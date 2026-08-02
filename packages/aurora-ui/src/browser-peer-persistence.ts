@@ -54,7 +54,7 @@ interface EncryptedVaultRecord {
 }
 
 export interface BrowserPeerPersistenceStatus {
-  backend: 'encrypted-indexeddb' | 'memory'
+  backend: 'encrypted-indexeddb' | 'platform-keychain' | 'memory'
   secretsPersisted: boolean
   profilePersisted: boolean
   fallbackReason?: string

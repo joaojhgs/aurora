@@ -369,6 +369,29 @@ def test_projection_digest_mutation_is_invalid() -> None:
     assert parse_manifest(payload) is None
 
 
+def test_projection_wire_normalizes_integral_floats_for_browser_digest() -> None:
+    payload = _projection_manifest()
+    input_schema = payload["shared_services"][0]["methods"][0]["input_schema"]
+    input_schema["properties"] = {
+        "offset": {"type": "number", "default": 0.0},
+        "ratio": {"type": "number", "default": 1.5},
+    }
+    payload = _refinalize_projection_payload(payload)
+    manifest = PeerManifest.model_validate(
+        {key: value for key, value in payload.items() if key != "type"}
+    )
+
+    wire = manifest_to_dict(manifest)
+    wire_schema = wire["shared_services"][0]["methods"][0]["input_schema"]
+
+    assert type(wire_schema["properties"]["offset"]["default"]) is int
+    assert wire_schema["properties"]["offset"]["default"] == 0
+    assert wire_schema["properties"]["ratio"]["default"] == 1.5
+    result = parse_manifest_with_evidence(wire)
+    assert result.status == "verified"
+    assert result.usable is True
+
+
 def test_legacy_opaque_service_digest_remains_accepted() -> None:
     payload = _legacy_manifest()
     payload["shared_services"][0]["digest"] = "opaque-legacy-v0-digest"

@@ -91,6 +91,26 @@ describe('WebRTC actual-G002 protocol parsers', () => {
     expect(() => parseWebRtcFrame({ type: 'call', id: 'x', method: 'm'.repeat(300) })).toThrow(/method/)
   })
 
+  it('accepts structured topic reasons on rejected subscriptions', () => {
+    expect(parseWebRtcFrame({
+      type: 'subscribe_rejected',
+      id: 'sub-assistant',
+      reason: 'not_authorized',
+      rejected_topics: [
+        { topic: 'TTS.AudioChunk', reason: 'grant_not_found' },
+        'Orchestrator.Response',
+      ],
+    })).toEqual({
+      type: 'subscribe_rejected',
+      id: 'sub-assistant',
+      reason: 'not_authorized',
+      rejected_topics: [
+        { topic: 'TTS.AudioChunk', reason: 'grant_not_found' },
+        'Orchestrator.Response',
+      ],
+    })
+  })
+
   it('enforces top-level frame size by UTF-8 bytes', () => {
     const json = JSON.stringify({ type: 'result', id: 'emoji', result: { value: '🙂' } })
     const byteLength = utf8Bytes(json)

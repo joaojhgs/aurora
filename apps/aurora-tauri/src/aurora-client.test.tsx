@@ -44,6 +44,10 @@ import {
   computeProjectionChecksum,
   computeProjectionPageHash,
 } from "@aurora/client/local-tools";
+import type {
+  ProviderLocalApprovalControllerPort,
+  ProviderLocalApprovalSnapshot,
+} from "@aurora/client/local-tools";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createAuroraTauriRuntime,
@@ -51,6 +55,7 @@ import {
 } from "./aurora-client";
 import {
   AuroraTauriApp,
+  rebuildAuroraThinRuntime,
   routeForPath,
   tauriRouteRegistryRouteIds,
   type AuroraTauriRuntime,
@@ -74,7 +79,6 @@ const DIAGNOSTICS_PAGE_MARKERS = [
   "Privacy check",
   "Support export",
   "Service checks",
-  "Device permissions",
   "App logs",
 ] as const;
 
@@ -97,7 +101,7 @@ const TAURI_RENDERED_ROUTE_LANDMARK_OVERRIDES: Record<
     "Tools & Plugins",
     "Review tool sources",
   ],
-  mesh: ["Mesh & Peers", "Peer trust, pairing and permissions"],
+  mesh: ["Connected devices", "Connect trusted devices and choose what each one can use."],
   backups: ["Backups", "Snapshots, verification and restore"],
   settings: ["Settings", "Connection choices"],
   models: ["Models & Sources", "Loading model sources from Aurora"],
@@ -180,6 +184,16 @@ function tauriLocalTransportProxy(transport: RecordingMockAuroraTransport) {
   }) as typeof transport;
 }
 
+function nativeMobileTransportProxy(transport: RecordingMockAuroraTransport) {
+  return new Proxy(transport, {
+    get(target, property, receiver) {
+      if (property === "kind") return "native-mobile";
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  }) as typeof transport;
+}
+
 function testRuntime(
   client: Aurora,
   modePreferenceStore?: AuroraTauriRuntime["modePreferenceStore"],
@@ -213,6 +227,50 @@ function testRuntime(
     dispose: async () => undefined,
     shutdown: async () => undefined,
   };
+}
+
+function fakeLocalApprovalController() {
+  let snapshot: ProviderLocalApprovalSnapshot = {
+    pending: [
+      {
+        id: "local-approval-safe-id",
+        toolDisplayName: "Share text",
+        toolDescription: "Share selected text through this device.",
+        callerPeerId: "peer-must-not-render",
+        displayArgsPreview: {
+          title: "Launch note",
+          text: "Aurora is ready",
+        },
+        createdAtMs: 1_000,
+        expiresAtMs: 301_000,
+      },
+    ],
+    revision: 1,
+  };
+  const listeners = new Set<(next: ProviderLocalApprovalSnapshot) => void>();
+  const decide = vi.fn((approvalId: string, choice: "approve" | "deny") => {
+    if (approvalId !== snapshot.pending[0]?.id) return false;
+    snapshot = { pending: [], revision: snapshot.revision + 1 };
+    for (const listener of listeners) listener(snapshot);
+    return choice === "approve" || choice === "deny";
+  });
+  const controller: ProviderLocalApprovalControllerPort = {
+    snapshot: () => snapshot,
+    subscribe: (listener) => {
+      listeners.add(listener);
+      listener(snapshot);
+      return () => listeners.delete(listener);
+    },
+    decide,
+    awaitApproval: async () => ({
+      status: "closed",
+      approvalId: "local-approval-safe-id",
+    }),
+    releaseClaim: () => false,
+    consumeClaim: () => false,
+    close: () => undefined,
+  };
+  return { controller, decide };
 }
 
 function testMeshInviteText(): string {
@@ -272,6 +330,34 @@ function fakeThinPeer(
   } as unknown as NonNullable<AuroraTauriRuntime["thinPeer"]>;
 }
 
+function controllableThinPeer(
+  snapshot: Partial<BrowserWebRtcSnapshot> = {},
+): {
+  peer: NonNullable<AuroraTauriRuntime["thinPeer"]>;
+  emit: (next: Partial<BrowserWebRtcSnapshot>) => void;
+} {
+  let current = fakeThinPeer(snapshot).snapshot();
+  const listeners = new Set<(next: BrowserWebRtcSnapshot) => void>();
+  const peer = {
+    ...fakeThinPeer(snapshot),
+    snapshot: () => current,
+    subscribe: (listener: (next: BrowserWebRtcSnapshot) => void) => {
+      listeners.add(listener);
+      listener(current);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  } as unknown as NonNullable<AuroraTauriRuntime["thinPeer"]>;
+  return {
+    peer,
+    emit(next) {
+      current = { ...current, ...next };
+      for (const listener of listeners) listener(current);
+    },
+  };
+}
+
 function unconfiguredThinRuntime(
   mode: "desktop-thin" | "mobile-native",
   client: Aurora,
@@ -291,7 +377,7 @@ function unconfiguredThinRuntime(
       profiles: [profile],
     }),
     selectProfile: async () => document,
-    createRuntime: () => runtime,
+    createRuntime: async () => runtime,
   };
   runtime = {
     ...testRuntime(client),
@@ -463,6 +549,49 @@ function assistantCapabilityCatalog() {
   const catalog = cloneFixture(capabilityCatalogFixture);
   const baseProvider = catalog.providers[0]!;
   const baseAction = catalog.actions[0]!;
+  const toolingProvider = {
+    ...baseProvider,
+    provider_id: "local:Tooling",
+    provider_kind: "local" as const,
+    peer_id: "local-peer",
+    node_name: "local Aurora node",
+    service_instance_id: "tooling-local",
+    module: "Tooling",
+    eligible: true,
+    reason_code: "available",
+    reason: "Local Aurora exposes its tool catalog.",
+    policy: {
+      ...baseProvider.policy,
+      required_permissions: ["Tooling.GetToolCatalog"],
+      explicit_selector_required: false,
+      consent_required: false,
+      privacy_indicator_required: false,
+      approval_required: false,
+      selector_required: false,
+      denial_reasons: [],
+    },
+  };
+  const toolingAction = {
+    ...baseAction,
+    action_id: "tooling-get-tool-catalog-local",
+    module: "Tooling",
+    method: "GetToolCatalog",
+    topic: TOOLING_METHODS.listCatalog,
+    provider_id: toolingProvider.provider_id,
+    provider_kind: toolingProvider.provider_kind,
+    peer_id: toolingProvider.peer_id,
+    service_instance_id: toolingProvider.service_instance_id,
+    selector: {
+      peer_id: toolingProvider.peer_id,
+      module: "Tooling",
+      provider_id: toolingProvider.provider_id,
+    },
+    bindability: "available" as const,
+    route_blockers: [],
+    summary: "Open the local Aurora tool catalog.",
+    policy: toolingProvider.policy,
+    freshness: toolingProvider.freshness,
+  };
   const provider = {
     ...baseProvider,
     provider_id: "local:Orchestrator",
@@ -530,14 +659,17 @@ function assistantCapabilityCatalog() {
     policy: provider.policy,
     freshness: provider.freshness,
   };
-  catalog.providers = [...catalog.providers, provider];
-  catalog.actions = [...catalog.actions, action, interruptAction];
+  catalog.providers = [...catalog.providers, toolingProvider, provider];
+  catalog.actions = [...catalog.actions, toolingAction, action, interruptAction];
   catalog.provider_index = {
     ...catalog.provider_index,
+    Tooling: [toolingProvider.provider_id],
     Orchestrator: [provider.provider_id],
   };
   catalog.action_index = {
     ...catalog.action_index,
+    Tooling: [toolingAction.action_id],
+    [TOOLING_METHODS.listCatalog]: [toolingAction.action_id],
     Orchestrator: [action.action_id, interruptAction.action_id],
     [ORCHESTRATOR_METHODS.externalUserInput]: [action.action_id],
     [ORCHESTRATOR_METHODS.interrupt]: [interruptAction.action_id],
@@ -549,7 +681,6 @@ function assistantGatewayTransport(
   responseText = "Local Gateway says hello from Orchestrator.",
 ): RecordingMockAuroraTransport {
   const transport = new RecordingMockAuroraTransport();
-  transport.register(GATEWAY_METHODS.health, () => ({ status: "healthy" }));
   transport.register(GATEWAY_METHODS.health, () => ({ status: "healthy" }));
   transport.register(GATEWAY_METHODS.getCapabilityCatalog, () =>
     assistantCapabilityCatalog(),
@@ -1102,6 +1233,40 @@ describe("Aurora Tauri runtime wrapper", () => {
     window.history.replaceState({}, "", "/");
   });
 
+  it("recomposes a saved runtime profile so first-run native services are available immediately", async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() });
+    const savedDocument = {
+      version: 1 as const,
+      activeProfileId: "saved",
+      profiles: [thinRuntimeProfile("webrtc-only")],
+    };
+    const nextRuntime = testRuntime(client);
+    const dispose = vi.fn(async () => undefined);
+    const createRuntime = vi.fn(async () => nextRuntime);
+    const recreateRuntime = vi.fn(async () => nextRuntime);
+    const runtime = {
+      ...testRuntime(client),
+      dispose,
+      thinProfileController: {
+        evidence: "test profile store",
+        document: { version: 1 as const, activeProfileId: null, profiles: [] },
+        saveProfile: vi.fn(async () => savedDocument),
+        selectProfile: vi.fn(async () => savedDocument),
+        createRuntime,
+        recreateRuntime,
+      },
+    } as AuroraTauriRuntime;
+
+    const rebuilt = await rebuildAuroraThinRuntime(runtime, (controller) =>
+      controller.saveProfile(thinRuntimeProfile("webrtc-only")),
+    );
+
+    expect(rebuilt).toBe(nextRuntime);
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(createRuntime).toHaveBeenCalledWith(savedDocument);
+    expect(recreateRuntime).not.toHaveBeenCalled();
+  });
+
   it("uses the SDK mock transport when no Tauri shell or Gateway URL is present", async () => {
     vi.stubEnv("VITE_AURORA_GATEWAY_URL", "");
 
@@ -1202,7 +1367,8 @@ describe("Aurora Tauri runtime wrapper", () => {
     expect(window.location.hash).not.toContain("invite=");
     expect(runtime.thinPeer?.snapshot()).toMatchObject({
       hasHttpFallback: false,
-      secretsPersisted: false,
+      secretsPersisted: true,
+      persistenceBackend: "platform-keychain",
     });
     await expect(runtime.sidecarStatus()).resolves.toBeNull();
     await expect(runtime.startSidecar()).resolves.toBeNull();
@@ -1458,6 +1624,76 @@ describe("Aurora Tauri runtime wrapper", () => {
         cursor: null,
         last_projection_revision: null,
         last_projection_digest: null,
+      });
+    } finally {
+      await act(async () => mounted.root.unmount());
+      mounted.container.remove();
+    }
+  });
+
+  it("refreshes the shell when a thin peer becomes authorized without a local assistant", async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() });
+    const getGraph = vi.spyOn(client.capabilities, "getGraph");
+    const thinPeer = controllableThinPeer({
+      status: "connecting",
+      state: "negotiating",
+    });
+    const runtime: AuroraTauriRuntime = {
+      ...testRuntime(client),
+      mode: "mobile-native",
+      thinConnectionMode: "webrtc-only",
+      thinPeer: thinPeer.peer,
+      localAssistant: undefined,
+    };
+    window.history.replaceState({}, "", "/assistant");
+
+    const mounted = await mountOutcomeApp(runtime);
+    try {
+      await waitUntil(() => expect(getGraph).toHaveBeenCalledTimes(1));
+      await act(async () => {
+        thinPeer.emit({ status: "authorized", state: "authorized" });
+        await flushReactWork();
+      });
+      await waitUntil(() => expect(getGraph).toHaveBeenCalledTimes(2));
+    } finally {
+      await act(async () => mounted.root.unmount());
+      mounted.container.remove();
+    }
+  });
+
+  it("shows sensitive shared-feature approval locally without exposing peer or token details", async () => {
+    const approvals = fakeLocalApprovalController();
+    const runtime: AuroraTauriRuntime = {
+      ...testRuntime(new Aurora({ transport: new MockAuroraTransport() })),
+      localToolApprovals: approvals.controller,
+    };
+    window.history.replaceState({}, "", "/assistant");
+
+    const mounted = await mountOutcomeApp(runtime);
+    try {
+      await waitUntil(() => {
+        expect(document.body.textContent).toContain("Allow Share text?");
+        expect(mounted.container.textContent).toContain("Aurora ready");
+        expect(document.body.textContent).toContain("Allow once");
+      });
+      expect(document.body.textContent).not.toContain("peer-must-not-render");
+      expect(document.body.textContent).not.toContain("approval_token");
+      expect(
+        document.body.querySelector('[role="alertdialog"]'),
+      ).not.toBeNull();
+      expect(
+        document.body
+          .querySelector('[data-local-feature-approval="pending"]')
+          ?.getAttribute("class"),
+      ).toContain("ata-local-feature-approval");
+
+      await clickButtonByLabel(document.body, "Allow once");
+      expect(approvals.decide).toHaveBeenCalledWith(
+        "local-approval-safe-id",
+        "approve",
+      );
+      await waitUntil(() => {
+        expect(document.body.textContent).not.toContain("Allow Share text?");
       });
     } finally {
       await act(async () => mounted.root.unmount());
@@ -2069,16 +2305,12 @@ describe("Tauri CI/E2E route gates", () => {
     );
     try {
       await waitUntil(() => {
-        expect(mesh.container.textContent).toContain("Mesh & Peers");
-        expect(mesh.container.textContent).toContain(
-          "Pending pairing requests",
-        );
-        expect(mesh.container.textContent).toContain("Route policy");
+        expect(mesh.container.textContent).toContain("Connected devices");
+        expect(mesh.container.textContent).toContain("Waiting for approval");
+        expect(mesh.container.textContent).toContain("How Aurora chooses a device");
         expect(mesh.container.textContent).toContain("Service sharing");
-        expect(mesh.container.textContent).toContain(
-          "Outbound route decision preview (advanced)",
-        );
-        expect(mesh.container.textContent).toContain("All peer records");
+        expect(mesh.container.textContent).toContain("Device selection details");
+        expect(mesh.container.textContent).toContain("All devices");
         expect(mesh.container.textContent).toContain("Review & approve");
         expect(mesh.container.textContent).not.toContain("Gateway.ExplainRoute");
         expect(requestMethods(meshTransport)).toContain(
@@ -2104,9 +2336,7 @@ describe("Tauri CI/E2E route gates", () => {
         reviewButtons.length,
         "mesh review request controls",
       ).toBeGreaterThan(0);
-      expect(mesh.container.textContent).toContain(
-        "Peer permissions and actions",
-      );
+      expect(mesh.container.textContent).toContain("Device permissions and actions");
       writeOutcomeArtifact(
         "mesh-route-status-pair-actions-route-preview",
         mesh.container.innerHTML,
@@ -2154,6 +2384,40 @@ describe("Tauri CI/E2E route gates", () => {
     }
   });
 
+  it("keeps local service settings off remote mobile mesh surfaces", async () => {
+    const transport = new RecordingMockAuroraTransport();
+    const runtime: AuroraTauriRuntime = {
+      ...testRuntime(
+        new Aurora({ transport: nativeMobileTransportProxy(transport) }),
+      ),
+      mode: "mobile-native",
+      thinConnectionMode: "webrtc-only",
+      thinPeer: fakeThinPeer({ status: "authorized", state: "authorized" }),
+    };
+    window.history.replaceState({}, "", "/mesh");
+
+    const mesh = await mountOutcomeApp(runtime);
+    try {
+      await waitUntil(() => {
+        expect(mesh.container.textContent).toContain("Connected devices");
+        expect(requestMethods(transport)).toContain(
+          GATEWAY_METHODS.getMeshStatus,
+        );
+      });
+      expect(mesh.container.textContent).not.toContain("Service sharing");
+      expect(requestMethods(transport)).not.toContain("Config.Get");
+      expect(requestMethods(transport)).not.toContain(
+        "Config.GetSchemaMetadata",
+      );
+      expect(requestMethods(transport)).not.toContain(
+        GATEWAY_METHODS.getMeshInviteConfig,
+      );
+    } finally {
+      await act(async () => mesh.root.unmount());
+      mesh.container.remove();
+    }
+  });
+
   it("e2e:assistant sends a text prompt to local Gateway and renders response or precise backend error", async () => {
     const successTransport = assistantGatewayTransport();
     const successRuntime: AuroraTauriRuntime = {
@@ -2187,6 +2451,23 @@ describe("Tauri CI/E2E route gates", () => {
         );
         expect(success.container.textContent).not.toContain("local-gateway-test");
       });
+      expect(
+        Array.from(
+          success.container.querySelectorAll(
+            ".aui-assistant-runtime-strip dt",
+          ),
+          (element) => element.textContent,
+        ),
+      ).toEqual([
+        "Selected model",
+        "Model state",
+        "Answers from",
+        "On this device",
+        "Connection",
+      ]);
+      expect(success.container.textContent).not.toContain(
+        "Local service status",
+      );
       const assistantRequests = successTransport.requests.filter(
         (request) => request.method === ORCHESTRATOR_METHODS.externalUserInput,
       );
@@ -2491,7 +2772,7 @@ describe("Tauri CI/E2E route gates", () => {
           ORCHESTRATOR_METHODS.interrupt,
         );
       });
-      expect(live.container.textContent).not.toContain("Retry");
+      expect(live.container.textContent).toContain("Retry");
       await navigateByHref(live.container, "/tools");
       await waitUntil(() => {
         expect(live.container.textContent).toContain("Tools & Plugins");
@@ -2869,12 +3150,12 @@ describe("Tauri CI/E2E route gates", () => {
         expect(activeCard?.textContent).toContain("Connect to Aurora");
         expect(container.textContent).toContain("Connect to Aurora");
       });
-      expect(writes).toEqual([]);
-      expect(tiers).toEqual([]);
+      expect(writes).toEqual(["remote-console"]);
+      expect(tiers).toEqual(["none"]);
       await clickButtonByLabel(container, "Connect to Aurora");
       await waitUntil(() => {
-        expect(writes).toEqual(["remote-console"]);
-        expect(tiers).toEqual(["none"]);
+        expect(writes).toEqual(["remote-console", "remote-console"]);
+        expect(tiers).toEqual(["none", "none"]);
       });
     } finally {
       await act(async () => root.unmount());

@@ -13,9 +13,14 @@ import pytest
 from langchain_core.tools import tool
 
 from app.messaging import Envelope, QueryResult
+from app.services.db.sqlite_connection import SQLITE_CONNECT_TIMEOUT_SECONDS
 from app.services.tooling.identity import source_tool_identity, stamp_tool
 from app.services.tooling.projection_cursor import ProjectionCursor
-from app.services.tooling.service import _derive_js_safe_catalog_revision
+from app.services.tooling.service import (
+    TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
+    _derive_js_safe_catalog_revision,
+)
+from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.db import (
     DBGetToolingExportPolicySnapshotResponse,
     DBGetToolingExposureLedgerResponse,
@@ -817,6 +822,11 @@ async def test_consumer_switch_cancels_staging_and_reenable_starts_full_baseline
         DBMethods.ABORT_TOOLING_REMOTE_CATALOG_SYNC,
         DBMethods.SET_TOOLING_REMOTE_PROVIDER_AVAILABILITY,
     ]
+    for call in tooling_service.bus.request.await_args_list:
+        assert call.kwargs["timeout"] == TOOLING_DB_REQUEST_TIMEOUT_SECONDS
+        assert call.kwargs["timeout"] > SQLITE_CONNECT_TIMEOUT_SECONDS
+        assert call.kwargs["origin"] == "internal"
+        assert "priority" in call.kwargs
     abort_request = tooling_service.bus.request.await_args_list[0].args[1]
     assert abort_request.sync_id == "sync-in-flight-0001"
     assert abort_request.reason_code == "consumer_mesh_tooling_disabled"
@@ -833,11 +843,14 @@ async def test_consumer_switch_cancels_staging_and_reenable_starts_full_baseline
         if method == "Gateway.FetchToolingExportCatalogPage":
             assert payload.request.cursor is None
             return QueryResult(ok=False, error="offline")
+        if method == DBMethods.SET_TOOLING_REMOTE_PROVIDER_AVAILABILITY:
+            assert payload.availability == "stale"
+            assert payload.reason_code == "projection_fetch_failed"
+            return QueryResult(ok=True, data={})
         raise AssertionError(f"unexpected method {method}")
 
     tooling_service.bus.request = AsyncMock(side_effect=reenabled)
-    with pytest.raises(RuntimeError, match="projection_fetch_failed"):
-        await tooling_service._on_projection_sync_requested(request)
+    await tooling_service._on_projection_sync_requested(request)
 
 
 def _sync_page(
@@ -919,6 +932,17 @@ async def test_projection_sync_stages_the_validated_page_service_identity(toolin
         )
     )
 
+    db_calls = [
+        call
+        for call in tooling_service.bus.request.await_args_list
+        if str(call.args[0]).startswith("DB.")
+    ]
+    assert db_calls
+    for call in db_calls:
+        assert call.kwargs["timeout"] == TOOLING_DB_REQUEST_TIMEOUT_SECONDS
+        assert call.kwargs["timeout"] > SQLITE_CONNECT_TIMEOUT_SECONDS
+        assert call.kwargs["origin"] == "internal"
+        assert "priority" in call.kwargs
     assert len(begin_requests) == 1
     assert begin_requests[0].service_instance_id == local_service_instance_id
     assert tooling_service._remote_provider_states[(provider, local_service_instance_id)] == (
@@ -1148,6 +1172,18 @@ async def test_policy_reconciliation_inflight_blocks_binding_and_execution(tooli
 
     async def request_bus(method, payload, **_kwargs):
         nonlocal committed, finalized
+        if method == AuthMethods.MESH_GET_PEER:
+            return QueryResult(
+                ok=True,
+                data={
+                    "peer": {
+                        "id": f"peer-row:{provider}",
+                        "peer_id": provider,
+                        "outbound_status": "approved",
+                        "outbound_permissions": [ToolingMethods.EXECUTE_TOOL],
+                    }
+                },
+            )
         if method == DBMethods.GET_TOOLING_REMOTE_CATALOG:
             if not committed:
                 return QueryResult(ok=True, data={"headers": [], "tools": []})
@@ -1311,6 +1347,9 @@ async def test_overlapping_projection_invalidation_reruns_latest_after_success_o
             return QueryResult(ok=True, data={})
         if method == DBMethods.ABORT_TOOLING_REMOTE_CATALOG_SYNC:
             return QueryResult(ok=True, data={})
+        if method == DBMethods.SET_TOOLING_REMOTE_PROVIDER_AVAILABILITY:
+            assert payload.availability == "stale"
+            return QueryResult(ok=True, data={})
         raise AssertionError(method)
 
     tooling_service.bus.request = AsyncMock(side_effect=request_bus)
@@ -1325,11 +1364,7 @@ async def test_overlapping_projection_invalidation_reruns_latest_after_success_o
     await tooling_service._on_projection_sync_requested(latest_request)
     assert tooling_service._projection_sync_pending[peer_id].reason_code == "policy_changed"
     release_first_fetch.set()
-    if fail_first:
-        with pytest.raises(RuntimeError, match="projection_fetch_failed"):
-            await first_run
-    else:
-        await first_run
+    await first_run
     await latest_fetch_started.wait()
     rerun = tooling_service._projection_sync_tasks[peer_id]
     release_latest_fetch.set()

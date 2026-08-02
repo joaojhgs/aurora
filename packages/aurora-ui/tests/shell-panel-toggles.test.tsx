@@ -54,15 +54,21 @@ describe('AppShell side-panel toggles', () => {
     })
   })
 
-  it('keeps the navigation menu open while navigating between routes', async () => {
+  it('closes the navigation menu after navigating between routes', async () => {
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
     const onNavigate = vi.fn()
+    const navigableSnapshot = {
+      ...snapshot,
+      routes: snapshot.routes.map((route) => route.item.id === 'mesh'
+        ? { ...route, disabled: false, routeable: true, state: 'available-local' as const, blockers: [] }
+        : route),
+    }
 
     await act(async () => {
       root.render(
-        <AppShell snapshot={snapshot} currentPath="/assistant" onNavigate={onNavigate}>
+        <AppShell snapshot={navigableSnapshot} currentPath="/assistant" onNavigate={onNavigate}>
           <div>Content</div>
         </AppShell>,
       )
@@ -80,12 +86,41 @@ describe('AppShell side-panel toggles', () => {
     await act(async () => destination?.click())
 
     expect(onNavigate).toHaveBeenCalledWith('/mesh')
-    expect(shell.dataset.navigationOpen).toBe('true')
-    expect(container.querySelector('button[aria-label="Hide navigation menu"]')).not.toBeNull()
+    expect(shell.dataset.navigationOpen).toBe('false')
+    expect(container.querySelector('button[aria-label="Show navigation menu"]')).not.toBeNull()
 
     await act(async () => {
       root.unmount()
     })
+  })
+
+  it('returns the content viewport to the top when the active route changes', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <AppShell snapshot={snapshot} currentPath="/mesh">
+          <div>Mesh content</div>
+        </AppShell>,
+      )
+    })
+
+    const content = container.querySelector<HTMLElement>('main#content')!
+    content.scrollTop = 640
+
+    await act(async () => {
+      root.render(
+        <AppShell snapshot={snapshot} currentPath="/settings">
+          <div>Settings content</div>
+        </AppShell>,
+      )
+    })
+
+    expect(content.scrollTop).toBe(0)
+
+    await act(async () => root.unmount())
   })
 
   it('hides admin navigation from non-admin peer sessions while retaining ordinary settings', async () => {
@@ -125,13 +160,51 @@ describe('AppShell side-panel toggles', () => {
 
     expect(container.textContent).toContain('Operate · admin only')
     expect(container.querySelector('a[href="/admin"]')).not.toBeNull()
-    expect(container.querySelector('[data-mobile-tab="admin"]')).not.toBeNull()
+    expect(container.querySelector('[data-mobile-tab="admin"]')).toBeNull()
+    expect(
+      Array.from(container.querySelectorAll<HTMLElement>('[data-mobile-tab]'))
+        .map((tab) => tab.dataset.mobileTab),
+    ).toEqual(['assistant', 'mesh', 'settings'])
     expect(container.querySelector('a[href="/admin/services"]')).not.toBeNull()
     expect(container.querySelector('a[href="/admin/tokens"]')).not.toBeNull()
     expect(container.textContent).toContain('admin')
     expect(container.textContent).toContain('Administrator on Aurora unavailable')
     expect(container.textContent).not.toContain('Full access')
     expect(container.textContent).not.toContain('Web Thin')
+
+    await act(async () => root.unmount())
+  })
+
+  it('updates the mobile product-role label when the same native surface changes role', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    const mobileSnapshot = {
+      ...snapshot,
+      loadState: 'ready' as const,
+      error: null,
+      nativePlatform: 'android',
+      nodeName: 'Home Aurora',
+    }
+
+    await act(async () => {
+      root.render(
+        <AppShell snapshot={mobileSnapshot} runtimeMode="mobile-native" nodeMode="remote-console">
+          <div>Content</div>
+        </AppShell>,
+      )
+    })
+    expect(container.textContent).toContain('Connected to Home Aurora')
+    expect(container.textContent).not.toContain('This device is available')
+
+    await act(async () => {
+      root.render(
+        <AppShell snapshot={mobileSnapshot} runtimeMode="mobile-native" nodeMode="mesh-node">
+          <div>Content</div>
+        </AppShell>,
+      )
+    })
+    expect(container.textContent).toContain('This device is available')
 
     await act(async () => root.unmount())
   })

@@ -139,6 +139,7 @@ describe('production UI copy', () => {
     expect(container.textContent).toContain('Scan invite')
     expect(container.textContent).toContain('Open invite file')
     expect(container.textContent).toContain('Paste invite')
+    expect(container.textContent).toContain('1 connection option')
     expect(container.querySelector<HTMLTextAreaElement>('#webthin-invite')?.value).toContain('aurora://mesh/invite?')
     expect(container.textContent).not.toContain('Sign in')
     expect(container.textContent).not.toContain('Access key')
@@ -228,6 +229,116 @@ describe('production UI copy', () => {
       buttonByText(container, 'Continue').click()
     })
     expect(container.querySelector('[data-testid="home-node-panel"]')).not.toBeNull()
+
+    root.unmount()
+    container.remove()
+  })
+
+  it('waits for both parts of a role choice to be saved before continuing setup', async () => {
+    let resolveModeWrite: (saved: boolean) => void = () => undefined
+    let resolveTierWrite: (saved: boolean) => void = () => undefined
+    const store: OnboardingModePreferenceStore = {
+      evidence: 'Saved for this device',
+      readSelectedMode: async () => 'remote-console',
+      readSelectedRuntimeTier: async () => 'none',
+      writeSelectedMode: async () => new Promise<boolean>((resolve) => {
+        resolveModeWrite = resolve
+      }),
+      writeSelectedRuntimeTier: async () => new Promise<boolean>((resolve) => {
+        resolveTierWrite = resolve
+      }),
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <OnboardingView
+          client={client('http')}
+          snapshot={safeShellSnapshot()}
+          modePreferenceStore={store}
+          setupRequired
+          thinConnectionPanel={<div data-testid="home-node-panel">Invite panel</div>}
+        />,
+      )
+    })
+    await flushReactWork()
+
+    await act(async () => {
+      choiceByText(container, 'Make this device available').click()
+    })
+    expect(buttonByText(container, 'Continue').disabled).toBe(true)
+
+    await act(async () => {
+      resolveModeWrite(true)
+      await Promise.resolve()
+    })
+    expect(buttonByText(container, 'Continue').disabled).toBe(true)
+
+    await act(async () => {
+      resolveTierWrite(true)
+      await Promise.resolve()
+    })
+    expect(buttonByText(container, 'Continue').disabled).toBe(false)
+
+    root.unmount()
+    container.remove()
+  })
+
+  it('saves the preselected Android device-sharing role before allowing setup to continue', async () => {
+    const modes: string[] = []
+    const tiers: string[] = []
+    const store: OnboardingModePreferenceStore = {
+      evidence: 'Saved with the Android connection profile',
+      readSelectedMode: async () => null,
+      readSelectedRuntimeTier: async () => null,
+      writeSelectedMode: async (modeId) => {
+        modes.push(modeId)
+        return true
+      },
+      writeSelectedRuntimeTier: async (runtimeTier) => {
+        tiers.push(runtimeTier)
+        return true
+      },
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <OnboardingView
+          client={client('native-mobile')}
+          snapshot={safeShellSnapshot({ nativePlatform: 'android', nativeAvailable: true })}
+          modePreferenceStore={store}
+          setupRequired
+          thinConnectionPanel={<div data-testid="home-node-panel">Invite panel</div>}
+        />,
+      )
+    })
+    await flushReactWork()
+
+    expect(activeChoiceText(container)).toContain('Make this device available')
+    expect(modes).toEqual(['mesh-node'])
+    expect(tiers).toEqual(['lightweight-ts'])
+    expect(buttonByText(container, 'Continue').disabled).toBe(false)
+
+    await act(async () => {
+      root.render(
+        <OnboardingView
+          client={client('native-mobile')}
+          snapshot={safeShellSnapshot({ nativePlatform: 'android', nativeAvailable: true })}
+          modePreferenceStore={store}
+          setupRequired
+          thinConnectionPanel={<div data-testid="home-node-panel">Invite panel</div>}
+        />,
+      )
+    })
+    await flushReactWork()
+    expect(modes).toEqual(['mesh-node'])
+    expect(tiers).toEqual(['lightweight-ts'])
+    expect(buttonByText(container, 'Continue').disabled).toBe(false)
 
     root.unmount()
     container.remove()

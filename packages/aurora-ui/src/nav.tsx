@@ -90,9 +90,7 @@ export const auroraEmbeddedNavItems: AuroraNavItem[] = [
 
 export const auroraMobileTabs = [
   auroraNavSections[0]!.items[0]!,
-  auroraNavSections[0]!.items[1]!,
   auroraNavSections[0]!.items[3]!,
-  auroraNavSections[1]!.items[0]!,
   auroraNavSections[1]!.items[7]!
 ]
 

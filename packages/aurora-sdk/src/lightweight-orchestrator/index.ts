@@ -13,10 +13,13 @@ export type {
 } from './limits.js'
 export {
   buildOpenAIToolAliases,
+  createAuroraInferenceProvider,
   createOpenAICompatibleToolProvider,
+  parseAuroraInferenceResponse,
   parseOpenAICompatibleResponse
 } from './provider.js'
 export type {
+  AuroraInferenceProviderOptions,
   OpenAIToolAlias,
   OpenAIToolAliasMap,
   OpenAICompatibleProviderOptions

@@ -4,6 +4,7 @@ import { createToolingPeerHostRegistry, type PeerHostCallContext } from '../src/
 import {
   LocalToolExecutionPolicy,
   LocalToolRegistry,
+  ProviderLocalApprovalController,
   createLocalToolingProviderHandlers,
   toolSchemaHash,
   type LocalToolAuditRecord,
@@ -170,6 +171,84 @@ describe('local Tooling policy/provider', () => {
     })
     expect(await provider.executeTool({ ...request, approval_token: fresh }, callContext)).toMatchObject({ ok: true, status: 'success' })
     expect(await provider.executeTool({ ...request, approval_token: fresh }, callContext)).toMatchObject({ ok: false, status: 'denied', error_code: 'approval_token_replayed' })
+  })
+
+  it('keeps sensitive inbound approval local and executes once after the device allows it', async () => {
+    let calls = 0
+    const audits: LocalToolAuditRecord[] = []
+    const registry = new LocalToolRegistry({ stablePeerId: 'provider' })
+    registry.register({
+      descriptor: dangerousDescriptor,
+      handler: () => {
+        calls += 1
+        return { ok: true }
+      }
+    })
+    const approvalController = new ProviderLocalApprovalController({ requestWaitMs: 1_000 })
+    const provider = providerFor(registry, {
+      approvalController,
+      audit: (record) => {
+        audits.push(record)
+      }
+    })
+    const execution = provider.executeTool({
+      tool_name: 'delete',
+      arguments: { text: 'target', apiToken: 'must-not-leak' }
+    }, context(['Tooling.ExecuteTool', 'Echo.Use']))
+
+    const pending = await waitForPendingApproval(approvalController)
+    expect(pending.toolDisplayName).toBe('Delete')
+    expect(pending.displayArgsPreview).toMatchObject({
+      text: 'target',
+      apiToken: '<redacted>'
+    })
+    expect(JSON.stringify(approvalController.snapshot())).not.toContain('must-not-leak')
+    expect(approvalController.decide(pending.id, 'approve')).toBe(true)
+
+    await expect(execution).resolves.toMatchObject({ ok: true, status: 'success' })
+    expect(calls).toBe(1)
+    expect(approvalController.snapshot().pending).toHaveLength(0)
+    expect(JSON.stringify(audits)).not.toContain('must-not-leak')
+    expect(JSON.stringify(audits)).not.toContain('local_tool_approval_')
+  })
+
+  it('retains a timed-out approval so an approved retry does not ask again', async () => {
+    let calls = 0
+    const registry = new LocalToolRegistry({ stablePeerId: 'provider' })
+    registry.register({
+      descriptor: dangerousDescriptor,
+      handler: () => {
+        calls += 1
+        return { ok: true }
+      }
+    })
+    const approvalController = new ProviderLocalApprovalController({ requestWaitMs: 5 })
+    const provider = providerFor(registry, { approvalController })
+    const request = { tool_name: 'delete', arguments: { text: 'target' } }
+
+    await expect(
+      provider.executeTool(request, context(['Tooling.ExecuteTool', 'Echo.Use']))
+    ).resolves.toMatchObject({
+      ok: false,
+      status: 'denied',
+      error_code: 'local_approval_pending'
+    })
+    const [pending] = approvalController.snapshot().pending
+    expect(pending).toBeDefined()
+    expect(approvalController.decide(pending!.id, 'approve')).toBe(true)
+
+    await expect(
+      provider.executeTool(request, context(['Tooling.ExecuteTool', 'Echo.Use']))
+    ).resolves.toMatchObject({ ok: true, status: 'success' })
+    expect(calls).toBe(1)
+    await expect(
+      provider.executeTool(request, context(['Tooling.ExecuteTool', 'Echo.Use']))
+    ).resolves.toMatchObject({
+      ok: false,
+      status: 'denied',
+      error_code: 'local_approval_already_used'
+    })
+    expect(calls).toBe(1)
   })
 
   it('uses WebCrypto random bytes for default approval tokens and nonces', async () => {
@@ -511,6 +590,17 @@ async function dangerousPreparation(policy: LocalToolExecutionPolicy) {
     policy,
     prepared: await policy.prepare(registry.resolveForDispatch('delete')!, request, execution)
   }
+}
+
+async function waitForPendingApproval(
+  controller: ProviderLocalApprovalController
+) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const pending = controller.snapshot().pending[0]
+    if (pending) return pending
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+  throw new Error('provider-local approval did not become pending')
 }
 
 function context(

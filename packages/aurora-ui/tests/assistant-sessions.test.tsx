@@ -73,6 +73,15 @@ describe('Assistant persisted sessions', () => {
       method: DB_METHODS.createSession,
       payload: { type: 'chat' }
     })
+    expect(transport.calls.filter((call) => call.method === 'Orchestrator.GetModelCatalog'))
+      .toEqual([{
+        method: 'Orchestrator.GetModelCatalog',
+        payload: {
+          include_unavailable: true,
+          include_operations: false,
+          include_remote: true
+        }
+      }])
 
     transport.principalId = 'user-b'
     await act(async () => {
@@ -83,6 +92,45 @@ describe('Assistant persisted sessions', () => {
     expect(container.textContent).toContain('Other principal thread')
     expect(container.textContent).not.toContain('First thread')
     expect(container.textContent).not.toContain('Beta message')
+  })
+
+  it('opens the same real session list from the mobile conversations sheet', async () => {
+    const transport = new SessionTransport()
+    const client = new AuroraClient({ transport })
+    client.auth.setAuthenticated('user-a', ['DB.use', 'Orchestrator.use'])
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(<AssistantView client={client} route={assistantRoute()} />)
+    })
+    await waitUntil(() => container.textContent?.includes('Alpha message') === true)
+
+    const trigger = container.querySelector<HTMLButtonElement>('[aria-label="Open conversations"]')
+    expect(trigger).not.toBeNull()
+    await act(async () => {
+      trigger!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+    await waitUntil(() => document.body.querySelector('[data-slot="sheet-content"]') !== null)
+
+    const sheet = document.body.querySelector<HTMLElement>('[data-slot="sheet-content"]')
+    expect(sheet?.textContent).toContain('Conversations')
+    expect(sheet?.textContent).toContain('First thread')
+    expect(sheet?.textContent).toContain('Second thread')
+    expect(sheet?.querySelector('[data-slot="sheet-title"]')).not.toBeNull()
+
+    const secondThread = [...(sheet?.querySelectorAll<HTMLButtonElement>('.aui-thread-row-button') ?? [])]
+      .find((button) => button.textContent?.includes('Second thread'))
+    expect(secondThread).toBeDefined()
+    await act(async () => {
+      secondThread!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+    await waitUntil(() => container.textContent?.includes('Beta message') === true)
+    await waitUntil(() => document.body.querySelector('[data-slot="sheet-content"]') === null)
   })
 })
 
@@ -140,6 +188,17 @@ class SessionTransport implements AuroraTransport {
       }
       case 'Orchestrator.GetModelRuntime':
         data = { provider: null, providers: [] }
+        break
+      case 'Orchestrator.GetModelCatalog':
+        data = {
+          generated_at: '2026-08-01T00:00:00Z',
+          selected_provider_id: null,
+          providers: [],
+          provider_index: {},
+          unavailable: [],
+          internal_only: [],
+          secrets_redacted: true
+        }
         break
       default:
         throw new Error(`unexpected method ${request.method}`)

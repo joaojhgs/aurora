@@ -6,6 +6,8 @@ import {
   CAP_CONSUMER_ONLY_V1,
   MemoryPeerCredentialStore,
   type BrowserWebRtcRuntimeOptions,
+  type PeerConnectionController,
+  type PeerPairingApproval,
   type PeerConnectionSnapshot,
   type WebRtcPeerConnectionProfile,
 } from '@aurora/client/webrtc'
@@ -30,6 +32,7 @@ import {
   normalizeAuroraWebRtcRolloutFlags,
   webRtcProfileFromInvite,
   type BrowserWebRtcSnapshot,
+  type LocalFeatureSharingPort,
   type ThinConnectionProfile,
   type WebThinRoomSecret,
 } from '../src/index'
@@ -770,6 +773,21 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(controller.isFallbackEligibleAfterWebRtcRoute(new AuroraError({ code: 'transport_loss', message: 'ICE transport lost' }))).toBe(true)
   })
 
+  it('does not render a successful authorization diagnostic as a connection failure', () => {
+    const peer = new FakeBrowserPeer({
+      status: 'authorized',
+      state: 'authorized',
+      lastRedactedError: {
+        code: 'webrtc_mesh_authorized',
+        message: 'WebRTC mesh transport authorized',
+        at: '2026-08-02T00:00:00.000Z',
+      },
+    })
+    const controller = new BrowserWebRtcPeerController(peer as any, 'webrtc-only', { httpFallback: false })
+
+    expect(controller.snapshot().diagnostic).toBeUndefined()
+  })
+
   it('keeps WebRTC peer sessions connected when the thin-shell document is hidden', async () => {
     const peer = new FakeBrowserPeer({ status: 'authorized', state: 'authorized' })
     const listeners = new Map<string, Set<() => void>>()
@@ -1277,6 +1295,35 @@ describe('browser WebRTC thin-shell runtime', () => {
     expectProductionCopyClean(rendered)
   })
 
+  it('keeps invite actions disabled on insecure public mobile origins', async () => {
+    const peer = new FakeBrowserPeer({
+      status: 'needs-secure-context',
+      secureContext: false,
+      diagnostic: 'Open Aurora from a secure page before connecting.',
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <WebThinConnectionPanel
+          peer={peer as unknown as BrowserWebRtcPeerController}
+          mode="webrtc-only"
+          transportKind="native-mobile"
+          nativePlatform="android"
+          initialInviteText={inviteText()}
+        />,
+      )
+    })
+
+    expect(container.textContent).toContain('Secure connection needed')
+    expect(findButton(container, 'Use invite').disabled).toBe(true)
+    expect(findButton(container, 'Reconnect').disabled).toBe(true)
+    expect(peer.connectedProfiles).toEqual([])
+  })
+
   it('renders invite diagnostics and SAS confirmation controls accessibly', async () => {
     const peer = new FakeBrowserPeer({
       status: 'pairing',
@@ -1325,6 +1372,162 @@ describe('browser WebRTC thin-shell runtime', () => {
       reconnect.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     })
     expect(peer.connectedProfiles).toHaveLength(2)
+  })
+
+  it('asks for locally available feature scopes before mobile pairing approval', async () => {
+    const peer = new FakeBrowserPeer({
+      status: 'pairing',
+      pairingSessionId: 'pair-session-mobile',
+      pairingVerificationCode: '12345678',
+      nodeName: 'Home Aurora',
+    })
+    const setFeatureEnabled = vi.fn(async () => undefined)
+    const localFeatureSharing: LocalFeatureSharingPort = {
+      load: vi.fn(async () => ({
+        features: [
+          {
+            id: 'aurora.local.native.get_device_status.v1',
+            label: 'Device status',
+            description: 'Share battery and connectivity status.',
+            enabled: false,
+            available: true,
+            requiresAuroraOpen: true,
+            requiresLocalConfirmation: false,
+          },
+          {
+            id: 'aurora.local.native.share.v1',
+            label: 'Share from this phone',
+            description: 'Share an item selected on this phone.',
+            enabled: true,
+            available: true,
+            requiresAuroraOpen: true,
+            requiresLocalConfirmation: true,
+          },
+        ],
+        approvedDevices: [],
+      })),
+      setFeatureEnabled,
+      replacePeerSharing: vi.fn(async () => undefined),
+      revokePeerSharing: vi.fn(async () => undefined),
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <WebThinConnectionPanel
+          peer={peer as unknown as BrowserWebRtcPeerController}
+          mode="webrtc-only"
+          transportKind="native-mobile"
+          nativePlatform="android"
+          localFeatureSharing={localFeatureSharing}
+        />
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Choose what Home Aurora can use from this device')
+    expect(container.textContent).toContain('Device status')
+    expect(container.textContent).toContain('Share from this phone')
+    expect(container.textContent).not.toContain('Gateway')
+
+    await act(async () => {
+      container.querySelector<HTMLElement>('[role="checkbox"][aria-label="Device status"]')?.click()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      findButton(container, 'Approve connection').click()
+      await Promise.resolve()
+    })
+
+    expect(setFeatureEnabled).toHaveBeenCalledWith('aurora.local.native.get_device_status.v1', true)
+    expect(peer.confirmed).toEqual(['pair-session-mobile'])
+    expect(peer.pairingApprovals).toEqual([{
+      sharedFeatureIds: [
+        'aurora.local.native.get_device_status.v1',
+        'aurora.local.native.share.v1',
+      ],
+    }])
+  })
+
+  it('keeps pending pairing intent through transient disconnect states', async () => {
+    const peer = new FakeBrowserPeer({
+      status: 'pairing',
+      state: 'awaiting-sas-confirmation',
+      pairingSessionId: 'pair-session-9',
+      pairingVerificationCode: '87654321',
+    })
+    const controller = new BrowserWebRtcPeerController(
+      peer as unknown as PeerConnectionController,
+      'webrtc-only',
+      { httpFallback: false },
+    )
+    expect(controller.snapshot().pairingSessionId).toBe('pair-session-9')
+    expect(controller.snapshot().pairingVerificationCode).toBe('87654321')
+
+    ;(peer as unknown as { snapshotValue: BrowserWebRtcSnapshot }).snapshotValue.state = 'closed'
+    expect(controller.snapshot().pairingSessionId).toBe('pair-session-9')
+    ;(peer as unknown as { snapshotValue: BrowserWebRtcSnapshot }).snapshotValue = {
+      ...(peer as unknown as { snapshotValue: BrowserWebRtcSnapshot }).snapshotValue,
+      state: 'reconnecting',
+      status: 'connecting',
+      pairingSessionId: undefined,
+      pairingVerificationCode: undefined,
+    }
+    expect(controller.snapshot().pairingSessionId).toBe('pair-session-9')
+
+    await controller.disconnect('disconnect')
+    expect(peer.disconnectedReasons.at(-1)).toBe('disconnect')
+    expect(controller.snapshot().pairingSessionId).toBe('pair-session-9')
+
+    ;(peer as unknown as { snapshotValue: BrowserWebRtcSnapshot }).snapshotValue = {
+      ...(peer as unknown as { snapshotValue: BrowserWebRtcSnapshot }).snapshotValue,
+      state: 'authorized',
+      status: 'authorized',
+      pairingSessionId: undefined,
+      pairingVerificationCode: undefined,
+    }
+    expect(controller.snapshot().pairingSessionId).toBeUndefined()
+  })
+
+  it('blocks mobile pairing approval when local sharing options cannot be loaded', async () => {
+    const peer = new FakeBrowserPeer({
+      status: 'pairing',
+      pairingSessionId: 'pair-session-mobile',
+      pairingVerificationCode: '12345678',
+      nodeName: 'Home Aurora',
+    })
+    const localFeatureSharing: LocalFeatureSharingPort = {
+      load: vi.fn(async () => Promise.reject(new Error('unavailable'))),
+      setFeatureEnabled: vi.fn(async () => undefined),
+      replacePeerSharing: vi.fn(async () => undefined),
+      revokePeerSharing: vi.fn(async () => undefined),
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <WebThinConnectionPanel
+          peer={peer as unknown as BrowserWebRtcPeerController}
+          mode="webrtc-only"
+          transportKind="native-mobile"
+          nativePlatform="android"
+          localFeatureSharing={localFeatureSharing}
+        />
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('This device’s sharing options are unavailable right now. Try again.')
+    expect(findButton(container, 'Approve connection').disabled).toBe(true)
+    expect(peer.confirmed).toEqual([])
   })
 
   it('edits and saves a nonsecret desktop-thin connection profile', async () => {
@@ -1684,6 +1887,7 @@ describe('browser WebRTC thin-shell runtime', () => {
 
 class FakeBrowserPeer {
   confirmed: string[] = []
+  pairingApprovals: Array<PeerPairingApproval | undefined> = []
   connectedProfiles: WebRtcPeerConnectionProfile[] = []
   disconnectedReasons: string[] = []
   selectedCandidatePairEvidenceCalls = 0
@@ -1720,7 +1924,10 @@ class FakeBrowserPeer {
     if (profile) this.connectedProfiles.push(profile)
     return undefined
   }
-  async confirmPairing(sessionId: string) { this.confirmed.push(sessionId) }
+  async confirmPairing(sessionId: string, approval?: PeerPairingApproval) {
+    this.confirmed.push(sessionId)
+    this.pairingApprovals.push(approval)
+  }
   async rejectPairing(_sessionId: string) { return undefined }
   async getSelectedCandidatePairEvidence() {
     this.selectedCandidatePairEvidenceCalls += 1

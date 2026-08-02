@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import crypto from 'node:crypto'
+import dgram from 'node:dgram'
 import fs from 'node:fs/promises'
 import net from 'node:net'
 import os from 'node:os'
@@ -10,7 +11,9 @@ import { fileURLToPath } from 'node:url'
 import { assertRoleSwitchEvidence } from './role-switch-evidence.mjs'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
-const serviceScript = path.join(repoRoot, 'scripts/webrtc_interop_services.sh')
+const serviceScript = process.env.WEBRTC_INTEROP_SERVICE_SCRIPT
+  ? path.resolve(repoRoot, process.env.WEBRTC_INTEROP_SERVICE_SCRIPT)
+  : path.join(repoRoot, 'scripts/webrtc_interop_services.sh')
 const gatewayScript = path.join(repoRoot, 'scripts/webrtc_interop_gateway.py')
 const scannerScript = path.join(repoRoot, 'scripts/webrtc_interop_scan.py')
 const localWebDriverScript = path.join(repoRoot, 'tests/e2e/desktop_live/desktop-webdriver-driver.mjs')
@@ -85,6 +88,7 @@ async function runLive() {
   const driverCommand = process.env.AURORA_DESKTOP_LIVE_E2E_DRIVER_COMMAND
   const driverApplication = process.env.AURORA_DESKTOP_LIVE_E2E_APPLICATION
   const applicationPidFile = process.env.AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE
+  const webdriverProvider = process.env.AURORA_DESKTOP_LIVE_E2E_WEBDRIVER_PROVIDER ?? 'official'
 
   let servicesStarted = false
   let pythonPeer
@@ -94,7 +98,7 @@ async function runLive() {
   const cleanup = async () => {
     await terminateChild(pythonPeer, 5_000)
     if (servicesStarted) {
-      spawnSync(serviceScript, ['down'], { cwd: repoRoot, stdio: 'ignore' })
+      spawnSync('bash', [serviceScript, 'down'], { cwd: repoRoot, stdio: 'ignore' })
     }
     await fs.rm(runtimeDir, { recursive: true, force: true })
   }
@@ -109,13 +113,25 @@ async function runLive() {
       fs.rm(driverLogPath, { force: true }),
       fs.rm(sessionReportPath, { force: true }),
       fs.rm(finalReportPath, { force: true }),
-      applicationPidFile ? fs.rm(applicationPidFile, { force: true }) : Promise.resolve(),
+      applicationPidFile && webdriverProvider === 'official'
+        ? fs.rm(applicationPidFile, { force: true })
+        : Promise.resolve(),
     ])
 
-    run(serviceScript, ['up'])
+    runService(['up'])
     servicesStarted = true
     await waitForPort(9001, timeoutMs, 'MQTT broker')
     if (lane === 'turn') await waitForPort(3478, timeoutMs, 'TURN server')
+    if (lane === 'stun') await waitForPort(3478, timeoutMs, 'STUN server')
+    const hostIpv4 = lane === 'direct'
+      ? undefined
+      : process.env.WEBRTC_INTEROP_HOST_IPV4 ?? await resolveHostIpv4()
+    const stunServer = lane === 'stun'
+      ? process.env.WEBRTC_INTEROP_STUN ?? `stun:${hostIpv4}:3478`
+      : undefined
+    const turnServer = lane === 'turn'
+      ? process.env.WEBRTC_INTEROP_TURN ?? `turn:${hostIpv4}:3478?transport=udp`
+      : undefined
 
     pythonPeer = spawn('uv', [
       'run',
@@ -135,7 +151,8 @@ async function runLive() {
       room,
       '--timeout',
       String(Math.ceil(timeoutMs / 1000)),
-      ...(lane === 'turn' ? ['--turn', 'turn:127.0.0.1:3478?transport=udp'] : []),
+      ...(stunServer ? ['--stun', stunServer] : []),
+      ...(turnServer ? ['--turn', turnServer] : []),
     ], {
       cwd: repoRoot,
       env: {
@@ -572,6 +589,31 @@ function run(command, args) {
   const result = spawnSync(command, args, { cwd: repoRoot, stdio: 'inherit' })
   if (result.error) throw result.error
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} failed with status ${result.status}`)
+}
+
+function runService(args) {
+  run('bash', [serviceScript, ...args])
+}
+
+async function resolveHostIpv4() {
+  return new Promise((resolve, reject) => {
+    const socket = dgram.createSocket('udp4')
+    const closeWithError = (error) => {
+      socket.close()
+      reject(error)
+    }
+    socket.once('error', closeWithError)
+    socket.connect(9, '192.0.2.1', () => {
+      const address = socket.address()
+      socket.off('error', closeWithError)
+      socket.close()
+      if (typeof address === 'string' || !address.address) {
+        reject(new Error('Could not resolve a host IPv4 address for desktop WebRTC interop'))
+        return
+      }
+      resolve(address.address)
+    })
+  })
 }
 
 async function writeSessionReport(file, {

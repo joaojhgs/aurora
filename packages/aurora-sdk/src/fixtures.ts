@@ -1967,6 +1967,7 @@ export const meshStatusFixture: MeshStatusResponse = {
         'manifest_projection_stale',
         'incompatible_version',
         'provider_at_capacity',
+        'provider_unavailable',
         'legacy_unverifiable'
       ]
     },

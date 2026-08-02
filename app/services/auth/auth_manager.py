@@ -75,8 +75,10 @@ from app.shared.models.db import Device, MeshCredential, Token, User
 # Password hashing configuration
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
-# Default timeout for DB bus requests (seconds)
-_DB_TIMEOUT = 10.0
+# DB handlers may legitimately wait through SQLite's 30-second busy window.
+# Keep the bus caller alive past that window so timed-out callers do not leave
+# duplicate DB work running during startup contention.
+AUTH_DB_REQUEST_TIMEOUT_SECONDS = 35.0
 
 # Pairing requests without a transport-authenticated source share one bucket.
 # Do not derive this key from PairingStartRequest fields: they are controlled by
@@ -141,7 +143,12 @@ class AuthManager:
 
     # ── Bus helpers ──────────────────────────────────────────────────────
 
-    async def _db_request(self, topic: str, payload: Any, timeout: float = _DB_TIMEOUT) -> Any:
+    async def _db_request(
+        self,
+        topic: str,
+        payload: Any,
+        timeout: float = AUTH_DB_REQUEST_TIMEOUT_SECONDS,
+    ) -> Any:
         """Send a request to the DB service and return result.data or None."""
         result = await self.bus.request(topic, payload, timeout=timeout)
         if result.ok:
@@ -893,22 +900,38 @@ class AuthManager:
                 log_warning("Rejected conflicting duplicate pairing session")
                 return None
 
-            # A reconnect creates a new channel transcript and supersedes an
-            # older pending request from the same authenticated transport peer.
-            # Never reuse or reveal the old opaque handle.
+            # A reconnect creates a new channel transcript while the user may
+            # still be comparing or approving the prior request. Keep that
+            # request stable and refresh its transcript binding instead of
+            # creating another approval row. If the first side already approved,
+            # the approved status and grants must survive the retry.
             if trusted_rate_limit_key:
-                superseded = [
-                    (code, request)
-                    for code, request in self.pairing_requests.items()
-                    if request.get("pairing_session_id")
-                    and request.get("status") in {"pending", "approved"}
-                    and (
-                        request.get("rate_limit_key") == attempt_key
-                        or (remote_peer_id and request.get("remote_peer_id") == remote_peer_id)
+                for existing_code, existing in self.pairing_requests.items():
+                    if (
+                        not existing.get("pairing_session_id")
+                        or existing.get("status") not in {"pending", "approved"}
+                        or existing.get("remote_peer_id") != remote_peer_id
+                        or existing.get("room_name") != room_name
+                    ):
+                        continue
+                    previous_key = existing.get("rate_limit_key") or _UNATTRIBUTED_PAIRING_RATE_KEY
+                    if previous_key != attempt_key:
+                        self._release_pairing_attempt(existing)
+                        self.pairing_attempts[attempt_key] = (
+                            self.pairing_attempts.get(attempt_key, 0) + 1
+                        )
+                    existing.update(
+                        {
+                            "device_name": device_name,
+                            "client_ip": client_ip,
+                            "rate_limit_key": attempt_key,
+                            "remote_node_name": remote_node_name,
+                            "pairing_session_id": pairing_session_id,
+                            "verification_code": verification_code,
+                            "expires_at": now + timedelta(minutes=5),
+                        }
                     )
-                ]
-                for code, request in superseded:
-                    await self._expire_pairing(code, request)
+                    return existing_code
 
             if not await self.upsert_mesh_peer(
                 peer_id=remote_peer_id,
@@ -1457,13 +1480,14 @@ class AuthManager:
         stored_session = str(request.get("pairing_session_id") or "")
         if not stored_session or trusted_rate_limit_key is None:
             return True
+        if not pairing_session_id:
+            return False
+        if not secrets.compare_digest(stored_session, pairing_session_id):
+            return False
         stored_source = str(request.get("rate_limit_key") or "")
-        return secrets.compare_digest(
-            stored_session, pairing_session_id
-        ) and secrets.compare_digest(
-            stored_source,
-            trusted_rate_limit_key,
-        )
+        if not stored_source:
+            return False
+        return secrets.compare_digest(stored_source, trusted_rate_limit_key)
 
     def _release_pairing_attempt(self, request: dict[str, Any]) -> None:
         """Release one active rate-limit slot owned by ``request``."""

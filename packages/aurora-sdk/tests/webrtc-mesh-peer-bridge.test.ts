@@ -143,6 +143,17 @@ function ackFromManifest(manifest: Record<string, unknown>): Record<string, unkn
 }
 
 describe('WebRtcMeshPeerBridge', () => {
+  it('answers heartbeat pings before any provider manifest is negotiated', async () => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a' })
+
+    session.emit({ type: 'ping', id: 'heartbeat-1', ts: 123.5 })
+    await flush()
+
+    expect(session.sent).toContainEqual({ type: 'pong', id: 'heartbeat-1' })
+    bridge.close()
+  })
+
   it('sends exact call frames and resolves result/errors while ignoring unknown duplicates', async () => {
     const session = new FakeSession()
     const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: () => 'rpc-1', timeoutMs: 1000 })
@@ -941,6 +952,76 @@ describe('WebRtcMeshPeerBridge', () => {
     session.emit(ackFromLatestSentManifest(session))
     await flush()
     expect(session.sent.filter((frame) => (frame as any).type === 'provider_lease')).toHaveLength(3)
+  })
+
+  it('renews local provider leases automatically, pauses during reconnect, and stops after close', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000)
+      const peerHost = new WebRtcPeerHost({
+        localPeerId: 'local-peer',
+        nodeName: 'Local',
+        registry: createToolingPeerHostRegistry({
+          getTools: async () => ({ count: 0, tools: [] }),
+          getExportCatalog: async () => { throw new Error('not implemented') },
+          prepareExecution: async () => { throw new Error('not implemented') },
+          executeTool: async () => { throw new Error('not implemented') }
+        }),
+        authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+        clock: () => Date.now(),
+        randomId: (() => { let epoch = 0; return () => `epoch-${++epoch}` })()
+      })
+      const session = new FakeSession()
+      const bridge = new WebRtcMeshPeerBridge({
+        session,
+        remotePeerId: 'peer-a',
+        localPeerRole: 'hybrid',
+        peerHost,
+        localProtocolHello: buildProtocolHello({
+          role: 'hybrid',
+          capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1]
+        })
+      })
+
+      session.emit(buildProtocolHello({
+        role: 'hybrid',
+        capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1]
+      }))
+      await flush()
+      session.emit(ackFromLatestSentManifest(session))
+      await flush()
+      expect(session.sent.filter((frame) => (frame as any).type === 'provider_lease')).toHaveLength(1)
+
+      await vi.advanceTimersByTimeAsync(peerHost.lease.renewMs)
+      await flush()
+      expect(session.sent.filter((frame) => (frame as any).type === 'provider_lease')).toHaveLength(2)
+
+      session.setSnapshot({ state: 'reconnecting', authorized: false })
+      await vi.advanceTimersByTimeAsync(peerHost.lease.renewMs * 2)
+      await flush()
+      expect(session.sent.filter((frame) => (frame as any).type === 'provider_lease')).toHaveLength(2)
+
+      session.setSnapshot({ state: 'authorized', authorized: true, failed: false })
+      session.emit(buildProtocolHello({
+        role: 'hybrid',
+        capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1]
+      }))
+      await flush()
+      session.emit(ackFromLatestSentManifest(session))
+      await flush()
+      expect(session.sent.filter((frame) => (frame as any).type === 'provider_lease')).toHaveLength(3)
+
+      await vi.advanceTimersByTimeAsync(peerHost.lease.renewMs)
+      await flush()
+      expect(session.sent.filter((frame) => (frame as any).type === 'provider_lease')).toHaveLength(4)
+
+      bridge.close()
+      await vi.advanceTimersByTimeAsync(peerHost.lease.renewMs * 2)
+      await flush()
+      expect(session.sent.filter((frame) => (frame as any).type === 'provider_lease')).toHaveLength(4)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('requires a fresh lease after each negotiated provider manifest generation', async () => {

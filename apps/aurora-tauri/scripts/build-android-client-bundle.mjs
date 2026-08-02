@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { delimiter, dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -9,13 +9,16 @@ import { fileURLToPath } from 'node:url'
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = resolve(packageRoot, '..', '..')
 const srcTauriRoot = join(packageRoot, 'src-tauri')
-const artifactOutputRoot = join(
-  srcTauriRoot,
-  'gen',
-  'android',
-  'app',
-  'build',
-  'outputs',
+const artifactOutputRoot = resolve(
+  process.env.AURORA_TAURI_ANDROID_BUILD_OUTPUT_ROOT
+    ?? join(
+      srcTauriRoot,
+      'gen',
+      'android',
+      'app',
+      'build',
+      'outputs',
+    ),
 )
 const sourceConfigPath = resolve(
   process.env.AURORA_TAURI_ANDROID_CLIENT_SOURCE_CONFIG_PATH
@@ -34,6 +37,7 @@ if (!['apk', 'aab'].includes(kind)) {
 const tempDir = mkdtempSync(join(tmpdir(), `aurora-android-client-${kind}-`))
 const tempConfigPath = join(tempDir, 'tauri.android-client.conf.json')
 const tempPrepareReportPath = join(tempDir, 'android-client-bundle-prepare.json')
+const tempFrontendDist = join(tempDir, 'dist')
 const buildProvenancePath = resolve(
   process.env.AURORA_TAURI_ANDROID_CLIENT_BUILD_PROVENANCE_PATH
     ?? process.env.AURORA_TAURI_ANDROID_THIN_BUILD_PROVENANCE_PATH
@@ -51,6 +55,16 @@ try {
   configRaw = readFileSync(tempConfigPath, 'utf8')
   const config = JSON.parse(configRaw)
   const prepareReport = JSON.parse(readFileSync(tempPrepareReportPath, 'utf8'))
+
+  run('pnpm', ['build:frontend:android-client'])
+  stageFrontendDist(tempFrontendDist)
+  config.build = {
+    ...config.build,
+    beforeBuildCommand: null,
+    frontendDist: tempFrontendDist,
+  }
+  writeAtomicJson(tempConfigPath, config)
+  configRaw = readFileSync(tempConfigPath, 'utf8')
   const configSha256 = createHash('sha256').update(configRaw).digest('hex')
 
   run('pnpm', ['android:sync-native-plugin'])
@@ -185,6 +199,15 @@ function javaVersionRank(version) {
 
 function cleanAndroidBuildOutputs() {
   rmSync(artifactOutputRoot, { recursive: true, force: true })
+}
+
+function stageFrontendDist(destination) {
+  const source = join(packageRoot, 'dist')
+  if (!existsSync(source)) {
+    throw new Error(`Android client frontend build did not produce ${source}`)
+  }
+  rmSync(destination, { recursive: true, force: true })
+  cpSync(source, destination, { recursive: true })
 }
 
 function writeAtomicJson(path, value) {

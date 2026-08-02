@@ -15,7 +15,7 @@ const evidenceScript = resolve(
 )
 
 describe('iOS CI evidence validator', () => {
-  it('requires production simulator rendering and both WebRTC surfaces', () => {
+  it('requires production simulator rendering, browser direct, and WKWebView direct STUN and TURN evidence', () => {
     const root = createPassingFixture()
     const summaryPath = join(root, 'summary.json')
 
@@ -26,14 +26,16 @@ describe('iOS CI evidence validator', () => {
 
     expect(result.summary).toMatchObject({
       status: 'passed',
-      checkCount: 11,
+      checkCount: 19,
       failures: [],
       secretsRedacted: true,
     })
     expect(result.summary.requiredSurfaces).toEqual([
       'production-client-simulator',
-      'mobile-safari-webrtc',
-      'packaged-tauri-wkwebview-webrtc',
+      'mobile-safari-direct-webrtc',
+      'packaged-wkwebview-direct-webrtc',
+      'packaged-wkwebview-stun-webrtc',
+      'packaged-wkwebview-turn-webrtc',
     ])
     expect(JSON.parse(readFileSync(summaryPath, 'utf8'))).toMatchObject({
       status: 'passed',
@@ -68,7 +70,7 @@ describe('iOS CI evidence validator', () => {
       expect.arrayContaining([
         expect.stringContaining('production-simulator-render'),
         expect.stringContaining('invalid-report'),
-        expect.stringContaining('packaged-wkwebview-browser-protocol'),
+        expect.stringContaining('packaged-wkwebview-direct-browser-protocol'),
       ]),
     )
     const cli = runEvidenceCli(root)
@@ -85,14 +87,16 @@ function createPassingFixture() {
     secretsRedacted: true,
   })
   writeJson(join(root, 'ios-simulator-smoke.json'), simulatorReport())
-  for (const [directory, prefix] of [
-    ['ios-mobile-safari', 'ios-mobile-safari'],
-    ['ios-wkwebview', 'ios-wkwebview'],
+  for (const [directory, prefix, lane] of [
+    ['ios-mobile-safari', 'ios-mobile-safari', 'direct'],
+    ['ios-wkwebview', 'ios-wkwebview', 'direct'],
+    ['ios-wkwebview-stun', 'ios-wkwebview-stun', 'stun'],
+    ['ios-wkwebview-turn', 'ios-wkwebview-turn', 'turn'],
   ]) {
     const surfaceRoot = join(root, 'webrtc-interop', directory)
     writeJson(join(surfaceRoot, `${prefix}-browser-report.json`), {
       status: 'passed',
-      lane: 'direct',
+      lane,
       noHttpFetchTransportUsed: true,
       consoleErrors: [],
       screenshotEvidence: screenshotEvidence(),
@@ -108,7 +112,7 @@ function createPassingFixture() {
     })
     writeJson(join(surfaceRoot, 'report.json'), {
       status: 'passed',
-      lane: 'direct',
+      lane,
       pathCategoryAccepted: true,
       secretsRedacted: true,
     })

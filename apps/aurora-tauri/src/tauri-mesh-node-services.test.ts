@@ -86,6 +86,9 @@ describe("Tauri mesh node services", () => {
       AURORA_NATIVE_TOOL_IDS.getDeviceStatus,
     ]);
     expect(services.peerHost).toBe(services.localToolProvider.peerHost);
+    expect(services.localToolApprovals).toBe(
+      services.localToolProvider.approvalController,
+    );
     expect(services.authorityResolver).toBeDefined();
     expect(services.pairingIssuer).toBeDefined();
     expect(services.grantManager).toBeDefined();
@@ -215,6 +218,29 @@ describe("Tauri mesh node services", () => {
     });
     nowMs = 2_001;
     await expect(services.grantManager.listActiveGrants(selector)).resolves.toEqual([]);
+    await services.close();
+  });
+
+  it("refreshes the provider projection after local feature sharing changes", async () => {
+    const services = await createEnabledServices();
+    const refresh = vi
+      .spyOn(services.peerHost, "resumeLocalProvider")
+      .mockResolvedValue(undefined);
+
+    await services.localFeatureSharing.setFeatureEnabled(
+      AURORA_NATIVE_TOOL_IDS.getDeviceStatus,
+      true,
+    );
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+
+    await services.pairingIssuer.issue(selector, {
+      featureIds: [AURORA_NATIVE_TOOL_IDS.getDeviceStatus],
+    });
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
+
+    await services.localFeatureSharing.revokePeerSharing(selector.claimantPeerId);
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(3));
+
     await services.close();
   });
 

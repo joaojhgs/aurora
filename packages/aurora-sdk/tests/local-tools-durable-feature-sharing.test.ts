@@ -179,11 +179,203 @@ describe('durable local feature sharing controller', () => {
     expect(JSON.stringify(snapshot)).not.toMatch(/token-1|room-a|verifier|provider/u)
 
     const failingIssuer = new TrackingPeerPairingIssuer({
-      delegate: { issue: async () => { throw new Error('persistence failed') } },
+      delegate: {
+        issue: async () => { throw new Error('persistence failed') },
+        rollback: async () => undefined
+      },
       registry: fixture.controller
     })
     await expect(failingIssuer.issue({ ...selector, claimantPeerId: 'peer-b', tokenId: 'token-b' })).rejects.toThrow(/persistence/u)
     expect((await fixture.controller.load()).approvedDevices.map((peer) => peer.peerId)).toEqual(['peer-a'])
+  })
+
+  it('applies the locally selected features when a pairing credential is issued', async () => {
+    const fixture = await controllerFixture()
+    await fixture.controller.load()
+    await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
+    const issuer = new TrackingPeerPairingIssuer({
+      delegate: new PeerPairingIssuer({
+        verifierStore: new MemoryInboundCredentialVerifierStore(),
+        randomBytes: () => new Uint8Array(32).fill(9),
+        now: () => 100
+      }),
+      registry: fixture.controller,
+      labelForSelector: () => 'Phone'
+    })
+
+    await expect(issuer.issue(selector, { featureIds: [descriptor.toolContractId] })).resolves.toMatchObject({
+      grantedPermissions: ['Native.ShareText']
+    })
+
+    expect(await fixture.controller.load()).toMatchObject({
+      approvedDevices: [{
+        peerId: selector.claimantPeerId,
+        peerLabel: 'Phone',
+        featureIds: [descriptor.toolContractId],
+        expiresAtMs: null
+      }]
+    })
+  })
+
+  it('rolls back a failed scope grant and lets a fresh pairing replace the same peer without ambiguity', async () => {
+    const fixture = await controllerFixture()
+    await fixture.controller.load()
+    await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
+    const verifierStore = new MemoryInboundCredentialVerifierStore()
+    const baseIssuer = new PeerPairingIssuer({
+      verifierStore,
+      randomBytes: () => new Uint8Array(32).fill(10),
+      now: () => 100
+    })
+    const rollback = vi.spyOn(baseIssuer, 'rollback')
+    vi.spyOn(fixture.grantManager, 'replaceGrant').mockRejectedValueOnce(new Error('grant write failed'))
+    const issuer = new TrackingPeerPairingIssuer({
+      delegate: baseIssuer,
+      registry: fixture.controller,
+      labelForSelector: () => 'Phone'
+    })
+
+    await expect(issuer.issue(selector, { featureIds: [descriptor.toolContractId] })).rejects.toMatchObject({
+      code: 'sharing_unavailable'
+    })
+    await expect(verifierStore.getVerifier(selector, 101)).resolves.toBeUndefined()
+    expect((await fixture.controller.load()).approvedDevices).toEqual([])
+
+    await issuer.issue(secondSelector, { featureIds: [descriptor.toolContractId] })
+
+    expect(rollback).toHaveBeenCalledWith(selector)
+    expect(await fixture.controller.load()).toMatchObject({
+      approvedDevices: [{
+        peerId: selector.claimantPeerId,
+        peerLabel: 'Phone',
+        featureIds: [descriptor.toolContractId],
+        expiresAtMs: null
+      }]
+    })
+    await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toEqual([])
+    await expect(fixture.grantManager.listActiveGrants(secondSelector)).resolves.toHaveLength(1)
+  })
+
+  it('rotates a previously delivered credential and grant when the same peer pairs again', async () => {
+    const fixture = await controllerFixture()
+    await fixture.controller.load()
+    await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
+    const verifierStore = new MemoryInboundCredentialVerifierStore()
+    const baseIssuer = new PeerPairingIssuer({
+      verifierStore,
+      randomBytes: () => new Uint8Array(32).fill(11),
+      now: () => 100
+    })
+    const issuer = new TrackingPeerPairingIssuer({
+      delegate: baseIssuer,
+      registry: fixture.controller,
+      labelForSelector: () => 'Phone'
+    })
+
+    await issuer.issue(selector, { featureIds: [descriptor.toolContractId] })
+    await issuer.issue(secondSelector, { featureIds: [descriptor.toolContractId] })
+
+    await expect(verifierStore.getVerifier(selector, 101)).resolves.toBeUndefined()
+    await expect(verifierStore.getVerifier(secondSelector, 101)).resolves.toBeDefined()
+    await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toEqual([])
+    await expect(fixture.grantManager.listActiveGrants(secondSelector)).resolves.toHaveLength(1)
+    expect((await fixture.controller.load()).approvedDevices).toEqual([{
+      peerId: selector.claimantPeerId,
+      peerLabel: 'Phone',
+      featureIds: [descriptor.toolContractId],
+      expiresAtMs: null
+    }])
+  })
+
+  it('fails closed when the previous credential cannot be retired and converges on retry', async () => {
+    const fixture = await controllerFixture()
+    await fixture.controller.load()
+    await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
+    const verifierStore = new MemoryInboundCredentialVerifierStore()
+    const baseIssuer = new PeerPairingIssuer({
+      verifierStore,
+      randomBytes: () => new Uint8Array(32).fill(12),
+      now: () => 100
+    })
+    const issuer = new TrackingPeerPairingIssuer({
+      delegate: baseIssuer,
+      registry: fixture.controller,
+      labelForSelector: () => 'Phone'
+    })
+
+    await issuer.issue(selector, { featureIds: [descriptor.toolContractId] })
+    const rollback = vi.spyOn(baseIssuer, 'rollback')
+    rollback.mockRejectedValueOnce(new Error('old verifier deletion failed'))
+
+    await expect(issuer.issue(secondSelector, { featureIds: [descriptor.toolContractId] })).rejects.toThrow(
+      'old verifier deletion failed'
+    )
+
+    await expect(verifierStore.getVerifier(selector, 101)).resolves.toBeDefined()
+    await expect(verifierStore.getVerifier(secondSelector, 101)).resolves.toBeUndefined()
+    await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toHaveLength(1)
+    await expect(fixture.grantManager.listActiveGrants(secondSelector)).resolves.toEqual([])
+    expect((await fixture.controller.load()).approvedDevices).toEqual([{
+      peerId: selector.claimantPeerId,
+      peerLabel: 'Phone',
+      featureIds: [descriptor.toolContractId],
+      expiresAtMs: null
+    }])
+
+    await issuer.issue(secondSelector, { featureIds: [descriptor.toolContractId] })
+
+    await expect(verifierStore.getVerifier(selector, 101)).resolves.toBeUndefined()
+    await expect(verifierStore.getVerifier(secondSelector, 101)).resolves.toBeDefined()
+    await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toEqual([])
+    await expect(fixture.grantManager.listActiveGrants(secondSelector)).resolves.toHaveLength(1)
+    expect((await fixture.controller.load()).approvedDevices).toEqual([{
+      peerId: selector.claimantPeerId,
+      peerLabel: 'Phone',
+      featureIds: [descriptor.toolContractId],
+      expiresAtMs: null
+    }])
+  })
+
+  it('converges after the old credential retires but the replacement grant write fails', async () => {
+    const fixture = await controllerFixture()
+    await fixture.controller.load()
+    await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
+    const verifierStore = new MemoryInboundCredentialVerifierStore()
+    const baseIssuer = new PeerPairingIssuer({
+      verifierStore,
+      randomBytes: () => new Uint8Array(32).fill(13),
+      now: () => 100
+    })
+    const issuer = new TrackingPeerPairingIssuer({
+      delegate: baseIssuer,
+      registry: fixture.controller,
+      labelForSelector: () => 'Phone'
+    })
+
+    await issuer.issue(selector, { featureIds: [descriptor.toolContractId] })
+    vi.spyOn(fixture.grantManager, 'replaceGrant').mockRejectedValueOnce(new Error('replacement grant write failed'))
+
+    await expect(issuer.issue(secondSelector, { featureIds: [descriptor.toolContractId] })).rejects.toMatchObject({
+      code: 'sharing_unavailable'
+    })
+
+    await expect(verifierStore.getVerifier(selector, 101)).resolves.toBeUndefined()
+    await expect(verifierStore.getVerifier(secondSelector, 101)).resolves.toBeUndefined()
+    await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toHaveLength(1)
+    await expect(fixture.grantManager.listActiveGrants(secondSelector)).resolves.toEqual([])
+
+    await issuer.issue(secondSelector, { featureIds: [descriptor.toolContractId] })
+
+    await expect(verifierStore.getVerifier(selector, 101)).resolves.toBeUndefined()
+    await expect(verifierStore.getVerifier(secondSelector, 101)).resolves.toBeDefined()
+    await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toEqual([])
+    await expect(fixture.grantManager.listActiveGrants(secondSelector)).resolves.toHaveLength(1)
+    expect((await fixture.controller.load()).approvedDevices).toEqual([{
+      peerId: selector.claimantPeerId,
+      peerLabel: 'Phone',
+      featureIds: [descriptor.toolContractId],
+      expiresAtMs: null
+    }])
   })
 
   it('validates enabled registered features and writes exact grant contents and expiry', async () => {
@@ -403,10 +595,11 @@ async function controllerFixture() {
     profileId,
     localNodeId
   })
+  let grantSequence = 0
   const grantManager = new PeerGrantManager({
     repository,
     now: () => 1_000,
-    randomId: () => 'grant-1'
+    randomId: () => `grant-${++grantSequence}`
   })
   const controller = new DurableFeatureSharingController(controllerOptions(session, registry, grantManager))
   return { backend, session, registry, crypto, repository, grantManager, controller }

@@ -7,9 +7,8 @@ import os
 import re
 from pathlib import Path
 
-import aiosqlite
-
 from app.helpers.aurora_logger import log_info
+from app.services.db.sqlite_connection import database_connection
 
 
 class MigrationManager:
@@ -22,7 +21,7 @@ class MigrationManager:
 
     async def initialize_migration_table(self):
         """Create the migrations table if it doesn't exist"""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with database_connection(self.db_path) as db:
             await db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS migrations (
@@ -55,7 +54,7 @@ class MigrationManager:
 
     async def get_applied_migrations(self) -> list[str]:
         """Get list of applied migration versions"""
-        async with aiosqlite.connect(self.db_path) as db:
+        async with database_connection(self.db_path) as db:
             cursor = await db.execute("SELECT version FROM migrations ORDER BY version")
             rows = await cursor.fetchall()
             return [row[0] for row in rows]
@@ -67,7 +66,7 @@ class MigrationManager:
         with open(filename) as f:
             migration_sql = f.read()
 
-        async with aiosqlite.connect(self.db_path) as db:
+        async with database_connection(self.db_path) as db:
             # Execute migration SQL
             await db.executescript(migration_sql)
 

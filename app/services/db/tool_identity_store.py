@@ -15,6 +15,7 @@ from uuid import uuid4
 import aiosqlite
 
 from app.helpers.aurora_logger import log_error
+from app.services.db.sqlite_connection import close_database, open_database
 from app.shared.contracts.models.db import (
     DBAllocateToolIdentityRequest,
     DBAllocateToolIdentityResponse,
@@ -51,10 +52,7 @@ class ToolIdentityCollisionError(ValueError):
 
 
 async def _connect(db_path: str) -> aiosqlite.Connection:
-    db = await aiosqlite.connect(db_path)
-    await db.execute("PRAGMA foreign_keys = ON")
-    db.row_factory = aiosqlite.Row
-    return db
+    return await open_database(db_path, row_factory=aiosqlite.Row)
 
 
 def _rekey_json(
@@ -297,7 +295,7 @@ async def _record_conflict(
             await db.rollback()
         raise
     finally:
-        await db.close()
+        await close_database(db)
     return conflict_id
 
 
@@ -623,7 +621,7 @@ async def reconcile_tool_identity(
         )
     finally:
         if db is not None:
-            await db.close()
+            await close_database(db)
 
 
 async def allocate_tool_identity(
@@ -702,7 +700,7 @@ async def allocate_tool_identity(
             error=str(error),
         )
     finally:
-        await db.close()
+        await close_database(db)
 
     aliases = list(
         dict.fromkeys([request.legacy_identity_locator, *request.legacy_global_tool_ids])
@@ -784,4 +782,4 @@ async def resolve_tool_identity_aliases(
             }
         )
     finally:
-        await db.close()
+        await close_database(db)

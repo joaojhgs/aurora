@@ -31,6 +31,35 @@ const meshRoute = {
 } as RouteAvailability
 
 describe('mesh invite secret access', () => {
+  it('does not request local settings or invite credentials from a remote client surface', async () => {
+    let metadataReads = 0
+    let inviteReads = 0
+    const transport = new MockAuroraTransport()
+      .register('Config.GetSchemaMetadata', () => {
+        metadataReads += 1
+        return { fields: [], secrets_redacted: true }
+      })
+      .register('Gateway.GetMeshInviteConfig', () => {
+        inviteReads += 1
+        return {
+          app_id: 'should-not-be-read',
+          room: 'should-not-be-read',
+          room_password: 'should-not-be-read',
+        }
+      })
+
+    const snapshot = await buildMeshPeersSnapshot(
+      new AuroraClient({ transport }),
+      meshRoute,
+      { canManageLocalServiceConfiguration: false },
+    )
+
+    expect(metadataReads).toBe(0)
+    expect(inviteReads).toBe(0)
+    expect(snapshot.inviteConfig).toBeNull()
+    expect(snapshot.config.editable).toBe(false)
+  })
+
   it('uses only the dedicated invite credential method, never raw Config.Get', async () => {
     let rawConfigReads = 0
     const transport = new MockAuroraTransport()

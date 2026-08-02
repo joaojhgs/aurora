@@ -7,7 +7,11 @@ import pytest
 
 from app.messaging import QueryResult
 from app.services.db.manager import DatabaseManager
-from app.services.tooling.service import ToolingService
+from app.services.db.sqlite_connection import SQLITE_CONNECT_TIMEOUT_SECONDS
+from app.services.tooling.service import (
+    TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
+    ToolingService,
+)
 from app.services.tooling.tools_manager import ToolsManager
 from app.shared.contracts.models.db import DBAllocateToolIdentityRequest, DBMethods
 from app.shared.contracts.models.tooling import (
@@ -22,8 +26,10 @@ from app.shared.contracts.models.tooling import (
 class _IdentityBus:
     def __init__(self, manager: DatabaseManager):
         self.manager = manager
+        self.requests: list[tuple[str, dict[str, object]]] = []
 
-    async def request(self, topic, payload, **_kwargs):
+    async def request(self, topic, payload, **kwargs):
+        self.requests.append((topic, kwargs))
         if topic == DBMethods.ALLOCATE_TOOL_IDENTITY:
             response = await self.manager.allocate_tool_identity(payload)
         elif topic == DBMethods.RECONCILE_TOOL_IDENTITY:
@@ -186,3 +192,27 @@ async def test_name_only_same_named_mcp_tools_use_server_scoped_allocations(tmp_
     )
     assert mail._aurora_tool_identity.share_group_id == "mcp:mail"
     assert calendar._aurora_tool_identity.share_group_id == "mcp:calendar"
+
+
+@pytest.mark.asyncio
+async def test_identity_requests_outlive_sqlite_lock_wait_budget(tmp_path: Path):
+    """Tooling must not abandon a DB write while SQLite can still acquire its lock."""
+
+    db = DatabaseManager(str(tmp_path / "identity-timeout.db"))
+    await db.initialize()
+    bus = _IdentityBus(db)
+    service = await _service(bus, _NameOnlyPluginTool("create_event"))
+
+    await service._reconcile_local_tool_identities()
+
+    identity_topics = {
+        DBMethods.ALLOCATE_TOOL_IDENTITY,
+        DBMethods.RECONCILE_TOOL_IDENTITY,
+    }
+    identity_requests = [kwargs for topic, kwargs in bus.requests if topic in identity_topics]
+    assert identity_requests
+    assert TOOLING_DB_REQUEST_TIMEOUT_SECONDS > SQLITE_CONNECT_TIMEOUT_SECONDS
+    assert all(
+        kwargs["timeout"] == TOOLING_DB_REQUEST_TIMEOUT_SECONDS
+        for kwargs in identity_requests
+    )

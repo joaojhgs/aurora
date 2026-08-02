@@ -28,6 +28,7 @@ import {
 } from './execution-policy.js'
 import { validateJsonAgainstSchema } from './json-schema.js'
 import { LocalToolRegistry, type LocalToolExecutionContext } from './tool-registry.js'
+import type { ProviderLocalApprovalControllerPort, ProviderLocalApprovalDecision } from './provider-local-approval.js'
 
 const LOCAL_TOOL_HANDLER_ERROR_CODES = new Set([
   'capability_unavailable',
@@ -82,6 +83,7 @@ export interface LocalToolingProviderOptions {
     readonly switch_revision: number
     readonly protocol_revision: number
   }
+  readonly approvalController?: ProviderLocalApprovalControllerPort
 }
 
 export class LocalToolHandlerError extends Error {
@@ -145,7 +147,43 @@ export function createLocalToolingProviderHandlers(options: LocalToolingProvider
         return response
       }
       const execution = executionContext(context)
-      const prepared = await options.policy.validateForExecute(entry, request, execution)
+      let prepared = await options.policy.validateForExecute(entry, request, execution)
+      let localApprovalClaimId: string | null = null
+      if (
+        options.approvalController
+        && !request.approval_token
+        && prepared.policy_decision.reason === 'approval_token_required'
+      ) {
+        const decision = await options.approvalController.awaitApproval({
+          prepared,
+          request,
+          context: execution,
+          toolDisplayName: entry.descriptor.displayName,
+          toolDescription: entry.descriptor.description,
+          signal: context.signal
+        })
+        if (decision.status === 'approved') {
+          localApprovalClaimId = decision.approvalId
+          try {
+            const approvalToken = options.policy.issueApprovalToken(prepared, request, execution)
+            prepared = await options.policy.validateForExecute(entry, {
+              ...request,
+              confirmed: true,
+              approval_token: approvalToken
+            }, execution)
+          } catch {
+            options.approvalController.releaseClaim(localApprovalClaimId)
+            localApprovalClaimId = null
+            prepared = denyPrepared(prepared, 'local_approval_unavailable')
+          }
+          if (!prepared.ok || !prepared.policy_decision.allowed) {
+            if (localApprovalClaimId) options.approvalController.releaseClaim(localApprovalClaimId)
+            localApprovalClaimId = null
+          }
+        } else {
+          prepared = denyPrepared(prepared, localApprovalReason(decision))
+        }
+      }
       if (!prepared.ok || !prepared.policy_decision.allowed) {
         const response = parseBoundary('Tooling.ExecuteTool.output.ToolingExecuteToolResponse', ToolingExecuteToolOutputToolingExecuteToolResponseSchema, {
           ok: false,
@@ -164,6 +202,7 @@ export function createLocalToolingProviderHandlers(options: LocalToolingProvider
         return response
       }
       if (request.dry_run) {
+        if (localApprovalClaimId) options.approvalController?.consumeClaim(localApprovalClaimId)
         const response = parseBoundary('Tooling.ExecuteTool.output.ToolingExecuteToolResponse', ToolingExecuteToolOutputToolingExecuteToolResponseSchema, {
           ok: true,
           data: null,
@@ -181,8 +220,17 @@ export function createLocalToolingProviderHandlers(options: LocalToolingProvider
         return response
       }
       if (context.signal.aborted) {
+        if (localApprovalClaimId) options.approvalController?.releaseClaim(localApprovalClaimId)
         const response = cancelledExecute(prepared)
         await audit(options, context, auditFromExecuteResponse('execute', response, request, context, options, 'cancelled'))
+        return response
+      }
+      if (
+        localApprovalClaimId
+        && !options.approvalController?.consumeClaim(localApprovalClaimId)
+      ) {
+        const response = failedExecute(prepared, 'local_approval_already_used')
+        await audit(options, context, auditFromExecuteResponse('execute', response, request, context, options, 'denied'))
         return response
       }
       try {
@@ -226,6 +274,40 @@ export function createLocalToolingProviderHandlers(options: LocalToolingProvider
         return response
       }
     }
+  }
+}
+
+function denyPrepared(
+  prepared: ToolingPrepareExecutionResponse,
+  reason: string
+): ToolingPrepareExecutionResponse {
+  return {
+    ...prepared,
+    ok: false,
+    policy_decision: {
+      ...prepared.policy_decision,
+      allowed: false,
+      reason
+    }
+  }
+}
+
+function localApprovalReason(decision: ProviderLocalApprovalDecision): string {
+  switch (decision.status) {
+    case 'denied':
+      return 'local_approval_denied'
+    case 'pending_timeout':
+      return 'local_approval_pending'
+    case 'cancelled':
+      return 'cancelled'
+    case 'expired':
+      return 'local_approval_expired'
+    case 'already_consumed':
+      return 'local_approval_already_used'
+    case 'closed':
+      return 'local_approval_unavailable'
+    case 'approved':
+      return 'local_approval_unavailable'
   }
 }
 

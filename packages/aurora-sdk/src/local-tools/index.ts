@@ -34,6 +34,18 @@ export {
   safeToolError,
   sanitizeHandlerData
 } from './execution-policy.js'
+export {
+  ProviderLocalApprovalController
+} from './provider-local-approval.js'
+export type {
+  ProviderLocalApprovalChoice,
+  ProviderLocalApprovalControllerOptions,
+  ProviderLocalApprovalControllerPort,
+  ProviderLocalApprovalDecision,
+  ProviderLocalApprovalRequest,
+  ProviderLocalApprovalSnapshot,
+  ProviderLocalApprovalWaitInput
+} from './provider-local-approval.js'
 export type {
   LocalToolExecuteRequest,
   LocalToolExecutionPolicyOptions,

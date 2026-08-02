@@ -10,6 +10,36 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const requiredWebRtcSurfaces = [
+  {
+    id: 'mobile-safari-direct',
+    surface: 'mobile-safari',
+    lane: 'direct',
+    directory: 'ios-mobile-safari',
+    prefix: 'ios-mobile-safari',
+  },
+  {
+    id: 'packaged-wkwebview-direct',
+    surface: 'packaged-wkwebview',
+    lane: 'direct',
+    directory: 'ios-wkwebview',
+    prefix: 'ios-wkwebview',
+  },
+  {
+    id: 'packaged-wkwebview-stun',
+    surface: 'packaged-wkwebview',
+    lane: 'stun',
+    directory: 'ios-wkwebview-stun',
+    prefix: 'ios-wkwebview-stun',
+  },
+  {
+    id: 'packaged-wkwebview-turn',
+    surface: 'packaged-wkwebview',
+    lane: 'turn',
+    directory: 'ios-wkwebview-turn',
+    prefix: 'ios-wkwebview-turn',
+  },
+]
 
 export function validateIosCiEvidence(options = {}) {
   const reportRoot = resolve(
@@ -35,37 +65,25 @@ export function validateIosCiEvidence(options = {}) {
       'ios-simulator-smoke.json',
       failures,
     ),
-    mobileSafariBrowser: readJson(
-      reportRoot,
-      'webrtc-interop/ios-mobile-safari/ios-mobile-safari-browser-report.json',
-      failures,
-    ),
-    mobileSafariPython: readJson(
-      reportRoot,
-      'webrtc-interop/ios-mobile-safari/python-gateway-report.json',
-      failures,
-    ),
-    mobileSafariAggregate: readJson(
-      reportRoot,
-      'webrtc-interop/ios-mobile-safari/report.json',
-      failures,
-    ),
-    wkWebViewBrowser: readJson(
-      reportRoot,
-      'webrtc-interop/ios-wkwebview/ios-wkwebview-browser-report.json',
-      failures,
-    ),
-    wkWebViewPython: readJson(
-      reportRoot,
-      'webrtc-interop/ios-wkwebview/python-gateway-report.json',
-      failures,
-    ),
-    wkWebViewAggregate: readJson(
-      reportRoot,
-      'webrtc-interop/ios-wkwebview/report.json',
-      failures,
-    ),
   }
+  const webRtcDocuments = requiredWebRtcSurfaces.map((surface) => ({
+    ...surface,
+    browser: readJson(
+      reportRoot,
+      `webrtc-interop/${surface.directory}/${surface.prefix}-browser-report.json`,
+      failures,
+    ),
+    python: readJson(
+      reportRoot,
+      `webrtc-interop/${surface.directory}/python-gateway-report.json`,
+      failures,
+    ),
+    aggregate: readJson(
+      reportRoot,
+      `webrtc-interop/${surface.directory}/report.json`,
+      failures,
+    ),
+  }))
 
   check(
     checks,
@@ -93,22 +111,9 @@ export function validateIosCiEvidence(options = {}) {
     documents.simulator?.screenshotEvidence,
   )
 
-  checkWebRtcSurface(
-    checks,
-    failures,
-    'mobile-safari',
-    documents.mobileSafariBrowser,
-    documents.mobileSafariPython,
-    documents.mobileSafariAggregate,
-  )
-  checkWebRtcSurface(
-    checks,
-    failures,
-    'packaged-wkwebview',
-    documents.wkWebViewBrowser,
-    documents.wkWebViewPython,
-    documents.wkWebViewAggregate,
-  )
+  for (const surface of webRtcDocuments) {
+    checkWebRtcSurface(checks, failures, surface)
+  }
 
   const summary = {
     schema: 'aurora.ios-ci-evidence-summary.v1',
@@ -116,8 +121,9 @@ export function validateIosCiEvidence(options = {}) {
     generatedAt: new Date().toISOString(),
     requiredSurfaces: [
       'production-client-simulator',
-      'mobile-safari-webrtc',
-      'packaged-tauri-wkwebview-webrtc',
+      ...requiredWebRtcSurfaces.map(
+        (surface) => `${surface.id}-webrtc`,
+      ),
     ],
     checkCount: checks.length,
     checks,
@@ -131,22 +137,20 @@ export function validateIosCiEvidence(options = {}) {
 function checkWebRtcSurface(
   checks,
   failures,
-  id,
-  browser,
-  python,
-  aggregate,
+  surface,
 ) {
+  const { id, lane, browser, python, aggregate } = surface
   check(
     checks,
     failures,
     `${id}-browser-protocol`,
     browser?.status === 'passed' &&
-      browser?.lane === 'direct' &&
+      browser?.lane === lane &&
       browser?.noHttpFetchTransportUsed === true &&
       browser?.secretsRedacted === true &&
       Array.isArray(browser?.consoleErrors) &&
       browser.consoleErrors.length === 0,
-    `${id} browser report must pass direct WebRTC without HTTP fallback, console errors, or exposed secrets`,
+    `${id} browser report must pass ${lane} WebRTC without HTTP fallback, console errors, or exposed secrets`,
   )
   checkScreenshot(
     checks,
@@ -171,10 +175,10 @@ function checkWebRtcSurface(
     failures,
     `${id}-aggregate`,
     aggregate?.status === 'passed' &&
-      aggregate?.lane === 'direct' &&
+      aggregate?.lane === lane &&
       aggregate?.pathCategoryAccepted === true &&
       aggregate?.secretsRedacted === true,
-    `${id} aggregate interoperability report must pass its accepted direct path with redacted secrets`,
+    `${id} aggregate interoperability report must pass its accepted ${lane} path with redacted secrets`,
   )
 }
 

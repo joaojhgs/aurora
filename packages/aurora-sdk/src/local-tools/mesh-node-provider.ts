@@ -17,6 +17,7 @@ import {
 } from './execution-policy.js'
 import { providerServiceInstanceId } from './identity.js'
 import type { LocalToolRegistry } from './tool-registry.js'
+import type { ProviderLocalApprovalControllerPort } from './provider-local-approval.js'
 import {
   createLocalToolingProviderHandlers,
   type LocalToolAuditPort
@@ -38,6 +39,7 @@ export interface MeshNodeLocalToolProviderOptions {
   readonly defaultTimeoutMs?: PeerHostOptions['defaultTimeoutMs']
   readonly tokenTtlSeconds?: number | undefined
   readonly nowSeconds?: () => number
+  readonly approvalController?: ProviderLocalApprovalControllerPort | undefined
 }
 
 export interface MeshNodeLocalToolProviderComposition {
@@ -48,6 +50,7 @@ export interface MeshNodeLocalToolProviderComposition {
   readonly providerPeerId: string
   readonly serviceInstanceId: string
   readonly registeredToolIds: readonly string[]
+  readonly approvalController?: ProviderLocalApprovalControllerPort | undefined
   readonly enabled: boolean
 }
 
@@ -93,7 +96,8 @@ export function createMeshNodeLocalToolProvider(
     audit: options.audit ?? (() => undefined),
     ...(enabled && options.exportDecision ? { exportDecision: options.exportDecision } : {}),
     ...(options.cursorSecret ? { cursorSecret: options.cursorSecret } : {}),
-    ...(options.nowSeconds ? { nowSeconds: options.nowSeconds } : {})
+    ...(options.nowSeconds ? { nowSeconds: options.nowSeconds } : {}),
+    ...(options.approvalController ? { approvalController: options.approvalController } : {})
   })
   const peerHostRegistry = enabled
     ? createToolingPeerHostRegistry(handlers)
@@ -121,6 +125,7 @@ export function createMeshNodeLocalToolProvider(
     providerPeerId: options.localPeerId,
     serviceInstanceId,
     registeredToolIds: registeredTools.map((tool) => tool.descriptor.toolContractId),
+    ...(options.approvalController ? { approvalController: options.approvalController } : {}),
     enabled
   }
 }

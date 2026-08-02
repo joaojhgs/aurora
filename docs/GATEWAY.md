@@ -637,6 +637,7 @@ When `api.auth_enabled` is `true`, the RTCClient enforces a strict auth gate:
 3. **RPC allowlist**: Anonymous peers may call `PairingStart`, `PairingConnect`, `PairingExchange`, and `Login`. Other RPC calls return 401.
 4. **Event blocking**: Events from anonymous peers are silently dropped.
 5. **Smart auth timeout (heartbeat loop)**: Instead of a single fire-and-forget timer, the auth gate runs a periodic heartbeat check (every 5 seconds) that monitors whether the peer has authenticated. When a peer starts pairing via `PairingStart`, the deadline is extended to `webrtc_pairing_timeout_seconds` (default 300s). If the peer authenticates before the deadline, the loop exits. If the deadline passes without authentication, the peer is disconnected with `"auth_timeout"`.
+6. **Partial-pairing recovery**: A credential direction completed before transport loss is resumed only after its holder proves that credential against the new SDP/channel binding. The verifier answers subsequent pairing calls for that direction with `status="already_trusted"`; the peer skips duplicate exchange and continues only the still-missing bilateral direction.
 
 When `api.auth_enabled` is `false`:
 - Peers receive the `OPEN_PEER` identity immediately (full permissions).

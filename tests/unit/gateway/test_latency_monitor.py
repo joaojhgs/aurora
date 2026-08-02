@@ -20,10 +20,11 @@ def mock_rtc_client():
 @pytest.fixture
 def mock_peer_registry():
     reg = MagicMock()
-    reg.get_negotiated_peers = MagicMock(
+    reg.get_all_peers = MagicMock(
         return_value=[
             PeerState(peer_id="peer-1", status="negotiated"),
-            PeerState(peer_id="peer-2", status="negotiated"),
+            PeerState(peer_id="peer-2", status="authenticated"),
+            PeerState(peer_id="peer-stale", status="stale"),
         ]
     )
     reg.update_latency = AsyncMock()
@@ -153,5 +154,6 @@ class TestPingLoop:
         await asyncio.sleep(0.25)
         await monitor.stop()
 
-        # Should have sent pings to both peers
-        assert mock_rtc_client.send_to_peer.call_count >= 2
+        # Provider, consumer-only, and stale peers all stay probeable.
+        sent_peers = {call.args[0] for call in mock_rtc_client.send_to_peer.call_args_list}
+        assert {"peer-1", "peer-2", "peer-stale"}.issubset(sent_peers)

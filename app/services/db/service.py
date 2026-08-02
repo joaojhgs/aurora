@@ -16,12 +16,15 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+import aiosqlite
+
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import Envelope, QueryResult
 from app.services.db.manager import DatabaseManager, MeshManagedAuthorityError
 from app.services.db.models import CronJob, JobStatus, Message, MessageType, ScheduleType
 from app.services.db.rag_service import RAGService
 from app.services.db.scheduler_db_service import SchedulerDatabaseService
+from app.services.db.sqlite_connection import database_connection
 from app.shared.contracts.models.common import EmptyOutput
 from app.shared.contracts.models.db import (
     DBAbortToolingRemoteCatalogSyncRequest,
@@ -2377,10 +2380,8 @@ class DBService(BaseService):
         event: str | None = None,
     ) -> int:
         """Internal helper to count audit events matching filters."""
-        import aiosqlite
-
         try:
-            async with aiosqlite.connect(self.db_manager.db_path) as db:
+            async with database_connection(self.db_manager.db_path) as db:
                 query_str = "SELECT COUNT(*) FROM audit_log WHERE 1=1"
                 params: list[object] = []
                 if event:
@@ -2781,8 +2782,6 @@ class DBService(BaseService):
         Returns rows for SELECTs and rowcount for writes.
         """
         try:
-            import aiosqlite
-
             protected_error = _protected_authority_write_error(cmd.sql)
             if protected_error is not None:
                 return DBExecuteSQLResponse(
@@ -2793,8 +2792,9 @@ class DBService(BaseService):
                 )
 
             params = tuple(cmd.params) if cmd.params else ()
-            async with aiosqlite.connect(self.db_manager.db_path) as db:
-                db.row_factory = aiosqlite.Row
+            async with database_connection(
+                self.db_manager.db_path, row_factory=aiosqlite.Row
+            ) as db:
                 cursor = await db.execute(cmd.sql, params)
 
                 # Detect if this is a SELECT (returns rows)

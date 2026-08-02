@@ -52,7 +52,7 @@ describe('settings/native route separation', () => {
     expect(settingsMarkup).toContain('Theme, accessibility, and local storage')
     expect(settingsMarkup).toContain('Connection choices')
     expect(settingsMarkup).toContain('Needs confirmation')
-    expect(settingsMarkup).toContain('redacted non-secret UI preferences')
+    expect(settingsMarkup).toContain('Display choices only')
 
     expect(settingsMarkup).not.toContain('Native permissions and capabilities')
     expect(settingsMarkup).not.toContain('Tauri tray status')

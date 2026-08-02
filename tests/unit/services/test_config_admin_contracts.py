@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.messaging import QueryResult
+from app.messaging.local_bus import LocalBus
 from app.services.config.config_manager import ConfigManager
 from app.services.config.messages import UpdateConfigCommand
 from app.services.config.service import ConfigService
@@ -24,6 +25,7 @@ from app.shared.contracts.models.config import (
     ConfigVersionHistoryRequest,
 )
 from app.shared.contracts.registry import list_modules
+from app.shared.messaging.bus_init import set_bus
 
 
 @pytest.fixture
@@ -31,8 +33,10 @@ def config_service(tmp_path, monkeypatch):
     ConfigManager._instance = None
     config_path = tmp_path / "config.json"
     monkeypatch.setenv("AURORA_CONFIG_FILE", str(config_path))
+    set_bus(LocalBus(validate_topics=False))
     service = ConfigService()
     yield service
+    set_bus(None)  # type: ignore[arg-type]
     ConfigManager._instance = None
 
 
@@ -600,6 +604,73 @@ async def test_auth_preflight_retries_then_success(config_service, monkeypatch):
     assert config_service.config_manager.mesh_policy_rbac_report_path.endswith(
         "config.json.mesh-policy-rbac.json"
     )
+
+
+@pytest.mark.asyncio
+async def test_config_startup_defers_auth_dependent_work(config_service, monkeypatch):
+    original_sleep = asyncio.sleep
+    sleep_started = asyncio.Event()
+    release_startup = asyncio.Event()
+
+    async def wait_for_foundation_services(delay: float) -> None:
+        assert delay > 0
+        sleep_started.set()
+        await release_startup.wait()
+
+    monkeypatch.setattr(
+        "app.services.config.service.asyncio.sleep",
+        wait_for_foundation_services,
+    )
+    config_service.config_manager.mesh_policy_migration_audit = {"changed": True}
+    refreshed_report = {
+        "release_blocking": False,
+        "reason": "ready",
+        "services": [],
+    }
+    config_service.refresh_mesh_policy_rbac_preflight = AsyncMock(return_value=refreshed_report)
+    config_service._audit_mesh_config_event = AsyncMock()
+    auth_ready = False
+    monkeypatch.setattr(
+        config_service.bus,
+        "has_subscribers",
+        lambda topic: auth_ready,
+    )
+
+    await config_service.on_start()
+    await original_sleep(0)
+    await sleep_started.wait()
+
+    config_service.refresh_mesh_policy_rbac_preflight.assert_not_awaited()
+    config_service._audit_mesh_config_event.assert_not_awaited()
+
+    auth_ready = True
+    release_startup.set()
+    assert config_service._mesh_policy_rbac_task is not None
+    await config_service._mesh_policy_rbac_task
+
+    config_service.refresh_mesh_policy_rbac_preflight.assert_awaited_once_with()
+    assert config_service._audit_mesh_config_event.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_config_startup_skips_auth_request_when_local_contract_never_appears(
+    config_service,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "app.services.config.service.AUTH_DEPENDENT_STARTUP_POLL_ATTEMPTS",
+        2,
+    )
+    monkeypatch.setattr(
+        "app.services.config.service.asyncio.sleep",
+        AsyncMock(),
+    )
+    config_service.refresh_mesh_policy_rbac_preflight = AsyncMock()
+    config_service._audit_mesh_config_event = AsyncMock()
+
+    await config_service._run_startup_mesh_policy_tasks()
+
+    config_service.refresh_mesh_policy_rbac_preflight.assert_not_awaited()
 
 
 @pytest.mark.asyncio

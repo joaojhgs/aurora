@@ -4,6 +4,7 @@ import { cloneFixture, meshStatusFixture } from '../src/fixtures.js'
 import type {
   ManifestAck,
   MeshCompatibilityReasonCode,
+  MeshRoutingReasonCode,
   MeshStatusResponse
 } from '../src/types.js'
 
@@ -20,6 +21,10 @@ const G009_REASON_CODES = [
   'provider_at_capacity',
   'legacy_unverifiable'
 ] as const satisfies readonly MeshCompatibilityReasonCode[]
+
+const ROUTING_ONLY_REASON_CODES = [
+  'provider_unavailable'
+] as const satisfies readonly MeshRoutingReasonCode[]
 
 describe('G009 mesh status contracts', () => {
   it('keeps legacy manifest ACK arrays while accepting additive revisions and reasons', () => {
@@ -100,6 +105,7 @@ describe('G009 mesh status contracts', () => {
     )
 
     for (const reason of G009_REASON_CODES) expect(fixtureReasons.has(reason)).toBe(true)
+    for (const reason of ROUTING_ONLY_REASON_CODES) expect(fixtureReasons.has(reason)).toBe(true)
     expect(fixtureReasons.has('eligible')).toBe(false)
 
     const serialized = JSON.stringify(fixture).toLowerCase()

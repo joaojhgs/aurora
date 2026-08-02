@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { CheckCircle2, ChevronDown, Copy, Cpu, FileText, Image as ImageIcon, Laptop, LoaderCircle, MessageSquarePlus, Mic, Network, Paperclip, Radio, RotateCcw, Route as RouteIcon, ArrowUp, ShieldAlert, StopCircle, Volume2, WifiOff, Wrench, XCircle, X } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Copy, Cpu, FileText, History, Image as ImageIcon, Laptop, LoaderCircle, MessageSquarePlus, Mic, Network, Paperclip, Radio, RotateCcw, Route as RouteIcon, ArrowUp, ShieldAlert, StopCircle, Volume2, WifiOff, Wrench, XCircle, X } from 'lucide-react'
 import type {
   AttachmentContextIngestResponse,
   AttachmentContextItem,
@@ -13,6 +13,7 @@ import type {
   AssistantMessage as SdkAssistantMessage,
   AssistantRoutePolicy,
   AssistantStreamUpdate,
+  AuthSessionSnapshot,
   AuroraClient,
   AuroraError,
   AuroraResponse,
@@ -23,6 +24,17 @@ import type {
   ModelRuntimeModelInfo,
   ModelRuntimeProviderInfo
 } from '@aurora/client'
+import type { LightweightConfirmationEvent, LightweightOrchestrator } from '@aurora/client/lightweight-orchestrator'
+import {
+  buildEnvelopeAad,
+  createLocalConversations,
+  type ConversationMessageRecord,
+  type ConversationRecord,
+  type EnvelopeCryptoPort,
+  type LocalConversationSummary,
+  type LocalDataScope,
+  type LocalDataSession,
+} from '@aurora/client/local-data'
 import type { AssistantVoiceRoutes, RouteAvailability } from './shell-data'
 import { RouteSheet } from './route-sheet'
 import { AudioRecorderVisualizer } from './audio-recorder-visualizer'
@@ -51,9 +63,22 @@ import {
 import { ToolFallbackArgs, ToolFallbackContent, ToolFallbackResult, ToolFallbackRoot } from '#components/assistant-ui/tool-fallback'
 import { ModelSelector, type ModelOption } from '#components/assistant-ui/model-selector'
 import { Badge } from '#components/ui/badge'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '#components/ui/sheet'
 import { EvidenceBadge, StatusBadge } from './status-badges'
 import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from './platform-surface'
 import type { AuroraSurfaceProfile } from './platform-surface'
+import {
+  createLightweightAssistantOrchestrator,
+  isLightweightLocalAssistantAvailable,
+  type LightweightAssistantDependencies,
+} from './local-assistant/lightweight-assistant'
 
 
 export interface AssistantViewProps {
@@ -69,6 +94,8 @@ export interface AssistantViewProps {
   storageKey?: string
   initialSession?: AssistantSessionSnapshot | undefined
   runtimeHealth?: AssistantRuntimeHealth | undefined
+  executionHost?: 'this-device' | 'connected-device'
+  localAssistant?: LightweightAssistantDependencies | null | undefined
 }
 
 export interface AssistantRuntimeHealth {
@@ -78,12 +105,20 @@ export interface AssistantRuntimeHealth {
   gatewayHealth: string
 }
 
+function assistantAuthScope(auth: AuthSessionSnapshot): string {
+  return `${auth.state}:${auth.principalId ?? ''}:${[...auth.effectivePermissions].sort().join(',')}`
+}
+
 export interface AssistantExecutionOption {
   id: string
   mode: 'local' | 'dispatch'
+  runner: 'aurora-route' | 'lightweight-local'
   label: string
   description: string
   routePolicy: AssistantRoutePolicy
+  executionPeerId: string | null
+  transportHost: boolean
+  modelCatalogHost: 'mixed' | 'this-device' | 'connected-device'
 }
 
 export interface AssistantModelChoice {
@@ -130,6 +165,7 @@ export interface AssistantToolCallCard {
   approvalRequestId?: string | null | undefined
   approvalExpiresAt?: number | null | undefined
   policyDecisionId?: string | null | undefined
+  localConfirmationToken?: string | null | undefined
   resolving?: boolean | undefined
 }
 
@@ -153,6 +189,20 @@ type AssistantApprovalGrantScope = 'once' | 'session' | 'until_expiry' | 'always
 export interface AssistantSessionSnapshot {
   sessionId: string | null
   messages: AssistantUiMessage[]
+}
+
+interface AssistantConversationRow {
+  id: string
+  title: string
+  route: string
+  updated: string
+  active: boolean
+}
+
+interface LocalAssistantHistoryDependencies {
+  localData: LocalDataSession
+  envelopeCrypto: EnvelopeCryptoPort
+  scope: LocalDataScope
 }
 
 export type AssistantStreamStatus = 'idle' | 'streaming' | 'fallback' | 'lost' | 'cancelled'
@@ -279,15 +329,19 @@ export function AssistantView({
   recentVoiceEvents = emptyVoiceEventList,
   storageKey = defaultStorageKey,
   initialSession,
-  runtimeHealth
+  runtimeHealth,
+  executionHost = 'this-device',
+  localAssistant = null
 }: AssistantViewProps) {
   const [session, setSession] = useState<AssistantSessionSnapshot>(() => initialSession ?? defaultAssistantSessionForTransport(client.transport.kind))
   const [sessionIndex, setSessionIndex] = useState<DBSessionRecord[]>([])
+  const [localConversationRows, setLocalConversationRows] = useState<AssistantConversationRow[]>([])
   const [sessionIndexLoading, setSessionIndexLoading] = useState(false)
   const [sessionIndexError, setSessionIndexError] = useState<string | null>(null)
+  const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false)
   const [sessionAuthScope, setSessionAuthScope] = useState(() => {
     const auth = client.auth.snapshot()
-    return `${auth.state}:${auth.principalId ?? ''}`
+    return assistantAuthScope(auth)
   })
   const sessionAuthScopeRef = useRef(sessionAuthScope)
   const [text, setText] = useState('')
@@ -358,7 +412,26 @@ export function AssistantView({
   }
   const activePendingIdRef = useRef<string | null>(null)
   const cancelledPendingIdsRef = useRef<Set<string>>(new Set())
-  const executionOptions = useMemo(() => assistantExecutionOptions(route), [route])
+  const localConfirmationOrchestratorsRef = useRef<Map<string, LightweightOrchestrator>>(new Map())
+  const localAssistantAvailable = localAssistant !== null && isLightweightLocalAssistantAvailable(localAssistant)
+  const localOrchestrator = useMemo(
+    () => localAssistant === null ? null : createLightweightAssistantOrchestrator(localAssistant),
+    [localAssistant]
+  )
+  const localHistory = useMemo(
+    () => resolveLocalAssistantHistoryDependencies(localAssistant, executionHost),
+    [
+      executionHost,
+      localAssistant?.localData,
+      localAssistant?.envelopeCrypto,
+      localAssistant?.scope?.localNodeId,
+      localAssistant?.scope?.profileId,
+    ]
+  )
+  const executionOptions = useMemo(
+    () => assistantExecutionOptions(route, { executionHost, localExecutionAvailable: localAssistantAvailable }),
+    [executionHost, localAssistantAvailable, route]
+  )
   const executionPeerLabels = useMemo(
     () => {
       const labels = new Map<string, string>()
@@ -369,8 +442,8 @@ export function AssistantView({
         labels.set(peerId, executionPeerLabel(candidate.nodeName ?? candidate.label, peerId))
       }
       for (const option of executionOptions) {
-        if (option.mode === 'dispatch' && option.routePolicy.peerId) {
-          labels.set(option.routePolicy.peerId, option.label)
+        if (option.mode === 'dispatch' && option.executionPeerId) {
+          labels.set(option.executionPeerId, option.label)
         }
       }
       return labels
@@ -378,8 +451,11 @@ export function AssistantView({
     [executionOptions, route.candidateProviders]
   )
   const selectedExecution = executionOptions.find((option) => option.id === executionOptionId) ?? executionOptions[0]!
+  const localExecutionMessageLabel = 'Local'
   const routePolicy = selectedExecution.routePolicy
-  const activeModelCatalog = selectedExecution.mode === 'local' ? localModelCatalog : dispatchModelCatalog
+  const activeModelCatalog = selectedExecution.mode === 'local' || selectedExecution.transportHost
+    ? localModelCatalog
+    : dispatchModelCatalog
   const modelChoices = useMemo(
     () => assistantModelChoices(activeModelCatalog, selectedExecution),
     [activeModelCatalog, selectedExecution]
@@ -394,14 +470,27 @@ export function AssistantView({
   )
   const selectedModelChoice = modelChoices.find((choice) => choice.id === selectedModelChoiceId) ?? modelChoices[0]!
   const inferencePolicy = assistantInferencePolicy(selectedModelChoice, route)
-  const supportsPersistedSessions = client.transport.kind !== 'mock' && client.transport.kind !== 'mesh'
+  const usesLocalConversationHistory = localHistory !== null
+  const supportsPersistedSessions = !usesLocalConversationHistory
+    && selectedExecution.runner !== 'lightweight-local'
+    && client.transport.kind !== 'mock'
+    && client.transport.kind !== 'mesh'
+  const conversationRows = usesLocalConversationHistory
+    ? localConversationRows.map((row) => ({ ...row, active: row.id === session.sessionId }))
+    : assistantConversationRows(session, sessionIndex, client.transport.kind)
   const sessionMessages = session.messages
   const isSending = sessionMessages.some((message) => message.status === 'sending')
   const isStreaming = sessionMessages.some((message) => message.status === 'streaming')
   const hasContextUpload = attachments.some((attachment) => attachment.status === 'uploading')
-  const controls = assistantControlsForRoute(route, cancellationRoute, isSending || isStreaming || hasContextUpload)
+  const controls = selectedExecution.runner === 'lightweight-local'
+    ? {
+        canSend: localOrchestrator !== null && !isSending && !isStreaming && !hasContextUpload,
+        canCancel: isSending || isStreaming,
+        cancelReason: isSending || isStreaming ? 'Stop is available for this response.' : 'no active response'
+      }
+    : assistantControlsForRoute(route, cancellationRoute, isSending || isStreaming || hasContextUpload)
   const canSend = controls.canSend && (!supportsPersistedSessions || Boolean(session.sessionId)) && !sessionIndexLoading
-  const canAttach = !route.disabled && !isSending && !isStreaming && !hasContextUpload
+  const canAttach = controls.canSend && !isSending && !isStreaming && !hasContextUpload
   const attachmentsAwaitingValidation = attachments.filter((attachment) =>
     attachment.status === 'staged' || attachment.status === 'error'
   )
@@ -410,10 +499,16 @@ export function AssistantView({
   const retryableFailure = Boolean(lastPrompt) && (
     streamState.status === 'lost' ||
     streamState.status === 'fallback' ||
+    streamState.status === 'cancelled' ||
     voiceCaptureStatus === 'error' ||
     sessionMessages.some((message) => message.status === 'failed')
   )
-  const primaryComposerAction: 'send' | 'stop' | 'retry' = retryableFailure ? 'retry' : assistantBusy || voiceBusy ? 'stop' : 'send'
+  const hasFreshPrompt = text.trim().length > 0
+  const primaryComposerAction: 'send' | 'stop' | 'retry' = retryableFailure && !hasFreshPrompt
+    ? 'retry'
+    : assistantBusy || voiceBusy
+      ? 'stop'
+      : 'send'
   const primaryComposerDisabled = primaryComposerAction === 'send'
     ? !canSend || hasContextUpload || text.trim().length === 0
     : primaryComposerAction === 'retry'
@@ -427,8 +522,12 @@ export function AssistantView({
       : 'Send assistant prompt'
   const contextSummary = summarizeAttachments(attachments)
   const runtimeStrip = useMemo(
-    () => buildAssistantRuntimeStrip(runtimeHealth, modelLabel, route, client.transport.kind),
-    [runtimeHealth, modelLabel, route, client.transport.kind]
+    () => ({
+      ...buildAssistantRuntimeStrip(runtimeHealth, modelLabel, route, client.transport.kind),
+      selectedModel: safeAssistantRuntimeValue(selectedModelChoice.model.name, modelLabel),
+      routeLabel: selectedExecution.mode === 'local' ? localExecutionMessageLabel : selectedExecution.label
+    }),
+    [client.transport.kind, localExecutionMessageLabel, modelLabel, route, runtimeHealth, selectedExecution, selectedModelChoice.model.name]
   )
   const surfaceProfile = useMemo(() => getAuroraSurfaceProfile({
     runtimeMode: client.transport.kind === 'tauri-local' ? 'desktop-local' : client.transport.kind === 'native-mobile' ? 'mobile' : undefined,
@@ -557,28 +656,70 @@ export function AssistantView({
     }
   }
 
+  async function initializeLocalSessions(
+    generation: number,
+    history: LocalAssistantHistoryDependencies,
+  ) {
+    setSessionIndexLoading(true)
+    setSessionIndexError(null)
+    try {
+      const rows = await loadLocalAssistantConversationRows(history)
+      if (sessionLoadGenerationRef.current !== generation) return
+      setLocalConversationRows(rows)
+      const activeSessionId = session.sessionId && rows.some((row) => row.id === session.sessionId)
+        ? session.sessionId
+        : rows[0]?.id ?? null
+      if (activeSessionId) {
+        const messages = await loadLocalAssistantConversationMessages(history, activeSessionId)
+        if (sessionLoadGenerationRef.current !== generation) return
+        setSession({ sessionId: activeSessionId, messages })
+      } else {
+        setSession(emptyAssistantSession())
+      }
+    } catch {
+      if (sessionLoadGenerationRef.current !== generation) return
+      setLocalConversationRows([])
+      setSession(emptyAssistantSession())
+      setSessionIndexError('Saved chats could not be opened. Your data was not changed.')
+    } finally {
+      if (sessionLoadGenerationRef.current === generation) {
+        setSessionIndexLoading(false)
+      }
+    }
+  }
+
   useEffect(() => {
     return client.auth.subscribe((auth) => {
-      const nextScope = `${auth.state}:${auth.principalId ?? ''}`
+      const nextScope = assistantAuthScope(auth)
       if (sessionAuthScopeRef.current === nextScope) return
       sessionAuthScopeRef.current = nextScope
-      if (supportsPersistedSessions) {
+      if (supportsPersistedSessions || usesLocalConversationHistory) {
         sessionLoadGenerationRef.current += 1
         resetConversationUi(emptyAssistantSession())
         setSessionIndex([])
+        setLocalConversationRows([])
         setSessionIndexError(null)
         setSessionIndexLoading(true)
       }
       setSessionAuthScope(nextScope)
     })
-  }, [client, supportsPersistedSessions])
+  }, [client, supportsPersistedSessions, usesLocalConversationHistory])
 
   useEffect(() => {
+    if (usesLocalConversationHistory && localHistory) {
+      const generation = sessionLoadGenerationRef.current + 1
+      sessionLoadGenerationRef.current = generation
+      setSessionIndex([])
+      setLocalConversationRows([])
+      void initializeLocalSessions(generation, localHistory)
+      return
+    }
     if (client.transport.kind === 'mock') {
       const stored = loadAssistantSession(storageKey)
       const nextSession = initialSession ?? (stored.sessionId || stored.messages.length > 0 ? stored : defaultAssistantSessionForTransport(client.transport.kind))
       setSession(nextSession)
       setSessionIndex([])
+      setLocalConversationRows([])
       setSessionIndexLoading(false)
       setSessionIndexError(null)
       return
@@ -586,6 +727,7 @@ export function AssistantView({
     if (!supportsPersistedSessions) {
       setSession(emptyAssistantSession())
       setSessionIndex([])
+      setLocalConversationRows([])
       setSessionIndexLoading(false)
       setSessionIndexError('Saved chats are unavailable for this connection.')
       return
@@ -595,8 +737,9 @@ export function AssistantView({
     sessionLoadGenerationRef.current = generation
     setSession(emptyAssistantSession())
     setSessionIndex([])
+    setLocalConversationRows([])
     void initializePersistedSessions(generation)
-  }, [client, client.transport.kind, initialSession, sessionAuthScope, storageKey, supportsPersistedSessions])
+  }, [client, client.transport.kind, initialSession, localHistory, sessionAuthScope, storageKey, supportsPersistedSessions, usesLocalConversationHistory])
 
   useEffect(() => {
     if (client.transport.kind !== 'mock') return
@@ -613,6 +756,8 @@ export function AssistantView({
 
   useEffect(() => () => {
     abortRef.current?.abort()
+    for (const orchestrator of localConfirmationOrchestratorsRef.current.values()) orchestrator.cancel()
+    localConfirmationOrchestratorsRef.current.clear()
     clearVoiceResponseTimeout()
     clearReadAloudFallbackTimer()
     stopStreamedTtsPlayback()
@@ -627,19 +772,17 @@ export function AssistantView({
       const catalog = await client.models.listCatalog({
         include_unavailable: true,
         include_operations: false,
-        includeRemote: true,
-        includeCloudModels: true
+        includeRemote: true
       })
       const remoteCatalogs = await Promise.all(
         executionOptions
-          .filter((option) => option.mode === 'dispatch')
+          .filter((option) => option.mode === 'dispatch' && !option.transportHost)
           .map(async (execution) => {
             try {
               const remoteCatalog = await client.models.listCatalog({
                 include_unavailable: true,
                 include_operations: false,
                 includeRemote: true,
-                includeCloudModels: true,
                 meshSelector: {
                   peerId: execution.routePolicy.peerId ?? null,
                   providerId: execution.routePolicy.providerId ?? null,
@@ -680,7 +823,7 @@ export function AssistantView({
   }, [client, executionOptions, route.item.privacyClass])
 
   useEffect(() => {
-    if (selectedExecution.mode !== 'dispatch') {
+    if (selectedExecution.mode !== 'dispatch' || selectedExecution.transportHost) {
       setDispatchModelCatalog(null)
       setModelCatalogLoading(localModelCatalog === null)
       setModelCatalogError(null)
@@ -693,7 +836,6 @@ export function AssistantView({
       include_unavailable: true,
       include_operations: false,
       includeRemote: true,
-      includeCloudModels: true,
       meshSelector: {
         peerId: selectedExecution.routePolicy.peerId ?? null,
         providerId: selectedExecution.routePolicy.providerId ?? null,
@@ -809,7 +951,7 @@ export function AssistantView({
       active = false
       controller.abort()
     }
-  }, [client])
+  }, [client, sessionAuthScope])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -835,7 +977,7 @@ export function AssistantView({
       active = false
       controller.abort()
     }
-  }, [client])
+  }, [client, sessionAuthScope])
 
   function resetConversationUi(nextSession: AssistantSessionSnapshot) {
     abortRef.current?.abort()
@@ -875,6 +1017,22 @@ export function AssistantView({
     }
   }
 
+  async function openLocalSession(sessionId: string) {
+    if (!localHistory) return
+    setSessionIndexLoading(true)
+    setSessionIndexError(null)
+    try {
+      const messages = await loadLocalAssistantConversationMessages(localHistory, sessionId)
+      resetConversationUi({ sessionId, messages })
+      setMobileHistoryOpen(false)
+      window.setTimeout(() => textAreaRef.current?.focus(), 0)
+    } catch {
+      setSessionIndexError('This chat could not be opened. Your saved data was not changed.')
+    } finally {
+      setSessionIndexLoading(false)
+    }
+  }
+
   async function refreshPersistedSessionIndex() {
     if (!supportsPersistedSessions) return
     const listed = await client.memory.listSessions({ type: 'chat', limit: 100 })
@@ -884,6 +1042,16 @@ export function AssistantView({
     }
     setSessionIndex(sortSessionsByModification(listed.data.sessions))
     setSessionIndexError(null)
+  }
+
+  async function refreshLocalSessionIndex() {
+    if (!localHistory) return
+    try {
+      setLocalConversationRows(await loadLocalAssistantConversationRows(localHistory))
+      setSessionIndexError(null)
+    } catch {
+      setSessionIndexError('Saved chats could not be refreshed. Your data was not changed.')
+    }
   }
 
   async function createPersistedChatSession(): Promise<DBSessionRecord | null> {
@@ -945,7 +1113,9 @@ export function AssistantView({
   async function startAssistantTurn(prompt: string, replayFrom: string | null = null) {
     const now = new Date().toISOString()
     const requestId = `assistant-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-    let turnSessionId = session.sessionId
+    let turnSessionId = usesLocalConversationHistory || supportsPersistedSessions
+      ? session.sessionId
+      : null
     if (!turnSessionId && supportsPersistedSessions) {
       const created = await createPersistedChatSession()
       if (!created) return
@@ -967,8 +1137,8 @@ export function AssistantView({
       status: 'streaming',
       modelLabel: selectedModelChoice.model.name,
       providerLabel: selectedModelChoice.provider ? 'Selected model source' : runtimeProviderLabel ?? route.providerLabel,
-      routeLabel: selectedExecution.mode === 'local' ? 'Local' : selectedExecution.label,
-      executionPeerId: selectedExecution.routePolicy.peerId
+      routeLabel: selectedExecution.mode === 'local' ? localExecutionMessageLabel : selectedExecution.label,
+      executionPeerId: selectedExecution.executionPeerId
     }
 
     setText('')
@@ -987,25 +1157,55 @@ export function AssistantView({
     setActiveAssistantPendingId(pendingMessage.id)
     cancelledPendingIdsRef.current.delete(pendingMessage.id)
     let terminalSeen = false
+    let completedRemoteUpdate: AssistantStreamUpdate | null = null
     try {
-      for await (const update of client.assistant.streamMessage({
-        text: prompt,
-        sessionId: turnSessionId,
-        requestId,
-        routePolicy,
-        inferencePolicy,
-        signal: abort.signal,
-        replayFrom,
-        clientTtsPlayback: !surfaceProfile.usesLocalSidecar
-      })) {
-        applyAssistantStreamUpdate(update, pendingMessage.id)
-        if (update.kind === 'completed') {
-          terminalSeen = true
-          continue
+      if (selectedExecution.runner === 'lightweight-local') {
+        if (!localOrchestrator) throw new Error('On-device assistant is unavailable.')
+        const result = await localOrchestrator.runTurn({
+          text: prompt,
+          conversationId: turnSessionId,
+          providerId: inferencePolicy?.runtimeProviderId ?? inferencePolicy?.providerId ?? null,
+          modelId: inferencePolicy?.modelId ?? null,
+          signal: abort.signal
+        })
+        terminalSeen = true
+        await applyLightweightAssistantResult(result, pendingMessage.id, localOrchestrator)
+      } else {
+        for await (const update of client.assistant.streamMessage({
+          text: prompt,
+          sessionId: turnSessionId,
+          requestId,
+          routePolicy,
+          inferencePolicy,
+          signal: abort.signal,
+          replayFrom,
+          clientTtsPlayback: !surfaceProfile.usesLocalSidecar
+        })) {
+          applyAssistantStreamUpdate(update, pendingMessage.id)
+          if (update.kind === 'completed' || update.kind === 'fallback') {
+            completedRemoteUpdate = update
+          }
+          if (update.kind === 'completed') {
+            terminalSeen = true
+            continue
+          }
+          if (isAssistantStreamHardTerminal(update)) {
+            terminalSeen = true
+            break
+          }
         }
-        if (isAssistantStreamHardTerminal(update)) {
-          terminalSeen = true
-          break
+        if (completedRemoteUpdate && localHistory) {
+          try {
+            await persistConnectedAssistantTurnToLocalHistory(localHistory, {
+              conversationId: turnSessionId,
+              requestId,
+              prompt,
+              response: completedRemoteUpdate.text,
+              createdAtMs: Date.parse(now),
+            })
+          } catch {
+            setSessionIndexError('This reply could not be saved on this device.')
+          }
         }
       }
       if (!terminalSeen && !abort.signal.aborted && !cancelledPendingIdsRef.current.has(pendingMessage.id)) {
@@ -1019,8 +1219,89 @@ export function AssistantView({
       if (abortRef.current === abort) abortRef.current = null
       if (activePendingIdRef.current === pendingMessage.id) activePendingIdRef.current = null
       setActiveAssistantPendingId((current) => current === pendingMessage.id ? null : current)
-      void refreshPersistedSessionIndex()
+      if (usesLocalConversationHistory) {
+        void refreshLocalSessionIndex()
+      } else {
+        void refreshPersistedSessionIndex()
+      }
     }
+  }
+
+  async function applyLightweightAssistantResult(
+    result: Awaited<ReturnType<LightweightOrchestrator['runTurn']>>,
+    pendingId: string,
+    orchestrator: LightweightOrchestrator
+  ): Promise<void> {
+    if (result.status === 'awaiting_confirmation' && result.confirmation) {
+      const confirmation = result.confirmation
+      localConfirmationOrchestratorsRef.current.set(confirmation.token, orchestrator)
+      setSession((current) => ({
+        sessionId: result.conversationId,
+        messages: current.messages.map((message) =>
+          message.id === pendingId
+            ? {
+                ...message,
+                text: result.assistantText.trim() || 'Aurora needs your approval before continuing.',
+                status: 'sent',
+                toolCalls: [lightweightConfirmationToolCard(confirmation)],
+                routeLabel: localExecutionMessageLabel,
+                executionPeerId: null
+              }
+            : message
+        )
+      }))
+      setStreamState({ status: 'idle', lastEventId: null, message: 'Aurora needs your approval before continuing.' })
+      return
+    }
+    if (result.status === 'cancelled') {
+      setSession((current) => ({
+        sessionId: result.conversationId,
+        messages: current.messages.map((message) =>
+          message.id === pendingId
+            ? { ...message, text: 'Stopped by user.', status: 'cancelled' }
+            : message
+        )
+      }))
+      setStreamState({ status: 'cancelled', lastEventId: null, message: 'Aurora stopped responding.' })
+      return
+    }
+    const completedText = result.assistantText.trim()
+    const createdAt = new Date().toISOString()
+    let persistedMessages: AssistantUiMessage[] | null = null
+    if (localHistory) {
+      try {
+        persistedMessages = await loadLocalAssistantConversationMessages(localHistory, result.conversationId)
+      } catch {
+        persistedMessages = null
+      }
+    }
+    setLastResult({ id: pendingId, role: 'assistant', text: completedText, createdAt })
+    setModelLabel(selectedModelChoice.model.name)
+    setSession((current) => ({
+      sessionId: result.conversationId,
+      messages: persistedMessages
+        ? enrichLatestLocalAssistantMessage(persistedMessages, {
+            text: completedText,
+            modelLabel: selectedModelChoice.model.name,
+            providerLabel: selectedModelChoice.provider?.display_name ?? 'Selected model source',
+            routeLabel: localExecutionMessageLabel,
+          })
+        : current.messages.map((message) =>
+            message.id === pendingId
+              ? {
+                  ...message,
+                  text: completedText,
+                  createdAt,
+                  status: 'sent',
+                  modelLabel: selectedModelChoice.model.name,
+                  providerLabel: selectedModelChoice.provider?.display_name ?? 'Selected model source',
+                  routeLabel: localExecutionMessageLabel,
+                  executionPeerId: null
+                }
+              : message
+          )
+    }))
+    setStreamState({ status: 'idle', lastEventId: null, message: 'Aurora finished responding.' })
   }
 
   function markAssistantTurnFailed(pendingId: string, failureCopy: string) {
@@ -1134,8 +1415,8 @@ export function AssistantView({
                 status: 'sent',
                 modelLabel: result.data.modelLabel,
                 providerLabel,
-                routeLabel: selectedExecution.mode === 'local' ? 'Local' : selectedExecution.label,
-                executionPeerId: selectedExecution.routePolicy.peerId
+                routeLabel: selectedExecution.mode === 'local' ? localExecutionMessageLabel : selectedExecution.label,
+                executionPeerId: selectedExecution.executionPeerId
               }
             : message
         )
@@ -1194,7 +1475,7 @@ export function AssistantView({
     if (update.kind === 'tool') {
       setSession((current) => ({
         ...current,
-        sessionId: update.sessionId ?? current.sessionId,
+        sessionId: usesLocalConversationHistory ? current.sessionId : update.sessionId ?? current.sessionId,
         messages: current.messages.map((message) =>
           message.id === pendingId ? applyAssistantToolUpdate(message, update) : message
         )
@@ -1265,20 +1546,22 @@ export function AssistantView({
           status: 'streaming',
           modelLabel: modelLabel ?? runtimeHealth?.selectedModel ?? null,
           providerLabel: runtimeProviderLabel ?? route.providerLabel,
-          routeLabel: selectedExecution.mode === 'local' ? 'Local' : selectedExecution.label,
-          executionPeerId: selectedExecution.routePolicy.peerId
+          routeLabel: selectedExecution.mode === 'local' ? localExecutionMessageLabel : selectedExecution.label,
+          executionPeerId: selectedExecution.executionPeerId
         }
         const terminalMessage = applyAssistantTerminalUpdate({
           ...baseMessage,
           modelLabel: update.modelLabel ?? baseMessage.modelLabel,
           providerLabel: metadataStringValue(update.metadata, 'provider_label') ?? metadataStringValue(update.metadata, 'provider') ?? baseMessage.providerLabel,
-          routeLabel: baseMessage.routeLabel ?? (selectedExecution.mode === 'local' ? 'Local' : selectedExecution.label),
-          executionPeerId: baseMessage.executionPeerId ?? selectedExecution.routePolicy.peerId
+          routeLabel: baseMessage.routeLabel ?? (selectedExecution.mode === 'local' ? localExecutionMessageLabel : selectedExecution.label),
+          executionPeerId: baseMessage.executionPeerId ?? selectedExecution.executionPeerId
         }, update)
         lastAssistantMessageIdRef.current = terminalMessage.id
         const replaced = current.messages.some((message) => message.id === terminalMessage.id)
         return {
-          sessionId: update.sessionId ?? current.sessionId ?? session.sessionId,
+          sessionId: usesLocalConversationHistory
+            ? current.sessionId ?? session.sessionId
+            : update.sessionId ?? current.sessionId ?? session.sessionId,
           messages: replaced
             ? current.messages.map((message) => message.id === terminalMessage.id ? terminalMessage : message)
             : [...current.messages, terminalMessage]
@@ -1408,7 +1691,7 @@ export function AssistantView({
               status: 'streaming' as const,
               modelLabel: modelLabel ?? runtimeHealth?.selectedModel ?? null,
               providerLabel: runtimeProviderLabel ?? route.providerLabel,
-              routeLabel: 'Local'
+              routeLabel: localExecutionMessageLabel
             }])
           ]
         }
@@ -1549,7 +1832,7 @@ export function AssistantView({
         status: 'streaming',
         modelLabel: update.modelLabel ?? modelLabel,
         providerLabel,
-        routeLabel: 'Local',
+        routeLabel: localExecutionMessageLabel,
         ...(existing || {})
       }, update)
       setLastResult({
@@ -1712,7 +1995,7 @@ export function AssistantView({
     approve: boolean,
     grantScope: AssistantApprovalGrantScope
   ) {
-    if (!tool.pendingId && !tool.approvalRequestId) {
+    if (!tool.pendingId && !tool.approvalRequestId && !tool.localConfirmationToken) {
       setLastError('This tool approval card is missing backend approval identifiers.')
       return
     }
@@ -1727,6 +2010,51 @@ export function AssistantView({
       }))
     }))
     try {
+      if (tool.localConfirmationToken) {
+        const orchestrator = localConfirmationOrchestratorsRef.current.get(tool.localConfirmationToken)
+        if (!orchestrator) throw new Error('This on-device approval has expired.')
+        const result = await orchestrator.resumeConfirmation({
+          token: tool.localConfirmationToken,
+          decision: approve ? 'approve' : 'deny',
+          grantScope
+        })
+        localConfirmationOrchestratorsRef.current.delete(tool.localConfirmationToken)
+        const assistantText = result.assistantText.trim()
+        setSession((current) => ({
+          sessionId: result.conversationId,
+          messages: current.messages.map((message) => {
+            if (!message.toolCalls?.some((candidate) => candidate.id === tool.id)) return message
+            return {
+              ...message,
+              text: assistantText || (approve
+                ? 'Aurora finished the approved action.'
+                : 'Aurora stopped this action because it was denied.'),
+              status: 'sent',
+              toolCalls: message.toolCalls.map((candidate) =>
+                candidate.id === tool.id
+                  ? {
+                      ...candidate,
+                      resolving: false,
+                      status: approve && result.status === 'completed' ? 'completed' : 'failed',
+                      summary: approve && result.status === 'completed'
+                        ? 'Approved and completed on this device.'
+                        : 'Denied on this device.',
+                      error: approve && result.status === 'completed' ? null : 'approval_denied'
+                    }
+                  : candidate
+              )
+            }
+          })
+        }))
+        setStreamState({
+          status: 'idle',
+          lastEventId: null,
+          message: approve && result.status === 'completed'
+            ? 'Aurora finished the approved action.'
+            : 'The action was denied.'
+        })
+        return
+      }
       const request: Parameters<typeof client.assistant.resumeToolApproval>[0] = {
         approve,
         grant_scope: grantScope,
@@ -1771,6 +2099,9 @@ export function AssistantView({
         })
       }))
     } catch (error) {
+      if (tool.localConfirmationToken) {
+        localConfirmationOrchestratorsRef.current.delete(tool.localConfirmationToken)
+      }
       const message = productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error)))
       setLastError(message)
       setSession((current) => ({
@@ -1847,6 +2178,19 @@ export function AssistantView({
     const pendingId = activePendingIdRef.current
     if (pendingId) cancelledPendingIdsRef.current.add(pendingId)
     abortRef.current?.abort()
+    if (selectedExecution.runner === 'lightweight-local') {
+      localOrchestrator?.cancel()
+      setStreamState((current) => ({ ...current, status: 'cancelled', message: 'Aurora stopped responding.' }))
+      setSession((current) => ({
+        ...current,
+        messages: current.messages.map((message) =>
+          message.status === 'streaming' || message.status === 'sending'
+            ? { ...message, status: 'cancelled', text: message.text.trim() ? message.text : 'Stopped by user.' }
+            : message
+        )
+      }))
+      return
+    }
     const result = await client.assistant.cancel({
       sessionId: session.sessionId,
       reason: 'user_interrupt'
@@ -1868,7 +2212,7 @@ export function AssistantView({
 
   async function retryLastPrompt(replay = false) {
     if (!lastPrompt || !canSend) return
-    await startAssistantTurn(replay ? lastPrompt : lastPrompt, replay ? streamState.lastEventId : null)
+    await startAssistantTurn(lastPrompt, replay ? streamState.lastEventId : null)
   }
 
   async function onPrimaryComposerAction() {
@@ -2271,7 +2615,9 @@ export function AssistantView({
   }
 
   async function startNewConversation() {
-    if (supportsPersistedSessions) {
+    if (usesLocalConversationHistory) {
+      resetConversationUi(emptyAssistantSession())
+    } else if (supportsPersistedSessions) {
       setSessionIndexLoading(true)
       const created = await createPersistedChatSession()
       setSessionIndexLoading(false)
@@ -2280,6 +2626,7 @@ export function AssistantView({
     } else {
       resetConversationUi(emptyAssistantSession())
     }
+    setMobileHistoryOpen(false)
     textAreaRef.current?.focus()
   }
 
@@ -2288,27 +2635,36 @@ export function AssistantView({
       <h1 id="assistant-title" className="aui-sr-only">Text chat with Aurora</h1>
       <AssistantRuntimeStrip health={runtimeStrip} />
 
-      {streamState.status === 'lost' || streamState.status === 'fallback' ? (
+      {streamState.status === 'lost' || streamState.status === 'fallback' || streamState.status === 'cancelled' ? (
         <div className="aui-stream-banner" role="status" aria-live="polite">
           <WifiOff size={17} aria-hidden />
           <span>{streamState.message}</span>
-          <button type="button" onClick={() => void retryLastPrompt(true)} disabled={!lastPrompt || !canSend}>
+          <button
+            type="button"
+            onClick={() => void retryLastPrompt(streamState.status !== 'cancelled')}
+            disabled={!lastPrompt || !canSend}
+          >
             <RotateCcw size={15} aria-hidden />
-            <span>Replay</span>
+            <span>{streamState.status === 'cancelled' ? 'Retry' : 'Replay'}</span>
           </button>
         </div>
       ) : null}
 
       <div className="aui-assistant-grid">
         <ConversationRail
-          session={{ ...session, messages: sessionMessages }}
-          sessions={sessionIndex}
+          rows={conversationRows}
           route={route}
-          transportKind={client.transport.kind}
           loading={sessionIndexLoading}
           error={sessionIndexError}
           disabled={assistantBusy || voiceBusy}
-          onSelectConversation={(sessionId) => void openPersistedSession(sessionId)}
+          newConversationDisabled={client.transport.kind === 'mesh' && !usesLocalConversationHistory}
+          onSelectConversation={(sessionId) => {
+            if (usesLocalConversationHistory) {
+              void openLocalSession(sessionId)
+            } else {
+              void openPersistedSession(sessionId)
+            }
+          }}
           onNewConversation={() => void startNewConversation()}
         />
 
@@ -2346,16 +2702,37 @@ export function AssistantView({
 
           <form className="aui-assistant-form" onSubmit={onSubmit} aria-label="Prompt composer" data-voice-active={voiceCaptureStatus === 'listening' ? 'true' : undefined}>
             <div className="aui-composer-toolbar" aria-label="Route/model selector">
+              <MobileConversationSheet
+                open={mobileHistoryOpen}
+                onOpenChange={setMobileHistoryOpen}
+                rows={conversationRows}
+                loading={sessionIndexLoading}
+                error={sessionIndexError}
+                disabled={assistantBusy || voiceBusy}
+                newConversationDisabled={client.transport.kind === 'mesh' && !usesLocalConversationHistory}
+                onSelectConversation={(sessionId) => {
+                  if (usesLocalConversationHistory) {
+                    void openLocalSession(sessionId)
+                  } else {
+                    void openPersistedSession(sessionId).finally(() => setMobileHistoryOpen(false))
+                  }
+                }}
+                onNewConversation={() => void startNewConversation()}
+              />
               <div className="aui-composer-selectors">
                 <ModelSelector.Root
-                  models={executionOptions.map((option) => ({
-                    id: option.id,
-                    name: option.mode === 'local' ? 'Locally' : `Dispatch to ${option.label}`,
-                    description: option.description,
-                    icon: option.mode === 'local' ? <Laptop aria-hidden /> : <Network aria-hidden />
-                  }))}
+                  models={executionOptions.map((option) => {
+                    const optionLabel = safeAssistantRuntimeValue(option.label, 'Connected Aurora device') ?? 'Connected Aurora device'
+                    return {
+                      id: option.id,
+                      name: option.mode === 'local' ? 'Locally' : `Dispatch to ${optionLabel}`,
+                      description: option.description,
+                      icon: option.mode === 'local' ? <Laptop aria-hidden /> : <Network aria-hidden />
+                    }
+                  })}
                   value={selectedExecution.id}
                   onValueChange={(value) => {
+                    if (value === selectedExecution.id) return
                     setExecutionOptionId(value)
                     setSelectedModelChoiceId('automatic')
                     setModelSearchQuery('')
@@ -2365,19 +2742,20 @@ export function AssistantView({
                     variant="ghost"
                     size="sm"
                     className="aui-execution-selector-trigger"
-                    aria-label={`Executing ${selectedExecution.mode === 'local' ? 'locally' : `by dispatch to ${selectedExecution.label}`}`}
+                    aria-label={`Executing ${selectedExecution.mode === 'local' ? 'locally' : `by dispatch to ${safeAssistantRuntimeValue(selectedExecution.label, 'Connected Aurora device') ?? 'Connected Aurora device'}`}`}
                   >
                     {selectedExecution.mode === 'local' ? <Laptop aria-hidden /> : <Network aria-hidden />}
                     <span className="aui-selector-prefix">Executing</span>
-                    <strong>{selectedExecution.mode === 'local' ? 'locally' : `dispatch to ${selectedExecution.label}`}</strong>
+                    <strong>{selectedExecution.mode === 'local' ? 'locally' : `dispatch to ${safeAssistantRuntimeValue(selectedExecution.label, 'Connected Aurora device') ?? 'Connected Aurora device'}`}</strong>
                   </ModelSelector.Trigger>
                   <ModelSelector.Content searchable={false} className="aui-execution-selector-content">
                     <ModelSelector.List>
                       <ModelSelector.Group heading="Execution">
                         {executionOptions.map((option) => {
+                          const optionLabel = safeAssistantRuntimeValue(option.label, 'Connected Aurora device') ?? 'Connected Aurora device'
                           const model = {
                             id: option.id,
-                            name: option.mode === 'local' ? 'Locally' : `Dispatch to ${option.label}`,
+                            name: option.mode === 'local' ? 'Locally' : `Dispatch to ${optionLabel}`,
                             description: option.description,
                             icon: option.mode === 'local' ? <Laptop aria-hidden /> : <Network aria-hidden />
                           }
@@ -2602,14 +2980,14 @@ function AssistantRuntimeStrip({ health }: { health: AssistantRuntimeHealth }) {
   return (
     <section className="aui-assistant-runtime-strip" aria-label="Assistant status">
       <p className="aui-runtime-secondary-label">
-        Local service status is available for this computer, while the assistant conversation remains the primary page.
+        Connection and model status for this conversation.
       </p>
       <dl>
         <div><dt>Selected model</dt><dd>{health.selectedModel ?? 'model pending'}</dd></div>
         <div><dt>Model state</dt><dd>{health.selectedModel ? 'configured' : 'model status pending'}</dd></div>
-        <div><dt>Route</dt><dd>{health.routeLabel}</dd></div>
-        <div><dt>Local service</dt><dd>{health.sidecarHealth}</dd></div>
-        <div><dt>Gateway</dt><dd>{health.gatewayHealth}</dd></div>
+        <div><dt>Answers from</dt><dd>{health.routeLabel}</dd></div>
+        <div><dt>On this device</dt><dd>{health.sidecarHealth}</dd></div>
+        <div><dt>Connection</dt><dd>{health.gatewayHealth}</dd></div>
       </dl>
     </section>
   )
@@ -3146,17 +3524,37 @@ export function routePolicyFromRoute(
   }
 }
 
-export function assistantExecutionOptions(route: RouteAvailability): AssistantExecutionOption[] {
-  const options: AssistantExecutionOption[] = [{
-    id: 'local',
-    mode: 'local',
-    label: 'Locally',
-    description: 'Run the assistant here. The model may be local, cloud-backed, or shared by a peer.',
-    routePolicy: routePolicyFromRoute(route)
-  }]
+export interface AssistantExecutionContext {
+  executionHost?: 'this-device' | 'connected-device'
+  localExecutionAvailable?: boolean
+}
+
+export function assistantExecutionOptions(
+  route: RouteAvailability,
+  context: AssistantExecutionContext = {}
+): AssistantExecutionOption[] {
+  const executionHost = context.executionHost ?? 'this-device'
+  const options: AssistantExecutionOption[] = []
+  if (executionHost === 'this-device' || context.localExecutionAvailable === true) {
+    options.push({
+      id: 'local',
+      mode: 'local',
+      runner: context.localExecutionAvailable === true ? 'lightweight-local' : 'aurora-route',
+      label: 'Local',
+      description: 'Run the assistant on this device. The model may run here, use a cloud service, or be shared by another device.',
+      routePolicy: context.localExecutionAvailable === true
+        ? { ...routePolicyFromRoute(route), providerId: null, peerId: null, serviceInstanceId: null }
+        : routePolicyFromRoute(route),
+      executionPeerId: null,
+      transportHost: false,
+      modelCatalogHost: executionHost === 'connected-device' ? 'connected-device' : 'mixed'
+    })
+  }
   const seen = new Set<string>()
   for (const candidate of route.candidateProviders) {
-    if (!candidate.selectable || !isRemoteRouteCandidate(candidate)) continue
+    if (!candidate.selectable) continue
+    const remoteCandidate = isRemoteRouteCandidate(candidate)
+    if (executionHost !== 'connected-device' && !remoteCandidate) continue
     const peerId = candidate.peerId ?? peerIdFromProviderIdentity(candidate.providerId ?? candidate.id)
     const serviceInstanceId = candidate.serviceInstanceId ?? serviceInstanceFromProviderIdentity(candidate.providerId ?? candidate.id)
     const providerId = candidate.providerId ?? candidate.id
@@ -3164,21 +3562,41 @@ export function assistantExecutionOptions(route: RouteAvailability): AssistantEx
     if (!identity || seen.has(identity)) continue
     seen.add(identity)
     const peerLabel = executionPeerLabel(candidate.nodeName ?? candidate.label, peerId)
+    const transportHost = executionHost === 'connected-device' && !remoteCandidate
     options.push({
-      id: `dispatch:${identity}`,
+      id: `dispatch:${transportHost ? 'connected:' : ''}${identity}`,
       mode: 'dispatch',
+      runner: 'aurora-route',
       label: peerLabel,
       description: `Dispatch the assistant turn to ${peerLabel}; that peer executes the request.`,
-      routePolicy: {
-        providerId,
-        peerId,
-        serviceInstanceId,
-        routeState: candidate.state,
-        fallbackBehavior: candidate.state === 'degraded' ? candidate.reason : null,
-        privacyClass: route.item.privacyClass,
-        selectorRequired: route.selectorRequired,
-        approvalRequired: route.approvalRequired
-      }
+      routePolicy: transportHost
+        ? routePolicyFromRoute(route, candidate)
+        : {
+            providerId,
+            peerId,
+            serviceInstanceId,
+            routeState: candidate.state,
+            fallbackBehavior: candidate.state === 'degraded' ? candidate.reason : null,
+            privacyClass: route.item.privacyClass,
+            selectorRequired: route.selectorRequired,
+            approvalRequired: route.approvalRequired
+          },
+      executionPeerId: peerId,
+      transportHost,
+      modelCatalogHost: 'connected-device'
+    })
+  }
+  if (executionHost === 'connected-device' && !options.some((option) => option.mode === 'dispatch')) {
+    options.push({
+      id: 'dispatch:connected',
+      mode: 'dispatch',
+      runner: 'aurora-route',
+      label: 'Connected Aurora device',
+      description: 'Dispatch the assistant turn to the connected Aurora device.',
+      routePolicy: routePolicyFromRoute(route),
+      executionPeerId: null,
+      transportHost: true,
+      modelCatalogHost: 'connected-device'
     })
   }
   return options
@@ -3257,7 +3675,7 @@ export function assistantModelChoices(
 
   const usableProviders = catalog.providers
     .filter((provider) => providerUsableForAssistant(provider))
-    .filter((provider) => execution.mode === 'local' || providerMatchesExecution(provider, execution))
+    .filter((provider) => execution.mode === 'local' || execution.transportHost || providerMatchesExecution(provider, execution))
   const choices = usableProviders
     .flatMap((provider, providerIndex) => {
       const models = provider.models?.filter((model) => model.available !== false) ?? []
@@ -3272,18 +3690,28 @@ export function assistantModelChoices(
             } satisfies ModelRuntimeModelInfo]
           : []
       return availableModels.map((runtimeModel, modelIndex): AssistantModelChoice => {
-        const providerClass = assistantModelProviderClass(provider)
-        const providerLabel = assistantModelProviderLabel(providerClass, providerIndex + 1)
-        const modelLabel = assistantModelLabel(providerClass, providerIndex + 1, modelIndex + 1)
-        const id = assistantModelChoiceId(providerIndex + 1, modelIndex + 1)
+        const providerClass = execution.modelCatalogHost === 'connected-device'
+          ? 'connected'
+          : assistantModelProviderClass(provider)
+        const providerLabel = safeAssistantCatalogLabel(
+          provider.display_name,
+          assistantModelProviderLabel(providerClass, providerIndex + 1)
+        )
+        const modelLabel = safeAssistantCatalogLabel(
+          runtimeModel.display_name || runtimeModel.model_id,
+          assistantModelLabel(providerClass, providerIndex + 1, modelIndex + 1)
+        )
+        const id = assistantModelChoiceId(provider.provider_id, runtimeModel.model_id)
         return {
           id,
           model: {
             id,
             name: modelLabel,
             description: assistantModelDescription(providerClass, providerLabel),
-            icon: providerIsRemote(provider) ? <Network aria-hidden /> : <Cpu aria-hidden />,
-            keywords: assistantModelKeywords(providerClass, providerIndex + 1, modelIndex + 1)
+            icon: execution.modelCatalogHost === 'connected-device' || providerIsRemote(provider)
+              ? <Network aria-hidden />
+              : <Cpu aria-hidden />,
+            keywords: assistantModelKeywords(providerClass, providerIndex + 1, modelIndex + 1, providerLabel, modelLabel)
           },
           provider,
           runtimeModel,
@@ -3305,7 +3733,7 @@ export function assistantModelChoiceGroups(
   for (const choice of choices) {
     if (choice.automatic || !choice.provider) continue
     const provider = choice.provider
-    const remote = providerIsRemote(provider)
+    const remote = execution.modelCatalogHost === 'connected-device' || providerIsRemote(provider)
     const id = remote
       ? `peer:${provider.provider_peer_id ?? 'remote'}:${provider.provider_id}`
       : `local:${provider.provider_id}`
@@ -3315,11 +3743,15 @@ export function assistantModelChoiceGroups(
       existing.choices.push(choice)
       continue
     }
-    const providerClass = assistantModelProviderClass(provider)
+    const providerClass = remote ? 'connected' : assistantModelProviderClass(provider)
     const providerOrdinal = target.size + 1
+    const providerLabel = safeAssistantCatalogLabel(
+      provider.display_name,
+      assistantModelProviderLabel(providerClass, providerOrdinal)
+    )
     target.set(id, {
       id,
-      heading: `${assistantModelProviderLabel(providerClass, providerOrdinal)} · ${modelCountLabel(1)}`,
+      heading: `${providerLabel} · ${modelCountLabel(1)}`,
       choices: [choice],
       scope: remote ? 'connected device' : 'this device'
     })
@@ -3344,16 +3776,19 @@ export function assistantModelChoiceGroups(
 export function assistantModelSourceGroups(
   providerGroups: AssistantModelChoiceGroup[],
   execution: AssistantExecutionOption,
-  _executionOptions: AssistantExecutionOption[] = [execution]
+  executionOptions: AssistantExecutionOption[] = [execution]
 ): AssistantModelSourceGroup[] {
   const sources = new Map<string, AssistantModelSourceGroup>()
+  const connectedHostExecution = executionOptions.find((option) => option.transportHost)
   for (const group of providerGroups) {
     if (group.scope === 'default' || group.choices.length === 0) continue
     const provider = group.choices[0]?.provider
     if (!provider) continue
-    const remote = providerIsRemote(provider)
+    const remote = execution.modelCatalogHost === 'connected-device' || providerIsRemote(provider)
     const peerId = remote
-      ? provider.provider_peer_id ?? peerIdFromProviderIdentity(provider.provider_id) ?? 'remote'
+      ? execution.modelCatalogHost === 'connected-device'
+        ? connectedHostExecution?.executionPeerId ?? 'connected-host'
+        : provider.provider_peer_id ?? peerIdFromProviderIdentity(provider.provider_id) ?? 'remote'
       : null
     const sourceId = remote ? `source:peer:${peerId}` : 'source:local'
     const existing = sources.get(sourceId)
@@ -3366,7 +3801,11 @@ export function assistantModelSourceGroups(
     sources.set(sourceId, {
       id: sourceId,
       heading: remote
-        ? execution.mode === 'dispatch' ? 'Selected connected device' : `Connected device ${sourceOrdinal}`
+        ? execution.modelCatalogHost === 'connected-device'
+          ? execution.mode === 'dispatch'
+            ? execution.label
+            : connectedHostExecution?.label ?? 'Connected Aurora device'
+          : execution.mode === 'dispatch' ? 'Selected connected device' : `Connected device ${sourceOrdinal}`
         : 'This device',
       description: remote
         ? execution.mode === 'dispatch'
@@ -3388,7 +3827,7 @@ function AssistantModelSourceSection({
   source: AssistantModelSourceGroup
   query: string
 }) {
-  const [open, setOpen] = useState(source.scope === 'local')
+  const [open, setOpen] = useState(true)
   const searching = query.trim().length > 0
   const visibleProviders = source.providerGroups.filter((group) =>
     !searching || group.choices.some((choice) => assistantModelChoiceMatches(choice, query))
@@ -3429,7 +3868,7 @@ function AssistantModelProviderSection({
   group: AssistantModelChoiceGroup
   query: string
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const searching = query.trim().length > 0
   const visibleChoices = group.choices.filter((choice) =>
     !searching || assistantModelChoiceMatches(choice, query)
@@ -3445,7 +3884,7 @@ function AssistantModelProviderSection({
       className="aui-model-provider-section"
     >
       <CollapsibleTrigger type="button" className="aui-model-provider-trigger">
-        {providerIsRemote(provider!) ? <Network aria-hidden /> : <Cpu aria-hidden />}
+        {group.scope === 'connected device' ? <Network aria-hidden /> : <Cpu aria-hidden />}
         <span>{group.heading.replace(/\s+·\s+\d+\s+models?$/, '')}</span>
         <span className="aui-model-group-count">{modelCountLabel(visibleChoices.length)}</span>
         <ChevronDown className="aui-model-group-chevron" aria-hidden />
@@ -3475,7 +3914,7 @@ export function defaultAssistantModelChoiceId(
   catalog: ModelRuntimeCatalogResponse | null,
   execution: AssistantExecutionOption
 ): string {
-  if (execution.mode === 'dispatch' || !catalog) return 'automatic'
+  if (!catalog) return 'automatic'
   const selectedProvider = selectedRuntimeProvider(
     catalog.providers.find((provider) => provider.provider_id === catalog.selected_provider_id) ?? null,
     catalog.providers
@@ -3514,8 +3953,18 @@ export function assistantInferencePolicy(
   }
 }
 
-function assistantModelChoiceId(providerOrdinal: number, modelOrdinal: number): string {
-  return `model-choice-${providerOrdinal}-${modelOrdinal}`
+function assistantModelChoiceId(providerId: string, modelId: string): string {
+  return `model-choice-${stableAssistantChoiceToken(`${providerId}\u001f${modelId}`)}`
+}
+
+function stableAssistantChoiceToken(value: string): string {
+  let forward = 0x811c9dc5
+  let reverse = 0x811c9dc5
+  for (let index = 0; index < value.length; index += 1) {
+    forward = Math.imul(forward ^ value.charCodeAt(index), 0x01000193)
+    reverse = Math.imul(reverse ^ value.charCodeAt(value.length - index - 1), 0x01000193)
+  }
+  return `${(forward >>> 0).toString(36)}-${(reverse >>> 0).toString(36)}`
 }
 
 function providerUsableForAssistant(provider: ModelRuntimeProviderInfo): boolean {
@@ -3578,13 +4027,23 @@ function assistantModelDescription(
 function assistantModelKeywords(
   providerClass: AssistantModelProviderClass,
   providerOrdinal: number,
-  modelOrdinal: number
+  modelOrdinal: number,
+  providerLabel: string,
+  modelLabel: string
 ): string[] {
   return [
     providerClass === 'connected' ? 'connected device' : providerClass === 'cloud' ? 'cloud service' : 'local device',
     `choice group ${providerOrdinal}`,
-    `model ${modelOrdinal}`
+    `model ${modelOrdinal}`,
+    providerLabel,
+    modelLabel
   ]
+}
+
+function safeAssistantCatalogLabel(value: string | null | undefined, fallback: string): string {
+  const label = value?.trim()
+  if (!label || label.length > 96 || isInternalAssistantLabel(label)) return fallback
+  return label
 }
 
 function modelCountLabel(count: number): string {
@@ -4558,61 +5017,150 @@ function formatBytes(bytes: number): string {
 }
 
 function ConversationRail({
-  session,
-  sessions,
+  rows,
   route,
-  transportKind,
   loading,
   error,
   disabled,
+  newConversationDisabled,
   onSelectConversation,
   onNewConversation
 }: {
-  session: AssistantSessionSnapshot
-  sessions: DBSessionRecord[]
+  rows: AssistantConversationRow[]
   route: RouteAvailability
-  transportKind: string
   loading: boolean
   error: string | null
   disabled: boolean
+  newConversationDisabled: boolean
   onSelectConversation: (sessionId: string) => void
   onNewConversation: () => void
 }) {
-  const [search, setSearch] = useState('')
-  const normalizedSearch = search.trim().toLowerCase()
-  const rows = assistantConversationRows(session, sessions, transportKind)
-    .filter((row) => normalizedSearch.length === 0 || `${row.title} ${row.route}`.toLowerCase().includes(normalizedSearch))
   return (
     <aside className="aui-conversation-rail" aria-labelledby="assistant-recent-chats-title">
       <h2 id="assistant-recent-chats-title" className="aui-sr-only">Recent chats</h2><span className="aui-sr-only">Conversation rail</span><div className="aui-sr-only" aria-label="Assistant local remote mesh route chips"><span>Search recent conversations</span><span>Local {assistantRouteProviderCopy(route)}</span><span>Remote route pending</span><span>Mesh route pending</span></div>
       <header>
-        <Button type="button" variant="ghost" size="sm" onClick={onNewConversation} disabled={disabled || loading || transportKind === 'mesh'} aria-label="New conversation" className="aui-thread-new-button">
+        <Button type="button" variant="ghost" size="sm" onClick={onNewConversation} disabled={disabled || loading || newConversationDisabled} aria-label="New conversation" className="aui-thread-new-button">
           <MessageSquarePlus aria-hidden />
           <span>New conversation</span>
         </Button>
       </header>
-      <ul aria-label="Assistant conversation list">
-        {error ? (
-          <li className="empty" role="status">{error}</li>
-        ) : loading && rows.length === 0 ? (
-          <li className="empty">Loading conversations…</li>
-        ) : rows.length === 0 ? (
-          <li className="empty">No matching conversations.</li>
-        ) : rows.map((row) => (
-          <li key={row.id} className={row.active ? 'active' : undefined}>
-            <Button type="button" variant="ghost" aria-current={row.active ? 'true' : undefined} disabled={disabled || loading} onClick={() => onSelectConversation(row.id)} className="aui-thread-row-button">
-              <strong>{row.title}</strong>
-              <span><EvidenceBadge label={row.route} /> <time>{row.updated}</time></span>
-            </Button>
-          </li>
-        ))}
-      </ul>
+      <ConversationList
+        rows={rows}
+        loading={loading}
+        error={error}
+        disabled={disabled}
+        onSelectConversation={onSelectConversation}
+      />
     </aside>
   )
 }
 
+function MobileConversationSheet({
+  open,
+  onOpenChange,
+  rows,
+  loading,
+  error,
+  disabled,
+  newConversationDisabled,
+  onSelectConversation,
+  onNewConversation,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  rows: AssistantConversationRow[]
+  loading: boolean
+  error: string | null
+  disabled: boolean
+  newConversationDisabled: boolean
+  onSelectConversation: (sessionId: string) => void
+  onNewConversation: () => void
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetTrigger
+        render={(
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="aui-mobile-history-trigger"
+            aria-label="Open conversations"
+          />
+        )}
+      >
+        <History aria-hidden />
+        <span>Chats</span>
+      </SheetTrigger>
+      <SheetContent side="left" className="aui-conversation-sheet">
+        <SheetHeader>
+          <SheetTitle>Conversations</SheetTitle>
+          <SheetDescription>Open a recent chat or start a new one.</SheetDescription>
+        </SheetHeader>
+        <div className="aui-conversation-sheet-actions">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onNewConversation}
+            disabled={disabled || loading || newConversationDisabled}
+            aria-label="New conversation"
+            className="aui-thread-new-button"
+          >
+            <MessageSquarePlus aria-hidden />
+            <span>New conversation</span>
+          </Button>
+        </div>
+        <ConversationList
+          rows={rows}
+          loading={loading}
+          error={error}
+          disabled={disabled}
+          onSelectConversation={onSelectConversation}
+          className="aui-conversation-sheet-list"
+        />
+      </SheetContent>
+    </Sheet>
+  )
+}
 
-function assistantConversationRows(session: AssistantSessionSnapshot, sessions: DBSessionRecord[], transportKind: string): Array<{ id: string; title: string; route: string; updated: string; active: boolean }> {
+function ConversationList({
+  rows,
+  loading,
+  error,
+  disabled,
+  onSelectConversation,
+  className,
+}: {
+  rows: AssistantConversationRow[]
+  loading: boolean
+  error: string | null
+  disabled: boolean
+  onSelectConversation: (sessionId: string) => void
+  className?: string
+}) {
+  return (
+    <ul className={className} aria-label="Assistant conversation list">
+      {error ? (
+        <li className="empty" role="status">{error}</li>
+      ) : loading && rows.length === 0 ? (
+        <li className="empty">Loading conversations…</li>
+      ) : rows.length === 0 ? (
+        <li className="empty">No conversations yet.</li>
+      ) : rows.map((row) => (
+        <li key={row.id} className={row.active ? 'active' : undefined}>
+          <Button type="button" variant="ghost" aria-current={row.active ? 'true' : undefined} disabled={disabled || loading} onClick={() => onSelectConversation(row.id)} className="aui-thread-row-button">
+            <strong>{row.title}</strong>
+            <span><EvidenceBadge label={row.route} /> <time>{row.updated}</time></span>
+          </Button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+
+function assistantConversationRows(session: AssistantSessionSnapshot, sessions: DBSessionRecord[], transportKind: string): AssistantConversationRow[] {
   if (transportKind === 'mock') {
     return [
       { id: 'draft-launch', title: 'Draft launch announcement', route: 'Local', updated: '2m ago', active: true },
@@ -4628,6 +5176,387 @@ function assistantConversationRows(session: AssistantSessionSnapshot, sessions: 
     updated: `${formatSessionActivity(record.updated_at)} · ${record.message_count} ${record.message_count === 1 ? 'message' : 'messages'}`,
     active: record.id === session.sessionId
   }))
+}
+
+function resolveLocalAssistantHistoryDependencies(
+  localAssistant: LightweightAssistantDependencies | null,
+  executionHost: AssistantViewProps['executionHost'],
+): LocalAssistantHistoryDependencies | null {
+  if (executionHost !== 'connected-device') return null
+  const localData = localAssistant?.localData
+  const envelopeCrypto = localAssistant?.envelopeCrypto
+  const scope = localAssistant?.scope
+  if (
+    !localData
+    || typeof localData.conversations?.listConversations !== 'function'
+    || typeof localData.conversations?.listMessages !== 'function'
+    || !envelopeCrypto
+    || typeof envelopeCrypto.decrypt !== 'function'
+    || !scope
+    || !scope.profileId
+    || !scope.localNodeId
+  ) return null
+  return { localData, envelopeCrypto, scope }
+}
+
+async function persistConnectedAssistantTurnToLocalHistory(
+  history: LocalAssistantHistoryDependencies,
+  input: {
+    conversationId: string
+    requestId: string
+    prompt: string
+    response: string
+    createdAtMs: number
+  },
+): Promise<void> {
+  if (
+    history.localData.profileId !== history.scope.profileId
+    || history.localData.localNodeId !== history.scope.localNodeId
+  ) {
+    throw new Error('Local conversation scope does not match the active profile.')
+  }
+
+  const userMessageId = `${input.requestId}-local-user`
+  const assistantMessageId = `${input.requestId}-connected-assistant`
+  const responseCreatedAtMs = Math.max(input.createdAtMs, Date.now())
+  const [userEnvelope, assistantEnvelope] = await Promise.all([
+    encryptLocalAssistantText(history, userMessageId, input.prompt),
+    encryptLocalAssistantText(history, assistantMessageId, input.response),
+  ])
+
+  await history.localData.transaction(async (repositories) => {
+    const existingConversation = (await repositories.conversations.listConversations())
+      .find((conversation) => conversation.id === input.conversationId)
+    if (
+      existingConversation
+      && (
+        existingConversation.profileId !== history.scope.profileId
+        || existingConversation.localNodeId !== history.scope.localNodeId
+      )
+    ) {
+      throw new Error('Local conversation belongs to a different profile.')
+    }
+
+    const conversation: ConversationRecord = existingConversation
+      ? {
+          ...existingConversation,
+          updatedAtMs: Math.max(existingConversation.updatedAtMs, responseCreatedAtMs),
+        }
+      : {
+          id: input.conversationId,
+          profileId: history.scope.profileId,
+          localNodeId: history.scope.localNodeId,
+          titleEnvelope: null,
+          createdAtMs: input.createdAtMs,
+          updatedAtMs: responseCreatedAtMs,
+          archivedAtMs: null,
+        }
+    await repositories.conversations.upsertConversation(conversation)
+
+    const existingMessages = await repositories.conversations.listMessages(input.conversationId)
+    let nextSequence = existingMessages.reduce(
+      (next, message) => Math.max(next, message.sequence + 1),
+      0,
+    )
+    const records: ConversationMessageRecord[] = [
+      {
+        id: userMessageId,
+        conversationId: input.conversationId,
+        sequence: nextSequence,
+        role: 'user',
+        contentEnvelope: userEnvelope,
+        toolEnvelope: null,
+        status: 'complete',
+        createdAtMs: input.createdAtMs,
+      },
+      {
+        id: assistantMessageId,
+        conversationId: input.conversationId,
+        sequence: nextSequence + 1,
+        role: 'assistant',
+        contentEnvelope: assistantEnvelope,
+        toolEnvelope: null,
+        status: 'complete',
+        createdAtMs: responseCreatedAtMs,
+      },
+    ]
+    const existingIds = new Set(existingMessages.map((message) => message.id))
+    for (const record of records) {
+      if (existingIds.has(record.id)) continue
+      await repositories.conversations.appendMessage({ ...record, sequence: nextSequence })
+      nextSequence += 1
+    }
+  })
+}
+
+async function encryptLocalAssistantText(
+  history: LocalAssistantHistoryDependencies,
+  messageId: string,
+  text: string,
+): Promise<ConversationMessageRecord['contentEnvelope']> {
+  return await history.envelopeCrypto.encrypt(
+    'local-structured-data',
+    new TextEncoder().encode(text),
+    buildEnvelopeAad({
+      table: 'aurora_messages',
+      recordId: messageId,
+      field: 'content_envelope_json',
+      profileId: history.scope.profileId,
+      localNodeId: history.scope.localNodeId,
+    }),
+  )
+}
+
+async function loadLocalAssistantConversationRows(
+  history: LocalAssistantHistoryDependencies,
+): Promise<AssistantConversationRow[]> {
+  const conversations = createLocalConversations(history.localData)
+  const summaries = await conversations.listConversations({
+    scope: history.scope,
+    includeArchived: false,
+    limit: 100,
+  })
+  return await Promise.all(summaries.map(async (summary) => ({
+    id: summary.record.id,
+    title: await localAssistantConversationTitle(history, conversations, summary),
+    route: 'This device',
+    updated: `${formatSessionActivity(new Date(summary.record.updatedAtMs).toISOString())} · ${summary.messageCount} ${summary.messageCount === 1 ? 'message' : 'messages'}`,
+    active: false,
+  })))
+}
+
+async function localAssistantConversationTitle(
+  history: LocalAssistantHistoryDependencies,
+  conversations: ReturnType<typeof createLocalConversations>,
+  summary: LocalConversationSummary,
+): Promise<string> {
+  if (summary.record.titleEnvelope) {
+    const title = await decryptLocalAssistantText(history, {
+      envelope: summary.record.titleEnvelope,
+      table: 'aurora_conversations',
+      recordId: summary.record.id,
+      field: 'title_envelope_json',
+    })
+    if (title.trim()) return conciseConversationTitle(title)
+  }
+  const messages = await conversations.listMessages({
+    scope: history.scope,
+    conversationId: summary.record.id,
+    limit: 64,
+  })
+  const firstPrompt = messages.find((message) => message.role === 'user' && message.contentEnvelope)
+  if (!firstPrompt?.contentEnvelope) return 'New chat'
+  const prompt = await decryptLocalAssistantText(history, {
+    envelope: firstPrompt.contentEnvelope,
+    table: 'aurora_messages',
+    recordId: firstPrompt.id,
+    field: 'content_envelope_json',
+  })
+  return conciseConversationTitle(prompt)
+}
+
+async function loadLocalAssistantConversationMessages(
+  history: LocalAssistantHistoryDependencies,
+  conversationId: string,
+): Promise<AssistantUiMessage[]> {
+  const conversations = createLocalConversations(history.localData)
+  const records = await conversations.listMessages({
+    scope: history.scope,
+    conversationId,
+    limit: 2_000,
+  })
+  const messages: AssistantUiMessage[] = []
+  let pendingToolCards: AssistantToolCallCard[] = []
+  let pendingToolCreatedAt: string | null = null
+  let pendingToolStatus: AssistantUiMessageStatus = 'sent'
+  for (const record of records) {
+    if (record.role === 'tool') {
+      const tool = await localAssistantToolCallCard(history, record)
+      pendingToolCards = upsertAssistantToolCall(pendingToolCards, tool)
+      pendingToolCreatedAt = new Date(record.createdAtMs).toISOString()
+      pendingToolStatus = localAssistantMessageStatus(record.status)
+      continue
+    }
+    const message: AssistantUiMessage = {
+      id: record.id,
+      role: record.role,
+      text: await localAssistantMessageText(history, record),
+      createdAt: new Date(record.createdAtMs).toISOString(),
+      status: localAssistantMessageStatus(record.status),
+      routeLabel: 'This device',
+      executionPeerId: null,
+    }
+    if (record.role === 'assistant' && pendingToolCards.length > 0) {
+      message.toolCalls = pendingToolCards
+      pendingToolCards = []
+      pendingToolCreatedAt = null
+      pendingToolStatus = 'sent'
+    }
+    messages.push(message)
+  }
+  if (pendingToolCards.length > 0) {
+    messages.push({
+      id: `local-tool-${pendingToolCards.map((tool) => tool.id).join('-')}`,
+      role: 'assistant',
+      text: '',
+      createdAt: pendingToolCreatedAt ?? new Date().toISOString(),
+      status: pendingToolStatus,
+      toolCalls: pendingToolCards,
+      routeLabel: 'This device',
+      executionPeerId: null,
+    })
+  }
+  return messages
+}
+
+async function localAssistantToolCallCard(
+  history: LocalAssistantHistoryDependencies,
+  record: ConversationMessageRecord,
+): Promise<AssistantToolCallCard> {
+  let payload: Record<string, unknown> = {}
+  if (record.toolEnvelope) {
+    const plaintext = await decryptLocalAssistantText(history, {
+      envelope: record.toolEnvelope,
+      table: 'aurora_messages',
+      recordId: record.id,
+      field: 'tool_envelope_json',
+    })
+    try {
+      const parsed: unknown = JSON.parse(plaintext)
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        payload = parsed as Record<string, unknown>
+      }
+    } catch {
+      payload = {}
+    }
+  }
+  const toolCall = metadataObjectValue(payload, 'toolCall') ?? {}
+  const route = metadataStringValue(toolCall, 'route')
+  const data = payload.data
+  const resultPreview = typeof data === 'string'
+    ? data
+    : typeof data === 'object' && data !== null && !Array.isArray(data)
+      ? data as Record<string, unknown>
+      : data === null || data === undefined
+        ? null
+        : 'Saved with this chat'
+  const status = localAssistantToolCardStatus(record.status)
+  const errorCode = metadataStringValue(payload, 'errorCode')
+  return {
+    id: metadataStringValue(toolCall, 'id') ?? record.id,
+    name: metadataStringValue(payload, 'globalToolId')
+      ?? metadataStringValue(toolCall, 'toolName')
+      ?? 'assistant-action',
+    sessionId: record.conversationId,
+    status,
+    riskClass: 'reviewed',
+    target: route === 'remote' ? 'Connected Aurora device' : 'This device',
+    dataLeavesDevice: route === 'remote',
+    summary: toolSummaryForStatus(status),
+    auditId: metadataStringValue(payload, 'correlationId'),
+    payloadPreview: metadataObjectValue(toolCall, 'arguments'),
+    resultPreview,
+    error: status === 'failed' ? errorCode ?? 'action_incomplete' : null,
+    errorDetails: null,
+    pendingId: null,
+    approvalRequestId: null,
+    approvalExpiresAt: null,
+    policyDecisionId: null,
+  }
+}
+
+function localAssistantToolCardStatus(
+  status: ConversationMessageRecord['status'],
+): AssistantToolCallCard['status'] {
+  if (status === 'pending') return 'requires_action'
+  if (status === 'complete') return 'completed'
+  return 'failed'
+}
+
+function enrichLatestLocalAssistantMessage(
+  messages: AssistantUiMessage[],
+  runtime: {
+    text: string
+    modelLabel: string
+    providerLabel: string
+    routeLabel: string
+  },
+): AssistantUiMessage[] {
+  const latestAssistantIndex = messages.reduce(
+    (latest, message, index) => message.role === 'assistant' ? index : latest,
+    -1,
+  )
+  return messages.map((message, index) => index === latestAssistantIndex
+    ? {
+        ...message,
+        text: runtime.text || message.text,
+        modelLabel: runtime.modelLabel,
+        providerLabel: runtime.providerLabel,
+        routeLabel: runtime.routeLabel,
+        executionPeerId: null,
+      }
+    : message)
+}
+
+async function localAssistantMessageText(
+  history: LocalAssistantHistoryDependencies,
+  record: ConversationMessageRecord,
+): Promise<string> {
+  if (record.contentEnvelope) {
+    const content = await decryptLocalAssistantText(history, {
+      envelope: record.contentEnvelope,
+      table: 'aurora_messages',
+      recordId: record.id,
+      field: 'content_envelope_json',
+    })
+    if (content.trim() || record.role !== 'tool') return content
+  }
+  if (record.role === 'tool') {
+    if (record.status === 'pending') return 'This action was waiting for approval.'
+    if (record.status === 'failed') return 'This action did not finish.'
+    if (record.status === 'cancelled') return 'This action was cancelled.'
+    return 'Action completed.'
+  }
+  if (record.status === 'failed') return 'This response did not finish.'
+  if (record.status === 'cancelled' || record.status === 'pending') return 'This response was stopped.'
+  return 'Saved message'
+}
+
+async function decryptLocalAssistantText(
+  history: LocalAssistantHistoryDependencies,
+  input: {
+    envelope: NonNullable<ConversationMessageRecord['contentEnvelope']>
+    table: 'aurora_conversations' | 'aurora_messages'
+    recordId: string
+    field: 'title_envelope_json' | 'content_envelope_json' | 'tool_envelope_json'
+  },
+): Promise<string> {
+  const plaintext = await history.envelopeCrypto.decrypt(
+    input.envelope,
+    buildEnvelopeAad({
+      table: input.table,
+      recordId: input.recordId,
+      field: input.field,
+      profileId: history.scope.profileId,
+      localNodeId: history.scope.localNodeId,
+    }),
+  )
+  return new TextDecoder('utf-8', { fatal: true }).decode(plaintext)
+}
+
+function conciseConversationTitle(value: string): string {
+  const normalized = value.replace(/\s+/gu, ' ').trim()
+  if (!normalized) return 'New chat'
+  return normalized.length <= 64 ? normalized : `${normalized.slice(0, 61).trimEnd()}…`
+}
+
+function localAssistantMessageStatus(
+  status: ConversationMessageRecord['status'],
+): AssistantUiMessageStatus {
+  if (status === 'complete') return 'sent'
+  if (status === 'pending') return 'sending'
+  if (status === 'cancelled') return 'cancelled'
+  return 'failed'
 }
 
 function ComposerAttachmentPreview({ attachments, onRemove }: { attachments: AssistantAttachmentDraft[]; onRemove: (id: string) => void }) {
@@ -4687,12 +5616,35 @@ function ChatBubble({
   const align = message.role === 'user' ? 'end' : 'start'
   const variant = message.role === 'user' ? 'tinted' : assistant ? 'outline' : 'muted'
   const isSpeaking = speakingMessageId === message.id
+  const hasMessageText = message.text.trim().length > 0
+  const hasToolCards = (message.toolCalls?.length ?? 0) > 0
+  const isToolOnlyMessage = hasToolCards && (message.role === 'tool' || (assistant && isAssistantToolOnlyText(message.text)))
+  const toolCards = message.toolCalls?.length ? (
+    <div className="aui-assistant-tool-cards" aria-label="Assistant tool call cards">
+      {message.toolCalls.map((tool) => (
+        <AssistantToolCallCardView
+          key={tool.id}
+          tool={tool}
+          onResolveToolApproval={onResolveToolApproval}
+        />
+      ))}
+    </div>
+  ) : null
   function copyMessageText() {
     if (typeof navigator !== 'undefined') {
       void navigator.clipboard?.writeText(message.text)
     }
     setCopied(true)
     if (typeof window !== 'undefined') window.setTimeout(() => setCopied(false), 1100)
+  }
+  if (isToolOnlyMessage && toolCards) {
+    return (
+      <Message align="start" className={`aui-chat-message aui-chat-tool aui-chat-${message.status}`}>
+        <MessageContent className="aui-chat-message-content">
+          {toolCards}
+        </MessageContent>
+      </Message>
+    )
   }
   return (
     <Message align={align} className={`aui-chat-message aui-chat-${message.role} aui-chat-${message.status}`}>
@@ -4702,26 +5654,18 @@ function ChatBubble({
           {assistant ? <span className="aui-chat-runtime">{runtimeLabel}</span> : <span>{message.status}</span>}
           {assistant ? <span className="aui-sr-only">Aurora · {message.status}</span> : null}
         </MessageHeader>
-        {assistant && message.toolCalls?.length ? (
-          <div className="aui-assistant-tool-cards" aria-label="Assistant tool call cards">
-            {message.toolCalls.map((tool) => (
-              <AssistantToolCallCardView
-                key={tool.id}
-                tool={tool}
-                onResolveToolApproval={onResolveToolApproval}
-              />
-            ))}
-          </div>
+        {assistant ? toolCards : null}
+        {hasMessageText ? (
+          <Bubble align={align} variant={variant} className="aui-chat-bubble-wrap">
+            <BubbleContent className="aui-chat-bubble">
+              <p>{message.text}</p>
+              {message.sources?.length ? (
+                <div className="aui-message-sources"><span>Sources:</span>{message.sources.map((source) => <code key={source}>{source}</code>)}</div>
+              ) : null}
+            </BubbleContent>
+          </Bubble>
         ) : null}
-        <Bubble align={align} variant={variant} className="aui-chat-bubble-wrap">
-          <BubbleContent className="aui-chat-bubble">
-            <p>{message.text}</p>
-            {message.sources?.length ? (
-              <div className="aui-message-sources"><span>Sources:</span>{message.sources.map((source) => <code key={source}>{source}</code>)}</div>
-            ) : null}
-          </BubbleContent>
-        </Bubble>
-        {assistant ? (
+        {assistant && hasMessageText ? (
           <MessageFooter className="aui-message-actions" aria-label="Assistant message actions">
             <Button type="button" variant="ghost" size="xs" onClick={copyMessageText} className="aui-message-action-button">
               <Copy size={12} aria-hidden data-icon="inline-start" />
@@ -4745,6 +5689,19 @@ function ChatBubble({
       </MessageContent>
     </Message>
   )
+}
+
+function isAssistantToolOnlyText(value: string): boolean {
+  const normalized = value.replace(/\s+/gu, ' ').trim().toLowerCase()
+  if (!normalized) return true
+  return normalized === 'aurora paused for a tool approval decision.'
+    || normalized === 'aurora is using a tool.'
+    || normalized === 'aurora is finished using a tool.'
+    || normalized === 'aurora is reporting a tool error.'
+    || normalized === 'this action was waiting for approval.'
+    || normalized === 'this action did not finish.'
+    || normalized === 'this action was cancelled.'
+    || normalized === 'action completed.'
 }
 
 export function assistantMessageRuntimeLabel(
@@ -4900,7 +5857,7 @@ function AssistantToolCallCardView({
             type="button"
             size="xs"
             className="aui-action-chip aui-action-approve"
-            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId)}
+            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId && !tool.localConfirmationToken)}
             onClick={() => onResolveToolApproval?.(tool, true, 'once')}
           >
             Approve once
@@ -4910,7 +5867,7 @@ function AssistantToolCallCardView({
             size="xs"
             variant="outline"
             className="aui-action-chip aui-action-approve"
-            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId)}
+            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId && !tool.localConfirmationToken)}
             onClick={() => onResolveToolApproval?.(tool, true, 'session')}
           >
             Session
@@ -4920,7 +5877,7 @@ function AssistantToolCallCardView({
             size="xs"
             variant="outline"
             className="aui-action-chip aui-action-approve"
-            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId)}
+            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId && !tool.localConfirmationToken)}
             onClick={() => onResolveToolApproval?.(tool, true, 'until_expiry')}
           >
             Until expiry
@@ -4930,7 +5887,7 @@ function AssistantToolCallCardView({
             size="xs"
             variant="outline"
             className="aui-action-chip aui-action-approve"
-            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId)}
+            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId && !tool.localConfirmationToken)}
             onClick={() => onResolveToolApproval?.(tool, true, 'always')}
           >
             Always
@@ -4940,7 +5897,7 @@ function AssistantToolCallCardView({
             size="xs"
             variant="ghost"
             className="aui-action-chip"
-            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId)}
+            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId && !tool.localConfirmationToken)}
             onClick={() => onResolveToolApproval?.(tool, false, 'deny_once')}
           >
             Deny once
@@ -4950,7 +5907,7 @@ function AssistantToolCallCardView({
             size="xs"
             variant="ghost"
             className="aui-action-chip"
-            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId)}
+            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId && !tool.localConfirmationToken)}
             onClick={() => onResolveToolApproval?.(tool, false, 'deny_always')}
           >
             Block
@@ -4999,6 +5956,32 @@ function assistantToolCallFromUpdate(update: AssistantStreamUpdate): AssistantTo
       ? tool.approvalExpiresAt
       : metadataNumberValue(metadata, 'approval_expires_at') ?? metadataNumberValue(metadata, 'approvalExpiresAt') ?? null,
     policyDecisionId: tool?.policyDecisionId ?? metadataStringValue(metadata, 'policy_decision_id') ?? metadataStringValue(metadata, 'policyDecisionId') ?? null
+  }
+}
+
+function lightweightConfirmationToolCard(
+  confirmation: LightweightConfirmationEvent
+): AssistantToolCallCard {
+  const prepared = confirmation.prepared
+  const toolCall = confirmation.toolCall
+  return {
+    id: toolCall.id,
+    name: prepared.global_tool_id || toolCall.toolName,
+    sessionId: confirmation.conversationId,
+    status: 'requires_action',
+    riskClass: prepared.trust_tier ?? prepared.capability_class ?? 'review required',
+    target: toolCall.route === 'local' ? 'This device' : 'Connected Aurora device',
+    dataLeavesDevice: toolCall.route === 'remote',
+    summary: 'Review this action before Aurora continues.',
+    auditId: prepared.correlation_id ?? null,
+    payloadPreview: null,
+    resultPreview: null,
+    error: null,
+    pendingId: null,
+    approvalRequestId: null,
+    approvalExpiresAt: null,
+    policyDecisionId: prepared.policy_decision.decision_id ?? null,
+    localConfirmationToken: confirmation.token
   }
 }
 

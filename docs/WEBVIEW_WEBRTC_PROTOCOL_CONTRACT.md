@@ -2,7 +2,7 @@
 
 **Status:** Current source of truth
 
-**Last reviewed:** 2026-07-28
+**Last reviewed:** 2026-08-01
 
 This document describes the implemented browser/WebView WebRTC protocol shared by hosted web thin, desktop Tauri thin, Android thin, and the iOS thin source path. Python remains the reference peer for room/signaling/auth semantics; TypeScript implements signaling, cryptography, pairing, reconnect, RPC, and transport policy and consumes Python-owned protocol fixtures. Linux desktop thin uses the same TypeScript protocol through a narrow native `RTCPeerConnection`/`RTCDataChannel` adapter when the system WebKitGTK build does not expose those DOM APIs.
 
@@ -33,7 +33,10 @@ This document describes the implemented browser/WebView WebRTC protocol shared b
 - Room passwords derive signaling and data keys with deterministic Scrypt/HKDF-compatible behavior. Browser Scrypt uses `@noble/hashes` in a dedicated Worker, runs off the UI thread, zeroes transferred password/salt buffers, and is checked against Python-generated vectors.
 - Signaling and optional application-layer DataChannel encryption use AES-GCM-compatible envelopes where configured; WebRTC DTLS still protects the DataChannel in transit.
 - Pairing uses bilateral SAS v2 with SDP/channel binding and canonical JSON commitments.
+- The SAS approval window is five minutes. A live client re-announces retained presence, deterministically renegotiates a fresh SDP-bound channel, and keeps retrying until explicitly disconnected. Work from a replaced DataChannel is generation-bound and cannot complete against the newer channel.
 - Reconnect uses the canonical `mesh_auth_proof_v1` HMAC proof bound to challenge, channel binding, stable peer IDs, signaling peer IDs, and room. Python, TypeScript, and native Android proof commands must stay fixture-compatible and must not emit legacy `proof_hmac_sha256`.
+- A direction that completed credential exchange survives transport loss: the holder proves that durable credential on the new channel, and the verifier returns `already_trusted` for that direction instead of creating another approval or rotating the credential. A click that did not complete credential delivery is not carried across a new SDP transcript without proof; a fresh SAS comparison remains required.
+- Mesh-node approval presents only local features currently reported as available by the local feature-sharing catalog. The selected feature IDs are applied to the credential relationship; generic Gateway permissions are not offered as mobile-node resources.
 - Hosted-browser reconnect material is encrypted before IndexedDB persistence with a non-extractable origin-scoped WebCrypto AES-GCM key. Unsupported or denied durable storage falls back to memory-only. Desktop/mobile native stores persist scoped reconnect material through OS credential stores. Profiles must not store raw invite secrets or bearer tokens.
 - Revoked credentials fail closed; mutation retry logic must not replay uncertain in-flight mutations on a different transport. Current live proof covers a mutation started event followed by disconnect before response settlement with execution count 1, not a broad exactly-once guarantee.
 - Event delivery is subscription/correlation scoped. Wildcard or wrong-correlation event leakage is a test failure. Scoped authorization stays on public production Auth/Gateway/DataChannel boundaries rather than private service calls.

@@ -284,7 +284,10 @@ describe('WebRtcPeerHost', () => {
     expect(JSON.stringify(manifest)).not.toContain('manifest_digest')
     expect(JSON.stringify(manifest)).not.toContain('provider_lease_v1')
     const service = firstSharedService(manifest)
-    expect(service).toMatchObject({ module: 'Tooling', capabilities: [] })
+    expect(service).toMatchObject({
+      module: 'Tooling',
+      capabilities: ['tool_discovery', 'tool_execution']
+    })
     expect(typeof service.digest).toBe('string')
     const methods = service.methods as Array<Record<string, unknown>>
     expect(methods.map((method) => method.bus_topic)).toEqual([

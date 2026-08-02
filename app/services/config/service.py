@@ -51,6 +51,10 @@ from app.shared.contracts.models.config import (
 from app.shared.contracts.registry import method_contract
 from app.shared.services.base_service import BaseService
 
+AUTH_DEPENDENT_STARTUP_GRACE_SECONDS = 1.0
+AUTH_DEPENDENT_STARTUP_POLL_SECONDS = 0.1
+AUTH_DEPENDENT_STARTUP_POLL_ATTEMPTS = 300
+
 
 class ConfigService(BaseService):
     """Config Service for managing Aurora configuration."""
@@ -473,13 +477,26 @@ class ConfigService(BaseService):
         # Note: Subscriptions are now handled automatically by BaseService via @method_contract
 
         self._set_started(True)
+        self._mesh_policy_rbac_task = asyncio.create_task(
+            self._run_startup_mesh_policy_tasks()
+        )
+        log_info("ConfigService started")
+
+    async def _run_startup_mesh_policy_tasks(self) -> None:
+        """Run Auth-dependent startup work after foundational services can subscribe."""
+
+        auth_ready = await self._wait_for_auth_peer_inventory()
+        report = (
+            await self.refresh_mesh_policy_rbac_preflight()
+            if auth_ready
+            else self.config_manager.mesh_policy_rbac_report
+        )
         if self.config_manager.mesh_policy_migration_audit:
             await self._audit_mesh_config_event(
                 "mesh.config.migrated",
                 actor="startup",
                 details=self.config_manager.mesh_policy_migration_audit,
             )
-        report = self.config_manager.mesh_policy_rbac_report
         if isinstance(report, dict):
             await self._audit_mesh_config_event(
                 "mesh.config.rbac_review",
@@ -494,8 +511,32 @@ class ConfigService(BaseService):
                     ),
                 },
             )
-        self._mesh_policy_rbac_task = asyncio.create_task(self.refresh_mesh_policy_rbac_preflight())
-        log_info("ConfigService started")
+
+    async def _wait_for_auth_peer_inventory(self) -> bool:
+        """Wait until the local Auth peer inventory contract can receive requests.
+
+        LocalBus can report subscription readiness exactly. Distributed buses
+        cannot observe subscribers in another process, so they retain the
+        short startup grace period and rely on the existing bounded request
+        retries.
+        """
+
+        has_subscribers = getattr(self.bus, "has_subscribers", None)
+        if not callable(has_subscribers):
+            await asyncio.sleep(AUTH_DEPENDENT_STARTUP_GRACE_SECONDS)
+            return True
+
+        for attempt in range(AUTH_DEPENDENT_STARTUP_POLL_ATTEMPTS):
+            if has_subscribers(AuthMethods.MESH_LIST_PEERS):
+                return True
+            if attempt + 1 < AUTH_DEPENDENT_STARTUP_POLL_ATTEMPTS:
+                await asyncio.sleep(AUTH_DEPENDENT_STARTUP_POLL_SECONDS)
+
+        log_debug(
+            "Skipping startup mesh policy refresh because Auth peer inventory "
+            "did not become locally available"
+        )
+        return False
 
     async def refresh_mesh_policy_rbac_preflight(
         self,
@@ -549,7 +590,7 @@ class ConfigService(BaseService):
             result = await self.bus.request(
                 AuthMethods.MESH_LIST_PEERS,
                 MeshPeerListRequest(include_disconnected=True),
-                timeout=5.0,
+                timeout=40.0,
             )
             if not getattr(result, "ok", False):
                 log_error(

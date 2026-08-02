@@ -72,7 +72,11 @@ jobs:
           if ! command -v mosquitto >/dev/null 2>&1; then
             brew install mosquitto
           fi
+          if ! command -v turnserver >/dev/null 2>&1; then
+            brew install coturn
+          fi
           mosquitto -h >/dev/null
+          command -v turnserver >/dev/null
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
@@ -125,6 +129,24 @@ jobs:
 
       - name: Pair iOS MobileSafari and packaged WKWebView with the external Python peer over WebRTC
         env:
+          CODE_SIGN_IDENTITY: ""
+          CODE_SIGNING_ALLOWED: "NO"
+          CODE_SIGNING_REQUIRED: "NO"
+        run: pnpm --filter @aurora/tauri-ui ios:webrtc:interop
+
+      - name: Pair packaged WKWebView with the external Python peer through STUN
+        env:
+          AURORA_IOS_WEBRTC_LANE: stun
+          AURORA_IOS_WEBRTC_SURFACES: tauri-wkwebview
+          CODE_SIGN_IDENTITY: ""
+          CODE_SIGNING_ALLOWED: "NO"
+          CODE_SIGNING_REQUIRED: "NO"
+        run: pnpm --filter @aurora/tauri-ui ios:webrtc:interop
+
+      - name: Pair packaged WKWebView with the external Python peer through TURN
+        env:
+          AURORA_IOS_WEBRTC_LANE: turn
+          AURORA_IOS_WEBRTC_SURFACES: tauri-wkwebview
           CODE_SIGN_IDENTITY: ""
           CODE_SIGNING_ALLOWED: "NO"
           CODE_SIGNING_REQUIRED: "NO"
@@ -209,4 +231,6 @@ jobs:
           path: |
             apps/aurora-tauri/reports/webrtc-interop/ios-mobile-safari/
             apps/aurora-tauri/reports/webrtc-interop/ios-wkwebview/
+            apps/aurora-tauri/reports/webrtc-interop/ios-wkwebview-stun/
+            apps/aurora-tauri/reports/webrtc-interop/ios-wkwebview-turn/
           if-no-files-found: error

@@ -13,7 +13,11 @@ from typing import Any
 
 from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.messaging.bus import Envelope
-from app.services.auth.auth_manager import AuthManager, MeshPairingDeniedError
+from app.services.auth.auth_manager import (
+    AUTH_DB_REQUEST_TIMEOUT_SECONDS,
+    AuthManager,
+    MeshPairingDeniedError,
+)
 from app.shared.auth.audit import audit_event
 from app.shared.auth.permissions import validate_permission
 from app.shared.contracts.models.auth import (
@@ -971,7 +975,7 @@ class AuthService(BaseService):
                         data.ip_address,
                     ],
                 ),
-                timeout=5.0,
+                timeout=AUTH_DB_REQUEST_TIMEOUT_SECONDS,
             )
             return MeshBoolResponse(success=result.ok if hasattr(result, "ok") else True)
         except Exception as e:
@@ -1142,7 +1146,7 @@ class AuthService(BaseService):
         return MeshPeerListResponse(peers=peers, total=len(peers))
 
     @method_contract(
-        method_id="Auth.MeshGetPeer",
+        method_id=AuthMethods.MESH_GET_PEER,
         summary="Get a single mesh peer by peer_id",
         input_model=MeshPeerGetRequest,
         output_model=MeshPeerGetResponse,
@@ -1155,7 +1159,19 @@ class AuthService(BaseService):
             room_name=data.room_name,
         )
         if row:
-            return MeshPeerGetResponse(peer=MeshPeerInfo(**row))
+            return MeshPeerGetResponse(
+                peer=MeshPeerInfo(
+                    **{
+                        **row,
+                        "outbound_permissions": _api_permission_list(
+                            row.get("outbound_permissions")
+                        ),
+                        "inbound_permissions": _api_permission_list(
+                            row.get("inbound_permissions")
+                        ),
+                    }
+                )
+            )
         return MeshPeerGetResponse(peer=None)
 
     @method_contract(

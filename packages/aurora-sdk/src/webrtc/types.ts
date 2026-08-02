@@ -157,11 +157,16 @@ export interface PeerConnectionSnapshot {
   updatedAt: string
 }
 
+export interface PeerPairingApproval {
+  /** Local device features this peer may use after the credential is issued. */
+  readonly sharedFeatureIds?: readonly string[]
+}
+
 export interface PeerConnectionController {
   snapshot(): PeerConnectionSnapshot
   subscribe(listener: (snapshot: PeerConnectionSnapshot) => void): () => void
   connect(profile: WebRtcPeerConnectionProfile): Promise<void>
-  confirmPairing(sessionId: string): Promise<void>
+  confirmPairing(sessionId: string, approval?: PeerPairingApproval): Promise<void>
   rejectPairing(sessionId: string): Promise<void>
   disconnect(reason?: string): Promise<void>
   getSelectedCandidatePairEvidence(): Promise<SelectedCandidatePairEvidence>

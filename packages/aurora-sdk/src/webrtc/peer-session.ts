@@ -8,6 +8,7 @@ import {
 } from './peer-protocol.js'
 import { DataChannelFlowController, type DataChannelFlowLimits } from './datachannel-flow.js'
 import type { AuthenticatedPeerContext } from '../peer-host/index.js'
+import type { PeerPairingApproval } from './types.js'
 
 export const AURORA_RPC_DATA_CHANNEL_LABEL = 'aurora-rpc' as const
 
@@ -116,13 +117,16 @@ export type PeerSessionAuthFrameResult = boolean | {
   authenticatedPeerContext?: AuthenticatedPeerContext
   denied?: boolean
   terminal?: boolean
+  retry?: boolean
   handled?: boolean
 } | void
 
 export interface PeerSessionAuthPort {
   tryReconnect?(context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> | PeerSessionAuthFrameResult
   startPairing?(context: PeerSessionAuthContext): Promise<void> | void
-  confirmPairing?(code: string, context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> | PeerSessionAuthFrameResult
+  confirmPairing?(code: string, context: PeerSessionAuthContext, approval?: PeerPairingApproval): Promise<PeerSessionAuthFrameResult> | PeerSessionAuthFrameResult
+  /** Clear state derived from the old SDP/DataChannel while retaining durable credentials. */
+  resetTransport?(): void
   handleFrame(frame: unknown, context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> | PeerSessionAuthFrameResult
 }
 
@@ -227,6 +231,7 @@ export interface PeerSessionTimeouts {
   discoveryMs: number
   negotiationMs: number
   authMs: number
+  pairingMs: number
 }
 
 export interface PeerSessionReconnectOptions {
@@ -243,11 +248,14 @@ const DEFAULT_TIMEOUTS: PeerSessionTimeouts = {
   signalingMs: 10_000,
   discoveryMs: 30_000,
   negotiationMs: 20_000,
-  authMs: 20_000
+  authMs: 20_000,
+  pairingMs: 300_000
 }
 
 const DEFAULT_RECONNECT: PeerSessionReconnectOptions = {
-  maxAttempts: 3,
+  // A live mesh session keeps recovering until it is explicitly closed.
+  // Callers and tests can still provide a finite ceiling when required.
+  maxAttempts: Number.POSITIVE_INFINITY,
   baseDelayMs: 500,
   maxDelayMs: 5_000,
   jitterRatio: 0.2
@@ -315,6 +323,8 @@ export class WebRtcPeerSession {
   private role: PeerSessionRole = 'unknown'
   private remoteSignalingId: string | undefined
   private remoteStableId: string | undefined
+  private remoteSignalingEpochInvalidated = false
+  private readonly pendingSignalingEpochMessages: SignalingMessage[] = []
   private offerSdpTranscript: string | undefined
   private answerSdpTranscript: string | undefined
   private icePath: IcePathCategory = 'unknown'
@@ -323,7 +333,9 @@ export class WebRtcPeerSession {
   private terminalNoReconnect = false
   private lastError: string | undefined
   private sentLocalProtocolHello = false
+  private pendingRemoteProtocolHello: unknown | undefined
   private authenticatedPeerContext: AuthenticatedPeerContext | undefined
+  private transportGeneration = 0
 
   constructor(options: PeerSessionOptions) {
     this.options = options
@@ -414,12 +426,26 @@ export class WebRtcPeerSession {
     return this.enqueueFrame(frame, 'Aurora WebRTC peer session is not authorized', () => this.state === 'authorized')
   }
 
-  async confirmSas(code: string): Promise<void> {
+  async confirmSas(code: string, approval?: PeerPairingApproval): Promise<void> {
     if (this.state !== 'awaiting-sas-confirmation') {
       throw new Error('No SAS confirmation is pending')
     }
-    const context = this.authContext()
-    const result = await this.options.auth?.confirmPairing?.(code, context)
+    const channel = this.channel
+    if (channel === undefined) throw new Error('Pairing transport is unavailable')
+    const context = this.authContext(channel)
+    this.clearTimerKind('auth')
+    this.clearTimerKind('pairing-exchange')
+    this.armTimeout('pairing-exchange', this.timeouts.pairingMs, () => {
+      if (this.channel === channel && !this.isTerminal()) this.fail('pairing exchange timeout', true)
+    })
+    let result: PeerSessionAuthFrameResult
+    try {
+      result = await this.options.auth?.confirmPairing?.(code, context, approval)
+    } catch (error) {
+      if (this.channel === channel && !this.isTerminal()) this.clearTimerKind('pairing-exchange')
+      throw error
+    }
+    if (this.channel !== channel || this.isTerminal()) return
     await this.applyAuthResult(result, 'pairing confirmation')
   }
 
@@ -429,6 +455,7 @@ export class WebRtcPeerSession {
     this.clearAllTimers()
     this.detachSignaling()
     this.authenticatedPeerContext = undefined
+    this.pendingSignalingEpochMessages.length = 0
     this.closeChannel()
     this.closePeerConnection()
     this.frameListeners.clear()
@@ -466,17 +493,12 @@ export class WebRtcPeerSession {
 
   private acceptRemoteIdentity(message: SignalingMessage): boolean {
     if (message.from === this.options.localSignalingId) return false
+    const stable = message.stablePeerId ?? message.envelope.stable_peer_id
     if (this.options.expectedRemoteSignalingId !== undefined && message.from !== this.options.expectedRemoteSignalingId) {
       this.terminalNoReconnect = true
       this.fail('remote signaling identity mismatch', false)
       return false
     }
-    if (this.remoteSignalingId !== undefined && message.from !== this.remoteSignalingId) {
-      this.terminalNoReconnect = true
-      this.fail('remote signaling identity changed', false)
-      return false
-    }
-    const stable = message.stablePeerId ?? message.envelope.stable_peer_id
     if (this.options.expectedRemoteStableId !== undefined && stable !== undefined && stable !== this.options.expectedRemoteStableId) {
       this.terminalNoReconnect = true
       this.fail('remote stable identity mismatch', false)
@@ -487,12 +509,36 @@ export class WebRtcPeerSession {
       this.fail('remote stable identity changed', false)
       return false
     }
+    if (this.remoteSignalingId !== undefined && message.from !== this.remoteSignalingId) {
+      const trustedStableId = this.remoteStableId ?? this.options.expectedRemoteStableId
+      if (trustedStableId !== undefined && stable === trustedStableId) {
+        if (message.envelope.type !== 'presence_departed') {
+          if (this.pendingSignalingEpochMessages.length >= MAX_STARTUP_SIGNALING_MESSAGES) {
+            this.pendingSignalingEpochMessages.shift()
+          }
+          this.pendingSignalingEpochMessages.push(message)
+        }
+        this.remoteSignalingEpochInvalidated = true
+        if (this.state !== 'reconnecting') {
+          this.onTransientDisconnect('remote signaling session changed')
+        }
+        return false
+      }
+      this.terminalNoReconnect = true
+      this.fail('remote signaling identity changed', false)
+      return false
+    }
     this.remoteSignalingId = message.from
     if (stable !== undefined) this.remoteStableId = stable
     return true
   }
 
   private async handlePresence(message: SignalingMessage): Promise<void> {
+    if (message.envelope.type === 'presence_departed') {
+      this.remoteSignalingEpochInvalidated = true
+      this.onTransientDisconnect('remote signaling session departed')
+      return
+    }
     if (this.state !== 'discovering-peer' && this.state !== 'reconnecting') return
     this.clearTimerKind('discovery')
     this.role = this.options.localSignalingId < message.from ? 'offerer' : 'answerer'
@@ -502,16 +548,27 @@ export class WebRtcPeerSession {
   }
 
   private async beginOffer(): Promise<void> {
+    if (this.state !== 'discovering-peer' && this.state !== 'reconnecting') return
+    this.clearTimerKind('discovery')
     this.ensurePeerConnection()
-    this.attachDataChannel(this.pc!.createDataChannel(AURORA_RPC_DATA_CHANNEL_LABEL, { ordered: true }))
+    const pc = this.pc!
+    const generation = this.transportGeneration
+    const remoteSignalingId = this.remoteSignalingId
+    if (remoteSignalingId === undefined) return
+    this.attachDataChannel(pc.createDataChannel(AURORA_RPC_DATA_CHANNEL_LABEL, { ordered: true }))
     this.transition('negotiating')
-    this.armTimeout('negotiation', this.timeouts.negotiationMs, () => this.fail('negotiation timeout', true))
-    const offer = await this.pc!.createOffer()
-    await this.pc!.setLocalDescription(offer)
-    const localOfferSdp = this.pc!.localDescription?.sdp ?? offer.sdp
+    this.armTimeout('negotiation', this.timeouts.negotiationMs, () => {
+      if (this.isCurrentTransport(pc, generation)) this.fail('negotiation timeout', true)
+    })
+    const offer = await pc.createOffer()
+    if (!this.isCurrentNegotiation(pc, generation)) return
+    await pc.setLocalDescription(offer)
+    if (!this.isCurrentNegotiation(pc, generation)) return
+    const localOfferSdp = pc.localDescription?.sdp ?? offer.sdp
     this.offerSdpTranscript = localOfferSdp
     this.answerSdpTranscript = undefined
-    await this.options.signaling.publish('offer', { type: 'offer', from: this.options.localSignalingId, to: this.remoteSignalingId, sdp: localOfferSdp }, this.remoteSignalingId)
+    if (!this.isCurrentNegotiation(pc, generation)) return
+    await this.options.signaling.publish('offer', { type: 'offer', from: this.options.localSignalingId, to: remoteSignalingId, sdp: localOfferSdp }, remoteSignalingId)
   }
 
   private async handleOffer(message: SignalingMessage): Promise<void> {
@@ -524,16 +581,24 @@ export class WebRtcPeerSession {
     }
     this.clearTimerKind('discovery')
     this.role = 'answerer'
+    this.ensurePeerConnection()
+    const pc = this.pc!
+    const generation = this.transportGeneration
+    this.transition('negotiating')
+    this.armTimeout('negotiation', this.timeouts.negotiationMs, () => {
+      if (this.isCurrentTransport(pc, generation)) this.fail('negotiation timeout', true)
+    })
+    await pc.setRemoteDescription({ type: 'offer', sdp })
+    if (!this.isCurrentNegotiation(pc, generation)) return
     this.offerSdpTranscript = sdp
     this.answerSdpTranscript = undefined
-    this.ensurePeerConnection()
-    this.transition('negotiating')
-    this.armTimeout('negotiation', this.timeouts.negotiationMs, () => this.fail('negotiation timeout', true))
-    await this.pc!.setRemoteDescription({ type: 'offer', sdp })
-    const answer = await this.pc!.createAnswer()
-    await this.pc!.setLocalDescription(answer)
-    const localAnswerSdp = this.pc!.localDescription?.sdp ?? answer.sdp
+    const answer = await pc.createAnswer()
+    if (!this.isCurrentNegotiation(pc, generation)) return
+    await pc.setLocalDescription(answer)
+    if (!this.isCurrentNegotiation(pc, generation)) return
+    const localAnswerSdp = pc.localDescription?.sdp ?? answer.sdp
     this.answerSdpTranscript = localAnswerSdp
+    if (!this.isCurrentNegotiation(pc, generation)) return
     await this.options.signaling.publish('answer', { type: 'answer', from: this.options.localSignalingId, to: message.from, sdp: localAnswerSdp }, message.from)
   }
 
@@ -544,56 +609,75 @@ export class WebRtcPeerSession {
       this.fail('answer missing sdp', false)
       return
     }
+    const pc = this.pc
+    if (pc === undefined) return
+    const generation = this.transportGeneration
+    await pc.setRemoteDescription({ type: 'answer', sdp })
+    if (!this.isCurrentNegotiation(pc, generation)) return
     this.answerSdpTranscript = sdp
-    await this.pc?.setRemoteDescription({ type: 'answer', sdp })
   }
 
   private async handleCandidate(message: SignalingMessage): Promise<void> {
+    const pc = this.pc
+    if (pc === undefined) return
+    const generation = this.transportGeneration
     const candidate = message.envelope.candidate
     if (candidate === null) {
-      await this.pc?.addIceCandidate(null)
+      await pc.addIceCandidate(null)
       return
     }
     if (typeof candidate !== 'string') return
-    this.icePath = categorizeIceCandidate(candidate)
+    const icePath = categorizeIceCandidate(candidate)
     const init: IceCandidateInitLike = { candidate }
     if (typeof message.envelope.sdp_mid === 'string') init.sdpMid = message.envelope.sdp_mid
     if (typeof message.envelope.sdp_mline_index === 'number') init.sdpMLineIndex = message.envelope.sdp_mline_index
-    await this.pc?.addIceCandidate(init)
+    await pc.addIceCandidate(init)
+    if (!this.isCurrentTransport(pc, generation)) return
+    this.icePath = icePath
     this.emit()
   }
 
   private ensurePeerConnection(): void {
     if (this.pc !== undefined) return
     const pc = this.options.createPeerConnection({ iceServers: this.options.iceServers ?? [] })
+    const generation = this.transportGeneration + 1
+    this.transportGeneration = generation
     this.pc = pc
-    pc.onicecandidate = (event) => void this.onIceCandidate(event)
-    pc.ondatachannel = (event) => this.onRemoteDataChannel(event.channel)
-    pc.onconnectionstatechange = () => this.onConnectionStateChanged()
-    pc.oniceconnectionstatechange = () => this.onConnectionStateChanged()
+    pc.onicecandidate = (event) => void this.onIceCandidate(pc, generation, event)
+    pc.ondatachannel = (event) => this.onRemoteDataChannel(pc, generation, event.channel)
+    pc.onconnectionstatechange = () => this.onConnectionStateChanged(pc, generation)
+    pc.oniceconnectionstatechange = () => this.onConnectionStateChanged(pc, generation)
   }
 
-  private async onIceCandidate(event: IceCandidateEventLike): Promise<void> {
-    if (this.isTerminal() || this.remoteSignalingId === undefined) return
+  private async onIceCandidate(pc: PeerConnectionLike, generation: number, event: IceCandidateEventLike): Promise<void> {
+    if (!this.isCurrentTransport(pc, generation) || this.isTerminal() || this.remoteSignalingId === undefined) return
+    const remoteSignalingId = this.remoteSignalingId
     if (event.candidate === null) {
-      await this.options.signaling.publish('candidate', { type: 'candidate', from: this.options.localSignalingId, to: this.remoteSignalingId, candidate: null }, this.remoteSignalingId)
+      await this.options.signaling.publish('candidate', { type: 'candidate', from: this.options.localSignalingId, to: remoteSignalingId, candidate: null }, remoteSignalingId)
       return
     }
     const init = candidateToInit(event.candidate)
-    this.icePath = categorizeIceCandidate(init.candidate)
+    const icePath = categorizeIceCandidate(init.candidate)
+    if (!this.isCurrentTransport(pc, generation)) return
     await this.options.signaling.publish('candidate', {
       type: 'candidate',
       from: this.options.localSignalingId,
-      to: this.remoteSignalingId,
+      to: remoteSignalingId,
       candidate: init.candidate,
-      candidate_category: this.icePath,
+      candidate_category: icePath,
       sdp_mid: init.sdpMid ?? null,
       sdp_mline_index: init.sdpMLineIndex ?? null
-    }, this.remoteSignalingId)
+    }, remoteSignalingId)
+    if (!this.isCurrentTransport(pc, generation)) return
+    this.icePath = icePath
     this.emit()
   }
 
-  private onRemoteDataChannel(channel: DataChannelLike): void {
+  private onRemoteDataChannel(pc: PeerConnectionLike, generation: number, channel: DataChannelLike): void {
+    if (!this.isCurrentTransport(pc, generation)) {
+      channel.close()
+      return
+    }
     if (channel.label !== AURORA_RPC_DATA_CHANNEL_LABEL) {
       channel.close()
       this.terminalNoReconnect = true
@@ -623,8 +707,9 @@ export class WebRtcPeerSession {
 
   private bindDataChannel(channel: DataChannelLike): void {
     this.sentLocalProtocolHello = false
+    this.pendingRemoteProtocolHello = undefined
     this.receiveQueue = Promise.resolve()
-    channel.onopen = () => void this.onChannelOpen()
+    channel.onopen = () => void this.onChannelOpen(channel)
     channel.onmessage = (event) => {
       const decoded = this.decodeChannelFrame(channel, event.data)
       // Pairing/reconnect handlers can legitimately wait for an RPC response,
@@ -652,25 +737,31 @@ export class WebRtcPeerSession {
     channel.onerror = () => this.onTransientDisconnect('data channel error')
   }
 
-  private async onChannelOpen(): Promise<void> {
+  private async onChannelOpen(channel: DataChannelLike): Promise<void> {
     try {
-      if (this.isTerminal()) return
+      if (this.isTerminal() || this.channel !== channel) return
       this.clearTimerKind('negotiation')
       this.transition('channel-open')
-      this.armTimeout('auth', this.timeouts.authMs, () => this.fail('auth timeout', false))
+      this.armTimeout('auth', this.timeouts.authMs, () => this.fail('auth timeout', true))
       const auth = this.requiredAuth()
       if (auth === undefined) return
-      const context = this.authContext()
+      const context = this.authContext(channel)
       if (auth.tryReconnect !== undefined) {
         this.transition('reconnect-authenticating')
-        await this.applyReconnectResult(await auth.tryReconnect(context))
+        const reconnectResult = await auth.tryReconnect(context)
+        if (this.channel !== channel || this.isTerminal()) return
+        await this.applyReconnectResult(reconnectResult)
         if (this.state === 'authorized' || this.state === 'failed') return
       }
       this.transition('pairing-required')
       await auth.startPairing?.(context)
-      if (this.state === 'pairing-required') this.transition('awaiting-sas-confirmation')
+      if (this.channel !== channel || this.isTerminal()) return
+      if (this.state === 'pairing-required') {
+        this.transition('awaiting-sas-confirmation')
+        this.armTimeout('auth', this.timeouts.pairingMs, () => this.fail('pairing timeout', true))
+      }
     } catch (error) {
-      if (this.isTerminal() || this.closedExplicitly) return
+      if (this.isTerminal() || this.closedExplicitly || this.channel !== channel) return
       this.terminalNoReconnect = true
       this.fail(error, false)
     }
@@ -688,12 +779,12 @@ export class WebRtcPeerSession {
     if (this.channel !== channel || this.isTerminal()) return
     try {
       if (this.state === 'authorized') {
-        if (await this.handleAuthorizedAuthFrame(frame)) return
+        if (await this.handleAuthorizedAuthFrame(frame, channel)) return
         this.deliverFrame(frame)
         return
       }
       if (this.isPreAuthState()) {
-        await this.handlePreAuthFrame(frame)
+        await this.handlePreAuthFrame(frame, channel)
       }
     } catch (error) {
       this.rejectChannelFrame(channel, error)
@@ -706,12 +797,17 @@ export class WebRtcPeerSession {
     this.fail(`encrypted data channel frame rejected: ${redactError(error)}`, false)
   }
 
-  private async handleAuthorizedAuthFrame(frame: unknown): Promise<boolean> {
+  private async handleAuthorizedAuthFrame(frame: unknown, channel: DataChannelLike): Promise<boolean> {
     const auth = this.requiredAuth()
     if (auth === undefined) return false
-    const result = await auth.handleFrame(frame, this.authContext())
+    const result = await auth.handleFrame(frame, this.authContext(channel))
+    if (this.channel !== channel || this.isTerminal()) return true
     if (result === true) return true
     if (typeof result === 'object' && result !== null) {
+      if (result.retry === true) {
+        this.fail('authorized auth retry required', true)
+        return true
+      }
       if (result.denied === true || result.terminal === true) {
         this.terminalNoReconnect = true
         this.fail('authorized auth frame denied', false)
@@ -726,7 +822,7 @@ export class WebRtcPeerSession {
     return false
   }
 
-  private async handlePreAuthFrame(frame: unknown): Promise<void> {
+  private async handlePreAuthFrame(frame: unknown, channel: DataChannelLike): Promise<void> {
     const auth = this.requiredAuth()
     if (auth === undefined) return
     const isHello = isProtocolHelloFrame(frame)
@@ -738,18 +834,25 @@ export class WebRtcPeerSession {
         this.fail('invalid protocol hello', false)
         return
       }
+      this.pendingRemoteProtocolHello = frame
     }
-    const result = await auth.handleFrame(frame, this.authContext())
+    const result = await auth.handleFrame(frame, this.authContext(channel))
+    if (this.channel !== channel || this.isTerminal()) return
     const authenticated = result === true || (typeof result === 'object' && result !== null && result.authenticated === true)
-    await this.applyAuthResult(result, 'preauth frame', authenticated && isHello ? frame : undefined)
+    await this.applyAuthResult(
+      result,
+      'preauth frame',
+      authenticated ? this.pendingRemoteProtocolHello : undefined
+    )
+    if (authenticated) this.pendingRemoteProtocolHello = undefined
   }
 
-  private authContext(): PeerSessionAuthContext {
+  private authContext(channel: DataChannelLike): PeerSessionAuthContext {
     if (this.remoteSignalingId === undefined) throw new Error('remote peer is not known')
     const context: PeerSessionAuthContext = {
       localSignalingId: this.options.localSignalingId,
       remoteSignalingId: this.remoteSignalingId,
-      sendControlFrame: (frame: unknown) => this.sendControlFrame(frame)
+      sendControlFrame: (frame: unknown) => this.sendControlFrame(frame, channel)
     }
     const offerSdp = this.offerSdpTranscript ?? (this.role === 'offerer' ? this.pc?.localDescription?.sdp : this.pc?.remoteDescription?.sdp)
     const answerSdp = this.answerSdpTranscript ?? (this.role === 'offerer' ? this.pc?.remoteDescription?.sdp : this.pc?.localDescription?.sdp)
@@ -760,8 +863,9 @@ export class WebRtcPeerSession {
     return context
   }
 
-  private onConnectionStateChanged(): void {
-    const state = this.pc?.connectionState ?? this.pc?.iceConnectionState
+  private onConnectionStateChanged(pc: PeerConnectionLike, generation: number): void {
+    if (!this.isCurrentTransport(pc, generation)) return
+    const state = pc.connectionState ?? pc.iceConnectionState
     if (state === 'failed' || state === 'disconnected') {
       this.onTransientDisconnect(`peer connection ${state}`)
     }
@@ -769,25 +873,67 @@ export class WebRtcPeerSession {
 
   private onTransientDisconnect(reason: string): void {
     if (this.closedExplicitly || this.terminalNoReconnect || this.isTerminal()) return
+    if (this.state === 'reconnecting') return
     this.authenticatedPeerContext = undefined
     if (this.reconnectAttempts >= this.reconnectOptions.maxAttempts) {
       this.fail(reason, false)
       return
     }
+    this.clearTimerKind('signaling')
+    this.clearTimerKind('discovery')
+    this.clearTimerKind('negotiation')
+    this.clearTimerKind('auth')
+    this.clearTimerKind('pairing-exchange')
     this.reconnectAttempts += 1
     this.transition('reconnecting')
     const jitter = 1 + ((this.random() * 2 - 1) * this.reconnectOptions.jitterRatio)
     const base = Math.min(this.reconnectOptions.maxDelayMs, this.reconnectOptions.baseDelayMs * 2 ** (this.reconnectAttempts - 1))
     this.armTimeout('reconnect', Math.max(0, Math.round(base * jitter)), () => {
-      if (this.closedExplicitly || this.terminalNoReconnect || this.state === 'closed') return
-      this.closeChannel()
-      this.closePeerConnection()
-      this.transition('discovering-peer')
+      void this.restartAfterTransientDisconnect()
     })
   }
 
-  private async sendControlFrame(frame: unknown): Promise<void> {
-    return this.enqueueFrame(frame, 'Aurora WebRTC control channel is not open', () => this.channel?.readyState === 'open')
+  private async restartAfterTransientDisconnect(): Promise<void> {
+    if (this.closedExplicitly || this.terminalNoReconnect || this.state === 'closed') return
+    this.closeChannel()
+    this.closePeerConnection()
+    this.options.auth.resetTransport?.()
+    if (this.remoteSignalingEpochInvalidated) {
+      this.remoteSignalingId = undefined
+      this.role = 'unknown'
+      this.remoteSignalingEpochInvalidated = false
+    }
+    this.offerSdpTranscript = undefined
+    this.answerSdpTranscript = undefined
+    this.transition('discovering-peer')
+    this.armTimeout('discovery', this.timeouts.discoveryMs, () => this.fail('peer discovery timeout', true))
+    try {
+      await this.options.signaling.publish('presence', {
+        type: 'presence',
+        from: this.options.localSignalingId,
+        stable_peer_id: this.options.localStableId
+      })
+      const epochMessages = this.pendingSignalingEpochMessages.splice(0)
+      for (const message of epochMessages) {
+        if (this.isTerminal()) break
+        await this.handleSignalingMessage(message)
+      }
+      if (this.role === 'offerer' && this.remoteSignalingId !== undefined) {
+        await this.beginOffer()
+      }
+    } catch (error) {
+      this.fail(error, true)
+    }
+  }
+
+  private async sendControlFrame(frame: unknown, channel?: DataChannelLike): Promise<void> {
+    const expectedChannel = channel ?? this.channel
+    if (expectedChannel === undefined) throw new Error('Aurora WebRTC control channel is not open')
+    return this.enqueueFrame(
+      frame,
+      'Aurora WebRTC control channel is not open',
+      () => this.channel === expectedChannel && expectedChannel.readyState === 'open'
+    )
   }
 
   private async enqueueFrame(frame: unknown, errorMessage: string, isAllowed: () => boolean): Promise<void> {
@@ -824,12 +970,18 @@ export class WebRtcPeerSession {
     if (typeof result === 'object' && result !== null && (result.denied === true || result.terminal === true)) {
       this.terminalNoReconnect = true
       this.fail('reconnect denied', false)
+      return
     }
+    if (typeof result === 'object' && result !== null && result.retry === true) this.fail('reconnect retry required', true)
   }
 
   private async applyAuthResult(result: PeerSessionAuthFrameResult, source: string, replayFrame?: unknown): Promise<void> {
     if (result === true || (typeof result === 'object' && result !== null && result.authenticated === true)) {
       await this.completeAuthentication(replayFrame, typeof result === 'object' && result !== null ? result.authenticatedPeerContext : undefined)
+      return
+    }
+    if (typeof result === 'object' && result !== null && result.retry === true) {
+      this.fail(`${source} retry required`, true)
       return
     }
     if (result === false || (typeof result === 'object' && result !== null && (result.denied === true || result.terminal === true))) {
@@ -853,6 +1005,8 @@ export class WebRtcPeerSession {
       }
     }
     this.authenticatedPeerContext = authenticatedPeerContext === undefined ? undefined : cloneAuthenticatedPeerContext(authenticatedPeerContext)
+    this.pendingRemoteProtocolHello = undefined
+    this.lastError = undefined
     this.transition('authorized')
     if (replayFrame !== undefined) this.deliverFrame(replayFrame)
     if (localHello !== undefined) {
@@ -918,7 +1072,12 @@ export class WebRtcPeerSession {
 
   private armTimeout(kind: string, ms: number, callback: () => void): void {
     this.clearTimerKind(kind)
-    const handle = this.timers.setTimeout(callback, ms)
+    let handle: unknown
+    handle = this.timers.setTimeout(() => {
+      this.timerHandles.delete(handle)
+      timerKinds.delete(handle)
+      callback()
+    }, ms)
     this.timerHandles.add(handle)
     timerKinds.set(handle, kind)
   }
@@ -959,13 +1118,23 @@ export class WebRtcPeerSession {
 
   private closePeerConnection(): void {
     if (this.pc !== undefined) {
-      this.pc.onicecandidate = null
-      this.pc.ondatachannel = null
-      this.pc.onconnectionstatechange = null
-      this.pc.oniceconnectionstatechange = null
-      this.pc.close()
+      const pc = this.pc
       this.pc = undefined
+      this.transportGeneration += 1
+      pc.onicecandidate = null
+      pc.ondatachannel = null
+      pc.onconnectionstatechange = null
+      pc.oniceconnectionstatechange = null
+      pc.close()
     }
+  }
+
+  private isCurrentTransport(pc: PeerConnectionLike, generation: number): boolean {
+    return this.pc === pc && this.transportGeneration === generation && !this.closedExplicitly && !this.isTerminal()
+  }
+
+  private isCurrentNegotiation(pc: PeerConnectionLike, generation: number): boolean {
+    return this.isCurrentTransport(pc, generation) && this.state === 'negotiating'
   }
 
   private detachSignaling(): void {

@@ -312,6 +312,7 @@ describe('desktop-thin live connection profiles', () => {
       registeredToolIds: ['native.get_device_status'],
     })
     expect(runtime.localFeatureSharing).toBe(localFeatureSharing)
+    expect(runtime.localAssistant?.provider).toBeDefined()
     await runtime.dispose()
     await runtime.dispose()
     expect(close).toHaveBeenCalledOnce()
@@ -731,7 +732,7 @@ describe('desktop-thin live connection profiles', () => {
       label: 'Second remote',
     })
     await runtime.thinProfileController!.selectProfile('mesh-only')
-    const recreated = runtime.thinProfileController!.createRuntime(runtime.thinProfileController!.document)
+    const recreated = await runtime.thinProfileController!.createRuntime(runtime.thinProfileController!.document)
 
     expect(saved.profiles.map((candidate) => candidate.id).sort()).toEqual([
       'mesh-only',
@@ -1020,13 +1021,133 @@ describe('desktop-thin live connection profiles', () => {
     expect(runtime.thinConnectionMode).toBe('http-only')
     expect(runtime.client.transport.kind).toBe('http')
     expect(runtime.thinPeer).toBeDefined()
-    expect(runtime.thinPeer?.snapshot().secretsPersisted).toBe(false)
+    expect(runtime.thinPeer?.snapshot()).toMatchObject({
+      secretsPersisted: true,
+      persistenceBackend: 'platform-keychain',
+    })
     expect(runtime.thinDiagnostics().join(' ')).toContain('mode=http-only')
     await expect(runtime.sidecarStatus()).resolves.toBeNull()
     await expect(runtime.startSidecar()).resolves.toBeNull()
     await expect(runtime.stopSidecar()).resolves.toBeNull()
     await runtime.dispose()
     await initial.dispose()
+  })
+
+  it('persists a fresh Android device-sharing choice in the saved runtime profile before rebuilding', async () => {
+    vi.stubEnv('VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK', '1')
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Linux; Android 15) Aurora',
+      configurable: true,
+    })
+    let saved: AuroraRuntimeProfileDocument = {
+      version: 2,
+      activeProfileId: null,
+      profiles: [],
+    }
+    const store: AuroraRuntimeProfileStore = {
+      kind: 'runtime-profile',
+      evidence: 'Android runtime profile store',
+      load: vi.fn(async () => saved),
+      save: vi.fn(async (next) => { saved = next }),
+    }
+    const runtime = createAuroraTauriRuntime({
+      runtimeProfileStore: store,
+      runtimeProfileDocument: saved,
+      consumeThinInvite: false,
+    })
+
+    await runtime.modePreferenceStore!.writeSelectedMode('mesh-node')
+    await runtime.modePreferenceStore!.writeSelectedRuntimeTier?.('lightweight-ts')
+    const rebuilt = await rebuildAuroraThinRuntime(
+      runtime,
+      (controller) => controller.saveProfile({
+        ...profile,
+        id: 'android-first-run',
+        label: 'Android device',
+        mode: 'webrtc-only',
+        gatewayUrl: '',
+        nodeName: 'Aurora Android',
+        localStablePeerId: 'android-peer-first-run',
+      }),
+    )
+
+    expect(saved.activeProfileId).toBe('android-first-run')
+    expect(saved.profiles[0]).toMatchObject({
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      homeConnection: {
+        mode: 'webrtc-only',
+        webrtcProfile: { room: 'office-room' },
+      },
+      localNode: {
+        stablePeerId: 'android-peer-first-run',
+        enabledCapabilityPacks: ['native-actions'],
+        meshMembership: {
+          webrtcProfile: { room: 'office-room' },
+        },
+      },
+    })
+    expect(rebuilt.nodeMode).toBe('mesh-node')
+    expect(rebuilt.runtimeTier).toBe('lightweight-ts')
+    expect(await rebuilt.modePreferenceStore?.readSelectedMode()).toBe('mesh-node')
+    await rebuilt.dispose()
+  })
+
+  it('reuses an existing Android mesh-node identity when the same Aurora invite is saved again', async () => {
+    vi.stubEnv('VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK', '1')
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Linux; Android 15) Aurora',
+      configurable: true,
+    })
+    let saved: AuroraRuntimeProfileDocument = runtimeDocument
+    const store: AuroraRuntimeProfileStore = {
+      kind: 'runtime-profile',
+      evidence: 'Android runtime profile store',
+      load: vi.fn(async () => saved),
+      save: vi.fn(async (next) => { saved = next }),
+    }
+    const runtime = createAuroraTauriRuntime({
+      runtimeProfileStore: store,
+      runtimeProfileDocument: saved,
+      consumeThinInvite: false,
+    })
+
+    await runtime.modePreferenceStore!.writeSelectedMode('mesh-node')
+    await runtime.modePreferenceStore!.writeSelectedRuntimeTier?.('lightweight-ts')
+    const rebuilt = await rebuildAuroraThinRuntime(
+      runtime,
+      (controller) => controller.saveProfile({
+        ...profile,
+        id: 'android-generated-after-upgrade',
+        label: 'Android device',
+        mode: 'webrtc-only',
+        gatewayUrl: '',
+        nodeName: 'Aurora android device',
+        localStablePeerId: 'android-generated-peer-after-upgrade',
+      }),
+    )
+
+    expect(saved.activeProfileId).toBe('runtime-office')
+    expect(saved.profiles).toHaveLength(1)
+    expect(saved.profiles[0]).toMatchObject({
+      id: 'runtime-office',
+      label: 'Runtime office',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      localNode: {
+        nodeName: 'Aurora desktop',
+        stablePeerId: 'desktop-peer-01',
+        enabledCapabilityPacks: ['local-tools'],
+      },
+      homeConnection: {
+        homePeerId: 'office-home',
+        webrtcProfile: { room: 'office-room' },
+      },
+    })
+    expect(rebuilt.runtimeProfile?.id).toBe('runtime-office')
+    await rebuilt.dispose()
   })
 
   it('uses runtime-configured desktop-thin endpoints without enabling sidecar ownership', async () => {
@@ -1135,7 +1256,11 @@ describe('desktop-thin live connection profiles', () => {
     expect(runtime.mode).toBe('mobile-native')
     expect(runtime.thinConnectionMode).toBe('webrtc-only')
     expect(runtime.client.transport.kind).toBe('mesh')
-    expect(runtime.thinPeer?.snapshot()).toMatchObject({ hasHttpFallback: false, secretsPersisted: false })
+    expect(runtime.thinPeer?.snapshot()).toMatchObject({
+      hasHttpFallback: false,
+      secretsPersisted: true,
+      persistenceBackend: 'platform-keychain',
+    })
     expect(runtime.thinDiagnostics().join(' ')).toContain('invite room=android-room')
     expect(window.location.hash).not.toContain('invite=')
     expect(window.location.hash).toContain('panel=mesh')
@@ -1148,8 +1273,19 @@ describe('desktop-thin live connection profiles', () => {
     expect(secondRuntime.thinPeer?.snapshot().hasHttpFallback).toBe(true)
     expect(secondRuntime.thinDiagnostics().join(' ')).toContain('invite room=android-room')
     expect(window.location.hash).not.toContain('invite=')
+
+    const savedProfileRuntime = createAuroraTauriRuntime({
+      thinProfileDocument: {
+        ...document,
+        profiles: [webrtcOnly],
+      },
+    })
+    expect(savedProfileRuntime.thinDiagnostics().join(' ')).not.toContain(
+      'blocked: invite/profile required',
+    )
     await runtime.dispose()
     await secondRuntime.dispose()
+    await savedProfileRuntime.dispose()
   })
 
   it('resolves Android thin HTTP authorization from the current SDK session', async () => {

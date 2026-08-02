@@ -1,6 +1,7 @@
 export type {
   AuroraConnectionMode,
   IcePathCategory,
+  PeerPairingApproval,
   PeerConnectionController,
   PeerConnectionSnapshot,
   PeerConnectionState,

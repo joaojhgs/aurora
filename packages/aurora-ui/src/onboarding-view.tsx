@@ -17,6 +17,7 @@ export interface OnboardingViewProps {
   client: AuroraClient
   snapshot: AuroraShellSnapshot
   modePreferenceStore?: OnboardingModePreferenceStore | undefined
+  onApplyModePreference?: (() => Promise<void>) | undefined
   thinConnectionPanel?: ReactNode
   setupRequired?: boolean | undefined
 }
@@ -83,13 +84,21 @@ export interface OnboardingViewModel {
   cockpitHref: string
 }
 
-export function OnboardingView({ client, snapshot, modePreferenceStore, thinConnectionPanel, setupRequired = false }: OnboardingViewProps) {
+export function OnboardingView({
+  client,
+  snapshot,
+  modePreferenceStore,
+  onApplyModePreference,
+  thinConnectionPanel,
+  setupRequired = false,
+}: OnboardingViewProps) {
   const [session, setSession] = useState(() => client.auth.refreshClock())
   const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
   const [selectedModeId, setSelectedModeId] = useState(() => defaultModeId(client.transport.kind, snapshot, userAgent))
   const [modePreferenceReady, setModePreferenceReady] = useState(() => !modePreferenceStore)
   const [modePreferenceStatus, setModePreferenceStatus] = useState('Saved for this session')
   const modeSelectionTouchedRef = useRef(false)
+  const modeSelectionRevisionRef = useRef(0)
   const [endpoint, setEndpoint] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -120,6 +129,32 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     return client.auth.subscribe(setSession)
   }, [client])
 
+  function persistModePreference(modeId: OnboardingProductModeId, shouldApply: () => boolean = () => true) {
+    if (!modePreferenceStore) {
+      setModePreferenceReady(true)
+      return
+    }
+    const revision = ++modeSelectionRevisionRef.current
+    const preference = productModePreference(modeId)
+    setModePreferenceReady(false)
+    setModePreferenceStatus(`Saving ${modeLabel(modeId)}`)
+    void Promise.all([
+      modePreferenceStore.writeSelectedMode(preference.nodeMode),
+      modePreferenceStore.writeSelectedRuntimeTier?.(preference.runtimeTier) ?? Promise.resolve(true),
+    ]).then(
+      ([modeOk, tierOk]) => {
+        if (!shouldApply() || revision !== modeSelectionRevisionRef.current) return
+        setModePreferenceStatus(modeOk && tierOk ? `Saved ${modeLabel(modeId)}` : 'Choice not saved')
+        setModePreferenceReady(modeOk && tierOk)
+      },
+      () => {
+        if (!shouldApply() || revision !== modeSelectionRevisionRef.current) return
+        setModePreferenceStatus('Choice not saved')
+        setModePreferenceReady(false)
+      },
+    )
+  }
+
   useEffect(() => {
     let cancelled = false
     if (!modePreferenceStore) {
@@ -129,7 +164,11 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
         cancelled = true
       }
     }
-    modeSelectionTouchedRef.current = false
+    if (modeSelectionTouchedRef.current) {
+      return () => {
+        cancelled = true
+      }
+    }
     setModePreferenceReady(false)
     setModePreferenceStatus('Checking saved choice')
     void Promise.all([
@@ -142,20 +181,54 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
         const availableModeId = productModeId
           ? availableProductModeId(productModeId, client.transport.kind, snapshot, userAgent, { allowBrowserDeviceSetup })
           : null
+        const savedLocalModeIsStillStarting = productModeId === 'run-aurora-on-this-computer'
+          && client.transport.kind === 'tauri-local'
+          && !snapshot.nativeAvailable
         if (availableModeId && !modeSelectionTouchedRef.current) {
           setSelectedModeId(availableModeId)
           setModePreferenceStatus(`Restored ${modeLabel(availableModeId)}`)
-        } else if (modeId) {
-          setModePreferenceStatus('Choose how to use this device')
-        } else {
-          setModePreferenceStatus('Choose how to use this device')
+          setModePreferenceReady(true)
+        } else if (modeId && !modeSelectionTouchedRef.current) {
+          const fallbackModeId = availableProductModeId(
+            selectedModeId,
+            client.transport.kind,
+            snapshot,
+            userAgent,
+            { allowBrowserDeviceSetup },
+          ) ?? deploymentModes(client.transport.kind, snapshot, userAgent, { allowBrowserDeviceSetup })
+            .find((mode) => !mode.disabled)?.id as OnboardingProductModeId | undefined
+          if (fallbackModeId) {
+            setSelectedModeId(fallbackModeId)
+            if (savedLocalModeIsStillStarting) {
+              setModePreferenceStatus('Saved choice is not available yet')
+              setModePreferenceReady(false)
+            } else {
+              modeSelectionTouchedRef.current = true
+              persistModePreference(fallbackModeId, () => !cancelled)
+            }
+          } else {
+            setModePreferenceStatus('Choose how to use this device')
+            setModePreferenceReady(false)
+          }
+        } else if (!modeSelectionTouchedRef.current) {
+          const fallbackModeId = availableProductModeId(
+            selectedModeId,
+            client.transport.kind,
+            snapshot,
+            userAgent,
+            { allowBrowserDeviceSetup },
+          ) ?? defaultModeId(client.transport.kind, snapshot, userAgent)
+          modeSelectionTouchedRef.current = true
+          setSelectedModeId(fallbackModeId)
+          persistModePreference(fallbackModeId, () => !cancelled)
         }
-        setModePreferenceReady(true)
       },
       () => {
-        if (!cancelled) {
-          setModePreferenceStatus('Choose how to use this device')
-          setModePreferenceReady(true)
+        if (!cancelled && !modeSelectionTouchedRef.current) {
+          const fallbackModeId = defaultModeId(client.transport.kind, snapshot, userAgent)
+          modeSelectionTouchedRef.current = true
+          setSelectedModeId(fallbackModeId)
+          persistModePreference(fallbackModeId, () => !cancelled)
         }
       },
     )
@@ -167,20 +240,12 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
   function onSelectMode(modeId: string) {
     if (!isSupportedModeId(modeId)) return
     modeSelectionTouchedRef.current = true
-    setModePreferenceReady(true)
     setSelectedModeId(modeId)
-    if (!modePreferenceStore) return
-    const preference = productModePreference(modeId)
-    setModePreferenceStatus(`Saving ${modeLabel(modeId)}`)
-    void Promise.all([
-      modePreferenceStore.writeSelectedMode(preference.nodeMode),
-      modePreferenceStore.writeSelectedRuntimeTier?.(preference.runtimeTier) ?? Promise.resolve(true),
-    ]).then(
-      ([modeOk, tierOk]) => {
-        setModePreferenceStatus(modeOk && tierOk ? `Saved ${modeLabel(modeId)}` : 'Choice not saved')
-      },
-      () => setModePreferenceStatus('Choice not saved'),
-    )
+    if (!modePreferenceStore) {
+      setModePreferenceReady(true)
+      return
+    }
+    persistModePreference(modeId)
   }
 
   async function onLogin(event: FormEvent<HTMLFormElement>) {
@@ -252,14 +317,32 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     setMessage(onboardingErrorMessage(result.error))
   }
 
+  async function onFinishSetup() {
+    if (busy) return
+    if (!onApplyModePreference) {
+      setWizardStep('done')
+      return
+    }
+    setBusy('mode-apply')
+    setMessage(null)
+    try {
+      await onApplyModePreference()
+      setWizardStep('done')
+    } catch {
+      setMessage('Aurora could not apply this choice. Try again.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const manualAddressGated = setupRequired && Boolean(thinConnectionPanel)
   const showManualAddress = !manualAddressGated || manualAddressVisible
   const showFirstRunInviteFlow = setupRequired && !thinConnectionPanel
   const showAccountAuthFlow = !setupRequired
 
   return (
-    <section className="aui-onboarding-scroll-viewport" aria-labelledby="onboarding-title">
-      <div className="mx-auto flex max-w-xl flex-col gap-6 px-6 pt-8 pb-[max(2.5rem,env(safe-area-inset-bottom))]">
+    <section className="aui-onboarding-scroll-viewport min-h-0 w-full overflow-y-auto px-0" aria-labelledby="onboarding-title">
+      <div className="aui-onboarding-content mx-auto flex max-w-xl flex-col gap-6 px-6 pt-8 pb-[max(2.5rem,env(safe-area-inset-bottom))]">
       <div className="text-center">
         <h1 id="onboarding-title" className="text-xl font-semibold tracking-tight">
           {PRODUCT_COPY.onboarding.title}
@@ -432,8 +515,8 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
           ) : null}
 
           {!thinConnectionPanel ? (
-            <Button variant="primary" onClick={() => setWizardStep('done')}>
-              Finish setup
+            <Button variant="primary" onClick={onFinishSetup} disabled={busy !== null}>
+              {busy === 'mode-apply' ? 'Applying choice…' : 'Finish setup'}
             </Button>
           ) : null}
         </div>
@@ -443,7 +526,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
         <div className="flex flex-col items-center gap-3 py-6 text-center" data-step="done">
           <Check size={40} aria-hidden className="text-success" />
           <h2 className="text-base font-semibold">{PRODUCT_COPY.onboarding.done.title}</h2>
-          <p className="text-[12.5px] text-muted-foreground">{model.selectedMode.label} is ready. You can revisit this from Settings later.</p>
+          <p className="text-[12.5px] text-muted-foreground">{model.selectedMode.label} is ready. You can change this choice from Settings.</p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setWizardStep('detect')}>
               Run setup again
@@ -595,7 +678,7 @@ function desktopThinState(snapshot: AuroraShellSnapshot, transportKind: string):
       repair: 'Check the Aurora address, then sign in or approve this device.',
     }
   }
-  if (transportKind === 'tauri-local') {
+  if (transportKind === 'tauri-local' || isThinSetupTransport(transportKind)) {
     return {
       state: 'pending',
       evidence: 'Desktop app can connect to another Aurora device.',
@@ -609,6 +692,16 @@ function desktopThinState(snapshot: AuroraShellSnapshot, transportKind: string):
   }
 }
 
+function isThinSetupTransport(transportKind: string): boolean {
+  return [
+    'mesh',
+    'tauri-thin',
+    'webrtc',
+    'webrtc-preferred',
+    'webrtc-only',
+  ].includes(transportKind)
+}
+
 function androidMobileThinState(snapshot: AuroraShellSnapshot, transportKind: string): { state: AvailabilityState; evidence: string; repair: string } {
   const platform = snapshot.nativePlatform.toLowerCase()
   if (transportKind === 'native-mobile' && platform.includes('android')) {
@@ -620,8 +713,8 @@ function androidMobileThinState(snapshot: AuroraShellSnapshot, transportKind: st
   }
   if (platform.includes('android')) {
     return {
-      state: snapshot.nativeAvailable ? 'degraded' : 'unsupported',
-      evidence: snapshot.nativeAvailable ? 'Android device features are available.' : 'Android device features are not available yet.',
+      state: snapshot.nativeAvailable ? 'available-local' : 'pending',
+      evidence: snapshot.nativeAvailable ? 'Android device features are available.' : 'Android device features are still starting.',
       repair: 'Use an invite or sign in, then review Android permissions.',
     }
   }
@@ -650,7 +743,7 @@ function iosMobileThinState(snapshot: AuroraShellSnapshot, transportKind: string
   }
   if (platform.includes('ios')) {
     return {
-      state: snapshot.nativeAvailable ? iosLocalLightState(snapshot) : 'unsupported',
+      state: snapshot.nativeAvailable ? iosLocalLightState(snapshot) : 'pending',
       evidence: iosLocalLightEvidence(snapshot),
       repair: 'Use iOS shortcuts, widgets, sharing, and links from Aurora-owned surfaces.',
     }
@@ -951,7 +1044,11 @@ function routeById(snapshot: AuroraShellSnapshot, id: string): RouteAvailability
   return snapshot.routes.find((route) => route.item.id === id)
 }
 
-function defaultModeId(transportKind: string, snapshot?: AuroraShellSnapshot, userAgent?: string): string {
+function defaultModeId(
+  transportKind: string,
+  snapshot?: AuroraShellSnapshot,
+  userAgent?: string,
+): OnboardingProductModeId {
   const profile = getAuroraSurfaceProfile({
     transportKind,
     nativePlatform: snapshot?.nativePlatform,

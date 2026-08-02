@@ -1,6 +1,7 @@
 """Unit tests for app.services.gateway.acl.permissions."""
 
 import pytest
+from pydantic import ValidationError
 
 from app.services.gateway.acl.permissions import (
     PERM_ALL,
@@ -9,7 +10,8 @@ from app.services.gateway.acl.permissions import (
     resolve_effective_permissions,
     wildcard_intersection,
 )
-from app.shared.auth.permissions import validate_permission
+from app.shared.auth.permissions import NativeToolPermissions, validate_permission
+from app.shared.contracts.models.mesh import MeshPeerSaveInboundRequest
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
 
 
@@ -17,6 +19,30 @@ def test_remote_inference_permission_is_grantable() -> None:
     assert validate_permission(OrchestratorMethods.REMOTE_INFERENCE) == (
         "Orchestrator.RemoteInference"
     )
+
+
+def test_native_device_permissions_are_valid_credential_scopes() -> None:
+    request = MeshPeerSaveInboundRequest(
+        remote_peer_id="android-peer",
+        room_name="aurora-room",
+        token="opaque-token",
+        permissions=[
+            NativeToolPermissions.GET_DEVICE_STATUS,
+            NativeToolPermissions.SHARE_TEXT,
+        ],
+    )
+
+    assert request.permissions == ["Native.GetDeviceStatus", "Native.ShareText"]
+
+
+def test_unknown_native_device_permission_remains_fail_closed() -> None:
+    with pytest.raises(ValidationError, match="Unknown permission 'Native.Unknown'"):
+        MeshPeerSaveInboundRequest(
+            remote_peer_id="android-peer",
+            room_name="aurora-room",
+            token="opaque-token",
+            permissions=["Native.Unknown"],
+        )
 
 
 # ── has_permission ───────────────────────────────────────────────────────

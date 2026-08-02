@@ -468,6 +468,10 @@ If only one phase completes (admin on one side didn't approve in time), the syst
 
 The `mesh_peers` row persists even when a phase is incomplete. The admin can always come back later and approve via the **Peer Management API** (`POST /mesh/peers/{peer_id}/approve`), at which point the next WebRTC reconnection will complete the missing phase.
 
+Transport loss does not restart a direction that already completed credential exchange. On the fresh SDP-bound DataChannel, the credential holder answers a new reconnect challenge; after that proof, the verifier reports `already_trusted` for the completed direction and only the missing direction continues its approval flow. This avoids duplicate requests and credential rotation without reusing an old SAS. If the connection dropped before the approved credential reached the other device, there is no reconnect proof yet, so the replacement transport requires a fresh verification-code comparison.
+
+Browser/WebView mesh nodes keep the five-minute pairing window open and automatically renegotiate after timeout or transient loss until the user disconnects. Each retry clears transport-bound commitments, RPC waits, and SAS state, republishes presence, and derives a new channel-bound code. Durable credentials and completed proof-capable directions remain intact.
+
 ---
 
 ## Consolidated Trust Stores

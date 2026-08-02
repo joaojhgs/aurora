@@ -138,6 +138,7 @@ describe('MQTT WebSocket signaling contract', () => {
 
     await signaling.connect(room)
     expect(calls).toHaveLength(1)
+    expect(calls[0]?.options.keepalive).toBe(15)
     expect(calls[0]?.options.will).toEqual(
       expect.objectContaining({
         topic: 'aurora/aurora-fixture/lab-room/presence/peer-offer',
@@ -148,6 +149,14 @@ describe('MQTT WebSocket signaling contract', () => {
     )
     expect(client.subscriptions).toEqual(roomSubscriptions('aurora', 'aurora-fixture', 'lab-room', 'peer-offer'))
     expect(client.publishes[0]).toEqual(
+      expect.objectContaining({
+        topic: 'aurora/aurora-fixture/lab-room/presence/peer-offer',
+        options: expect.objectContaining({ qos: 1, retain: true })
+      })
+    )
+
+    await signaling.announcePresence()
+    expect(client.publishes[1]).toEqual(
       expect.objectContaining({
         topic: 'aurora/aurora-fixture/lab-room/presence/peer-offer',
         options: expect.objectContaining({ qos: 1, retain: true })
@@ -266,6 +275,43 @@ describe('MQTT WebSocket signaling contract', () => {
     second.emit('close')
     await Promise.resolve()
     expect(factory.mock.calls.length).toBe(callsBefore)
+  })
+
+  it('keeps reconnecting after close-only failures and restores retained presence', async () => {
+    const clients: FakeMqttClient[] = []
+    const factory = vi.fn(() => {
+      const client = new FakeMqttClient()
+      clients.push(client)
+      const attempt = clients.length
+      setTimeout(() => {
+        if (attempt === 1 || attempt === 4) client.emit('connect')
+        else client.emit('close')
+      }, 0)
+      return client
+    })
+    const signaling = new MqttWebSocketSignalingClient({
+      brokers: ['wss://mqtt.example.test/mqtt'],
+      crypto: jsonCrypto(),
+      mqttFactory: factory,
+      randomId: () => 'peer-offer',
+      sleep: async () => undefined,
+      connectTimeoutMs: 1_000,
+      reconnect: { maxAttempts: 0, baseDelayMs: 0, maxDelayMs: 0, jitterRatio: 0 }
+    })
+
+    await signaling.connect(room)
+    clients[0]?.emit('offline')
+
+    await vi.waitFor(() => expect(clients).toHaveLength(4))
+    await vi.waitFor(() => expect(signaling.snapshot().connected).toBe(true))
+    expect(signaling.diagnostics().reconnectCount).toBe(3)
+    expect(clients[3]?.subscriptions).toEqual(roomSubscriptions('aurora', 'aurora-fixture', 'lab-room', 'peer-offer'))
+    expect(clients[3]?.publishes[0]).toEqual(expect.objectContaining({
+      topic: 'aurora/aurora-fixture/lab-room/presence/peer-offer',
+      options: expect.objectContaining({ qos: 1, retain: true })
+    }))
+
+    await signaling.close()
   })
 
   it('enforces production WSS and only allows ws loopback when explicitly configured', async () => {

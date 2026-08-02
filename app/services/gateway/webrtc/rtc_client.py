@@ -374,6 +374,11 @@ class RTCClient:
         self._peer_acl: dict[str, Identity] = {}
         self._peer_tokens: dict[str, Token] = {}  # Original tokens for re-resolution
         self._peer_timeout_tasks: dict[str, asyncio.Task] = {}  # Auth timeout tasks
+        # Reconnect credential checks can legitimately outlive the short
+        # anonymous-peer watchdog while Auth waits on the database. Keep each
+        # validation tied to its exact transport so the watchdog can extend its
+        # bound without allowing a late result to authenticate a replacement PC.
+        self._reconnect_proof_tasks: dict[str, tuple[RTCPeerConnection, asyncio.Task[None]]] = {}
         self._system_token: str | None = None
         self._auth_timeout: float = 10.0  # seconds
         self._peer_pairing_active: set[str] = set()  # Peers in active pairing flow
@@ -1317,6 +1322,8 @@ class RTCClient:
         pc: RTCPeerConnection | None = None,
     ) -> None:
         """Drop commit/reveal state only for the exact peer connection."""
+        self._cancel_reconnect_proof_task(peer, pc)
+
         handshake_entry = self._pairing_handshakes.get(peer)
         if handshake_entry is not None and (pc is None or handshake_entry[0] is pc):
             self._pairing_handshakes.pop(peer, None)
@@ -1341,6 +1348,39 @@ class RTCClient:
 
         self._peer_pairing_directions.pop(peer, None)
         self._peer_pairing_active.discard(peer)
+
+    def _cancel_reconnect_proof_task(
+        self,
+        peer: str,
+        pc: RTCPeerConnection | None = None,
+    ) -> None:
+        """Cancel proof validation only when it belongs to the selected PC."""
+        entry = self._reconnect_proof_tasks.get(peer)
+        if entry is None or (pc is not None and entry[0] is not pc):
+            return
+        self._reconnect_proof_tasks.pop(peer, None)
+        task = entry[1]
+        if task is not asyncio.current_task() and not task.done():
+            task.cancel()
+
+    def _track_reconnect_proof_task(
+        self,
+        peer: str,
+        pc: RTCPeerConnection,
+        task: asyncio.Task[None],
+    ) -> None:
+        """Own one reconnect proof validation for an exact peer connection."""
+        previous = self._reconnect_proof_tasks.get(peer)
+        if previous is not None and previous[1] is not task:
+            self._cancel_reconnect_proof_task(peer, previous[0])
+        self._reconnect_proof_tasks[peer] = (pc, task)
+
+        def discard_if_current(completed: asyncio.Task[None]) -> None:
+            entry = self._reconnect_proof_tasks.get(peer)
+            if entry is not None and entry[0] is pc and entry[1] is completed:
+                self._reconnect_proof_tasks.pop(peer, None)
+
+        task.add_done_callback(discard_if_current)
 
     async def _discard_failed_negotiation_pc(
         self,
@@ -1379,8 +1419,54 @@ class RTCClient:
         self._negotiation_retry_pcs.discard(pc)
         self._reconnect_suppressed_pcs.discard(pc)
         with contextlib.suppress(Exception):
-            await pc.close()
+            await self._close_peer_connection(pc)
         return True
+
+    async def _close_peer_connection(self, pc: RTCPeerConnection) -> None:
+        """Cancel aioice retry work before closing a peer connection.
+
+        aioice 0.10.x can leave STUN transaction timers scheduled while its
+        datagram transport is being closed. A late retry then calls ``sendto``
+        on the cleared transport. The dependency does not expose transaction
+        cancellation publicly, so this compatibility guard feature-detects its
+        current internals and becomes a no-op when they are unavailable.
+        """
+
+        ice_transports = getattr(pc, "_RTCPeerConnection__iceTransports", ())
+        if isinstance(ice_transports, (list, set, tuple)):
+            check_tasks: list[asyncio.Task[Any]] = []
+            current_task = asyncio.current_task()
+            for ice_transport in list(ice_transports):
+                connection = getattr(ice_transport, "_connection", None)
+                if connection is None:
+                    continue
+                for pair in list(getattr(connection, "_check_list", ()) or ()):
+                    task = getattr(pair, "task", None)
+                    if (
+                        isinstance(task, asyncio.Task)
+                        and task is not current_task
+                        and not task.done()
+                    ):
+                        task.cancel()
+                        check_tasks.append(task)
+                for protocol in list(getattr(connection, "_protocols", ()) or ()):
+                    transactions = getattr(protocol, "transactions", None)
+                    if not isinstance(transactions, dict):
+                        continue
+                    for transaction in list(transactions.values()):
+                        timeout_handle = getattr(
+                            transaction,
+                            "_Transaction__timeout_handle",
+                            None,
+                        )
+                        if timeout_handle is not None:
+                            timeout_handle.cancel()
+                        future = getattr(transaction, "_Transaction__future", None)
+                        if isinstance(future, asyncio.Future) and not future.done():
+                            future.cancel()
+            if check_tasks:
+                await asyncio.gather(*check_tasks, return_exceptions=True)
+        await pc.close()
 
     def _suppress_durably_denied_pairing(
         self,
@@ -1521,6 +1607,12 @@ class RTCClient:
         for task in self._peer_timeout_tasks.values():
             task.cancel()
         self._peer_timeout_tasks.clear()
+        reconnect_proof_tasks = [entry[1] for entry in self._reconnect_proof_tasks.values()]
+        for task in reconnect_proof_tasks:
+            task.cancel()
+        if reconnect_proof_tasks:
+            await asyncio.gather(*reconnect_proof_tasks, return_exceptions=True)
+        self._reconnect_proof_tasks.clear()
         for task in self._pairing_tasks.values():
             task.cancel()
         self._pairing_tasks.clear()
@@ -1597,7 +1689,7 @@ class RTCClient:
                     await self._peer_registry.clear_provider_lease_session(stable_peer_id)
 
         for pc in list(self._pcs.values()):
-            await pc.close()
+            await self._close_peer_connection(pc)
         self._pcs.clear()
         self._peer_acl.clear()
         self._peer_tokens.clear()
@@ -1811,7 +1903,7 @@ class RTCClient:
         self._resolve_peer_rpc_calls(session_peer_id)
         self._cancel_peer_rpc_work(session_peer_id, stable_peer_id, peer_id)
         self._clear_pairing_state(session_peer_id, pc)
-        await pc.close()
+        await self._close_peer_connection(pc)
         self._pcs.pop(session_peer_id, None)
         self._peer_acl.pop(session_peer_id, None)
         self._peer_acl.pop(peer_id, None)
@@ -3956,7 +4048,7 @@ class RTCClient:
             self._reconnect_suppressed_pcs.add(pc)
             stable_peer_id = self._stable_peer_id_for_session(peer)
             self._invalidate_provider_export_peer(stable_peer_id)
-            await pc.close()
+            await self._close_peer_connection(pc)
             return
 
         stable_peer_id = self._stable_peer_id_for_session(peer)
@@ -4412,6 +4504,10 @@ class RTCClient:
         message: dict[str, Any],
     ) -> None:
         """Validate a one-time proof through Auth and promote the stable identity."""
+        if self._pcs.get(peer) is not pc:
+            raise PairingProtocolError(
+                "Reconnect proof does not match the active challenge connection"
+            )
         now_ms = self._provider_lease_clock_ms()
         self._cleanup_reconnect_challenge_cache(now_ms)
         challenge = str(message.get("challenge") or "")
@@ -4448,6 +4544,8 @@ class RTCClient:
                 room_name=str(self._settings.webrtc.room),
             )
         except Exception:
+            if self._pcs.get(peer) is not pc:
+                return
             self._record_diagnostic_error(
                 "reconnect_auth_unavailable",
                 "Reconnect credential verification was unavailable",
@@ -4457,6 +4555,12 @@ class RTCClient:
             # anonymous, let the bounded auth watchdog close this exact PC,
             # and make that close eligible for deterministic reconnect.
             self._negotiation_retry_pcs.add(pc)
+            return
+
+        # Auth may wait on another service for longer than the initial peer
+        # watchdog. A connection can be closed or replaced during that await;
+        # its result must never mutate the replacement session.
+        if self._pcs.get(peer) is not pc:
             return
 
         if token is None:
@@ -4611,7 +4715,7 @@ class RTCClient:
                     self._reconnect_suppressed_pcs.add(pc)
                 else:
                     self._negotiation_retry_pcs.add(pc)
-                asyncio.create_task(pc.close())
+                asyncio.create_task(self._close_peer_connection(pc))
                 return True
 
             handshake = self._send_pairing_commit(peer, pc, chan)
@@ -4655,7 +4759,7 @@ class RTCClient:
     ) -> None:
         if self._pcs.get(peer) is pc:
             self._reconnect_suppressed_pcs.add(pc)
-            await pc.close()
+            await self._close_peer_connection(pc)
 
     def _start_bilateral_pairing(
         self,
@@ -4710,24 +4814,24 @@ class RTCClient:
             log_warning(f"Pairing v2 verification timed out with peer {peer[:8]}…")
             if self._pcs.get(peer) is pc:
                 self._negotiation_retry_pcs.add(pc)
-                await pc.close()
+                await self._close_peer_connection(pc)
         except PairingProtocolError as exc:
             self._record_diagnostic_error("pairing_protocol_error", str(exc), peer)
             log_warning(f"Pairing v2 aborted with peer {peer[:8]}…: {exc}")
             if self._pcs.get(peer) is pc:
                 self._reconnect_suppressed_pcs.add(pc)
-                await pc.close()
+                await self._close_peer_connection(pc)
         except _PairingDeniedError:
             log_info(f"Bilateral pairing was denied by peer {peer[:8]}…")
             if self._pcs.get(peer) is pc:
                 self._reconnect_suppressed_pcs.add(pc)
-                await pc.close()
+                await self._close_peer_connection(pc)
         except _PairingRetryRequiredError as exc:
             self._record_diagnostic_error("pairing_session_restart", str(exc), peer)
             log_info(f"Restarting bilateral pairing with peer {peer[:8]}…: {exc}")
             if self._pcs.get(peer) is pc:
                 self._negotiation_retry_pcs.add(pc)
-                await pc.close()
+                await self._close_peer_connection(pc)
         except asyncio.CancelledError:
             log_debug(f"Pairing task cancelled for peer {peer}")
             raise
@@ -4736,7 +4840,7 @@ class RTCClient:
             log_error(f"Pairing flow failed for peer {peer}: {exc}")
             if self._pcs.get(peer) is pc:
                 self._negotiation_retry_pcs.add(pc)
-                await pc.close()
+                await self._close_peer_connection(pc)
         finally:
             self._clear_pairing_direction(peer, "outbound")
             if self._pairing_tasks.get(peer) is current_task:
@@ -4786,6 +4890,12 @@ class RTCClient:
             or result.get("verification_code") != pairing.verification_code
         ):
             raise PairingProtocolError("Remote PairingStart response does not match the SAS")
+        if result.get("status") == "already_trusted":
+            log_info(
+                f"Peer {peer[:8]}… retained this node's existing credential; "
+                "skipping duplicate credential exchange"
+            )
+            return
 
         pairing_handle = str(result["code"])
         if pairing_handle == pairing.verification_code:
@@ -4819,6 +4929,12 @@ class RTCClient:
                 raise PairingProtocolError("Remote pairing status changed the verification code")
 
             status = str(poll_result.get("status") or "")
+            if status == "already_trusted":
+                log_info(
+                    f"Peer {peer[:8]}… retained this node's existing credential; "
+                    "skipping duplicate credential exchange"
+                )
+                return
             if status == "approved":
                 log_info(f"Pairing approved by peer {peer[:8]}… — exchanging credential")
                 break
@@ -5047,7 +5163,7 @@ class RTCClient:
                     # presence; blindly reconnecting the old ephemeral session
                     # strands offers after browser refresh/navigation.
                     self._reconnect_suppressed_pcs.add(pc)
-                    await pc.close()
+                    await self._close_peer_connection(pc)
 
             @chan.on("open")
             def on_open() -> None:
@@ -5083,8 +5199,35 @@ class RTCClient:
                         current_task = asyncio.current_task()
                         try:
                             await asyncio.sleep(self._auth_timeout)
-                            if peer not in self._pcs:
+                            if self._pcs.get(peer) is not pc:
                                 return  # Already disconnected
+
+                            # Auth reconnect verification crosses the message
+                            # bus and database and can outlive the short initial
+                            # anonymous-peer window. Keep this exact transport
+                            # alive while its owned validation is making bounded
+                            # progress, but never extend a replacement PC.
+                            elapsed = self._auth_timeout
+                            proof_entry = self._reconnect_proof_tasks.get(peer)
+                            while (
+                                proof_entry is not None
+                                and proof_entry[0] is pc
+                                and not proof_entry[1].done()
+                                and self._pcs.get(peer) is pc
+                                and elapsed < self._pairing_timeout
+                            ):
+                                remaining = self._pairing_timeout - elapsed
+                                heartbeat_interval = min(10.0, max(0.1, remaining))
+                                log_debug(
+                                    f"Peer {peer[:8]}… reconnect verification heartbeat "
+                                    f"({elapsed:.0f}s / {self._pairing_timeout}s)"
+                                )
+                                await asyncio.sleep(heartbeat_interval)
+                                elapsed += heartbeat_interval
+                                proof_entry = self._reconnect_proof_tasks.get(peer)
+
+                            if self._pcs.get(peer) is not pc:
+                                return
 
                             if peer in self._peer_pairing_active:
                                 # A valid inbound credential is only half of a
@@ -5093,7 +5236,7 @@ class RTCClient:
                                 # the remote caller becomes authenticated.
                                 elapsed = self._auth_timeout
                                 while (
-                                    peer in self._pcs
+                                    self._pcs.get(peer) is pc
                                     and peer in self._peer_pairing_active
                                     and elapsed < self._pairing_timeout
                                 ):
@@ -5106,7 +5249,7 @@ class RTCClient:
                                     await asyncio.sleep(heartbeat_interval)
                                     elapsed += heartbeat_interval
 
-                                if peer not in self._pcs:
+                                if self._pcs.get(peer) is not pc:
                                     return
                                 if peer not in self._peer_pairing_active:
                                     if self._peer_acl.get(peer, ANONYMOUS) != ANONYMOUS:
@@ -5129,7 +5272,7 @@ class RTCClient:
                                     retry_after_pairing_timeout = True
                                     if self._peer_timeout_tasks.get(peer) is current_task:
                                         self._peer_timeout_tasks.pop(peer, None)
-                                    await pc.close()
+                                    await self._close_peer_connection(pc)
                                     return
 
                             if self._peer_acl.get(peer, ANONYMOUS) != ANONYMOUS:
@@ -5147,7 +5290,7 @@ class RTCClient:
                             if self._peer_timeout_tasks.get(peer) is current_task:
                                 self._peer_timeout_tasks.pop(peer, None)
                             self._negotiation_retry_pcs.add(pc)
-                            await pc.close()
+                            await self._close_peer_connection(pc)
                         finally:
                             if self._peer_timeout_tasks.get(peer) is current_task:
                                 self._peer_timeout_tasks.pop(peer, None)
@@ -5219,11 +5362,23 @@ class RTCClient:
                                 )
                                 asyncio.create_task(self._abort_pairing_protocol(peer, pc))
                         elif msg_type == _MESH_AUTH_PROOF_TYPE:
+                            existing_proof = self._reconnect_proof_tasks.get(peer)
+                            if (
+                                existing_proof is not None
+                                and existing_proof[0] is pc
+                                and not existing_proof[1].done()
+                            ):
+                                log_debug(
+                                    f"Ignoring duplicate reconnect proof from peer {peer[:8]}…"
+                                )
+                                return
 
                             async def validate_reconnect_proof() -> None:
                                 try:
                                     await self._handle_reconnect_proof(peer, pc, chan, obj)
                                 except PairingProtocolError as exc:
+                                    if self._pcs.get(peer) is not pc:
+                                        return
                                     self._record_diagnostic_error(
                                         "reconnect_proof_mismatch",
                                         str(exc),
@@ -5231,7 +5386,11 @@ class RTCClient:
                                     )
                                     await self._abort_pairing_protocol(peer, pc)
 
-                            asyncio.create_task(validate_reconnect_proof())
+                            proof_task = asyncio.create_task(
+                                validate_reconnect_proof(),
+                                name=f"reconnect-proof:{peer}",
+                            )
+                            self._track_reconnect_proof_task(peer, pc, proof_task)
                         elif msg_type == "auth":
                             token_str = obj.get("token")
                             if not token_str:
@@ -5295,11 +5454,15 @@ class RTCClient:
                                             token_str
                                         )
                                 except Exception:
+                                    if self._pcs.get(peer) is not pc:
+                                        return
                                     self._record_diagnostic_error(
                                         "auth_service_unavailable",
                                         "Peer credential verification was unavailable",
                                         peer,
                                     )
+                                    return
+                                if self._pcs.get(peer) is not pc:
                                     return
                                 if token:
                                     # A fresh v2 session uses only the identity
@@ -5663,7 +5826,7 @@ class RTCClient:
                         if failed_pc is not None:
                             self._negotiation_retry_pcs.add(failed_pc)
                             with contextlib.suppress(Exception):
-                                await failed_pc.close()
+                                await self._close_peer_connection(failed_pc)
                         delay = min(max(delay * 2, 1.0), 30.0)
                         continue
 
@@ -5738,7 +5901,7 @@ class RTCClient:
             # cannot be confused with an explicit local disconnect.
             self._negotiation_retry_pcs.add(pc)
             try:
-                await pc.close()
+                await self._close_peer_connection(pc)
             except Exception as exc:
                 self._negotiation_retry_pcs.discard(pc)
                 self._record_diagnostic_error(
@@ -5869,8 +6032,32 @@ class RTCClient:
         log_debug(f"Received offer from {peer}")
         pc: RTCPeerConnection | None = None
         try:
-            pc = await self._ensure_pc(peer)
             offer_sdp = str(msg["sdp"])
+            existing_pc = self._pcs.get(peer)
+            existing_transport = self._pairing_transports.get(peer)
+            existing_offer_sdp = (
+                str(existing_transport.get("offer_sdp") or "")
+                if existing_transport is not None
+                and existing_transport.get("pc") is existing_pc
+                else ""
+            )
+            active_channel = self._peer_data_channels.get(peer)
+            if (
+                existing_pc is not None
+                and existing_offer_sdp
+                and existing_offer_sdp != offer_sdp
+            ):
+                if (
+                    existing_pc.connectionState == "connected"
+                    or getattr(active_channel, "readyState", "") == "open"
+                ):
+                    log_debug(
+                        f"RTCClient: Ignoring a fresh offer for active peer {peer}"
+                    )
+                    return
+                await self._discard_failed_negotiation_pc(peer, existing_pc)
+
+            pc = await self._ensure_pc(peer)
             self._pairing_transports[peer] = {
                 "pc": pc,
                 "offerer_signaling_id": peer,
@@ -5940,7 +6127,7 @@ class RTCClient:
                     peer,
                 )
                 self._reconnect_suppressed_pcs.add(pc)
-                await pc.close()
+                await self._close_peer_connection(pc)
                 return
             transport["answer_sdp"] = answer_sdp
             transport["remote_stable_peer_id"] = remote_stable_peer_id

@@ -378,11 +378,11 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     label: 'Mesh peers and pairing lifecycle',
     navItemIds: ['mesh', 'pairing'],
     routeOracles: [
-      routeOracle('mesh', ['Mesh & Peers', 'Peer trust, pairing and permissions'], ['Pairing queue controls']),
+      routeOracle('mesh', ['Mesh', 'Manage trusted devices'], ['Pairing queue controls']),
       routeOracle('pairing', ['Pairing queue'], ['Pairing queue controls'])
     ],
     mockReferenceFiles: ['components/aurora/mesh/mesh-view.tsx'],
-    mockUxAnchors: ['Mesh &amp; Peers', 'Connected peers', 'Pending requests', 'Connect peer'],
+    mockUxAnchors: ['Mesh', 'Connected devices', 'Pending requests', 'Connect device'],
     componentFiles: ['mesh-peers-view.tsx', 'pairing-queue-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
@@ -421,7 +421,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     label: 'Route policy',
     navItemIds: ['mesh', 'settings'],
     mockReferenceFiles: ['components/aurora/assistant/route-sheet.tsx', 'components/aurora/settings/settings-permissions-view.tsx'],
-    mockUxAnchors: ['Route policy decisions', 'Route explain scenarios', 'Tool call', 'Scheduler delegation'],
+    mockUxAnchors: ['How Aurora chooses a device', 'Tasks to review', 'Tool action', 'Scheduled task'],
     componentFiles: ['route-policy-view.tsx', 'route-sheet.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy'],
     truthSources: [

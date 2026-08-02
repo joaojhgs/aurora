@@ -38,6 +38,9 @@ if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
 
 
+AUTH_SERVICE_REQUEST_TIMEOUT_SECONDS = 40.0
+
+
 def _safe_exception_category(exc: Exception) -> str:
     """Return a non-identifying exception category for credential diagnostics."""
 
@@ -100,7 +103,7 @@ class _AuditDBProxy:
         that interface, forwarding to the Auth service via the bus.
         """
         try:
-            await self._bus.request(
+            response = await self._bus.request(
                 AuthMethods.STORE_AUDIT_EVENT,
                 StoreAuditEventRequest(
                     event=event or "unknown",
@@ -108,24 +111,38 @@ class _AuditDBProxy:
                     details=details,
                     ip_address=ip_address,
                 ),
-                timeout=5.0,
+                timeout=AUTH_SERVICE_REQUEST_TIMEOUT_SECONDS,
             )
+            self._require_audit_success(response)
         except Exception as exc:
-            log_warning(f"_AuditDBProxy.store_audit_event failed: {exc}")
+            log_warning(f"_AuditDBProxy.store_audit_event failed: {_safe_exception_category(exc)}")
 
     async def log_audit_event(self, **kwargs: Any) -> None:
         """Forward audit event to the Auth service via the bus."""
         try:
-            await self._bus.request(
+            response = await self._bus.request(
                 AuthMethods.STORE_AUDIT_EVENT,
                 StoreAuditEventRequest(
                     event=kwargs.get("event_type", "unknown"),
                     principal_id=kwargs.get("actor_id"),
                 ),
-                timeout=5.0,
+                timeout=AUTH_SERVICE_REQUEST_TIMEOUT_SECONDS,
             )
+            self._require_audit_success(response)
         except Exception as exc:
-            log_warning(f"_AuditDBProxy.log_audit_event failed: {exc}")
+            log_warning(f"_AuditDBProxy.log_audit_event failed: {_safe_exception_category(exc)}")
+
+    @staticmethod
+    def _require_audit_success(response: Any) -> None:
+        """Reject failed command envelopes instead of masking audit loss."""
+
+        if response is None:
+            raise RuntimeError("Audit storage returned no response")
+        if hasattr(response, "ok") and response.ok is False:
+            raise RuntimeError("Audit storage command failed")
+        data = getattr(response, "data", response)
+        if isinstance(data, dict) and data.get("ok") is False:
+            raise RuntimeError("Audit storage rejected the event")
 
     async def get_audit_log(self, **kwargs: Any) -> list[dict]:
         """Retrieve audit log entries via the Auth.AuditLog contract."""
@@ -225,7 +242,7 @@ class BusAuthProxy:
             resp = await self._bus.request(
                 AuthMethods.VALIDATE_TOKEN,
                 ValidateTokenRequest(token=token_str),
-                timeout=5.0,
+                timeout=AUTH_SERVICE_REQUEST_TIMEOUT_SECONDS,
             )
 
             data = self._unwrap(resp)
@@ -258,15 +275,20 @@ class BusAuthProxy:
                     verifier_peer_id=verifier_peer_id,
                     room_name=room_name,
                 ),
-                timeout=5.0,
+                timeout=AUTH_SERVICE_REQUEST_TIMEOUT_SECONDS,
             )
+            if resp is None or (hasattr(resp, "ok") and not resp.ok):
+                raise RuntimeError("Auth reconnect proof request was unavailable")
             data = self._unwrap(resp)
             return self._validated_token_proxy(data) if data else None
         except Exception as exc:
             # An Auth outage is not evidence that a credential is invalid.  Let
             # RTC keep the normal bounded timeout/reconnect path instead of
             # silently replacing trust with a new pairing request.
-            log_warning(f"BusAuthProxy.verify_mesh_reconnect_proof failed: {exc}")
+            log_warning(
+                "BusAuthProxy.verify_mesh_reconnect_proof result=retry "
+                f"reason={_safe_exception_category(exc)}"
+            )
             raise
 
     async def validate_mesh_pairing_token(

@@ -227,7 +227,9 @@ struct ThinPeerCredentialSetRequest {
     verifier_signaling_peer_id: String,
     room_name: String,
     raw_bearer_token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     created_at_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     expires_at_ms: Option<u64>,
 }
 
@@ -7036,6 +7038,10 @@ pub fn run() {
             let _ = window.set_focus();
         }
     }));
+    // The embedded WebDriver server is restricted to an explicit debug-only E2E
+    // feature. Release builds never register its local automation endpoint.
+    #[cfg(all(desktop, debug_assertions, feature = "desktop-live-webdriver"))]
+    let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
     let builder = builder.plugin(tauri_plugin_deep_link::init());
     #[cfg(mobile)]
     let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
@@ -8708,6 +8714,27 @@ mod tests {
         assert!(request
             .expires_at_ms
             .is_some_and(|expires_at_ms| expires_at_ms <= current_unix_ms()));
+    }
+
+    #[test]
+    fn native_peer_credential_payload_omits_absent_optional_timestamps() {
+        let request = ThinPeerCredentialSetRequest {
+            peer_id: "stable-answer".to_string(),
+            token_id: "token-fixture-001".to_string(),
+            claimant_peer_id: "stable-answer".to_string(),
+            verifier_peer_id: "stable-offer".to_string(),
+            claimant_signaling_peer_id: "sig-answer".to_string(),
+            verifier_signaling_peer_id: "sig-offer".to_string(),
+            room_name: "lab-room".to_string(),
+            raw_bearer_token: "synthetic-reconnect-token".to_string(),
+            created_at_ms: None,
+            expires_at_ms: None,
+        };
+
+        let payload = serde_json::to_value(request).unwrap();
+
+        assert!(!payload.as_object().unwrap().contains_key("createdAtMs"));
+        assert!(!payload.as_object().unwrap().contains_key("expiresAtMs"));
     }
 
     #[test]

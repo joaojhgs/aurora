@@ -237,6 +237,41 @@ async def test_mesh_status_reports_route_provider_capacity_and_compatibility():
 
 
 @pytest.mark.asyncio
+async def test_mesh_status_reports_transient_provider_unavailability():
+    mesh_config = MeshConfig(
+        enabled=True,
+        node_name="local-node",
+        services={"Tooling": mesh_policy(prefer="network", fallback="local")},
+    )
+    registry = PeerRegistry(mesh_config)
+    routing_table = RoutingTable(mesh_config, registry)
+    await registry.register_peer("peer-mobile", "mobile-node")
+    await registry.update_manifest(
+        "peer-mobile",
+        verified_peer_manifest(
+            "peer-mobile",
+            [_peer_service("Tooling")],
+            node_name="mobile-node",
+        ),
+    )
+    registry.get_peer("peer-mobile").status = "provider_unavailable"
+
+    service = _service_with_settings(Settings(mesh=mesh_config))
+    service._mesh_peer_registry = registry
+    service._mesh_routing_table = routing_table
+    service._mesh_bus = object()
+    service._rtc_client = object()
+    service._mesh_peer_id = "local-peer"
+
+    response = await service.get_mesh_status(EmptyInput())
+
+    routing = {item.service_id: item for item in response.routing_summaries}
+    assert routing["Tooling"].eligible_provider_ids == []
+    assert routing["Tooling"].ineligible_provider_ids == ["peer-mobile"]
+    assert routing["Tooling"].reason_codes == ["provider_unavailable"]
+
+
+@pytest.mark.asyncio
 async def test_mesh_status_output_does_not_include_secret_field_names():
     mesh_config = MeshConfig(enabled=True, node_name="local")
     service = _service_with_settings(Settings(mesh=mesh_config))

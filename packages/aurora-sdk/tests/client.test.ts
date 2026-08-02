@@ -4578,7 +4578,7 @@ describe('AuroraClient', () => {
     )
   })
 
-  it('uses 401 and 403 results to update auth session without mutating on transport loss', async () => {
+  it('expires on 401, preserves authenticated identity on scoped 403, and ignores transport loss', async () => {
     const authTransport = new HttpGatewayTransport({
       baseUrl: 'http://aurora.local',
       fetchImpl: async () =>
@@ -4612,6 +4612,19 @@ describe('AuroraClient', () => {
 
     expect(permissionResult.ok).toBe(false)
     expect(permissionClient.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'user',
+        principalId: 'user-2',
+        effectivePermissions: ['Gateway.use'],
+        isAuthenticated: true,
+        isDenied: false,
+        isTerminal: false
+      })
+    )
+
+    const anonymousPermissionClient = new AuroraClient({ transport: permissionTransport })
+    await anonymousPermissionClient.requestResult('Gateway.GetRegistry', {}, { path: '/api/Gateway/GetRegistry' })
+    expect(anonymousPermissionClient.auth.snapshot()).toEqual(
       expect.objectContaining({
         state: 'forbidden',
         status: 403,
@@ -4933,6 +4946,34 @@ describe('AuroraClient', () => {
       state: 'speaking',
       text: 'Turning lights on'
     }))
+  })
+
+  it('does not request unauthorized voice topics over a mesh connection', async () => {
+    const requests: Array<{ stream: string; topics: string[] }> = []
+    const transport = new MockAuroraTransport()
+      .stream('voice', function* (request) {
+        requests.push({ stream: request.stream, topics: request.topics })
+      })
+      .stream('assistant', function* (request) {
+        requests.push({ stream: request.stream, topics: request.topics })
+      })
+    Object.defineProperty(transport, 'kind', { value: 'mesh' })
+    const client = new AuroraClient({ transport })
+    client.auth.setAuthenticated('mobile-peer', ['Orchestrator.use'])
+
+    expect(await collectEvents(client.assistant.streamVoiceEvents(), 1)).toEqual([])
+    expect(await collectEvents(client.assistant.streamVoiceAssistantResponses(), 1)).toEqual([])
+    expect(requests).toEqual([])
+
+    client.auth.setAuthenticated('mobile-peer', ['Orchestrator.use', 'STTCoordinator.use'])
+    expect(await collectEvents(client.assistant.streamVoiceEvents(), 1)).toEqual([])
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.stream).toBe('voice')
+    expect(requests[0]?.topics).toEqual(expect.arrayContaining([
+      'STTCoordinator.SessionStarted',
+      'STTCoordinator.Final',
+    ]))
+    expect(requests[0]?.topics).not.toContain('TTS.Started')
   })
 
   it('sanitizes nested raw tool arguments from voice assistant response streams', async () => {
@@ -5542,6 +5583,59 @@ describe('AuroraClient', () => {
 })
 
 describe('AuroraClient assistant namespace', () => {
+  it('routes inference-only chat with caller cancellation and timeout metadata', async () => {
+    const requests: Array<{
+      method: string
+      path?: string | undefined
+      timeoutMs?: number | undefined
+      signal?: AbortSignal | undefined
+      payload?: unknown | undefined
+    }> = []
+    const transport = new MockAuroraTransport().register(
+      ORCHESTRATOR_METHODS.inferChat,
+      (request) => {
+        requests.push(request)
+        return {
+          text: 'AURORA_INFERENCE_OK',
+          model_id: 'remote-default',
+          provider_id: 'remote-provider',
+          finish_reason: 'stop',
+          correlation_id: 'infer-correlation',
+          metadata: {},
+          secrets_redacted: true
+        }
+      }
+    )
+    const client = new AuroraClient({ transport })
+    const controller = new AbortController()
+    const input = {
+      messages: [{ role: 'user' as const, content: 'Reply exactly.' }],
+      tools: [],
+      tool_choice: 'auto' as const,
+      metadata: { source: 'lightweight-local-orchestrator' }
+    }
+
+    await expect(
+      client.assistant.inferChat(input, {
+        signal: controller.signal,
+        timeoutMs: 90_000
+      })
+    ).resolves.toMatchObject({
+      text: 'AURORA_INFERENCE_OK',
+      secrets_redacted: true
+    })
+    expect(requests).toEqual([
+      expect.objectContaining({
+        method: ORCHESTRATOR_METHODS.inferChat,
+        busTopic: ORCHESTRATOR_METHODS.inferChat,
+        path: '/api/Orchestrator/InferChat',
+        timeoutMs: 90_000,
+        signal: controller.signal,
+        payload: input
+      })
+    ])
+  })
+
   it('streams assistant deltas, final event evidence, and model metadata', async () => {
     const calls: Array<{ method: string; payload: unknown }> = []
     const transport = new MockAuroraTransport().stream('assistant', [

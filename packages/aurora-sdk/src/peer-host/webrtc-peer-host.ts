@@ -34,6 +34,7 @@ const ACTIVE_MANIFEST_PROTOCOL = 'projection-v1'
 const LEGACY_MANIFEST_PROTOCOL = 'legacy-unfiltered-v0'
 const ACTIVE_VERSION = 'v1'
 const ACTIVE_TIER = 'projection'
+const TOOLING_PROVIDER_CAPABILITIES = Object.freeze(['tool_discovery', 'tool_execution'] as const)
 
 export class WebRtcPeerHost {
   readonly lease: ProviderLeaseController
@@ -686,7 +687,7 @@ function manifestService(methods: Array<Record<string, unknown>>): Record<string
   const service = {
     module: 'Tooling',
     version: '0.0.0',
-    capabilities: [],
+    capabilities: [...TOOLING_PROVIDER_CAPABILITIES],
     callable_features: [],
     available_feature_ids: [],
     methods,

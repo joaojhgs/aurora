@@ -31,7 +31,7 @@ from app.services.gateway.webrtc.rtc_client import (
     _PairingDeniedError,
     _ReconnectChallengeRecord,
 )
-from app.shared.contracts.models.auth import build_mesh_reconnect_proof_message
+from app.shared.contracts.models.auth import AuthMethods, build_mesh_reconnect_proof_message
 from app.shared.contracts.models.gateway import MethodInfo
 from app.shared.contracts.models.tooling import ToolingMethods
 from tests.unit.gateway.mesh_policy_helpers import mesh_policy
@@ -147,6 +147,9 @@ def install_reconnect_challenge(
     challenge: str = "56" * 32,
     issued_at_ms: int | None = None,
 ) -> _ReconnectChallengeRecord:
+    client._pcs[peer] = pc
+    if not isinstance(getattr(pc, "close", None), AsyncMock):
+        pc.close = AsyncMock()
     transport = client._pairing_transports[peer]
     issued_ms = client._provider_lease_clock_ms() if issued_at_ms is None else issued_at_ms
     record = _ReconnectChallengeRecord(
@@ -427,6 +430,44 @@ async def test_reconnect_proof_wrong_pc_does_not_consume_challenge(mock_deps):
     await asyncio.sleep(0)
     auth_service.verify_mesh_reconnect_proof.assert_awaited_once()
     client._run_bilateral_pairing.assert_awaited_once_with(peer, channel, pc)
+
+
+@pytest.mark.parametrize(
+    ("field", "wrong_value"),
+    [
+        ("claimant_peer_id", "wrong-stable-peer"),
+        ("verifier_peer_id", "wrong-local-peer"),
+        ("claimant_signaling_peer_id", "wrong-remote-session"),
+        ("verifier_signaling_peer_id", "wrong-local-session"),
+        ("room_name", "wrong-room"),
+        ("channel_binding", "ff" * 32),
+    ],
+)
+@pytest.mark.asyncio
+async def test_reconnect_proof_wrong_current_transport_context_is_rejected_without_consuming(
+    mock_deps,
+    field,
+    wrong_value,
+):
+    """The active proof stays bound to every field of its current challenge."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "local-session"
+    client.set_mesh_identity("stable-local-peer", "Local Aurora")
+    peer = "remote-session"
+    pc = MagicMock()
+    channel = MockDataChannel()
+    install_pairing_transport(client, peer, pc)
+    record = install_reconnect_challenge(client, peer, pc, challenge="ce" * 32)
+    message = reconnect_proof_for(record)
+    message[field] = wrong_value
+
+    with pytest.raises(PairingProtocolError, match="active challenge"):
+        await client._handle_reconnect_proof(peer, pc, channel, message)
+
+    auth_service.verify_mesh_reconnect_proof.assert_not_awaited()
+    assert client._peer_auth_challenges[peer] is record
+    assert record.challenge not in client._used_peer_auth_challenges
 
 
 @pytest.mark.asyncio
@@ -737,6 +778,78 @@ async def test_durable_remote_denial_stops_pairing_start_retry(mock_deps):
     terminal = json.loads(channel.sent_messages[-1])
     assert terminal["type"] == PAIRING_TERMINAL_TYPE
     assert terminal["status"] == "denied"
+
+
+@pytest.mark.asyncio
+async def test_existing_remote_credential_skips_duplicate_direction_exchange(mock_deps):
+    """A peer that just proved an existing credential must not be paired again."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    peer = "remote-session"
+    pairing = pairing_sas_result()
+    client._pairing_results[peer] = pairing
+    client._pcs[peer] = MagicMock()
+    client._mark_pairing_direction(peer, "outbound")
+    client._rpc_call = AsyncMock(
+        return_value={
+            "code": "existing-credential",
+            "status": "already_trusted",
+            "pairing_session_id": pairing.pairing_session_id,
+            "verification_code": pairing.verification_code,
+        }
+    )
+    channel = MockDataChannel()
+
+    await client._initiate_pairing(peer, channel)
+
+    client._rpc_call.assert_awaited_once()
+    rpc_peer, rpc_method, rpc_payload = client._rpc_call.await_args.args
+    assert rpc_peer == peer
+    assert rpc_method == AuthMethods.PAIRING_START
+    assert rpc_payload["pairing_session_id"] == pairing.pairing_session_id
+    assert rpc_payload["verification_code"] == pairing.verification_code
+    assert channel.sent_messages == []
+
+
+@pytest.mark.asyncio
+async def test_existing_remote_credential_discovered_while_polling_skips_exchange(mock_deps):
+    """A reconnect proof completed during approval polling must end pairing cleanly."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    peer = "remote-session"
+    pairing = pairing_sas_result()
+    client._pairing_results[peer] = pairing
+    client._pcs[peer] = MagicMock()
+    client._mark_pairing_direction(peer, "outbound")
+    client._rpc_call = AsyncMock(
+        side_effect=[
+            {
+                "code": "pending-pairing-handle",
+                "status": "pending",
+                "pairing_session_id": pairing.pairing_session_id,
+                "verification_code": pairing.verification_code,
+            },
+            {
+                "code": "existing-credential",
+                "status": "already_trusted",
+                "pairing_session_id": pairing.pairing_session_id,
+                "verification_code": pairing.verification_code,
+            },
+        ]
+    )
+    channel = MockDataChannel()
+
+    with patch(
+        "app.services.gateway.webrtc.rtc_client.asyncio.sleep",
+        new=AsyncMock(),
+    ):
+        await client._initiate_pairing(peer, channel)
+
+    assert [call.args[1] for call in client._rpc_call.await_args_list] == [
+        AuthMethods.PAIRING_START,
+        AuthMethods.PAIRING_CONNECT,
+    ]
+    assert channel.sent_messages == []
 
 
 @pytest.mark.asyncio
@@ -1562,6 +1675,161 @@ class MockPeerConnectionWithEvents:
 
 
 @pytest.mark.asyncio
+async def test_slow_reconnect_proof_outlives_initial_auth_timeout(mock_deps):
+    """A progressing exact-PC proof keeps the transport alive until Auth returns."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "local-session"
+    client.set_mesh_identity("stable-local-peer", "Local Aurora")
+    client._auth_timeout = 0.01
+    client._pairing_timeout = 0.3
+    client._audit = AsyncMock()
+    peer = "remote-session"
+    channel = MockDataChannel()
+    pc = MockPeerConnectionWithEvents()
+    pc.connectionState = "connected"
+    pc.signalingState = "stable"
+    pc.createDataChannel.return_value = channel
+    pc.close = AsyncMock()
+    verification_started = asyncio.Event()
+    release_verification = asyncio.Event()
+    token = Token(
+        id="token-id-123",
+        token_hash="hash",
+        prefix="prefix",
+        device_id="remote-device",
+        user_id="remote-user",
+        scopes=["read"],
+    )
+    identity = Identity(
+        principal_id="remote-user",
+        principal_name="Remote Aurora",
+        is_admin=False,
+        effective_perms=frozenset({"read"}),
+        device_id="remote-device",
+        source="webrtc_peer",
+    )
+
+    async def verify_slowly(**_kwargs: Any) -> Token:
+        verification_started.set()
+        await release_verification.wait()
+        return token
+
+    auth_service.verify_mesh_reconnect_proof.side_effect = verify_slowly
+    auth_service.build_identity_from_token.return_value = identity
+
+    with patch(
+        "app.services.gateway.webrtc.rtc_client.RTCPeerConnection",
+        return_value=pc,
+    ):
+        await client._ensure_pc(peer, is_offer_initiator=True)
+        install_pairing_transport(client, peer, pc)
+        channel.emit("open")
+        record = client._peer_auth_challenges[peer]
+        channel.emit("message", json.dumps(reconnect_proof_for(record)))
+        await asyncio.wait_for(verification_started.wait(), timeout=1.0)
+
+        await asyncio.sleep(0.04)
+        assert client._pcs[peer] is pc
+        assert peer in client._reconnect_proof_tasks
+        pc.close.assert_not_awaited()
+
+        release_verification.set()
+        async with asyncio.timeout(1.0):
+            while client._peer_acl.get(peer, ANONYMOUS) == ANONYMOUS:
+                await asyncio.sleep(0.001)
+
+    assert client._peer_acl[peer] == identity
+    assert client._stable_peer_sessions["stable-remote-peer"] == peer
+    assert peer not in client._reconnect_proof_tasks
+    pc.close.assert_not_awaited()
+    await cancel_auth_timeouts(client)
+
+
+@pytest.mark.asyncio
+async def test_late_reconnect_proof_cannot_authenticate_replacement_pc(mock_deps):
+    """A proof result is discarded when its exact PC is no longer current."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "local-session"
+    client.set_mesh_identity("stable-local-peer", "Local Aurora")
+    client._audit = AsyncMock()
+    peer = "remote-session"
+    old_pc = MagicMock()
+    old_pc.close = AsyncMock()
+    replacement_pc = MagicMock()
+    channel = MockDataChannel()
+    install_pairing_transport(client, peer, old_pc)
+    record = install_reconnect_challenge(client, peer, old_pc, challenge="de" * 32)
+    verification_started = asyncio.Event()
+    release_verification = asyncio.Event()
+    token = Token(
+        id="token-id-123",
+        token_hash="hash",
+        prefix="prefix",
+        device_id="remote-device",
+        user_id="remote-user",
+        scopes=["read"],
+    )
+
+    async def verify_slowly(**_kwargs: Any) -> Token:
+        verification_started.set()
+        await release_verification.wait()
+        return token
+
+    auth_service.verify_mesh_reconnect_proof.side_effect = verify_slowly
+
+    proof_task = asyncio.create_task(
+        client._handle_reconnect_proof(peer, old_pc, channel, reconnect_proof_for(record))
+    )
+    await asyncio.wait_for(verification_started.wait(), timeout=1.0)
+    client._pcs[peer] = replacement_pc
+    release_verification.set()
+    await proof_task
+
+    assert client._peer_acl.get(peer, ANONYMOUS) == ANONYMOUS
+    assert "stable-remote-peer" not in client._peer_acl
+    assert "stable-remote-peer" not in client._stable_peer_sessions
+    auth_service.build_identity_from_token.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_terminal_peer_close_cancels_exact_reconnect_proof_task(mock_deps):
+    """Connection cleanup owns and cancels its pending proof validation."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._audit = AsyncMock()
+    peer = "remote-session"
+    channel = MockDataChannel()
+    pc = MockPeerConnectionWithEvents()
+    pc.connectionState = "connected"
+    pc.createDataChannel.return_value = channel
+    pc.close = AsyncMock()
+
+    with patch(
+        "app.services.gateway.webrtc.rtc_client.RTCPeerConnection",
+        return_value=pc,
+    ):
+        await client._ensure_pc(peer, is_offer_initiator=True)
+        install_pairing_transport(client, peer, pc)
+        started = asyncio.Event()
+
+        async def wait_forever() -> None:
+            started.set()
+            await asyncio.Event().wait()
+
+        proof_task = asyncio.create_task(wait_forever())
+        client._track_reconnect_proof_task(peer, pc, proof_task)
+        await started.wait()
+        pc.connectionState = "closed"
+        await pc._handlers["connectionstatechange"]()
+        await asyncio.sleep(0)
+
+    assert proof_task.cancelled()
+    assert peer not in client._reconnect_proof_tasks
+
+
+@pytest.mark.asyncio
 async def test_closed_datachannel_closes_and_cleans_owning_peer_connection(mock_deps):
     """A closed RPC channel cannot leave an authenticated session resident."""
     settings, bus, registry, auth_service = mock_deps
@@ -1918,13 +2186,18 @@ async def test_initial_offer_failure_discards_pc_and_schedules_retry(mock_deps):
 
 @pytest.mark.asyncio
 async def test_failed_offer_response_discards_pc_before_fresh_offer(mock_deps):
-    """A responder failure must not strand the peer or block the owner's retry."""
+    """A responder failure clears the old SAS epoch before the owner's retry."""
     settings, bus, registry, auth_service = mock_deps
     client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
     client._peer_id = "z-responder"
     client._adapter = MagicMock()
     client._adapter.send = AsyncMock()
     peer = "a-offer-owner"
+    client._pairing_results[peer] = pairing_sas_result()
+    client._pairing_commits_sent.add(peer)
+    client._pairing_bootstrapped.add(peer)
+    client._peer_pairing_directions[peer] = {"inbound", "outbound"}
+    client._peer_pairing_active.add(peer)
 
     failed_pc = MockPeerConnectionWithEvents()
     failed_pc.connectionState = "new"
@@ -1962,6 +2235,11 @@ async def test_failed_offer_response_discards_pc_before_fresh_offer(mock_deps):
         await client._on_offer(offer)
         assert peer not in client._pcs
         failed_pc.close.assert_awaited_once()
+        assert peer not in client._pairing_results
+        assert peer not in client._pairing_commits_sent
+        assert peer not in client._pairing_bootstrapped
+        assert peer not in client._peer_pairing_directions
+        assert peer not in client._peer_pairing_active
 
         await client._on_offer(offer)
 
@@ -1969,6 +2247,73 @@ async def test_failed_offer_response_discards_pc_before_fresh_offer(mock_deps):
     client._adapter.send.assert_awaited_once()
     assert client._adapter.send.await_args.args[0] == "answer"
     assert client._diagnostic_errors[0].code == "negotiation_response_failed"
+
+
+@pytest.mark.asyncio
+async def test_fresh_offer_replaces_stale_unconnected_answerer_transport(mock_deps):
+    """A recovering offerer gets a clean answerer PC for each new SDP epoch."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "z-responder"
+    client._adapter = MagicMock()
+    client._adapter.send = AsyncMock()
+    peer = "a-offer-owner"
+
+    stale_pc = MockPeerConnectionWithEvents()
+    stale_pc.connectionState = "new"
+    stale_pc.close = AsyncMock()
+    stale_answer = SimpleNamespace(type="answer", sdp="stale-answer-sdp")
+    stale_pc.createAnswer.return_value = stale_answer
+
+    fresh_pc = MockPeerConnectionWithEvents()
+    fresh_pc.connectionState = "new"
+    fresh_pc.close = AsyncMock()
+    fresh_answer = SimpleNamespace(type="answer", sdp="fresh-answer-sdp")
+    fresh_pc.createAnswer.return_value = fresh_answer
+
+    async def set_stale_local_description(description: Any) -> None:
+        stale_pc.localDescription = description
+
+    async def set_fresh_local_description(description: Any) -> None:
+        fresh_pc.localDescription = description
+
+    stale_pc.setLocalDescription.side_effect = set_stale_local_description
+    fresh_pc.setLocalDescription.side_effect = set_fresh_local_description
+
+    def sealed_offer(sdp: str) -> bytes:
+        return aead_seal(
+            client._keys.k_sig,
+            {
+                "type": "offer",
+                "app_id": settings.webrtc.app_id,
+                "room": settings.webrtc.room,
+                "from": peer,
+                "to": client._peer_id,
+                "sdp": sdp,
+                "stable_peer_id": "stable-offer-owner",
+                "node_name": "Aurora 1",
+            },
+        )
+
+    with patch(
+        "app.services.gateway.webrtc.rtc_client.RTCPeerConnection",
+        side_effect=[stale_pc, fresh_pc],
+    ):
+        await client._on_offer(sealed_offer("v=0\r\na=ice-ufrag:stale\r\n"))
+        await client._on_offer(sealed_offer("v=0\r\na=ice-ufrag:fresh\r\n"))
+
+    stale_pc.close.assert_awaited_once()
+    assert client._pcs[peer] is fresh_pc
+    assert client._pairing_transports[peer]["pc"] is fresh_pc
+    assert client._pairing_transports[peer]["offer_sdp"].endswith(
+        "a=ice-ufrag:fresh\r\n"
+    )
+    assert client._adapter.send.await_count == 2
+
+    fresh_pc.connectionState = "connected"
+    await client._on_offer(sealed_offer("v=0\r\na=ice-ufrag:unsolicited\r\n"))
+    assert client._pcs[peer] is fresh_pc
+    assert client._adapter.send.await_count == 2
 
 
 @pytest.mark.asyncio

@@ -11,6 +11,13 @@ const harness = path.join(repoRoot, 'tests/e2e/desktop_live/desktop-live-e2e.mjs
 const webdriverDriver = path.join(repoRoot, 'tests/e2e/desktop_live/desktop-webdriver-driver.mjs')
 const liveRunner = path.join(repoRoot, 'scripts/desktop_live_e2e.sh')
 const applicationWrapper = path.join(repoRoot, 'scripts/desktop_live_application.sh')
+const desktopWorkflow = path.join(repoRoot, '.github/workflows/tauri-desktop.yml')
+const tauriCargoManifest = path.join(repoRoot, 'apps/aurora-tauri/src-tauri/Cargo.toml')
+const tauriRustLibrary = path.join(repoRoot, 'apps/aurora-tauri/src-tauri/src/lib.rs')
+const webdriverConfig = path.join(
+  repoRoot,
+  'apps/aurora-tauri/src-tauri/tauri.desktop-live-webdriver.conf.json',
+)
 
 test('self-test validates desktop process-tree and profile helpers', async () => {
   const output = await execNode([harness, '--self-test'])
@@ -74,6 +81,7 @@ test('harness source preserves real-peer, Python-free desktop-client, driver, an
   assert.match(source, /AURORA_DESKTOP_LIVE_E2E_SESSION_NONCE/)
   assert.match(source, /AURORA_DESKTOP_LIVE_E2E_APPLICATION/)
   assert.match(source, /AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE/)
+  assert.match(source, /webdriverProvider === 'official'/)
   assert.match(source, /assertNoSeededSecretsInTree/)
   assert.match(source, /enforceNoSeededSecretsInTree/)
   assert.match(source, /desktop-secret-quarantine/)
@@ -99,7 +107,7 @@ test('webdriver fixture source invokes the narrow desktop live WebView hook', as
   assert.match(source, /captureProcessTree/)
 })
 
-test('maintained desktop live scripts are valid and bind tauri-driver to the wrapper', async () => {
+test('maintained desktop live scripts support official and embedded WebDriver providers', async () => {
   await execFilePromise('bash', ['-n', liveRunner])
   await execFilePromise('bash', ['-n', applicationWrapper])
   const runnerSource = await fs.readFile(liveRunner, 'utf8')
@@ -109,10 +117,54 @@ test('maintained desktop live scripts are valid and bind tauri-driver to the wra
   assert.match(runnerSource, /AURORA_DESKTOP_LIVE_E2E_KEEP_DIST/)
   assert.match(runnerSource, /apps\/aurora-tauri\/dist/)
   assert.match(runnerSource, /tauri-driver/)
+  assert.match(runnerSource, /AURORA_DESKTOP_LIVE_E2E_WEBDRIVER_PROVIDER/)
+  assert.match(runnerSource, /desktop-live-webdriver/)
+  assert.match(runnerSource, /tauri\.desktop-live-webdriver\.conf\.json/)
+  assert.match(runnerSource, /TAURI_WEBDRIVER_PORT/)
+  assert.match(runnerSource, /\/status/)
   assert.match(runnerSource, /src-tauri\/tauri\.client\.conf\.json/)
   assert.match(runnerSource, /AURORA_DESKTOP_LIVE_E2E_APPLICATION/)
   assert.match(wrapperSource, /AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE/)
   assert.match(wrapperSource, /exec "\$AURORA_DESKTOP_LIVE_E2E_APPLICATION_BIN"/)
+})
+
+test('macOS live lane uses the embedded WebDriver and does not install unsupported tauri-driver', async () => {
+  const source = await fs.readFile(desktopWorkflow, 'utf8')
+  const macosJob = source
+    .split('  desktop-client-live-macos-stun:')[1]
+    ?.split('  desktop-client-native-packages:')[0]
+  assert.ok(macosJob, 'macOS desktop live job must exist')
+  assert.match(macosJob, /runs-on: macos-latest/)
+  assert.match(macosJob, /AURORA_DESKTOP_LIVE_E2E_WEBDRIVER_PROVIDER: embedded/)
+  assert.match(macosJob, /AURORA_DESKTOP_LIVE_E2E_LANE: stun/)
+  assert.doesNotMatch(macosJob, /cargo install tauri-driver/)
+})
+
+test('embedded WebDriver is dependency-, registration-, and capability-gated to the live debug build', async () => {
+  const [cargoManifest, rustLibrary, configSource] = await Promise.all([
+    fs.readFile(tauriCargoManifest, 'utf8'),
+    fs.readFile(tauriRustLibrary, 'utf8'),
+    fs.readFile(webdriverConfig, 'utf8'),
+  ])
+  const config = JSON.parse(configSource)
+  const capability = config.app.security.capabilities[1]
+
+  assert.match(
+    cargoManifest,
+    /desktop-live-webdriver\s*=\s*\["dep:tauri-plugin-wdio-webdriver"\]/,
+  )
+  assert.match(
+    cargoManifest,
+    /tauri-plugin-wdio-webdriver\s*=\s*\{[^\n]*version\s*=\s*"=1\.2\.0"[^\n]*optional\s*=\s*true/,
+  )
+  assert.match(
+    rustLibrary,
+    /cfg\(all\(desktop, debug_assertions, feature = "desktop-live-webdriver"\)\)/,
+  )
+  assert.match(rustLibrary, /tauri_plugin_wdio_webdriver::init\(\)/)
+  assert.deepEqual(capability.permissions, ['wdio-webdriver:default'])
+  assert.equal(config.app.security.capabilities[0], 'aurora-thin')
+  assert.equal(capability.identifier, 'aurora-desktop-live-webdriver')
 })
 
 function execNode(args, extraEnv = {}) {

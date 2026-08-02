@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import aiosqlite
 
+from app.services.db.sqlite_connection import close_database, open_database
 from app.shared.contracts.models.db import (
     DBActivateToolingMeshEnforcementRequest,
     DBActivateToolingMeshEnforcementResponse,
@@ -53,9 +54,7 @@ def _state(row: aiosqlite.Row) -> DBToolingMeshActivationState:
 
 
 async def _connect(db_path: str) -> aiosqlite.Connection:
-    db = await aiosqlite.connect(db_path)
-    db.row_factory = aiosqlite.Row
-    return db
+    return await open_database(db_path, row_factory=aiosqlite.Row)
 
 
 async def get_tooling_mesh_activation_state(
@@ -70,7 +69,7 @@ async def get_tooling_mesh_activation_state(
             raise RuntimeError("tooling_mesh_activation_state_missing")
         return DBGetToolingMeshActivationStateResponse(state=_state(row))
     finally:
-        await db.close()
+        await close_database(db)
 
 
 async def activate_tooling_mesh_enforcement(
@@ -183,4 +182,4 @@ async def activate_tooling_mesh_enforcement(
         await db.rollback()
         raise
     finally:
-        await db.close()
+        await close_database(db)

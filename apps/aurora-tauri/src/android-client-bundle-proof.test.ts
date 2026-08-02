@@ -24,6 +24,7 @@ type AndroidClientKind = 'apk' | 'aab'
 
 interface AndroidClientProofContext {
   root: string
+  buildOutputRoot: string
   configPath: string
   prepareReportPath: string
   apkProvenancePath: string
@@ -36,6 +37,7 @@ function createAndroidClientProofContext(): AndroidClientProofContext {
   const root = mkdtempSync(join(tmpdir(), 'aurora-android-thin-proof-'))
   return {
     root,
+    buildOutputRoot: join(root, 'android-build-outputs'),
     configPath: join(root, 'tauri.android-client.conf.json'),
     prepareReportPath: join(root, 'android-client-bundle-prepare.json'),
     apkProvenancePath: join(root, 'android-client-apk-build-provenance.json'),
@@ -54,6 +56,7 @@ function androidClientEnv(
     ...process.env,
     AURORA_TAURI_ANDROID_CLIENT_CONFIG_PATH: context.configPath,
     AURORA_TAURI_ANDROID_CLIENT_SOURCE_CONFIG_PATH: context.configPath,
+    AURORA_TAURI_ANDROID_BUILD_OUTPUT_ROOT: context.buildOutputRoot,
     AURORA_TAURI_ANDROID_CLIENT_REPORT_PATH: context.prepareReportPath,
     AURORA_TAURI_ANDROID_CLIENT_BUILD_PROVENANCE_PATH:
       kind === 'apk' ? context.apkProvenancePath : context.aabProvenancePath,
@@ -297,6 +300,14 @@ if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
   }
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
   if (JSON.stringify(config.app.security.capabilities) !== JSON.stringify(['aurora-android-thin', 'aurora-mobile-mesh'])) process.exit(4)
+  if (config.build.beforeBuildCommand !== null) process.exit(5)
+  if (!config.build.frontendDist || !fs.existsSync(config.build.frontendDist)) process.exit(6)
+}
+if (argv[0] === 'build:frontend:android-client') {
+  const dist = path.join(${JSON.stringify(packageRoot)}, 'dist')
+  fs.rmSync(dist, { recursive: true, force: true })
+  fs.mkdirSync(dist, { recursive: true })
+  fs.writeFileSync(path.join(dist, 'index.html'), '<!doctype html><title>Aurora</title>')
 }
 `)
     chmodSync(pnpmStub, 0o755)
@@ -315,16 +326,17 @@ if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
     expect(result.status, result.stderr).toBe(0)
     const calls = readFileSync(callsPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
     expect(calls.map((call) => call.argv.join(' '))).toEqual([
+      'build:frontend:android-client',
       'android:sync-native-plugin',
-      'tauri android build --debug --aab --config ' + calls[1].argv.at(-1),
+      'tauri android build --debug --aab --config ' + calls[2].argv.at(-1),
     ])
-    expect(calls[1].argv.at(-1)).not.toContain('src-tauri/tauri.android-client.conf.json')
-    expect(calls[1]).toMatchObject({
+    expect(calls[2].argv.at(-1)).not.toContain('src-tauri/tauri.android-client.conf.json')
+    expect(calls[2]).toMatchObject({
       javaHome: jdkHome,
       asdfJavaVersion: 'temurin-17.0.20+8',
     })
-    expect(calls[1].pathHead).toEqual([jdkBin, stubDir])
-    expect(existsSync(calls[1].argv.at(-1))).toBe(false)
+    expect(calls[2].pathHead).toEqual([jdkBin, stubDir])
+    expect(existsSync(calls[2].argv.at(-1))).toBe(false)
     expect(existsSync(context.configPath)).toBe(false)
     const provenance = JSON.parse(readFileSync(context.aabProvenancePath, 'utf8'))
     expect(provenance).toMatchObject({
@@ -334,12 +346,13 @@ if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
       sourceConfigWritten: false,
       expectedCapabilities: ['aurora-android-thin', 'aurora-mobile-mesh'],
     })
+    expect(provenance.artifactRoot).toBe(context.buildOutputRoot)
     expect(provenance.config.app.security.capabilities).toEqual([
       'aurora-android-thin',
       'aurora-mobile-mesh',
     ])
     expect(provenance.configSha256).toBe(createHash('sha256').update(`${JSON.stringify(provenance.config, null, 2)}\n`).digest('hex'))
-  })
+  }, 30_000)
 
   it('auto-discovers generated universal debug APK and AAB artifacts from nested Tauri output paths', () => {
     const context = createAndroidClientProofContext()

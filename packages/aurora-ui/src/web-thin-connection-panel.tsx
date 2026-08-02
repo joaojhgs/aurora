@@ -9,18 +9,20 @@ import {
   type BrowserWebRtcSnapshot,
   type AuroraThinConnectionMode,
 } from './web-thin-runtime'
-import type { WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
+import { type PeerPairingApproval, type WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
 import { decodeMeshInvite, meshInviteSummary } from './mesh-invite'
 import { getAuroraSurfaceProfile } from './platform-surface'
 import type { ThinConnectionProfile } from './thin-connection-profile'
 import { scanQrInviteWithBrowserCamera } from './browser-qr-scanner'
 import { PRODUCT_COPY, productStatusCopy, safeErrorCopy } from './product-copy'
+import { type LocalDeviceFeature, type LocalFeatureSharingPort } from './local-feature-sharing'
 import { Alert, AlertDescription, AlertTitle } from '#components/ui/alert'
 import { Badge } from '#components/ui/badge'
 import { Button } from '#components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '#components/ui/card'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '#components/ui/field'
 import { Input } from '#components/ui/input'
+import { Checkbox } from '#components/ui/checkbox'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '#components/ui/select'
 import { Textarea } from '#components/ui/textarea'
 
@@ -42,6 +44,7 @@ export interface WebThinConnectionPanelProps {
   profile?: WebThinConnectionProfile | undefined
   profiles?: WebThinConnectionProfile[] | undefined
   profileStoreEvidence?: string | undefined
+  localFeatureSharing?: LocalFeatureSharingPort | undefined
   onSaveProfile?: (
     profile: WebThinConnectionProfile,
     roomSecret?: WebThinRoomSecret,
@@ -63,6 +66,7 @@ export function HomeNodeConnectionPanel({
   profile,
   profiles = [],
   profileStoreEvidence,
+  localFeatureSharing,
   onSaveProfile,
   onSelectProfile,
 }: WebThinConnectionPanelProps) {
@@ -72,7 +76,14 @@ export function HomeNodeConnectionPanel({
   const [profileError, setProfileError] = useState<string | null>(null)
   const [profilePending, setProfilePending] = useState(false)
   const [invitePending, setInvitePending] = useState(false)
+  const [availableSharedFeatures, setAvailableSharedFeatures] = useState<readonly LocalDeviceFeature[]>([])
+  const [sharedFeatureIds, setSharedFeatureIds] = useState<string[]>([])
+  const [sharedFeatureLoadError, setSharedFeatureLoadError] = useState<string | null>(null)
+  const [pairingApprovalPending, setPairingApprovalPending] = useState(false)
+  const approvedPairingSessionsRef = useMemo(() => new Map<string, number>(), [])
+  const pairingApprovalInFlightRef = useMemo(() => new Set<string>(), [])
   const inviteFileRef = useRef<HTMLInputElement>(null)
+  const normalizedInviteText = useMemo(() => inviteText.trim(), [inviteText])
   const surface = useMemo(() => getAuroraSurfaceProfile({
     runtimeMode: mode === 'http-only' ? 'web' : 'web-thin',
     transportKind,
@@ -82,7 +93,8 @@ export function HomeNodeConnectionPanel({
   const [draftProfile, setDraftProfile] = useState<WebThinConnectionProfile | null>(
     () => profile ?? defaultProfileForSurface(surface),
   )
-  const invite = useMemo(() => decodeMeshInvite(inviteText), [inviteText])
+  const invite = useMemo(() => decodeMeshInvite(normalizedInviteText), [normalizedInviteText])
+  const parsedInvite = useMemo(() => parseWebRtcInvite(normalizedInviteText), [normalizedInviteText])
   const summary = invite ? meshInviteSummary(invite) : null
   const mixedContentWarning = hostedMixedContentWarning(
     surface.kind,
@@ -102,15 +114,44 @@ export function HomeNodeConnectionPanel({
     && (!configuredPeerOffline || !isExpectedOfflineDiagnostic(snapshot.diagnostic))
       ? productDiagnosticMessage(snapshot.diagnostic)
       : null
-  const connectDisabled = (!configureOnly && mode === 'http-only')
-    || snapshot.status === 'disabled'
-    || !invite
-    || !snapshot.secureContext
+  const requiresSecureContext = !snapshot.secureContext
+  const hasConnectableInvite = Boolean(parsedInvite)
+  const connectDisabled = snapshot.status === 'disabled'
+    || !hasConnectableInvite
+    || requiresSecureContext
     || (configureOnly && !draftProfile?.nodeName.trim())
   useEffect(() => peer.subscribe(setSnapshot), [peer])
   useEffect(() => {
     if (initialInviteText) setInviteText(initialInviteText)
   }, [initialInviteText])
+  useEffect(() => {
+    let active = true
+    const loadFeatures = async () => {
+      if (!snapshot.pairingSessionId || !localFeatureSharing) {
+        setAvailableSharedFeatures([])
+        setSharedFeatureIds([])
+        setSharedFeatureLoadError(null)
+        return
+      }
+      try {
+        const next = await localFeatureSharing.load()
+        if (!active) return
+        const available = filterPairingFeatures(next.features, surface)
+        setAvailableSharedFeatures(available)
+        setSharedFeatureIds(available.filter((feature) => feature.enabled).map((feature) => feature.id))
+        setSharedFeatureLoadError(null)
+      } catch {
+        if (!active) return
+        setAvailableSharedFeatures([])
+        setSharedFeatureIds([])
+        setSharedFeatureLoadError('This device’s sharing options are unavailable right now. Try again.')
+      }
+    }
+    void loadFeatures()
+    return () => {
+      active = false
+    }
+  }, [localFeatureSharing, snapshot.pairingSessionId])
   useEffect(() => {
     setDraftProfile(profile ?? defaultProfileForSurface(surface))
   }, [profile, surface])
@@ -120,14 +161,17 @@ export function HomeNodeConnectionPanel({
       setProductError('Paste a valid Aurora invite before continuing.')
       return
     }
+    const nextParsedInvite = parsedInvite ?? parseWebRtcInvite(normalizedInviteText)
+    if (!nextParsedInvite) {
+      setProductError('This invite can’t be used to connect right now. Generate a fresh invite and try again.')
+      return
+    }
     setProductError(null)
     setInvitePending(true)
     try {
-      const webRtcProfile = peer.importInvite(inviteText)
-      const parsedInvite = parseWebRtcInvite(inviteText)
+      const webRtcProfile = peer.importInvite(normalizedInviteText)
       if (
-        !parsedInvite
-        || parsedInvite.profile.roomSecretRef !== webRtcProfile.roomSecretRef
+        nextParsedInvite.profile.roomSecretRef !== webRtcProfile.roomSecretRef
       ) {
         throw new Error('invalid_invite')
       }
@@ -149,9 +193,9 @@ export function HomeNodeConnectionPanel({
       }
       await onSaveProfile?.(nextProfile, {
         roomSecretRef: webRtcProfile.roomSecretRef,
-        roomSecret: parsedInvite.roomSecret,
+        roomSecret: nextParsedInvite.roomSecret,
       })
-      await onInviteAccepted?.(webRtcProfile, inviteText)
+      await onInviteAccepted?.(webRtcProfile, normalizedInviteText)
       if (!configureOnly) await peer.connect(nextProfile.webrtcProfile)
     } catch (nextError) {
       setProductError(uiErrorMessage(nextError))
@@ -167,10 +211,11 @@ export function HomeNodeConnectionPanel({
     setProductError(null)
     try {
       const text = await file.text()
-      if (!decodeMeshInvite(text)) {
+      const trimmed = text.trim()
+      if (!decodeMeshInvite(trimmed)) {
         throw new Error('invalid_invite')
       }
-      setInviteText(text)
+      setInviteText(trimmed)
     } catch (nextError) {
       setProductError(uiErrorMessage(nextError))
     }
@@ -182,7 +227,7 @@ export function HomeNodeConnectionPanel({
     setInvitePending(true)
     try {
       const scanned = await (onScanQr ?? scanQrInviteWithBrowserCamera)()
-      if (scanned) setInviteText(scanned)
+      if (scanned) setInviteText(scanned.trim())
     } catch (nextError) {
       setProductError(uiErrorMessage(nextError))
     } finally {
@@ -194,7 +239,7 @@ export function HomeNodeConnectionPanel({
     setProductError(null)
     try {
       if (invite) {
-        const profile = peer.importInvite(inviteText)
+        const profile = peer.importInvite(normalizedInviteText)
         await peer.connect(profile)
       } else {
         await peer.connect()
@@ -203,6 +248,75 @@ export function HomeNodeConnectionPanel({
       setProductError(uiErrorMessage(nextError))
     }
   }
+
+  const confirmPairing = async () => {
+    if (!snapshot.pairingSessionId || !snapshot.pairingVerificationCode) return
+    if (!snapshot.pairingSessionId) return
+    const sessionId = snapshot.pairingSessionId
+    if (pairingApprovalInFlightRef.has(sessionId) || approvedPairingSessionsRef.has(sessionId)) return
+    setProductError(null)
+    setPairingApprovalPending(true)
+    pairingApprovalInFlightRef.add(sessionId)
+    try {
+      let sharedFeatureIdsToShare: string[] = []
+      if (localFeatureSharing) {
+        const requested = new Set(sharedFeatureIds.map((featureId) => featureId.trim()).filter(Boolean))
+        const featureSnapshot = await localFeatureSharing.load()
+        const availableFeatures = filterPairingFeatures(featureSnapshot.features, surface)
+        const available = new Map(availableFeatures.map((feature) => [feature.id, feature]))
+        for (const featureId of requested) {
+          const feature = available.get(featureId)
+          if (!feature?.available) {
+            throw new Error('The selected device features are no longer available. Review the selection and try again.')
+          }
+        }
+        for (const featureId of requested) {
+          const feature = available.get(featureId)
+          if (feature && !feature.enabled) {
+            await localFeatureSharing.setFeatureEnabled(featureId, true)
+          }
+        }
+        sharedFeatureIdsToShare = availableFeatures
+          .filter((feature) => requested.has(feature.id))
+          .map((feature) => feature.id)
+      }
+      const approval: PeerPairingApproval = {
+        sharedFeatureIds: sharedFeatureIdsToShare,
+      }
+      await peer.confirmPairing(sessionId, approval)
+      approvedPairingSessionsRef.set(sessionId, Date.now())
+    } catch (nextError) {
+      setProductError(uiErrorMessage(nextError))
+      if (localFeatureSharing) {
+        try {
+          const next = await localFeatureSharing.load()
+          const available = filterPairingFeatures(next.features, surface)
+          setAvailableSharedFeatures(available)
+          setSharedFeatureIds(available.filter((feature) => feature.enabled).map((feature) => feature.id))
+          setSharedFeatureLoadError(null)
+        } catch {
+          setAvailableSharedFeatures([])
+          setSharedFeatureIds([])
+          setSharedFeatureLoadError('This device’s sharing options are unavailable right now. Try again.')
+        }
+      }
+    } finally {
+      pairingApprovalInFlightRef.delete(sessionId)
+      setPairingApprovalPending(false)
+    }
+  }
+
+  useEffect(() => {
+    const sessionId = snapshot.pairingSessionId
+    if (!sessionId) {
+      const now = Date.now()
+      for (const [knownSessionId, approvedAt] of approvedPairingSessionsRef) {
+        if (now - approvedAt > 65_000) approvedPairingSessionsRef.delete(knownSessionId)
+      }
+    } else if (!snapshot.pairingVerificationCode) {
+      approvedPairingSessionsRef.delete(sessionId)
+    }
+  }, [snapshot.pairingSessionId, snapshot.pairingVerificationCode])
 
   const saveProfile = async () => {
     if (!draftProfile || !onSaveProfile) return
@@ -237,6 +351,13 @@ export function HomeNodeConnectionPanel({
     setDraftProfile(defaultProfileForSurface(surface, suffix))
   }
 
+  const toggleSharedFeature = (featureId: string, checked: boolean) => {
+    setSharedFeatureIds((current) => {
+      if (checked) return current.includes(featureId) ? current : [...current, featureId]
+      return current.filter((currentId) => currentId !== featureId)
+    })
+  }
+
   if (configureOnly) {
     return (
       <Card
@@ -244,19 +365,7 @@ export function HomeNodeConnectionPanel({
         className="overflow-hidden border-border/80 bg-card/95 shadow-xl shadow-black/10"
         data-thin-invite-onboarding="true"
       >
-        <CardContent className="flex flex-col gap-5 p-5 sm:p-6">
-          <div className="flex items-start gap-3.5">
-            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-muted text-primary">
-              <Network size={19} aria-hidden />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-base font-semibold tracking-tight">{PRODUCT_COPY.onboarding.choices.connect.label}</h2>
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                {PRODUCT_COPY.onboarding.choices.connect.description}
-              </p>
-            </div>
-          </div>
-
+        <CardContent className="aui-webthin-invite-card-content flex flex-col gap-5 p-5 sm:p-6">
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="webthin-profile-node-name">
@@ -337,7 +446,7 @@ export function HomeNodeConnectionPanel({
                 placeholder="aurora://mesh/invite?…"
                 rows={3}
                 spellCheck={false}
-                className="min-h-24 resize-y font-mono text-xs"
+                className="aui-webthin-invite-textarea min-h-24 resize-y font-mono text-xs"
               />
             </Field>
           </FieldGroup>
@@ -357,14 +466,14 @@ export function HomeNodeConnectionPanel({
                   Invite from {summary.nodeName}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {summary.room} · {summary.brokerCount} invite address
+                  {summary.room} · {summary.brokerCount} connection option
                   {summary.brokerCount === 1 ? '' : 's'}
                 </p>
               </div>
             </div>
           ) : null}
 
-          {!snapshot.secureContext ? (
+          {requiresSecureContext ? (
             <Alert variant="destructive">
               <AlertTriangle size={16} aria-hidden />
               <AlertTitle>Secure connection needed</AlertTitle>
@@ -395,7 +504,7 @@ export function HomeNodeConnectionPanel({
 
           <Button
             type="button"
-            className="h-auto min-h-11 w-full"
+            className="aui-webthin-invite-action h-auto min-h-11 w-full"
             disabled={connectDisabled || invitePending}
             onClick={() => void connectInvite()}
           >
@@ -557,6 +666,7 @@ export function HomeNodeConnectionPanel({
             placeholder="Paste aurora://mesh/invite?... or amv1.…"
             rows={4}
             spellCheck={false}
+            className="aui-webthin-invite-textarea font-mono text-xs"
           />
             <FieldDescription>
             Sensitive invite details are saved privately when this device supports it.
@@ -594,13 +704,69 @@ export function HomeNodeConnectionPanel({
         {productError ?? visibleDiagnostic ? <p role="alert" className="text-sm text-destructive">{productError ?? visibleDiagnostic}</p> : null}
       </CardContent>
       <CardFooter className="flex flex-wrap gap-2">
-        <Button type="button" disabled={connectDisabled || invitePending} onClick={() => void connectInvite()}>
+        {snapshot.pairingSessionId && surface.isMobile ? (
+          <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3">
+            <p className="text-sm font-medium">
+              Confirm this connection to pair this Aurora with the invited device.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Scopes are based on what this device can safely share.
+            </p>
+          </div>
+        ) : null}
+        {snapshot.pairingSessionId && !localFeatureSharing && !surface.isMobile ? (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!snapshot.pairingVerificationCode || pairingApprovalPending}
+            onClick={() => void confirmPairing()}
+          >
+            Approve connection
+          </Button>
+        ) : null}
+        {snapshot.pairingSessionId && localFeatureSharing ? (
+          <div className="flex w-full flex-col gap-2 rounded-lg border bg-muted/20 p-3">
+            <div className="flex flex-col gap-0.5">
+              <p className="text-sm font-medium">Choose what {snapshot.nodeName || 'the connected Aurora'} can use from this device</p>
+              <p className="text-xs text-muted-foreground">Only features available on this device are shown. You can change this later.</p>
+            </div>
+            {sharedFeatureLoadError ? <p role="alert" className="text-xs text-destructive">{sharedFeatureLoadError}</p> : null}
+            {!sharedFeatureLoadError && availableSharedFeatures.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No local features are available to share. You can still pair the devices.</p>
+            ) : null}
+            {availableSharedFeatures.map((feature) => (
+              <label key={feature.id} className="flex items-start gap-3 rounded-md border px-3 py-2.5">
+                <Checkbox
+                  aria-label={feature.label}
+                  checked={sharedFeatureIds.includes(feature.id)}
+                  disabled={pairingApprovalPending}
+                  onCheckedChange={(checked) => toggleSharedFeature(feature.id, Boolean(checked))}
+                />
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-sm font-medium">{feature.label}</span>
+                  <span className="text-xs text-muted-foreground">{feature.description}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        ) : null}
+        {snapshot.pairingSessionId && !snapshot.pairingVerificationCode ? (
+          <p role="alert" className="w-full text-sm text-destructive">This connection cannot be approved safely. Try again.</p>
+        ) : null}
+        {snapshot.pairingSessionId && (localFeatureSharing || surface.isMobile) ? (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!snapshot.pairingVerificationCode || pairingApprovalPending || invitePending || Boolean(sharedFeatureLoadError)}
+            onClick={() => void confirmPairing()}
+          >
+            {pairingApprovalPending ? 'Approving…' : 'Approve connection'}
+          </Button>
+        ) : null}
+        <Button type="button" disabled={connectDisabled || invitePending || pairingApprovalPending} onClick={() => void connectInvite()}>
           {invitePending ? PRODUCT_COPY.onboarding.invite.saving : configureOnly ? PRODUCT_COPY.onboarding.invite.continue : PRODUCT_COPY.connection.useInvite}
         </Button>
-        {!configureOnly ? <Button type="button" variant="outline" disabled={mode === 'http-only' || !snapshot.secureContext} onClick={() => void reconnect()}>{PRODUCT_COPY.connection.reconnect}</Button> : null}
-        {snapshot.pairingSessionId ? (
-          <Button type="button" variant="outline" onClick={() => void peer.confirmPairing(snapshot.pairingSessionId!)}>Approve connection</Button>
-        ) : null}
+        {!configureOnly ? <Button type="button" variant="outline" disabled={mode === 'http-only' || requiresSecureContext} onClick={() => void reconnect()}>{PRODUCT_COPY.connection.reconnect}</Button> : null}
         {!configureOnly ? <Button type="button" variant="ghost" onClick={() => void peer.disconnect('disconnect')}>{PRODUCT_COPY.connection.disconnect}</Button> : null}
       </CardFooter>
     </Card>
@@ -608,6 +774,16 @@ export function HomeNodeConnectionPanel({
 }
 
 export const WebThinConnectionPanel = HomeNodeConnectionPanel
+
+function isGatewayScopedFeature(feature: LocalDeviceFeature): boolean {
+  return /gateway/i.test(feature.id) || /gateway/i.test(feature.label) || /gateway/i.test(feature.description)
+}
+
+function filterPairingFeatures(features: readonly LocalDeviceFeature[], surface: ReturnType<typeof getAuroraSurfaceProfile>): readonly LocalDeviceFeature[] {
+  const next = features.filter((feature) => feature.available)
+  if (!surface.isMobile) return next
+  return next.filter((feature) => !isGatewayScopedFeature(feature))
+}
 
 function defaultProfileForSurface(
   surface: ReturnType<typeof getAuroraSurfaceProfile>,

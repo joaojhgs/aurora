@@ -19,6 +19,7 @@ MeshCompatibilityReasonCode = Literal[
     "provider_at_capacity",
     "legacy_unverifiable",
 ]
+MeshRoutingReasonCode = MeshCompatibilityReasonCode | Literal["provider_unavailable"]
 MeshServiceCompatibilityStatus = Literal["compatible", "incompatible", "unused"]
 MESH_COMPATIBILITY_REASON_CODES = frozenset(get_args(MeshCompatibilityReasonCode))
 

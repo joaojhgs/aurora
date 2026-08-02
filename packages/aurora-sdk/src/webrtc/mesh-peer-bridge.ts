@@ -150,6 +150,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private remoteLeaseCursor: RemoteLeaseCursor | null = null
   private remoteLeaseFloor: RemoteLeaseCursor | null = null
   private remoteLeaseTimer: unknown | null = null
+  private localProviderLeaseTimer: unknown | null = null
+  private localProviderLeaseRenewalActive = false
   private remoteAvailability: 'unknown' | 'active' | 'unavailable' = 'unknown'
   private incomingManifestAck: IncomingManifestAck | null = null
   private incomingManifestGeneration = 0
@@ -367,6 +369,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     for (const stream of this.rpcStreams.values()) this.failRpcStream(stream, new Error(reason))
     this.rpcStreams.clear()
     this.peerHost?.handleDisconnect(reason)
+    this.stopLocalProviderLeaseRenewal()
     this.clearRemoteLease()
     this.reassembler.cleanupPeer(this.remotePeerId)
     this.clearAllTimers()
@@ -517,6 +520,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.remoteAvailability = 'unknown'
     this.remoteLeaseCursor = null
     this.remoteLeaseFloor = null
+    this.stopLocalProviderLeaseRenewal()
     this.clearRemoteLease()
     this.clearAllTimers()
   }
@@ -616,7 +620,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
         this.observeAsyncDispatch('manifest_response', this.sendLocalManifest())
         return
       case 'manifest_ack':
-        this.peerHost?.markManifestAcknowledged(frame as unknown as Record<string, unknown> & ManifestAckFrame)
+        if (this.peerHost?.markManifestAcknowledged(frame as unknown as Record<string, unknown> & ManifestAckFrame)) {
+          this.startLocalProviderLeaseRenewal()
+        }
         return
       case 'provider_lease':
       case 'provider_unavailable':
@@ -967,6 +973,32 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       this.remoteLeaseTimer = null
       this.clearRemoteAvailability({ settleWaiters: !this.incomingManifestAck })
     })
+  }
+
+  private startLocalProviderLeaseRenewal(): void {
+    this.stopLocalProviderLeaseRenewal()
+    this.localProviderLeaseRenewalActive = true
+    this.scheduleLocalProviderLeaseRenewal()
+  }
+
+  private scheduleLocalProviderLeaseRenewal(): void {
+    const peerHost = this.peerHost
+    if (!peerHost || this.closed || !this.localProviderLeaseRenewalActive) return
+    this.localProviderLeaseTimer = this.armTimer(peerHost.lease.renewMs, () => {
+      this.localProviderLeaseTimer = null
+      if (this.closed || !this.localProviderLeaseRenewalActive) return
+      void peerHost.renewLocalProvider()
+        .catch(() => undefined)
+        .finally(() => this.scheduleLocalProviderLeaseRenewal())
+    })
+  }
+
+  private stopLocalProviderLeaseRenewal(): void {
+    this.localProviderLeaseRenewalActive = false
+    if (this.localProviderLeaseTimer !== null) {
+      this.clearTimer(this.localProviderLeaseTimer)
+      this.localProviderLeaseTimer = null
+    }
   }
 
   private clearRemoteAvailability(options: { settleWaiters?: boolean } = {}): void {

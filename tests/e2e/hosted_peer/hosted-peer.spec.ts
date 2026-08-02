@@ -593,7 +593,7 @@ async function expectMeshResourceReady(
   await expect(meshResource).toHaveAttribute('data-thin-peer-status', 'authorized', {
     timeout: 30_000,
   })
-  await expect(meshResource).toContainText('Connected peers')
+  await expect(meshResource).toContainText('Connected devices')
   if (expectedPeerName) {
     await expect(meshResource).toContainText(expectedPeerName)
   }

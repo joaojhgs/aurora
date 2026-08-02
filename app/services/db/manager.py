@@ -15,6 +15,7 @@ import aiosqlite
 from app.helpers.aurora_logger import log_error, log_info
 from app.services.db.migration_manager import MigrationManager
 from app.services.db.models import Device, MeshCredential, Message, Session, Token, User
+from app.services.db.sqlite_connection import close_database, open_database
 from app.services.db.tool_identity_store import (
     allocate_tool_identity,
     reconcile_tool_identity,
@@ -117,14 +118,12 @@ class DatabaseManager:
         self.migration_manager = MigrationManager(db_path, str(migrations_dir))
 
     async def _connect(self) -> aiosqlite.Connection:
-        """Return a connection with ``PRAGMA foreign_keys = ON``.
+        """Return a connection with Aurora's shared SQLite policy.
 
-        All write operations that depend on FK cascading should use this
-        helper instead of calling ``aiosqlite.connect()`` directly.
+        All operations must use this helper so foreign keys, WAL, and lock
+        waiting stay consistent across DB and scheduler call paths.
         """
-        db = await aiosqlite.connect(self.db_path)
-        await db.execute("PRAGMA foreign_keys = ON")
-        return db
+        return await open_database(self.db_path)
 
     @contextlib.asynccontextmanager
     async def _connection(self):
@@ -134,7 +133,7 @@ class DatabaseManager:
         try:
             yield db
         finally:
-            await db.close()
+            await close_database(db)
 
     @staticmethod
     def _permission_tuple(value: object) -> tuple[str, ...]:
@@ -368,7 +367,7 @@ class DatabaseManager:
             raise
         finally:
             if db is not None:
-                await db.close()
+                await close_database(db)
 
     async def initialize(self):
         """Initialize the database and run migrations"""
@@ -443,7 +442,7 @@ class DatabaseManager:
             return False
         finally:
             if db is not None:
-                await db.close()
+                await close_database(db)
 
     async def get_messages_for_date(self, target_date: date | None = None) -> list[Message]:
         """Get all messages for a specific date (defaults to today)"""
@@ -455,7 +454,7 @@ class DatabaseManager:
         end_datetime = datetime.combine(target_date, datetime.max.time())
 
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
                     """
@@ -485,7 +484,7 @@ class DatabaseManager:
     async def get_recent_messages(self, limit: int = 50) -> list[Message]:
         """Get the most recent messages"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
                     """
@@ -576,7 +575,7 @@ class DatabaseManager:
     async def get_message_by_id(self, message_id: str) -> Message | None:
         """Get a specific message by ID"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute("SELECT * FROM messages WHERE id = ?", (message_id,))
                 row = await cursor.fetchone()
@@ -595,7 +594,7 @@ class DatabaseManager:
     async def delete_message(self, message_id: str) -> bool:
         """Delete a message by ID"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 await db.execute("DELETE FROM messages WHERE id = ?", (message_id,))
                 await db.commit()
                 return True
@@ -612,7 +611,7 @@ class DatabaseManager:
         end_datetime = datetime.combine(target_date, datetime.max.time())
 
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 cursor = await db.execute(
                     """
                     SELECT COUNT(*) FROM messages
@@ -633,7 +632,7 @@ class DatabaseManager:
         cutoff_date = cutoff_date.replace(day=cutoff_date.day - days_to_keep)
 
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 cursor = await db.execute(
                     "DELETE FROM messages WHERE timestamp < ?", (cutoff_date.isoformat(),)
                 )
@@ -646,7 +645,7 @@ class DatabaseManager:
     async def get_session_messages(self, session_id: str) -> list[Message]:
         """Get all messages for a specific session"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
                     """
@@ -674,7 +673,7 @@ class DatabaseManager:
     async def update_message(self, message: Message) -> bool:
         """Update an existing message in the database"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 await db.execute(
                     """
                     UPDATE messages
@@ -850,7 +849,7 @@ class DatabaseManager:
             raise
         finally:
             if db is not None:
-                await db.close()
+                await close_database(db)
 
     async def get_session_for_principal(self, session_id: str, principal_id: str) -> Session | None:
         """Return a session only when it belongs to the requested principal."""
@@ -1025,11 +1024,11 @@ class DatabaseManager:
             raise
         finally:
             if db is not None:
-                await db.close()
+                await close_database(db)
 
     async def create_user(self, user: User) -> bool:
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 await db.execute(
                     """
                     INSERT INTO users (id, username, password_hash, role, permissions, is_admin, created_at)
@@ -1053,7 +1052,7 @@ class DatabaseManager:
 
     async def get_user_by_username(self, username: str) -> User | None:
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute("SELECT * FROM users WHERE username = ?", (username,))
                 row = await cursor.fetchone()
@@ -1064,7 +1063,7 @@ class DatabaseManager:
 
     async def get_user_by_id(self, user_id: str) -> User | None:
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute("SELECT * FROM users WHERE id = ?", (user_id,))
                 row = await cursor.fetchone()
@@ -1075,7 +1074,7 @@ class DatabaseManager:
 
     async def count_users(self) -> int:
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 cursor = await db.execute("SELECT COUNT(*) FROM users")
                 result = await cursor.fetchone()
                 return result[0] if result else 0
@@ -1085,7 +1084,7 @@ class DatabaseManager:
 
     async def create_device(self, device: Device) -> bool:
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 await db.execute(
                     """
                     INSERT INTO devices (id, user_id, name, public_key, is_trusted, last_seen, created_at)
@@ -1109,7 +1108,7 @@ class DatabaseManager:
 
     async def get_device_by_id(self, device_id: str) -> Device | None:
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute("SELECT * FROM devices WHERE id = ?", (device_id,))
                 row = await cursor.fetchone()
@@ -1120,7 +1119,7 @@ class DatabaseManager:
 
     async def get_device_by_token(self, token_hash: str) -> Device | None:
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
                     """
@@ -1138,7 +1137,7 @@ class DatabaseManager:
 
     async def get_devices_by_user(self, user_id: str) -> list[Device]:
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute("SELECT * FROM devices WHERE user_id = ?", (user_id,))
                 rows = await cursor.fetchall()
@@ -1197,11 +1196,11 @@ class DatabaseManager:
             return False
         finally:
             if db is not None:
-                await db.close()
+                await close_database(db)
 
     async def get_token_by_hash(self, token_hash: str) -> Token | None:
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
                     "SELECT * FROM tokens WHERE token_hash = ?", (token_hash,)
@@ -1336,7 +1335,7 @@ class DatabaseManager:
             return False, ()
         finally:
             if db:
-                await db.close()
+                await close_database(db)
 
     async def revoke_token(self, token_id: str) -> bool:
         success, _changes = await self.revoke_token_with_authority(token_id)
@@ -1345,7 +1344,7 @@ class DatabaseManager:
     async def get_tokens_by_user(self, user_id: str) -> list[Token]:
         """Get all tokens for a user."""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute("SELECT * FROM tokens WHERE user_id = ?", (user_id,))
                 rows = await cursor.fetchall()
@@ -1357,7 +1356,7 @@ class DatabaseManager:
     async def get_tokens_by_device(self, device_id: str) -> list[Token]:
         """Get all tokens for a device."""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute("SELECT * FROM tokens WHERE device_id = ?", (device_id,))
                 rows = await cursor.fetchall()
@@ -1371,7 +1370,7 @@ class DatabaseManager:
     async def list_users(self) -> list[User]:
         """List all users."""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute("SELECT * FROM users ORDER BY created_at ASC")
                 rows = await cursor.fetchall()
@@ -1431,7 +1430,7 @@ class DatabaseManager:
             return False
         finally:
             if db is not None:
-                await db.close()
+                await close_database(db)
 
     async def delete_user(self, user_id: str) -> bool:
         """Delete a user and cascade to devices/tokens via FK."""
@@ -1460,7 +1459,7 @@ class DatabaseManager:
             return False
         finally:
             if db:
-                await db.close()
+                await close_database(db)
 
     async def update_device(self, device_id: str, **fields: object) -> bool:
         """Update device fields dynamically.
@@ -1484,7 +1483,7 @@ class DatabaseManager:
         values = list(updates.values()) + [device_id]
 
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 await db.execute(f"UPDATE devices SET {set_clause} WHERE id = ?", values)
                 await db.commit()
                 return True
@@ -1519,12 +1518,12 @@ class DatabaseManager:
             return False
         finally:
             if db:
-                await db.close()
+                await close_database(db)
 
     async def list_devices(self) -> list[Device]:
         """List all devices."""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute("SELECT * FROM devices ORDER BY created_at ASC")
                 rows = await cursor.fetchall()
@@ -1538,7 +1537,7 @@ class DatabaseManager:
     ) -> list[Token]:
         """List tokens, optionally filtered by user and/or device."""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 query = "SELECT * FROM tokens WHERE 1=1"
                 params: list[str] = []
@@ -1589,7 +1588,7 @@ class DatabaseManager:
             return False
         finally:
             if db is not None:
-                await db.close()
+                await close_database(db)
 
     async def approve_mesh_peer_with_authority(
         self,
@@ -1721,7 +1720,7 @@ class DatabaseManager:
             return False, [], None
         finally:
             if db is not None:
-                await db.close()
+                await close_database(db)
 
     async def approve_mesh_peer(
         self,
@@ -1856,7 +1855,7 @@ class DatabaseManager:
             return False, None
         finally:
             if db is not None:
-                await db.close()
+                await close_database(db)
 
     async def update_mesh_peer_permissions(self, peer_id: str, permissions: list[str]) -> bool:
         success, _change = await self.update_mesh_peer_permissions_with_authority(
@@ -2075,7 +2074,7 @@ class DatabaseManager:
             return False, None
         finally:
             if db is not None:
-                await db.close()
+                await close_database(db)
 
     async def remove_mesh_peer_with_authority(
         self,
@@ -2192,7 +2191,7 @@ class DatabaseManager:
             return False, None
         finally:
             if db is not None:
-                await db.close()
+                await close_database(db)
 
     async def link_mesh_peer_credential_with_authority(
         self,
@@ -2285,7 +2284,7 @@ class DatabaseManager:
             return False, None
         finally:
             if db is not None:
-                await db.close()
+                await close_database(db)
 
     async def issue_mesh_peer_credential_with_authority(
         self,
@@ -2536,7 +2535,7 @@ class DatabaseManager:
             return False, None
         finally:
             if db is not None:
-                await db.close()
+                await close_database(db)
 
     async def upsert_mesh_peer(
         self,
@@ -2666,7 +2665,7 @@ class DatabaseManager:
     async def get_token_by_id(self, token_id: str) -> Token | None:
         """Get a token by its ID."""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute("SELECT * FROM tokens WHERE id = ?", (token_id,))
                 row = await cursor.fetchone()
@@ -2687,7 +2686,7 @@ class DatabaseManager:
     ) -> bool:
         """Store an audit event."""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 await db.execute(
                     """
                     INSERT INTO audit_log (id, event, principal_id, details, ip_address)
@@ -2712,7 +2711,7 @@ class DatabaseManager:
     ) -> list[dict]:
         """Query the audit log with optional filters."""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 query = "SELECT * FROM audit_log WHERE 1=1"
                 params: list[object] = []
@@ -2878,7 +2877,7 @@ class DatabaseManager:
     async def save_mesh_credential(self, credential: MeshCredential) -> bool:
         """Upsert a mesh credential (INSERT OR REPLACE keyed by room_name)."""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 await db.execute(
                     """
                     INSERT INTO mesh_credentials
@@ -2910,7 +2909,7 @@ class DatabaseManager:
     async def get_mesh_credential_by_room(self, room_name: str) -> MeshCredential | None:
         """Retrieve a stored mesh credential by room name."""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._connection() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
                     "SELECT * FROM mesh_credentials WHERE room_name = ?",
@@ -2938,4 +2937,4 @@ class DatabaseManager:
             return False
         finally:
             if db:
-                await db.close()
+                await close_database(db)

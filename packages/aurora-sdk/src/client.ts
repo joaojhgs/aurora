@@ -134,6 +134,8 @@ import type {
   ModelRuntimeRequest,
   ModelRuntimeResponse,
   NativeCapabilityManifest,
+  OrchestratorInferChatRequest,
+  OrchestratorInferChatResponse,
   OrchestratorProcessRequest,
   OrchestratorResponse,
   OrchestratorInterruptRequest,
@@ -271,7 +273,7 @@ export class AuroraClient {
   async request<TData = unknown, TPayload = unknown>(
     method: string,
     payload?: TPayload,
-    options: { path?: string; busTopic?: string; httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; timeoutMs?: number; headers?: Record<string, string> } = {}
+    options: { path?: string; busTopic?: string; httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; timeoutMs?: number; headers?: Record<string, string>; signal?: AbortSignal } = {}
   ): Promise<TData> {
     try {
       const response = await this.transport.request<TData, TPayload>({
@@ -281,6 +283,7 @@ export class AuroraClient {
         httpMethod: options.httpMethod,
         payload,
         headers: options.headers,
+        signal: options.signal,
         timeoutMs: options.timeoutMs ?? this.defaultTimeoutMs
       })
       return response.data
@@ -293,7 +296,7 @@ export class AuroraClient {
   async requestResult<TData = unknown, TPayload = unknown>(
     method: string,
     payload?: TPayload,
-    options: { path?: string; busTopic?: string; httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; timeoutMs?: number; headers?: Record<string, string> } = {}
+    options: { path?: string; busTopic?: string; httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; timeoutMs?: number; headers?: Record<string, string>; signal?: AbortSignal } = {}
   ): Promise<AuroraResponse<TData>> {
     const busTopic = options.busTopic ?? method
     try {
@@ -304,6 +307,7 @@ export class AuroraClient {
         httpMethod: options.httpMethod,
         payload,
         headers: options.headers,
+        signal: options.signal,
         timeoutMs: options.timeoutMs ?? this.defaultTimeoutMs
       })
       return {
@@ -817,6 +821,21 @@ export class AssistantClient {
     )
   }
 
+  inferChat(
+    input: OrchestratorInferChatRequest,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {}
+  ): Promise<OrchestratorInferChatResponse> {
+    return this.client.request<OrchestratorInferChatResponse, OrchestratorInferChatRequest>(
+      ORCHESTRATOR_METHODS.inferChat,
+      input,
+      {
+        path: routePath('Orchestrator', 'InferChat'),
+        ...(options.signal ? { signal: options.signal } : {}),
+        ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {})
+      }
+    )
+  }
+
   async sendMessage(input: AssistantSendMessageRequest): Promise<AuroraResponse<AssistantSendMessageResult>> {
     const text = input.text.trim()
     if (!text) {
@@ -898,7 +917,9 @@ export class AssistantClient {
     payload.request_id = requestId
     payload.correlation_id = requestId
     payload.stream = true
-    if (input.clientTtsPlayback !== undefined) payload.client_tts_playback = input.clientTtsPlayback
+    const clientTtsPlayback = input.clientTtsPlayback === true
+      && this.client.permissions.has(TTS_METHODS.audioChunk, 'use')
+    if (input.clientTtsPlayback !== undefined) payload.client_tts_playback = clientTtsPlayback
     applyAssistantRouting(payload, input)
 
     let sawEvent = false
@@ -908,8 +929,14 @@ export class AssistantClient {
     let awaitingTtsDrain = false
     try {
       const correlationId = requestId
+      const assistantTopics = this.client.transport.kind === 'mesh'
+        ? clientTtsPlayback
+          ? [ORCHESTRATOR_METHODS.response, TTS_METHODS.audioChunk]
+          : [ORCHESTRATOR_METHODS.response]
+        : undefined
       const openAssistantStream = () => {
         const openedStream = this.client.events.streamAssistant<Record<string, unknown>, OrchestratorProcessRequest>(payload, {
+          ...(assistantTopics ? { topics: assistantTopics } : {}),
           signal: input.signal,
           lastEventId: input.lastEventId ?? null,
           replayFrom: input.replayFrom ?? input.lastEventId ?? null,
@@ -1088,9 +1115,11 @@ export class AssistantClient {
   async *streamVoiceEvents(
     options: AuroraSubscribeOptions = {}
   ): AsyncIterable<VoiceRuntimeEvent> {
+    const topics = this.voiceEventTopics()
+    if (topics.length === 0) return
     const stream = this.client.events.subscribe<unknown>({
       stream: 'voice',
-      topics: [...VOICE_EVENT_TOPICS],
+      topics,
       kinds: [...VOICE_EVENT_KINDS],
       reconnect: { maxAttempts: 120, initialDelayMs: 250, maxDelayMs: 2_000 },
       ...options,
@@ -1108,6 +1137,7 @@ export class AssistantClient {
   async *streamVoiceAssistantResponses(
     options: AuroraSubscribeOptions = {}
   ): AsyncIterable<AssistantStreamUpdate> {
+    if (this.voiceEventTopics().length === 0) return
     const stream = this.client.events.streamAssistant<Record<string, unknown>, unknown>(undefined, {
       topics: [ORCHESTRATOR_METHODS.response],
       kinds: ['assistant.completed', 'assistant.delta', 'assistant.failed', 'tool.requested', 'tool.running', 'tool.completed', 'tool.failed', 'tool.requires_action'],
@@ -1123,6 +1153,11 @@ export class AssistantClient {
       if (typeof source === 'string' && source !== 'stt') continue
       yield assistantStreamUpdateFromEvent(event)
     }
+  }
+
+  private voiceEventTopics(): string[] {
+    if (this.client.transport.kind !== 'mesh') return [...VOICE_EVENT_TOPICS]
+    return VOICE_EVENT_TOPICS.filter((topic) => this.client.permissions.has(topic, 'use'))
   }
 
   async startVoiceListen(input: AssistantVoiceListenRequest = {}): Promise<AuroraResponse<AssistantVoiceListenResult>> {

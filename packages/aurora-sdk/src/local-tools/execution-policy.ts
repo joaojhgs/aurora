@@ -64,6 +64,7 @@ interface ApprovalTokenClaims {
   readonly route_decision_id: string
   readonly schedule_id: string | null
   readonly scheduled_action_hash: string | null
+  readonly dry_run: boolean
   readonly decision: 'approved'
   readonly nonce: string
   readonly expires_at_ms: number
@@ -174,6 +175,7 @@ export class LocalToolExecutionPolicy {
         route_decision_id: prepared.route_decision_id,
         schedule_id: request.schedule_id ?? null,
         scheduled_action_hash: request.scheduled_action_hash ?? null,
+        dry_run: request.dry_run === true,
         decision: 'approved',
         nonce: this.options.randomToken(),
         expires_at_ms: this.options.nowMs() + this.options.tokenTtlSeconds * 1000
@@ -229,7 +231,8 @@ export class LocalToolExecutionPolicy {
       resource_selector_hash: prepared.resource_selector_hash,
       route_decision_id: prepared.route_decision_id,
       schedule_id: request.schedule_id ?? null,
-      scheduled_action_hash: request.scheduled_action_hash ?? null
+      scheduled_action_hash: request.scheduled_action_hash ?? null,
+      dry_run: request.dry_run === true
     }
     for (const key of Object.keys(expected) as Array<keyof ApprovalTokenClaims>) {
       if (stored.claims[key] !== expected[key]) return `approval_token_${key}_mismatch`

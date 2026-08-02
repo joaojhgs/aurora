@@ -15,6 +15,7 @@ import {
   AURORA_OWL_LOADER_STAGES,
   AuroraOwlLoader,
   BackupRestoreView,
+  Button,
   ConfigEditorView,
   MemoryView,
   DataPolicyResource,
@@ -50,13 +51,22 @@ import {
   type WebThinRoomSecret,
 } from "@aurora/ui";
 import {
-  AssistantSurfaceSelector,
-  type LightweightAssistantProps,
+  type LightweightAssistantDependencies,
 } from "@aurora/ui/local-assistant";
 import {
   LocalDataProvider,
   type LocalDataBackendFactory,
 } from "@aurora/ui/local-data";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@aurora/ui/components/ui/alert-dialog";
 import owlSrc from "./assets/aurora-owl.png";
 import { GATEWAY_METHODS } from "@aurora/client";
 import {
@@ -88,6 +98,11 @@ import type {
   LocalDataBackend,
   LocalDataBackendStatus,
 } from "@aurora/client/local-data";
+import type {
+  ProviderLocalApprovalControllerPort,
+  ProviderLocalApprovalRequest,
+  ProviderLocalApprovalSnapshot,
+} from "@aurora/client/local-tools";
 import {
   bootstrapAuroraTauriRuntime,
   createAuroraTauriRuntime,
@@ -96,6 +111,7 @@ import {
   requiresAsyncAuroraTauriBootstrap,
   type AndroidForegroundRuntimeStatus,
   type AndroidMediaPolicyStatus,
+  type AuroraTauriRuntime as AuroraTauriRuntimeModel,
   type AuroraThinConnectionProfile,
   type AuroraThinProfileDocument,
 } from "./aurora-client";
@@ -107,7 +123,7 @@ import {
 
 const navItems = auroraNavSections.flatMap((section) => section.items);
 const routePathItems = [...navItems, ...auroraEmbeddedNavItems];
-export type AuroraTauriRuntime = ReturnType<typeof createAuroraTauriRuntime>;
+export type AuroraTauriRuntime = AuroraTauriRuntimeModel;
 type AuroraTauriClient = AuroraTauriRuntime["client"];
 type TauriRouteRenderer = (input: {
   route: RouteAvailability;
@@ -116,6 +132,8 @@ type TauriRouteRenderer = (input: {
   client: AuroraTauriClient;
   shutdown: () => Promise<void>;
   modePreferenceStore?: OnboardingModePreferenceStore | undefined;
+  applyModePreference?: (() => Promise<void>) | undefined;
+  navigate: (href: string) => void;
   assistantNativePermissions: Array<{ name: string; granted: boolean }>;
   assistantNativeCapabilities: Array<{ name: string; enabled: boolean }>;
 }) => ReactElement;
@@ -164,35 +182,34 @@ export const tauriRouteRegistry = {
     assistantNativePermissions,
     assistantNativeCapabilities,
   }) => (
-    <AssistantSurfaceSelector
-      connectedAssistant={
-        <AssistantView
-          client={client}
-          route={route}
-          cancellationRoute={snapshot.assistantCancellationRoute ?? undefined}
-          voiceRoutes={snapshot.assistantVoiceRoutes}
-          nativePlatform={snapshot.nativePlatform}
-          nativeAvailable={snapshot.nativeAvailable}
-          nativePermissions={assistantNativePermissions}
-          nativeCapabilities={assistantNativeCapabilities}
-          runtimeHealth={{
-            selectedModel: null,
-            routeLabel: routeAvailabilityLabel(route),
-            sidecarHealth: nativeContext.sidecar?.running
-              ? "Ready"
-              : nativeContext.localMode
-                ? "Starting Aurora on this computer"
-                : "Not needed for this connection",
-            gatewayHealth: nativeContext.sidecar?.gatewayUrl
-              ? "Connected on this computer"
-              : transportKindLabel(
-                  snapshot.transportKind,
-                  nativeContext.runtimeMode,
-                ),
-          }}
-        />
-      }
+    <AssistantView
+      client={client}
+      route={route}
+      cancellationRoute={snapshot.assistantCancellationRoute ?? undefined}
+      voiceRoutes={snapshot.assistantVoiceRoutes}
+      nativePlatform={snapshot.nativePlatform}
+      nativeAvailable={snapshot.nativeAvailable}
+      nativePermissions={assistantNativePermissions}
+      nativeCapabilities={assistantNativeCapabilities}
+      executionHost={nativeContext.thinPeer ? "connected-device" : "this-device"}
       localAssistant={tauriLocalAssistant(nativeContext, client)}
+      runtimeHealth={{
+        selectedModel: null,
+        routeLabel: nativeContext.thinPeer
+          ? "Connected Aurora device"
+          : routeAvailabilityLabel(route),
+        sidecarHealth: nativeContext.sidecar?.running
+          ? "Ready"
+          : nativeContext.localMode
+            ? "Starting Aurora on this computer"
+            : "Not needed for this connection",
+        gatewayHealth: nativeContext.sidecar?.gatewayUrl
+          ? "Connected on this computer"
+          : transportKindLabel(
+              snapshot.transportKind,
+              nativeContext.runtimeMode,
+            ),
+      }}
     />
   ),
   memory: ({ route, nativeContext, client }) => (
@@ -244,17 +261,21 @@ export const tauriRouteRegistry = {
           localFeatureSharing={nativeContext.localFeatureSharing}
           {...(isMobileTauriShell() ? { onScanQr: scanMeshInviteQr } : {})}
         />
-        <ServiceRoutingResource
-          client={client}
-          route={route}
-          thinPeer={nativeContext.thinPeer}
-        />
-        <details>
-          <summary className="cursor-pointer text-sm text-muted-foreground">
-            Outbound route decision preview (advanced)
-          </summary>
-          <RoutePolicyResource client={client} route={route} />
-        </details>
+        {nativeContext.surfaceProfile.canManageLocalServiceConfiguration ? (
+          <ServiceRoutingResource
+            client={client}
+            route={route}
+            thinPeer={nativeContext.thinPeer}
+          />
+        ) : null}
+        {!isMobileTauriShell() ? (
+          <details>
+            <summary className="cursor-pointer text-sm text-muted-foreground">
+              Device selection details
+            </summary>
+            <RoutePolicyResource client={client} route={route} />
+          </details>
+        ) : null}
       </div>
     );
   },
@@ -277,12 +298,13 @@ export const tauriRouteRegistry = {
     <AdminSchedulerView client={client} route={route} />
   ),
   audit: ({ client }) => <AdminAuditResource client={client} />,
-  settings: ({ route, snapshot, nativeContext, client }) => (
+  settings: ({ route, snapshot, nativeContext, client, navigate }) => (
     <TauriSettingsPage
       route={route}
       snapshot={snapshot}
       nativeContext={nativeContext}
       client={client}
+      onChangeDeviceSetup={() => navigate("/onboarding")}
     />
   ),
   devices: ({ client }) => <AdminDevicesResource client={client} />,
@@ -315,11 +337,17 @@ export const tauriRouteRegistry = {
     />
   ),
   models: ({ client }) => <ModelsView client={client} />,
-  onboarding: ({ snapshot, client, modePreferenceStore }) => (
+  onboarding: ({
+    snapshot,
+    client,
+    modePreferenceStore,
+    applyModePreference,
+  }) => (
     <OnboardingView
       client={client}
       snapshot={snapshot}
       modePreferenceStore={modePreferenceStore}
+      onApplyModePreference={applyModePreference}
     />
   ),
 } satisfies Record<TauriRouteId, TauriRouteRenderer>;
@@ -340,7 +368,7 @@ export async function rebuildAuroraThinRuntime(
   if (!controller) return runtime;
   const document = await action(controller);
   await runtime.dispose();
-  return controller.createRuntime(document);
+  return await controller.createRuntime(document);
 }
 
 const DESKTOP_LOCAL_GATEWAY_READY_TIMEOUT_MS = 45_000;
@@ -459,6 +487,13 @@ export function AuroraTauriApp({
     [rebuildThinRuntime],
   );
 
+  const applyModePreference = useCallback(async () => {
+    if (!runtime.thinProfile || !runtime.thinProfileController) return;
+    await rebuildThinRuntime((controller) =>
+      controller.saveProfile(runtime.thinProfile!),
+    );
+  }, [rebuildThinRuntime, runtime.thinProfile, runtime.thinProfileController]);
+
   useEffect(() => {
     const peer = runtime.thinPeer;
     let cancelled = false;
@@ -474,9 +509,8 @@ export function AuroraTauriApp({
       }
     };
 
-    if (!runtime.localAssistant) return;
     if (!peer) {
-      void refreshRemoteTools();
+      if (runtime.localAssistant) void refreshRemoteTools();
       return () => {
         cancelled = true;
         refreshEpoch += 1;
@@ -490,7 +524,7 @@ export function AuroraTauriApp({
       if (nextReady && !ready) {
         ready = true;
         setThinPeerReadyRevision((revision) => revision + 1);
-        void refreshRemoteTools();
+        if (runtime.localAssistant) void refreshRemoteTools();
       } else if (!nextReady && ready) {
         ready = false;
         refreshEpoch += 1;
@@ -580,6 +614,7 @@ export function AuroraTauriApp({
             buildRuntimeShellSnapshot(
               runtime.client,
               runtime.mode === "desktop-local",
+              runtime.nativeCapabilityManifest,
             ),
           ),
           trackModelsProgress(
@@ -785,6 +820,7 @@ export function AuroraTauriApp({
             profile={runtime.thinProfile}
             profiles={runtime.thinProfileController.document.profiles}
             profileStoreEvidence={runtime.thinProfileController.evidence}
+            localFeatureSharing={runtime.localFeatureSharing}
             onSaveProfile={async (profile, roomSecret) => {
               await saveThinProfile(profile, roomSecret);
               navigate("/mesh");
@@ -810,23 +846,120 @@ export function AuroraTauriApp({
   }
 
   return (
-    <AppShell
-      snapshot={snapshot}
-      currentPath={currentPath}
-      onNavigate={navigate}
-      sessionIsAdmin={runtime.client.auth.snapshot().isAdmin}
-      runtimeMode={runtime.mode}
-    >
-      <TauriRouteContent
-        path={currentPath}
+    <>
+      <AppShell
         snapshot={snapshot}
-        nativeContext={nativeContext}
-        client={runtime.client}
-        modePreferenceStore={runtime.modePreferenceStore}
-        shutdown={runtime.shutdown}
-      />
-    </AppShell>
+        currentPath={currentPath}
+        onNavigate={navigate}
+        sessionIsAdmin={runtime.client.auth.snapshot().isAdmin}
+        runtimeMode={runtime.mode}
+        nodeMode={runtime.nodeMode}
+      >
+        <TauriRouteContent
+          path={currentPath}
+          snapshot={snapshot}
+          nativeContext={nativeContext}
+          client={runtime.client}
+          modePreferenceStore={runtime.modePreferenceStore}
+          applyModePreference={applyModePreference}
+          navigate={navigate}
+          shutdown={runtime.shutdown}
+        />
+      </AppShell>
+      <LocalFeatureApprovalPrompt controller={runtime.localToolApprovals} />
+    </>
   );
+}
+
+const EMPTY_LOCAL_APPROVAL_SNAPSHOT: ProviderLocalApprovalSnapshot = {
+  pending: [],
+  revision: 0,
+};
+
+function LocalFeatureApprovalPrompt({
+  controller,
+}: {
+  controller?: ProviderLocalApprovalControllerPort | undefined;
+}) {
+  const [snapshot, setSnapshot] = useState<ProviderLocalApprovalSnapshot>(() =>
+    controller?.snapshot() ?? EMPTY_LOCAL_APPROVAL_SNAPSHOT,
+  );
+
+  useEffect(() => {
+    if (!controller) {
+      setSnapshot(EMPTY_LOCAL_APPROVAL_SNAPSHOT);
+      return;
+    }
+    setSnapshot(controller.snapshot());
+    return controller.subscribe(setSnapshot);
+  }, [controller]);
+
+  const request = snapshot.pending[0];
+  if (!request || !controller) return null;
+
+  return (
+    <AlertDialog open>
+      <AlertDialogContent
+        className="ata-local-feature-approval"
+        data-local-feature-approval="pending"
+        size="sm"
+      >
+        <AlertDialogHeader>
+          <p className="ata-local-feature-approval-kicker">Approval needed</p>
+          <AlertDialogTitle>Allow {request.toolDisplayName}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            A connected Aurora device wants to use this feature on your device. It runs only if you allow it once.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="ata-local-feature-approval-body">
+          <p className="ata-local-feature-approval-description">{request.toolDescription}</p>
+          <ApprovalRequestPreview request={request} />
+          {snapshot.pending.length > 1 ? (
+            <p className="ata-local-feature-approval-queue">
+              {snapshot.pending.length - 1} more request{snapshot.pending.length === 2 ? "" : "s"} waiting.
+            </p>
+          ) : null}
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => controller.decide(request.id, "deny")}>
+            Deny
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={() => controller.decide(request.id, "approve")}>
+            Allow once
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function ApprovalRequestPreview({ request }: { request: ProviderLocalApprovalRequest }) {
+  const entries = Object.entries(request.displayArgsPreview);
+  if (entries.length === 0) return null;
+  return (
+    <dl className="ata-local-feature-approval-preview">
+      {entries.map(([key, value]) => (
+        <div className="ata-local-feature-approval-preview-row" key={key}>
+          <dt>{friendlyApprovalField(key)}</dt>
+          <dd>
+            {approvalPreviewText(value)}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function friendlyApprovalField(value: string): string {
+  const spaced = value.replace(/[._-]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function approvalPreviewText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value === null || value === undefined) return "None";
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value, null, 2);
 }
 
 async function runRuntimeReadinessProbes(
@@ -1087,16 +1220,18 @@ function registryPollDetail(services: ServiceInfo[]): string {
 async function buildRuntimeShellSnapshot(
   client: AuroraClient,
   retryTransientError: boolean,
+  nativeManifest?: AuroraTauriRuntime["nativeCapabilityManifest"],
 ): Promise<AuroraShellSnapshot> {
-  if (!retryTransientError) return buildShellSnapshot(client);
+  const options = nativeManifest ? { nativeManifest } : undefined;
+  if (!retryTransientError) return buildShellSnapshot(client, options);
 
-  let snapshot = await buildShellSnapshot(client);
+  let snapshot = await buildShellSnapshot(client, options);
   if (snapshot.loadState !== "error") return snapshot;
 
   const deadline = Date.now() + DESKTOP_LOCAL_SNAPSHOT_READY_TIMEOUT_MS;
   while (Date.now() <= deadline) {
     await delay(DESKTOP_LOCAL_GATEWAY_RETRY_DELAY_MS);
-    snapshot = await buildShellSnapshot(client);
+    snapshot = await buildShellSnapshot(client, options);
     if (snapshot.loadState !== "error") return snapshot;
   }
   return snapshot;
@@ -1141,7 +1276,7 @@ interface NativeContext {
 function tauriLocalAssistant(
   nativeContext: NativeContext,
   client: AuroraClient,
-): LightweightAssistantProps | null {
+): LightweightAssistantDependencies | null {
   const localData = nativeContext.localData;
   const localToolProvider = nativeContext.localToolProvider;
   const localAssistant = nativeContext.localAssistant;
@@ -1218,6 +1353,8 @@ function TauriRouteContent({
   nativeContext,
   client,
   modePreferenceStore,
+  applyModePreference,
+  navigate,
   shutdown,
 }: {
   path: string;
@@ -1225,6 +1362,8 @@ function TauriRouteContent({
   nativeContext: NativeContext;
   client: ReturnType<typeof createAuroraTauriRuntime>["client"];
   modePreferenceStore?: OnboardingModePreferenceStore | undefined;
+  applyModePreference?: (() => Promise<void>) | undefined;
+  navigate: (href: string) => void;
   shutdown: () => Promise<void>;
 }) {
   const route = routeForPath(snapshot, path);
@@ -1253,6 +1392,8 @@ function TauriRouteContent({
     client,
     shutdown,
     modePreferenceStore,
+    applyModePreference,
+    navigate,
     assistantNativePermissions,
     assistantNativeCapabilities,
   });
@@ -1490,11 +1631,13 @@ function TauriSettingsPage({
   snapshot,
   nativeContext,
   client,
+  onChangeDeviceSetup,
 }: {
   route: RouteAvailability;
   snapshot: AuroraShellSnapshot;
   nativeContext: NativeContext;
   client: AuroraTauriClient;
+  onChangeDeviceSetup: () => void;
 }) {
   const configRoute = embeddedRoute("config", snapshot) ?? route;
   const dataRoute = embeddedRoute("data", snapshot) ?? route;
@@ -1529,9 +1672,21 @@ function TauriSettingsPage({
         }
       />
       <p className="aui-muted">
-        Settings includes Data policy and retention plus Native platform
-        settings in the Advanced section.
+        Privacy history and device-specific controls are available in Advanced.
       </p>
+      {nativeContext.thinProfileController ? (
+        <section className="ata-panel" aria-labelledby="device-setup-title">
+          <h2 id="device-setup-title">How this device works with Aurora</h2>
+          <p className="aui-muted">
+            {nativeContext.nodeMode === "mesh-node"
+              ? "Approved Aurora devices can use features you choose from this device."
+              : "This device uses Aurora running on another approved device or server."}
+          </p>
+          <Button variant="outline" onClick={onChangeDeviceSetup}>
+            Change device setup
+          </Button>
+        </section>
+      ) : null}
       <div
         className="aui-tab-list"
         role="tablist"
@@ -1664,6 +1819,7 @@ function TauriDiagnosticsPage({
           profile={nativeContext.thinProfile}
           profiles={nativeContext.thinProfileController?.document.profiles}
           profileStoreEvidence={nativeContext.thinProfileController?.evidence}
+          localFeatureSharing={nativeContext.localFeatureSharing}
           {...(nativeContext.thinProfileController
             ? {
                 onSaveProfile: nativeContext.saveThinProfile,

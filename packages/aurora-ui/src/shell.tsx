@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import {
   CheckCircle2,
   Clock3,
@@ -18,6 +18,7 @@ import type { AuroraNavSection } from "./nav";
 import { getAuroraSurfaceProfile } from "./platform-surface";
 import { PRODUCT_COPY, productStatusCopy } from "./product-copy";
 import type { AuroraShellSnapshot, RouteAvailability } from "./shell-data";
+import type { AuroraNodeMode } from "./runtime-profile";
 import { CapabilityDrawer } from "./state-surface";
 import {
   EvidenceBadge,
@@ -43,6 +44,8 @@ export interface AppShellProps {
   sessionIsAdmin?: boolean;
   /** Runtime mode feeds the centralized platform-surface classifier. */
   runtimeMode?: string;
+  /** Product role is separate from the physical surface and transport. */
+  nodeMode?: AuroraNodeMode;
 }
 
 export function AppShell({
@@ -52,10 +55,12 @@ export function AppShell({
   onNavigate,
   sessionIsAdmin = false,
   runtimeMode,
+  nodeMode,
 }: AppShellProps) {
   const activePath = normalizePath(currentPath);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [activityRailCollapsed, setActivityRailCollapsed] = useState(true);
+  const contentRef = useRef<HTMLElement>(null);
   const handleMobileMenuToggle = useCallback(
     () => {
       setNavigationOpen((open) => {
@@ -89,6 +94,9 @@ export function AppShell({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [navigationOpen]);
+  useEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, [activePath]);
   return (
     <div
       className="aui-shell flex h-dvh w-full overflow-hidden bg-background text-foreground"
@@ -115,7 +123,7 @@ export function AppShell({
           onClick={() => setNavigationOpen(false)}
           className="absolute top-2.5 right-2.5 z-10 md:hidden"
         >
-          <Menu size={18} aria-hidden />
+          <X size={18} aria-hidden />
         </Button>
         <div className="flex h-full w-[248px] shrink-0 flex-col">
           <BrandHeader snapshot={snapshot} />
@@ -139,8 +147,8 @@ export function AppShell({
         </div>
       </aside>
       <div className="aui-main-column flex min-w-0 flex-1 flex-col">
-        <header className="aui-topbar flex h-[54px] shrink-0 items-center gap-2.5 border-b border-border px-4">
-          <div className="aui-mobile-menu md:hidden" data-open={navigationOpen ? "true" : "false"}>
+      <header className="aui-topbar flex h-[54px] shrink-0 items-center gap-2.5 border-b border-border px-4 py-1 md:pt-0 md:py-0">
+            <div className="aui-mobile-menu md:hidden" data-open={navigationOpen ? "true" : "false"}>
             <Button
               type="button"
               variant="ghost"
@@ -154,7 +162,7 @@ export function AppShell({
               <Menu size={20} aria-hidden />
             </Button>
             <div
-              className="aui-mobile-sheet fixed left-0 z-40 w-[min(20rem,86vw)] overflow-hidden border border-border bg-background shadow-xl"
+              className="aui-mobile-sheet"
               aria-hidden={!navigationOpen}
               inert={!navigationOpen}
             >
@@ -177,7 +185,7 @@ export function AppShell({
             ) : null}
           </div>
           <div className="aui-status-row flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto" aria-label="Aurora shell status">
-            <ModeBadge mode={shellSurfaceLabel(snapshot, runtimeMode)} className="aui-shell-status" />
+            <ModeBadge mode={shellSurfaceLabel(snapshot, runtimeMode, nodeMode)} className="aui-shell-status" />
             <HealthBadge health={shellHealthLabel(snapshot)} className="aui-shell-status" />
             <IdentityBadge identity={shellIdentityBadgeLabel(sessionIsAdmin)} className="aui-shell-status" />
           </div>
@@ -185,9 +193,9 @@ export function AppShell({
             className="aui-runtime-chip shrink-0 rounded-md border border-border bg-muted/40 px-2.5 py-1 font-mono text-[11.5px] text-muted-foreground"
             aria-label="Aurora version and connection state"
           >
-            v0.9.2{" "}
+            <span className="aui-runtime-version">v0.9.2</span>{" "}
             <strong className={snapshot.loadState === "error" ? "text-destructive" : "text-success"}>
-              · {shellRuntimeStateLabel(snapshot)}
+              <span className="aui-runtime-separator">· </span>{shellRuntimeStateLabel(snapshot)}
             </strong>
           </span>
           <span className="sr-only" aria-label="Aurora readiness">
@@ -207,7 +215,11 @@ export function AppShell({
           </Button>
         </header>
         <div className="flex min-h-0 flex-1">
-          <main className="aui-content min-w-0 flex-1 overflow-y-auto" id="content">
+          <main
+            ref={contentRef}
+            className="aui-content relative min-w-0 flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-[calc(4.8rem+env(safe-area-inset-bottom))] md:pb-0"
+            id="content"
+          >
             {children}
           </main>
           <aside
@@ -224,7 +236,7 @@ export function AppShell({
             inert={activityRailCollapsed}
           >
             <div className="h-full w-[280px] overflow-y-auto">
-              <ActivityRail snapshot={snapshot} runtimeMode={runtimeMode} />
+              <ActivityRail snapshot={snapshot} runtimeMode={runtimeMode} nodeMode={nodeMode} />
             </div>
           </aside>
         </div>
@@ -254,7 +266,6 @@ function MobileNavigationSheet({
   onNavigate?: (href: string) => void;
   onClose: () => void;
 }) {
-  const activeRoute = routes.find((route) => route.item.href === activePath);
   return (
     <div className="aui-mobile-sheet-layout flex h-full flex-col" role="dialog" aria-labelledby="aui-mobile-sheet-title">
       <div className="aui-mobile-sheet-header flex items-center border-b border-border">
@@ -267,7 +278,6 @@ function MobileNavigationSheet({
         <p className="aui-mobile-sheet-title text-sm font-semibold" id="aui-mobile-sheet-title">
           Navigation
         </p>
-        <MobileSheetRouteSummary route={activeRoute} snapshot={snapshot} />
         <ShellNavigation
           activePath={activePath}
           routes={routes}
@@ -291,30 +301,6 @@ function MobileNavigationSheet({
   );
 }
 
-function MobileSheetRouteSummary({
-  route,
-  snapshot,
-}: {
-  route: RouteAvailability | undefined;
-  snapshot: AuroraShellSnapshot;
-}) {
-  return (
-    <Card className="aui-mobile-sheet-summary p-3" aria-label="Current mobile route">
-      <div className="flex flex-col gap-0.5">
-        <span className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">Current route</span>
-        <strong className="text-sm">{route?.item.label ?? "Assistant"}</strong>
-        <small className="text-xs text-muted-foreground">
-          {route ? shellRouteSummaryLabel(route) : "Aurora cockpit ready."}
-        </small>
-      </div>
-      <div className="aui-mobile-sheet-summary-badges mt-2 flex flex-wrap items-center gap-1.5" aria-label="Current mobile route state">
-        <EvidenceBadge label={route ? shellRouteBadgeLabel(route) : "Ready"} />
-        <EvidenceBadge label={snapshot.loadState === "ready" ? "Ready" : "Checking"} />
-      </div>
-    </Card>
-  );
-}
-
 function MobileBottomTabs({
   activePath,
   routes,
@@ -332,7 +318,10 @@ function MobileBottomTabs({
     (tab) => mobileTabOrder.has(tab.id) && (sessionIsAdmin || !tab.adminGated || tab.id === "settings"),
   );
   return (
-    <nav className="aui-mobile-tabs fixed inset-x-0 bottom-0 z-10 flex items-center justify-around border-t border-border bg-background py-1.5 md:hidden" aria-label="Mobile navigation">
+    <nav
+      className="aui-mobile-tabs fixed inset-x-0 bottom-0 z-50 flex min-h-[calc(4.1rem+env(safe-area-inset-bottom))] items-center justify-around border-t border-border bg-background pb-[env(safe-area-inset-bottom)] pt-1.5 md:hidden"
+      aria-label="Mobile navigation"
+    >
       {tabs.map((tab) => (
         <MobileBottomTab
           key={tab.id}
@@ -362,7 +351,6 @@ function MobileBottomTab({
     <a
       href={tab.href}
       aria-current={active ? "page" : undefined}
-      aria-disabled={route?.disabled ? "true" : undefined}
       aria-label={`${tab.mobileLabel ?? tab.label} mobile tab: ${routeState}`}
       data-mobile-tab={tab.id}
       onClick={(event) => handleShellNavigation(event, tab.href, onNavigate)}
@@ -410,7 +398,6 @@ export function ShellNavigation({
                   active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
                 )}
                 aria-current={active ? "page" : undefined}
-                aria-disabled={route?.disabled ? "true" : undefined}
                 onClick={(event) => handleShellNavigation(event, item.href, onNavigate)}
               >
                 <item.icon size={15} className="shrink-0" aria-hidden />
@@ -525,11 +512,13 @@ function BrandHeader({ snapshot }: { snapshot: AuroraShellSnapshot }) {
 function ActivityRail({
   snapshot,
   runtimeMode,
+  nodeMode,
 }: {
   snapshot: AuroraShellSnapshot;
   runtimeMode?: string | undefined;
+  nodeMode?: AuroraNodeMode | undefined;
 }) {
-  const events = shellActivityEvents(snapshot, runtimeMode);
+  const events = shellActivityEvents(snapshot, runtimeMode, nodeMode);
   const shellAlertCopy = snapshot.error ? productStatusCopy("connection-failed").title : null;
   return (
     <aside className="flex h-full flex-col" aria-label="Aurora activity">
@@ -567,7 +556,11 @@ function activityRailBadgeLabel(snapshot: AuroraShellSnapshot): string {
   return "Live";
 }
 
-function shellActivityEvents(snapshot: AuroraShellSnapshot, runtimeMode?: string) {
+function shellActivityEvents(
+  snapshot: AuroraShellSnapshot,
+  runtimeMode?: string,
+  nodeMode?: AuroraNodeMode,
+) {
   const healthy = snapshot.loadState !== "error";
   const surface = shellSurfaceProfile(snapshot, runtimeMode);
   return [
@@ -581,7 +574,7 @@ function shellActivityEvents(snapshot: AuroraShellSnapshot, runtimeMode?: string
     },
     {
       id: "mode",
-      title: shellModeLabel(snapshot, runtimeMode),
+      title: shellModeLabel(snapshot, runtimeMode, nodeMode),
       detail: "Connected to Aurora",
       when: "live",
       icon: Network,
@@ -611,8 +604,8 @@ function shellActivityEvents(snapshot: AuroraShellSnapshot, runtimeMode?: string
       detail: snapshot.nativeAvailable
         ? `Native ${snapshot.nativePlatform}`
         : surface.usesNativeShell
-          ? productSurfaceLabel(snapshot, runtimeMode)
-          : `${productSurfaceLabel(snapshot, runtimeMode)}; local controls unavailable`,
+          ? productSurfaceLabel(snapshot, runtimeMode, nodeMode)
+          : `${productSurfaceLabel(snapshot, runtimeMode, nodeMode)}; local controls unavailable`,
       when: "policy",
       icon: snapshot.nativeAvailable ? CheckCircle2 : Clock3,
       tone: snapshot.nativeAvailable ? "good" : "info",
@@ -620,8 +613,12 @@ function shellActivityEvents(snapshot: AuroraShellSnapshot, runtimeMode?: string
   ] as const;
 }
 
-function shellSurfaceLabel(snapshot: AuroraShellSnapshot, runtimeMode?: string): string {
-  return productSurfaceLabel(snapshot, runtimeMode);
+function shellSurfaceLabel(
+  snapshot: AuroraShellSnapshot,
+  runtimeMode?: string,
+  nodeMode?: AuroraNodeMode,
+): string {
+  return productSurfaceLabel(snapshot, runtimeMode, nodeMode);
 }
 
 function shellHealthLabel(snapshot: AuroraShellSnapshot): string {
@@ -656,21 +653,12 @@ function shellRuntimeStateLabel(snapshot: AuroraShellSnapshot): string {
   return "connected";
 }
 
-function shellRouteSummaryLabel(route: RouteAvailability): string {
-  if (route.disabled) return "Operator workflow is configured for review.";
-  if (route.selectorRequired)
-    return "Choose a preferred local device before running.";
-  return "Ready for operator workflow.";
-}
-
-function shellRouteBadgeLabel(route: RouteAvailability): string {
-  if (route.selectorRequired) return "Select";
-  if (route.disabled) return "Review";
-  return "Ready";
-}
-
-function shellModeLabel(snapshot: AuroraShellSnapshot, runtimeMode?: string): string {
-  return productSurfaceLabel(snapshot, runtimeMode);
+function shellModeLabel(
+  snapshot: AuroraShellSnapshot,
+  runtimeMode?: string,
+  nodeMode?: AuroraNodeMode,
+): string {
+  return productSurfaceLabel(snapshot, runtimeMode, nodeMode);
 }
 
 function shellSurfaceProfile(snapshot: AuroraShellSnapshot, runtimeMode?: string) {
@@ -681,10 +669,16 @@ function shellSurfaceProfile(snapshot: AuroraShellSnapshot, runtimeMode?: string
   });
 }
 
-function productSurfaceLabel(snapshot: AuroraShellSnapshot, runtimeMode?: string): string {
+function productSurfaceLabel(
+  snapshot: AuroraShellSnapshot,
+  runtimeMode?: string,
+  nodeMode?: AuroraNodeMode,
+): string {
   const profile = shellSurfaceProfile(snapshot, runtimeMode);
   if (profile.usesLocalSidecar) return "Aurora is running on this computer";
   if (snapshot.loadState === "error") return `${shellNodeLabel(snapshot)} is offline`;
+  if (nodeMode === "mesh-node" && profile.isMobile) return "This device is available";
+  if (nodeMode === "remote-console") return `Connected to ${shellNodeLabel(snapshot)}`;
   if (profile.isMobile) return "This device is available";
   return `Connected to ${shellNodeLabel(snapshot)}`;
 }

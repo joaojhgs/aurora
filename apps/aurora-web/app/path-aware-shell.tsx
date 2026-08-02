@@ -196,6 +196,7 @@ function ReadyPathAwareShell({
             profile={profile}
             profiles={document.profiles}
             profileStoreEvidence="Connection settings stay in this browser. Room keys are protected when secure storage is available."
+            localFeatureSharing={runtime.localFeatureSharing}
             configureOnly
             onSaveProfile={async (nextProfile, roomSecret) => {
               await saveAuroraBrowserOnboardingProfile(nextProfile, runtimeNodeMode, roomSecret)
@@ -220,6 +221,7 @@ function ReadyPathAwareShell({
         onNavigate={(href) => router.push(href)}
         sessionIsAdmin={runtime.client.auth.snapshot().isAdmin}
         runtimeMode="web-thin"
+        nodeMode={configuredRuntimeProfile?.nodeMode ?? runtimeNodeMode}
       >
         {children}
       </AppShell>

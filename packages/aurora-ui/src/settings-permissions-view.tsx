@@ -401,9 +401,9 @@ function SettingsDataBlock() {
           <strong className="text-sm font-medium">Export or delete your data</strong>
           <p className="mt-0.5 text-xs text-muted-foreground">Preview affected records before either action runs.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline">Export my data</Button>
-          <Button variant="danger">Delete my data</Button>
+        <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
+          <Button variant="outline" className="w-full justify-center sm:w-auto">Export my data</Button>
+          <Button variant="danger" className="w-full justify-center sm:w-auto">Delete my data</Button>
         </div>
       </div>
     </Card>
@@ -566,16 +566,16 @@ function userExperienceDefaults(
     {
       id: 'accessibility',
       label: 'Accessibility default',
-      value: 'reduced-motion/responsive safe',
+      value: 'Follows this device',
       state: settingsState,
-      detail: 'Accessibility preferences stay with this screen and do not need device access.'
+      detail: 'Comfort and motion preferences stay with this screen.'
     },
     {
       id: 'local-storage',
-      label: 'Local storage default',
-      value: snapshot.secretsRedacted ? 'redacted non-secret UI preferences' : 'redaction pending',
+      label: 'Saved preferences',
+      value: snapshot.secretsRedacted ? 'Display choices only' : 'Checking',
       state: snapshot.secretsRedacted ? 'available-local' : 'degraded',
-      detail: 'Local storage is limited to non-secret screen preferences.'
+      detail: 'Only display preferences are kept on this device.'
     }
   ]
 }
@@ -583,7 +583,7 @@ function userExperienceDefaults(
 function VoiceBehaviorRow({ item }: { item: SettingsVoiceBehaviorCard }) {
   const icon = item.enabled ? <CheckCircle2 size={18} aria-hidden /> : <Mic size={18} aria-hidden />
   return (
-    <article className="flex items-start gap-3 rounded-lg border border-border/60 p-3" data-state={item.enabled ? 'optimistic' : 'disabled'}>
+    <article className="aui-settings-row flex items-start gap-3 rounded-lg border border-border/60 p-3" data-state={item.enabled ? 'optimistic' : 'disabled'}>
       <div className="mt-0.5 text-muted-foreground">{icon}</div>
       <div className="flex flex-1 flex-col gap-1.5">
         <h3 className="text-sm font-medium">{item.label}</h3>
@@ -607,7 +607,7 @@ function VoiceBehaviorRow({ item }: { item: SettingsVoiceBehaviorCard }) {
 
 function NativeIntegrationRow({ integration }: { integration: SettingsNativeIntegrationCard }) {
   return (
-    <article className="flex items-start gap-3 rounded-lg border border-border/60 p-3">
+    <article className="aui-settings-row flex items-start gap-3 rounded-lg border border-border/60 p-3">
       <div className="mt-0.5 text-muted-foreground">
         {integration.state === 'unsupported' ? <AlertTriangle size={18} aria-hidden /> : <CheckCircle2 size={18} aria-hidden />}
       </div>
@@ -648,7 +648,7 @@ function PrivacyControlRow({ control }: { control: SettingsPrivacyControl }) {
       ? <CheckCircle2 size={18} aria-hidden />
       : <ToggleLeft size={18} aria-hidden />
   return (
-    <article className="flex items-start gap-3 rounded-lg border border-border/60 p-3" data-state={control.mutationState}>
+    <article className="aui-settings-row flex items-start gap-3 rounded-lg border border-border/60 p-3" data-state={control.mutationState}>
       <div className="mt-0.5 text-muted-foreground">{icon}</div>
       <div className="flex flex-1 flex-col gap-1.5">
         <h3 className="text-sm font-medium">{control.label}</h3>

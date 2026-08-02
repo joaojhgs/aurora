@@ -28,6 +28,7 @@ import {
 import {
   DurableFeatureSharingController,
   LocalToolRegistry,
+  ProviderLocalApprovalController,
   TrackingPeerPairingIssuer,
   createMeshNodeLocalToolProvider,
   type LocalFeatureSharingPort,
@@ -37,6 +38,7 @@ import {
   type LocalToolAuditResult,
   type LocalToolExportDecisionPort,
   type MeshNodeLocalToolProviderComposition,
+  type ProviderLocalApprovalControllerPort,
 } from "@aurora/client/local-tools";
 import {
   normalizeAuroraWebRtcRolloutFlags,
@@ -60,6 +62,7 @@ export interface TauriMeshNodeServicesOptions {
   readonly randomId?: () => string;
   readonly now?: () => number;
   readonly exportDecision?: LocalToolExportDecisionPort | undefined;
+  readonly approvalController?: ProviderLocalApprovalControllerPort | undefined;
   readonly invokeCommand?: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 }
 
@@ -80,6 +83,7 @@ export interface DisabledTauriMeshNodeServices {
   readonly reason: TauriMeshNodeServicesDisabledReason;
   readonly registeredToolIds: readonly string[];
   readonly localToolRegistry?: LocalToolRegistry | undefined;
+  readonly localToolApprovals?: undefined;
   readonly peerHost?: undefined;
   readonly authorityResolver?: undefined;
   readonly pairingIssuer?: undefined;
@@ -108,6 +112,7 @@ export interface EnabledTauriMeshNodeServices {
   readonly grantManager: PeerGrantManager;
   readonly localToolRegistry: LocalToolRegistry;
   readonly localToolProvider: MeshNodeLocalToolProviderComposition;
+  readonly localToolApprovals: ProviderLocalApprovalControllerPort;
   readonly peerHost: MeshNodeLocalToolProviderComposition["peerHost"];
   readonly registeredToolIds: readonly string[];
   close(): Promise<void>;
@@ -156,6 +161,7 @@ export async function createTauriMeshNodeServices(
     sourceId: "tauri-native",
   });
   let registered: Awaited<ReturnType<typeof registerTauriNativeCapabilityPack>>;
+  let localToolApprovals: ProviderLocalApprovalControllerPort | null = null;
   try {
     registered = await registerTauriNativeCapabilityPack({
       registry,
@@ -267,6 +273,11 @@ export async function createTauriMeshNodeServices(
       delegate: basePairingIssuer,
       registry: localFeatureSharing,
     });
+    const approvalController = options.approvalController
+      ?? new ProviderLocalApprovalController({
+        ...(options.now ? { nowMs: options.now } : {}),
+      });
+    localToolApprovals = approvalController;
     const localToolProvider = createMeshNodeLocalToolProvider({
       nodeMode: "mesh-node",
       localPeerId,
@@ -277,16 +288,35 @@ export async function createTauriMeshNodeServices(
       audit: localToolAudit,
       cursorSecret: randomBytes(32),
       providerEnabled: true,
+      approvalController,
       ...(options.now ? { clock: options.now } : {}),
       ...(options.randomId ? { randomId: options.randomId } : {}),
     });
     if (!localToolProvider.enabled) {
+      approvalController.close();
       await backend.close().catch(() => undefined);
       return disabled("native_tools_unavailable", {
         registry,
         registeredToolIds: registered.registered,
       });
     }
+
+    let providerRefreshClosed = false;
+    let providerRefreshQueue = Promise.resolve();
+    const scheduleProviderRefresh = () => {
+      providerRefreshQueue = providerRefreshQueue.then(async () => {
+        if (providerRefreshClosed) return;
+        await localToolProvider.peerHost.resumeLocalProvider().catch(() => undefined);
+      });
+    };
+    let initialFeatureSnapshotSeen = false;
+    const unsubscribeFeatureSharing = localFeatureSharing.subscribe(() => {
+      if (!initialFeatureSnapshotSeen) {
+        initialFeatureSnapshotSeen = true;
+        return;
+      }
+      scheduleProviderRefresh();
+    });
 
     return {
       enabled: true,
@@ -308,14 +338,20 @@ export async function createTauriMeshNodeServices(
       grantManager,
       localToolRegistry: registry,
       localToolProvider,
+      localToolApprovals: approvalController,
       peerHost: localToolProvider.peerHost,
       registeredToolIds: localToolProvider.registeredToolIds,
       close: async () => {
+        providerRefreshClosed = true;
+        unsubscribeFeatureSharing();
+        await providerRefreshQueue;
+        approvalController.close();
         localToolProvider.peerHost.suspend("provider_closed");
         await backend.close();
       },
     };
   } catch (error) {
+    localToolApprovals?.close();
     await backend.close().catch(() => undefined);
     return disabled(error instanceof LocalToolAuditUnavailableError
       ? "local_tool_audit_unavailable"

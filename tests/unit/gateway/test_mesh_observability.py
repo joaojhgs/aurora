@@ -571,6 +571,26 @@ async def test_gateway_event_capture_ignores_internal_request_reply_envelopes():
 
 
 @pytest.mark.asyncio
+async def test_gateway_event_capture_ignores_request_commands() -> None:
+    """Observability cannot hold a request topic's serial command worker."""
+
+    service = GatewayService()
+    service.bus.publish = AsyncMock()
+
+    await service._capture_gateway_event(
+        Envelope(
+            type=ToolingMethods.EXECUTE_TOOL,
+            payload={"global_tool_id": "peer-tool:lookup"},
+            reply_to="reply.ToolingExecuteToolRequest.corr-command",
+            correlation_id="corr-command",
+        )
+    )
+
+    assert list(service._event_stream) == []
+    service.bus.publish.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_gateway_event_capture_publishes_live_assistant_payload_without_storing_it():
     service = GatewayService()
     service.bus.publish = AsyncMock()

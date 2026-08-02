@@ -6,6 +6,7 @@ import {
   type ChildProcessWithoutNullStreams,
 } from 'node:child_process'
 import crypto from 'node:crypto'
+import dgram from 'node:dgram'
 import { existsSync, statSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import http, {
@@ -75,6 +76,8 @@ type IosInteropSurface = {
   observation: string
 }
 
+type IosInteropLane = 'direct' | 'stun' | 'turn'
+
 const repoRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../../../..',
@@ -105,19 +108,22 @@ const mqttImportMapCspHash = `sha256-${crypto
   .createHash('sha256')
   .update(mqttImportMapJson)
   .digest('base64')}`
-const surfaces: IosInteropSurface[] = [
+const interopLane = parseInteropLane(
+  process.env.AURORA_IOS_WEBRTC_LANE ?? 'direct',
+)
+const surfaceFilter = parseSurfaceFilter(
+  process.env.AURORA_IOS_WEBRTC_SURFACES,
+)
+const allSurfaces: IosInteropSurface[] = [
   {
     id: 'mobile-safari',
     testName:
-      'pairs MobileSafari in an iOS simulator with an external Python peer without HTTP transport fallback',
+      `pairs MobileSafari in an iOS simulator with an external Python peer over the ${interopLane} WebRTC lane without HTTP transport fallback`,
     browserName: 'ios-mobile-safari-simulator',
     artifactDir:
       process.env.AURORA_IOS_MOBILE_WEBRTC_ARTIFACT_DIR ??
-      resolve(
-        appRoot,
-        'reports/webrtc-interop/ios-mobile-safari',
-      ),
-    artifactPrefix: 'ios-mobile-safari',
+      iosInteropArtifactDir('ios-mobile-safari'),
+    artifactPrefix: iosInteropArtifactPrefix('ios-mobile-safari'),
     command:
       'pnpm --filter @aurora/tauri-ui ios:webrtc:interop',
     observation:
@@ -126,18 +132,24 @@ const surfaces: IosInteropSurface[] = [
   {
     id: 'tauri-wkwebview',
     testName:
-      'pairs a packaged Tauri WKWebView simulator app with an external Python peer without HTTP transport fallback',
+      `pairs a packaged Tauri WKWebView simulator app with an external Python peer over the ${interopLane} WebRTC lane without HTTP transport fallback`,
     browserName: 'ios-tauri-wkwebview-simulator',
     artifactDir:
       process.env.AURORA_IOS_WKWEBVIEW_WEBRTC_ARTIFACT_DIR ??
-      resolve(appRoot, 'reports/webrtc-interop/ios-wkwebview'),
-    artifactPrefix: 'ios-wkwebview',
+      iosInteropArtifactDir('ios-wkwebview'),
+    artifactPrefix: iosInteropArtifactPrefix('ios-wkwebview'),
     command:
       'pnpm --filter @aurora/tauri-ui ios:webrtc:interop',
     observation:
       'auto-running harness embedded in a dedicated unsigned Tauri iOS simulator app; loopback HTTP is test control only, while Aurora application RPC and events remain on the WebRTC DataChannel with the Python HTTP API disabled',
   },
 ]
+const surfaces = allSurfaces.filter((surface) =>
+  surfaceFilter.has(surface.id),
+)
+if (surfaces.length === 0) {
+  throw new Error('AURORA_IOS_WEBRTC_SURFACES selected no iOS surfaces')
+}
 // Cold simulator WebKit startup plus the full reconnect/revocation proof can
 // exceed three minutes on shared macOS runners.
 const interopTimeoutMs = Number(
@@ -187,7 +199,7 @@ async function runIosInterop(surface: IosInteropSurface): Promise<void> {
     const browserResult = mobileResult.result
     resources.assertNoSeededSecrets(browserResult)
     assertInteropBrowserResult(browserResult, {
-      lane: 'direct',
+      lane: interopLane,
       expectedStablePeerId: ready.expectedStablePeerId,
       expectedNegotiationRole: ready.expectedNegotiationRole,
     })
@@ -195,7 +207,7 @@ async function runIosInterop(surface: IosInteropSurface): Promise<void> {
 
     screenshotEvidence = await resources.captureSimulatorEvidence()
     await writeJson(resources.browserReportPath, {
-      lane: 'direct',
+      lane: interopLane,
       browserName: surface.browserName,
       status: 'passed',
       durationMs: Date.now() - started,
@@ -251,7 +263,7 @@ async function runIosInterop(surface: IosInteropSurface): Promise<void> {
         '--out',
         resources.finalReportPath,
         '--lane',
-        'direct',
+        interopLane,
       ],
       repoRoot,
     )
@@ -263,7 +275,7 @@ async function runIosInterop(surface: IosInteropSurface): Promise<void> {
     resources.assertNoSeededSecrets(aggregate)
     expect(aggregate).toMatchObject({
       status: 'passed',
-      lane: 'direct',
+      lane: interopLane,
       pathCategoryAccepted: true,
       secretsRedacted: true,
     })
@@ -275,7 +287,7 @@ async function runIosInterop(surface: IosInteropSurface): Promise<void> {
       error instanceof Error ? error.message : String(error),
     )
     const failureReport = resources.redactArtifactValue({
-      lane: 'direct',
+      lane: interopLane,
       browserName: surface.browserName,
       status: 'failed',
       durationMs: Date.now() - started,
@@ -299,6 +311,11 @@ async function runIosInterop(surface: IosInteropSurface): Promise<void> {
 async function createInteropResources(surface: IosInteropSurface) {
   assertCommandAvailable('xcrun', ['--version'])
   assertCommandAvailable('mosquitto', ['-h'])
+  if (interopLane !== 'direct') {
+    assertCommandAvailable('turnserver', ['--help'], {
+      allowNonZeroStatus: true,
+    })
+  }
 
   const timeoutMs = interopTimeoutMs
   const artifactDir = surface.artifactDir
@@ -308,7 +325,21 @@ async function createInteropResources(surface: IosInteropSurface) {
     .toString('base64url')}`
   const seededSecrets = [roomSecret, token]
   const room = `ios-${surface.id}-${process.pid}-${Date.now().toString(36)}`
+  const hostIpv4 =
+    interopLane === 'direct' ? undefined : await resolveHostIpv4()
   const brokerPort = await allocateTcpPort()
+  const iceServerPort =
+    interopLane === 'direct' ? undefined : await allocateTcpPort()
+  const stunServer =
+    interopLane === 'stun'
+      ? process.env.AURORA_IOS_WEBRTC_STUN_URL ??
+        `stun:${hostIpv4}:${iceServerPort}`
+      : undefined
+  const turnServer =
+    interopLane === 'turn'
+      ? process.env.AURORA_IOS_WEBRTC_TURN_URL ??
+        `turn:${hostIpv4}:${iceServerPort}?transport=udp`
+      : undefined
   const readyPath = join(artifactDir, 'gateway-ready.json')
   const donePath = join(
     artifactDir,
@@ -340,6 +371,8 @@ async function createInteropResources(surface: IosInteropSurface) {
     artifactDir,
     'mosquitto-ios-interop.log',
   )
+  const turnConfigPath = join(artifactDir, 'turnserver-ios-interop.conf')
+  const turnLogPath = join(artifactDir, 'turnserver-ios-interop.log')
   const simulatorLogPath = join(
     artifactDir,
     `${surface.artifactPrefix}.log`,
@@ -359,6 +392,8 @@ async function createInteropResources(surface: IosInteropSurface) {
     cryptoWorkerBundlePath,
     mosquittoConfigPath,
     mosquittoLogPath,
+    turnConfigPath,
+    turnLogPath,
     simulatorLogPath,
     simulatorScreenshotPath,
   ]
@@ -472,6 +507,8 @@ async function createInteropResources(surface: IosInteropSurface) {
   let controlOrigin: string | undefined
   let pythonPeer: ChildProcessWithoutNullStreams | undefined
   let pythonOutput = ''
+  let turnServerProcess: ChildProcessWithoutNullStreams | undefined
+  let turnServerOutput = ''
   let readyConfig: BrowserConfig | undefined
   let mobileResultSettled = false
   let resolveMobileResult: (result: MobileResult) => void = () =>
@@ -529,10 +566,19 @@ async function createInteropResources(surface: IosInteropSurface) {
     if (mosquitto.exitCode === null) {
       await terminateChild(mosquitto, 5_000)
     }
+    if (turnServerProcess?.exitCode === null) {
+      await terminateChild(turnServerProcess, 5_000)
+    }
     await fs.writeFile(
       mosquittoLogPath,
       redactProcessOutput(mosquittoOutput),
     )
+    if (turnServerProcess || turnServerOutput) {
+      await fs.writeFile(
+        turnLogPath,
+        redactProcessOutput(turnServerOutput),
+      )
+    }
     if (wkWebViewHarness) {
       spawnSync(
         'xcrun',
@@ -577,6 +623,44 @@ async function createInteropResources(surface: IosInteropSurface) {
     await waitForPort(brokerPort, timeoutMs, mosquitto, () =>
       mosquittoOutput,
     )
+    if (interopLane !== 'direct') {
+      if (!iceServerPort) {
+        throw new Error('iOS WebRTC ICE server port was not allocated')
+      }
+      await fs.writeFile(
+        turnConfigPath,
+        [
+          `listening-port=${iceServerPort}`,
+          'listening-ip=0.0.0.0',
+          'fingerprint',
+          'lt-cred-mech',
+          'user=interop:interop',
+          'realm=aurora-interop.test',
+          'no-tls',
+          'no-dtls',
+          'verbose',
+          '',
+        ].join('\n'),
+      )
+      turnServerProcess = spawn(
+        'turnserver',
+        ['-c', turnConfigPath],
+        {
+          cwd: repoRoot,
+          env: process.env,
+          stdio: 'pipe',
+        },
+      )
+      turnServerProcess.stdout.on('data', (chunk) => {
+        turnServerOutput += String(chunk)
+      })
+      turnServerProcess.stderr.on('data', (chunk) => {
+        turnServerOutput += String(chunk)
+      })
+      await waitForPort(iceServerPort, timeoutMs, turnServerProcess, () =>
+        turnServerOutput,
+      )
+    }
     server = http.createServer(async (request, response) => {
       try {
         await handleHarnessRequest(
@@ -662,7 +746,7 @@ async function createInteropResources(surface: IosInteropSurface) {
         'python',
         gatewayScript,
         '--lane',
-        'direct',
+        interopLane,
         '--ready',
         readyPath,
         '--done',
@@ -675,6 +759,8 @@ async function createInteropResources(surface: IosInteropSurface) {
         room,
         '--timeout',
         String(timeoutMs / 1000),
+        ...(stunServer ? ['--stun', stunServer] : []),
+        ...(turnServer ? ['--turn', turnServer] : []),
       ],
       {
         cwd: repoRoot,
@@ -828,7 +914,7 @@ async function createInteropResources(surface: IosInteropSurface) {
     )
     const failureReport = redactInteropArtifactValue(
       {
-        lane: 'direct',
+        lane: interopLane,
         browserName: surface.browserName,
         status: 'failed',
         phase: 'setup',
@@ -851,6 +937,47 @@ async function createInteropResources(surface: IosInteropSurface) {
     }
     throw new Error(String(redactedError))
   }
+}
+
+function parseInteropLane(value: string): IosInteropLane {
+  if (value === 'direct' || value === 'stun' || value === 'turn') {
+    return value
+  }
+  throw new Error(
+    `AURORA_IOS_WEBRTC_LANE must be direct, stun, or turn; received ${value}`,
+  )
+}
+
+function parseSurfaceFilter(
+  value: string | undefined,
+): Set<IosInteropSurface['id']> {
+  const valid = new Set<IosInteropSurface['id']>([
+    'mobile-safari',
+    'tauri-wkwebview',
+  ])
+  if (!value?.trim()) return valid
+  const requested = value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+  for (const item of requested) {
+    if (!valid.has(item as IosInteropSurface['id'])) {
+      throw new Error(
+        `AURORA_IOS_WEBRTC_SURFACES contains unsupported surface ${item}`,
+      )
+    }
+  }
+  return new Set(requested as Array<IosInteropSurface['id']>)
+}
+
+function iosInteropArtifactDir(prefix: string): string {
+  const directory =
+    interopLane === 'direct' ? prefix : `${prefix}-${interopLane}`
+  return resolve(appRoot, 'reports/webrtc-interop', directory)
+}
+
+function iosInteropArtifactPrefix(prefix: string): string {
+  return interopLane === 'direct' ? prefix : `${prefix}-${interopLane}`
 }
 
 async function captureReadableSimulatorScreenshot({
@@ -1660,6 +1787,31 @@ async function allocateTcpPort(): Promise<number> {
   })
 }
 
+async function resolveHostIpv4(): Promise<string> {
+  return await new Promise<string>((resolvePromise, rejectPromise) => {
+    const socket = dgram.createSocket('udp4')
+    const closeWithError = (error: Error) => {
+      socket.close()
+      rejectPromise(error)
+    }
+    socket.once('error', closeWithError)
+    socket.connect(9, '192.0.2.1', () => {
+      const address = socket.address()
+      socket.off('error', closeWithError)
+      socket.close()
+      if (typeof address === 'string' || !address.address) {
+        rejectPromise(
+          new Error(
+            'Could not resolve a host IPv4 address for iOS WebRTC interop',
+          ),
+        )
+        return
+      }
+      resolvePromise(address.address)
+    })
+  })
+}
+
 async function waitForChild(
   child: ChildProcessWithoutNullStreams,
   timeoutMs: number,
@@ -1723,11 +1875,15 @@ async function waitForExit(
 function assertCommandAvailable(
   command: string,
   args: string[],
+  options: { allowNonZeroStatus?: boolean } = {},
 ): void {
   const result = spawnSync(command, args, {
     encoding: 'utf8',
   })
-  if (result.error || result.status !== 0) {
+  if (
+    result.error ||
+    (result.status !== 0 && options.allowNonZeroStatus !== true)
+  ) {
     throw new Error(
       `${command} is required for iOS mobile WebRTC interop`,
     )

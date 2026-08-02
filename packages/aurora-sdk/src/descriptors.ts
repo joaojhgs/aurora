@@ -104,6 +104,8 @@ export const TOOLING_EXPORT_POLICY_CONFIRMATION_TEXT = 'CONFIRM TOOL EXPORT POLI
 export const ORCHESTRATOR_METHODS = {
   userInput: 'Orchestrator.UserInput',
   externalUserInput: 'Orchestrator.ExternalUserInput',
+  inferChat: 'Orchestrator.InferChat',
+  streamInferChat: 'Orchestrator.StreamInferChat',
   ingestContext: 'Orchestrator.IngestContext',
   listPendingToolApprovals: 'Orchestrator.ListPendingToolApprovals',
   resumeToolApproval: 'Orchestrator.ResumeToolApproval',

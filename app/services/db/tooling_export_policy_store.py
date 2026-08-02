@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import aiosqlite
 
+from app.services.db.sqlite_connection import close_database, open_database
 from app.shared.contracts.models.db import (
     DBGetToolingExportPolicySnapshotRequest,
     DBGetToolingExportPolicySnapshotResponse,
@@ -28,10 +29,7 @@ from app.shared.contracts.models.tooling import (
 
 
 async def _connect(db_path: str) -> aiosqlite.Connection:
-    db = await aiosqlite.connect(db_path)
-    db.row_factory = aiosqlite.Row
-    await db.execute("PRAGMA foreign_keys = ON")
-    return db
+    return await open_database(db_path, row_factory=aiosqlite.Row)
 
 
 def _policy(row: aiosqlite.Row) -> ToolingExportPolicy:
@@ -148,7 +146,7 @@ async def get_tooling_export_policy_snapshot(
             secrets_redacted=True,
         )
     finally:
-        await db.close()
+        await close_database(db)
 
 
 async def mutate_tooling_export_policy(
@@ -411,7 +409,7 @@ async def mutate_tooling_export_policy(
         await db.rollback()
         raise
     finally:
-        await db.close()
+        await close_database(db)
 
 
 async def get_tooling_mesh_switches(db_path: str) -> ToolingMeshKillSwitches:
@@ -426,7 +424,7 @@ async def get_tooling_mesh_switches(db_path: str) -> ToolingMeshKillSwitches:
             raise RuntimeError("Tooling export migration 014 is incomplete")
         return _switches(row)
     finally:
-        await db.close()
+        await close_database(db)
 
 
 async def set_tooling_mesh_switches(
@@ -519,4 +517,4 @@ async def set_tooling_mesh_switches(
         await db.rollback()
         raise
     finally:
-        await db.close()
+        await close_database(db)

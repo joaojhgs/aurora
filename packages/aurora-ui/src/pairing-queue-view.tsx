@@ -24,6 +24,7 @@ import { PageHeader } from './state-surface'
 import { StatusBadge, presentableSignal } from './status-badges'
 import { safeErrorCopy } from './product-copy'
 import type { RouteAvailability } from './shell-data'
+import { getAuroraSurfaceProfile } from './platform-surface'
 import {
   Button,
   Card,
@@ -145,6 +146,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
   const [loadError, setLoadError] = useState<unknown>(null)
   const [adminReason, setAdminReason] = useState('Review pending device or peer pairing request')
   const [permissions, setPermissions] = useState('')
+  const [mobilePermissionScope, setMobilePermissionScope] = useState('assistant')
   const [grantAdmin, setGrantAdmin] = useState(false)
   const [reauthConfirmed, setReauthConfirmed] = useState(false)
   const [createDeviceName, setCreateDeviceName] = useState('New Aurora device')
@@ -211,6 +213,14 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
     () => buildPairingQueueModel({ route, response, diagnostics, loadState, error: loadError }),
     [diagnostics, loadError, loadState, response, route]
   )
+  const isMobileSurface = useMemo(
+    () =>
+      getAuroraSurfaceProfile({
+        transportKind: client.transport.kind,
+        userAgent: typeof globalThis.navigator === 'undefined' ? '' : globalThis.navigator.userAgent,
+      }).isMobile,
+    [client.transport.kind],
+  )
 
   const submitPairingAction = useCallback(
     async (entry: PendingPairingEntry, action: 'approve' | 'deny') => {
@@ -220,7 +230,18 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
       setCopyError(null)
       const reason = adminReason.trim() || `${action} pairing request ${entry.request_id}`
       try {
-        const result = await client.admin.execute(buildPairingAdminActionRequest(entry, action, { reason, permissions, grantAdmin, reauthConfirmed }))
+        const result = await client.admin.execute(
+          buildPairingAdminActionRequest(
+            entry,
+            action,
+            {
+              reason,
+              permissions: isMobileSurface ? (mobilePermissionScope === 'none' ? '' : 'Orchestrator.use') : permissions,
+              grantAdmin,
+              reauthConfirmed,
+            },
+          ),
+        )
         setOperation({
           status: 'success',
           message: `${action} pairing completed; queue refresh requested.`,
@@ -235,7 +256,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
         setPendingAction(null)
       }
     },
-    [adminReason, client.admin, grantAdmin, loadQueue, permissions, reauthConfirmed]
+    [adminReason, client.admin, grantAdmin, isMobileSurface, loadQueue, mobilePermissionScope, permissions, reauthConfirmed],
   )
 
   const createPairingCredential = useCallback(async () => {
@@ -373,6 +394,9 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
       onCreate={createPairingCredential}
       onExchange={exchangePairingCode}
       onRevokeExchangedToken={revokeExchangedToken}
+      isMobileSurface={isMobileSurface}
+      mobilePermissionScope={mobilePermissionScope}
+      onMobilePermissionScopeChange={setMobilePermissionScope}
       onApprove={(entry) => submitPairingAction(entry, 'approve')}
       onDeny={(entry) => submitPairingAction(entry, 'deny')}
     />
@@ -412,6 +436,9 @@ export interface PairingQueueSurfaceProps {
   onCreate?: () => void
   onExchange?: () => void
   onRevokeExchangedToken?: () => void
+  isMobileSurface?: boolean
+  mobilePermissionScope?: string
+  onMobilePermissionScopeChange?: (value: string) => void
   onApprove?: (entry: PendingPairingEntry) => void
   onDeny?: (entry: PendingPairingEntry) => void
 }
@@ -449,6 +476,9 @@ export function PairingQueueSurface({
   onCreate,
   onExchange,
   onRevokeExchangedToken,
+  isMobileSurface = false,
+  mobilePermissionScope = 'assistant',
+  onMobilePermissionScopeChange,
   onApprove,
   onDeny
 }: PairingQueueSurfaceProps) {
@@ -559,15 +589,34 @@ export function PairingQueueSurface({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="pairing-permissions">Approve permissions</Label>
-            <Input
-              id="pairing-permissions"
-              value={permissions}
-              disabled={controlsDisabled}
-              placeholder="Example: feature access"
-              onChange={(event) => onPermissionsChange?.(event.currentTarget.value)}
-            />
-            <p className="text-xs text-muted-foreground">Space or comma separated permissions granted on approval.</p>
+            {isMobileSurface ? (
+              <>
+                <Label htmlFor="pairing-permissions">Approve permissions</Label>
+                <select
+                  id="pairing-permissions"
+                  value={mobilePermissionScope}
+                  disabled={controlsDisabled}
+                  onChange={(event) => onMobilePermissionScopeChange?.(event.currentTarget.value)}
+                  className="h-9 rounded-md border border-border bg-background px-2 text-sm disabled:opacity-55"
+                >
+                  <option value="assistant">Assistant access</option>
+                  <option value="none">No access</option>
+                </select>
+                <p className="text-xs text-muted-foreground">Use this to apply the scopes available on this mobile device.</p>
+              </>
+            ) : (
+              <>
+                <Label htmlFor="pairing-permissions">Approve permissions</Label>
+                <Input
+                  id="pairing-permissions"
+                  value={permissions}
+                  disabled={controlsDisabled}
+                  placeholder="Example: feature access"
+                  onChange={(event) => onPermissionsChange?.(event.currentTarget.value)}
+                />
+                <p className="text-xs text-muted-foreground">Space or comma separated permissions granted on approval.</p>
+              </>
+            )}
           </div>
         </div>
         <div className="flex flex-col gap-2">

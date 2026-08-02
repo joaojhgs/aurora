@@ -329,6 +329,7 @@ export class AuthSession {
       return
     }
     if (error.code === 'permission' || error.status === 403) {
+      if (this.snapshotValue.isAuthenticated) return
       this.markForbidden(error.message || 'Permission denied', error.status ?? 403)
     }
   }

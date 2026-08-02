@@ -41,7 +41,12 @@ export interface SubscribedFrame {
   reason: string | null
   idempotent: boolean
 }
-export interface SubscribeRejectedFrame { type: 'subscribe_rejected'; id: string; reason: string; rejected_topics?: string[] }
+export interface SubscribeRejectedFrame {
+  type: 'subscribe_rejected'
+  id: string
+  reason: string
+  rejected_topics?: Array<string | { topic: string; reason?: string }>
+}
 export interface UnsubscribeFrame { type: 'unsubscribe'; id: string }
 export interface UnsubscribedFrame { type: 'unsubscribed'; id: string; subscription_id?: string; removed?: boolean }
 
@@ -262,7 +267,7 @@ function parseSubscribed(object: Record<string, unknown>, limits: ParserLimits):
 
 function parseSubscribeRejected(object: Record<string, unknown>, limits: ParserLimits): SubscribeRejectedFrame {
   const frame: SubscribeRejectedFrame = { type: 'subscribe_rejected', id: requireId(object.id) as string, reason: requireString(object.reason, 'reason', 4096) }
-  if (object.rejected_topics !== undefined) frame.rejected_topics = normalizeTopics(requireStringArray(object.rejected_topics, 'rejected_topics', limits.maxTopics, limits.maxTopicLength), limits)
+  if (object.rejected_topics !== undefined) frame.rejected_topics = parseRejectedTopics(object.rejected_topics, limits)
   return frame
 }
 

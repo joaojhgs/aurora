@@ -194,6 +194,111 @@ async def test_migration_015_and_raw_sql_protection(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_migration_018_quarantines_unsafe_legacy_authority_revisions(
+    tmp_path: Path,
+) -> None:
+    manager = await _manager(tmp_path, "unsafe-legacy-revision.db")
+    committed_page = _page([_tool("legacy-unsafe")], revision="legacy-unsafe")
+    assert (await _begin(manager, "sync-legacy-committed", committed_page)).ok
+    assert (
+        await manager.append_tooling_remote_catalog_page(
+            DBAppendToolingRemoteCatalogPageRequest(
+                sync_id="sync-legacy-committed",
+                page=committed_page,
+            )
+        )
+    ).ok
+    assert (
+        await manager.commit_tooling_remote_catalog_sync(
+            DBCommitToolingRemoteCatalogSyncRequest(
+                sync_id="sync-legacy-committed",
+                expected_base_generation=0,
+            )
+        )
+    ).ok
+
+    staged_page = _page(
+        [_tool("legacy-staged")],
+        complete=False,
+        next_cursor="next-page",
+        revision="legacy-staged",
+    )
+    assert (await _begin(manager, "sync-legacy-staged", staged_page, base=1)).ok
+    assert (
+        await manager.append_tooling_remote_catalog_page(
+            DBAppendToolingRemoteCatalogPageRequest(
+                sync_id="sync-legacy-staged",
+                page=staged_page,
+            )
+        )
+    ).ok
+
+    unsafe_revision = 1_103_051_928_452_846_181
+    async with aiosqlite.connect(manager.db_path) as db:
+        await db.execute("DELETE FROM migrations WHERE version='018'")
+        await db.execute(
+            """UPDATE tooling_remote_catalog_headers
+               SET catalog_revision=?
+               WHERE peer_id=? AND provider_id='provider-a'""",
+            (unsafe_revision, PROVIDER_PEER_ID),
+        )
+        await db.execute(
+            """UPDATE tooling_remote_catalog_tools
+               SET catalog_revision=?
+               WHERE peer_id=? AND provider_id='provider-a'""",
+            (unsafe_revision, PROVIDER_PEER_ID),
+        )
+        await db.execute(
+            "UPDATE tooling_remote_catalog_syncs SET catalog_revision=? WHERE sync_id=?",
+            (unsafe_revision, "sync-legacy-staged"),
+        )
+        await db.commit()
+
+    restarted = DatabaseManager(manager.db_path)
+    await restarted.initialize()
+    retained = await restarted.get_tooling_remote_catalog(
+        DBGetToolingRemoteCatalogRequest(include_inactive=True)
+    )
+    assert retained.headers[0].authority_revision.catalog_revision == 0
+    assert retained.headers[0].current_generation == 0
+    assert retained.headers[0].sync_state == "failed"
+    assert retained.headers[0].availability == "stale"
+    assert retained.headers[0].last_error_reason == "unsafe_legacy_authority_revision"
+    assert retained.tools[0].authority_revision.catalog_revision == 0
+    assert retained.tools[0].availability == "stale"
+    assert retained.tools[0].active_generation is None
+    assert retained.tools[0].reason_code == "unsafe_legacy_authority_revision"
+    assert retained.tools[0].review_required
+    active = await restarted.get_tooling_remote_catalog(
+        DBGetToolingRemoteCatalogRequest(include_inactive=False)
+    )
+    assert active.tools == []
+
+    async with aiosqlite.connect(manager.db_path) as db:
+        assert (
+            await (
+                await db.execute(
+                    "SELECT COUNT(*) FROM tooling_remote_catalog_syncs WHERE sync_id=?",
+                    ("sync-legacy-staged",),
+                )
+            ).fetchone()
+        )[0] == 0
+        for table in (
+            "tooling_remote_catalog_stage_pages",
+            "tooling_remote_catalog_stage_tools",
+            "tooling_remote_catalog_stage_retirements",
+        ):
+            assert (
+                await (
+                    await db.execute(
+                        f"SELECT COUNT(*) FROM {table} WHERE sync_id=?",
+                        ("sync-legacy-staged",),
+                    )
+                ).fetchone()
+            )[0] == 0
+
+
+@pytest.mark.asyncio
 async def test_first_sync_retains_permission_blocked_definition_without_binding(
     tmp_path: Path,
 ) -> None:

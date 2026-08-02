@@ -9,6 +9,7 @@ Handles:
 from __future__ import annotations
 
 import contextlib
+import math
 from dataclasses import dataclass
 from datetime import UTC, datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal
@@ -527,9 +528,29 @@ def _plain_mapping(value: Any) -> Any:
     return value
 
 
+def _normalize_manifest_json_numbers(value: Any) -> Any:
+    """Normalize JSON numbers to the representation browsers can reproduce.
+
+    JSON.parse does not preserve the lexical distinction between an integral
+    float such as ``0.0`` and the integer ``0``. Projection evidence must hash
+    the same value that a browser receives, so normalize those values before
+    both hashing and transmission.
+    """
+
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("manifest JSON contains a non-finite number")
+        return int(value) if value.is_integer() else value
+    if isinstance(value, dict):
+        return {str(key): _normalize_manifest_json_numbers(item) for key, item in value.items()}
+    if isinstance(value, tuple | list):
+        return [_normalize_manifest_json_numbers(item) for item in value]
+    return value
+
+
 def _compute_service_digest(service: PeerServiceInfo) -> str:
     payload = service.model_dump(mode="json", exclude={"digest"})
-    return canonical_digest(payload)
+    return canonical_digest(_normalize_manifest_json_numbers(payload))
 
 
 def generate_manifest_ack(
@@ -686,10 +707,12 @@ def manifest_to_dict(manifest: PeerManifest) -> dict:
     Returns:
         Dictionary suitable for JSON encoding and sending via DataChannel
     """
-    return {
-        "type": "manifest",
-        **manifest.model_dump(mode="json"),
-    }
+    return _normalize_manifest_json_numbers(
+        {
+            "type": "manifest",
+            **manifest.model_dump(mode="json"),
+        }
+    )
 
 
 def manifest_ack_to_dict(ack: ManifestAck) -> dict:
@@ -1150,13 +1173,15 @@ def manifest_projection_digest(manifest: PeerManifest) -> str:
     """Return the canonical digest for recipient projection service evidence."""
 
     return canonical_digest(
-        {
-            "provider_peer_id": manifest.peer_id,
-            "services": [
-                service.model_dump(mode="json", exclude={"digest"})
-                for service in manifest.shared_services
-            ],
-        }
+        _normalize_manifest_json_numbers(
+            {
+                "provider_peer_id": manifest.peer_id,
+                "services": [
+                    service.model_dump(mode="json", exclude={"digest"})
+                    for service in manifest.shared_services
+                ],
+            }
+        )
     )
 
 

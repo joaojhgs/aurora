@@ -69,6 +69,7 @@ import {
   applyAssistantStreamDelta,
   applyAssistantTerminalUpdate,
   applyAssistantToolUpdate,
+  AppShell,
   isAssistantStreamHardTerminal,
   assistantControlsForRoute,
   assistantRemotePrivacyWarning,
@@ -150,6 +151,38 @@ class RecordingMockAuroraTransport extends MockAuroraTransport {
 }
 
 describe('Aurora production shell', () => {
+  it('keeps status and recovery pages navigable while their capabilities are unavailable', async () => {
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
+    const mesh = snapshot.routes.find((candidate) => candidate.item.id === 'mesh')
+    if (!mesh) throw new Error('Mesh route fixture is unavailable')
+    const unavailableSnapshot = {
+      ...snapshot,
+      routes: snapshot.routes.map((candidate) => candidate.item.id === 'mesh'
+        ? { ...candidate, disabled: true, routeable: false, state: 'stale' as const }
+        : candidate),
+    }
+    const onNavigate = vi.fn()
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <AppShell snapshot={unavailableSnapshot} currentPath="/" onNavigate={onNavigate}>
+          <div>Current page</div>
+        </AppShell>,
+      )
+    })
+    const meshTab = host.querySelector<HTMLAnchorElement>('[data-mobile-tab="mesh"]')
+    expect(meshTab).not.toBeNull()
+    expect(meshTab?.getAttribute('aria-disabled')).toBeNull()
+    await act(async () => meshTab?.click())
+    expect(onNavigate).toHaveBeenCalledWith('/mesh')
+
+    await act(async () => root.unmount())
+    host.remove()
+  })
+
   it('builds policy blocker signals for privacy-blocked routes', () => {
     const privacyBlocked = blockedRouteEvaluation('privacy-blocked')
     const policySignals = routeSheetPolicySignals({
@@ -370,8 +403,8 @@ describe('Aurora production shell', () => {
     expect(shellSource).toContain('Primary navigation')
     expect(shellSource).toContain('Navigation')
     expect(shellSource).toContain('Mobile navigation')
+    expect(shellSource).toContain('MobileNavigationSheet')
     expect(shellSource).toContain('MobileBottomTabs')
-    expect(shellSource).toContain('MobileSheetRouteSummary')
     expect(shellSource).toContain('Toggle activity rail')
     expect(shellSource).toContain('Route')
     expect(shellSource).toContain('Privacy')
@@ -443,7 +476,7 @@ describe('Aurora production shell', () => {
   })
 
   it('keeps mock-derived mobile tabs in the required id order', () => {
-    expect(auroraMobileTabs.map((tab) => tab.id)).toEqual(['assistant', 'memory', 'mesh', 'admin', 'settings'])
+    expect(auroraMobileTabs.map((tab) => tab.id)).toEqual(['assistant', 'mesh', 'settings'])
   })
 
   it('keeps desktop, tablet, and mobile responsive shell rules explicit', () => {
@@ -459,6 +492,26 @@ describe('Aurora production shell', () => {
     expect(css).toContain(
       '.aui-onboarding-scroll-viewport { width:100%;height:100vh;height:100dvh;overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch }'
     )
+    expect(css).toContain('height: calc(100dvh - max(env(safe-area-inset-top), 1.5rem));')
+    expect(css).toContain('margin-top: max(env(safe-area-inset-top), 1.5rem);')
+    expect(css).toContain('scroll-padding-bottom: calc(12rem + env(safe-area-inset-bottom));')
+    expect(css).toContain('max-height: min(12rem, 32dvh);')
+    expect(css).toContain('field-sizing: fixed;')
+    expect(css).toContain('.aui-webthin-invite-action {\n    margin-bottom: 0;')
+    expect(css).toContain('.aui-assistant-form .aui-route-details-trigger {\n  width:1.75rem;\n  flex:0 0 1.75rem;')
+    expect(css).toContain('.aui-chat-workspace {\n    overflow-x:hidden;\n    overscroll-behavior-x:none;')
+    expect(css).toContain('.aui-assistant-form {\n    position:relative;\n    bottom:auto;')
+    expect(css).toContain('.aui-chat-panel {\n    padding-bottom:0;\n    scroll-padding-bottom:0;')
+    expect(css).toContain('.aui-chat-scroller-content[data-slot="message-scroller-content"] {\n    padding-bottom:1.25rem;')
+    expect(css).toContain('.aui-composer-toolbar {\n    flex-wrap:nowrap;\n    overflow:hidden;')
+    expect(css).toContain('.aui-composer-selectors {\n    flex:1 1 0;\n    max-width:100%;\n    overflow-x:auto;')
+    expect(css).toContain('width: min(30rem, min(96vw, var(--aui-chat-width, 30rem)));')
+    expect(css).toContain('[data-slot="model-selector-search"] { font-size:1rem }')
+    expect(css).toContain('.aui-shell[data-navigation-open="true"] .aui-topbar {\n    z-index: 65;')
+    expect(css).toContain('.aui-mobile-menu > button {\n    position: relative;\n    z-index: 50;')
+    expect(css).toContain('.aui-content:has(.aui-assistant) {\n    overflow: hidden;\n    padding-bottom: calc(4.1rem + env(safe-area-inset-bottom));')
+    expect(css).toContain('.aui-content:has(.aui-assistant) .aui-assistant {\n    min-height: 0;\n    height: 100%;\n    overflow: hidden;\n    padding-bottom: 0;')
+    expect(css).toContain('.aui-assistant-grid,\n  .aui-chat-workspace,\n  .aui-chat-panel {\n    min-height: 0;')
   })
 
   it('maps capability graph states into disabled routes and repair actions', async () => {
@@ -1349,6 +1402,29 @@ describe('Aurora production shell', () => {
     expect(connectMode?.disabled).toBe(false)
   })
 
+  it('uses packaged Android capability evidence when the active mesh peer has no native manifest', async () => {
+    const remoteMeshTransport = new MockAuroraTransport()
+    Object.defineProperty(remoteMeshTransport, 'kind', { value: 'mesh' })
+    remoteMeshTransport.register('Native.GetCapabilityManifest', () => {
+      throw new Error('The connected server does not expose device-local Android features')
+    })
+    const mobileClient = new Aurora({ transport: remoteMeshTransport })
+
+    const snapshot = await buildShellSnapshot(mobileClient, {
+      nativeManifest: async () => androidNativeCapabilityManifestFixture,
+    })
+    const makeAvailableMode = buildOnboardingViewModel({
+      client: mobileClient,
+      snapshot,
+      selectedModeId: 'make-this-device-available',
+    }).modes.find((mode) => mode.id === 'make-this-device-available')
+
+    expect(snapshot.nativePlatform).toBe('android')
+    expect(snapshot.nativeAvailable).toBe(true)
+    expect(makeAvailableMode?.state).toBe('available-local')
+    expect(makeAvailableMode?.disabled).toBe(false)
+  })
+
   it('maps assistant attachment drafts to backend context payloads and statuses', () => {
     const item = attachmentToContextItem({
       id: 'context-1',
@@ -2069,7 +2145,7 @@ describe('Aurora production shell', () => {
     expect(snapshot.peers.find((peer) => peer.peerId === 'peer-den')?.compatibility).toContain('incompatible')
   })
 
-  it('shows outgoing pairing progress on Mesh & Peers when the incoming queue is empty', async () => {
+  it('shows outgoing pairing progress on Mesh when the incoming queue is empty', async () => {
     const transport = new MockAuroraTransport()
     transport
       .register('Auth.ListPendingPairings', () => emptyPairingQueue())
@@ -2236,12 +2312,12 @@ describe('Aurora production shell', () => {
         />
       ))
 
-      expect(container.textContent).toContain('Mesh & Peers')
-      expect(container.textContent).toContain('Pending pairing requests')
+      expect(container.textContent).toContain('Connected devices')
+      expect(container.textContent).toContain('Waiting for approval')
       expect(container.textContent).toContain('4827 1935')
       expect(container.textContent).not.toContain('Thin-shell transport')
-      expect(container.textContent).not.toContain('Mesh settings')
-      expect(container.textContent).not.toContain('Connect peer')
+      expect(container.textContent).not.toContain('Device connection settings')
+      expect(container.textContent).not.toContain('Connect device')
       expect(container.querySelectorAll('[data-slot="card"]').length).toBeGreaterThan(1)
       expect(
         container.querySelector('[data-slot="switch"]')?.hasAttribute('data-disabled'),
@@ -2259,7 +2335,7 @@ describe('Aurora production shell', () => {
         document.body.querySelectorAll<HTMLButtonElement>('button'),
       ).find((button) => button.textContent?.includes('Approve & pair'))
       await act(async () => approve?.click())
-      expect(onConfirmThinPairing).toHaveBeenCalledWith('thin-pairing-session')
+      expect(onConfirmThinPairing).toHaveBeenCalledWith('thin-pairing-session', { sharedFeatureIds: [] })
       expect(onRejectThinPairing).not.toHaveBeenCalled()
     } finally {
       await act(async () => root.unmount())
@@ -2343,7 +2419,7 @@ describe('Aurora production shell', () => {
       expect(container.textContent).toContain('Aurora host is offline')
       expect(container.textContent).toContain('Saved devices and last-known services stay visible')
       expect(container.textContent).not.toContain(
-        'Peer connection needs attention',
+        'Device connection needs attention',
       )
       expect(container.textContent).not.toContain(
         'WebRTC mesh transport is not connected',
@@ -2510,6 +2586,44 @@ describe('Aurora production shell', () => {
     }
   })
 
+  it('shows a live negotiated peer as connected when saved inbound trust is not yet mirrored', async () => {
+    const snapshot = await buildMeshPeersSnapshot(new Aurora({ transport: new MockAuroraTransport() }), meshRoute())
+    const peer = snapshot.peers.find((candidate) => candidate.peerId === 'peer-studio-gpu') ?? snapshot.peers[0]!
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    try {
+      await act(async () => root.render(
+        <MeshPeersView
+          snapshot={{
+            ...snapshot,
+            peers: [{
+              ...peer,
+              trustState: 'degraded',
+              trustLabel: 'Waiting for the other device',
+              outboundStatus: 'approved',
+              inboundStatus: 'unknown',
+              lifecycleState: 'available-remote',
+              lifecycleLabel: 'Connected',
+              connectionStatus: 'connected',
+              latencyMs: 4.6,
+            }],
+          }}
+          route={meshRoute()}
+        />
+      ))
+
+      expect(container.textContent).toContain('Remote')
+      expect(container.textContent).toContain('4.6 ms')
+      expect(container.textContent).not.toContain('Needs attention')
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
   it('does not send Auth pairing reads before Auth or the mesh runtime is ready', async () => {
     const transport = new MockAuroraTransport()
     const disabledMesh = cloneFixture(meshStatusFixture)
@@ -2551,6 +2665,45 @@ describe('Aurora production shell', () => {
     expect(authReads).toEqual([])
     expect(snapshot.meshEnabled).toBe(false)
     expect(snapshot.warnings.join(' ')).not.toMatch(/mesh peers|pairing queue|Auth devices/)
+  })
+
+  it('does not send admin Auth reads from a non-admin mesh peer session', async () => {
+    const backingTransport = new MockAuroraTransport()
+    const authReads: string[] = []
+    backingTransport
+      .register('Auth.MeshListPeers', () => {
+        authReads.push('Auth.MeshListPeers')
+        return cloneFixture(meshPeerListFixture)
+      })
+      .register('Auth.ListPendingPairings', () => {
+        authReads.push('Auth.ListPendingPairings')
+        return emptyPairingQueue()
+      })
+      .register('Auth.ListDevices', () => {
+        authReads.push('Auth.ListDevices')
+        return { devices: [] }
+      })
+    const transport = {
+      kind: 'mesh' as const,
+      request: backingTransport.request.bind(backingTransport),
+    }
+    const client = new Aurora({ transport })
+    client.auth.setMeshPeer({
+      principalId: 'mobile-peer',
+      permissions: ['Gateway.use', 'Auth.MeshListPeers'],
+      effectivePermissions: ['Gateway.use', 'Auth.MeshListPeers'],
+      source: 'webrtc_rpc',
+    })
+
+    const snapshot = await buildMeshPeersSnapshot(client, meshRoute())
+
+    expect(snapshot.peers.length).toBeGreaterThan(0)
+    expect(authReads).toEqual(['Auth.MeshListPeers'])
+    expect(client.auth.snapshot()).toEqual(expect.objectContaining({
+      state: 'mesh_peer',
+      isAuthenticated: true,
+      isDenied: false,
+    }))
   })
 
   it('builds mesh invites with mandatory signaling credentials and without pre-created pairing codes', async () => {
@@ -2598,7 +2751,7 @@ describe('Aurora production shell', () => {
       await act(async () => {
         root.render(<MeshPeersView snapshot={snapshot} route={route} />)
       })
-      const connectButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Connect peer'))
+      const connectButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Connect device'))
       expect(connectButton).toBeDefined()
 
       await act(async () => {

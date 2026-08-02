@@ -134,6 +134,13 @@ async def test_signaling_departure_cancels_reconnect_and_suppresses_pc_retry():
     rtc_client._pcs = {}
     rtc_client._reconnect_suppressed_pcs = set()
     rtc_client._cancel_negotiation_watchdog = MagicMock()
+    rtc_client._stable_peer_id_for_session = MagicMock(return_value=None)
+    rtc_client._invalidate_provider_export_peer = MagicMock()
+
+    async def close_peer_connection(connection):
+        await connection.close()
+
+    rtc_client._close_peer_connection = AsyncMock(side_effect=close_peer_connection)
 
     # Exercise the real unbound helper without constructing aiortc state.
     from app.services.gateway.webrtc.rtc_client import RTCClient
@@ -153,6 +160,7 @@ async def test_signaling_departure_cancels_reconnect_and_suppresses_pc_retry():
 
     assert retry_task.cancelled()
     assert pc in rtc_client._reconnect_suppressed_pcs
+    rtc_client._close_peer_connection.assert_awaited_once_with(pc)
     pc.close.assert_awaited_once()
 
 

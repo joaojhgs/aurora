@@ -188,7 +188,8 @@ describe('Tauri secure storage policy', () => {
       runtimeSource.indexOf('const mobileClient = configuredGatewayUrl'),
     )
 
-    expect(mobileThinBranch).toContain('memoryOnlyModePreferenceStore')
+    expect(mobileThinBranch).toContain('modePreferenceStore: runtimeModePreferenceStore')
+    expect(runtimeSource).toContain('runtimeBackedModePreferenceStore')
     expect(mobileThinBranch).not.toContain('secureModePreferenceStore')
     expect(mobileThinBranch).not.toContain('secureStorageGet')
     expect(mobileThinBranch).not.toContain('secureStorageSet')

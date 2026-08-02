@@ -79,6 +79,7 @@ describe('Tauri CI native evidence contract', () => {
   it('keeps the Linux Tauri smoke script from being only jsdom/web route tests', () => {
     const packageJson = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
 
+    expect(packageJson.scripts.build).toContain('pnpm --dir ../.. --filter @aurora/client build')
     expect(packageJson.scripts['test:ci-native-evidence']).toContain('ci-native-evidence.test.ts')
     expect(packageJson.scripts['tauri:smoke:linux']).toContain('test:ci-regression-gates')
     expect(packageJson.scripts['test:ci-regression-gates']).toContain('test:e2e:routes')
@@ -755,6 +756,9 @@ describe('Tauri CI native evidence contract', () => {
     const kotlin = repoText(
       'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt',
     )
+    const androidManifest = repoText(
+      'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/AndroidManifest.xml',
+    )
     const swift = repoText(
       'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraNativePlugin.swift',
     )
@@ -832,6 +836,10 @@ describe('Tauri CI native evidence contract', () => {
       expect(kotlin).toContain(`fun ${action}(invoke: Invoke)`)
       expect(swift).toContain(`@objc public func ${action}(_ invoke: Invoke)`)
     }
+    expect(androidManifest).toContain('<queries>')
+    expect(kotlin).toContain('canResolveExternalIntent')
+    expect(kotlin).toContain('it.packageName != activity.packageName')
+    expect(kotlin).toContain('Intent.EXTRA_EXCLUDE_COMPONENTS')
     expect(kotlin).toContain('NotificationManagerCompat.from(activity).areNotificationsEnabled()')
     expect(swift).toContain('UNUserNotificationCenter.current().getNotificationSettings')
     expect(`${kotlin}\n${swift}`).not.toMatch(/requestAuthorization\(/u)

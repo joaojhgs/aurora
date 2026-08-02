@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import json
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -200,6 +201,34 @@ def test_outbound_ice_filter_removes_only_disallowed_candidate_lines(mock_deps):
         "a=candidate:2 1 udp 1 198.51.100.10 6000 typ srflx\r\n"
         "a=end-of-candidates\r\n"
     )
+
+
+@pytest.mark.asyncio
+async def test_peer_close_cancels_aioice_retry_work_before_transport_close(client):
+    blocked = asyncio.create_task(asyncio.Event().wait())
+    timeout_handle = MagicMock()
+    transaction_future = asyncio.get_running_loop().create_future()
+    transaction = SimpleNamespace(
+        _Transaction__timeout_handle=timeout_handle,
+        _Transaction__future=transaction_future,
+    )
+    protocol = SimpleNamespace(transactions={b"transaction": transaction})
+    connection = SimpleNamespace(
+        _check_list=[SimpleNamespace(task=blocked)],
+        _protocols=[protocol],
+    )
+    ice_transport = SimpleNamespace(_connection=connection)
+    pc = SimpleNamespace(
+        _RTCPeerConnection__iceTransports=[ice_transport],
+        close=AsyncMock(),
+    )
+
+    await client._close_peer_connection(pc)  # noqa: SLF001
+
+    assert blocked.cancelled()
+    timeout_handle.cancel.assert_called_once_with()
+    assert transaction_future.cancelled()
+    pc.close.assert_awaited_once_with()
 
 
 @pytest.mark.asyncio
@@ -559,6 +588,26 @@ async def test_close_cancels_timeout_tasks(client):
     assert len(client._peer_tokens) == 0
     assert len(client._pcs) == 0
     assert len(client._peer_acl) == 0
+
+
+@pytest.mark.asyncio
+async def test_close_cancels_reconnect_proof_tasks(client):
+    """close() cancels credential checks that are still waiting on Auth."""
+    started = asyncio.Event()
+
+    async def wait_forever() -> None:
+        started.set()
+        await asyncio.Event().wait()
+
+    pc = AsyncMock()
+    task = asyncio.create_task(wait_forever())
+    await started.wait()
+    client._reconnect_proof_tasks = {"peer-a": (pc, task)}
+
+    await client.close()
+
+    assert task.cancelled()
+    assert client._reconnect_proof_tasks == {}
 
 
 @pytest.mark.asyncio

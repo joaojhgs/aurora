@@ -166,6 +166,38 @@ class TestLocalBusEdgeCases:
         assert len(received) >= 4
 
     @pytest.mark.asyncio
+    async def test_full_event_queue_drops_without_blocking_publisher(self):
+        """Best-effort events never backpressure request or command handlers."""
+
+        bus = LocalBus(event_queue_size=1, validate_topics=False)
+        topic = "test.event.full"
+        bus._evt_workers_started[topic] = True
+        await bus._evt_queues[topic].put(BusEvent(data="already queued"))
+
+        await asyncio.wait_for(
+            bus.publish(topic, BusEvent(data="must be dropped"), event=True),
+            timeout=0.1,
+        )
+
+        assert bus._evt_queues[topic].qsize() == 1
+
+    def test_has_subscribers_matches_exact_and_wildcard_topics(self):
+        bus = LocalBus(validate_topics=False)
+
+        async def handler(_envelope):
+            return None
+
+        assert bus.has_subscribers("Auth.MeshListPeers") is False
+
+        bus.subscribe("Auth.*", handler)
+
+        assert bus.has_subscribers("Auth.MeshListPeers") is True
+        assert bus.has_subscribers("Gateway.GetMeshStatus") is False
+
+        bus.unsubscribe("Auth.*", handler)
+        assert bus.has_subscribers("Auth.MeshListPeers") is False
+
+    @pytest.mark.asyncio
     async def test_wildcard_prefix_matching(self, local_bus):
         """Test wildcard subscription with prefix matching."""
         received = []
@@ -390,6 +422,10 @@ class TestLocalBusEdgeCases:
 
         # Shutdown event should be set
         assert local_bus._shutdown.is_set()
+        assert local_bus._evt_worker_tasks == {}
+        assert local_bus._cmd_worker_tasks == {}
+        assert local_bus._evt_workers_started == {}
+        assert local_bus._cmd_workers_started == {}
 
     @pytest.mark.asyncio
     async def test_multiple_subscribe_same_topic(self, local_bus):

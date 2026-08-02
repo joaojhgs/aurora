@@ -10,7 +10,7 @@ const ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS: Record<string, readonly string[]> = {
   assistant: ['Text chat'],
   memory: ['Memory & Knowledge', 'Collections', 'Search conversations'],
   tools: ['Tools & Plugins', 'Review tool sources', 'Execution approval'],
-  mesh: ['Mesh & Peers', 'Peer trust, pairing and permissions', 'Pending pairing requests', 'Network'],
+  mesh: ['Connected devices', 'This device', 'Pending requests', 'Device connections'],
   admin: ['Admin overview', 'Diagnostics'],
   services: ['Services', 'Service health and restart controls'],
   access: ['Access & RBAC', 'Roles define permission sets', 'Principals'],
@@ -230,12 +230,12 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
     await page.getByRole('link', { name: /^Mesh$/i }).focus()
     await page.keyboard.press('Enter')
     await expect(page).toHaveURL(/\/mesh$/)
-    await expect(page.getByRole('heading', { name: /Mesh/i }).first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Connected devices' }).first()).toBeVisible()
 
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto('/')
     await expect(page.getByLabel('Mobile navigation', { exact: true })).toBeVisible()
-    const mobileMenuButton = page.locator('.aui-mobile-menu').getByRole('button')
+    const mobileMenuButton = page.locator('.aui-mobile-menu > button[aria-controls="primary-navigation"]')
     await expect(mobileMenuButton).toHaveAccessibleName('Show navigation menu')
     await page.keyboard.press('Tab')
     await expect(mobileMenuButton).toBeFocused()
@@ -246,9 +246,19 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
     await expect(mobileMenuButton).toHaveAttribute('aria-expanded', 'true')
     await expect(page.locator('.aui-mobile-sheet')).toHaveCSS('visibility', 'visible')
 
+    const mobileDialog = page.getByRole('dialog', { name: 'Navigation' })
+    const closeMenuButton = mobileDialog.getByRole('button', { name: 'Close navigation menu' })
+    await page.keyboard.press('Tab')
+    await expect(closeMenuButton).toBeFocused()
+    await expectFocusedWithVisibleOutline(page, 'mobile sheet close button')
     await page.keyboard.press('Tab')
     await expect(page.locator('.aui-mobile-sheet a').first()).toBeFocused()
     await expectFocusedWithVisibleOutline(page, 'mobile sheet route link')
+    await page.keyboard.press('Shift+Tab')
+    await page.keyboard.press('Enter')
+    await expect(page.locator('.aui-mobile-menu')).toHaveAttribute('data-open', 'false')
+    await expect(mobileMenuButton).toHaveAccessibleName('Show navigation menu')
+    await expect(page.locator('.aui-mobile-sheet')).toHaveCSS('visibility', 'hidden')
   })
 
 

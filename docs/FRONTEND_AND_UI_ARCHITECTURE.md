@@ -93,6 +93,13 @@ stable peer metadata remain editable from the normal connection settings after
 the shell is unlocked. The full-screen gate owns an explicit touch-scroll
 viewport rather than changing the fixed-shell document overflow contract.
 
+On mobile mesh-node pairing, both the connection card and Mesh screen compare
+the channel-bound code and list only features that the local device catalog
+currently marks available. The chosen features become that peer relationship's
+sharing grant; Gateway administration is not presented as a mobile resource.
+A failed approval stays open and retryable, while a late result from an older
+transport cannot close a newer pairing prompt.
+
 Default bundles are unsigned and use the lean `desktop-local-minimal` sidecar profile. Python-free packages use the neutral `*:client` bundle commands; legacy `*:thin` commands delegate to them for compatibility. See [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md), [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md), and `apps/aurora-tauri/README.md`.
 
 ## Platform capability truth matrix

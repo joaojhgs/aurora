@@ -20,6 +20,7 @@ import {
   type WebRtcPeerCredentialStore,
   type PeerConnectionController,
   type PeerConnectionSnapshot,
+  type PeerPairingApproval,
   type WebRtcPeerConnectionProfile,
   type WebRtcPeerHost,
 } from '@aurora/client/webrtc'
@@ -402,6 +403,8 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   private attemptedConnect = false
   private authorizedRouteSeen = false
   private disconnected = false
+  private readonly pairingCacheTtlMs = 65_000
+  private pendingPairingCache: { sessionId?: string; verificationCode?: string; cachedAt: number } | null = null
   private unsubscribe: (() => void) | undefined
   private removeVisibilityListeners: (() => void) | undefined
   private readonly visibilityDocument: BrowserThinRuntimeConfig['visibilityDocument']
@@ -424,9 +427,22 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   }
 
   snapshot(): BrowserWebRtcSnapshot {
-    const sdk = this.sdkSnapshot ?? this.peer?.snapshot() ?? null
+    const sdk = this.peer?.snapshot() ?? this.sdkSnapshot ?? null
     const diagnostic = this.connectionDiagnostic ?? this.visibilityDiagnostic ?? this.disabledReason ?? diagnosticFromSnapshot(sdk) ?? diagnosticFromError(this.creationError)
-    const pendingPairing = pendingPairingFromSnapshot(sdk)
+    const snapshotPairing = pendingPairingFromSnapshot(sdk)
+    if (snapshotPairing) {
+      this.pendingPairingCache = {
+        cachedAt: Date.now(),
+      }
+      if (snapshotPairing.sessionId) this.pendingPairingCache.sessionId = snapshotPairing.sessionId
+      if (snapshotPairing.verificationCode) this.pendingPairingCache.verificationCode = snapshotPairing.verificationCode
+    } else if (sdk?.state) {
+      const staleCache = this.pendingPairingCache && Date.now() - this.pendingPairingCache.cachedAt > this.pairingCacheTtlMs
+      if (staleCache || sdk.state === 'authorized') {
+        this.pendingPairingCache = null
+      }
+    }
+    const pendingPairing = snapshotPairing ?? this.pendingPairingCache
     const persistence = this.credentialStore?.persistenceStatus?.()
     const out: BrowserWebRtcSnapshot = {
       state: sdk?.state ?? (this.disconnected ? 'closed' : this.creationError ? 'failed' : 'idle'),
@@ -508,14 +524,16 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     return Boolean(diagnostic && /transport[_-]?(loss|unavailable)|webrtc[_-]?transport[_-]?unavailable/i.test(`${diagnostic.code} ${diagnostic.message}`))
   }
 
-  async confirmPairing(sessionId: string): Promise<void> {
+  async confirmPairing(sessionId: string, approval?: PeerPairingApproval): Promise<void> {
     if (!this.peer) throw new AuroraError({ code: 'unavailable_service', message: CONNECTION_UNAVAILABLE_COPY })
-    await this.peer.confirmPairing(sessionId)
+    await this.peer.confirmPairing(sessionId, approval)
+    if (this.pendingPairingCache?.sessionId === sessionId) this.pendingPairingCache = null
   }
 
   async rejectPairing(sessionId: string): Promise<void> {
     if (!this.peer) return
     await this.peer.rejectPairing(sessionId)
+    if (this.pendingPairingCache?.sessionId === sessionId) this.pendingPairingCache = null
   }
 
   async getSelectedCandidatePairEvidence(): Promise<SelectedCandidatePairEvidence> {
@@ -530,6 +548,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
       this.unsubscribe = undefined
       this.removeVisibilityListeners?.()
       this.removeVisibilityListeners = undefined
+      this.pendingPairingCache = null
     }
     await this.peer?.disconnect(reason)
     if (reason === 'runtime closed') await this.credentialStore?.close()
@@ -781,7 +800,8 @@ export function parseWebRtcInvite(
   inviteText: string | null | undefined,
   config: Pick<BrowserThinRuntimeConfig, 'production' | 'allowInsecureLoopbackSignaling' | 'nodeName' | 'signalingUrl'> = {}
 ): ParsedWebRtcInvite | null {
-  const invite = inviteText ? decodeMeshInvite(inviteText) : null
+  const trimmedInvite = typeof inviteText === 'string' ? inviteText.trim() : ''
+  const invite = trimmedInvite ? decodeMeshInvite(trimmedInvite) : null
   if (!invite) return null
   const signaling = record(invite.signaling)
   const node = record(invite.node)
@@ -889,8 +909,17 @@ function statusFromSnapshot(
 }
 
 function pendingPairingFromSnapshot(snapshot: PeerConnectionSnapshot | null): { sessionId?: string; verificationCode?: string } | null {
+  if (snapshot?.state === 'authorized') return null
   const pending = (snapshot as unknown as { pendingPairing?: { sessionId?: string; verificationCode?: string } } | null)?.pendingPairing
-  return pending ?? null
+  if (pending) return pending
+  const legacy = snapshot as unknown as { pairingSessionId?: string; pairingVerificationCode?: string } | null
+  if (legacy?.pairingSessionId || legacy?.pairingVerificationCode) {
+    const next: { sessionId?: string; verificationCode?: string } = {}
+    if (legacy.pairingSessionId) next.sessionId = legacy.pairingSessionId
+    if (legacy.pairingVerificationCode) next.verificationCode = legacy.pairingVerificationCode
+    return next
+  }
+  return null
 }
 
 function emptySelectedCandidatePairEvidence(): SelectedCandidatePairEvidence {
@@ -903,6 +932,7 @@ function emptySelectedCandidatePairEvidence(): SelectedCandidatePairEvidence {
 }
 
 function diagnosticFromSnapshot(snapshot: PeerConnectionSnapshot | null): string | undefined {
+  if (snapshot?.state === 'authorized') return undefined
   const diagnostic = `${snapshot?.lastRedactedError?.code ?? ''} ${snapshot?.lastRedactedError?.message ?? ''}`.trim()
   if (isExpectedOfflineDiagnostic(diagnostic)) return undefined
   return productDiagnosticFromValue(diagnostic)

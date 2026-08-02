@@ -137,6 +137,16 @@ describe('hostile production copy mapping for assistant and data surfaces', () =
       .resolves.toMatchObject({ loadState: 'unavailable' })
   })
 
+  it('presents shared-device choices without exposing internal availability states', () => {
+    const markup = renderToStaticMarkup(<RoutePolicyView snapshot={routePolicySnapshot(hostileEvaluation())} />)
+    const rendered = renderedUserCopy(markup)
+
+    expect(rendered).toContain('How Aurora chooses a device')
+    expect(rendered).toContain('Example tasks')
+    expect(rendered).toContain('Device choice needed')
+    expect(rendered).not.toMatch(/\b(?:route policy|decision matrix|selected scenario|route explain|available-local|available-remote|privacy-blocked|explicit selector|required provider)\b/iu)
+  })
+
   it('keeps microphone route warnings product-safe while preserving the privacy class value', () => {
     const route = rawAudioAssistantRoute()
 

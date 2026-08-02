@@ -1,5 +1,5 @@
 import type { LocalDataSession, LocalToolStateRecord, PeerGrantMetadataRecord } from '../local-data/index.js'
-import type { IssuedPeerBearerCredential, PeerRelationshipSelector } from '../peer-host/authority.js'
+import type { IssuedPeerBearerCredential, PeerPairingIssueOptions, PeerRelationshipSelector } from '../peer-host/authority.js'
 import { PeerGrantManager, type PeerGrantSummary } from '../peer-host/grant-management.js'
 import type { ToolingProjectionToolInfo } from '../types.js'
 import { MESH_NODE_TOOLING_METHOD_IDS } from './mesh-node-provider.js'
@@ -54,11 +54,21 @@ export interface LocalFeatureSharingStatus {
 }
 
 export interface PeerPairingIssuerLike {
-  issue(selector: PeerRelationshipSelector, options?: { expiresAtMs?: number }): Promise<IssuedPeerBearerCredential>
+  issue(selector: PeerRelationshipSelector, options?: PeerPairingIssueOptions): Promise<IssuedPeerBearerCredential>
+  rollback(selector: PeerRelationshipSelector): Promise<void>
 }
 
 export interface TrustedPeerRelationshipRegistry {
   registerTrustedRelationship(selector: PeerRelationshipSelector, peerLabel?: string | null): void
+  commitPairingRelationship(
+    selector: PeerRelationshipSelector,
+    peerLabel: string | null,
+    featureIds: readonly string[],
+    expiresAtMs: number | null,
+    retireRelationships: (selectors: readonly PeerRelationshipSelector[]) => Promise<void>
+  ): Promise<void>
+  rollbackPairingRelationship(selector: PeerRelationshipSelector): Promise<void>
+  requiredPermissionsForFeatures?(featureIds: readonly string[]): readonly string[]
 }
 
 export interface DurableFeatureSharingControllerOptions {
@@ -118,10 +128,41 @@ export class TrackingPeerPairingIssuer implements PeerPairingIssuerLike {
     this.labelForSelector = options.labelForSelector
   }
 
-  async issue(selector: PeerRelationshipSelector, options: { expiresAtMs?: number } = {}): Promise<IssuedPeerBearerCredential> {
+  async issue(selector: PeerRelationshipSelector, options: PeerPairingIssueOptions = {}): Promise<IssuedPeerBearerCredential> {
+    const peerLabel = this.labelForSelector?.(selector) ?? null
     const issued = await this.delegate.issue(selector, options)
-    this.registry.registerTrustedRelationship(selector, this.labelForSelector?.(selector) ?? null)
-    return issued
+    try {
+      await this.registry.commitPairingRelationship(
+        selector,
+        peerLabel,
+        options.featureIds ?? [],
+        options.expiresAtMs ?? null,
+        async (replacedSelectors) => {
+          for (const replaced of replacedSelectors) await this.delegate.rollback(replaced)
+        }
+      )
+      const grantedPermissions = this.registry.requiredPermissionsForFeatures?.(options.featureIds ?? []) ?? []
+      return {
+        ...issued,
+        grantedPermissions: [...grantedPermissions]
+      }
+    } catch (error) {
+      await Promise.allSettled([
+        this.registry.rollbackPairingRelationship(selector),
+        this.delegate.rollback(selector)
+      ])
+      throw error
+    }
+  }
+
+  async rollback(selector: PeerRelationshipSelector): Promise<void> {
+    const results = await Promise.allSettled([
+      this.registry.rollbackPairingRelationship(selector),
+      this.delegate.rollback(selector)
+    ])
+    if (results.some((result) => result.status === 'rejected')) {
+      throw new DurableFeatureSharingError('sharing_unavailable')
+    }
   }
 }
 
@@ -202,6 +243,82 @@ export class DurableFeatureSharingController implements LocalFeatureSharingPort,
     }
   }
 
+  async commitPairingRelationship(
+    selector: PeerRelationshipSelector,
+    peerLabel: string | null,
+    featureIds: readonly string[],
+    expiresAtMs: number | null,
+    retireRelationships: (selectors: readonly PeerRelationshipSelector[]) => Promise<void>
+  ): Promise<void> {
+    await this.withWriteLock(async () => {
+      this.requireLoaded()
+      const parsed = normalizeSelector(selector)
+      const selectedTools = this.validateSelectedFeatures(featureIds)
+      const peerId = parsed.claimantPeerId
+      const previous = (this.trustedRelationships.get(peerId) ?? [])
+        .filter((relationship) => !selectorEquals(relationship.selector, parsed))
+      await retireRelationships(previous.map((relationship) => ({ ...relationship.selector })))
+      let sharing: ActiveSharing
+      try {
+        sharing = await this.writeSharing(parsed, selectedTools, expiresAtMs)
+        let cleanupFailed = false
+        for (const relationship of previous) {
+          try {
+            await this.grantManager.revokeSharing(relationship.selector)
+          } catch {
+            cleanupFailed = true
+          }
+        }
+        if (cleanupFailed) throw new DurableFeatureSharingError('sharing_unavailable')
+      } catch (error) {
+        await this.grantManager.revokeSharing(parsed).catch(() => undefined)
+        if (error instanceof DurableFeatureSharingError) throw error
+        throw new DurableFeatureSharingError('sharing_unavailable')
+      }
+      this.trustedRelationships.set(peerId, [{
+        selector: parsed,
+        peerLabel: sanitizeLabel(peerLabel) ?? peerId
+      }])
+      this.activeSharing.set(peerId, sharing)
+      this.publishStatus(readyStatus())
+      this.publishSnapshot()
+    })
+  }
+
+  requiredPermissionsForFeatures(featureIds: readonly string[]): readonly string[] {
+    return sortedUnique(
+      this.validateSelectedFeatures(featureIds)
+        .flatMap((tool) => tool.descriptor.requiredPermissions)
+    )
+  }
+
+  async rollbackPairingRelationship(selector: PeerRelationshipSelector): Promise<void> {
+    await this.withWriteLock(async () => {
+      this.requireLoaded()
+      const parsed = normalizeSelector(selector)
+      try {
+        await this.grantManager.revokeSharing(parsed)
+      } catch {
+        throw new DurableFeatureSharingError('sharing_unavailable')
+      }
+      const peerId = parsed.claimantPeerId
+      const relationships = this.trustedRelationships.get(peerId) ?? []
+      const remaining = relationships.filter((relationship) => !selectorEquals(relationship.selector, parsed))
+      if (remaining.length === 0) this.trustedRelationships.delete(peerId)
+      else this.trustedRelationships.set(peerId, remaining)
+      this.activeSharing.delete(peerId)
+      if (remaining.length === 1) {
+        try {
+          const active = (await this.activeGrants(remaining[0]!.selector))[0]
+          this.activeSharing.set(peerId, active ? activeSharingFromSummary(active) : { featureIds: [], expiresAtMs: null })
+        } catch (error) {
+          this.publishStatus(statusFromError(error))
+        }
+      }
+      this.publishSnapshot()
+    })
+  }
+
   async load(): Promise<LocalFeatureSharingSnapshot> {
     const tools = this.registeredTools()
     const states = await this.session.localTools.listLocalToolStates()
@@ -256,30 +373,7 @@ export class DurableFeatureSharingController implements LocalFeatureSharingPort,
       const normalizedPeerId = validateId(peerId, 'invalid_peer')
       const selector = this.exactSelectorForPeer(normalizedPeerId)
       const selectedTools = this.validateSelectedFeatures(featureIds)
-      if (selectedTools.length === 0) {
-        try {
-          await this.grantManager.revokeSharing(selector)
-        } catch {
-          throw new DurableFeatureSharingError('sharing_unavailable')
-        }
-        this.activeSharing.set(normalizedPeerId, { featureIds: [], expiresAtMs: null })
-        this.publishSnapshot()
-        return
-      }
-      const selection = {
-        allowedMethodIds: MESH_NODE_TOOLING_METHOD_IDS,
-        allowedToolContractIds: selectedTools.map((tool) => tool.descriptor.toolContractId),
-        capabilityPackIds: sortedUnique(selectedTools.flatMap((tool) => tool.descriptor.nativeRequirements.capabilityIds)),
-        resourceScopes: sortedUnique(selectedTools.flatMap((tool) => tool.descriptor.resourceScopes)),
-        ...(expiresAtMs === null ? {} : { expiresAtMs })
-      }
-      let summary: PeerGrantSummary
-      try {
-        summary = await this.grantManager.replaceGrant(selector, selection)
-      } catch {
-        throw new DurableFeatureSharingError('sharing_unavailable')
-      }
-      this.activeSharing.set(normalizedPeerId, activeSharingFromSummary(summary))
+      this.activeSharing.set(normalizedPeerId, await this.writeSharing(selector, selectedTools, expiresAtMs))
       this.publishSnapshot()
     })
   }
@@ -324,6 +418,33 @@ export class DurableFeatureSharingController implements LocalFeatureSharingPort,
   private async activeGrants(selector: PeerRelationshipSelector): Promise<readonly PeerGrantSummary[]> {
     try {
       return await this.grantManager.listActiveGrants(selector)
+    } catch {
+      throw new DurableFeatureSharingError('sharing_unavailable')
+    }
+  }
+
+  private async writeSharing(
+    selector: PeerRelationshipSelector,
+    selectedTools: readonly RegisteredLocalTool[],
+    expiresAtMs: number | null
+  ): Promise<ActiveSharing> {
+    if (selectedTools.length === 0) {
+      try {
+        await this.grantManager.revokeSharing(selector)
+      } catch {
+        throw new DurableFeatureSharingError('sharing_unavailable')
+      }
+      return { featureIds: [], expiresAtMs: null }
+    }
+    const selection = {
+      allowedMethodIds: MESH_NODE_TOOLING_METHOD_IDS,
+      allowedToolContractIds: selectedTools.map((tool) => tool.descriptor.toolContractId),
+      capabilityPackIds: sortedUnique(selectedTools.flatMap((tool) => tool.descriptor.nativeRequirements.capabilityIds)),
+      resourceScopes: sortedUnique(selectedTools.flatMap((tool) => tool.descriptor.resourceScopes)),
+      ...(expiresAtMs === null ? {} : { expiresAtMs })
+    }
+    try {
+      return activeSharingFromSummary(await this.grantManager.replaceGrant(selector, selection))
     } catch {
       throw new DurableFeatureSharingError('sharing_unavailable')
     }

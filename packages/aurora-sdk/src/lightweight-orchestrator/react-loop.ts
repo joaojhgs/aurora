@@ -27,6 +27,8 @@ interface PendingConfirmation {
   readonly toolCall: LightweightToolCall
   readonly prepared: ToolingPrepareExecutionResponse
   readonly approvalRequestId: string
+  readonly providerId: string | null
+  readonly modelId: string | null
   readonly controller: AbortController
   readonly timeoutHandle: unknown
   readonly expiresAtMs: number
@@ -79,13 +81,19 @@ export class LightweightOrchestrator {
       assertTextBound(input.text, this.limits.maxPromptBytes, 'prompt_too_large')
       await this.ensureConversation(conversationId)
       conversationReady = true
+      const history = await this.loadConversationHistory(conversationId)
       await this.appendState(conversationId, 'user', 'complete', { content: input.text })
-      let messages: LightweightProviderMessage[] = [{ role: 'user', content: input.text }]
+      let messages: LightweightProviderMessage[] = [...history, { role: 'user', content: input.text }]
       let assistantText = ''
       let totalTools = 0
       for (let iteration = 0; iteration < this.limits.maxIterations; iteration += 1) {
         throwIfAborted(controller.signal)
-        const providerResponse = await this.callProvider(messages, controller.signal)
+        const providerResponse = await this.callProvider(
+          messages,
+          controller.signal,
+          input.providerId ?? null,
+          input.modelId ?? null
+        )
         if (providerResponse.type === 'message') {
           assertTextBound(providerResponse.content, this.limits.maxProviderResponseBytes, 'provider_response_too_large')
           await this.appendState(conversationId, 'assistant', 'complete', { content: providerResponse.content })
@@ -93,7 +101,14 @@ export class LightweightOrchestrator {
         }
         totalTools += providerResponse.toolCalls.length
         if (totalTools > this.limits.maxTotalTools) throw new LightweightOrchestratorError('tool_total_limit_exceeded')
-        const preparedMessages = await this.executeToolCalls(conversationId, messages, providerResponse, controller)
+        const preparedMessages = await this.executeToolCalls(
+          conversationId,
+          messages,
+          providerResponse,
+          controller,
+          input.providerId ?? null,
+          input.modelId ?? null
+        )
         if ('confirmation' in preparedMessages) {
           return {
             status: 'awaiting_confirmation',
@@ -131,6 +146,7 @@ export class LightweightOrchestrator {
     this.pending.delete(input.token)
     this.timers.clearTimeout(pending.timeoutHandle)
     if (input.decision === 'deny') {
+      await this.denyApproval(pending, input.grantScope ?? 'deny_once')
       pending.controller.abort()
       await this.appendState(pending.conversationId, 'tool', 'cancelled', { tool: { type: 'tool_cancelled', toolCall: persistedToolCall(pending.toolCall), secretsRedacted: true } })
       return {
@@ -142,10 +158,19 @@ export class LightweightOrchestrator {
     }
     const controller = this.turnController(input.signal)
     try {
-      const approval = await this.confirmApproval(pending, controller.signal)
+      const approval = await this.confirmApproval(
+        pending,
+        controller.signal,
+        input.grantScope ?? 'once'
+      )
       const result = await this.executePreparedTool(pending.toolCall, pending.prepared, controller.signal, approval.approval_token)
       const messages = [...pending.messages, toolResultMessage(pending.toolCall, result)]
-      const providerResponse = await this.callProvider(messages, controller.signal)
+      const providerResponse = await this.callProvider(
+        messages,
+        controller.signal,
+        pending.providerId,
+        pending.modelId
+      )
       if (providerResponse.type !== 'message') {
         throw new LightweightOrchestratorError('provider_nested_confirmation_not_supported')
       }
@@ -187,13 +212,22 @@ export class LightweightOrchestrator {
     conversationId: string,
     messages: LightweightProviderMessage[],
     providerResponse: Extract<LightweightProviderResponse, { type: 'tool_calls' }>,
-    controller: AbortController
+    controller: AbortController,
+    providerId: string | null,
+    modelId: string | null
   ): Promise<{ messages: LightweightProviderMessage[] } | { confirmation: NonNullable<LightweightTurnResult['confirmation']> }> {
     if (providerResponse.toolCalls.length === 0 || providerResponse.toolCalls.length > this.limits.maxToolsPerIteration) {
       throw new LightweightOrchestratorError('tool_iteration_limit_exceeded')
     }
     const seen = new Set<string>()
-    const nextMessages = [...messages]
+    const nextMessages: LightweightProviderMessage[] = [
+      ...messages,
+      {
+        role: 'assistant',
+        content: providerResponse.content ?? '',
+        toolCalls: providerResponse.toolCalls
+      }
+    ]
     for (const toolCall of providerResponse.toolCalls) {
       this.validateToolCall(toolCall, seen)
       const prepared = await this.prepareTool(toolCall)
@@ -212,6 +246,8 @@ export class LightweightOrchestrator {
           toolCall,
           prepared,
           approvalRequestId: approval.approval_request_id,
+          providerId,
+          modelId,
           controller,
           timeoutHandle: this.timers.setTimeout(() => {
             void this.expirePending(token)
@@ -294,13 +330,17 @@ export class LightweightOrchestrator {
     })
   }
 
-  private async confirmApproval(pending: PendingConfirmation, signal: AbortSignal) {
+  private async confirmApproval(
+    pending: PendingConfirmation,
+    signal: AbortSignal,
+    grantScope: import('../types.js').ToolingApprovalGrantScope
+  ) {
     throwIfAborted(signal)
     const response = await this.options.tools.confirmExecution({
       approval_request_id: pending.approvalRequestId,
       approver_principal_id: this.options.approvalPrincipalId ?? this.options.scope.profileId,
       approve: true,
-      grant_scope: 'once',
+      grant_scope: grantScope,
       reason: 'lightweight_assistant_confirmation',
       correlation_id: pending.prepared.correlation_id
     })
@@ -308,6 +348,23 @@ export class LightweightOrchestrator {
       throw new LightweightOrchestratorError(response.error ?? 'approval_token_required')
     }
     return response
+  }
+
+  private async denyApproval(
+    pending: PendingConfirmation,
+    grantScope: import('../types.js').ToolingApprovalGrantScope
+  ): Promise<void> {
+    const response = await this.options.tools.confirmExecution({
+      approval_request_id: pending.approvalRequestId,
+      approver_principal_id: this.options.approvalPrincipalId ?? this.options.scope.profileId,
+      approve: false,
+      grant_scope: grantScope,
+      reason: 'lightweight_assistant_confirmation_denied',
+      correlation_id: pending.prepared.correlation_id
+    })
+    if (response.ok) {
+      throw new LightweightOrchestratorError('approval_denial_malformed')
+    }
   }
 
   private confirmationExpiresAtMs(prepared: ToolingPrepareExecutionResponse, backendExpiresAtSeconds: number | null): number {
@@ -333,7 +390,12 @@ export class LightweightOrchestrator {
     await this.appendState(pending.conversationId, 'tool', 'cancelled', { tool: { type: 'tool_cancelled', toolCall: persistedToolCall(pending.toolCall), secretsRedacted: true } })
   }
 
-  private async callProvider(messages: LightweightProviderMessage[], parentSignal: AbortSignal): Promise<LightweightProviderResponse> {
+  private async callProvider(
+    messages: LightweightProviderMessage[],
+    parentSignal: AbortSignal,
+    providerId: string | null,
+    modelId: string | null
+  ): Promise<LightweightProviderResponse> {
     assertSerializedBound(messages.slice(-this.limits.maxHistoryMessages), this.limits.maxPromptBytes, 'history_too_large')
     const controller = this.timeoutController(parentSignal, this.limits.providerCallTimeoutMs, 'provider_call_timeout')
     try {
@@ -341,6 +403,8 @@ export class LightweightOrchestrator {
         messages: messages.slice(-this.limits.maxHistoryMessages),
         tools: this.options.availableTools,
         maxToolCalls: this.limits.maxToolsPerIteration,
+        providerId,
+        modelId,
         signal: controller.signal
       })
       assertSerializedBound(response, this.limits.maxProviderResponseBytes, 'provider_response_too_large')
@@ -376,6 +440,21 @@ export class LightweightOrchestrator {
 
   private async ensureConversation(conversationId: string): Promise<void> {
     const now = this.nowMs()
+    const existing = (await this.options.localData.conversations.listConversations())
+      .find((conversation) => conversation.id === conversationId)
+    if (existing) {
+      if (
+        existing.profileId !== this.options.scope.profileId
+        || existing.localNodeId !== this.options.scope.localNodeId
+      ) {
+        throw new LightweightOrchestratorError('conversation_scope_mismatch')
+      }
+      await this.options.localData.conversations.upsertConversation({
+        ...existing,
+        updatedAtMs: Math.max(existing.updatedAtMs, now)
+      })
+      return
+    }
     const record: ConversationRecord = {
       id: conversationId,
       profileId: this.options.scope.profileId,
@@ -386,6 +465,42 @@ export class LightweightOrchestrator {
       archivedAtMs: null
     }
     await this.options.localData.conversations.upsertConversation(record)
+  }
+
+  private async loadConversationHistory(conversationId: string): Promise<LightweightProviderMessage[]> {
+    const records = await this.options.localData.conversations.listMessages(conversationId)
+    const historyLimit = Math.max(0, this.limits.maxHistoryMessages - 1)
+    if (historyLimit === 0) return []
+    const candidates = records
+      .filter((record) => record.status === 'complete' && record.role !== 'tool' && record.contentEnvelope !== null)
+      .slice(-historyLimit)
+    const messages: LightweightProviderMessage[] = []
+    for (const record of candidates) {
+      const envelope = record.contentEnvelope
+      if (!envelope) continue
+      const crypto = this.options.localDataCrypto
+      if (!crypto) throw new LightweightOrchestratorError('history_decrypt_unavailable')
+      try {
+        const plaintext = await crypto.decrypt(
+          envelope,
+          buildEnvelopeAad({
+            table: 'aurora_messages',
+            recordId: record.id,
+            field: 'content_envelope_json',
+            profileId: this.options.scope.profileId,
+            localNodeId: this.options.scope.localNodeId
+          })
+        )
+        const content = new TextDecoder('utf-8', { fatal: true }).decode(plaintext)
+        assertTextBound(content, this.limits.maxPromptBytes, 'history_message_too_large')
+        messages.push({ role: record.role, content })
+      } catch (error) {
+        if (error instanceof LightweightOrchestratorError) throw error
+        throw new LightweightOrchestratorError('history_decrypt_failed')
+      }
+    }
+    assertSerializedBound(messages, this.limits.maxProviderRequestBytes, 'history_too_large')
+    return messages
   }
 
   private async appendState(

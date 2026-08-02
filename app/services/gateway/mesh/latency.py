@@ -76,8 +76,14 @@ class LatencyMonitor:
                 log_warning(f"LatencyMonitor: Error in ping loop: {e}")
 
     async def _ping_all_peers(self) -> None:
-        """Send a ping to every negotiated peer."""
-        peers = self._registry.get_negotiated_peers()
+        """Send a ping to every authenticated transport peer.
+
+        Consumer-only thin peers do not advertise provider manifests, so they
+        can remain in ``authenticated`` state for their entire connection.
+        Stale peers must also keep receiving probes so a pong can restore their
+        live status.
+        """
+        peers = self._registry.get_all_peers()
         for peer in peers:
             try:
                 self.ping_peer(peer.peer_id)

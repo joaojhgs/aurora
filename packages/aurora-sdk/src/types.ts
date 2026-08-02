@@ -100,6 +100,44 @@ export interface OrchestratorResponse {
   metadata?: JsonObject
 }
 
+export interface OrchestratorChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool'
+  content: string
+  name?: string | null
+  tool_call_id?: string | null
+  tool_calls?: JsonObject[]
+  metadata?: JsonObject
+}
+
+export interface OrchestratorInferChatRequest {
+  messages: OrchestratorChatMessage[]
+  stream?: boolean
+  model_id?: string | null
+  provider_id?: string | null
+  tools?: JsonObject[]
+  tool_choice?: JsonObject | string | boolean | null
+  params?: JsonObject
+  correlation_id?: string | null
+  session_id?: string | null
+  request_id?: string | null
+  mesh_selector?: JsonObject | null
+  selector?: JsonObject | null
+  metadata?: JsonObject
+}
+
+export interface OrchestratorInferChatResponse {
+  text: string
+  message?: OrchestratorChatMessage | null
+  model_id?: string | null
+  provider_id?: string | null
+  finish_reason?: string | null
+  correlation_id?: string | null
+  session_id?: string | null
+  request_id?: string | null
+  metadata?: JsonObject
+  secrets_redacted: boolean
+}
+
 export interface AssistantRoutePolicy {
   providerId?: string | null
   peerId?: string | null
@@ -1525,6 +1563,11 @@ export type MeshCompatibilityReasonCode =
   | 'provider_at_capacity'
   | 'legacy_unverifiable'
 
+/** Stable route-ineligibility reasons, including transient provider availability. */
+export type MeshRoutingReasonCode =
+  | MeshCompatibilityReasonCode
+  | 'provider_unavailable'
+
 export type MeshServiceCompatibilityStatus = 'compatible' | 'incompatible' | 'unused'
 
 export interface ManifestServiceCompatibility {
@@ -1655,7 +1698,7 @@ export interface MeshServiceRoutingSummary {
   policy_revision: number
   eligible_provider_ids: string[]
   ineligible_provider_ids: string[]
-  reason_codes: MeshCompatibilityReasonCode[]
+  reason_codes: MeshRoutingReasonCode[]
 }
 
 export interface MeshStatusResponse {

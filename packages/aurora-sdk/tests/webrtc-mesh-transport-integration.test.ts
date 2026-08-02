@@ -215,14 +215,19 @@ describe('WebRtcMeshPeerBridge with MeshP2PTransport and AuroraClient', () => {
 
   it('streams assistant updates over mesh and reports transport_lost after partial event without fallback', async () => {
     const { session, client } = makeClient(['sub-stream', 'call-stream'])
-    const iterator = client.assistant.streamMessage({ text: 'hello', requestId: 'corr-stream', timeoutMs: 5_000 })[Symbol.asyncIterator]()
+    const iterator = client.assistant.streamMessage({
+      text: 'hello',
+      requestId: 'corr-stream',
+      timeoutMs: 5_000,
+      clientTtsPlayback: true
+    })[Symbol.asyncIterator]()
     const first = iterator.next()
     await tick()
 
     expect(session.sent[0]).toEqual({
       type: 'subscribe',
       id: 'sub-stream',
-      topics: ['Orchestrator.Response', 'TTS.AudioChunk'],
+      topics: ['Orchestrator.Response'],
       correlation_ids: ['corr-stream'],
       ttl_seconds: 60
     })
@@ -231,7 +236,7 @@ describe('WebRtcMeshPeerBridge with MeshP2PTransport and AuroraClient', () => {
       id: 'sub-stream',
       subscription_id: 'sub-stream',
       accepted: true,
-      accepted_topics: ['Orchestrator.Response', 'TTS.AudioChunk'],
+      accepted_topics: ['Orchestrator.Response'],
       rejected_topics: [],
       correlation_ids: ['corr-stream'],
       ttl_seconds: 60,
@@ -243,7 +248,8 @@ describe('WebRtcMeshPeerBridge with MeshP2PTransport and AuroraClient', () => {
       type: 'call',
       id: 'corr-stream',
       correlation_id: 'corr-stream',
-      method: 'Orchestrator.ExternalUserInput'
+      method: 'Orchestrator.ExternalUserInput',
+      params: expect.objectContaining({ client_tts_playback: false })
     })
 
     session.emit({ type: 'event', topic: 'Orchestrator.Response', correlation_id: 'corr-stream', params: { kind: 'assistant.delta', delta: 'hel', request_id: 'corr-stream', session_id: 'corr-stream' } })
@@ -252,6 +258,57 @@ describe('WebRtcMeshPeerBridge with MeshP2PTransport and AuroraClient', () => {
     const second = iterator.next()
     session.closeAsTransportLoss()
     await expect(second).resolves.toMatchObject({ value: { kind: 'transport_lost' }, done: false })
+  })
+
+  it('requests optional assistant audio only when the authenticated session grants TTS use', async () => {
+    const { session, client } = makeClient(['sub-audio', 'call-audio'])
+    client.auth.setUser({
+      principalId: 'principal-a',
+      permissions: ['Orchestrator.use', 'TTS.use'],
+      effectivePermissions: ['Orchestrator.use', 'TTS.use']
+    })
+    const iterator = client.assistant.streamMessage({
+      text: 'hello with audio',
+      requestId: 'corr-audio',
+      timeoutMs: 5_000,
+      clientTtsPlayback: true
+    })[Symbol.asyncIterator]()
+    const first = iterator.next()
+    await tick()
+
+    expect(session.sent[0]).toEqual({
+      type: 'subscribe',
+      id: 'sub-audio',
+      topics: ['Orchestrator.Response', 'TTS.AudioChunk'],
+      correlation_ids: ['corr-audio'],
+      ttl_seconds: 60
+    })
+    session.emit({
+      type: 'subscribed',
+      id: 'sub-audio',
+      subscription_id: 'sub-audio',
+      accepted: true,
+      accepted_topics: ['Orchestrator.Response', 'TTS.AudioChunk'],
+      rejected_topics: [],
+      correlation_ids: ['corr-audio'],
+      ttl_seconds: 60,
+      reason: null,
+      idempotent: false
+    })
+    await tick()
+    expect(session.sent[1]).toMatchObject({
+      type: 'call',
+      id: 'corr-audio',
+      params: expect.objectContaining({ client_tts_playback: true })
+    })
+    session.emit({
+      type: 'event',
+      topic: 'Orchestrator.Response',
+      correlation_id: 'corr-audio',
+      params: { kind: 'assistant.completed', text: 'done', request_id: 'corr-audio' }
+    })
+    await expect(first).resolves.toMatchObject({ value: { kind: 'completed', text: 'done' } })
+    await iterator.return?.()
   })
 
 

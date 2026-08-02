@@ -116,7 +116,8 @@ describe('Assistant inline tool approval', () => {
       }
     ])
     expect(container.textContent).toContain('The approved tool completed successfully.')
-    expect(container.textContent).toContain('Aurora finished this action.')
+    expect(container.textContent).toContain('Action finished.')
+    expect(container.querySelector('[data-slot="tool-fallback-root"]')).not.toBeNull()
   })
 
   it('binds a fresh streamed turn and its approval resume to the same session', async () => {
@@ -215,7 +216,9 @@ describe('Assistant inline tool approval', () => {
     })
     await waitUntil(() => container.textContent?.includes('Needs approval') === true)
 
-    expect(countText(container.textContent ?? '', 'Aurora paused for a tool approval decision.')).toBe(1)
+    expect(container.querySelector('.aui-chat-tool [data-slot="tool-fallback-root"]')).not.toBeNull()
+    expect(container.querySelector('.aui-chat-assistant [data-slot="tool-fallback-root"]')).toBeNull()
+    expect(countText(container.textContent ?? '', 'Aurora paused for a tool approval decision.')).toBe(0)
     const approveButton = findButtonByText(container, 'Approve once')
     expect(approveButton).not.toBeNull()
     await act(async () => {
@@ -229,6 +232,55 @@ describe('Assistant inline tool approval', () => {
     expect(initialCall?.payload.session_id).toEqual(expect.any(String))
     expect(initialCall?.payload.session_id).toBe(initialCall?.payload.request_id)
     expect(resumeCall?.payload.session_id).toBe(initialCall?.payload.session_id)
+  })
+
+  it('sends newly typed text instead of replaying the failed prompt', async () => {
+    const prompts: string[] = []
+    const transport = MockAuroraTransport.empty()
+      .stream('assistant', async function* (request) {
+        const payload = request.payload as { text?: unknown }
+        prompts.push(typeof payload.text === 'string' ? payload.text : '')
+        throw new Error('connection interrupted')
+      })
+    const client = new Aurora({ transport })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          initialSession={{ sessionId: 'retry-session', messages: [] }}
+        />
+      )
+      await Promise.resolve()
+    })
+
+    const composer = container.querySelector<HTMLTextAreaElement>('#assistant-prompt')
+    expect(composer).not.toBeNull()
+    await enterPrompt(container, composer!, 'first prompt')
+    await waitUntil(() => prompts.length === 1)
+    await waitUntil(() => container.querySelector('[aria-label="Retry last assistant prompt"]') !== null)
+
+    await act(async () => {
+      setNativeValue(composer!, 'fresh prompt')
+      composer!.dispatchEvent(new Event('input', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    const sendButton = container.querySelector<HTMLButtonElement>('[aria-label="Send assistant prompt"]')
+    expect(sendButton).not.toBeNull()
+    expect(sendButton!.disabled).toBe(false)
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+    await waitUntil(() => prompts.length === 2)
+
+    expect(prompts).toEqual(['first prompt', 'fresh prompt'])
   })
 })
 
@@ -260,6 +312,21 @@ function setNativeValue(element: HTMLInputElement | HTMLTextAreaElement, value: 
   const prototype = Object.getPrototypeOf(element) as HTMLElement
   const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value')
   descriptor?.set?.call(element, value)
+}
+
+async function enterPrompt(container: HTMLElement, composer: HTMLTextAreaElement, prompt: string) {
+  await act(async () => {
+    setNativeValue(composer, prompt)
+    composer.dispatchEvent(new Event('input', { bubbles: true }))
+    await Promise.resolve()
+  })
+  const sendButton = container.querySelector<HTMLButtonElement>('[aria-label="Send assistant prompt"]')
+  expect(sendButton).not.toBeNull()
+  expect(sendButton!.disabled).toBe(false)
+  await act(async () => {
+    sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await Promise.resolve()
+  })
 }
 
 async function waitUntil(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {

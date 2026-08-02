@@ -49,6 +49,65 @@
   padding: 0 14px;
 }
 
+.ata-local-feature-approval {
+  max-height: min(80dvh, 38rem);
+  overflow: hidden;
+}
+
+.ata-local-feature-approval-kicker {
+  color: var(--aui-primary);
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ata-local-feature-approval-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ata-local-feature-approval-description {
+  color: var(--aui-text);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.ata-local-feature-approval-preview {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--aui-border);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--aui-surface-3) 30%, transparent);
+}
+
+.ata-local-feature-approval-preview-row {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.ata-local-feature-approval-preview-row dt,
+.ata-local-feature-approval-queue {
+  color: var(--aui-muted);
+  font-size: 0.75rem;
+}
+
+.ata-local-feature-approval-preview-row dd {
+  max-height: 7rem;
+  margin: 0;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-size: 0.875rem;
+}
+
+.ata-local-feature-approval-queue {
+  margin-top: 0.75rem;
+}
+
 html.aurora-overlay-surface,
 body.aurora-overlay-surface,
 html[data-aurora-surface='overlay'],
@@ -65,12 +124,4 @@ body.aurora-overlay-surface,
 body[data-aurora-surface='overlay'] {
   margin: 0;
   overflow: hidden;
-}
-
-html[data-aurora-platform='android'] .aui-shell {
-  padding-bottom: 7rem;
-}
-
-html[data-aurora-platform='android'] .aui-mobile-tabs {
-  padding-bottom: max(env(safe-area-inset-bottom), 3rem);
 }

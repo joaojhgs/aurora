@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
 import aiosqlite
 import pytest
 
+from app.services.db import tooling_remote_catalog_store
 from app.services.db.manager import DatabaseManager
 from app.services.db.service import _protected_authority_write_error
 from app.shared.contracts.models.db import (
@@ -680,6 +682,89 @@ async def test_retention_audit_failure_rolls_back_full_row_and_tombstone(tmp_pat
     remaining = await manager.get_tooling_remote_catalog(DBGetToolingRemoteCatalogRequest())
     assert [item.tool.local_name for item in remaining.tools] == ["protected"]
     assert remaining.retained_tombstones == []
+
+
+@pytest.mark.asyncio
+async def test_retention_noop_does_not_wait_for_sqlite_writer(tmp_path: Path) -> None:
+    """A no-op maintenance pass stays read-only under an unrelated writer."""
+
+    manager = await _manager(tmp_path, "retention-noop-writer.db")
+    async with aiosqlite.connect(manager.db_path) as writer:
+        await writer.execute("PRAGMA journal_mode = WAL")
+        await writer.execute("BEGIN IMMEDIATE")
+
+        result = await asyncio.wait_for(
+            manager.prune_tooling_remote_catalog_retention(
+                DBPruneToolingRemoteCatalogRetentionRequest()
+            ),
+            timeout=1.0,
+        )
+
+    assert result.compacted_tool_count == 0
+    assert result.compacted_management_metadata_count == 0
+    assert result.pruned_audit_count == 0
+    assert result.providers == []
+
+
+@pytest.mark.asyncio
+async def test_retention_releases_writer_between_provider_batches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unrelated write can commit before the next provider is pruned."""
+
+    manager = await _manager(tmp_path, "retention-provider-batches.db")
+    async with aiosqlite.connect(manager.db_path) as db:
+        await db.execute("CREATE TABLE retention_writer_probe (value TEXT NOT NULL)")
+        await db.executemany(
+            """INSERT INTO tooling_remote_catalog_audit (
+                   audit_id, peer_id, provider_id, action, created_at
+               ) VALUES (?, ?, ?, 'fixture', ?)""",
+            [
+                (f"audit-{peer}-{index:02d}", peer, provider, float(index))
+                for peer, provider in (("peer-a", "provider-a"), ("peer-b", "provider-b"))
+                for index in range(33)
+            ],
+        )
+        await db.commit()
+
+    real_connect = tooling_remote_catalog_store._connect
+    commits = 0
+
+    class InterleavingConnection:
+        def __init__(self, inner: aiosqlite.Connection) -> None:
+            self.inner = inner
+
+        def __getattr__(self, name: str):
+            return getattr(self.inner, name)
+
+        async def commit(self) -> None:
+            nonlocal commits
+            await self.inner.commit()
+            commits += 1
+            if commits == 1:
+                async with aiosqlite.connect(manager.db_path, timeout=0.1) as writer:
+                    await writer.execute(
+                        "INSERT INTO retention_writer_probe (value) VALUES ('between-providers')"
+                    )
+                    await writer.commit()
+
+    async def connect_with_interleave(db_path: str):
+        return InterleavingConnection(await real_connect(db_path))
+
+    monkeypatch.setattr(tooling_remote_catalog_store, "_connect", connect_with_interleave)
+
+    result = await manager.prune_tooling_remote_catalog_retention(
+        DBPruneToolingRemoteCatalogRetentionRequest(max_audit_rows_per_provider=32)
+    )
+
+    assert commits == 2
+    assert result.pruned_audit_count == 4
+    assert len(result.providers) == 2
+    async with aiosqlite.connect(manager.db_path) as db:
+        probe = await (
+            await db.execute("SELECT value FROM retention_writer_probe")
+        ).fetchall()
+    assert probe == [("between-providers",)]
 
 
 @pytest.mark.asyncio

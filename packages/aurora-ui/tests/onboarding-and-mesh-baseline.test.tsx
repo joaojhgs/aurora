@@ -12,10 +12,12 @@ import {
   errorShellSnapshot,
   MeshPeersView,
   OnboardingView,
+  prepareLocalFeatureSharingApproval,
   WebThinConnectionPanel,
   webRtcProfileFromInvite,
   type AuroraShellSnapshot,
   type BrowserWebRtcSnapshot,
+  type LocalFeatureSharingPort,
 } from '../src/index'
 import { encodeMeshInviteToken, encodeMeshInviteUrl } from '../src/mesh-invite'
 import type { ThinConnectionProfile } from '../src/thin-connection-profile'
@@ -33,6 +35,75 @@ afterEach(() => {
 })
 
 describe('Phase 2 onboarding and Mesh baseline behavior', () => {
+  it('keeps Android mesh-node setup selectable while native details are still loading', async () => {
+    const container = render(
+      <OnboardingView
+        client={new Aurora({ transport: new MockAuroraTransport() })}
+        snapshot={{
+          ...onboardingSnapshot(),
+          transportKind: 'mesh',
+          nativeAvailable: false,
+        }}
+      />,
+    )
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const makeAvailable = findButton(container, 'Make this device available')
+    expect(makeAvailable.disabled).toBe(false)
+    expect(makeAvailable.getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('applies a changed device mode before reporting setup complete', async () => {
+    let releaseApply: (() => void) | undefined
+    const applyModePreference = vi.fn(
+      () => new Promise<void>((resolve) => { releaseApply = resolve }),
+    )
+    const container = render(
+      <OnboardingView
+        client={new Aurora({ transport: new MockAuroraTransport() })}
+        snapshot={onboardingSnapshot()}
+        modePreferenceStore={{
+          evidence: 'native storage',
+          readSelectedMode: vi.fn(async () => 'remote-console'),
+          readSelectedRuntimeTier: vi.fn(async () => 'none'),
+          writeSelectedMode: vi.fn(async () => true),
+          writeSelectedRuntimeTier: vi.fn(async () => true),
+        }}
+        onApplyModePreference={applyModePreference}
+      />,
+    )
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    const continueButton = findButton(container, 'Continue')
+    expect(continueButton.disabled).toBe(false)
+    await act(async () => {
+      continueButton.click()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      findButton(container, 'Finish setup').click()
+      await Promise.resolve()
+    })
+
+    expect(applyModePreference).toHaveBeenCalledOnce()
+    expect(container.textContent).toContain('Applying choice…')
+    expect(container.textContent).not.toContain("You're all set")
+
+    await act(async () => {
+      releaseApply?.()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain("You're all set")
+    expect(container.textContent).toContain('change this choice from Settings')
+  })
+
   it('offers device naming plus scan, open, paste, and deep-link invite setup on mobile surfaces', async () => {
     const peer = new FakeBrowserPeer({ status: 'needs-invite' })
     const scannedInvite = inviteToken('scan-room')
@@ -56,12 +127,18 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       await Promise.resolve()
     })
     expect(container.querySelector('.aui-onboarding-scroll-viewport')).not.toBeNull()
+    expect(container.querySelector('.aui-onboarding-content')).not.toBeNull()
     expect(container.textContent).not.toContain('Guided setup')
     expect(container.querySelector<HTMLInputElement>('#webthin-profile-node-name')).not.toBeNull()
     expect(findButton(container, 'Scan invite')).not.toBeNull()
     expect(findButton(container, 'Open invite file')).not.toBeNull()
     expect(container.querySelector<HTMLTextAreaElement>('#webthin-invite')?.value)
       .toContain('aurora://mesh/invite?')
+    expect(container.querySelector<HTMLTextAreaElement>('#webthin-invite')?.className)
+      .toContain('aui-webthin-invite-textarea')
+    expect(container.querySelector('.aui-webthin-invite-card-content')).not.toBeNull()
+    expect(findButton(container, 'Save invite and continue').className)
+      .toContain('aui-webthin-invite-action')
     expect(container.textContent).toContain('Paste invite')
 
     await act(async () => {
@@ -96,6 +173,181 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
     })
     expect(container.querySelector<HTMLTextAreaElement>('#webthin-invite')?.value)
       .toBe(fileInvite)
+  })
+
+  it('enables mobile invite saving only after the pasted invite has complete connection details', async () => {
+    const peer = new FakeBrowserPeer({ status: 'needs-invite' })
+    const incompletePayload = invitePayload('incomplete-room')
+    delete (incompletePayload.signaling as { room_password?: string }).room_password
+    const container = render(
+      <WebThinConnectionPanel
+        peer={peer as never}
+        mode="webrtc-only"
+        transportKind="native-mobile"
+        nativePlatform="android"
+        initialInviteText={encodeMeshInviteToken(incompletePayload)}
+        configureOnly
+        onSaveProfile={async () => undefined}
+      />,
+    )
+
+    expect(findButton(container, 'Save invite and continue').disabled).toBe(true)
+
+    await setTextareaValue(container, '#webthin-invite', `  ${inviteToken('complete-room')}  `)
+
+    expect(findButton(container, 'Save invite and continue').disabled).toBe(false)
+  })
+
+  it('keeps the invite step aligned with the selected mobile setup choice', async () => {
+    const container = renderOnboardingWithPanel(
+      <WebThinConnectionPanel
+        peer={new FakeBrowserPeer({ status: 'needs-invite' }) as never}
+        mode="webrtc-only"
+        transportKind="native-mobile"
+        nativePlatform="android"
+        configureOnly
+        onSaveProfile={async () => undefined}
+      />,
+    )
+
+    await act(async () => {
+      findButton(container, 'Make this device available').click()
+      findButton(container, 'Continue').click()
+      await Promise.resolve()
+    })
+
+    const setup = container.querySelector<HTMLElement>('[data-step="setup"]')
+    expect(setup?.textContent).toContain('Make this device available')
+    expect(setup?.textContent).not.toContain('Connect to Aurora')
+  })
+
+  it('keeps setup-required mobile onboarding on connect when a stale node preference exists', async () => {
+    const writeSelectedMode = vi.fn(async () => true)
+    const writeSelectedRuntimeTier = vi.fn(async () => true)
+    const container = render(
+      <OnboardingView
+        client={new Aurora({ transport: new MockAuroraTransport() })}
+        snapshot={onboardingSnapshot()}
+        setupRequired
+        modePreferenceStore={{
+          evidence: 'native storage',
+          readSelectedMode: vi.fn(async () => 'mesh-node'),
+          readSelectedRuntimeTier: vi.fn(async () => 'lightweight-ts'),
+          writeSelectedMode,
+          writeSelectedRuntimeTier,
+        }}
+        thinConnectionPanel={
+          <WebThinConnectionPanel
+            peer={new FakeBrowserPeer({ status: 'needs-invite' }) as never}
+            mode="webrtc-only"
+            transportKind="native-mobile"
+            nativePlatform="android"
+            configureOnly
+            onSaveProfile={async () => undefined}
+          />
+        }
+      />,
+    )
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Restored Make this device available')
+    expect(findButton(container, 'Make this device available').getAttribute('aria-checked')).toBe('true')
+    expect(writeSelectedMode).not.toHaveBeenCalled()
+    expect(writeSelectedRuntimeTier).not.toHaveBeenCalled()
+  })
+
+  it('falls back to browser device setup when a saved hosted choice is unavailable', async () => {
+    const writeSelectedMode = vi.fn(async () => true)
+    const writeSelectedRuntimeTier = vi.fn(async () => true)
+    const transport = new MockAuroraTransport()
+    Object.defineProperty(transport, 'kind', { value: 'offline' })
+    const hostedSnapshot: AuroraShellSnapshot = {
+      ...onboardingSnapshot(),
+      transportKind: 'offline',
+      nativePlatform: '',
+      nativeAvailable: false,
+    }
+    const container = render(
+      <OnboardingView
+        client={new Aurora({ transport })}
+        snapshot={hostedSnapshot}
+        setupRequired
+        modePreferenceStore={{
+          evidence: 'browser setup mode selection',
+          readSelectedMode: vi.fn(async () => 'remote-console'),
+          writeSelectedMode,
+          writeSelectedRuntimeTier,
+        }}
+        thinConnectionPanel={
+          <WebThinConnectionPanel
+            peer={new FakeBrowserPeer({ status: 'needs-invite' }) as never}
+            mode="webrtc-only"
+            transportKind="offline"
+            configureOnly
+            onSaveProfile={async () => undefined}
+          />
+        }
+      />,
+    )
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const makeAvailable = findButton(container, 'Make this device available')
+    expect(makeAvailable.disabled).toBe(false)
+    expect(makeAvailable.getAttribute('aria-checked')).toBe('true')
+    expect(findButton(container, 'Connect to Aurora').disabled).toBe(true)
+    expect(findButton(container, 'Continue').disabled).toBe(false)
+    expect(writeSelectedMode).toHaveBeenCalledWith('mesh-node')
+    expect(writeSelectedRuntimeTier).toHaveBeenCalledWith('lightweight-ts')
+  })
+
+  it('keeps hosted WebRTC setup selectable for connecting to Aurora', async () => {
+    const transport = new MockAuroraTransport()
+    Object.defineProperty(transport, 'kind', { value: 'mesh' })
+    const container = render(
+      <OnboardingView
+        client={new Aurora({ transport })}
+        snapshot={{
+          ...onboardingSnapshot(),
+          transportKind: 'mesh',
+          nativePlatform: '',
+          nativeAvailable: false,
+        }}
+        setupRequired
+        modePreferenceStore={{
+          evidence: 'browser setup mode selection',
+          readSelectedMode: vi.fn(async () => 'remote-console'),
+          writeSelectedMode: vi.fn(async () => true),
+          writeSelectedRuntimeTier: vi.fn(async () => true),
+        }}
+        thinConnectionPanel={
+          <WebThinConnectionPanel
+            peer={new FakeBrowserPeer({ status: 'needs-invite' }) as never}
+            mode="webrtc-only"
+            transportKind="mesh"
+            configureOnly
+            onSaveProfile={async () => undefined}
+          />
+        }
+      />,
+    )
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const connect = findButton(container, 'Connect to Aurora')
+    expect(connect.disabled).toBe(false)
+    expect(connect.getAttribute('aria-checked')).toBe('true')
+    expect(findButton(container, 'Continue').disabled).toBe(false)
   })
 
   it.each([
@@ -155,9 +407,9 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
     )
 
     const pageText = container.textContent ?? ''
-    expect(pageText.indexOf('Mesh & Peers')).toBeLessThan(pageText.indexOf('Local node'))
-    expect(pageText.indexOf('Local node')).toBeLessThan(pageText.indexOf('Pending pairing requests'))
-    expect(pageText.indexOf('Pending pairing requests')).toBeLessThan(pageText.indexOf('All peer records'))
+    expect(pageText.indexOf('Connected devices')).toBeLessThan(pageText.indexOf('This device'))
+    expect(pageText.indexOf('This device')).toBeLessThan(pageText.indexOf('Waiting for approval'))
+    expect(pageText.indexOf('Waiting for approval')).toBeLessThan(pageText.indexOf('All devices'))
     expect(container.querySelectorAll('[data-slot="card"]').length).toBeGreaterThanOrEqual(4)
 
     await act(async () => {
@@ -168,6 +420,7 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
     expect(dialog?.textContent).toContain('Approve Kitchen node')
     expect(dialog?.textContent).toContain('Confirm that the verification code matches on both Auroras')
     expect(dialog?.textContent).toContain('6543 21')
+    expect(dialog?.textContent).toContain('Model selection')
 
     await act(async () => {
       findButton(document.body, 'Approve & pair').click()
@@ -181,6 +434,158 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       }),
     )
     expect(denyPeer).not.toHaveBeenCalled()
+  })
+
+  it('asks mobile mesh nodes which local features to share and never offers a gateway scope', async () => {
+    const snapshot = await buildMeshPeersSnapshot(
+      new Aurora({ transport: new MockAuroraTransport() }),
+      meshRoute(),
+    )
+    snapshot.pendingRequests = []
+    const confirmPairing = vi.fn()
+      .mockRejectedValueOnce(new Error('connection interrupted'))
+      .mockResolvedValue(undefined)
+    const featureSharing: LocalFeatureSharingPort = {
+      load: vi.fn(async () => ({
+        features: [
+          {
+            id: 'aurora.local.native.get_device_status.v1',
+            label: 'Device status',
+            description: 'Share battery and connectivity status.',
+            enabled: false,
+            available: true,
+            requiresAuroraOpen: true,
+            requiresLocalConfirmation: false,
+          },
+          {
+            id: 'aurora.local.native.share.v1',
+            label: 'Share from this phone',
+            description: 'Share a file selected on this phone.',
+            enabled: true,
+            available: true,
+            requiresAuroraOpen: true,
+            requiresLocalConfirmation: true,
+          },
+        ],
+        approvedDevices: [],
+      })),
+      setFeatureEnabled: vi.fn(async () => undefined),
+      replacePeerSharing: vi.fn(async () => undefined),
+      revokePeerSharing: vi.fn(async () => undefined),
+    }
+    const thinSnapshot: BrowserWebRtcSnapshot = {
+      state: 'awaiting-sas-confirmation',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-home',
+      nodeName: 'Home Aurora',
+      icePathCategory: 'unknown',
+      protocolCapabilities: [],
+      reconnectCount: 0,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-08-01T00:00:00.000Z',
+      status: 'pairing',
+      pairingSessionId: 'pairing-session-mobile',
+      pairingVerificationCode: '12345678',
+      secureContext: true,
+      visible: true,
+      focused: true,
+      hasHttpFallback: false,
+      secretsPersisted: true,
+    }
+    const container = render(
+      <MeshPeersView
+        snapshot={snapshot}
+        route={meshRoute()}
+        thinPeerSnapshot={thinSnapshot}
+        localFeatureSharing={featureSharing}
+        onConfirmThinPairing={confirmPairing}
+      />,
+    )
+
+    await act(async () => {
+      findButton(container, 'Review & approve').click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const dialog = document.body.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain('Choose what Home Aurora can use from this device')
+    expect(dialog?.textContent).toContain('Device status')
+    expect(dialog?.textContent).toContain('Share from this phone')
+    expect(dialog?.textContent).not.toContain('Gateway')
+
+    const deviceStatusLabel = Array.from(dialog?.querySelectorAll('label') ?? [])
+      .find((label) => label.textContent?.includes('Device status'))
+    const deviceStatusCheckbox = deviceStatusLabel?.querySelector<HTMLElement>('[role="checkbox"]')
+    expect(deviceStatusCheckbox).not.toBeNull()
+    await act(async () => {
+      deviceStatusCheckbox?.click()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      findButton(document.body, 'Approve & pair').click()
+      await Promise.resolve()
+    })
+
+    expect(document.body.textContent).toContain('Could not approve this device')
+    expect(findButton(document.body, 'Approve & pair').hasAttribute('disabled')).toBe(false)
+    await act(async () => {
+      findButton(document.body, 'Approve & pair').click()
+      await Promise.resolve()
+    })
+
+    expect(confirmPairing).toHaveBeenCalledTimes(2)
+    expect(confirmPairing).toHaveBeenLastCalledWith('pairing-session-mobile', {
+      sharedFeatureIds: [
+        'aurora.local.native.get_device_status.v1',
+        'aurora.local.native.share.v1',
+      ],
+    })
+  })
+
+  it('enables only selected available local features before pairing', async () => {
+    const setFeatureEnabled = vi.fn(async () => undefined)
+    const featureSharing: LocalFeatureSharingPort = {
+      load: vi.fn(async () => ({
+        features: [
+          {
+            id: 'feature-a',
+            label: 'Feature A',
+            description: 'Feature A description',
+            enabled: false,
+            available: true,
+            requiresAuroraOpen: true,
+            requiresLocalConfirmation: false,
+          },
+          {
+            id: 'feature-b',
+            label: 'Feature B',
+            description: 'Feature B description',
+            enabled: true,
+            available: true,
+            requiresAuroraOpen: true,
+            requiresLocalConfirmation: false,
+          },
+        ],
+        approvedDevices: [],
+      })),
+      setFeatureEnabled,
+      replacePeerSharing: vi.fn(async () => undefined),
+      revokePeerSharing: vi.fn(async () => undefined),
+    }
+
+    const surfaceProfile = { isMobile: false } as never
+    await expect(prepareLocalFeatureSharingApproval(featureSharing, ['feature-b', 'feature-a'], surfaceProfile))
+      .resolves.toEqual(['feature-a', 'feature-b'])
+    expect(setFeatureEnabled).toHaveBeenCalledOnce()
+    expect(setFeatureEnabled).toHaveBeenCalledWith('feature-a', true)
+    await expect(prepareLocalFeatureSharingApproval(featureSharing, ['missing-feature'], surfaceProfile))
+      .rejects.toThrow('no longer available')
   })
 })
 

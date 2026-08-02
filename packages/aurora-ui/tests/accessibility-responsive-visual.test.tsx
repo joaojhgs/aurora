@@ -58,23 +58,23 @@ const viewports: Viewport[] = [
 ]
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
-  // Baselines regenerated after runtime surface and authorization state became
-  // evidence-driven: thin shells no longer claim Desktop Local/admin status or
-  // render a synthetic uptime value.
+  // Baselines regenerated after the unified Assistant controls, three-tab
+  // mobile navigation, scroll-safe mobile layouts, mobile conversation access,
+  // and end-user Settings copy.
   assistant: {
-    desktop: '0eb3ae7445be',
-    tablet: '5a00ea9f08e4',
-    mobile: 'c66bd1b0c5d7'
+    desktop: '777312c87662',
+    tablet: 'c79780c5788b',
+    mobile: '1e39f79bfa55'
   },
   admin: {
-    desktop: '1312f4f626ec',
-    tablet: 'df9b67a512c5',
-    mobile: 'e531fb1c08aa'
+    desktop: '15ce9550ad15',
+    tablet: '959920ebd64c',
+    mobile: 'c7c2c5936236'
   },
   'native-settings': {
-    desktop: '6d37e40dc56d',
-    tablet: '1e7fcfdb06a5',
-    mobile: 'e1698566be65'
+    desktop: '45237d49a94e',
+    tablet: '5c89c229b1d6',
+    mobile: 'c9ce2215e343'
   }
 }
 
@@ -196,7 +196,7 @@ describe('Accessibility, responsive, and visual regression suite', () => {
     expect(stateCoverage).toContain('Sensitive details stay hidden')
     expect(stateCoverage).toContain('aurora-prod-01')
     expect(stateCoverage).toContain('AD admin Administrator')
-    expect(stateCoverage).toContain('Local service')
+    expect(stateCoverage).toContain('Runs with Aurora')
     expect(stateCoverage).toContain('Healthy')
     expect(stateCoverage).toContain('v0.9.2')
     expect(stateCoverage).toContain('· connected')

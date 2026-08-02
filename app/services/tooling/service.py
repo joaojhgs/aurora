@@ -10,6 +10,7 @@ This service:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import json
 import re
@@ -28,6 +29,7 @@ from jsonschema import (
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging.bus import Envelope
 from app.messaging.priority_helpers import get_interactive_priority, get_system_priority
+from app.services.db.sqlite_connection import SQLITE_CONNECT_TIMEOUT_SECONDS
 from app.services.db.tooling_remote_catalog_store import (
     compute_projection_checksum,
     compute_projection_page_hash,
@@ -97,10 +99,12 @@ from app.shared.contracts.models.gateway import (
 )
 from app.shared.contracts.models.mesh import (
     MeshAddressSelector,
+    MeshEvents,
     MeshIdentityLoadRequest,
     MeshPeerGetRequest,
     MeshPeerGetResponse,
     MeshPeerListRequest,
+    MeshPeerPermissionsUpdatedEvent,
 )
 from app.shared.contracts.models.tooling import (
     JS_SAFE_INTEGER_MAX,
@@ -224,6 +228,10 @@ from app.shared.messaging.models.tooling_models import (
 )
 from app.shared.services.base_service import BaseService
 
+
+class _ProjectionFetchUnavailableError(RuntimeError):
+    """Transient remote projection fetch failure that must remain fail closed."""
+
 ToolingDiscoveryRequest = (
     ToolingGetToolsRequest | ToolingGetToolByNameRequest | ToolingExecuteToolRequest
 )
@@ -243,6 +251,9 @@ _ERROR_REDACT_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\b(?:sk|pk)-[A-Za-z0-9_-]{16,}\b"),
 )
 TOOLING_AUDIT_REQUEST_TIMEOUT_SECONDS = 0.5
+TOOLING_DB_REQUEST_TIMEOUT_SECONDS = SQLITE_CONNECT_TIMEOUT_SECONDS + 5.0
+REMOTE_CATALOG_RETENTION_STARTUP_DELAY_SECONDS = 30.0
+REMOTE_CATALOG_RETENTION_INTERVAL_SECONDS = 6 * 60 * 60
 _CATALOG_REVISION_DIGEST_BITS = 53
 
 
@@ -338,13 +349,6 @@ class ToolingService(BaseService):
         await self._migrate_legacy_tool_export_policy()
         await self._activate_mesh_projection_enforcement()
         await self._recover_normalized_remote_catalogs()
-        if (
-            self._mesh_projection_enforcement_active
-            and not self._normalized_catalog_recovery_failed
-        ):
-            self._remote_catalog_retention_task = asyncio.create_task(
-                self._remote_catalog_retention_loop()
-            )
         readiness = await self._on_get_mesh_projection_readiness(EmptyInput())
         await self.bus.publish(
             ToolingMethods.MESH_PROJECTION_READINESS_CHANGED,
@@ -352,6 +356,18 @@ class ToolingService(BaseService):
             event=True,
             mesh=False,
             origin="internal",
+        )
+        if (
+            self._mesh_projection_enforcement_active
+            and not self._normalized_catalog_recovery_failed
+        ):
+            self._remote_catalog_retention_task = asyncio.create_task(
+                self._remote_catalog_retention_loop()
+            )
+
+        self.bus.subscribe(
+            MeshEvents.PEER_PERMISSIONS_UPDATED,
+            self._on_mesh_peer_permissions_updated,
         )
 
         # Emit initialization event
@@ -381,7 +397,7 @@ class ToolingService(BaseService):
             DBMethods.RECOVER_TOOLING_REMOTE_CATALOGS,
             DBRecoverToolingRemoteCatalogsRequest(correlation_id=correlation_id),
             origin="internal",
-            timeout=15.0,
+            timeout=TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
             priority=get_system_priority(),
         )
         data = (
@@ -395,8 +411,6 @@ class ToolingService(BaseService):
             log_error("Normalized remote Tooling catalog recovery failed closed")
             return
 
-        await self._prune_normalized_remote_catalog_retention(correlation_id=correlation_id)
-
         providers = {
             str(peer_id)
             for peer_id in data.get("providers_needing_sync", [])
@@ -408,7 +422,7 @@ class ToolingService(BaseService):
             DBMethods.GET_TOOLING_REMOTE_CATALOG,
             DBGetToolingRemoteCatalogRequest(include_inactive=True),
             origin="internal",
-            timeout=10.0,
+            timeout=TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
         )
         catalog_data = (
             catalog.data.model_dump(mode="python")
@@ -453,14 +467,11 @@ class ToolingService(BaseService):
     ) -> None:
         """Run one typed, policy-preserving retention compaction."""
 
-        pruned = await self.bus.request(
+        pruned = await self._request_db(
             DBMethods.PRUNE_TOOLING_REMOTE_CATALOG_RETENTION,
             DBPruneToolingRemoteCatalogRetentionRequest(
                 correlation_id=correlation_id,
             ),
-            origin="internal",
-            timeout=15.0,
-            priority=get_system_priority(),
         )
         if not pruned.ok:
             log_warning("Remote Tooling retention compaction failed; retained history preserved")
@@ -468,8 +479,9 @@ class ToolingService(BaseService):
     async def _remote_catalog_retention_loop(self) -> None:
         """Bound long-running retained history without touching authority records."""
 
+        delay_seconds = REMOTE_CATALOG_RETENTION_STARTUP_DELAY_SECONDS
         while True:
-            await asyncio.sleep(6 * 60 * 60)
+            await asyncio.sleep(delay_seconds)
             try:
                 await self._prune_normalized_remote_catalog_retention(
                     correlation_id=str(uuid.uuid4())
@@ -478,6 +490,7 @@ class ToolingService(BaseService):
                 raise
             except Exception as error:
                 log_warning(f"Remote Tooling retention maintenance failed safely: {error}")
+            delay_seconds = REMOTE_CATALOG_RETENTION_INTERVAL_SECONDS
 
     async def _activate_mesh_projection_enforcement(self) -> None:
         """Honor only a previously attested durable G013 activation state.
@@ -552,10 +565,9 @@ class ToolingService(BaseService):
             normalized_catalog = required_tables.issubset(
                 {str(row.get("name") or "") for row in rows}
             )
-            state_result = await self.bus.request(
+            state_result = await self._request_db(
                 DBMethods.GET_TOOLING_MESH_ACTIVATION_STATE,
                 DBGetToolingMeshActivationStateRequest(),
-                origin="internal",
             )
             if state_result.ok and state_result.data is not None:
                 data = (
@@ -570,13 +582,12 @@ class ToolingService(BaseService):
                 durable_revision = int(state.get("revision", 0))
                 legacy_guard_active = not bool(state.get("legacy_guard_retired"))
             if self._stable_peer_id:
-                ledger_probe = await self.bus.request(
+                ledger_probe = await self._request_db(
                     DBMethods.GET_TOOLING_EXPOSURE_LEDGER,
                     DBGetToolingExposureLedgerRequest(
                         recipient_peer_id=self._stable_peer_id,
                         provider_id=self._stable_peer_id,
                     ),
-                    origin="internal",
                 )
                 if ledger_probe.ok and ledger_probe.data is not None:
                     DBGetToolingExposureLedgerResponse.model_validate(ledger_probe.data)
@@ -623,6 +634,17 @@ class ToolingService(BaseService):
         await self._activate_mesh_projection_enforcement()
         return EmptyOutput()
 
+    async def _on_mesh_peer_permissions_updated(
+        self, envelope: Envelope
+    ) -> EmptyOutput:
+        MeshPeerPermissionsUpdatedEvent.model_validate(envelope.payload)
+        # The event carries what this Aurora granted the peer.  Do not merge it
+        # into ``_remote_provider_states``: that map contains the reciprocal,
+        # peer-issued grants proved by the remote manifest.  Catalog and
+        # execution authorization re-read Auth's current outbound grant below.
+        self._catalog_cache.clear()
+        return EmptyOutput()
+
     async def on_stop(self) -> None:
         """Stop the tooling service."""
         log_info("Stopping Tooling service...")
@@ -648,6 +670,11 @@ class ToolingService(BaseService):
             await asyncio.gather(*sync_tasks, return_exceptions=True)
         self._projection_sync_tasks.clear()
         self._projection_sync_ids.clear()
+        with contextlib.suppress(Exception):
+            self.bus.unsubscribe(
+                MeshEvents.PEER_PERMISSIONS_UPDATED,
+                self._on_mesh_peer_permissions_updated,
+            )
 
     async def reload(self, config_section: str | None = None) -> None:
         """Reload service configuration.
@@ -864,7 +891,7 @@ class ToolingService(BaseService):
                 legacy_global_tool_ids=list(normalize_legacy_aliases(legacy_global_tool_ids)),
             ),
             origin="internal",
-            timeout=10.0,
+            timeout=TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
             priority=get_system_priority(),
         )
         if not result.ok:
@@ -980,7 +1007,7 @@ class ToolingService(BaseService):
                     legacy_global_tool_ids=list(legacy_ids),
                 ),
                 origin="internal",
-                timeout=10.0,
+                timeout=TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
                 priority=get_system_priority(),
             )
             if not result.ok:
@@ -1414,12 +1441,21 @@ class ToolingService(BaseService):
             for value in requested_values
         )
 
+    async def _request_db(self, method: str, request: IOModel) -> Any:
+        """Send one typed DB request without abandoning SQLite's lock wait."""
+
+        return await self.bus.request(
+            method,
+            request,
+            origin="internal",
+            timeout=TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
+            priority=get_system_priority(),
+        )
+
     async def _db_sql(self, sql: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
-        result = await self.bus.request(
+        result = await self._request_db(
             DBMethods.EXECUTE_SQL,
             DBExecuteSQLRequest(sql=sql, params=params or []),
-            origin="internal",
-            timeout=10.0,
         )
         if not result.ok:
             raise RuntimeError(result.error or "DB.ExecuteSQL failed")
@@ -1689,7 +1725,7 @@ class ToolingService(BaseService):
             DBMethods.GET_TOOLING_REMOTE_CATALOG,
             DBGetToolingRemoteCatalogRequest(include_inactive=False),
             origin="internal",
-            timeout=10.0,
+            timeout=TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
         )
         if not result.ok or result.data is None:
             return []
@@ -1768,7 +1804,7 @@ class ToolingService(BaseService):
             DBMethods.GET_TOOLING_REMOTE_CATALOG,
             DBGetToolingRemoteCatalogRequest(include_inactive=True),
             origin="internal",
-            timeout=10.0,
+            timeout=TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
         )
         if not result.ok or result.data is None:
             return {}, []
@@ -2172,7 +2208,7 @@ class ToolingService(BaseService):
                         legacy_global_tool_ids=aliases,
                     ),
                     origin="internal",
-                    timeout=10.0,
+                    timeout=TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
                     priority=get_system_priority(),
                 )
                 data = result.data
@@ -2195,7 +2231,7 @@ class ToolingService(BaseService):
                     stable_peer_id=snapshot.peer_id,
                 ),
                 origin="internal",
-                timeout=10.0,
+                timeout=TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
                 priority=get_system_priority(),
             )
             alias_data = alias_result.data
@@ -2601,13 +2637,12 @@ class ToolingService(BaseService):
             existing_task.cancel()
             existing_sync_id = self._projection_sync_ids.get(request.provider_peer_id)
             if existing_sync_id:
-                await self.bus.request(
+                await self._request_db(
                     DBMethods.ABORT_TOOLING_REMOTE_CATALOG_SYNC,
                     DBAbortToolingRemoteCatalogSyncRequest(
                         sync_id=existing_sync_id,
                         reason_code="consumer_mesh_tooling_disabled",
                     ),
-                    origin="internal",
                 )
             self._projection_sync_pending.pop(request.provider_peer_id, None)
             existing_task = None
@@ -2622,7 +2657,7 @@ class ToolingService(BaseService):
 
         if not local_policy.mesh_switches.consumer_mesh_tooling_enabled:
             self._projection_sync_pending.pop(request.provider_peer_id, None)
-            await self.bus.request(
+            await self._request_db(
                 DBMethods.SET_TOOLING_REMOTE_PROVIDER_AVAILABILITY,
                 DBSetToolingRemoteProviderAvailabilityRequest(
                     peer_id=request.provider_peer_id,
@@ -2630,14 +2665,13 @@ class ToolingService(BaseService):
                     availability="stale",
                     reason_code="consumer_mesh_tooling_disabled",
                 ),
-                origin="internal",
             )
             self._catalog_cache.clear()
             self._complete_projection_sync_task(request.provider_peer_id, current_task)
             return EmptyOutput()
 
         if request.reason_code.startswith(("provider_disconnected", "provider_status_")):
-            await self.bus.request(
+            await self._request_db(
                 DBMethods.SET_TOOLING_REMOTE_PROVIDER_AVAILABILITY,
                 DBSetToolingRemoteProviderAvailabilityRequest(
                     peer_id=request.provider_peer_id,
@@ -2645,7 +2679,6 @@ class ToolingService(BaseService):
                     availability="provider_unavailable",
                     reason_code=request.reason_code,
                 ),
-                origin="internal",
             )
             self._catalog_cache.clear()
             self._complete_projection_sync_task(request.provider_peer_id, current_task)
@@ -2655,7 +2688,7 @@ class ToolingService(BaseService):
             "protocol_unsupported",
             "baseline_required",
         }:
-            await self.bus.request(
+            await self._request_db(
                 DBMethods.SET_TOOLING_REMOTE_PROVIDER_AVAILABILITY,
                 DBSetToolingRemoteProviderAvailabilityRequest(
                     peer_id=request.provider_peer_id,
@@ -2663,7 +2696,6 @@ class ToolingService(BaseService):
                     availability="protocol_unsupported",
                     reason_code=request.reason_code,
                 ),
-                origin="internal",
             )
             self._catalog_cache.clear()
             self._complete_projection_sync_task(request.provider_peer_id, current_task)
@@ -2675,12 +2707,11 @@ class ToolingService(BaseService):
         verified_granted_permissions: tuple[str, ...] | None = None
         verified_service_instance_id: str | None = None
         try:
-            existing = await self.bus.request(
+            existing = await self._request_db(
                 DBMethods.GET_TOOLING_REMOTE_CATALOG,
                 DBGetToolingRemoteCatalogRequest(
                     peer_id=request.provider_peer_id, provider_id=request.provider_peer_id
                 ),
-                origin="internal",
             )
             existing_data = (
                 existing.data.model_dump(mode="python")
@@ -2712,15 +2743,14 @@ class ToolingService(BaseService):
                     proxy_reason = (
                         fetched_data.get("reason_code") if isinstance(fetched_data, dict) else None
                     )
-                    log_warning(
-                        "Tooling projection proxy request failed for "
-                        f"{request.provider_peer_id}: "
-                        f"{proxy_reason or 'projection_fetch_failed'}"
+                    raise _ProjectionFetchUnavailableError(
+                        proxy_reason or "projection_fetch_failed"
                     )
-                    raise RuntimeError(proxy_reason or "projection_fetch_failed")
                 proxy = GatewayFetchToolingExportCatalogPageResponse.model_validate(fetched.data)
                 if not proxy.ok or proxy.page is None:
-                    raise RuntimeError(proxy.reason_code or "projection_fetch_failed")
+                    raise _ProjectionFetchUnavailableError(
+                        proxy.reason_code or "projection_fetch_failed"
+                    )
                 page = proxy.page
                 if page.provider_peer_id != request.provider_peer_id:
                     raise RuntimeError("projection_provider_mismatch")
@@ -2734,7 +2764,7 @@ class ToolingService(BaseService):
                 ):
                     raise RuntimeError("projection_authority_changed")
                 if not begun:
-                    result = await self.bus.request(
+                    result = await self._request_db(
                         DBMethods.BEGIN_TOOLING_REMOTE_CATALOG_SYNC,
                         DBBeginToolingRemoteCatalogSyncRequest(
                             sync_id=sync_id,
@@ -2747,12 +2777,11 @@ class ToolingService(BaseService):
                             page_size=page.page_size,
                             expected_base_generation=base_generation,
                         ),
-                        origin="internal",
                     )
                     if not result.ok:
                         raise RuntimeError("projection_stage_failed")
                     begun = True
-                appended = await self.bus.request(
+                appended = await self._request_db(
                     DBMethods.APPEND_TOOLING_REMOTE_CATALOG_PAGE,
                     DBAppendToolingRemoteCatalogPageRequest(
                         sync_id=sync_id,
@@ -2761,7 +2790,6 @@ class ToolingService(BaseService):
                             hashlib.sha256(cursor.encode()).hexdigest() if cursor else None
                         ),
                     ),
-                    origin="internal",
                 )
                 if not appended.ok:
                     raise RuntimeError(appended.error or "projection_page_rejected")
@@ -2776,14 +2804,13 @@ class ToolingService(BaseService):
             )
             if requires_policy_reconciliation:
                 self._policy_reconciliation_inflight.add(request.provider_peer_id)
-            committed = await self.bus.request(
+            committed = await self._request_db(
                 DBMethods.COMMIT_TOOLING_REMOTE_CATALOG_SYNC,
                 DBCommitToolingRemoteCatalogSyncRequest(
                     sync_id=sync_id,
                     expected_base_generation=base_generation,
                     defer_activation_for_policy_reconciliation=requires_policy_reconciliation,
                 ),
-                origin="internal",
             )
             if not committed.ok:
                 raise RuntimeError("projection_commit_failed")
@@ -2822,7 +2849,7 @@ class ToolingService(BaseService):
                 # The catalog commit is durable, so never issue a misleading
                 # abort. Keep the provider non-bindable until Config-owned
                 # approval/refusal selectors can be reconciled safely.
-                stale = await self.bus.request(
+                stale = await self._request_db(
                     DBMethods.SET_TOOLING_REMOTE_PROVIDER_AVAILABILITY,
                     DBSetToolingRemoteProviderAvailabilityRequest(
                         peer_id=request.provider_peer_id,
@@ -2830,7 +2857,6 @@ class ToolingService(BaseService):
                         availability="stale",
                         reason_code="policy_alias_reconciliation_failed",
                     ),
-                    origin="internal",
                 )
                 stale_data = (
                     stale.data.model_dump(mode="python")
@@ -2856,7 +2882,7 @@ class ToolingService(BaseService):
             )
             if generation < 1 or not projection_revision:
                 raise RuntimeError("projection_commit_missing_policy_finalize_cas")
-            finalized = await self.bus.request(
+            finalized = await self._request_db(
                 DBMethods.FINALIZE_TOOLING_REMOTE_CATALOG_POLICY,
                 DBFinalizeToolingRemoteCatalogPolicyRequest(
                     peer_id=request.provider_peer_id,
@@ -2864,7 +2890,6 @@ class ToolingService(BaseService):
                     expected_generation=generation,
                     expected_projection_revision=projection_revision,
                 ),
-                origin="internal",
             )
             finalized_data = (
                 finalized.data.model_dump(mode="python")
@@ -2886,14 +2911,36 @@ class ToolingService(BaseService):
                     "secrets_redacted": True,
                 },
             )
-        except Exception:
+        except _ProjectionFetchUnavailableError as exc:
             if begun:
-                await self.bus.request(
+                await self._request_db(
                     DBMethods.ABORT_TOOLING_REMOTE_CATALOG_SYNC,
                     DBAbortToolingRemoteCatalogSyncRequest(
                         sync_id=sync_id, reason_code="projection_sync_failed"
                     ),
-                    origin="internal",
+                )
+            await self._request_db(
+                DBMethods.SET_TOOLING_REMOTE_PROVIDER_AVAILABILITY,
+                DBSetToolingRemoteProviderAvailabilityRequest(
+                    peer_id=request.provider_peer_id,
+                    provider_id=request.provider_peer_id,
+                    availability="stale",
+                    reason_code="projection_fetch_failed",
+                ),
+            )
+            self._catalog_cache.clear()
+            log_warning(
+                "Tooling projection refresh deferred for "
+                f"{request.provider_peer_id}: {exc}"
+            )
+            return EmptyOutput()
+        except Exception:
+            if begun:
+                await self._request_db(
+                    DBMethods.ABORT_TOOLING_REMOTE_CATALOG_SYNC,
+                    DBAbortToolingRemoteCatalogSyncRequest(
+                        sync_id=sync_id, reason_code="projection_sync_failed"
+                    ),
                 )
             raise
         finally:
@@ -3358,7 +3405,7 @@ class ToolingService(BaseService):
                 ),
             ),
             origin="internal",
-            timeout=10.0,
+            timeout=TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
             priority=get_interactive_priority(),
         )
         if not result.ok:
@@ -3375,7 +3422,7 @@ class ToolingService(BaseService):
             DBMethods.MUTATE_TOOLING_EXPORT_POLICY,
             request,
             origin="internal",
-            timeout=10.0,
+            timeout=TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
             priority=get_interactive_priority(),
         )
         if result.data is not None:
@@ -3572,15 +3619,13 @@ class ToolingService(BaseService):
     def _remote_tooling_candidates(self) -> list[Any]:
         """Return all remote Tooling provider candidates when running behind MeshBus."""
 
+        if not self._remote_tooling_registry_available():
+            return []
+
         bus = self.bus
         routing_table = getattr(bus, "_routing_table", None)
         registry = getattr(routing_table, "_registry", None)
-        if not registry:
-            return []
-
         current_mesh_policy_snapshot = getattr(bus, "current_mesh_policy_snapshot", None)
-        if not callable(current_mesh_policy_snapshot):
-            return []
         policy_snapshot = current_mesh_policy_snapshot()
         routing_config = policy_snapshot.mesh_config.services.get(ToolingModule.NAME)
         version_policy = getattr(policy_snapshot.mesh_config, "version_policy", "compatible")
@@ -3599,6 +3644,13 @@ class ToolingService(BaseService):
         except Exception as error:
             log_warning(f"Failed to enumerate remote Tooling providers: {error}")
             return []
+
+    def _remote_tooling_registry_available(self) -> bool:
+        bus = self.bus
+        routing_table = getattr(bus, "_routing_table", None)
+        registry = getattr(routing_table, "_registry", None)
+        current_mesh_policy_snapshot = getattr(bus, "current_mesh_policy_snapshot", None)
+        return bool(registry and callable(current_mesh_policy_snapshot))
 
     def _update_remote_provider_state(
         self,
@@ -3657,6 +3709,31 @@ class ToolingService(BaseService):
         if granted is None:
             return None
         return [str(permission) for permission in granted]
+
+    async def _current_peer_outbound_permissions(self, peer_id: str) -> list[str] | None:
+        """Read the local Auth authority that gates use of one remote provider."""
+
+        try:
+            result = await self.bus.request(
+                AuthMethods.MESH_GET_PEER,
+                MeshPeerGetRequest(peer_id=peer_id),
+                origin="internal",
+                timeout=5.0,
+                priority=get_interactive_priority(),
+            )
+            if not result.ok or result.data is None:
+                return None
+            response = MeshPeerGetResponse.model_validate(result.data)
+            if response.peer is None or response.peer.outbound_status != "approved":
+                return []
+            return list(
+                dict.fromkeys(
+                    str(permission) for permission in response.peer.outbound_permissions
+                )
+            )
+        except Exception as error:
+            log_debug(f"Tooling peer authority unavailable for {peer_id}: {error}")
+            return None
 
     @staticmethod
     def _catalog_cache_key(
@@ -4343,7 +4420,7 @@ class ToolingService(BaseService):
                     global_tool_ids=sorted(ids), stable_peer_id=peer_id
                 ),
                 origin="internal",
-                timeout=10.0,
+                timeout=TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
                 priority=get_system_priority(),
             )
             if not result.ok:
@@ -4426,7 +4503,7 @@ class ToolingService(BaseService):
                 global_tool_ids=sorted(scoped_ids),
             ),
             origin="internal",
-            timeout=10.0,
+            timeout=TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
             priority=get_system_priority(),
         )
         if not result.ok:
@@ -5919,7 +5996,7 @@ class ToolingService(BaseService):
                 stable_peer_id=provider_peer_id,
             ),
             origin="internal",
-            timeout=10.0,
+            timeout=TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
             priority=get_system_priority(),
         )
         if not result.ok:
@@ -6737,6 +6814,7 @@ class ToolingService(BaseService):
                     include_blocked_tools=request.include_blocked_tools,
                 )
 
+            remote_registry_available = self._remote_tooling_registry_available()
             candidates_by_peer = {
                 str(candidate.peer.peer_id): candidate
                 for candidate in self._remote_tooling_candidates()
@@ -6753,6 +6831,9 @@ class ToolingService(BaseService):
                 candidate = candidates_by_peer.get(snapshot.peer_id)
                 provider_label = self._peer_display_name(snapshot.peer_id)
                 granted_permissions: list[str] | None = None
+                outbound_permissions = await self._current_peer_outbound_permissions(
+                    snapshot.peer_id
+                )
                 volatile_permissions, volatile_available = self._remote_provider_states.get(
                     (snapshot.peer_id, snapshot.service_instance_id), (None, False)
                 )
@@ -6773,24 +6854,40 @@ class ToolingService(BaseService):
                     if candidate_label:
                         provider_label = candidate_label
                 elif candidate is not None:
-                    granted_permissions = self._candidate_granted_permissions(candidate)
+                    candidate_permissions = self._candidate_granted_permissions(candidate)
+                    granted_permissions = candidate_permissions
                     candidate_label = str(
                         getattr(getattr(candidate, "peer", None), "node_name", "") or ""
                     ).strip()
                     if candidate_label:
                         provider_label = candidate_label
-                    if granted_permissions is None:
+                    if candidate_permissions is None:
                         provider_eligible = False
                         provider_reason_code = "permissions_unknown"
                         provider_reason = (
                             "provider permission manifest is unavailable; cached catalog "
                             "metadata was retained"
                         )
+                    elif outbound_permissions is None:
+                        provider_eligible = False
+                        provider_reason_code = "permissions_unknown"
+                        provider_reason = (
+                            "current peer permissions are unavailable; cached catalog "
+                            "metadata was retained"
+                        )
+                    elif self._missing_required_permissions(
+                        [ToolingMethods.GET_TOOLS], outbound_permissions
+                    ):
+                        provider_eligible = False
+                        provider_reason_code = "permission_denied"
+                        provider_reason = (
+                            "current peer permissions do not allow remote Tooling discovery"
+                        )
                     else:
                         provider_eligible = True
                         provider_reason_code = "cached_negotiated_catalog"
                         provider_reason = "cached negotiated Tooling catalog"
-                elif volatile_available:
+                elif volatile_available and not remote_registry_available:
                     granted_permissions = volatile_permissions
                     if granted_permissions is None:
                         provider_eligible = False
@@ -7947,11 +8044,16 @@ class ToolingService(BaseService):
 
         selector = request.mesh_selector
         target_peer = self._selector_target_peer(request)
-        if not self._mesh_projection_enforcement_active:
-            # The legacy guard remains authoritative until the durable atomic
-            # activation row confirms every G013 component and retires it.
-            return True
         if not selector or not target_peer or self._is_local_provider(target_peer):
+            return True
+        outbound_permissions = await self._current_peer_outbound_permissions(target_peer)
+        if outbound_permissions is None or self._missing_required_permissions(
+            [ToolingMethods.EXECUTE_TOOL], outbound_permissions
+        ):
+            return False
+        if not self._mesh_projection_enforcement_active:
+            # The legacy sharing-policy guard remains authoritative until the
+            # durable cutover, but current Auth authority always applies.
             return True
         candidate = next(
             (
@@ -9049,7 +9151,7 @@ class ToolingService(BaseService):
                 correlation_id=request.correlation_id,
             ),
             origin="internal",
-            timeout=10.0,
+            timeout=TOOLING_DB_REQUEST_TIMEOUT_SECONDS,
             priority=get_system_priority(),
         )
         data = (

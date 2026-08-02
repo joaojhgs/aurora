@@ -141,11 +141,16 @@ export const loadingShellSnapshot: AuroraShellSnapshot = {
   error: null
 }
 
-export async function buildShellSnapshot(client: AuroraClient): Promise<AuroraShellSnapshot> {
+export async function buildShellSnapshot(
+  client: AuroraClient,
+  options: {
+    nativeManifest?: (() => Promise<NativeCapabilityManifest>) | undefined
+  } = {}
+): Promise<AuroraShellSnapshot> {
   try {
     const [graph, native] = await Promise.all([
       client.capabilities.getGraph({ include_unavailable: true, include_internal: true }),
-      client.native.getManifest().catch(() => null)
+      (options.nativeManifest?.() ?? client.native.getManifest()).catch(() => null)
     ])
     return snapshotFromGraph(client.transport.kind, graph, native)
   } catch (error) {

@@ -6,6 +6,7 @@ import time
 
 import aiosqlite
 
+from app.services.db.sqlite_connection import database_connection
 from app.shared.contracts.models.db import (
     DBGetToolingExposureLedgerRequest,
     DBGetToolingExposureLedgerResponse,
@@ -18,8 +19,7 @@ from app.shared.contracts.models.db import (
 async def get_tooling_exposure_ledger(
     db_path: str, request: DBGetToolingExposureLedgerRequest
 ) -> DBGetToolingExposureLedgerResponse:
-    async with aiosqlite.connect(db_path) as db:
-        db.row_factory = aiosqlite.Row
+    async with database_connection(db_path, row_factory=aiosqlite.Row) as db:
         rows = await (
             await db.execute(
                 """SELECT global_tool_id, last_schema_hash
@@ -44,7 +44,7 @@ async def record_tooling_exposures(
     db_path: str, request: DBRecordToolingExposuresRequest
 ) -> DBRecordToolingExposuresResponse:
     now = time.time()
-    async with aiosqlite.connect(db_path) as db:
+    async with database_connection(db_path) as db:
         await db.execute("BEGIN IMMEDIATE")
         await db.executemany(
             """INSERT INTO tooling_tool_exposure_ledger (

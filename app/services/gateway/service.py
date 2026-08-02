@@ -1224,6 +1224,7 @@ class GatewayService(BaseService):
         self._tooling_projection_invalidation_topic = ToolingMethods.PROJECTION_INVALIDATED
         self._tooling_projection_readiness_topic = ToolingMethods.MESH_PROJECTION_READINESS_CHANGED
         self._tooling_invalidation_subscription_ready = False
+        self._tooling_mesh_activation_task: asyncio.Task[None] | None = None
         self._admin_action_manager = AdminActionManager()
         self._mesh_infer_stream_tasks: set[asyncio.Task[None]] = set()
         self._mesh_infer_stream_tasks_by_id: dict[str, asyncio.Task[None]] = {}
@@ -1251,11 +1252,12 @@ class GatewayService(BaseService):
             self._tooling_projection_readiness_topic,
             self._handle_tooling_projection_readiness_changed,
         )
+        self._audio_session_service._bus = self.bus
         await self._audio_session_service.start()
         await self._start_gateway()
         await self._start_webrtc()
         await self._start_mesh()
-        await self._coordinate_tooling_mesh_activation()
+        self._schedule_tooling_mesh_activation()
 
     async def on_stop(self) -> None:
         """Service-specific shutdown logic."""
@@ -1280,6 +1282,16 @@ class GatewayService(BaseService):
                 self._tooling_projection_readiness_topic,
                 self._handle_tooling_projection_readiness_changed,
             )
+        tooling_activation_task = self._tooling_mesh_activation_task
+        self._tooling_mesh_activation_task = None
+        if (
+            tooling_activation_task is not None
+            and tooling_activation_task is not asyncio.current_task()
+            and not tooling_activation_task.done()
+        ):
+            tooling_activation_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await tooling_activation_task
         for task in list(self._mesh_infer_stream_tasks):
             task.cancel()
         if self._mesh_infer_stream_tasks:
@@ -2100,7 +2112,7 @@ class GatewayService(BaseService):
 
     async def _capture_gateway_event(self, envelope: Envelope) -> None:
         """Capture bus events into a redacted normalized stream."""
-        if envelope.type in {
+        if envelope.reply_to is not None or envelope.type in {
             AuroraMethods.EVENT_STREAM,
             AudioTopics.STREAM_MICROPHONE,
         } or envelope.type.startswith("reply."):
@@ -2270,12 +2282,16 @@ class GatewayService(BaseService):
             result = rtc_client.apply_trusted_peer_authority_snapshot(row)
             if result.status.name not in {"APPLIED", "DUPLICATE", "ABSENT"}:
                 return _MeshAuthorityReconcileResult(False)
+            if self._mesh_peer_registry is not None:
+                self._mesh_peer_registry.apply_local_peer_authority(row)
             if result.reannounce and result.peer_id:
                 reannounce.add(result.peer_id)
         for missing_peer in absences_to_apply:
             result = rtc_client.apply_trusted_peer_authority_absence(missing_peer)
             if result.status.name != "ABSENT":
                 return _MeshAuthorityReconcileResult(False)
+            if self._mesh_peer_registry is not None:
+                self._mesh_peer_registry.mark_local_peer_authority_absent(missing_peer)
             if result.reannounce and result.peer_id:
                 reannounce.add(result.peer_id)
         return _MeshAuthorityReconcileResult(True, tuple(sorted(reannounce)))
@@ -2329,9 +2345,22 @@ class GatewayService(BaseService):
                 and result.peer_id
                 and event.state != "active"
             ):
+                if self._mesh_peer_registry is not None:
+                    self._mesh_peer_registry.apply_local_peer_authority(
+                        MeshPeerAuthoritySnapshot.model_validate(event.model_dump())
+                    )
                 disconnect_peer_id = result.peer_id
             elif result.reannounce and result.peer_id:
+                if self._mesh_peer_registry is not None:
+                    self._mesh_peer_registry.apply_local_peer_authority(
+                        MeshPeerAuthoritySnapshot.model_validate(event.model_dump())
+                    )
                 reannounce_peers = (result.peer_id,)
+            elif result.status.name in {"APPLIED", "DUPLICATE"} and result.peer_id:
+                if self._mesh_peer_registry is not None:
+                    self._mesh_peer_registry.apply_local_peer_authority(
+                        MeshPeerAuthoritySnapshot.model_validate(event.model_dump())
+                    )
         if disconnect_peer_id:
             await rtc_client.disconnect_peer(disconnect_peer_id)
             return
@@ -2717,7 +2746,32 @@ class GatewayService(BaseService):
             or envelope.caller_peer_id is not None
         ):
             return
-        await self._coordinate_tooling_mesh_activation()
+        self._schedule_tooling_mesh_activation()
+
+    def _schedule_tooling_mesh_activation(self) -> None:
+        """Start one bounded background activation loop without delaying startup."""
+
+        task = self._tooling_mesh_activation_task
+        if task is not None and not task.done():
+            return
+        self._tooling_mesh_activation_task = asyncio.create_task(
+            self._run_tooling_mesh_activation_attempts()
+        )
+
+    async def _run_tooling_mesh_activation_attempts(self) -> None:
+        """Retry fail-closed Tooling activation while startup settles."""
+
+        try:
+            for attempt in range(5):
+                if await self._coordinate_tooling_mesh_activation():
+                    return
+                if attempt < 4:
+                    await asyncio.sleep(min(0.25 * (2**attempt), 2.0))
+        except asyncio.CancelledError:
+            raise
+        finally:
+            if self._tooling_mesh_activation_task is asyncio.current_task():
+                self._tooling_mesh_activation_task = None
 
     async def _coordinate_tooling_mesh_activation(self) -> bool:
         """Activate only after concrete Gateway and Tooling readiness evidence."""
@@ -2738,6 +2792,7 @@ class GatewayService(BaseService):
                 ToolingMethods.GET_MESH_PROJECTION_READINESS,
                 EmptyInput(),
                 origin="internal",
+                timeout=35.0,
             )
             if not result.ok or result.data is None:
                 return False
@@ -2768,6 +2823,7 @@ class GatewayService(BaseService):
                     reason="concrete_gateway_and_tooling_readiness_attested",
                 ),
                 origin="internal",
+                timeout=35.0,
             )
             if not activation.ok or activation.data is None:
                 return False
@@ -4056,12 +4112,17 @@ class GatewayService(BaseService):
                     MeshPeerUpsertRequest,
                 )
 
+                registry = self._mesh_peer_registry
+                current = registry.get_peer(p_id) if registry is not None else None
+                if current is None:
+                    log_debug(f"Skipping stale peer registration callback for {p_id}")
+                    return
                 await bus_for_callbacks.request(
                     AuthMethods.MESH_UPSERT_PEER,
                     MeshPeerUpsertRequest(
                         peer_id=p_id,
                         room_name=room_name_for_callbacks,
-                        node_name=p_name,
+                        node_name=current.node_name or p_name,
                     ),
                     timeout=5.0,
                 )
@@ -4069,7 +4130,7 @@ class GatewayService(BaseService):
                     AuthMethods.MESH_UPDATE_PEER_CONNECTION,
                     MeshPeerUpdateConnectionRequest(
                         peer_id=p_id,
-                        connection_status=_mesh_connection_status(p_status),
+                        connection_status=_mesh_connection_status(current.status),
                     ),
                     timeout=5.0,
                 )
@@ -4083,6 +4144,10 @@ class GatewayService(BaseService):
                 )
                 from app.shared.contracts.models.tooling import ToolingProjectionSyncRequested
 
+                registry = self._mesh_peer_registry
+                if registry is not None and registry.get_peer(p_id) is not None:
+                    log_debug(f"Skipping stale peer removal callback for {p_id}")
+                    return
                 await bus_for_callbacks.request(
                     AuthMethods.MESH_UPDATE_PEER_CONNECTION,
                     MeshPeerUpdateConnectionRequest(
@@ -4113,6 +4178,13 @@ class GatewayService(BaseService):
                 )
                 from app.shared.contracts.models.tooling import ToolingProjectionSyncRequested
 
+                registry = self._mesh_peer_registry
+                current = registry.get_peer(p_id) if registry is not None else None
+                if current is None or current.status != p_status:
+                    log_debug(
+                        f"Skipping stale peer status callback for {p_id}: {p_status}"
+                    )
+                    return
                 await bus_for_callbacks.request(
                     AuthMethods.MESH_UPDATE_PEER_CONNECTION,
                     MeshPeerUpdateConnectionRequest(
@@ -4288,7 +4360,7 @@ class GatewayService(BaseService):
             resp = await self.bus.request(
                 AuthMethods.LOAD_MESH_IDENTITY,
                 MeshIdentityLoadRequest(),
-                timeout=5.0,
+                timeout=40.0,
             )
             if hasattr(resp, "ok") and not resp.ok:
                 raise RuntimeError(getattr(resp, "error", None) or "identity load failed")

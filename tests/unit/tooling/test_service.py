@@ -1,5 +1,6 @@
 """Unit tests for ToolingService."""
 
+import asyncio
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
@@ -14,12 +15,17 @@ from app.services.tooling.identity import (
     source_tool_identity,
     stamp_tool,
 )
-from app.services.tooling.service import ToolingService
+from app.services.tooling.service import TOOLING_DB_REQUEST_TIMEOUT_SECONDS, ToolingService
 from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.db import DBMethods
-from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.mesh import (
+    MeshAddressSelector,
+    MeshEvents,
+    MeshPeerPermissionsUpdatedEvent,
+)
 from app.shared.contracts.models.tooling import (
     JS_SAFE_INTEGER_MAX,
+    ToolingExecuteToolRequest,
     ToolingGetToolCatalogRequest,
     ToolingGetToolsResponse,
     ToolingMeshProjectionReadiness,
@@ -107,6 +113,30 @@ def tooling_service(mock_bus):
         yield service
 
 
+def _install_approved_peer_authority(mock_bus) -> AsyncMock:
+    """Make remote-tool tests model the Auth authority required in production."""
+
+    async def request(method, payload, **_kwargs):
+        if method == AuthMethods.MESH_GET_PEER:
+            peer_id = str(payload.peer_id)
+            return QueryResult(
+                ok=True,
+                data={
+                    "peer": {
+                        "id": f"peer-row:{peer_id}",
+                        "peer_id": peer_id,
+                        "outbound_status": "approved",
+                        "outbound_permissions": [ToolingMethods.EXECUTE_TOOL],
+                    }
+                },
+            )
+        return QueryResult(ok=True, data={"ok": True})
+
+    request_mock = AsyncMock(side_effect=request)
+    mock_bus.request = request_mock
+    return request_mock
+
+
 def test_remote_catalog_mutation_contracts_are_internal_only():
     """Remote catalog mutation methods are bus-internal and not externally callable."""
 
@@ -123,8 +153,8 @@ def test_remote_catalog_mutation_contracts_are_internal_only():
 
 
 @pytest.mark.asyncio
-async def test_startup_recovery_prunes_and_requests_fresh_full_sync(tooling_service):
-    """Recovered providers stay stale until a fresh authenticated projection is fetched."""
+async def test_startup_recovery_defers_pruning_and_requests_fresh_full_sync(tooling_service):
+    """Recovery stays lean while stale providers request fresh authenticated state."""
 
     peer_id = "stable-peer-recovery"
     tooling_service._mesh_projection_enforcement_active = True
@@ -186,6 +216,8 @@ async def test_startup_recovery_prunes_and_requests_fresh_full_sync(tooling_serv
     assert published.args[1].provider_peer_id == peer_id
     assert published.args[1].service_instance_id == "remote:stable:Tooling"
     assert published.args[1].force_full_snapshot is True
+    requested_topics = [call.args[0] for call in tooling_service.bus.request.await_args_list]
+    assert DBMethods.PRUNE_TOOLING_REMOTE_CATALOG_RETENTION not in requested_topics
 
 
 @pytest.mark.asyncio
@@ -728,6 +760,102 @@ class TestToolingServiceInitialization:
         assert isinstance(tools_init_calls[0][0][1], ToolsInitialized)
 
     @pytest.mark.asyncio
+    async def test_start_publishes_readiness_before_deferred_retention(
+        self, tooling_service, mock_bus
+    ):
+        """Retention maintenance cannot hold Tooling readiness hostage."""
+
+        order: list[str] = []
+        retention_release = asyncio.Event()
+
+        async def activate() -> None:
+            tooling_service._mesh_projection_enforcement_active = True
+
+        async def publish(topic, *_args, **_kwargs):
+            order.append(topic)
+
+        async def retention_loop() -> None:
+            order.append("retention-started")
+            await retention_release.wait()
+
+        tooling_service._load_sharing_policy_from_config = AsyncMock()
+        tooling_service._ensure_tooling_policy_tables = AsyncMock()
+        tooling_service._load_stable_tooling_peer_id = AsyncMock()
+        tooling_service._reconcile_local_tool_identities = AsyncMock()
+        tooling_service._migrate_legacy_tool_export_policy = AsyncMock()
+        tooling_service._activate_mesh_projection_enforcement = AsyncMock(side_effect=activate)
+        tooling_service._recover_normalized_remote_catalogs = AsyncMock()
+        tooling_service._on_get_mesh_projection_readiness = AsyncMock(
+            return_value=ToolingMeshProjectionReadiness(
+                projection_transport=True,
+                normalized_catalog=True,
+                consumer_binding=True,
+                provider_discovery=True,
+                prepare_enforcement=True,
+                execute_enforcement=True,
+                legacy_guard_active=True,
+                durable_active=False,
+                durable_revision=0,
+            )
+        )
+        tooling_service._announce_local_tool_catalog = AsyncMock()
+        tooling_service._remote_catalog_retention_loop = AsyncMock(side_effect=retention_loop)
+        mock_bus.publish.side_effect = publish
+
+        await asyncio.wait_for(tooling_service.on_start(), timeout=0.5)
+        await asyncio.sleep(0)
+
+        assert ToolingMethods.MESH_PROJECTION_READINESS_CHANGED in order
+        assert order.index(ToolingMethods.MESH_PROJECTION_READINESS_CHANGED) < order.index(
+            "retention-started"
+        )
+
+        retention_release.set()
+        await tooling_service.on_stop()
+
+    @pytest.mark.asyncio
+    async def test_retention_uses_full_sqlite_busy_window_budget(self, tooling_service, mock_bus):
+        mock_bus.request.return_value = QueryResult(
+            ok=True,
+            data={
+                "ok": True,
+                "compacted_tool_count": 0,
+                "compacted_management_metadata_count": 0,
+                "pruned_audit_count": 0,
+                "providers": [],
+            },
+        )
+
+        await tooling_service._prune_normalized_remote_catalog_retention()
+
+        assert mock_bus.request.await_args.args[0] == (
+            DBMethods.PRUNE_TOOLING_REMOTE_CATALOG_RETENTION
+        )
+        assert mock_bus.request.await_args.kwargs["timeout"] == (TOOLING_DB_REQUEST_TIMEOUT_SECONDS)
+
+    @pytest.mark.asyncio
+    async def test_startup_recovery_uses_full_sqlite_busy_window_budget(
+        self, tooling_service, mock_bus
+    ):
+        tooling_service._mesh_projection_enforcement_active = True
+        mock_bus.request.return_value = QueryResult(
+            ok=True,
+            data={
+                "ok": True,
+                "providers_needing_sync": [],
+                "recovered_sync_count": 0,
+                "imported_legacy_provider_count": 0,
+                "imported_legacy_tool_count": 0,
+                "recovered_sync_ids": [],
+            },
+        )
+
+        await tooling_service._recover_normalized_remote_catalogs()
+
+        assert mock_bus.request.await_args.args[0] == (DBMethods.RECOVER_TOOLING_REMOTE_CATALOGS)
+        assert mock_bus.request.await_args.kwargs["timeout"] == (TOOLING_DB_REQUEST_TIMEOUT_SECONDS)
+
+    @pytest.mark.asyncio
     async def test_stop(self, tooling_service):
         """Test service stop."""
         await tooling_service.stop()
@@ -1127,6 +1255,283 @@ class TestToolingServiceQueries:
         ].tools == [remote_tool]
 
     @pytest.mark.asyncio
+    async def test_normalized_catalog_does_not_reuse_stale_volatile_grants_after_registry_revoke(
+        self, tooling_service
+    ):
+        """Live registry loss after permission reduction blocks cached remote tools."""
+
+        peer_id = "raspi-lab"
+        service_instance_id = f"remote:{peer_id}:Tooling"
+        remote_tool = _tool_info(
+            name="raspi-lab_lookup",
+            local_name="lookup",
+            provider_peer_id=peer_id,
+            provider_service_instance_id=service_instance_id,
+            namespace=peer_id,
+            source_type="mesh_peer",
+            execution_location="remote",
+            required_permissions=["Tooling.ExecuteTool"],
+        )
+        snapshot = ToolingRemoteCatalogAnnounced(
+            peer_id=peer_id,
+            service_instance_id=service_instance_id,
+            provider_id=peer_id,
+            catalog_epoch=1,
+            generated_at="2026-07-10T00:00:00Z",
+            full_schema_hash="hash",
+            tools=[remote_tool],
+            granted_permissions=None,
+        )
+        tooling_service._remote_provider_states[(peer_id, service_instance_id)] = (
+            ["Tooling.ExecuteTool"],
+            True,
+        )
+        tooling_service._on_get_tools = AsyncMock(
+            return_value=ToolingGetToolsResponse(tools=[], count=0)
+        )
+
+        with (
+            patch.object(
+                tooling_service,
+                "_load_normalized_bindable_remote_catalogs",
+                AsyncMock(return_value=[snapshot]),
+            ),
+            patch.object(
+                tooling_service,
+                "_load_remote_catalog_snapshots",
+                AsyncMock(return_value=[]),
+            ),
+            patch.object(
+                tooling_service,
+                "_remote_tooling_registry_available",
+                Mock(return_value=True),
+            ),
+            patch.object(
+                tooling_service,
+                "_remote_tooling_candidates",
+                Mock(return_value=[]),
+            ),
+        ):
+            catalog = await tooling_service._on_get_tool_catalog(
+                ToolingGetToolCatalogRequest(
+                    caller_permissions=["*"],
+                    include_blocked_tools=True,
+                )
+            )
+
+        assert catalog.tools == []
+        assert catalog.blocked_tools[0].reason_code == "provider_unavailable"
+        assert catalog.blocked_tools[0].tool.global_tool_id == remote_tool.global_tool_id
+
+    @pytest.mark.asyncio
+    async def test_mesh_permission_update_invalidates_catalog_without_overwriting_remote_grants(
+        self, tooling_service
+    ):
+        """Outbound Auth changes preserve reciprocal manifest authority."""
+
+        peer_id = "raspi-lab"
+        service_instance_id = f"local:{peer_id}:Tooling"
+        tooling_service._remote_provider_states[(peer_id, service_instance_id)] = (
+            ["Tooling.ExecuteTool", "Native.GetDeviceStatus"],
+            True,
+        )
+        tooling_service._catalog_cache["stale"] = (
+            9999999999.0,
+            ToolingGetToolsResponse(tools=[], count=0),
+        )
+
+        await tooling_service._on_mesh_peer_permissions_updated(
+            Envelope(
+                type=MeshEvents.PEER_PERMISSIONS_UPDATED,
+                payload=MeshPeerPermissionsUpdatedEvent(
+                    peer_id=peer_id,
+                    permissions=["Gateway.GetMeshStatus", "Auth.WhoAmI"],
+                ),
+            )
+        )
+
+        assert tooling_service._remote_provider_states[(peer_id, service_instance_id)] == (
+            ["Tooling.ExecuteTool", "Native.GetDeviceStatus"],
+            True,
+        )
+        assert tooling_service._catalog_cache == {}
+
+    @pytest.mark.asyncio
+    async def test_mesh_permission_reduction_immediately_blocks_cached_remote_tools(
+        self, tooling_service
+    ):
+        """Fresh Auth grants override stale candidate grants for cached discovery."""
+
+        peer_id = "raspi-lab"
+        service_instance_id = f"local:{peer_id}:Tooling"
+        remote_tool = _tool_info(
+            name="raspi-lab_device_status",
+            local_name="native.get_device_status",
+            provider_peer_id=peer_id,
+            provider_service_instance_id=service_instance_id,
+            namespace=peer_id,
+            source_type="mesh_peer",
+            execution_location="remote",
+            required_permissions=["Native.GetDeviceStatus"],
+        )
+        snapshot = ToolingRemoteCatalogAnnounced(
+            peer_id=peer_id,
+            service_instance_id=service_instance_id,
+            provider_id=peer_id,
+            catalog_epoch=1,
+            generated_at="2026-08-02T00:00:00Z",
+            full_schema_hash="hash",
+            tools=[remote_tool],
+            shared_by_policy=True,
+        )
+        tooling_service._remote_provider_states[(peer_id, service_instance_id)] = (
+            ["Native.GetDeviceStatus"],
+            True,
+        )
+        tooling_service._on_get_tools = AsyncMock(
+            return_value=ToolingGetToolsResponse(tools=[], count=0)
+        )
+
+        await tooling_service._on_mesh_peer_permissions_updated(
+            Envelope(
+                type=MeshEvents.PEER_PERMISSIONS_UPDATED,
+                payload=MeshPeerPermissionsUpdatedEvent(
+                    peer_id=peer_id,
+                    permissions=["Gateway.GetMeshStatus", "Auth.WhoAmI"],
+                ),
+            )
+        )
+
+        tooling_service._mesh_projection_enforcement_active = True
+        tooling_service.bus.request = AsyncMock(
+            return_value=QueryResult(
+                ok=True,
+                data={
+                    "peer": {
+                        "id": "peer-row",
+                        "peer_id": peer_id,
+                        "outbound_status": "approved",
+                        "outbound_permissions": [
+                            "Gateway.GetMeshStatus",
+                            "Auth.WhoAmI",
+                        ],
+                    }
+                },
+            )
+        )
+
+        with (
+            patch.object(
+                tooling_service,
+                "_load_normalized_bindable_remote_catalogs",
+                AsyncMock(return_value=[snapshot]),
+            ),
+            patch.object(
+                tooling_service,
+                "_load_remote_catalog_snapshots",
+                AsyncMock(return_value=[]),
+            ),
+            patch.object(
+                tooling_service,
+                "_remote_tooling_candidates",
+                Mock(
+                    return_value=[
+                        _provider_candidate(
+                            peer_id,
+                            eligible=True,
+                            granted_permissions=[
+                                ToolingMethods.GET_TOOLS,
+                                "Native.GetDeviceStatus",
+                            ],
+                        )
+                    ]
+                ),
+            ),
+        ):
+            catalog = await tooling_service._on_get_tool_catalog(
+                ToolingGetToolCatalogRequest(
+                    caller_permissions=["*"],
+                    include_blocked_tools=True,
+                )
+            )
+
+        assert catalog.tools == []
+        assert catalog.providers[1].eligible is False
+        assert catalog.providers[1].reason_code == "permission_denied"
+        assert catalog.blocked_tools[0].reason_code == "permission_denied"
+
+    @pytest.mark.asyncio
+    async def test_remote_execution_rechecks_current_outbound_peer_permissions(
+        self, tooling_service
+    ):
+        """A known remote tool ID cannot bypass a live Auth permission reduction."""
+
+        peer_id = "raspi-lab"
+        service_instance_id = f"local:{peer_id}:Tooling"
+        remote_tool = _tool_info(
+            name="raspi-lab_device_status",
+            local_name="native.get_device_status",
+            provider_peer_id=peer_id,
+            provider_service_instance_id=service_instance_id,
+            namespace=peer_id,
+            source_type="mesh_peer",
+            execution_location="remote",
+        )
+        tooling_service._mesh_projection_enforcement_active = False
+        tooling_service.bus.request = AsyncMock(
+            return_value=QueryResult(
+                ok=True,
+                data={
+                    "peer": {
+                        "id": "peer-row",
+                        "peer_id": peer_id,
+                        "outbound_status": "approved",
+                        "outbound_permissions": ["Gateway.GetMeshStatus", "Auth.WhoAmI"],
+                    }
+                },
+            )
+        )
+
+        with (
+            patch.object(
+                tooling_service,
+                "_load_normalized_bindable_remote_catalogs",
+                AsyncMock(
+                    return_value=[
+                        ToolingRemoteCatalogAnnounced(
+                            peer_id=peer_id,
+                            service_instance_id=service_instance_id,
+                            provider_id=peer_id,
+                            catalog_epoch=1,
+                            generated_at="2026-08-02T00:00:00Z",
+                            full_schema_hash="hash",
+                            tools=[remote_tool],
+                            shared_by_policy=True,
+                        )
+                    ]
+                ),
+            ),
+            patch.object(
+                tooling_service,
+                "_remote_tooling_candidates",
+                Mock(return_value=[_provider_candidate(peer_id, eligible=True)]),
+            ),
+        ):
+            authorized = await tooling_service._consumer_mesh_execution_authorized(
+                ToolingExecuteToolRequest(
+                    tool_name=remote_tool.global_tool_id,
+                    arguments={},
+                    mesh_selector=MeshAddressSelector(
+                        peer_id=peer_id,
+                        service_instance_id=service_instance_id,
+                        tool_id=remote_tool.global_tool_id,
+                    ),
+                )
+            )
+
+        assert authorized is False
+
+    @pytest.mark.asyncio
     async def test_get_tool_catalog_reports_blocked_provider(self, tooling_service, mock_bus):
         """Cached providers that are not shared by policy are returned as ineligible."""
         from app.shared.contracts.models.tooling import ToolingGetToolCatalogRequest
@@ -1408,6 +1813,7 @@ class TestToolingServiceQueries:
             return target
 
         tooling_service.tools_manager.get_tools = Mock(return_value=[switch_on])
+        _install_approved_peer_authority(tooling_service.bus)
 
         lab_response = await tooling_service._on_get_tools(
             ToolingGetToolsRequest(
@@ -2090,7 +2496,7 @@ class TestToolingServiceToolExecution:
             ToolingSharingPolicy,
         )
 
-        mock_bus.request = AsyncMock()
+        _install_approved_peer_authority(mock_bus)
         mock_tool = Mock()
         mock_tool.source = "core"
         mock_tool.safety_class = "dangerous"
@@ -2135,7 +2541,7 @@ class TestToolingServiceToolExecution:
             ToolingResourceSelector,
         )
 
-        mock_bus.request = AsyncMock()
+        _install_approved_peer_authority(mock_bus)
         mock_tool = Mock()
         mock_tool.source = "core"
         mock_tool.safety_class = "sensitive"
@@ -2294,7 +2700,7 @@ class TestToolingServiceToolExecution:
         """Policy denial logs omit raw secret-like argument values."""
         from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
 
-        mock_bus.request = AsyncMock()
+        _install_approved_peer_authority(mock_bus)
         mock_tool = Mock()
         mock_tool.source = "core"
         mock_tool.safety_class = "dangerous"
@@ -2391,6 +2797,7 @@ class TestToolingServiceToolExecution:
 
         tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
         tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+        _install_approved_peer_authority(mock_bus)
         await tooling_service._on_set_sharing_policy(
             ToolingSetSharingPolicyRequest(
                 policy=ToolingSharingPolicy(policy_mode="unrestricted_except_blocked"),
@@ -2428,6 +2835,7 @@ class TestToolingServiceToolExecution:
 
         tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
         tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+        _install_approved_peer_authority(mock_bus)
         await tooling_service._on_set_sharing_policy(
             ToolingSetSharingPolicyRequest(
                 policy=ToolingSharingPolicy(policy_mode="unrestricted_except_blocked"),
@@ -2652,7 +3060,7 @@ class TestToolingSharingPolicyAndApproval:
             ToolingResourceSelector,
         )
 
-        mock_bus.request = AsyncMock()
+        _install_approved_peer_authority(mock_bus)
         mock_tool = self._mock_tool(safety_class="dangerous", confirmation_required=True)
         tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
         tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
@@ -2851,7 +3259,7 @@ class TestToolingSharingPolicyAndApproval:
             ToolingResourceSelector,
         )
 
-        mock_bus.request = AsyncMock()
+        _install_approved_peer_authority(mock_bus)
         mock_tool = self._mock_tool(safety_class="dangerous", confirmation_required=True)
         tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
         tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)

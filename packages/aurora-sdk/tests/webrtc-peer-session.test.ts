@@ -21,17 +21,26 @@ import type { AuthenticatedPeerContext } from '../src/peer-host/authority.js'
 
 class FakeTimers {
   next = 1
-  handles = new Map<number, () => void>()
-  setTimeout = (callback: () => void): number => {
+  handles = new Map<number, { callback: () => void; ms: number }>()
+  setTimeout = (callback: () => void, ms: number): number => {
     const handle = this.next++
-    this.handles.set(handle, callback)
+    this.handles.set(handle, { callback, ms })
     return handle
   }
   clearTimeout = (handle: unknown): void => {
     this.handles.delete(handle as number)
   }
   fireAll(): void {
-    for (const callback of [...this.handles.values()]) callback()
+    for (const { callback } of [...this.handles.values()]) callback()
+  }
+  fireDelay(ms: number): void {
+    const entry = [...this.handles.entries()].find(([, timer]) => timer.ms === ms)
+    if (!entry) throw new Error(`No timer is scheduled for ${ms}ms`)
+    this.handles.delete(entry[0])
+    entry[1].callback()
+  }
+  scheduledDelays(): number[] {
+    return [...this.handles.values()].map((timer) => timer.ms).sort((left, right) => left - right)
   }
 }
 
@@ -142,6 +151,12 @@ function presence(from: string, stablePeerId = `stable-${from}`): SignalingMessa
 
 async function flush(): Promise<void> {
   for (let index = 0; index < 32; index += 1) await Promise.resolve()
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve(value: T): void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((next) => { resolve = next })
+  return { promise, resolve }
 }
 
 async function authorizedAnswerer(options: Partial<ConstructorParameters<typeof WebRtcPeerSession>[0]> = {}): Promise<{
@@ -608,6 +623,480 @@ describe('WebRtcPeerSession', () => {
     expect(session.getSnapshot()).toMatchObject({ state: 'reconnecting', reconnectAttempts: 1, remoteStableId: 'stable-b' })
     timers.fireAll()
     expect(session.getSnapshot()).toMatchObject({ state: 'discovering-peer', remoteStableId: 'stable-b' })
+  })
+
+  it('keeps retrying transient transport failures by default until explicitly closed', async () => {
+    const timers = new FakeTimers()
+    const signaling = new FakeSignaling()
+    const pcs = Array.from({ length: 5 }, () => new FakePeerConnection())
+    const session = new WebRtcPeerSession({
+      localSignalingId: 'a',
+      signaling,
+      createPeerConnection: () => pcs.shift() ?? new FakePeerConnection(),
+      codec,
+      timers,
+      random: () => 0.5,
+      auth: { tryReconnect: async () => true, handleFrame: async () => undefined }
+    })
+
+    await session.start()
+    signaling.emit(presence('b'))
+    await flush()
+
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      const current = (session as unknown as { pc: FakePeerConnection }).pc
+      current.fail()
+      expect(session.getSnapshot()).toMatchObject({ state: 'reconnecting', reconnectAttempts: attempt })
+      timers.fireDelay(500 * 2 ** (attempt - 1))
+      await flush()
+      expect(session.getSnapshot().failed).toBe(false)
+    }
+
+    await session.close()
+    expect(session.getSnapshot().state).toBe('closed')
+  })
+
+  it('rebinds a restarted peer signaling session only when its stable identity still matches', async () => {
+    const timers = new FakeTimers()
+    const signaling = new FakeSignaling()
+    const firstPc = new FakePeerConnection('unused', 'answer-old')
+    const secondPc = new FakePeerConnection('unused', 'answer-new')
+    const pcs = [firstPc, secondPc]
+    const auth = {
+      tryReconnect: vi.fn(async () => true),
+      startPairing: vi.fn(async () => undefined),
+      resetTransport: vi.fn(),
+      handleFrame: vi.fn(async () => undefined)
+    }
+    const session = new WebRtcPeerSession({
+      localSignalingId: 'z-local',
+      expectedRemoteStableId: 'stable-home',
+      signaling,
+      createPeerConnection: () => pcs.shift() ?? new FakePeerConnection(),
+      codec,
+      timers,
+      random: () => 0.5,
+      reconnect: { maxAttempts: 2, baseDelayMs: 1, maxDelayMs: 1, jitterRatio: 0 },
+      auth
+    })
+
+    await session.start()
+    signaling.emit({
+      channel: 'offer',
+      from: 'home-epoch-old',
+      stablePeerId: 'stable-home',
+      envelope: { type: 'offer', stable_peer_id: 'stable-home', sdp: 'offer-old' }
+    })
+    await flush()
+    const firstChannel = new FakeDataChannel(AURORA_RPC_DATA_CHANNEL_LABEL)
+    firstPc.remoteChannel(firstChannel)
+    firstChannel.open()
+    await flush()
+    expect(session.getSnapshot()).toMatchObject({
+      state: 'authorized',
+      remoteSignalingId: 'home-epoch-old',
+      remoteStableId: 'stable-home'
+    })
+
+    signaling.emit(presence('home-epoch-new', 'stable-home'))
+    await flush()
+    expect(session.getSnapshot()).toMatchObject({
+      state: 'reconnecting',
+      failed: false,
+      remoteSignalingId: 'home-epoch-old',
+      remoteStableId: 'stable-home'
+    })
+
+    timers.fireDelay(1)
+    await flush()
+    expect(session.getSnapshot()).toMatchObject({
+      state: 'discovering-peer',
+      role: 'answerer',
+      remoteSignalingId: 'home-epoch-new',
+      remoteStableId: 'stable-home'
+    })
+    expect(firstPc.closed).toBe(true)
+    expect(auth.resetTransport).toHaveBeenCalledOnce()
+
+    signaling.emit({
+      channel: 'offer',
+      from: 'home-epoch-new',
+      stablePeerId: 'stable-home',
+      envelope: { type: 'offer', stable_peer_id: 'stable-home', sdp: 'offer-new' }
+    })
+    await flush()
+    expect(secondPc.remoteDescription).toEqual({ type: 'offer', sdp: 'offer-new' })
+    expect(signaling.published).toContainEqual(expect.objectContaining({
+      channel: 'answer',
+      toPeer: 'home-epoch-new',
+      envelope: expect.objectContaining({ sdp: 'answer-new' })
+    }))
+
+    const secondChannel = new FakeDataChannel(AURORA_RPC_DATA_CHANNEL_LABEL)
+    secondPc.remoteChannel(secondChannel)
+    secondChannel.open()
+    await flush()
+    expect(session.getSnapshot()).toMatchObject({
+      state: 'authorized',
+      authorized: true,
+      remoteSignalingId: 'home-epoch-new',
+      remoteStableId: 'stable-home'
+    })
+    expect(session.getSnapshot().lastError).toBeUndefined()
+    expect(auth.tryReconnect).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      remoteSignalingId: 'home-epoch-new',
+      remoteStableId: 'stable-home'
+    }))
+    expect(auth.startPairing).not.toHaveBeenCalled()
+  })
+
+  it('replays a same-stable-peer presence received before rollover teardown completes', async () => {
+    const timers = new FakeTimers()
+    const signaling = new FakeSignaling()
+    const firstPc = new FakePeerConnection('offer-old')
+    const secondPc = new FakePeerConnection('offer-new')
+    const pcs = [firstPc, secondPc]
+    const auth = {
+      tryReconnect: vi.fn(async () => true),
+      resetTransport: vi.fn(),
+      handleFrame: vi.fn(async () => undefined)
+    }
+    const session = new WebRtcPeerSession({
+      localSignalingId: 'a-local',
+      expectedRemoteStableId: 'stable-home',
+      signaling,
+      createPeerConnection: () => pcs.shift() ?? new FakePeerConnection(),
+      codec,
+      timers,
+      random: () => 0.5,
+      reconnect: { maxAttempts: 2, baseDelayMs: 1, maxDelayMs: 1, jitterRatio: 0 },
+      auth
+    })
+
+    await session.start()
+    signaling.emit(presence('home-epoch-old', 'stable-home'))
+    await flush()
+    signaling.emit({
+      channel: 'answer',
+      from: 'home-epoch-old',
+      stablePeerId: 'stable-home',
+      envelope: { type: 'answer', stable_peer_id: 'stable-home', sdp: 'answer-old' }
+    })
+    await flush()
+    firstPc.channels[0]!.open()
+    await flush()
+    expect(session.getSnapshot()).toMatchObject({
+      state: 'authorized',
+      remoteSignalingId: 'home-epoch-old',
+      remoteStableId: 'stable-home'
+    })
+
+    signaling.emit(presence('home-epoch-new', 'stable-home'))
+    await flush()
+    expect(session.getSnapshot()).toMatchObject({
+      state: 'reconnecting',
+      remoteSignalingId: 'home-epoch-old',
+      remoteStableId: 'stable-home'
+    })
+
+    timers.fireDelay(1)
+    await flush()
+    expect(session.getSnapshot()).toMatchObject({
+      state: 'negotiating',
+      role: 'offerer',
+      remoteSignalingId: 'home-epoch-new',
+      remoteStableId: 'stable-home'
+    })
+    expect(signaling.published).toContainEqual(expect.objectContaining({
+      channel: 'offer',
+      toPeer: 'home-epoch-new',
+      envelope: expect.objectContaining({ sdp: 'offer-new' })
+    }))
+    expect(firstPc.closed).toBe(true)
+    expect(auth.resetTransport).toHaveBeenCalledOnce()
+  })
+
+  it('treats a trusted peer departure as recoverable but preserves an explicit signaling-session pin', async () => {
+    const timers = new FakeTimers()
+    const signaling = new FakeSignaling()
+    const pc = new FakePeerConnection()
+    const session = new WebRtcPeerSession({
+      localSignalingId: 'z-local',
+      expectedRemoteStableId: 'stable-home',
+      signaling,
+      createPeerConnection: () => pc,
+      codec,
+      timers,
+      random: () => 0.5,
+      reconnect: { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 1, jitterRatio: 0 },
+      auth: { tryReconnect: async () => true, handleFrame: async () => undefined }
+    })
+    await session.start()
+    signaling.emit({
+      channel: 'offer',
+      from: 'home-epoch-old',
+      stablePeerId: 'stable-home',
+      envelope: { type: 'offer', stable_peer_id: 'stable-home', sdp: 'offer-old' }
+    })
+    await flush()
+    const channel = new FakeDataChannel(AURORA_RPC_DATA_CHANNEL_LABEL)
+    pc.remoteChannel(channel)
+    channel.open()
+    await flush()
+
+    signaling.emit({
+      channel: 'presence',
+      from: 'home-epoch-old',
+      stablePeerId: 'stable-home',
+      envelope: { type: 'presence_departed', stable_peer_id: 'stable-home' }
+    })
+    await flush()
+    expect(session.getSnapshot()).toMatchObject({ state: 'reconnecting', failed: false })
+
+    const pinnedSignaling = new FakeSignaling()
+    const pinned = new WebRtcPeerSession({
+      localSignalingId: 'z-pinned',
+      expectedRemoteSignalingId: 'home-epoch-old',
+      expectedRemoteStableId: 'stable-home',
+      signaling: pinnedSignaling,
+      createPeerConnection: () => new FakePeerConnection(),
+      codec,
+      timers: new FakeTimers(),
+      auth: { tryReconnect: async () => true, handleFrame: async () => undefined }
+    })
+    await pinned.start()
+    pinnedSignaling.emit(presence('home-epoch-new', 'stable-home'))
+    await flush()
+    expect(pinned.getSnapshot()).toMatchObject({
+      state: 'failed',
+      lastError: 'remote signaling identity mismatch'
+    })
+  })
+
+  it('keeps SAS approval alive for the pairing window, then retries with fresh transport state and presence', async () => {
+    const timers = new FakeTimers()
+    const signaling = new FakeSignaling()
+    const pc = new FakePeerConnection()
+    const auth = {
+      tryReconnect: vi.fn(async () => undefined),
+      startPairing: vi.fn(async () => undefined),
+      resetTransport: vi.fn(),
+      handleFrame: vi.fn(async () => undefined)
+    }
+    const session = new WebRtcPeerSession({
+      localSignalingId: 'z',
+      signaling,
+      createPeerConnection: () => pc,
+      codec,
+      timers,
+      timeouts: { authMs: 20, pairingMs: 300, discoveryMs: 30, negotiationMs: 20, signalingMs: 10 },
+      reconnect: { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 1, jitterRatio: 0 },
+      auth
+    })
+
+    await session.start()
+    signaling.emit({ channel: 'offer', from: 'a', stablePeerId: 'stable-a', envelope: { type: 'offer', sdp: 'offer-1' } })
+    await flush()
+    const channel = new FakeDataChannel(AURORA_RPC_DATA_CHANNEL_LABEL)
+    pc.remoteChannel(channel)
+    channel.open()
+    await flush()
+
+    expect(session.getSnapshot()).toMatchObject({ state: 'awaiting-sas-confirmation', failed: false })
+    expect(timers.scheduledDelays()).toEqual([300])
+
+    timers.fireDelay(300)
+    expect(session.getSnapshot()).toMatchObject({ state: 'reconnecting', failed: false, reconnectAttempts: 1 })
+    timers.fireDelay(1)
+    await flush()
+
+    expect(auth.resetTransport).toHaveBeenCalledOnce()
+    expect(session.getSnapshot()).toMatchObject({ state: 'discovering-peer', failed: false, remoteStableId: 'stable-a' })
+    expect(signaling.published).toContainEqual(expect.objectContaining({ channel: 'presence' }))
+  })
+
+  it('replaces the approval-window timer when confirmation begins and allows the delayed exchange to finish', async () => {
+    const timers = new FakeTimers()
+    const signaling = new FakeSignaling()
+    const pc = new FakePeerConnection()
+    const confirmation = deferred<true>()
+    const session = new WebRtcPeerSession({
+      localSignalingId: 'z',
+      signaling,
+      createPeerConnection: () => pc,
+      codec,
+      timers,
+      timeouts: { authMs: 20, pairingMs: 300, discoveryMs: 30, negotiationMs: 20, signalingMs: 10 },
+      auth: {
+        tryReconnect: async () => undefined,
+        startPairing: async () => undefined,
+        confirmPairing: () => confirmation.promise,
+        handleFrame: async () => undefined
+      }
+    })
+
+    await session.start()
+    signaling.emit({ channel: 'offer', from: 'a', envelope: { type: 'offer', sdp: 'offer' } })
+    await flush()
+    const channel = new FakeDataChannel(AURORA_RPC_DATA_CHANNEL_LABEL)
+    pc.remoteChannel(channel)
+    channel.open()
+    await flush()
+
+    const approvalTimerHandle = [...timers.handles.keys()][0]!
+    const pendingConfirmation = session.confirmSas('123456')
+    const exchangeTimerHandle = [...timers.handles.keys()][0]!
+    expect(exchangeTimerHandle).not.toBe(approvalTimerHandle)
+    expect(timers.handles.has(approvalTimerHandle)).toBe(false)
+    expect(timers.scheduledDelays()).toEqual([300])
+
+    confirmation.resolve(true)
+    await pendingConfirmation
+    expect(session.getSnapshot()).toMatchObject({ state: 'authorized', authorized: true })
+    expect(timers.handles.size).toBe(0)
+  })
+
+  it('drops a delayed old offer and old local ICE callback after reconnect creates a replacement transport', async () => {
+    const timers = new FakeTimers()
+    const signaling = new FakeSignaling()
+    const pc1 = new FakePeerConnection('stale-offer')
+    const pc2 = new FakePeerConnection('fresh-offer')
+    const offer = deferred<{ type: 'offer'; sdp: string }>()
+    pc1.createOffer = () => offer.promise
+    const pcs = [pc1, pc2]
+    const session = new WebRtcPeerSession({
+      localSignalingId: 'a',
+      signaling,
+      createPeerConnection: () => pcs.shift() ?? new FakePeerConnection(),
+      codec,
+      timers,
+      random: () => 0.5,
+      reconnect: { maxAttempts: 2, baseDelayMs: 1, maxDelayMs: 1, jitterRatio: 0 },
+      auth: { tryReconnect: async () => true, handleFrame: async () => undefined }
+    })
+
+    await session.start()
+    signaling.emit(presence('b'))
+    await flush()
+    const oldIceCallback = pc1.onicecandidate
+    pc1.fail()
+    timers.fireDelay(1)
+    await flush()
+
+    expect(pc1.closed).toBe(true)
+    expect(signaling.published.filter((item) => item.channel === 'offer').map((item) => item.envelope.sdp)).toEqual(['fresh-offer'])
+    oldIceCallback?.({ candidate: { candidate: 'candidate:0 1 udp 1 203.0.113.9 9 typ relay' } })
+    offer.resolve({ type: 'offer', sdp: 'stale-offer' })
+    await flush()
+
+    expect(signaling.published.filter((item) => item.channel === 'offer').map((item) => item.envelope.sdp)).toEqual(['fresh-offer'])
+    expect(signaling.published.some((item) => item.channel === 'candidate')).toBe(false)
+    expect(pc2.localDescription?.sdp).toBe('fresh-offer')
+  })
+
+  it('drops delayed remote SDP and candidate work from an answerer transport replaced during reconnect', async () => {
+    const timers = new FakeTimers()
+    const signaling = new FakeSignaling()
+    const pc1 = new FakePeerConnection('unused', 'stale-answer')
+    const pc2 = new FakePeerConnection('unused', 'fresh-answer')
+    const remoteDescription = deferred<void>()
+    const candidate = deferred<void>()
+    pc1.setRemoteDescription = async (description) => {
+      await remoteDescription.promise
+      pc1.remoteDescription = description
+    }
+    pc1.addIceCandidate = async (value) => {
+      await candidate.promise
+      pc1.candidates.push(value)
+    }
+    const pcs = [pc1, pc2]
+    const session = new WebRtcPeerSession({
+      localSignalingId: 'z',
+      signaling,
+      createPeerConnection: () => pcs.shift() ?? new FakePeerConnection(),
+      codec,
+      timers,
+      random: () => 0.5,
+      reconnect: { maxAttempts: 2, baseDelayMs: 1, maxDelayMs: 1, jitterRatio: 0 },
+      auth: { tryReconnect: async () => true, handleFrame: async () => undefined }
+    })
+
+    await session.start()
+    signaling.emit({ channel: 'offer', from: 'a', stablePeerId: 'stable-a', envelope: { type: 'offer', sdp: 'stale-offer' } })
+    signaling.emit({ channel: 'candidate', from: 'a', stablePeerId: 'stable-a', envelope: { type: 'candidate', candidate: 'candidate:0 1 udp 1 203.0.113.8 8 typ relay' } })
+    await flush()
+    pc1.fail()
+    timers.fireDelay(1)
+    await flush()
+    signaling.emit({ channel: 'offer', from: 'a', stablePeerId: 'stable-a', envelope: { type: 'offer', sdp: 'fresh-offer' } })
+    await flush()
+
+    candidate.resolve(undefined)
+    remoteDescription.resolve(undefined)
+    await flush()
+
+    expect(signaling.published.filter((item) => item.channel === 'answer').map((item) => item.envelope.sdp)).toEqual(['fresh-answer'])
+    expect(pc2.remoteDescription?.sdp).toBe('fresh-offer')
+    expect(session.getSnapshot().icePath).toBe('unknown')
+  })
+
+  it('ignores authentication work that completes after its data channel was replaced', async () => {
+    const timers = new FakeTimers()
+    const signaling = new FakeSignaling()
+    const pc1 = new FakePeerConnection()
+    const pc2 = new FakePeerConnection()
+    const pcs = [pc1, pc2]
+    const firstReconnect = deferred<true | undefined>()
+    const secondReconnect = deferred<true | undefined>()
+    let reconnectCall = 0
+    const auth = {
+      tryReconnect: vi.fn(() => {
+        reconnectCall += 1
+        return reconnectCall === 1 ? firstReconnect.promise : secondReconnect.promise
+      }),
+      startPairing: vi.fn(async () => undefined),
+      resetTransport: vi.fn(),
+      handleFrame: vi.fn(async () => undefined)
+    }
+    const session = new WebRtcPeerSession({
+      localSignalingId: 'z',
+      signaling,
+      createPeerConnection: () => pcs.shift() ?? new FakePeerConnection(),
+      codec,
+      timers,
+      reconnect: { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 1, jitterRatio: 0 },
+      auth
+    })
+
+    await session.start()
+    signaling.emit({ channel: 'offer', from: 'a', stablePeerId: 'stable-a', envelope: { type: 'offer', sdp: 'offer-1' } })
+    await flush()
+    const firstChannel = new FakeDataChannel(AURORA_RPC_DATA_CHANNEL_LABEL)
+    pc1.remoteChannel(firstChannel)
+    firstChannel.open()
+    await flush()
+    expect(session.getSnapshot().state).toBe('reconnect-authenticating')
+
+    firstChannel.close()
+    timers.fireDelay(1)
+    await flush()
+    signaling.emit({ channel: 'offer', from: 'a', stablePeerId: 'stable-a', envelope: { type: 'offer', sdp: 'offer-2' } })
+    await flush()
+    const secondChannel = new FakeDataChannel(AURORA_RPC_DATA_CHANNEL_LABEL)
+    pc2.remoteChannel(secondChannel)
+    secondChannel.open()
+    await flush()
+    expect(session.getSnapshot().state).toBe('reconnect-authenticating')
+
+    firstReconnect.resolve(undefined)
+    await flush()
+    expect(session.getSnapshot().state).toBe('reconnect-authenticating')
+    expect(auth.startPairing).not.toHaveBeenCalled()
+
+    secondReconnect.resolve(true)
+    await flush()
+    expect(session.getSnapshot()).toMatchObject({ state: 'authorized', authorized: true })
+    expect(auth.resetTransport).toHaveBeenCalledOnce()
   })
 
   it('routes preauth challenge/pairing frames through auth and lets auth send proof control frames before authorization', async () => {

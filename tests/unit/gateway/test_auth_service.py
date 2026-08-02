@@ -485,8 +485,8 @@ async def test_bilateral_pairing_start_is_idempotent_and_preserves_session_sas(
 
 
 @pytest.mark.asyncio
-async def test_bilateral_reconnect_supersedes_stale_request_by_stable_peer(auth_service):
-    """A new signaling session cannot leave an old approval row for the same Aurora."""
+async def test_bilateral_reconnect_refreshes_pending_request_by_stable_peer(auth_service):
+    """A new signaling session keeps one approval row for the same Aurora."""
     stable_peer_id = "stable-peer-a"
     first_code = await auth_service.start_pairing(
         "Aurora 1",
@@ -499,6 +499,7 @@ async def test_bilateral_reconnect_supersedes_stale_request_by_stable_peer(auth_
         trusted_rate_limit_key="webrtc:old-signaling-session",
     )
     assert first_code is not None
+    first_request_id = auth_service.pairing_requests[first_code]["id"]
 
     replacement_code = await auth_service.start_pairing(
         "Aurora 1",
@@ -512,11 +513,133 @@ async def test_bilateral_reconnect_supersedes_stale_request_by_stable_peer(auth_
     )
 
     assert replacement_code is not None
-    assert replacement_code != first_code
-    assert first_code not in auth_service.pairing_requests
-    assert set(auth_service.pairing_requests) == {replacement_code}
+    assert replacement_code == first_code
+    assert set(auth_service.pairing_requests) == {first_code}
+    refreshed = auth_service.pairing_requests[first_code]
+    assert refreshed["id"] == first_request_id
+    assert refreshed["pairing_session_id"] == "b" * 64
+    assert refreshed["verification_code"] == "33334444"
+    assert refreshed["status"] == "pending"
     assert "webrtc:old-signaling-session" not in auth_service.pairing_attempts
     assert auth_service.pairing_attempts["webrtc:new-signaling-session"] == 1
+
+
+@pytest.mark.asyncio
+async def test_bilateral_reconnect_preserves_approved_request_by_stable_peer(auth_service):
+    """Approval survives a retry before the remote exchanges credentials."""
+    stable_peer_id = "stable-peer-a"
+    room_name = "private-mesh-room"
+    auth_service._bus_router.on(
+        DBMethods.APPROVE_MESH_PEER,
+        _ok({"success": True, "approved_rooms": [room_name], "authority_changes": []}),
+    )
+    first_code = await auth_service.start_pairing(
+        "Aurora 1",
+        "unknown",
+        remote_peer_id=stable_peer_id,
+        remote_node_name="Aurora 1",
+        room_name=room_name,
+        pairing_session_id="a" * 64,
+        verification_code="11112222",
+        trusted_rate_limit_key="webrtc:old-signaling-session",
+    )
+    assert first_code is not None
+    approved = await auth_service.approve_pairing(
+        first_code,
+        "admin",
+        permissions=["Tooling.GetTools"],
+    )
+    assert approved is True
+
+    replacement_code = await auth_service.start_pairing(
+        "Aurora 1",
+        "unknown",
+        remote_peer_id=stable_peer_id,
+        remote_node_name="Aurora 1",
+        room_name=room_name,
+        pairing_session_id="b" * 64,
+        verification_code="33334444",
+        trusted_rate_limit_key="webrtc:new-signaling-session",
+    )
+
+    assert replacement_code == first_code
+    refreshed = auth_service.pairing_requests[first_code]
+    assert refreshed["status"] == "approved"
+    assert refreshed["granted_permissions"] == ["Tooling.GetTools"]
+    assert refreshed["approved_by"] == "admin"
+    assert refreshed["pairing_session_id"] == "b" * 64
+    assert refreshed["verification_code"] == "33334444"
+
+
+@pytest.mark.asyncio
+async def test_bilateral_pairing_connect_and_exchange_reject_wrong_transport_without_mutation(
+    auth_service,
+):
+    """A valid opaque handle cannot cross its SAS session or trusted transport."""
+    pairing_session_id = "c" * 64
+    trusted_source = "webrtc:signaling-session-a"
+    room_name = "private-mesh-room"
+    auth_service._bus_router.on(DBMethods.UPSERT_MESH_PEER, _ok({"success": True}))
+    auth_service._bus_router.on(
+        DBMethods.APPROVE_MESH_PEER,
+        _ok({"success": True, "approved_rooms": [room_name], "authority_changes": []}),
+    )
+    auth_service._bus_router.on(
+        DBMethods.ISSUE_MESH_PEER_CREDENTIAL,
+        _ok({"success": True, "authority_changes": []}),
+    )
+    pairing_code = await auth_service.start_pairing(
+        "Aurora 1",
+        "unknown",
+        remote_peer_id="stable-peer-a",
+        remote_node_name="Aurora 1",
+        room_name=room_name,
+        pairing_session_id=pairing_session_id,
+        verification_code="55667788",
+        trusted_rate_limit_key=trusted_source,
+    )
+    assert pairing_code is not None
+    request = auth_service.pairing_requests[pairing_code]
+
+    assert await auth_service.connect_pairing(
+        pairing_code,
+        pairing_session_id=pairing_session_id,
+        trusted_rate_limit_key="webrtc:signaling-session-b",
+    ) is None
+    assert await auth_service.connect_pairing(
+        pairing_code,
+        pairing_session_id="d" * 64,
+        trusted_rate_limit_key=trusted_source,
+    ) is None
+    assert auth_service.pairing_requests[pairing_code] is request
+    assert request["status"] == "pending"
+
+    assert await auth_service.approve_pairing(pairing_code, "admin-id") is True
+    assert await auth_service.exchange_pairing(
+        pairing_code,
+        pairing_session_id=pairing_session_id,
+        trusted_rate_limit_key="webrtc:signaling-session-b",
+    ) is None
+    assert await auth_service.exchange_pairing(
+        pairing_code,
+        pairing_session_id="d" * 64,
+        trusted_rate_limit_key=trusted_source,
+    ) is None
+    assert "exchange_result" not in request
+    assert "pending_exchange" not in request
+
+    connected = await auth_service.connect_pairing(
+        pairing_code,
+        pairing_session_id=pairing_session_id,
+        trusted_rate_limit_key=trusted_source,
+    )
+    exchanged = await auth_service.exchange_pairing(
+        pairing_code,
+        pairing_session_id=pairing_session_id,
+        trusted_rate_limit_key=trusted_source,
+    )
+    assert connected is request
+    assert exchanged is not None
 
 
 @pytest.mark.asyncio

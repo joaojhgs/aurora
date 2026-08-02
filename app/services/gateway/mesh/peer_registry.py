@@ -28,7 +28,7 @@ from app.services.gateway.mesh.provider_eligibility import (
     evaluate_outbound_provider,
 )
 from app.services.gateway.mesh.provider_export import ACTIVE_MANIFEST_PROTOCOL
-from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.mesh import MeshAddressSelector, MeshPeerAuthoritySnapshot
 
 from .models import PeerManifest, PeerServiceInfo, PeerState, ProviderCandidate, ProviderLeaseState
 
@@ -82,6 +82,8 @@ class PeerRegistry:
         self._retired_provider_lease_epochs: dict[str, OrderedDict[str, None]] = {}
         self._capacity_leases: dict[tuple[str, str], set[str]] = {}
         self._legacy_leases: dict[str, list[CapacityLease]] = {}
+        self._local_peer_authority: dict[str, MeshPeerAuthoritySnapshot] = {}
+        self._local_peer_authority_absent: set[str] = set()
         self._lock = asyncio.Lock()
         self._stale_check_task: asyncio.Task | None = None
         self._sleep: Callable[[float], Coroutine[Any, Any, None]] = asyncio.sleep
@@ -90,6 +92,33 @@ class PeerRegistry:
         self.on_peer_registered: PeerLifecycleCallback | None = None
         self.on_peer_removed: PeerLifecycleCallback | None = None
         self.on_peer_status_changed: PeerLifecycleCallback | None = None
+
+    def apply_local_peer_authority(self, authority: MeshPeerAuthoritySnapshot) -> bool:
+        """Apply the local trust grant that also bounds outbound peer routing."""
+
+        peer_id = authority.peer_id
+        current = self._local_peer_authority.get(peer_id)
+        if current is not None:
+            if authority.auth_grant_revision < current.auth_grant_revision:
+                return False
+            if (
+                authority.auth_grant_revision == current.auth_grant_revision
+                and authority != current
+            ):
+                log_warning(
+                    "PeerRegistry: Ignored conflicting local authority revision for "
+                    f"{peer_id}"
+                )
+                return False
+        self._local_peer_authority[peer_id] = authority
+        self._local_peer_authority_absent.discard(peer_id)
+        return True
+
+    def mark_local_peer_authority_absent(self, peer_id: str) -> None:
+        """Fail closed when the durable local trust row is absent."""
+
+        self._local_peer_authority.pop(peer_id, None)
+        self._local_peer_authority_absent.add(peer_id)
 
     def _snapshot_config(self) -> MeshConfig:
         if self._policy_provider is not None:
@@ -274,16 +303,19 @@ class PeerRegistry:
             if state:
                 state.latency_ms = latency_ms
                 state.last_ping = time.monotonic()
-                # If peer was stale, restore to negotiated (if it has a bindable manifest)
-                if state.status == "stale" and state.manifest:
-                    next_status = self._bindable_status_for_peer_locked(peer_id, state)
-                    if next_status != "negotiated":
-                        return
+                # A successful pong proves transport liveness whether the peer
+                # shares provider services or is a consumer-only thin client.
+                if state.status == "stale":
+                    next_status = (
+                        self._bindable_status_for_peer_locked(peer_id, state)
+                        if state.manifest
+                        else "authenticated"
+                    )
                     state.status = next_status
                     log_info(
                         f"PeerRegistry: Peer {peer_id} recovered from stale (latency={latency_ms:.1f}ms)"
                     )
-                    recovered = (peer_id, state.node_name, "negotiated")
+                    recovered = (peer_id, state.node_name, next_status)
 
         if recovered and self.on_peer_status_changed:
             try:
@@ -769,7 +801,13 @@ class PeerRegistry:
         )
         return evaluate_outbound_provider(
             requirements,
-            _provider_snapshot(peer=peer, module=module, service=service),
+            _provider_snapshot(
+                peer=peer,
+                module=module,
+                service=service,
+                local_authority=self._local_peer_authority.get(peer.peer_id),
+                local_authority_absent=peer.peer_id in self._local_peer_authority_absent,
+            ),
         )
 
     def _evaluate_module_provider_candidate(
@@ -1088,6 +1126,8 @@ def _provider_snapshot(
     peer: PeerState,
     module: str,
     service: PeerServiceInfo | None,
+    local_authority: MeshPeerAuthoritySnapshot | None = None,
+    local_authority_absent: bool = False,
 ) -> OutboundProviderSnapshot:
     evidence = peer.manifest.recipient_projection_evidence if peer.manifest else None
     grants = None
@@ -1112,6 +1152,16 @@ def _provider_snapshot(
         auth_grant_revision=evidence.auth_grant_revision if evidence else 0,
         auth_grant_state=evidence.auth_grant_state if evidence else "unknown",
         grants=grants,
+        local_authority_state=(
+            local_authority.state
+            if local_authority is not None
+            else ("revoked" if local_authority_absent else None)
+        ),
+        local_grants=(
+            frozenset(local_authority.effective_permissions)
+            if local_authority is not None and local_authority.state == "active"
+            else (frozenset() if local_authority_absent else None)
+        ),
     )
 
 

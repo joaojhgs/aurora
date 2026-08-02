@@ -76,7 +76,13 @@ function projectionFrame(): Record<string, unknown> & { shared_services: unknown
             callable_features: [],
             public_infrastructure: false,
             method_type: 'use',
-            input_schema: null,
+            input_schema: {
+              type: 'object',
+              properties: {
+                offset: { type: 'number', default: 0 },
+                ratio: { type: 'number', default: 1.5 }
+              }
+            },
             output_schema: null
           }
         ],
@@ -97,7 +103,7 @@ function projectionFrame(): Record<string, unknown> & { shared_services: unknown
       protocol_tier: 'projection-v1',
       // Generated with Python canonical_digest({provider_peer_id, services}) in
       // app.services.gateway.mesh.negotiation.manifest_projection_digest.
-      projection_digest: 'fc25a1ccb1831df3222d86fc8a88f65f4ba8f8ab68206ae8aaab7e3e519b7416',
+      projection_digest: '154952047c0334b696cef698c6c0fd0dcd92243062c7f33fe31c1c62e83c84e2',
       evidence_digest: '5'.repeat(64),
       grants: []
     },
@@ -229,7 +235,7 @@ describe('WebRTC mesh manifest parser', () => {
       registry_revision: 'registry-7',
       export_policy_revision: 'export-4',
       auth_grant_revision: 9,
-      projection_digest: 'fc25a1ccb1831df3222d86fc8a88f65f4ba8f8ab68206ae8aaab7e3e519b7416',
+      projection_digest: '154952047c0334b696cef698c6c0fd0dcd92243062c7f33fe31c1c62e83c84e2',
       services: [
         {
           service_id: 'Empty',

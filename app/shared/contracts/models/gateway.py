@@ -14,6 +14,7 @@ from pydantic import Field
 
 from app.shared.contracts.mesh_compatibility import (
     MeshCompatibilityReasonCode,
+    MeshRoutingReasonCode,
     MeshServiceCompatibilityStatus,
 )
 from app.shared.contracts.models.aurora import (
@@ -563,7 +564,7 @@ class MeshServiceRoutingSummary(IOModel):
     policy_revision: int = 0
     eligible_provider_ids: list[str] = Field(default_factory=list)
     ineligible_provider_ids: list[str] = Field(default_factory=list)
-    reason_codes: list[MeshCompatibilityReasonCode] = Field(default_factory=list)
+    reason_codes: list[MeshRoutingReasonCode] = Field(default_factory=list)
 
 
 class GetMeshStatusResponse(IOModel):

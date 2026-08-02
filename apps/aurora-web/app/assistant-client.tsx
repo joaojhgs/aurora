@@ -18,7 +18,7 @@ import {
   type LightweightToolExecutionResponse,
 } from '@aurora/client/lightweight-orchestrator'
 import { AssistantView, type RouteAvailability } from '@aurora/ui'
-import { AssistantSurfaceSelector, type LightweightAssistantProps } from '@aurora/ui/local-assistant'
+import type { LightweightAssistantDependencies } from '@aurora/ui/local-assistant'
 import {
   useBrowserCancellationRoute,
   useBrowserRoute,
@@ -38,20 +38,17 @@ export function AssistantClientPage({
   const activeCancellationRoute = useBrowserCancellationRoute(cancellationRoute)
   const localAssistant = useMemo(() => browserLocalAssistant(runtime), [runtime])
   return (
-    <AssistantSurfaceSelector
-      connectedAssistant={
-        <AssistantView
-          client={runtime.client}
-          route={activeRoute}
-          cancellationRoute={activeCancellationRoute}
-        />
-      }
+    <AssistantView
+      client={runtime.client}
+      route={activeRoute}
+      cancellationRoute={activeCancellationRoute}
+      executionHost="connected-device"
       localAssistant={localAssistant}
     />
   )
 }
 
-function browserLocalAssistant(runtime: AuroraBrowserRuntime): LightweightAssistantProps | null {
+function browserLocalAssistant(runtime: AuroraBrowserRuntime): LightweightAssistantDependencies | null {
   const localData = runtime.localData
   const localToolProvider = runtime.localToolProvider
   const localAssistant = runtime.localAssistant

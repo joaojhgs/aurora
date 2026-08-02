@@ -787,6 +787,24 @@ class TestMeshBusRequest:
         assert "No remote peer" in result.error
 
     @pytest.mark.asyncio
+    async def test_permission_denied_route_returns_stable_authorization_code(
+        self, mesh_bus, routing_table
+    ):
+        routing_table.resolve.return_value = RouteDecision(
+            target="error",
+            module="Tooling",
+            error_code="selector_permission_denied",
+            error_message=(
+                "Tooling selector peer/provider 'mobile-peer': "
+                "local peer authority does not allow Tooling.ExecuteTool"
+            ),
+        )
+
+        result = await mesh_bus.request("Tooling.ExecuteTool", FakePayload())
+
+        assert result == QueryResult(ok=False, error="permission_denied")
+
+    @pytest.mark.asyncio
     async def test_none_route(self, mesh_bus, routing_table):
         routing_table.resolve.return_value = RouteDecision(target="none", module="TTS")
         result = await mesh_bus.request("TTS.Request", FakePayload())

@@ -1,13 +1,15 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Copy, GitBranch, KeyRound, Link2, LockKeyhole, Network, QrCode, RadioTower, RefreshCw, Router, ScanLine, Settings2, ShieldCheck, Signal, UsersRound, Wifi } from 'lucide-react'
-import { AUTH_METHODS, AuroraError, GATEWAY_METHODS, routePath, summarizeCapabilities, type AuroraClient, type AvailabilityState, type CapabilitySummary, type ConfigFieldMetadata, type DeviceListResponse, type DeviceResponse, type JsonObject, type JsonValue, type ListPendingPairingsResponse, type MeshInviteConfigResponse, type MeshPeerListResponse, type MeshPeerDiagnostic, type MeshPeerInfo, type MeshRouteDiagnostic, type MeshStatusResponse, type PendingPairingEntry, type PermissionCatalogEntry, type WebRTCDiagnosticsResponse } from '@aurora/client'
+import { AUTH_METHODS, AuroraError, GATEWAY_METHODS, routePath, summarizeCapabilities, type AuroraClient, type AvailabilityState, type CapabilitySummary, type ConfigFieldMetadata, type ConfigSchemaMetadataResponse, type DeviceListResponse, type DeviceResponse, type JsonObject, type JsonValue, type ListPendingPairingsResponse, type MeshInviteConfigResponse, type MeshPeerListResponse, type MeshPeerDiagnostic, type MeshPeerInfo, type MeshRouteDiagnostic, type MeshStatusResponse, type PendingPairingEntry, type PermissionCatalogEntry, type WebRTCDiagnosticsResponse } from '@aurora/client'
+import type { PeerPairingApproval } from '@aurora/client/webrtc'
 import { Alert, AlertDescription, AlertTitle } from '#components/ui/alert'
 import { Avatar, AvatarFallback } from '#components/ui/avatar'
 import { Badge } from '#components/ui/badge'
 import { Button } from '#components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '#components/ui/card'
+import { Checkbox } from '#components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '#components/ui/dialog'
 import { Input } from '#components/ui/input'
 import { Label } from '#components/ui/label'
@@ -30,6 +32,7 @@ import { presentableSignal } from './status-badges'
 import { safeErrorCopy } from './product-copy'
 import {
   LocalFeatureSharingPanel,
+  type LocalDeviceFeature,
   type LocalFeatureSharingPort,
 } from './local-feature-sharing'
 import type { RouteAvailability } from './shell-data'
@@ -178,9 +181,15 @@ export interface MeshPeersResourceProps {
   localFeatureSharing?: LocalFeatureSharingPort | undefined
 }
 
+export interface MeshPeersSnapshotOptions {
+  /** Local configuration and invite credentials are available only to the owning Aurora surface. */
+  canManageLocalServiceConfiguration?: boolean
+}
+
 export interface MeshPeersViewProps {
   snapshot: MeshPeersSnapshot
   route: RouteAvailability
+  surfaceProfile?: AuroraSurfaceProfile
   permissions?: string
   revokeToken?: boolean
   pendingPeerId?: string | null
@@ -202,7 +211,7 @@ export interface MeshPeersViewProps {
   canManageLocalServiceConfiguration?: boolean
   thinPeerSnapshot?: BrowserWebRtcSnapshot | null
   thinPeerMutationError?: string | null
-  onConfirmThinPairing?: (sessionId: string) => void
+  onConfirmThinPairing?: (sessionId: string, approval: PeerPairingApproval) => void | Promise<void>
   onRejectThinPairing?: (sessionId: string) => void
   onReconnectThinPeer?: () => void
   /** Invite text handed off by a deep link (`aurora://mesh/invite`); opens the connect dialog pre-filled. */
@@ -232,7 +241,7 @@ const loadingSnapshot: MeshPeersSnapshot = {
   loadState: 'loading',
   generatedAt: null,
   localPeerId: null,
-  localNodeName: 'Loading Aurora mesh',
+  localNodeName: 'Checking connection',
   meshEnabled: false,
   meshStarted: false,
   webrtcStarted: false,
@@ -252,11 +261,11 @@ const loadingSnapshot: MeshPeersSnapshot = {
   routeCount: 0,
   compatibilityFailures: [],
   listState: 'pending',
-  listReason: 'Loading mesh peers and pending requests through Aurora.',
+  listReason: 'Loading devices and pending requests through Aurora.',
   statusState: 'pending',
   statusReason: 'Loading mesh status through Aurora.',
   mutationState: 'pending',
-  mutationReason: 'Loading Auth mesh peer manage capabilities.',
+  mutationReason: 'Loading device management capabilities.',
   config: {
     fields: [],
     state: 'pending',
@@ -281,20 +290,6 @@ export function MeshPeersResource({
   onScanQr,
   localFeatureSharing,
 }: MeshPeersResourceProps) {
-  const [snapshot, setSnapshot] = useState<MeshPeersSnapshot>(loadingSnapshot)
-  const [permissions, setPermissions] = useState('Gateway.use')
-  const [revokeToken, setRevokeToken] = useState(true)
-  const [pendingPeerId, setPendingPeerId] = useState<string | null>(null)
-  const [optimisticPeerId, setOptimisticPeerId] = useState<string | null>(null)
-  const [mutationError, setMutationError] = useState<string | null>(null)
-  const [configPendingKey, setConfigPendingKey] = useState<string | null>(null)
-  const [configMutationError, setConfigMutationError] = useState<string | null>(null)
-  const [inviteImport, setInviteImport] = useState<MeshInviteImportOperation>(idleInviteImport)
-  const [initialInviteText] = useState<string | null>(() => initialInviteTextProp)
-  const [thinPeerSnapshot, setThinPeerSnapshot] =
-    useState<BrowserWebRtcSnapshot | null>(() => thinPeer?.snapshot() ?? null)
-  const [thinPeerMutationError, setThinPeerMutationError] =
-    useState<string | null>(null)
   const resolvedSurface = useMemo(
     () =>
       surfaceProfile
@@ -313,8 +308,43 @@ export function MeshPeersResource({
       }),
     [client.transport.kind, surfaceProfile],
   )
+  const [snapshot, setSnapshot] = useState<MeshPeersSnapshot>(loadingSnapshot)
+  const [permissions, setPermissions] = useState(() =>
+    resolvedSurface.isMobile ? 'Orchestrator.use' : 'Gateway.use',
+  )
+  const [revokeToken, setRevokeToken] = useState(true)
+  const [pendingPeerId, setPendingPeerId] = useState<string | null>(null)
+  const [optimisticPeerId, setOptimisticPeerId] = useState<string | null>(null)
+  const [mutationError, setMutationError] = useState<string | null>(null)
+  const [configPendingKey, setConfigPendingKey] = useState<string | null>(null)
+  const [configMutationError, setConfigMutationError] = useState<string | null>(null)
+  const [inviteImport, setInviteImport] = useState<MeshInviteImportOperation>(idleInviteImport)
+  const [initialInviteText] = useState<string | null>(() => initialInviteTextProp)
+  const [thinPeerSnapshot, setThinPeerSnapshot] =
+    useState<BrowserWebRtcSnapshot | null>(() => thinPeer?.snapshot() ?? null)
+  const [thinPeerMutationError, setThinPeerMutationError] =
+    useState<string | null>(null)
+  const thinPairingApprovals = useRef<Set<string>>(new Set<string>())
   const canManageLocalServiceConfiguration =
     resolvedSurface.canManageLocalServiceConfiguration
+
+  const sanitizePermissions = useCallback(
+    (value: string) =>
+      parseMeshPermissionList(value)
+        ?.filter((permission) => isPermissionAllowedOnSurface(permission, resolvedSurface))
+        .join(' ') || '',
+    [resolvedSurface],
+  )
+
+  const filterPermissions = useCallback(
+    (nextPermissions: string[]) =>
+      nextPermissions.filter((permission) => isPermissionAllowedOnSurface(permission, resolvedSurface)),
+    [resolvedSurface],
+  )
+
+  useEffect(() => {
+    setPermissions((next) => sanitizePermissions(next) || (resolvedSurface.isMobile ? 'Orchestrator.use' : 'Gateway.use'))
+  }, [resolvedSurface.isMobile, sanitizePermissions])
 
   useEffect(() => {
     if (!thinPeer) {
@@ -334,7 +364,9 @@ export function MeshPeersResource({
   }, [thinPeer])
 
   const loadPeers = useCallback(async () => {
-    const next = await buildMeshPeersSnapshot(client, route)
+    const next = await buildMeshPeersSnapshot(client, route, {
+      canManageLocalServiceConfiguration,
+    })
     setSnapshot((current) =>
       reconcileMeshPeersWithThinPeer(
         next,
@@ -342,7 +374,7 @@ export function MeshPeersResource({
         current,
       ),
     )
-  }, [client, route, thinPeer, thinPeerSnapshot])
+  }, [canManageLocalServiceConfiguration, client, route, thinPeer, thinPeerSnapshot])
 
   useEffect(() => {
     if (!snapshot.meshEnabled) return
@@ -352,7 +384,9 @@ export function MeshPeersResource({
       if (pending) return
       pending = true
       try {
-        const next = await buildMeshPeersSnapshot(client, route)
+        const next = await buildMeshPeersSnapshot(client, route, {
+          canManageLocalServiceConfiguration,
+        })
         if (!cancelled) {
           setSnapshot((current) =>
             reconcileMeshPeersWithThinPeer(
@@ -371,12 +405,14 @@ export function MeshPeersResource({
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [client, route, snapshot.meshEnabled, thinPeer, thinPeerSnapshot])
+  }, [canManageLocalServiceConfiguration, client, route, snapshot.meshEnabled, thinPeer, thinPeerSnapshot])
 
   useEffect(() => {
     let cancelled = false
     setSnapshot(loadingSnapshot)
-    void buildMeshPeersSnapshot(client, route).then((next) => {
+    void buildMeshPeersSnapshot(client, route, {
+      canManageLocalServiceConfiguration,
+    }).then((next) => {
       if (!cancelled) {
         setSnapshot((current) =>
           reconcileMeshPeersWithThinPeer(
@@ -390,7 +426,7 @@ export function MeshPeersResource({
     return () => {
       cancelled = true
     }
-  }, [client, route, thinPeer])
+  }, [canManageLocalServiceConfiguration, client, route, thinPeer])
 
   const runAction = useCallback(
     async (peer: MeshPeerRow, kind: 'approve' | 'deny' | 'remove') => {
@@ -398,7 +434,7 @@ export function MeshPeersResource({
         kind === 'approve'
           ? buildMeshPeerAdminAction(peer, 'approve', {
               reason: `Approve ${peer.nodeName}`,
-              permissions,
+              permissions: sanitizePermissions(permissions),
               reauthConfirmed: true,
             })
           : kind === 'deny'
@@ -506,9 +542,9 @@ export function MeshPeersResource({
 
   const saveScopes = useCallback(
     async (peer: MeshPeerRow, nextPermissions: string[]) => {
-      const action = buildMeshScopesAdminAction(peer, nextPermissions)
+      const action = buildMeshScopesAdminAction(peer, filterPermissions(nextPermissions))
       if (!action) {
-        setMutationError('Pending pairing requests must be reviewed by comparing the verification code on both Auroras before scopes can be changed.')
+        setMutationError('Pending pairing requests must be reviewed by comparing the verification code on both Auroras before shared features can be changed.')
         return
       }
       setPendingPeerId(peer.peerId)
@@ -528,16 +564,22 @@ export function MeshPeersResource({
   )
 
   const confirmThinPairing = useCallback(
-    async (sessionId: string) => {
+    async (sessionId: string, approval: PeerPairingApproval) => {
+      if (thinPairingApprovals.current.has(sessionId)) return
       if (!thinPeer) return
       setThinPeerMutationError(null)
       try {
-        await thinPeer.confirmPairing(sessionId)
+        const sharedFeatureIds = localFeatureSharing
+          ? await prepareLocalFeatureSharingApproval(localFeatureSharing, approval.sharedFeatureIds ?? [], resolvedSurface)
+          : []
+        await thinPeer.confirmPairing(sessionId, { sharedFeatureIds })
+        thinPairingApprovals.current.add(sessionId)
       } catch (error) {
         setThinPeerMutationError(meshPeerErrorMessage(error))
+        throw error
       }
     },
-    [thinPeer],
+    [localFeatureSharing, thinPeer],
   )
 
   const rejectThinPairing = useCallback(
@@ -564,10 +606,11 @@ export function MeshPeersResource({
   }, [thinPeer])
 
   return (
-    <MeshPeersView
-      snapshot={snapshot}
-      route={route}
-      permissions={permissions}
+      <MeshPeersView
+        snapshot={snapshot}
+        route={route}
+        surfaceProfile={resolvedSurface}
+        permissions={permissions}
       revokeToken={revokeToken}
       pendingPeerId={pendingPeerId}
       optimisticPeerId={optimisticPeerId}
@@ -584,7 +627,7 @@ export function MeshPeersResource({
       canManageLocalServiceConfiguration={canManageLocalServiceConfiguration}
       thinPeerSnapshot={thinPeerSnapshot}
       thinPeerMutationError={thinPeerMutationError}
-      onConfirmThinPairing={(sessionId) => void confirmThinPairing(sessionId)}
+      onConfirmThinPairing={confirmThinPairing}
       onRejectThinPairing={(sessionId) => void rejectThinPairing(sessionId)}
       onReconnectThinPeer={() => void reconnectThinPeer()}
       {...(canManageLocalServiceConfiguration
@@ -640,6 +683,46 @@ export function meshInviteQuiesceChanges(): { key_path: string; value: JsonValue
   ]
 }
 
+export async function prepareLocalFeatureSharingApproval(
+  port: LocalFeatureSharingPort,
+  featureIds: readonly string[],
+  surfaceProfile: AuroraSurfaceProfile,
+): Promise<string[]> {
+  if (!Array.isArray(featureIds) || featureIds.length > 128) {
+    throw new Error('The selected device features could not be approved. Review the selection and try again.')
+  }
+  const requested = new Set(featureIds.map((featureId) => featureId.trim()).filter(Boolean))
+  const snapshot = await port.load()
+  const availableFeatures = filterPairingFeatures(snapshot.features, surfaceProfile)
+  const available = new Map(availableFeatures.map((feature) => [feature.id, feature]))
+  for (const featureId of requested) {
+    const feature = available.get(featureId)
+    if (!feature?.available) {
+      throw new Error('One of the selected device features is no longer available. Review the selection and try again.')
+    }
+  }
+  const selected = availableFeatures
+    .filter((feature) => requested.has(feature.id))
+    .map((feature) => feature.id)
+  for (const featureId of selected) {
+    if (!available.get(featureId)?.enabled) await port.setFeatureEnabled(featureId, true)
+  }
+  return selected
+}
+
+function isGatewayScopedFeature(feature: LocalDeviceFeature): boolean {
+  return /gateway/i.test(feature.id) || /gateway/i.test(feature.label) || /gateway/i.test(feature.description)
+}
+
+function filterPairingFeatures(
+  features: readonly LocalDeviceFeature[],
+  surfaceProfile: AuroraSurfaceProfile,
+): readonly LocalDeviceFeature[] {
+  const available = features.filter((feature) => feature.available)
+  if (!surfaceProfile.isMobile) return available
+  return available.filter((feature) => !isGatewayScopedFeature(feature))
+}
+
 function jsonObjectAt(value: JsonObject, key: string): JsonObject {
   const nested = value[key]
   return typeof nested === 'object' && nested !== null && !Array.isArray(nested) ? (nested as JsonObject) : {}
@@ -655,7 +738,12 @@ function nonEmptyStringArray(value: unknown): string[] | undefined {
   return items.length > 0 ? items : undefined
 }
 
-export async function buildMeshPeersSnapshot(client: AuroraClient, route: RouteAvailability): Promise<MeshPeersSnapshot> {
+export async function buildMeshPeersSnapshot(
+  client: AuroraClient,
+  route: RouteAvailability,
+  options: MeshPeersSnapshotOptions = {},
+): Promise<MeshPeersSnapshot> {
+  const canManageLocalServiceConfiguration = options.canManageLocalServiceConfiguration ?? true
   const [statusResult, diagnosticsResult, catalogResult, configResult, inviteConfigResult] = await Promise.allSettled([
     client.requestResult<MeshStatusResponse, JsonObject>(
       GATEWAY_METHODS.getMeshStatus,
@@ -681,15 +769,19 @@ export async function buildMeshPeersSnapshot(client: AuroraClient, route: RouteA
       MESH_PRIMARY_READ_TIMEOUT_MS,
       'capability catalog',
     ),
-    client.config.getSchemaMetadata({ include_values: true }),
-    client.requestResult<MeshInviteConfigResponse, JsonObject>(
-      GATEWAY_METHODS.getMeshInviteConfig,
-      {},
-      {
-        path: routePath('Gateway', 'GetMeshInviteConfig'),
-        timeoutMs: MESH_OPTIONAL_READ_TIMEOUT_MS,
-      },
-    ),
+    canManageLocalServiceConfiguration
+      ? client.config.getSchemaMetadata({ include_values: true })
+      : skippedMeshAuthRead<ConfigSchemaMetadataResponse>(),
+    canManageLocalServiceConfiguration
+      ? client.requestResult<MeshInviteConfigResponse, JsonObject>(
+          GATEWAY_METHODS.getMeshInviteConfig,
+          {},
+          {
+            path: routePath('Gateway', 'GetMeshInviteConfig'),
+            timeoutMs: MESH_OPTIONAL_READ_TIMEOUT_MS,
+          },
+        )
+      : skippedMeshAuthRead<MeshInviteConfigResponse>(),
   ])
 
   const statusResponse = responseDataOrNull(statusResult)
@@ -699,6 +791,12 @@ export async function buildMeshPeersSnapshot(client: AuroraClient, route: RouteA
   const inviteConfig = responseDataOrNull(inviteConfigResult)
   const authEnabled = configBoolean(configResponse?.fields ?? [], 'services.auth.enabled', false)
   const authReadsReady = authEnabled || statusResponse?.local.mesh_started === true
+  const authSnapshot = client.auth.snapshot()
+  const adminAuthReadsReady = authReadsReady && (
+    authSnapshot.isAdmin
+    || client.permissions.has('Auth.manage', 'manage')
+    || (!authSnapshot.isAuthenticated && client.transport.kind !== 'mesh')
+  )
   const [peersResult, pairingsResult, devicesResult] = await Promise.allSettled([
     authReadsReady
       ? client.requestResult<MeshPeerListResponse, JsonObject>(
@@ -710,7 +808,7 @@ export async function buildMeshPeersSnapshot(client: AuroraClient, route: RouteA
           },
         )
       : skippedMeshAuthRead<MeshPeerListResponse>(),
-    authReadsReady
+    adminAuthReadsReady
       ? client.requestResult<ListPendingPairingsResponse, JsonObject>(
           AUTH_METHODS.listPendingPairings,
           { include_non_pending: true },
@@ -720,7 +818,7 @@ export async function buildMeshPeersSnapshot(client: AuroraClient, route: RouteA
           },
         )
       : skippedMeshAuthRead<ListPendingPairingsResponse>(),
-    authReadsReady
+    adminAuthReadsReady
       ? client.requestResult<DeviceListResponse, JsonObject>(
           AUTH_METHODS.listDevices,
           {},
@@ -743,7 +841,7 @@ export async function buildMeshPeersSnapshot(client: AuroraClient, route: RouteA
   const hasEditableConfigMetadata = metadataFields.length > 0
   const configFields = metadataFields.length > 0 ? metadataFields : buildRuntimeConfigFields(statusResponse, diagnostics)
   const configWarning = failureMessage('mesh configuration', configResult, true)
-  const failures = [failureMessage('mesh status', statusResult), failureMessage('mesh peers', peersResult), failureMessage('pairing queue', pairingsResult, true), failureMessage('WebRTC diagnostics', diagnosticsResult, true), failureMessage('Auth devices', devicesResult, true), failureMessage('capability catalog', catalogResult), configWarning, failureMessage('mesh invite credentials', inviteConfigResult, true)].filter((message): message is string => Boolean(message))
+  const failures = [failureMessage('connection status', statusResult), failureMessage('devices', peersResult), failureMessage('pairing queue', pairingsResult, true), failureMessage('connection details', diagnosticsResult, true), failureMessage('authorized devices', devicesResult, true), failureMessage('capability catalog', catalogResult), configWarning, failureMessage('invite credentials', inviteConfigResult, true)].filter((message): message is string => Boolean(message))
   const denied = [statusResult, peersResult, catalogResult].some(isDeniedFailure)
 
   if (route.disabled || (!statusResponse && !peersResponse && !catalog)) {
@@ -758,14 +856,14 @@ export async function buildMeshPeersSnapshot(client: AuroraClient, route: RouteA
       config: {
         fields: configFields,
         state: configFields.length > 0 ? 'degraded' : 'unsupported',
-        reason: configFields.length > 0 ? 'Mesh settings are visible, but peer lifecycle is unavailable.' : message,
+        reason: configFields.length > 0 ? 'Connection settings are visible, but device lifecycle is unavailable.' : message,
         secretsRedacted: configResponse?.secrets_redacted ?? true,
         editable: false,
         warnings: configWarning ? [configWarning] : [],
       },
       listReason: message,
       statusReason: message,
-      mutationReason: route.requiresAdminAction ? 'Peer management is not available for this route.' : message,
+      mutationReason: route.requiresAdminAction ? 'Device management is not available for this route.' : message,
       warnings: failures,
       error: message,
       evidenceSource: route.disabled ? route.providerLabel : 'Aurora request error',
@@ -816,11 +914,11 @@ export async function buildMeshPeersSnapshot(client: AuroraClient, route: RouteA
     statusState: stateFromCapability(statusCapability, statusResponse ? 'available-local' : 'degraded'),
     statusReason: capabilityReason(statusCapability, 'Gateway.GetMeshStatus returned mesh runtime details.'),
     mutationState: stateFromCapability(mutationCapability, mutationCapability ? mutationCapability.availability : 'unsupported'),
-    mutationReason: capabilityReason(mutationCapability, 'Auth mesh peer mutations are available.'),
+    mutationReason: capabilityReason(mutationCapability, 'Device management actions are available.'),
     config: {
       fields: configFields,
       state: hasEditableConfigMetadata ? 'available-local' : configFields.length > 0 ? 'degraded' : 'unsupported',
-      reason: hasEditableConfigMetadata ? 'Mesh settings loaded.' : 'Mesh settings are visible, but editing is unavailable.',
+      reason: hasEditableConfigMetadata ? 'Connection settings loaded.' : 'Connection settings are visible, but editing is unavailable.',
       secretsRedacted: configResponse?.secrets_redacted ?? true,
       editable: hasEditableConfigMetadata,
       warnings: configWarning ? [configWarning] : [],
@@ -867,7 +965,7 @@ export function reconcileMeshPeersWithThinPeer(
       }
     : next
   const peerId = thinPeer.expectedStablePeerId!
-  const nodeName = thinPeer.nodeName?.trim() || 'Invited Aurora peer'
+  const nodeName = thinPeer.nodeName?.trim() || 'Invited Aurora device'
   const peerState: AvailabilityState = connected
     ? 'available-remote'
     : thinPeer.status === 'pairing'
@@ -966,6 +1064,7 @@ export function reconcileMeshPeersWithThinPeer(
 export function MeshPeersView({
   snapshot,
   route,
+  surfaceProfile,
   permissions = '',
   revokeToken = true,
   pendingPeerId = null,
@@ -1001,7 +1100,6 @@ export function MeshPeersView({
   useEffect(() => {
     if (!thinPeerSnapshot?.pairingSessionId) setThinPairingOpen(false)
   }, [thinPeerSnapshot?.pairingSessionId])
-  const connectedPeers = snapshot.peers.filter((peer) => peer.lifecycleState === 'available-remote' || peer.connectionStatus === 'connected')
   const pendingRequests = snapshot.pendingRequests
   const outgoingPairingSessions = pendingRequests.length === 0
     ? snapshot.liveSessions.filter((session) => {
@@ -1035,6 +1133,14 @@ export function MeshPeersView({
     || Boolean(configPendingKey)
     || Boolean(masterSwitchUnavailable)
 
+  const resolvedSurface =
+    surfaceProfile
+    ?? getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: snapshot.transportKind === 'mock' ? 'mock' : snapshot.transportKind,
+      userAgent: typeof navigator === 'undefined' ? undefined : navigator.userAgent,
+    })
+
   return (
     <div
       className="flex flex-col gap-5"
@@ -1047,9 +1153,9 @@ export function MeshPeersView({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h1 id="mesh-peers-title" className="text-xl font-semibold tracking-tight">
-            Mesh &amp; Peers
+            Connected devices
           </h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">Peer trust, pairing and permissions. Peer-specific tools live on the Tools page.</p>
+          <p className="max-w-2xl text-sm text-muted-foreground">Connect trusted devices and choose what each one can use.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" onClick={onRefresh} disabled={controlsDisabled}>
@@ -1058,10 +1164,10 @@ export function MeshPeersView({
           {canManageLocalServiceConfiguration ? (
             <>
               <Button type="button" variant="outline" onClick={() => setSettingsOpen(true)} disabled={controlsDisabled && snapshot.config.fields.length === 0}>
-                <Settings2 data-icon="inline-start" /> Mesh settings
+                <Settings2 data-icon="inline-start" /> Device network settings
               </Button>
               <Button type="button" onClick={() => setConnectOpen(true)} disabled={controlsDisabled && snapshot.config.fields.length === 0}>
-                <RadioTower data-icon="inline-start" /> Connect peer
+                <RadioTower data-icon="inline-start" /> Connect device
               </Button>
             </>
           ) : null}
@@ -1081,23 +1187,23 @@ export function MeshPeersView({
         onReconnect={onReconnectThinPeer}
       />
 
-      <MeshSummaryCards snapshot={snapshot} connectedPeers={connectedPeers.length} pendingPeers={pendingRequests.length} />
+      <MeshSummaryCards snapshot={snapshot} pendingPeers={pendingRequests.length} />
 
       {localFeatureSharing ? <LocalFeatureSharingPanel port={localFeatureSharing} /> : null}
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Network /> Network · Mesh networking
+            <Network /> Device connections
           </CardTitle>
           <CardDescription>
             {canManageLocalServiceConfiguration
-              ? <>Master switch for mesh networking. Turning this off disconnects all peers.</>
-              : <>Mesh state reported by the connected Aurora device. This device cannot start or stop the remote mesh service.</>}
+              ? <>Turning this off disconnects trusted devices.</>
+              : <>Connection state is reported by the connected Aurora device. This device can view it, but cannot change it.</>}
           </CardDescription>
           <CardAction>
             <Switch
-              aria-label="Mesh networking"
+              aria-label="Device connections"
               checked={meshEnabledChecked}
               disabled={masterSwitchDisabled}
               onCheckedChange={(checked) =>
@@ -1113,7 +1219,7 @@ export function MeshPeersView({
         </CardHeader>
         {masterSwitchUnavailable || configPendingKey ? (
           <CardContent className="flex flex-col gap-1">
-            {masterSwitchUnavailable ? <p className="text-sm text-muted-foreground">Mesh toggle is read-only right now.</p> : null}
+            {masterSwitchUnavailable ? <p className="text-sm text-muted-foreground">This switch is read-only right now.</p> : null}
             {configPendingKey ? <p className="text-sm text-muted-foreground">Applying changes…</p> : null}
           </CardContent>
         ) : null}
@@ -1124,7 +1230,7 @@ export function MeshPeersView({
           <RadioTower />
           <AlertTitle>Outgoing pairing is active</AlertTitle>
           <AlertDescription>
-            Pairing request sent to <strong>{outgoingPairingLabels.join(', ')}</strong>. Both Auroras create an incoming request automatically. Compare the verification code shown on both devices, then approve independently on each Aurora.
+            Pairing request sent to <strong>{outgoingPairingLabels.join(', ')}</strong>. Compare the verification code shown on both devices, then approve on each Aurora.
             {outgoingPairingSessions.some((session) => session.verificationCode) ? (
               <span className="mt-2 flex flex-col gap-1">
                 {outgoingPairingSessions.map((session) => (
@@ -1144,8 +1250,21 @@ export function MeshPeersView({
         if (request) setReviewRequestId(request.pendingPairing.request_id)
       }} />
 
-      <PeerTable peers={snapshot.peers} pendingPeerId={pendingPeerId} optimisticPeerId={optimisticPeerId} mutationDisabled={mutationDisabled} onOpenScopes={setScopesPeerId} onApprove={onApprovePeer} onDeny={onDenyPeer} onRemove={onRemovePeer} />
-      <RequestReviewDialog peer={reviewPeer} open={Boolean(reviewPeer)} disabled={mutationDisabled} pending={reviewPeer ? pendingPeerId === meshPeerActionIdentity(reviewPeer) : false} permissions={permissions} onOpenChange={(open) => !open && setReviewRequestId(null)} onPermissionsChange={onPermissionsChange} onApprovePeer={onApprovePeer} onDenyPeer={onDenyPeer} />
+      <div className="hidden md:block">
+        <PeerTable peers={snapshot.peers} pendingPeerId={pendingPeerId} optimisticPeerId={optimisticPeerId} mutationDisabled={mutationDisabled} onOpenScopes={setScopesPeerId} onApprove={onApprovePeer} onDeny={onDenyPeer} onRemove={onRemovePeer} />
+      </div>
+      <RequestReviewDialog
+        peer={reviewPeer}
+        open={Boolean(reviewPeer)}
+        disabled={mutationDisabled}
+        pending={reviewPeer ? pendingPeerId === meshPeerActionIdentity(reviewPeer) : false}
+        permissions={permissions}
+        surfaceProfile={resolvedSurface}
+        onOpenChange={(open) => !open && setReviewRequestId(null)}
+        onPermissionsChange={onPermissionsChange}
+        onApprovePeer={onApprovePeer}
+        onDenyPeer={onDenyPeer}
+      />
       {canManageLocalServiceConfiguration ? (
         <>
           <ConnectPeerDialog open={connectOpen} inviteUrl={inviteUrl} inviteReadiness={inviteReadiness} inviteImport={inviteImport} initialInviteText={initialInviteText} onScanQr={onScanQr} onApplyInvite={onApplyInvite} onOpenChange={setConnectOpen} />
@@ -1154,12 +1273,22 @@ export function MeshPeersView({
       ) : null}
       <ThinPeerPairingDialog
         snapshot={thinPeerSnapshot}
+        surfaceProfile={resolvedSurface}
         open={thinPairingOpen}
         onOpenChange={setThinPairingOpen}
+        localFeatureSharing={localFeatureSharing}
         onConfirm={onConfirmThinPairing}
         onReject={onRejectThinPairing}
       />
-      <ScopesDialog peer={scopesPeer} open={Boolean(scopesPeer)} disabled={mutationDisabled} pending={scopesPeer ? pendingPeerId === scopesPeer.peerId : false} onOpenChange={(open) => !open && setScopesPeerId(null)} onSave={onSaveScopes} />
+      <ScopesDialog
+        peer={scopesPeer}
+        open={Boolean(scopesPeer)}
+        disabled={mutationDisabled}
+        pending={scopesPeer ? pendingPeerId === scopesPeer.peerId : false}
+        surfaceProfile={resolvedSurface}
+        onOpenChange={(open) => !open && setScopesPeerId(null)}
+        onSave={onSaveScopes}
+      />
     </div>
   )
 }
@@ -1181,7 +1310,7 @@ function ThinPeerConnectionStatus({
     return (
       <div className="overflow-hidden rounded-xl border border-warning/35 bg-warning/5">
         <div className="flex items-center gap-1.5 border-b border-warning/25 px-4 py-3 text-sm font-semibold text-warning">
-          <Network className="size-3.5" /> Pending pairing requests
+          <Network className="size-3.5" /> Waiting for approval
         </div>
         <div className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
           <div className="min-w-0">
@@ -1189,7 +1318,7 @@ function ThinPeerConnectionStatus({
               {snapshot.nodeName || 'Invited Aurora node'}
             </p>
             <p className="text-[11px] text-muted-foreground">
-              Direct device connection · compare this code on both Auroras
+              Compare this code on both Auroras
             </p>
           </div>
           <div className="flex flex-col gap-0.5">
@@ -1253,13 +1382,13 @@ function ThinPeerConnectionStatus({
   return (
     <Alert variant="destructive" role="alert">
       <AlertTriangle />
-      <AlertTitle>Peer connection needs attention</AlertTitle>
+      <AlertTitle>Device connection needs attention</AlertTitle>
       <AlertDescription className="flex flex-col items-start gap-2">
         <span>
           {snapshot.diagnostic
             ?? (snapshot.status === 'needs-invite'
               ? 'The saved Aurora invite is unavailable.'
-              : 'The direct peer connection is not active.')}
+              : 'The device connection is not active.')}
         </span>
         {onReconnect && snapshot.status !== 'disabled' ? (
           <Button type="button" size="sm" variant="outline" onClick={onReconnect}>
@@ -1273,30 +1402,95 @@ function ThinPeerConnectionStatus({
 
 function ThinPeerPairingDialog({
   snapshot,
+  surfaceProfile,
   open,
   onOpenChange,
+  localFeatureSharing,
   onConfirm,
   onReject,
 }: {
   snapshot: BrowserWebRtcSnapshot | null
+  surfaceProfile: AuroraSurfaceProfile
   open: boolean
   onOpenChange: (open: boolean) => void
-  onConfirm: ((sessionId: string) => void) | undefined
+  localFeatureSharing: LocalFeatureSharingPort | undefined
+  onConfirm: ((sessionId: string, approval: PeerPairingApproval) => void | Promise<void>) | undefined
   onReject: ((sessionId: string) => void) | undefined
 }) {
   const sessionId = snapshot?.pairingSessionId ?? null
   const verificationCode = snapshot?.pairingVerificationCode ?? null
+  const [features, setFeatures] = useState<Awaited<ReturnType<LocalFeatureSharingPort['load']>>['features']>([])
+  const [selectedFeatureIds, setSelectedFeatureIds] = useState<string[]>([])
+  const [featuresLoading, setFeaturesLoading] = useState(false)
+  const [featureLoadError, setFeatureLoadError] = useState<string | null>(null)
+  const [confirmError, setConfirmError] = useState<string | null>(null)
+  const [confirmPending, setConfirmPending] = useState(false)
+  const approvalAttempt = useRef(0)
+  useEffect(() => {
+    if (!open || !sessionId) return
+    let active = true
+    approvalAttempt.current += 1
+    setFeatureLoadError(null)
+    setConfirmError(null)
+    setConfirmPending(false)
+    if (!localFeatureSharing) {
+      setFeatures([])
+      setSelectedFeatureIds([])
+      setFeaturesLoading(false)
+      return
+    }
+    setFeaturesLoading(true)
+    void localFeatureSharing.load().then((next) => {
+      if (!active) return
+      const available = filterPairingFeatures(next.features, surfaceProfile)
+      setFeatures(available)
+      setSelectedFeatureIds(available.filter((feature) => feature.enabled).map((feature) => feature.id))
+      setFeaturesLoading(false)
+    }, () => {
+      if (!active) return
+      setFeatures([])
+      setSelectedFeatureIds([])
+      setFeaturesLoading(false)
+      setFeatureLoadError('This device’s sharing options are unavailable right now. Try again.')
+    })
+    return () => {
+      active = false
+    }
+  }, [localFeatureSharing, open, sessionId])
+  const toggleFeature = (featureId: string, checked: boolean) => {
+    setSelectedFeatureIds((current) => {
+      if (checked) return current.includes(featureId) ? current : [...current, featureId]
+      return current.filter((currentId) => currentId !== featureId)
+    })
+  }
+  const approve = async () => {
+    if (!sessionId || !verificationCode || !onConfirm || featuresLoading || featureLoadError) return
+    const attempt = approvalAttempt.current + 1
+    approvalAttempt.current = attempt
+    setConfirmPending(true)
+    setConfirmError(null)
+    try {
+      const selected = features.filter((feature) => selectedFeatureIds.includes(feature.id)).map((feature) => feature.id)
+      await onConfirm(sessionId, { sharedFeatureIds: selected })
+      if (approvalAttempt.current === attempt) onOpenChange(false)
+    } catch {
+      if (approvalAttempt.current === attempt) {
+        setConfirmError('Could not approve this device. Check the connection and try again.')
+      }
+    } finally {
+      if (approvalAttempt.current === attempt) setConfirmPending(false)
+    }
+  }
   return (
     <Dialog open={open && Boolean(sessionId)} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            Approve {snapshot?.nodeName || 'Aurora peer'}
+            Approve {snapshot?.nodeName || 'Aurora device'}
           </DialogTitle>
           <DialogDescription>
             Confirm that the verification code matches on both Auroras. Each
-            device must approve independently before the peer session is
-            authorized.
+            device must approve independently before sharing starts.
           </DialogDescription>
         </DialogHeader>
         <div className="rounded-lg bg-muted/40 px-3.5 py-2.5 text-center text-xl">
@@ -1305,6 +1499,39 @@ function ThinPeerPairingDialog({
           </p>
           <MeshVerificationCode value={verificationCode} />
         </div>
+        <div className="flex flex-col gap-3 rounded-lg border p-3">
+          <div className="flex flex-col gap-1">
+            <h3 className="text-sm font-medium">Choose what {snapshot?.nodeName || 'this Aurora'} can use from this device</h3>
+            <p className="text-xs text-muted-foreground">Only features available on this device are shown. You can change this later.</p>
+          </div>
+          {featuresLoading ? <Skeleton className="h-16 w-full" /> : null}
+          {!featuresLoading && features.length === 0 && !featureLoadError ? (
+            <p className="text-sm text-muted-foreground">No local features are available to share. You can still pair the devices.</p>
+          ) : null}
+          {!featuresLoading && features.length > 0 ? (
+            <div className="grid gap-2">
+              {features.map((feature) => (
+                <label key={feature.id} className="flex items-start gap-3 rounded-md border px-3 py-2.5">
+                  <Checkbox
+                    aria-label={feature.label}
+                    checked={selectedFeatureIds.includes(feature.id)}
+                    disabled={confirmPending}
+                    onCheckedChange={(checked) => toggleFeature(feature.id, checked === true)}
+                  />
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-sm font-medium">{feature.label}</span>
+                    <span className="text-xs text-muted-foreground">{feature.description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        {featureLoadError || confirmError ? (
+          <Alert variant="destructive" role="alert">
+            <AlertDescription>{featureLoadError ?? confirmError}</AlertDescription>
+          </Alert>
+        ) : null}
         {!verificationCode ? (
           <Alert variant="destructive" role="alert">
             <AlertDescription>
@@ -1317,7 +1544,7 @@ function ThinPeerPairingDialog({
           <Button
             type="button"
             variant="destructive"
-            disabled={!sessionId || !onReject}
+            disabled={!sessionId || !onReject || confirmPending}
             onClick={() => {
               if (sessionId) onReject?.(sessionId)
               onOpenChange(false)
@@ -1327,13 +1554,10 @@ function ThinPeerPairingDialog({
           </Button>
           <Button
             type="button"
-            disabled={!sessionId || !verificationCode || !onConfirm}
-            onClick={() => {
-              if (sessionId) onConfirm?.(sessionId)
-              onOpenChange(false)
-            }}
+            disabled={!sessionId || !verificationCode || !onConfirm || featuresLoading || Boolean(featureLoadError) || confirmPending}
+            onClick={() => void approve()}
           >
-            Approve &amp; pair
+            {confirmPending ? 'Approving…' : 'Approve & pair'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1356,8 +1580,20 @@ function MeshPeerStateBadge({
     return <Badge variant="outline">Offline</Badge>
   }
   return (
-    <MeshStateBadge state={optimistic ? 'pending' : peer.trustState} />
+    <MeshStateBadge state={optimistic ? 'pending' : peerVisibleState(peer)} />
   )
+}
+
+function peerVisibleState(peer: MeshPeerRow): AvailabilityState {
+  if (peer.pendingPairing || peer.trustState === 'pending') return 'pending'
+  if (peer.trustState === 'denied' || peer.outboundStatus === 'removed') return peer.trustState
+  if (peer.lifecycleState === 'available-local' || peer.lifecycleState === 'available-remote') {
+    return peer.lifecycleState
+  }
+  if (peer.connectionStatus.includes('connected') && !peer.connectionStatus.includes('disconnected')) {
+    return 'available-remote'
+  }
+  return peer.trustState
 }
 
 function meshStateLabel(state: AvailabilityState | MeshPeersLoadState): string {
@@ -1371,30 +1607,32 @@ function meshStateLabel(state: AvailabilityState | MeshPeersLoadState): string {
   return 'Status'
 }
 
-function MeshSummaryCards({ snapshot, connectedPeers, pendingPeers }: { snapshot: MeshPeersSnapshot; connectedPeers: number; pendingPeers: number }) {
+function MeshSummaryCards({ snapshot, pendingPeers }: { snapshot: MeshPeersSnapshot; pendingPeers: number }) {
   const items = [
     {
-      label: 'Local node',
+      label: 'This device',
       value: snapshot.localNodeName,
-      detail: snapshot.localPeerId ?? 'peer id not reported',
+      detail: snapshot.meshStarted ? 'Ready for secure connections' : 'Connections are unavailable',
       icon: Network,
     },
     {
-      label: 'Connected peers',
-      value: String(connectedPeers),
-      detail: `${snapshot.runtimePeerCount} known / ${snapshot.liveSessionCount} active sessions`,
+      label: 'Connected devices',
+      value: String(snapshot.liveSessionCount),
+      detail: `${snapshot.runtimePeerCount} saved · ${snapshot.liveSessionCount} online`,
       icon: UsersRound,
     },
     {
       label: 'Pending requests',
       value: String(pendingPeers),
-      detail: `${snapshot.approvedCount} approved / ${snapshot.deniedCount} denied / ${snapshot.removedCount} removed`,
+      detail: pendingPeers > 0 ? 'Review requests before another device can connect' : 'No requests waiting',
       icon: ShieldCheck,
     },
     {
       label: 'Availability',
-      value: snapshot.meshEnabled ? 'enabled' : 'disabled',
-      detail: `network ${snapshot.meshStarted ? 'online' : 'offline'} · direct connections ${snapshot.webrtcStarted ? 'ready' : 'off'}`,
+      value: snapshot.meshEnabled ? 'On' : 'Off',
+      detail: snapshot.meshStarted && snapshot.webrtcStarted
+        ? 'Ready for device connections'
+        : 'Device connections are unavailable',
       icon: Wifi,
     },
   ]
@@ -1422,7 +1660,7 @@ function PendingRequestsTable({ peers, pendingPeerId, onReview }: { peers: MeshP
   return (
     <div className="overflow-hidden rounded-xl border border-warning/35 bg-warning/5">
       <div className="flex items-center gap-1.5 border-b border-warning/25 px-4 py-3 text-sm font-semibold text-warning">
-        <Network className="size-3.5" /> Pending pairing requests
+        <Network className="size-3.5" /> Waiting for approval
       </div>
       <Table>
         <TableBody>
@@ -1439,7 +1677,7 @@ function PendingRequestsTable({ peers, pendingPeerId, onReview }: { peers: MeshP
                     <div>
                       <div className="text-sm font-medium">{peer.nodeName}</div>
                       <div className="text-[11px] text-muted-foreground">
-                        {pairing?.remote_node_name ? 'mesh peer' : 'device'} · requested {formatRelative(pairing?.created_at ?? null)}
+                        device · requested {formatRelative(pairing?.created_at ?? null)}
                       </div>
                     </div>
                   </div>
@@ -1466,7 +1704,7 @@ function PendingRequestsTable({ peers, pendingPeerId, onReview }: { peers: MeshP
 }
 
 function PeerCardGrid({ peers, pendingPeerId, optimisticPeerId, onOpenScopes, onReview }: { peers: MeshPeerRow[]; pendingPeerId: string | null; optimisticPeerId: string | null; onOpenScopes: (peerId: string) => void; onReview: (peerId: string) => void }) {
-  if (peers.length === 0) return <EmptyPanel title="No mesh peers yet" description="Paired devices will appear here after they connect or request access." />
+  if (peers.length === 0) return <EmptyPanel title="No connected devices yet" description="Approved devices will appear here after they connect or request access." />
   return (
     <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}>
       {peers.map((peer) => {
@@ -1493,13 +1731,13 @@ function PeerCardGrid({ peers, pendingPeerId, optimisticPeerId, onOpenScopes, on
               </div>
               <div>
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>Latency quality</span>
+                  <span>Connection quality</span>
                   <span>{qualityLabel(peer)}</span>
                 </div>
-                <Progress value={qualityPct} className="mt-1.5" aria-label={`Route quality for ${peer.nodeName}`} />
+                <Progress value={qualityPct} className="mt-1.5" aria-label={`Connection quality for ${peer.nodeName}`} />
               </div>
               <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>{peer.latencyMs === null ? 'latency measuring' : formatLatencyMs(peer.latencyMs)}</span>
+                <span>{peer.latencyMs === null ? 'Checking speed' : formatLatencyMs(peer.latencyMs)}</span>
                 <span>{peer.lastSeen ? formatRelative(peer.lastSeen) : 'last seen n/a'}</span>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
@@ -1510,7 +1748,7 @@ function PeerCardGrid({ peers, pendingPeerId, optimisticPeerId, onOpenScopes, on
                 ) : null}
                 {meshPeerScopesEditable(peer) ? (
                   <Button type="button" size="sm" variant="outline" onClick={() => onOpenScopes(peer.peerId)}>
-                    Scopes
+                    Features
                   </Button>
                 ) : null}
               </div>
@@ -1524,6 +1762,7 @@ function PeerCardGrid({ peers, pendingPeerId, optimisticPeerId, onOpenScopes, on
 
 function peerPresenceDotClass(peer: MeshPeerRow): string {
   if (peer.trustState === 'denied' || peer.outboundStatus === 'removed') return 'bg-destructive'
+  if (peer.lifecycleState === 'available-local' || peer.lifecycleState === 'available-remote') return 'bg-emerald-500'
   if (peer.connectionStatus.includes('connected') && !peer.connectionStatus.includes('disconnected')) return 'bg-emerald-500'
   if (peer.trustState === 'pending' || peer.pendingPairing) return 'bg-amber-500'
   return 'bg-muted-foreground/40'
@@ -1538,6 +1777,7 @@ function routeQualityPercent(peer: MeshPeerRow): number {
     if (peer.latencyMs <= 300) return 45
     return 15
   }
+  if (peer.lifecycleState === 'available-local' || peer.lifecycleState === 'available-remote') return 60
   if (peer.connectionStatus.includes('connected')) return 20
   if (peer.trustState === 'available-local' || peer.trustState === 'available-remote') return 60
   if (peer.trustState === 'pending') return 25
@@ -1562,17 +1802,17 @@ function PeerTable({ peers, pendingPeerId, optimisticPeerId, mutationDisabled, o
   return (
     <Card>
       <CardHeader>
-        <CardTitle>All peer records</CardTitle>
-        <CardDescription>Peer permissions and actions.</CardDescription>
+        <CardTitle>All devices</CardTitle>
+        <CardDescription>Device permissions and actions.</CardDescription>
       </CardHeader>
       <CardContent>
         {peers.length === 0 ? (
-          <EmptyPanel title="No rows" description="Peer permission rows will appear here after pairing." />
+          <EmptyPanel title="No devices" description="Device permission rows will appear here after pairing." />
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Peer</TableHead>
+                <TableHead>Device</TableHead>
                 <TableHead>Permissions</TableHead>
                 <TableHead>Latency</TableHead>
                 <TableHead>Trust</TableHead>
@@ -1610,7 +1850,7 @@ function PeerTable({ peers, pendingPeerId, optimisticPeerId, mutationDisabled, o
                     <TableCell className="text-right">
                       {meshPeerScopesEditable(peer) ? (
                         <Button type="button" size="sm" variant="outline" onClick={() => onOpenScopes(peer.peerId)}>
-                          Scopes
+                    Features
                         </Button>
                       ) : (
                         <span className="text-[11.5px] text-muted-foreground">Review required</span>
@@ -1640,7 +1880,7 @@ function RequestRow({ peer, pending, onReview }: { peer: MeshPeerRow; pending: b
         </CardAction>
       </CardHeader>
       <CardContent className="grid gap-2 sm:grid-cols-3">
-        <DetailItem label="Peer ID" value={peer.fingerprint} />
+        <DetailItem label="Device ID" value={peer.fingerprint} />
         <DetailItem label="Requested" value={permissionSummary(peer.permissions)} />
         <DetailItem label="Status" value={peer.pendingPairing?.status ?? peer.outboundStatus} />
       </CardContent>
@@ -1658,48 +1898,47 @@ function PeerDetailSheet({ peer, open, onOpenChange }: { peer: MeshPeerRow | nul
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
         <SheetHeader>
-          <SheetTitle>{peer?.nodeName ?? 'Peer details'}</SheetTitle>
-          <SheetDescription>Device identity, trust, connection status, shared service summary, and compatibility.</SheetDescription>
+          <SheetTitle>{peer?.nodeName ?? 'Device details'}</SheetTitle>
+          <SheetDescription>Connection status and the features shared between these devices.</SheetDescription>
         </SheetHeader>
         {peer ? (
           <div className="flex flex-col gap-4 px-4 pb-4">
             <Card>
               <CardContent className="grid gap-3 sm:grid-cols-2">
-                <DetailItem label="Stable peer id" value={peer.peerId} />
-                <DetailItem label="Room" value={peer.roomName || 'not reported'} />
+                <DetailItem label="Device ID" value={peer.peerId} />
+                <DetailItem label="Connection group" value={peer.roomName || 'Not available'} />
                 <DetailItem label="Trust" value={peer.trustLabel} />
-                <DetailItem label="Lifecycle" value={peer.lifecycleLabel} />
+                <DetailItem label="Availability" value={peer.lifecycleLabel} />
                 <DetailItem label="Connection" value={peer.connectionStatus} />
-                <DetailItem label="Latency" value={peer.latencyMs === null ? 'measuring' : formatLatencyMs(peer.latencyMs)} />
+                <DetailItem label="Response time" value={peer.latencyMs === null ? 'Checking' : formatLatencyMs(peer.latencyMs)} />
                 <DetailItem label="Last seen" value={formatDate(peer.lastSeen)} />
-                <DetailItem label="Details source" value={peer.lastEvidenceSource} />
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
                 <CardTitle>Permissions</CardTitle>
-                <CardDescription>Outbound grants are what this node allows the peer to use; inbound grants are what the peer has granted to this node.</CardDescription>
+                <CardDescription>Review what each device has chosen to share.</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2">
                 <div className="flex flex-col gap-2">
-                  <Label>Outbound</Label>
-                  <PermissionBadges permissions={peer.permissions} empty="No outbound permissions" />
+                  <Label>Shared with this device</Label>
+                  <PermissionBadges permissions={peer.permissions} empty="Nothing shared" />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label>Inbound</Label>
-                  <PermissionBadges permissions={peer.inboundPermissions} empty="No inbound permissions" />
+                  <Label>Available from this device</Label>
+                  <PermissionBadges permissions={peer.inboundPermissions} empty="Nothing available" />
                 </div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Shared services and route state</CardTitle>
-                <CardDescription>Summaries only. Service-native management belongs on each service page.</CardDescription>
+                <CardTitle>Shared features and connection</CardTitle>
+                <CardDescription>What this device offers and how well the connection is working.</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-3">
-                <DetailItem label="Services" value={peer.services.join(', ') || 'none advertised'} />
-                <DetailItem label="Compatibility" value={peer.compatibility} />
-                <DetailItem label="Route quality" value={peer.routeQuality} />
+                <DetailItem label="Available features" value={peer.services.join(', ') || 'None reported'} />
+                <DetailItem label="App compatibility" value={peer.compatibility} />
+                <DetailItem label="Connection quality" value={peer.routeQuality} />
               </CardContent>
             </Card>
           </div>
@@ -1732,14 +1971,21 @@ function toCatalogEntry(id: string): PermissionCatalogEntry {
   }
 }
 
-function meshPermissionCatalog(...permissionSets: string[][]): PermissionCatalogEntry[] {
-  const base = ['*', 'Gateway.use', 'Orchestrator.use', 'DB.use', 'Tooling.use', 'Scheduler.manage', 'TTS.use', 'STT.use']
+function isPermissionAllowedOnSurface(permission: string, surfaceProfile: AuroraSurfaceProfile): boolean {
+  if (!permission) return false
+  if (surfaceProfile.isMobile && permission === 'Gateway.use') return false
+  return true
+}
+
+function meshPermissionCatalog(surfaceProfile: AuroraSurfaceProfile, ...permissionSets: string[][]): PermissionCatalogEntry[] {
+  const base = ['*', 'Gateway.use', 'Orchestrator.use', 'Orchestrator.RemoteInference', 'DB.use', 'Tooling.use', 'Scheduler.manage', 'TTS.use', 'STT.use']
   const roleDefaults = ROLE_TEMPLATES.flatMap((template) => template.permissions ?? [])
   const ordered: string[] = []
   const seen = new Set<string>()
   for (const list of [...permissionSets, roleDefaults, base]) {
     for (const permission of list) {
-      if (permission && !seen.has(permission)) {
+      if (!isPermissionAllowedOnSurface(permission, surfaceProfile)) continue
+      if (!seen.has(permission)) {
         seen.add(permission)
         ordered.push(permission)
       }
@@ -1748,12 +1994,35 @@ function meshPermissionCatalog(...permissionSets: string[][]): PermissionCatalog
   return ordered.map(toCatalogEntry)
 }
 
-function RequestReviewDialog({ peer, open, disabled, pending, permissions, onOpenChange, onPermissionsChange, onApprovePeer, onDenyPeer }: { peer: MeshPeerRow | null; open: boolean; disabled: boolean; pending: boolean; permissions: string; onOpenChange: (open: boolean) => void; onPermissionsChange: ((value: string) => void) | undefined; onApprovePeer: ((peer: MeshPeerRow) => void) | undefined; onDenyPeer: ((peer: MeshPeerRow) => void) | undefined }) {
+function RequestReviewDialog({
+  peer,
+  open,
+  disabled,
+  pending,
+  permissions,
+  surfaceProfile,
+  onOpenChange,
+  onPermissionsChange,
+  onApprovePeer,
+  onDenyPeer,
+}: {
+  peer: MeshPeerRow | null
+  open: boolean
+  disabled: boolean
+  pending: boolean
+  permissions: string
+  surfaceProfile: AuroraSurfaceProfile
+  onOpenChange: (open: boolean) => void
+  onPermissionsChange: ((value: string) => void) | undefined
+  onApprovePeer: ((peer: MeshPeerRow) => void) | undefined
+  onDenyPeer: ((peer: MeshPeerRow) => void) | undefined
+}) {
   const selected = parseMeshPermissionList(permissions) ?? []
-  const catalog = useMemo(() => meshPermissionCatalog(peer?.permissions ?? [], selected), [peer?.peerId, permissions])
-  const checked: Record<string, boolean> = Object.fromEntries(selected.map((permission) => [permission, true]))
+  const filteredSelected = useMemo(() => selected.filter((permission) => isPermissionAllowedOnSurface(permission, surfaceProfile)), [selected, surfaceProfile])
+  const catalog = useMemo(() => meshPermissionCatalog(surfaceProfile, peer?.permissions ?? [], filteredSelected), [peer?.peerId, filteredSelected, surfaceProfile])
+  const checked: Record<string, boolean> = Object.fromEntries(filteredSelected.map((permission) => [permission, true]))
   const verificationCode = peer?.pendingPairing?.verification_code?.trim() || null
-  const applyPermissions = (next: string[]) => onPermissionsChange?.(next.join(' '))
+  const applyPermissions = (next: string[]) => onPermissionsChange?.(next.filter((permission) => isPermissionAllowedOnSurface(permission, surfaceProfile)).join(' '))
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-md">
@@ -1775,13 +2044,13 @@ function RequestReviewDialog({ peer, open, disabled, pending, permissions, onOpe
             <PermissionEditorTable
               catalog={catalog}
               checked={checked}
-              roleTemplate={matchRoleTemplate(selected)}
+              roleTemplate={matchRoleTemplate(filteredSelected)}
               onSelectRoleTemplate={(templateId) => {
                 const template = ROLE_TEMPLATES.find((entry) => entry.id === templateId)
                 if (template?.permissions) applyPermissions(template.permissions)
               }}
               onToggle={(permissionId) => {
-                const next = checked[permissionId] ? selected.filter((permission) => permission !== permissionId) : [...selected, permissionId]
+                const next = checked[permissionId] ? filteredSelected.filter((permission) => permission !== permissionId) : [...filteredSelected, permissionId]
                 applyPermissions(next)
               }}
             />
@@ -1835,11 +2104,11 @@ function MeshSettingsDialog({ open, snapshot, disabled, pendingKey, mutationErro
       <DialogContent className="max-h-[90vh] w-full overflow-y-auto" style={{ maxWidth: 'min(68rem, calc(100vw - 2rem))' }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Settings2 /> Mesh settings
+            <Settings2 /> Device connection settings
           </DialogTitle>
           <DialogDescription>
-            Choose this device&apos;s mesh identity, connection behavior,
-            encryption, and pairing defaults. Changes are reviewed before they
+            Choose this device&apos;s name, connection behavior,
+            security, and pairing defaults. Changes are reviewed before they
             take effect.
           </DialogDescription>
         </DialogHeader>
@@ -1853,13 +2122,13 @@ function MeshSettingsDialog({ open, snapshot, disabled, pendingKey, mutationErro
               </Alert>
             ) : null}
             {pendingKey ? <p className="text-sm text-muted-foreground">Applying changes…</p> : null}
-            {readOnly ? <p className="text-sm text-muted-foreground">Mesh settings are read-only right now.</p> : null}
+            {readOnly ? <p className="text-sm text-muted-foreground">Connection settings are read-only right now.</p> : null}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
             <div>
-              <p className="text-[13px] font-medium">Default share scope for new peers</p>
+              <p className="text-[13px] font-medium">Default sharing for new devices</p>
               <p className="text-[11.5px] text-muted-foreground">
-                Baseline permissions granted on approval. Fine-tune each device in Scopes.
+                Baseline permissions granted on approval. Fine-tune each device in Features.
               </p>
             </div>
             <EnumToggle
@@ -1906,7 +2175,7 @@ function MeshConfigurationPanel({ snapshot, disabled, pendingKey, onConfigChange
   }
 
   if (snapshot.config.fields.length === 0) {
-    return <EmptyPanel title="Settings" description="Mesh settings appear here when Aurora reports them." />
+    return <EmptyPanel title="Settings" description="Connection settings appear here when Aurora reports them." />
   }
 
   return (
@@ -2009,39 +2278,55 @@ function ConfigFieldControl({ field, value, disabled, onChange }: { field: Confi
   return <Input id={field.key_path} type={isNumberConfigField(field) ? 'number' : 'text'} value={value} disabled={disabled} onChange={(event) => onChange(event.currentTarget.value)} />
 }
 
-function ScopesDialog({ peer, open, disabled, pending, onOpenChange, onSave }: { peer: MeshPeerRow | null; open: boolean; disabled: boolean; pending: boolean; onOpenChange: (open: boolean) => void; onSave: ((peer: MeshPeerRow, permissions: string[]) => void) | undefined }) {
+function ScopesDialog({
+  peer,
+  open,
+  disabled,
+  pending,
+  surfaceProfile,
+  onOpenChange,
+  onSave,
+}: {
+  peer: MeshPeerRow | null
+  open: boolean
+  disabled: boolean
+  pending: boolean
+  surfaceProfile: AuroraSurfaceProfile
+  onOpenChange: (open: boolean) => void
+  onSave: ((peer: MeshPeerRow, permissions: string[]) => void) | undefined
+}) {
   const [selected, setSelected] = useState<string[]>([])
   useEffect(() => {
-    if (peer) setSelected(peer.permissions)
+    if (peer) setSelected(peer.permissions.filter((permission) => isPermissionAllowedOnSurface(permission, surfaceProfile)))
   }, [peer?.peerId, open])
-  const catalog = useMemo(() => meshPermissionCatalog(peer?.permissions ?? [], selected), [peer?.peerId, selected])
-  const checked: Record<string, boolean> = Object.fromEntries(selected.map((permission) => [permission, true]))
+  const sanitizedSelected = useMemo(() => selected.filter((permission) => isPermissionAllowedOnSurface(permission, surfaceProfile)), [selected, surfaceProfile])
+  const catalog = useMemo(() => meshPermissionCatalog(surfaceProfile, peer?.permissions ?? [], sanitizedSelected), [peer?.peerId, sanitizedSelected, surfaceProfile])
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Scopes{peer ? ` - ${peer.nodeName}` : ''}</DialogTitle>
-          <DialogDescription>What this peer can access on this node. Bilateral - the peer independently controls what it grants you.</DialogDescription>
+          <DialogTitle>Features{peer ? ` - ${peer.nodeName}` : ''}</DialogTitle>
+          <DialogDescription>Choose what this device can use. The other device separately controls what it shares back.</DialogDescription>
         </DialogHeader>
-        {peer && meshPeerScopesEditable(peer) ? (
+    {peer && meshPeerScopesEditable(peer) ? (
           <PermissionEditorTable
             catalog={catalog}
-            checked={checked}
-            roleTemplate={matchRoleTemplate(selected)}
+            checked={Object.fromEntries(sanitizedSelected.map((permission) => [permission, true]))}
+            roleTemplate={matchRoleTemplate(sanitizedSelected)}
             onSelectRoleTemplate={(templateId) => {
               const template = ROLE_TEMPLATES.find((entry) => entry.id === templateId)
-              if (template?.permissions) setSelected(template.permissions)
+              if (template?.permissions) setSelected(template.permissions.filter((permission) => isPermissionAllowedOnSurface(permission, surfaceProfile)))
             }}
             onToggle={(permissionId) => setSelected((current) => (current.includes(permissionId) ? current.filter((permission) => permission !== permissionId) : [...current, permissionId]))}
           />
         ) : peer ? (
-          <p className="text-sm text-muted-foreground">Review this pending pairing request and verify its exact code before granting scopes.</p>
+          <p className="text-sm text-muted-foreground">Review this pending pairing request and verify its exact code before sharing features.</p>
         ) : null}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" disabled={disabled || pending || !peer || !meshPeerScopesEditable(peer) || !onSave} onClick={() => peer && meshPeerScopesEditable(peer) && onSave?.(peer, selected)}>
+          <Button type="button" disabled={disabled || pending || !peer || !meshPeerScopesEditable(peer) || !onSave} onClick={() => peer && meshPeerScopesEditable(peer) && onSave?.(peer, sanitizedSelected)}>
             Save
           </Button>
         </DialogFooter>
@@ -2053,9 +2338,9 @@ function ScopesDialog({ peer, open, disabled, pending, onOpenChange, onSave }: {
 function ConnectPeerDialog({ open, inviteUrl, inviteReadiness, inviteImport, initialInviteText, onScanQr, onApplyInvite, onOpenChange }: { open: boolean; inviteUrl: string | null; inviteReadiness: MeshInviteReadiness; inviteImport: MeshInviteImportOperation; initialInviteText: string | null; onScanQr: (() => Promise<string | null>) | undefined; onApplyInvite: ((invite: JsonObject) => void) | undefined; onOpenChange: (open: boolean) => void }) {
   const [copied, setCopied] = useState(false)
   const [mode, setMode] = useState<'invite' | 'join'>(initialInviteText ? 'join' : 'invite')
-  const [joinText, setJoinText] = useState(initialInviteText ?? '')
+  const [joinText, setJoinText] = useState((initialInviteText ?? '').trim())
   const [scanError, setScanError] = useState<string | null>(null)
-  const joinInvite = useMemo(() => decodeMeshInvite(joinText), [joinText])
+  const joinInvite = useMemo(() => decodeMeshInvite(joinText.trim()), [joinText])
   const joinSummary = useMemo(() => (joinInvite ? meshInviteSummary(joinInvite) : null), [joinInvite])
   const copyInvite = async () => {
     if (!inviteUrl) return
@@ -2068,7 +2353,7 @@ function ConnectPeerDialog({ open, inviteUrl, inviteReadiness, inviteImport, ini
     setScanError(null)
     try {
       const scanned = await onScanQr()
-      if (scanned) setJoinText(scanned)
+      if (scanned) setJoinText(scanned.trim())
     } catch (error) {
       setScanError(meshPeerErrorMessage(error))
     }
@@ -2077,8 +2362,8 @@ function ConnectPeerDialog({ open, inviteUrl, inviteReadiness, inviteImport, ini
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Connect peer</DialogTitle>
-          <DialogDescription>Invite another device into this mesh, or configure this device from an invite created elsewhere.</DialogDescription>
+          <DialogTitle>Connect device</DialogTitle>
+          <DialogDescription>Invite another device, or configure this device from an invite created elsewhere.</DialogDescription>
         </DialogHeader>
         <Tabs value={mode} onValueChange={(value) => setMode(String(value) === 'join' ? 'join' : 'invite')}>
           <TabsList>
@@ -2150,7 +2435,7 @@ function ConnectPeerDialog({ open, inviteUrl, inviteReadiness, inviteImport, ini
                       </Button>
                     ) : null}
                   </div>
-                  <Textarea id="mesh-join-invite" className="min-h-16 break-all font-mono text-[11px]" placeholder="aurora://mesh/invite?i=amv1.…" value={joinText} disabled={inviteImport.pending} onChange={(event) => setJoinText(event.currentTarget.value)} />
+                  <Textarea id="mesh-join-invite" className="min-h-16 break-all font-mono text-[11px]" placeholder="aurora://mesh/invite?i=amv1.…" value={joinText} disabled={inviteImport.pending} onChange={(event) => setJoinText(event.currentTarget.value.trim())} />
                   {scanError ? <p className="text-sm text-destructive">{meshSafeErrorTitle(scanError)}</p> : null}
                   {joinText && !joinInvite ? <p className="text-sm text-muted-foreground">Not a recognizable Aurora mesh invite yet. Paste the full link or the amv1 token.</p> : null}
                 </div>
@@ -2170,7 +2455,7 @@ function ConnectPeerDialog({ open, inviteUrl, inviteReadiness, inviteImport, ini
                     <AlertDescription>This invite is incomplete. Ask the sender for a new invite.</AlertDescription>
                   </Alert>
                 ) : null}
-                <Button type="button" disabled={!joinInvite || !joinSummary?.includesPassword || inviteImport.pending || !onApplyInvite} onClick={() => joinInvite && onApplyInvite?.(joinInvite)}>
+                <Button type="button" disabled={!joinInvite || inviteImport.pending || !onApplyInvite} onClick={() => joinInvite && onApplyInvite?.(joinInvite)}>
                   {inviteImport.pending ? 'Applying invite…' : 'Apply invite'}
                 </Button>
                 {inviteImport.appliedChangeCount !== null ? (
@@ -2376,6 +2661,7 @@ function permissionLabel(permission: string): string {
     '*': 'Full access',
     'Gateway.use': 'Device connection',
     'Orchestrator.use': 'Assistant use',
+    'Orchestrator.RemoteInference': 'Model selection',
     'DB.use': 'Memory use',
     'Tooling.use': 'Tool use',
     'Scheduler.manage': 'Automation management',
@@ -2528,7 +2814,7 @@ export function meshInviteReadiness(snapshot: MeshPeersSnapshot): MeshInviteRead
   if (!appId || appId.toLowerCase() === 'aurora') return { ready: false, reason: 'Aurora is preparing a unique invite identity.' }
   if (!room || room.toLowerCase() === 'default') return { ready: false, reason: 'Aurora is preparing a private invite channel.' }
   if (!password || password === '[REDACTED]') return { ready: false, reason: 'Aurora is loading private invite details.' }
-  if (!snapshot.webrtcStarted || !snapshot.meshStarted) return { ready: false, reason: 'Secure credentials are ready; wait for mesh services to finish starting.' }
+  if (!snapshot.webrtcStarted || !snapshot.meshStarted) return { ready: false, reason: 'Secure credentials are ready; wait for device connections to finish starting.' }
   return { ready: true, reason: 'Secure mesh invite is ready.' }
 }
 
@@ -2571,7 +2857,7 @@ export function buildMeshInvitePayload(snapshot: MeshPeersSnapshot): JsonObject 
       auth_timeout_seconds: configNumber(fields, 'services.auth.webrtc_auth_timeout_seconds'),
       pairing_timeout_seconds: configNumber(fields, 'services.auth.webrtc_pairing_timeout_seconds'),
     },
-    note: 'Open this invite on another Aurora device, or paste it into Mesh & Peers -> Connect peer -> Join from an invite.',
+    note: 'Open this invite on another Aurora device, or paste it into Mesh -> Connect device -> Join from an invite.',
   }
   return payload
 }
@@ -2640,7 +2926,7 @@ function buildMeshDeviceRows(devices: DeviceResponse[], peers: MeshPeerRow[], se
       state: device.is_trusted ? 'available-local' : 'denied',
       trustLabel: device.is_trusted ? 'trusted Auth device' : 'untrusted Auth device',
       linkedPeerId: linkedPeer?.peerId ?? null,
-      linkedPeerLabel: linkedPeer ? `${linkedPeer.nodeName} (${linkedPeer.source})` : 'not linked to a mesh peer by service status',
+      linkedPeerLabel: linkedPeer ? `${linkedPeer.nodeName} (${linkedPeer.source})` : 'not linked to a device by service status',
       lastSeen: device.last_seen ?? null,
       evidenceSource: 'Auth.ListDevices',
     }
@@ -2733,7 +3019,7 @@ function buildMeshPeerRow(peerId: string, persisted: MeshPeerInfo | null, runtim
   const canMutate = mutationCapability ? ['available-local', 'available-remote', 'degraded'].includes(mutationCapability.availability) : true
   const base: Omit<MeshPeerRow, 'approveAction' | 'denyAction' | 'removeAction'> = {
     peerId,
-    nodeName: persisted?.node_name || runtime?.node_name || pairing?.remote_node_name || pairing?.device_name || 'Unnamed mesh peer',
+    nodeName: persisted?.node_name || runtime?.node_name || pairing?.remote_node_name || pairing?.device_name || 'Unnamed device',
     roomName: persisted?.room_name ?? 'not reported',
     lifecycleState,
     lifecycleLabel: runtime?.status ?? persisted?.connection_status ?? 'No recent status',
@@ -2759,15 +3045,15 @@ function buildMeshPeerRow(peerId: string, persisted: MeshPeerInfo | null, runtim
     approveAction:
       canMutate && outboundStatus !== 'approved'
         ? buildMeshPeerAdminAction(base, 'approve', {
-            reason: 'Approve mesh peer',
+            reason: 'Approve device',
             permissions: base.permissions.join(', '),
           })
         : null,
-    denyAction: canMutate && outboundStatus !== 'denied' ? buildMeshPeerAdminAction(base, 'deny', { reason: 'Deny mesh peer' }) : null,
+    denyAction: canMutate && outboundStatus !== 'denied' ? buildMeshPeerAdminAction(base, 'deny', { reason: 'Deny device' }) : null,
     removeAction:
       canMutate && outboundStatus !== 'removed'
         ? buildMeshPeerAdminAction(base, 'remove', {
-            reason: 'Remove mesh peer',
+            reason: 'Remove device',
             revokeToken: true,
           })
         : null,
@@ -2784,7 +3070,7 @@ export function buildMeshPeerAdminAction(
     reauthConfirmed?: boolean
   },
 ): MeshPeerAdminAction | null {
-  const reason = input.reason.trim() || `${action} mesh peer ${peer.peerId}`
+  const reason = input.reason.trim() || `${action} device ${peer.peerId}`
   if (action !== 'remove' && peer.pendingPairing) {
     if (!peer.pendingPairing.code.trim()) return null
     const affectedResources = [

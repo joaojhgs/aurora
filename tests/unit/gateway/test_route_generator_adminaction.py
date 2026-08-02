@@ -49,6 +49,7 @@ from app.shared.contracts.models.orchestrator import (
     OrchestratorProcessRequest,
     OrchestratorResponse,
 )
+from app.shared.contracts.models.tooling import ToolingMethods
 
 
 class _SingleMethodRegistry:
@@ -464,6 +465,107 @@ async def test_generated_handler_uses_updated_bus_for_mesh_selector_route():
     mesh_bus.request.assert_awaited_once()
     assert mesh_bus.request.await_args.args[0] == OrchestratorMethods.EXTERNAL_USER_INPUT
     assert mesh_bus.request.await_args.args[1]["mesh_selector"] == {"peer_id": "assistant-peer"}
+
+
+@pytest.mark.asyncio
+async def test_remote_tool_execution_outlives_provider_local_approval_window():
+    """A mobile allow/deny decision returns before the gateway abandons the call."""
+    bus = AsyncMock()
+    bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"ok": False}))
+    method_info = MethodInfo(
+        name="ExecuteTool",
+        summary="Execute a tool",
+        bus_topic=ToolingMethods.EXECUTE_TOOL,
+        exposure="external",
+        method_type="use",
+        required_perms=[ToolingMethods.EXECUTE_TOOL],
+    )
+    generator = RouteGenerator(
+        bus=bus,
+        registry=_SingleMethodRegistry("Tooling", method_info),
+        request_timeout=30.0,
+    )
+    handler = generator._create_handler("Tooling", method_info)
+
+    await handler(
+        {
+            "tool_name": "aurora-tool:v1:mobile:Tooling:share-text",
+            "arguments": {"text": "hello"},
+            "mesh_selector": {"peer_id": "mobile-peer"},
+        },
+        principal_id="principal-1",
+        effective_perms=[ToolingMethods.EXECUTE_TOOL],
+        identity_source="test",
+    )
+
+    assert bus.request.await_args.kwargs["timeout"] == 75.0
+
+
+@pytest.mark.asyncio
+async def test_generated_handler_maps_projection_authority_failure_to_forbidden():
+    """Projection-only provider routes fail closed without looking like server faults."""
+
+    bus = AsyncMock()
+    bus.request = AsyncMock(
+        return_value=QueryResult(ok=False, error="projection_authority_unknown")
+    )
+    method_info = MethodInfo(
+        name="GetExportCatalog",
+        summary="Get export catalog",
+        bus_topic=ToolingMethods.GET_EXPORT_CATALOG,
+        exposure="external",
+        method_type="use",
+        required_perms=[ToolingMethods.GET_TOOLS],
+    )
+    generator = RouteGenerator(
+        bus=bus,
+        registry=_SingleMethodRegistry("Tooling", method_info),
+    )
+    handler = generator._create_handler("Tooling", method_info)
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        await handler(
+            {},
+            principal_id="principal-1",
+            effective_perms=[ToolingMethods.GET_TOOLS],
+            identity_source="gateway_http",
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "projection_authority_unknown"
+
+
+@pytest.mark.asyncio
+async def test_generated_handler_maps_mesh_permission_denial_to_forbidden():
+    bus = AsyncMock()
+    bus.request = AsyncMock(return_value=QueryResult(ok=False, error="permission_denied"))
+    method_info = MethodInfo(
+        name="ExecuteTool",
+        summary="Execute a tool",
+        bus_topic=ToolingMethods.EXECUTE_TOOL,
+        exposure="external",
+        method_type="use",
+        required_perms=[ToolingMethods.EXECUTE_TOOL],
+    )
+    handler = RouteGenerator(
+        bus=bus,
+        registry=_SingleMethodRegistry("Tooling", method_info),
+    )._create_handler("Tooling", method_info)
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        await handler(
+            {},
+            principal_id="principal-1",
+            effective_perms=[ToolingMethods.EXECUTE_TOOL],
+            identity_source="gateway_http",
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "permission_denied"
 
 
 @pytest.mark.asyncio

@@ -62,6 +62,8 @@ class OutboundProviderSnapshot:
     auth_grant_revision: int = 0
     auth_grant_state: str = "unknown"
     grants: frozenset[str] | None = None
+    local_authority_state: str | None = None
+    local_grants: frozenset[str] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,6 +203,25 @@ def evaluate_outbound_provider(
         "required_perms": tuple(method.required_perms),
         "granted_permissions": tuple(sorted(provider.grants or ())),
     }
+    if provider.local_authority_state is not None:
+        if provider.local_authority_state != "active" or provider.local_grants is None:
+            return _decision(
+                **method_base,
+                eligible=False,
+                reason_code="permission_denied",
+                reason="local peer authority is not active",
+            )
+        if not check_access(
+            set(provider.local_grants),
+            list(method.required_perms),
+            method.method_type,
+        ):
+            return _decision(
+                **method_base,
+                eligible=False,
+                reason_code="permission_denied",
+                reason=f"local peer authority does not allow {requirements.topic}",
+            )
     if provider.grants is None:
         return _decision(
             **method_base,

@@ -662,7 +662,10 @@ class MeshBus:
             if terminal.target == "error":
                 return QueryResult(
                     ok=False,
-                    error=terminal.error_message or f"No fallback route available for {topic}",
+                    error=_route_query_error(
+                        terminal,
+                        fallback=f"No fallback route available for {topic}",
+                    ),
                 )
             if terminal.target == "none":
                 return QueryResult(ok=False, error=f"No fallback route available for {topic}")
@@ -693,7 +696,10 @@ class MeshBus:
         if route.target == "error":
             return QueryResult(
                 ok=False,
-                error=route.error_message or f"No remote peer available for {topic}",
+                error=_route_query_error(
+                    route,
+                    fallback=f"No remote peer available for {topic}",
+                ),
             )
 
         if route.target == "none":
@@ -1176,6 +1182,14 @@ def _requires_native_local_stream(topic: str) -> bool:
 
 def _module_from_topic(topic: str) -> str:
     return topic.split(".", 1)[0] if "." in topic else topic
+
+
+def _route_query_error(route: Any, *, fallback: str) -> str:
+    """Return a stable authorization code without exposing routing internals."""
+
+    if getattr(route, "error_code", None) == "selector_permission_denied":
+        return "permission_denied"
+    return getattr(route, "error_message", None) or fallback
 
 
 def _extract_mesh_selector(message: Any, *, topic: str | None = None) -> MeshAddressSelector | None:

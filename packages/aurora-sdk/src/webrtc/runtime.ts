@@ -55,10 +55,11 @@ import {
   type SignalingMessage
 } from './peer-session.js'
 import { WebRtcMeshPeerBridge } from './mesh-peer-bridge.js'
-import type { WebRtcPeerHost } from '../peer-host/index.js'
+import type { AuthenticatedPeerContext, WebRtcPeerHost } from '../peer-host/index.js'
 import type { PeerAuthorityResolver, PeerPairingIssuer, PeerRelationshipSelector } from '../peer-host/authority.js'
 import type {
   AuroraConnectionMode,
+  PeerPairingApproval,
   PeerConnectionController,
   PeerConnectionSnapshot,
   RedactedPeerDiagnostic,
@@ -78,7 +79,7 @@ export interface PairingConnectPollOptions {
 }
 
 const DEFAULT_PAIRING_CONNECT_POLL: PairingConnectPollOptions = {
-  maxAttempts: 12,
+  maxAttempts: 0,
   initialDelayMs: 500,
   maxDelayMs: 5_000,
   rpcTimeoutMs: 5_000
@@ -107,7 +108,7 @@ export interface BrowserWebRtcRuntimeOptions<TClient = AuroraClient> {
   localProtocolCapabilities?: readonly string[] | undefined
   peerHost?: WebRtcPeerHost | undefined
   peerAuthorityResolver?: PeerAuthorityResolver | undefined
-  peerPairingIssuer?: Pick<PeerPairingIssuer, 'issue'> | undefined
+  peerPairingIssuer?: Pick<PeerPairingIssuer, 'issue' | 'rollback'> | undefined
   appLayerE2eeAllowed?: boolean | undefined
   allowInsecureLoopback?: boolean | undefined
   pairingConnectPoll?: Partial<PairingConnectPollOptions> | undefined
@@ -364,12 +365,16 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
     }
   }
 
-  async confirmPairing(sessionId: string): Promise<void> {
+  async confirmPairing(sessionId: string, approval?: PeerPairingApproval): Promise<void> {
     const pending = this.pendingPairing
     if (!pending || pending.pairingSessionId !== sessionId) throw new AuroraError({ code: 'validation', message: 'No matching WebRTC pairing session is pending.' })
-    await this.session?.confirmSas(pending.verificationCode)
-    this.pendingPairing = null
-    this.emit()
+    const session = this.session
+    if (!session) throw new AuroraError({ code: 'unavailable_service', message: 'The WebRTC pairing session is unavailable.' })
+    await session.confirmSas(pending.verificationCode, approval)
+    if (this.session === session && this.pendingPairing?.pairingSessionId === sessionId) {
+      this.pendingPairing = null
+      this.emit()
+    }
   }
 
   async rejectPairing(sessionId: string): Promise<void> {
@@ -425,6 +430,12 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
   }
 
   private handleSessionSnapshot(snapshot: PeerSessionSnapshot | null, profile: WebRtcPeerConnectionProfile | undefined): void {
+    if (snapshot && ['failed', 'closed', 'idle', 'needs-invite', 'disabled'].includes(snapshot.state)) {
+      this.pendingPairing = null
+    }
+    if (snapshot && snapshot.state === 'reconnecting' && this.pendingPairing) {
+      this.recordDiagnostic('webrtc_reconnect_active', 'Direct device pairing continues while this connection retries.')
+    }
     if (snapshot?.authorized && profile?.expectedStablePeerId && !this.meshTransport && this.session) {
       this.installAuthorizedBridge(this.session, profile)
     }
@@ -468,6 +479,9 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
   private snapshotFromSession(snapshot: PeerSessionSnapshot | null, profile: WebRtcPeerConnectionProfile | undefined): PeerConnectionSnapshot {
     const bridgeDiagnostics = this.bridge?.getDiagnostics?.()
     const lastDiagnostic = this.diagnostics[this.diagnostics.length - 1]
+    const visibleDiagnostic = snapshot?.authorized && lastDiagnostic?.code === 'webrtc_peer_not_connected'
+      ? [...this.diagnostics].reverse().find((item) => item.code === 'webrtc_mesh_authorized') ?? lastDiagnostic
+      : lastDiagnostic
     return {
       state: snapshot?.state ?? (this.mode === 'http-only' ? 'idle' : 'closed'),
       connectionMode: this.mode,
@@ -487,7 +501,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
       bufferPressureHighWaterBytes: bridgeDiagnostics?.bufferPressureHighWaterBytes ?? 0,
       sentFragmentCount: bridgeDiagnostics?.sentFragmentCount ?? 0,
       receivedFragmentCount: bridgeDiagnostics?.receivedFragmentCount ?? 0,
-      lastRedactedError: snapshot?.lastError ? diagnostic('session_error', snapshot.lastError) : lastDiagnostic,
+      lastRedactedError: snapshot?.lastError ? diagnostic('session_error', snapshot.lastError) : visibleDiagnostic,
       updatedAt: new Date().toISOString(),
       ...(this.pendingPairing ? { pendingPairing: { sessionId: this.pendingPairing.pairingSessionId, verificationCode: this.pendingPairing.verificationCode, remoteStablePeerId: this.pendingPairing.remoteStablePeerId, remoteNodeName: this.pendingPairing.remoteNodeName } } : {})
     } as PeerConnectionSnapshot
@@ -518,7 +532,10 @@ class RuntimeSignalingPort implements PeerSessionSignalingPort {
   async connect(): Promise<void> { await this.signaling.connect(this.room) }
   async close(): Promise<void> { await this.signaling.close() }
   async publish(channel: SignalingChannel, envelope: Record<string, unknown>, toPeer?: string): Promise<void> {
-    if (channel === 'presence') return
+    if (channel === 'presence') {
+      await this.signaling.announcePresence()
+      return
+    }
     if (channel === 'broadcast') await this.signaling.send('broadcast', envelope as import('./signaling-mqtt.js').MqttSignalingEnvelope)
     else await this.signaling.send(channel, envelope as import('./signaling-mqtt.js').MqttSignalingEnvelope, toPeer ?? String(envelope.to ?? ''))
   }
@@ -532,6 +549,28 @@ class RuntimeSignalingPort implements PeerSessionSignalingPort {
   }
 }
 
+interface LegacyInboundCredential {
+  readonly mode: 'legacy'
+  readonly token: string
+  readonly tokenId: string
+  readonly pairingSessionId: string
+}
+
+interface DurableInboundCredential {
+  readonly mode: 'durable'
+  readonly selector: PeerRelationshipSelector
+  readonly token: string
+  readonly tokenHashHex: string
+  readonly credentialRevision: number
+  readonly pairingSessionId: string
+  readonly permissions: readonly string[]
+}
+
+interface InboundPairingExchangeOutcome {
+  readonly result: Record<string, unknown>
+  readonly rollback?: (() => Promise<void>) | undefined
+}
+
 class RuntimePeerAuth implements PeerSessionAuthPort {
   private handshake: PairingSasHandshake | null = null
   private handshakePromise: Promise<PairingSasHandshake> | null = null
@@ -543,24 +582,21 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
   private awaitingGatewayHello = false
   private pairingHandle: string | null = null
   private inboundPairingHandle: string | null = null
-  private issuedInboundCredential: {
-    mode: 'legacy'
-    token: string
-    tokenId: string
-    pairingSessionId: string
-  } | {
-    mode: 'durable'
-    selector: PeerRelationshipSelector
-    tokenHashHex: string
-    credentialRevision: number
-    pairingSessionId: string
-  } | null = null
+  private issuedInboundCredential: LegacyInboundCredential | DurableInboundCredential | null = null
   private localSasConfirmed = false
+  private approvedSharedFeatureIds: readonly string[] = []
+  private remoteAuthenticatedByReconnectProof = false
+  private remoteAuthenticated = false
+  private remoteAuthenticatedContext: AuthenticatedPeerContext | undefined
+  private gatewayHelloReceived = false
+  private pairingCompleted = false
+  private transportGeneration = 0
   private pairingConnectPromise: Promise<PeerSessionAuthFrameResult> | null = null
   private readonly pairingConnectPoll: PairingConnectPollOptions
   private readonly pendingCalls = new Map<string, { method: string; resolve(value: Record<string, unknown> | null): void; timer: ReturnType<typeof setTimeout> }>()
   private reconnectWaiter: ((result: PeerSessionAuthFrameResult) => void) | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private reconnectProgressActive = false
 
   constructor(private readonly options: {
     profile: WebRtcPeerConnectionProfile
@@ -572,29 +608,28 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     randomId?: (() => string) | undefined
     pairingConnectPoll?: Partial<PairingConnectPollOptions> | undefined
     peerAuthorityResolver?: PeerAuthorityResolver | undefined
-    peerPairingIssuer?: Pick<PeerPairingIssuer, 'issue'> | undefined
+    peerPairingIssuer?: Pick<PeerPairingIssuer, 'issue' | 'rollback'> | undefined
   }) {
     this.pairingConnectPoll = { ...DEFAULT_PAIRING_CONNECT_POLL, ...options.pairingConnectPoll }
   }
 
   async tryReconnect(context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> {
+    const generation = this.transportGeneration
     if (this.options.peerAuthorityResolver !== undefined) {
       let issued = false
       try {
         issued = await this.issueVerifierReconnectChallenge(context)
       } catch {
+        if (!this.isCurrentTransport(generation)) return undefined
         this.options.onDiagnostic(
           'webrtc_reconnect_challenge_unavailable',
           'Reconnect verification is unavailable; pairing was not attempted.'
         )
         return { denied: true, terminal: true }
       }
+      if (!this.isCurrentTransport(generation)) return undefined
       if (issued) {
-        this.resolveReconnectWait(undefined)
-        return await new Promise<PeerSessionAuthFrameResult>((resolve) => {
-          this.reconnectWaiter = resolve
-          this.reconnectTimer = setTimeout(() => this.resolveReconnectWait(undefined), 1500)
-        })
+        return await this.waitForReconnectResult(true)
       }
     }
     const peerId = this.options.profile.expectedStablePeerId ?? ''
@@ -602,21 +637,34 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     try {
       if (this.options.credentialStore.status !== undefined) {
         const status = await this.options.credentialStore.status(peerId)
+        if (!this.isCurrentTransport(generation)) return undefined
         if (!status.found) return undefined
-      } else if ((await this.options.credentialStore.get(peerId)) === undefined) {
-        return undefined
+      } else {
+        const credential = await this.options.credentialStore.get(peerId)
+        if (!this.isCurrentTransport(generation)) return undefined
+        if (credential === undefined) return undefined
       }
     } catch {
+      if (!this.isCurrentTransport(generation)) return undefined
       this.options.onDiagnostic(
         'webrtc_reconnect_store_unavailable',
         'Native reconnect storage is unavailable; pairing was not attempted.'
       )
       return { denied: true, terminal: true }
     }
+    if (!this.isCurrentTransport(generation)) return undefined
+    return await this.waitForReconnectResult(false)
+  }
+
+  private waitForReconnectResult(progressActive: boolean): Promise<PeerSessionAuthFrameResult> {
     this.resolveReconnectWait(undefined)
-    return await new Promise<PeerSessionAuthFrameResult>((resolve) => {
+    this.reconnectProgressActive = progressActive
+    return new Promise<PeerSessionAuthFrameResult>((resolve) => {
       this.reconnectWaiter = resolve
-      this.reconnectTimer = setTimeout(() => this.resolveReconnectWait(undefined), 1500)
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null
+        if (!this.reconnectProgressActive) this.resolveReconnectWait(undefined)
+      }, 1500)
     })
   }
 
@@ -627,17 +675,73 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     }
     const resolve = this.reconnectWaiter
     this.reconnectWaiter = null
+    this.reconnectProgressActive = false
     if (resolve) resolve(result)
   }
 
-  async startPairing(context: PeerSessionAuthContext): Promise<void> {
-    await this.ensureHandshake(context)
-    await this.sendCommit(context)
+  resetTransport(): void {
+    this.transportGeneration += 1
+    this.resolveReconnectWait(undefined)
+    for (const pending of this.pendingCalls.values()) {
+      clearTimeout(pending.timer)
+      pending.resolve(null)
+    }
+    this.pendingCalls.clear()
+    // Authentication is bound to the current SDP/DataChannel. Preserve the
+    // user's in-flight pairing decision, but require both trust directions to
+    // complete again before application traffic is authorized on a new one.
+    this.sentAuthFrame = false
+    this.awaitingGatewayHello = false
+    this.remoteAuthenticatedByReconnectProof = false
+    this.remoteAuthenticated = false
+    this.remoteAuthenticatedContext = undefined
+    this.gatewayHelloReceived = false
+    const preservePairingState = !this.pairingCompleted && (
+      this.pairing !== null
+      || this.pairingHandle !== null
+      || this.localSasConfirmed
+      || this.issuedInboundCredential !== null
+      || this.inboundPairingHandle !== null
+      || this.pairingConnectPromise !== null
+    )
+    if (!preservePairingState) {
+      this.handshake = null
+      this.handshakePromise = null
+      this.pairing = null
+      this.sentCommit = false
+      this.commitPromise = null
+      this.sentReveal = false
+      this.sentAuthFrame = false
+      this.awaitingGatewayHello = false
+      this.pairingHandle = null
+      this.inboundPairingHandle = null
+      this.issuedInboundCredential = null
+      this.localSasConfirmed = false
+      this.approvedSharedFeatureIds = []
+      this.remoteAuthenticatedByReconnectProof = false
+      this.pairingCompleted = false
+      this.pairingConnectPromise = null
+      return
+    }
+    if (!this.handshake && this.pairing) {
+      this.handshake = null
+    }
+    this.handshakePromise = null
+    this.commitPromise = null
+    this.pairingConnectPromise = null
   }
 
-  async confirmPairing(code: string, context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> {
+  async startPairing(context: PeerSessionAuthContext): Promise<void> {
+    const generation = this.transportGeneration
+    const handshake = await this.ensureHandshake(context, generation)
+    if (!handshake || !this.isCurrentTransport(generation)) return
+    await this.sendCommit(context, generation)
+  }
+
+  async confirmPairing(code: string, context: PeerSessionAuthContext, approval?: PeerPairingApproval): Promise<PeerSessionAuthFrameResult> {
     if (!this.pairing || this.pairing.verificationCode !== code) return { denied: true, terminal: true }
     this.localSasConfirmed = true
+    this.approvedSharedFeatureIds = normalizeSharedFeatureIds(approval?.sharedFeatureIds)
     this.handshake?.confirm()
     if (this.pairingHandle) return await this.pollPairingConnect(context, this.pairingHandle)
     return undefined
@@ -645,21 +749,21 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
 
   async handleFrame(frame: unknown, context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> {
     if (!isRecord(frame)) return undefined
+    const generation = this.transportGeneration
     const type = frame.type
     if (type === 'result' || type === 'error') {
       return this.resolveRpcFrame(frame) ? { handled: true } : undefined
     }
     if (type === 'call') {
-      return await this.handleInboundAuthCall(frame, context)
+      return await this.handleInboundAuthCall(frame, context, generation)
     }
     if (type === 'auth') {
-      return this.handleInboundAuthFrame(frame, context)
+      return await this.handleInboundAuthFrame(frame, context, generation)
     }
     if (type === 'protocol_hello') {
       if (this.awaitingGatewayHello || this.sentAuthFrame) {
-        const result = { authenticated: true }
-        this.resolveReconnectWait(result)
-        return result
+        this.gatewayHelloReceived = true
+        return this.mutualAuthenticationResult()
       }
       return undefined
     }
@@ -668,7 +772,9 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
       return undefined
     }
     if (type === 'mesh_auth_challenge_v1') {
+      this.reconnectProgressActive = true
       const proof = await createReconnectProof(this.options.credentialStore, this.options.profile.expectedStablePeerId ?? '', frame as unknown as MeshReconnectChallengeMessage)
+      if (!this.isCurrentTransport(generation)) return { handled: true }
       if (proof) {
         await context.sendControlFrame(proof)
         this.awaitingGatewayHello = true
@@ -679,22 +785,29 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
       return undefined
     }
     if (type === 'mesh_auth_proof_v1' && this.options.peerAuthorityResolver !== undefined) {
-      return await this.handleInboundReconnectProof(frame, context)
+      return await this.handleInboundReconnectProof(frame, context, generation)
     }
     if (type === 'pairing_v2_commit') {
-      const handshake = await this.ensureHandshake(context)
+      this.resolveReconnectWait(undefined)
+      const handshake = await this.ensureHandshake(context, generation)
+      if (!handshake || !this.isCurrentTransport(generation)) return { handled: true }
       handshake.acceptCommit(parsePairingCommitMessage(frame))
-      await this.sendCommit(context)
-      await this.sendReveal(context)
+      await this.sendCommit(context, generation)
+      await this.sendReveal(context, generation)
       return undefined
     }
     if (type === 'pairing_v2_reveal') {
-      const handshake = await this.ensureHandshake(context)
-      this.pairing = await handshake.acceptReveal(parsePairingRevealMessage(frame))
-      this.options.onPairing(this.pairing)
-      return await this.beginGatewayPairing(context)
+      this.resolveReconnectWait(undefined)
+      const handshake = await this.ensureHandshake(context, generation)
+      if (!handshake || !this.isCurrentTransport(generation)) return { handled: true }
+      const pairing = await handshake.acceptReveal(parsePairingRevealMessage(frame))
+      if (!this.isCurrentTransport(generation)) return { handled: true }
+      this.pairing = pairing
+      if (!this.remoteAuthenticatedByReconnectProof) this.options.onPairing(this.pairing)
+      return await this.beginGatewayPairing(context, generation)
     }
     if (type === 'pairing_v2_terminal') {
+      this.resolveReconnectWait(undefined)
       const terminal = parsePairingTerminalMessage(frame)
       this.options.onDiagnostic('pairing_terminal', `Pairing ended with ${terminal.status}`)
       return terminal.status === 'denied' ? { denied: true, terminal: true } : undefined
@@ -702,16 +815,18 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     return undefined
   }
 
-  private async beginGatewayPairing(context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> {
+  private async beginGatewayPairing(context: PeerSessionAuthContext, generation: number): Promise<PeerSessionAuthFrameResult> {
     if (!this.pairing) return undefined
+    const pairing = this.pairing
     const result = await this.call(context, AUTH_METHODS.pairingStart, {
       device_name: this.options.localNodeName,
       remote_peer_id: this.options.localStablePeerId,
       remote_node_name: this.options.localNodeName,
       room_name: this.options.profile.room,
-      pairing_session_id: this.pairing.pairingSessionId,
-      verification_code: this.pairing.verificationCode
+      pairing_session_id: pairing.pairingSessionId,
+      verification_code: pairing.verificationCode
     })
+    if (!this.isCurrentPairing(generation, pairing)) return { handled: true }
     if (!result || result.error) {
       this.options.onDiagnostic('pairing_start_failed', 'Pairing initiation failed')
       return undefined
@@ -720,58 +835,71 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
       this.options.onDiagnostic('pairing_denied', 'Pairing was denied by the remote endpoint')
       return { denied: true, terminal: true }
     }
-    if (result.pairing_session_id !== this.pairing.pairingSessionId || result.verification_code !== this.pairing.verificationCode) {
+    if (result.pairing_session_id !== pairing.pairingSessionId || result.verification_code !== pairing.verificationCode) {
       throw new PairingProtocolError('Remote PairingStart response does not match the SAS')
     }
+    if (result.status === 'already_trusted') return undefined
     const handle = typeof result.code === 'string' ? result.code : ''
-    if (!handle || handle === this.pairing.verificationCode) throw new PairingProtocolError('Remote reused the display code as a pairing credential')
+    if (!handle || handle === pairing.verificationCode) throw new PairingProtocolError('Remote reused the display code as a pairing credential')
     this.pairingHandle = handle
-    if (this.localSasConfirmed) return await this.pollPairingConnect(context, handle)
+    if (this.localSasConfirmed) return await this.pollPairingConnect(context, handle, generation)
     return undefined
   }
 
-  private async pollPairingConnect(context: PeerSessionAuthContext, handle: string): Promise<PeerSessionAuthFrameResult> {
+  private async pollPairingConnect(context: PeerSessionAuthContext, handle: string, generation = this.transportGeneration): Promise<PeerSessionAuthFrameResult> {
+    if (!this.isCurrentTransport(generation)) return { handled: true }
     if (this.pairingConnectPromise) return await this.pairingConnectPromise
-    this.pairingConnectPromise = this.pollPairingConnectOnce(context, handle).finally(() => {
-      this.pairingConnectPromise = null
-    })
-    return await this.pairingConnectPromise
+    const pending = this.pollPairingConnectOnce(context, handle, generation)
+    this.pairingConnectPromise = pending
+    try {
+      return await pending
+    } finally {
+      if (this.pairingConnectPromise === pending) this.pairingConnectPromise = null
+    }
   }
 
-  private async pollPairingConnectOnce(context: PeerSessionAuthContext, handle: string): Promise<PeerSessionAuthFrameResult> {
-    for (let attempt = 1; attempt <= this.pairingConnectPoll.maxAttempts; attempt += 1) {
-      if (!this.pairing) return undefined
+  private async pollPairingConnectOnce(context: PeerSessionAuthContext, handle: string, generation: number): Promise<PeerSessionAuthFrameResult> {
+    const pairing = this.pairing
+    if (!pairing) return undefined
+    const maxAttempts = Math.max(0, Math.floor(this.pairingConnectPoll.maxAttempts))
+    for (let attempt = 1; maxAttempts === 0 || attempt <= maxAttempts; attempt += 1) {
+      if (!this.isCurrentPairing(generation, pairing)) return { handled: true }
       const result = await this.call(context, AUTH_METHODS.pairingConnect, {
         code: handle,
-        pairing_session_id: this.pairing.pairingSessionId
+        pairing_session_id: pairing.pairingSessionId
       }, this.pairingConnectPoll.rpcTimeoutMs)
+      if (!this.isCurrentPairing(generation, pairing)) return { handled: true }
       if (result && !result.error) {
-        if (result.pairing_session_id !== this.pairing.pairingSessionId || result.verification_code !== this.pairing.verificationCode) {
+        if (result.pairing_session_id !== pairing.pairingSessionId || result.verification_code !== pairing.verificationCode) {
           throw new PairingProtocolError('Remote pairing status belongs to another SAS')
         }
         const status = String(result.status ?? '')
         if (status === 'approved') {
-          await this.sendPairingExchange(context, handle)
+          await this.sendPairingExchange(context, handle, generation, pairing)
           return undefined
         }
+        if (status === 'already_trusted') return undefined
         if (status === 'denied' || status === 'expired' || status === 'superseded') {
           this.options.onDiagnostic(`pairing_${status}`, `Pairing was ${status} by the remote endpoint`)
           return { denied: true, terminal: true }
         }
         if (status && status !== 'pending') this.options.onDiagnostic('pairing_not_ready', `Pairing status ${status}`)
       }
-      if (attempt < this.pairingConnectPoll.maxAttempts) await sleep(Math.min(this.pairingConnectPoll.maxDelayMs, this.pairingConnectPoll.initialDelayMs * 2 ** (attempt - 1)))
+      if (maxAttempts === 0 || attempt < maxAttempts) {
+        await sleep(Math.min(this.pairingConnectPoll.maxDelayMs, this.pairingConnectPoll.initialDelayMs * 2 ** (attempt - 1)))
+      }
     }
     this.options.onDiagnostic('pairing_timeout', 'Pairing approval timed out')
-    return { denied: true, terminal: true }
+    return { retry: true }
   }
 
-  private async sendPairingExchange(context: PeerSessionAuthContext, handle: string): Promise<void> {
-    if (!this.pairing) return
+  private async sendPairingExchange(context: PeerSessionAuthContext, handle: string, generation: number, pairing: PairingSasResult): Promise<void> {
+    if (!this.isCurrentPairing(generation, pairing)) return
     const result = await this.call(context, AUTH_METHODS.pairingExchange, {
       code: handle,
-      pairing_session_id: this.pairing.pairingSessionId
+      pairing_session_id: pairing.pairingSessionId
     })
+    if (!this.isCurrentPairing(generation, pairing)) return
     const token = typeof result?.token === 'string' ? result.token : ''
     if (!token) {
       this.options.onDiagnostic('pairing_exchange_failed', 'Credential exchange failed')
@@ -780,33 +908,36 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     const tokenId = typeof result?.token_id === 'string' ? result.token_id : ''
     if (!tokenId) throw new PairingProtocolError('Credential exchange omitted its reconnect token id')
     const claimedPeerId = typeof result?.peer_id === 'string' ? result.peer_id : ''
-    if (claimedPeerId && claimedPeerId !== this.pairing.remoteStablePeerId) throw new PairingProtocolError('Credential issuer identity does not match the SAS')
-    await this.options.credentialStore?.save(this.pairing.remoteStablePeerId, {
+    if (claimedPeerId && claimedPeerId !== pairing.remoteStablePeerId) throw new PairingProtocolError('Credential issuer identity does not match the SAS')
+    await this.options.credentialStore?.save(pairing.remoteStablePeerId, {
       tokenId,
       claimantPeerId: this.options.localStablePeerId,
-      verifierPeerId: this.pairing.remoteStablePeerId,
+      verifierPeerId: pairing.remoteStablePeerId,
       claimantSignalingPeerId: context.localSignalingId,
       verifierSignalingPeerId: context.remoteSignalingId,
       roomName: this.options.profile.room,
       rawBearerToken: token
     })
+    if (!this.isCurrentPairing(generation, pairing)) return
     await context.sendControlFrame({
       type: 'auth',
       peer_name: this.options.localNodeName,
       peer_id: this.options.localStablePeerId,
       signaling_peer_id: context.localSignalingId,
-      pairing_session_id: this.pairing.pairingSessionId,
+      pairing_session_id: pairing.pairingSessionId,
       token
     })
+    if (!this.isCurrentPairing(generation, pairing)) return
     this.sentAuthFrame = true
     this.awaitingGatewayHello = true
   }
 
-  private async handleInboundAuthCall(frame: Record<string, unknown>, context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> {
+  private async handleInboundAuthCall(frame: Record<string, unknown>, context: PeerSessionAuthContext, generation: number): Promise<PeerSessionAuthFrameResult> {
     const id = typeof frame.id === 'string' ? frame.id : ''
     const method = typeof frame.method === 'string' ? frame.method : ''
     const params = isRecord(frame.params) ? frame.params : {}
     if (method !== AUTH_METHODS.pairingStart && method !== AUTH_METHODS.pairingConnect && method !== AUTH_METHODS.pairingExchange) return undefined
+    let rollbackIssue: (() => Promise<void>) | undefined
     try {
       let result: Record<string, unknown>
       if (method === AUTH_METHODS.pairingStart) {
@@ -814,10 +945,25 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
       } else if (method === AUTH_METHODS.pairingConnect) {
         result = this.handleInboundPairingConnect(params)
       } else {
-        result = await this.handleInboundPairingExchange(params, context)
+        const exchange = await this.handleInboundPairingExchange(params, context, generation)
+        result = exchange.result
+        rollbackIssue = exchange.rollback
+      }
+      if (!this.isCurrentTransport(generation)) {
+        await rollbackIssue?.()
+        return { handled: true }
       }
       await context.sendControlFrame({ type: 'result', id, result })
+      rollbackIssue = undefined
     } catch (error) {
+      if (rollbackIssue !== undefined) {
+        try {
+          await rollbackIssue()
+        } catch {
+          this.options.onDiagnostic('pairing_rollback_failed', 'The connection approval could not be finalized safely.')
+        }
+      }
+      if (!this.isCurrentTransport(generation)) return { handled: true }
       await context.sendControlFrame({ type: 'error', id, correlation_id: id, error: { code: 409, message: error instanceof Error ? error.message : 'Pairing request rejected' } })
     }
     return { handled: true }
@@ -834,7 +980,7 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
       expires_in_seconds: 300,
       pairing_session_id: pairing.pairingSessionId,
       verification_code: pairing.verificationCode,
-      status: this.localSasConfirmed ? 'approved' : 'pending'
+      status: this.remoteAuthenticatedByReconnectProof ? 'already_trusted' : this.localSasConfirmed ? 'approved' : 'pending'
     }
   }
 
@@ -844,26 +990,42 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     return {
       request_id: this.inboundPairingHandle,
       device_name: pairing.remoteNodeName || pairing.remoteStablePeerId,
-      status: this.localSasConfirmed ? 'approved' : 'pending',
+      status: this.remoteAuthenticatedByReconnectProof ? 'already_trusted' : this.localSasConfirmed ? 'approved' : 'pending',
       pairing_session_id: pairing.pairingSessionId,
       verification_code: pairing.verificationCode
     }
   }
 
-  private async handleInboundPairingExchange(params: Record<string, unknown>, context: PeerSessionAuthContext): Promise<Record<string, unknown>> {
+  private async handleInboundPairingExchange(params: Record<string, unknown>, context: PeerSessionAuthContext, generation: number): Promise<InboundPairingExchangeOutcome> {
     const pairing = this.requireInboundPairingContext(params, false)
     this.assertInboundHandle(params)
+    if (this.remoteAuthenticatedByReconnectProof) throw new PairingProtocolError('Peer already has a trusted credential')
     if (!this.localSasConfirmed) throw new PairingProtocolError('Pairing has not been approved locally')
     if (this.options.peerPairingIssuer !== undefined) {
-      if (this.issuedInboundCredential !== null) throw new PairingProtocolError('Pairing credential was already issued')
+      if (this.issuedInboundCredential !== null) {
+        if (this.issuedInboundCredential.mode !== 'durable' || this.issuedInboundCredential.pairingSessionId !== pairing.pairingSessionId) {
+          throw new PairingProtocolError('Pairing credential was already issued')
+        }
+        return { result: this.durablePairingExchangeResult(this.issuedInboundCredential, context) }
+      }
       const selector: PeerRelationshipSelector = {
         tokenId: boundedTokenId(),
         claimantPeerId: pairing.remoteStablePeerId,
         verifierPeerId: this.options.localStablePeerId,
         roomName: this.options.profile.room
       }
-      const issued = await this.options.peerPairingIssuer.issue(selector)
-      this.issuedInboundCredential = {
+      const issued = await this.options.peerPairingIssuer.issue(selector, {
+        featureIds: this.approvedSharedFeatureIds
+      })
+      if (!this.isCurrentPairing(generation, pairing)) {
+        try {
+          await this.options.peerPairingIssuer.rollback(selector)
+        } catch {
+          this.options.onDiagnostic('pairing_rollback_failed', 'The connection approval could not be finalized safely.')
+        }
+        throw new PairingProtocolError('Pairing transport changed during credential issue')
+      }
+      const credential: DurableInboundCredential = {
         mode: 'durable',
         selector: {
           tokenId: issued.verifier.tokenId,
@@ -871,18 +1033,22 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
           verifierPeerId: issued.verifier.verifierPeerId,
           roomName: issued.verifier.roomName
         },
+        token: issued.bearerToken,
         tokenHashHex: issued.verifier.tokenHashHex,
         credentialRevision: issued.verifier.credentialRevision,
-        pairingSessionId: pairing.pairingSessionId
+        pairingSessionId: pairing.pairingSessionId,
+        permissions: normalizeGrantedPermissions(issued.grantedPermissions)
       }
+      this.issuedInboundCredential = credential
+      let rollbackPending = true
       return {
-        token: issued.bearerToken,
-        token_id: issued.tokenId,
-        device_id: context.localStableId ?? this.options.localStablePeerId,
-        user_id: this.options.localStablePeerId,
-        permissions: [],
-        peer_id: this.options.localStablePeerId,
-        node_name: this.options.localNodeName
+        result: this.durablePairingExchangeResult(credential, context),
+        rollback: async () => {
+          if (!rollbackPending) return
+          rollbackPending = false
+          if (this.issuedInboundCredential === credential) this.issuedInboundCredential = null
+          await this.options.peerPairingIssuer!.rollback(selector)
+        }
       }
     }
     if (this.issuedInboundCredential === null) {
@@ -895,23 +1061,38 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     }
     if (this.issuedInboundCredential.mode !== 'legacy') throw new PairingProtocolError('Pairing credential was already issued')
     return {
-      token: this.issuedInboundCredential.token,
-      token_id: this.issuedInboundCredential.tokenId,
+      result: {
+        token: this.issuedInboundCredential.token,
+        token_id: this.issuedInboundCredential.tokenId,
+        device_id: context.localStableId ?? this.options.localStablePeerId,
+        user_id: this.options.localStablePeerId,
+        permissions: [],
+        peer_id: this.options.localStablePeerId,
+        node_name: this.options.localNodeName
+      }
+    }
+  }
+
+  private durablePairingExchangeResult(credential: DurableInboundCredential, context: PeerSessionAuthContext): Record<string, unknown> {
+    return {
+      token: credential.token,
+      token_id: credential.selector.tokenId,
       device_id: context.localStableId ?? this.options.localStablePeerId,
       user_id: this.options.localStablePeerId,
-      permissions: [],
+      permissions: [...credential.permissions],
       peer_id: this.options.localStablePeerId,
       node_name: this.options.localNodeName
     }
   }
 
-  private async handleInboundAuthFrame(frame: Record<string, unknown>, context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> {
+  private async handleInboundAuthFrame(frame: Record<string, unknown>, context: PeerSessionAuthContext, generation: number): Promise<PeerSessionAuthFrameResult> {
     const pairing = this.pairing
     const credential = this.issuedInboundCredential
     if (!pairing || !credential) return undefined
     const token = typeof frame.token === 'string' ? frame.token : ''
     if (credential.mode === 'durable') {
       const transport = await this.currentInboundTransport(context)
+      if (!this.isCurrentPairing(generation, pairing) || this.issuedInboundCredential !== credential) return { handled: true }
       const actualHash = await sha256Bytes(token)
       const expectedHash = hexToBytes(credential.tokenHashHex)
       try {
@@ -922,16 +1103,14 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
           transport.verifierSignalingPeerId === context.localSignalingId &&
           constantTimeEqual(actualHash, expectedHash)
         if (!matches) return { handled: true, denied: true, terminal: true }
-        return {
-          handled: true,
-          authenticated: true,
-          authenticatedPeerContext: {
-            selector: { ...credential.selector },
-            transport,
-            credentialRevision: credential.credentialRevision,
-            authenticatedAtMs: Date.now()
-          }
+        this.remoteAuthenticated = true
+        this.remoteAuthenticatedContext = {
+          selector: { ...credential.selector },
+          transport,
+          credentialRevision: credential.credentialRevision,
+          authenticatedAtMs: Date.now()
         }
+        return this.mutualAuthenticationResult()
       } finally {
         zeroBytes(actualHash)
         zeroBytes(expectedHash)
@@ -946,7 +1125,9 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     actualToken.fill(0)
     expectedToken.fill(0)
     if (!matches) return { handled: true, denied: true, terminal: true }
-    return { handled: true, authenticated: true }
+    this.remoteAuthenticated = true
+    this.remoteAuthenticatedContext = undefined
+    return this.mutualAuthenticationResult()
   }
 
   private async issueVerifierReconnectChallenge(context: PeerSessionAuthContext): Promise<boolean> {
@@ -983,7 +1164,7 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     }
   }
 
-  private async handleInboundReconnectProof(frame: Record<string, unknown>, context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> {
+  private async handleInboundReconnectProof(frame: Record<string, unknown>, context: PeerSessionAuthContext, generation: number): Promise<PeerSessionAuthFrameResult> {
     const expectedClaimantPeerId = this.options.profile.expectedStablePeerId ?? context.remoteStableId
     const verifierPeerId = this.options.localStablePeerId
     if (!expectedClaimantPeerId || !context.offerSdp || !context.answerSdp) return { handled: true, denied: true, terminal: true }
@@ -1010,6 +1191,7 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
       return { handled: true, denied: true, terminal: true }
     }
     const expectedChannelBinding = await reconnectChannelBinding(this.options.profile, context)
+    if (!this.isCurrentTransport(generation)) return { handled: true }
     if (channelBinding !== expectedChannelBinding) return { handled: true, denied: true, terminal: true }
     const result = await this.options.peerAuthorityResolver!.verifyReconnectProof({
       proofHex,
@@ -1027,10 +1209,46 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
       },
       nowMs: Date.now()
     })
-    if (!result.ok || result.context === undefined) return { handled: true, denied: true, terminal: true }
-    const authenticated = { handled: true, authenticated: true, authenticatedPeerContext: result.context }
-    this.resolveReconnectWait(authenticated)
-    return authenticated
+    if (!this.isCurrentTransport(generation)) return { handled: true }
+    if (!result.ok || result.context === undefined) {
+      if (result.reasonCode === 'credential_not_found') {
+        this.options.onDiagnostic(
+          'webrtc_reconnect_credential_stale',
+          'Saved reconnect approval is no longer available; fresh pairing is required.'
+        )
+        this.resolveReconnectWait(undefined)
+        await this.startPairing(context)
+        return { handled: true }
+      }
+      return { handled: true, denied: true, terminal: true }
+    }
+    this.remoteAuthenticatedByReconnectProof = true
+    this.remoteAuthenticated = true
+    this.remoteAuthenticatedContext = result.context
+    this.localSasConfirmed = true
+    return this.mutualAuthenticationResult()
+  }
+
+  private mutualAuthenticationResult(): PeerSessionAuthFrameResult {
+    const remoteAuthenticationRequired = this.options.peerAuthorityResolver !== undefined
+      || this.options.peerPairingIssuer !== undefined
+    const outboundAuthenticationRequired = this.pairing !== null
+      || this.awaitingGatewayHello
+      || this.sentAuthFrame
+    if ((outboundAuthenticationRequired && !this.gatewayHelloReceived)
+      || (remoteAuthenticationRequired && !this.remoteAuthenticated)) {
+      return { handled: true }
+    }
+    const result: PeerSessionAuthFrameResult = {
+      handled: true,
+      authenticated: true,
+      ...(this.remoteAuthenticatedContext !== undefined
+        ? { authenticatedPeerContext: this.remoteAuthenticatedContext }
+        : {})
+    }
+    this.pairingCompleted = true
+    this.resolveReconnectWait(result)
+    return result
   }
 
   private requireInboundPairingContext(params: Record<string, unknown>, requireVerificationCode: boolean): PairingSasResult {
@@ -1058,6 +1276,18 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     }
   }
 
+  private isCurrentTransport(generation: number): boolean {
+    return generation === this.transportGeneration
+  }
+
+  private isCurrentPairing(generation: number, pairing: PairingSasResult): boolean {
+    const current = this.pairing
+    return this.isCurrentTransport(generation)
+      && current?.pairingSessionId === pairing.pairingSessionId
+      && current.verificationCode === pairing.verificationCode
+      && current.remoteStablePeerId === pairing.remoteStablePeerId
+  }
+
   private async call(context: PeerSessionAuthContext, method: string, params: Record<string, unknown>, timeoutMs = DEFAULT_PAIRING_CONNECT_POLL.rpcTimeoutMs): Promise<Record<string, unknown> | null> {
     const id = this.options.randomId?.() ?? `auth-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`
     const response = new Promise<Record<string, unknown> | null>((resolve) => {
@@ -1081,17 +1311,27 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     return true
   }
 
-  private async ensureHandshake(context: PeerSessionAuthContext): Promise<PairingSasHandshake> {
+  private async ensureHandshake(context: PeerSessionAuthContext, generation: number): Promise<PairingSasHandshake | null> {
+    if (!this.isCurrentTransport(generation)) return null
     if (this.handshake) return this.handshake
-    if (this.handshakePromise) return await this.handshakePromise
-    this.handshakePromise = this.createHandshake(context).then((handshake) => {
-      this.handshake = handshake
+    if (this.handshakePromise) {
+      const handshake = await this.handshakePromise
+      return this.isCurrentTransport(generation) ? handshake : null
+    }
+    const pending = this.createHandshake(context)
+    this.handshakePromise = pending
+    try {
+      const handshake = await pending
+      if (!this.isCurrentTransport(generation)) return null
+      if (this.handshakePromise === pending) {
+        this.handshake = handshake
+        this.handshakePromise = null
+      }
       return handshake
-    }).catch((error) => {
-      this.handshakePromise = null
+    } catch (error) {
+      if (this.handshakePromise === pending) this.handshakePromise = null
       throw error
-    })
-    return await this.handshakePromise
+    }
   }
 
   private async createHandshake(context: PeerSessionAuthContext): Promise<PairingSasHandshake> {
@@ -1124,26 +1364,31 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     })
   }
 
-  private async sendCommit(context: PeerSessionAuthContext): Promise<void> {
-    if (this.sentCommit || !this.handshake) return
+  private async sendCommit(context: PeerSessionAuthContext, generation: number): Promise<void> {
+    if (!this.isCurrentTransport(generation) || this.sentCommit || !this.handshake) return
     if (this.commitPromise) return await this.commitPromise
-    this.commitPromise = this.sendCommitOnce(context).catch((error) => {
-      this.sentCommit = false
-      this.commitPromise = null
+    const pending = this.sendCommitOnce(context, generation)
+    this.commitPromise = pending
+    try {
+      await pending
+    } catch (error) {
+      if (this.isCurrentTransport(generation) && this.commitPromise === pending) this.sentCommit = false
       throw error
-    })
-    return await this.commitPromise
+    } finally {
+      if (this.isCurrentTransport(generation) && this.commitPromise === pending) this.commitPromise = null
+    }
   }
 
-  private async sendCommitOnce(context: PeerSessionAuthContext): Promise<void> {
-    if (!this.handshake) return
+  private async sendCommitOnce(context: PeerSessionAuthContext, generation: number): Promise<void> {
+    if (!this.isCurrentTransport(generation) || !this.handshake) return
     this.sentCommit = true
     const commit: PairingCommitMessage = await this.handshake.commitMessage()
+    if (!this.isCurrentTransport(generation)) return
     await context.sendControlFrame(commit)
   }
 
-  private async sendReveal(context: PeerSessionAuthContext): Promise<void> {
-    if (this.sentReveal || !this.handshake) return
+  private async sendReveal(context: PeerSessionAuthContext, generation: number): Promise<void> {
+    if (!this.isCurrentTransport(generation) || this.sentReveal || !this.handshake) return
     const reveal: PairingRevealMessage = this.handshake.revealMessage()
     this.sentReveal = true
     await context.sendControlFrame(reveal)
@@ -1250,6 +1495,34 @@ function randomBrowserId(): string {
 
 function boundedTokenId(): string {
   return `thin-token-row-${bytesToBase64Url(randomBytes(18))}`
+}
+
+function normalizeSharedFeatureIds(featureIds: readonly string[] | undefined): readonly string[] {
+  if (featureIds === undefined) return []
+  if (!Array.isArray(featureIds) || featureIds.length > 128) {
+    throw new PairingProtocolError('Invalid local feature selection')
+  }
+  const normalized = featureIds.map((featureId) => {
+    if (typeof featureId !== 'string') throw new PairingProtocolError('Invalid local feature selection')
+    const value = featureId.trim()
+    if (!value || value.length > 256) throw new PairingProtocolError('Invalid local feature selection')
+    return value
+  })
+  return [...new Set(normalized)].sort()
+}
+
+function normalizeGrantedPermissions(permissions: readonly string[] | undefined): readonly string[] {
+  if (permissions === undefined) return []
+  if (!Array.isArray(permissions) || permissions.length > 128) {
+    throw new PairingProtocolError('Invalid local feature permissions')
+  }
+  const normalized = permissions.map((permission) => {
+    if (typeof permission !== 'string') throw new PairingProtocolError('Invalid local feature permissions')
+    const value = permission.trim()
+    if (!value || value.length > 256) throw new PairingProtocolError('Invalid local feature permissions')
+    return value
+  })
+  return [...new Set(normalized)].sort()
 }
 
 function bytesFromDataChannel(data: string | ArrayBuffer | ArrayBufferView): Uint8Array {

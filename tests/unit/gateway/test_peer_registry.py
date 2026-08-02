@@ -23,7 +23,7 @@ from app.services.gateway.mesh.peer_registry import PeerRegistry
 from app.services.gateway.mesh.policy_store import MeshPolicySnapshot, MeshPolicyStore
 from app.services.gateway.mesh.provider_export import ACTIVE_MANIFEST_PROTOCOL, SUPPORTED_PROTOCOLS
 from app.shared.contracts.models.gateway import MethodInfo
-from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.mesh import MeshAddressSelector, MeshPeerAuthoritySnapshot
 from tests.unit.gateway.mesh_policy_helpers import mesh_policy
 
 
@@ -269,6 +269,24 @@ class TestLatencyAndCalls:
 
         registry.on_peer_status_changed.assert_awaited_once_with(
             "peer-1", "node-peer-1", "negotiated"
+        )
+
+    @pytest.mark.asyncio
+    async def test_latency_restores_consumer_only_stale_peer_as_authenticated(self, registry):
+        """Thin peers remain live without advertising a provider manifest."""
+
+        await registry.register_peer("thin-peer", "Thin client")
+        state = registry.get_peer("thin-peer")
+        assert state is not None
+        state.status = "stale"
+        registry.on_peer_status_changed = AsyncMock()
+
+        await registry.update_latency("thin-peer", 4.5)
+
+        assert state.status == "authenticated"
+        assert state.latency_ms == 4.5
+        registry.on_peer_status_changed.assert_awaited_once_with(
+            "thin-peer", "Thin client", "authenticated"
         )
 
     @pytest.mark.asyncio
@@ -742,6 +760,62 @@ class TestProviderQueries:
         assert [candidate.peer.peer_id for candidate in candidates] == ["p1", "p2", "p3"]
         assert all(candidate.eligible for candidate in candidates)
         assert {candidate.reason_code for candidate in candidates} == {"eligible"}
+
+    @pytest.mark.asyncio
+    async def test_local_peer_authority_reduction_blocks_exact_remote_route(
+        self, mesh_config
+    ):
+        """A known remote selector cannot outlive the local Auth grant."""
+
+        tooling_config = _with_service(
+            mesh_config,
+            "Tooling",
+            mesh_policy(share=True, prefer="network", fallback="error"),
+        )
+        registry = PeerRegistry(tooling_config)
+        await registry.register_peer("peer-a")
+        await registry.update_manifest(
+            "peer-a",
+            _verified_manifest(
+                "peer-a",
+                [
+                    _make_service(
+                        module="Tooling",
+                        method_topic="Tooling.ExecuteTool",
+                    )
+                ],
+            ),
+        )
+
+        registry.apply_local_peer_authority(
+            MeshPeerAuthoritySnapshot(
+                peer_id="peer-a",
+                auth_grant_revision=1,
+                disposition="present",
+                state="active",
+                effective_permissions=("Tooling.ExecuteTool",),
+            )
+        )
+        allowed = registry.get_provider_candidates(
+            "Tooling", topic="Tooling.ExecuteTool"
+        )[0]
+
+        registry.apply_local_peer_authority(
+            MeshPeerAuthoritySnapshot(
+                peer_id="peer-a",
+                auth_grant_revision=2,
+                disposition="present",
+                state="active",
+                effective_permissions=("Gateway.GetMeshStatus",),
+            )
+        )
+        denied = registry.get_provider_candidates(
+            "Tooling", topic="Tooling.ExecuteTool"
+        )[0]
+
+        assert allowed.eligible is True
+        assert denied.eligible is False
+        assert denied.reason_code == "permission_denied"
 
     @pytest.mark.asyncio
     async def test_local_preference_keeps_explicit_remote_provider_selectable(

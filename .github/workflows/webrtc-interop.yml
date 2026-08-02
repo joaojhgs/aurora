@@ -5,8 +5,14 @@ on:
     paths:
       - "app/services/auth/**"
       - "app/services/config/config_defaults.json"
+      - "app/messaging/mesh_bus.py"
+      - "app/services/db/**"
       - "app/services/gateway/service.py"
+      - "app/services/gateway/mesh/**"
       - "app/services/gateway/webrtc/**"
+      - "app/services/tooling/**"
+      - "app/shared/auth/**"
+      - "app/shared/contracts/**"
       - "packages/aurora-sdk/src/**"
       - "packages/aurora-ui/src/**"
       - "apps/aurora-web/app/**"
@@ -14,6 +20,8 @@ on:
       - "apps/aurora-tauri/src/legacy-webview-polyfills.ts"
       - "tests/e2e/webrtc_interop/**"
       - "tests/e2e/hosted_peer/**"
+      - "tests/e2e/hosted_mesh_node/**"
+      - "scripts/hosted_mesh_node_e2e.sh"
       - "scripts/hosted_peer_e2e.sh"
       - "scripts/hosted_thin_shell_e2e.sh"
       - "scripts/webrtc_interop*"
@@ -49,6 +57,9 @@ jobs:
       - name: Run the hosted peer UI against the full Python service
         run: pnpm test:hosted-peer:live
 
+      - name: Run the hosted browser as a persistent mesh node
+        run: scripts/hosted_mesh_node_e2e.sh
+
       - name: Run strict direct, STUN, and TURN interoperability matrix
         env:
           WEBRTC_INTEROP_REQUIRE_ALL_BROWSERS: "1"
@@ -59,5 +70,6 @@ jobs:
           name: webrtc-interop-e2e
           path: |
             reports/webrtc-interop/
+            reports/hosted-mesh-node/
             reports/hosted-peer/
           if-no-files-found: warn

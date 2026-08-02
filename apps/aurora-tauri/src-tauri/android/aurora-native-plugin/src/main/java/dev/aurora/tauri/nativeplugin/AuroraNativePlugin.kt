@@ -7,6 +7,7 @@ import android.app.NotificationManager
 import android.app.KeyguardManager
 import android.app.role.RoleManager
 import android.content.ActivityNotFoundException
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -164,7 +165,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val assistantRoleDenied = assistantRole.getBoolean("denied")
         val assistantRoleOemUnavailable = assistantRole.getBoolean("oemUnavailable")
         val localLightInference = localLightInferenceStatusObject()
-        val shareTextReady = canResolveIntent(Intent(Intent.ACTION_SEND).setType("text/plain"))
+        val shareTextReady = canResolveExternalIntent(
+            Intent(Intent.ACTION_SEND).setType("text/plain"),
+        )
         val deepLinkReady = canResolveIntent(
             Intent(Intent.ACTION_VIEW, Uri.parse("https://aurora.local/"))
                 .addCategory(Intent.CATEGORY_BROWSABLE),
@@ -508,12 +511,18 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                 .setType("text/plain")
                 .putExtra(Intent.EXTRA_TEXT, text)
             if (title != null) sendIntent.putExtra(Intent.EXTRA_TITLE, title)
-            if (!canResolveIntent(sendIntent)) {
+            if (!canResolveExternalIntent(sendIntent)) {
                 invoke.reject("capability_unavailable")
                 return
             }
             val chooser = Intent.createChooser(sendIntent, title ?: "Share with")
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val ownShareTargets = resolvingActivityComponents(sendIntent)
+                .filter { it.packageName == activity.packageName }
+                .toTypedArray()
+            if (ownShareTargets.isNotEmpty()) {
+                chooser.putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, ownShareTargets)
+            }
             activity.startActivity(chooser)
             val ret = JSObject()
             ret.put("shared", true)
@@ -830,10 +839,17 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun thinProfileGet(invoke: Invoke) {
-        val ret = thinProfileStatusObject()
-        ret.put("key", THIN_PROFILE_KEY)
-        ret.put("value", activity.getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE).getString(THIN_PROFILE_KEY, null))
-        invoke.resolve(ret)
+        try {
+            val ret = thinProfileStatusObject()
+            val stored = activity
+                .getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE)
+                .getString(THIN_PROFILE_KEY, null)
+            ret.put("key", THIN_PROFILE_KEY)
+            if (stored != null) ret.put("value", stored)
+            invoke.resolve(ret)
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "thin_profile_get_failed")
+        }
     }
 
     @Command
@@ -887,7 +903,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             val stored = securePrefs().getString(thinRoomSecretKey(args.ref), null)
             val ret = thinRoomSecretStatusObject()
             ret.put("ref", args.ref)
-            ret.put("value", stored?.let { decryptSecureValue(it) })
+            if (stored != null) ret.put("value", decryptSecureValue(stored))
             invoke.resolve(ret)
         } catch (error: Exception) {
             invoke.reject(error.message ?: "thin_room_secret_get_failed")
@@ -1299,6 +1315,16 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun canResolveIntent(intent: Intent): Boolean =
         intent.resolveActivity(activity.packageManager) != null
+
+    private fun canResolveExternalIntent(intent: Intent): Boolean =
+        resolvingActivityComponents(intent).any { it.packageName != activity.packageName }
+
+    private fun resolvingActivityComponents(intent: Intent): List<ComponentName> =
+        activity.packageManager
+            .queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            .mapNotNull { resolveInfo ->
+                resolveInfo.activityInfo?.let { info -> ComponentName(info.packageName, info.name) }
+            }
 
     private fun boundedRequiredString(field: String, value: String, maxLen: Int): String {
         val trimmed = value.trim()

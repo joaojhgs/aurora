@@ -109,6 +109,37 @@ _ADMIN_ACTION_EXEMPT_TOPICS = {
 
 _admin_action_digest = admin_action_digest
 
+# Provider-local confirmation is intentionally allowed to wait for up to one
+# minute on the device that owns a sensitive feature. The gateway must outlive
+# that window so a deny/allow decision returns as an application response
+# instead of becoming an ambiguous transport timeout.
+_REMOTE_TOOL_APPROVAL_REQUEST_TIMEOUT_SECONDS = 75.0
+_SERVICE_AUTHORIZATION_ERROR_CODES = {
+    "permission_denied",
+    "projection_authority_unknown",
+    "projection_ledger_unavailable",
+    "projection_restart_required",
+    "provider_mesh_tooling_disabled",
+}
+
+
+def _service_error_status_code(error: str | None) -> int:
+    """Map explicit service authorization failures without hiding real faults."""
+
+    if error in _SERVICE_AUTHORIZATION_ERROR_CODES:
+        return 403
+    return 500
+
+
+def _request_timeout_for(topic: str, payload: Any, default_timeout: float) -> float:
+    if (
+        topic == ToolingMethods.EXECUTE_TOOL
+        and isinstance(payload, Mapping)
+        and payload.get("mesh_selector")
+    ):
+        return max(default_timeout, _REMOTE_TOOL_APPROVAL_REQUEST_TIMEOUT_SECONDS)
+    return default_timeout
+
 
 async def _apply_orchestrator_dispatch_default(topic: str, payload: Any) -> Any:
     if topic != OrchestratorMethods.EXTERNAL_USER_INPUT or not isinstance(payload, dict):
@@ -774,13 +805,14 @@ class RouteGenerator:
                 if remote_data_reason:
                     raise HTTPException(status_code=403, detail=remote_data_reason)
                 payload = await _apply_orchestrator_dispatch_default(topic, payload)
+                request_timeout = _request_timeout_for(topic, payload, timeout)
 
                 # Make the bus request
                 log_debug(f"Gateway forwarding to {topic} with payload: {payload}")
                 result = await self._bus.request(
                     topic,
                     payload,
-                    timeout=timeout,
+                    timeout=request_timeout,
                     origin="external",
                     principal_id=principal_id,
                     effective_perms=effective_perms,
@@ -826,9 +858,13 @@ class RouteGenerator:
                     return response
                 else:
                     # Service returned an error
-                    log_error(f"Service error: {result.error}")
+                    status_code = _service_error_status_code(result.error)
+                    if status_code < 500:
+                        log_warning(f"Service request denied: {result.error}")
+                    else:
+                        log_error(f"Service error: {result.error}")
                     raise HTTPException(
-                        status_code=500,
+                        status_code=status_code,
                         detail=result.error or "Service request failed",
                     )
 

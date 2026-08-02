@@ -4,7 +4,8 @@ import type {
   JsonValue,
   ToolingPrepareExecutionRequest,
   ToolingPrepareExecutionResponse,
-  ToolingProjectionToolInfo
+  ToolingProjectionToolInfo,
+  ToolingApprovalGrantScope
 } from '../types.js'
 import type { ToolApprovalConfirmRequest, ToolApprovalConfirmResponse, ToolApprovalRequestResponse } from '../admin.js'
 import type { LightweightOrchestratorLimits } from './limits.js'
@@ -26,12 +27,15 @@ export interface LightweightProviderMessage {
   readonly content: string
   readonly toolCallId?: string | null
   readonly name?: string | null
+  readonly toolCalls?: readonly LightweightToolCall[] | null
 }
 
 export interface LightweightProviderRequest {
   readonly messages: readonly LightweightProviderMessage[]
   readonly tools: readonly ToolingProjectionToolInfo[]
   readonly maxToolCalls: number
+  readonly providerId?: string | null
+  readonly modelId?: string | null
   readonly signal: AbortSignal
 }
 
@@ -90,6 +94,8 @@ export interface LightweightOrchestratorOptions {
 export interface LightweightTurnInput {
   readonly text: string
   readonly conversationId?: string | null
+  readonly providerId?: string | null
+  readonly modelId?: string | null
   readonly signal?: AbortSignal
 }
 
@@ -120,6 +126,7 @@ export type LightweightConfirmationDecision = 'approve' | 'deny'
 export interface LightweightConfirmationInput {
   readonly token: string
   readonly decision: LightweightConfirmationDecision
+  readonly grantScope?: ToolingApprovalGrantScope
   readonly signal?: AbortSignal
 }
 

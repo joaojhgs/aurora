@@ -270,6 +270,39 @@ async def test_canonical_subscribe_unsubscribe_only(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_gateway_start_defers_tooling_activation_while_readiness_hangs() -> None:
+    """A slow Tooling readiness probe cannot delay Gateway availability."""
+
+    service = GatewayService()
+    service._bus = _FakeBus()
+    service._start_gateway = AsyncMock()
+    service._start_webrtc = AsyncMock()
+    service._start_mesh = AsyncMock()
+    service._audio_session_service.start = AsyncMock()
+    activation_started = asyncio.Event()
+    activation_release = asyncio.Event()
+
+    async def blocked_activation() -> bool:
+        activation_started.set()
+        await activation_release.wait()
+        return False
+
+    service._coordinate_tooling_mesh_activation = AsyncMock(
+        side_effect=blocked_activation
+    )
+
+    await asyncio.wait_for(service.on_start(), timeout=0.5)
+    await asyncio.wait_for(activation_started.wait(), timeout=0.5)
+
+    assert service._tooling_mesh_activation_task is not None
+    assert not service._tooling_mesh_activation_task.done()
+
+    service._audio_session_service.stop = AsyncMock()
+    await service.on_stop()
+    assert service._tooling_mesh_activation_task is None
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "updates",
     [
@@ -1134,6 +1167,7 @@ async def test_startup_success_snapshot_precedes_configure_credentials_presence(
 
     bus.request.reset_mock()
     bus.publish.reset_mock()
+    service._mesh_peer_registry.get_peer("browser-peer").status = "provider_unavailable"
     await service._mesh_peer_registry.on_peer_status_changed(
         "browser-peer",
         "Browser Thin",
@@ -1158,6 +1192,19 @@ async def test_startup_success_snapshot_precedes_configure_credentials_presence(
     assert bus.request.await_args.args[0] == AuthMethods.MESH_UPDATE_PEER_CONNECTION
     assert disconnect_update.peer_id == "browser-peer"
     assert disconnect_update.connection_status == "disconnected"
+
+    bus.request.reset_mock()
+    bus.publish.reset_mock()
+    await service._mesh_peer_registry.register_peer("browser-peer", "Replacement Thin")
+    bus.request.reset_mock()
+    bus.publish.reset_mock()
+    await service._mesh_peer_registry.on_peer_removed(
+        "browser-peer",
+        "Browser Thin",
+        "disconnected",
+    )
+    bus.request.assert_not_awaited()
+    bus.publish.assert_not_awaited()
 
 
 def test_disconnect_retains_committed_evidence_and_close_clears_runtime_authority() -> None:

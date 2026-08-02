@@ -65,6 +65,8 @@ class LocalBus:
         # Worker tracking
         self._cmd_workers_started: dict[str, bool] = defaultdict(bool)
         self._evt_workers_started: dict[str, bool] = defaultdict(bool)
+        self._cmd_worker_tasks: dict[str, asyncio.Task[None]] = {}
+        self._evt_worker_tasks: dict[str, asyncio.Task[None]] = {}
 
         # Shutdown signal
         self._shutdown = asyncio.Event()
@@ -88,13 +90,26 @@ class LocalBus:
 
     async def start(self) -> None:
         """Start the message bus."""
+        self._shutdown.clear()
         log_info("LocalBus started")
 
     async def stop(self) -> None:
         """Stop the message bus and cleanup resources."""
         log_info("Stopping LocalBus...")
         self._shutdown.set()
-        await asyncio.sleep(0.1)  # Give workers time to finish
+        worker_tasks = [
+            task
+            for task in (*self._cmd_worker_tasks.values(), *self._evt_worker_tasks.values())
+            if not task.done()
+        ]
+        for task in worker_tasks:
+            task.cancel()
+        if worker_tasks:
+            await asyncio.gather(*worker_tasks, return_exceptions=True)
+        self._cmd_worker_tasks.clear()
+        self._evt_worker_tasks.clear()
+        self._cmd_workers_started.clear()
+        self._evt_workers_started.clear()
         log_info("LocalBus stopped")
 
     def subscribe(self, topic: str, handler: Handler) -> None:
@@ -126,7 +141,10 @@ class LocalBus:
         # Start event worker for this topic if not already started
         if not self._evt_workers_started[topic]:
             self._evt_workers_started[topic] = True
-            asyncio.create_task(self._event_worker(topic))
+            self._evt_worker_tasks[topic] = asyncio.create_task(
+                self._event_worker(topic),
+                name=f"local-bus-event-worker:{topic}",
+            )
 
     def unsubscribe(self, topic: str, handler: Handler) -> None:
         """Remove a handler previously registered with ``subscribe``."""
@@ -140,6 +158,20 @@ class LocalBus:
             pass
         if not handlers:
             self._subs.pop(topic, None)
+
+    def has_subscribers(self, topic: str) -> bool:
+        """Return whether a concrete topic currently has a local handler.
+
+        This readiness probe is intentionally local-only. It lets services in
+        thread mode avoid issuing startup requests before the destination
+        service has registered its contracts, while distributed buses remain
+        free to use transport-level retries instead.
+        """
+
+        return any(
+            handlers and self._topic_matches(topic, pattern)
+            for pattern, handlers in self._subs.items()
+        )
 
     def register_stream_handler(
         self,
@@ -389,10 +421,16 @@ class LocalBus:
             # Event: broadcast to all subscribers
             if not self._evt_workers_started[topic]:
                 self._evt_workers_started[topic] = True
-                asyncio.create_task(self._event_worker(topic))
+                self._evt_worker_tasks[topic] = asyncio.create_task(
+                    self._event_worker(topic),
+                    name=f"local-bus-event-worker:{topic}",
+                )
 
             try:
-                await self._evt_queues[topic].put(env)
+                # Events are explicitly best-effort. Never let a slow event
+                # consumer block command workers or request handlers that emit
+                # observability events while completing their own work.
+                self._evt_queues[topic].put_nowait(env)
                 log_debug(f"Published event to {topic}")
             except asyncio.QueueFull:
                 log_warning(f"Event queue full for {topic}, dropping message")
@@ -400,7 +438,10 @@ class LocalBus:
             # Command: point-to-point with priority
             if not self._cmd_workers_started[topic]:
                 self._cmd_workers_started[topic] = True
-                asyncio.create_task(self._command_worker(topic))
+                self._cmd_worker_tasks[topic] = asyncio.create_task(
+                    self._command_worker(topic),
+                    name=f"local-bus-command-worker:{topic}",
+                )
 
             try:
                 # Use counter as tiebreaker to ensure FIFO for same priority

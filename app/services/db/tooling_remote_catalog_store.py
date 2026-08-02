@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import time
@@ -11,6 +12,7 @@ from uuid import uuid4
 import aiosqlite
 from pydantic import ValidationError
 
+from app.services.db.sqlite_connection import close_database, open_database
 from app.shared.contracts.models.db import (
     DBAbortToolingRemoteCatalogSyncRequest,
     DBAbortToolingRemoteCatalogSyncResponse,
@@ -115,10 +117,7 @@ def compute_projection_checksum(
 
 
 async def _connect(db_path: str) -> aiosqlite.Connection:
-    db = await aiosqlite.connect(db_path)
-    db.row_factory = aiosqlite.Row
-    await db.execute("PRAGMA foreign_keys = ON")
-    return db
+    return await open_database(db_path, row_factory=aiosqlite.Row)
 
 
 def _authority(row: aiosqlite.Row) -> ToolingProjectionAuthorityRevision:
@@ -521,7 +520,7 @@ async def begin_tooling_remote_catalog_sync(
             ok=True, sync_id=request.sync_id, base_generation=base_generation
         )
     finally:
-        await db.close()
+        await close_database(db)
 
 
 def _page_binding_error(sync: aiosqlite.Row, page: ToolingGetExportCatalogResponse) -> str | None:
@@ -708,7 +707,7 @@ async def append_tooling_remote_catalog_page(
             ok=False, sync_id=request.sync_id, error="remote_catalog_duplicate_identity"
         )
     finally:
-        await db.close()
+        await close_database(db)
 
 
 async def _reject_staged_sync(
@@ -1254,7 +1253,7 @@ async def commit_tooling_remote_catalog_sync(
             correlation_id=request.correlation_id,
         )
     finally:
-        await db.close()
+        await close_database(db)
 
 
 async def finalize_tooling_remote_catalog_policy(
@@ -1351,7 +1350,7 @@ async def finalize_tooling_remote_catalog_policy(
             correlation_id=request.correlation_id,
         )
     finally:
-        await db.close()
+        await close_database(db)
 
 
 async def abort_tooling_remote_catalog_sync(
@@ -1371,7 +1370,7 @@ async def abort_tooling_remote_catalog_sync(
         await _reject_staged_sync(db, sync, request.reason_code, request.correlation_id)
         return DBAbortToolingRemoteCatalogSyncResponse(ok=True, aborted=True)
     finally:
-        await db.close()
+        await close_database(db)
 
 
 async def get_tooling_remote_catalog(
@@ -1439,7 +1438,7 @@ async def get_tooling_remote_catalog(
             retained_tombstones=[_tombstone(row) for row in retained_tombstones],
         )
     finally:
-        await db.close()
+        await close_database(db)
 
 
 async def set_tooling_remote_provider_availability(
@@ -1527,7 +1526,7 @@ async def set_tooling_remote_provider_availability(
             correlation_id=request.correlation_id,
         )
     finally:
-        await db.close()
+        await close_database(db)
 
 
 async def accept_tooling_remote_tool_schema(
@@ -1659,7 +1658,7 @@ async def accept_tooling_remote_tool_schema(
         await db.rollback()
         raise
     finally:
-        await db.close()
+        await close_database(db)
 
 
 async def import_legacy_tooling_remote_catalogs(
@@ -1742,7 +1741,7 @@ async def import_legacy_tooling_remote_catalogs(
             skipped_rows=skipped_rows,
         )
     finally:
-        await db.close()
+        await close_database(db)
 
 
 async def recover_tooling_remote_catalogs(
@@ -1817,7 +1816,7 @@ async def recover_tooling_remote_catalogs(
         await db.rollback()
         raise
     finally:
-        await db.close()
+        await close_database(db)
 
     imported = await import_legacy_tooling_remote_catalogs(
         db_path, DBImportLegacyToolingRemoteCatalogsRequest()
@@ -1845,13 +1844,54 @@ async def prune_tooling_remote_catalog_retention(
     total_management_compacted = 0
     total_audit_pruned = 0
     try:
-        await db.execute("BEGIN IMMEDIATE")
         providers = await (
             await db.execute(
-                "SELECT peer_id, provider_id FROM tooling_remote_catalog_headers ORDER BY peer_id, provider_id"
+                """WITH inactive_ranked AS (
+                       SELECT peer_id, provider_id, updated_at,
+                              ROW_NUMBER() OVER (
+                                  PARTITION BY peer_id, provider_id
+                                  ORDER BY updated_at DESC, global_tool_id ASC
+                              ) AS retained_rank
+                       FROM tooling_remote_catalog_tools
+                       WHERE availability IN ('removed', 'stale') AND review_required=0
+                   ), management_ranked AS (
+                       SELECT peer_id, provider_id, compacted_at,
+                              ROW_NUMBER() OVER (
+                                  PARTITION BY peer_id, provider_id
+                                  ORDER BY compacted_at DESC, global_tool_id ASC
+                              ) AS retained_rank
+                       FROM tooling_remote_catalog_retention_tombstones
+                       WHERE management_metadata_json != '{}'
+                   )
+                   SELECT peer_id, provider_id FROM inactive_ranked
+                   WHERE updated_at < ? OR retained_rank > ?
+                   UNION
+                   SELECT peer_id, provider_id FROM management_ranked
+                   WHERE compacted_at < ? OR retained_rank > ?
+                   UNION
+                   SELECT peer_id, provider_id FROM tooling_remote_catalog_audit
+                   GROUP BY peer_id, provider_id
+                   HAVING COUNT(*) > ?
+                   ORDER BY peer_id, provider_id""",
+                (
+                    cutoff,
+                    request.max_retained_per_provider,
+                    management_cutoff,
+                    request.max_management_tombstones_per_provider,
+                    request.max_audit_rows_per_provider,
+                ),
             )
         ).fetchall()
+        if not providers:
+            return DBPruneToolingRemoteCatalogRetentionResponse(
+                compacted_tool_count=0,
+                compacted_management_metadata_count=0,
+                pruned_audit_count=0,
+                providers=[],
+            )
+
         for provider in providers:
+            await db.execute("BEGIN IMMEDIATE")
             peer_id = str(provider["peer_id"])
             provider_id = str(provider["provider_id"])
             inactive = await (
@@ -1976,12 +2016,15 @@ async def prune_tooling_remote_catalog_retention(
                 total_compacted += compacted
                 total_management_compacted += management_compacted
                 total_audit_pruned += len(audit_to_prune)
-        await db.commit()
+            await db.commit()
+            # Release the single SQLite writer slot between providers so
+            # pairing/reconnect writes are never queued behind the full job.
+            await asyncio.sleep(0)
     except Exception:
         await db.rollback()
         raise
     finally:
-        await db.close()
+        await close_database(db)
     return DBPruneToolingRemoteCatalogRetentionResponse(
         compacted_tool_count=total_compacted,
         compacted_management_metadata_count=total_management_compacted,
@@ -2018,4 +2061,4 @@ async def resolve_tooling_remote_tool_aliases(
                 resolved[requested_id] = requested_id
         return DBResolveToolingRemoteToolAliasesResponse(canonical_by_requested_id=resolved)
     finally:
-        await db.close()
+        await close_database(db)

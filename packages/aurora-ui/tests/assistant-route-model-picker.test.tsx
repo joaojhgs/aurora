@@ -1,6 +1,8 @@
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { ModelRuntimeCatalogResponse, ModelRuntimeProviderInfo } from '@aurora/client'
+import { AuroraClient, MockAuroraTransport, type ModelRuntimeCatalogResponse, type ModelRuntimeProviderInfo } from '@aurora/client'
 import {
+  AssistantView,
   assistantExecutionOptions,
   assistantInferencePolicy,
   assistantMessageRuntimeLabel,
@@ -11,15 +13,52 @@ import {
   mergeAssistantModelCatalogs
 } from '../src/assistant-view'
 import type { RouteAvailability } from '../src/shell-data'
+import type { LightweightAssistantDependencies } from '../src/local-assistant/lightweight-assistant'
 
 const hostileCatalogPattern = /\b(?:SDK|WebView|daemon|Orchestrator|native-manifest|WebRTC|transport|fallback|runtime|Gateway\.ExplainRoute|Tooling\.DeleteSecret|api_key|secret-token|sk-secret)\b|provider:\/\/|peer-WebRTC-runtime/i
 
 describe('assistant execution and model pickers', () => {
+  it('keeps one Assistant UI and renders the bottom execution control for a connected host', () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const candidateRoute = route()
+    const connectedRoute = {
+      ...candidateRoute,
+      candidateProviders: [{
+        ...candidateRoute.candidateProviders[0]!,
+        peerId: 'peer-home',
+        nodeName: 'Home Aurora'
+      }]
+    }
+    const execution = assistantExecutionOptions(connectedRoute, {
+      executionHost: 'connected-device',
+      localExecutionAvailable: true
+    })
+
+    const markup = renderToStaticMarkup(
+      <AssistantView
+        client={client}
+        route={connectedRoute}
+        executionHost="connected-device"
+        localAssistant={readyLocalAssistant()}
+      />
+    )
+
+    expect(execution.map((option) => [option.mode, option.label, option.runner])).toEqual([
+      ['local', 'Local', 'lightweight-local'],
+      ['dispatch', 'Home Aurora', 'aurora-route']
+    ])
+    expect(markup).not.toContain('Choose how Aurora answers')
+    expect(markup.match(/aria-label="Prompt composer"/g)).toHaveLength(1)
+    expect(markup).toContain('aria-label="Executing locally"')
+    expect(markup).toContain('aui-execution-selector-trigger')
+    expect(markup).not.toContain('aui-execution-segment')
+  })
+
   it('offers local execution and preserves the selected peer dispatch identity', () => {
     const options = assistantExecutionOptions(route())
 
     expect(options.map((option) => [option.mode, option.label])).toEqual([
-      ['local', 'Locally'],
+      ['local', 'Local'],
       ['dispatch', 'studio']
     ])
     expect(options[1]?.routePolicy).toEqual(expect.objectContaining({
@@ -36,13 +75,13 @@ describe('assistant execution and model pickers', () => {
 
     expect(localChoices.map((choice) => choice.model.name)).toEqual([
       'Configured default',
-      'Cloud model 1.1',
-      'Local model 2.1',
-      'Connected device model 3.1'
+      'GPT 5',
+      'DialoGPT Medium',
+      'Qwen 32B'
     ])
     expect(dispatchChoices.map((choice) => choice.model.name)).toEqual([
       'Connected device default',
-      'Connected device model 1.1'
+      'Qwen 32B'
     ])
 
     const localGroups = assistantModelChoiceGroups(localChoices, execution[0]!)
@@ -52,13 +91,13 @@ describe('assistant execution and model pickers', () => {
       models: group.choices.map((choice) => choice.model.name)
     }))).toEqual([
       { heading: 'Configured default', models: ['Configured default'] },
-      { heading: 'Cloud service 1 · 1 model', models: ['Cloud model 1.1'] },
-      { heading: 'This device 2 · 1 model', models: ['Local model 2.1'] },
-      { heading: 'Connected device 1 · 1 model', models: ['Connected device model 3.1'] }
+      { heading: 'OpenAI · 1 model', models: ['GPT 5'] },
+      { heading: 'HuggingFace Pipeline · 1 model', models: ['DialoGPT Medium'] },
+      { heading: 'Studio OpenAI · 1 model', models: ['Qwen 32B'] }
     ])
     expect(dispatchGroups.map((group) => group.heading)).toEqual([
       'Connected device default',
-      'Connected device 1 · 1 model'
+      'Studio OpenAI · 1 model'
     ])
     expect(assistantModelSourceGroups(localGroups, execution[0]!, execution).map((source) => ({
       heading: source.heading,
@@ -67,12 +106,12 @@ describe('assistant execution and model pickers', () => {
     }))).toEqual([
       {
         heading: 'This device',
-        providers: ['Cloud service 1 · 1 model', 'This device 2 · 1 model'],
+        providers: ['OpenAI · 1 model', 'HuggingFace Pipeline · 1 model'],
         modelCount: 2
       },
       {
         heading: 'Connected device 1',
-        providers: ['Connected device 1 · 1 model'],
+        providers: ['Studio OpenAI · 1 model'],
         modelCount: 1
       }
     ])
@@ -99,13 +138,46 @@ describe('assistant execution and model pickers', () => {
 
     expect(assistantModelChoices(merged, execution[0]!).map((choice) => choice.model.name)).toEqual([
       'Configured default',
-      'Cloud model 1.1',
-      'Local model 2.1',
-      'Connected device model 3.1'
+      'GPT 5',
+      'DialoGPT Medium',
+      'Qwen 32B'
     ])
     expect(merged.providers.filter((provider) => provider.provider_peer_id).map((provider) =>
       provider.provider_peer_id
     )).toEqual(['peer-studio'])
+  })
+
+  it('classifies a connected host catalog as peer-owned while preserving real model names', () => {
+    const connectedRoute = {
+      ...route(),
+      candidateProviders: [{
+        ...route().candidateProviders[0]!,
+        peerId: 'peer-home',
+        nodeName: 'Home Aurora'
+      }]
+    }
+    const execution = assistantExecutionOptions(connectedRoute, {
+      executionHost: 'connected-device',
+      localExecutionAvailable: true
+    })
+    const choices = assistantModelChoices(catalog(), execution[0]!)
+    const groups = assistantModelChoiceGroups(choices, execution[0]!)
+    const sources = assistantModelSourceGroups(groups, execution[0]!, execution)
+
+    expect(choices.map((choice) => choice.model.name)).toEqual([
+      'Configured default',
+      'GPT 5',
+      'DialoGPT Medium',
+      'Qwen 32B'
+    ])
+    expect(groups.filter((group) => group.scope !== 'default').every((group) => group.scope === 'connected device')).toBe(true)
+    expect(sources).toEqual([
+      expect.objectContaining({
+        heading: 'Home Aurora',
+        scope: 'peer',
+        modelCount: 3
+      })
+    ])
   })
 
   it('keeps dispatch and explicit inference selectors independent', () => {
@@ -161,7 +233,7 @@ describe('assistant execution and model pickers', () => {
     })
 
     expect(renderedSelectorFields).not.toMatch(hostileCatalogPattern)
-    expect(explicit.model.id).toBe('model-choice-1-1')
+    expect(explicit.model.id).toMatch(/^model-choice-[a-z0-9]+-[a-z0-9]+$/)
     expect(explicit.provider?.provider_id).toBe(hostileProviderId)
     expect(explicit.runtimeModel?.model_id).toBe(hostileModelId)
     expect(assistantInferencePolicy(explicit, route())).toEqual(expect.objectContaining({
@@ -213,6 +285,17 @@ describe('assistant execution and model pickers', () => {
       persisted.messages[0]!,
       new Map([['peer-studio', 'studio']])
     )).toBe('studio · gpt-4o')
+  })
+
+  it('keeps a model selection stable when a refreshed catalog changes provider order', () => {
+    const execution = assistantExecutionOptions(route())[0]!
+    const original = assistantModelChoices(catalog(), execution)
+    const reorderedCatalog = catalog()
+    reorderedCatalog.providers = [...reorderedCatalog.providers].reverse()
+    const reordered = assistantModelChoices(reorderedCatalog, execution)
+    const selected = original.find((choice) => choice.runtimeModel?.model_id === 'qwen-32b')!
+
+    expect(reordered.find((choice) => choice.runtimeModel?.model_id === 'qwen-32b')?.id).toBe(selected.id)
   })
 })
 
@@ -337,5 +420,16 @@ function model(providerId: string, modelId: string, displayName: string) {
     provider_id: providerId,
     available: true,
     secrets_redacted: true
+  }
+}
+
+function readyLocalAssistant(): LightweightAssistantDependencies {
+  return {
+    provider: { complete: async () => ({ type: 'message', content: 'local' }) },
+    tools: {} as LightweightAssistantDependencies['tools'] & object,
+    localData: {} as LightweightAssistantDependencies['localData'] & object,
+    envelopeCrypto: {} as LightweightAssistantDependencies['envelopeCrypto'] & object,
+    scope: { profileId: 'profile-1', localNodeId: 'node-1' },
+    availableTools: []
   }
 }

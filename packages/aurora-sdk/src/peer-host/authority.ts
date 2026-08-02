@@ -201,10 +201,18 @@ export interface PeerPairingIssuerOptions {
   now?: () => number
 }
 
+export interface PeerPairingIssueOptions {
+  readonly expiresAtMs?: number
+  /** Local feature identifiers selected during this pairing approval. */
+  readonly featureIds?: readonly string[]
+}
+
 export interface IssuedPeerBearerCredential {
   readonly tokenId: string
   readonly bearerToken: string
   readonly verifier: LocalPeerCredentialVerifierV1
+  /** Product permission labels derived locally from the features shared at pairing time. */
+  readonly grantedPermissions?: readonly string[]
 }
 
 export interface PeerAuthorityResolverOptions {
@@ -578,7 +586,7 @@ export class PeerPairingIssuer {
     this.now = options.now ?? Date.now
   }
 
-  async issue(selector: PeerRelationshipSelector, options: { expiresAtMs?: number } = {}): Promise<IssuedPeerBearerCredential> {
+  async issue(selector: PeerRelationshipSelector, options: PeerPairingIssueOptions = {}): Promise<IssuedPeerBearerCredential> {
     validateSelector(selector)
     const tokenBytes = this.random(32)
     const bearerToken = bytesToHex(tokenBytes)
@@ -600,6 +608,11 @@ export class PeerPairingIssuer {
       zeroBytes(tokenBytes)
       zeroBytes(tokenHash)
     }
+  }
+
+  async rollback(selector: PeerRelationshipSelector): Promise<void> {
+    validateSelector(selector)
+    await this.verifierStore.deleteVerifier(selector)
   }
 }
 

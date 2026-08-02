@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { ToolApprovalConfirmRequest } from '../src/admin.js'
 import { searchLocalData } from '../src/local-data/search.js'
 import {
   MemoryLocalDataBackend,
@@ -9,7 +10,12 @@ import {
   type LocalDataSession
 } from '../src/local-data/index.js'
 import { LightweightOrchestratorError } from '../src/lightweight-orchestrator/limits.js'
-import { buildOpenAIToolAliases, createOpenAICompatibleToolProvider, parseOpenAICompatibleResponse } from '../src/lightweight-orchestrator/provider.js'
+import {
+  buildOpenAIToolAliases,
+  createAuroraInferenceProvider,
+  createOpenAICompatibleToolProvider,
+  parseOpenAICompatibleResponse
+} from '../src/lightweight-orchestrator/provider.js'
 import { createLightweightOrchestrator } from '../src/lightweight-orchestrator/react-loop.js'
 import type {
   LightweightAssistantProvider,
@@ -39,6 +45,46 @@ describe('lightweight orchestrator', () => {
       ['user', 'complete'],
       ['assistant', 'complete']
     ])
+  })
+
+  it('continues a selected local conversation with its decrypted message history', async () => {
+    const crypto = new RecordingEnvelopeCryptoPort()
+    const session = await dataSession()
+    const requests: Array<readonly { role: string; content: string }[]> = []
+    let responseNumber = 0
+    let now = 1_000
+    const orchestrator = createLightweightOrchestrator({
+      provider: {
+        async complete(request) {
+          requests.push(request.messages.map((message) => ({ role: message.role, content: message.content })))
+          responseNumber += 1
+          return { type: 'message', content: responseNumber === 1 ? 'first answer' : 'follow-up answer' }
+        }
+      },
+      tools: toolPort(),
+      localData: session,
+      localDataCrypto: crypto,
+      scope,
+      availableTools: [],
+      ids: idSequence('user-1', 'assistant-1', 'user-2', 'assistant-2'),
+      nowMs: () => now++
+    })
+
+    await orchestrator.runTurn({ text: 'first question', conversationId: 'conversation-history' })
+    const created = (await session.conversations.listConversations())[0]!
+    await orchestrator.runTurn({ text: 'follow-up question', conversationId: 'conversation-history' })
+    const continued = (await session.conversations.listConversations())[0]!
+
+    expect(requests).toEqual([
+      [{ role: 'user', content: 'first question' }],
+      [
+        { role: 'user', content: 'first question' },
+        { role: 'assistant', content: 'first answer' },
+        { role: 'user', content: 'follow-up question' }
+      ]
+    ])
+    expect(continued.createdAtMs).toBe(created.createdAtMs)
+    expect(continued.updatedAtMs).toBeGreaterThan(created.updatedAtMs)
   })
 
   it('runs a remote mesh tool only through prepare and execute', async () => {
@@ -172,12 +218,13 @@ describe('lightweight orchestrator', () => {
 
   it('emits confirmation, denies without execute, and rejects token replay', async () => {
     const calls: string[] = []
+    const confirmations: ToolApprovalConfirmRequest[] = []
     const session = await dataSession()
     const orchestrator = createLightweightOrchestrator({
       provider: sequenceProvider([
         { type: 'tool_calls', toolCalls: [{ id: 'danger', toolName: 'local.delete', arguments: { id: '1' }, route: 'local' }] }
       ]),
-      tools: toolPort({ calls, approvalRequired: true }),
+      tools: toolPort({ calls, approvalRequired: true, onConfirm: (request) => confirmations.push(request) }),
       localData: session,
       scope,
       availableTools: [tool('local.delete', 'local', { confirmation_required: true })],
@@ -188,10 +235,21 @@ describe('lightweight orchestrator', () => {
     expect(pending.status).toBe('awaiting_confirmation')
     expect(pending.confirmation).toMatchObject({ secretsRedacted: true })
 
-    await expect(orchestrator.resumeConfirmation({ token: pending.confirmation!.token, decision: 'deny' })).resolves.toMatchObject({
+    await expect(orchestrator.resumeConfirmation({
+      token: pending.confirmation!.token,
+      decision: 'deny',
+      grantScope: 'deny_always'
+    })).resolves.toMatchObject({
       status: 'cancelled'
     })
-    expect(calls).toEqual(['prepare:local.delete:local', 'request:local.delete:local'])
+    expect(calls).toEqual([
+      'prepare:local.delete:local',
+      'request:local.delete:local',
+      'confirm:approval-local.delete'
+    ])
+    expect(confirmations).toEqual([
+      expect.objectContaining({ approve: false, grant_scope: 'deny_always' })
+    ])
     await expect(orchestrator.resumeConfirmation({ token: pending.confirmation!.token, decision: 'approve' })).rejects.toMatchObject({
       reasonCode: 'confirmation_token_replayed'
     })
@@ -572,6 +630,210 @@ describe('lightweight orchestrator', () => {
     })
   })
 
+  it('keeps the lightweight loop local while using a connected Aurora for inference', async () => {
+    const infer = vi.fn(async (payload) => {
+      const alias = ((payload.tools?.[0] as JsonObject)?.function as JsonObject)?.name
+      expect(payload).toMatchObject({
+        messages: [{ role: 'user', content: 'Use the device tool' }],
+        stream: false,
+        tool_choice: 'auto',
+        metadata: { caller_runtime: 'lightweight', max_tool_calls: 2 }
+      })
+      expect(payload).not.toHaveProperty('provider_id')
+      expect(payload).not.toHaveProperty('model_id')
+      expect(payload).not.toHaveProperty('params')
+      return {
+        text: '',
+        message: {
+          role: 'assistant' as const,
+          content: '',
+          tool_calls: [{ id: 'call-remote-1', name: alias, args: { text: 'hello' } }]
+        },
+        secrets_redacted: true
+      }
+    })
+    const provider = createAuroraInferenceProvider({ infer })
+
+    await expect(provider.complete({
+      messages: [{ role: 'user', content: 'Use the device tool' }],
+      tools: [tool('local.echo', 'local')],
+      maxToolCalls: 2,
+      signal: new AbortController().signal
+    })).resolves.toEqual({
+      type: 'tool_calls',
+      content: '',
+      toolCalls: [{
+        id: 'call-remote-1',
+        toolName: 'aurora-tool:v1:local:local.echo',
+        providerToolName: expect.stringMatching(/^[A-Za-z0-9_-]{1,64}$/),
+        arguments: { text: 'hello' },
+        route: 'local'
+      }]
+    })
+    expect(infer).toHaveBeenCalledOnce()
+  })
+
+  it('returns an assistant tool-call owner before the local tool result to connected inference', async () => {
+    const availableTool = tool('local.echo', 'local')
+    const alias = buildOpenAIToolAliases([availableTool]).byGlobalToolId.get(availableTool.global_tool_id)!.alias
+    const requests: JsonObject[] = []
+    const provider = createAuroraInferenceProvider({
+      infer: vi.fn(async (payload) => {
+        requests.push(payload as unknown as JsonObject)
+        if (requests.length === 1) {
+          return {
+            text: '',
+            message: {
+              role: 'assistant' as const,
+              content: '',
+              tool_calls: [{ id: 'call-local-1', name: alias, args: { text: 'hello' } }]
+            },
+            secrets_redacted: true
+          }
+        }
+        return {
+          text: 'tool result accepted',
+          message: { role: 'assistant' as const, content: 'tool result accepted' },
+          secrets_redacted: true
+        }
+      })
+    })
+    const orchestrator = createLightweightOrchestrator({
+      provider,
+      tools: toolPort(),
+      localData: await dataSession(),
+      scope,
+      availableTools: [availableTool]
+    })
+
+    await expect(orchestrator.runTurn({ text: 'Use the device tool' })).resolves.toMatchObject({
+      status: 'completed',
+      assistantText: 'tool result accepted'
+    })
+
+    expect(requests).toHaveLength(2)
+    expect(requests[1]?.messages).toEqual([
+      { role: 'user', content: 'Use the device tool' },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [{
+          id: 'call-local-1',
+          type: 'function',
+          function: { name: alias, arguments: '{"text":"hello"}' }
+        }]
+      },
+      expect.objectContaining({
+        role: 'tool',
+        tool_call_id: 'call-local-1',
+        name: alias
+      })
+    ])
+  })
+
+  it('passes the selected connected model through local orchestration and confirmation resume', async () => {
+    const requests: Array<{ providerId?: string | null; modelId?: string | null }> = []
+    const confirmations: ToolApprovalConfirmRequest[] = []
+    const session = await dataSession()
+    const provider: LightweightAssistantProvider = {
+      async complete(request) {
+        requests.push({
+          providerId: request.providerId ?? null,
+          modelId: request.modelId ?? null
+        })
+        if (requests.length === 1) {
+          return {
+            type: 'tool_calls',
+            toolCalls: [{ id: 'danger', toolName: 'local.delete', arguments: { id: '1' }, route: 'local' }]
+          }
+        }
+        return { type: 'message', content: 'deleted with selected model' }
+      }
+    }
+    const orchestrator = createLightweightOrchestrator({
+      provider,
+      tools: toolPort({
+        approvalRequired: true,
+        onConfirm: (request) => confirmations.push(request)
+      }),
+      localData: session,
+      scope,
+      availableTools: [tool('local.delete', 'local', { confirmation_required: true })],
+      ids: idSequence('1', '2', '3', '4', '5', '6')
+    })
+
+    const pending = await orchestrator.runTurn({
+      text: 'delete',
+      providerId: 'openai',
+      modelId: 'gpt-5.4-mini'
+    })
+    await expect(orchestrator.resumeConfirmation({
+      token: pending.confirmation!.token,
+      decision: 'approve',
+      grantScope: 'session'
+    })).resolves.toMatchObject({
+      status: 'completed',
+      assistantText: 'deleted with selected model'
+    })
+
+    expect(requests).toEqual([
+      { providerId: 'openai', modelId: 'gpt-5.4-mini' },
+      { providerId: 'openai', modelId: 'gpt-5.4-mini' }
+    ])
+    expect(confirmations).toEqual([
+      expect.objectContaining({ approve: true, grant_scope: 'session' })
+    ])
+  })
+
+  it('lets a per-turn connected model override the provider construction default', async () => {
+    const infer = vi.fn(async () => ({
+      text: 'selected',
+      message: { role: 'assistant' as const, content: 'selected' },
+      secrets_redacted: true
+    }))
+    const provider = createAuroraInferenceProvider({
+      infer,
+      providerId: 'default-provider',
+      modelId: 'default-model'
+    })
+
+    await provider.complete({
+      messages: [{ role: 'user', content: 'select' }],
+      tools: [],
+      maxToolCalls: 1,
+      providerId: 'openai',
+      modelId: 'gpt-5.4-mini',
+      signal: new AbortController().signal
+    })
+
+    expect(infer).toHaveBeenCalledWith(
+      expect.objectContaining({ provider_id: 'openai', model_id: 'gpt-5.4-mini' }),
+      expect.any(AbortSignal)
+    )
+  })
+
+  it('fails closed for cancelled or unredacted connected-Aurora inference', async () => {
+    const aborted = new AbortController()
+    aborted.abort()
+    const infer = vi.fn(async () => ({ text: 'unsafe', secrets_redacted: false as const }))
+    const provider = createAuroraInferenceProvider({ infer })
+
+    await expect(provider.complete({
+      messages: [],
+      tools: [],
+      maxToolCalls: 1,
+      signal: aborted.signal
+    })).rejects.toMatchObject({ reasonCode: 'provider_call_cancelled' })
+    expect(infer).not.toHaveBeenCalled()
+
+    await expect(provider.complete({
+      messages: [],
+      tools: [],
+      maxToolCalls: 1,
+      signal: new AbortController().signal
+    })).rejects.toMatchObject({ reasonCode: 'provider_response_malformed' })
+  })
+
   it('bounds OpenAI provider requests separately from responses and redacts malformed JSON failures', async () => {
     const provider = createOpenAICompatibleToolProvider({
       endpoint: 'https://example.invalid/v1/chat/completions',
@@ -639,6 +901,7 @@ function toolPort(options: {
   approvalRequired?: boolean
   approvalExpiresAt?: number | null
   execute?: (payload: ToolingPrepareExecutionRequest) => Promise<LightweightToolExecutionResponse>
+  onConfirm?: (payload: ToolApprovalConfirmRequest) => void
 } = {}): LightweightToolClientPort {
   return {
     async prepareExecution(payload) {
@@ -667,6 +930,7 @@ function toolPort(options: {
     },
     async confirmExecution(payload) {
       options.calls?.push(`confirm:${payload.approval_request_id}`)
+      options.onConfirm?.(payload)
       const toolName = payload.approval_request_id.replace(/^approval-/, '')
       return {
         ok: payload.approve !== false,

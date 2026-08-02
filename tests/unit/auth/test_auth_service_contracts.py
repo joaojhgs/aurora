@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, PropertyMock, patch
 
 import pytest
 
 from app.messaging.bus import Envelope
-from app.services.auth.auth_manager import MeshPairingDeniedError
+from app.services.auth.auth_manager import (
+    AUTH_DB_REQUEST_TIMEOUT_SECONDS,
+    MeshPairingDeniedError,
+)
 from app.services.auth.service import AuthService
 from app.shared.contracts.mesh_surface import PUBLIC_INFRASTRUCTURE_TOPICS
 from app.shared.contracts.models.auth import (
@@ -17,10 +20,27 @@ from app.shared.contracts.models.auth import (
     PairingExchangeRequest,
     PairingStartRequest,
     PrincipalListRequest,
+    StoreAuditEventRequest,
     TokenCreateRequest,
     TokenListRequest,
 )
+from app.shared.contracts.models.mesh import MeshPeerGetRequest
 from app.shared.models.db import Token, User
+
+
+@pytest.mark.asyncio
+async def test_store_audit_event_waits_through_sqlite_busy_window() -> None:
+    service = AuthService()
+    bus = AsyncMock()
+    bus.request.return_value = SimpleNamespace(ok=True)
+
+    with patch.object(AuthService, "bus", new_callable=PropertyMock, return_value=bus):
+        response = await service.handle_store_audit_event(
+            StoreAuditEventRequest(event="mesh.reconnect", details="{}")
+        )
+
+    assert response.success
+    assert bus.request.await_args.kwargs["timeout"] == AUTH_DB_REQUEST_TIMEOUT_SECONDS
 
 
 def test_auth_public_infrastructure_markers_are_exact_bootstrap_allowlist() -> None:
@@ -268,3 +288,32 @@ async def test_auth_list_apis_normalize_permissions_and_token_scopes() -> None:
     service.manager.list_principals.assert_awaited_once()
     service.manager.list_tokens.assert_awaited_once_with(principal_id=None, device_id=None)
     service.manager.create_token_for_principal.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_mesh_get_peer_normalizes_legacy_permission_storage() -> None:
+    service = AuthService()
+    service._manager = SimpleNamespace(
+        get_mesh_peer=AsyncMock(
+            return_value={
+                "id": "mesh-row-1",
+                "peer_id": "aurora-peer-1",
+                "node_name": "Aurora phone",
+                "room_name": "private-room",
+                "outbound_permissions": '["tooling.use", "all", "tooling.use"]',
+                "inbound_permissions": '["orchestrator.use"]',
+            }
+        )
+    )
+
+    response = await service.handle_get_peer(
+        MeshPeerGetRequest(peer_id="aurora-peer-1", room_name="private-room")
+    )
+
+    assert response.peer is not None
+    assert response.peer.outbound_permissions == ["Tooling.use", "*"]
+    assert response.peer.inbound_permissions == ["Orchestrator.use"]
+    service.manager.get_mesh_peer.assert_awaited_once_with(
+        peer_id="aurora-peer-1",
+        room_name="private-room",
+    )

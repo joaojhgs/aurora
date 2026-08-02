@@ -85,6 +85,7 @@ export interface MqttClientLike {
 export interface MqttConnectOptions {
   protocolVersion: 5
   reconnectPeriod: 0
+  keepalive: number
   username?: string | undefined
   password?: string | undefined
   will?: {
@@ -137,6 +138,7 @@ export interface MqttSignalingClientSnapshot {
 const DEFAULT_TOPIC_ROOT = 'aurora'
 const DEFAULT_CONNECT_TIMEOUT_MS = 10_000
 const DEFAULT_MAX_PAYLOAD_BYTES = 256 * 1024
+const DEFAULT_KEEPALIVE_SECONDS = 15
 const DEPARTURE_EXPIRY_SECONDS = 300
 const PRESENCE_QOS = 1 as const
 const DIRECT_QOS = 0 as const
@@ -289,6 +291,7 @@ export class MqttWebSocketSignalingClient {
         const connectOptions: MqttConnectOptions = {
           protocolVersion: 5,
           reconnectPeriod: 0,
+          keepalive: DEFAULT_KEEPALIVE_SECONDS,
           will: {
             topic: this.topic(`presence/${this.room.signalingPeerId}`),
             payload: willPayload,
@@ -335,6 +338,17 @@ export class MqttWebSocketSignalingClient {
     await this.publish(channel === 'broadcast' ? this.topic('broadcast') : this.direct(channel, toPeer ?? ''), payload, {
       qos: DIRECT_QOS,
       retain: false
+    })
+  }
+
+  async announcePresence(): Promise<void> {
+    if (!this.client || !this.room || !this.connected) {
+      throw new Error('MQTT signaling is not connected')
+    }
+    const payload = await this.options.crypto.seal(this.presenceEnvelope('presence'))
+    await this.publish(this.topic(`presence/${this.room.signalingPeerId}`), payload, {
+      qos: PRESENCE_QOS,
+      retain: true
     })
   }
 
@@ -408,6 +422,12 @@ export class MqttWebSocketSignalingClient {
     await new Promise<void>((resolve, reject) => {
       let done = false
       const timeoutMs = this.options.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS
+      const fail = (error: unknown, fallback: string) => {
+        if (done) return
+        done = true
+        ;(this.options.clearTimeout ?? globalThis.clearTimeout)(timer)
+        reject(error instanceof Error ? error : new Error(String(error ?? fallback)))
+      }
       const timer = (this.options.setTimeout ?? globalThis.setTimeout)(() => {
         if (done) return
         done = true
@@ -420,11 +440,10 @@ export class MqttWebSocketSignalingClient {
         resolve()
       })
       client.on('error', (error?: unknown) => {
-        if (done) return
-        done = true
-        ;(this.options.clearTimeout ?? globalThis.clearTimeout)(timer)
-        reject(error instanceof Error ? error : new Error(String(error ?? 'MQTT connect failed')))
+        fail(error, 'MQTT connect failed')
       })
+      client.on('close', () => fail(undefined, 'MQTT connection closed before it was ready'))
+      client.on('offline', () => fail(undefined, 'MQTT connection went offline before it was ready'))
     })
   }
 
@@ -433,15 +452,17 @@ export class MqttWebSocketSignalingClient {
     for (const sub of roomSubscriptions(this.root, this.room.appId, this.room.room, this.room.signalingPeerId)) {
       await this.subscribe(sub.topic, { qos: sub.qos })
     }
-    const payload = await this.options.crypto.seal(this.presenceEnvelope('presence'))
-    await this.publish(this.topic(`presence/${this.room.signalingPeerId}`), payload, { qos: PRESENCE_QOS, retain: true })
+    await this.announcePresence()
   }
 
   private async reconnectAfterTransientClose(): Promise<void> {
     if (this.reconnecting || this.explicitClose || this.closed || !this.room) return
     this.reconnecting = true
     try {
-      const maxAttempts = this.options.reconnect?.maxAttempts ?? 5
+      const configuredMaxAttempts = this.options.reconnect?.maxAttempts
+      const maxAttempts = configuredMaxAttempts === undefined || configuredMaxAttempts === 0
+        ? Number.POSITIVE_INFINITY
+        : Math.max(1, Math.floor(configuredMaxAttempts))
       const room = this.room
       for (let attempt = 1; attempt <= maxAttempts && !this.explicitClose && !this.closed; attempt += 1) {
         this.diagnosticsState.reconnectCount += 1
