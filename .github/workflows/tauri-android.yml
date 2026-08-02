@@ -109,8 +109,8 @@ jobs:
           path: apps/aurora-tauri/reports/android-preflight.json
           if-no-files-found: error
 
-      - name: Build Android client debug APK
-        run: pnpm --filter @aurora/tauri-ui android:build:client:apk
+      - name: Build Android client x86_64 debug APK
+        run: pnpm --filter @aurora/tauri-ui android:build:client:apk:x86_64
 
       - name: Verify Android client debug APK contents
         run: pnpm --filter @aurora/tauri-ui android:verify:client:apk
@@ -128,6 +128,12 @@ jobs:
           name: aurora-android-client-debug-apk
           path: apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           if-no-files-found: error
+
+      - name: Retain Android client smoke APK
+        run: |
+          mkdir -p apps/aurora-tauri/reports
+          cp apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk \
+            apps/aurora-tauri/reports/android-client-smoke.apk
 
       - name: Build Android client debug AAB
         run: pnpm --filter @aurora/tauri-ui android:build:client:aab
@@ -151,6 +157,8 @@ jobs:
 
       - name: Android 11 baseline WebView and native payload E2E
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          AURORA_ANDROID_APK: ${{ github.workspace }}/apps/aurora-tauri/reports/android-client-smoke.apk
         with:
           api-level: 30
           target: default
@@ -160,6 +168,8 @@ jobs:
 
       - name: Android 15 current WebView, mobile browser, native payload, and Python peer WebRTC E2E
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          AURORA_ANDROID_APK: ${{ github.workspace }}/apps/aurora-tauri/reports/android-client-smoke.apk
         with:
           api-level: 35
           target: google_apis

@@ -25,6 +25,7 @@ from app.services.tooling.projection_cursor import (
     ProjectionCursorError,
 )
 from app.services.tooling.service import ToolingService
+from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.db import (
     DBAcceptToolingRemoteToolSchemaRequest,
     DBAppendToolingRemoteCatalogPageRequest,
@@ -46,6 +47,7 @@ from app.shared.contracts.models.tooling import (
     ToolingGetToolSourceDetailRequest,
     ToolingListToolSourcesRequest,
     ToolingMeshKillSwitches,
+    ToolingMethods,
     ToolingPolicyDecision,
     ToolingPrepareExecutionRequest,
     ToolingPrepareExecutionResponse,
@@ -780,7 +782,24 @@ def _service_for_remote_denial(tool: ToolingToolInfo) -> ToolingService:
         manager_type.return_value = manager
         service = ToolingService()
     service.tools_manager = manager
-    service.bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"resolved": {}}))
+
+    async def request(method, payload, **_kwargs):
+        if method == AuthMethods.MESH_GET_PEER:
+            peer_id = str(payload.peer_id)
+            return QueryResult(
+                ok=True,
+                data={
+                    "peer": {
+                        "id": f"peer-row:{peer_id}",
+                        "peer_id": peer_id,
+                        "outbound_status": "approved",
+                        "outbound_permissions": [ToolingMethods.EXECUTE_TOOL],
+                    }
+                },
+            )
+        return QueryResult(ok=True, data={"resolved": {}})
+
+    service.bus.request = AsyncMock(side_effect=request)
     service._mesh_projection_enforcement_active = True
     service._stable_peer_id = "consumer"
     snapshot = ToolingRemoteCatalogAnnounced(

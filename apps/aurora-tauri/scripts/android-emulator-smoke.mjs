@@ -14,7 +14,7 @@ export async function runAndroidEmulatorSmoke() {
   run('adb', ['wait-for-device'])
   run('adb', ['install', '-r', apk])
   run('adb', ['logcat', '-c'])
-  run('adb', ['shell', 'monkey', '-p', appId, '-c', 'android.intent.category.LAUNCHER', '1'])
+  launchApp(appId)
 
   const payloadJson = waitForPayloadJson()
   if (!payloadJson) {
@@ -63,6 +63,14 @@ function walk(dir) {
 
 function run(command, args) {
   execFileSync(command, args, { stdio: 'inherit' })
+}
+
+function launchApp(appId) {
+  try {
+    run('adb', ['shell', 'monkey', '-p', appId, '-c', 'android.intent.category.LAUNCHER', '1'])
+  } catch {
+    run('adb', ['shell', 'am', 'start', '-n', `${appId}/.MainActivity`])
+  }
 }
 
 async function waitForWebviewMount(appId) {

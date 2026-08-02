@@ -179,6 +179,7 @@ describe('Tauri CI native evidence contract', () => {
     const iosBaselineWorkflow = repoText('.github/workflows/tauri-ios.yml')
     const iosPolicyWorkflow = repoText('.github/workflows/tauri-ios-release.yml')
     const androidClientBuildWrapper = repoText('apps/aurora-tauri/scripts/build-android-client-bundle.mjs')
+    const androidSmoke = repoText('apps/aurora-tauri/scripts/android-emulator-smoke.mjs')
     const androidInteropRunner = repoText('apps/aurora-tauri/scripts/run-android-webrtc-interop.mjs')
     const iosInteropTest = repoText('apps/aurora-tauri/tests/ios/ios-python-webrtc.e2e.test.ts')
     const iosSimulatorSmoke = repoText('apps/aurora-tauri/scripts/ios-simulator-smoke.mjs')
@@ -293,10 +294,19 @@ describe('Tauri CI native evidence contract', () => {
     expect(packageJson.scripts['build:frontend:ios-client']).toBe('node ./scripts/build-ios-client-frontend.mjs')
     expect(packageJson.scripts['build:frontend:ios-thin']).toBe('pnpm build:frontend:ios-client')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:preflight:ci')
-    expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:client:apk')
+    expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:client:apk:x86_64')
+    expect(androidWorkflow).not.toContain('pnpm --filter @aurora/tauri-ui android:build:client:apk\n')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:verify:client:apk')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:client:aab')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:verify:client:aab')
+    expect(androidWorkflow).toContain('Retain Android client smoke APK')
+    expect(androidWorkflow).toContain('apps/aurora-tauri/reports/android-client-smoke.apk')
+    expect(androidWorkflow.indexOf('Retain Android client smoke APK')).toBeLessThan(
+      androidWorkflow.indexOf('pnpm --filter @aurora/tauri-ui android:build:client:aab'),
+    )
+    expect(androidWorkflow).toContain(
+      'AURORA_ANDROID_APK: ${{ github.workspace }}/apps/aurora-tauri/reports/android-client-smoke.apk',
+    )
     expect(androidWorkflow).not.toContain('AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS')
     expect(androidWorkflow).not.toContain('AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"')
     expect(androidWorkflow).not.toContain('https://gateway.example.invalid')
@@ -325,6 +335,8 @@ describe('Tauri CI native evidence contract', () => {
     expect(androidInteropRunner).toContain(
       'aurora.android_webrtc_interop.aggregate.v1',
     )
+    expect(androidSmoke).toContain('function launchApp')
+    expect(androidSmoke).toContain("['shell', 'am', 'start', '-n', `${appId}/.MainActivity`]")
     expect(packageJson.scripts['android:build:thin:apk']).not.toMatch(/python|uv/i)
     expect(packageJson.scripts['android:build:thin:aab']).not.toMatch(/python|uv/i)
     expect(androidWorkflow).toContain('Set up Python interop peer')
