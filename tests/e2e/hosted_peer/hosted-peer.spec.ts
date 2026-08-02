@@ -724,7 +724,10 @@ async function expectNonAdminNavigation(page: Page): Promise<void> {
 
 async function expectRemovedToolAccessHidden(page: Page): Promise<void> {
   const body = page.locator('body')
-  await expect(body).toContainText('No sources', { timeout: 30_000 })
+  await expect(body).toContainText(
+    /No sources|No core, MCP, plugin, mesh, unknown, or blocked sources/u,
+    { timeout: 30_000 },
+  )
   await expect(body).not.toContainText(
     /Tooling\.|Gateway\.|WebRTC mesh transport|fallback|raw token|room password/i,
   )
