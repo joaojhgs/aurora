@@ -145,7 +145,7 @@ describe('Tauri CI native evidence contract', () => {
       frontendWorkflow.indexOf(tauriRegressionGate),
     )
     expect(rootPackage.devDependencies?.esbuild).toBeDefined()
-    expect(interopWorkflow).toContain('uv sync --extra gateway')
+    expect(interopWorkflow).toContain('uv sync --extra sidecar-thin')
     expect(interopWorkflow).not.toContain('uv sync --all-extras')
   })
 
@@ -329,7 +329,7 @@ describe('Tauri CI native evidence contract', () => {
     expect(packageJson.scripts['android:build:thin:aab']).not.toMatch(/python|uv/i)
     expect(androidWorkflow).toContain('Set up Python interop peer')
     expect(androidWorkflow).toContain('Install uv for the external Python peer')
-    expect(androidWorkflow).toContain('uv sync --extra gateway')
+    expect(androidWorkflow).toContain('uv sync --extra sidecar-thin')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:smoke')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:webrtc:interop')
     expect(androidWorkflow).toContain(
@@ -364,7 +364,7 @@ describe('Tauri CI native evidence contract', () => {
     expect(iosBaselineWorkflow).toContain('Set up Python interop peer')
     expect(iosBaselineWorkflow).toContain('python-version: "3.11"')
     expect(iosBaselineWorkflow).toContain('Install uv for the external Python peer')
-    expect(iosBaselineWorkflow).toContain('uv sync --extra gateway')
+    expect(iosBaselineWorkflow).toContain('uv sync --extra sidecar-thin')
     expect(iosBaselineWorkflow).toContain('brew install mosquitto')
     expect(iosBaselineWorkflow).toContain(
       'pnpm --filter @aurora/tauri-ui ios:webrtc:interop',

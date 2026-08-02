@@ -84,7 +84,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Python WebRTC peer dependencies
-        run: uv sync --extra gateway
+        run: uv sync --extra sidecar-thin
 
       - name: Build shared UI packages
         run: |

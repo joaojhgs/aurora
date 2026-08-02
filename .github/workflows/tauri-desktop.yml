@@ -221,7 +221,7 @@ jobs:
 
       - name: Install Python and workspace dependencies
         run: |
-          uv sync --extra gateway
+          uv sync --extra sidecar-thin
           pnpm install --frozen-lockfile
 
       - name: Build desktop client workspace dependencies
@@ -279,7 +279,7 @@ jobs:
 
       - name: Install Python and workspace dependencies
         run: |
-          uv sync --extra gateway
+          uv sync --extra sidecar-thin
           pnpm install --frozen-lockfile
 
       - name: Build desktop client workspace dependencies

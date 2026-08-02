@@ -90,7 +90,7 @@ jobs:
           src/ios-webrtc-log-redaction.test.ts
 
       - name: Install Python WebRTC peer dependencies
-        run: uv sync --extra gateway
+        run: uv sync --extra sidecar-thin
 
       - name: Build Tauri workspace dependencies
         run: |
