@@ -91,8 +91,18 @@ export interface MeshPeerBridge {
   ): AsyncIterable<TChunk>
   subscribe?<TEventPayload = unknown>(
     request: MeshStreamRpcRequest
-  ): AsyncIterable<AuroraEvent<TEventPayload> | Record<string, unknown>> | Iterable<AuroraEvent<TEventPayload> | Record<string, unknown>>
+  ): MeshEventSource<TEventPayload>
   getManifest?(peerId: string): Promise<MeshPeerManifest | null>
+}
+
+export type MeshEventSource<TEventPayload = unknown> = (
+  AsyncIterable<AuroraEvent<TEventPayload> | Record<string, unknown>>
+  | Iterable<AuroraEvent<TEventPayload> | Record<string, unknown>>
+) & { readonly ready?: Promise<void> }
+
+export interface AsyncMeshEventSource<TEventPayload = unknown>
+  extends AsyncIterable<AuroraEvent<TEventPayload> | Record<string, unknown>> {
+  readonly ready?: Promise<void>
 }
 
 export interface MeshStreamRpcRequest extends AuroraStreamRequest {
@@ -299,7 +309,11 @@ export class MeshP2PTransport implements AuroraTransport {
     }
     if (resolution.selector) streamRequest.selector = resolution.selector
     const source = this.bridge.subscribe<TEventPayload>(streamRequest)
-    return createEventSubscription(normalizeMeshEvents<TEventPayload>(source, request, resolution.peerId))
+    return createEventSubscription(
+      normalizeMeshEvents<TEventPayload>(source, request, resolution.peerId),
+      undefined,
+      source.ready
+    )
   }
 
   private async resolveRoute(request: AuroraTransportRequest): Promise<MeshRouteResolution> {

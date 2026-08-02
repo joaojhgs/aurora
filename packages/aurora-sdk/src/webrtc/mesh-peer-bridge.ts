@@ -1,4 +1,4 @@
-import { MeshP2PTransport, type MeshP2PTransportOptions, type MeshPeerBridge, type MeshPeerManifest, type MeshRpcRequest, type MeshRpcResponse, type MeshStreamRpcRequest } from '../mesh.js'
+import { MeshP2PTransport, type AsyncMeshEventSource, type MeshP2PTransportOptions, type MeshPeerBridge, type MeshPeerManifest, type MeshRpcRequest, type MeshRpcResponse, type MeshStreamRpcRequest } from '../mesh.js'
 import type { AuroraEvent } from '../types.js'
 import { MeshEventSubscriptionRegistry } from './event-subscriptions.js'
 import {
@@ -259,7 +259,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     return this.iterateRpcCall<TChunk, TPayload>(request)
   }
 
-  subscribe<TEventPayload = unknown>(request: MeshStreamRpcRequest): AsyncIterable<AuroraEvent<TEventPayload> | Record<string, unknown>> {
+  subscribe<TEventPayload = unknown>(request: MeshStreamRpcRequest): AsyncMeshEventSource<TEventPayload> {
     this.assertOpen()
     this.assertPeer(request.peerId)
     const topics = normalizeTopics(request.topics)
@@ -274,8 +274,20 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     }
     request.signal?.addEventListener('abort', abort, { once: true })
     this.streams.set(id, stream)
-    void this.openSubscription(id, topics, correlationIds, request.timeoutMs ?? this.timeoutMs, request.signal, abort).catch((error) => this.failStream(stream, error))
-    return this.iterateStream<TEventPayload>(stream, request.signal, abort)
+    const ready = this.openSubscription(
+      id,
+      topics,
+      correlationIds,
+      request.timeoutMs ?? this.timeoutMs,
+      request.signal,
+      abort
+    )
+    void ready.catch((error) => this.failStream(stream, error))
+    const source = this.iterateStream<TEventPayload>(stream, request.signal, abort)
+    return {
+      ready,
+      [Symbol.asyncIterator]: () => source[Symbol.asyncIterator]()
+    }
   }
 
   async getManifest(peerId: string): Promise<MeshPeerManifest | null> {

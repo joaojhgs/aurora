@@ -85,6 +85,14 @@ async function tick(): Promise<void> {
   await Promise.resolve()
 }
 
+async function waitForSentCount(session: FakeAuthorizedSession, count: number): Promise<void> {
+  const deadline = Date.now() + 250
+  while (session.sent.length < count) {
+    if (Date.now() >= deadline) throw new Error(`timed out waiting for ${count} sent frames`)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
 describe('WebRtcMeshPeerBridge with MeshP2PTransport and AuroraClient', () => {
   it('preserves requestResult peer/audit normalization over WebRTC bridge calls', async () => {
     const { session, client } = makeClient(['call-1'])
@@ -231,6 +239,7 @@ describe('WebRtcMeshPeerBridge with MeshP2PTransport and AuroraClient', () => {
       correlation_ids: ['corr-stream'],
       ttl_seconds: 60
     })
+    expect(session.sent).toHaveLength(1)
     session.emit({
       type: 'subscribed',
       id: 'sub-stream',
@@ -243,7 +252,7 @@ describe('WebRtcMeshPeerBridge with MeshP2PTransport and AuroraClient', () => {
       reason: null,
       idempotent: false
     })
-    await tick()
+    await waitForSentCount(session, 2)
     expect(session.sent[1]).toMatchObject({
       type: 'call',
       id: 'corr-stream',
@@ -295,7 +304,7 @@ describe('WebRtcMeshPeerBridge with MeshP2PTransport and AuroraClient', () => {
       reason: null,
       idempotent: false
     })
-    await tick()
+    await waitForSentCount(session, 2)
     expect(session.sent[1]).toMatchObject({
       type: 'call',
       id: 'corr-audio',

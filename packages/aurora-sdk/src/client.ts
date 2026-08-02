@@ -962,6 +962,7 @@ export class AssistantClient {
         stream = opened.stream
         iterator = opened.iterator
         firstEvent = readFirstIteratorEvent(iterator)
+        if (this.client.transport.kind === 'mesh') await stream.ready
       }
       const requestOptions: { path: string; timeoutMs?: number } = {
         path: routePath('Orchestrator', 'ExternalUserInput')
