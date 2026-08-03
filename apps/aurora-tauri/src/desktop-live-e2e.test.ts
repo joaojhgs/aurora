@@ -39,11 +39,24 @@ describe("desktop live E2E WebView hook", () => {
       VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC: "1",
     })).toBe(true);
     expect(resolveDesktopLivePeerConnectionPrimitive(liveEnv, true)).toBe("browser-rtcpeerconnection");
-    expect(resolveDesktopLivePeerConnectionPrimitive(liveEnv, false)).toBe("tauri-native-webrtc");
+    expect(resolveDesktopLivePeerConnectionPrimitive(liveEnv, false, true)).toBe("tauri-native-webrtc");
     expect(resolveDesktopLivePeerConnectionPrimitive({
       ...liveEnv,
       VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC: "1",
-    }, true)).toBe("tauri-native-webrtc");
+    }, true, true)).toBe("tauri-native-webrtc");
+  });
+
+  it("never selects the Linux native WebRTC bridge on another desktop OS", () => {
+    expect(resolveDesktopLivePeerConnectionPrimitive(liveEnv, true, false)).toBe("browser-rtcpeerconnection");
+    expect(() => resolveDesktopLivePeerConnectionPrimitive(liveEnv, false, false)).toThrow(
+      "requires browser RTCPeerConnection on non-Linux desktop platforms",
+    );
+    expect(() => resolveDesktopLivePeerConnectionPrimitive({
+      ...liveEnv,
+      VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC: "1",
+    }, true, false)).toThrow(
+      "requires browser RTCPeerConnection on non-Linux desktop platforms",
+    );
   });
 
   it("uses a fresh transient signaling identity after switching roles", () => {

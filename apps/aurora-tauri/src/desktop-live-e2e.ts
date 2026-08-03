@@ -30,6 +30,7 @@ import {
 } from "@aurora/client/webrtc";
 import {
   activeRuntimeProfile,
+  getAuroraSurfaceProfile,
   sanitizeRuntimeProfileDocument,
   type AuroraRuntimeProfileDocumentV2,
   type AuroraRuntimeProfileV2,
@@ -218,10 +219,31 @@ export function isDesktopLiveNativeWebRtcForced(
 export function resolveDesktopLivePeerConnectionPrimitive(
   env: Record<string, unknown> = import.meta.env,
   hasBrowserRtcPeerConnection = typeof globalThis.RTCPeerConnection === "function",
+  supportsNativeWebRtcBridge = desktopLiveSurfaceSupportsNativeWebRtc(env),
 ): "tauri-native-webrtc" | "browser-rtcpeerconnection" {
-  return isDesktopLiveNativeWebRtcForced(env) || !hasBrowserRtcPeerConnection
+  const nativeForced = isDesktopLiveNativeWebRtcForced(env);
+  if (!supportsNativeWebRtcBridge && (nativeForced || !hasBrowserRtcPeerConnection)) {
+    throw new Error(
+      "Desktop live E2E requires browser RTCPeerConnection on non-Linux desktop platforms",
+    );
+  }
+  return nativeForced || !hasBrowserRtcPeerConnection
     ? "tauri-native-webrtc"
     : "browser-rtcpeerconnection";
+}
+
+function desktopLiveSurfaceSupportsNativeWebRtc(
+  env: Record<string, unknown>,
+): boolean {
+  return getAuroraSurfaceProfile({
+    runtimeMode: typeof env.VITE_AURORA_RUNTIME_MODE === "string"
+      ? env.VITE_AURORA_RUNTIME_MODE
+      : undefined,
+    transportKind: typeof env.VITE_AURORA_CONNECTION_MODE === "string"
+      ? env.VITE_AURORA_CONNECTION_MODE
+      : undefined,
+    userAgent: typeof navigator === "undefined" ? undefined : navigator.userAgent,
+  }).supportsNativeWebRtcBridge;
 }
 
 export function desktopLiveSignalingId(

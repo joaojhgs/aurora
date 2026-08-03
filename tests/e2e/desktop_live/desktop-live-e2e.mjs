@@ -89,6 +89,7 @@ async function runLive() {
   const driverApplication = process.env.AURORA_DESKTOP_LIVE_E2E_APPLICATION
   const applicationPidFile = process.env.AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE
   const webdriverProvider = process.env.AURORA_DESKTOP_LIVE_E2E_WEBDRIVER_PROVIDER ?? 'official'
+  const expectedWebRtcPrimitive = resolveExpectedWebRtcPrimitive()
 
   let servicesStarted = false
   let pythonPeer
@@ -226,7 +227,7 @@ async function runLive() {
 
     await waitForJson(donePath, timeoutMs, 'desktop driver completion')
     const desktopReport = await waitForJson(desktopReportPath, 10_000, 'desktop driver report')
-    validateDriverReport(desktopReport, { sessionNonce })
+    validateDriverReport(desktopReport, { sessionNonce, expectedWebRtcPrimitive })
     const tauriPid = String(desktopReport.tauriPid)
     const processTreeBefore = desktopReport.processTree.beforeHook
     const processTreeAfter = desktopReport.processTree.afterHook
@@ -302,7 +303,8 @@ function desktopClientLaunchContract() {
       VITE_AURORA_RUNTIME_MODE: 'desktop-thin',
       VITE_AURORA_CONNECTION_MODE: 'webrtc-only',
       VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: '1',
-      VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC: '1',
+      VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC:
+        process.env.VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC ?? 'platform-selected',
     },
     forbiddenDescendants: ['python', 'python3', 'uv', 'main.py', 'aurora-sidecar'],
   }
@@ -439,7 +441,10 @@ async function runDriver(command, env, timeoutMs, seededSecrets, logPath) {
   }
 }
 
-function validateDriverReport(report, { sessionNonce }) {
+function validateDriverReport(
+  report,
+  { sessionNonce, expectedWebRtcPrimitive = 'tauri-native-webrtc' },
+) {
   assert.equal(report.status, 'passed', 'desktop driver report must pass before aggregate scan')
   assert.equal(report.sessionNonce, sessionNonce, 'desktop driver report must echo the launch nonce')
   assert.match(String(report.tauriPid), /^[1-9]\d{0,19}$/u, 'desktop driver report must contain the launched Tauri PID')
@@ -470,20 +475,21 @@ function validateDriverReport(report, { sessionNonce }) {
     String(report.tauriPid),
     'desktop WebView PID binding must match the wrapper-recorded application PID',
   )
+  const nativeWebRtcExpected = expectedWebRtcPrimitive === 'tauri-native-webrtc'
   assert.equal(
     report.desktopResult?.nativeWebRtcFallback?.used,
-    true,
-    'desktop driver report must prove the Rust native WebRTC fallback was used',
+    nativeWebRtcExpected,
+    'desktop driver report must use the expected OS-supported WebRTC primitive',
   )
   assert.equal(
     report.desktopResult?.nativeWebRtcFallback?.primitive,
-    'tauri-native-webrtc',
-    'desktop driver report must name the native WebRTC primitive',
+    expectedWebRtcPrimitive,
+    'desktop driver report must name the expected WebRTC primitive',
   )
   assert.equal(
     report.desktopResult?.nativeWebRtcFallback?.forcedByLiveGate,
-    true,
-    'desktop driver report must bind native WebRTC use to the live gate',
+    nativeWebRtcExpected,
+    'desktop driver report must only force the Linux-native WebRTC bridge',
   )
   for (const [label, snapshot] of Object.entries({
     beforeHook: report.processTree?.beforeHook,
@@ -766,6 +772,17 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function resolveExpectedWebRtcPrimitive() {
+  const value = process.env.AURORA_DESKTOP_LIVE_E2E_EXPECTED_WEBRTC_PRIMITIVE
+    ?? 'tauri-native-webrtc'
+  if (value !== 'tauri-native-webrtc' && value !== 'browser-rtcpeerconnection') {
+    throw new Error(
+      'AURORA_DESKTOP_LIVE_E2E_EXPECTED_WEBRTC_PRIMITIVE must name a supported primitive',
+    )
+  }
+  return value
+}
+
 async function runSelfTest() {
   const ready = {
     lane: 'direct',
@@ -822,6 +839,22 @@ async function runSelfTest() {
   }
   assert.doesNotThrow(() =>
     validateDriverReport(passedDriverReport, { sessionNonce: 'nonce' }),
+  )
+  assert.doesNotThrow(() =>
+    validateDriverReport({
+      ...passedDriverReport,
+      desktopResult: {
+        ...passedDriverReport.desktopResult,
+        nativeWebRtcFallback: {
+          used: false,
+          primitive: 'browser-rtcpeerconnection',
+          forcedByLiveGate: false,
+        },
+      },
+    }, {
+      sessionNonce: 'nonce',
+      expectedWebRtcPrimitive: 'browser-rtcpeerconnection',
+    }),
   )
   assert.throws(() =>
     validateDriverReport({

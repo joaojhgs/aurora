@@ -62,6 +62,34 @@ describe('Aurora surface profile regression coverage', () => {
     expect(remote.trustsNativeWebViewOrigin).toBe(true)
   })
 
+  it('limits the native WebRTC bridge to Linux desktop shells', () => {
+    const linux = getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-thin',
+      transportKind: 'webrtc-only',
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
+    })
+    const macos = getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-thin',
+      transportKind: 'webrtc-only',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15',
+    })
+    const android = getAuroraSurfaceProfile({
+      runtimeMode: 'android-thin',
+      transportKind: 'webrtc-only',
+      userAgent: 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36',
+    })
+    const hostedLinux = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'webrtc-only',
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
+    })
+
+    expect(linux.supportsNativeWebRtcBridge).toBe(true)
+    expect(macos.supportsNativeWebRtcBridge).toBe(false)
+    expect(android.supportsNativeWebRtcBridge).toBe(false)
+    expect(hostedLinux.supportsNativeWebRtcBridge).toBe(false)
+  })
+
   it('keeps voice ownership centralized by surface capabilities', () => {
     const desktopLocal = getAuroraSurfaceProfile({
       runtimeMode: 'desktop-local',

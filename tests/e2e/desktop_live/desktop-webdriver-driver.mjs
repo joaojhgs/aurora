@@ -10,7 +10,7 @@ const args = new Set(process.argv.slice(2))
 const forbiddenDesktopChildPattern = /\b(?:python(?:3(?:\.\d+)?)?|uv|aurora-sidecar)\b|(?:^|\s)main\.py(?:\s|$)/i
 
 if (args.has('--self-test')) {
-  runSelfTest()
+  await runSelfTest()
 } else {
   await run()
 }
@@ -22,6 +22,11 @@ async function run() {
   const sessionNonce = requireEnv('AURORA_DESKTOP_LIVE_E2E_SESSION_NONCE')
   const application = process.env.AURORA_DESKTOP_LIVE_E2E_APPLICATION
   const pidFile = process.env.AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE
+  const expectedWebRtcPrimitive = resolveExpectedWebRtcPrimitive()
+  const scriptTimeoutMs = parsePositiveIntegerEnv(
+    'AURORA_DESKTOP_LIVE_E2E_SCRIPT_TIMEOUT_MS',
+    180_000,
+  )
   let tauriPid = process.env.AURORA_DESKTOP_LIVE_E2E_TAURI_PID ?? 'unavailable'
 
   if (!webdriverUrl) {
@@ -48,7 +53,7 @@ async function run() {
   let session
   try {
     session = await createSession(webdriverUrl, application)
-    await setSessionTimeouts(webdriverUrl, session.sessionId)
+    await setSessionTimeouts(webdriverUrl, session.sessionId, scriptTimeoutMs)
     tauriPid = await waitForApplicationPid(pidFile)
     const processTreeBefore = captureProcessTree(tauriPid)
     const payload = await buildHookPayload({ sessionNonce, tauriPid, reportPath, donePath })
@@ -56,7 +61,11 @@ async function run() {
     if (hookResult?.status === 'passed') {
       const processTreeAfter = captureProcessTree(tauriPid)
       try {
-        validatePassedHookResult(hookResult, { sessionNonce, tauriPid })
+        validatePassedHookResult(hookResult, {
+          sessionNonce,
+          tauriPid,
+          expectedWebRtcPrimitive,
+        })
       } catch (error) {
         await writeBlocked(reportPath, donePath, {
           blocker: 'desktop-webview-hook-invalid-report',
@@ -142,24 +151,26 @@ async function createSession(baseUrl, application) {
       },
     },
   }
-  const value = await request(baseUrl, 'POST', '/session', body)
+  const value = await request(baseUrl, 'POST', '/session', body, 'create-session')
   const sessionId = value.sessionId ?? value.value?.sessionId
   if (!sessionId) throw new Error('WebDriver did not return a session id')
   return { sessionId }
 }
 
-async function setSessionTimeouts(baseUrl, sessionId) {
-  const scriptTimeoutMs = parsePositiveIntegerEnv(
-    'AURORA_DESKTOP_LIVE_E2E_SCRIPT_TIMEOUT_MS',
-    180_000,
-  )
+async function setSessionTimeouts(baseUrl, sessionId, scriptTimeoutMs) {
   await request(baseUrl, 'POST', `/session/${encodeURIComponent(sessionId)}/timeouts`, {
     script: scriptTimeoutMs,
-  })
+  }, 'set-session-timeouts')
 }
 
 async function deleteSession(baseUrl, sessionId) {
-  await request(baseUrl, 'DELETE', `/session/${encodeURIComponent(sessionId)}`)
+  await request(
+    baseUrl,
+    'DELETE',
+    `/session/${encodeURIComponent(sessionId)}`,
+    undefined,
+    'delete-session',
+  )
 }
 
 async function executeScript(baseUrl, sessionId, script) {
@@ -178,6 +189,7 @@ async function executeAsyncScript(baseUrl, sessionId, script, args = []) {
     'POST',
     `/session/${encodeURIComponent(sessionId)}/execute/async`,
     { script, args },
+    'invoke-desktop-hook',
   )
   return value.value ?? value
 }
@@ -247,7 +259,14 @@ async function invokeDesktopHook(baseUrl, sessionId, payload) {
   `, [payload])
 }
 
-function validatePassedHookResult(result, { sessionNonce, tauriPid }) {
+function validatePassedHookResult(
+  result,
+  {
+    sessionNonce,
+    tauriPid,
+    expectedWebRtcPrimitive = 'tauri-native-webrtc',
+  },
+) {
   assert.equal(result.status, 'passed')
   assert.equal(result.sessionNonce, sessionNonce)
   assert.equal(String(result.tauriPid), String(tauriPid))
@@ -255,9 +274,16 @@ function validatePassedHookResult(result, { sessionNonce, tauriPid }) {
   assert.equal(result.noHttpFetchTransportUsed, true)
   assert.equal(result.browserResult?.noHttpFetchTransportUsed, true)
   assert.deepEqual(result.browserResult?.httpFetchCalls, [])
-  assert.equal(result.desktopResult?.nativeWebRtcFallback?.used, true)
-  assert.equal(result.desktopResult?.nativeWebRtcFallback?.primitive, 'tauri-native-webrtc')
-  assert.equal(result.desktopResult?.nativeWebRtcFallback?.forcedByLiveGate, true)
+  const nativeWebRtcExpected = expectedWebRtcPrimitive === 'tauri-native-webrtc'
+  assert.equal(result.desktopResult?.nativeWebRtcFallback?.used, nativeWebRtcExpected)
+  assert.equal(
+    result.desktopResult?.nativeWebRtcFallback?.primitive,
+    expectedWebRtcPrimitive,
+  )
+  assert.equal(
+    result.desktopResult?.nativeWebRtcFallback?.forcedByLiveGate,
+    nativeWebRtcExpected,
+  )
   assertRoleSwitchEvidence(result.roleSwitchEvidence, 'hook result')
   assert.ok(
     result.browserResult || result.desktopResult,
@@ -346,18 +372,32 @@ function descendantsOf(entries, rootPid) {
   return descendants
 }
 
-async function request(baseUrl, method, pathname, body) {
-  const response = await fetch(new URL(pathname, baseUrl), {
-    method,
-    headers: body ? { 'content-type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  })
+async function request(baseUrl, method, pathname, body, phase = 'webdriver-request') {
+  let response
+  try {
+    response = await fetch(new URL(pathname, baseUrl), {
+      method,
+      headers: body ? { 'content-type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    })
+  } catch (error) {
+    throw new Error(`${phase} failed: ${requestErrorDetail(error)}`)
+  }
   const text = await response.text()
   const payload = text ? JSON.parse(text) : {}
   if (!response.ok) {
     throw new Error(`WebDriver ${method} ${pathname} failed with ${response.status}: ${text}`)
   }
   return payload
+}
+
+function requestErrorDetail(error) {
+  const detail = error instanceof Error ? error.message : String(error)
+  const cause = error && typeof error === 'object' ? error.cause : undefined
+  const code = cause && typeof cause === 'object' && typeof cause.code === 'string'
+    ? cause.code
+    : undefined
+  return code ? `${detail} (${code})` : detail
 }
 
 async function writeBlocked(reportPath, donePath, details) {
@@ -402,6 +442,17 @@ function parsePositiveIntegerEnv(name, fallback) {
   return parsed
 }
 
+function resolveExpectedWebRtcPrimitive() {
+  const value = process.env.AURORA_DESKTOP_LIVE_E2E_EXPECTED_WEBRTC_PRIMITIVE
+    ?? 'tauri-native-webrtc'
+  if (value !== 'tauri-native-webrtc' && value !== 'browser-rtcpeerconnection') {
+    throw new Error(
+      'AURORA_DESKTOP_LIVE_E2E_EXPECTED_WEBRTC_PRIMITIVE must name a supported primitive',
+    )
+  }
+  return value
+}
+
 function redactEndpoint(value) {
   return String(value).replace(/\/\/([^:@/]+):([^@/]+)@/, '//<redacted>@')
 }
@@ -410,7 +461,7 @@ function sha256Like(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex')
 }
 
-function runSelfTest() {
+async function runSelfTest() {
   assert.equal(redactEndpoint('http://user:pass@127.0.0.1:4444'), 'http://<redacted>@127.0.0.1:4444')
   assert.equal(sha256Like('abc'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
   const processEntries = parseProcessTable([
@@ -426,6 +477,11 @@ function runSelfTest() {
     false,
   )
   assert.throws(() => requireEnv('AURORA_DESKTOP_LIVE_E2E_SELF_TEST_MISSING'))
+  assert.equal(resolveExpectedWebRtcPrimitive(), 'tauri-native-webrtc')
+  await assert.rejects(
+    request('http://127.0.0.1:1', 'GET', '/status', undefined, 'self-test-phase'),
+    /self-test-phase failed/,
+  )
   assert.doesNotThrow(() =>
     validatePassedHookResult({
       status: 'passed',
@@ -440,6 +496,28 @@ function runSelfTest() {
       desktopResult: { approved: true, nativeWebRtcFallback: nativeWebRtcFallbackEvidence() },
       secretsRedacted: true,
     }, { sessionNonce: 'nonce', tauriPid: '123' }),
+  )
+  assert.doesNotThrow(() =>
+    validatePassedHookResult({
+      status: 'passed',
+      sessionNonce: 'nonce',
+      tauriPid: '123',
+      roleSwitchEvidence: { passed: true, from: 'remote-console', to: 'mesh-node' },
+      noHttpFetchTransportUsed: true,
+      browserResult: {
+        noHttpFetchTransportUsed: true,
+        httpFetchCalls: [],
+      },
+      desktopResult: {
+        approved: true,
+        nativeWebRtcFallback: browserWebRtcEvidence(),
+      },
+      secretsRedacted: true,
+    }, {
+      sessionNonce: 'nonce',
+      tauriPid: '123',
+      expectedWebRtcPrimitive: 'browser-rtcpeerconnection',
+    }),
   )
   assert.throws(() =>
     validatePassedHookResult({
@@ -503,5 +581,13 @@ function nativeWebRtcFallbackEvidence() {
     used: true,
     primitive: 'tauri-native-webrtc',
     forcedByLiveGate: true,
+  }
+}
+
+function browserWebRtcEvidence() {
+  return {
+    used: false,
+    primitive: 'browser-rtcpeerconnection',
+    forcedByLiveGate: false,
   }
 }

@@ -1060,8 +1060,10 @@ function createTauriWebThinRuntime({
   meshNodeServices?: TauriMeshNodeServices | null | undefined;
 }): BrowserWebThinRuntime {
   let runtime: BrowserWebThinRuntime;
+  const surfaceProfile = currentAuroraSurfaceProfile();
   const usesNativePeerConnection =
     isDesktopTauriRuntime() &&
+    surfaceProfile.supportsNativeWebRtcBridge &&
     typeof globalThis.RTCPeerConnection !== "function";
   runtime = createBrowserWebThinRuntime({
     mode,

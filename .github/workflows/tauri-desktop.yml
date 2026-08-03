@@ -292,6 +292,7 @@ jobs:
           AURORA_DESKTOP_LIVE_E2E_LANE: stun
           AURORA_DESKTOP_LIVE_E2E_ARTIFACT_DIR: reports/desktop-live-e2e-macos-stun
           AURORA_DESKTOP_LIVE_E2E_WEBDRIVER_PROVIDER: embedded
+          AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC: "0"
           WEBRTC_INTEROP_SERVICE_SCRIPT: scripts/webrtc_interop_macos_services.sh
         run: pnpm test:desktop-client:live
 

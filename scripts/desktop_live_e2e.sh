@@ -26,6 +26,23 @@ desktop_driver_log="$desktop_artifact_dir/${desktop_webdriver_provider}-webdrive
 desktop_frontend_dist="$desktop_repo_root/apps/aurora-tauri/dist"
 desktop_driver_pid=""
 desktop_application_pid=""
+desktop_force_native_webrtc="${AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC:-}"
+if [[ -z "$desktop_force_native_webrtc" ]]; then
+  if [[ "$desktop_platform" == "Linux" ]]; then
+    desktop_force_native_webrtc="1"
+  else
+    desktop_force_native_webrtc="0"
+  fi
+fi
+if [[ "$desktop_force_native_webrtc" != "0" && "$desktop_force_native_webrtc" != "1" ]]; then
+  echo "AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC must be '0' or '1'" >&2
+  exit 2
+fi
+if [[ "$desktop_force_native_webrtc" == "1" ]]; then
+  desktop_expected_webrtc_primitive="tauri-native-webrtc"
+else
+  desktop_expected_webrtc_primitive="browser-rtcpeerconnection"
+fi
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-aurora-desktop-live-e2e}"
 
 cleanup_desktop_driver() {
@@ -84,7 +101,7 @@ if [[ "${AURORA_DESKTOP_LIVE_E2E_SKIP_BUILD:-0}" != "1" ]]; then
     VITE_AURORA_RUNTIME_MODE=desktop-thin \
     VITE_AURORA_CONNECTION_MODE=webrtc-only \
     VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK=1 \
-    VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC=1 \
+    VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC="$desktop_force_native_webrtc" \
     pnpm --filter @aurora/tauri-ui tauri "${desktop_tauri_build_args[@]}"
 fi
 
@@ -103,7 +120,8 @@ desktop_webdriver_url="http://127.0.0.1:$desktop_driver_port"
 
 export AURORA_DESKTOP_LIVE_E2E=1
 export AURORA_TAURI_DEV_AUTOSIDECAR=0
-export VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC=1
+export VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC="$desktop_force_native_webrtc"
+export AURORA_DESKTOP_LIVE_E2E_EXPECTED_WEBRTC_PRIMITIVE="$desktop_expected_webrtc_primitive"
 export AURORA_DESKTOP_LIVE_E2E_APPLICATION="$desktop_application_wrapper"
 export AURORA_DESKTOP_LIVE_E2E_APPLICATION_BIN="$desktop_application_bin"
 export AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE="$desktop_app_pid_file"

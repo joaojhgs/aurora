@@ -47,6 +47,8 @@ export interface AuroraSurfaceProfile {
   supportsMobileNative: boolean
   supportsIosOnly: boolean
   supportsAndroidOnly: boolean
+  /** Aurora's native RTCPeerConnection bridge is currently packaged only on Linux desktop. */
+  supportsNativeWebRtcBridge: boolean
   isWebThin: boolean
   supportsWebRtcThin: boolean
   prefersWebRtcTransport: boolean
@@ -101,6 +103,8 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
   const nativeSaysIos = /\b(ios|iphone|ipad|ipod)\b/.test(nativePlatform)
   const userAgentSaysAndroid = userAgent.includes('android')
   const userAgentSaysIos = /(iphone|ipad|ipod)/.test(userAgent)
+  const nativeSaysLinux = /\blinux\b/.test(nativePlatform)
+  const userAgentSaysLinux = userAgent.includes('linux') && !userAgentSaysAndroid
   const isAndroid = runtimeSaysAndroid || (
     !runtimeSaysIos && (nativeSaysAndroid || (!nativeSaysIos && userAgentSaysAndroid))
   )
@@ -137,6 +141,9 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
 
   const physicalKind: AuroraSurfaceKind = physicalSurfaceKind(legacyKind)
   const isDesktop = legacyKind === 'desktop-local' || legacyKind === 'desktop-thin'
+  const supportsNativeWebRtcBridge = isDesktop && usesNativeShell && (
+    nativeSaysLinux || userAgentSaysLinux
+  )
   const isWebThin = legacyKind === 'web' || legacyKind === 'desktop-thin' || (isMobile && (transportKind === 'http' || usesWebRtcTransport))
   const supportsWebRtcThin = isWebThin || isMobile
   const prefersWebRtcTransport = usesWebRtcTransport
@@ -161,6 +168,7 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
     supportsMobileNative: isMobile,
     supportsIosOnly: isIos,
     supportsAndroidOnly: isAndroid,
+    supportsNativeWebRtcBridge,
     isWebThin,
     supportsWebRtcThin,
     prefersWebRtcTransport,
