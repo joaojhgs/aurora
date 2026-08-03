@@ -103,6 +103,10 @@ describe('durable local feature sharing controller', () => {
       id: descriptor.toolContractId,
       enabled: false,
       label: 'Share text',
+      serviceId: 'tooling',
+      servicePermissionId: 'Tooling.use',
+      serviceLabel: 'Tools',
+      serviceDescription: 'Use tools this device makes available.',
       requiresAuroraOpen: true,
       requiresLocalConfirmation: true,
       permissionNeeded: true,
@@ -137,6 +141,122 @@ describe('durable local feature sharing controller', () => {
 
     const reloaded = new DurableFeatureSharingController(controllerOptions(fixture.session, fixture.registry, fixture.grantManager))
     expect(feature(await reloaded.load(), descriptor.toolContractId)).toMatchObject({ enabled: true })
+  })
+
+  it('persists tool-group defaults and per-tool approval overrides without changing shareable features', async () => {
+    const fixture = await controllerFixture()
+    await fixture.controller.load()
+    const entry = fixture.registry.resolveForDispatch(descriptor.toolContractId)!
+    const sourceId = entry.toolInfo.share_group_id
+
+    await fixture.controller.setSourceApprovalPolicy(sourceId, 'untrusted', true)
+    await fixture.controller.setToolApprovalOverride(descriptor.toolContractId, 'deny_all')
+    await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
+
+    expect(await fixture.controller.loadApprovalPolicies()).toEqual({
+      sourcePolicies: [{
+        sourceId,
+        trustTier: 'untrusted',
+        includeFutureTools: true,
+        knownToolContractIds: [descriptor.toolContractId],
+        revision: 1,
+        updatedAtMs: 1_000
+      }],
+      toolPolicies: [{
+        toolContractId: descriptor.toolContractId,
+        globalToolId: entry.toolInfo.global_tool_id,
+        localToolName: descriptor.localName,
+        trustTier: 'blocked',
+        revision: 1,
+        updatedAtMs: 1_000
+      }],
+      revision: 1,
+      unavailable: false
+    })
+    expect(fixture.controller.resolveLocalToolApproval(entry)).toEqual({
+      mode: 'deny_all',
+      sourceId,
+      unavailable: false
+    })
+    const records = await fixture.session.localTools.listLocalToolStates()
+    expect(records).toHaveLength(2)
+    expect(records.find((record) => record.toolContractId === descriptor.toolContractId)).toMatchObject({
+      enabled: true,
+      revision: 2,
+      settingsEnvelope: expect.objectContaining({ version: 1 })
+    })
+
+    const reloaded = new DurableFeatureSharingController(
+      controllerOptions(fixture.session, fixture.registry, fixture.grantManager, fixture.crypto)
+    )
+    expect((await reloaded.load()).features).toHaveLength(2)
+    expect(await reloaded.loadApprovalPolicies()).toEqual(await fixture.controller.loadApprovalPolicies())
+    expect(reloaded.resolveLocalToolApproval(entry).mode).toBe('deny_all')
+
+    await reloaded.clearToolApprovalOverride(descriptor.toolContractId)
+    expect(reloaded.resolveLocalToolApproval(entry).mode).toBe('ask_each_time')
+    await reloaded.clearSourceApprovalPolicy(sourceId)
+    expect(reloaded.resolveLocalToolApproval(entry).mode).toBe('inherit')
+  })
+
+  it('requires review for tools added after source trust unless future tools were included', async () => {
+    const fixture = await controllerFixture()
+    await fixture.controller.load()
+    const existingEntry = fixture.registry.resolveForDispatch(descriptor.toolContractId)!
+    const sourceId = existingEntry.toolInfo.share_group_id
+
+    await fixture.controller.setSourceApprovalPolicy(sourceId, 'trusted', false)
+    expect(fixture.controller.resolveLocalToolApproval(existingEntry).mode).toBe('approve_all_for_peer')
+
+    const futureDescriptor: LocalToolDescriptorV1 = {
+      ...descriptor,
+      toolContractId: 'aurora.local.native.share_link.v1',
+      localName: 'native.share_link',
+      displayName: 'Share link',
+      handlerId: 'native.share_link'
+    }
+    fixture.registry.register({ descriptor: futureDescriptor, handler: () => ({ shared: true }) })
+    const futureEntry = fixture.registry.resolveForDispatch(futureDescriptor.toolContractId)!
+
+    expect(fixture.controller.resolveLocalToolApproval(futureEntry)).toEqual({
+      mode: 'ask_each_time',
+      sourceId,
+      unavailable: false
+    })
+
+    const reloaded = new DurableFeatureSharingController(
+      controllerOptions(fixture.session, fixture.registry, fixture.grantManager, fixture.crypto)
+    )
+    await reloaded.load()
+    expect(reloaded.resolveLocalToolApproval(existingEntry).mode).toBe('approve_all_for_peer')
+    expect(reloaded.resolveLocalToolApproval(futureEntry).mode).toBe('ask_each_time')
+  })
+
+  it('marks unreadable local approval policy unavailable without publishing synthetic features', async () => {
+    const fixture = await controllerFixture()
+    await fixture.controller.load()
+    const entry = fixture.registry.resolveForDispatch(descriptor.toolContractId)!
+    await fixture.controller.setToolApprovalOverride(descriptor.toolContractId, 'ask_each_time')
+    const failingCrypto: EnvelopeCryptoPort = {
+      encrypt: fixture.crypto.encrypt.bind(fixture.crypto),
+      decrypt: async () => { throw new Error('unreadable policy') },
+      rotateKey: fixture.crypto.rotateKey.bind(fixture.crypto)
+    }
+    const reloaded = new DurableFeatureSharingController(
+      controllerOptions(fixture.session, fixture.registry, fixture.grantManager, failingCrypto)
+    )
+
+    const sharing = await reloaded.load()
+
+    expect(sharing.features.map((item) => item.id)).toEqual([
+      statusDescriptor.toolContractId,
+      descriptor.toolContractId
+    ].sort())
+    expect(await reloaded.loadApprovalPolicies()).toMatchObject({ unavailable: true })
+    expect(reloaded.resolveLocalToolApproval(entry)).toMatchObject({
+      mode: 'deny_all',
+      unavailable: true
+    })
   })
 
   it('does not mutate memory when a durable local-tool write fails', async () => {
@@ -601,17 +721,23 @@ async function controllerFixture() {
     now: () => 1_000,
     randomId: () => `grant-${++grantSequence}`
   })
-  const controller = new DurableFeatureSharingController(controllerOptions(session, registry, grantManager))
+  const controller = new DurableFeatureSharingController(controllerOptions(session, registry, grantManager, crypto))
   return { backend, session, registry, crypto, repository, grantManager, controller }
 }
 
-function controllerOptions(session: LocalDataSession, registry: LocalToolRegistry, grantManager: PeerGrantManager) {
+function controllerOptions(
+  session: LocalDataSession,
+  registry: LocalToolRegistry,
+  grantManager: PeerGrantManager,
+  crypto?: EnvelopeCryptoPort
+) {
   return {
     registry,
     session,
     grantManager,
     localVerifierPeerId: localNodeId,
     roomName,
+    ...(crypto ? { crypto } : {}),
     now: () => 1_000
   }
 }

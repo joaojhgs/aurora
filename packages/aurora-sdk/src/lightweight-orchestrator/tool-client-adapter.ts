@@ -189,7 +189,10 @@ export async function loadLightweightRemoteProjectionCatalog(
         authorityRevision: page.authority_revision,
         projectionRevision: page.projection_revision,
         projectionDigest: page.projection_digest,
-        tools: mergeLightweightAssistantTools([], tools)
+        tools: mergeLightweightAssistantTools(
+          [],
+          tools.map((tool) => bindRemoteProjectionTool(tool, page.provider_peer_id, page.service_instance_id))
+        )
       }
     }
     cursor = page.next_cursor
@@ -436,6 +439,43 @@ function validateProjectionToolIdentity(page: ToolingGetExportCatalogResponse, t
   ) {
     throw new LightweightOrchestratorError('projection_tool_identity_mismatch')
   }
+}
+
+/**
+ * Translate an authenticated provider-local projection into the receiving
+ * device's routing view. Page hashes and the final checksum are intentionally
+ * verified before this conversion so consumer-owned fields cannot weaken the
+ * signed provider projection.
+ */
+function bindRemoteProjectionTool(
+  tool: ToolingProjectionToolInfo,
+  providerPeerId: string,
+  serviceInstanceId: string
+): ToolingProjectionToolInfo {
+  return {
+    ...tool,
+    provider_peer_id: providerPeerId,
+    provider_service_instance_id: serviceInstanceId,
+    provider_granted_permissions: null,
+    source_type: 'mesh_peer',
+    source: 'mesh_peer',
+    source_id: `mesh:${providerPeerId}:${safeProjectionSourceSegment(serviceInstanceId)}`,
+    trust_tier: 'untrusted',
+    execution_location: 'remote',
+    provenance: {
+      ...tool.provenance,
+      provider_peer_id: providerPeerId,
+      provider_service_instance_id: serviceInstanceId,
+      provider_kind: 'mesh_peer'
+    }
+  }
+}
+
+function safeProjectionSourceSegment(value: string): string {
+  return value.trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'Tooling'
 }
 
 function contextFor(options: LightweightToolClientAdapterOptions, methodId: string, receivedAtMs: number): PeerHostCallContext {

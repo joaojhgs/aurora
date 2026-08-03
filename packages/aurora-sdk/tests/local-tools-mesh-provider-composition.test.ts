@@ -243,6 +243,44 @@ describe('mesh-node local Tooling provider composition', () => {
     expect(JSON.stringify({ result, audits })).not.toContain('cursor-secret-1234')
   })
 
+  it('passes the local owner approval policy into the provider execution gate', async () => {
+    const grantRepository = new MemoryPeerGrantRepository()
+    await grantRepository.upsertGrant(grant())
+    const resolver = new PeerAuthorityResolver({
+      verifierStore: new MemoryInboundCredentialVerifierStore(),
+      grantRepository
+    })
+    const registry = registryWithEcho()
+    const composition = createMeshNodeLocalToolProvider({
+      nodeMode: 'mesh-node',
+      localPeerId: 'provider',
+      nodeName: 'Provider',
+      registry,
+      authorityResolver: resolver,
+      exportDecision: { isShared: () => true },
+      audit: () => undefined,
+      approvalPolicy: {
+        resolveLocalToolApproval: (entry) => ({
+          mode: 'deny_all',
+          sourceId: entry.toolInfo.share_group_id,
+          unavailable: false
+        })
+      },
+      cursorSecret: 'cursor-secret-1234',
+      clock: () => 1_000,
+      randomId: () => 'epoch-1'
+    })
+
+    await expect(composition.policy.prepare(
+      registry.resolveForDispatch('echo')!,
+      { tool_name: 'echo', arguments: { text: 'hello' } },
+      executionContext()
+    )).resolves.toMatchObject({
+      ok: false,
+      policy_decision: { reason: 'local_policy_blocked' }
+    })
+  })
+
   it('executes granted local tools through the real peer-host call path', async () => {
     const grantRepository = new MemoryPeerGrantRepository()
     await grantRepository.upsertGrant(grant())

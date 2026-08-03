@@ -17,10 +17,17 @@ import {
   navItemSnapshot,
   type LocalFeatureSharingPort,
   type LocalFeatureSharingSnapshot,
+  type LocalToolApprovalPolicySnapshot,
   type RouteAvailability,
 } from '../src'
 
 const LOCAL_FEATURE_ID = 'Native.GetDeviceStatus'
+const TOOLING_SERVICE = {
+  serviceId: 'tooling',
+  servicePermissionId: 'Tooling.use',
+  serviceLabel: 'Tools',
+  serviceDescription: 'Use tools this device makes available.',
+} as const
 
 function projectionTool(overrides: Partial<ToolingProjectionToolInfo> = {}): ToolingProjectionToolInfo {
   return {
@@ -108,6 +115,7 @@ function remoteProjectionTool(): ToolingProjectionToolInfo {
 function sharingSnapshot(enabled = true): LocalFeatureSharingSnapshot {
   return {
     features: [{
+      ...TOOLING_SERVICE,
       id: LOCAL_FEATURE_ID,
       label: 'Device status',
       description: 'Read device status.',
@@ -146,6 +154,32 @@ function toolsRoute(): RouteAvailability {
 }
 
 describe('lightweight node tool inventory', () => {
+  it('stays on the local-node Tools surface while local sharing is temporarily unavailable', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const loadPolicy = vi.spyOn(client.tools, 'getPolicySummary')
+    const container = document.createElement('div')
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <LightweightToolApprovalPanel
+          client={client}
+          route={toolsRoute()}
+          localTools={[projectionTool()]}
+          nativePlatform="android"
+        />,
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Device status')
+    expect(container.textContent).not.toContain('Tools are unavailable')
+    expect(container.textContent).not.toContain('Add MCP source')
+    expect(loadPolicy).not.toHaveBeenCalled()
+    await act(async () => root.unmount())
+  })
+
   it('renders local native tools and peer-shared tools through the canonical Tools console', async () => {
     const port: LocalFeatureSharingPort = {
       load: vi.fn(async () => sharingSnapshot()),
@@ -173,18 +207,127 @@ describe('lightweight node tool inventory', () => {
     expect(container.textContent).toContain('Tools')
     expect(container.textContent).toContain('Home Aurora')
     expect(container.textContent).toContain('Device status')
+    expect(container.textContent).not.toContain('Service sharing')
     expect(container.textContent).not.toContain('Features on this device')
     expect(container.textContent).not.toContain('Tools are unavailable')
     expect(container.textContent).not.toContain('Add MCP source')
 
+    const revealSelectedSource = vi.fn()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: revealSelectedSource,
+    })
+    const sourcesTrigger = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent === 'Sources')
+    await act(async () => sourcesTrigger?.click())
+    expect(container.querySelector('#tool-source-drawer')?.className).toContain('flex')
+
     const homeSource = Array.from(container.querySelectorAll<HTMLButtonElement>('[aria-label="Tool sources"] button'))
       .find((button) => button.textContent?.includes('Home Aurora'))
     await act(async () => homeSource?.click())
+    expect(container.querySelector('#tool-source-drawer')?.className).toContain('hidden lg:flex')
+    expect(revealSelectedSource).toHaveBeenCalledWith({ block: 'start' })
     expect(container.textContent).toContain('Read calendar')
 
     const remoteDetails = container.querySelector<HTMLButtonElement>('button[aria-label="Toggle details for Read calendar"]')
     await act(async () => remoteDetails?.click())
     expect(container.textContent).toContain('Shared from another device')
+    await act(async () => root.unmount())
+  })
+
+  it('uses the canonical approval controls for durable local source and tool policy', async () => {
+    let policySnapshot: LocalToolApprovalPolicySnapshot = {
+      sourcePolicies: [],
+      toolPolicies: [],
+      revision: 0,
+      unavailable: false,
+    }
+    const setSourceApprovalPolicy = vi.fn(async (
+      sourceId: string,
+      trustTier: 'trusted' | 'untrusted' | 'blocked',
+      includeFutureTools = false,
+    ) => {
+      policySnapshot = {
+        ...policySnapshot,
+        sourcePolicies: [{ sourceId, trustTier, includeFutureTools, revision: 1, updatedAtMs: 1 }],
+        revision: 1,
+      }
+    })
+    const setToolApprovalOverride = vi.fn(async (
+      toolContractId: string,
+      mode: 'approve_all_for_peer' | 'ask_each_time' | 'deny_all',
+    ) => {
+      const trustTier = mode === 'approve_all_for_peer'
+        ? 'trusted'
+        : mode === 'ask_each_time'
+          ? 'untrusted'
+          : 'blocked'
+      policySnapshot = {
+        ...policySnapshot,
+        toolPolicies: [{
+          toolContractId,
+          globalToolId: projectionTool().global_tool_id,
+          localToolName: projectionTool().local_name,
+          trustTier,
+          revision: 2,
+          updatedAtMs: 2,
+        }],
+        revision: 2,
+      }
+    })
+    const port: LocalFeatureSharingPort = {
+      load: vi.fn(async () => sharingSnapshot()),
+      setFeatureEnabled: vi.fn(async () => undefined),
+      replacePeerSharing: vi.fn(async () => undefined),
+      revokePeerSharing: vi.fn(async () => undefined),
+      toolApprovalPolicy: {
+        loadApprovalPolicies: vi.fn(async () => policySnapshot),
+        setSourceApprovalPolicy,
+        clearSourceApprovalPolicy: vi.fn(async () => undefined),
+        setToolApprovalOverride,
+        clearToolApprovalOverride: vi.fn(async () => undefined),
+      },
+    }
+    const container = document.createElement('div')
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <LightweightToolApprovalPanel
+          client={new AuroraClient({ transport: new MockAuroraTransport() })}
+          route={toolsRoute()}
+          localTools={[projectionTool()]}
+          remoteTools={[remoteProjectionTool()]}
+          featureSharing={port}
+          nativePlatform="android"
+        />,
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const sourceApproval = container.querySelector('[role="group"][aria-label="Trust policy for Device"]')
+    const requireSourceApproval = [...(sourceApproval?.querySelectorAll('button') ?? [])]
+      .find((button) => button.textContent === 'Require approval') as HTMLButtonElement
+    expect(requireSourceApproval.disabled).toBe(false)
+    await act(async () => requireSourceApproval.click())
+    await waitUntil(() => expect(setSourceApprovalPolicy).toHaveBeenCalledWith('android.device', 'untrusted', true))
+
+    const details = container.querySelector<HTMLButtonElement>('button[aria-label="Toggle details for Device status"]')
+    await act(async () => details?.click())
+    const toolApproval = container.querySelector('[role="group"][aria-label="Policy override for Device status"]')
+    const blockTool = [...(toolApproval?.querySelectorAll('button') ?? [])]
+      .find((button) => button.textContent === 'Block') as HTMLButtonElement
+    expect(blockTool.disabled).toBe(false)
+    await act(async () => blockTool.click())
+    await waitUntil(() => expect(setToolApprovalOverride).toHaveBeenCalledWith(LOCAL_FEATURE_ID, 'deny_all'))
+
+    const homeSource = Array.from(container.querySelectorAll<HTMLButtonElement>('[aria-label="Tool sources"] button'))
+      .find((button) => button.textContent?.includes('Home Aurora'))
+    await act(async () => homeSource?.click())
+    const remoteApproval = container.querySelector('[role="group"][aria-label="Trust policy for Home Aurora · Calendar"]')
+    expect([...(remoteApproval?.querySelectorAll('button') ?? [])].every((button) => button.disabled)).toBe(true)
+
     await act(async () => root.unmount())
   })
 
@@ -235,3 +378,18 @@ describe('lightweight node tool inventory', () => {
     )
   })
 })
+
+async function waitUntil(assertion: () => void, timeoutMs = 1_000): Promise<void> {
+  const started = Date.now()
+  while (Date.now() - started < timeoutMs) {
+    try {
+      assertion()
+      return
+    } catch {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+    }
+  }
+  assertion()
+}

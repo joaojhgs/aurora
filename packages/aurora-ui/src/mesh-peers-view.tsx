@@ -230,6 +230,8 @@ export interface MeshPeersViewProps {
   initialInviteText?: string | null
   /** Local authority facade; omitted when this surface cannot safely offer local features. */
   localFeatureSharing?: LocalFeatureSharingPort | undefined
+  /** Services this local node can share. Tool-level choices remain on the Tools page. */
+  localServiceScopes?: readonly LocalShareableServiceScope[] | undefined
   ownsLocalNodeState?: boolean
 }
 
@@ -601,6 +603,37 @@ export function MeshPeersResource({
     [client.admin, loadPeers],
   )
 
+  const saveLocalScopes = useCallback(
+    async (peer: MeshPeerRow, nextPermissions: string[]) => {
+      if (!localFeatureSharing) return
+      setPendingPeerId(peer.peerId)
+      setOptimisticPeerId(peer.peerId)
+      setMutationError(null)
+      try {
+        const current = await localFeatureSharing.load()
+        const approvedDevice = current.approvedDevices.find((device) => device.peerId === peer.peerId)
+        if (!approvedDevice) {
+          throw new Error('This device is no longer available. Refresh connected devices and try again.')
+        }
+        const scopes = localShareableServiceScopes(current)
+        const selectedFeatureIds = localFeatureIdsForServicePermissions(scopes, nextPermissions)
+        const enabledFeatureIds = await prepareLocalFeatureSharingApproval(localFeatureSharing, selectedFeatureIds)
+        await localFeatureSharing.replacePeerSharing(
+          peer.peerId,
+          enabledFeatureIds,
+          approvedDevice.expiresAtMs,
+        )
+        await loadPeers()
+      } catch (error) {
+        setMutationError(meshPeerErrorMessage(error))
+      } finally {
+        setPendingPeerId(null)
+        setOptimisticPeerId(null)
+      }
+    },
+    [loadPeers, localFeatureSharing],
+  )
+
   const confirmThinPairing = useCallback(
     async (sessionId: string, approval: PeerPairingApproval) => {
       if (thinPairingApprovals.current.has(sessionId)) return
@@ -608,7 +641,7 @@ export function MeshPeersResource({
       setThinPeerMutationError(null)
       try {
         const sharedFeatureIds = localFeatureSharing
-          ? await prepareLocalFeatureSharingApproval(localFeatureSharing, approval.sharedFeatureIds ?? [], resolvedSurface)
+          ? await prepareLocalFeatureSharingApproval(localFeatureSharing, approval.sharedFeatureIds ?? [])
           : []
         await thinPeer.confirmPairing(sessionId, { sharedFeatureIds })
         thinPairingApprovals.current.add(sessionId)
@@ -658,10 +691,6 @@ export function MeshPeersResource({
       onPermissionsChange={setPermissions}
       onRevokeTokenChange={setRevokeToken}
       onRefresh={loadPeers}
-      onApprovePeer={(peer) => runAction(peer, 'approve')}
-      onDenyPeer={(peer) => runAction(peer, 'deny')}
-      onRemovePeer={(peer) => runAction(peer, 'remove')}
-      onSaveScopes={saveScopes}
       canManageLocalServiceConfiguration={canManageLocalServiceConfiguration}
       ownsLocalNodeState={ownsLocalNodeState}
       thinPeerSnapshot={thinPeerSnapshot}
@@ -675,10 +704,23 @@ export function MeshPeersResource({
             onApplyInvite: applyInvite,
           }
         : {})}
+      {...(!ownsLocalNodeState
+        ? {
+            onApprovePeer: (peer: MeshPeerRow) => runAction(peer, 'approve'),
+            onDenyPeer: (peer: MeshPeerRow) => runAction(peer, 'deny'),
+            onRemovePeer: (peer: MeshPeerRow) => runAction(peer, 'remove'),
+            onSaveScopes: saveScopes,
+          }
+        : localFeatureSharing
+          ? { onSaveScopes: saveLocalScopes }
+          : {})}
       {...(onScanQr ? { onScanQr } : {})}
       inviteImport={inviteImport}
       initialInviteText={initialInviteText}
       {...(localFeatureSharing ? { localFeatureSharing } : {})}
+      {...(ownsLocalNodeState && localSharingSnapshot.current
+        ? { localServiceScopes: localShareableServiceScopes(localSharingSnapshot.current) }
+        : {})}
     />
   )
 }
@@ -725,14 +767,13 @@ export function meshInviteQuiesceChanges(): { key_path: string; value: JsonValue
 export async function prepareLocalFeatureSharingApproval(
   port: LocalFeatureSharingPort,
   featureIds: readonly string[],
-  surfaceProfile: AuroraSurfaceProfile,
 ): Promise<string[]> {
   if (!Array.isArray(featureIds) || featureIds.length > 128) {
     throw new Error('The selected device features could not be approved. Review the selection and try again.')
   }
   const requested = new Set(featureIds.map((featureId) => featureId.trim()).filter(Boolean))
   const snapshot = await port.load()
-  const availableFeatures = filterPairingFeatures(snapshot.features, surfaceProfile)
+  const availableFeatures = filterPairingFeatures(snapshot.features)
   const available = new Map(availableFeatures.map((feature) => [feature.id, feature]))
   for (const featureId of requested) {
     const feature = available.get(featureId)
@@ -749,17 +790,10 @@ export async function prepareLocalFeatureSharingApproval(
   return selected
 }
 
-function isGatewayScopedFeature(feature: LocalDeviceFeature): boolean {
-  return /gateway/i.test(feature.id) || /gateway/i.test(feature.label) || /gateway/i.test(feature.description)
-}
-
 function filterPairingFeatures(
   features: readonly LocalDeviceFeature[],
-  surfaceProfile: AuroraSurfaceProfile,
 ): readonly LocalDeviceFeature[] {
-  const available = features.filter((feature) => feature.available)
-  if (!surfaceProfile.isMobile) return available
-  return available.filter((feature) => !isGatewayScopedFeature(feature))
+  return features.filter((feature) => feature.available)
 }
 
 function jsonObjectAt(value: JsonObject, key: string): JsonObject {
@@ -1116,6 +1150,7 @@ export function buildLocalMeshNodeSnapshot({
   const expectedPeerId = configured ? thinPeer.expectedStablePeerId ?? null : null
   const featureById = new Map((featureSharing?.features ?? []).map((feature) => [feature.id, feature]))
   const approvedDevices = featureSharing?.approvedDevices ?? []
+  const serviceScopes = featureSharing ? localShareableServiceScopes(featureSharing) : []
   const rows = new Map<string, MeshPeerRow>()
 
   for (const approved of approvedDevices) {
@@ -1123,17 +1158,18 @@ export function buildLocalMeshNodeSnapshot({
     const grantedFeatures = approved.featureIds
       .map((featureId) => featureById.get(featureId))
       .filter((feature): feature is LocalDeviceFeature => Boolean(feature?.available && feature.enabled))
-    const permissions = uniqueStrings([
-      ...(grantedFeatures.length > 0 ? ['Tooling.use'] : []),
-      ...grantedFeatures.flatMap((feature) => [...(feature.requiredPermissions ?? [])]),
-    ])
+    const grantedFeatureIds = new Set(grantedFeatures.map((feature) => feature.id))
+    const grantedServices = serviceScopes.filter((scope) =>
+      scope.featureIds.some((featureId) => grantedFeatureIds.has(featureId)),
+    )
+    const permissions = grantedServices.map((scope) => scope.permissionId)
     rows.set(approved.peerId, localMeshPeerRow({
       peerId: approved.peerId,
       nodeName: isCurrent ? thinPeer?.nodeName?.trim() || approved.peerLabel : approved.peerLabel,
       connected: isCurrent && connected,
       updatedAt: isCurrent ? thinPeer?.updatedAt ?? null : null,
       permissions,
-      services: grantedFeatures.length > 0 ? ['Tools'] : [],
+      services: grantedServices.map((scope) => scope.label),
     }))
   }
 
@@ -1296,6 +1332,7 @@ export function MeshPeersView({
   onRejectThinPairing,
   onReconnectThinPeer,
   localFeatureSharing,
+  localServiceScopes = [],
   ownsLocalNodeState = false,
 }: MeshPeersViewProps) {
   const [reviewRequestId, setReviewRequestId] = useState<string | null>(null)
@@ -1449,13 +1486,13 @@ export function MeshPeersView({
       ) : null}
 
       <PendingRequestsTable peers={pendingRequests} pendingPeerId={pendingPeerId} onReview={setReviewRequestId} />
-      <PeerCardGrid peers={snapshot.peers} pendingPeerId={pendingPeerId} optimisticPeerId={optimisticPeerId} onOpenScopes={setScopesPeerId} onReview={(peerId) => {
+      <PeerCardGrid peers={snapshot.peers} pendingPeerId={pendingPeerId} optimisticPeerId={optimisticPeerId} onOpenScopes={onSaveScopes ? setScopesPeerId : undefined} onReview={(peerId) => {
         const request = pendingRequests.find((peer) => peer.peerId === peerId)
         if (request) setReviewRequestId(request.pendingPairing.request_id)
       }} />
 
       <div className="hidden md:block">
-        <PeerTable peers={snapshot.peers} pendingPeerId={pendingPeerId} optimisticPeerId={optimisticPeerId} mutationDisabled={mutationDisabled} onOpenScopes={setScopesPeerId} onApprove={onApprovePeer} onDeny={onDenyPeer} onRemove={onRemovePeer} />
+        <PeerTable peers={snapshot.peers} pendingPeerId={pendingPeerId} optimisticPeerId={optimisticPeerId} mutationDisabled={mutationDisabled} onOpenScopes={onSaveScopes ? setScopesPeerId : undefined} onApprove={onApprovePeer} onDeny={onDenyPeer} onRemove={onRemovePeer} />
       </div>
       <RequestReviewDialog
         peer={reviewPeer}
@@ -1477,22 +1514,30 @@ export function MeshPeersView({
       ) : null}
       <ThinPeerPairingDialog
         snapshot={thinPeerSnapshot}
-        surfaceProfile={resolvedSurface}
         open={thinPairingOpen}
         onOpenChange={setThinPairingOpen}
         localFeatureSharing={localFeatureSharing}
         onConfirm={onConfirmThinPairing}
         onReject={onRejectThinPairing}
       />
-      <ScopesDialog
-        peer={scopesPeer}
-        open={Boolean(scopesPeer)}
-        disabled={mutationDisabled}
-        pending={scopesPeer ? pendingPeerId === scopesPeer.peerId : false}
-        surfaceProfile={resolvedSurface}
-        onOpenChange={(open) => !open && setScopesPeerId(null)}
-        onSave={onSaveScopes}
-      />
+      {onSaveScopes ? (
+        <ScopesDialog
+          peer={scopesPeer}
+          open={Boolean(scopesPeer)}
+          disabled={mutationDisabled}
+          pending={scopesPeer ? pendingPeerId === scopesPeer.peerId : false}
+          surfaceProfile={resolvedSurface}
+          {...(ownsLocalNodeState
+            ? {
+                permissionCatalog: localServicePermissionCatalog(localServiceScopes),
+                showRoleTemplates: false,
+                showPermissionIds: false,
+              }
+            : {})}
+          onOpenChange={(open) => !open && setScopesPeerId(null)}
+          onSave={onSaveScopes}
+        />
+      ) : null}
     </div>
   )
 }
@@ -1606,7 +1651,6 @@ function ThinPeerConnectionStatus({
 
 function ThinPeerPairingDialog({
   snapshot,
-  surfaceProfile,
   open,
   onOpenChange,
   localFeatureSharing,
@@ -1614,7 +1658,6 @@ function ThinPeerPairingDialog({
   onReject,
 }: {
   snapshot: BrowserWebRtcSnapshot | null
-  surfaceProfile: AuroraSurfaceProfile
   open: boolean
   onOpenChange: (open: boolean) => void
   localFeatureSharing: LocalFeatureSharingPort | undefined
@@ -1648,7 +1691,7 @@ function ThinPeerPairingDialog({
       if (!active) return
       const filtered = {
         ...next,
-        features: filterPairingFeatures(next.features, surfaceProfile),
+        features: filterPairingFeatures(next.features),
       }
       const scopes = localShareableServiceScopes(filtered)
       setServiceScopes(scopes)
@@ -1904,7 +1947,7 @@ function PendingRequestsTable({ peers, pendingPeerId, onReview }: { peers: MeshP
   )
 }
 
-function PeerCardGrid({ peers, pendingPeerId, optimisticPeerId, onOpenScopes, onReview }: { peers: MeshPeerRow[]; pendingPeerId: string | null; optimisticPeerId: string | null; onOpenScopes: (peerId: string) => void; onReview: (peerId: string) => void }) {
+function PeerCardGrid({ peers, pendingPeerId, optimisticPeerId, onOpenScopes, onReview }: { peers: MeshPeerRow[]; pendingPeerId: string | null; optimisticPeerId: string | null; onOpenScopes?: ((peerId: string) => void) | undefined; onReview: (peerId: string) => void }) {
   if (peers.length === 0) return <EmptyPanel title="No connected devices yet" description="Approved devices will appear here after they connect or request access." />
   return (
     <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}>
@@ -1925,7 +1968,6 @@ function PeerCardGrid({ peers, pendingPeerId, optimisticPeerId, onOpenScopes, on
                       <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${peerPresenceDotClass(peer)}`} />
                       <span className="truncate">{peer.nodeName}</span>
                     </p>
-                    <p className="truncate font-mono text-[11px] text-muted-foreground">{peer.fingerprint}</p>
                   </div>
                 </div>
                 <MeshPeerStateBadge peer={peer} optimistic={optimistic} />
@@ -1947,7 +1989,7 @@ function PeerCardGrid({ peers, pendingPeerId, optimisticPeerId, onOpenScopes, on
                     Review
                   </Button>
                 ) : null}
-                {meshPeerScopesEditable(peer) ? (
+                {onOpenScopes && meshPeerScopesEditable(peer) ? (
                   <Button type="button" size="sm" variant="outline" onClick={() => onOpenScopes(peer.peerId)}>
                     Features
                   </Button>
@@ -1999,7 +2041,7 @@ function formatLatencyMs(latencyMs: number): string {
   return `${latencyMs.toFixed(1)} ms`
 }
 
-function PeerTable({ peers, pendingPeerId, optimisticPeerId, mutationDisabled, onOpenScopes, onApprove, onDeny, onRemove }: { peers: MeshPeerRow[]; pendingPeerId: string | null; optimisticPeerId: string | null; mutationDisabled: boolean; onOpenScopes: (peerId: string) => void; onApprove: ((peer: MeshPeerRow) => void) | undefined; onDeny: ((peer: MeshPeerRow) => void) | undefined; onRemove: ((peer: MeshPeerRow) => void) | undefined }) {
+function PeerTable({ peers, pendingPeerId, optimisticPeerId, mutationDisabled, onOpenScopes, onApprove, onDeny, onRemove }: { peers: MeshPeerRow[]; pendingPeerId: string | null; optimisticPeerId: string | null; mutationDisabled: boolean; onOpenScopes?: ((peerId: string) => void) | undefined; onApprove: ((peer: MeshPeerRow) => void) | undefined; onDeny: ((peer: MeshPeerRow) => void) | undefined; onRemove: ((peer: MeshPeerRow) => void) | undefined }) {
   return (
     <Card>
       <CardHeader>
@@ -2028,7 +2070,6 @@ function PeerTable({ peers, pendingPeerId, optimisticPeerId, mutationDisabled, o
                     <TableCell>
                       <div className="flex min-w-48 flex-col">
                         <span className="text-sm font-medium">{peer.nodeName}</span>
-                        <code className="truncate font-mono text-[11px] text-muted-foreground">{peer.fingerprint}</code>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -2049,7 +2090,7 @@ function PeerTable({ peers, pendingPeerId, optimisticPeerId, mutationDisabled, o
                       <MeshPeerStateBadge peer={peer} optimistic={optimistic} />
                     </TableCell>
                     <TableCell className="text-right">
-                      {meshPeerScopesEditable(peer) ? (
+                      {onOpenScopes && meshPeerScopesEditable(peer) ? (
                         <Button type="button" size="sm" variant="outline" onClick={() => onOpenScopes(peer.peerId)}>
                     Features
                         </Button>
@@ -2485,6 +2526,9 @@ function ScopesDialog({
   disabled,
   pending,
   surfaceProfile,
+  permissionCatalog,
+  showRoleTemplates = true,
+  showPermissionIds = true,
   onOpenChange,
   onSave,
 }: {
@@ -2493,15 +2537,33 @@ function ScopesDialog({
   disabled: boolean
   pending: boolean
   surfaceProfile: AuroraSurfaceProfile
+  permissionCatalog?: readonly PermissionCatalogEntry[] | undefined
+  showRoleTemplates?: boolean | undefined
+  showPermissionIds?: boolean | undefined
   onOpenChange: (open: boolean) => void
   onSave: ((peer: MeshPeerRow, permissions: string[]) => void) | undefined
 }) {
   const [selected, setSelected] = useState<string[]>([])
+  const allowedPermissionIds = useMemo(
+    () => permissionCatalog ? new Set(permissionCatalog.map((permission) => permission.id)) : null,
+    [permissionCatalog],
+  )
+  const permissionAllowed = useCallback(
+    (permission: string) =>
+      isPermissionAllowedOnSurface(permission, surfaceProfile)
+      && (!allowedPermissionIds || allowedPermissionIds.has(permission)),
+    [allowedPermissionIds, surfaceProfile],
+  )
   useEffect(() => {
-    if (peer) setSelected(peer.permissions.filter((permission) => isPermissionAllowedOnSurface(permission, surfaceProfile)))
-  }, [peer?.peerId, open])
-  const sanitizedSelected = useMemo(() => selected.filter((permission) => isPermissionAllowedOnSurface(permission, surfaceProfile)), [selected, surfaceProfile])
-  const catalog = useMemo(() => meshPermissionCatalog(surfaceProfile, peer?.permissions ?? [], sanitizedSelected), [peer?.peerId, sanitizedSelected, surfaceProfile])
+    if (peer) setSelected(peer.permissions.filter(permissionAllowed))
+  }, [open, peer?.peerId, permissionAllowed])
+  const sanitizedSelected = useMemo(() => selected.filter(permissionAllowed), [permissionAllowed, selected])
+  const catalog = useMemo(
+    () => permissionCatalog
+      ? [...permissionCatalog]
+      : meshPermissionCatalog(surfaceProfile, peer?.permissions ?? [], sanitizedSelected),
+    [peer?.peerId, permissionCatalog, sanitizedSelected, surfaceProfile],
+  )
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-md">
@@ -2516,9 +2578,11 @@ function ScopesDialog({
             roleTemplate={matchRoleTemplate(sanitizedSelected)}
             onSelectRoleTemplate={(templateId) => {
               const template = ROLE_TEMPLATES.find((entry) => entry.id === templateId)
-              if (template?.permissions) setSelected(template.permissions.filter((permission) => isPermissionAllowedOnSurface(permission, surfaceProfile)))
+              if (template?.permissions) setSelected(template.permissions.filter(permissionAllowed))
             }}
             onToggle={(permissionId) => setSelected((current) => (current.includes(permissionId) ? current.filter((permission) => permission !== permissionId) : [...current, permissionId]))}
+            showRoleTemplates={showRoleTemplates}
+            showPermissionIds={showPermissionIds}
           />
         ) : peer ? (
           <p className="text-sm text-muted-foreground">Review this pending pairing request and verify its exact code before sharing features.</p>

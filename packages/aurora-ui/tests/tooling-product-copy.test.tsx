@@ -362,6 +362,45 @@ describe('tooling product copy', () => {
     expectForbiddenFree(visibleText(container.innerHTML))
   })
 
+  it('uses approved device names and trims Python tool internals from shared-tool copy', async () => {
+    const peerId = 'aurora-7810d9a4f79a3ed0ccd5273d10b86c7a'
+    const remoteTool = tool({
+      id: 'remote:pomodoro:status',
+      name: 'pomodoro_status_tool',
+      description: 'Get the current status of the Pomodoro session. Args: bus: MessageBus instance for communication (injected by ToolingService) Returns: Current session information.',
+      providerLabel: peerId,
+      providerPeerId: peerId,
+      providerKind: 'mesh_peer',
+      sourceType: 'mesh_peer',
+      serviceInstanceId: 'tooling-remote',
+      shareGroupId: 'pomodoro',
+      shareGroupLabel: 'Pomodoro',
+    })
+    await renderPanel(client(), [], {
+      sourceSummaries: [{
+        ...backendSourceSummary('mesh:pomodoro', `${peerId} · Pomodoro`),
+        kind: 'mesh_peer',
+        providerPeerId: peerId,
+        providerServiceInstanceId: 'tooling-remote',
+        providerKind: 'mesh_peer',
+      }],
+      sourceDetails: {
+        'mesh:pomodoro': sourceDetail([remoteTool]),
+      },
+      sharingPeers: [{ peerId, label: 'Office Aurora', stale: false }],
+    })
+
+    const rendered = visibleAndAriaText()
+    expect(rendered).toContain('Office Aurora · Pomodoro')
+    expect(rendered).toContain('Pomodoro status')
+    expect(rendered).toContain('Get the current status of the Pomodoro session.')
+    expect(rendered).not.toContain(peerId)
+    expect(rendered).not.toContain('MessageBus')
+    expect(rendered).not.toContain('Args:')
+    expect(rendered).not.toContain('Returns:')
+    expectForbiddenFree(visibleText(container.innerHTML))
+  })
+
   it('keeps selected sharing group labels product-safe in visible and ARIA copy', async () => {
     await renderPanel(client(), [
       tool({

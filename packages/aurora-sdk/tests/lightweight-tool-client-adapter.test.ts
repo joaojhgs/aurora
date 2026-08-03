@@ -194,7 +194,18 @@ describe('lightweight tool-client adapter', () => {
     const callable = remoteToolInfo('remote.search')
     const unavailable = { ...remoteToolInfo('remote.offline'), provider_available: false }
     const unexportable = { ...remoteToolInfo('remote.private'), exportable: false }
-    const localProjection = { ...remoteToolInfo('local.echo'), execution_location: 'local' as const }
+    const localProjection = {
+      ...remoteToolInfo('local.echo'),
+      source_type: 'local' as const,
+      source: 'core' as const,
+      source_id: 'local:core',
+      trust_tier: 'trusted' as const,
+      execution_location: 'local' as const,
+      provenance: {
+        ...remoteToolInfo('local.echo').provenance,
+        provider_kind: 'local'
+      }
+    }
     const pages = projectionPages([[callable], [unavailable, unexportable, localProjection]])
     const calls: unknown[] = []
 
@@ -212,8 +223,32 @@ describe('lightweight tool-client adapter', () => {
     expect(snapshot).toMatchObject({
       providerPeerId: 'remote-peer',
       serviceInstanceId: REMOTE_SERVICE_INSTANCE_ID,
-      tools: [expect.objectContaining({ global_tool_id: callable.global_tool_id })]
+      tools: [
+        expect.objectContaining({ global_tool_id: callable.global_tool_id }),
+        expect.objectContaining({
+          global_tool_id: localProjection.global_tool_id,
+          provider_peer_id: REMOTE_PEER_ID,
+          provider_service_instance_id: REMOTE_SERVICE_INSTANCE_ID,
+          source_type: 'mesh_peer',
+          source: 'mesh_peer',
+          source_id: 'mesh:remote-peer:remote_remote-peer_Tooling',
+          trust_tier: 'untrusted',
+          execution_location: 'remote',
+          provenance: expect.objectContaining({ provider_kind: 'mesh_peer' })
+        })
+      ]
     })
+    expect(snapshot.tools.map((tool) => tool.source_id)).not.toContain('local:core')
+
+    const remote = remoteDelegate()
+    const { adapter } = fixture({ remote, availableTools: snapshot.tools })
+    const payload = request(localProjection.global_tool_id, {}, null, 'remote', {
+      provider_peer_id: REMOTE_PEER_ID,
+      provider_service_instance_id: REMOTE_SERVICE_INSTANCE_ID,
+      global_tool_id: localProjection.global_tool_id
+    })
+    await adapter.execute(payload)
+    expect(remote.calls).toEqual([['execute', payload]])
   })
 
   it('fails closed for malformed projection catalog pages and digest mismatches', async () => {

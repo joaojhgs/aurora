@@ -73,11 +73,17 @@ function previewEvidence(overrides: Partial<ServiceRoutingPreviewEvidence> = {})
 }
 
 function localSharingSnapshot(): LocalFeatureSharingSnapshot {
+  const service = {
+    serviceId: 'tooling',
+    servicePermissionId: 'Tooling.use',
+    serviceLabel: 'Tools',
+    serviceDescription: 'Use tools this device makes available.',
+  } as const
   return {
     features: [
-      { id: 'Native.GetDeviceStatus', label: 'Device status', description: 'Read device status.', enabled: true, available: true, requiresAuroraOpen: true, requiresLocalConfirmation: false },
-      { id: 'Native.StartVoice', label: 'Voice capture', description: 'Start voice capture.', enabled: true, available: true, requiresAuroraOpen: true, requiresLocalConfirmation: true },
-      { id: 'Native.Unavailable', label: 'Unavailable', description: 'Unavailable here.', enabled: false, available: false, requiresAuroraOpen: true, requiresLocalConfirmation: true },
+      { ...service, id: 'Native.GetDeviceStatus', label: 'Device status', description: 'Read device status.', enabled: true, available: true, requiresAuroraOpen: true, requiresLocalConfirmation: false },
+      { ...service, id: 'Native.StartVoice', label: 'Voice capture', description: 'Start voice capture.', enabled: true, available: true, requiresAuroraOpen: true, requiresLocalConfirmation: true },
+      { ...service, id: 'Native.Unavailable', label: 'Unavailable', description: 'Unavailable here.', enabled: false, available: false, requiresAuroraOpen: true, requiresLocalConfirmation: true },
     ],
     approvedDevices: [{ peerId: 'peer-home', peerLabel: 'Home Aurora', featureIds: ['Native.GetDeviceStatus'], expiresAtMs: null }],
   }
@@ -169,6 +175,7 @@ describe('Service sharing and outbound routing', () => {
     expect(container.textContent).toContain('Tools')
     expect(container.textContent).not.toContain('Send requests to')
     expect(container.querySelector('[aria-label="Mobile service policy cards"]')?.className).toContain('hidden')
+    expect(container.querySelector('table')?.className).toContain('aui-service-sharing-table')
 
     await act(async () => {
       container.querySelector<HTMLElement>('[aria-label="Share Tools from this device"]')?.click()

@@ -230,6 +230,7 @@ export async function createBrowserMeshNodeServices(
       grantManager,
       localVerifierPeerId: localNodeId,
       roomName,
+      crypto,
       now: options.nowMs ?? Date.now,
     })
     await localFeatureSharing.load()
@@ -250,6 +251,7 @@ export async function createBrowserMeshNodeServices(
       },
       cursorSecret: options.cursorSecret ?? randomSecret(options.crypto ?? safeGlobalCrypto()),
       providerEnabled: true,
+      approvalPolicy: localFeatureSharing,
       clock: options.nowMs ?? Date.now,
       randomId: options.randomId,
     })
@@ -268,6 +270,14 @@ export async function createBrowserMeshNodeServices(
     const unsubscribeFeatureSharing = localFeatureSharing.subscribe(() => {
       if (!initialFeatureSnapshotSeen) {
         initialFeatureSnapshotSeen = true
+        return
+      }
+      scheduleProviderRefresh()
+    })
+    let initialApprovalPolicySnapshotSeen = false
+    const unsubscribeApprovalPolicy = localFeatureSharing.subscribeApprovalPolicies(() => {
+      if (!initialApprovalPolicySnapshotSeen) {
+        initialApprovalPolicySnapshotSeen = true
         return
       }
       scheduleProviderRefresh()
@@ -293,6 +303,7 @@ export async function createBrowserMeshNodeServices(
       async close() {
         providerRefreshClosed = true
         unsubscribeFeatureSharing()
+        unsubscribeApprovalPolicy()
         await providerRefreshQueue
         await crypto?.close?.().catch(() => undefined)
         await backend?.close().catch(() => undefined)

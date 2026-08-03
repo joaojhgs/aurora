@@ -1386,6 +1386,10 @@ describe('browser WebRTC thin-shell runtime', () => {
       load: vi.fn(async () => ({
         features: [
           {
+            serviceId: 'tooling',
+            servicePermissionId: 'Tooling.use',
+            serviceLabel: 'Tools',
+            serviceDescription: 'Use tools this device makes available.',
             id: 'aurora.local.native.get_device_status.v1',
             label: 'Device status',
             description: 'Share battery and connectivity status.',
@@ -1395,6 +1399,10 @@ describe('browser WebRTC thin-shell runtime', () => {
             requiresLocalConfirmation: false,
           },
           {
+            serviceId: 'tooling',
+            servicePermissionId: 'Tooling.use',
+            serviceLabel: 'Tools',
+            serviceDescription: 'Use tools this device makes available.',
             id: 'aurora.local.native.share.v1',
             label: 'Share from this phone',
             description: 'Share an item selected on this phone.',

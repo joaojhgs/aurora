@@ -29,7 +29,13 @@ import {
   type ToolingProjectionToolInfo,
 } from '@aurora/client'
 import { mergeLightweightAssistantTools } from '@aurora/client/lightweight-orchestrator'
-import type { LocalFeatureSharingPort, LocalFeatureSharingSnapshot } from './local-feature-sharing'
+import type {
+  LocalFeatureSharingPort,
+  LocalFeatureSharingSnapshot,
+  LocalToolApprovalPolicyPort,
+  LocalToolApprovalPolicySnapshot,
+  LocalToolApprovalTrustTier,
+} from './local-feature-sharing'
 import type { RouteAvailability } from './shell-data'
 import { safeErrorCopy } from './product-copy'
 import { buildBuiltinPlugins, ToolingConsole, type BuiltinPluginModel, type ToolSharingMutation } from './tooling'
@@ -60,6 +66,8 @@ export interface ToolApprovalPanelProps {
   nativePlatform?: string | undefined
   initialManagementState?: ToolApprovalPanelManagementState | undefined
   localFeatureSharing?: LocalFeatureSharingPort | undefined
+  localToolApprovalPolicy?: LocalToolApprovalPolicyPort | undefined
+  sourceManagementEnabled?: boolean | undefined
 }
 
 export interface LightweightToolApprovalPanelProps {
@@ -67,7 +75,7 @@ export interface LightweightToolApprovalPanelProps {
   route: RouteAvailability
   localTools: readonly ToolingProjectionToolInfo[]
   remoteTools?: readonly ToolingProjectionToolInfo[] | undefined
-  featureSharing: LocalFeatureSharingPort
+  featureSharing?: LocalFeatureSharingPort | undefined
   nativePlatform?: string | undefined
 }
 
@@ -134,13 +142,21 @@ export function LightweightToolApprovalPanel({
       initialTools={tools}
       initialSchedulerJobs={[]}
       nativePlatform={nativePlatform}
-      localFeatureSharing={featureSharing}
+      sourceManagementEnabled={false}
+      {...(featureSharing ? { localFeatureSharing: featureSharing } : {})}
+      {...(featureSharing?.toolApprovalPolicy
+        ? { localToolApprovalPolicy: featureSharing.toolApprovalPolicy }
+        : {})}
     />
   )
 }
 
-export function ToolApprovalPanel({ client, route, initialTools, initialSchedulerJobs, nativePlatform, initialManagementState, localFeatureSharing }: ToolApprovalPanelProps) {
+export function ToolApprovalPanel({ client, route, initialTools, initialSchedulerJobs, nativePlatform, initialManagementState, localFeatureSharing, localToolApprovalPolicy, sourceManagementEnabled = true }: ToolApprovalPanelProps) {
   const sharingRequestGeneration = useRef(0)
+  const managementEnabled = sourceManagementEnabled && !localFeatureSharing
+  const [localApprovalPolicies, setLocalApprovalPolicies] = useState<LocalToolApprovalPolicySnapshot | null>(null)
+  const [localApprovalLoading, setLocalApprovalLoading] = useState(Boolean(localToolApprovalPolicy))
+  const [localApprovalError, setLocalApprovalError] = useState<string | null>(null)
   const [state, setState] = useState<ToolApprovalPanelState>(() => ({
     tools: initialTools ?? [],
     loading: !initialTools,
@@ -157,12 +173,12 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
     pendingApprovals: initialManagementState?.pendingApprovals ?? [],
     auditEvents: initialManagementState?.auditEvents ?? [],
     builtinPlugins: initialManagementState?.builtinPlugins ?? [],
-    managementLoading: initialManagementState?.managementLoading ?? (!initialManagementState && !localFeatureSharing),
+    managementLoading: initialManagementState?.managementLoading ?? (!initialManagementState && managementEnabled),
     managementError: initialManagementState?.managementError ?? null,
     sharingPolicy: initialManagementState?.sharingPolicy ?? null,
     sharingPeers: mergeSharingScopes(initialManagementState?.sharingPeers ?? [], initialManagementState?.sharingPolicy ?? null),
     sharingDecisions: initialManagementState?.sharingDecisions ?? {},
-    sharingLoading: initialManagementState?.sharingLoading ?? (!initialManagementState && !localFeatureSharing),
+    sharingLoading: initialManagementState?.sharingLoading ?? (!initialManagementState && managementEnabled),
     sharingError: initialManagementState?.sharingError ?? null,
     sharingMessage: initialManagementState?.sharingMessage ?? null,
     sharingPendingKey: null
@@ -213,7 +229,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
   }, [client, initialSchedulerJobs])
 
   useEffect(() => {
-    if (initialManagementState || localFeatureSharing) return
+    if (initialManagementState || !managementEnabled) return
     let cancelled = false
     setState((current) => ({ ...current, managementLoading: true, managementError: null }))
     async function loadManagementState() {
@@ -284,7 +300,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
     return () => {
       cancelled = true
     }
-  }, [client, initialManagementState, localFeatureSharing])
+  }, [client, initialManagementState, managementEnabled])
 
   useEffect(() => {
     if (!localFeatureSharing) return
@@ -316,6 +332,36 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
       unsubscribe?.()
     }
   }, [initialTools, localFeatureSharing])
+
+  useEffect(() => {
+    if (!localToolApprovalPolicy) {
+      setLocalApprovalPolicies(null)
+      setLocalApprovalLoading(false)
+      setLocalApprovalError(null)
+      return
+    }
+    let active = true
+    const apply = (snapshot: LocalToolApprovalPolicySnapshot) => {
+      if (!active) return
+      setLocalApprovalPolicies(snapshot)
+      setLocalApprovalLoading(false)
+      setLocalApprovalError(snapshot.unavailable
+        ? 'Tool approval settings are unavailable right now. Try again.'
+        : null)
+    }
+    setLocalApprovalLoading(true)
+    setLocalApprovalError(null)
+    const unsubscribe = localToolApprovalPolicy.subscribeApprovalPolicies?.(apply)
+    void localToolApprovalPolicy.loadApprovalPolicies().then(apply, () => {
+      if (!active) return
+      setLocalApprovalLoading(false)
+      setLocalApprovalError('Tool approval settings are unavailable right now. Try again.')
+    })
+    return () => {
+      active = false
+      unsubscribe?.()
+    }
+  }, [localToolApprovalPolicy])
 
   async function refreshSharing() {
     const generation = ++sharingRequestGeneration.current
@@ -556,6 +602,15 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
     }))
   }
 
+  async function refreshLocalApprovalPolicies() {
+    if (!localToolApprovalPolicy) return
+    const snapshot = await localToolApprovalPolicy.loadApprovalPolicies()
+    setLocalApprovalPolicies(snapshot)
+    setLocalApprovalError(snapshot.unavailable
+      ? 'Tool approval settings are unavailable right now. Try again.'
+      : null)
+  }
+
   async function setPolicyMode(policyMode: string) {
     const requiredConfirmation = policyConfirmationText(policyMode)
     let confirmationText: string | null = null
@@ -578,6 +633,20 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
   async function upsertSourcePolicy(source: { id: string; peerId: string | null; serviceInstanceId: string | null }, trustTier: string, includeFutureTools = false) {
     setDecisionMessage('__policy__', `Updating source policy for ${source.id}...`)
     try {
+      if (localToolApprovalPolicy) {
+        if (trustTier === 'inherit') {
+          await localToolApprovalPolicy.clearSourceApprovalPolicy(source.id)
+        } else {
+          await localToolApprovalPolicy.setSourceApprovalPolicy(
+            source.id,
+            localApprovalTrustTier(trustTier),
+            includeFutureTools,
+          )
+        }
+        await refreshLocalApprovalPolicies()
+        setDecisionMessage('__policy__', `Default approval updated for ${source.id}.`)
+        return
+      }
       if (trustTier === 'inherit') {
         await client.tools.clearSourcePolicy({
           sourceId: source.id,
@@ -617,6 +686,26 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
   async function upsertToolOverride(tool: ToolApprovalCardModel, approvalMode: string) {
     setDecisionMessage(tool.id, `Updating policy override for ${tool.name}...`)
     try {
+      if (localToolApprovalPolicy) {
+        const toolId = tool.toolContractId?.trim()
+        if (!toolId || tool.sourceType === 'mesh_peer' || /mesh|remote/i.test(tool.providerKind)) {
+          throw new Error('Approval settings for this tool are managed by the device that shares it.')
+        }
+        if (approvalMode === 'inherit') {
+          await localToolApprovalPolicy.clearToolApprovalOverride(toolId)
+        } else if (
+          approvalMode === 'approve_all_for_peer'
+          || approvalMode === 'ask_each_time'
+          || approvalMode === 'deny_all'
+        ) {
+          await localToolApprovalPolicy.setToolApprovalOverride(toolId, approvalMode)
+        } else {
+          throw new Error('This approval choice is unavailable.')
+        }
+        await refreshLocalApprovalPolicies()
+        setDecisionMessage(tool.id, `Approval updated for ${tool.name}.`)
+        return
+      }
       if (approvalMode === 'inherit') {
         await client.tools.clearToolOverride({
           toolId: tool.id,
@@ -742,11 +831,29 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
     }
   }
 
+  const toolsForConsole = useMemo(
+    () => applyLocalToolApprovalPolicies(state.tools, localApprovalPolicies),
+    [localApprovalPolicies, state.tools],
+  )
+  const sourceConfiguredTrustTiers = useMemo(
+    () => Object.fromEntries(
+      (localApprovalPolicies?.sourcePolicies ?? []).map((policy) => [policy.sourceId, policy.trustTier]),
+    ),
+    [localApprovalPolicies],
+  )
+  const localApprovalMutable = Boolean(
+    localToolApprovalPolicy
+    && localApprovalPolicies
+    && !localApprovalPolicies.unavailable
+    && !localApprovalLoading,
+  )
+  const approvalPolicyMutable = managementEnabled || localApprovalMutable
+
   return (
     <ToolingConsole
       client={client}
       route={route}
-      tools={state.tools}
+      tools={toolsForConsole}
       loading={state.loading}
       error={state.error}
       schedulerJobs={state.schedulerJobs}
@@ -762,8 +869,8 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
       pendingApprovals={state.pendingApprovals}
       auditEvents={state.auditEvents}
       builtinPlugins={state.builtinPlugins}
-      managementLoading={state.managementLoading}
-      managementError={state.managementError}
+      managementLoading={state.managementLoading || localApprovalLoading}
+      managementError={localApprovalError ?? state.managementError}
       sharingPolicy={state.sharingPolicy}
       sharingPeers={state.sharingPeers}
       sharingDecisions={state.sharingDecisions}
@@ -771,14 +878,20 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
       sharingError={state.sharingError}
       sharingMessage={state.sharingMessage}
       sharingPendingKey={state.sharingPendingKey}
-      onMutateSharing={(mutation) => { void mutateSharing(mutation) }}
-      sourceManagementEnabled={!localFeatureSharing}
-      {...(!localFeatureSharing ? {
+      {...(localFeatureSharing || managementEnabled
+        ? { onMutateSharing: (mutation: ToolSharingMutation) => { void mutateSharing(mutation) } }
+        : {})}
+      sourceManagementEnabled={managementEnabled}
+      sourceConfiguredTrustTiers={sourceConfiguredTrustTiers}
+      localApprovalPolicyOnly={Boolean(localToolApprovalPolicy)}
+      {...(approvalPolicyMutable ? {
+        onUpsertSourcePolicy: upsertSourcePolicy,
+        onUpsertToolOverride: upsertToolOverride,
+      } : {})}
+      {...(managementEnabled ? {
         onTogglePlugin: togglePlugin,
         onSavePluginConfig: savePluginConfig,
         onSetPolicyMode: setPolicyMode,
-        onUpsertSourcePolicy: upsertSourcePolicy,
-        onUpsertToolOverride: upsertToolOverride,
         onRevokeGrant: revokeGrant,
         onTestSource: testSource,
         onCreateSource: createSource,
@@ -795,6 +908,80 @@ type LocalToolSharingManagement = Pick<
   ToolApprovalPanelManagementState,
   'sharingPolicy' | 'sharingPeers' | 'sharingDecisions'
 >
+
+function localApprovalTrustTier(value: string): LocalToolApprovalTrustTier {
+  if (value === 'trusted' || value === 'untrusted' || value === 'blocked') return value
+  throw new Error('This approval choice is unavailable.')
+}
+
+function applyLocalToolApprovalPolicies(
+  tools: readonly ToolApprovalCardModel[],
+  snapshot: LocalToolApprovalPolicySnapshot | null,
+): ToolApprovalCardModel[] {
+  if (!snapshot) return [...tools]
+  const sourcePolicies = new Map(
+    snapshot.sourcePolicies.map((policy) => [policy.sourceId, policy] as const),
+  )
+  const toolPolicies = new Map<string, LocalToolApprovalTrustTier>()
+  for (const policy of snapshot.toolPolicies) {
+    toolPolicies.set(policy.toolContractId, policy.trustTier)
+    toolPolicies.set(policy.globalToolId, policy.trustTier)
+    toolPolicies.set(policy.localToolName, policy.trustTier)
+  }
+  return tools.map((tool) => {
+    if (isRemoteApprovalTool(tool)) return tool
+    const configuredTrustTier = [tool.toolContractId, tool.id, tool.localToolName]
+      .map((candidate) => candidate?.trim())
+      .filter((candidate): candidate is string => Boolean(candidate))
+      .map((candidate) => toolPolicies.get(candidate))
+      .find((candidate): candidate is LocalToolApprovalTrustTier => Boolean(candidate)) ?? null
+    const sourcePolicy = sourcePolicies.get(localApprovalSourceId(tool))
+    const sourcePolicyApplies = sourcePolicy
+      ? sourcePolicy.includeFutureTools
+        || Boolean(
+          tool.toolContractId
+          && sourcePolicy.knownToolContractIds?.includes(tool.toolContractId),
+        )
+      : false
+    const sourceTrustTier = sourcePolicy
+      ? sourcePolicyApplies
+        ? sourcePolicy.trustTier
+        : 'untrusted'
+      : null
+    const trustTier = configuredTrustTier ?? sourceTrustTier ?? tool.trustTier
+    return {
+      ...tool,
+      configuredTrustTier,
+      trustTier,
+      approvalRequired: trustTier === 'untrusted'
+        ? true
+        : trustTier === 'trusted'
+          ? mandatoryLocalToolApproval(tool)
+          : tool.approvalRequired,
+    }
+  })
+}
+
+function localApprovalSourceId(tool: ToolApprovalCardModel): string {
+  return tool.shareGroupId?.trim()
+    || tool.sourceId?.trim()
+    || tool.sourceType?.trim()
+    || 'local'
+}
+
+function isRemoteApprovalTool(tool: ToolApprovalCardModel): boolean {
+  return tool.sourceType === 'mesh' || tool.sourceType === 'mesh_peer'
+    || /mesh|remote/i.test(tool.providerKind)
+}
+
+function mandatoryLocalToolApproval(tool: ToolApprovalCardModel): boolean {
+  const risk = tool.riskClass.toLowerCase()
+  return tool.requiresAdminAction
+    || tool.mutating
+    || tool.dataEgress
+    || ['dangerous', 'sensitive', 'admin', 'admin-critical', 'mutating', 'external'].includes(risk)
+    || (tool.approvalRequired && tool.trustTier === 'trusted')
+}
 
 export function buildLocalToolSharingManagement(
   snapshot: LocalFeatureSharingSnapshot,

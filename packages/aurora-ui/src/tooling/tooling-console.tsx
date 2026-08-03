@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import {
   AlertTriangle,
   Boxes,
@@ -92,6 +92,8 @@ export interface ToolingConsoleProps {
   sharingMessage?: string | null | undefined
   sharingPendingKey?: string | null | undefined
   sourceManagementEnabled?: boolean | undefined
+  sourceConfiguredTrustTiers?: Readonly<Record<string, string | null>> | undefined
+  localApprovalPolicyOnly?: boolean | undefined
   onMutateSharing?: ((mutation: ToolSharingMutation) => void) | undefined
   onTogglePlugin?: ((plugin: BuiltinPluginModel, active: boolean) => void) | undefined
   onSavePluginConfig?: ((plugin: BuiltinPluginModel, values: Record<string, JsonValue>) => void) | undefined
@@ -140,6 +142,8 @@ export function ToolingConsole({
   sharingMessage = null,
   sharingPendingKey = null,
   sourceManagementEnabled = true,
+  sourceConfiguredTrustTiers = {},
+  localApprovalPolicyOnly = false,
   onMutateSharing,
   onTogglePlugin,
   onSavePluginConfig,
@@ -160,6 +164,8 @@ export function ToolingConsole({
   const [wizard, setWizard] = useState<'mcp' | 'plugin' | null>(null)
   const [wizardStep, setWizardStep] = useState(1)
   const [sourceDrawerOpen, setSourceDrawerOpen] = useState(false)
+  const sourceDetailRef = useRef<HTMLElement>(null)
+  const revealSelectedSourceRef = useRef(false)
   const [wizardResult, setWizardResult] = useState<string | null>(null)
   const [mcpDraft, setMcpDraft] = useState<McpSourceWizardDraft>(() => ({
     name: 'Aurora MCP source',
@@ -182,12 +188,25 @@ export function ToolingConsole({
   }))
   const inventoryLoading = loading || managementLoading
   const sources = useMemo(
-    () => managementLoading
+    () => {
+      const base = managementLoading
       ? []
       : sourceSummaries.length > 0
         ? buildToolingSourcesFromBackend(sourceSummaries, sourceDetails, tools)
-        : buildToolingSources(tools),
-    [managementLoading, sourceSummaries, sourceDetails, tools]
+        : buildToolingSources(tools)
+      return base.map((source) => {
+        const display = sourcePresentation(source, sharingPeers)
+        const configured = sourceConfiguredTrustTiers[source.id]
+        if (configured === undefined) return { ...source, ...display }
+        return {
+          ...source,
+          ...display,
+          configuredTrustTier: configured,
+          effectiveTrust: configuredSourceTrustState(configured, source.effectiveTrust),
+        }
+      })
+    },
+    [managementLoading, sharingPeers, sourceConfiguredTrustTiers, sourceSummaries, sourceDetails, tools]
   )
   const toolSources = useMemo(() => sources.filter((source) => source.type !== 'plugin'), [sources])
   const pluginSources = useMemo(() => sources.filter((source) => source.type === 'plugin'), [sources])
@@ -205,6 +224,12 @@ export function ToolingConsole({
     userAgent: typeof navigator === 'undefined' ? undefined : navigator.userAgent
   }), [client.transport.kind, nativePlatform])
   const filteredSourceTools = selectedSource ? toolsForSourceSearch(selectedSource, query) : []
+
+  useEffect(() => {
+    if (!surfaceProfile.isMobile || sourceDrawerOpen || !revealSelectedSourceRef.current) return
+    revealSelectedSourceRef.current = false
+    sourceDetailRef.current?.scrollIntoView?.({ block: 'start' })
+  }, [selectedSourceId, sourceDrawerOpen, surfaceProfile.isMobile])
 
   function showWizard(type: 'mcp' | 'plugin') {
     setWizard(type)
@@ -279,11 +304,17 @@ export function ToolingConsole({
                   onQuery={setQuery}
                   drawerOpen={sourceDrawerOpen}
                   onDrawerOpen={setSourceDrawerOpen}
-                  onSelectSource={(source) => setSelectedSourceId(source.id)}
+                  onSelectSource={(source) => {
+                    setSelectedSourceId(source.id)
+                    if (surfaceProfile.isMobile) {
+                      revealSelectedSourceRef.current = true
+                      setSourceDrawerOpen(false)
+                    }
+                  }}
                   onAddMcp={sourceManagementEnabled ? () => showWizard('mcp') : undefined}
                 />
 
-                <main className="flex min-w-0 flex-1 flex-col gap-4 overflow-x-auto" aria-label="Source detail">
+                <main ref={sourceDetailRef} className="flex min-w-0 flex-1 flex-col gap-4 overflow-x-auto" aria-label="Source detail">
                   {inventoryLoading ? <LoadingState /> : null}
                   {!inventoryLoading && toolSources.length === 0 ? <EmptyCatalog onAddMcp={sourceManagementEnabled ? () => showWizard('mcp') : undefined} /> : null}
                   {!inventoryLoading && selectedSource ? (
@@ -292,7 +323,9 @@ export function ToolingConsole({
                         source={selectedSource}
                         policyBypass={policy.bypassEnabled}
                         policyMessage={decisionMessages.__policy__ ?? null}
-                        onUpsertSourcePolicy={onUpsertSourcePolicy}
+                        onUpsertSourcePolicy={localApprovalPolicyOnly && selectedSource.type === 'mesh'
+                          ? undefined
+                          : onUpsertSourcePolicy}
                         sharingControl={selectedSource.type !== 'mesh' && selectedSource.shareGroupId ? (
                           <ToolSharingGroupControl
                             groupId={selectedSource.shareGroupId}
@@ -311,7 +344,9 @@ export function ToolingConsole({
                         source={selectedSource}
                         tools={filteredSourceTools}
                         decisionMessages={decisionMessages}
-                        onUpsertToolOverride={onUpsertToolOverride}
+                        onUpsertToolOverride={localApprovalPolicyOnly && selectedSource.type === 'mesh'
+                          ? undefined
+                          : onUpsertToolOverride}
                         sharingPolicy={sharingPolicy}
                         sharingPeers={sharingPeers}
                         sharingDecisions={sharingDecisions}
@@ -351,7 +386,7 @@ export function ToolingConsole({
                   setWizardStep(1)
                   setPluginDraft({
                     ...pluginDraft,
-                    packageName: productSafeSourceName(source.name),
+                    packageName: productSafeSourceName(source),
                     pluginId: source.serviceInstanceId ?? source.id,
                     sourceUrl: typeof source.transport === 'string' && source.transport.startsWith('http') ? source.transport : (pluginDraft.sourceUrl ?? null),
                     reason: `Configure plugin source ${source.id} from /tools`
@@ -588,67 +623,80 @@ function SourceRail({
       || source.tools.some((tool) => [tool.name, tool.description].some((value) => value.toLowerCase().includes(normalized)))
   })
   return (
-    <aside
-      id="tool-source-drawer"
-      className={cn('flex-col gap-3 rounded-xl border border-border bg-card p-3 lg:flex lg:w-72 lg:shrink-0', drawerOpen ? 'flex' : 'hidden lg:flex')}
-      aria-label="Source rail"
-    >
-      <div className="flex items-center justify-between lg:hidden">
-        <strong className="text-sm font-semibold">Sources</strong>
+    <>
+      {!drawerOpen ? (
         <Button
           variant="outline"
-          ariaExpanded={drawerOpen}
+          className="self-start lg:hidden"
+          ariaExpanded={false}
           ariaControls="tool-source-drawer"
-          onClick={() => onDrawerOpen(!drawerOpen)}
+          onClick={() => onDrawerOpen(true)}
         >
-          {drawerOpen ? 'Close' : 'Sources'}
+          Sources
         </Button>
-      </div>
-      <label className="relative">
-        <Search size={15} aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground" />
-        <span className="sr-only">Search sources and tools</span>
-        <input
-          className="h-9 w-full rounded-lg border border-border bg-transparent pr-3 pl-8 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          value={query}
-          onChange={(event) => onQuery(event.currentTarget.value)}
-          type="search"
-          placeholder="Search sources or tools"
-          disabled={loading}
-        />
-      </label>
-      {loading ? <p className="text-sm text-muted-foreground">Loading tools…</p> : null}
-      <div className="flex flex-col gap-1" aria-label="Tool sources">
-        {!loading && visibleSources.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            {query.trim()
-              ? 'No sources match this search.'
-              : 'No core, MCP, plugin, mesh, unknown, or blocked sources are available right now.'}
-          </p>
-        ) : null}
-        {visibleSources.map((source) => (
-          <button
-            key={source.id}
-            type="button"
-            className={cn(
-              'flex items-center justify-between gap-2 rounded-lg border border-transparent px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted',
-              selectedSourceId === source.id && 'border-border bg-muted'
-            )}
-            aria-pressed={selectedSourceId === source.id}
-            onClick={() => onSelectSource(source)}
+      ) : null}
+      <aside
+        id="tool-source-drawer"
+        className={cn('flex-col gap-3 rounded-xl border border-border bg-card p-3 lg:flex lg:w-72 lg:shrink-0', drawerOpen ? 'flex' : 'hidden lg:flex')}
+        aria-label="Source rail"
+      >
+        <div className="flex items-center justify-between lg:hidden">
+          <strong className="text-sm font-semibold">Sources</strong>
+          <Button
+            variant="outline"
+            ariaExpanded={drawerOpen}
+            ariaControls="tool-source-drawer"
+            onClick={() => onDrawerOpen(false)}
           >
-            <span className="flex flex-col">
-              <strong className="font-medium">{productSafeSourceName(source.name)}</strong>
-              {source.providerLabel && source.providerLabel !== source.name ? (
-                <small className="text-xs text-muted-foreground">{productSafeSourceLabel(source.providerLabel)}</small>
-              ) : null}
-              <small className="text-xs text-muted-foreground">{sourceSectionLabel(source.type)} · {source.toolCount} tools</small>
-            </span>
-            <TrustPill trust={source.effectiveTrust} />
-          </button>
-        ))}
-      </div>
-      {onAddMcp ? <Button variant="outline" icon={<Plug size={15} aria-hidden />} onClick={onAddMcp} disabled={loading}>Add MCP source</Button> : null}
-    </aside>
+            Close
+          </Button>
+        </div>
+        <label className="relative">
+          <Search size={15} aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground" />
+          <span className="sr-only">Search sources and tools</span>
+          <input
+            className="h-9 w-full rounded-lg border border-border bg-transparent pr-3 pl-8 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            value={query}
+            onChange={(event) => onQuery(event.currentTarget.value)}
+            type="search"
+            placeholder="Search sources or tools"
+            disabled={loading}
+          />
+        </label>
+        {loading ? <p className="text-sm text-muted-foreground">Loading tools…</p> : null}
+        <div className="flex flex-col gap-1" aria-label="Tool sources">
+          {!loading && visibleSources.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {query.trim()
+                ? 'No sources match this search.'
+                : 'No core, MCP, plugin, mesh, unknown, or blocked sources are available right now.'}
+            </p>
+          ) : null}
+          {visibleSources.map((source) => (
+            <button
+              key={source.id}
+              type="button"
+              className={cn(
+                'flex items-center justify-between gap-2 rounded-lg border border-transparent px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted',
+                selectedSourceId === source.id && 'border-border bg-muted'
+              )}
+              aria-pressed={selectedSourceId === source.id}
+              onClick={() => onSelectSource(source)}
+            >
+              <span className="flex flex-col">
+                <strong className="font-medium">{productSafeSourceName(source)}</strong>
+                {source.providerLabel && source.providerLabel !== source.name ? (
+                  <small className="text-xs text-muted-foreground">{productSafeSourceLabel(source)}</small>
+                ) : null}
+                <small className="text-xs text-muted-foreground">{sourceSectionLabel(source.type)} · {source.toolCount} tools</small>
+              </span>
+              <TrustPill trust={source.effectiveTrust} />
+            </button>
+          ))}
+        </div>
+        {onAddMcp ? <Button variant="outline" icon={<Plug size={15} aria-hidden />} onClick={onAddMcp} disabled={loading}>Add MCP source</Button> : null}
+      </aside>
+    </>
   )
 }
 
@@ -658,6 +706,16 @@ const SOURCE_TRUST_ACTIONS: { tier: 'inherit' | 'trusted' | 'untrusted' | 'block
   { tier: 'untrusted', label: 'Require approval' },
   { tier: 'blocked', label: 'Block all' },
 ]
+
+function configuredSourceTrustState(
+  trustTier: string | null,
+  inherited: ToolingTrustState,
+): ToolingTrustState {
+  if (trustTier === 'trusted') return 'trusted'
+  if (trustTier === 'untrusted') return 'approval-required'
+  if (trustTier === 'blocked') return 'blocked'
+  return inherited
+}
 
 function SourceOverview({
   source,
@@ -673,7 +731,7 @@ function SourceOverview({
   onUpsertSourcePolicy?: ((source: ToolingSourceModel, trustTier: string, includeFutureTools?: boolean) => void) | undefined
 }) {
   const configuredTier = source.configuredTrustTier ?? 'inherit'
-  const sourceDisplayName = productSafeSourceName(source.name)
+  const sourceDisplayName = productSafeSourceName(source)
   return (
     <Card
       ariaLabel="Selected source overview"
@@ -815,8 +873,8 @@ function PluginsWorkspace({
           <h3 className="mt-2 text-sm font-semibold">Plugin tool sources</h3>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3.5">
             {plugins.map(({ source, status }) => (
-              <Card key={source.id} title={productSafeSourceName(source.name)} icon={<Package size={18} aria-hidden />} description={`${sourceSectionLabel(source.type)} · ${source.toolCount} tools`} actions={<ToneBadge tone={pluginStatusTone(status)}>{status}</ToneBadge>}>
-                <p className="text-sm text-muted-foreground">{productSafeSourceLabel(source.providerLabel)}</p>
+              <Card key={source.id} title={productSafeSourceName(source)} icon={<Package size={18} aria-hidden />} description={`${sourceSectionLabel(source.type)} · ${source.toolCount} tools`} actions={<ToneBadge tone={pluginStatusTone(status)}>{status}</ToneBadge>}>
+                <p className="text-sm text-muted-foreground">{productSafeSourceLabel(source)}</p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <Button variant="outline" onClick={() => onConfigure(source)}>Configure source</Button>
                 </div>
@@ -1176,7 +1234,7 @@ function ToolDetailRow({
           <button
             type="button"
             aria-expanded={expanded}
-            aria-label={`Toggle details for ${tool.name}`}
+            aria-label={`Toggle details for ${productSafeToolName(tool)}`}
             onClick={(event) => {
               event.stopPropagation()
               onToggle()
@@ -1185,7 +1243,7 @@ function ToolDetailRow({
           >
             <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', expanded ? '' : '-rotate-90')} aria-hidden />
             <span className="flex min-w-0 flex-col" style={{ maxWidth: 360 }}>
-              <strong className="truncate font-mono text-[12.5px] font-medium">{tool.name}</strong>
+              <strong className="truncate font-medium">{productSafeToolName(tool)}</strong>
               {!expanded ? <small className={cn('truncate text-xs', tool.disabledReason ? 'text-destructive' : 'text-muted-foreground')}>{tool.disabledReason ? toolDisabledCopy(tool) : productSafeToolDescription(tool)}</small> : null}
             </span>
           </button>
@@ -1208,7 +1266,7 @@ function ToolDetailRow({
                 {tool.mutating ? 'Changes data' : 'Reads data'}
                 {tool.mutating ? ' · mutating' : ''}
                 {tool.dataEgress ? ' · data egress' : ''}
-                {tool.providerLabel ? ` · ${productSafeSourceLabel(tool.providerLabel)}` : ''}
+                {tool.providerLabel ? ` · ${productSafePeerSourceLabel(tool, sharingPeers)}` : ''}
               </p>
               {tool.result ? <ToolResultCard result={tool.result} /> : null}
               <div className="flex flex-col gap-1 bg-background/25 px-3">
@@ -1238,7 +1296,7 @@ function ToolDetailRow({
                     size="sm"
                     spacing={1}
                     disabled={!onUpsertToolOverride}
-                    aria-label={`Policy override for ${tool.name}`}
+                    aria-label={`Policy override for ${productSafeToolName(tool)}`}
                     className="bg-background/60 p-1 shadow-inner"
                   >
                     {TOOL_POLICY_ACTIONS.map((action) => (
@@ -1288,7 +1346,7 @@ function ToolInventory(props: {
 }) {
   if (props.tools.length === 0) return <p className="text-sm text-muted-foreground">No tools match the current source/search filter.</p>
   return (
-    <div className="flex flex-col gap-2" aria-label={`${productSafeSourceName(props.source.name)} tools`}>
+    <div className="flex flex-col gap-2" aria-label={`${productSafeSourceName(props.source)} tools`}>
       {props.tools.map((tool) => (
         <ToolRow
           key={tool.id}
@@ -1343,7 +1401,7 @@ function ToolRow({
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
         <span className="flex items-center gap-2">
           {toolStateIcon(tool)}
-          <span className="flex flex-col"><strong className="font-medium">{tool.name}</strong><small className="text-xs text-muted-foreground">{productSafeToolDescription(tool)}</small></span>
+          <span className="flex flex-col"><strong className="font-medium">{productSafeToolName(tool)}</strong><small className="text-xs text-muted-foreground">{productSafeToolDescription(tool)}</small></span>
         </span>
         <span className="flex items-center gap-2">
           <ToneBadge tone={riskTone(tool.riskClass)}>{tool.riskClass}</ToneBadge>
@@ -1438,7 +1496,7 @@ function PolicyWorkspace({
         <div className="flex flex-col gap-2">
           {source.tools.map((tool) => (
             <div key={tool.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2.5 text-sm">
-              <strong className="font-medium">{tool.name}</strong>
+              <strong className="font-medium">{productSafeToolName(tool)}</strong>
               <span className="text-muted-foreground">{effectivePolicyCopy(tool, source)}</span>
               <Button variant="ghost" onClick={() => onUpsertToolOverride?.(tool, 'approve_all_for_peer')} disabled={!onUpsertToolOverride} disabledReason={!onUpsertToolOverride ? 'Tool trust changes are unavailable right now.' : undefined}>Trust tool</Button>
               <Button variant="ghost" onClick={() => onUpsertToolOverride?.(tool, 'ask_each_time')} disabled={!onUpsertToolOverride} disabledReason={!onUpsertToolOverride ? 'Approval changes are unavailable right now.' : undefined}>Require approval</Button>
@@ -1864,7 +1922,7 @@ function effectivePolicyCopy(tool: ToolApprovalCardModel, source: ToolingSourceM
   if (isBlockedTool(tool)) return 'Blocked until this source is reviewed.'
   if (source.effectiveTrust === 'trusted' && !tool.approvalRequired) return 'Trusted from reviewed source.'
   if (tool.approvalRequired) return 'Approval required for this exact tool scope.'
-  return `${trustLabel(source.effectiveTrust)} from ${productSafeSourceName(source.name)}.`
+  return `${trustLabel(source.effectiveTrust)} from ${productSafeSourceName(source)}.`
 }
 
 function toolDisabledCopy(tool: ToolApprovalCardModel): string {
@@ -1887,26 +1945,93 @@ function resultStatusCopy(status: string): string {
 function productSafeToolDescription(tool: ToolApprovalCardModel): string {
   const description = tool.description.trim()
   if (!description) return 'No description provided.'
+  const summary = description.split(/\s+(?=(?:Args|Arguments|Parameters|Returns|Raises|Examples?)\s*:)/iu)[0]?.trim() ?? ''
+  if (summary && !containsInternalToolCopy(summary)) return summary
   if (!containsInternalToolCopy(description)) return description
   if (tool.mutating) return 'This tool can make changes after you review it.'
   if (tool.dataEgress) return 'This tool can use connected information after you review it.'
   return 'This tool can help after you review it.'
 }
 
-function productSafeSourceLabel(label: string | null | undefined): string {
-  const trimmed = label?.trim()
-  if (!trimmed) return 'Aurora source'
-  return containsInternalToolCopy(trimmed) ? 'Aurora source' : trimmed
+function productSafeToolName(tool: ToolApprovalCardModel): string {
+  const name = tool.name.trim()
+  if (!name) return 'Tool'
+  if (!/^[a-z0-9]+(?:_[a-z0-9]+)+$/iu.test(name)) return name
+  const words = name.replace(/_tool$/iu, '').replace(/_/gu, ' ').trim()
+  return words ? `${words.charAt(0).toUpperCase()}${words.slice(1)}` : 'Tool'
 }
 
-function productSafeSourceName(name: string | null | undefined): string {
+function productSafePeerSourceLabel(tool: ToolApprovalCardModel, peers: ToolExportScopeModel[]): string {
+  const knownPeer = tool.providerPeerId
+    ? peers.find((peer) => peer.peerId === tool.providerPeerId)
+    : undefined
+  return productSafeSourceLabel(knownPeer?.label ?? tool.providerLabel)
+}
+
+function productSafeSourceLabel(sourceOrLabel: ToolingSourceModel | string | null | undefined): string {
+  const label = typeof sourceOrLabel === 'object' && sourceOrLabel !== null
+    ? sourceOrLabel.displayProviderLabel ?? sourceOrLabel.providerLabel
+    : sourceOrLabel
+  const trimmed = label?.trim()
+  if (!trimmed) return 'Aurora source'
+  if (containsInternalToolCopy(trimmed)) return 'Aurora source'
+  return redactStablePeerIds(trimmed)
+}
+
+function productSafeSourceName(sourceOrName: ToolingSourceModel | string | null | undefined): string {
+  const name = typeof sourceOrName === 'object' && sourceOrName !== null
+    ? sourceOrName.displayName ?? sourceOrName.name
+    : sourceOrName
   const trimmed = name?.trim()
   if (!trimmed) return 'Aurora source'
-  return containsInternalToolCopy(trimmed) ? 'Aurora source' : trimmed
+  if (containsInternalToolCopy(trimmed)) return 'Aurora source'
+  return redactStablePeerIds(trimmed)
+}
+
+function sourcePresentation(
+  source: ToolingSourceModel,
+  peers: ToolExportScopeModel[],
+): Pick<ToolingSourceModel, 'displayName' | 'displayProviderLabel'> {
+  if (source.type !== 'mesh') {
+    return {
+      displayName: productSafeSourceName(source.name),
+      displayProviderLabel: productSafeSourceLabel(source.providerLabel),
+    }
+  }
+  const knownPeerLabel = source.peerId
+    ? peers.find((peer) => peer.peerId === source.peerId)?.label
+    : undefined
+  const rawPeerLabel = sourcePeerLabelCandidate(source)
+  const peerLabel = productSafeSourceLabel(knownPeerLabel ?? rawPeerLabel ?? 'Approved device')
+  const groupLabel = source.shareGroupLabel
+    ? productSafeSourceName(source.shareGroupLabel)
+    : null
+  return {
+    displayName: groupLabel ? `${peerLabel} · ${groupLabel}` : peerLabel,
+    displayProviderLabel: peerLabel,
+  }
+}
+
+function sourcePeerLabelCandidate(source: ToolingSourceModel): string | null {
+  const groupSuffix = source.shareGroupLabel ? ` · ${source.shareGroupLabel}` : ''
+  const candidate = groupSuffix && source.name.endsWith(groupSuffix)
+    ? source.name.slice(0, -groupSuffix.length).trim()
+    : source.providerLabel.trim()
+  if (!candidate || candidate === source.peerId || containsStablePeerId(candidate)) return null
+  return candidate
+}
+
+function redactStablePeerIds(value: string): string {
+  const redacted = value.replace(/\baurora-(?:thin-)?[0-9a-f]{12,}(?:-[0-9a-f]{4,})*\b/giu, 'Approved device')
+  return redacted.trim() || 'Approved device'
+}
+
+function containsStablePeerId(value: string): boolean {
+  return /\baurora-(?:thin-)?[0-9a-f]{12,}(?:-[0-9a-f]{4,})*\b/iu.test(value)
 }
 
 function containsInternalToolCopy(value: string): boolean {
-  return /\b(?:Tooling|Scheduler|AdminAction|SDK|cache|route|provider|schema|protocol|transport|runtime|manifest|contract|fallback|sidecar|SQLite|IndexedDB|OPFS|stack trace|debug|fixture|assertion|implementation|tested|evidence)\b/i.test(value)
+  return /\b(?:Tooling|Scheduler|AdminAction|SDK|MessageBus|WebRTC|HTTP|WSS|cache|route|provider|schema|protocol|transport|runtime|manifest|contract|fallback|sidecar|SQLite|IndexedDB|OPFS|stack trace|debug|fixture|assertion|implementation|tested|evidence)\b/i.test(value)
     || /\b[A-Z][A-Za-z0-9]*(?:\.[A-Za-z0-9_-]+)+\b/.test(value)
 }
 

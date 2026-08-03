@@ -119,6 +119,104 @@ describe('local Tooling policy/provider', () => {
     expect(notFound).toMatchObject({ ok: false, status: 'not_found', error_code: 'tool_not_found' })
   })
 
+  it('enforces local owner approval policy after peer grants and fails closed when policy is unavailable', async () => {
+    const registry = new LocalToolRegistry({ stablePeerId: 'provider' })
+    registry.register({ descriptor: safeDescriptor, handler: () => ({ ok: true }) })
+    registry.register({ descriptor: dangerousDescriptor, handler: () => ({ ok: true }) })
+    let decision: 'trusted' | 'untrusted' | 'blocked' | 'unavailable' = 'untrusted'
+    const policy = new LocalToolExecutionPolicy({
+      providerPeerId: 'provider',
+      providerServiceInstanceId: 'local:provider:Tooling',
+      ports: allowPorts(),
+      approvalPolicy: {
+        resolveLocalToolApproval: (entry) => ({
+          mode: decision === 'trusted'
+            ? 'approve_all_for_peer'
+            : decision === 'untrusted'
+              ? 'ask_each_time'
+              : 'deny_all',
+          sourceId: entry.toolInfo.share_group_id,
+          unavailable: decision === 'unavailable'
+        })
+      }
+    })
+    const execution = {
+      callerPeerId: 'peer-a',
+      callerPrincipalId: 'principal-a',
+      permissions: ['Tooling.ExecuteTool', 'Echo.Use'],
+      methodId: 'Tooling.ExecuteTool',
+      nowMs: 1_000
+    }
+
+    await expect(policy.prepare(
+      registry.resolveForDispatch('echo')!,
+      { tool_name: 'echo', arguments: { text: 'hi' } },
+      execution
+    )).resolves.toMatchObject({
+      ok: false,
+      policy_decision: { approval_required: true, reason: 'approval_token_required' }
+    })
+
+    decision = 'trusted'
+    await expect(policy.prepare(
+      registry.resolveForDispatch('echo')!,
+      { tool_name: 'echo', arguments: { text: 'hi' } },
+      execution
+    )).resolves.toMatchObject({
+      ok: true,
+      policy_decision: { approval_required: false, approval_mode: 'approve_all_for_peer' }
+    })
+    await expect(policy.prepare(
+      registry.resolveForDispatch('delete')!,
+      { tool_name: 'delete', arguments: { text: 'target' } },
+      execution
+    )).resolves.toMatchObject({
+      ok: false,
+      policy_decision: { approval_required: true, reason: 'approval_token_required' }
+    })
+
+    decision = 'blocked'
+    await expect(policy.prepare(
+      registry.resolveForDispatch('echo')!,
+      { tool_name: 'echo', arguments: { text: 'hi' } },
+      execution
+    )).resolves.toMatchObject({
+      ok: false,
+      policy_decision: { share: false, reason: 'local_policy_blocked' }
+    })
+
+    decision = 'unavailable'
+    await expect(policy.prepare(
+      registry.resolveForDispatch('echo')!,
+      { tool_name: 'echo', arguments: { text: 'hi' } },
+      execution
+    )).resolves.toMatchObject({
+      ok: false,
+      policy_decision: { share: false, reason: 'local_policy_unavailable' }
+    })
+
+    const grantDenied = new LocalToolExecutionPolicy({
+      providerPeerId: 'provider',
+      providerServiceInstanceId: 'local:provider:Tooling',
+      ports: { ...allowPorts(), hasToolGrant: () => false },
+      approvalPolicy: {
+        resolveLocalToolApproval: (entry) => ({
+          mode: 'approve_all_for_peer',
+          sourceId: entry.toolInfo.share_group_id,
+          unavailable: false
+        })
+      }
+    })
+    await expect(grantDenied.prepare(
+      registry.resolveForDispatch('echo')!,
+      { tool_name: 'echo', arguments: { text: 'hi' } },
+      execution
+    )).resolves.toMatchObject({
+      ok: false,
+      policy_decision: { reason: 'tool_not_granted' }
+    })
+  })
+
   it('requires one-time approval tokens for dangerous tools and rejects replay or changed args', async () => {
     const registry = new LocalToolRegistry({ stablePeerId: 'provider' })
     registry.register({ descriptor: dangerousDescriptor, handler: () => ({ ok: true }) })
@@ -247,6 +345,43 @@ describe('local Tooling policy/provider', () => {
       ok: false,
       status: 'denied',
       error_code: 'local_approval_already_used'
+    })
+    expect(calls).toBe(1)
+  })
+
+  it('asks again when a later execution has a distinct correlation id', async () => {
+    let calls = 0
+    const registry = new LocalToolRegistry({ stablePeerId: 'provider' })
+    registry.register({
+      descriptor: dangerousDescriptor,
+      handler: () => {
+        calls += 1
+        return { ok: true }
+      }
+    })
+    const approvalController = new ProviderLocalApprovalController({ requestWaitMs: 1_000 })
+    const provider = providerFor(registry, { approvalController })
+    const request = { tool_name: 'delete', arguments: { text: 'target' } }
+
+    const firstExecution = provider.executeTool(
+      { ...request, correlation_id: 'request-1' },
+      context(['Tooling.ExecuteTool', 'Echo.Use'])
+    )
+    const firstApproval = await waitForPendingApproval(approvalController)
+    expect(approvalController.decide(firstApproval.id, 'approve')).toBe(true)
+    await expect(firstExecution).resolves.toMatchObject({ ok: true, status: 'success' })
+
+    const secondExecution = provider.executeTool(
+      { ...request, correlation_id: 'request-2' },
+      context(['Tooling.ExecuteTool', 'Echo.Use'])
+    )
+    const secondApproval = await waitForPendingApproval(approvalController)
+    expect(secondApproval.id).not.toBe(firstApproval.id)
+    expect(approvalController.decide(secondApproval.id, 'deny')).toBe(true)
+    await expect(secondExecution).resolves.toMatchObject({
+      ok: false,
+      status: 'denied',
+      error_code: 'local_approval_denied'
     })
     expect(calls).toBe(1)
   })

@@ -8,6 +8,7 @@ import { randomBytes } from '../webrtc/crypto.js'
 import { bytesToHex } from '../webrtc/encoding.js'
 import { canonicalJson, canonicalJsonSha256Hex } from './canonical-json.js'
 import { validateJsonAgainstSchema } from './json-schema.js'
+import type { LocalToolApprovalDecision, LocalToolApprovalDecisionPort } from './durable-feature-sharing.js'
 import type { LocalToolDispatchEntry, LocalToolExecutionContext } from './tool-registry.js'
 
 const SECRET_KEY_PARTS = ['secret', 'token', 'password', 'api_key', 'apikey', 'credential', 'private_key']
@@ -44,6 +45,7 @@ export interface LocalToolExecutionPolicyOptions {
   readonly nowMs?: () => number
   readonly randomToken?: () => string
   readonly ports?: LocalToolPolicyPorts
+  readonly approvalPolicy?: LocalToolApprovalDecisionPort | undefined
 }
 
 interface StoredApprovalToken {
@@ -88,6 +90,7 @@ export class LocalToolExecutionPolicy {
     readonly nowMs: () => number
     readonly randomToken: () => string
     readonly ports?: LocalToolPolicyPorts
+    readonly approvalPolicy?: LocalToolApprovalDecisionPort | undefined
   }
   private readonly approvalTokensByHash = new Map<string, StoredApprovalToken>()
 
@@ -98,7 +101,8 @@ export class LocalToolExecutionPolicy {
       tokenTtlSeconds: options.tokenTtlSeconds ?? 300,
       nowMs: options.nowMs ?? (() => Date.now()),
       randomToken: options.randomToken ?? secureRandomToken,
-      ...(options.ports ? { ports: options.ports } : {})
+      ...(options.ports ? { ports: options.ports } : {}),
+      ...(options.approvalPolicy ? { approvalPolicy: options.approvalPolicy } : {})
     }
   }
 
@@ -109,7 +113,14 @@ export class LocalToolExecutionPolicy {
       ? 'args_schema_hash_mismatch'
       : validateArguments(entry, request.arguments)
     const grantReason = validationReason ?? await this.firstGrantDenial(entry, request, context)
-    const approvalRequired = isApprovalRequired(entry)
+    const localApproval = resolveLocalApproval(this.options.approvalPolicy, entry)
+    const localPolicyReason = localApproval.unavailable
+      ? 'local_policy_unavailable'
+      : localApproval.mode === 'deny_all'
+        ? 'local_policy_blocked'
+        : null
+    const denialReason = grantReason ?? localPolicyReason
+    const approvalRequired = !denialReason && approvalRequiredForPolicy(entry, localApproval)
     const argsHash = argumentsFingerprint(request.arguments)
     const resourceHash = resourceSelectorFingerprint(request)
     const routeId = routeDecisionId({
@@ -119,19 +130,33 @@ export class LocalToolExecutionPolicy {
       local_tool_name: entry.toolInfo.local_name,
       resource_selector_hash: resourceHash
     })
-    const allowed = !grantReason && !approvalRequired
+    const allowed = !denialReason && !approvalRequired
     return {
       ok: allowed,
       policy_decision: {
         allowed,
-        share: !grantReason,
+        share: !denialReason,
         approval_required: approvalRequired,
-        approval_mode: approvalRequired ? 'ask_each_time' : 'approve_all_local_safe',
+        approval_mode: localApproval.mode === 'deny_all'
+          ? 'deny_all'
+          : approvalRequired
+            ? 'ask_each_time'
+            : localApproval.mode === 'approve_all_for_peer'
+              ? 'approve_all_for_peer'
+              : 'approve_all_local_safe',
         decision_id: canonicalJsonSha256Hex({ route_decision_id: routeId, args_hash: argsHash, approval_required: approvalRequired }),
         policy_rule_id: null,
-        reason: grantReason ?? (approvalRequired ? 'approval_token_required' : null),
-        auto_approved_reason: allowed ? 'local_safe_tool' : null,
-        effective_default: approvalRequired ? 'ask_each_time' : 'approve_all_local_safe',
+        reason: denialReason ?? (approvalRequired ? 'approval_token_required' : null),
+        auto_approved_reason: allowed
+          ? localApproval.mode === 'approve_all_for_peer'
+            ? 'local_owner_policy'
+            : 'local_safe_tool'
+          : null,
+        effective_default: localApproval.mode === 'inherit'
+          ? approvalRequired
+            ? 'ask_each_time'
+            : 'approve_all_local_safe'
+          : localApproval.mode,
         grant_id: null,
         grant_scope: null,
         token_ttl_seconds: this.options.tokenTtlSeconds
@@ -311,6 +336,34 @@ function isApprovalRequired(entry: LocalToolDispatchEntry): boolean {
     || entry.descriptor.safetyClass === 'dangerous'
     || entry.descriptor.safetyClass === 'sensitive'
     || (entry.descriptor.confirmationPolicy === 'sensitive' && entry.toolInfo.confirmation_required)
+}
+
+function resolveLocalApproval(
+  policy: LocalToolApprovalDecisionPort | undefined,
+  entry: LocalToolDispatchEntry
+): LocalToolApprovalDecision {
+  const sourceId = entry.toolInfo.share_group_id || entry.toolInfo.source_id || entry.toolInfo.source
+  if (!policy) return { mode: 'inherit', sourceId, unavailable: false }
+  try {
+    return policy.resolveLocalToolApproval(entry)
+  } catch {
+    return { mode: 'deny_all', sourceId, unavailable: true }
+  }
+}
+
+function approvalRequiredForPolicy(
+  entry: LocalToolDispatchEntry,
+  policy: LocalToolApprovalDecision
+): boolean {
+  if (policy.mode === 'ask_each_time') return true
+  if (policy.mode === 'approve_all_for_peer') return mandatoryOwnerConfirmation(entry)
+  return isApprovalRequired(entry)
+}
+
+function mandatoryOwnerConfirmation(entry: LocalToolDispatchEntry): boolean {
+  return entry.descriptor.confirmationPolicy === 'always'
+    || entry.descriptor.safetyClass === 'dangerous'
+    || entry.descriptor.safetyClass === 'sensitive'
 }
 
 function validateArguments(entry: LocalToolDispatchEntry, args: JsonObject): string | null {

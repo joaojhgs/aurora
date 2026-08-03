@@ -36,9 +36,13 @@ describe('Tooling source interactions', () => {
     const trigger = findButtonByText(container, 'Sources')
     expect(trigger).not.toBeNull()
     expect(trigger!.getAttribute('aria-expanded')).toBe('false')
+    expect(trigger!.closest('#tool-source-drawer')).toBeNull()
     expect(container.querySelector('.aui-tool-source-rail-open')).toBeNull()
 
     expect(trigger!.getAttribute('aria-controls')).toBe('tool-source-drawer')
+    await act(async () => trigger!.click())
+    expect(container.querySelector('#tool-source-drawer')?.className).toContain('flex')
+    expect(findButtonByText(container, 'Close')).not.toBeNull()
   })
 
   it('surfaces onboarding validation failures from typed Tooling source contracts', async () => {

@@ -69,7 +69,7 @@ export const PRODUCT_COPY = {
     title: 'Mesh',
     localDevice: 'This device',
     connectedDevice: 'Connected Aurora device',
-    localFeatures: 'Features on this device',
+    localFeatures: 'Device sharing',
     approvals: 'Waiting for approval on both devices',
     approve: 'Approve device',
     deny: 'Deny device',

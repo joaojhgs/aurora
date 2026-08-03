@@ -266,6 +266,7 @@ export async function createTauriMeshNodeServices(
       grantManager,
       localVerifierPeerId: localPeerId,
       roomName: meshMembership.webrtcProfile.room,
+      crypto,
       ...(options.now ? { now: options.now } : {}),
     });
     await localFeatureSharing.load();
@@ -289,6 +290,7 @@ export async function createTauriMeshNodeServices(
       cursorSecret: randomBytes(32),
       providerEnabled: true,
       approvalController,
+      approvalPolicy: localFeatureSharing,
       ...(options.now ? { clock: options.now } : {}),
       ...(options.randomId ? { randomId: options.randomId } : {}),
     });
@@ -313,6 +315,14 @@ export async function createTauriMeshNodeServices(
     const unsubscribeFeatureSharing = localFeatureSharing.subscribe(() => {
       if (!initialFeatureSnapshotSeen) {
         initialFeatureSnapshotSeen = true;
+        return;
+      }
+      scheduleProviderRefresh();
+    });
+    let initialApprovalPolicySnapshotSeen = false;
+    const unsubscribeApprovalPolicy = localFeatureSharing.subscribeApprovalPolicies(() => {
+      if (!initialApprovalPolicySnapshotSeen) {
+        initialApprovalPolicySnapshotSeen = true;
         return;
       }
       scheduleProviderRefresh();
@@ -344,6 +354,7 @@ export async function createTauriMeshNodeServices(
       close: async () => {
         providerRefreshClosed = true;
         unsubscribeFeatureSharing();
+        unsubscribeApprovalPolicy();
         await providerRefreshQueue;
         approvalController.close();
         localToolProvider.peerHost.suspend("provider_closed");

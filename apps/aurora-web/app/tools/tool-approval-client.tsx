@@ -28,7 +28,7 @@ export function ToolApprovalClientPage({
   )
 
   useEffect(() => {
-    if (!runtime.surface.ownsLocalNodeState || !runtime.localToolProvider) return
+    if (!runtime.surface.ownsLocalNodeState) return
     let active = true
     let generation = 0
     const refresh = async () => {
@@ -62,16 +62,16 @@ export function ToolApprovalClientPage({
 
   if (
     runtime.surface.ownsLocalNodeState
-    && runtime.localToolProvider
-    && runtime.localFeatureSharing
   ) {
     return (
       <LightweightToolApprovalPanel
         client={client}
         route={activeRoute}
-        localTools={runtime.localToolProvider.localToolRegistry.publicTools()}
+        localTools={runtime.localToolProvider?.localToolRegistry.publicTools() ?? []}
         remoteTools={remoteTools}
-        featureSharing={runtime.localFeatureSharing}
+        {...(runtime.localFeatureSharing
+          ? { featureSharing: runtime.localFeatureSharing }
+          : {})}
       />
     )
   }

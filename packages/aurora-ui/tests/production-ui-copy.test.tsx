@@ -50,6 +50,19 @@ describe('production UI copy', () => {
     }
   })
 
+  it('keeps internal device identifiers out of connected-device summaries', () => {
+    const html = renderToStaticMarkup(
+      <MeshPeersView
+        snapshot={meshSnapshot()}
+        route={route()}
+        canManageLocalServiceConfiguration={false}
+      />,
+    )
+
+    expect(html).toContain('Studio Aurora')
+    expect(html).not.toContain('peer-studio')
+  })
+
   it('maps hostile shell errors before the activity rail renders them', () => {
     const raw = 'thin client HTTP Gateway WebRTC invite failed'
     const snapshot = errorShellSnapshot('http', new Error(raw))

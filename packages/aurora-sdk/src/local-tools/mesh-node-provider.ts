@@ -11,6 +11,7 @@ import {
 import type { PeerAuthorityResolver } from '../peer-host/authority.js'
 import { createPeerAuthorityLocalToolPolicyPorts } from './authority-policy.js'
 import type { LocalToolExportDecisionPort } from './export-catalog.js'
+import type { LocalToolApprovalDecisionPort } from './durable-feature-sharing.js'
 import {
   LocalToolExecutionPolicy,
   type LocalToolPolicyPorts
@@ -40,6 +41,7 @@ export interface MeshNodeLocalToolProviderOptions {
   readonly tokenTtlSeconds?: number | undefined
   readonly nowSeconds?: () => number
   readonly approvalController?: ProviderLocalApprovalControllerPort | undefined
+  readonly approvalPolicy?: LocalToolApprovalDecisionPort | undefined
 }
 
 export interface MeshNodeLocalToolProviderComposition {
@@ -81,6 +83,7 @@ export function createMeshNodeLocalToolProvider(
     providerServiceInstanceId: serviceInstanceId,
     ...(options.tokenTtlSeconds !== undefined ? { tokenTtlSeconds: options.tokenTtlSeconds } : {}),
     ...(options.clock ? { nowMs: options.clock } : {}),
+    ...(options.approvalPolicy ? { approvalPolicy: options.approvalPolicy } : {}),
     ports: enabled && options.authorityResolver
       ? createPeerAuthorityLocalToolPolicyPorts({
           resolver: options.authorityResolver,

@@ -29,7 +29,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#
 import { Switch } from '#components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#components/ui/table'
 import { meshPeerErrorMessage } from './mesh-peers-view'
-import type { LocalFeatureSharingPort, LocalFeatureSharingSnapshot } from './local-feature-sharing'
+import {
+  localShareableServiceScopes,
+  type LocalFeatureSharingPort,
+  type LocalFeatureSharingSnapshot,
+} from './local-feature-sharing'
 import type { RouteAvailability } from './shell-data'
 import {
   isBrowserWebRtcConfigured,
@@ -334,10 +338,10 @@ export function LocalServiceRoutingResource({
         secret: false,
         reload_required: false,
         restart_required: false,
-        affected_services: ['Tools'],
+        affected_services: [row.label],
       }] : [],
       errors: unsupported.length > 0 || !shareChange
-        ? ['This device can only change whether its local tools are shared here.']
+        ? ['This device can only change whether this service is shared here.']
         : [],
       baseRevision: sharing ? localSharingRevision(sharing) : null,
       previewToken: sharing ? localSharingPreviewToken(sharing) : null,
@@ -362,7 +366,11 @@ export function LocalServiceRoutingResource({
       }
       const share = changes.find((change) => change.keyPath === `${row.sharingPath}.share`)?.value
       if (typeof share !== 'boolean') throw new Error('This sharing choice is unavailable.')
-      for (const feature of current.features.filter((candidate) => candidate.available)) {
+      const serviceScope = localShareableServiceScopes(current)
+        .find((candidate) => candidate.id === row.id)
+      if (!serviceScope) throw new Error('This service is no longer available on this device.')
+      const serviceFeatures = new Set(serviceScope.featureIds)
+      for (const feature of current.features.filter((candidate) => candidate.available && serviceFeatures.has(candidate.id))) {
         if (feature.enabled !== share) await featureSharing.setFeatureEnabled(feature.id, share)
       }
       await load()
@@ -400,38 +408,47 @@ export function buildLocalServiceRoutingSnapshot(
       evidenceSource: 'This device',
     }
   }
-  const availableFeatures = sharing.features.filter((feature) => feature.available)
-  const rows: ServiceRoutingRow[] = availableFeatures.length === 0 ? [] : [{
-    id: 'tools',
-    label: 'Tools',
-    basePath: 'local.tools',
-    sharingPath: 'local.tools.mesh_sharing',
-    routingPath: 'local.tools.mesh_routing',
-    registryStatus: 'healthy',
-    registryVersion: null,
-    registered: true,
-    exportPolicy: {
-      share: availableFeatures.some((feature) => feature.enabled),
-      maxConcurrent: 1,
-      unsharedFeatureIds: [],
-      unsharedMethodIds: [],
-    },
-    routingPolicy: {
-      prefer: 'local_only',
-      fallback: 'none',
-      allowedProviderPeerIds: [],
-      minVersion: null,
-      requiredProviderFeatureIds: [],
-      requiredProviderCapabilityTags: [],
-      requireExplicitSelector: false,
-    },
-    exportFeatures: [],
-    ungroupedMethods: [],
-    staleMethodIds: [],
-    providerOptions: [],
-    remoteFeatureOptions: [],
-    remoteCapabilityTagOptions: [],
-  }]
+  const availableById = new Map(
+    sharing.features
+      .filter((feature) => feature.available)
+      .map((feature) => [feature.id, feature]),
+  )
+  const rows: ServiceRoutingRow[] = localShareableServiceScopes(sharing).map((scope) => {
+    const serviceFeatures = scope.featureIds
+      .map((featureId) => availableById.get(featureId))
+      .filter((feature): feature is NonNullable<typeof feature> => Boolean(feature))
+    return {
+      id: scope.id,
+      label: scope.label,
+      basePath: `local.${scope.id}`,
+      sharingPath: `local.${scope.id}.mesh_sharing`,
+      routingPath: `local.${scope.id}.mesh_routing`,
+      registryStatus: 'healthy',
+      registryVersion: null,
+      registered: true,
+      exportPolicy: {
+        share: serviceFeatures.some((feature) => feature.enabled),
+        maxConcurrent: 1,
+        unsharedFeatureIds: [],
+        unsharedMethodIds: [],
+      },
+      routingPolicy: {
+        prefer: 'local_only',
+        fallback: 'none',
+        allowedProviderPeerIds: [],
+        minVersion: null,
+        requiredProviderFeatureIds: [],
+        requiredProviderCapabilityTags: [],
+        requireExplicitSelector: false,
+      },
+      exportFeatures: [],
+      ungroupedMethods: [],
+      staleMethodIds: [],
+      providerOptions: [],
+      remoteFeatureOptions: [],
+      remoteCapabilityTagOptions: [],
+    }
+  })
   return {
     loadState: 'ready',
     rows,
@@ -848,7 +865,7 @@ export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationErro
           {readOnly && snapshot.loadState !== 'loading' ? <p className="text-xs text-muted-foreground">Service sharing is read-only right now.</p> : null}
         </div>
         <div className={sharingOnly ? 'overflow-x-auto' : 'hidden overflow-x-auto md:block'}>
-          <Table>
+          <Table className={sharingOnly ? 'aui-service-sharing-table' : undefined}>
             <TableHeader><TableRow><TableHead>Service</TableHead><TableHead>Status</TableHead><TableHead>Shared</TableHead>{sharingOnly ? null : <><TableHead>Send requests to</TableHead><TableHead>If unavailable</TableHead></>}<TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
             <TableBody>
               {snapshot.rows.map((row) => {

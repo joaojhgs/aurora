@@ -6,6 +6,10 @@ export type ToolingPolicyMode = 'enforce' | 'deny_all' | 'dry_run_only' | 'unres
 
 export interface ToolingSourceModel {
   id: string
+  /** Product-facing copy only. Stable source identity remains in `id`/`peerId`. */
+  displayName?: string
+  /** Product-facing provider copy only. Never use this field for routing or authorization. */
+  displayProviderLabel?: string
   shareGroupId?: string | null
   shareGroupLabel?: string | null
   exportable?: boolean

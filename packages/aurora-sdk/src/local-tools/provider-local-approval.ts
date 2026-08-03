@@ -244,6 +244,9 @@ export class ProviderLocalApprovalController implements ProviderLocalApprovalCon
 }
 
 function approvalFingerprint(input: ProviderLocalApprovalWaitInput): string {
+  // correlation_id is the execution identity at this boundary: transport
+  // retries preserve it, while a separate user invocation must allocate a new
+  // value so identical arguments cannot reuse an earlier owner decision.
   return canonicalJsonSha256Hex({
     caller_peer_id: input.context.callerPeerId,
     caller_principal_id: input.context.callerPrincipalId ?? null,
@@ -254,6 +257,7 @@ function approvalFingerprint(input: ProviderLocalApprovalWaitInput): string {
     args_hash: input.prepared.args_hash,
     resource_selector_hash: input.prepared.resource_selector_hash,
     route_decision_id: input.prepared.route_decision_id,
+    correlation_id: input.request.correlation_id ?? null,
     schedule_id: input.request.schedule_id ?? null,
     scheduled_action_hash: input.request.scheduled_action_hash ?? null,
     dry_run: input.request.dry_run === true

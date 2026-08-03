@@ -11,6 +11,8 @@ import {
   buildMeshPeersSnapshot,
   buildLocalMeshNodeSnapshot,
   errorShellSnapshot,
+  getAuroraSurfaceProfile,
+  MeshPeersResource,
   MeshPeersView,
   OnboardingView,
   prepareLocalFeatureSharingApproval,
@@ -24,6 +26,12 @@ import { encodeMeshInviteToken, encodeMeshInviteUrl } from '../src/mesh-invite'
 import type { ThinConnectionProfile } from '../src/thin-connection-profile'
 
 const roots: Root[] = []
+const TOOLING_SERVICE = {
+  serviceId: 'tooling',
+  servicePermissionId: 'Tooling.use',
+  serviceLabel: 'Tools',
+  serviceDescription: 'Use tools this device makes available.',
+} as const
 
 beforeEach(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -66,6 +74,7 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       sharingAvailable: true,
       featureSharing: {
         features: [{
+          ...TOOLING_SERVICE,
           id: 'aurora.local.native.get_device_status.v1',
           label: 'Device status',
           description: 'Read device status.',
@@ -92,7 +101,7 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       services: ['Tools'],
       connectionStatus: 'connected',
     })
-    expect(snapshot.peers[0]?.permissions).toEqual(expect.arrayContaining(['Native.GetDeviceStatus', 'Tooling.use']))
+    expect(snapshot.peers[0]?.permissions).toEqual(['Tooling.use'])
     expect(snapshot.devices).toEqual([])
     expect(snapshot.liveSessionCount).toBe(1)
 
@@ -109,6 +118,149 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
     expect(container.textContent).not.toContain('Old server label')
     expect(container.textContent).not.toContain('Features on this device')
     expect(container.textContent).not.toContain('Device connections')
+    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent?.trim() === 'Features')).toBe(false)
+  })
+
+  it('never loads the connected server peer history for a node-owned Mesh page', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
+    const requestResult = vi.spyOn(client, 'requestResult')
+    const localFeatureSharing: LocalFeatureSharingPort = {
+      load: vi.fn(async () => ({
+        features: [{
+          ...TOOLING_SERVICE,
+          id: 'Native.GetDeviceStatus',
+          label: 'Device status',
+          description: 'Read device status.',
+          enabled: true,
+          available: true,
+          requiresAuroraOpen: true,
+          requiresLocalConfirmation: false,
+        }],
+        approvedDevices: [],
+      })),
+      setFeatureEnabled: vi.fn(async () => undefined),
+      replacePeerSharing: vi.fn(async () => undefined),
+      revokePeerSharing: vi.fn(async () => undefined),
+    }
+    const peer = new FakeBrowserPeer({
+      status: 'authorized',
+      state: 'authorized',
+      expectedStablePeerId: 'peer-home',
+      nodeName: 'Home Aurora',
+      secretsPersisted: true,
+    })
+    const container = render(
+      <MeshPeersResource
+        client={client}
+        route={meshRoute()}
+        surfaceProfile={getAuroraSurfaceProfile({
+          runtimeMode: 'mobile-native',
+          transportKind: 'native-mobile',
+          nativePlatform: 'android',
+          nodeMode: 'mesh-node',
+          runtimeTier: 'lightweight-ts',
+        })}
+        thinPeer={peer as never}
+        localFeatureSharing={localFeatureSharing}
+        localNode={{ peerId: 'peer-waydroid', nodeName: 'Waydroid' }}
+      />,
+    )
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Waydroid')
+    expect(container.textContent).toContain('Home Aurora')
+    expect(requestResult).not.toHaveBeenCalled()
+  })
+
+  it('changes a paired device service access through the canonical Mesh scopes dialog', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
+    const setFeatureEnabled = vi.fn(async () => undefined)
+    const replacePeerSharing = vi.fn(async () => undefined)
+    const localFeatureSharing: LocalFeatureSharingPort = {
+      load: vi.fn(async () => ({
+        features: [{
+          ...TOOLING_SERVICE,
+          id: 'Native.GetDeviceStatus',
+          label: 'Device status',
+          description: 'Read device status.',
+          enabled: false,
+          available: true,
+          requiresAuroraOpen: true,
+          requiresLocalConfirmation: false,
+        }],
+        approvedDevices: [{
+          peerId: 'peer-home',
+          peerLabel: 'Home Aurora',
+          featureIds: [],
+          expiresAtMs: 1_800_000_000_000,
+        }],
+      })),
+      setFeatureEnabled,
+      replacePeerSharing,
+      revokePeerSharing: vi.fn(async () => undefined),
+    }
+    const peer = new FakeBrowserPeer({
+      status: 'authorized',
+      state: 'authorized',
+      expectedStablePeerId: 'peer-home',
+      nodeName: 'Home Aurora',
+      secretsPersisted: true,
+    })
+    const container = render(
+      <MeshPeersResource
+        client={client}
+        route={meshRoute()}
+        surfaceProfile={getAuroraSurfaceProfile({
+          runtimeMode: 'mobile-native',
+          transportKind: 'native-mobile',
+          nativePlatform: 'android',
+          nodeMode: 'mesh-node',
+          runtimeTier: 'lightweight-ts',
+        })}
+        thinPeer={peer as never}
+        localFeatureSharing={localFeatureSharing}
+        localNode={{ peerId: 'peer-waydroid', nodeName: 'Waydroid' }}
+      />,
+    )
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      findButton(container, 'Features').click()
+      await Promise.resolve()
+    })
+
+    const dialog = document.body.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain('Tools')
+    expect(dialog?.textContent).not.toContain('Device status')
+    expect(dialog?.textContent).not.toContain('Gateway')
+    expect(dialog?.textContent).not.toContain('Orchestrator')
+    expect(dialog?.querySelector('[aria-label="Role templates"]')).toBeNull()
+
+    await act(async () => {
+      const toolingToggle = dialog?.querySelector<HTMLButtonElement>('[aria-label="Toggle Tools"]')
+      expect(toolingToggle).not.toBeNull()
+      toolingToggle?.click()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      findButton(document.body, 'Save').click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(setFeatureEnabled).toHaveBeenCalledWith('Native.GetDeviceStatus', true)
+    expect(replacePeerSharing).toHaveBeenCalledWith(
+      'peer-home',
+      ['Native.GetDeviceStatus'],
+      1_800_000_000_000,
+    )
   })
 
   it('keeps Android mesh-node setup selectable while native details are still loading', async () => {
@@ -525,6 +677,7 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       load: vi.fn(async () => ({
         features: [
           {
+            ...TOOLING_SERVICE,
             id: 'aurora.local.native.get_device_status.v1',
             label: 'Device status',
             description: 'Share battery and connectivity status.',
@@ -534,6 +687,7 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
             requiresLocalConfirmation: false,
           },
           {
+            ...TOOLING_SERVICE,
             id: 'aurora.local.native.share.v1',
             label: 'Share from this phone',
             description: 'Share a file selected on this phone.',
@@ -625,6 +779,7 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       load: vi.fn(async () => ({
         features: [
           {
+            ...TOOLING_SERVICE,
             id: 'feature-a',
             label: 'Feature A',
             description: 'Feature A description',
@@ -634,6 +789,7 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
             requiresLocalConfirmation: false,
           },
           {
+            ...TOOLING_SERVICE,
             id: 'feature-b',
             label: 'Feature B',
             description: 'Feature B description',
@@ -650,12 +806,11 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       revokePeerSharing: vi.fn(async () => undefined),
     }
 
-    const surfaceProfile = { isMobile: false } as never
-    await expect(prepareLocalFeatureSharingApproval(featureSharing, ['feature-b', 'feature-a'], surfaceProfile))
+    await expect(prepareLocalFeatureSharingApproval(featureSharing, ['feature-b', 'feature-a']))
       .resolves.toEqual(['feature-a', 'feature-b'])
     expect(setFeatureEnabled).toHaveBeenCalledOnce()
     expect(setFeatureEnabled).toHaveBeenCalledWith('feature-a', true)
-    await expect(prepareLocalFeatureSharingApproval(featureSharing, ['missing-feature'], surfaceProfile))
+    await expect(prepareLocalFeatureSharingApproval(featureSharing, ['missing-feature']))
       .rejects.toThrow('no longer available')
   })
 })
