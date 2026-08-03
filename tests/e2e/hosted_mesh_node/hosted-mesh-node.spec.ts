@@ -294,6 +294,18 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
   await expect(serviceSharing).toContainText('Tools')
   await expect(serviceSharing).not.toContainText(forbiddenProductionTerms)
   const toolsServiceSwitch = serviceSharing.getByLabel('Share Tools from this device')
+  await expect(toolsServiceSwitch).not.toBeChecked()
+
+  await toolsServiceSwitch.click()
+  await serviceSharing.getByRole('button', { name: 'Review changes' }).click()
+  const enabledServiceReview = serviceSharing.getByRole('region', {
+    name: 'Service sharing change review',
+  })
+  await expect(enabledServiceReview.getByText('Ready to save')).toBeVisible()
+  await enabledServiceReview
+    .getByText('I approve these changes for this session.')
+    .click()
+  await enabledServiceReview.getByRole('button', { name: 'Save changes' }).click()
   await expect(toolsServiceSwitch).toBeChecked()
 
   await toolsServiceSwitch.click()
@@ -310,14 +322,14 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
 
   await toolsServiceSwitch.click()
   await serviceSharing.getByRole('button', { name: 'Review changes' }).click()
-  const enabledServiceReview = serviceSharing.getByRole('region', {
+  const reenabledServiceReview = serviceSharing.getByRole('region', {
     name: 'Service sharing change review',
   })
-  await expect(enabledServiceReview.getByText('Ready to save')).toBeVisible()
-  await enabledServiceReview
+  await expect(reenabledServiceReview.getByText('Ready to save')).toBeVisible()
+  await reenabledServiceReview
     .getByText('I approve these changes for this session.')
     .click()
-  await enabledServiceReview.getByRole('button', { name: 'Save changes' }).click()
+  await reenabledServiceReview.getByRole('button', { name: 'Save changes' }).click()
   await expect(toolsServiceSwitch).toBeChecked()
 
   const secondPage = await page.context().newPage()
@@ -337,6 +349,32 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
     await secondPage.close()
   }
 
+  const peerFeaturesButton = page
+    .locator('[aria-labelledby="mesh-peers-title"]')
+    .getByRole('button', { name: 'Features', exact: true })
+  await peerFeaturesButton.click()
+  const peerFeaturesDialog = page.getByRole('dialog', {
+    name: `Features - ${expectedNodeName}`,
+    exact: true,
+  })
+  await expect(peerFeaturesDialog).toBeVisible()
+  const peerToolsSwitch = peerFeaturesDialog.getByRole('switch', {
+    name: 'Toggle Tools',
+    exact: true,
+  })
+  await expect(peerToolsSwitch).not.toBeChecked()
+  await peerToolsSwitch.click()
+  await expect(peerToolsSwitch).toBeChecked()
+  const savePeerFeatures = peerFeaturesDialog.getByRole('button', {
+    name: 'Save',
+    exact: true,
+  })
+  await savePeerFeatures.click()
+  await expect(savePeerFeatures).toBeDisabled({ timeout: 5_000 })
+  await expect(savePeerFeatures).toBeEnabled()
+  await peerFeaturesDialog.getByRole('button', { name: 'Close', exact: true }).click()
+  await expect(peerFeaturesDialog).not.toBeVisible()
+
   await page.goto(`${baseUrl}/tools`, { waitUntil: 'domcontentloaded' })
   await expect(page.getByRole('heading', { name: 'Tools', exact: true })).toBeVisible()
   await expect(page.getByText('Service sharing', { exact: true })).toHaveCount(0)
@@ -346,15 +384,22 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
   await expect(localToolDetails).toBeVisible()
   await localToolDetails.click()
   const localToolSharing = page.getByRole('group', {
-    name: /Mesh sharing for .*device status/iu,
+    name: 'Mesh sharing for Get device status',
+    exact: true,
   })
   await expect(localToolSharing).toBeVisible()
   await expect(
     page.getByRole('group', { name: /Mesh sharing for .* group/iu }),
   ).toBeVisible()
-  await localToolSharing.getByRole('button', { name: 'Do not share tools' }).click()
-  await expect(localToolSharing.getByText('Not shared with mesh peers.')).toBeVisible()
-  await localToolSharing.getByRole('button', { name: 'Share tools' }).click()
+  await localToolSharing
+    .getByRole('button', { name: 'Do not share tools', exact: true })
+    .click()
+  await expect(
+    localToolSharing.getByText('Tool is not shared with approved devices.'),
+  ).toBeVisible()
+  await localToolSharing
+    .getByRole('button', { name: 'Share tools', exact: true })
+    .click()
   await expect(localToolSharing.getByText('Tool sharing updated.')).toBeVisible()
 
   await page.goto(`${baseUrl}/mesh`, { waitUntil: 'domcontentloaded' })
