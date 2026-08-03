@@ -5,6 +5,10 @@ const genAndroidDir = process.env.AURORA_ANDROID_GENERATED_PROJECT_DIR
   ? resolve(process.env.AURORA_ANDROID_GENERATED_PROJECT_DIR)
   : resolve('src-tauri/gen/android')
 const appManifestPath = resolve(genAndroidDir, 'app/src/main/AndroidManifest.xml')
+const mainActivityPath = resolve(
+  genAndroidDir,
+  'app/src/main/java/dev/aurora/desktop/MainActivity.kt',
+)
 const cargoTomlPath = resolve('src-tauri/Cargo.toml')
 const vendorBarcodeScannerAndroidDir = resolve(
   'src-tauri/vendor/tauri-plugin-barcode-scanner/android',
@@ -33,6 +37,9 @@ syncCanonicalAndroidLauncherIcons()
 verifyVendorBarcodeScannerSource()
 
 patchFile(appManifestPath, (content) => mergePluginManifest(content))
+if (existsSync(mainActivityPath)) {
+  patchFile(mainActivityPath, (content) => addMainActivityImeInsets(content))
+}
 
 console.log('Installed Aurora Android native plugin source into src-tauri/gen/android.')
 
@@ -195,6 +202,18 @@ function mergePluginManifest(content) {
     /android:usesCleartextTraffic="[^"]*"/,
     'android:usesCleartextTraffic="true"',
   )
+  patched = patched.replace(
+    /<activity\b(?=[^>]*android:name="[^"]*\.MainActivity")[^>]*>/,
+    (activity) => {
+      if (activity.includes('android:windowSoftInputMode=')) {
+        return activity.replace(
+          /android:windowSoftInputMode="[^"]*"/,
+          'android:windowSoftInputMode="adjustResize"',
+        )
+      }
+      return activity.replace(/>$/, ' android:windowSoftInputMode="adjustResize">')
+    },
+  )
 
   // Keep the generated app manifest aligned with the canonical native-plugin
   // manifest. Remove stale Aurora-owned component declarations first so this
@@ -325,6 +344,63 @@ function mergePluginManifest(content) {
   }
 
   patched = patched.replace(/\s*<\/application>/, `${nativeComponents}\n    </application>`)
+  return patched
+}
+
+function addMainActivityImeInsets(content) {
+  let patched = content
+  const missingImports = [
+    'import android.view.View',
+    'import androidx.core.view.ViewCompat',
+    'import androidx.core.view.WindowInsetsCompat',
+  ].filter((line) => !patched.includes(line))
+  if (missingImports.length > 0) {
+    patched = patched.replace(
+      /^(package[^\n]*\n)/,
+      `$1\n${missingImports.join('\n')}\n`,
+    )
+  }
+
+  if (!/super\.onCreate\(savedInstanceState\)\s*\n\s*applyAuroraImeInsets\(\)/.test(patched)) {
+    patched = patched.replace(
+      /super\.onCreate\(savedInstanceState\)/,
+      'super.onCreate(savedInstanceState)\n    applyAuroraImeInsets()',
+    )
+  }
+
+  if (!patched.includes('private fun applyAuroraImeInsets')) {
+    patched = patched.replace(
+      /\n}\s*$/,
+      `
+
+  private fun applyAuroraImeInsets() {
+    val content = findViewById<View>(android.R.id.content)
+    val initialPaddingLeft = content.paddingLeft
+    val initialPaddingTop = content.paddingTop
+    val initialPaddingRight = content.paddingRight
+    val initialPaddingBottom = content.paddingBottom
+
+    ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
+      val imeBottom = if (insets.isVisible(WindowInsetsCompat.Type.ime())) {
+        insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+      } else {
+        0
+      }
+      view.setPadding(
+        initialPaddingLeft,
+        initialPaddingTop,
+        initialPaddingRight,
+        initialPaddingBottom + imeBottom,
+      )
+      insets
+    }
+    ViewCompat.requestApplyInsets(content)
+  }
+}
+`,
+    )
+  }
+
   return patched
 }
 

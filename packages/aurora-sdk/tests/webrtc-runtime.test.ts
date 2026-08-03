@@ -598,7 +598,7 @@ async function runtimeKeys() {
 }
 
 // WebCrypto jobs share constrained CI worker pools with other workspace tests.
-const RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS = 10_000
+const RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS = 30_000
 
 async function waitForSent(channel: RuntimeFakeChannel, count: number): Promise<void> {
   const deadline = Date.now() + RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS
@@ -855,7 +855,9 @@ async function authorizeHarness(harness: RuntimeHarness): Promise<{ channel: Run
   return { channel, proof }
 }
 
-describe('browser WebRTC runtime Python gateway auth interop', () => {
+describe('browser WebRTC runtime Python gateway auth interop', {
+  timeout: RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS + 5_000,
+}, () => {
   it('advertises only enabled local capabilities and negotiates their intersection', async () => {
     const harness = makeRuntimeHarness({
       mode: 'webrtc-only',

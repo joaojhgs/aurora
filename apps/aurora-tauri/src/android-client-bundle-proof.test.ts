@@ -494,8 +494,20 @@ if (argv[0] === 'build:frontend:android-client') {
   it('syncs init-time Android projects before Tauri writes mobile Gradle plugin files', () => {
     const root = mkdtempSync(join(tmpdir(), 'aurora-android-init-sync-'))
     const manifestPath = join(root, 'app', 'src', 'main', 'AndroidManifest.xml')
+    const mainActivityPath = join(
+      root,
+      'app',
+      'src',
+      'main',
+      'java',
+      'dev',
+      'aurora',
+      'desktop',
+      'MainActivity.kt',
+    )
     const reportPath = join(root, 'android-preflight.json')
     mkdirSync(dirname(manifestPath), { recursive: true })
+    mkdirSync(dirname(mainActivityPath), { recursive: true })
     writeFileSync(
       manifestPath,
       [
@@ -506,6 +518,23 @@ if (argv[0] === 'build:frontend:android-client') {
         '</application>',
         '</manifest>',
       ].join(''),
+    )
+    writeFileSync(
+      mainActivityPath,
+      [
+        'package dev.aurora.desktop',
+        '',
+        'import android.os.Bundle',
+        'import androidx.activity.enableEdgeToEdge',
+        '',
+        'class MainActivity : TauriActivity() {',
+        '  override fun onCreate(savedInstanceState: Bundle?) {',
+        '    enableEdgeToEdge()',
+        '    super.onCreate(savedInstanceState)',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
     )
 
     const syncResult = spawnSync(process.execPath, [syncNativePlugin], {
@@ -521,6 +550,13 @@ if (argv[0] === 'build:frontend:android-client') {
     expect(syncResult.stdout).toContain(
       'Verified Android barcode scanner uses Aurora’s cancellation-safe vendored source',
     )
+    expect(readFileSync(manifestPath, 'utf8')).toMatch(
+      /<activity\b(?=[^>]*android:name="\.MainActivity")(?=[^>]*android:windowSoftInputMode="adjustResize")[^>]*>/,
+    )
+    const mainActivity = readFileSync(mainActivityPath, 'utf8')
+    expect(mainActivity).toContain('ViewCompat.setOnApplyWindowInsetsListener(content)')
+    expect(mainActivity).toContain('WindowInsetsCompat.Type.ime()')
+    expect(mainActivity).toContain('applyAuroraImeInsets()')
     expect(existsSync(join(root, 'tauri.settings.gradle'))).toBe(false)
     expect(existsSync(join(root, 'app', 'tauri.build.gradle.kts'))).toBe(false)
     expect(

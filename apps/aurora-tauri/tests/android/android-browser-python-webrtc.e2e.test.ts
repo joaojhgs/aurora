@@ -79,8 +79,11 @@ const cryptoWorkerEntry = resolve(
   repoRoot,
   'packages/aurora-sdk/src/webrtc/crypto-worker.ts',
 )
-const chromePackage =
-  process.env.AURORA_ANDROID_BROWSER_PACKAGE ?? 'com.android.chrome'
+const mqttImportMapJson = '{"imports":{"mqtt":"/mqtt-bundle.mjs"}}'
+const configuredBrowserPackage =
+  process.env.AURORA_ANDROID_BROWSER_PACKAGE?.trim() || null
+let browserPackage = configuredBrowserPackage ?? 'com.android.chrome'
+let browserComponent: string | null = null
 const artifactDir =
   process.env.AURORA_ANDROID_MOBILE_WEBRTC_ARTIFACT_DIR ??
   resolve(appRoot, 'reports/webrtc-interop/android-mobile-browser')
@@ -152,7 +155,8 @@ describe('Android mobile-browser WebRTC interoperability', () => {
 
         await writeJson(resources.browserReportPath, {
           lane: interopLane,
-          browserName: 'android-chrome',
+          browserName: 'android-browser',
+          browserPackage,
           status: 'passed',
           durationMs: Date.now() - started,
           command:
@@ -231,7 +235,8 @@ describe('Android mobile-browser WebRTC interoperability', () => {
         )
         const failureReport = resources.redactArtifactValue({
           lane: interopLane,
-          browserName: 'android-chrome',
+          browserName: 'android-browser',
+          browserPackage,
           status: 'failed',
           durationMs: Date.now() - started,
           error: redactedError,
@@ -320,7 +325,7 @@ async function createInteropResources() {
   const close = async () => {
     if (closed) return
     closed = true
-    spawnSync(adb, ['shell', 'am', 'force-stop', chromePackage], {
+    spawnSync(adb, ['shell', 'am', 'force-stop', browserPackage], {
       stdio: 'ignore',
     })
     for (const port of reversedPorts) {
@@ -467,10 +472,15 @@ async function createInteropResources() {
     }
 
     hostPort = address.port
-    // `adb root` restarts adbd and clears reverse-port mappings. Elevate the
-    // emulator before installing the mappings that Chrome and WebRTC consume.
-    spawnSync(adb, ['root'], { stdio: 'ignore' })
     run(adb, ['wait-for-device'])
+    resolveAndroidBrowserTarget()
+    // Chrome setup writes its first-run preferences directly. Root only the
+    // emulator for that browser family; other installed browsers do not need it.
+    if (isChromeFamilyBrowser()) {
+      spawnSync(adb, ['root'], { stdio: 'ignore' })
+      await reconnectTcpAdbAfterRoot()
+      run(adb, ['wait-for-device'])
+    }
     run(adb, ['shell', 'svc', 'power', 'stayon', 'true'])
     run(adb, ['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'])
     run(adb, ['shell', 'wm', 'dismiss-keyguard'])
@@ -696,6 +706,7 @@ function mobileHarnessHtml(): string {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Aurora Android WebRTC Interop</title>
+    <script type="importmap">${mqttImportMapJson}</script>
     <style>
       body { font-family: sans-serif; padding: 2rem; }
       [data-status="passed"] { color: #087a32; }
@@ -764,31 +775,33 @@ function mobileHarnessHtml(): string {
 }
 
 async function launchAndroidBrowser(url: string): Promise<void> {
-  await resetChromeForInterop()
-  startChromeUrl('about:blank')
-  const activityDeadline = Date.now() + 60_000
-  while (Date.now() < activityDeadline) {
-    if (isChromeForeground()) {
-      break
+  await resetAndroidBrowserForInterop()
+  if (isChromeFamilyBrowser()) {
+    startAndroidBrowserUrl('about:blank')
+    const activityDeadline = Date.now() + 60_000
+    while (Date.now() < activityDeadline) {
+      if (isAndroidBrowserForeground()) break
+      await sleep(500)
     }
-    await sleep(500)
+    run(adb, ['shell', 'am', 'force-stop', browserPackage])
   }
-  run(adb, ['shell', 'am', 'force-stop', chromePackage])
-  startChromeUrl(url)
+  startAndroidBrowserUrl(url)
   await sleep(2_000)
-  if (!isChromeForeground()) {
-    startChromeUrl(url, true)
+  if (!isAndroidBrowserForeground()) {
+    startAndroidBrowserUrl(url, true)
   }
-  await dismissChromeNotificationPrompt()
+  await dismissAndroidBrowserNotificationPrompt()
 }
 
-function startChromeUrl(url: string, explicitActivity = false): void {
+function startAndroidBrowserUrl(url: string, explicitActivity = false): void {
   const args = [
     'shell',
     'am',
     'start',
     '-a',
     'android.intent.action.VIEW',
+    '-c',
+    'android.intent.category.BROWSABLE',
     '-d',
     url,
     '--ez',
@@ -796,15 +809,15 @@ function startChromeUrl(url: string, explicitActivity = false): void {
     'true',
     '--activity-clear-top',
   ]
-  if (explicitActivity) {
-    args.push('-n', `${chromePackage}/com.google.android.apps.chrome.Main`)
+  if (explicitActivity && browserComponent) {
+    args.push('-n', browserComponent)
   } else {
-    args.push(chromePackage)
+    args.push('-p', browserPackage)
   }
   run(adb, args)
 }
 
-function isChromeForeground(): boolean {
+function isAndroidBrowserForeground(): boolean {
   const activities = adbOutputOrEmpty([
     'shell',
     'dumpsys',
@@ -812,22 +825,24 @@ function isChromeForeground(): boolean {
     'activities',
   ])
   return (
-    activities.includes(`${chromePackage}/`) ||
-    activities.includes(`packageName=${chromePackage}`) ||
+    activities.includes(`${browserPackage}/`) ||
+    activities.includes(`packageName=${browserPackage}`) ||
     activities.includes(`mResumedActivity`) &&
-      activities.includes(chromePackage)
+      activities.includes(browserPackage)
   )
 }
 
-async function resetChromeForInterop(): Promise<void> {
-  const preferencesPath =
-    `/data/data/${chromePackage}/shared_prefs/` +
-    `${chromePackage}_preferences.xml`
-
+async function resetAndroidBrowserForInterop(): Promise<void> {
   spawnSync(adb, ['logcat', '-c'], { stdio: 'ignore' })
-  run(adb, ['shell', 'pm', 'enable', chromePackage])
-  run(adb, ['shell', 'pm', 'clear', chromePackage])
-  run(adb, ['shell', 'pm', 'enable', chromePackage])
+  run(adb, ['shell', 'pm', 'enable', browserPackage])
+  run(adb, ['shell', 'pm', 'clear', browserPackage])
+  run(adb, ['shell', 'pm', 'enable', browserPackage])
+  if (!isChromeFamilyBrowser()) return
+
+  const preferencesPath =
+    `/data/data/${browserPackage}/shared_prefs/` +
+    `${browserPackage}_preferences.xml`
+
   spawnSync(adb, [
     'shell',
     'rm',
@@ -854,14 +869,14 @@ async function resetChromeForInterop(): Promise<void> {
       'stat',
       '-c',
       '%u',
-      `/data/data/${chromePackage}`,
+      `/data/data/${browserPackage}`,
     ]).trim()
     if (/^\d+$/.test(uid)) break
     await sleep(500)
   }
   if (!/^\d+$/.test(uid)) {
     throw new Error(
-      `Could not initialize ${chromePackage} for the Android browser interop test`,
+      `Could not initialize ${browserPackage} for the Android browser interop test`,
     )
   }
 
@@ -880,11 +895,11 @@ async function resetChromeForInterop(): Promise<void> {
   run(adb, [
     'shell',
     [
-      `mkdir -p /data/data/${chromePackage}/shared_prefs`,
+      `mkdir -p /data/data/${browserPackage}/shared_prefs`,
       `echo ${encoded} | base64 -d > ${preferencesPath}`,
       `chown ${uid}:${uid} ${preferencesPath}`,
       `chmod 660 ${preferencesPath}`,
-      `restorecon -R /data/data/${chromePackage}`,
+      `restorecon -R /data/data/${browserPackage}`,
     ].join(' && '),
   ])
   spawnSync(
@@ -893,7 +908,7 @@ async function resetChromeForInterop(): Promise<void> {
       'shell',
       'pm',
       'set-permission-flags',
-      chromePackage,
+      browserPackage,
       'android.permission.POST_NOTIFICATIONS',
       'user-set',
     ],
@@ -905,7 +920,7 @@ async function resetChromeForInterop(): Promise<void> {
       'shell',
       'appops',
       'set',
-      chromePackage,
+      browserPackage,
       'POST_NOTIFICATION',
       'ignore',
     ],
@@ -913,7 +928,8 @@ async function resetChromeForInterop(): Promise<void> {
   )
 }
 
-async function dismissChromeNotificationPrompt(): Promise<void> {
+async function dismissAndroidBrowserNotificationPrompt(): Promise<void> {
+  if (!isChromeFamilyBrowser()) return
   const deadline = Date.now() + 45_000
   while (Date.now() < deadline) {
     spawnSync(
@@ -936,7 +952,7 @@ async function dismissChromeNotificationPrompt(): Promise<void> {
       .find(
         (node) =>
           node.includes(
-            `resource-id="${chromePackage}:id/negative_button"`,
+            `resource-id="${browserPackage}:id/negative_button"`,
           ) || node.includes('text="No thanks"'),
       )
     if (promptNode) {
@@ -1046,6 +1062,98 @@ function resolveAdbCommand(): string {
             0),
     ) ?? 'adb'
   )
+}
+
+function resolveAndroidBrowserTarget(): void {
+  const preferredPackage = configuredBrowserPackage ?? 'com.android.chrome'
+  if (androidPackageInstalled(preferredPackage)) {
+    browserPackage = preferredPackage
+    browserComponent = resolveBrowserComponent(preferredPackage)
+    return
+  }
+  if (configuredBrowserPackage) {
+    throw new Error(
+      `Configured Android browser package is not installed: ${configuredBrowserPackage}`,
+    )
+  }
+
+  const output = adbOutputOrEmpty([
+    'shell',
+    'cmd',
+    'package',
+    'resolve-activity',
+    '--brief',
+    '-a',
+    'android.intent.action.VIEW',
+    '-c',
+    'android.intent.category.BROWSABLE',
+    '-d',
+    'https://example.com',
+  ])
+  const component = parseAndroidComponent(output)
+  if (!component) {
+    throw new Error(
+      'No installed Android browser can handle secure web pages for the mobile WebRTC test',
+    )
+  }
+  browserComponent = component
+  browserPackage = component.slice(0, component.indexOf('/'))
+}
+
+function androidPackageInstalled(packageName: string): boolean {
+  return adbOutputOrEmpty(['shell', 'pm', 'path', packageName])
+    .trim()
+    .startsWith('package:')
+}
+
+function resolveBrowserComponent(packageName: string): string | null {
+  return parseAndroidComponent(
+    adbOutputOrEmpty([
+      'shell',
+      'cmd',
+      'package',
+      'resolve-activity',
+      '--brief',
+      '-a',
+      'android.intent.action.VIEW',
+      '-c',
+      'android.intent.category.BROWSABLE',
+      '-d',
+      'https://example.com',
+      '-p',
+      packageName,
+    ]),
+  )
+}
+
+function parseAndroidComponent(output: string): string | null {
+  return (
+    output
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .find((line) => /^[A-Za-z0-9._]+\/[A-Za-z0-9._$]+$/u.test(line)) ??
+    null
+  )
+}
+
+function isChromeFamilyBrowser(): boolean {
+  return /(?:chrome|chromium)/iu.test(browserPackage)
+}
+
+async function reconnectTcpAdbAfterRoot(): Promise<void> {
+  const serial = process.env.ANDROID_SERIAL?.trim()
+  if (!serial || !serial.includes(':')) return
+
+  const deadline = Date.now() + 30_000
+  while (Date.now() < deadline) {
+    spawnSync(adb, ['connect', serial], { stdio: 'ignore' })
+    const state = spawnSync(adb, ['-s', serial, 'get-state'], {
+      encoding: 'utf8',
+    })
+    if (state.status === 0 && state.stdout.trim() === 'device') return
+    await sleep(500)
+  }
+  throw new Error(`Android emulator did not reconnect after adb root: ${serial}`)
 }
 
 async function waitForJson<T>(

@@ -19,7 +19,11 @@ import {
   redactInteropSeededText,
   type InteropBrowserResult,
 } from '../../../../tests/e2e/webrtc_interop/assertions.js'
-import { splitAndroidConsoleErrors } from './android-webrtc-harness-utils.js'
+import {
+  formatAndroidRuntimeException,
+  splitAndroidConsoleErrors,
+  type AndroidRuntimeExceptionDetails,
+} from './android-webrtc-harness-utils.js'
 
 type BrowserConfig = {
   lane: string
@@ -64,6 +68,7 @@ const cryptoWorkerEntry = resolve(
   repoRoot,
   'packages/aurora-sdk/src/webrtc/crypto-worker.ts',
 )
+const mqttImportMapJson = '{"imports":{"mqtt":"/mqtt-bundle.mjs"}}'
 const appId = process.env.AURORA_ANDROID_APP_ID ?? 'dev.aurora.desktop'
 const artifactDir =
   process.env.AURORA_ANDROID_WEBRTC_ARTIFACT_DIR ??
@@ -103,27 +108,38 @@ describe('Android thin-shell WebRTC interoperability', () => {
         resources.pythonPeer,
         resources.getPythonOutput,
       )
-      const consoleErrors: string[] = []
+      const runtimeExceptions: AndroidRuntimeExceptionDetails[] = []
+      const consoleLogErrors: string[] = []
       const networkRequests: NetworkRequest[] = []
       const started = Date.now()
       let browserResult: InteropBrowserResult | undefined
+      let cdpClient: Awaited<ReturnType<typeof connectCdp>> | undefined
+      let renderedConsoleErrors: string[] | undefined
+      const getConsoleErrors = async (): Promise<string[]> => {
+        if (renderedConsoleErrors !== undefined) {
+          return renderedConsoleErrors
+        }
+        renderedConsoleErrors = [
+          ...(await formatRuntimeExceptions(
+            cdpClient,
+            runtimeExceptions,
+          )),
+          ...consoleLogErrors,
+        ]
+        return renderedConsoleErrors
+      }
       try {
         const client = await connectAndroidWebView(appId, (message) => {
           if (message.method === 'Runtime.exceptionThrown') {
-            const details = message.params?.exceptionDetails
-            consoleErrors.push(
-              String(
-                details?.exception?.description ??
-                  details?.text ??
-                  'Uncaught Android WebView exception',
-              ),
+            runtimeExceptions.push(
+              message.params?.exceptionDetails as AndroidRuntimeExceptionDetails,
             )
           }
           if (
             message.method === 'Log.entryAdded' &&
             message.params?.entry?.level === 'error'
           ) {
-            consoleErrors.push(String(message.params.entry.text))
+            consoleLogErrors.push(String(message.params.entry.text))
           }
           if (message.method === 'Network.requestWillBeSent') {
             networkRequests.push({
@@ -138,9 +154,11 @@ describe('Android thin-shell WebRTC interoperability', () => {
             })
           }
         })
+        cdpClient = client
         resources.setCdpClient(client)
 
         await client.send('Runtime.enable')
+        await client.send('Debugger.enable')
         await client.send('Log.enable')
         await client.send('Network.enable')
         await client.send('Page.enable')
@@ -166,8 +184,9 @@ describe('Android thin-shell WebRTC interoperability', () => {
           resources.roomSecret,
           resources.timeoutMs,
         )
-        const filteredConsoleErrors =
-          splitAndroidConsoleErrors(consoleErrors)
+        const filteredConsoleErrors = splitAndroidConsoleErrors(
+          await getConsoleErrors(),
+        )
         resources.assertNoSeededSecrets({
           browserResult,
           networkRequests,
@@ -266,8 +285,9 @@ describe('Android thin-shell WebRTC interoperability', () => {
         const redactedError = resources.redactArtifactValue(
           error instanceof Error ? error.message : String(error),
         )
-        const filteredConsoleErrors =
-          splitAndroidConsoleErrors(consoleErrors)
+        const filteredConsoleErrors = splitAndroidConsoleErrors(
+          await getConsoleErrors(),
+        )
         const failureReport = resources.redactArtifactValue({
           lane: interopLane,
           browserName: 'android-webview',
@@ -478,7 +498,7 @@ async function createInteropResources() {
         'cache-control': 'no-store',
       })
       response.end(
-        '<!doctype html><html><head><meta charset="utf-8"><title>Aurora Android WebRTC Interop</title></head><body><script type="module" src="/android-webview-bundle.js"></script></body></html>',
+        `<!doctype html><html><head><meta charset="utf-8"><title>Aurora Android WebRTC Interop</title><script type="importmap">${mqttImportMapJson}</script></head><body><script type="module" src="/android-webview-bundle.js"></script></body></html>`,
       )
     })
     await new Promise<void>((resolvePromise) =>
@@ -500,15 +520,7 @@ async function createInteropResources() {
       reversedPorts.add(port)
     }
     run('adb', ['shell', 'am', 'force-stop', appId])
-    run('adb', [
-      'shell',
-      'monkey',
-      '-p',
-      appId,
-      '-c',
-      'android.intent.category.LAUNCHER',
-      '1',
-    ])
+    launchAndroidApp(appId)
 
     const gatewayArgs = [
       'run',
@@ -811,6 +823,42 @@ async function connectCdp(
   }
 }
 
+async function formatRuntimeExceptions(
+  client: Awaited<ReturnType<typeof connectCdp>> | undefined,
+  exceptions: AndroidRuntimeExceptionDetails[],
+): Promise<string[]> {
+  if (client === undefined) {
+    return exceptions.map((details) =>
+      formatAndroidRuntimeException(details),
+    )
+  }
+
+  const sources = new Map<string, string | undefined>()
+  return Promise.all(
+    exceptions.map(async (details) => {
+      const scriptId = details.scriptId
+      if (typeof scriptId !== 'string') {
+        return formatAndroidRuntimeException(details)
+      }
+      if (!sources.has(scriptId)) {
+        try {
+          const response = await client.send('Debugger.getScriptSource', {
+            scriptId,
+          })
+          const source = response.result?.scriptSource
+          sources.set(
+            scriptId,
+            typeof source === 'string' ? source : undefined,
+          )
+        } catch {
+          sources.set(scriptId, undefined)
+        }
+      }
+      return formatAndroidRuntimeException(details, sources.get(scriptId))
+    }),
+  )
+}
+
 async function waitForRuntimeExpression(
   client: Awaited<ReturnType<typeof connectCdp>>,
   expression: string,
@@ -1037,6 +1085,36 @@ function run(command: string, args: string[], cwd = appRoot): void {
     throw new Error(
       `${command} ${args.join(' ')} failed with status ${result.status}`,
     )
+  }
+}
+
+function launchAndroidApp(packageId: string): void {
+  const component = `${packageId}/.MainActivity`
+  const direct = spawnSync(
+    'adb',
+    ['shell', 'am', 'start', '-W', '-n', component],
+    { cwd: appRoot, encoding: 'utf8' },
+  )
+  if (direct.error) throw direct.error
+  if (direct.status === 0) return
+
+  const fallback = spawnSync(
+    'adb',
+    [
+      'shell',
+      'monkey',
+      '-p',
+      packageId,
+      '-c',
+      'android.intent.category.LAUNCHER',
+      '1',
+    ],
+    { cwd: appRoot, encoding: 'utf8' },
+  )
+  if (fallback.error) throw fallback.error
+  if (fallback.status !== 0) {
+    const detail = `${direct.stdout ?? ''}\n${direct.stderr ?? ''}\n${fallback.stdout ?? ''}\n${fallback.stderr ?? ''}`.trim()
+    throw new Error(`Could not launch ${component}: ${detail}`)
   }
 }
 
