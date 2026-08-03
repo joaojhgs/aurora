@@ -156,6 +156,7 @@ const interopTimeoutMs = Number(
   process.env.AURORA_IOS_MOBILE_WEBRTC_TIMEOUT_MS ?? 600_000,
 )
 const testTimeoutMs = Math.max(900_000, interopTimeoutMs + 180_000)
+const cleanupTimeoutMs = 60_000
 const safariBundleId = 'com.apple.mobilesafari'
 const describeOnMac = process.platform === 'darwin' ? describe : describe.skip
 
@@ -164,7 +165,7 @@ let cleanup: (() => Promise<void>) | undefined
 afterEach(async () => {
   await cleanup?.()
   cleanup = undefined
-})
+}, cleanupTimeoutMs)
 
 describeOnMac('iOS browser and packaged WKWebView WebRTC interoperability', () => {
   for (const surface of surfaces) {
@@ -555,20 +556,25 @@ async function createInteropResources(surface: IosInteropSurface) {
       ],
       { stdio: 'ignore' },
     )
+    const shutdowns: Promise<void>[] = []
     if (server?.listening) {
-      await new Promise<void>((resolvePromise) =>
-        server?.close(() => resolvePromise()),
+      shutdowns.push(
+        new Promise<void>((resolvePromise) =>
+          server?.close(() => resolvePromise()),
+        ),
       )
+      server.closeAllConnections()
     }
     if (pythonPeer?.exitCode === null) {
-      await terminateChild(pythonPeer, 5_000)
+      shutdowns.push(terminateChild(pythonPeer, 5_000))
     }
     if (mosquitto.exitCode === null) {
-      await terminateChild(mosquitto, 5_000)
+      shutdowns.push(terminateChild(mosquitto, 5_000))
     }
     if (turnServerProcess?.exitCode === null) {
-      await terminateChild(turnServerProcess, 5_000)
+      shutdowns.push(terminateChild(turnServerProcess, 5_000))
     }
+    await Promise.all(shutdowns)
     await fs.writeFile(
       mosquittoLogPath,
       redactProcessOutput(mosquittoOutput),
@@ -926,14 +932,28 @@ async function createInteropResources(surface: IosInteropSurface) {
       seededSecrets,
     )
     assertNoInteropSeededSecrets(failureReport, seededSecrets)
+    const secondaryFailures: unknown[] = []
     try {
       await writeJson(browserReportPath, failureReport)
       await writeJson(donePath, {
         ok: false,
         at: new Date().toISOString(),
       })
-    } finally {
+    } catch (reportError) {
+      secondaryFailures.push(reportError)
+    }
+    try {
       await close()
+    } catch (cleanupError) {
+      secondaryFailures.push(cleanupError)
+    }
+    if (secondaryFailures.length > 0) {
+      console.error(
+        redactInteropSeededText(
+          `iOS WebRTC setup failed and cleanup also encountered ${secondaryFailures.length} error(s)`,
+          seededSecrets,
+        ),
+      )
     }
     throw new Error(String(redactedError))
   }

@@ -236,6 +236,10 @@ describe('Tauri CI native evidence contract', () => {
     expect(iosInteropTest).toContain(
       'AURORA_IOS_MOBILE_WEBRTC_TIMEOUT_MS ?? 600_000',
     )
+    expect(iosInteropTest).toContain('const cleanupTimeoutMs = 60_000')
+    expect(iosInteropTest).toContain('}, cleanupTimeoutMs)')
+    expect(iosInteropTest).toContain('server.closeAllConnections()')
+    expect(iosInteropTest).toContain('await Promise.all(shutdowns)')
     expect(iosInteropTest).toContain('frontendDist: distDir')
     expect(iosInteropTest).not.toContain("frontendDist: './dist'")
     expect(iosInteropTest).toContain('const iosBuildRoot = join(')
