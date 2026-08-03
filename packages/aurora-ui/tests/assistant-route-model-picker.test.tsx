@@ -47,6 +47,7 @@ describe('assistant execution and model pickers', () => {
       ['local', 'Local', 'lightweight-local'],
       ['dispatch', 'Home Aurora', 'aurora-route']
     ])
+    expect(execution[1]?.description).toBe('Send this turn to Home Aurora; that device handles the request.')
     expect(markup).not.toContain('Choose how Aurora answers')
     expect(markup.match(/aria-label="Prompt composer"/g)).toHaveLength(1)
     expect(markup).toContain('aria-label="Executing locally"')

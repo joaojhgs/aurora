@@ -224,19 +224,15 @@ export const tauriRouteRegistry = {
   tools: ({ route, snapshot, nativeContext, client }) => {
     const localProvider = nativeContext.localToolProvider;
     const localSharing = nativeContext.localFeatureSharing;
-    if (
-      nativeContext.surfaceProfile.ownsLocalNodeState &&
-      localProvider &&
-      localSharing
-    ) {
+    if (nativeContext.surfaceProfile.ownsLocalNodeState) {
       return (
         <LightweightToolApprovalPanel
           client={client}
           route={route}
-          localTools={localProvider.localToolRegistry.publicTools()}
+          localTools={localProvider?.localToolRegistry.publicTools() ?? []}
           remoteTools={nativeContext.remoteTools ?? []}
-          featureSharing={localSharing}
           nativePlatform={snapshot.nativePlatform}
+          {...(localSharing ? { featureSharing: localSharing } : {})}
         />
       );
     }
@@ -274,7 +270,7 @@ export const tauriRouteRegistry = {
         providerStatus &&
         !providerStatus.available ? (
           <p className="text-sm text-muted-foreground" role="status">
-            Features from this device are unavailable right now. Review this
+            Services from this device are unavailable right now. Review this
             device&apos;s setup and try again.
           </p>
         ) : null}
@@ -301,7 +297,8 @@ export const tauriRouteRegistry = {
             featureSharing={nativeContext.localFeatureSharing}
           />
         ) : null}
-        {!isMobileTauriShell() ? (
+        {nativeContext.surfaceProfile.canManageLocalServiceConfiguration ||
+        nativeContext.surfaceProfile.isRemoteConsole ? (
           <details>
             <summary className="cursor-pointer text-sm text-muted-foreground">
               Device selection details
@@ -543,7 +540,7 @@ export function AuroraTauriApp({
     };
 
     if (!peer) {
-      if (runtime.localAssistant || runtime.localToolProvider) void refreshRemoteTools();
+      if (runtime.nodeMode === "mesh-node" || runtime.localAssistant || runtime.localToolProvider) void refreshRemoteTools();
       return () => {
         cancelled = true;
         refreshEpoch += 1;
@@ -557,7 +554,7 @@ export function AuroraTauriApp({
       if (nextReady && !ready) {
         ready = true;
         setThinPeerReadyRevision((revision) => revision + 1);
-        if (runtime.localAssistant || runtime.localToolProvider) void refreshRemoteTools();
+        if (runtime.nodeMode === "mesh-node" || runtime.localAssistant || runtime.localToolProvider) void refreshRemoteTools();
       } else if (!nextReady && ready) {
         ready = false;
         refreshEpoch += 1;

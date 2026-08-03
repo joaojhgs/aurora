@@ -51,6 +51,7 @@ import type {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createAuroraTauriRuntime,
+  loadTauriRemoteAssistantTools,
   type AuroraThinConnectionProfile,
 } from "./aurora-client";
 import {
@@ -1557,13 +1558,13 @@ describe("Aurora Tauri runtime wrapper", () => {
     expect(markup).not.toContain("aurora_sidecar_start");
   });
 
-  it("refreshes verified remote assistant tools when the Tauri peer becomes authorized", async () => {
+  it("retries verified remote assistant tools until the authorized peer catalog is ready", async () => {
     const client = new Aurora({ transport: new MockAuroraTransport() });
     const digest = computeProjectionChecksum([], [], []);
     const pageBase = {
       ok: true,
       provider_peer_id: "python-peer",
-      service_instance_id: "python:Tooling",
+      service_instance_id: "remote:python-peer:Tooling",
       selected_protocol_tier: "projection_v1" as const,
       authority_revision: {
         catalog_revision: 1,
@@ -1594,6 +1595,7 @@ describe("Aurora Tauri runtime wrapper", () => {
     } as ToolingGetExportCatalogResponse;
     const getExportCatalog = vi
       .spyOn(client.tools, "getExportCatalog")
+      .mockRejectedValueOnce(new Error("catalog authority is still arriving"))
       .mockResolvedValue(page);
     const runtime: AuroraTauriRuntime = {
       ...testRuntime(client),
@@ -1613,22 +1615,15 @@ describe("Aurora Tauri runtime wrapper", () => {
         },
       },
     };
-    window.history.replaceState({}, "", "/assistant");
-
-    const mounted = await mountOutcomeApp(runtime);
-    try {
-      await waitUntil(() => expect(getExportCatalog).toHaveBeenCalledOnce());
-      expect(getExportCatalog).toHaveBeenCalledWith({
-        protocol_tier: "projection_v1",
-        page_size: 100,
-        cursor: null,
-        last_projection_revision: null,
-        last_projection_digest: null,
-      });
-    } finally {
-      await act(async () => mounted.root.unmount());
-      mounted.container.remove();
-    }
+    await expect(loadTauriRemoteAssistantTools(runtime)).resolves.toEqual([]);
+    expect(getExportCatalog).toHaveBeenCalledTimes(2);
+    expect(getExportCatalog).toHaveBeenCalledWith({
+      protocol_tier: "projection_v1",
+      page_size: 100,
+      cursor: null,
+      last_projection_revision: null,
+      last_projection_digest: null,
+    });
   });
 
   it("refreshes the shell when a thin peer becomes authorized without a local assistant", async () => {
@@ -2265,6 +2260,7 @@ describe("Tauri CI/E2E route gates", () => {
         expect(tools.container.textContent).toContain(
           "Expand a tool to review what it can do",
         );
+        expect(tools.container.textContent).not.toContain("Service sharing");
         expect(requestMethods(transport)).toContain(
           TOOLING_METHODS.listCatalog,
         );

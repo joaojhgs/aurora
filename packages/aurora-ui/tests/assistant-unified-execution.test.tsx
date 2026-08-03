@@ -78,6 +78,7 @@ describe('unified Assistant execution controls', () => {
     expect(source?.getAttribute('aria-expanded')).toBe('true')
     expect(providers.length).toBeGreaterThan(0)
     expect(providers.every((providerTrigger) => providerTrigger.getAttribute('aria-expanded') === 'true')).toBe(true)
+    expect(document.querySelector('[data-slot="model-selector-content"]')?.getAttribute('data-side')).toBe('top')
     expect(document.body.textContent).toContain('llama-3-8b-instruct')
   })
 
@@ -211,7 +212,10 @@ describe('unified Assistant execution controls', () => {
     const provider: LightweightAssistantProvider = {
       async complete(request) {
         providerCalls.push(request)
-        return { type: 'message', content: 'Local setup response.' }
+        return {
+          type: 'message',
+          content: providerCalls.length === 1 ? 'Local setup response.' : 'Local continuation response.',
+        }
       },
     }
     const transport = MockAuroraTransport.empty()
@@ -265,6 +269,9 @@ describe('unified Assistant execution controls', () => {
     expect((streamCalls[0]?.payload as { session_id?: string }).session_id).toBe(localConversationId)
     expect(container.textContent).toContain('Local setup response.')
     expect(container.textContent).toContain('Answered by Home Aurora.')
+    expect([...container.querySelectorAll('.aui-chat-runtime')].map((node) => node.textContent)).toContain(
+      'Home Aurora · llama-3-8b-instruct',
+    )
     expect(container.textContent).toContain('Home Aurora · llama-3-8b-instruct')
 
     const messagesAfterDispatch = await localData.conversations.listMessages(localConversationId!)
@@ -279,7 +286,7 @@ describe('unified Assistant execution controls', () => {
     expect(container.textContent).toContain('Local setup response.')
     expect(container.textContent).toContain('Answered by Home Aurora.')
     await enterPrompt(container, 'continue locally after dispatch')
-    await waitUntil(() => providerCalls.length === 2)
+    await waitUntil(() => providerCalls.length === 2 && container.textContent?.includes('Local continuation response.') === true)
 
     expect(providerCalls[1]?.messages.map((message) => [message.role, message.content])).toEqual([
       ['user', 'start a local-only chat'],
@@ -290,6 +297,42 @@ describe('unified Assistant execution controls', () => {
     ])
     expect(container.textContent).toContain('Local setup response.')
     expect(container.textContent).toContain('Answered by Home Aurora.')
+    expect([...container.querySelectorAll('.aui-chat-runtime')].map((node) => node.textContent)).toContain(
+      'Home Aurora · llama-3-8b-instruct',
+    )
+
+    const messagesAfterLocalContinuation = await localData.conversations.listMessages(localConversationId!)
+    expect(messagesAfterLocalContinuation
+      .filter((message) => message.role === 'assistant')
+      .map((message) => message.toolEnvelope !== null)).toEqual([true, true, true])
+
+    const newConversation = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.includes('New conversation'))
+    if (!newConversation) throw new Error('missing new conversation button')
+    await act(async () => {
+      newConversation.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+    const historyTrigger = container.querySelector<HTMLButtonElement>('[aria-label="Open conversations"]')
+    if (!historyTrigger) throw new Error('missing mobile conversations trigger')
+    await act(async () => {
+      historyTrigger.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+    await waitUntil(() => document.body.querySelector('[data-slot="sheet-content"]')?.textContent?.includes('start a local-only chat') === true)
+    const savedConversation = [...(document.body.querySelector('[data-slot="sheet-content"]')?.querySelectorAll<HTMLButtonElement>('.aui-thread-row-button') ?? [])]
+      .find((button) => button.textContent?.includes('start a local-only chat'))
+    if (!savedConversation) throw new Error('missing saved mixed-execution conversation')
+    await act(async () => {
+      savedConversation.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+    await waitUntil(() => container.textContent?.includes('Local continuation response.') === true)
+
+    const restoredRuntimeLabels = [...container.querySelectorAll('.aui-chat-runtime')]
+      .map((node) => node.textContent)
+    expect(restoredRuntimeLabels.filter((label) => label === 'Local · Configured default')).toHaveLength(2)
+    expect(restoredRuntimeLabels).toContain('Home Aurora · llama-3-8b-instruct')
   })
 
   it('restores dispatched tool activity from the same encrypted on-device chat', async () => {
@@ -372,7 +415,7 @@ describe('unified Assistant execution controls', () => {
       ['user', 'complete', false],
       ['tool', 'complete', true],
       ['tool', 'complete', true],
-      ['assistant', 'complete', false],
+      ['assistant', 'complete', true],
     ])
 
     const newConversation = [...container.querySelectorAll<HTMLButtonElement>('button')]
@@ -403,6 +446,9 @@ describe('unified Assistant execution controls', () => {
     expect(container.querySelector('.aui-chat-assistant [data-slot="tool-fallback-root"]')).not.toBeNull()
     expect(container.querySelector('.aui-chat-tool')).toBeNull()
     expect(container.textContent).toContain('Action finished')
+    expect([...container.querySelectorAll('.aui-chat-runtime')].map((node) => node.textContent)).toContain(
+      'Home Aurora · llama-3-8b-instruct',
+    )
   })
 
   it('renders a completed on-device action with the shared tool-call component instead of a chat bubble', async () => {

@@ -151,6 +151,96 @@ class RecordingMockAuroraTransport extends MockAuroraTransport {
 }
 
 describe('Aurora production shell', () => {
+  it('tracks the mobile visual viewport so the Android keyboard cannot cover the composer', async () => {
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
+    const originalInnerHeight = Object.getOwnPropertyDescriptor(window, 'innerHeight')
+    const originalVisualViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport')
+    const viewport = new EventTarget()
+    Object.defineProperties(viewport, {
+      height: { configurable: true, value: 572.19 },
+      offsetTop: { configurable: true, value: 0 },
+    })
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 914 })
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport })
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+
+    try {
+      await act(async () => {
+        root.render(
+          <AppShell snapshot={snapshot} runtimeMode="mobile">
+            <div>Current page</div>
+          </AppShell>,
+        )
+      })
+
+      const shell = host.querySelector<HTMLElement>('.aui-shell')
+      expect(shell?.dataset.mobileViewport).toBe('true')
+      expect(shell?.dataset.virtualKeyboardOpen).toBe('true')
+      expect(shell?.style.getPropertyValue('--aui-visual-viewport-height')).toBe('572px')
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+      if (originalInnerHeight) Object.defineProperty(window, 'innerHeight', originalInnerHeight)
+      else Reflect.deleteProperty(window, 'innerHeight')
+      if (originalVisualViewport) Object.defineProperty(window, 'visualViewport', originalVisualViewport)
+      else Reflect.deleteProperty(window, 'visualViewport')
+    }
+  })
+
+  it('recognizes native resize-based keyboards and reclaims the mobile tab space', async () => {
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
+    const originalInnerHeight = Object.getOwnPropertyDescriptor(window, 'innerHeight')
+    const originalVisualViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport')
+    let viewportHeight = 914
+    const viewport = new EventTarget()
+    Object.defineProperties(viewport, {
+      height: { configurable: true, get: () => viewportHeight },
+      offsetTop: { configurable: true, value: 0 },
+    })
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      get: () => viewportHeight,
+    })
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport })
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+
+    try {
+      await act(async () => {
+        root.render(
+          <AppShell snapshot={snapshot} runtimeMode="mobile">
+            <textarea aria-label="Prompt" />
+          </AppShell>,
+        )
+      })
+
+      const shell = host.querySelector<HTMLElement>('.aui-shell')
+      expect(shell?.dataset.virtualKeyboardOpen).toBeUndefined()
+
+      const prompt = host.querySelector<HTMLTextAreaElement>('textarea')
+      await act(async () => prompt?.focus())
+      viewportHeight = 572
+      await act(async () => {
+        viewport.dispatchEvent(new Event('resize'))
+      })
+
+      expect(shell?.dataset.virtualKeyboardOpen).toBe('true')
+      expect(shell?.style.getPropertyValue('--aui-visual-viewport-height')).toBe('572px')
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+      if (originalInnerHeight) Object.defineProperty(window, 'innerHeight', originalInnerHeight)
+      else Reflect.deleteProperty(window, 'innerHeight')
+      if (originalVisualViewport) Object.defineProperty(window, 'visualViewport', originalVisualViewport)
+      else Reflect.deleteProperty(window, 'visualViewport')
+    }
+  })
+
   it('keeps status and recovery pages navigable while their capabilities are unavailable', async () => {
     const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const mesh = snapshot.routes.find((candidate) => candidate.item.id === 'mesh')
@@ -512,6 +602,9 @@ describe('Aurora production shell', () => {
     expect(css).toContain('.aui-content:has(.aui-assistant) {\n    overflow: hidden;\n    padding-bottom: calc(4.1rem + env(safe-area-inset-bottom));')
     expect(css).toContain('.aui-content:has(.aui-assistant) .aui-assistant {\n    min-height: 0;\n    height: 100%;\n    overflow: hidden;\n    padding-bottom: 0;')
     expect(css).toContain('.aui-assistant-grid,\n  .aui-chat-workspace,\n  .aui-chat-panel {\n    min-height: 0;')
+    expect(css).toContain('.aui-shell[data-mobile-viewport="true"] {\n    height: var(--aui-visual-viewport-height, 100dvh);')
+    expect(css).toContain('.aui-shell[data-virtual-keyboard-open="true"] .aui-mobile-tabs {\n    display: none;')
+    expect(css).toContain('.aui-shell[data-virtual-keyboard-open="true"] .aui-content:has(.aui-assistant) {\n    padding-bottom: 0;')
   })
 
   it('maps capability graph states into disabled routes and repair actions', async () => {
@@ -1081,6 +1174,7 @@ describe('Aurora production shell', () => {
       .split('\n')
       .filter((line) => line.includes('JSON.stringify') && !line.includes('localStorage.setItem'))
     expect(renderStringifyLines).toEqual([
+      expect.stringContaining('new TextEncoder().encode(JSON.stringify({'),
       expect.stringContaining('new TextEncoder().encode(JSON.stringify({'),
       expect.stringContaining('JSON.stringify(value)'),
     ])

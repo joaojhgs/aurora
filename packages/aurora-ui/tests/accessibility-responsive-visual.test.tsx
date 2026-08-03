@@ -58,23 +58,22 @@ const viewports: Viewport[] = [
 ]
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
-  // Baselines regenerated after the unified Assistant controls, three-tab
-  // mobile navigation, scroll-safe mobile layouts, mobile conversation access,
-  // and end-user Settings copy.
+  // Baselines regenerated after the canonical Assistant dropdown placement and
+  // the explicit closed-state attribute on the shared mobile navigation sheet.
   assistant: {
-    desktop: '777312c87662',
-    tablet: 'c79780c5788b',
-    mobile: '1e39f79bfa55'
+    desktop: '201ab388f521',
+    tablet: 'd49e2762c424',
+    mobile: '980cb53aa67f'
   },
   admin: {
-    desktop: '15ce9550ad15',
-    tablet: '959920ebd64c',
-    mobile: 'c7c2c5936236'
+    desktop: '6d80c45b2304',
+    tablet: 'ecb33b74ce18',
+    mobile: 'ac1288640ea4'
   },
   'native-settings': {
-    desktop: '45237d49a94e',
-    tablet: '5c89c229b1d6',
-    mobile: 'c9ce2215e343'
+    desktop: '57a984b8f118',
+    tablet: '41327f05fd64',
+    mobile: 'e4c84295966e'
   }
 }
 

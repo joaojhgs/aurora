@@ -80,6 +80,8 @@ import {
 
 export const TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS = 90_000;
 
+const TAURI_REMOTE_TOOL_CATALOG_RETRY_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000] as const;
+
 export interface AuroraTauriRuntime {
   client: AuroraClient;
   mode: "desktop-local" | "desktop-thin" | "mobile-native" | "mock";
@@ -361,15 +363,33 @@ export async function bootstrapAuroraTauriRuntime(
 export async function loadTauriRemoteAssistantTools(
   runtime: AuroraTauriRuntime,
 ): Promise<readonly ToolingProjectionToolInfo[]> {
-  try {
-    const snapshot = await loadLightweightRemoteProjectionCatalog(
-      runtime.client.tools,
-      { pageSize: 100, maxPages: 16 },
-    );
-    return snapshot.tools;
-  } catch {
-    return [];
+  for (
+    let attempt = 0;
+    attempt <= TAURI_REMOTE_TOOL_CATALOG_RETRY_DELAYS_MS.length;
+    attempt += 1
+  ) {
+    try {
+      const snapshot = await loadLightweightRemoteProjectionCatalog(
+        runtime.client.tools,
+        { pageSize: 100, maxPages: 16 },
+      );
+      return snapshot.tools;
+    } catch {
+      const retryDelay = TAURI_REMOTE_TOOL_CATALOG_RETRY_DELAYS_MS[attempt];
+      if (retryDelay === undefined) {
+        console.warn("Aurora connected-tool catalog is not available yet");
+        return [];
+      }
+      if (
+        runtime.thinPeer &&
+        runtime.thinPeer.snapshot().status !== "authorized"
+      ) {
+        return [];
+      }
+      await new Promise((resolve) => setTimeout(resolve, retryDelay));
+    }
   }
+  return [];
 }
 
 function connectedAuroraInferenceAssistant(

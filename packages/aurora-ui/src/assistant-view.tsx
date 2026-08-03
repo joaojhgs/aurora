@@ -1191,6 +1191,7 @@ export function AssistantView({
                 requestId,
                 prompt,
                 response: null,
+                runtime: null,
                 toolEvents: [{
                   recordId: toolRecordId,
                   card: assistantToolCallFromUpdate(update),
@@ -1221,6 +1222,16 @@ export function AssistantView({
               requestId,
               prompt,
               response: completedRemoteUpdate.text,
+              runtime: {
+                routeLabel: selectedExecution.mode === 'local' ? localExecutionMessageLabel : selectedExecution.label,
+                executionPeerId: selectedExecution.executionPeerId,
+                modelLabel: completedRemoteUpdate.modelLabel ?? selectedModelChoice.model.name,
+                providerLabel: metadataStringValue(completedRemoteUpdate.metadata, 'provider_label')
+                  ?? metadataStringValue(completedRemoteUpdate.metadata, 'provider')
+                  ?? selectedModelChoice.provider?.display_name
+                  ?? runtimeProviderLabel
+                  ?? null,
+              },
               toolEvents: [],
               createdAtMs: Date.parse(now),
             })
@@ -1291,6 +1302,16 @@ export function AssistantView({
     let persistedMessages: AssistantUiMessage[] | null = null
     if (localHistory) {
       try {
+        await persistLatestLocalAssistantRuntime(localHistory, {
+          conversationId: result.conversationId,
+          response: completedText,
+          runtime: {
+            routeLabel: localExecutionMessageLabel,
+            executionPeerId: null,
+            modelLabel: selectedModelChoice.model.name,
+            providerLabel: selectedModelChoice.provider?.display_name ?? 'Selected model source',
+          },
+        })
         persistedMessages = await loadLocalAssistantConversationMessages(localHistory, result.conversationId)
       } catch {
         persistedMessages = null
@@ -2769,7 +2790,7 @@ export function AssistantView({
                     <span className="aui-selector-prefix">Executing</span>
                     <strong>{selectedExecution.mode === 'local' ? 'locally' : `dispatch to ${safeAssistantRuntimeValue(selectedExecution.label, 'Connected Aurora device') ?? 'Connected Aurora device'}`}</strong>
                   </ModelSelector.Trigger>
-                  <ModelSelector.Content searchable={false} className="aui-execution-selector-content">
+                  <ModelSelector.Content side="top" searchable={false} className="aui-execution-selector-content">
                     <ModelSelector.List>
                       <ModelSelector.Group heading="Execution">
                         {executionOptions.map((option) => {
@@ -2807,7 +2828,7 @@ export function AssistantView({
                     <ModelSelector.Value showEffort={false} />
                     {modelCatalogLoading ? <LoaderCircle className="aui-spin" aria-label="Loading models" /> : null}
                   </ModelSelector.Trigger>
-                  <ModelSelector.Content searchable className="aui-assistant-model-selector-content">
+                  <ModelSelector.Content side="top" searchable className="aui-assistant-model-selector-content">
                     <ModelSelector.Search
                       placeholder="Search available models..."
                       value={modelSearchQuery}
@@ -3679,7 +3700,7 @@ export function assistantExecutionOptions(
       mode: 'dispatch',
       runner: 'aurora-route',
       label: peerLabel,
-      description: `Dispatch the assistant turn to ${peerLabel}; that peer executes the request.`,
+      description: `Send this turn to ${peerLabel}; that device handles the request.`,
       routePolicy: transportHost
         ? routePolicyFromRoute(route, candidate)
         : {
@@ -5317,6 +5338,12 @@ async function persistConnectedAssistantTurnToLocalHistory(
     requestId: string
     prompt: string
     response: string | null
+    runtime: {
+      routeLabel: string
+      executionPeerId: string | null
+      modelLabel: string | null
+      providerLabel: string | null
+    } | null
     toolEvents: Array<{
       recordId: string
       card: AssistantToolCallCard
@@ -5339,11 +5366,14 @@ async function persistConnectedAssistantTurnToLocalHistory(
     ...input.toolEvents.map((event) => event.createdAtMs),
     input.response === null ? input.createdAtMs : Date.now(),
   )
-  const [userEnvelope, assistantEnvelope, toolRecords] = await Promise.all([
+  const [userEnvelope, assistantEnvelope, assistantRuntimeEnvelope, toolRecords] = await Promise.all([
     encryptLocalAssistantText(history, userMessageId, input.prompt),
     input.response === null
       ? Promise.resolve(null)
       : encryptLocalAssistantText(history, assistantMessageId, input.response),
+    input.response === null || input.runtime === null
+      ? Promise.resolve(null)
+      : encryptLocalAssistantMessageRuntime(history, assistantMessageId, input.runtime),
     Promise.all(input.toolEvents.map(async (event): Promise<ConversationMessageRecord> => ({
       id: event.recordId,
       conversationId: input.conversationId,
@@ -5408,7 +5438,7 @@ async function persistConnectedAssistantTurnToLocalHistory(
         sequence: 0,
         role: 'assistant' as const,
         contentEnvelope: assistantEnvelope,
-        toolEnvelope: null,
+        toolEnvelope: assistantRuntimeEnvelope,
         status: 'complete' as const,
         createdAtMs: activityCreatedAtMs,
       }]),
@@ -5464,6 +5494,100 @@ async function encryptLocalAssistantToolCard(
       localNodeId: history.scope.localNodeId,
     }),
   )
+}
+
+async function encryptLocalAssistantMessageRuntime(
+  history: LocalAssistantHistoryDependencies,
+  messageId: string,
+  runtime: {
+    routeLabel: string
+    executionPeerId: string | null
+    modelLabel: string | null
+    providerLabel: string | null
+  },
+  existingEnvelope: ConversationMessageRecord['toolEnvelope'] = null,
+): Promise<ConversationMessageRecord['toolEnvelope']> {
+  const existingPayload = await localAssistantToolEnvelopePayload(
+    history,
+    messageId,
+    existingEnvelope,
+  )
+  return await history.envelopeCrypto.encrypt(
+    'local-structured-data',
+    new TextEncoder().encode(JSON.stringify({
+      ...existingPayload,
+      assistantRuntime: runtime,
+      secretsRedacted: true,
+    })),
+    buildEnvelopeAad({
+      table: 'aurora_messages',
+      recordId: messageId,
+      field: 'tool_envelope_json',
+      profileId: history.scope.profileId,
+      localNodeId: history.scope.localNodeId,
+    }),
+  )
+}
+
+async function persistLatestLocalAssistantRuntime(
+  history: LocalAssistantHistoryDependencies,
+  input: {
+    conversationId: string
+    response: string
+    runtime: {
+      routeLabel: string
+      executionPeerId: string | null
+      modelLabel: string | null
+      providerLabel: string | null
+    }
+  },
+): Promise<void> {
+  const messages = await history.localData.conversations.listMessages(input.conversationId)
+  const candidates = messages
+    .filter((message) => message.role === 'assistant' && message.status === 'complete')
+    .reverse()
+  let target = candidates[0] ?? null
+  for (const candidate of candidates) {
+    if (await localAssistantMessageText(history, candidate) === input.response) {
+      target = candidate
+      break
+    }
+  }
+  if (!target) throw new Error('Completed local assistant message was not saved.')
+  const toolEnvelope = await encryptLocalAssistantMessageRuntime(
+    history,
+    target.id,
+    input.runtime,
+    target.toolEnvelope,
+  )
+  await history.localData.transaction(async (repositories) => {
+    const current = (await repositories.conversations.listMessages(input.conversationId))
+      .find((message) => message.id === target.id)
+    if (!current) throw new Error('Completed local assistant message is unavailable.')
+    await repositories.conversations.appendMessage({ ...current, toolEnvelope })
+  })
+}
+
+async function localAssistantToolEnvelopePayload(
+  history: LocalAssistantHistoryDependencies,
+  messageId: string,
+  envelope: ConversationMessageRecord['toolEnvelope'],
+): Promise<Record<string, unknown>> {
+  if (!envelope) return {}
+  try {
+    const plaintext = await decryptLocalAssistantText(history, {
+      envelope,
+      table: 'aurora_messages',
+      recordId: messageId,
+      field: 'tool_envelope_json',
+    })
+    const parsed: unknown = JSON.parse(plaintext)
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {}
+  } catch {
+    return {}
+  }
 }
 
 async function loadLocalAssistantConversationRows(
@@ -5536,14 +5660,19 @@ async function loadLocalAssistantConversationMessages(
       pendingToolStatus = localAssistantMessageStatus(record.status)
       continue
     }
+    const runtime = record.role === 'assistant'
+      ? await localAssistantMessageRuntime(history, record)
+      : null
     const message: AssistantUiMessage = {
       id: record.id,
       role: record.role,
       text: await localAssistantMessageText(history, record),
       createdAt: new Date(record.createdAtMs).toISOString(),
       status: localAssistantMessageStatus(record.status),
-      routeLabel: 'This device',
-      executionPeerId: null,
+      routeLabel: runtime?.routeLabel ?? 'This device',
+      executionPeerId: runtime?.executionPeerId ?? null,
+      modelLabel: runtime?.modelLabel ?? null,
+      providerLabel: runtime?.providerLabel ?? null,
     }
     if (record.role === 'assistant' && pendingToolCards.length > 0) {
       message.toolCalls = pendingToolCards
@@ -5566,6 +5695,35 @@ async function loadLocalAssistantConversationMessages(
     })
   }
   return messages
+}
+
+async function localAssistantMessageRuntime(
+  history: LocalAssistantHistoryDependencies,
+  record: ConversationMessageRecord,
+): Promise<Pick<AssistantUiMessage, 'routeLabel' | 'executionPeerId' | 'modelLabel' | 'providerLabel'> | null> {
+  if (record.role !== 'assistant' || !record.toolEnvelope) return null
+  let payload: Record<string, unknown>
+  try {
+    const plaintext = await decryptLocalAssistantText(history, {
+      envelope: record.toolEnvelope,
+      table: 'aurora_messages',
+      recordId: record.id,
+      field: 'tool_envelope_json',
+    })
+    const parsed: unknown = JSON.parse(plaintext)
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
+    payload = parsed as Record<string, unknown>
+  } catch {
+    return null
+  }
+  const runtime = metadataObjectValue(payload, 'assistantRuntime')
+  if (!runtime) return null
+  return {
+    routeLabel: safeAssistantRuntimeValue(metadataStringValue(runtime, 'routeLabel'), null),
+    executionPeerId: metadataStringValue(runtime, 'executionPeerId'),
+    modelLabel: safeAssistantRuntimeValue(metadataStringValue(runtime, 'modelLabel'), null),
+    providerLabel: safeAssistantRuntimeValue(metadataStringValue(runtime, 'providerLabel'), null),
+  }
 }
 
 async function localAssistantToolCallCard(

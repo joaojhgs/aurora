@@ -9548,7 +9548,8 @@ button,input,select,textarea { font:inherit }
 .aui-mobile-sheet { position:fixed;top:3.6rem;right:auto;bottom:0;left:0;inset:3.6rem auto 0 0;z-index:40;display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:min(19rem,90vw);max-height:calc(100vh - 3.6rem);max-height:calc(100dvh - 3.6rem);border-right:1px solid var(--aui-border);background:var(--aui-surface);box-shadow:0 1rem 3rem rgb(0 0 0 / 0.16);overflow:auto }
 .aui-mobile-sheet-layout { display:flex;height:100%;flex-direction:column }
 .aui-mobile-menu .aui-mobile-sheet { visibility:hidden;opacity:0;transform:translateX(-105%);pointer-events:none;transition:opacity 0.16s ease,transform 0.16s ease,visibility 0.16s ease }
-.aui-mobile-menu[data-open="true"] .aui-mobile-sheet,.aui-mobile-menu:focus-within .aui-mobile-sheet { visibility:visible;opacity:1;transform:translateX(0);pointer-events:auto }
+.aui-mobile-menu .aui-mobile-sheet[hidden] { display:none }
+.aui-mobile-menu[data-open="true"] .aui-mobile-sheet { visibility:visible;opacity:1;transform:translateX(0);pointer-events:auto }
 .aui-mobile-sheet-body { min-width:0;overflow:auto }
 .aui-mobile-sheet-title { margin:0.75rem 0.75rem 0.45rem;color:var(--aui-muted);font-size:0.72rem;font-weight:800;letter-spacing:0.04em;text-transform:uppercase }
 .aui-mobile-sheet-summary { display:grid;gap:0.65rem;margin:0 0.75rem 0.65rem;padding:0.75rem;border:1px solid var(--aui-border);border-radius:0.55rem;background:color-mix(in srgb,var(--aui-primary) 6%,var(--aui-surface)) }
@@ -11445,6 +11446,8 @@ body { font-size:14px;line-height:1.45 }
 /* Visual Ralph P1 density/copy page refinements -------------------------- */
  .aui-service-card-summary { margin:0;color:var(--aui-muted);font-size:0.82rem;line-height:1.5 }
 .aui-service-card-foot { display:flex;align-items:center;justify-content:space-between;gap:0.75rem;color:var(--aui-muted);font-size:0.76rem }
+.aui-service-sharing-table th,.aui-service-sharing-table td { padding-inline:0.25rem }
+.aui-service-sharing-table td button { padding-inline:0.5rem }
 .aui-memory-collection-card[type="button"] { appearance:none;width:100%;cursor:pointer;color:inherit;text-align:left }
 .aui-memory-collection-card.active { border-color:color-mix(in srgb,var(--aui-primary) 42%,var(--aui-border));box-shadow:0 0 0 1px color-mix(in srgb,var(--aui-primary) 22%,transparent) }
 .aui-settings-tabs { display:flex;gap:0.25rem;border-bottom:1px solid var(--aui-border);padding:0.8rem 1.5rem 0 }
@@ -11942,5 +11945,25 @@ body { font-size:14px;line-height:1.45 }
   }
   .aui-composer-route-context > [data-slot="badge"] {
     display: none;
+  }
+}
+
+/* Native mobile WebViews can keep the layout viewport full-height while the
+   keyboard covers the visual viewport. Keep the canonical shell inside the
+   visible area and reclaim the bottom-tab space while text input is active. */
+@media (max-width: 1040px) {
+  .aui-shell[data-mobile-viewport="true"] {
+    height: var(--aui-visual-viewport-height, 100dvh);
+    min-height: 0;
+  }
+  .aui-shell[data-mobile-viewport="true"] .aui-main-column {
+    height: 100%;
+    min-height: 0;
+  }
+  .aui-shell[data-virtual-keyboard-open="true"] .aui-mobile-tabs {
+    display: none;
+  }
+  .aui-shell[data-virtual-keyboard-open="true"] .aui-content:has(.aui-assistant) {
+    padding-bottom: 0;
   }
 }

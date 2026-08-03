@@ -36,17 +36,20 @@ describe('AppShell side-panel toggles', () => {
     expect(shell.dataset.activityCollapsed).toBe('true')
     expect(navigation?.getAttribute('aria-hidden')).toBeNull()
     expect(mobileNavigation?.getAttribute('aria-hidden')).toBe('true')
+    expect(mobileNavigation?.hidden).toBe(true)
     expect(activity?.getAttribute('aria-hidden')).toBe('true')
 
     await act(async () => menuButton?.click())
     expect(shell.dataset.navigationOpen).toBe('true')
     expect(navigation?.getAttribute('aria-hidden')).toBeNull()
     expect(mobileNavigation?.getAttribute('aria-hidden')).toBe('false')
+    expect(mobileNavigation?.hidden).toBe(false)
     expect(container.querySelector('button[aria-label="Hide navigation menu"]')).not.toBeNull()
 
     await act(async () => activityButton?.click())
     expect(shell.dataset.navigationOpen).toBe('false')
     expect(shell.dataset.activityCollapsed).toBe('false')
+    expect(mobileNavigation?.hidden).toBe(true)
     expect(activity?.getAttribute('aria-hidden')).toBe('false')
 
     await act(async () => {
@@ -81,13 +84,18 @@ describe('AppShell side-panel toggles', () => {
     expect(shell.dataset.navigationOpen).toBe('true')
 
     const destination = container.querySelector<HTMLAnchorElement>(
-      '#primary-navigation a[href="/mesh"]',
+      '.aui-mobile-sheet a[href="/mesh"]',
     )
+    destination?.focus()
+    expect(document.activeElement).toBe(destination)
     await act(async () => destination?.click())
 
     expect(onNavigate).toHaveBeenCalledWith('/mesh')
     expect(shell.dataset.navigationOpen).toBe('false')
-    expect(container.querySelector('button[aria-label="Show navigation menu"]')).not.toBeNull()
+    expect(container.querySelector<HTMLElement>('.aui-mobile-sheet')?.hidden).toBe(true)
+    const closedMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="Show navigation menu"]')
+    expect(closedMenuButton).not.toBeNull()
+    expect(document.activeElement).toBe(closedMenuButton)
 
     await act(async () => {
       root.unmount()

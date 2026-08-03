@@ -37,7 +37,7 @@ describe('createAuroraBrowserLocalAssistantConfig', () => {
     expect(fetch).toHaveBeenCalledWith('/api/assistant/completion', expect.objectContaining({ method: 'GET' }))
   })
 
-  it('builds a same-origin provider and filters parsed available remote tools without exposing a raw provider key', async () => {
+  it('builds a same-origin provider and binds parsed provider tools to the remote route without exposing a raw provider key', async () => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ enabled: true }))
@@ -61,7 +61,26 @@ describe('createAuroraBrowserLocalAssistantConfig', () => {
       signal: new AbortController().signal,
     })
 
-    expect(config?.remoteTools).toEqual([remoteTool])
+    expect(config?.remoteTools).toEqual([
+      expect.objectContaining({
+        global_tool_id: remoteTool.global_tool_id,
+        provider_peer_id: 'peer-python',
+        provider_service_instance_id: 'remote:peer-python:Tooling',
+        source_type: 'mesh_peer',
+        source: 'mesh_peer',
+        trust_tier: 'untrusted',
+        execution_location: 'remote',
+      }),
+      expect.objectContaining({
+        global_tool_id: localProjectionTool.global_tool_id,
+        provider_peer_id: 'peer-python',
+        provider_service_instance_id: 'remote:peer-python:Tooling',
+        source_type: 'mesh_peer',
+        source: 'mesh_peer',
+        trust_tier: 'untrusted',
+        execution_location: 'remote',
+      }),
+    ])
     expect(response).toEqual({ type: 'message', content: 'Ready.' })
     expect(fetch).toHaveBeenLastCalledWith('/api/assistant/completion', expect.objectContaining({
       method: 'POST',

@@ -1,6 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import {
   CheckCircle2,
   Clock3,
@@ -58,9 +66,16 @@ export function AppShell({
   nodeMode,
 }: AppShellProps) {
   const activePath = normalizePath(currentPath);
+  const surfaceProfile = getAuroraSurfaceProfile({ runtimeMode, nodeMode });
+  const mobileViewport = useMobileVisualViewport(surfaceProfile.isMobile);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [activityRailCollapsed, setActivityRailCollapsed] = useState(true);
   const contentRef = useRef<HTMLElement>(null);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const closeMobileNavigation = useCallback(() => {
+    mobileMenuButtonRef.current?.focus();
+    setNavigationOpen(false);
+  }, []);
   const handleMobileMenuToggle = useCallback(
     () => {
       setNavigationOpen((open) => {
@@ -81,19 +96,19 @@ export function AppShell({
   );
   const handleMobileNavigate = useCallback(
     (href: string) => {
-      setNavigationOpen(false);
+      closeMobileNavigation();
       onNavigate?.(href);
     },
-    [onNavigate],
+    [closeMobileNavigation, onNavigate],
   );
   useEffect(() => {
     if (!navigationOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setNavigationOpen(false);
+      if (event.key === "Escape") closeMobileNavigation();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [navigationOpen]);
+  }, [closeMobileNavigation, navigationOpen]);
   useEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
   }, [activePath]);
@@ -101,7 +116,12 @@ export function AppShell({
     <div
       className="aui-shell flex h-dvh w-full overflow-hidden bg-background text-foreground"
       data-activity-collapsed={activityRailCollapsed ? "true" : "false"}
+      data-mobile-viewport={surfaceProfile.isMobile && mobileViewport.height !== null ? "true" : undefined}
       data-navigation-open={navigationOpen ? "true" : "false"}
+      data-virtual-keyboard-open={mobileViewport.keyboardOpen ? "true" : undefined}
+      style={mobileViewport.height === null ? undefined : ({
+        "--aui-visual-viewport-height": `${mobileViewport.height}px`,
+      } as CSSProperties)}
     >
       <aside
         id="primary-navigation"
@@ -150,6 +170,7 @@ export function AppShell({
       <header className="aui-topbar flex h-[54px] shrink-0 items-center gap-2.5 border-b border-border px-4 py-1 md:pt-0 md:py-0">
             <div className="aui-mobile-menu md:hidden" data-open={navigationOpen ? "true" : "false"}>
             <Button
+              ref={mobileMenuButtonRef}
               type="button"
               variant="ghost"
               size="icon"
@@ -164,6 +185,7 @@ export function AppShell({
             <div
               className="aui-mobile-sheet"
               aria-hidden={!navigationOpen}
+              hidden={!navigationOpen}
               inert={!navigationOpen}
             >
               <MobileNavigationSheet
@@ -172,7 +194,7 @@ export function AppShell({
                 routes={snapshot.routes}
                 sessionIsAdmin={sessionIsAdmin}
                 {...(onNavigate ? { onNavigate: handleMobileNavigate } : {})}
-                onClose={() => setNavigationOpen(false)}
+                onClose={closeMobileNavigation}
               />
             </div>
             {navigationOpen ? (
@@ -180,7 +202,7 @@ export function AppShell({
                 type="button"
                 className="aui-mobile-menu-backdrop fixed inset-0 z-30 cursor-default border-0 bg-black/40"
                 aria-label="Close navigation menu"
-                onClick={() => setNavigationOpen(false)}
+                onClick={closeMobileNavigation}
               />
             ) : null}
           </div>
@@ -249,6 +271,102 @@ export function AppShell({
       />
     </div>
   );
+}
+
+interface MobileVisualViewportState {
+  height: number | null;
+  keyboardOpen: boolean;
+}
+
+const CLOSED_MOBILE_VIEWPORT: MobileVisualViewportState = {
+  height: null,
+  keyboardOpen: false,
+};
+
+function useMobileVisualViewport(enabled: boolean): MobileVisualViewportState {
+  const baselineHeightRef = useRef<number | null>(null);
+  const [viewport, setViewport] = useState<MobileVisualViewportState>(() => {
+    const initial = readMobileVisualViewport(enabled);
+    baselineHeightRef.current = initial.height;
+    return initial;
+  });
+
+  useEffect(() => {
+    if (!enabled || typeof window === "undefined") {
+      baselineHeightRef.current = null;
+      setViewport(CLOSED_MOBILE_VIEWPORT);
+      return;
+    }
+
+    const syncViewport = () => {
+      const measured = readMobileVisualViewport(true);
+      const resizedForKeyboard = isTextEntryFocused()
+        && measured.height !== null
+        && baselineHeightRef.current !== null
+        && baselineHeightRef.current - measured.height >= 120;
+      const next = resizedForKeyboard && !measured.keyboardOpen
+        ? { ...measured, keyboardOpen: true }
+        : measured;
+      if (!next.keyboardOpen && next.height !== null) {
+        baselineHeightRef.current = next.height;
+      }
+      setViewport((current) => (
+        current.height === next.height && current.keyboardOpen === next.keyboardOpen
+          ? current
+          : next
+      ));
+    };
+    const visualViewport = window.visualViewport;
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    document.addEventListener("focusin", syncViewport);
+    document.addEventListener("focusout", syncViewport);
+    visualViewport?.addEventListener("resize", syncViewport);
+    visualViewport?.addEventListener("scroll", syncViewport);
+    return () => {
+      window.removeEventListener("resize", syncViewport);
+      document.removeEventListener("focusin", syncViewport);
+      document.removeEventListener("focusout", syncViewport);
+      visualViewport?.removeEventListener("resize", syncViewport);
+      visualViewport?.removeEventListener("scroll", syncViewport);
+    };
+  }, [enabled]);
+
+  return viewport;
+}
+
+function isTextEntryFocused(): boolean {
+  const activeElement = document.activeElement;
+  if (activeElement instanceof HTMLTextAreaElement) return true;
+  if (activeElement instanceof HTMLInputElement) {
+    return ![
+      'button',
+      'checkbox',
+      'color',
+      'file',
+      'hidden',
+      'image',
+      'radio',
+      'range',
+      'reset',
+      'submit',
+    ].includes(activeElement.type);
+  }
+  return activeElement instanceof HTMLElement && activeElement.isContentEditable;
+}
+
+function readMobileVisualViewport(enabled: boolean): MobileVisualViewportState {
+  if (!enabled || typeof window === "undefined") return CLOSED_MOBILE_VIEWPORT;
+  if (!window.visualViewport) return CLOSED_MOBILE_VIEWPORT;
+  const layoutHeight = Math.max(window.innerHeight, document.documentElement?.clientHeight ?? 0);
+  const visualViewport = window.visualViewport;
+  const visualHeight = Math.max(1, visualViewport.height);
+  const visualBottom = visualHeight + Math.max(0, visualViewport.offsetTop);
+  const coveredHeight = Math.max(0, layoutHeight - visualBottom);
+  return {
+    height: Math.round(visualHeight),
+    keyboardOpen: coveredHeight >= 120,
+  };
 }
 
 function MobileNavigationSheet({
