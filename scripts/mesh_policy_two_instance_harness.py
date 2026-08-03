@@ -951,7 +951,6 @@ async def _persist_authority_patch(
     """Apply harness setup mutations only through canonical production topics."""
 
     from app.services.config.messages import UpdateConfigCommand
-    from app.shared.contracts.models.auth import AuthMethods
     from app.shared.contracts.models.config import ConfigMethods
     from app.shared.contracts.models.db import (
         DBGetToolingExportPolicySnapshotRequest,
@@ -960,49 +959,16 @@ async def _persist_authority_patch(
         DBMutateToolingExportPolicyRequest,
         DBSetToolingMeshSwitchesRequest,
     )
-    from app.shared.contracts.models.mesh import (
-        MeshPeerApproveRequest,
-        MeshPeerGetRequest,
-        MeshPeerGetResponse,
-        MeshPeerUpdatePermissionsRequest,
-        MeshPeerUpsertRequest,
-    )
 
     remote_peer_id = str(
         patch.get("authority_peer_id") or ("aurora-2" if node_id == "aurora-1" else "aurora-1")
     )
     if "paired_peers" in patch or "grants" in patch:
-        await bus.request(
-            AuthMethods.MESH_UPSERT_PEER,
-            MeshPeerUpsertRequest(
-                peer_id=remote_peer_id,
-                room_name="g016-isolated",
-                node_name=remote_peer_id,
-            ),
-            origin="internal",
+        await _persist_synthetic_peer_authority(
+            bus,
+            remote_peer_id=remote_peer_id,
+            permissions=list(state["grants"]),
         )
-        peer_result = await bus.request(
-            AuthMethods.MESH_GET_PEER,
-            MeshPeerGetRequest(peer_id=remote_peer_id),
-            origin="internal",
-        )
-        peer = (
-            MeshPeerGetResponse.model_validate(peer_result.data).peer
-            if peer_result.ok and peer_result.data is not None
-            else None
-        )
-        permissions = list(state["grants"])
-        method = (
-            AuthMethods.MESH_UPDATE_PEER_PERMISSIONS
-            if peer is not None and peer.outbound_status == "approved"
-            else AuthMethods.MESH_APPROVE_PEER
-        )
-        request = (
-            MeshPeerUpdatePermissionsRequest(peer_id=remote_peer_id, permissions=permissions)
-            if method == AuthMethods.MESH_UPDATE_PEER_PERMISSIONS
-            else MeshPeerApproveRequest(peer_id=remote_peer_id, permissions=permissions)
-        )
-        await bus.request(method, request, origin="internal")
 
     if "tool_rules" in patch:
         snapshot_result = await bus.request(
@@ -1105,6 +1071,51 @@ async def _persist_authority_patch(
             event=False,
             origin="internal",
         )
+
+
+async def _persist_synthetic_peer_authority(
+    bus: Any,
+    *,
+    remote_peer_id: str,
+    permissions: list[str],
+) -> None:
+    """Persist grants for the harness's intentionally unlinked peer row."""
+
+    from app.shared.contracts.models.auth import AuthMethods
+    from app.shared.contracts.models.mesh import (
+        MeshBoolResponse,
+        MeshPeerApproveRequest,
+        MeshPeerUpsertRequest,
+    )
+
+    upsert_result = await bus.request(
+        AuthMethods.MESH_UPSERT_PEER,
+        MeshPeerUpsertRequest(
+            peer_id=remote_peer_id,
+            room_name="g016-isolated",
+            node_name=remote_peer_id,
+        ),
+        origin="internal",
+    )
+    if not upsert_result.ok:
+        raise RuntimeError(upsert_result.error or "synthetic mesh peer upsert failed")
+    upsert = MeshBoolResponse.model_validate(upsert_result.data)
+    if not upsert.success:
+        raise RuntimeError(upsert.message or "synthetic mesh peer upsert was rejected")
+
+    # Harness-created peer rows intentionally have no linked credential graph.
+    # Re-approval supports that pre-exchange state; permission update correctly
+    # fails closed when an approved peer has no linked user/token authority.
+    approval_result = await bus.request(
+        AuthMethods.MESH_APPROVE_PEER,
+        MeshPeerApproveRequest(peer_id=remote_peer_id, permissions=permissions),
+        origin="internal",
+    )
+    if not approval_result.ok:
+        raise RuntimeError(approval_result.error or "synthetic mesh peer approval failed")
+    approval = MeshBoolResponse.model_validate(approval_result.data)
+    if not approval.success:
+        raise RuntimeError(approval.message or "synthetic mesh peer approval was rejected")
 
 
 async def _wait_for_gateway_authority_convergence(

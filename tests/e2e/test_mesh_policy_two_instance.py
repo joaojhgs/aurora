@@ -14,9 +14,12 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.messaging import QueryResult
+from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.mesh import MeshBoolResponse, MeshPeerApproveRequest
 from app.shared.mesh.observability import canonical_mesh_rollout_reason
 from scripts.mesh_policy_two_instance_harness import (
     OwnedNode,
+    _persist_synthetic_peer_authority,
     _wait_for_gateway_authority_convergence,
     run_harness,
 )
@@ -104,6 +107,70 @@ async def test_process_patch_waits_for_gateway_manifest_convergence():
     )
 
     assert bus.request.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_synthetic_authority_patch_reapproves_unlinked_peer_and_checks_result():
+    bus = AsyncMock()
+    bus.request = AsyncMock(
+        side_effect=[
+            QueryResult(ok=True, data=MeshBoolResponse(success=True)),
+            QueryResult(ok=True, data=MeshBoolResponse(success=True)),
+        ]
+    )
+    await _persist_synthetic_peer_authority(
+        bus,
+        remote_peer_id="aurora-2",
+        permissions=["Gateway.manage"],
+    )
+
+    assert bus.request.await_count == 2
+    approval_call = bus.request.await_args_list[1]
+    assert approval_call.args == (
+        AuthMethods.MESH_APPROVE_PEER,
+        MeshPeerApproveRequest(peer_id="aurora-2", permissions=["Gateway.manage"]),
+    )
+
+
+@pytest.mark.asyncio
+async def test_synthetic_authority_patch_fails_when_reapproval_is_rejected():
+    bus = AsyncMock()
+    bus.request = AsyncMock(
+        side_effect=[
+            QueryResult(ok=True, data=MeshBoolResponse(success=True)),
+            QueryResult(
+                ok=True,
+                data=MeshBoolResponse(success=False, message="peer approval rejected"),
+            ),
+        ]
+    )
+
+    with pytest.raises(RuntimeError, match="peer approval rejected"):
+        await _persist_synthetic_peer_authority(
+            bus,
+            remote_peer_id="aurora-2",
+            permissions=[],
+        )
+
+
+@pytest.mark.asyncio
+async def test_synthetic_authority_patch_fails_when_peer_upsert_is_rejected():
+    bus = AsyncMock()
+    bus.request = AsyncMock(
+        return_value=QueryResult(
+            ok=True,
+            data=MeshBoolResponse(success=False, message="peer upsert rejected"),
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="peer upsert rejected"):
+        await _persist_synthetic_peer_authority(
+            bus,
+            remote_peer_id="aurora-2",
+            permissions=[],
+        )
+
+    bus.request.assert_awaited_once()
 
 
 @pytest.mark.e2e
