@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import socket
 
 import pytest
 
@@ -42,8 +43,10 @@ from scripts.webrtc_interop_gateway import (
     build_ac18_mesh_config,
     build_gateway_report,
     build_ready_payload,
+    can_connect,
     install_ac18_authority_refresh,
     non_host_ice_candidate,
+    reserve_gateway_http_probe_port,
     run_ac18_reverse_browser_tool_probe,
 )
 
@@ -52,6 +55,17 @@ TOKEN = "g009.test-token-that-must-never-be-reported"
 
 def make_bus() -> InteropBus:
     return InteropBus(InteropRegistry(), TOKEN)
+
+
+def test_gateway_http_probe_reserves_a_non_listening_port() -> None:
+    reservation, port = reserve_gateway_http_probe_port()
+    try:
+        assert port > 0
+        assert can_connect("127.0.0.1", port, timeout=0.05) is False
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as contender, pytest.raises(OSError):
+            contender.bind(("127.0.0.1", port))
+    finally:
+        reservation.close()
 
 
 def test_registry_response_is_sorted_and_digest_is_stable() -> None:
@@ -239,6 +253,7 @@ async def test_auth_accepts_canonical_reconnect_proof_and_fails_closed_after_rev
     assert token.id == "interop-token-row"
     assert tampered is None
     assert revoked is None
+    assert auth.reconnect_proof_results == ["accepted", "proof_mismatch", "revoked"]
 
 
 @pytest.mark.asyncio
@@ -333,6 +348,7 @@ def test_gateway_report_preserves_evidence_and_redacts_credentials() -> None:
         wrong_correlation_interested=False,
         wildcard_interested=False,
         revoked_reconnect_failures=1,
+        reconnect_proof_results=["accepted", "revoked"],
         manifest_sent=True,
         ac18_local_tool_provider=False,
         ac18_reverse_tool=None,
@@ -343,6 +359,10 @@ def test_gateway_report_preserves_evidence_and_redacts_credentials() -> None:
     assert report["authenticatedPeerCount"] == 1
     assert report["mutationCounts"] == {"mutation-1": 1}
     assert report["reconnectEvidence"]["revokedReconnectFailuresObserved"] == 1
+    assert report["reconnectEvidence"]["proofVerificationResults"] == [
+        "accepted",
+        "revoked",
+    ]
     assert report["scopedEventEvidence"] == {
         "wrongCorrelationInterested": False,
         "wildcardInterested": False,

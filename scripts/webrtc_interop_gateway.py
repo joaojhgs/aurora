@@ -645,6 +645,7 @@ class InteropAuth:
         self.token_value = token_value
         self.bus = bus
         self.db_manager = None
+        self.reconnect_proof_results: list[str] = []
 
     async def get_system_token(self) -> str:
         return "interop-system-token-redacted"
@@ -676,9 +677,11 @@ class InteropAuth:
 
     async def verify_mesh_reconnect_proof(self, **kwargs: Any) -> Token | None:
         if self.bus.revoked:
+            self.reconnect_proof_results.append("revoked")
             return None
         token_id = str(kwargs.get("token_id") or "")
         if token_id != "interop-token-row":
+            self.reconnect_proof_results.append("token_id_mismatch")
             return None
         message = build_mesh_reconnect_proof_message(
             token_id=token_id,
@@ -691,7 +694,9 @@ class InteropAuth:
         key = hashlib.sha256(self.token_value.encode("utf-8")).digest()
         expected = hmac.new(key, message, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, str(kwargs.get("proof") or "")):
+            self.reconnect_proof_results.append("proof_mismatch")
             return None
+        self.reconnect_proof_results.append("accepted")
         return Token(
             id="interop-token-row",
             token_hash="redacted",
@@ -719,6 +724,18 @@ def can_connect(host: str, port: int, timeout: float = 0.5) -> bool:
             return True
     except OSError:
         return False
+
+
+def reserve_gateway_http_probe_port() -> tuple[socket.socket, int]:
+    """Reserve a non-listening loopback port for the disabled HTTP API check."""
+
+    probe_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe_socket.bind(("127.0.0.1", 0))
+        return probe_socket, int(probe_socket.getsockname()[1])
+    except BaseException:
+        probe_socket.close()
+        raise
 
 
 def write_json(path: Path, data: Any) -> None:
@@ -799,6 +816,7 @@ def build_gateway_report(
     wrong_correlation_interested: bool,
     wildcard_interested: bool,
     revoked_reconnect_failures: int,
+    reconnect_proof_results: list[str],
     manifest_sent: bool,
     ac18_local_tool_provider: bool,
     ac18_reverse_tool: dict[str, Any] | None,
@@ -824,7 +842,10 @@ def build_gateway_report(
         "mutationCounts": bus.mutation_counts,
         "mutationRecords": bus.mutation_records,
         "revoked": bus.revoked,
-        "reconnectEvidence": {"revokedReconnectFailuresObserved": revoked_reconnect_failures},
+        "reconnectEvidence": {
+            "revokedReconnectFailuresObserved": revoked_reconnect_failures,
+            "proofVerificationResults": list(reconnect_proof_results),
+        },
         "manifestSent": manifest_sent,
         "ac18LocalToolProviderEnabled": ac18_local_tool_provider,
         "ac18ReverseToolEvidence": ac18_reverse_tool
@@ -1188,11 +1209,17 @@ async def main() -> int:
     report_path = Path(args.report)
     token_value = os.environ.get("WEBRTC_INTEROP_TOKEN", "interop-browser-token-value-not-written")
     ac18_local_tool_provider = env_flag(AC18_LOCAL_TOOL_PROVIDER_ENV)
+    gateway_http_probe_socket, gateway_http_probe_port = reserve_gateway_http_probe_port()
     registry = InteropRegistry()
     bus = InteropBus(registry, token_value)
     auth = InteropAuth(token_value, bus)
     settings = Settings(
-        api=APISettings(enabled=False, host="127.0.0.1", port=0, auth_enabled=False),
+        api=APISettings(
+            enabled=False,
+            host="127.0.0.1",
+            port=gateway_http_probe_port,
+            auth_enabled=False,
+        ),
         webrtc=WebRTCSettings(
             enabled=True,
             strategy="mqtt",
@@ -1305,7 +1332,7 @@ async def main() -> int:
                 stun_servers=args.stun,
                 turn_servers=args.turn,
                 timeout_seconds=args.timeout,
-                gateway_http_reachable=can_connect("127.0.0.1", 8000),
+                gateway_http_reachable=can_connect("127.0.0.1", gateway_http_probe_port),
                 ac18_local_tool_provider=ac18_local_tool_provider,
                 ready_at=now(),
             ),
@@ -1394,7 +1421,7 @@ async def main() -> int:
                 lane=args.lane,
                 started_at=now(),
                 duration_ms=round((time.monotonic() - started_at) * 1000),
-                gateway_http_reachable=can_connect("127.0.0.1", 8000),
+                gateway_http_reachable=can_connect("127.0.0.1", gateway_http_probe_port),
                 diagnostics=diagnostics,
                 bus=bus,
                 event_sent=event_sent,
@@ -1402,6 +1429,7 @@ async def main() -> int:
                 wrong_correlation_interested=wrong_corr_interest,
                 wildcard_interested=wildcard_interest,
                 revoked_reconnect_failures=revoked_reconnect_failures,
+                reconnect_proof_results=auth.reconnect_proof_results,
                 manifest_sent=manifest_sent,
                 ac18_local_tool_provider=ac18_local_tool_provider,
                 ac18_reverse_tool=ac18_reverse_tool,
@@ -1413,6 +1441,7 @@ async def main() -> int:
         await rtc.close()
         if peer_registry is not None:
             await peer_registry.stop()
+        gateway_http_probe_socket.close()
     return 0 if done_path.exists() else 2
 
 
