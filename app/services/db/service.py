@@ -9,6 +9,7 @@ This service:
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import re
 from copy import deepcopy
@@ -349,6 +350,7 @@ class DBService(BaseService):
         self.db_manager = DatabaseManager(db_path)
         self.scheduler_db = SchedulerDatabaseService(db_path)
         self.rag_service = RAGService()
+        self._contract_write_lock = asyncio.Lock()
 
     async def on_start(self) -> None:
         """Start the DB service."""
@@ -387,6 +389,64 @@ class DBService(BaseService):
         # Database path changes would require restart, but that's handled by supervisor
         # Just log the reload event
         log_debug(f"DB service reloaded for section: {config_section}")
+
+    async def _invoke_contract_method(
+        self,
+        method: Any,
+        data: Any,
+        *,
+        envelope: Any,
+        pass_envelope: bool,
+        topic: str | None,
+        method_name: str,
+        method_type: str | None,
+    ) -> Any:
+        """Serialize SQLite writers across independently subscribed DB topics."""
+
+        invoke = super()._invoke_contract_method
+        if self._contract_call_is_read_only(method_name, data):
+            return await invoke(
+                method,
+                data,
+                envelope=envelope,
+                pass_envelope=pass_envelope,
+                topic=topic,
+                method_name=method_name,
+                method_type=method_type,
+            )
+        async with self._contract_write_lock:
+            return await invoke(
+                method,
+                data,
+                envelope=envelope,
+                pass_envelope=pass_envelope,
+                topic=topic,
+                method_name=method_name,
+                method_type=method_type,
+            )
+
+    @staticmethod
+    def _contract_call_is_read_only(method_name: str, data: Any) -> bool:
+        """Classify only operations proven not to acquire SQLite's writer slot."""
+
+        if method_name == "execute_sql":
+            return _is_read_only_sql(str(getattr(data, "sql", "")))
+        if method_name == "get_session":
+            return not bool(getattr(data, "activate", False))
+        return method_name.startswith(
+            (
+                "get_",
+                "list_",
+                "count_",
+                "rag_get",
+                "rag_list",
+                "rag_search",
+                "rag_export",
+                "match_",
+                "resolve_tool_identity_",
+                "resolve_tooling_remote_tool_",
+            )
+        )
 
     def _namespace_to_tuple(self, namespace: str | tuple[str, ...]) -> tuple[str, ...]:
         """Normalize dotted or legacy pipe-delimited namespace strings."""

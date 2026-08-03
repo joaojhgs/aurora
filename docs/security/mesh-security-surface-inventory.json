@@ -18,7 +18,7 @@
       "handler": "create_session",
       "source": {
         "file": "app/services/db/service.py",
-        "line": 683
+        "line": 743
       },
       "exposure": "external",
       "method_type": "use",
@@ -40,7 +40,7 @@
       "handler": "list_sessions",
       "source": {
         "file": "app/services/db/service.py",
-        "line": 709
+        "line": 769
       },
       "exposure": "external",
       "method_type": "use",
@@ -62,7 +62,7 @@
       "handler": "get_session",
       "source": {
         "file": "app/services/db/service.py",
-        "line": 752
+        "line": 812
       },
       "exposure": "external",
       "method_type": "use",
@@ -84,7 +84,7 @@
       "handler": "set_active_session",
       "source": {
         "file": "app/services/db/service.py",
-        "line": 789
+        "line": 849
       },
       "exposure": "external",
       "method_type": "use",
@@ -106,7 +106,7 @@
       "handler": "get_messages",
       "source": {
         "file": "app/services/db/service.py",
-        "line": 911
+        "line": 971
       },
       "exposure": "both",
       "method_type": "use",
@@ -128,7 +128,7 @@
       "handler": "get_messages_for_date",
       "source": {
         "file": "app/services/db/service.py",
-        "line": 960
+        "line": 1020
       },
       "exposure": "both",
       "method_type": "use",
@@ -150,7 +150,7 @@
       "handler": "rag_list_namespaces",
       "source": {
         "file": "app/services/db/service.py",
-        "line": 1313
+        "line": 1373
       },
       "exposure": "both",
       "method_type": "use",
@@ -172,7 +172,7 @@
       "handler": "rag_search_remote",
       "source": {
         "file": "app/services/db/service.py",
-        "line": 1360
+        "line": 1420
       },
       "exposure": "both",
       "method_type": "use",
@@ -194,7 +194,7 @@
       "handler": "rag_get_provenance",
       "source": {
         "file": "app/services/db/service.py",
-        "line": 1428
+        "line": 1488
       },
       "exposure": "both",
       "method_type": "use",
@@ -216,7 +216,7 @@
       "handler": "rag_export_namespace",
       "source": {
         "file": "app/services/db/service.py",
-        "line": 1480
+        "line": 1540
       },
       "exposure": "both",
       "method_type": "manage",
@@ -238,7 +238,7 @@
       "handler": "rag_import_namespace",
       "source": {
         "file": "app/services/db/service.py",
-        "line": 1572
+        "line": 1632
       },
       "exposure": "both",
       "method_type": "manage",

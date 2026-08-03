@@ -1,5 +1,6 @@
 """Unit tests for DBService."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import aiosqlite
@@ -100,6 +101,72 @@ async def test_execute_sql_reports_statement_failure(db_service, tmp_path):
     assert "no such table" in (failed.error or "")
     assert failed.rows == []
     assert failed.rowcount == 0
+
+
+@pytest.mark.asyncio
+async def test_contract_boundary_serializes_writers_but_keeps_reads_concurrent(db_service):
+    first_entered = asyncio.Event()
+    release_first = asyncio.Event()
+    second_entered = asyncio.Event()
+    read_entered = asyncio.Event()
+
+    async def first_write(_data):
+        first_entered.set()
+        await release_first.wait()
+        return "first"
+
+    async def second_write(_data):
+        second_entered.set()
+        return "second"
+
+    async def read(_data):
+        read_entered.set()
+        return "read"
+
+    async def invoke(method, method_name):
+        return await db_service._invoke_contract_method(
+            method,
+            object(),
+            envelope=None,
+            pass_envelope=False,
+            topic=f"DB.{method_name}",
+            method_name=method_name,
+            method_type="use",
+        )
+
+    first_task = asyncio.create_task(invoke(first_write, "store_message"))
+    await asyncio.wait_for(first_entered.wait(), timeout=1)
+    second_task = asyncio.create_task(invoke(second_write, "create_user"))
+    read_task = asyncio.create_task(invoke(read, "get_user_by_id"))
+    await asyncio.wait_for(read_entered.wait(), timeout=1)
+    await asyncio.sleep(0)
+    assert second_entered.is_set() is False
+
+    release_first.set()
+    assert await asyncio.gather(first_task, second_task, read_task) == [
+        "first",
+        "second",
+        "read",
+    ]
+
+
+def test_contract_boundary_classifies_execute_sql_from_the_statement():
+    assert DBService._contract_call_is_read_only(
+        "execute_sql",
+        DBExecuteSQLRequest(sql="WITH rows AS (SELECT 1) SELECT * FROM rows"),
+    )
+    assert not DBService._contract_call_is_read_only(
+        "execute_sql",
+        DBExecuteSQLRequest(sql="WITH rows AS (SELECT 1) INSERT INTO harmless SELECT * FROM rows"),
+    )
+    assert DBService._contract_call_is_read_only(
+        "get_session",
+        MagicMock(activate=False),
+    )
+    assert not DBService._contract_call_is_read_only(
+        "get_session",
+        MagicMock(activate=True),
+    )
 
 
 @pytest.mark.asyncio

@@ -572,6 +572,7 @@ class BaseService(ABC):
                         async def create_stream_handler(
                             method=attr,
                             model=input_model,
+                            topic=topic,
                             method_name=attr_name,
                             required_perms=required_perms,
                             contract_method_type=contract_method_type,
@@ -600,13 +601,25 @@ class BaseService(ABC):
                                             )
                                     except Exception as e:
                                         raise ValueError(f"Validation error: {e}") from e
-                                    if pass_envelope:
-                                        return await method(data, envelope=envelope)
-                                    return await method(data)
+                                    return await self._invoke_contract_method(
+                                        method,
+                                        data,
+                                        envelope=envelope,
+                                        pass_envelope=pass_envelope,
+                                        topic=topic,
+                                        method_name=method_name,
+                                        method_type=contract_method_type,
+                                    )
 
-                                if pass_envelope:
-                                    return await method(envelope.payload, envelope=envelope)
-                                return await method(envelope.payload)
+                                return await self._invoke_contract_method(
+                                    method,
+                                    envelope.payload,
+                                    envelope=envelope,
+                                    pass_envelope=pass_envelope,
+                                    topic=topic,
+                                    method_name=method_name,
+                                    method_type=contract_method_type,
+                                )
 
                             return direct_stream_handler
 
@@ -630,6 +643,7 @@ class BaseService(ABC):
                         async def create_wrapper(
                             method=attr,
                             model=input_model,
+                            topic=topic,
                             method_name=attr_name,
                             required_perms=required_perms,
                             contract_method_type=contract_method_type,
@@ -699,18 +713,26 @@ class BaseService(ABC):
                                             return
 
                                         # 2. Execute method
-                                        if pass_envelope:
-                                            result = await method(data, envelope=envelope)
-                                        else:
-                                            result = await method(data)
+                                        result = await self._invoke_contract_method(
+                                            method,
+                                            data,
+                                            envelope=envelope,
+                                            pass_envelope=pass_envelope,
+                                            topic=topic,
+                                            method_name=method_name,
+                                            method_type=contract_method_type,
+                                        )
                                     else:
                                         # No input model, pass payload directly
-                                        if pass_envelope:
-                                            result = await method(
-                                                envelope.payload, envelope=envelope
-                                            )
-                                        else:
-                                            result = await method(envelope.payload)
+                                        result = await self._invoke_contract_method(
+                                            method,
+                                            envelope.payload,
+                                            envelope=envelope,
+                                            pass_envelope=pass_envelope,
+                                            topic=topic,
+                                            method_name=method_name,
+                                            method_type=contract_method_type,
+                                        )
 
                                     # 3. Handle response
                                     if result is not None and envelope.reply_to:
@@ -764,6 +786,29 @@ class BaseService(ABC):
 
             except Exception as e:
                 log_error(f"Error setting up subscription for {attr_name}: {e}")
+
+    async def _invoke_contract_method(
+        self,
+        method: Any,
+        data: Any,
+        *,
+        envelope: Any,
+        pass_envelope: bool,
+        topic: str | None,
+        method_name: str,
+        method_type: str | None,
+    ) -> Any:
+        """Invoke one validated contract method.
+
+        Services may override this protected boundary to coordinate resources
+        shared across otherwise independent bus-topic subscribers. The default
+        preserves the existing concurrent delivery behavior.
+        """
+
+        del topic, method_name, method_type
+        if pass_envelope:
+            return await method(data, envelope=envelope)
+        return await method(data)
 
     def _envelope_authorized(
         self,
