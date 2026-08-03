@@ -311,16 +311,14 @@ class TestOrchestratorServiceUserInputHandling:
             include_cloud_models=True,
         )
 
-    def test_graph_cloud_catalog_expansion_requires_remote_inference_permission(
-        self, orchestrator_service
-    ):
+    def test_graph_cloud_catalog_expansion_uses_permission_hierarchy(self, orchestrator_service):
         assert (
             orchestrator_service._can_expand_graph_cloud_catalog(
                 caller_effective_perms=["Orchestrator.use"],
                 caller_identity_source="gateway_http",
                 source="external",
             )
-            is False
+            is True
         )
         assert (
             orchestrator_service._can_expand_graph_cloud_catalog(
@@ -330,42 +328,52 @@ class TestOrchestratorServiceUserInputHandling:
             )
             is True
         )
-
-    def test_remote_runtime_inference_selector_requires_explicit_permission(
-        self, orchestrator_service
-    ):
-        """External callers need explicit permission before prompts leave the device."""
-        from app.shared.contracts.models.mesh import MeshAddressSelector
-
-        with pytest.raises(PermissionError, match="RemoteInference"):
-            orchestrator_service._authorize_inference_override(
-                {
-                    "inference_selector": MeshAddressSelector(
-                        peer_id="lab", resource_namespace="inference"
-                    ),
-                    "inference_provider": "remote_peer",
-                },
-                caller_effective_perms=["Orchestrator.use"],
+        assert (
+            orchestrator_service._can_expand_graph_cloud_catalog(
+                caller_effective_perms=["Orchestrator.manage"],
                 caller_identity_source="gateway_http",
                 source="external",
             )
+            is False
+        )
 
+    def test_remote_runtime_inference_selector_uses_permission_hierarchy(
+        self, orchestrator_service
+    ):
+        """Coarse use and granular inference grants permit remote selection."""
+        from app.shared.contracts.models.mesh import MeshAddressSelector
+
+        override = {
+            "inference_selector": MeshAddressSelector(
+                peer_id="lab", resource_namespace="inference"
+            ),
+            "inference_provider": "remote_peer",
+        }
         orchestrator_service._authorize_inference_override(
-            {
-                "inference_selector": MeshAddressSelector(
-                    peer_id="lab", resource_namespace="inference"
-                ),
-                "inference_provider": "remote_peer",
-            },
+            override,
+            caller_effective_perms=["Orchestrator.use"],
+            caller_identity_source="gateway_http",
+            source="external",
+        )
+        orchestrator_service._authorize_inference_override(
+            override,
             caller_effective_perms=["Orchestrator.RemoteInference"],
             caller_identity_source="gateway_http",
             source="external",
         )
 
-    def test_external_explicit_cloud_or_non_default_inference_requires_permission(
+        with pytest.raises(PermissionError, match="RemoteInference"):
+            orchestrator_service._authorize_inference_override(
+                override,
+                caller_effective_perms=["Orchestrator.manage"],
+                caller_identity_source="gateway_http",
+                source="external",
+            )
+
+    def test_external_explicit_cloud_or_non_default_inference_uses_permission_hierarchy(
         self, orchestrator_service
     ):
-        """External provider/model overrides require remote-inference permission."""
+        """External provider/model overrides accept coarse or granular use grants."""
 
         for override in (
             {
@@ -383,20 +391,25 @@ class TestOrchestratorServiceUserInputHandling:
                 "inference_selection_is_default": False,
             },
         ):
-            with pytest.raises(PermissionError, match="RemoteInference"):
-                orchestrator_service._authorize_inference_override(
-                    override,
-                    caller_effective_perms=["Orchestrator.use"],
-                    caller_identity_source="gateway_http",
-                    source="external",
-                )
-
+            orchestrator_service._authorize_inference_override(
+                override,
+                caller_effective_perms=["Orchestrator.use"],
+                caller_identity_source="gateway_http",
+                source="external",
+            )
             orchestrator_service._authorize_inference_override(
                 override,
                 caller_effective_perms=["Orchestrator.RemoteInference"],
                 caller_identity_source="gateway_http",
                 source="external",
             )
+            with pytest.raises(PermissionError, match="RemoteInference"):
+                orchestrator_service._authorize_inference_override(
+                    override,
+                    caller_effective_perms=["Orchestrator.manage"],
+                    caller_identity_source="gateway_http",
+                    source="external",
+                )
 
     @pytest.mark.asyncio
     async def test_resolved_cloud_graph_override_is_permission_gated_for_external_callers(
@@ -448,10 +461,16 @@ class TestOrchestratorServiceUserInputHandling:
 
         assert override["inference_provider_is_cloud"] is True
         assert override["inference_selection_is_default"] is False
+        orchestrator_service._authorize_inference_override(
+            override,
+            caller_effective_perms=["Orchestrator.use"],
+            caller_identity_source="gateway_http",
+            source="external",
+        )
         with pytest.raises(PermissionError, match="RemoteInference"):
             orchestrator_service._authorize_inference_override(
                 override,
-                caller_effective_perms=["Orchestrator.use"],
+                caller_effective_perms=["Orchestrator.manage"],
                 caller_identity_source="gateway_http",
                 source="external",
             )
@@ -474,7 +493,7 @@ class TestOrchestratorServiceUserInputHandling:
             source="external",
         )
 
-    def test_direct_inference_provider_selection_requires_explicit_permission(
+    def test_direct_inference_provider_selection_uses_permission_hierarchy(
         self, orchestrator_service
     ):
         from app.messaging.bus import Envelope
@@ -496,12 +515,11 @@ class TestOrchestratorServiceUserInputHandling:
             identity_source="gateway_http",
         )
 
-        with pytest.raises(PermissionError, match="RemoteInference"):
-            orchestrator_service._authorize_direct_inference_request(
-                request,
-                envelope,
-                explicit_selection=True,
-            )
+        orchestrator_service._authorize_direct_inference_request(
+            request,
+            envelope,
+            explicit_selection=True,
+        )
 
         allowed = envelope.model_copy(update={"effective_perms": ["Orchestrator.RemoteInference"]})
         orchestrator_service._authorize_direct_inference_request(
@@ -509,8 +527,14 @@ class TestOrchestratorServiceUserInputHandling:
             allowed,
             explicit_selection=True,
         )
+        with pytest.raises(PermissionError, match="RemoteInference"):
+            orchestrator_service._authorize_direct_inference_request(
+                request,
+                envelope.model_copy(update={"effective_perms": ["Orchestrator.manage"]}),
+                explicit_selection=True,
+            )
 
-    def test_cloud_catalog_expansion_requires_explicit_permission(self, orchestrator_service):
+    def test_cloud_catalog_expansion_uses_permission_hierarchy(self, orchestrator_service):
         from app.messaging.bus import Envelope
         from app.shared.contracts.models.orchestrator import ModelRuntimeCatalogRequest
 
@@ -524,13 +548,17 @@ class TestOrchestratorServiceUserInputHandling:
             identity_source="gateway_http",
         )
 
-        with pytest.raises(PermissionError, match="Cloud model catalog"):
-            orchestrator_service._authorize_cloud_catalog_request(request, envelope)
+        orchestrator_service._authorize_cloud_catalog_request(request, envelope)
 
         orchestrator_service._authorize_cloud_catalog_request(
             request,
             envelope.model_copy(update={"effective_perms": ["Orchestrator.RemoteInference"]}),
         )
+        with pytest.raises(PermissionError, match="Cloud model catalog"):
+            orchestrator_service._authorize_cloud_catalog_request(
+                request,
+                envelope.model_copy(update={"effective_perms": ["Orchestrator.manage"]}),
+            )
 
     def test_inference_request_limits_reject_oversized_payload(self, orchestrator_service):
         from app.shared.contracts.models.orchestrator import (

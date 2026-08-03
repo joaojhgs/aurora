@@ -21,6 +21,33 @@ def test_remote_inference_permission_is_grantable() -> None:
     )
 
 
+def test_remote_dispatch_permission_is_grantable() -> None:
+    assert validate_permission(OrchestratorMethods.REMOTE_DISPATCH) == (
+        "Orchestrator.RemoteDispatch"
+    )
+
+
+@pytest.mark.parametrize(
+    ("granted", "expected"),
+    [
+        ({"Orchestrator.use"}, True),
+        ({"Orchestrator.*"}, True),
+        ({OrchestratorMethods.REMOTE_INFERENCE}, True),
+        ({"*"}, True),
+        ({"Orchestrator.manage"}, False),
+    ],
+)
+def test_orchestrator_use_permission_hierarchy(granted: set[str], expected: bool) -> None:
+    assert (
+        has_permission(
+            OrchestratorMethods.REMOTE_INFERENCE,
+            granted,
+            method_type="use",
+        )
+        is expected
+    )
+
+
 def test_native_device_permissions_are_valid_credential_scopes() -> None:
     request = MeshPeerSaveInboundRequest(
         remote_peer_id="android-peer",

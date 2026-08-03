@@ -274,7 +274,7 @@ def test_backend_inventory_includes_model_runtime_contracts():
     assert read_method["routePath"] == "/api/Orchestrator/GetModelCatalog"
     assert read_method["exposure"] == "external"
     assert read_method["method_type"] == "use"
-    assert read_method["required_perms"] == ["Orchestrator.use"]
+    assert read_method["required_perms"] == [OrchestratorMethods.REMOTE_INFERENCE]
     assert read_method["input_model"] == "ModelRuntimeCatalogRequest"
     assert read_method["output_model"] == "ModelRuntimeCatalogResponse"
 

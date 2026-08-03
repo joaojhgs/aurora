@@ -260,7 +260,7 @@
       "handler": "process_external_input",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 547
+        "line": 542
       },
       "exposure": "external",
       "method_type": "use",
@@ -281,12 +281,12 @@
       "handler": "infer_chat",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 617
+        "line": 612
       },
       "exposure": "external",
       "method_type": "use",
       "required_perms": [
-        "Orchestrator.use"
+        "Orchestrator.RemoteInference"
       ],
       "module_capabilities": [
         "llm_processing",
@@ -302,12 +302,12 @@
       "handler": "stream_infer_chat",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 646
+        "line": 641
       },
       "exposure": "external",
       "method_type": "use",
       "required_perms": [
-        "Orchestrator.use"
+        "Orchestrator.RemoteInference"
       ],
       "module_capabilities": [
         "llm_processing",
@@ -323,7 +323,7 @@
       "handler": "ingest_context",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 674
+        "line": 669
       },
       "exposure": "external",
       "method_type": "use",
@@ -344,7 +344,7 @@
       "handler": "list_pending_tool_approvals",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 862
+        "line": 857
       },
       "exposure": "external",
       "method_type": "use",
@@ -365,7 +365,7 @@
       "handler": "resume_tool_approval",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 913
+        "line": 908
       },
       "exposure": "external",
       "method_type": "use",
@@ -386,7 +386,7 @@
       "handler": "interrupt_assistant",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1064
+        "line": 1059
       },
       "exposure": "external",
       "method_type": "use",
@@ -407,12 +407,12 @@
       "handler": "get_model_runtime",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1190
+        "line": 1185
       },
       "exposure": "external",
       "method_type": "use",
       "required_perms": [
-        "Orchestrator.use"
+        "Orchestrator.RemoteInference"
       ],
       "module_capabilities": [
         "llm_processing",
@@ -428,12 +428,12 @@
       "handler": "get_model_catalog",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1234
+        "line": 1229
       },
       "exposure": "external",
       "method_type": "use",
       "required_perms": [
-        "Orchestrator.use"
+        "Orchestrator.RemoteInference"
       ],
       "module_capabilities": [
         "llm_processing",
@@ -449,7 +449,7 @@
       "handler": "get_model_operation",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1262
+        "line": 1257
       },
       "exposure": "external",
       "method_type": "use",
@@ -470,7 +470,7 @@
       "handler": "import_model",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1289
+        "line": 1284
       },
       "exposure": "external",
       "method_type": "manage",
@@ -491,7 +491,7 @@
       "handler": "download_model",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1305
+        "line": 1300
       },
       "exposure": "external",
       "method_type": "manage",
@@ -512,7 +512,7 @@
       "handler": "benchmark_model",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1321
+        "line": 1316
       },
       "exposure": "external",
       "method_type": "manage",

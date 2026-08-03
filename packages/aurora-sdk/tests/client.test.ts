@@ -1376,8 +1376,8 @@ describe('AuroraClient', () => {
       'Auth.manage',
       'Gateway.manage',
       'Gateway.use',
+      'Orchestrator.RemoteInference',
       'Orchestrator.manage',
-      'Orchestrator.use',
       'Scheduler.manage',
       'Scheduler.use'
     ])

@@ -5,21 +5,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from app.shared.auth.permissions import has_permission
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
 
-_REMOTE_DISPATCH_PERMS = {
-    "*",
-    "Orchestrator.manage",
-    "Orchestrator.RemoteDispatch",
-    "Orchestrator.remote_dispatch",
-}
-_REMOTE_INFERENCE_PERMS = {
-    "*",
-    "Orchestrator.manage",
-    "Orchestrator.RemoteInference",
-    "Orchestrator.remote_inference",
-}
+
+def _has_use_capability(required: str, permissions: set[str]) -> bool:
+    """Return whether a use-level capability is covered by a caller grant."""
+
+    return has_permission(required, permissions, method_type="use")
 
 
 def selector_from_mapping(value: Any) -> MeshAddressSelector | None:
@@ -82,17 +76,25 @@ def remote_data_movement_denial_reason(
     payload: Any,
     effective_perms: list[str] | frozenset[str] | set[str] | tuple[str, ...] | None,
 ) -> str | None:
-    """Return a denial reason when runtime data movement lacks its specific permission."""
+    """Return a denial reason when runtime data movement lacks a use grant."""
 
     permissions = set(effective_perms or [])
-    if runtime_dispatch_selector_present(topic, payload) and not permissions.intersection(
-        _REMOTE_DISPATCH_PERMS
+    if runtime_dispatch_selector_present(topic, payload) and not _has_use_capability(
+        OrchestratorMethods.REMOTE_DISPATCH,
+        permissions,
     ):
-        return "Runtime remote dispatch selection requires Orchestrator.RemoteDispatch permission"
-    if runtime_inference_selector_present(topic, payload) and not permissions.intersection(
-        _REMOTE_INFERENCE_PERMS
+        return (
+            "Runtime remote dispatch selection requires Orchestrator.use or "
+            "Orchestrator.RemoteDispatch permission"
+        )
+    if runtime_inference_selector_present(topic, payload) and not _has_use_capability(
+        OrchestratorMethods.REMOTE_INFERENCE,
+        permissions,
     ):
-        return "Runtime remote inference selection requires Orchestrator.RemoteInference permission"
+        return (
+            "Runtime remote inference selection requires Orchestrator.use or "
+            "Orchestrator.RemoteInference permission"
+        )
     return None
 
 

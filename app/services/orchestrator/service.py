@@ -30,6 +30,7 @@ from app.messaging import (
 )
 from app.messaging.priority_helpers import get_interactive_priority, get_system_priority
 from app.services.orchestrator.graph import GraphOrchestrator, set_orchestrator
+from app.shared.auth.permissions import has_permission
 from app.shared.config.interface import ConfigAPI
 from app.shared.contracts.models.auth import AuthMethods, StoreAuditEventRequest
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
@@ -106,12 +107,6 @@ _SENSITIVE_METADATA_KEY_PATTERN = re.compile(
     r"(?i)(api[_-]?key|auth|authorization|bearer|cookie|credential|password|secret|signature|token)"
 )
 _URI_IN_TEXT_PATTERN = re.compile(r"\b[a-z][a-z0-9+.-]*://[^\s'\"]+", re.IGNORECASE)
-_REMOTE_INFERENCE_PERMS = {
-    "*",
-    "Orchestrator.manage",
-    "Orchestrator.RemoteInference",
-    "Orchestrator.remote_inference",
-}
 _MAX_INFERENCE_MESSAGES = 64
 _MAX_INFERENCE_MESSAGE_BYTES = 64 * 1024
 _MAX_INFERENCE_TOTAL_BYTES = 256 * 1024
@@ -621,7 +616,7 @@ class OrchestratorService(BaseService):
         output_model=OrchestratorInferChatResponse,
         exposure="external",
         method_type="use",
-        required_perms=["Orchestrator.use"],
+        required_perms=[OrchestratorMethods.REMOTE_INFERENCE],
         callable_feature_ids=["inference"],
     )
     async def infer_chat(
@@ -650,7 +645,7 @@ class OrchestratorService(BaseService):
         output_model=OrchestratorInferChatChunk,
         exposure="external",
         method_type="use",
-        required_perms=["Orchestrator.use"],
+        required_perms=[OrchestratorMethods.REMOTE_INFERENCE],
         callable_feature_ids=["inference"],
     )
     async def stream_infer_chat(
@@ -1194,7 +1189,7 @@ class OrchestratorService(BaseService):
         output_model=ModelRuntimeResponse,
         exposure="external",
         method_type="use",
-        required_perms=["Orchestrator.use"],
+        required_perms=[OrchestratorMethods.REMOTE_INFERENCE],
         callable_feature_ids=["model_observability"],
     )
     async def get_model_runtime(self, data: ModelRuntimeRequest) -> ModelRuntimeResponse:
@@ -1238,7 +1233,7 @@ class OrchestratorService(BaseService):
         output_model=ModelRuntimeCatalogResponse,
         exposure="external",
         method_type="use",
-        required_perms=["Orchestrator.use"],
+        required_perms=[OrchestratorMethods.REMOTE_INFERENCE],
         callable_feature_ids=["model_observability"],
     )
     async def get_model_catalog(
@@ -2061,12 +2056,12 @@ class OrchestratorService(BaseService):
         caller_identity_source: str | None,
         source: str,
     ) -> None:
-        """Fail closed for external runtime routing to remote inference providers.
+        """Fail closed for external runtime routing without use capability.
 
-        A normal ``Orchestrator.use`` call may run the configured/default local
-        model. Choosing a mesh peer at runtime moves prompt content to another
-        device, so explicit remote-inference permission is required for
-        external callers. Internal UI/STT calls keep using configured defaults.
+        ``Orchestrator.use`` covers every use-level assistant capability. A
+        caller without that coarse grant may instead receive only the granular
+        ``Orchestrator.RemoteInference`` capability. Internal UI/STT calls keep
+        using configured defaults.
         """
 
         if not inference_override:
@@ -2097,11 +2092,11 @@ class OrchestratorService(BaseService):
         if not externalish:
             return
 
-        effective = set(caller_effective_perms or [])
-        if effective.intersection(_REMOTE_INFERENCE_PERMS):
+        if self._has_remote_inference_permission(caller_effective_perms):
             return
         raise PermissionError(
-            "Runtime inference provider/model selection requires Orchestrator.RemoteInference permission"
+            "Runtime inference provider/model selection requires Orchestrator.use or "
+            "Orchestrator.RemoteInference permission"
         )
 
     def _can_expand_graph_cloud_catalog(
@@ -2122,7 +2117,19 @@ class OrchestratorService(BaseService):
         }
         if not externalish:
             return True
-        return bool(set(caller_effective_perms or []).intersection(_REMOTE_INFERENCE_PERMS))
+        return self._has_remote_inference_permission(caller_effective_perms)
+
+    @staticmethod
+    def _has_remote_inference_permission(
+        effective_perms: list[str] | frozenset[str] | set[str] | tuple[str, ...] | None,
+    ) -> bool:
+        """Match coarse, wildcard, or granular inference use grants."""
+
+        return has_permission(
+            OrchestratorMethods.REMOTE_INFERENCE,
+            set(effective_perms or []),
+            method_type="use",
+        )
 
     async def _validate_local_graph_inference_ids(
         self,
@@ -2215,13 +2222,12 @@ class OrchestratorService(BaseService):
         *,
         explicit_selection: bool,
     ) -> None:
-        """Require explicit permission before external callers select provider/model.
+        """Require an inference use grant for external provider/model selection.
 
-        Direct InferChat/StreamInferChat are mesh transport primitives. A default
-        request may use the receiving peer's configured model under
-        ``Orchestrator.use``. Choosing a concrete provider/model can spend cloud
-        quota or select non-default local resources, so external callers need the
-        same remote-inference capability used by conversation runtime overrides.
+        Direct InferChat/StreamInferChat are mesh transport primitives. Coarse
+        ``Orchestrator.use`` access includes provider/model selection; callers
+        without it may receive only ``Orchestrator.RemoteInference``. Both paths
+        can spend cloud quota or select non-default local resources.
         """
 
         del data
@@ -2238,11 +2244,11 @@ class OrchestratorService(BaseService):
         }
         if not externalish:
             return
-        effective = set(getattr(envelope, "effective_perms", None) or [])
-        if effective.intersection(_REMOTE_INFERENCE_PERMS):
+        if self._has_remote_inference_permission(getattr(envelope, "effective_perms", None)):
             return
         raise PermissionError(
-            "Explicit inference provider/model selection requires Orchestrator.RemoteInference permission"
+            "Explicit inference provider/model selection requires Orchestrator.use or "
+            "Orchestrator.RemoteInference permission"
         )
 
     def _authorize_cloud_catalog_request(
@@ -2257,7 +2263,8 @@ class OrchestratorService(BaseService):
         if self._can_expand_cloud_catalog(envelope, explicit_selection=True):
             return
         raise PermissionError(
-            "Cloud model catalog expansion requires Orchestrator.RemoteInference permission"
+            "Cloud model catalog expansion requires Orchestrator.use or "
+            "Orchestrator.RemoteInference permission"
         )
 
     def _can_expand_cloud_catalog(
@@ -2280,8 +2287,7 @@ class OrchestratorService(BaseService):
         }
         if not externalish:
             return True
-        effective = set(getattr(envelope, "effective_perms", None) or [])
-        return bool(effective.intersection(_REMOTE_INFERENCE_PERMS))
+        return self._has_remote_inference_permission(getattr(envelope, "effective_perms", None))
 
     async def _validated_advertised_inference_provider(
         self,

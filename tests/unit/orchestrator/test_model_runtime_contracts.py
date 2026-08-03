@@ -111,13 +111,22 @@ def test_model_runtime_contracts_register_with_permissions():
 
     assert contracts[OrchestratorMethods.GET_MODEL_CATALOG].exposure == "external"
     assert contracts[OrchestratorMethods.GET_MODEL_CATALOG].method_type == "use"
-    assert contracts[OrchestratorMethods.GET_MODEL_CATALOG].required_perms == ["Orchestrator.use"]
+    assert contracts[OrchestratorMethods.GET_MODEL_CATALOG].required_perms == [
+        OrchestratorMethods.REMOTE_INFERENCE
+    ]
+    assert contracts[OrchestratorMethods.GET_MODEL_RUNTIME].required_perms == [
+        OrchestratorMethods.REMOTE_INFERENCE
+    ]
     assert contracts[OrchestratorMethods.INFER_CHAT].exposure == "external"
     assert contracts[OrchestratorMethods.INFER_CHAT].method_type == "use"
-    assert contracts[OrchestratorMethods.INFER_CHAT].required_perms == ["Orchestrator.use"]
+    assert contracts[OrchestratorMethods.INFER_CHAT].required_perms == [
+        OrchestratorMethods.REMOTE_INFERENCE
+    ]
     assert contracts[OrchestratorMethods.STREAM_INFER_CHAT].exposure == "external"
     assert contracts[OrchestratorMethods.STREAM_INFER_CHAT].method_type == "use"
-    assert contracts[OrchestratorMethods.STREAM_INFER_CHAT].required_perms == ["Orchestrator.use"]
+    assert contracts[OrchestratorMethods.STREAM_INFER_CHAT].required_perms == [
+        OrchestratorMethods.REMOTE_INFERENCE
+    ]
 
     assert contracts[OrchestratorMethods.IMPORT_MODEL].exposure == "external"
     assert contracts[OrchestratorMethods.IMPORT_MODEL].method_type == "manage"
@@ -526,7 +535,7 @@ async def test_infer_chat_allows_advertised_non_default_provider_model_without_p
 
 
 @pytest.mark.asyncio
-async def test_infer_chat_denies_explicit_external_selection_before_cloud_catalog_fetch(tmp_path):
+async def test_infer_chat_denies_manage_only_before_cloud_catalog_fetch(tmp_path):
     model_file = tmp_path / "private-model.gguf"
     model_file.write_bytes(b"gguf")
     service = OrchestratorService()
@@ -540,7 +549,7 @@ async def test_infer_chat_denies_explicit_external_selection_before_cloud_catalo
         payload=request,
         origin="external",
         principal_id="principal-1",
-        effective_perms=["Orchestrator.use"],
+        effective_perms=["Orchestrator.manage"],
         identity_source="gateway_http",
     )
 
@@ -560,7 +569,7 @@ async def test_infer_chat_denies_explicit_external_selection_before_cloud_catalo
 
 
 @pytest.mark.asyncio
-async def test_stream_infer_chat_denies_explicit_external_selection_before_cloud_catalog_fetch(
+async def test_stream_infer_chat_denies_manage_only_before_cloud_catalog_fetch(
     tmp_path,
 ):
     model_file = tmp_path / "private-model.gguf"
@@ -577,7 +586,7 @@ async def test_stream_infer_chat_denies_explicit_external_selection_before_cloud
         payload=request,
         origin="external",
         principal_id="principal-1",
-        effective_perms=["Orchestrator.use"],
+        effective_perms=["Orchestrator.manage"],
         identity_source="gateway_http",
     )
 
@@ -597,7 +606,13 @@ async def test_stream_infer_chat_denies_explicit_external_selection_before_cloud
 
 
 @pytest.mark.asyncio
-async def test_infer_chat_permitted_explicit_selection_may_fetch_cloud_catalog(tmp_path):
+@pytest.mark.parametrize(
+    "permission",
+    ["Orchestrator.use", OrchestratorMethods.REMOTE_INFERENCE],
+)
+async def test_infer_chat_permitted_explicit_selection_may_fetch_cloud_catalog(
+    tmp_path, permission
+):
     model_file = tmp_path / "private-model.gguf"
     model_file.write_bytes(b"gguf")
     config_api = AsyncMock()
@@ -614,7 +629,7 @@ async def test_infer_chat_permitted_explicit_selection_may_fetch_cloud_catalog(t
         payload=request,
         origin="external",
         principal_id="principal-1",
-        effective_perms=["Orchestrator.RemoteInference"],
+        effective_perms=[permission],
         identity_source="gateway_http",
     )
     fetched_catalog = {

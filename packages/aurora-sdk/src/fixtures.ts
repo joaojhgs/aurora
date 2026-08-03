@@ -76,7 +76,7 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           exposure: 'external',
           input_model: 'ModelRuntimeCatalogRequest',
           output_model: 'ModelRuntimeCatalogResponse',
-          required_perms: ['Orchestrator.use'],
+          required_perms: ['Orchestrator.RemoteInference'],
           method_type: 'use',
           input_schema: null,
           output_schema: null
@@ -88,7 +88,7 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           exposure: 'external',
           input_model: 'ModelRuntimeRequest',
           output_model: 'ModelRuntimeResponse',
-          required_perms: ['Orchestrator.use'],
+          required_perms: ['Orchestrator.RemoteInference'],
           method_type: 'use',
           input_schema: null,
           output_schema: null
@@ -2311,7 +2311,7 @@ export const backendInventoryFixture: BackendInventory = {
       route_kind: 'dynamic',
       exposure: 'external',
       method_type: 'use',
-      required_perms: ['Orchestrator.use'],
+      required_perms: ['Orchestrator.RemoteInference'],
       input_model: 'ModelRuntimeCatalogRequest',
       output_model: 'ModelRuntimeCatalogResponse',
       input_schema: {
@@ -2334,7 +2334,7 @@ export const backendInventoryFixture: BackendInventory = {
       route_kind: 'dynamic',
       exposure: 'external',
       method_type: 'use',
-      required_perms: ['Orchestrator.use'],
+      required_perms: ['Orchestrator.RemoteInference'],
       input_model: 'ModelRuntimeRequest',
       output_model: 'ModelRuntimeResponse',
       input_schema: {

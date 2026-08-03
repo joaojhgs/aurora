@@ -320,7 +320,7 @@ async def test_typed_payload_validation_failure_returns_400_without_bus_request(
         {"selector": {"peer_id": "assistant-peer"}},
     ],
 )
-async def test_external_user_input_runtime_dispatch_requires_remote_dispatch_permission(
+async def test_external_user_input_runtime_dispatch_allowed_with_orchestrator_use(
     mock_bus,
     mock_registry,
     mock_send_fn,
@@ -332,29 +332,28 @@ async def test_external_user_input_runtime_dispatch_requires_remote_dispatch_per
         OrchestratorProcessRequest,
     )
     _registry_with_method(mock_registry, "Orchestrator", method_info)
+    mock_bus.request.return_value = QueryResult(ok=True, data={"text": "ok"})
     handler = RPCHandler(
         mock_bus,
         mock_registry,
         mock_send_fn,
-        _make_acl_with_perms("Orchestrator.use", "Orchestrator.RemoteInference"),
+        _make_acl_with_perms("Orchestrator.use"),
     )
 
     await handler.on_message(
         json.dumps(
             {
                 "type": "call",
-                "id": "orch-dispatch-denied",
+                "id": "orch-dispatch-use",
                 "method": OrchestratorMethods.EXTERNAL_USER_INPUT,
                 "params": {"text": "hello", **selector_payload},
             }
         )
     )
 
+    mock_bus.request.assert_called_once()
     response = json.loads(mock_send_fn.call_args.args[0])
-    assert response["type"] == "error"
-    assert response["error"]["code"] == 403
-    assert "Orchestrator.RemoteDispatch" in response["error"]["message"]
-    mock_bus.request.assert_not_called()
+    assert response["type"] == "result"
 
 
 @pytest.mark.asyncio
@@ -374,7 +373,7 @@ async def test_external_user_input_runtime_dispatch_allowed_with_remote_dispatch
         mock_bus,
         mock_registry,
         mock_send_fn,
-        _make_acl_with_perms("Orchestrator.use", "Orchestrator.RemoteDispatch"),
+        _make_acl_with_perms("Orchestrator.*"),
     )
 
     await handler.on_message(
@@ -402,7 +401,7 @@ async def test_external_user_input_runtime_dispatch_allowed_with_remote_dispatch
         {"inference_model_id": "gpt-test"},
     ],
 )
-async def test_external_user_input_runtime_inference_requires_remote_inference_permission(
+async def test_external_user_input_runtime_inference_allowed_with_orchestrator_use(
     mock_bus,
     mock_registry,
     mock_send_fn,
@@ -414,29 +413,28 @@ async def test_external_user_input_runtime_inference_requires_remote_inference_p
         OrchestratorProcessRequest,
     )
     _registry_with_method(mock_registry, "Orchestrator", method_info)
+    mock_bus.request.return_value = QueryResult(ok=True, data={"text": "ok"})
     handler = RPCHandler(
         mock_bus,
         mock_registry,
         mock_send_fn,
-        _make_acl_with_perms("Orchestrator.use", "Orchestrator.RemoteDispatch"),
+        _make_acl_with_perms("Orchestrator.use"),
     )
 
     await handler.on_message(
         json.dumps(
             {
                 "type": "call",
-                "id": "orch-inference-denied",
+                "id": "orch-inference-use",
                 "method": OrchestratorMethods.EXTERNAL_USER_INPUT,
                 "params": {"text": "hello", **override_payload},
             }
         )
     )
 
+    mock_bus.request.assert_called_once()
     response = json.loads(mock_send_fn.call_args.args[0])
-    assert response["type"] == "error"
-    assert response["error"]["code"] == 403
-    assert "Orchestrator.RemoteInference" in response["error"]["message"]
-    mock_bus.request.assert_not_called()
+    assert response["type"] == "result"
 
 
 @pytest.mark.asyncio
@@ -456,7 +454,7 @@ async def test_external_user_input_runtime_inference_allowed_with_remote_inferen
         mock_bus,
         mock_registry,
         mock_send_fn,
-        _make_acl_with_perms("Orchestrator.use", "Orchestrator.RemoteInference"),
+        _make_acl_with_perms("Orchestrator.use"),
     )
 
     await handler.on_message(
@@ -477,7 +475,7 @@ async def test_external_user_input_runtime_inference_allowed_with_remote_inferen
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("override_payload", [{"provider_id": "openai"}, {"model_id": "gpt-test"}])
-async def test_stream_infer_chat_provider_model_override_requires_remote_inference_permission(
+async def test_stream_infer_chat_provider_model_override_allowed_with_orchestrator_use(
     mock_bus,
     mock_registry,
     mock_send_fn,
@@ -488,7 +486,10 @@ async def test_stream_infer_chat_provider_model_override_requires_remote_inferen
         OrchestratorMethods.STREAM_INFER_CHAT,
         OrchestratorInferChatRequest,
     )
+    method_info.required_perms = [OrchestratorMethods.REMOTE_INFERENCE]
     _registry_with_method(mock_registry, "Orchestrator", method_info)
+    mock_bus.stream_request = None
+    mock_bus.request.return_value = QueryResult(ok=True, data={"text": "ok"})
     handler = RPCHandler(
         mock_bus,
         mock_registry,
@@ -500,18 +501,17 @@ async def test_stream_infer_chat_provider_model_override_requires_remote_inferen
         json.dumps(
             {
                 "type": "call",
-                "id": "stream-inference-denied",
+                "id": "stream-inference-use",
                 "method": OrchestratorMethods.STREAM_INFER_CHAT,
                 "params": {"messages": [{"role": "user", "content": "hi"}], **override_payload},
             }
         )
     )
 
-    response = json.loads(mock_send_fn.call_args.args[0])
-    assert response["type"] == "error"
-    assert response["error"]["code"] == 403
-    assert "Orchestrator.RemoteInference" in response["error"]["message"]
-    mock_bus.request.assert_not_called()
+    mock_bus.request.assert_called_once()
+    assert mock_bus.request.call_args.args[0] == OrchestratorMethods.INFER_CHAT
+    response_messages = [json.loads(call.args[0]) for call in mock_send_fn.call_args_list]
+    assert response_messages[-1] == {"type": "eof", "id": "stream-inference-use"}
 
 
 @pytest.mark.asyncio
@@ -525,6 +525,7 @@ async def test_stream_infer_chat_provider_model_override_allowed_with_remote_inf
         OrchestratorMethods.STREAM_INFER_CHAT,
         OrchestratorInferChatRequest,
     )
+    method_info.required_perms = [OrchestratorMethods.REMOTE_INFERENCE]
     _registry_with_method(mock_registry, "Orchestrator", method_info)
     mock_bus.stream_request = None
     mock_bus.request.return_value = QueryResult(ok=True, data={"text": "ok"})
@@ -532,7 +533,7 @@ async def test_stream_infer_chat_provider_model_override_allowed_with_remote_inf
         mock_bus,
         mock_registry,
         mock_send_fn,
-        _make_acl_with_perms("Orchestrator.use", "Orchestrator.RemoteInference"),
+        _make_acl_with_perms(OrchestratorMethods.REMOTE_INFERENCE),
     )
 
     await handler.on_message(

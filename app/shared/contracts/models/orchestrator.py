@@ -39,6 +39,7 @@ class OrchestratorMethods:
     BENCHMARK_MODEL = f"{OrchestratorModule.NAME}.BenchmarkModel"
     INFER_CHAT = f"{OrchestratorModule.NAME}.InferChat"
     STREAM_INFER_CHAT = f"{OrchestratorModule.NAME}.StreamInferChat"
+    REMOTE_DISPATCH = f"{OrchestratorModule.NAME}.RemoteDispatch"
     REMOTE_INFERENCE = f"{OrchestratorModule.NAME}.RemoteInference"
     HEALTH_CHECK = f"{OrchestratorModule.NAME}.HealthCheck"
 
@@ -104,10 +105,11 @@ class OrchestratorInferChatRequest(IOModel):
     schemas for binding, but may not override generation parameters such as
     context size, max tokens, temperature, or credentials. ``params`` is accepted
     only as caller metadata for tracing/debugging and must not be used as
-    generation configuration by the receiving peer. External callers need
-    ``Orchestrator.RemoteInference`` before selecting an explicit provider/model
-    that can expand cloud catalogs, spend cloud quota, or use non-default local
-    runtime resources.
+    generation configuration by the receiving peer. External callers need either
+    coarse ``Orchestrator.use`` access or the granular
+    ``Orchestrator.RemoteInference`` capability before selecting an explicit
+    provider/model that can expand cloud catalogs, spend cloud quota, or use
+    non-default local runtime resources.
     """
 
     messages: list[OrchestratorChatMessage] = Field(default_factory=list)

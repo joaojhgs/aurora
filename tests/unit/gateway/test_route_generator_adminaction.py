@@ -731,7 +731,7 @@ async def test_dispatch_persistence_failure_does_not_discard_remote_answer():
 
 
 @pytest.mark.asyncio
-async def test_generated_handler_denies_runtime_dispatch_without_remote_permission():
+async def test_generated_handler_denies_runtime_dispatch_with_manage_only_permission():
     raw_bus = AsyncMock()
     raw_bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"bus": "raw"}))
     method_info = MethodInfo(
@@ -758,7 +758,7 @@ async def test_generated_handler_denies_runtime_dispatch_without_remote_permissi
         await handler(
             {"text": "hello", "mesh_selector": {"peer_id": "assistant-peer"}},
             principal_id="principal-1",
-            effective_perms=["Orchestrator.use"],
+            effective_perms=["Orchestrator.manage"],
             identity_source="gateway_http",
         )
 
@@ -768,7 +768,7 @@ async def test_generated_handler_denies_runtime_dispatch_without_remote_permissi
 
 
 @pytest.mark.asyncio
-async def test_generated_handler_denies_runtime_remote_inference_without_permission():
+async def test_generated_handler_denies_runtime_remote_inference_with_manage_only_permission():
     raw_bus = AsyncMock()
     raw_bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"bus": "raw"}))
     method_info = MethodInfo(
@@ -798,7 +798,7 @@ async def test_generated_handler_denies_runtime_remote_inference_without_permiss
                 "inference_selector": {"peer_id": "model-peer"},
             },
             principal_id="principal-1",
-            effective_perms=["Orchestrator.use"],
+            effective_perms=["Orchestrator.manage"],
             identity_source="gateway_http",
         )
 
@@ -815,7 +815,7 @@ async def test_generated_handler_denies_runtime_remote_inference_without_permiss
         {"inference_model_id": "gpt-test"},
     ],
 )
-async def test_generated_handler_denies_runtime_inference_provider_model_override_without_permission(
+async def test_generated_handler_allows_runtime_inference_provider_model_override_with_use(
     override_payload,
 ):
     raw_bus = AsyncMock()
@@ -838,19 +838,15 @@ async def test_generated_handler_denies_runtime_inference_provider_model_overrid
     )
     handler = generator._create_handler("Orchestrator", method_info)
 
-    from fastapi import HTTPException
+    result = await handler(
+        {"text": "hello", **override_payload},
+        principal_id="principal-1",
+        effective_perms=["Orchestrator.use"],
+        identity_source="gateway_http",
+    )
 
-    with pytest.raises(HTTPException) as exc:
-        await handler(
-            {"text": "hello", **override_payload},
-            principal_id="principal-1",
-            effective_perms=["Orchestrator.use"],
-            identity_source="gateway_http",
-        )
-
-    assert exc.value.status_code == 403
-    assert "RemoteInference" in str(exc.value.detail)
-    raw_bus.request.assert_not_awaited()
+    assert result == {"bus": "raw"}
+    raw_bus.request.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -878,7 +874,7 @@ async def test_generated_handler_allows_runtime_inference_provider_model_overrid
     result = await handler(
         {"text": "hello", "inference_provider_id": "openai"},
         principal_id="principal-1",
-        effective_perms=["Orchestrator.use", "Orchestrator.RemoteInference"],
+        effective_perms=["Orchestrator.*"],
         identity_source="gateway_http",
     )
 
@@ -889,7 +885,7 @@ async def test_generated_handler_allows_runtime_inference_provider_model_overrid
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("override_payload", [{"provider_id": "openai"}, {"model_id": "gpt-test"}])
-async def test_generated_infer_chat_denies_plain_provider_model_override_without_permission(
+async def test_generated_infer_chat_denies_plain_provider_model_override_with_manage_only(
     override_payload,
 ):
     raw_bus = AsyncMock()
@@ -900,7 +896,7 @@ async def test_generated_infer_chat_denies_plain_provider_model_override_without
         bus_topic=OrchestratorMethods.INFER_CHAT,
         exposure="external",
         method_type="use",
-        required_perms=["Orchestrator.use"],
+        required_perms=[OrchestratorMethods.REMOTE_INFERENCE],
         input_model="OrchestratorInferChatRequest",
         output_model="OrchestratorResponse",
         input_schema=OrchestratorInferChatRequest.model_json_schema(),
@@ -918,7 +914,7 @@ async def test_generated_infer_chat_denies_plain_provider_model_override_without
         await handler(
             {"messages": [{"role": "user", "content": "hi"}], **override_payload},
             principal_id="principal-1",
-            effective_perms=["Orchestrator.use"],
+            effective_perms=["Orchestrator.manage"],
             identity_source="gateway_http",
         )
 
@@ -937,7 +933,7 @@ async def test_generated_infer_chat_allows_plain_provider_model_override_with_pe
         bus_topic=OrchestratorMethods.INFER_CHAT,
         exposure="external",
         method_type="use",
-        required_perms=["Orchestrator.use"],
+        required_perms=[OrchestratorMethods.REMOTE_INFERENCE],
         input_model="OrchestratorInferChatRequest",
         output_model="OrchestratorResponse",
         input_schema=OrchestratorInferChatRequest.model_json_schema(),
@@ -952,7 +948,7 @@ async def test_generated_infer_chat_allows_plain_provider_model_override_with_pe
     result = await handler(
         {"messages": [{"role": "user", "content": "hi"}], "provider_id": "openai"},
         principal_id="principal-1",
-        effective_perms=["Orchestrator.use", "Orchestrator.RemoteInference"],
+        effective_perms=[OrchestratorMethods.REMOTE_INFERENCE],
         identity_source="gateway_http",
     )
 
