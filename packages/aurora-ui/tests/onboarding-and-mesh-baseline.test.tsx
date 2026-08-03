@@ -664,14 +664,17 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
     expect(denyPeer).not.toHaveBeenCalled()
   })
 
-  it('uses the shared service-scope table for lightweight mesh-node pairing', async () => {
+  it('uses the shared service-scope table and explains the bilateral approval wait', async () => {
     const snapshot = await buildMeshPeersSnapshot(
       new Aurora({ transport: new MockAuroraTransport() }),
       meshRoute(),
     )
     snapshot.pendingRequests = []
+    let rejectFirstApproval: ((reason?: unknown) => void) | undefined
     const confirmPairing = vi.fn()
-      .mockRejectedValueOnce(new Error('connection interrupted'))
+      .mockImplementationOnce(() => new Promise<void>((_resolve, reject) => {
+        rejectFirstApproval = reject
+      }))
       .mockResolvedValue(undefined)
     const featureSharing: LocalFeatureSharingPort = {
       load: vi.fn(async () => ({
@@ -754,6 +757,12 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
     expect(dialog?.querySelector('[aria-label="Role templates"]')).toBeNull()
     await act(async () => {
       findButton(document.body, 'Approve & pair').click()
+      await Promise.resolve()
+    })
+
+    expect(findButton(document.body, 'Waiting for other device…').hasAttribute('disabled')).toBe(true)
+    await act(async () => {
+      rejectFirstApproval?.(new Error('connection interrupted'))
       await Promise.resolve()
     })
 

@@ -1801,7 +1801,7 @@ function ThinPeerPairingDialog({
             disabled={!sessionId || !verificationCode || !onConfirm || featuresLoading || Boolean(featureLoadError) || confirmPending}
             onClick={() => void approve()}
           >
-            {confirmPending ? 'Approving…' : 'Approve & pair'}
+            {confirmPending ? 'Waiting for other device…' : 'Approve & pair'}
           </Button>
         </DialogFooter>
       </DialogContent>
