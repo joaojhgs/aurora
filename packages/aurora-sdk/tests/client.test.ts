@@ -5871,7 +5871,7 @@ describe('AuroraClient assistant namespace', () => {
         sessionId: 'session-http-sdk',
         requestId: 'corr-http-sdk',
         text: 'Hello from backend',
-        textDelta: 'Hello from backend',
+        textDelta: '',
         modelLabel: 'http-mock',
         audit: expect.objectContaining({
           correlationId: 'corr-http-sdk',

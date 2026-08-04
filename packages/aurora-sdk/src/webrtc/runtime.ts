@@ -595,8 +595,6 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
   private readonly pairingConnectPoll: PairingConnectPollOptions
   private readonly pendingCalls = new Map<string, { method: string; resolve(value: Record<string, unknown> | null): void; timer: ReturnType<typeof setTimeout> }>()
   private reconnectWaiter: ((result: PeerSessionAuthFrameResult) => void) | null = null
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
-  private reconnectProgressActive = false
 
   constructor(private readonly options: {
     profile: WebRtcPeerConnectionProfile
@@ -629,7 +627,7 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
       }
       if (!this.isCurrentTransport(generation)) return undefined
       if (issued) {
-        return await this.waitForReconnectResult(true)
+        return await this.waitForReconnectResult()
       }
     }
     const peerId = this.options.profile.expectedStablePeerId ?? ''
@@ -653,29 +651,19 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
       return { denied: true, terminal: true }
     }
     if (!this.isCurrentTransport(generation)) return undefined
-    return await this.waitForReconnectResult(false)
+    return await this.waitForReconnectResult()
   }
 
-  private waitForReconnectResult(progressActive: boolean): Promise<PeerSessionAuthFrameResult> {
+  private waitForReconnectResult(): Promise<PeerSessionAuthFrameResult> {
     this.resolveReconnectWait(undefined)
-    this.reconnectProgressActive = progressActive
     return new Promise<PeerSessionAuthFrameResult>((resolve) => {
       this.reconnectWaiter = resolve
-      this.reconnectTimer = setTimeout(() => {
-        this.reconnectTimer = null
-        if (!this.reconnectProgressActive) this.resolveReconnectWait(undefined)
-      }, 1500)
     })
   }
 
   private resolveReconnectWait(result: PeerSessionAuthFrameResult): void {
-    if (this.reconnectTimer !== null) {
-      clearTimeout(this.reconnectTimer)
-      this.reconnectTimer = null
-    }
     const resolve = this.reconnectWaiter
     this.reconnectWaiter = null
-    this.reconnectProgressActive = false
     if (resolve) resolve(result)
   }
 
@@ -772,7 +760,6 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
       return undefined
     }
     if (type === 'mesh_auth_challenge_v1') {
-      this.reconnectProgressActive = true
       const proof = await createReconnectProof(this.options.credentialStore, this.options.profile.expectedStablePeerId ?? '', frame as unknown as MeshReconnectChallengeMessage)
       if (!this.isCurrentTransport(generation)) return { handled: true }
       if (proof) {

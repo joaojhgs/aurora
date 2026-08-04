@@ -929,6 +929,7 @@ export class AssistantClient {
     let stream: AuroraEventSubscription<Record<string, unknown>> | null = null
     let iterator: AsyncIterator<AuroraEvent<Record<string, unknown>>> | null = null
     let awaitingTtsDrain = false
+    let finalTtsSeen = false
     try {
       const correlationId = requestId
       const assistantTopics = this.client.transport.kind === 'mesh'
@@ -1015,7 +1016,9 @@ export class AssistantClient {
         sawEvent = true
         const firstUpdate = assistantStreamUpdateFromEvent(lateFirst.value.value, request.data)
         yield firstUpdate
+        if (isFinalTtsAudioUpdate(firstUpdate)) finalTtsSeen = true
         if (assistantCompletionAwaitsTtsDrain(firstUpdate)) {
+          if (finalTtsSeen) return
           awaitingTtsDrain = true
         } else if (isTerminalAssistantStreamUpdate(firstUpdate)) {
           return
@@ -1035,7 +1038,9 @@ export class AssistantClient {
           requestState.response?.ok ? requestState.response.data : undefined
         )
         yield firstUpdate
+        if (isFinalTtsAudioUpdate(firstUpdate)) finalTtsSeen = true
         if (assistantCompletionAwaitsTtsDrain(firstUpdate)) {
+          if (finalTtsSeen) return
           awaitingTtsDrain = true
         } else if (isTerminalAssistantStreamUpdate(firstUpdate)) {
           return
@@ -1069,8 +1074,12 @@ export class AssistantClient {
           requestState.response?.ok ? requestState.response.data : undefined
         )
         yield update
-        if (isFinalTtsAudioUpdate(update) && awaitingTtsDrain) return
+        if (isFinalTtsAudioUpdate(update)) {
+          finalTtsSeen = true
+          if (awaitingTtsDrain) return
+        }
         if (assistantCompletionAwaitsTtsDrain(update)) {
+          if (finalTtsSeen) return
           awaitingTtsDrain = true
           continue
         }
@@ -1401,7 +1410,7 @@ function assistantStreamUpdateFromEvent(
       messageId,
       sessionId,
       text,
-      textDelta: text,
+      textDelta: '',
       modelLabel,
       requestId,
       error: null,
@@ -1747,7 +1756,7 @@ function toolStatusFromEvent(
 
 function isTtsAudioChunkKind(kind: string): boolean {
   const normalized = kind.toLowerCase().replace(/[_-]/g, '.')
-  return normalized === 'tts.audio.chunk' || normalized === 'tts.audio' || normalized === 'tts.chunk' || normalized.includes('tts.audio.chunk')
+  return normalized === 'tts.audiochunk' || normalized === 'tts.audio.chunk' || normalized === 'tts.audio' || normalized === 'tts.chunk' || normalized.includes('tts.audio.chunk')
 }
 
 function streamString(payload: Record<string, unknown>, ...keys: string[]): string | null {

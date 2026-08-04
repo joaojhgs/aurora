@@ -38,7 +38,8 @@ from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_warning
 from app.messaging.bus import Handler, MessageBus, QueryResult
-from app.services.gateway.mesh.policy_store import MeshPolicySnapshot
+from app.services.gateway.config import MeshConfig
+from app.services.gateway.mesh.policy_store import MeshPolicyProvider, MeshPolicySnapshot
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
 from app.shared.contracts.models.tts import TTSMethods
@@ -141,16 +142,6 @@ class _PeerBridgeLike(Protocol):
     ) -> bool: ...
 
 
-class _MeshConfigLike(Protocol):
-    services: dict[str, Any]
-
-
-class _MeshPolicySnapshotLike(Protocol):
-    revision: int
-    source_revision: int | None
-    mesh_config: _MeshConfigLike
-
-
 class MeshBus:
     """Message bus with transparent mesh routing.
 
@@ -164,8 +155,8 @@ class MeshBus:
         inner_bus: MessageBus,
         routing_table: _RoutingTableLike,
         peer_bridge: _PeerBridgeLike | None,
-        mesh_config: _MeshConfigLike,
-        policy_provider: Any | None = None,
+        mesh_config: MeshConfig,
+        policy_provider: MeshPolicyProvider | None = None,
     ) -> None:
         self._inner = inner_bus
         self._routing_table = routing_table
@@ -182,7 +173,7 @@ class MeshBus:
         """Return one synchronous snapshot of the live mesh policy."""
         return self._operation_snapshot()
 
-    def current_mesh_config(self) -> _MeshConfigLike:
+    def current_mesh_config(self) -> MeshConfig:
         """Return one synchronous snapshot of the live mesh policy."""
         return self.current_mesh_policy_snapshot().mesh_config
 
@@ -275,16 +266,18 @@ class MeshBus:
                 mesh_config = self.current_mesh_policy_snapshot().mesh_config
                 sharing_cfg = mesh_config.services.get(module)
                 if mesh_config.enabled and sharing_cfg and sharing_cfg.export.share:
-                    peers = self._routing_table.get_negotiated_peers()
                     target_peer_id = caller_peer_id if topic in _SCOPED_ONLY_EVENT_TOPICS else None
                     if topic in _SCOPED_ONLY_EVENT_TOPICS and not target_peer_id:
                         log_debug(
                             f"MeshBus: Suppressed scoped-only event {topic}; target peer absent"
                         )
                         return
-                    for peer in peers:
-                        if target_peer_id is not None and peer.peer_id != target_peer_id:
-                            continue
+                    recipient_peer_ids = (
+                        [target_peer_id]
+                        if target_peer_id is not None
+                        else [peer.peer_id for peer in self._routing_table.get_negotiated_peers()]
+                    )
+                    for recipient_peer_id in recipient_peer_ids:
                         try:
                             event_kwargs = {"correlation_id": event_correlation_id}
                             if target_peer_id is not None:
@@ -294,21 +287,21 @@ class MeshBus:
                                 fire_event_async
                             ):
                                 await fire_event_async(
-                                    peer.peer_id,
+                                    recipient_peer_id,
                                     topic,
                                     message,
                                     **event_kwargs,
                                 )
                             else:
                                 self._peer_bridge.fire_event(
-                                    peer.peer_id,
+                                    recipient_peer_id,
                                     topic,
                                     message,
                                     **event_kwargs,
                                 )
                         except Exception as exc:
                             log_debug(
-                                f"MeshBus: Failed to forward event {topic} to {peer.peer_id}: {exc}"
+                                f"MeshBus: Failed to forward event {topic} to {recipient_peer_id}: {exc}"
                             )
             return
 

@@ -1432,7 +1432,7 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     await harness.runtime.close()
   })
 
-  it('answers reconnect challenge with proof and authorizes only after gateway hello', async () => {
+  it('waits for a delayed reconnect challenge without starting fresh pairing and authorizes only after gateway hello', async () => {
     const signaling = new RuntimeFakeSignaling()
     const pc = new RuntimeFakePeerConnection('offer-sdp', 'answer-sdp')
     const store = new MemoryPeerCredentialStore()
@@ -1467,6 +1467,10 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     const channel = pc.channels[0] as RuntimeFakeChannel
     channel.open()
     await flushRuntime()
+    await new Promise((resolve) => setTimeout(resolve, 1_650))
+    expect(channel.sent).toEqual([])
+    expect(runtime.peer.snapshot().state).toBe('reconnect-authenticating')
+    expect(runtime.peer.snapshot().pendingPairing).toBeUndefined()
     const binding = await deriveChannelBinding({ appId: 'aurora', room: 'room-1', offererSignalingId: 'a-local', answererSignalingId: 'z-remote', offerSdp: 'offer-sdp', answerSdp: 'answer-sdp' })
     channel.receive(await encodeInbound({
       type: 'mesh_auth_challenge_v1',
@@ -1483,7 +1487,6 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     expect(createReconnectProof).toHaveBeenCalledOnce()
     expect(proof).toMatchObject({ type: 'mesh_auth_proof_v1', token_id: 'token-row-1', claimant_peer_id: 'local-stable', verifier_peer_id: 'peer-remote' })
     expect(runtime.peer.snapshot().state).not.toBe('authorized')
-    await new Promise((resolve) => setTimeout(resolve, 1_650))
     const framesBeforeHello = await Promise.all(channel.sent.map((_, index) => decodeSent(channel, index)))
     expect(framesBeforeHello.some((frame) => frame.type === 'pairing_v2_commit')).toBe(false)
     expect(runtime.peer.snapshot().state).toBe('reconnect-authenticating')

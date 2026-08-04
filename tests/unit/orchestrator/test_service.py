@@ -1006,6 +1006,7 @@ class TestOrchestratorInterruptHandling:
             principal_id="principal-123",
             caller_peer_id="peer-123",
             identity_source="webrtc_rpc",
+            effective_perms=["Orchestrator.use", "TTS.use"],
         )
 
         response = await orchestrator_service.interrupt_assistant(
@@ -1034,6 +1035,7 @@ class TestOrchestratorInterruptHandling:
         assert stop_call.kwargs["principal_id"] == "principal-123"
         assert stop_call.kwargs["caller_peer_id"] == "peer-123"
         assert stop_call.kwargs["identity_source"] == "webrtc_rpc"
+        assert stop_call.kwargs["effective_perms"] == ["Orchestrator.use", "TTS.use"]
 
         assert event_call.args[0] == OrchestratorEvents.INTERRUPTED
         event = event_call.args[1]
@@ -1380,6 +1382,49 @@ class TestOrchestratorServiceInputProcessing:
         assert tts_end.kwargs["caller_peer_id"] == "peer-a"
         assert tts_end.kwargs["principal_id"] == "principal-a"
         assert tts_end.kwargs["correlation_id"] == "corr-remote"
+
+    @pytest.mark.asyncio
+    async def test_remote_thin_completed_only_stream_flushes_client_tts_text(
+        self, orchestrator_service, mock_bus
+    ):
+        """A completed-only model stream still sends its response text to client TTS."""
+        from app.shared.contracts.models.orchestrator import AssistantStreamEvent
+        from app.shared.contracts.models.tts import TTSMethods, TTSStreamChunkRequest
+
+        async def stream_events(*args, **kwargs):
+            yield AssistantStreamEvent(
+                kind="assistant.completed", text="Completed-only remote audio."
+            )
+
+        orchestrator_service.orchestrator = MagicMock()
+        orchestrator_service.orchestrator.stream_graph_events = stream_events
+        orchestrator_service._ui_automatic_tts_readback = False
+
+        with patch("app.services.orchestrator.service.get_contract", return_value=object()):
+            await orchestrator_service._process_input(
+                "Input",
+                source="external",
+                session_id="session-completed-only",
+                request_id="request-completed-only",
+                correlation_id="corr-completed-only",
+                stream=True,
+                caller_principal_id="principal-a",
+                caller_peer_id="peer-a",
+                caller_identity_source="webrtc_rpc",
+                response_metadata={"client_tts_playback": True},
+            )
+
+        tts_chunks = [
+            call
+            for call in mock_bus.publish.call_args_list
+            if call.args[0] == TTSMethods.STREAM_CHUNK
+        ]
+        assert len(tts_chunks) == 1
+        assert isinstance(tts_chunks[0].args[1], TTSStreamChunkRequest)
+        assert tts_chunks[0].args[1].text == "Completed-only remote audio."
+        assert tts_chunks[0].args[1].is_final is True
+        assert tts_chunks[0].kwargs["caller_peer_id"] == "peer-a"
+        assert tts_chunks[0].kwargs["correlation_id"] == "corr-completed-only"
 
     @pytest.mark.asyncio
     async def test_stt_stream_keeps_server_tts_and_untargeted_response(

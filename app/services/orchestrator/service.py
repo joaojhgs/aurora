@@ -1116,6 +1116,7 @@ class OrchestratorService(BaseService):
                     principal_id=getattr(envelope, "principal_id", None),
                     identity_source=getattr(envelope, "identity_source", None),
                     caller_peer_id=getattr(envelope, "caller_peer_id", None),
+                    effective_perms=getattr(envelope, "effective_perms", None),
                 )
                 results.append(
                     OrchestratorInterruptScopeResult(
@@ -1641,6 +1642,7 @@ class OrchestratorService(BaseService):
         tts_stream_id: str | None = None
         tts_text_sequence = 0
         tts_buffer = ""
+        tts_source_text = ""
         client_tts_playback = metadata.get("client_tts_playback") is True
         should_stream_tts = source == "stt" or (
             source in {"ui", "external"}
@@ -1678,6 +1680,7 @@ class OrchestratorService(BaseService):
             if event.kind == "assistant.delta":
                 response_text = event.text or f"{response_text}{event.delta}"
                 if tts_stream_id and event.delta:
+                    tts_source_text = f"{tts_source_text}{event.delta}"
                     tts_buffer, tts_text_sequence = await self._flush_tts_stream_chunks(
                         stream_id=tts_stream_id,
                         buffer=f"{tts_buffer}{event.delta}",
@@ -1700,6 +1703,12 @@ class OrchestratorService(BaseService):
                 caller_peer_id=caller_peer_id,
                 mesh=mesh_response,
             )
+
+        if tts_stream_id and response_text and response_text != "END":
+            if not tts_source_text:
+                tts_buffer = response_text
+            elif response_text.startswith(tts_source_text):
+                tts_buffer = f"{tts_buffer}{response_text[len(tts_source_text) :]}"
 
         publish_text = response_text
         terminal_metadata = dict(metadata)

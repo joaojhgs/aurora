@@ -5,7 +5,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { AuroraClient, MockAuroraTransport, ORCHESTRATOR_METHODS } from '@aurora/client'
 import { AssistantView } from '../src/assistant-view'
 import { auroraNavSections, navItemSnapshot } from '../src/nav'
-import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT } from '../src/platform-surface'
+import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from '../src/platform-surface'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import type { RouteAvailability } from '../src/shell-data'
 
@@ -23,6 +23,149 @@ afterEach(() => {
 })
 
 describe('Assistant focused WebView microphone policy', () => {
+  it('does not open coordinator-wide voice subscriptions on Android focused capture', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const voiceEvents = vi.spyOn(client.assistant, 'streamVoiceEvents').mockImplementation(async function* () {})
+    const voiceResponses = vi.spyOn(client.assistant, 'streamVoiceAssistantResponses').mockImplementation(async function* () {})
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          surfaceProfile={getAuroraSurfaceProfile({
+            runtimeMode: 'android-node',
+            transportKind: 'mesh',
+            nativePlatform: 'android'
+          })}
+        />
+      )
+      await Promise.resolve()
+    })
+
+    expect(voiceEvents).not.toHaveBeenCalled()
+    expect(voiceResponses).not.toHaveBeenCalled()
+  })
+
+  it('keeps coordinator-wide voice subscriptions for desktop background wake listening', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const voiceEvents = vi.spyOn(client.assistant, 'streamVoiceEvents').mockImplementation(async function* () {})
+    const voiceResponses = vi.spyOn(client.assistant, 'streamVoiceAssistantResponses').mockImplementation(async function* () {})
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          surfaceProfile={getAuroraSurfaceProfile({
+            runtimeMode: 'desktop-local',
+            transportKind: 'tauri-local',
+            nativePlatform: 'linux'
+          })}
+        />
+      )
+      await Promise.resolve()
+    })
+
+    expect(voiceEvents).toHaveBeenCalledTimes(1)
+    expect(voiceResponses).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops desktop coordinator fallback capture without running the WebView no-audio finalizer', async () => {
+    const stoppedTrack = vi.fn()
+    const stream = { getTracks: () => [{ stop: stoppedTrack }] } as unknown as MediaStream
+    const getUserMedia = vi.fn()
+      .mockRejectedValueOnce(new DOMException('focused capture unavailable', 'NotReadableError'))
+      .mockResolvedValue(stream)
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia }
+    })
+    vi.stubGlobal('AudioContext', FakeAudioContext)
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    vi.spyOn(client.assistant, 'streamVoiceEvents').mockImplementation(async function* () {})
+    vi.spyOn(client.assistant, 'streamVoiceAssistantResponses').mockImplementation(async function* () {})
+    const audit = successfulTranscription('').audit
+    vi.spyOn(client.assistant, 'cancel').mockResolvedValue({
+      ok: true,
+      audit,
+      data: {
+        interrupt_id: 'desktop-voice-interrupt',
+        status: 'completed',
+        requested_scopes: ['tts_playback'],
+        results: [],
+        session_id: null,
+        request_id: null,
+        event_topic: 'Orchestrator.Interrupted',
+        audit_event: 'orchestrator.interrupted',
+        idempotent: false,
+        secrets_redacted: true
+      }
+    } as Awaited<ReturnType<typeof client.assistant.cancel>>)
+    const startVoiceListen = vi.spyOn(client.assistant, 'startVoiceListen').mockResolvedValue({
+      ok: true,
+      audit,
+      data: {
+        sessionId: 'desktop-coordinator-session',
+        status: 'listening',
+        source: 'push_to_talk'
+      }
+    } as Awaited<ReturnType<typeof client.assistant.startVoiceListen>>)
+    const stopVoiceListen = vi.spyOn(client.assistant, 'stopVoiceListen').mockResolvedValue({
+      ok: true,
+      audit,
+      data: {
+        sessionId: 'desktop-coordinator-session',
+        status: 'stopped',
+        source: 'push_to_talk'
+      }
+    } as Awaited<ReturnType<typeof client.assistant.stopVoiceListen>>)
+    const transcribe = vi.spyOn(client.assistant, 'transcribeVoiceAudio')
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          surfaceProfile={getAuroraSurfaceProfile({
+            runtimeMode: 'desktop-local',
+            transportKind: 'tauri-local',
+            nativePlatform: 'linux'
+          })}
+        />
+      )
+      await Promise.resolve()
+    })
+    await act(async () => {
+      findButton(container, 'Push to talk').click()
+      await vi.waitFor(() => expect(startVoiceListen).toHaveBeenCalledTimes(1))
+      await vi.waitFor(() => expect(findButton(container, 'Stop listening')).toBeTruthy())
+    })
+    await act(async () => {
+      findButton(container, 'Stop listening').click()
+      await vi.waitFor(() => expect(stopVoiceListen).toHaveBeenCalledTimes(1))
+    })
+
+    expect(stoppedTrack).toHaveBeenCalledTimes(1)
+    expect(transcribe).not.toHaveBeenCalled()
+    expect(renderedElementCopy(container)).not.toContain('No microphone audio was captured')
+  })
+
   it('stops focused push-to-talk media tracks when the thin shell is hidden', async () => {
     const stopped = vi.fn()
     const stream = { getTracks: () => [{ stop: stopped }] } as unknown as MediaStream
@@ -142,6 +285,206 @@ describe('Assistant focused WebView microphone policy', () => {
     expect(rendered).not.toMatch(/\b(WebRTC|transport|fallback|runtime)\b/i)
     expect(findForbiddenProductionCopyTerms(rendered).map((term) => term.id), rendered).toEqual([])
   })
+
+  it('reports when push-to-talk stops before Web Audio produces microphone samples', async () => {
+    const stream = { getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia: vi.fn(async () => stream) }
+    })
+    vi.stubGlobal('AudioContext', FakeAudioContext)
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(<AssistantView client={client} route={assistantRoute()} />)
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      findButton(container, 'Push to talk').click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      findButton(container, 'Stop listening').click()
+      await Promise.resolve()
+    })
+
+    expect(renderedElementCopy(container)).toContain(
+      'No microphone audio was captured. Check microphone permission and try push-to-talk again.'
+    )
+  })
+
+  it('resumes Web Audio from the tap before waiting for Android microphone access', async () => {
+    const events: string[] = []
+    const stream = { getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream
+    class SuspendedAudioContext extends FakeAudioContext {
+      state = 'suspended'
+      resume = vi.fn(async () => {
+        events.push('resume')
+        this.state = 'running'
+        return undefined
+      })
+    }
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => {
+          events.push('getUserMedia')
+          return stream
+        })
+      }
+    })
+    vi.stubGlobal('AudioContext', SuspendedAudioContext)
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(<AssistantView client={client} route={assistantRoute()} />)
+      await Promise.resolve()
+    })
+    await act(async () => {
+      findButton(container, 'Push to talk').click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(events.slice(0, 2)).toEqual(['resume', 'getUserMedia'])
+  })
+
+  it('transcribes MediaRecorder chunks when Web Audio produces no processor samples', async () => {
+    const stream = { getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia: vi.fn(async () => stream) }
+    })
+    vi.stubGlobal('AudioContext', DecodingAudioContext)
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder)
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const transcribe = vi.spyOn(client.assistant, 'transcribeVoiceAudio').mockResolvedValue(successfulTranscription(''))
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(<AssistantView client={client} route={assistantRoute()} />)
+      await Promise.resolve()
+    })
+    await act(async () => {
+      findButton(container, 'Push to talk').click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      findButton(container, 'Stop listening').click()
+      await vi.waitFor(() => expect(transcribe).toHaveBeenCalled())
+    })
+
+    const request = transcribe.mock.calls[0]?.[0]
+    expect(request).toEqual(expect.objectContaining({
+      format: 'raw',
+      sample_rate: 16_000,
+      channels: 1,
+      model: 'accurate'
+    }))
+    expect(request?.audio_data.length).toBeGreaterThan(0)
+  })
+
+  it('updates the existing composer with MediaRecorder transcription while still listening', async () => {
+    const stream = { getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia: vi.fn(async () => stream) }
+    })
+    vi.stubGlobal('AudioContext', DecodingAudioContext)
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder)
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const transcribe = vi.spyOn(client.assistant, 'transcribeVoiceAudio').mockResolvedValue(successfulTranscription('live words'))
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(<AssistantView client={client} route={assistantRoute()} />)
+      await Promise.resolve()
+    })
+    await act(async () => {
+      findButton(container, 'Push to talk').click()
+      await Promise.resolve()
+      await Promise.resolve()
+      await new Promise((resolve) => window.setTimeout(resolve, 950))
+      await vi.waitFor(() => expect(transcribe).toHaveBeenCalled())
+    })
+
+    expect(transcribe.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ model: 'realtime' }))
+    expect(container.querySelector('textarea')?.value).toBe('live words')
+    expect(findButton(container, 'Stop listening')).toBeTruthy()
+  })
+
+  it('keeps the Web Audio PCM transcription path when MediaRecorder is unavailable', async () => {
+    const stream = { getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia: vi.fn(async () => stream) }
+    })
+    vi.stubGlobal('AudioContext', PcmAudioContext)
+    vi.stubGlobal('MediaRecorder', RejectingMediaRecorder)
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const transcribe = vi.spyOn(client.assistant, 'transcribeVoiceAudio').mockResolvedValue(successfulTranscription(''))
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(<AssistantView client={client} route={assistantRoute()} />)
+      await Promise.resolve()
+    })
+    await act(async () => {
+      findButton(container, 'Push to talk').click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    PcmAudioContext.processor?.onaudioprocess?.({
+      inputBuffer: {
+        getChannelData: () => Float32Array.from({ length: 8_000 }, (_, index) => Math.sin(index / 8) * 0.2)
+      }
+    })
+    await act(async () => {
+      findButton(container, 'Stop listening').click()
+      await vi.waitFor(() => expect(transcribe).toHaveBeenCalled())
+    })
+
+    expect(transcribe.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      format: 'raw',
+      sample_rate: 16_000,
+      model: 'accurate'
+    }))
+  })
 })
 
 class FakeAudioContext {
@@ -153,6 +496,104 @@ class FakeAudioContext {
   createMediaStreamSource = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn() }))
   createAnalyser = vi.fn(() => ({ fftSize: 1024, smoothingTimeConstant: 0.35, getByteTimeDomainData: vi.fn() }))
   createScriptProcessor = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn(), onaudioprocess: null as unknown }))
+}
+
+class DecodingAudioContext extends FakeAudioContext {
+  sampleRate = 48_000
+  decodeAudioData = vi.fn(async () => ({
+    sampleRate: 48_000,
+    length: 48_000,
+    numberOfChannels: 1,
+    getChannelData: () => Float32Array.from({ length: 48_000 }, (_, index) => Math.sin(index / 12) * 0.2)
+  }))
+}
+
+class PcmAudioContext extends FakeAudioContext {
+  static processor: {
+    connect: ReturnType<typeof vi.fn>
+    disconnect: ReturnType<typeof vi.fn>
+    onaudioprocess: ((event: { inputBuffer: { getChannelData: () => Float32Array } }) => void) | null
+  } | null = null
+
+  createScriptProcessor = vi.fn(() => {
+    const processor = {
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      onaudioprocess: null as ((event: { inputBuffer: { getChannelData: () => Float32Array } }) => void) | null
+    }
+    PcmAudioContext.processor = processor
+    return processor
+  })
+}
+
+class RejectingMediaRecorder {
+  static isTypeSupported = vi.fn(() => true)
+
+  constructor() {
+    throw new Error('unsupported')
+  }
+}
+
+class FakeMediaRecorder {
+  static isTypeSupported = vi.fn((mimeType: string) => mimeType.startsWith('audio/webm'))
+
+  readonly mimeType: string
+  state: RecordingState = 'inactive'
+  ondataavailable: ((event: BlobEvent) => void) | null = null
+  onstop: (() => void) | null = null
+
+  constructor(_stream: MediaStream, options?: MediaRecorderOptions) {
+    this.mimeType = options?.mimeType ?? 'audio/webm'
+  }
+
+  start(_timeslice?: number) {
+    this.state = 'recording'
+    queueMicrotask(() => this.emitChunk([1, 2, 3, 4]))
+  }
+
+  stop() {
+    this.emitChunk([5, 6, 7, 8])
+    this.state = 'inactive'
+    queueMicrotask(() => this.onstop?.())
+  }
+
+  private emitChunk(bytes: number[]) {
+    this.ondataavailable?.({
+      data: new Blob([new Uint8Array(bytes)], { type: this.mimeType })
+    } as BlobEvent)
+  }
+}
+
+function successfulTranscription(text: string) {
+  return {
+    ok: true as const,
+    audit: {
+      correlationId: 'voice-capture-test',
+      eventKind: null,
+      peerId: null,
+      principalId: null,
+      targetPeerId: null,
+      method: 'Transcription.Transcribe',
+      busTopic: 'Transcription.Transcribe',
+      toolId: null,
+      resourceId: null,
+      status: 'ok',
+      transport: 'mock',
+      redaction: {
+        secretsRedacted: true,
+        redactedFields: [],
+        source: 'transport' as const,
+        warnings: []
+      }
+    },
+    data: {
+      text,
+      confidence: null,
+      language: null,
+      duration_ms: 1_000,
+      model_used: 'test'
+    }
+  }
 }
 
 function assistantRoute(): RouteAvailability {

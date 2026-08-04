@@ -71,7 +71,9 @@ export function buildWebRtcManifestAck(manifest: MeshPeerManifest): MeshManifest
   const peerId = requireString(input.peerId, 'peerId')
   assertIdentifier(peerId, 'peerId')
   const services = requireManifestServices(input.services ?? [])
-  const sortedServices = [...services].sort((left, right) => left.module.localeCompare(right.module))
+  const sortedServices = [...services].sort((left, right) =>
+    left.module < right.module ? -1 : left.module > right.module ? 1 : 0
+  )
   assertUnique(sortedServices.map((service) => service.module), 'services')
 
   const raw = input.raw === undefined ? null : requirePlainRecord(input.raw, 'manifest.raw')

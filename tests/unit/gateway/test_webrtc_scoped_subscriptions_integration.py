@@ -477,6 +477,43 @@ async def test_targeted_assistant_mesh_bus_skips_wrong_missing_target_and_stale_
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_targeted_assistant_events_reach_authenticated_consumer_only_peer() -> None:
+    """Scoped replies target their caller even when it advertises no provider services."""
+    inner = AsyncMock()
+    routing = MagicMock()
+    routing.get_negotiated_peers.return_value = []
+    peer_bridge = MagicMock()
+    peer_bridge.fire_event_async = AsyncMock(return_value=True)
+    cfg = MeshConfig(
+        enabled=True,
+        node_name="node",
+        services={
+            "Orchestrator": mesh_policy(share=True),
+            "TTS": mesh_policy(share=True),
+        },
+    )
+    bus = MeshBus(inner, routing, peer_bridge, cfg)
+
+    await bus.publish(
+        TTSMethods.AUDIO_CHUNK,
+        Payload(),
+        event=True,
+        mesh=True,
+        correlation_id="corr-consumer",
+        caller_peer_id="consumer-peer",
+    )
+
+    peer_bridge.fire_event_async.assert_awaited_once_with(
+        "consumer-peer",
+        TTSMethods.AUDIO_CHUNK,
+        Payload(),
+        correlation_id="corr-consumer",
+        target_peer_id="consumer-peer",
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_subscription_interest_unsubscribe_disconnect_and_expiry_stop_delivery() -> None:
     registry = MeshEventSubscriptionRegistry(clock=lambda: 1000.0)
     accepted = registry.subscribe(

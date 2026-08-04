@@ -253,6 +253,27 @@ export interface AssistantAttachmentDraft {
 
 export type VoiceCaptureStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'permission-denied' | 'no-device' | 'error'
 
+interface VoiceMediaRecorderCapture {
+  recorder: MediaRecorder
+  chunks: Blob[]
+  mimeType: string
+  acceptingData: boolean
+  stopped: Promise<void>
+  finish: () => void
+}
+
+interface VoiceRecordingSnapshot {
+  pcmChunks: Float32Array[]
+  pcmSampleRate: number
+  mediaChunks: Blob[]
+  mediaMimeType: string
+}
+
+interface VoiceWaveformStartResult {
+  visualizerStarted: boolean
+  pcmCaptureStarted: boolean
+}
+
 export interface VoiceCapabilityChip {
   id: string
   label: string
@@ -381,6 +402,7 @@ export function AssistantView({
   const voiceAnalyserRef = useRef<AnalyserNode | null>(null)
   const voiceMediaSourceRef = useRef<MediaStreamAudioSourceNode | null>(null)
   const voiceScriptProcessorRef = useRef<ScriptProcessorNode | null>(null)
+  const voiceMediaRecorderCaptureRef = useRef<VoiceMediaRecorderCapture | null>(null)
   const voicePcmChunksRef = useRef<Float32Array[]>([])
   const voicePcmSampleRateRef = useRef(16_000)
   const voicePartialTranscribeTimerRef = useRef<number | null>(null)
@@ -537,6 +559,7 @@ export function AssistantView({
     nativePlatform,
     userAgent: typeof navigator === 'undefined' ? undefined : navigator.userAgent
   }), [client.transport.kind, nativePlatform, providedSurfaceProfile])
+  const receivesCoordinatorVoiceEvents = surfaceProfile.voiceCapture.wakewordOwner === 'coordinator-daemon'
   const remotePrivacyWarning = assistantRemotePrivacyWarning(route)
   const voiceModel = useMemo(
     () => buildAssistantVoiceModel({
@@ -933,6 +956,7 @@ export function AssistantView({
   }, [voiceCaptureStatus])
 
   useEffect(() => {
+    if (!receivesCoordinatorVoiceEvents) return
     const controller = new AbortController()
     let active = true
     void (async () => {
@@ -960,9 +984,10 @@ export function AssistantView({
       active = false
       controller.abort()
     }
-  }, [client, sessionAuthScope])
+  }, [client, receivesCoordinatorVoiceEvents, sessionAuthScope])
 
   useEffect(() => {
+    if (!receivesCoordinatorVoiceEvents) return
     const controller = new AbortController()
     let active = true
     void (async () => {
@@ -986,7 +1011,7 @@ export function AssistantView({
       active = false
       controller.abort()
     }
-  }, [client, sessionAuthScope])
+  }, [client, receivesCoordinatorVoiceEvents, sessionAuthScope])
 
   function resetConversationUi(nextSession: AssistantSessionSnapshot) {
     abortRef.current?.abort()
@@ -1540,9 +1565,12 @@ export function AssistantView({
       return
     }
     if (update.kind === 'tts_audio_chunk') {
+      const hasPlayableAudio = update.ttsAudio?.final !== true && Boolean(update.ttsAudio?.audioData)
+      if (hasPlayableAudio) {
+        if (lastAssistantMessageIdRef.current === null) lastAssistantMessageIdRef.current = pendingId
+        if (!speakingMessageIdRef.current) setSpeakingMessageId(lastAssistantMessageIdRef.current)
+      }
       enqueueStreamedTtsAudio(update)
-      if (lastAssistantMessageIdRef.current === null) lastAssistantMessageIdRef.current = pendingId
-      if (!speakingMessageIdRef.current) setSpeakingMessageId(lastAssistantMessageIdRef.current)
       setSession((current) => ({
         ...current,
         messages: current.messages.map((message) =>
@@ -1552,7 +1580,11 @@ export function AssistantView({
       setStreamState((current) => ({
         ...current,
         status: current.status === 'streaming' ? 'streaming' : current.status,
-        message: 'TTS audio chunk received; playback state is separate from the composer.'
+        message: update.ttsAudio?.final
+          ? 'Aurora finished speaking.'
+          : hasPlayableAudio
+            ? 'Aurora is speaking.'
+            : current.message
       }))
       return
     }
@@ -1848,8 +1880,9 @@ export function AssistantView({
       return
     }
     if (update.kind === 'tts_audio_chunk') {
+      const hasPlayableAudio = update.ttsAudio?.final !== true && Boolean(update.ttsAudio?.audioData)
+      if (hasPlayableAudio && pendingId && !speakingMessageIdRef.current) setSpeakingMessageId(pendingId)
       enqueueStreamedTtsAudio(update)
-      if (pendingId && !speakingMessageIdRef.current) setSpeakingMessageId(pendingId)
       if (pendingId) {
         setSession((current) => ({
           ...current,
@@ -1861,7 +1894,15 @@ export function AssistantView({
       setVoiceCaptureStatus('idle')
       setVoiceResponsePendingId(null)
       clearVoiceResponseTimeout()
-      setStreamState((current) => ({ ...current, status: 'idle', message: 'Voice response audio chunk received; composer is ready.' }))
+      setStreamState((current) => ({
+        ...current,
+        status: 'idle',
+        message: update.ttsAudio?.final
+          ? 'Aurora finished speaking.'
+          : hasPlayableAudio
+            ? 'Aurora is speaking.'
+            : current.message
+      }))
       return
     }
     if (update.kind !== 'completed' && update.kind !== 'fallback') return
@@ -2408,7 +2449,10 @@ export function AssistantView({
     const currentCaptureStatus = voiceCaptureStatusRef.current
     if (currentCaptureStatus === 'listening') {
       const sessionId = activeVoiceSessionRef.current
-      if (sessionId && coordinatorVoiceSessionIdsRef.current.has(sessionId)) {
+      const coordinatorOwnsCapture = Boolean(
+        sessionId && coordinatorVoiceSessionIdsRef.current.has(sessionId)
+      )
+      if (sessionId && coordinatorOwnsCapture) {
         const stopped = await client.assistant.stopVoiceListen({
           sessionId,
           reason: 'user_request',
@@ -2416,7 +2460,7 @@ export function AssistantView({
         })
         if (!stopped.ok) setLastError(productAssistantErrorCopy(stopped.error))
       }
-      stopLocalCapture({ finalizeTranscription: currentCaptureStatus === 'listening' })
+      stopLocalCapture({ finalizeTranscription: !coordinatorOwnsCapture })
       setVoiceCaptureStatus('idle')
       activeVoiceSessionRef.current = null
       ownedVoiceSessionIdsRef.current.clear()
@@ -2473,48 +2517,80 @@ export function AssistantView({
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       throw new Error('This platform did not expose a browser microphone API to the Aurora UI.')
     }
-    const stream = await withTimeout(
-      navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      }),
-      8_000,
-      new Error('Timed out waiting for microphone permission or device samples.')
-    )
+    const preparedAudioContext = createVoiceAudioContext()
+    const audioContextReady = resumeVoiceAudioContext(preparedAudioContext)
+    let stream: MediaStream
+    try {
+      stream = await withTimeout(
+        navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        }),
+        8_000,
+        new Error('Timed out waiting for microphone permission or device samples.')
+      )
+      await audioContextReady
+    } catch (error) {
+      if (preparedAudioContext && preparedAudioContext.state !== 'closed') {
+        void preparedAudioContext.close().catch(() => undefined)
+      }
+      throw error
+    }
     voiceStreamRef.current = stream
-    const audioStarted = startVoiceWaveform(stream, { recordForTranscription })
-    if (recordForTranscription && !audioStarted) {
+    if (recordForTranscription) {
+      voicePcmChunksRef.current = []
+      stopVoiceMediaRecorderCapture({ discard: true })
+    }
+    const mediaRecorderStarted = recordForTranscription && startVoiceMediaRecorder(stream)
+    const waveform = startVoiceWaveform(
+      stream,
+      { recordForTranscription: recordForTranscription && !mediaRecorderStarted },
+      preparedAudioContext
+    )
+    const transcriptionCaptureStarted = mediaRecorderStarted || waveform.pcmCaptureStarted
+    if (recordForTranscription && !transcriptionCaptureStarted) {
       stopLocalCapture({ finalizeTranscription: false })
-      throw new Error('This platform can show microphone permission but did not expose Web Audio samples for transcription.')
+      throw new Error('This platform allowed microphone access but did not expose audio samples for transcription.')
     }
     if (recordForTranscription) {
       const generation = voiceRecordingGenerationRef.current + 1
       voiceRecordingGenerationRef.current = generation
       voiceFinalizeOnStopRef.current = true
       voiceTranscriptPreviewRef.current = ''
-      voicePcmChunksRef.current = []
       scheduleRealtimeTranscriptionPreview(generation)
-    } else if (!audioStarted && !optionalVisualizer) {
+    } else if (!waveform.visualizerStarted && !optionalVisualizer) {
       throw new Error('This platform did not expose Web Audio microphone levels to the Aurora UI.')
     }
   }
 
   function stopLocalCapture({ finalizeTranscription = false }: { finalizeTranscription?: boolean } = {}) {
     const generation = voiceRecordingGenerationRef.current
-    const shouldFinalize = finalizeTranscription && voicePcmChunksRef.current.length > 0
+    const pcmChunks = [...voicePcmChunksRef.current]
+    const pcmSampleRate = voicePcmSampleRateRef.current
+    const mediaCapture = stopVoiceMediaRecorderCapture({ discard: !finalizeTranscription })
+    const shouldFinalize = finalizeTranscription && (pcmChunks.length > 0 || mediaCapture !== null)
     voiceFinalizeOnStopRef.current = finalizeTranscription
     clearPartialTranscriptionTimer()
     voiceStreamRef.current?.getTracks().forEach((track) => track.stop())
     voiceStreamRef.current = null
     stopVoiceWaveform()
     setVoiceWaveformBars(idleWaveformBars())
+    voicePcmChunksRef.current = []
     if (shouldFinalize) {
-      void transcribeRecordedBrowserAudio({ final: true, generation })
-    } else if (!finalizeTranscription) {
-      voicePcmChunksRef.current = []
+      void (async () => {
+        if (mediaCapture) await mediaCapture.stopped
+        await transcribeRecordedBrowserAudio({
+          final: true,
+          generation,
+          recording: voiceRecordingSnapshot({ pcmChunks, pcmSampleRate, mediaCapture })
+        })
+      })()
+    } else if (finalizeTranscription) {
+      setLastError('No microphone audio was captured. Check microphone permission and try push-to-talk again.')
+      setVoiceCaptureStatus('idle')
     }
   }
 
@@ -2532,7 +2608,7 @@ export function AssistantView({
       voicePartialTranscribeTimerRef.current = null
       if (voicePartialTranscribeInFlightRef.current) return
       if (voiceRecordingGenerationRef.current !== generation) return
-      if (voicePcmChunksRef.current.length === 0) {
+      if (!hasRecordedVoiceAudio()) {
         scheduleRealtimeTranscriptionPreview(generation)
         return
       }
@@ -2547,15 +2623,117 @@ export function AssistantView({
     }, 900)
   }
 
-  function startVoiceWaveform(stream: MediaStream, options: { recordForTranscription?: boolean } = {}): boolean {
-    stopVoiceWaveform()
-    if (typeof window === 'undefined') return false
+  function createVoiceAudioContext(): AudioContext | null {
+    if (typeof window === 'undefined') return null
     const AudioContextCtor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-    if (!AudioContextCtor) return false
-    const context = new AudioContextCtor()
-    if (context.state === 'suspended') void context.resume().catch(() => undefined)
-    const source = context.createMediaStreamSource(stream)
-    const analyser = context.createAnalyser()
+    if (!AudioContextCtor) return null
+    try {
+      return new AudioContextCtor()
+    } catch {
+      return null
+    }
+  }
+
+  function resumeVoiceAudioContext(context: AudioContext | null): Promise<boolean> {
+    if (!context) return Promise.resolve(false)
+    if (context.state !== 'suspended') return Promise.resolve(true)
+    return context.resume()
+      .then(() => context.state !== 'suspended')
+      .catch(() => false)
+  }
+
+  function startVoiceMediaRecorder(stream: MediaStream): boolean {
+    if (typeof MediaRecorder === 'undefined') return false
+    const mimeType = preferredVoiceMediaRecorderMimeType(MediaRecorder)
+    let recorder: MediaRecorder
+    try {
+      recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream)
+    } catch {
+      return false
+    }
+    let finished = false
+    let resolveStopped: (() => void) | null = null
+    const stopped = new Promise<void>((resolve) => {
+      resolveStopped = resolve
+    })
+    const capture: VoiceMediaRecorderCapture = {
+      recorder,
+      chunks: [],
+      mimeType: recorder.mimeType || mimeType || '',
+      acceptingData: true,
+      stopped,
+      finish: () => {
+        if (finished) return
+        finished = true
+        resolveStopped?.()
+      }
+    }
+    recorder.ondataavailable = (event) => {
+      if (!capture.acceptingData || event.data.size === 0) return
+      capture.chunks.push(event.data)
+    }
+    recorder.onstop = capture.finish
+    recorder.onerror = capture.finish
+    try {
+      recorder.start(250)
+    } catch {
+      recorder.ondataavailable = null
+      recorder.onstop = null
+      recorder.onerror = null
+      capture.finish()
+      return false
+    }
+    voiceMediaRecorderCaptureRef.current = capture
+    return true
+  }
+
+  function stopVoiceMediaRecorderCapture({ discard }: { discard: boolean }): VoiceMediaRecorderCapture | null {
+    const capture = voiceMediaRecorderCaptureRef.current
+    if (!capture) return null
+    if (voiceMediaRecorderCaptureRef.current === capture) voiceMediaRecorderCaptureRef.current = null
+    if (discard) {
+      capture.acceptingData = false
+      capture.chunks.length = 0
+    }
+    if (capture.recorder.state === 'inactive') {
+      capture.finish()
+      return capture
+    }
+    try {
+      capture.recorder.stop()
+    } catch {
+      capture.finish()
+    }
+    return capture
+  }
+
+  function hasRecordedVoiceAudio(): boolean {
+    if (voicePcmChunksRef.current.length > 0) return true
+    return Boolean(voiceMediaRecorderCaptureRef.current?.chunks.some((chunk) => chunk.size > 0))
+  }
+
+  function startVoiceWaveform(
+    stream: MediaStream,
+    options: { recordForTranscription?: boolean } = {},
+    preparedAudioContext: AudioContext | null = null
+  ): VoiceWaveformStartResult {
+    stopVoiceWaveform()
+    const context = preparedAudioContext ?? createVoiceAudioContext()
+    if (!context || context.state === 'suspended') {
+      if (context && context.state !== 'closed') void context.close().catch(() => undefined)
+      return { visualizerStarted: false, pcmCaptureStarted: false }
+    }
+    let source: MediaStreamAudioSourceNode
+    let analyser: AnalyserNode
+    try {
+      source = context.createMediaStreamSource(stream)
+      analyser = context.createAnalyser()
+    } catch {
+      if (context.state !== 'closed') void context.close().catch(() => undefined)
+      return { visualizerStarted: false, pcmCaptureStarted: false }
+    }
     analyser.fftSize = 1024
     analyser.smoothingTimeConstant = 0.35
     source.connect(analyser)
@@ -2563,15 +2741,21 @@ export function AssistantView({
     voiceMediaSourceRef.current = source
     voiceAnalyserRef.current = analyser
     voicePcmSampleRateRef.current = context.sampleRate
+    let pcmCaptureStarted = false
     if (options.recordForTranscription) {
-      const processor = context.createScriptProcessor(4096, 1, 1)
-      processor.onaudioprocess = (event) => {
-        const channel = event.inputBuffer.getChannelData(0)
-        voicePcmChunksRef.current.push(new Float32Array(channel))
+      try {
+        const processor = context.createScriptProcessor(4096, 1, 1)
+        processor.onaudioprocess = (event) => {
+          const channel = event.inputBuffer.getChannelData(0)
+          voicePcmChunksRef.current.push(new Float32Array(channel))
+        }
+        source.connect(processor)
+        processor.connect(context.destination)
+        voiceScriptProcessorRef.current = processor
+        pcmCaptureStarted = true
+      } catch {
+        pcmCaptureStarted = false
       }
-      source.connect(processor)
-      processor.connect(context.destination)
-      voiceScriptProcessorRef.current = processor
     }
     const samples = new Uint8Array(analyser.fftSize)
     const tick = () => {
@@ -2580,7 +2764,7 @@ export function AssistantView({
       voiceAnalyserFrameRef.current = window.requestAnimationFrame(tick)
     }
     tick()
-    return true
+    return { visualizerStarted: true, pcmCaptureStarted }
   }
 
   function stopVoiceWaveform() {
@@ -2603,19 +2787,63 @@ export function AssistantView({
     if (context && context.state !== 'closed') void context.close()
   }
 
-  function recordedPcmBase64(recentSeconds?: number): string | null {
-    const chunks = voicePcmChunksRef.current
-    if (chunks.length === 0) return null
-    const sourceRate = voicePcmSampleRateRef.current || 16_000
-    const samples = flattenPcmChunks(chunks, recentSeconds ? Math.ceil(sourceRate * recentSeconds) : undefined)
-    if (samples.length < sourceRate * 0.35) return null
-    return floatPcmToBase64(samples, sourceRate, 16_000)
+  function voiceRecordingSnapshot({
+    pcmChunks = voicePcmChunksRef.current,
+    pcmSampleRate = voicePcmSampleRateRef.current,
+    mediaCapture = voiceMediaRecorderCaptureRef.current
+  }: {
+    pcmChunks?: Float32Array[]
+    pcmSampleRate?: number
+    mediaCapture?: VoiceMediaRecorderCapture | null
+  } = {}): VoiceRecordingSnapshot {
+    return {
+      pcmChunks: [...pcmChunks],
+      pcmSampleRate: pcmSampleRate || 16_000,
+      mediaChunks: mediaCapture ? [...mediaCapture.chunks] : [],
+      mediaMimeType: mediaCapture?.mimeType ?? ''
+    }
   }
 
-  async function transcribeRecordedBrowserAudio({ final, generation }: { final: boolean; generation: number }) {
+  async function recordedPcmBase64(recording: VoiceRecordingSnapshot, recentSeconds?: number): Promise<string | null> {
+    if (recording.pcmChunks.length > 0) {
+      const sourceRate = recording.pcmSampleRate || 16_000
+      const samples = flattenPcmChunks(recording.pcmChunks, recentSeconds ? Math.ceil(sourceRate * recentSeconds) : undefined)
+      if (samples.length < sourceRate * 0.35) return null
+      return floatPcmToBase64(samples, sourceRate, 16_000)
+    }
+    if (recording.mediaChunks.length === 0) return null
+    const context = createVoiceAudioContext()
+    if (!context) return null
+    try {
+      const encoded = await blobToArrayBuffer(new Blob(recording.mediaChunks, {
+        type: recording.mediaMimeType || recording.mediaChunks[0]?.type || ''
+      }))
+      if (encoded.byteLength === 0) return null
+      const decoded = await context.decodeAudioData(encoded.slice(0))
+      const sourceRate = decoded.sampleRate || 16_000
+      const samples = monoSamplesFromAudioBuffer(
+        decoded,
+        recentSeconds ? Math.ceil(sourceRate * recentSeconds) : undefined
+      )
+      if (samples.length < sourceRate * 0.35) return null
+      return floatPcmToBase64(samples, sourceRate, 16_000)
+    } finally {
+      if (context.state !== 'closed') await context.close().catch(() => undefined)
+    }
+  }
+
+  async function transcribeRecordedBrowserAudio({
+    final,
+    generation,
+    recording = voiceRecordingSnapshot()
+  }: {
+    final: boolean
+    generation: number
+    recording?: VoiceRecordingSnapshot
+  }) {
     if (final) setVoiceCaptureStatus('processing')
     try {
-      const audioData = recordedPcmBase64(final ? undefined : 12)
+      const audioData = await recordedPcmBase64(recording, final ? undefined : 12)
       if (!audioData) {
         if (final) {
           setLastError('No microphone audio was captured. Check microphone permission and try push-to-talk again.')
@@ -2631,7 +2859,7 @@ export function AssistantView({
         model: final ? 'accurate' : 'realtime',
         routePolicy: routePolicyFromRoute(voiceModel.transcriptionRoute)
       })
-      if (voiceRecordingGenerationRef.current !== generation && !final) return
+      if (voiceRecordingGenerationRef.current !== generation) return
       if (!result.ok) {
         if (final) {
           setLastError(productAssistantErrorCopy(result.error))
@@ -2644,7 +2872,6 @@ export function AssistantView({
         if (final) {
           setLastError('No speech was transcribed from the recorded audio.')
           setVoiceCaptureStatus('idle')
-          voicePcmChunksRef.current = []
         }
         return
       }
@@ -2655,13 +2882,12 @@ export function AssistantView({
         setText(preview)
         return
       }
-      voicePcmChunksRef.current = []
       const finalTranscript = mergeTranscriptText(voiceTranscriptPreviewRef.current, transcript, { appendOnMiss: false }).trim()
       voiceTranscriptPreviewRef.current = ''
       await startAssistantTurn(finalTranscript || transcript)
       setVoiceCaptureStatus('idle')
     } catch (error) {
-      if (final) {
+      if (final && voiceRecordingGenerationRef.current === generation) {
         setLastError(productAudioCaptureErrorCopy(error))
         setVoiceCaptureStatus('error')
       }
@@ -5024,6 +5250,49 @@ function withIgnoredAudioDisconnect(disconnect: () => void) {
   } catch {
     // Web Audio nodes may already be disconnected during rapid stop/retry.
   }
+}
+
+const voiceMediaRecorderMimeTypes = [
+  'audio/webm;codecs=opus',
+  'audio/webm',
+  'audio/mp4',
+  'audio/ogg;codecs=opus'
+] as const
+
+function preferredVoiceMediaRecorderMimeType(recorder: typeof MediaRecorder): string {
+  if (typeof recorder.isTypeSupported !== 'function') return ''
+  return voiceMediaRecorderMimeTypes.find((mimeType) => recorder.isTypeSupported(mimeType)) ?? ''
+}
+
+function blobToArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
+  const compatibleBlob = blob as Blob & { arrayBuffer?: () => Promise<ArrayBuffer> }
+  if (typeof compatibleBlob.arrayBuffer === 'function') return compatibleBlob.arrayBuffer()
+  return new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(reader.error ?? new Error('Unable to read captured microphone audio.'))
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) resolve(reader.result)
+      else reject(new Error('Unable to read captured microphone audio.'))
+    }
+    reader.readAsArrayBuffer(blob)
+  })
+}
+
+function monoSamplesFromAudioBuffer(buffer: AudioBuffer, maxSamples?: number): Float32Array {
+  if (buffer.numberOfChannels <= 0 || buffer.length <= 0) return new Float32Array()
+  const wanted = maxSamples === undefined ? buffer.length : Math.min(buffer.length, maxSamples)
+  const start = buffer.length - wanted
+  if (buffer.numberOfChannels === 1) {
+    return new Float32Array(buffer.getChannelData(0).subarray(start))
+  }
+  const output = new Float32Array(wanted)
+  for (let channelIndex = 0; channelIndex < buffer.numberOfChannels; channelIndex += 1) {
+    const channel = buffer.getChannelData(channelIndex)
+    for (let sampleIndex = 0; sampleIndex < wanted; sampleIndex += 1) {
+      output[sampleIndex] = (output[sampleIndex] ?? 0) + (channel[start + sampleIndex] ?? 0) / buffer.numberOfChannels
+    }
+  }
+  return output
 }
 
 function flattenPcmChunks(chunks: Float32Array[], maxSamples?: number): Float32Array {

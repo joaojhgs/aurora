@@ -239,6 +239,16 @@ describe('WebRTC actual-G002 protocol parsers', () => {
       ]
     }
     expect(parseWebRtcFrame(ack)).toEqual(ack)
+    const pythonOrderedAck = {
+      ...ack,
+      compatible_services: ['TTS', 'Tooling', 'Transcription'],
+      services: [
+        { service_id: 'TTS', service_label: '', status: 'compatible', reason_codes: [], reason: '' },
+        { service_id: 'Tooling', service_label: '', status: 'compatible', reason_codes: [], reason: '' },
+        { service_id: 'Transcription', service_label: '', status: 'compatible', reason_codes: [], reason: '' }
+      ]
+    }
+    expect(parseWebRtcFrame(pythonOrderedAck)).toEqual(pythonOrderedAck)
     expect(parseWebRtcFrame({ type: 'manifest_ack', compatible_services: ['Tooling'] })).toMatchObject({
       type: 'manifest_ack',
       compatible_services: ['Tooling'],

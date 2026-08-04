@@ -2551,7 +2551,12 @@ describe("Tauri CI/E2E route gates", () => {
         },
       },
     ]);
-    const runtime = testRuntime(new Aurora({ transport }));
+    const runtime = {
+      ...testRuntime(
+        new Aurora({ transport: tauriLocalTransportProxy(transport) }),
+      ),
+      mode: "desktop-local" as const,
+    };
     window.localStorage.clear();
     window.history.replaceState({}, "", "/");
     const mounted = await mountOutcomeApp(runtime);
@@ -2609,7 +2614,12 @@ describe("Tauri CI/E2E route gates", () => {
         },
       },
     ]);
-    const runtime = testRuntime(new Aurora({ transport }));
+    const runtime = {
+      ...testRuntime(
+        new Aurora({ transport: tauriLocalTransportProxy(transport) }),
+      ),
+      mode: "desktop-local" as const,
+    };
     window.localStorage.clear();
     window.history.replaceState({}, "", "/");
     const mounted = await mountOutcomeApp(runtime);

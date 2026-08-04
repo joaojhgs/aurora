@@ -779,7 +779,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     for (const stream of this.streams.values()) {
       if (!stream.topics.includes(frame.topic)) continue
       if (stream.correlationIds.length > 0 && (!frame.correlation_id || !stream.correlationIds.includes(frame.correlation_id))) continue
-      const kind = readEventKind(frame.params) ?? frame.topic
+      const kind = readEventKind(frame.params) ?? eventKindFromTopic(frame.topic)
       this.enqueueStream(stream.id, { kind, topic: frame.topic, payload: frame.params, correlation_id: frame.correlation_id, peer_id: this.remotePeerId, target_peer_id: this.remotePeerId })
     }
   }
@@ -1242,6 +1242,11 @@ function readEventKind(params: unknown): string | null {
   if (!isRecord(params)) return null
   const value = params.kind ?? params.event_kind ?? params.eventKind
   return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function eventKindFromTopic(topic: string): string {
+  if (topic === 'TTS.AudioChunk') return 'tts.audio_chunk'
+  return topic
 }
 
 function readSafe(record: Record<string, unknown>, ...keys: string[]): string | null {

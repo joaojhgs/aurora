@@ -272,6 +272,26 @@ describe('WebRTC mesh manifest parser', () => {
     })
   })
 
+  it('orders ACK service IDs using Python-compatible code point order', () => {
+    const frame = validFrame()
+    frame.shared_services = [
+      { module: 'Transcription', methods: ['Transcription.Transcribe'], capabilities: [] },
+      { module: 'TTS', methods: ['TTS.Synthesize'], capabilities: [] },
+      { module: 'Tooling', methods: ['Tooling.GetTools'], capabilities: [] },
+      { module: 'Orchestrator', methods: ['Orchestrator.ExternalUserInput'], capabilities: [] }
+    ]
+
+    const ack = buildWebRtcManifestAck(parseWebRtcMeshManifest(frame, 'stable-peer-1'))
+
+    expect(ack.incompatible_services).toEqual(['Orchestrator', 'TTS', 'Tooling', 'Transcription'])
+    expect(ack.services?.map((service) => service.service_id)).toEqual([
+      'Orchestrator',
+      'TTS',
+      'Tooling',
+      'Transcription'
+    ])
+  })
+
   it('rejects projection ACKs with missing or contradictory authority evidence', () => {
     const missingEvidence = parseWebRtcMeshManifest(
       { ...projectionFrame(), recipient_projection_evidence: undefined },

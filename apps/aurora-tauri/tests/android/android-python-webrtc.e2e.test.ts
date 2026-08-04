@@ -320,6 +320,11 @@ async function createInteropResources() {
   const token = `android.${crypto.randomBytes(24).toString('base64url')}`
   const seededSecrets = [roomSecret, token]
   const room = `android-webview-${process.pid}-${Date.now().toString(36)}`
+  const stunServer =
+    interopLane === 'stun'
+      ? (process.env.AURORA_ANDROID_WEBRTC_STUN_URL ??
+        `stun:${await resolveHostIpv4()}:3478`)
+      : undefined
   const turnServer =
     interopLane === 'turn'
       ? (process.env.AURORA_ANDROID_WEBRTC_TURN_URL ??
@@ -541,6 +546,9 @@ async function createInteropResources() {
       '--timeout',
       String(timeoutMs / 1000),
     ]
+    if (stunServer !== undefined) {
+      gatewayArgs.push('--stun', stunServer)
+    }
     if (turnServer !== undefined) {
       gatewayArgs.push('--turn', turnServer)
     }

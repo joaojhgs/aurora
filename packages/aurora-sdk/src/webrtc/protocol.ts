@@ -453,7 +453,7 @@ function validateManifestAckServices(services: unknown[], partitions: { compatib
     const service = requirePlainRecord(item, 'manifest_ack.services[]')
     const serviceId = requireString(service.service_id, 'service_id', limits.maxTopicLength)
     if (seen.has(serviceId)) throw new WebRtcProtocolParseError('manifest_ack services contain duplicate service_id')
-    if (previous.serviceId !== null && previous.serviceId.localeCompare(serviceId) > 0) throw new WebRtcProtocolParseError('manifest_ack services must be sorted by service_id')
+    if (previous.serviceId !== null && previous.serviceId > serviceId) throw new WebRtcProtocolParseError('manifest_ack services must be sorted by service_id')
     previous.serviceId = serviceId
     seen.add(serviceId)
     const status = requireString(service.status, 'status', 32)

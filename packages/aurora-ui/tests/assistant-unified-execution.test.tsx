@@ -566,6 +566,111 @@ describe('unified Assistant execution controls', () => {
     await waitUntil(() => container.textContent?.includes('Hello from the connected device.') === true)
   })
 
+  it('plays streamed connected-device audio without duplicating the completed answer or leaving speaking active', async () => {
+    const playedSources: string[] = []
+    Object.defineProperty(window.URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn(() => 'blob:aurora-streamed-tts'),
+    })
+    Object.defineProperty(window.URL, 'revokeObjectURL', {
+      configurable: true,
+      value: vi.fn(),
+    })
+    vi.stubGlobal('Audio', class {
+      onended: (() => void) | null = null
+      onerror: (() => void) | null = null
+      constructor(readonly src: string) {}
+      async play() {
+        playedSources.push(this.src)
+        this.onended?.()
+      }
+      pause() {}
+    })
+    const provider: LightweightAssistantProvider = {
+      async complete() {
+        return { type: 'message', content: 'Unused local response.' }
+      },
+    }
+    const transport = MockAuroraTransport.empty()
+      .register(ORCHESTRATOR_MODEL_METHODS.getCatalog, () => structuredClone(modelRuntimeCatalogFixture))
+      .register(ORCHESTRATOR_METHODS.externalUserInput, (request) => assistantResponse(request, 'Targeted audio works.'))
+      .stream('assistant', async function* (request) {
+        const payload = request.payload as Record<string, unknown>
+        const common = {
+          session_id: payload.session_id,
+          request_id: payload.request_id,
+          metadata: {
+            model: 'llama-3-8b-instruct',
+            provider_label: 'Home Aurora',
+            tts_status: 'streaming',
+            tts_stream_id: 'tts-targeted-audio',
+          },
+        }
+        yield {
+          id: 'remote-assistant-delta-1',
+          kind: 'assistant.delta',
+          payload: { ...common, text: 'Targeted', delta: 'Targeted' },
+          correlation_id: request.correlationId,
+        }
+        yield {
+          id: 'remote-assistant-delta-2',
+          kind: 'assistant.delta',
+          payload: { ...common, text: 'Targeted audio works.', delta: ' audio works.' },
+          correlation_id: request.correlationId,
+        }
+        yield {
+          id: 'remote-assistant-completed',
+          kind: 'assistant.completed',
+          payload: { ...common, text: 'Targeted audio works.' },
+          correlation_id: request.correlationId,
+        }
+        yield {
+          id: 'remote-assistant-audio',
+          kind: 'tts.audio_chunk',
+          payload: {
+            stream_id: 'tts-targeted-audio',
+            sequence: 0,
+            audio_data: 'UklGRg==',
+            format: 'wav',
+            sample_rate: 22_050,
+            channels: 1,
+            duration_ms: 120,
+            is_final: false,
+          },
+          correlation_id: request.correlationId,
+        }
+        yield {
+          id: 'remote-assistant-audio-final',
+          kind: 'tts.audio_chunk',
+          payload: {
+            stream_id: 'tts-targeted-audio',
+            sequence: 1,
+            audio_data: '',
+            format: 'wav',
+            sample_rate: 22_050,
+            channels: 1,
+            duration_ms: 0,
+            is_final: true,
+          },
+          correlation_id: request.correlationId,
+        }
+      })
+    const container = await renderUnifiedAssistant(new AuroraClient({ transport }), provider)
+
+    await chooseModelSelectorItem('Executing locally', 'Dispatch to Home Aurora')
+    await enterPrompt(container, 'play the targeted response')
+    await waitUntil(() => playedSources.length === 1)
+    await waitUntil(() => container.querySelector('.aui-chat-assistant.aui-chat-sent') !== null)
+
+    const assistantText = container.querySelector('.aui-chat-assistant .aui-chat-bubble p')?.textContent
+    const readAloud = [...container.querySelectorAll<HTMLButtonElement>('.aui-chat-assistant .aui-message-action-button')]
+      .find((button) => button.textContent?.trim() === 'Read aloud')
+    expect(assistantText).toBe('Targeted audio works.')
+    expect(playedSources).toEqual(['blob:aurora-streamed-tts'])
+    expect(readAloud?.getAttribute('aria-pressed')).toBe('false')
+    expect(container.textContent).not.toContain('TTS audio chunk received')
+  })
+
   it('restores dispatched tool activity from the same encrypted on-device chat', async () => {
     const provider: LightweightAssistantProvider = {
       async complete() {

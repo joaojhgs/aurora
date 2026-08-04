@@ -320,6 +320,181 @@ describe('WebRtcMeshPeerBridge with MeshP2PTransport and AuroraClient', () => {
     await iterator.return?.()
   })
 
+  it('normalizes raw WebRTC TTS.AudioChunk topics and drains assistant audio through the final chunk', async () => {
+    const { session, client } = makeClient(['sub-live-audio', 'call-live-audio'])
+    client.auth.setUser({
+      principalId: 'principal-a',
+      permissions: ['Orchestrator.use', 'TTS.use'],
+      effectivePermissions: ['Orchestrator.use', 'TTS.use']
+    })
+    const iterator = client.assistant.streamMessage({
+      text: 'speak over webrtc',
+      requestId: 'corr-live-audio',
+      timeoutMs: 5_000,
+      clientTtsPlayback: true
+    })[Symbol.asyncIterator]()
+    const completed = iterator.next()
+    await tick()
+
+    session.emit({
+      type: 'subscribed',
+      id: 'sub-live-audio',
+      subscription_id: 'sub-live-audio',
+      accepted: true,
+      accepted_topics: ['Orchestrator.Response', 'TTS.AudioChunk'],
+      rejected_topics: [],
+      correlation_ids: ['corr-live-audio'],
+      ttl_seconds: 60,
+      reason: null,
+      idempotent: false
+    })
+    await waitForSentCount(session, 2)
+    session.emit({
+      type: 'result',
+      id: 'corr-live-audio',
+      result: {
+        text: 'Spoken response',
+        request_id: 'corr-live-audio',
+        correlation_id: 'corr-live-audio',
+        metadata: { tts_status: 'streaming', tts_stream_id: 'tts-corr-live-audio' }
+      }
+    })
+    session.emit({
+      type: 'event',
+      topic: 'Orchestrator.Response',
+      correlation_id: 'corr-live-audio',
+      params: {
+        kind: 'assistant.completed',
+        text: 'Spoken response',
+        request_id: 'corr-live-audio',
+        metadata: { tts_status: 'streaming', tts_stream_id: 'tts-corr-live-audio' }
+      }
+    })
+    await expect(completed).resolves.toMatchObject({
+      done: false,
+      value: { kind: 'completed', text: 'Spoken response', textDelta: '' }
+    })
+
+    const audio = iterator.next()
+    session.emit({
+      type: 'event',
+      topic: 'TTS.AudioChunk',
+      correlation_id: 'corr-live-audio',
+      params: {
+        stream_id: 'tts-corr-live-audio',
+        sequence: 0,
+        audio_data: 'UklGRg==',
+        format: 'wav',
+        sample_rate: 22_050,
+        channels: 1,
+        duration_ms: 120,
+        text: 'Spoken response',
+        is_final: false
+      }
+    })
+    await expect(audio).resolves.toMatchObject({
+      done: false,
+      value: {
+        kind: 'tts_audio_chunk',
+        textDelta: '',
+        ttsAudio: { audioData: 'UklGRg==', encoding: 'wav', final: false }
+      }
+    })
+
+    const finalAudio = iterator.next()
+    session.emit({
+      type: 'event',
+      topic: 'TTS.AudioChunk',
+      correlation_id: 'corr-live-audio',
+      params: {
+        stream_id: 'tts-corr-live-audio',
+        sequence: 1,
+        audio_data: '',
+        format: 'wav',
+        sample_rate: 22_050,
+        channels: 1,
+        duration_ms: 0,
+        is_final: true
+      }
+    })
+    await expect(finalAudio).resolves.toMatchObject({
+      done: false,
+      value: { kind: 'tts_audio_chunk', ttsAudio: { final: true } }
+    })
+    await expect(iterator.next()).resolves.toMatchObject({ done: true })
+  })
+
+  it('closes a streaming TTS response when its final audio arrives before assistant completion', async () => {
+    const { session, client } = makeClient(['sub-early-final-audio', 'call-early-final-audio'])
+    client.auth.setUser({
+      principalId: 'principal-a',
+      permissions: ['Orchestrator.use', 'TTS.use'],
+      effectivePermissions: ['Orchestrator.use', 'TTS.use']
+    })
+    const iterator = client.assistant.streamMessage({
+      text: 'speak with early final audio',
+      requestId: 'corr-early-final-audio',
+      timeoutMs: 5_000,
+      clientTtsPlayback: true
+    })[Symbol.asyncIterator]()
+    const finalAudio = iterator.next()
+    await tick()
+
+    session.emit({
+      type: 'subscribed',
+      id: 'sub-early-final-audio',
+      subscription_id: 'sub-early-final-audio',
+      accepted: true,
+      accepted_topics: ['Orchestrator.Response', 'TTS.AudioChunk'],
+      rejected_topics: [],
+      correlation_ids: ['corr-early-final-audio'],
+      ttl_seconds: 60,
+      reason: null,
+      idempotent: false
+    })
+    await waitForSentCount(session, 2)
+    session.emit({
+      type: 'event',
+      topic: 'TTS.AudioChunk',
+      correlation_id: 'corr-early-final-audio',
+      params: {
+        stream_id: 'tts-corr-early-final-audio',
+        sequence: 1,
+        audio_data: '',
+        format: 'wav',
+        sample_rate: 22_050,
+        channels: 1,
+        duration_ms: 0,
+        is_final: true
+      }
+    })
+    await expect(finalAudio).resolves.toMatchObject({
+      done: false,
+      value: { kind: 'tts_audio_chunk', ttsAudio: { final: true } }
+    })
+
+    const completed = iterator.next()
+    session.emit({
+      type: 'event',
+      topic: 'Orchestrator.Response',
+      correlation_id: 'corr-early-final-audio',
+      params: {
+        kind: 'assistant.completed',
+        text: 'Spoken response',
+        request_id: 'corr-early-final-audio',
+        metadata: {
+          tts_status: 'streaming',
+          tts_stream_id: 'tts-corr-early-final-audio'
+        }
+      }
+    })
+    await expect(completed).resolves.toMatchObject({
+      done: false,
+      value: { kind: 'completed', text: 'Spoken response', textDelta: '' }
+    })
+    await expect(iterator.next()).resolves.toMatchObject({ done: true })
+  })
+
   it('carries browser-captured STT and client-playback TTS requests over the authorized DataChannel', async () => {
     const { session, client } = makeClient(['stt-call', 'tts-call'])
 

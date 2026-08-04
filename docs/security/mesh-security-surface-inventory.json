@@ -407,7 +407,7 @@
       "handler": "get_model_runtime",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1185
+        "line": 1186
       },
       "exposure": "external",
       "method_type": "use",
@@ -428,7 +428,7 @@
       "handler": "get_model_catalog",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1229
+        "line": 1230
       },
       "exposure": "external",
       "method_type": "use",
@@ -449,7 +449,7 @@
       "handler": "get_model_operation",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1257
+        "line": 1258
       },
       "exposure": "external",
       "method_type": "use",
@@ -470,7 +470,7 @@
       "handler": "import_model",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1284
+        "line": 1285
       },
       "exposure": "external",
       "method_type": "manage",
@@ -491,7 +491,7 @@
       "handler": "download_model",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1300
+        "line": 1301
       },
       "exposure": "external",
       "method_type": "manage",
@@ -512,7 +512,7 @@
       "handler": "benchmark_model",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1316
+        "line": 1317
       },
       "exposure": "external",
       "method_type": "manage",
