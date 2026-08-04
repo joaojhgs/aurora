@@ -8,6 +8,7 @@ import { assertRoleSwitchEvidence } from './role-switch-evidence.mjs'
 
 const args = new Set(process.argv.slice(2))
 const forbiddenDesktopChildPattern = /\b(?:python(?:3(?:\.\d+)?)?|uv|aurora-sidecar)\b|(?:^|\s)main\.py(?:\s|$)/i
+const hookResultEnvelopeSchema = 'aurora.desktop_live_e2e.webdriver_result.v1'
 
 if (args.has('--self-test')) {
   await runSelfTest()
@@ -218,9 +219,26 @@ async function readJsonEnv(name) {
 }
 
 async function invokeDesktopHook(baseUrl, sessionId, payload) {
-  return await executeAsyncScript(baseUrl, sessionId, `
+  const value = await executeAsyncScript(baseUrl, sessionId, `
     const payload = arguments[0];
+    const envelopeSchema = arguments[1];
     const done = arguments[arguments.length - 1];
+    const finish = (result) => {
+      let serialized;
+      try {
+        serialized = JSON.stringify({ schema: envelopeSchema, result });
+      } catch (error) {
+        serialized = JSON.stringify({
+          schema: envelopeSchema,
+          result: {
+            status: 'failed',
+            blocker: 'desktop-webview-hook-serialization-failed',
+            detail: error && typeof error.message === 'string' ? error.message : String(error)
+          }
+        });
+      }
+      done(serialized);
+    };
     Promise.resolve().then(async () => {
       const runtime = {
         href: String(window.location.href),
@@ -251,12 +269,36 @@ async function invokeDesktopHook(baseUrl, sessionId, payload) {
         };
       }
       return { runtime, ...result };
-    }).then(done, (error) => done({
+    }).then(finish, (error) => finish({
       status: 'failed',
       blocker: 'desktop-webview-hook-threw',
-      detail: error?.message ?? String(error)
+      detail: error && typeof error.message === 'string' ? error.message : String(error)
     }));
-  `, [payload])
+  `, [payload, hookResultEnvelopeSchema])
+  return parseHookResultEnvelope(value)
+}
+
+function parseHookResultEnvelope(value) {
+  if (typeof value !== 'string') {
+    throw new Error('Desktop WebView hook returned a non-JSON result envelope')
+  }
+  let envelope
+  try {
+    envelope = JSON.parse(value)
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new Error(`Desktop WebView hook returned invalid JSON: ${detail}`)
+  }
+  if (
+    !envelope
+    || typeof envelope !== 'object'
+    || envelope.schema !== hookResultEnvelopeSchema
+    || !envelope.result
+    || typeof envelope.result !== 'object'
+  ) {
+    throw new Error('Desktop WebView hook returned an invalid result envelope')
+  }
+  return envelope.result
 }
 
 function validatePassedHookResult(
@@ -478,6 +520,19 @@ async function runSelfTest() {
   )
   assert.throws(() => requireEnv('AURORA_DESKTOP_LIVE_E2E_SELF_TEST_MISSING'))
   assert.equal(resolveExpectedWebRtcPrimitive(), 'tauri-native-webrtc')
+  assert.deepEqual(
+    parseHookResultEnvelope(JSON.stringify({
+      schema: hookResultEnvelopeSchema,
+      result: { status: 'passed' },
+    })),
+    { status: 'passed' },
+  )
+  assert.throws(() => parseHookResultEnvelope({ status: 'passed' }), /non-JSON result envelope/)
+  assert.throws(() => parseHookResultEnvelope('{'), /returned invalid JSON/)
+  assert.throws(
+    () => parseHookResultEnvelope(JSON.stringify({ schema: 'wrong', result: {} })),
+    /invalid result envelope/,
+  )
   await assert.rejects(
     request('http://127.0.0.1:1', 'GET', '/status', undefined, 'self-test-phase'),
     /self-test-phase failed/,

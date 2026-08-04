@@ -95,6 +95,9 @@ test('harness source preserves real-peer, Python-free desktop-client, driver, an
 test('webdriver fixture source invokes the narrow desktop live WebView hook', async () => {
   const source = await fs.readFile(webdriverDriver, 'utf8')
   assert.match(source, /__AURORA_DESKTOP_LIVE_E2E__/)
+  assert.match(source, /aurora\.desktop_live_e2e\.webdriver_result\.v1/)
+  assert.match(source, /JSON\.stringify\(\{ schema: envelopeSchema, result \}\)/)
+  assert.match(source, /parseHookResultEnvelope/)
   assert.match(source, /buildHookPayload/)
   assert.match(source, /validatePassedHookResult/)
   assert.match(source, /roleSwitchEvidence/)
