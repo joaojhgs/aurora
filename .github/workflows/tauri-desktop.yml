@@ -287,6 +287,9 @@ jobs:
           pnpm --filter @aurora/client build
           pnpm --filter @aurora/ui build
 
+      - name: Run shared client regressions on macOS
+        run: pnpm test:tauri:shared-regressions
+
       - name: Run the Python-free desktop client against the real Python peer through STUN
         env:
           AURORA_DESKTOP_LIVE_E2E_LANE: stun

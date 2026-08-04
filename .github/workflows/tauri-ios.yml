@@ -97,6 +97,9 @@ jobs:
           pnpm --filter @aurora/client build
           pnpm --filter @aurora/ui build
 
+      - name: Run shared client regressions on macOS
+        run: pnpm test:tauri:shared-regressions
+
       - name: Build Tauri frontend bundle
         run: pnpm --filter @aurora/tauri-ui build
 

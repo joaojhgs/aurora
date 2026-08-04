@@ -20,6 +20,7 @@
     "test:web-thin:live": "pnpm test:hosted-peer:live",
     "test:desktop-client:live": "scripts/desktop_live_e2e.sh",
     "test:desktop-thin:live": "pnpm test:desktop-client:live",
+    "test:tauri:shared-regressions": "pnpm --filter @aurora/client exec vitest run --environment node tests/client.test.ts tests/webrtc-mesh-transport-integration.test.ts tests/webrtc-peer-session.test.ts && pnpm --filter @aurora/ui exec vitest run --environment node tests/assistant-unified-execution.test.tsx tests/onboarding-and-mesh-baseline.test.tsx tests/service-routing-view.test.tsx tests/shell-panel-toggles.test.tsx tests/shell.test.tsx tests/accessibility-responsive-visual.test.tsx tests/production-ui-copy.test.tsx",
     "test:webrtc:interop": "scripts/webrtc_interop_local.sh direct",
     "test:webrtc:turn": "scripts/webrtc_interop_local.sh turn",
     "test:webrtc:browsers": "scripts/webrtc_interop_browser_matrix.sh"
