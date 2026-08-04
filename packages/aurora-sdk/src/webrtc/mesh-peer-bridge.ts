@@ -634,6 +634,13 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       case 'manifest_ack':
         if (this.peerHost?.markManifestAcknowledged(frame as unknown as Record<string, unknown> & ManifestAckFrame)) {
           this.startLocalProviderLeaseRenewal()
+        } else if (this.peerHost) {
+          this.observeAsyncDispatch(
+            'manifest_response',
+            this.peerHost
+              .retryManifestAfterStaleAcknowledgement(frame as unknown as Record<string, unknown> & ManifestAckFrame)
+              .then(() => undefined)
+          )
         }
         return
       case 'provider_lease':

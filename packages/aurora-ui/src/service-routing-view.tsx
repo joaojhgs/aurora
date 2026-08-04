@@ -305,23 +305,33 @@ export function LocalServiceRoutingResource({
 }: LocalServiceRoutingResourceProps) {
   const [sharing, setSharing] = useState<LocalFeatureSharingSnapshot | null>(null)
   const [connectedSnapshot, setConnectedSnapshot] = useState<ServiceRoutingSnapshot | null>(null)
+  const [thinSnapshot, setThinSnapshot] = useState<BrowserWebRtcSnapshot | null>(
+    () => thinPeer?.snapshot() ?? null,
+  )
   const [loadError, setLoadError] = useState<string | null>(null)
   const [pendingRowId, setPendingRowId] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
+  const loadGeneration = useRef(0)
   const routeKey = route
     ? [route.item.id, route.state, route.disabled ? 'disabled' : 'enabled'].join('|')
     : null
   const stableRoute = useMemo(() => route, [routeKey])
+  const connectedTransportReady = !thinPeer || isBrowserWebRtcConnected(thinSnapshot)
+  const requiresConnectedLoad = Boolean(client && stableRoute && connectedTransportReady)
+  const [connectedLoadSettled, setConnectedLoadSettled] = useState(!requiresConnectedLoad)
 
   const load = useCallback(async () => {
+    const generation = loadGeneration.current + 1
+    loadGeneration.current = generation
     let localFailed = false
     try {
       const [localResult, connectedResult] = await Promise.allSettled([
         featureSharing.load(),
-        client && stableRoute
+        requiresConnectedLoad && client && stableRoute
           ? buildServiceRoutingSnapshot(client, stableRoute)
           : Promise.resolve(null),
       ])
+      if (loadGeneration.current !== generation) return
       if (localResult.status === 'fulfilled') {
         setSharing(localResult.value)
       } else {
@@ -343,13 +353,16 @@ export function LocalServiceRoutingResource({
         setLoadError(null)
       }
     } catch {
+      if (loadGeneration.current !== generation) return
       setLoadError('Service sharing is unavailable right now. Try again.')
     }
-  }, [client, featureSharing, stableRoute, thinPeer])
+  }, [client, featureSharing, requiresConnectedLoad, stableRoute, thinPeer])
 
   useEffect(() => {
-    if (!thinPeer) return
+    setThinSnapshot(thinPeer?.snapshot() ?? null)
+    if (!thinPeer) return undefined
     return thinPeer.subscribe((nextThinSnapshot) => {
+      setThinSnapshot(nextThinSnapshot)
       setConnectedSnapshot((current) =>
         current
           ? reconcileServiceRoutingWithThinPeer(
@@ -363,16 +376,30 @@ export function LocalServiceRoutingResource({
   }, [thinPeer])
 
   useEffect(() => {
-    void load()
+    let active = true
+    setConnectedSnapshot(null)
+    setConnectedLoadSettled(!requiresConnectedLoad)
+    void load().finally(() => {
+      if (active) setConnectedLoadSettled(true)
+    })
+    return () => {
+      active = false
+      loadGeneration.current += 1
+    }
+  }, [load, requiresConnectedLoad])
+
+  useEffect(() => {
     return featureSharing.subscribe?.((next) => {
       setSharing(next)
       setLoadError(null)
     })
-  }, [featureSharing, load])
+  }, [featureSharing])
 
   const snapshot = useMemo(
-    () => buildNodeServiceRoutingSnapshot(sharing, connectedSnapshot, loadError),
-    [connectedSnapshot, loadError, sharing],
+    () => requiresConnectedLoad && !connectedLoadSettled
+      ? { ...loadingSnapshot, evidenceSource: 'This device' }
+      : buildNodeServiceRoutingSnapshot(sharing, connectedSnapshot, loadError),
+    [connectedLoadSettled, connectedSnapshot, loadError, requiresConnectedLoad, sharing],
   )
 
   const previewRow = useCallback(async (
@@ -958,6 +985,22 @@ export function serviceRoutingDraftFromRow(row: ServiceRoutingRow): ServiceRouti
   }
 }
 
+function serviceRoutingRowPolicyRevision(
+  row: ServiceRoutingRow,
+  sharingOnly: boolean,
+): string {
+  return JSON.stringify({
+    id: row.id,
+    sharingPath: row.sharingPath,
+    routingPath: row.routingPath,
+    sharingEditable: row.sharingEditable !== false,
+    sharingDetailsEditable: row.sharingDetailsEditable !== false,
+    routingEditable: row.routingEditable !== false,
+    sharingOnly,
+    draft: serviceRoutingDraftFromRow(row),
+  })
+}
+
 export function serviceRoutingDraftChanges(row: ServiceRoutingRow, draft: ServiceRoutingRowDraft): ServiceRoutingChange[] {
   const original = serviceRoutingDraftFromRow(row)
   const changes: ServiceRoutingChange[] = []
@@ -990,10 +1033,39 @@ export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationErro
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
   const [reviews, setReviews] = useState<Record<string, ServiceRoutingReviewState | undefined>>({})
   const reviewGenerations = useRef<Record<string, number>>({})
+  const appliedRowRevisions = useRef<Record<string, string>>({})
+  const rowRevisions = useMemo(
+    () => Object.fromEntries(
+      snapshot.rows.map((row) => [row.id, serviceRoutingRowPolicyRevision(row, sharingOnly)]),
+    ),
+    [sharingOnly, snapshot.rows],
+  )
+  const rowsRevision = useMemo(() => JSON.stringify(rowRevisions), [rowRevisions])
   useEffect(() => {
-    setDrafts(Object.fromEntries(snapshot.rows.map((row) => [row.id, serviceRoutingDraftFromRow(row)])))
-    setReviews({})
-  }, [snapshot.rows])
+    const previousRevisions = appliedRowRevisions.current
+    if (JSON.stringify(previousRevisions) === rowsRevision) return
+    appliedRowRevisions.current = rowRevisions
+    const changedRowIds = new Set(
+      [...new Set([...Object.keys(previousRevisions), ...Object.keys(rowRevisions)])]
+        .filter((rowId) => previousRevisions[rowId] !== rowRevisions[rowId]),
+    )
+    for (const rowId of changedRowIds) {
+      reviewGenerations.current[rowId] = (reviewGenerations.current[rowId] ?? 0) + 1
+    }
+    setDrafts((current) => Object.fromEntries(
+      snapshot.rows.map((row) => [
+        row.id,
+        changedRowIds.has(row.id) || !current[row.id]
+          ? serviceRoutingDraftFromRow(row)
+          : current[row.id]!,
+      ]),
+    ))
+    setReviews((current) => Object.fromEntries(
+      snapshot.rows
+        .filter((row) => !changedRowIds.has(row.id) && current[row.id])
+        .map((row) => [row.id, current[row.id]]),
+    ))
+  }, [rowRevisions, rowsRevision, snapshot.rows])
   const readOnly = !snapshot.editable || !onPreviewRow || !onSaveRow || snapshot.loadState === 'loading' || snapshot.loadState === 'unavailable'
   const invalidateReview = (rowId: string) => {
     reviewGenerations.current[rowId] = (reviewGenerations.current[rowId] ?? 0) + 1

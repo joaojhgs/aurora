@@ -185,6 +185,113 @@ describe('Service sharing and outbound routing', () => {
     })
   })
 
+  it('keeps a reviewed change ready across status-only service refreshes', async () => {
+    const onPreviewRow = vi.fn(async () => previewEvidence())
+    const onSaveRow = vi.fn()
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const initialSnapshot = snapshot()
+
+    await act(async () => {
+      root.render(
+        <ServiceRoutingView
+          snapshot={initialSnapshot}
+          onPreviewRow={onPreviewRow}
+          onSaveRow={onSaveRow}
+        />,
+      )
+    })
+
+    const table = container.querySelector('table')!
+    await act(async () => {
+      table.querySelector<HTMLElement>('[aria-label="Share Text to speech from this device"]')?.click()
+      buttonByText(table, 'Review changes').click()
+      await Promise.resolve()
+    })
+    const approval = Array.from(table.querySelectorAll<HTMLElement>('[role="checkbox"]'))
+      .find((checkbox) => checkbox.parentElement?.textContent?.includes('I approve these changes for this session'))!
+    await act(async () => approval.click())
+
+    await act(async () => {
+      root.render(
+        <ServiceRoutingView
+          snapshot={{
+            ...initialSnapshot,
+            knownPeers: [{ peerId: 'peer-provider', label: 'Renamed studio node' }],
+            rows: initialSnapshot.rows.map((candidate) => ({
+              ...candidate,
+              registryStatus: 'degraded',
+              registryVersion: '1.0.1',
+              providerOptions: candidate.providerOptions.map((option) => ({
+                ...option,
+                label: 'Renamed studio node',
+                stale: true,
+              })),
+            })),
+          }}
+          onPreviewRow={onPreviewRow}
+          onSaveRow={onSaveRow}
+        />,
+      )
+    })
+
+    const refreshedTable = container.querySelector('table')!
+    expect(refreshedTable.querySelector('[role="region"]')?.textContent).toContain('Ready to save')
+    await act(async () => buttonByText(refreshedTable, 'Save changes').click())
+    expect(onSaveRow).toHaveBeenCalledTimes(1)
+
+    await act(async () => root.unmount())
+  })
+
+  it('waits for the connected routing baseline before enabling local service edits', async () => {
+    const connectedRegistry = deferred<Awaited<ReturnType<AuroraClient['registry']['getRegistry']>>>()
+    const baseClient = snapshotClient()
+    const registryResult = await baseClient.registry.getRegistry()
+    const client = {
+      ...baseClient,
+      registry: {
+        ...baseClient.registry,
+        getRegistry: vi.fn(() => connectedRegistry.promise),
+      },
+    } as unknown as AuroraClient
+    const port: LocalFeatureSharingPort = {
+      load: vi.fn(async () => localSharingSnapshot()),
+      subscribe: (listener) => {
+        listener(localSharingSnapshot())
+        return () => undefined
+      },
+      setFeatureEnabled: vi.fn(async () => undefined),
+      replacePeerSharing: vi.fn(async () => undefined),
+      revokePeerSharing: vi.fn(async () => undefined),
+    }
+    const container = document.createElement('div')
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <LocalServiceRoutingResource
+          featureSharing={port}
+          client={client}
+          route={route()}
+        />,
+      )
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Loading service sharing through Aurora')
+    expect(container.querySelector('[aria-label="Share Tools from this device"]')).toBeNull()
+
+    await act(async () => {
+      connectedRegistry.resolve(registryResult)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
+    expect(container.textContent).toContain('Send requests to')
+    await act(async () => root.unmount())
+  })
+
   it('reuses the service table for a lightweight node and changes every available local tool', async () => {
     const setFeatureEnabled = vi.fn(async () => undefined)
     const port: LocalFeatureSharingPort = {
@@ -649,7 +756,15 @@ describe('Service sharing and outbound routing', () => {
     await act(async () => container.querySelector<HTMLElement>('[aria-label="Share Text to speech from this device"]')!.click())
     await act(async () => buttonByText(container, 'Review changes').click())
 
-    await act(async () => root.render(<ServiceRoutingView snapshot={{ ...snapshot(), evidenceSource: 'refreshed test' }} onPreviewRow={onPreviewRow} onSaveRow={onSaveRow} />))
+    await act(async () => root.render(<ServiceRoutingView snapshot={{
+      ...snapshot(row({
+        routingPolicy: {
+          ...row().routingPolicy,
+          fallback: 'error',
+        },
+      })),
+      evidenceSource: 'refreshed test',
+    }} onPreviewRow={onPreviewRow} onSaveRow={onSaveRow} />))
     await act(async () => container.querySelector<HTMLElement>('[aria-label="Share Text to speech from this device"]')!.click())
     await act(async () => buttonByText(container, 'Review changes').click())
 

@@ -35,6 +35,7 @@ const LEGACY_MANIFEST_PROTOCOL = 'legacy-unfiltered-v0'
 const ACTIVE_VERSION = 'v1'
 const ACTIVE_TIER = 'projection'
 const TOOLING_PROVIDER_CAPABILITIES = Object.freeze(['tool_discovery', 'tool_execution'] as const)
+const MAX_STALE_MANIFEST_ACK_RETRIES = 3
 
 export class WebRtcPeerHost {
   readonly lease: ProviderLeaseController
@@ -45,6 +46,8 @@ export class WebRtcPeerHost {
   private availabilityRevision = 0
   private connectionEpoch: string
   private pendingManifest: ManifestEvidence = null
+  private pendingManifestFrame: Record<string, unknown> | null = null
+  private staleManifestAckRetryCount = 0
   private lastRecipientPeerId: string | undefined
   private lastAuthenticatedPeerContext: AuthenticatedPeerContext | undefined
   private activeAuthoritySelector: PeerRelationshipSelector | null = null
@@ -76,6 +79,8 @@ export class WebRtcPeerHost {
     this.connectionEpoch = this.lease.startEpoch()
     this.availabilityRevision = 0
     this.pendingManifest = null
+    this.pendingManifestFrame = null
+    this.staleManifestAckRetryCount = 0
     this.authorityRevoked = false
     if (remotePeerId !== undefined) this.lastRecipientPeerId = remotePeerId
     if (authenticatedPeerContext !== undefined) this.lastAuthenticatedPeerContext = authenticatedPeerContext
@@ -86,20 +91,26 @@ export class WebRtcPeerHost {
 
   markManifestAcknowledged(ack: Record<string, unknown>): boolean {
     if (!this.pendingManifest) return false
-    if (ack.active_protocol !== ACTIVE_MANIFEST_PROTOCOL) return false
-    if (ack.active_version !== ACTIVE_VERSION) return false
-    if (ack.active_tier !== ACTIVE_TIER) return false
-    if (ack.projection_digest !== this.pendingManifest.projectionDigest) return false
-    if (ack.registry_revision !== this.pendingManifest.registryRevision) return false
-    if (ack.export_policy_revision !== this.pendingManifest.policyRevision) return false
-    if (ack.auth_grant_revision !== this.pendingManifest.authGrantRevision) return false
+    if (!this.manifestAckEvidenceMatches(ack)) return false
     const compatible = this.validateStructuredManifestAckServices(ack)
     if (compatible === null) return false
     if (!this.pendingManifest.requiredServices.every((service) => compatible.includes(service))) return false
     if (this.pendingManifest.requiredServices.length === 0) return false
     this.acceptingInbound = true
     this.pendingManifest = null
+    this.pendingManifestFrame = null
+    this.staleManifestAckRetryCount = 0
     void this.sender?.sendFrame(this.renewLease()).catch(() => undefined)
+    return true
+  }
+
+  /** Retransmit the pending manifest after a stale authority acknowledgement. */
+  async retryManifestAfterStaleAcknowledgement(ack: Record<string, unknown>): Promise<boolean> {
+    if (!this.pendingManifest || !this.pendingManifestFrame) return false
+    if (this.manifestAckEvidenceMatches(ack)) return false
+    if (this.staleManifestAckRetryCount >= MAX_STALE_MANIFEST_ACK_RETRIES) return false
+    this.staleManifestAckRetryCount += 1
+    await this.requireSender().sendFrame(this.pendingManifestFrame)
     return true
   }
 
@@ -178,6 +189,19 @@ export class WebRtcPeerHost {
     return compatible
   }
 
+  private manifestAckEvidenceMatches(ack: Record<string, unknown>): boolean {
+    return Boolean(
+      this.pendingManifest
+      && ack.active_protocol === ACTIVE_MANIFEST_PROTOCOL
+      && ack.active_version === ACTIVE_VERSION
+      && ack.active_tier === ACTIVE_TIER
+      && ack.projection_digest === this.pendingManifest.projectionDigest
+      && ack.registry_revision === this.pendingManifest.registryRevision
+      && ack.export_policy_revision === this.pendingManifest.policyRevision
+      && ack.auth_grant_revision === this.pendingManifest.authGrantRevision
+    )
+  }
+
   private readAckServicePartition(value: unknown): string[] | null {
     if (!Array.isArray(value)) return null
     const out = value.filter((item): item is string => typeof item === 'string' && item.length > 0)
@@ -214,6 +238,8 @@ export class WebRtcPeerHost {
       && methods.length > 0
     if (!projectionReady) {
       this.pendingManifest = null
+      this.pendingManifestFrame = null
+      this.staleManifestAckRetryCount = 0
       return {
         type: 'manifest',
         peer_id: this.options.localPeerId,
@@ -276,7 +302,8 @@ export class WebRtcPeerHost {
       authGrantRevision: authority.authGrantRevision,
       requiredServices
     }
-    return {
+    this.staleManifestAckRetryCount = 0
+    const manifestFrame: Record<string, unknown> = {
       type: 'manifest',
       peer_id: this.options.localPeerId,
       node_name: this.options.nodeName,
@@ -292,6 +319,8 @@ export class WebRtcPeerHost {
       recipient_projection_evidence: evidence,
       timestamp: new Date(nowMs).toISOString()
     }
+    this.pendingManifestFrame = manifestFrame
+    return manifestFrame
   }
 
   async handleCall(frame: CallFrame, remotePeerId: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {

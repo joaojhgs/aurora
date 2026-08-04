@@ -866,6 +866,8 @@ describe('WebRtcMeshPeerBridge', () => {
     const ack = ackFromSentManifest(session)
     session.emit({ ...ack, projection_digest: '1'.repeat(64) })
     await flush()
+    await flush()
+    expect(session.sent.filter((frame) => (frame as any).type === 'manifest')).toHaveLength(2)
     expect(session.sent.filter((frame) => (frame as any).type === 'provider_lease')).toHaveLength(0)
     session.emit({ type: 'call', id: 'forged-call', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } })
     await flush()
@@ -906,6 +908,50 @@ describe('WebRtcMeshPeerBridge', () => {
     oldHost.renewLease()
     await flush()
     expect(oldSession.sent.some((frame) => ['manifest', 'provider_lease', 'provider_unavailable'].includes((frame as any).type))).toBe(false)
+  })
+
+  it('bounds stale manifest acknowledgement retransmits without opening the provider', async () => {
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry: createToolingPeerHostRegistry({
+        getTools: async () => ({ count: 0, tools: [] }),
+        getExportCatalog: async () => { throw new Error('not implemented') },
+        prepareExecution: async () => { throw new Error('not implemented') },
+        executeTool: async () => { throw new Error('not implemented') }
+      }),
+      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      clock: () => 1000,
+      randomId: () => 'epoch-bounded'
+    })
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({
+      session,
+      remotePeerId: 'peer-a',
+      localPeerRole: 'hybrid',
+      peerHost,
+      localProtocolHello: buildProtocolHello({
+        role: 'hybrid',
+        capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1]
+      })
+    })
+
+    session.emit(buildProtocolHello({
+      role: 'hybrid',
+      capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1]
+    }))
+    await flush()
+    await flush()
+    const staleAck = { ...ackFromSentManifest(session), projection_digest: '1'.repeat(64) }
+    for (let index = 0; index < 5; index += 1) {
+      session.emit(staleAck)
+      await flush()
+      await flush()
+    }
+
+    expect(session.sent.filter((frame) => (frame as any).type === 'manifest')).toHaveLength(4)
+    expect(session.sent.filter((frame) => (frame as any).type === 'provider_lease')).toHaveLength(0)
+    bridge.close()
   })
 
   it('routes provider lifecycle frames through the bridge after ACK gating', async () => {
