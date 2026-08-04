@@ -115,6 +115,8 @@ export interface SelectedCandidatePairEvidence {
   selected: boolean
   /** Raw selected-pair path category from observed candidate types; prflx is not normalized to srflx. */
   category: IcePathCategory
+  /** Selected-pair round-trip time converted from WebRTC stats seconds to milliseconds. */
+  roundTripTimeMs?: number | undefined
   pairState?: string | undefined
   nominated?: boolean | undefined
   localCandidateType?: string | undefined

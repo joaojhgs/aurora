@@ -193,6 +193,7 @@ export const tauriRouteRegistry = {
       nativeAvailable={snapshot.nativeAvailable}
       nativePermissions={assistantNativePermissions}
       nativeCapabilities={assistantNativeCapabilities}
+      surfaceProfile={nativeContext.surfaceProfile}
       executionHost={nativeContext.thinPeer ? "connected-device" : "this-device"}
       localAssistant={tauriLocalAssistant(nativeContext, client)}
       runtimeHealth={{
@@ -295,6 +296,9 @@ export const tauriRouteRegistry = {
           nativeContext.localFeatureSharing ? (
           <LocalServiceRoutingResource
             featureSharing={nativeContext.localFeatureSharing}
+            client={client}
+            route={route}
+            thinPeer={nativeContext.thinPeer}
           />
         ) : null}
         {nativeContext.surfaceProfile.canManageLocalServiceConfiguration ||
@@ -888,6 +892,7 @@ export function AuroraTauriApp({
         sessionIsAdmin={runtime.client.auth.snapshot().isAdmin}
         runtimeMode={runtime.mode}
         nodeMode={runtime.nodeMode}
+        localNodeAvailable={runtime.localNodeProviderStatus?.available}
       >
         <TauriRouteContent
           path={currentPath}

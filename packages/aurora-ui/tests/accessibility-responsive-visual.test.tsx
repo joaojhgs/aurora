@@ -58,12 +58,12 @@ const viewports: Viewport[] = [
 ]
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
-  // Baselines regenerated after the canonical Assistant dropdown placement and
-  // the explicit closed-state attribute on the shared mobile navigation sheet.
+  // Assistant baselines include product-safe response status copy without
+  // exposing internal event identifiers in the route sheet.
   assistant: {
-    desktop: '201ab388f521',
-    tablet: 'd49e2762c424',
-    mobile: '980cb53aa67f'
+    desktop: 'a4dcc9342a3e',
+    tablet: 'd5511aed68da',
+    mobile: 'ee728056a174'
   },
   admin: {
     desktop: '6d80c45b2304',

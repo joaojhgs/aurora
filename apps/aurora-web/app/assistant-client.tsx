@@ -44,6 +44,7 @@ export function AssistantClientPage({
       cancellationRoute={activeCancellationRoute}
       executionHost="connected-device"
       localAssistant={localAssistant}
+      surfaceProfile={runtime.surface}
     />
   )
 }

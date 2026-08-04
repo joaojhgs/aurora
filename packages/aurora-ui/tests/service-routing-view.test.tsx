@@ -7,6 +7,7 @@ import {
   LocalServiceRoutingResource,
   ServiceRoutingView,
   buildLocalServiceRoutingSnapshot,
+  buildNodeServiceRoutingSnapshot,
   buildServiceRoutingSnapshot,
   commitServiceRoutingChanges,
   previewServiceRoutingChanges,
@@ -155,6 +156,35 @@ describe('Service sharing and outbound routing', () => {
     expect(JSON.stringify(local)).not.toContain('Native.Unavailable')
   })
 
+  it('combines local service sharing with connected-device routing without claiming remote services are local', async () => {
+    const connected = await buildServiceRoutingSnapshot(snapshotClient(), route())
+    const node = buildNodeServiceRoutingSnapshot(localSharingSnapshot(), connected)
+
+    expect(node.rows.map((candidate) => candidate.id)).toEqual(expect.arrayContaining([
+      'tooling',
+      'tts',
+      'stt-coordinator',
+      'stt-transcription',
+    ]))
+    expect(node.rows.find((candidate) => candidate.id === 'tooling')).toMatchObject({
+      sharingEditable: true,
+      sharingDetailsEditable: false,
+      routingEditable: true,
+      exportPolicy: { share: true },
+    })
+    expect(node.rows.find((candidate) => candidate.id === 'tts')).toMatchObject({
+      sharingEditable: false,
+      routingEditable: true,
+      exportPolicy: { share: false },
+      routingPolicy: { prefer: 'network', fallback: 'local' },
+    })
+    expect(node.rows.find((candidate) => candidate.id === 'tts')?.providerOptions).toContainEqual({
+      id: 'peer-provider',
+      label: 'Studio node',
+      stale: false,
+    })
+  })
+
   it('reuses the service table for a lightweight node and changes every available local tool', async () => {
     const setFeatureEnabled = vi.fn(async () => undefined)
     const port: LocalFeatureSharingPort = {
@@ -166,16 +196,23 @@ describe('Service sharing and outbound routing', () => {
     const container = document.createElement('div')
     const root = createRoot(container)
     await act(async () => {
-      root.render(<LocalServiceRoutingResource featureSharing={port} />)
+      root.render(
+        <LocalServiceRoutingResource
+          featureSharing={port}
+          client={snapshotClient()}
+          route={route()}
+        />,
+      )
       await Promise.resolve()
       await Promise.resolve()
     })
 
     expect(container.textContent).toContain('Service sharing')
     expect(container.textContent).toContain('Tools')
-    expect(container.textContent).not.toContain('Send requests to')
-    expect(container.querySelector('[aria-label="Mobile service policy cards"]')?.className).toContain('hidden')
-    expect(container.querySelector('table')?.className).toContain('aui-service-sharing-table')
+    expect(container.textContent).toContain('Text to speech')
+    expect(container.textContent).toContain('Send requests to')
+    expect(container.querySelector('[aria-label="Mobile service policy cards"]')).not.toBeNull()
+    expect(container.querySelector('table')?.className).not.toContain('aui-service-sharing-table')
 
     await act(async () => {
       container.querySelector<HTMLElement>('[aria-label="Share Tools from this device"]')?.click()
@@ -190,6 +227,119 @@ describe('Service sharing and outbound routing', () => {
       await Promise.resolve()
     })
 
+    expect(setFeatureEnabled.mock.calls).toEqual([
+      ['Native.GetDeviceStatus', false],
+      ['Native.StartVoice', false],
+    ])
+    await act(async () => root.unmount())
+  })
+
+  it('reviews and saves local sharing with connected routing as one row update', async () => {
+    const setFeatureEnabled = vi.fn(async () => undefined)
+    const previewDiff = vi.fn(async ({ changes }: { changes: Array<{ key_path: string; value: unknown }> }) => ({
+      ok: true as const,
+      data: {
+        valid: true,
+        diffs: changes.map((change) => ({
+          key_path: change.key_path,
+          old_value: false,
+          new_value: change.value,
+          changed: true,
+          source_layer: 'user',
+          secret: false,
+          reload_required: false,
+          restart_required: false,
+          affected_services: ['Tooling'],
+        })),
+        errors: [],
+        secrets_redacted: true,
+        base_revision: 12,
+        preview_token: 'connected-preview-12',
+        changed_paths: changes.map((change) => change.key_path),
+      },
+    }))
+    const commitChangeSet = vi.fn(async () => ({
+      ok: true as const,
+      data: {
+        success: true,
+        revision: 13,
+        changed_paths: ['services.tooling.mesh_routing.require_explicit_selector'],
+        reload_required: false,
+        restart_required: false,
+        error: null,
+        error_code: null,
+        secrets_redacted: true,
+      },
+    }))
+    const baseClient = snapshotClient()
+    const client = {
+      ...baseClient,
+      config: {
+        ...baseClient.config,
+        previewDiff,
+        commitChangeSet,
+      },
+    } as unknown as AuroraClient
+    const port: LocalFeatureSharingPort = {
+      load: vi.fn(async () => localSharingSnapshot()),
+      setFeatureEnabled,
+      replacePeerSharing: vi.fn(async () => undefined),
+      revokePeerSharing: vi.fn(async () => undefined),
+    }
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(
+        <LocalServiceRoutingResource
+          featureSharing={port}
+          client={client}
+          route={route()}
+        />,
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const toolsCard = Array.from(container.querySelectorAll<HTMLElement>('article'))
+      .find((candidate) => candidate.querySelector('h3')?.textContent === 'Tools')!
+    await act(async () => {
+      toolsCard.querySelector<HTMLElement>('[aria-label="Share Tools from this device on mobile"]')?.click()
+      buttonByText(toolsCard, 'Edit sharing').click()
+    })
+    expect(toolsCard.querySelector<HTMLInputElement>('input[type="number"]')?.disabled).toBe(true)
+    const routingSwitch = Array.from(toolsCard.querySelectorAll<HTMLElement>('[role="switch"]'))
+      .find((candidate) => candidate.parentElement?.textContent?.includes('Require device selection'))!
+    await act(async () => routingSwitch.click())
+    await act(async () => buttonByText(toolsCard, 'Review changes').click())
+    await act(async () => Promise.resolve())
+
+    expect(toolsCard.textContent).toContain('Review 2 changes')
+    expect(toolsCard.textContent).not.toContain('separately')
+    const approval = Array.from(toolsCard.querySelectorAll<HTMLElement>('[role="checkbox"]'))
+      .find((checkbox) => checkbox.parentElement?.textContent?.includes('I approve these changes for this session'))!
+    await act(async () => approval.click())
+    await act(async () => {
+      buttonByText(toolsCard, 'Save changes').click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(previewDiff).toHaveBeenCalledWith({
+      changes: [{
+        key_path: 'services.tooling.mesh_routing.require_explicit_selector',
+        value: true,
+      }],
+    })
+    expect(commitChangeSet).toHaveBeenCalledWith(expect.objectContaining({
+      request: {
+        changes: [{
+          key_path: 'services.tooling.mesh_routing.require_explicit_selector',
+          value: true,
+        }],
+        base_revision: 12,
+        preview_token: 'connected-preview-12',
+      },
+    }))
     expect(setFeatureEnabled.mock.calls).toEqual([
       ['Native.GetDeviceStatus', false],
       ['Native.StartVoice', false],

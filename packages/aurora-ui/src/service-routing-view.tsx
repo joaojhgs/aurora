@@ -120,6 +120,9 @@ export interface ServiceRoutingRow {
   providerOptions: ServiceRoutingOption[]
   remoteFeatureOptions: ServiceRoutingOption[]
   remoteCapabilityTagOptions: ServiceRoutingOption[]
+  sharingEditable?: boolean
+  sharingDetailsEditable?: boolean
+  routingEditable?: boolean
 }
 
 export interface ServiceRoutingKnownPeer {
@@ -151,6 +154,9 @@ export interface ServiceRoutingResourceProps {
 
 export interface LocalServiceRoutingResourceProps {
   featureSharing: LocalFeatureSharingPort
+  client?: AuroraClient
+  route?: RouteAvailability
+  thinPeer?: BrowserWebRtcPeerController
 }
 
 export interface ServiceRoutingViewProps {
@@ -172,6 +178,7 @@ export interface ServiceRoutingPreviewEvidence {
   errors: string[]
   baseRevision: number | null
   previewToken: string | null
+  localPreviewToken?: string | null
   changedPaths: string[]
   secretsRedacted: boolean
 }
@@ -292,21 +299,68 @@ export function ServiceRoutingResource({
 
 export function LocalServiceRoutingResource({
   featureSharing,
+  client,
+  route,
+  thinPeer,
 }: LocalServiceRoutingResourceProps) {
   const [sharing, setSharing] = useState<LocalFeatureSharingSnapshot | null>(null)
+  const [connectedSnapshot, setConnectedSnapshot] = useState<ServiceRoutingSnapshot | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [pendingRowId, setPendingRowId] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
+  const routeKey = route
+    ? [route.item.id, route.state, route.disabled ? 'disabled' : 'enabled'].join('|')
+    : null
+  const stableRoute = useMemo(() => route, [routeKey])
 
   const load = useCallback(async () => {
+    let localFailed = false
     try {
-      const next = await featureSharing.load()
-      setSharing(next)
-      setLoadError(null)
+      const [localResult, connectedResult] = await Promise.allSettled([
+        featureSharing.load(),
+        client && stableRoute
+          ? buildServiceRoutingSnapshot(client, stableRoute)
+          : Promise.resolve(null),
+      ])
+      if (localResult.status === 'fulfilled') {
+        setSharing(localResult.value)
+      } else {
+        localFailed = true
+      }
+      if (connectedResult.status === 'fulfilled') {
+        const nextConnected = connectedResult.value
+        setConnectedSnapshot((current) => nextConnected
+          ? reconcileServiceRoutingWithThinPeer(
+              nextConnected,
+              thinPeer?.snapshot(),
+              current,
+            )
+          : null)
+      }
+      if (localFailed) {
+        setLoadError('Service sharing is unavailable right now. Try again.')
+      } else {
+        setLoadError(null)
+      }
     } catch {
       setLoadError('Service sharing is unavailable right now. Try again.')
     }
-  }, [featureSharing])
+  }, [client, featureSharing, stableRoute, thinPeer])
+
+  useEffect(() => {
+    if (!thinPeer) return
+    return thinPeer.subscribe((nextThinSnapshot) => {
+      setConnectedSnapshot((current) =>
+        current
+          ? reconcileServiceRoutingWithThinPeer(
+              current,
+              nextThinSnapshot,
+              current,
+            )
+          : current,
+      )
+    })
+  }, [thinPeer])
 
   useEffect(() => {
     void load()
@@ -317,17 +371,19 @@ export function LocalServiceRoutingResource({
   }, [featureSharing, load])
 
   const snapshot = useMemo(
-    () => buildLocalServiceRoutingSnapshot(sharing, loadError),
-    [loadError, sharing],
+    () => buildNodeServiceRoutingSnapshot(sharing, connectedSnapshot, loadError),
+    [connectedSnapshot, loadError, sharing],
   )
 
   const previewRow = useCallback(async (
     row: ServiceRoutingRow,
     changes: ServiceRoutingChange[],
   ): Promise<ServiceRoutingPreviewEvidence> => {
-    const unsupported = changes.filter((change) => change.keyPath !== `${row.sharingPath}.share`)
-    const shareChange = changes.find((change) => change.keyPath === `${row.sharingPath}.share`)
-    return {
+    const localChanges = changes.filter((change) => change.keyPath.startsWith('local.'))
+    const connectedChanges = changes.filter((change) => change.keyPath.startsWith('services.'))
+    const unsupported = localChanges.filter((change) => change.keyPath !== `${row.sharingPath}.share`)
+    const shareChange = localChanges.find((change) => change.keyPath === `${row.sharingPath}.share`)
+    const localPreview: ServiceRoutingPreviewEvidence = {
       valid: unsupported.length === 0 && Boolean(shareChange),
       diffs: shareChange ? [{
         key_path: shareChange.keyPath,
@@ -345,10 +401,27 @@ export function LocalServiceRoutingResource({
         : [],
       baseRevision: sharing ? localSharingRevision(sharing) : null,
       previewToken: sharing ? localSharingPreviewToken(sharing) : null,
+      localPreviewToken: sharing ? localSharingPreviewToken(sharing) : null,
       changedPaths: shareChange ? [shareChange.keyPath] : [],
       secretsRedacted: true,
     }
-  }, [sharing])
+    if (connectedChanges.length === 0) return localPreview
+    if (!client) throw new Error('Service sharing is unavailable right now. Try again.')
+    const connectedPreview = await previewServiceRoutingChanges(client, connectedChanges)
+    if (localChanges.length === 0) return connectedPreview
+    return {
+      ...connectedPreview,
+      valid: connectedPreview.valid && localPreview.valid,
+      diffs: [...localPreview.diffs, ...connectedPreview.diffs],
+      errors: [...localPreview.errors, ...connectedPreview.errors],
+      localPreviewToken: localPreview.localPreviewToken ?? null,
+      changedPaths: [...new Set([
+        ...localPreview.changedPaths,
+        ...connectedPreview.changedPaths,
+      ])],
+      secretsRedacted: localPreview.secretsRedacted && connectedPreview.secretsRedacted,
+    }
+  }, [client, sharing])
 
   const saveRow = useCallback(async (
     row: ServiceRoutingRow,
@@ -357,21 +430,46 @@ export function LocalServiceRoutingResource({
     confirmation: ServiceRoutingSaveConfirmation,
   ) => {
     if (!confirmation.reauthConfirmed || !preview.valid || !preview.previewToken) return
+    const localChanges = changes.filter((change) => change.keyPath.startsWith('local.'))
+    const connectedChanges = changes.filter((change) => change.keyPath.startsWith('services.'))
     setPendingRowId(row.id)
     setMutationError(null)
     try {
-      const current = await featureSharing.load()
-      if (localSharingPreviewToken(current) !== preview.previewToken) {
-        throw new Error('Sharing choices changed. Refresh and review before saving again.')
+      let localUpdate: {
+        current: LocalFeatureSharingSnapshot
+        share: boolean
+        featureIds: Set<string>
+      } | null = null
+      if (localChanges.length > 0) {
+        const current = await featureSharing.load()
+        const expectedLocalToken = preview.localPreviewToken
+          ?? (connectedChanges.length === 0 ? preview.previewToken : null)
+        if (!expectedLocalToken || localSharingPreviewToken(current) !== expectedLocalToken) {
+          throw new Error('Sharing choices changed. Refresh and review before saving again.')
+        }
+        const share = localChanges.find((change) => change.keyPath === `${row.sharingPath}.share`)?.value
+        if (typeof share !== 'boolean') throw new Error('This sharing choice is unavailable.')
+        const serviceScope = localShareableServiceScopes(current)
+          .find((candidate) => candidate.id === row.id)
+        if (!serviceScope) throw new Error('This service is no longer available on this device.')
+        localUpdate = {
+          current,
+          share,
+          featureIds: new Set(serviceScope.featureIds),
+        }
       }
-      const share = changes.find((change) => change.keyPath === `${row.sharingPath}.share`)?.value
-      if (typeof share !== 'boolean') throw new Error('This sharing choice is unavailable.')
-      const serviceScope = localShareableServiceScopes(current)
-        .find((candidate) => candidate.id === row.id)
-      if (!serviceScope) throw new Error('This service is no longer available on this device.')
-      const serviceFeatures = new Set(serviceScope.featureIds)
-      for (const feature of current.features.filter((candidate) => candidate.available && serviceFeatures.has(candidate.id))) {
-        if (feature.enabled !== share) await featureSharing.setFeatureEnabled(feature.id, share)
+      if (connectedChanges.length > 0) {
+        if (!client) throw new Error('Service sharing is unavailable right now. Try again.')
+        await commitServiceRoutingChanges(client, row, connectedChanges, preview, confirmation)
+      }
+      if (localUpdate) {
+        for (const feature of localUpdate.current.features.filter(
+          (candidate) => candidate.available && localUpdate?.featureIds.has(candidate.id),
+        )) {
+          if (feature.enabled !== localUpdate.share) {
+            await featureSharing.setFeatureEnabled(feature.id, localUpdate.share)
+          }
+        }
       }
       await load()
     } catch (error) {
@@ -379,7 +477,7 @@ export function LocalServiceRoutingResource({
     } finally {
       setPendingRowId(null)
     }
-  }, [featureSharing, load])
+  }, [client, featureSharing, load])
 
   return (
     <ServiceRoutingView
@@ -391,7 +489,7 @@ export function LocalServiceRoutingResource({
       onSaveRow={(row, changes, preview, confirmation) => {
         void saveRow(row, changes, preview, confirmation)
       }}
-      sharingOnly
+      sharingOnly={!client || !stableRoute}
     />
   )
 }
@@ -447,6 +545,9 @@ export function buildLocalServiceRoutingSnapshot(
       providerOptions: [],
       remoteFeatureOptions: [],
       remoteCapabilityTagOptions: [],
+      sharingEditable: true,
+      sharingDetailsEditable: false,
+      routingEditable: false,
     }
   })
   return {
@@ -461,6 +562,79 @@ export function buildLocalServiceRoutingSnapshot(
     warnings: [],
     error: null,
     evidenceSource: 'This device',
+  }
+}
+
+export function buildNodeServiceRoutingSnapshot(
+  sharing: LocalFeatureSharingSnapshot | null,
+  connected: ServiceRoutingSnapshot | null,
+  error: string | null = null,
+): ServiceRoutingSnapshot {
+  const local = buildLocalServiceRoutingSnapshot(sharing, error)
+  if (!connected || connected.loadState === 'loading') return local
+
+  const connectedRows = new Map(connected.rows.map((row) => [row.id, row]))
+  const localRowIds = new Set(local.rows.map((row) => row.id))
+  const rows: ServiceRoutingRow[] = local.rows.map((localRow) => {
+    const connectedRow = connectedRows.get(localRow.id)
+    return {
+      ...localRow,
+      registryStatus: localRow.registryStatus,
+      registryVersion: connectedRow?.registryVersion ?? localRow.registryVersion,
+      registered: localRow.registered,
+      routingPath: connectedRow?.routingPath ?? localRow.routingPath,
+      routingPolicy: connectedRow?.routingPolicy ?? localRow.routingPolicy,
+      providerOptions: connectedRow?.providerOptions ?? localRow.providerOptions,
+      remoteFeatureOptions: connectedRow?.remoteFeatureOptions ?? localRow.remoteFeatureOptions,
+      remoteCapabilityTagOptions: connectedRow?.remoteCapabilityTagOptions ?? localRow.remoteCapabilityTagOptions,
+      sharingEditable: true,
+      sharingDetailsEditable: false,
+      routingEditable: Boolean(connectedRow?.routingEditable ?? connectedRow),
+    }
+  })
+
+  for (const row of connected.rows) {
+    if (localRowIds.has(row.id)) continue
+    rows.push({
+      ...row,
+      exportPolicy: {
+        share: false,
+        maxConcurrent: 0,
+        unsharedFeatureIds: [],
+        unsharedMethodIds: [],
+      },
+      exportFeatures: [],
+      ungroupedMethods: [],
+      staleMethodIds: [],
+      sharingEditable: false,
+      sharingDetailsEditable: false,
+      routingEditable: row.routingEditable ?? connected.editable,
+    })
+  }
+
+  const knownPeerMap = new Map<string, ServiceRoutingKnownPeer>()
+  for (const peer of local.knownPeers) knownPeerMap.set(peer.peerId, peer)
+  for (const peer of connected.knownPeers) knownPeerMap.set(peer.peerId, peer)
+  const warnings = [
+    ...local.warnings,
+    ...connected.warnings,
+  ]
+  return {
+    loadState: local.loadState === 'unavailable'
+      ? local.loadState
+      : connected.loadState === 'unavailable'
+        ? 'degraded'
+        : connected.loadState === 'degraded'
+          ? 'degraded'
+          : local.loadState,
+    rows: orderServiceRows(rows),
+    knownPeers: [...knownPeerMap.values()]
+      .sort((a, b) => a.label.localeCompare(b.label) || a.peerId.localeCompare(b.peerId)),
+    editable: local.editable || connected.editable,
+    registryMode: connected.registryMode ?? local.registryMode,
+    warnings: [...new Set(warnings)],
+    error: local.error,
+    evidenceSource: connected.evidenceSource,
   }
 }
 
@@ -665,6 +839,8 @@ function buildRow(
     providerOptions: remoteOptions.providers,
     remoteFeatureOptions: remoteOptions.features,
     remoteCapabilityTagOptions: remoteOptions.tags,
+    sharingEditable: true,
+    routingEditable: true,
   }
 }
 
@@ -785,21 +961,27 @@ export function serviceRoutingDraftFromRow(row: ServiceRoutingRow): ServiceRouti
 export function serviceRoutingDraftChanges(row: ServiceRoutingRow, draft: ServiceRoutingRowDraft): ServiceRoutingChange[] {
   const original = serviceRoutingDraftFromRow(row)
   const changes: ServiceRoutingChange[] = []
-  pushChange(changes, draft.share !== original.share, `${row.sharingPath}.share`, draft.share)
-  if (draft.maxConcurrent !== original.maxConcurrent && validMaxConcurrency(draft.maxConcurrent)) {
-    changes.push({ keyPath: `${row.sharingPath}.max_concurrent`, value: Number(draft.maxConcurrent) })
+  if (row.sharingEditable !== false) {
+    pushChange(changes, draft.share !== original.share, `${row.sharingPath}.share`, draft.share)
+    if (row.sharingDetailsEditable !== false) {
+      if (draft.maxConcurrent !== original.maxConcurrent && validMaxConcurrency(draft.maxConcurrent)) {
+        changes.push({ keyPath: `${row.sharingPath}.max_concurrent`, value: Number(draft.maxConcurrent) })
+      }
+      pushListChange(changes, draft.unsharedFeatureIds, original.unsharedFeatureIds, `${row.sharingPath}.unshared_feature_ids`)
+      pushListChange(changes, draft.unsharedMethodIds, original.unsharedMethodIds, `${row.sharingPath}.unshared_method_ids`)
+    }
   }
-  pushListChange(changes, draft.unsharedFeatureIds, original.unsharedFeatureIds, `${row.sharingPath}.unshared_feature_ids`)
-  pushListChange(changes, draft.unsharedMethodIds, original.unsharedMethodIds, `${row.sharingPath}.unshared_method_ids`)
-  pushChange(changes, draft.prefer !== original.prefer, `${row.routingPath}.prefer`, draft.prefer)
-  pushChange(changes, draft.fallback !== original.fallback, `${row.routingPath}.fallback`, draft.fallback)
-  const providerValue = draft.providerMode === 'any' ? null : draft.providerMode === 'none' ? [] : uniqueStrings(draft.selectedProviderPeerIds)
-  if (!sameNullableList(providerValue, row.routingPolicy.allowedProviderPeerIds)) changes.push({ keyPath: `${row.routingPath}.allowed_provider_peer_ids`, value: providerValue })
-  const minVersion = draft.minVersion.trim() || null
-  pushChange(changes, minVersion !== row.routingPolicy.minVersion, `${row.routingPath}.min_version`, minVersion)
-  pushListChange(changes, draft.requiredProviderFeatureIds, original.requiredProviderFeatureIds, `${row.routingPath}.required_provider_feature_ids`)
-  pushListChange(changes, draft.requiredProviderCapabilityTags, original.requiredProviderCapabilityTags, `${row.routingPath}.required_provider_capability_tags`)
-  pushChange(changes, draft.requireExplicitSelector !== original.requireExplicitSelector, `${row.routingPath}.require_explicit_selector`, draft.requireExplicitSelector)
+  if (row.routingEditable !== false) {
+    pushChange(changes, draft.prefer !== original.prefer, `${row.routingPath}.prefer`, draft.prefer)
+    pushChange(changes, draft.fallback !== original.fallback, `${row.routingPath}.fallback`, draft.fallback)
+    const providerValue = draft.providerMode === 'any' ? null : draft.providerMode === 'none' ? [] : uniqueStrings(draft.selectedProviderPeerIds)
+    if (!sameNullableList(providerValue, row.routingPolicy.allowedProviderPeerIds)) changes.push({ keyPath: `${row.routingPath}.allowed_provider_peer_ids`, value: providerValue })
+    const minVersion = draft.minVersion.trim() || null
+    pushChange(changes, minVersion !== row.routingPolicy.minVersion, `${row.routingPath}.min_version`, minVersion)
+    pushListChange(changes, draft.requiredProviderFeatureIds, original.requiredProviderFeatureIds, `${row.routingPath}.required_provider_feature_ids`)
+    pushListChange(changes, draft.requiredProviderCapabilityTags, original.requiredProviderCapabilityTags, `${row.routingPath}.required_provider_capability_tags`)
+    pushChange(changes, draft.requireExplicitSelector !== original.requireExplicitSelector, `${row.routingPath}.require_explicit_selector`, draft.requireExplicitSelector)
+  }
   return changes
 }
 
@@ -901,37 +1083,40 @@ export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationErro
 }
 
 function ServiceRoutingTableRow({ row, draft, knownPeers: _knownPeers, dirty, pending, disabled, expanded, review, sharingOnly, onToggleExpanded, onDraftChange, onReview, onCancelReview, onReauthChange, onConfirm }: { row: ServiceRoutingRow; draft: ServiceRoutingRowDraft; knownPeers: ServiceRoutingKnownPeer[]; dirty: boolean; pending: boolean; disabled: boolean; expanded: boolean; review: ServiceRoutingReviewState | undefined; sharingOnly: boolean; onToggleExpanded: () => void; onDraftChange: (patch: Partial<ServiceRoutingRowDraft>) => void; onReview: () => void; onCancelReview: () => void; onReauthChange: (checked: boolean) => void; onConfirm: () => void }) {
-  const selectedModeInvalid = draft.providerMode === 'selected' && draft.selectedProviderPeerIds.length === 0
-  const maxInvalid = !validMaxConcurrency(draft.maxConcurrent)
+  const sharingDisabled = disabled || row.sharingEditable === false
+  const sharingDetailsDisabled = sharingDisabled || row.sharingDetailsEditable === false
+  const routingDisabled = disabled || row.routingEditable === false
+  const selectedModeInvalid = row.routingEditable !== false && draft.providerMode === 'selected' && draft.selectedProviderPeerIds.length === 0
+  const maxInvalid = row.sharingEditable !== false && row.sharingDetailsEditable !== false && !validMaxConcurrency(draft.maxConcurrent)
   const detailsId = `desktop-${row.id}-details`
   return (
     <>
       <TableRow data-state={dirty ? 'selected' : undefined}>
         <TableCell>{sharingOnly ? <span className="text-sm font-medium">{row.label}</span> : <button type="button" className="flex items-start gap-1.5 text-left" onClick={onToggleExpanded} aria-expanded={expanded} aria-controls={detailsId} aria-label={`Toggle service sharing and outbound routing for ${row.label}`}><ChevronDown className={`mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform ${expanded ? '' : '-rotate-90'}`} /><span className="flex min-w-36 flex-col"><span className="text-sm font-medium">{row.label}</span><code className="truncate font-mono text-[10.5px] text-muted-foreground">{row.basePath.replace(/^services\./, '')}{row.registryVersion ? ` · v${row.registryVersion}` : ''}</code></span></button>}</TableCell>
         <TableCell><ServiceStatusBadge status={row.registryStatus} registered={row.registered} /></TableCell>
-        <TableCell><Switch checked={draft.share} disabled={disabled} aria-label={`Share ${row.label} from this device`} onCheckedChange={(checked) => onDraftChange({ share: Boolean(checked) })} /></TableCell>
-        {sharingOnly ? null : <><TableCell><PolicySelect value={draft.prefer} options={SERVICE_ROUTING_PREFER_OPTIONS} disabled={disabled} ariaLabel={`Where Aurora sends ${row.label} requests`} onChange={(prefer) => onDraftChange({ prefer })} /></TableCell><TableCell><PolicySelect value={draft.fallback} options={SERVICE_ROUTING_FALLBACK_OPTIONS} disabled={disabled} ariaLabel={`What Aurora does when ${row.label} is unavailable`} onChange={(fallback) => onDraftChange({ fallback })} /></TableCell></>}
+        <TableCell><Switch checked={draft.share} disabled={sharingDisabled} aria-label={`Share ${row.label} from this device`} onCheckedChange={(checked) => onDraftChange({ share: Boolean(checked) })} /></TableCell>
+        {sharingOnly ? null : <><TableCell><PolicySelect value={draft.prefer} options={SERVICE_ROUTING_PREFER_OPTIONS} disabled={routingDisabled} ariaLabel={`Where Aurora sends ${row.label} requests`} onChange={(prefer) => onDraftChange({ prefer })} /></TableCell><TableCell><PolicySelect value={draft.fallback} options={SERVICE_ROUTING_FALLBACK_OPTIONS} disabled={routingDisabled} ariaLabel={`What Aurora does when ${row.label} is unavailable`} onChange={(fallback) => onDraftChange({ fallback })} /></TableCell></>}
         <TableCell className="text-right"><Button type="button" size="sm" disabled={disabled || !dirty || selectedModeInvalid || maxInvalid} onClick={onReview}>{pending ? 'Saving…' : 'Review changes'}</Button></TableCell>
       </TableRow>
       {review ? <TableRow><TableCell colSpan={sharingOnly ? 4 : 6}><ChangeReview review={review} pending={pending} onCancel={onCancelReview} onReauthChange={onReauthChange} onConfirm={onConfirm} /></TableCell></TableRow> : null}
       {!sharingOnly && expanded ? <TableRow id={detailsId} className="hover:bg-transparent"><TableCell colSpan={6} className="bg-muted/30" style={{ whiteSpace: 'normal' }}><div className="grid gap-5 py-2 lg:grid-cols-2">
         <section aria-labelledby={`${row.id}-sharing-heading`} className="flex flex-col gap-3 rounded-lg border border-border bg-background/60 p-3">
           <div><h3 id={`${row.id}-sharing-heading`} className="text-sm font-semibold">Shared from this device</h3><p className="text-[11px] text-muted-foreground">Turn off features you do not want other approved devices to use.</p></div>
-          <Label className="flex items-center justify-between gap-3 text-[12.5px] font-normal normal-case tracking-normal"><span>Share service</span><Switch checked={draft.share} disabled={disabled} aria-label={`Share ${row.label} service`} onCheckedChange={(checked) => onDraftChange({ share: Boolean(checked) })} /></Label>
-          <Label className="flex items-center justify-between gap-3 text-[12.5px] font-normal normal-case tracking-normal"><span>Maximum concurrent remote calls</span><Input className="h-8 w-20 text-right" type="number" min={0} step={1} value={draft.maxConcurrent} disabled={disabled} aria-invalid={maxInvalid} aria-label={`Maximum concurrent remote calls for ${row.label}`} onChange={(event) => onDraftChange({ maxConcurrent: event.currentTarget.value })} /></Label>{maxInvalid ? <p className="text-xs text-destructive">Maximum concurrency must be a nonnegative integer.</p> : null}
-          <div className="flex flex-col gap-2">{row.exportFeatures.map((feature) => <FeatureExportControl key={feature.featureId} feature={feature} draft={draft} disabled={disabled} onDraftChange={onDraftChange} />)}{row.exportFeatures.length === 0 ? <p className="text-xs text-muted-foreground">No shareable features are available for this service.</p> : null}</div>
-          {row.ungroupedMethods.length > 0 ? <ExactMethodControls title="Other callable methods" methods={row.ungroupedMethods} draft={draft} disabled={disabled} onDraftChange={onDraftChange} /> : null}
-          {row.staleMethodIds.filter((topic) => draft.unsharedMethodIds.includes(topic)).map((topic) => <div key={topic} className="flex items-center justify-between gap-2 rounded border border-amber-500/40 px-2 py-1 text-xs"><span><code>{topic}</code> <Badge variant="outline">stale configured method</Badge></span><Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => onDraftChange({ unsharedMethodIds: draft.unsharedMethodIds.filter((id) => id !== topic) })}>Remove exclusion</Button></div>)}
+          <Label className="flex items-center justify-between gap-3 text-[12.5px] font-normal normal-case tracking-normal"><span>Share service</span><Switch checked={draft.share} disabled={sharingDisabled} aria-label={`Share ${row.label} service`} onCheckedChange={(checked) => onDraftChange({ share: Boolean(checked) })} /></Label>
+          <Label className="flex items-center justify-between gap-3 text-[12.5px] font-normal normal-case tracking-normal"><span>Maximum concurrent remote calls</span><Input className="h-8 w-20 text-right" type="number" min={0} step={1} value={draft.maxConcurrent} disabled={sharingDetailsDisabled} aria-invalid={maxInvalid} aria-label={`Maximum concurrent remote calls for ${row.label}`} onChange={(event) => onDraftChange({ maxConcurrent: event.currentTarget.value })} /></Label>{maxInvalid ? <p className="text-xs text-destructive">Maximum concurrency must be a nonnegative integer.</p> : null}
+          <div className="flex flex-col gap-2">{row.exportFeatures.map((feature) => <FeatureExportControl key={feature.featureId} feature={feature} draft={draft} disabled={sharingDetailsDisabled} onDraftChange={onDraftChange} />)}{row.exportFeatures.length === 0 ? <p className="text-xs text-muted-foreground">No shareable features are available for this service.</p> : null}</div>
+          {row.ungroupedMethods.length > 0 ? <ExactMethodControls title="Other callable methods" methods={row.ungroupedMethods} draft={draft} disabled={sharingDetailsDisabled} onDraftChange={onDraftChange} /> : null}
+          {row.staleMethodIds.filter((topic) => draft.unsharedMethodIds.includes(topic)).map((topic) => <div key={topic} className="flex items-center justify-between gap-2 rounded border border-amber-500/40 px-2 py-1 text-xs"><span><code>{topic}</code> <Badge variant="outline">stale configured method</Badge></span><Button type="button" size="sm" variant="outline" disabled={sharingDetailsDisabled} onClick={() => onDraftChange({ unsharedMethodIds: draft.unsharedMethodIds.filter((id) => id !== topic) })}>Remove exclusion</Button></div>)}
         </section>
         <section aria-labelledby={`${row.id}-routing-heading`} className="flex flex-col gap-3 rounded-lg border border-border bg-background/60 p-3">
           <div><h3 id={`${row.id}-routing-heading`} className="text-sm font-semibold">Send requests to devices</h3><p className="text-[11px] text-muted-foreground">Choose which approved devices Aurora may use for this service.</p></div>
-          <div className="grid gap-2 sm:grid-cols-2"><PolicySelect value={draft.prefer} options={SERVICE_ROUTING_PREFER_OPTIONS} disabled={disabled} ariaLabel={`Where Aurora sends ${row.label} requests`} onChange={(prefer) => onDraftChange({ prefer })} /><PolicySelect value={draft.fallback} options={SERVICE_ROUTING_FALLBACK_OPTIONS} disabled={disabled} ariaLabel={`What Aurora does when ${row.label} is unavailable`} onChange={(fallback) => onDraftChange({ fallback })} /></div>
-          <fieldset className="flex flex-col gap-2"><legend className="text-[12.5px] font-medium">Allowed devices</legend>{(['any', 'selected', 'none'] as const).map((mode) => <Label key={mode} className="flex items-center gap-2 text-[12.5px] font-normal normal-case tracking-normal"><input type="radio" name={`${row.id}-provider-mode`} value={mode} checked={draft.providerMode === mode} disabled={disabled} onChange={() => onDraftChange({ providerMode: mode })} /><span>{mode === 'any' ? 'Any approved device' : mode === 'selected' ? 'Selected devices' : 'This device only'}</span></Label>)}</fieldset>
-          {draft.providerMode === 'selected' ? <div className="flex flex-col gap-1.5 rounded-lg border border-border p-2">{row.providerOptions.map((peer) => <Label key={peer.id} className="flex items-center gap-2 text-[12.5px] font-normal normal-case tracking-normal"><Checkbox checked={draft.selectedProviderPeerIds.includes(peer.id)} disabled={disabled} onCheckedChange={() => onDraftChange({ selectedProviderPeerIds: toggleListValue(draft.selectedProviderPeerIds, peer.id) })} /><span className="min-w-0"><span className="block truncate">{peer.label}</span>{peer.label !== peer.id ? <code className="block truncate font-mono text-[10px] text-muted-foreground">{peer.id}</code> : null}</span>{peer.stale ? <Badge variant="outline">Needs refresh</Badge> : null}</Label>)}{row.providerOptions.length === 0 ? <p className="text-xs text-muted-foreground">No approved devices are available for this service.</p> : null}{selectedModeInvalid ? <p className="text-xs text-destructive">Select at least one device, or choose Any approved device or This device only.</p> : null}</div> : null}
-          <Label className="flex flex-col gap-1 text-[12.5px] font-normal normal-case tracking-normal"><span>Minimum device version</span><Input value={draft.minVersion} disabled={disabled} placeholder="Any compatible version" aria-label={`Minimum device version for ${row.label}`} onChange={(event) => onDraftChange({ minVersion: event.currentTarget.value })} /></Label>
-          <OptionChecklist title="Required features" description="Every selected feature must be available on the chosen device." options={row.remoteFeatureOptions} selected={draft.requiredProviderFeatureIds} disabled={disabled} onToggle={(id) => onDraftChange({ requiredProviderFeatureIds: toggleListValue(draft.requiredProviderFeatureIds, id) })} />
-          <OptionChecklist title="Required device capabilities" description="All selected requirements must be available before Aurora sends work there." options={row.remoteCapabilityTagOptions} selected={draft.requiredProviderCapabilityTags} disabled={disabled} onToggle={(id) => onDraftChange({ requiredProviderCapabilityTags: toggleListValue(draft.requiredProviderCapabilityTags, id) })} />
-          <Label className="flex items-center justify-between gap-3 text-[12.5px] font-normal normal-case tracking-normal"><span><span className="block">Require explicit selector</span><span className="block text-[11px] text-muted-foreground">Callers must name a peer before routing remotely.</span></span><Switch checked={draft.requireExplicitSelector} disabled={disabled} aria-label={`Require explicit selector for ${row.label}`} onCheckedChange={(checked) => onDraftChange({ requireExplicitSelector: Boolean(checked) })} /></Label>
+          <div className="grid gap-2 sm:grid-cols-2"><PolicySelect value={draft.prefer} options={SERVICE_ROUTING_PREFER_OPTIONS} disabled={routingDisabled} ariaLabel={`Where Aurora sends ${row.label} requests`} onChange={(prefer) => onDraftChange({ prefer })} /><PolicySelect value={draft.fallback} options={SERVICE_ROUTING_FALLBACK_OPTIONS} disabled={routingDisabled} ariaLabel={`What Aurora does when ${row.label} is unavailable`} onChange={(fallback) => onDraftChange({ fallback })} /></div>
+          <fieldset className="flex flex-col gap-2"><legend className="text-[12.5px] font-medium">Allowed devices</legend>{(['any', 'selected', 'none'] as const).map((mode) => <Label key={mode} className="flex items-center gap-2 text-[12.5px] font-normal normal-case tracking-normal"><input type="radio" name={`${row.id}-provider-mode`} value={mode} checked={draft.providerMode === mode} disabled={routingDisabled} onChange={() => onDraftChange({ providerMode: mode })} /><span>{mode === 'any' ? 'Any approved device' : mode === 'selected' ? 'Selected devices' : 'This device only'}</span></Label>)}</fieldset>
+          {draft.providerMode === 'selected' ? <div className="flex flex-col gap-1.5 rounded-lg border border-border p-2">{row.providerOptions.map((peer) => <Label key={peer.id} className="flex items-center gap-2 text-[12.5px] font-normal normal-case tracking-normal"><Checkbox checked={draft.selectedProviderPeerIds.includes(peer.id)} disabled={routingDisabled} onCheckedChange={() => onDraftChange({ selectedProviderPeerIds: toggleListValue(draft.selectedProviderPeerIds, peer.id) })} /><span className="min-w-0"><span className="block truncate">{peer.label}</span>{peer.label !== peer.id ? <code className="block truncate font-mono text-[10px] text-muted-foreground">{peer.id}</code> : null}</span>{peer.stale ? <Badge variant="outline">Needs refresh</Badge> : null}</Label>)}{row.providerOptions.length === 0 ? <p className="text-xs text-muted-foreground">No approved devices are available for this service.</p> : null}{selectedModeInvalid ? <p className="text-xs text-destructive">Select at least one device, or choose Any approved device or This device only.</p> : null}</div> : null}
+          <Label className="flex flex-col gap-1 text-[12.5px] font-normal normal-case tracking-normal"><span>Minimum device version</span><Input value={draft.minVersion} disabled={routingDisabled} placeholder="Any compatible version" aria-label={`Minimum device version for ${row.label}`} onChange={(event) => onDraftChange({ minVersion: event.currentTarget.value })} /></Label>
+          <OptionChecklist title="Required features" description="Every selected feature must be available on the chosen device." options={row.remoteFeatureOptions} selected={draft.requiredProviderFeatureIds} disabled={routingDisabled} onToggle={(id) => onDraftChange({ requiredProviderFeatureIds: toggleListValue(draft.requiredProviderFeatureIds, id) })} />
+          <OptionChecklist title="Required device capabilities" description="All selected requirements must be available before Aurora sends work there." options={row.remoteCapabilityTagOptions} selected={draft.requiredProviderCapabilityTags} disabled={routingDisabled} onToggle={(id) => onDraftChange({ requiredProviderCapabilityTags: toggleListValue(draft.requiredProviderCapabilityTags, id) })} />
+          <Label className="flex items-center justify-between gap-3 text-[12.5px] font-normal normal-case tracking-normal"><span><span className="block">Require explicit selector</span><span className="block text-[11px] text-muted-foreground">Callers must name a peer before routing remotely.</span></span><Switch checked={draft.requireExplicitSelector} disabled={routingDisabled} aria-label={`Require explicit selector for ${row.label}`} onCheckedChange={(checked) => onDraftChange({ requireExplicitSelector: Boolean(checked) })} /></Label>
         </section>
       </div></TableCell></TableRow> : null}
     </>
@@ -939,10 +1124,82 @@ function ServiceRoutingTableRow({ row, draft, knownPeers: _knownPeers, dirty, pe
 }
 
 function ServiceRoutingMobileCard({ row, draft, changes, pending, disabled, expanded, review, onToggleExpanded, onDraftChange, onReview, onCancelReview, onReauthChange, onConfirm }: { row: ServiceRoutingRow; draft: ServiceRoutingRowDraft; changes: ServiceRoutingChange[]; pending: boolean; disabled: boolean; expanded: boolean; review: ServiceRoutingReviewState | undefined; onToggleExpanded: () => void; onDraftChange: (patch: Partial<ServiceRoutingRowDraft>) => void; onReview: () => void; onCancelReview: () => void; onReauthChange: (checked: boolean) => void; onConfirm: () => void }) {
-  const maxInvalid = !validMaxConcurrency(draft.maxConcurrent)
-  const selectedInvalid = draft.providerMode === 'selected' && draft.selectedProviderPeerIds.length === 0
+  const sharingDisabled = disabled || row.sharingEditable === false
+  const sharingDetailsDisabled = sharingDisabled || row.sharingDetailsEditable === false
+  const routingDisabled = disabled || row.routingEditable === false
+  const maxInvalid = row.sharingEditable !== false && row.sharingDetailsEditable !== false && !validMaxConcurrency(draft.maxConcurrent)
+  const selectedInvalid = row.routingEditable !== false && draft.providerMode === 'selected' && draft.selectedProviderPeerIds.length === 0
   const detailsId = `mobile-${row.id}-details`
-  return <article className="flex flex-col gap-3 rounded-xl border border-border p-3"><header className="flex items-start justify-between gap-3"><div><h3 className="font-medium">{row.label}</h3><ServiceStatusBadge status={row.registryStatus} registered={row.registered} /></div><Button type="button" size="sm" variant="outline" disabled={disabled} aria-expanded={expanded} aria-controls={detailsId} onClick={onToggleExpanded}>{expanded ? 'Hide details' : 'Edit sharing'}</Button></header><div className="grid gap-2"><Label className="flex items-center justify-between text-sm font-normal normal-case tracking-normal"><span>Shared from this device</span><Switch checked={draft.share} disabled={disabled} aria-label={`Share ${row.label} from this device on mobile`} onCheckedChange={(checked) => onDraftChange({ share: Boolean(checked) })} /></Label><PolicySelect value={draft.prefer} options={SERVICE_ROUTING_PREFER_OPTIONS} disabled={disabled} ariaLabel={`Where Aurora sends ${row.label} requests on mobile`} onChange={(prefer) => onDraftChange({ prefer })} /></div>{expanded ? <div id={detailsId} className="flex flex-col gap-4"><section className="flex flex-col gap-2"><h4 className="text-sm font-semibold">Shared from this device</h4><Label className="flex items-center justify-between text-xs font-normal normal-case tracking-normal"><span>Maximum simultaneous calls</span><Input className="h-8 w-20" type="number" min={0} step={1} value={draft.maxConcurrent} aria-invalid={maxInvalid} disabled={disabled} onChange={(event) => onDraftChange({ maxConcurrent: event.currentTarget.value })} /></Label>{maxInvalid ? <p className="text-xs text-destructive">Enter zero or a whole number.</p> : null}{row.exportFeatures.map((feature) => <FeatureExportControl key={feature.featureId} feature={feature} draft={draft} disabled={disabled} onDraftChange={onDraftChange} />)}{row.ungroupedMethods.length ? <ExactMethodControls title="Other features" methods={row.ungroupedMethods} draft={draft} disabled={disabled} onDraftChange={onDraftChange} /> : null}{row.staleMethodIds.filter((topic) => draft.unsharedMethodIds.includes(topic)).map((topic) => <div key={topic} className="flex items-center justify-between gap-2 rounded border border-amber-500/40 p-2 text-xs"><code>{topic}</code><Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => onDraftChange({ unsharedMethodIds: draft.unsharedMethodIds.filter((id) => id !== topic) })}>Remove</Button></div>)}</section><section className="flex flex-col gap-2"><h4 className="text-sm font-semibold">Send requests to devices</h4><PolicySelect value={draft.fallback} options={SERVICE_ROUTING_FALLBACK_OPTIONS} disabled={disabled} ariaLabel={`What Aurora does when ${row.label} is unavailable on mobile`} onChange={(fallback) => onDraftChange({ fallback })} /><fieldset className="flex flex-col gap-1"><legend className="text-xs font-medium">Allowed devices</legend>{(['any', 'selected', 'none'] as const).map((mode) => <Label key={mode} className="flex gap-2 text-xs font-normal normal-case tracking-normal"><input type="radio" name={`mobile-${row.id}-providers`} value={mode} disabled={disabled} checked={draft.providerMode === mode} onChange={() => onDraftChange({ providerMode: mode })} />{mode === 'any' ? 'Any approved device' : mode === 'selected' ? 'Selected devices' : 'This device only'}</Label>)}</fieldset>{draft.providerMode === 'selected' ? row.providerOptions.map((peer) => <Label key={peer.id} className="flex items-center gap-2 text-xs font-normal normal-case tracking-normal"><Checkbox checked={draft.selectedProviderPeerIds.includes(peer.id)} disabled={disabled} onCheckedChange={() => onDraftChange({ selectedProviderPeerIds: toggleListValue(draft.selectedProviderPeerIds, peer.id) })} />{peer.label}{peer.label !== peer.id ? <code>{peer.id}</code> : null}{peer.stale ? <Badge variant="outline">Needs refresh</Badge> : null}</Label>) : null}{selectedInvalid ? <p className="text-xs text-destructive">Select at least one device, or choose Any approved device or This device only.</p> : null}<Input value={draft.minVersion} disabled={disabled} placeholder="Minimum device version" onChange={(event) => onDraftChange({ minVersion: event.currentTarget.value })} /><OptionChecklist title="Required features" description="All selected features must be available." options={row.remoteFeatureOptions} selected={draft.requiredProviderFeatureIds} disabled={disabled} onToggle={(id) => onDraftChange({ requiredProviderFeatureIds: toggleListValue(draft.requiredProviderFeatureIds, id) })} /><OptionChecklist title="Required device capabilities" description="All selected requirements must be available." options={row.remoteCapabilityTagOptions} selected={draft.requiredProviderCapabilityTags} disabled={disabled} onToggle={(id) => onDraftChange({ requiredProviderCapabilityTags: toggleListValue(draft.requiredProviderCapabilityTags, id) })} /><Label className="flex items-center justify-between text-xs font-normal normal-case tracking-normal">Require device selection<Switch checked={draft.requireExplicitSelector} disabled={disabled} onCheckedChange={(checked) => onDraftChange({ requireExplicitSelector: Boolean(checked) })} /></Label></section></div> : null}{review ? <ChangeReview review={review} pending={pending} onCancel={onCancelReview} onReauthChange={onReauthChange} onConfirm={onConfirm} /> : <Button type="button" disabled={disabled || changes.length === 0 || maxInvalid || selectedInvalid} onClick={onReview}>Review changes</Button>}</article>
+  return (
+    <article className="flex flex-col gap-3 rounded-xl border border-border p-3">
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-medium">{row.label}</h3>
+          <ServiceStatusBadge status={row.registryStatus} registered={row.registered} />
+        </div>
+        <Button type="button" size="sm" variant="outline" disabled={disabled} aria-expanded={expanded} aria-controls={detailsId} onClick={onToggleExpanded}>{expanded ? 'Hide details' : 'Edit sharing'}</Button>
+      </header>
+      <div className="grid gap-2">
+        <Label className="flex items-center justify-between text-sm font-normal normal-case tracking-normal">
+          <span>Shared from this device</span>
+          <Switch checked={draft.share} disabled={sharingDisabled} aria-label={`Share ${row.label} from this device on mobile`} onCheckedChange={(checked) => onDraftChange({ share: Boolean(checked) })} />
+        </Label>
+        <PolicySelect value={draft.prefer} options={SERVICE_ROUTING_PREFER_OPTIONS} disabled={routingDisabled} ariaLabel={`Where Aurora sends ${row.label} requests on mobile`} onChange={(prefer) => onDraftChange({ prefer })} />
+      </div>
+      {expanded ? (
+        <div id={detailsId} className="flex flex-col gap-4">
+          <section className="flex flex-col gap-2">
+            <h4 className="text-sm font-semibold">Shared from this device</h4>
+            <Label className="flex items-center justify-between text-xs font-normal normal-case tracking-normal">
+              <span>Maximum simultaneous calls</span>
+              <Input className="h-8 w-20" type="number" min={0} step={1} value={draft.maxConcurrent} aria-invalid={maxInvalid} disabled={sharingDetailsDisabled} onChange={(event) => onDraftChange({ maxConcurrent: event.currentTarget.value })} />
+            </Label>
+            {maxInvalid ? <p className="text-xs text-destructive">Enter zero or a whole number.</p> : null}
+            {row.exportFeatures.map((feature) => <FeatureExportControl key={feature.featureId} feature={feature} draft={draft} disabled={sharingDetailsDisabled} onDraftChange={onDraftChange} />)}
+            {row.ungroupedMethods.length ? <ExactMethodControls title="Other features" methods={row.ungroupedMethods} draft={draft} disabled={sharingDetailsDisabled} onDraftChange={onDraftChange} /> : null}
+            {row.staleMethodIds.filter((topic) => draft.unsharedMethodIds.includes(topic)).map((topic) => (
+              <div key={topic} className="flex items-center justify-between gap-2 rounded border border-amber-500/40 p-2 text-xs">
+                <code>{topic}</code>
+                <Button type="button" size="sm" variant="outline" disabled={sharingDetailsDisabled} onClick={() => onDraftChange({ unsharedMethodIds: draft.unsharedMethodIds.filter((id) => id !== topic) })}>Remove</Button>
+              </div>
+            ))}
+          </section>
+          <section className="flex flex-col gap-2">
+            <h4 className="text-sm font-semibold">Send requests to devices</h4>
+            <PolicySelect value={draft.fallback} options={SERVICE_ROUTING_FALLBACK_OPTIONS} disabled={routingDisabled} ariaLabel={`What Aurora does when ${row.label} is unavailable on mobile`} onChange={(fallback) => onDraftChange({ fallback })} />
+            <fieldset className="flex flex-col gap-1">
+              <legend className="text-xs font-medium">Allowed devices</legend>
+              {(['any', 'selected', 'none'] as const).map((mode) => (
+                <Label key={mode} className="flex gap-2 text-xs font-normal normal-case tracking-normal">
+                  <input type="radio" name={`mobile-${row.id}-providers`} value={mode} disabled={routingDisabled} checked={draft.providerMode === mode} onChange={() => onDraftChange({ providerMode: mode })} />
+                  {mode === 'any' ? 'Any approved device' : mode === 'selected' ? 'Selected devices' : 'This device only'}
+                </Label>
+              ))}
+            </fieldset>
+            {draft.providerMode === 'selected' ? row.providerOptions.map((peer) => (
+              <Label key={peer.id} className="flex items-center gap-2 text-xs font-normal normal-case tracking-normal">
+                <Checkbox checked={draft.selectedProviderPeerIds.includes(peer.id)} disabled={routingDisabled} onCheckedChange={() => onDraftChange({ selectedProviderPeerIds: toggleListValue(draft.selectedProviderPeerIds, peer.id) })} />
+                {peer.label}
+                {peer.label !== peer.id ? <code>{peer.id}</code> : null}
+                {peer.stale ? <Badge variant="outline">Needs refresh</Badge> : null}
+              </Label>
+            )) : null}
+            {selectedInvalid ? <p className="text-xs text-destructive">Select at least one device, or choose Any approved device or This device only.</p> : null}
+            <Input value={draft.minVersion} disabled={routingDisabled} placeholder="Minimum device version" onChange={(event) => onDraftChange({ minVersion: event.currentTarget.value })} />
+            <OptionChecklist title="Required features" description="All selected features must be available." options={row.remoteFeatureOptions} selected={draft.requiredProviderFeatureIds} disabled={routingDisabled} onToggle={(id) => onDraftChange({ requiredProviderFeatureIds: toggleListValue(draft.requiredProviderFeatureIds, id) })} />
+            <OptionChecklist title="Required device capabilities" description="All selected requirements must be available." options={row.remoteCapabilityTagOptions} selected={draft.requiredProviderCapabilityTags} disabled={routingDisabled} onToggle={(id) => onDraftChange({ requiredProviderCapabilityTags: toggleListValue(draft.requiredProviderCapabilityTags, id) })} />
+            <Label className="flex items-center justify-between text-xs font-normal normal-case tracking-normal">
+              Require device selection
+              <Switch checked={draft.requireExplicitSelector} disabled={routingDisabled} onCheckedChange={(checked) => onDraftChange({ requireExplicitSelector: Boolean(checked) })} />
+            </Label>
+          </section>
+        </div>
+      ) : null}
+      {review
+        ? <ChangeReview review={review} pending={pending} onCancel={onCancelReview} onReauthChange={onReauthChange} onConfirm={onConfirm} />
+        : <Button type="button" disabled={disabled || changes.length === 0 || maxInvalid || selectedInvalid} onClick={onReview}>Review changes</Button>}
+    </article>
+  )
 }
 
 function ChangeReview({ review, pending, onCancel, onReauthChange, onConfirm }: { review: ServiceRoutingReviewState; pending: boolean; onCancel: () => void; onReauthChange: (checked: boolean) => void; onConfirm: () => void }) {
@@ -1027,6 +1284,10 @@ function fulfilled<T>(result: PromiseSettledResult<T>): T | null { return result
 function fulfilledOk<T>(result: PromiseSettledResult<{ ok: boolean; data?: T | null }>): T | null { return result.status === 'fulfilled' && result.value.ok ? result.value.data ?? null : null }
 function rejectedWarning(result: PromiseSettledResult<unknown>, label: string): string | null { return result.status === 'rejected' ? `${label} unavailable: ${meshPeerErrorMessage(result.reason)}` : null }
 function isExpectedOfflineTransportWarning(value: string): boolean { return /webrtc mesh (?:transport|event stream) is not connected|transport datachannel not connected|preferred-mode HTTP fallback/i.test(value) }
+function orderServiceRows(rows: ServiceRoutingRow[]): ServiceRoutingRow[] {
+  const targetOrder = new Map(SERVICE_ROUTING_TARGETS.map((target, index) => [target.id, index]))
+  return [...rows].sort((a, b) => Number(b.sharingEditable !== false) - Number(a.sharingEditable !== false) || (targetOrder.get(a.id) ?? 1_000) - (targetOrder.get(b.id) ?? 1_000) || a.label.localeCompare(b.label))
+}
 function normalizeModule(value: string): string { return value.toLowerCase().replace(/[^a-z0-9]+/g, '') }
 function matchesModule(module: string, candidates: string[]): boolean { return candidates.includes(normalizeModule(module)) }
 function matchRegistryService(candidates: string[], services: ServiceInfo[]): ServiceInfo | null { return services.find((service) => matchesModule(service.module, candidates)) ?? null }

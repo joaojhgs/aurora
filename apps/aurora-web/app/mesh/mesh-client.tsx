@@ -65,6 +65,9 @@ export function MeshPeersClientPage({ route }: { route: RouteAvailability }) {
       ) : runtime.surface.ownsLocalNodeState && runtime.localFeatureSharing ? (
         <LocalServiceRoutingResource
           featureSharing={runtime.localFeatureSharing}
+          client={client}
+          route={activeRoute}
+          thinPeer={runtime.peer}
         />
       ) : null}
       {runtime.surface.isRemoteConsole ? (

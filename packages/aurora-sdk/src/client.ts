@@ -150,6 +150,8 @@ import type {
   TranscribeAudioRequest,
   TranscribeAudioResponse,
   TTSPlaybackRequest,
+  TTSSynthesisRequest,
+  TTSSynthesisResponse,
   PeerSummary,
   PermissionPatchRequest,
   PermissionPatchResponse,
@@ -1167,9 +1169,17 @@ export class AssistantClient {
       path: routePath('STTCoordinator', 'Listen')
     }
     if (input.timeoutMs !== undefined) requestOptions.timeoutMs = input.timeoutMs
+    const selector = this.client.transport.kind === 'mesh'
+      ? null
+      : assistantRouteSelector(input.routePolicy)
+    const payload: STTListenRequest = { session_id: sessionId }
+    if (selector) {
+      payload.mesh_selector = { ...selector }
+      payload.selector = { ...selector }
+    }
     const response = await this.client.requestResult<STTListenResponse, STTListenRequest>(
       STT_METHODS.listen,
-      { session_id: sessionId },
+      payload,
       requestOptions
     )
     if (!response.ok) return response
@@ -1194,9 +1204,17 @@ export class AssistantClient {
       path: routePath('STTCoordinator', 'StopListening')
     }
     if (input.timeoutMs !== undefined) requestOptions.timeoutMs = input.timeoutMs
+    const selector = this.client.transport.kind === 'mesh'
+      ? null
+      : assistantRouteSelector(input.routePolicy)
+    const payload: STTStopListeningRequest = { reason: input.reason ?? 'user_request' }
+    if (selector) {
+      payload.mesh_selector = { ...selector }
+      payload.selector = { ...selector }
+    }
     const response = await this.client.requestResult<unknown, STTStopListeningRequest>(
       STT_METHODS.stopListening,
-      { reason: input.reason ?? 'user_request' },
+      payload,
       requestOptions
     )
     if (!response.ok) return response
@@ -1212,24 +1230,68 @@ export class AssistantClient {
   }
 
   transcribeVoiceAudio(input: TranscribeAudioRequest): Promise<AuroraResponse<TranscribeAudioResponse>> {
+    const selector = this.client.transport.kind === 'mesh'
+      ? null
+      : assistantRouteSelector(input.routePolicy)
+    const {
+      routePolicy: _routePolicy,
+      mesh_selector: _meshSelector,
+      selector: _selector,
+      ...transcriptionPayload
+    } = input
+    const payload: TranscribeAudioRequest = transcriptionPayload
+    if (selector) {
+      payload.mesh_selector = { ...selector }
+      payload.selector = { ...selector }
+    }
     return this.client.requestResult<TranscribeAudioResponse, TranscribeAudioRequest>(
       TRANSCRIPTION_METHODS.transcribe,
-      input,
+      payload,
       { path: routePath('Transcription', 'Transcribe'), timeoutMs: 120_000 }
     )
   }
 
 
   requestReadAloud(input: TTSPlaybackRequest): Promise<AuroraResponse<unknown>> {
+    const selector = this.client.transport.kind === 'mesh'
+      ? null
+      : assistantRouteSelector(input.routePolicy)
+    const payload: TTSPlaybackRequest = {
+      text: input.text,
+      voice: input.voice ?? null,
+      speed: input.speed ?? 1.0,
+      interrupt: input.interrupt ?? true
+    }
+    if (selector) {
+      payload.mesh_selector = { ...selector }
+      payload.selector = { ...selector }
+    }
     return this.client.requestResult<unknown, TTSPlaybackRequest>(
       TTS_METHODS.request,
-      {
-        text: input.text,
-        voice: input.voice ?? null,
-        speed: input.speed ?? 1.0,
-        interrupt: input.interrupt ?? true
-      },
+      payload,
       { path: routePath('TTS', 'Request'), timeoutMs: 15_000 }
+    )
+  }
+
+  synthesizeReadAloud(input: TTSSynthesisRequest): Promise<AuroraResponse<TTSSynthesisResponse>> {
+    const selector = this.client.transport.kind === 'mesh'
+      ? null
+      : assistantRouteSelector(input.routePolicy)
+    const payload: TTSSynthesisRequest = {
+      text: input.text,
+      voice: input.voice ?? null,
+      speed: input.speed ?? 1.0,
+      format: input.format ?? 'wav'
+    }
+    if (input.sample_rate !== undefined) payload.sample_rate = input.sample_rate
+    if (selector) {
+      payload.mesh_selector = { ...selector }
+      payload.selector = { ...selector }
+    }
+    return this.client.requestResult<TTSSynthesisResponse, TTSSynthesisRequest>(
+      TTS_METHODS.synthesize,
+      payload,
+      { path: routePath('TTS', 'Synthesize'), timeoutMs: 120_000 }
     )
   }
 

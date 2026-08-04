@@ -320,5 +320,90 @@ describe('WebRtcMeshPeerBridge with MeshP2PTransport and AuroraClient', () => {
     await iterator.return?.()
   })
 
+  it('carries browser-captured STT and client-playback TTS requests over the authorized DataChannel', async () => {
+    const { session, client } = makeClient(['stt-call', 'tts-call'])
+
+    const transcriptionPromise = client.assistant.transcribeVoiceAudio({
+      audio_data: 'AAAA',
+      format: 'raw',
+      sample_rate: 16_000,
+      channels: 1,
+      model: 'accurate',
+      routePolicy: {
+        peerId: 'downstream-stt-peer',
+        providerId: 'remote:downstream-stt-peer:Transcription',
+        routeState: 'available-remote',
+      },
+      mesh_selector: { peer_id: 'legacy-downstream-stt-peer' },
+      selector: { peer_id: 'legacy-downstream-stt-peer' },
+    })
+    await waitForSentCount(session, 1)
+    expect(session.sent[0]).toMatchObject({
+      type: 'call',
+      id: 'stt-call',
+      method: 'Transcription.Transcribe',
+      params: {
+        audio_data: 'AAAA',
+        format: 'raw',
+        sample_rate: 16_000,
+        channels: 1,
+        model: 'accurate'
+      }
+    })
+    expect(JSON.stringify(session.sent[0])).not.toContain('downstream-stt-peer')
+    expect(JSON.stringify(session.sent[0])).not.toContain('mesh_selector')
+    session.emit({
+      type: 'result',
+      id: 'stt-call',
+      result: {
+        text: 'hello',
+        confidence: null,
+        language: 'en',
+        duration_ms: 120,
+        model_used: 'accurate'
+      }
+    })
+    await expect(transcriptionPromise).resolves.toMatchObject({ ok: true, data: { text: 'hello' } })
+
+    const synthesisPromise = client.assistant.synthesizeReadAloud({
+      text: 'hello',
+      routePolicy: {
+        peerId: 'downstream-tts-peer',
+        providerId: 'remote:downstream-tts-peer:TTS',
+        routeState: 'available-remote',
+      },
+    })
+    await waitForSentCount(session, 2)
+    expect(session.sent[1]).toMatchObject({
+      type: 'call',
+      id: 'tts-call',
+      method: 'TTS.Synthesize',
+      params: {
+        text: 'hello',
+        voice: null,
+        speed: 1,
+        format: 'wav'
+      }
+    })
+    expect(JSON.stringify(session.sent[1])).not.toContain('downstream-tts-peer')
+    expect(JSON.stringify(session.sent[1])).not.toContain('mesh_selector')
+    session.emit({
+      type: 'result',
+      id: 'tts-call',
+      result: {
+        audio_data: 'UklGRg==',
+        format: 'wav',
+        sample_rate: 22_050,
+        channels: 1,
+        duration_ms: 240,
+        text: 'hello'
+      }
+    })
+    await expect(synthesisPromise).resolves.toMatchObject({
+      ok: true,
+      data: { audio_data: 'UklGRg==', format: 'wav' }
+    })
+  })
+
 
 })

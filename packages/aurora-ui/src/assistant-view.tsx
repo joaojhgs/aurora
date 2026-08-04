@@ -96,6 +96,7 @@ export interface AssistantViewProps {
   runtimeHealth?: AssistantRuntimeHealth | undefined
   executionHost?: 'this-device' | 'connected-device'
   localAssistant?: LightweightAssistantDependencies | null | undefined
+  surfaceProfile?: AuroraSurfaceProfile | undefined
 }
 
 export interface AssistantRuntimeHealth {
@@ -294,6 +295,8 @@ export interface AssistantVoiceModel {
   events: VoiceEventRow[]
   routeSheetRoute: RouteAvailability
   remoteAudioRoute: RouteAvailability
+  transcriptionRoute: RouteAvailability
+  speechRoute: RouteAvailability
   waveformBars: number[]
 }
 
@@ -331,7 +334,8 @@ export function AssistantView({
   initialSession,
   runtimeHealth,
   executionHost = 'this-device',
-  localAssistant = null
+  localAssistant = null,
+  surfaceProfile: providedSurfaceProfile
 }: AssistantViewProps) {
   const [session, setSession] = useState<AssistantSessionSnapshot>(() => initialSession ?? defaultAssistantSessionForTransport(client.transport.kind))
   const [sessionIndex, setSessionIndex] = useState<DBSessionRecord[]>([])
@@ -399,7 +403,6 @@ export function AssistantView({
   }
   const voiceToggleInFlightRef = useRef(false)
   const voiceResponseTimeoutRef = useRef<number | null>(null)
-  const readAloudFallbackTimerRef = useRef<number | null>(null)
   const readAloudFallbackTokenRef = useRef(0)
   const [speakingMessageIdState, setSpeakingMessageIdState] = useState<string | null>(null)
   const speakingMessageIdRef = useRef<string | null>(null)
@@ -528,12 +531,12 @@ export function AssistantView({
     }),
     [client.transport.kind, localExecutionMessageLabel, modelLabel, route, runtimeHealth, selectedExecution, selectedModelChoice.model.name]
   )
-  const surfaceProfile = useMemo(() => getAuroraSurfaceProfile({
+  const surfaceProfile = useMemo(() => providedSurfaceProfile ?? getAuroraSurfaceProfile({
     runtimeMode: client.transport.kind === 'tauri-local' ? 'desktop-local' : client.transport.kind === 'native-mobile' ? 'mobile' : undefined,
     transportKind: client.transport.kind,
     nativePlatform,
     userAgent: typeof navigator === 'undefined' ? undefined : navigator.userAgent
-  }), [client.transport.kind, nativePlatform])
+  }), [client.transport.kind, nativePlatform, providedSurfaceProfile])
   const remotePrivacyWarning = assistantRemotePrivacyWarning(route)
   const voiceModel = useMemo(
     () => buildAssistantVoiceModel({
@@ -544,6 +547,7 @@ export function AssistantView({
       nativeAvailable,
       nativePermissions,
       nativeCapabilities,
+      surfaceProfile,
       captureStatus: voiceCaptureStatus,
       consentGranted: voiceConsentGranted,
       voiceEvents,
@@ -557,6 +561,7 @@ export function AssistantView({
       nativeAvailable,
       nativePermissions,
       nativeCapabilities,
+      surfaceProfile,
       voiceCaptureStatus,
       voiceConsentGranted,
       voiceEvents,
@@ -574,14 +579,20 @@ export function AssistantView({
       }
       return
     }
-    if (!chunk.audioData || typeof window === 'undefined') return
-    const bytes = base64ToUint8Array(chunk.audioData)
-    if (bytes.byteLength === 0) return
-    const encoding = (chunk.encoding ?? 'wav').toLowerCase()
-    const mimeType = chunk.mimeType ?? (encoding === 'raw' ? 'audio/wav' : `audio/${encoding}`)
+    if (!chunk.audioData) return
+    enqueueTtsAudio(chunk.audioData, chunk.encoding ?? 'wav', chunk.mimeType)
+  }
+
+  function enqueueTtsAudio(audioData: string, encoding: string, explicitMimeType?: string | null): boolean {
+    if (typeof window === 'undefined' || typeof window.URL?.createObjectURL !== 'function') return false
+    const bytes = base64ToUint8Array(audioData)
+    if (bytes.byteLength === 0) return false
+    const normalizedEncoding = encoding.toLowerCase()
+    const mimeType = explicitMimeType ?? (normalizedEncoding === 'raw' ? 'audio/wav' : `audio/${normalizedEncoding}`)
     const url = window.URL.createObjectURL(new Blob([bytes], { type: mimeType }))
     streamedTtsQueueRef.current.push(url)
     void drainStreamedTtsAudioQueue()
+    return true
   }
 
   async function drainStreamedTtsAudioQueue() {
@@ -758,7 +769,6 @@ export function AssistantView({
     for (const orchestrator of localConfirmationOrchestratorsRef.current.values()) orchestrator.cancel()
     localConfirmationOrchestratorsRef.current.clear()
     clearVoiceResponseTimeout()
-    clearReadAloudFallbackTimer()
     stopStreamedTtsPlayback()
     stopLocalCapture()
   }, [])
@@ -1131,7 +1141,7 @@ export function AssistantView({
       const pendingMessage: AssistantUiMessage = {
       id: requestId,
       role: 'assistant',
-      text: replayFrom ? 'Replaying stream from last backend event...' : 'Waiting for Aurora stream...',
+      text: replayFrom ? 'Restoring Aurora’s response...' : 'Waiting for Aurora...',
       createdAt: now,
       status: 'streaming',
       modelLabel: selectedModelChoice.model.name,
@@ -1319,30 +1329,35 @@ export function AssistantView({
     }
     setLastResult({ id: pendingId, role: 'assistant', text: completedText, createdAt })
     setModelLabel(selectedModelChoice.model.name)
-    setSession((current) => ({
-      sessionId: result.conversationId,
-      messages: persistedMessages
+    setSession((current) => {
+      const enrichedPersistedMessages = persistedMessages
         ? enrichLatestLocalAssistantMessage(persistedMessages, {
             text: completedText,
             modelLabel: selectedModelChoice.model.name,
             providerLabel: selectedModelChoice.provider?.display_name ?? 'Selected model source',
             routeLabel: localExecutionMessageLabel,
           })
-        : current.messages.map((message) =>
-            message.id === pendingId
-              ? {
-                  ...message,
-                  text: completedText,
-                  createdAt,
-                  status: 'sent',
-                  modelLabel: selectedModelChoice.model.name,
-                  providerLabel: selectedModelChoice.provider?.display_name ?? 'Selected model source',
-                  routeLabel: localExecutionMessageLabel,
-                  executionPeerId: null
-                }
-              : message
-          )
-    }))
+        : null
+      return {
+        sessionId: result.conversationId,
+        messages: enrichedPersistedMessages
+          ? preserveActiveAssistantTurnIds(enrichedPersistedMessages, current.messages, pendingId)
+          : current.messages.map((message) =>
+              message.id === pendingId
+                ? {
+                    ...message,
+                    text: completedText,
+                    createdAt,
+                    status: 'sent',
+                    modelLabel: selectedModelChoice.model.name,
+                    providerLabel: selectedModelChoice.provider?.display_name ?? 'Selected model source',
+                    routeLabel: localExecutionMessageLabel,
+                    executionPeerId: null
+                  }
+                : message
+            )
+      }
+    })
     setStreamState({ status: 'idle', lastEventId: null, message: 'Aurora finished responding.' })
   }
 
@@ -1359,7 +1374,7 @@ export function AssistantView({
         message.id === pendingId
           ? {
               ...message,
-              text: message.text.trim() && message.text !== 'Waiting for Aurora stream...' ? message.text : failureCopy,
+              text: message.text.trim() && message.text !== 'Waiting for Aurora...' ? message.text : failureCopy,
               status: 'failed',
               error: failureCopy
             }
@@ -1450,8 +1465,7 @@ export function AssistantView({
         messages: current.messages.map((message) =>
           message.id === pendingId
             ? {
-                id: result.data.response.id,
-                role: 'assistant',
+                ...message,
                 text: result.data.response.text,
                 createdAt: result.data.response.createdAt,
                 status: 'sent',
@@ -1526,7 +1540,6 @@ export function AssistantView({
       return
     }
     if (update.kind === 'tts_audio_chunk') {
-      clearReadAloudFallbackTimer()
       enqueueStreamedTtsAudio(update)
       if (lastAssistantMessageIdRef.current === null) lastAssistantMessageIdRef.current = pendingId
       if (!speakingMessageIdRef.current) setSpeakingMessageId(lastAssistantMessageIdRef.current)
@@ -1566,17 +1579,17 @@ export function AssistantView({
       setStreamState((current) => ({
         status: 'fallback',
         lastEventId: update.eventId ?? current.lastEventId,
-        message: 'Streaming was unavailable; Aurora returned a final non-streaming response.'
+        message: 'Aurora continued with a complete response.'
       }))
     }
     if (update.kind === 'completed' || update.kind === 'fallback') {
       setLastResult({
-        id: update.eventId ?? `assistant-${Date.now()}`,
+        id: pendingId,
         role: 'assistant',
         text: update.text,
         createdAt: new Date().toISOString()
       })
-        const finalAssistantId = update.messageId ?? pendingId
+        const finalAssistantId = pendingId
         lastAssistantMessageIdRef.current = finalAssistantId
         setSession((current) => {
         const existing = current.messages.find((message) => message.id === finalAssistantId)
@@ -1751,7 +1764,6 @@ export function AssistantView({
       return
     }
     if (event.kind === 'tts_started') {
-      clearReadAloudFallbackTimer()
       settleVoicePendingFromObservedText(event.text, 'tts_started')
       settleSubstantiveStreamingAssistantMessages('tts_started')
       // TTS playback must not keep the composer or push-to-talk controls in a stop state.
@@ -1770,7 +1782,6 @@ export function AssistantView({
       return
     }
     if (event.kind === 'tts_error') {
-      clearReadAloudFallbackTimer()
       setSpeakingMessageId(null)
       if (event.reason) setLastError(event.reason)
       setVoiceCaptureStatus('idle')
@@ -1837,7 +1848,6 @@ export function AssistantView({
       return
     }
     if (update.kind === 'tts_audio_chunk') {
-      clearReadAloudFallbackTimer()
       enqueueStreamedTtsAudio(update)
       if (pendingId && !speakingMessageIdRef.current) setSpeakingMessageId(pendingId)
       if (pendingId) {
@@ -1864,7 +1874,7 @@ export function AssistantView({
     coordinatorVoiceSessionIdsRef.current.clear()
     setStreamState((current) => ({ ...current, status: 'idle', message: 'Voice response received from Aurora.' }))
     setSession((current) => {
-      const finalAssistantId = update.messageId ?? pendingId ?? `assistant-voice-${Date.now()}`
+      const finalAssistantId = pendingId ?? update.messageId ?? `assistant-voice-${Date.now()}`
       const existing = current.messages.find((message) => message.id === finalAssistantId)
       const assistantMessage = applyAssistantTerminalUpdate({
         id: finalAssistantId,
@@ -2015,13 +2025,28 @@ export function AssistantView({
     setSpeakingMessageId(message.id)
     lastAssistantMessageIdRef.current = message.id
     try {
-      const result = await client.assistant.requestReadAloud({ text: speakableText, interrupt: true })
-      if (result.ok) {
+      if (surfaceProfile.usesLocalSidecar) {
+        const result = await client.assistant.requestReadAloud({
+          text: speakableText,
+          interrupt: true,
+          routePolicy: routePolicyFromRoute(voiceModel.speechRoute)
+        })
+        if (!result.ok) throw result.error
         setStreamState((current) => ({ ...current, message: 'Reading assistant response through Aurora TTS.' }))
-        scheduleBrowserReadAloudFallback(speakableText, message.id)
         return
       }
-      throw result.error
+      const result = await client.assistant.synthesizeReadAloud({
+        text: speakableText,
+        voice: null,
+        speed: 1,
+        format: 'wav',
+        routePolicy: routePolicyFromRoute(voiceModel.speechRoute)
+      })
+      if (!result.ok) throw result.error
+      if (!enqueueTtsAudio(result.data.audio_data, result.data.format)) {
+        throw new Error('This device could not start audio playback.')
+      }
+      setStreamState((current) => ({ ...current, message: 'Aurora is reading this response on this device.' }))
     } catch (error) {
       if (browserReadAloud(speakableText, message.id)) {
         setStreamState((current) => ({ ...current, message: 'Aurora is reading this response on this device.' }))
@@ -2161,25 +2186,17 @@ export function AssistantView({
   }
 
   async function stopReadAloud(reason: string) {
-    clearReadAloudFallbackTimer()
     readAloudFallbackTokenRef.current += 1
+    stopStreamedTtsPlayback()
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel()
     }
-    setSpeakingMessageId(null)
     const result = await client.assistant.cancel({
       sessionId: session.sessionId,
       scopes: ['tts_playback'],
       reason
     })
     if (!result.ok) setLastError(productAssistantErrorCopy(result.error))
-  }
-
-  function clearReadAloudFallbackTimer() {
-    if (readAloudFallbackTimerRef.current !== null && typeof window !== 'undefined') {
-      window.clearTimeout(readAloudFallbackTimerRef.current)
-    }
-    readAloudFallbackTimerRef.current = null
   }
 
   function browserReadAloud(textToSpeak: string, messageId: string | null = null): boolean {
@@ -2200,19 +2217,6 @@ export function AssistantView({
     }
     window.speechSynthesis.speak(utterance)
     return true
-  }
-
-  function scheduleBrowserReadAloudFallback(textToSpeak: string, messageId: string) {
-    if (typeof window === 'undefined') return
-    clearReadAloudFallbackTimer()
-    const token = readAloudFallbackTokenRef.current + 1
-    readAloudFallbackTokenRef.current = token
-    readAloudFallbackTimerRef.current = window.setTimeout(() => {
-      if (readAloudFallbackTokenRef.current !== token) return
-      if (browserReadAloud(textToSpeak, messageId)) {
-      setStreamState((current) => ({ ...current, message: 'Aurora is reading this response on this device.' }))
-      }
-    }, 2500)
   }
 
   async function onCancel() {
@@ -2351,7 +2355,11 @@ export function AssistantView({
         : 'Starting microphone listening on this computer...'
     }))
     try {
-      const started = await client.assistant.startVoiceListen({ sessionId, timeoutMs: 8_000 })
+      const started = await client.assistant.startVoiceListen({
+        sessionId,
+        timeoutMs: 8_000,
+        routePolicy: routePolicyFromRoute(voiceModel.transcriptionRoute)
+      })
       if (!started.ok) {
         activeVoiceSessionRef.current = null
         ownedVoiceSessionIdsRef.current.delete(sessionId)
@@ -2387,7 +2395,6 @@ export function AssistantView({
 
   async function interruptTtsForVoiceCapture() {
     if (speakingMessageIdRef.current) setSpeakingMessageId(null)
-    clearReadAloudFallbackTimer()
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
     const result = await client.assistant.cancel({
       sessionId: session.sessionId,
@@ -2402,7 +2409,11 @@ export function AssistantView({
     if (currentCaptureStatus === 'listening') {
       const sessionId = activeVoiceSessionRef.current
       if (sessionId && coordinatorVoiceSessionIdsRef.current.has(sessionId)) {
-        const stopped = await client.assistant.stopVoiceListen({ sessionId, reason: 'user_request' })
+        const stopped = await client.assistant.stopVoiceListen({
+          sessionId,
+          reason: 'user_request',
+          routePolicy: routePolicyFromRoute(voiceModel.transcriptionRoute)
+        })
         if (!stopped.ok) setLastError(productAssistantErrorCopy(stopped.error))
       }
       stopLocalCapture({ finalizeTranscription: currentCaptureStatus === 'listening' })
@@ -2617,7 +2628,8 @@ export function AssistantView({
         format: 'raw',
         sample_rate: 16000,
         channels: 1,
-        model: final ? 'accurate' : 'realtime'
+        model: final ? 'accurate' : 'realtime',
+        routePolicy: routePolicyFromRoute(voiceModel.transcriptionRoute)
       })
       if (voiceRecordingGenerationRef.current !== generation && !final) return
       if (!result.ok) {
@@ -2726,7 +2738,7 @@ export function AssistantView({
                     </MessageScrollerItem>
                   ) : (
                     sessionMessages.map((message) => (
-                      <MessageScrollerItem key={message.id} messageId={message.id} scrollAnchor={message.role === 'user'}>
+                      <MessageScrollerItem key={message.id} messageId={message.id}>
                         <ChatBubble
                           message={message}
                           onReadAloud={readAssistantMessageAloud}
@@ -2979,7 +2991,6 @@ export function AssistantView({
             <div><dt>Selector</dt><dd>{route.selectorRequired ? 'required' : 'not required'}</dd></div>
             <div><dt>Approval</dt><dd>{route.approvalRequired ? 'required' : 'not required'}</dd></div>
             <div><dt>Cancellation</dt><dd>{controls.canCancel ? 'supported' : controls.cancelReason}</dd></div>
-            <div><dt>Last stream event</dt><dd>{streamState.lastEventId ?? 'none'}</dd></div>
             <div><dt>Model</dt><dd>{safeAssistantRuntimeValue(modelLabel, lastResult ? 'not reported' : 'model response pending')}</dd></div>
             <div><dt>Context</dt><dd>{contextSummary.ready} ready, {contextSummary.blocked} blocked</dd></div>
           </dl>
@@ -3115,6 +3126,7 @@ export function buildAssistantVoiceModel(input: {
   nativeAvailable?: boolean | undefined
   nativePermissions?: Array<{ name: string; granted: boolean }> | undefined
   nativeCapabilities?: Array<{ name: string; enabled: boolean }> | undefined
+  surfaceProfile?: AuroraSurfaceProfile | undefined
   captureStatus: VoiceCaptureStatus
   consentGranted: boolean
   voiceEvents?: VoiceRuntimeEvent[] | undefined
@@ -3126,7 +3138,7 @@ export function buildAssistantVoiceModel(input: {
   const ttsSynthesize = input.voiceRoutes?.ttsSynthesize ?? missingVoiceRoute('voice-tts-synthesize', 'TTS synthesis', 'TTS.Synthesize', 'personal')
   const ttsStop = input.voiceRoutes?.ttsStop ?? missingVoiceRoute('voice-tts-stop', 'TTS playback stop', 'TTS.Stop', 'personal')
   const nativeCapture = nativeCaptureState(input.nativeAvailable ?? false, input.nativePlatform ?? 'not available', input.nativePermissions ?? [], input.nativeCapabilities ?? [])
-  const surfaceProfile = getAuroraSurfaceProfile({
+  const surfaceProfile = input.surfaceProfile ?? getAuroraSurfaceProfile({
     runtimeMode: input.client.transport.kind === 'tauri-local' ? 'desktop-local' : input.client.transport.kind === 'native-mobile' ? 'mobile' : undefined,
     transportKind: input.client.transport.kind,
     nativePlatform: input.nativePlatform
@@ -3190,6 +3202,8 @@ export function buildAssistantVoiceModel(input: {
     events: voiceEventRows(input.captureStatus, transcription, input.voiceEvents ?? []),
     routeSheetRoute: remoteAudioRoute,
     remoteAudioRoute,
+    transcriptionRoute: transcription,
+    speechRoute: ttsSynthesize,
     waveformBars: input.waveformBars ?? waveformBars(input.captureStatus)
   }
 }
@@ -4304,7 +4318,7 @@ export function isAssistantStreamHardTerminal(update: Pick<AssistantStreamUpdate
 export function applyAssistantStreamDelta(message: AssistantUiMessage, update: AssistantStreamUpdate): AssistantUiMessage {
   if (message.status === 'cancelled') return message
   if (!update.textDelta) return message
-  const currentText = message.text === 'Waiting for Aurora stream...' || message.text === 'Replaying stream from last backend event...'
+  const currentText = message.text === 'Waiting for Aurora...' || message.text === 'Restoring Aurora’s response...'
     ? ''
     : message.text
   return {
@@ -4319,7 +4333,7 @@ export function applyAssistantStreamDelta(message: AssistantUiMessage, update: A
 export function applyAssistantToolUpdate(
   message: AssistantUiMessage,
   update: AssistantStreamUpdate,
-  placeholder = 'Waiting for Aurora stream...'
+  placeholder = 'Waiting for Aurora...'
 ): AssistantUiMessage {
   if (message.status === 'cancelled') return message
   const toolCall = assistantToolCallFromUpdate(update)
@@ -4357,7 +4371,7 @@ export function applyAssistantTerminalUpdate(message: AssistantUiMessage, update
     : message.text
   return {
     ...message,
-    id: update.messageId ?? message.id,
+    id: message.id,
     role: 'assistant',
     text: terminalText,
     createdAt: message.createdAt,
@@ -5822,6 +5836,33 @@ function enrichLatestLocalAssistantMessage(
         executionPeerId: null,
       }
     : message)
+}
+
+export function preserveActiveAssistantTurnIds(
+  persistedMessages: AssistantUiMessage[],
+  currentMessages: AssistantUiMessage[],
+  pendingId: string,
+): AssistantUiMessage[] {
+  const pendingIndex = currentMessages.findIndex((message) => message.id === pendingId)
+  if (pendingIndex < 0) return persistedMessages
+  const activeUser = currentMessages
+    .slice(0, pendingIndex)
+    .reverse()
+    .find((message) => message.role === 'user')
+  const latestAssistantIndex = persistedMessages.reduce(
+    (latest, message, index) => message.role === 'assistant' ? index : latest,
+    -1,
+  )
+  if (latestAssistantIndex < 0) return persistedMessages
+  const latestUserIndex = persistedMessages.reduce(
+    (latest, message, index) => index < latestAssistantIndex && message.role === 'user' ? index : latest,
+    -1,
+  )
+  return persistedMessages.map((message, index) => {
+    if (index === latestAssistantIndex) return { ...message, id: pendingId }
+    if (activeUser && index === latestUserIndex) return { ...message, id: activeUser.id }
+    return message
+  })
 }
 
 async function localAssistantMessageText(

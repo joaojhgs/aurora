@@ -216,4 +216,72 @@ describe('AppShell side-panel toggles', () => {
 
     await act(async () => root.unmount())
   })
+
+  it('keeps a node-owned mobile surface available when only its saved peer is offline', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    const retainedPeerOutage = {
+      ...snapshot,
+      loadState: 'error' as const,
+      error: null,
+      transportKind: 'mesh' as const,
+      nativePlatform: 'android',
+      nodeName: 'aurora-prod-01',
+    }
+
+    await act(async () => {
+      root.render(
+        <AppShell snapshot={retainedPeerOutage} runtimeMode="mobile-native" nodeMode="mesh-node">
+          <div>Content</div>
+        </AppShell>,
+      )
+    })
+
+    const nodeStatus = container.querySelector('[aria-label="Aurora shell status"]')?.textContent
+    expect(nodeStatus).toContain('This device is available')
+    expect(nodeStatus).toContain('Healthy')
+    expect(nodeStatus).not.toContain('aurora-prod-01 is offline')
+    expect(nodeStatus).not.toContain('Offline')
+    expect(container.querySelector('[aria-label="Aurora version and connection state"]')?.textContent).toContain('available')
+
+    await act(async () => {
+      root.render(
+        <AppShell snapshot={retainedPeerOutage} runtimeMode="mobile-native" nodeMode="remote-console">
+          <div>Content</div>
+        </AppShell>,
+      )
+    })
+
+    const consoleStatus = container.querySelector('[aria-label="Aurora shell status"]')?.textContent
+    expect(consoleStatus).toContain('aurora-prod-01 is offline')
+    expect(consoleStatus).toContain('Offline')
+
+    await act(async () => root.unmount())
+  })
+
+  it('does not claim a node is ready when its local services could not start', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <AppShell
+          snapshot={{ ...snapshot, loadState: 'ready', error: null, nativePlatform: 'android' }}
+          runtimeMode="mobile-native"
+          nodeMode="mesh-node"
+          localNodeAvailable={false}
+        >
+          <div>Content</div>
+        </AppShell>,
+      )
+    })
+
+    const status = container.querySelector('[aria-label="Aurora shell status"]')?.textContent
+    expect(status).toContain('Device setup needs attention')
+    expect(status).not.toContain('This device is available')
+
+    await act(async () => root.unmount())
+  })
 })

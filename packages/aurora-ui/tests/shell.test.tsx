@@ -1230,7 +1230,7 @@ describe('Aurora production shell', () => {
     const pendingMessage = {
       id: 'assistant-pending',
       role: 'assistant' as const,
-      text: 'Waiting for Aurora stream...',
+      text: 'Waiting for Aurora...',
       createdAt: '2026-06-21T00:00:00Z',
       status: 'streaming' as const,
       modelLabel: 'gpt-4o',
@@ -1251,6 +1251,14 @@ describe('Aurora production shell', () => {
       modelLabel: 'gpt-4o',
       providerLabel: 'OpenAI'
     }))
+
+    expect(applyAssistantTerminalUpdate(pendingMessage, {
+      ...streamUpdate('Final streamed response'),
+      kind: 'completed' as const,
+      messageId: 'backend-message-id',
+      text: 'Final streamed response',
+      textDelta: ''
+    }).id).toBe('assistant-pending')
 
     const contextItem = attachmentToContextItem({
       id: 'context-text-1',
@@ -1342,6 +1350,10 @@ describe('Aurora production shell', () => {
 
     expect(model.chips.find((chip) => chip.id === 'native-capture')?.state).toBe('available-local')
     expect(model.chips.find((chip) => chip.id === 'remote-processing')?.state).toBe('available-local')
+    expect(model.transcriptionRoute.item.capabilityMethod).toBe('Transcribe')
+    expect(model.transcriptionRoute.state).toBe('available-local')
+    expect(model.speechRoute.item.capabilityMethod).toBe('Synthesize')
+    expect(model.speechRoute.state).toBe('available-remote')
     expect(model.controls.find((control) => control.id === 'remote-transcription')?.reason).toContain('Audio can start')
     expect(model.events.map((event) => event.id)).toEqual(expect.arrayContaining(['partial', 'final', 'timeout', 'cancelled', 'remote-denied', 'peer-disconnect']))
 
@@ -2664,7 +2676,9 @@ describe('Aurora production shell', () => {
           route={meshRoute()}
         />
       ))
-      expect(container.textContent).toContain('measuring')
+      expect(container.textContent).toContain('connected')
+      expect(container.textContent).toContain('Response time unavailable')
+      expect(container.textContent).not.toContain('measuring')
       expect(container.textContent).not.toContain('Route qualitygood')
 
       await act(async () => root.render(
@@ -3318,7 +3332,7 @@ describe('Aurora production shell', () => {
     const message = {
       id: 'assistant-pending',
       role: 'assistant' as const,
-      text: 'Waiting for Aurora stream...',
+      text: 'Waiting for Aurora...',
       createdAt: '2026-06-21T00:00:00Z',
       status: 'streaming' as const
     }
@@ -3335,7 +3349,7 @@ describe('Aurora production shell', () => {
     const pending = {
       id: 'assistant-pending',
       role: 'assistant' as const,
-      text: 'Waiting for Aurora stream...',
+      text: 'Waiting for Aurora...',
       createdAt: '2026-06-21T00:00:00Z',
       status: 'streaming' as const
     }
@@ -3400,7 +3414,7 @@ describe('Aurora production shell', () => {
     const pending = {
       id: 'assistant-pending',
       role: 'assistant' as const,
-      text: 'Waiting for Aurora stream...',
+      text: 'Waiting for Aurora...',
       createdAt: '2026-06-21T00:00:00Z',
       status: 'streaming' as const
     }
@@ -3448,7 +3462,7 @@ describe('Aurora production shell', () => {
     const pending = applyAssistantToolUpdate({
       id: 'assistant-pending',
       role: 'assistant' as const,
-      text: 'Waiting for Aurora stream...',
+      text: 'Waiting for Aurora...',
       createdAt: '2026-06-21T00:00:00Z',
       status: 'streaming' as const
     }, {

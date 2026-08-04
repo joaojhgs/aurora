@@ -222,6 +222,7 @@ function ReadyPathAwareShell({
         sessionIsAdmin={runtime.client.auth.snapshot().isAdmin}
         runtimeMode="web-thin"
         nodeMode={configuredRuntimeProfile?.nodeMode ?? runtimeNodeMode}
+        localNodeAvailable={runtime.localNodeProviderStatus?.available}
       >
         {children}
       </AppShell>

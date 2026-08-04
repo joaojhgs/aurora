@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Copy, GitBranch, KeyRound, Link2, LockKeyhole, Network, QrCode, RadioTower, RefreshCw, Router, ScanLine, Settings2, ShieldCheck, Signal, UsersRound, Wifi } from 'lucide-react'
 import { AUTH_METHODS, AuroraError, GATEWAY_METHODS, routePath, summarizeCapabilities, type AuroraClient, type AvailabilityState, type CapabilitySummary, type ConfigFieldMetadata, type ConfigSchemaMetadataResponse, type DeviceListResponse, type DeviceResponse, type JsonObject, type JsonValue, type ListPendingPairingsResponse, type MeshInviteConfigResponse, type MeshPeerListResponse, type MeshPeerDiagnostic, type MeshPeerInfo, type MeshRouteDiagnostic, type MeshStatusResponse, type PendingPairingEntry, type PermissionCatalogEntry, type WebRTCDiagnosticsResponse } from '@aurora/client'
-import type { PeerPairingApproval } from '@aurora/client/webrtc'
+import type { PeerPairingApproval, SelectedCandidatePairEvidence } from '@aurora/client/webrtc'
 import { Alert, AlertDescription, AlertTitle } from '#components/ui/alert'
 import { Avatar, AvatarFallback } from '#components/ui/avatar'
 import { Badge } from '#components/ui/badge'
@@ -222,6 +222,7 @@ export interface MeshPeersViewProps {
   inviteImport?: MeshInviteImportOperation
   canManageLocalServiceConfiguration?: boolean
   thinPeerSnapshot?: BrowserWebRtcSnapshot | null
+  thinPeerEvidence?: SelectedCandidatePairEvidence | null
   thinPeerMutationError?: string | null
   onConfirmThinPairing?: (sessionId: string, approval: PeerPairingApproval) => void | Promise<void>
   onRejectThinPairing?: (sessionId: string) => void
@@ -251,6 +252,7 @@ const meshConfigKeyPaths = ['services.gateway.mesh_network.enabled', 'services.g
 
 const MESH_PRIMARY_READ_TIMEOUT_MS = 8_000
 const MESH_OPTIONAL_READ_TIMEOUT_MS = 5_000
+const CONNECTION_STATS_POLL_MS = 3_000
 
 const loadingSnapshot: MeshPeersSnapshot = {
   loadState: 'loading',
@@ -338,6 +340,9 @@ export function MeshPeersResource({
   const [initialInviteText] = useState<string | null>(() => initialInviteTextProp)
   const [thinPeerSnapshot, setThinPeerSnapshot] =
     useState<BrowserWebRtcSnapshot | null>(() => thinPeer?.snapshot() ?? null)
+  const [thinPeerEvidence, setThinPeerEvidence] =
+    useState<SelectedCandidatePairEvidence | null>(null)
+  const thinPeerEvidenceRef = useRef<SelectedCandidatePairEvidence | null>(null)
   const [thinPeerMutationError, setThinPeerMutationError] =
     useState<string | null>(null)
   const thinPairingApprovals = useRef<Set<string>>(new Set<string>())
@@ -375,10 +380,11 @@ export function MeshPeersResource({
         ? buildLocalMeshNodeSnapshot({
             localNode,
             thinPeer: nextThinSnapshot,
+            connectionEvidence: thinPeerEvidenceRef.current,
             featureSharing: localSharingSnapshot.current,
             sharingAvailable: Boolean(localFeatureSharing),
           })
-        : reconcileMeshPeersWithThinPeer(current, nextThinSnapshot, current))
+        : reconcileMeshPeersWithThinPeer(current, nextThinSnapshot, current, thinPeerEvidenceRef.current))
     })
   }, [localFeatureSharing, localNode, ownsLocalNodeState, thinPeer])
 
@@ -389,6 +395,7 @@ export function MeshPeersResource({
       setSnapshot(buildLocalMeshNodeSnapshot({
         localNode,
         thinPeer: thinPeer?.snapshot() ?? null,
+        connectionEvidence: thinPeerEvidenceRef.current,
         featureSharing: nextSharing,
         sharingAvailable: true,
       }))
@@ -409,6 +416,7 @@ export function MeshPeersResource({
       setSnapshot(buildLocalMeshNodeSnapshot({
         localNode,
         thinPeer: thinPeer?.snapshot() ?? null,
+        connectionEvidence: thinPeerEvidenceRef.current,
         featureSharing,
         sharingAvailable: Boolean(localFeatureSharing),
       }))
@@ -422,6 +430,7 @@ export function MeshPeersResource({
         next,
         thinPeer?.snapshot() ?? thinPeerSnapshot,
         current,
+        thinPeerEvidenceRef.current,
       ),
     )
   }, [canManageLocalServiceConfiguration, client, localFeatureSharing, localNode, ownsLocalNodeState, route, thinPeer])
@@ -443,6 +452,7 @@ export function MeshPeersResource({
               next,
               thinPeer?.snapshot() ?? thinPeerSnapshot,
               current,
+              thinPeerEvidenceRef.current,
             ),
           )
         }
@@ -456,6 +466,67 @@ export function MeshPeersResource({
       window.clearInterval(interval)
     }
   }, [canManageLocalServiceConfiguration, client, ownsLocalNodeState, route, snapshot.meshEnabled, thinPeer, thinPeerSnapshot])
+
+  useEffect(() => {
+    if (!thinPeer || !isBrowserWebRtcConnected(thinPeerSnapshot)) {
+      thinPeerEvidenceRef.current = null
+      setThinPeerEvidence(null)
+      return
+    }
+    let cancelled = false
+    let pending = false
+    const measure = async () => {
+      if (pending) return
+      pending = true
+      try {
+        const evidence = await thinPeer.getSelectedCandidatePairEvidence()
+        if (cancelled) return
+        thinPeerEvidenceRef.current = evidence
+        setThinPeerEvidence(evidence)
+        const currentThinSnapshot = thinPeer.snapshot()
+        setSnapshot((current) => ownsLocalNodeState
+          ? buildLocalMeshNodeSnapshot({
+              localNode,
+              thinPeer: currentThinSnapshot,
+              connectionEvidence: evidence,
+              featureSharing: localSharingSnapshot.current,
+              sharingAvailable: Boolean(localFeatureSharing),
+            })
+          : reconcileMeshPeersWithThinPeer(current, currentThinSnapshot, current, evidence))
+      } catch {
+        if (!cancelled) {
+          thinPeerEvidenceRef.current = null
+          setThinPeerEvidence(null)
+          const currentThinSnapshot = thinPeer.snapshot()
+          setSnapshot((current) => ownsLocalNodeState
+            ? buildLocalMeshNodeSnapshot({
+                localNode,
+                thinPeer: currentThinSnapshot,
+                connectionEvidence: null,
+                featureSharing: localSharingSnapshot.current,
+                sharingAvailable: Boolean(localFeatureSharing),
+              })
+            : reconcileMeshPeersWithThinPeer(current, currentThinSnapshot, current, null))
+        }
+      } finally {
+        pending = false
+      }
+    }
+    void measure()
+    const interval = window.setInterval(() => void measure(), CONNECTION_STATS_POLL_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [
+    localFeatureSharing,
+    localNode,
+    ownsLocalNodeState,
+    thinPeer,
+    thinPeerSnapshot?.expectedStablePeerId,
+    thinPeerSnapshot?.state,
+    thinPeerSnapshot?.status,
+  ])
 
   useEffect(() => {
     let cancelled = false
@@ -694,6 +765,7 @@ export function MeshPeersResource({
       canManageLocalServiceConfiguration={canManageLocalServiceConfiguration}
       ownsLocalNodeState={ownsLocalNodeState}
       thinPeerSnapshot={thinPeerSnapshot}
+      thinPeerEvidence={thinPeerEvidence}
       thinPeerMutationError={thinPeerMutationError}
       onConfirmThinPairing={confirmThinPairing}
       onRejectThinPairing={(sessionId) => void rejectThinPairing(sessionId)}
@@ -1014,6 +1086,7 @@ export function reconcileMeshPeersWithThinPeer(
   next: MeshPeersSnapshot,
   thinPeer: BrowserWebRtcSnapshot | null | undefined,
   previous?: MeshPeersSnapshot | null,
+  connectionEvidence?: SelectedCandidatePairEvidence | null,
 ): MeshPeersSnapshot {
   if (!isBrowserWebRtcConfigured(thinPeer)) return next
 
@@ -1045,6 +1118,9 @@ export function reconcileMeshPeersWithThinPeer(
       ? 'pending'
       : 'stale'
   const connectionStatus = connected ? 'connected' : 'offline'
+  const measuredLatencyMs = connected
+    ? connectionRoundTripTimeMs(connectionEvidence)
+    : null
   const existingPeer = base.peers.find((peer) => peer.peerId === peerId)
   const projectedPeer: MeshPeerRow = existingPeer
     ? {
@@ -1055,6 +1131,7 @@ export function reconcileMeshPeersWithThinPeer(
           ? 'Approved device'
           : 'Saved device is offline',
         connectionStatus,
+        latencyMs: measuredLatencyMs ?? existingPeer.latencyMs,
         lastSeen: thinPeer.updatedAt,
         lastEvidenceSource: 'Saved device profile',
       }
@@ -1076,7 +1153,7 @@ export function reconcileMeshPeersWithThinPeer(
         fingerprint: peerId,
         permissions: [],
         inboundPermissions: [],
-        latencyMs: null,
+        latencyMs: measuredLatencyMs,
         routeQuality: connected ? 'connected' : 'offline',
         compatibility: 'checked again on reconnect',
         serviceCount: 0,
@@ -1137,11 +1214,13 @@ export function reconcileMeshPeersWithThinPeer(
 export function buildLocalMeshNodeSnapshot({
   localNode,
   thinPeer,
+  connectionEvidence,
   featureSharing,
   sharingAvailable,
 }: {
   localNode?: LocalMeshNodeIdentity | undefined
   thinPeer?: BrowserWebRtcSnapshot | null | undefined
+  connectionEvidence?: SelectedCandidatePairEvidence | null | undefined
   featureSharing?: LocalFeatureSharingSnapshot | null | undefined
   sharingAvailable?: boolean
 }): MeshPeersSnapshot {
@@ -1151,6 +1230,7 @@ export function buildLocalMeshNodeSnapshot({
   const featureById = new Map((featureSharing?.features ?? []).map((feature) => [feature.id, feature]))
   const approvedDevices = featureSharing?.approvedDevices ?? []
   const serviceScopes = featureSharing ? localShareableServiceScopes(featureSharing) : []
+  const latencyMs = connected ? connectionRoundTripTimeMs(connectionEvidence) : null
   const rows = new Map<string, MeshPeerRow>()
 
   for (const approved of approvedDevices) {
@@ -1168,6 +1248,7 @@ export function buildLocalMeshNodeSnapshot({
       nodeName: isCurrent ? thinPeer?.nodeName?.trim() || approved.peerLabel : approved.peerLabel,
       connected: isCurrent && connected,
       updatedAt: isCurrent ? thinPeer?.updatedAt ?? null : null,
+      latencyMs: isCurrent ? latencyMs : null,
       permissions,
       services: grantedServices.map((scope) => scope.label),
     }))
@@ -1179,6 +1260,7 @@ export function buildLocalMeshNodeSnapshot({
       nodeName: thinPeer?.nodeName?.trim() || 'Connected Aurora device',
       connected,
       updatedAt: thinPeer?.updatedAt ?? null,
+      latencyMs,
       permissions: [],
       services: [],
     }))
@@ -1201,7 +1283,7 @@ export function buildLocalMeshNodeSnapshot({
     webrtcStarted: connected,
     peers,
     pendingRequests: [],
-    liveSessions: connected && expectedPeerId ? [localMeshSessionRow(expectedPeerId, thinPeer!)] : [],
+    liveSessions: connected && expectedPeerId ? [localMeshSessionRow(expectedPeerId, thinPeer!, latencyMs)] : [],
     devices: [],
     pendingCount: thinPeer?.pairingSessionId ? 1 : 0,
     approvedCount: peers.filter((peer) => peer.trustState === 'available-local' || peer.trustState === 'available-remote').length,
@@ -1243,6 +1325,7 @@ function localMeshPeerRow({
   nodeName,
   connected,
   updatedAt,
+  latencyMs,
   permissions,
   services,
 }: {
@@ -1250,6 +1333,7 @@ function localMeshPeerRow({
   nodeName: string
   connected: boolean
   updatedAt: string | null
+  latencyMs: number | null
   permissions: string[]
   services: string[]
 }): MeshPeerRow {
@@ -1267,7 +1351,7 @@ function localMeshPeerRow({
     fingerprint: peerId,
     permissions,
     inboundPermissions: permissions,
-    latencyMs: null,
+    latencyMs,
     routeQuality: connected ? 'connected' : 'offline',
     compatibility: connected ? 'compatible' : 'checked again on reconnect',
     serviceCount: services.length,
@@ -1281,7 +1365,11 @@ function localMeshPeerRow({
   }
 }
 
-function localMeshSessionRow(peerId: string, thinPeer: BrowserWebRtcSnapshot): MeshLiveSessionRow {
+function localMeshSessionRow(
+  peerId: string,
+  thinPeer: BrowserWebRtcSnapshot,
+  latencyMs: number | null,
+): MeshLiveSessionRow {
   return {
     sessionId: `direct:${peerId}`,
     stablePeerId: peerId,
@@ -1293,7 +1381,7 @@ function localMeshSessionRow(peerId: string, thinPeer: BrowserWebRtcSnapshot): M
     iceState: thinPeer.icePathCategory,
     dataChannelState: 'connected',
     authState: 'approved',
-    latencyMs: null,
+    latencyMs,
     identitySource: 'Saved device identity',
     permissions: 'Approved connection',
     pairingState: thinPeer.pairingSessionId ? 'Waiting for approval' : 'Complete',
@@ -1316,6 +1404,7 @@ export function MeshPeersView({
   inviteImport = idleInviteImport,
   canManageLocalServiceConfiguration = true,
   thinPeerSnapshot = null,
+  thinPeerEvidence = null,
   thinPeerMutationError = null,
   initialInviteText = null,
   onPermissionsChange,
@@ -1339,6 +1428,7 @@ export function MeshPeersView({
   const [connectOpen, setConnectOpen] = useState<boolean>(() => Boolean(initialInviteText))
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [scopesPeerId, setScopesPeerId] = useState<string | null>(null)
+  const [detailsPeerId, setDetailsPeerId] = useState<string | null>(null)
   const [thinPairingOpen, setThinPairingOpen] = useState(false)
   useEffect(() => {
     if (!thinPeerSnapshot?.pairingSessionId) setThinPairingOpen(false)
@@ -1354,6 +1444,10 @@ export function MeshPeersView({
   const outgoingPairingLabels = [...new Set(outgoingPairingSessions.map((session) => session.nodeName.trim() || session.stablePeerId || session.sessionId))]
   const reviewPeer = pendingRequests.find((peer) => peer.pendingPairing.request_id === reviewRequestId) ?? null
   const scopesPeer = snapshot.peers.find((peer) => peer.peerId === scopesPeerId && meshPeerScopesEditable(peer)) ?? null
+  const detailsPeer = snapshot.peers.find((peer) => peer.peerId === detailsPeerId) ?? null
+  const detailsSession = detailsPeer
+    ? snapshot.liveSessions.find((session) => session.stablePeerId === detailsPeer.peerId) ?? null
+    : null
   const controlsDisabled = route.disabled || snapshot.loadState === 'loading' || snapshot.loadState === 'denied'
   const mutationDisabled = controlsDisabled || Boolean(pendingPeerId) || !['available-local', 'available-remote', 'degraded'].includes(snapshot.mutationState)
   const inviteReadiness = useMemo(() => meshInviteReadiness(snapshot), [snapshot])
@@ -1486,14 +1580,22 @@ export function MeshPeersView({
       ) : null}
 
       <PendingRequestsTable peers={pendingRequests} pendingPeerId={pendingPeerId} onReview={setReviewRequestId} />
-      <PeerCardGrid peers={snapshot.peers} pendingPeerId={pendingPeerId} optimisticPeerId={optimisticPeerId} onOpenScopes={onSaveScopes ? setScopesPeerId : undefined} onReview={(peerId) => {
+      <PeerCardGrid peers={snapshot.peers} pendingPeerId={pendingPeerId} optimisticPeerId={optimisticPeerId} onOpenDetails={setDetailsPeerId} onOpenScopes={onSaveScopes ? setScopesPeerId : undefined} onReview={(peerId) => {
         const request = pendingRequests.find((peer) => peer.peerId === peerId)
         if (request) setReviewRequestId(request.pendingPairing.request_id)
       }} />
 
       <div className="hidden md:block">
-        <PeerTable peers={snapshot.peers} pendingPeerId={pendingPeerId} optimisticPeerId={optimisticPeerId} mutationDisabled={mutationDisabled} onOpenScopes={onSaveScopes ? setScopesPeerId : undefined} onApprove={onApprovePeer} onDeny={onDenyPeer} onRemove={onRemovePeer} />
+        <PeerTable peers={snapshot.peers} pendingPeerId={pendingPeerId} optimisticPeerId={optimisticPeerId} mutationDisabled={mutationDisabled} onOpenDetails={setDetailsPeerId} onOpenScopes={onSaveScopes ? setScopesPeerId : undefined} onApprove={onApprovePeer} onDeny={onDenyPeer} onRemove={onRemovePeer} />
       </div>
+      <PeerDetailSheet
+        peer={detailsPeer}
+        session={detailsSession}
+        thinPeerSnapshot={thinPeerSnapshot}
+        thinPeerEvidence={thinPeerEvidence}
+        open={Boolean(detailsPeer)}
+        onOpenChange={(open) => !open && setDetailsPeerId(null)}
+      />
       <RequestReviewDialog
         peer={reviewPeer}
         open={Boolean(reviewPeer)}
@@ -1947,7 +2049,7 @@ function PendingRequestsTable({ peers, pendingPeerId, onReview }: { peers: MeshP
   )
 }
 
-function PeerCardGrid({ peers, pendingPeerId, optimisticPeerId, onOpenScopes, onReview }: { peers: MeshPeerRow[]; pendingPeerId: string | null; optimisticPeerId: string | null; onOpenScopes?: ((peerId: string) => void) | undefined; onReview: (peerId: string) => void }) {
+function PeerCardGrid({ peers, pendingPeerId, optimisticPeerId, onOpenDetails, onOpenScopes, onReview }: { peers: MeshPeerRow[]; pendingPeerId: string | null; optimisticPeerId: string | null; onOpenDetails: (peerId: string) => void; onOpenScopes?: ((peerId: string) => void) | undefined; onReview: (peerId: string) => void }) {
   if (peers.length === 0) return <EmptyPanel title="No connected devices yet" description="Approved devices will appear here after they connect or request access." />
   return (
     <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}>
@@ -1980,10 +2082,13 @@ function PeerCardGrid({ peers, pendingPeerId, optimisticPeerId, onOpenScopes, on
                 <Progress value={qualityPct} className="mt-1.5" aria-label={`Connection quality for ${peer.nodeName}`} />
               </div>
               <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>{peer.latencyMs === null ? 'Checking speed' : formatLatencyMs(peer.latencyMs)}</span>
+                <span>{peer.latencyMs === null ? 'Response time unavailable' : formatLatencyMs(peer.latencyMs)}</span>
                 <span>{peer.lastSeen ? formatRelative(peer.lastSeen) : 'last seen n/a'}</span>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={() => onOpenDetails(peer.peerId)}>
+                  Details
+                </Button>
                 {peer.trustState === 'pending' || peer.pendingPairing ? (
                   <Button type="button" size="sm" disabled={pending} onClick={() => onReview(peer.peerId)}>
                     Review
@@ -2029,7 +2134,7 @@ function routeQualityPercent(peer: MeshPeerRow): number {
 
 function qualityLabel(peer: MeshPeerRow): string {
   if (peer.latencyMs === null) {
-    return peer.connectionStatus.includes('connected') ? 'measuring' : 'unavailable'
+    return peer.connectionStatus.includes('connected') ? 'connected' : 'unavailable'
   }
   if (peer.latencyMs <= 50) return 'excellent'
   if (peer.latencyMs <= 150) return 'good'
@@ -2041,7 +2146,59 @@ function formatLatencyMs(latencyMs: number): string {
   return `${latencyMs.toFixed(1)} ms`
 }
 
-function PeerTable({ peers, pendingPeerId, optimisticPeerId, mutationDisabled, onOpenScopes, onApprove, onDeny, onRemove }: { peers: MeshPeerRow[]; pendingPeerId: string | null; optimisticPeerId: string | null; mutationDisabled: boolean; onOpenScopes?: ((peerId: string) => void) | undefined; onApprove: ((peer: MeshPeerRow) => void) | undefined; onDeny: ((peer: MeshPeerRow) => void) | undefined; onRemove: ((peer: MeshPeerRow) => void) | undefined }) {
+function connectionRoundTripTimeMs(
+  evidence: SelectedCandidatePairEvidence | null | undefined,
+): number | null {
+  const value = evidence?.roundTripTimeMs
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? value
+    : null
+}
+
+function connectionPathLabel(value: string | null | undefined): string {
+  switch (value?.toLowerCase()) {
+    case 'host':
+      return 'Nearby direct'
+    case 'srflx':
+    case 'prflx':
+      return 'Public-address direct'
+    case 'relay':
+      return 'Relayed'
+    default:
+      return 'Not available'
+  }
+}
+
+function candidateEndpointLabel(
+  kind: string | undefined,
+  networkKind: string | undefined,
+): string {
+  const path = kind === 'host'
+    ? 'Nearby'
+    : kind === 'srflx' || kind === 'prflx'
+      ? 'Public address'
+      : kind === 'relay'
+        ? 'Relay'
+        : 'Not available'
+  return networkKind && path !== 'Not available'
+    ? `${path} · ${networkKind.toUpperCase()}`
+    : path
+}
+
+function negotiationRoleLabel(role: BrowserWebRtcSnapshot['negotiationRole']): string {
+  if (role === 'offerer') return 'This device'
+  if (role === 'answerer') return 'Other device'
+  return 'Not available'
+}
+
+function formatConnectionBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+  if (bytes < 1_024) return `${Math.round(bytes)} B`
+  if (bytes < 1_048_576) return `${(bytes / 1_024).toFixed(1)} KB`
+  return `${(bytes / 1_048_576).toFixed(1)} MB`
+}
+
+function PeerTable({ peers, pendingPeerId, optimisticPeerId, mutationDisabled, onOpenDetails, onOpenScopes, onApprove, onDeny, onRemove }: { peers: MeshPeerRow[]; pendingPeerId: string | null; optimisticPeerId: string | null; mutationDisabled: boolean; onOpenDetails: (peerId: string) => void; onOpenScopes?: ((peerId: string) => void) | undefined; onApprove: ((peer: MeshPeerRow) => void) | undefined; onDeny: ((peer: MeshPeerRow) => void) | undefined; onRemove: ((peer: MeshPeerRow) => void) | undefined }) {
   return (
     <Card>
       <CardHeader>
@@ -2083,20 +2240,25 @@ function PeerTable({ peers, pendingPeerId, optimisticPeerId, mutationDisabled, o
                       {peer.lifecycleState === 'stale'
                         ? 'offline'
                         : peer.latencyMs === null
-                          ? 'measuring'
+                          ? 'not available'
                           : formatLatencyMs(peer.latencyMs)}
                     </TableCell>
                     <TableCell>
                       <MeshPeerStateBadge peer={peer} optimistic={optimistic} />
                     </TableCell>
                     <TableCell className="text-right">
-                      {onOpenScopes && meshPeerScopesEditable(peer) ? (
-                        <Button type="button" size="sm" variant="outline" onClick={() => onOpenScopes(peer.peerId)}>
-                    Features
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button type="button" size="sm" variant="outline" onClick={() => onOpenDetails(peer.peerId)}>
+                          Details
                         </Button>
-                      ) : (
-                        <span className="text-[11.5px] text-muted-foreground">Review required</span>
-                      )}
+                        {onOpenScopes && meshPeerScopesEditable(peer) ? (
+                          <Button type="button" size="sm" variant="outline" onClick={() => onOpenScopes(peer.peerId)}>
+                            Features
+                          </Button>
+                        ) : (
+                          <span className="self-center text-[11.5px] text-muted-foreground">Review required</span>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 )
@@ -2135,7 +2297,31 @@ function RequestRow({ peer, pending, onReview }: { peer: MeshPeerRow; pending: b
   )
 }
 
-function PeerDetailSheet({ peer, open, onOpenChange }: { peer: MeshPeerRow | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+function PeerDetailSheet({
+  peer,
+  session,
+  thinPeerSnapshot,
+  thinPeerEvidence,
+  open,
+  onOpenChange,
+}: {
+  peer: MeshPeerRow | null
+  session: MeshLiveSessionRow | null
+  thinPeerSnapshot: BrowserWebRtcSnapshot | null
+  thinPeerEvidence: SelectedCandidatePairEvidence | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const directSnapshot = peer && thinPeerSnapshot && (
+    thinPeerSnapshot.expectedStablePeerId === peer.peerId
+    || thinPeerSnapshot.connectedStablePeerId === peer.peerId
+  ) ? thinPeerSnapshot : null
+  const directEvidence = directSnapshot ? thinPeerEvidence : null
+  const responseTimeMs = peer?.latencyMs
+    ?? connectionRoundTripTimeMs(directEvidence)
+    ?? session?.latencyMs
+    ?? null
+  const hasConnectionDetails = Boolean(directSnapshot || session)
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
@@ -2152,10 +2338,44 @@ function PeerDetailSheet({ peer, open, onOpenChange }: { peer: MeshPeerRow | nul
                 <DetailItem label="Trust" value={peer.trustLabel} />
                 <DetailItem label="Availability" value={peer.lifecycleLabel} />
                 <DetailItem label="Connection" value={peer.connectionStatus} />
-                <DetailItem label="Response time" value={peer.latencyMs === null ? 'Checking' : formatLatencyMs(peer.latencyMs)} />
+                <DetailItem label="Response time" value={responseTimeMs === null ? 'Not available' : formatLatencyMs(responseTimeMs)} />
                 <DetailItem label="Last seen" value={formatDate(peer.lastSeen)} />
               </CardContent>
             </Card>
+            {hasConnectionDetails ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>More connection details</CardTitle>
+                  <CardDescription>Privacy-safe connection state for troubleshooting.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3 sm:grid-cols-2">
+                  <DetailItem
+                    label="Connection path"
+                    value={connectionPathLabel(directEvidence?.category ?? directSnapshot?.icePathCategory ?? session?.iceState)}
+                  />
+                  <DetailItem label="Response time" value={responseTimeMs === null ? 'Not available' : formatLatencyMs(responseTimeMs)} />
+                  <DetailItem label="Connection check" value={productConnectionState(directEvidence?.pairState ?? session?.connectionState ?? directSnapshot?.state ?? '')} />
+                  <DetailItem label="This device path" value={candidateEndpointLabel(directEvidence?.localCandidateType, directEvidence?.localProtocol)} />
+                  <DetailItem label="Other device path" value={candidateEndpointLabel(directEvidence?.remoteCandidateType, directEvidence?.remoteProtocol)} />
+                  <DetailItem label="Public address discovery" value={directEvidence?.stunServerReflexiveCandidate?.gathered ? 'Available' : 'Not observed'} />
+                  <DetailItem label="Started by" value={negotiationRoleLabel(directSnapshot?.negotiationRole)} />
+                  <DetailItem label="Coordination address" value={directSnapshot?.selectedSignalingBrokerOrigin ?? 'Not available'} />
+                  <DetailItem label="Reconnect attempts" value={String(directSnapshot?.reconnectCount ?? 0)} />
+                  <DetailItem label="Requests in progress" value={String(directSnapshot?.pendingCallCount ?? 0)} />
+                  <DetailItem label="Replies in progress" value={String(directSnapshot?.pendingStreamCount ?? 0)} />
+                  <DetailItem label="Live updates" value={String(directSnapshot?.pendingSubscriptionCount ?? 0)} />
+                  <DetailItem label="Message parts waiting" value={String(directSnapshot?.pendingFragmentCount ?? 0)} />
+                  <DetailItem label="Message parts sent" value={String(directSnapshot?.sentFragmentCount ?? 0)} />
+                  <DetailItem label="Message parts received" value={String(directSnapshot?.receivedFragmentCount ?? 0)} />
+                  <DetailItem label="Highest queued amount" value={formatConnectionBytes(directSnapshot?.bufferPressureHighWaterBytes ?? 0)} />
+                  <DetailItem label="Protected page" value={directSnapshot?.secureContext === false ? 'No' : 'Yes'} />
+                  <DetailItem label="Connection saved" value={directSnapshot?.secretsPersisted ? 'Yes' : 'No'} />
+                </CardContent>
+                <CardFooter>
+                  <p className="text-xs text-muted-foreground">Network addresses are hidden.</p>
+                </CardFooter>
+              </Card>
+            ) : null}
             <Card>
               <CardHeader>
                 <CardTitle>Permissions</CardTitle>
@@ -2820,7 +3040,7 @@ function LiveSessionsPanel({ sessions, fixtureOnly }: { sessions: MeshLiveSessio
                 <DetailItem label="Device" value={session.nodeName} />
                 <DetailItem label="Status" value={meshStateLabel(session.state)} />
                 <DetailItem label="Access" value={productConnectionState(session.authState)} />
-                <DetailItem label="Latency" value={session.latencyMs === null ? 'measuring' : formatLatencyMs(session.latencyMs)} />
+                <DetailItem label="Response time" value={session.latencyMs === null ? 'Response time unavailable' : formatLatencyMs(session.latencyMs)} />
                 <DetailItem label="Pairing" value={session.pairingState} />
                 <DetailItem label="Linked peer" value={session.linkedPeerState} />
                 <DetailItem label="Details" value={fixtureOnly ? 'Sample data' : 'Available'} />

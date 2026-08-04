@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   AuroraClient,
   MockAuroraTransport,
@@ -29,6 +29,7 @@ import {
 
 import { AssistantView } from '../src/assistant-view'
 import type { LightweightAssistantDependencies } from '../src/local-assistant/lightweight-assistant'
+import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from '../src/platform-surface'
 import type { RouteAvailability } from '../src/shell-data'
 
 const roots: Root[] = []
@@ -47,9 +48,188 @@ beforeAll(() => {
 afterEach(() => {
   for (const root of roots.splice(0)) root.unmount()
   document.body.innerHTML = ''
+  vi.unstubAllGlobals()
+  Reflect.deleteProperty(window.URL, 'createObjectURL')
+  Reflect.deleteProperty(window.URL, 'revokeObjectURL')
 })
 
 describe('unified Assistant execution controls', () => {
+  it('keeps the active turn mounted and follows the live edge when a local answer completes', async () => {
+    const resizeCallbacks: ResizeObserverCallback[] = []
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallbacks.push(callback)
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    })
+    let resolveResponse!: (response: LightweightProviderResponse) => void
+    const response = new Promise<LightweightProviderResponse>((resolve) => {
+      resolveResponse = resolve
+    })
+    const provider: LightweightAssistantProvider = {
+      async complete() {
+        return await response
+      },
+    }
+    const transport = MockAuroraTransport.empty()
+      .register(ORCHESTRATOR_MODEL_METHODS.getCatalog, () => structuredClone(modelRuntimeCatalogFixture))
+    const container = await renderUnifiedAssistant(new AuroraClient({ transport }), provider, {
+      surfaceProfile: getAuroraSurfaceProfile({
+        runtimeMode: 'android',
+        transportKind: 'mesh',
+        nativePlatform: 'android',
+        nodeMode: 'mesh-node',
+        runtimeTier: 'lightweight-ts',
+      }),
+    })
+
+    await enterPrompt(container, 'keep this turn at the bottom')
+    await waitUntil(() => container.textContent?.includes('Waiting for Aurora...') === true)
+    const beforeIds = [...container.querySelectorAll<HTMLElement>('[data-slot="message-scroller-item"][data-message-id]')]
+      .map((item) => item.dataset.messageId)
+    expect(beforeIds).toHaveLength(2)
+    expect(container.querySelectorAll('[data-scroll-anchor="true"]')).toHaveLength(0)
+    const viewport = container.querySelector<HTMLElement>('[data-slot="message-scroller-viewport"]')!
+    let scrollHeight = 1_180
+    Object.defineProperties(viewport, {
+      clientHeight: { configurable: true, value: 300 },
+      scrollHeight: { configurable: true, get: () => scrollHeight },
+      scrollTop: { configurable: true, value: 880, writable: true },
+    })
+    const scrollTo = vi.fn((options: ScrollToOptions) => {
+      viewport.scrollTop = Number(options.top ?? viewport.scrollTop)
+    })
+    Object.defineProperty(viewport, 'scrollTo', {
+      configurable: true,
+      value: scrollTo,
+    })
+
+    await act(async () => {
+      resolveResponse({ type: 'message', content: 'Finished without remounting the turn.' })
+      await response
+    })
+    await waitUntil(() => container.textContent?.includes('Finished without remounting the turn.') === true)
+    scrollHeight = 1_200
+    await act(async () => {
+      for (const callback of resizeCallbacks) {
+        callback([], {} as ResizeObserver)
+      }
+      await Promise.resolve()
+    })
+
+    const afterIds = [...container.querySelectorAll<HTMLElement>('[data-slot="message-scroller-item"][data-message-id]')]
+      .map((item) => item.dataset.messageId)
+    expect(afterIds).toEqual(beforeIds)
+    expect(container.querySelectorAll('[data-scroll-anchor="true"]')).toHaveLength(0)
+    expect(scrollTo).toHaveBeenCalledWith({ top: 900, behavior: 'auto' })
+    expect(viewport.scrollTop).toBe(900)
+  })
+
+  it('plays read-aloud audio returned by Aurora on connected client surfaces', async () => {
+    const synthesisPayloads: unknown[] = []
+    const playedSources: string[] = []
+    Object.defineProperty(window.URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn(() => 'blob:aurora-read-aloud'),
+    })
+    Object.defineProperty(window.URL, 'revokeObjectURL', {
+      configurable: true,
+      value: vi.fn(),
+    })
+    vi.stubGlobal('Audio', class {
+      onended: (() => void) | null = null
+      onerror: (() => void) | null = null
+      constructor(readonly src: string) {}
+      async play() {
+        playedSources.push(this.src)
+      }
+      pause() {}
+    })
+    const provider: LightweightAssistantProvider = {
+      async complete() {
+        return { type: 'message', content: 'Read this response on the client.' }
+      },
+    }
+    const transport = MockAuroraTransport.empty()
+      .register(ORCHESTRATOR_MODEL_METHODS.getCatalog, () => structuredClone(modelRuntimeCatalogFixture))
+      .register('TTS.Synthesize', (request) => {
+        synthesisPayloads.push(request.payload)
+        return {
+          audio_data: 'UklGRg==',
+          format: 'wav',
+          sample_rate: 22_050,
+          channels: 1,
+          duration_ms: 240,
+          text: 'Read this response on the client.',
+        }
+      })
+    const container = await renderUnifiedAssistant(new AuroraClient({ transport }), provider)
+
+    await enterPrompt(container, 'give me something to read')
+    await waitUntil(() => container.textContent?.includes('Read this response on the client.') === true)
+    const readAloud = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.trim() === 'Read aloud')
+    if (!readAloud) throw new Error('missing read-aloud action')
+    await act(async () => {
+      readAloud.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await waitUntil(() => playedSources.length === 1)
+
+    expect(synthesisPayloads).toEqual([{
+      text: 'Read this response on the client.',
+      voice: null,
+      speed: 1,
+      format: 'wav',
+    }])
+    expect(playedSources).toEqual(['blob:aurora-read-aloud'])
+  })
+
+  it('keeps desktop-local read-aloud on the Python-owned speaker path', async () => {
+    const playbackPayloads: unknown[] = []
+    const provider: LightweightAssistantProvider = {
+      async complete() {
+        return { type: 'message', content: 'Read this response on the desktop speaker.' }
+      },
+    }
+    const transport = MockAuroraTransport.empty()
+      .register(ORCHESTRATOR_MODEL_METHODS.getCatalog, () => structuredClone(modelRuntimeCatalogFixture))
+      .register('TTS.Request', (request) => {
+        playbackPayloads.push(request.payload)
+        return { status: 'queued' }
+      })
+    const container = await renderUnifiedAssistant(new AuroraClient({ transport }), provider, {
+      surfaceProfile: getAuroraSurfaceProfile({
+        runtimeMode: 'desktop-local',
+        transportKind: 'tauri-local',
+        nativePlatform: 'linux',
+        nodeMode: 'mesh-node',
+        runtimeTier: 'python-full',
+      }),
+    })
+
+    await enterPrompt(container, 'read locally')
+    await waitUntil(() => container.textContent?.includes('Read this response on the desktop speaker.') === true)
+    const readAloud = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.trim() === 'Read aloud')
+    if (!readAloud) throw new Error('missing read-aloud action')
+    await act(async () => {
+      readAloud.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(playbackPayloads).toEqual([{
+      text: 'Read this response on the desktop speaker.',
+      voice: null,
+      speed: 1,
+      interrupt: true,
+    }])
+  })
+
   it('opens the connected-device model groups so real models are immediately selectable', async () => {
     const provider: LightweightAssistantProvider = {
       async complete() {
@@ -335,6 +515,57 @@ describe('unified Assistant execution controls', () => {
     expect(restoredRuntimeLabels).toContain('Home Aurora · llama-3-8b-instruct')
   })
 
+  it('renders connected-device response deltas before the final answer arrives', async () => {
+    let releaseFinal!: () => void
+    const finalReady = new Promise<void>((resolve) => {
+      releaseFinal = resolve
+    })
+    const provider: LightweightAssistantProvider = {
+      async complete() {
+        return { type: 'message', content: 'Unused local response.' }
+      },
+    }
+    const transport = MockAuroraTransport.empty()
+      .register(ORCHESTRATOR_MODEL_METHODS.getCatalog, () => structuredClone(modelRuntimeCatalogFixture))
+      .register(ORCHESTRATOR_METHODS.externalUserInput, (request) => assistantResponse(request, 'Hello from the connected device.'))
+      .stream('assistant', async function* (request) {
+        const payload = request.payload as Record<string, unknown>
+        yield {
+          id: 'remote-assistant-delta',
+          kind: 'assistant.delta',
+          payload: {
+            delta: 'Hel',
+            session_id: payload.session_id,
+            request_id: payload.request_id,
+          },
+          correlation_id: request.correlationId,
+        }
+        await finalReady
+        yield {
+          id: 'remote-assistant-completed',
+          kind: 'assistant.completed',
+          payload: {
+            text: 'Hello from the connected device.',
+            session_id: payload.session_id,
+            request_id: payload.request_id,
+          },
+          correlation_id: request.correlationId,
+        }
+      })
+    const container = await renderUnifiedAssistant(new AuroraClient({ transport }), provider)
+
+    await chooseModelSelectorItem('Executing locally', 'Dispatch to Home Aurora')
+    await enterPrompt(container, 'show this answer as it arrives')
+    await waitUntil(() => container.textContent?.includes('Hel') === true)
+    expect(container.textContent).not.toContain('Hello from the connected device.')
+
+    await act(async () => {
+      releaseFinal()
+      await finalReady
+    })
+    await waitUntil(() => container.textContent?.includes('Hello from the connected device.') === true)
+  })
+
   it('restores dispatched tool activity from the same encrypted on-device chat', async () => {
     const provider: LightweightAssistantProvider = {
       async complete() {
@@ -583,6 +814,7 @@ async function renderUnifiedAssistant(
     tools?: LightweightToolClientPort
     availableTools?: readonly ToolingProjectionToolInfo[]
     localData?: LocalDataSession
+    surfaceProfile?: AuroraSurfaceProfile
   } = {},
 ): Promise<HTMLElement> {
   client.auth.setApiKeySystem()
@@ -607,6 +839,7 @@ async function renderUnifiedAssistant(
         route={connectedRoute()}
         executionHost="connected-device"
         localAssistant={localAssistant}
+        surfaceProfile={overrides.surfaceProfile}
         initialSession={{ sessionId: null, messages: [] }}
       />
     )

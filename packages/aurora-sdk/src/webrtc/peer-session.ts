@@ -45,6 +45,8 @@ export interface SelectedCandidatePairEvidence {
   selected: boolean
   /** Raw selected-pair path category from observed candidate types; prflx is not normalized to srflx. */
   category: IcePathCategory
+  /** Selected-pair round-trip time converted from WebRTC stats seconds to milliseconds. */
+  roundTripTimeMs?: number | undefined
   pairState?: string | undefined
   nominated?: boolean | undefined
   localCandidateType?: string | undefined
@@ -1224,6 +1226,8 @@ function selectedCandidatePairEvidenceFromStats(
     statsSource: 'RTCPeerConnection.getStats',
     rawAddressRedacted: true
   }
+  const roundTripTimeMs = candidatePairRoundTripTimeMs(pair)
+  if (roundTripTimeMs !== undefined) out.roundTripTimeMs = roundTripTimeMs
   if (typeof pair.state === 'string') out.pairState = pair.state
   if (typeof pair.nominated === 'boolean') out.nominated = pair.nominated
   if (localType !== undefined) out.localCandidateType = localType
@@ -1234,6 +1238,26 @@ function selectedCandidatePairEvidenceFromStats(
   if (typeof remote?.relayProtocol === 'string') out.remoteRelayProtocol = remote.relayProtocol
   if (stunServerReflexiveCandidate.gathered) out.stunServerReflexiveCandidate = stunServerReflexiveCandidate
   return out
+}
+
+function candidatePairRoundTripTimeMs(pair: any): number | undefined {
+  const current = pair?.currentRoundTripTime
+  if (typeof current === 'number' && Number.isFinite(current) && current >= 0) {
+    return current * 1_000
+  }
+  const total = pair?.totalRoundTripTime
+  const responses = pair?.responsesReceived
+  if (
+    typeof total === 'number'
+    && Number.isFinite(total)
+    && total >= 0
+    && typeof responses === 'number'
+    && Number.isFinite(responses)
+    && responses > 0
+  ) {
+    return (total / responses) * 1_000
+  }
+  return undefined
 }
 
 function candidatePairTrafficScore(pair: any): number {

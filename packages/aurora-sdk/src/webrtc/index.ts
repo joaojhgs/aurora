@@ -6,6 +6,7 @@ export type {
   PeerConnectionSnapshot,
   PeerConnectionState,
   RedactedPeerDiagnostic,
+  SelectedCandidatePairEvidence,
   StunServerReflexiveCandidateEvidence,
   WebRtcAuroraRuntime,
   WebRtcPeerConnectionProfile

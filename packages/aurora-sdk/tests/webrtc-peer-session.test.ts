@@ -295,6 +295,7 @@ describe('WebRtcPeerSession', () => {
         selected: true,
         nominated: true,
         state: 'succeeded',
+        currentRoundTripTime: 0.0425,
         localCandidateId: 'local-prflx',
         remoteCandidateId: 'remote-host',
         bytesSent: 10,
@@ -313,6 +314,7 @@ describe('WebRtcPeerSession', () => {
     await expect(session.getSelectedCandidatePairEvidence()).resolves.toMatchObject({
       selected: true,
       category: 'prflx',
+      roundTripTimeMs: 42.5,
       localCandidateType: 'prflx',
       remoteCandidateType: 'host',
       stunServerReflexiveCandidate: {

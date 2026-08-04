@@ -44,7 +44,7 @@ afterEach(() => {
 })
 
 describe('Phase 2 onboarding and Mesh baseline behavior', () => {
-  it('projects a lightweight mesh node from its own identity and direct grants only', () => {
+  it('projects a lightweight mesh node from its own identity and direct grants only', async () => {
     const thinSnapshot: BrowserWebRtcSnapshot = {
       state: 'authorized',
       connectionMode: 'webrtc-only',
@@ -71,6 +71,27 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
     const snapshot = buildLocalMeshNodeSnapshot({
       localNode: { peerId: 'peer-waydroid', nodeName: 'Waydroid' },
       thinPeer: thinSnapshot,
+      connectionEvidence: {
+        selected: true,
+        category: 'srflx',
+        pairState: 'succeeded',
+        nominated: true,
+        roundTripTimeMs: 42.5,
+        localCandidateType: 'srflx',
+        remoteCandidateType: 'prflx',
+        localProtocol: 'udp',
+        remoteProtocol: 'udp',
+        stunServerReflexiveCandidate: {
+          gathered: true,
+          candidateType: 'srflx',
+          urlScheme: 'stun',
+          configuredStunServerCount: 1,
+          statsSource: 'RTCPeerConnection.getStats',
+          rawAddressRedacted: true,
+        },
+        statsSource: 'RTCPeerConnection.getStats',
+        rawAddressRedacted: true,
+      },
       sharingAvailable: true,
       featureSharing: {
         features: [{
@@ -100,10 +121,12 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       nodeName: 'Home Aurora',
       services: ['Tools'],
       connectionStatus: 'connected',
+      latencyMs: 42.5,
     })
     expect(snapshot.peers[0]?.permissions).toEqual(['Tooling.use'])
     expect(snapshot.devices).toEqual([])
     expect(snapshot.liveSessionCount).toBe(1)
+    expect(snapshot.liveSessions[0]?.latencyMs).toBe(42.5)
 
     const container = render(
       <MeshPeersView
@@ -111,6 +134,20 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
         route={meshRoute()}
         ownsLocalNodeState
         canManageLocalServiceConfiguration={false}
+        thinPeerSnapshot={thinSnapshot}
+        thinPeerEvidence={{
+          selected: true,
+          category: 'srflx',
+          pairState: 'succeeded',
+          nominated: true,
+          roundTripTimeMs: 42.5,
+          localCandidateType: 'srflx',
+          remoteCandidateType: 'prflx',
+          localProtocol: 'udp',
+          remoteProtocol: 'udp',
+          statsSource: 'RTCPeerConnection.getStats',
+          rawAddressRedacted: true,
+        }}
       />,
     )
     expect(container.textContent).toContain('Waydroid')
@@ -118,6 +155,17 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
     expect(container.textContent).not.toContain('Old server label')
     expect(container.textContent).not.toContain('Features on this device')
     expect(container.textContent).not.toContain('Device connections')
+    expect(container.textContent).toContain('42.5 ms')
+    expect(container.textContent).not.toContain('measuring')
+    expect(container.textContent).not.toContain('Checking speed')
+    const detailsButton = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Details')
+    expect(detailsButton).toBeDefined()
+    await act(async () => detailsButton?.click())
+    expect(document.body.textContent).toContain('More connection details')
+    expect(document.body.textContent).toContain('Public-address direct')
+    expect(document.body.textContent).toContain('42.5 ms')
+    expect(document.body.textContent).toContain('Network addresses are hidden')
     expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent?.trim() === 'Features')).toBe(false)
   })
 
@@ -173,6 +221,8 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
 
     expect(container.textContent).toContain('Waydroid')
     expect(container.textContent).toContain('Home Aurora')
+    expect(container.textContent).toContain('18.8 ms')
+    expect(peer.selectedCandidatePairEvidenceCalls).toBeGreaterThan(0)
     expect(requestResult).not.toHaveBeenCalled()
   })
 
@@ -825,6 +875,7 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
 })
 
 class FakeBrowserPeer {
+  selectedCandidatePairEvidenceCalls = 0
   private readonly snapshotValue: BrowserWebRtcSnapshot
 
   constructor(partial: Partial<BrowserWebRtcSnapshot> = {}) {
@@ -863,6 +914,16 @@ class FakeBrowserPeer {
   async connect() { return undefined }
   async confirmPairing() { return undefined }
   async rejectPairing() { return undefined }
+  async getSelectedCandidatePairEvidence() {
+    this.selectedCandidatePairEvidenceCalls += 1
+    return {
+      selected: true,
+      category: 'srflx' as const,
+      roundTripTimeMs: 18.75,
+      statsSource: 'RTCPeerConnection.getStats' as const,
+      rawAddressRedacted: true as const,
+    }
+  }
   async disconnect() { return undefined }
 }
 

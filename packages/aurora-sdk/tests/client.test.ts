@@ -4902,6 +4902,87 @@ describe('AuroraClient', () => {
     }))
   })
 
+  it('synthesizes read-aloud audio for client playback without asking the server to play it', async () => {
+    let capturedPayload: unknown
+    const transport = MockAuroraTransport.empty()
+      .register('TTS.Synthesize', (request) => {
+        capturedPayload = request.payload
+        return {
+          audio_data: 'UklGRg==',
+          format: 'wav',
+          sample_rate: 22_050,
+          channels: 1,
+          duration_ms: 240,
+          text: 'hello from Aurora'
+        }
+      })
+    const client = new AuroraClient({ transport })
+
+    const result = await client.assistant.synthesizeReadAloud({
+      text: 'hello from Aurora',
+      voice: 'default',
+      speed: 1.1
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        audio_data: 'UklGRg==',
+        format: 'wav',
+        sample_rate: 22_050,
+        channels: 1,
+        duration_ms: 240,
+      }
+    })
+    expect(capturedPayload).toEqual({
+      text: 'hello from Aurora',
+      voice: 'default',
+      speed: 1.1,
+      format: 'wav',
+    })
+  })
+
+  it('preserves an explicit downstream audio route on non-mesh transports', async () => {
+    let capturedPayload: unknown
+    const transport = MockAuroraTransport.empty()
+      .register('TTS.Synthesize', (request) => {
+        capturedPayload = request.payload
+        return {
+          audio_data: 'UklGRg==',
+          format: 'wav',
+          sample_rate: 22_050,
+          channels: 1,
+          duration_ms: 240,
+          text: 'routed audio'
+        }
+      })
+    const client = new AuroraClient({ transport })
+
+    await client.assistant.synthesizeReadAloud({
+      text: 'routed audio',
+      routePolicy: {
+        peerId: 'peer-studio',
+        providerId: 'remote:peer-studio:TTS',
+        serviceInstanceId: 'remote:peer-studio:TTS',
+        routeState: 'available-remote',
+      },
+    })
+
+    const selector = {
+      peer_id: 'peer-studio',
+      provider_id: 'remote:peer-studio:TTS',
+      service_instance_id: 'remote:peer-studio:TTS',
+    }
+    expect(capturedPayload).toEqual({
+      text: 'routed audio',
+      voice: null,
+      speed: 1,
+      format: 'wav',
+      mesh_selector: selector,
+      selector,
+    })
+  })
+
   it('streams normalized voice events through the assistant SDK surface', async () => {
     const transport = new MockAuroraTransport()
     transport.stream('voice', [

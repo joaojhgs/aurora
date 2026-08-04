@@ -54,6 +54,8 @@ export interface AppShellProps {
   runtimeMode?: string;
   /** Product role is separate from the physical surface and transport. */
   nodeMode?: AuroraNodeMode;
+  /** Whether this node's own local services started successfully. */
+  localNodeAvailable?: boolean;
 }
 
 export function AppShell({
@@ -64,6 +66,7 @@ export function AppShell({
   sessionIsAdmin = false,
   runtimeMode,
   nodeMode,
+  localNodeAvailable,
 }: AppShellProps) {
   const activePath = normalizePath(currentPath);
   const surfaceProfile = getAuroraSurfaceProfile({ runtimeMode, nodeMode });
@@ -207,8 +210,8 @@ export function AppShell({
             ) : null}
           </div>
           <div className="aui-status-row flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto" aria-label="Aurora shell status">
-            <ModeBadge mode={shellSurfaceLabel(snapshot, runtimeMode, nodeMode)} className="aui-shell-status" />
-            <HealthBadge health={shellHealthLabel(snapshot)} className="aui-shell-status" />
+            <ModeBadge mode={shellSurfaceLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable)} className="aui-shell-status" />
+            <HealthBadge health={shellHealthLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable)} className="aui-shell-status" />
             <IdentityBadge identity={shellIdentityBadgeLabel(sessionIsAdmin)} className="aui-shell-status" />
           </div>
           <span
@@ -216,8 +219,8 @@ export function AppShell({
             aria-label="Aurora version and connection state"
           >
             <span className="aui-runtime-version">v0.9.2</span>{" "}
-            <strong className={snapshot.loadState === "error" ? "text-destructive" : "text-success"}>
-              <span className="aui-runtime-separator">· </span>{shellRuntimeStateLabel(snapshot)}
+            <strong className={shellRuntimeStateToneClass(snapshot, runtimeMode, nodeMode, localNodeAvailable)}>
+              <span className="aui-runtime-separator">· </span>{shellRuntimeStateLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable)}
             </strong>
           </span>
           <span className="sr-only" aria-label="Aurora readiness">
@@ -258,7 +261,12 @@ export function AppShell({
             inert={activityRailCollapsed}
           >
             <div className="h-full w-[280px] overflow-y-auto">
-              <ActivityRail snapshot={snapshot} runtimeMode={runtimeMode} nodeMode={nodeMode} />
+              <ActivityRail
+                snapshot={snapshot}
+                runtimeMode={runtimeMode}
+                nodeMode={nodeMode}
+                localNodeAvailable={localNodeAvailable}
+              />
             </div>
           </aside>
         </div>
@@ -631,12 +639,14 @@ function ActivityRail({
   snapshot,
   runtimeMode,
   nodeMode,
+  localNodeAvailable,
 }: {
   snapshot: AuroraShellSnapshot;
   runtimeMode?: string | undefined;
   nodeMode?: AuroraNodeMode | undefined;
+  localNodeAvailable?: boolean | undefined;
 }) {
-  const events = shellActivityEvents(snapshot, runtimeMode, nodeMode);
+  const events = shellActivityEvents(snapshot, runtimeMode, nodeMode, localNodeAvailable);
   const shellAlertCopy = snapshot.error ? productStatusCopy("connection-failed").title : null;
   return (
     <aside className="flex h-full flex-col" aria-label="Aurora activity">
@@ -644,7 +654,7 @@ function ActivityRail({
         <h2 className="text-sm font-semibold">Activity</h2>
         <Badge variant="outline" className="gap-1">
           <i aria-hidden className="size-1.5 rounded-full bg-success" />
-          {activityRailBadgeLabel(snapshot)}
+          {activityRailBadgeLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable)}
         </Badge>
       </header>
       <ul className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2" aria-label="Recent Aurora activity">
@@ -668,8 +678,15 @@ function ActivityRail({
   );
 }
 
-function activityRailBadgeLabel(snapshot: AuroraShellSnapshot): string {
-  if (snapshot.loadState === "error") return "Offline";
+function activityRailBadgeLabel(
+  snapshot: AuroraShellSnapshot,
+  runtimeMode?: string,
+  nodeMode?: AuroraNodeMode,
+  localNodeAvailable?: boolean,
+): string {
+  if (localNodeNeedsAttention(snapshot, runtimeMode, nodeMode, localNodeAvailable)) return "Attention";
+  if (shellRuntimeStateIsOffline(snapshot, runtimeMode, nodeMode)) return "Offline";
+  if (isRetainedPeerOutageOnLocalNode(snapshot, runtimeMode, nodeMode)) return "Live";
   if (snapshot.loadState !== "ready") return "Syncing";
   return "Live";
 }
@@ -678,9 +695,11 @@ function shellActivityEvents(
   snapshot: AuroraShellSnapshot,
   runtimeMode?: string,
   nodeMode?: AuroraNodeMode,
+  localNodeAvailable?: boolean,
 ) {
-  const healthy = snapshot.loadState !== "error";
-  const surface = shellSurfaceProfile(snapshot, runtimeMode);
+  const healthy = !shellRuntimeStateIsOffline(snapshot, runtimeMode, nodeMode)
+    && !localNodeNeedsAttention(snapshot, runtimeMode, nodeMode, localNodeAvailable);
+  const surface = shellSurfaceProfile(snapshot, runtimeMode, nodeMode);
   return [
     {
       id: "routes",
@@ -692,7 +711,7 @@ function shellActivityEvents(
     },
     {
       id: "mode",
-      title: shellModeLabel(snapshot, runtimeMode, nodeMode),
+      title: shellModeLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable),
       detail: "Connected to Aurora",
       when: "live",
       icon: Network,
@@ -722,8 +741,8 @@ function shellActivityEvents(
       detail: snapshot.nativeAvailable
         ? `Native ${snapshot.nativePlatform}`
         : surface.usesNativeShell
-          ? productSurfaceLabel(snapshot, runtimeMode, nodeMode)
-          : `${productSurfaceLabel(snapshot, runtimeMode, nodeMode)}; local controls unavailable`,
+          ? productSurfaceLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable)
+          : `${productSurfaceLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable)}; local controls unavailable`,
       when: "policy",
       icon: snapshot.nativeAvailable ? CheckCircle2 : Clock3,
       tone: snapshot.nativeAvailable ? "good" : "info",
@@ -735,12 +754,19 @@ function shellSurfaceLabel(
   snapshot: AuroraShellSnapshot,
   runtimeMode?: string,
   nodeMode?: AuroraNodeMode,
+  localNodeAvailable?: boolean,
 ): string {
-  return productSurfaceLabel(snapshot, runtimeMode, nodeMode);
+  return productSurfaceLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable);
 }
 
-function shellHealthLabel(snapshot: AuroraShellSnapshot): string {
-  if (snapshot.loadState === "error") return "Offline";
+function shellHealthLabel(
+  snapshot: AuroraShellSnapshot,
+  runtimeMode?: string,
+  nodeMode?: AuroraNodeMode,
+  localNodeAvailable?: boolean,
+): string {
+  if (localNodeNeedsAttention(snapshot, runtimeMode, nodeMode, localNodeAvailable)) return "Degraded";
+  if (shellRuntimeStateIsOffline(snapshot, runtimeMode, nodeMode)) return "Offline";
   if (snapshot.loadState === "loading") return "Connecting";
   return "Healthy";
 }
@@ -765,8 +791,15 @@ function shellAccessLabel(sessionIsAdmin: boolean, snapshot: AuroraShellSnapshot
   return sessionIsAdmin ? `${PRODUCT_COPY.permissions.administrator} on ${shellNodeLabel(snapshot)}` : PRODUCT_COPY.permissions.limited;
 }
 
-function shellRuntimeStateLabel(snapshot: AuroraShellSnapshot): string {
-  if (snapshot.loadState === "error") return "offline";
+function shellRuntimeStateLabel(
+  snapshot: AuroraShellSnapshot,
+  runtimeMode?: string,
+  nodeMode?: AuroraNodeMode,
+  localNodeAvailable?: boolean,
+): string {
+  if (localNodeNeedsAttention(snapshot, runtimeMode, nodeMode, localNodeAvailable)) return "attention";
+  if (shellRuntimeStateIsOffline(snapshot, runtimeMode, nodeMode)) return "offline";
+  if (isRetainedPeerOutageOnLocalNode(snapshot, runtimeMode, nodeMode)) return "available";
   if (snapshot.loadState === "loading") return "syncing";
   return "connected";
 }
@@ -775,27 +808,77 @@ function shellModeLabel(
   snapshot: AuroraShellSnapshot,
   runtimeMode?: string,
   nodeMode?: AuroraNodeMode,
+  localNodeAvailable?: boolean,
 ): string {
-  return productSurfaceLabel(snapshot, runtimeMode, nodeMode);
+  return productSurfaceLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable);
 }
 
-function shellSurfaceProfile(snapshot: AuroraShellSnapshot, runtimeMode?: string) {
+function shellRuntimeStateToneClass(
+  snapshot: AuroraShellSnapshot,
+  runtimeMode?: string,
+  nodeMode?: AuroraNodeMode,
+  localNodeAvailable?: boolean,
+): string {
+  if (localNodeNeedsAttention(snapshot, runtimeMode, nodeMode, localNodeAvailable)) return "text-warning";
+  if (shellRuntimeStateIsOffline(snapshot, runtimeMode, nodeMode)) return "text-destructive";
+  return "text-success";
+}
+
+function shellSurfaceProfile(
+  snapshot: AuroraShellSnapshot,
+  runtimeMode?: string,
+  nodeMode?: AuroraNodeMode,
+) {
   return getAuroraSurfaceProfile({
     runtimeMode,
     transportKind: snapshot.transportKind,
     nativePlatform: snapshot.nativePlatform,
+    nodeMode,
   });
+}
+
+function isRetainedPeerOutageOnLocalNode(
+  snapshot: AuroraShellSnapshot,
+  runtimeMode?: string,
+  nodeMode?: AuroraNodeMode,
+): boolean {
+  return shellSurfaceProfile(snapshot, runtimeMode, nodeMode).ownsLocalNodeState
+    && snapshot.loadState === "error"
+    && snapshot.error === null
+    && snapshot.transportKind === "mesh";
+}
+
+function shellRuntimeStateIsOffline(
+  snapshot: AuroraShellSnapshot,
+  runtimeMode?: string,
+  nodeMode?: AuroraNodeMode,
+): boolean {
+  return snapshot.loadState === "error"
+    && !isRetainedPeerOutageOnLocalNode(snapshot, runtimeMode, nodeMode);
+}
+
+function localNodeNeedsAttention(
+  snapshot: AuroraShellSnapshot,
+  runtimeMode?: string,
+  nodeMode?: AuroraNodeMode,
+  localNodeAvailable?: boolean,
+): boolean {
+  return localNodeAvailable === false
+    && shellSurfaceProfile(snapshot, runtimeMode, nodeMode).ownsLocalNodeState;
 }
 
 function productSurfaceLabel(
   snapshot: AuroraShellSnapshot,
   runtimeMode?: string,
   nodeMode?: AuroraNodeMode,
+  localNodeAvailable?: boolean,
 ): string {
-  const profile = shellSurfaceProfile(snapshot, runtimeMode);
+  const profile = shellSurfaceProfile(snapshot, runtimeMode, nodeMode);
   if (profile.usesLocalSidecar) return "Aurora is running on this computer";
+  if (localNodeAvailable === false && profile.ownsLocalNodeState) return "Device setup needs attention";
+  if (isRetainedPeerOutageOnLocalNode(snapshot, runtimeMode, nodeMode)) return "This device is available";
   if (snapshot.loadState === "error") return `${shellNodeLabel(snapshot)} is offline`;
-  if (nodeMode === "mesh-node" && profile.isMobile) return "This device is available";
+  if (profile.ownsLocalNodeState) return "This device is available";
   if (nodeMode === "remote-console") return `Connected to ${shellNodeLabel(snapshot)}`;
   if (profile.isMobile) return "This device is available";
   return `Connected to ${shellNodeLabel(snapshot)}`;

@@ -177,6 +177,29 @@ export interface TTSPlaybackRequest {
   voice?: string | null
   speed?: number
   interrupt?: boolean
+  routePolicy?: AssistantRoutePolicy | null
+  mesh_selector?: JsonObject | null
+  selector?: JsonObject | null
+}
+
+export interface TTSSynthesisRequest {
+  text: string
+  voice?: string | null
+  speed?: number
+  format?: 'wav' | 'raw' | string
+  sample_rate?: number | null
+  routePolicy?: AssistantRoutePolicy | null
+  mesh_selector?: JsonObject | null
+  selector?: JsonObject | null
+}
+
+export interface TTSSynthesisResponse {
+  audio_data: string
+  format: string
+  sample_rate: number
+  channels: number
+  duration_ms: number
+  text: string
 }
 
 export interface AssistantMessage {
@@ -961,6 +984,7 @@ export interface AssistantVoiceListenRequest {
   sessionId?: string | null
   reason?: string | null
   timeoutMs?: number
+  routePolicy?: AssistantRoutePolicy | null
 }
 
 export interface AssistantVoiceListenResult {
@@ -971,6 +995,8 @@ export interface AssistantVoiceListenResult {
 
 export interface STTListenRequest {
   session_id?: string | null
+  mesh_selector?: JsonObject | null
+  selector?: JsonObject | null
 }
 
 export interface STTListenResponse {
@@ -984,6 +1010,8 @@ export interface STTListenResponse {
 
 export interface STTStopListeningRequest {
   reason?: string | null
+  mesh_selector?: JsonObject | null
+  selector?: JsonObject | null
 }
 
 export interface TranscribeAudioRequest {
@@ -993,6 +1021,9 @@ export interface TranscribeAudioRequest {
   channels?: number
   language?: string | null
   model?: 'realtime' | 'accurate' | string
+  routePolicy?: AssistantRoutePolicy | null
+  mesh_selector?: JsonObject | null
+  selector?: JsonObject | null
 }
 
 export interface TranscribeAudioResponse {
