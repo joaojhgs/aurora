@@ -469,6 +469,45 @@ describe('WebRtcMeshPeerBridge', () => {
     await expect(second).resolves.toMatchObject({ peerId: 'peer-a', nodeName: 'Peer B' })
   })
 
+  it('waits for the lease that follows an unsolicited manifest without requesting a duplicate manifest', async () => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', timeoutMs: 1000 })
+    session.emit(buildProtocolHello({
+      role: 'provider',
+      capabilities: [
+        CAP_FRAGMENTATION_V1,
+        CAP_BACKPRESSURE_V1,
+        CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+        CAP_PROVIDER_LEASE_V1
+      ]
+    }))
+
+    session.emit({
+      type: 'manifest',
+      peer_id: 'peer-a',
+      node_name: 'Peer A',
+      shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }]
+    })
+    await flush()
+
+    const manifest = bridge.getManifest('peer-a')
+    await flush()
+
+    expect(await isSettled(manifest)).toBe(false)
+    expect(session.sent.filter((frame) => (frame as any).type === 'manifest_request')).toHaveLength(0)
+
+    session.emit({
+      type: 'provider_lease',
+      peer_id: 'peer-a',
+      connection_epoch: 'epoch-1',
+      availability_revision: 1,
+      issued_at_ms: 1000,
+      expires_at_ms: 61_000,
+      available: true
+    })
+    await expect(manifest).resolves.toMatchObject({ peerId: 'peer-a', nodeName: 'Peer A' })
+  })
+
   it('does not promote a delayed manifest ACK after an epoch reset and fresh auth', async () => {
     const session = new FakeSession()
     const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', timeoutMs: 1000 })

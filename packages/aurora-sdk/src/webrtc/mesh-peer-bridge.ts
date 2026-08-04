@@ -295,6 +295,13 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.assertPeer(peerId)
     if (this.incomingManifestAck) return await this.waitForIncomingManifest()
     if (this.manifest && this.isRemoteProviderAvailable()) return this.manifest
+    if (
+      this.manifest
+      && this.remoteRequiresProviderLease()
+      && this.remoteAvailability === 'unknown'
+    ) {
+      return await this.waitForIncomingManifest()
+    }
     if (this.remoteAvailability === 'unavailable') return null
     if (!this.manifestParser) return null
     if (this.pendingManifests.size > 0) {

@@ -3503,7 +3503,16 @@ class RTCClient:
             manifest,
             advertised_services,
         )
-        if pending_matches_projection and not force_send:
+        active_readiness = self._local_provider_ready.get(stable_peer_id)
+        active_matches_projection = self._manifest_expectation_matches_projection(
+            stable_peer_id,
+            session_peer_id,
+            active_readiness,
+            manifest,
+            advertised_services,
+        )
+        reuse_active_readiness = not pending_matches_projection and active_matches_projection
+        if (pending_matches_projection or active_matches_projection) and not force_send:
             return True
         await self._audit(
             "mesh.manifest_projection.generated",
@@ -3514,12 +3523,14 @@ class RTCClient:
                 "secrets_redacted": True,
             },
         )
-        if not pending_matches_projection:
+        if not pending_matches_projection and not active_matches_projection:
             self._reset_local_provider_readiness(stable_peer_id, session_peer_id=session_peer_id)
         evidence = manifest.recipient_projection_evidence
         expected_ack: _ManifestAckExpectation | None = None
         if pending_matches_projection:
             expected_ack = pending_ack
+        elif active_matches_projection:
+            expected_ack = None
         elif evidence is not None:
             expected_ack = _ManifestAckExpectation(
                 session_peer_id=session_peer_id,
@@ -3572,6 +3583,11 @@ class RTCClient:
             self._tooling_outbound_manifest_revisions[stable_peer_id] = (
                 self._tooling_outbound_manifest_revisions.get(stable_peer_id, 0) + 1
             )
+            if reuse_active_readiness and active_readiness is not None:
+                await self._send_local_provider_lease_frame(
+                    stable_peer_id,
+                    active_readiness,
+                )
             self.retry_tooling_projection_invalidation(stable_peer_id)
             self._schedule_provider_export_shadow(
                 stable_peer_id,
