@@ -4902,6 +4902,54 @@ describe('AuroraClient', () => {
     }))
   })
 
+  it('sends focused WebView push-to-talk audio through the Transcription route with an explicit selector', async () => {
+    let capturedPayload: unknown
+    const transport = MockAuroraTransport.empty()
+      .register('Transcription.Transcribe', (request) => {
+        capturedPayload = request.payload
+        return {
+          text: 'hello Aurora',
+          confidence: null,
+          language: 'en',
+          duration_ms: 500,
+          model_used: 'accurate'
+        }
+      })
+    const client = new AuroraClient({ transport })
+
+    const result = await client.assistant.transcribeVoiceAudio({
+      audio_data: 'AAAA',
+      format: 'raw',
+      sample_rate: 16_000,
+      channels: 1,
+      model: 'accurate',
+      routePolicy: {
+        peerId: 'peer-studio',
+        providerId: 'remote:peer-studio:Transcription',
+        serviceInstanceId: 'remote:peer-studio:Transcription',
+        routeState: 'available-remote',
+      },
+      mesh_selector: { peer_id: 'legacy-peer' },
+      selector: { peer_id: 'legacy-peer' },
+    })
+
+    const selector = {
+      peer_id: 'peer-studio',
+      provider_id: 'remote:peer-studio:Transcription',
+      service_instance_id: 'remote:peer-studio:Transcription',
+    }
+    expect(result).toMatchObject({ ok: true, data: { text: 'hello Aurora' } })
+    expect(capturedPayload).toEqual({
+      audio_data: 'AAAA',
+      format: 'raw',
+      sample_rate: 16_000,
+      channels: 1,
+      model: 'accurate',
+      mesh_selector: selector,
+      selector,
+    })
+  })
+
   it('synthesizes read-aloud audio for client playback without asking the server to play it', async () => {
     let capturedPayload: unknown
     const transport = MockAuroraTransport.empty()
@@ -4978,6 +5026,43 @@ describe('AuroraClient', () => {
       voice: null,
       speed: 1,
       format: 'wav',
+      mesh_selector: selector,
+      selector,
+    })
+  })
+
+  it('preserves an explicit server playback route on non-mesh transports', async () => {
+    let capturedPayload: unknown
+    const transport = MockAuroraTransport.empty()
+      .register('TTS.Request', (request) => {
+        capturedPayload = request.payload
+        return { status: 'queued' }
+      })
+    const client = new AuroraClient({ transport })
+
+    await client.assistant.requestReadAloud({
+      text: 'play on the selected speaker',
+      voice: 'studio',
+      speed: 0.9,
+      interrupt: false,
+      routePolicy: {
+        peerId: 'peer-kitchen',
+        providerId: 'remote:peer-kitchen:TTS',
+        serviceInstanceId: 'remote:peer-kitchen:TTS',
+        routeState: 'available-remote',
+      },
+    })
+
+    const selector = {
+      peer_id: 'peer-kitchen',
+      provider_id: 'remote:peer-kitchen:TTS',
+      service_instance_id: 'remote:peer-kitchen:TTS',
+    }
+    expect(capturedPayload).toEqual({
+      text: 'play on the selected speaker',
+      voice: 'studio',
+      speed: 0.9,
+      interrupt: false,
       mesh_selector: selector,
       selector,
     })
