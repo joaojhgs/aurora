@@ -57,6 +57,8 @@ def main(argv: list[str] | None = None) -> int:
         args.output.write_text(stable_json_dumps(report), encoding="utf-8")
     else:
         sys.stdout.write(stable_json_dumps(report))
+    if report["evidence_status"] == "blocked_no_ok_runs":
+        return 2
     return 0
 
 
@@ -87,6 +89,7 @@ def build_report(
         "schema_version": SCHEMA_VERSION,
         "benchmark_id": run_id,
         "generated_at_utc": generated_at_utc,
+        "evidence_status": _evidence_status(candidates, runs),
         "source": {
             "harness_revision": _revision(),
             "candidate_config_sha256": stable_sha256(
@@ -153,6 +156,8 @@ def _run_one(
         "thermal_state": result.thermal_state,
         "browser_features": sorted(result.browser_features or []),
     }
+    if result.runtime_provenance:
+        run["runtime_provenance"] = result.runtime_provenance
     if result.status == "ok":
         assert result.hypothesis_text is not None
         wer = score_wer(fixture.reference_text, result.hypothesis_text)
@@ -206,6 +211,7 @@ def _decision_inputs(
                 "revision": candidate.revision,
                 "source_url": candidate.source_url,
                 "model_artifacts": candidate.model_artifacts,
+                "decision_eligible": candidate.role != "harness-smoke",
                 "ok_runs": sum(1 for run in candidate_runs if run["status"] == "ok"),
                 "unavailable_or_failed_runs": sum(
                     1 for run in candidate_runs if run["status"] != "ok"
@@ -215,6 +221,16 @@ def _decision_inputs(
             }
         )
     return decisions
+
+
+def _evidence_status(candidates: list[Candidate], runs: list[dict[str, Any]]) -> str:
+    if all(candidate.role == "harness-smoke" for candidate in candidates):
+        return "schema_only"
+    if not any(run["status"] == "ok" for run in runs):
+        return "blocked_no_ok_runs"
+    if any(candidate.role == "harness-smoke" for candidate in candidates):
+        return "mixed_schema_only"
+    return "measured_incomplete"
 
 
 def _revision() -> str:

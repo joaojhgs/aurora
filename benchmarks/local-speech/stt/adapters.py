@@ -27,6 +27,7 @@ class AdapterResult:
     thermal_state: str | None = None
     browser_features: list[str] | None = None
     failure_bucket: str | None = None
+    runtime_provenance: dict[str, str] | None = None
 
 
 class SttAdapter(Protocol):
@@ -123,6 +124,18 @@ class ExternalJsonAdapter:
         except json.JSONDecodeError:
             return AdapterResult(status="failed", failure_bucket="invalid_output")
 
+        status = str(payload.get("status", "ok"))
+        if status != "ok":
+            return AdapterResult(
+                status=status,
+                failure_bucket=str(payload.get("failure_bucket", "adapter_failed")),
+                browser_features=[
+                    str(item)
+                    for item in payload.get("browser_features", [])
+                    if isinstance(item, str)
+                ],
+                runtime_provenance=_string_map(payload.get("runtime_provenance")),
+            )
         text = payload.get("text")
         if not isinstance(text, str):
             return AdapterResult(status="failed", failure_bucket="invalid_output")
@@ -137,6 +150,7 @@ class ExternalJsonAdapter:
             browser_features=[
                 str(item) for item in payload.get("browser_features", []) if isinstance(item, str)
             ],
+            runtime_provenance=_string_map(payload.get("runtime_provenance")),
         )
 
 
@@ -175,3 +189,9 @@ def _optional_int(value: object) -> int | None:
     if value is None:
         return None
     return int(value)
+
+
+def _string_map(value: object) -> dict[str, str] | None:
+    if not isinstance(value, dict):
+        return None
+    return {str(key): str(item) for key, item in value.items()}

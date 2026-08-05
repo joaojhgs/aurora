@@ -66,9 +66,12 @@ uv run python benchmarks/local-speech/stt/run_benchmark.py \
 ```
 
 The command receives `--candidate-id`, `--fixture-id`, `--audio`, and
-`--language`. It must print one JSON object containing `text` and may include
+`--language`. Successful runs must print one JSON object containing `text` and
+may include
 `finalization_latency_ms`, `initialization_ms`, `download_bytes`,
-`peak_memory_mb`, `thermal_state`, and `browser_features`. The harness never
+`peak_memory_mb`, `thermal_state`, `browser_features`, and
+`runtime_provenance`. Non-ok runs may print `status` plus `failure_bucket`; the
+harness preserves those states without fabricating metrics. The harness never
 copies stdout, stderr, audio paths, reference transcripts, or hypotheses into
 reports.
 
@@ -80,10 +83,29 @@ redacted run outputs.
 
 The section 16 STT gate requires WER by language/noise bucket, fixed and auto
 language modes, finalization latency, initialization, download bytes, peak
-memory, thermal state, browser feature support, and failure buckets. A new
-mobile default must beat the quantized Whisper baseline by at least 25 percent
-in p50/p95 end-of-utterance latency with no required bucket regressing by more
-than two absolute WER points and no memory or thermal failure.
+memory, thermal state, browser/WebView feature support, runtime provenance, and
+failure buckets across English and Portuguese, clean and noise buckets, and
+desktop browser plus Android and iOS WebView target surfaces. A new mobile
+default must meet the target p95 end-of-utterance latency for each required
+surface with no required bucket regressing by more than two absolute WER points
+and no memory or thermal failure.
 
 This harness records those inputs; it does not make the final product decision
-without real browser/WebView/device runs.
+from fixture-smoke, one clean English sample, all-failed runs, missing
+Portuguese/noise/device evidence, unsupported auto mode, or missing thermal
+evidence.
+
+Decision summaries are generated from redacted reports:
+
+```bash
+uv run python benchmarks/local-speech/stt/decision_gate.py \
+  --baseline-report benchmarks/local-speech/reports/<run>/whisper.redacted.json \
+  --candidate-report benchmarks/local-speech/reports/<run>/candidate.redacted.json \
+  --baseline-id transformersjs-whisper-webgpu-wasm \
+  --candidate-id transformersjs-moonshine-onnx \
+  --output benchmarks/local-speech/reports/<run>/decision.redacted.json
+```
+
+If fixed/auto language modes, latency, WER, memory, thermal, browser/WebView, or
+device evidence is missing, the output remains `decision_blocked` and the CLI
+exits `2` after writing the redacted decision report.

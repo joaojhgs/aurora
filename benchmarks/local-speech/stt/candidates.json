@@ -25,9 +25,39 @@
       "display_name": "Transformers.js Whisper tiny/base",
       "model_artifacts": [
         {
-          "artifact_id": "whisper-tiny-or-base-onnx",
-          "sha256": "TBD-after-download",
-          "source": "https://huggingface.co/docs/transformers.js/en/index"
+          "artifact_id": "Xenova/whisper-tiny.en:config.json",
+          "sha256": "37a1073be00d19118c06557896c7c148598f4d8277edc0f5bc07c9f5554839f1",
+          "source": "https://huggingface.co/Xenova/whisper-tiny.en"
+        },
+        {
+          "artifact_id": "Xenova/whisper-tiny.en:generation_config.json",
+          "sha256": "132c95ba9db45f4498f2eab3fea7c1d6a174005010f8f6b7d20cfd5e9795996b",
+          "source": "https://huggingface.co/Xenova/whisper-tiny.en"
+        },
+        {
+          "artifact_id": "Xenova/whisper-tiny.en:onnx/decoder_model_merged_quantized.onnx",
+          "sha256": "dbb2e063b7fbc41d9803b9698f93ecb035c50cbb3fb87b56cb131e4a5eb99059",
+          "source": "https://huggingface.co/Xenova/whisper-tiny.en"
+        },
+        {
+          "artifact_id": "Xenova/whisper-tiny.en:onnx/encoder_model_quantized.onnx",
+          "sha256": "8cc3c6f8563d1b3fbd2c5af9f64c2bed8b020bc593c402d1ef53b9f08fbf1b90",
+          "source": "https://huggingface.co/Xenova/whisper-tiny.en"
+        },
+        {
+          "artifact_id": "Xenova/whisper-tiny.en:preprocessor_config.json",
+          "sha256": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d",
+          "source": "https://huggingface.co/Xenova/whisper-tiny.en"
+        },
+        {
+          "artifact_id": "Xenova/whisper-tiny.en:tokenizer.json",
+          "sha256": "c6ee8f089220a5b1188f6426456772572671c6141ae007eecb83c6a8349f5deb",
+          "source": "https://huggingface.co/Xenova/whisper-tiny.en"
+        },
+        {
+          "artifact_id": "Xenova/whisper-tiny.en:tokenizer_config.json",
+          "sha256": "e082c1ad251541bf277967a703252cddd4bb37a71a43737e03d050c22ec08238",
+          "source": "https://huggingface.co/Xenova/whisper-tiny.en"
         }
       ],
       "notes": [
@@ -39,7 +69,7 @@
         "webgpu-or-wasm",
         "web-worker"
       ],
-      "revision": "TBD-exact-npm-version-and-model-hash",
+      "revision": "transformers.js@2.17.2; onnxruntime-node@1.14.0; Xenova/whisper-tiny.en quantized ONNX artifact set",
       "role": "baseline-fallback",
       "source_url": "https://huggingface.co/docs/transformers.js/en/index",
       "supported_languages": [
@@ -54,9 +84,39 @@
       "display_name": "Moonshine ONNX through Transformers.js",
       "model_artifacts": [
         {
-          "artifact_id": "moonshine-onnx",
-          "sha256": "TBD-after-download",
-          "source": "https://huggingface.co/onnx-community/moonshine-base-ONNX"
+          "artifact_id": "onnx-community/moonshine-tiny-ONNX:config.json",
+          "sha256": "558e1e02069137c796ace1e50c48d8fe451f04a295929138e6bea885517f0edb",
+          "source": "https://huggingface.co/onnx-community/moonshine-tiny-ONNX"
+        },
+        {
+          "artifact_id": "onnx-community/moonshine-tiny-ONNX:generation_config.json",
+          "sha256": "f9b3f711b57be7def2e50a8942f64f36ee0a55fad5b84ff93a687b6c5bcc1d44",
+          "source": "https://huggingface.co/onnx-community/moonshine-tiny-ONNX"
+        },
+        {
+          "artifact_id": "onnx-community/moonshine-tiny-ONNX:onnx/decoder_model_merged_quantized.onnx",
+          "sha256": "eed87831c3a6103534aae7d47a5d485025c659a1323901513961c39fe8a1a367",
+          "source": "https://huggingface.co/onnx-community/moonshine-tiny-ONNX"
+        },
+        {
+          "artifact_id": "onnx-community/moonshine-tiny-ONNX:onnx/encoder_model_quantized.onnx",
+          "sha256": "c6fc4b7bc5af75c0591fd157a1f3829b533d18e9769a888fd95a62e470dd4f4a",
+          "source": "https://huggingface.co/onnx-community/moonshine-tiny-ONNX"
+        },
+        {
+          "artifact_id": "onnx-community/moonshine-tiny-ONNX:preprocessor_config.json",
+          "sha256": "fa43a7017ef85cd1d0fba0d9aae77c8adb16990ae6f11115631f41ec5d8aa679",
+          "source": "https://huggingface.co/onnx-community/moonshine-tiny-ONNX"
+        },
+        {
+          "artifact_id": "onnx-community/moonshine-tiny-ONNX:tokenizer.json",
+          "sha256": "7b913404bdd039af4756783218af4440bc07fb7d6d8258d677e34f95b3ec416f",
+          "source": "https://huggingface.co/onnx-community/moonshine-tiny-ONNX"
+        },
+        {
+          "artifact_id": "onnx-community/moonshine-tiny-ONNX:tokenizer_config.json",
+          "sha256": "edaee394565d428ea98a663ae7209cdcfeefc5585c42d7a570ff7c986df2cd15",
+          "source": "https://huggingface.co/onnx-community/moonshine-tiny-ONNX"
         }
       ],
       "notes": [
@@ -67,7 +127,7 @@
         "webgpu-or-wasm",
         "web-worker"
       ],
-      "revision": "TBD-exact-npm-version-and-model-hash",
+      "revision": "@huggingface/transformers@4.2.0; onnxruntime-node@1.24.3; onnx-community/moonshine-tiny-ONNX q8 artifact set",
       "role": "latency-candidate",
       "source_url": "https://huggingface.co/onnx-community/moonshine-base-ONNX",
       "supported_languages": [
