@@ -36,12 +36,12 @@
         "expected_equivalence": "Raven delta-KV and merged-flow equivalence against pinned English source graphs"
       },
       "assets": {
-        "tokenizer.model": {"sha256": "d461765ae179566678c93091c5fa6f2984c31bbe990bf1aa62d92c64d91bc3f6", "size_bytes": 445894},
+        "tokenizer.model": {"sha256": "d461765ae179566678c93091c5fa6f2984c31bbe990bf1aa62d92c64d91bc3f6", "size_bytes": 59339},
         "spm_vocab.json": {"sha256": "354255248387036e66271fe9ee44bfb56055f7bd62600f8fcc84d2cd18e02315", "size_bytes": 109060},
-        "text_conditioner.onnx": {"sha256": "4ecee995fb69f85c7a7493d11f7b5ee15d9950facc7ab3f5c9c49ef1e03847bb", "size_bytes": 18368864},
-        "flow_lm_main_int8.onnx": {"sha256": "f9bd8106b79a0192c1c43399ab938fb24900a95c1c599870d75a884e99000116", "size_bytes": 109248000},
-        "flow_lm_flow_int8.onnx": {"sha256": "3dd781ee5abee9e195320bf0106bebd6372a852b3b36352524ee78b40554635d", "size_bytes": 12447744},
-        "mimi_decoder_int8.onnx": {"sha256": "3630450a3297a101792a6ac66619ebc70ab916b265e6220c2afaef8b1673f925", "size_bytes": 22474752},
+        "text_conditioner.onnx": {"sha256": "4ecee995fb69f85c7a7493d11f7b5ee15d9950facc7ab3f5c9c49ef1e03847bb", "size_bytes": 16388344},
+        "flow_lm_main_int8.onnx": {"sha256": "f9bd8106b79a0192c1c43399ab938fb24900a95c1c599870d75a884e99000116", "size_bytes": 76341079},
+        "flow_lm_flow_int8.onnx": {"sha256": "3dd781ee5abee9e195320bf0106bebd6372a852b3b36352524ee78b40554635d", "size_bytes": 9962530},
+        "mimi_decoder_int8.onnx": {"sha256": "3630450a3297a101792a6ac66619ebc70ab916b265e6220c2afaef8b1673f925", "size_bytes": 22684077},
         "bos_before_voice.npy": {"sha256": "f46edf4f7007b7ba4ea58831f49d003e59e167b4641c44bb3addfe9231a780b1", "size_bytes": 4224}
       }
     },

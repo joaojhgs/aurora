@@ -1,4 +1,5 @@
 {
+  "evidence_kind": "fixture",
   "first_audio_ms": 800,
   "audio_duration_ms": 10000,
   "generation_ms": 9000,
@@ -7,5 +8,7 @@
   "cancelled_stale_audio": false,
   "device": "fixture",
   "browser_or_runtime": "fixture",
-  "thermal": "not-measured"
+  "thermal": "not-measured",
+  "source_commit": "fixture",
+  "artifact_sha256": "fixture"
 }

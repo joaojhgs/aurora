@@ -20,11 +20,11 @@ PocketTTS-Raven spike. Generated JSON reports belong under ignored
 
 | Item | Status | Evidence/disposition |
 | --- | --- | --- |
-| P0.10 Raven runtime benchmark gate | Prepared only | `raven_gate.py benchmark` validates first-audio, RTF, memory, download, and cancellation report shape. No real browser/mobile/thermal claim was made because no live model runtime/device evidence was available in this lane. |
+| P0.10 Raven runtime benchmark gate | Prepared only | `raven_gate.py benchmark` validates first-audio, RTF, memory, download, cancellation, evidence kind, source commit, artifact hash, runtime, device, and thermal provenance. Fixture/synthetic reports return schema-only/non-release status. No real browser/mobile/thermal claim was made because no live model runtime/device evidence was available in this lane. |
 | P0.17 upstream and sibling provenance | Pinned | `pinned_raven_manifest.json` records exact upstream, Kyutai, ONNX mirror, sibling revisions, and license/source roles. |
-| P0.18 English compact conversion | Blocked before conversion | English source asset hashes are pinned, but source assets were not present under `.artifacts/pockettts/w0-raven/source-assets/english_2026-04`. The verifier reports first missing asset instead of claiming reproduction. |
-| P0.19 Portuguese compact conversion | Blocked before conversion | Immutable Portuguese asset hashes are intentionally `TBD:*`; release requires official Kyutai export or reviewed hash-pinned ONNX input before conversion/equivalence. |
-| P0.20 `french_24l` conversion | Blocked before conversion | Manifest records 24 layers and 72 state slots, explicitly `claims_compact: false`. Runtime/exporter work remains required for layer-count independence before French local support claims. |
+| P0.18 English compact conversion | Reproduced in ignored artifacts | The pinned Raven `tools/prepare_models.sh --web` path completed from immutable hash-checked English inputs. It verified AR delta-KV exact equivalence, decoder delta-KV exact equivalence, produced optimized native/web graphs, and precompressed the web model/runtime set. |
+| P0.19 Portuguese compact conversion | Blocked in converter | The pinned community mirror exposes a `portuguese` candidate with 18 flow state entries / 6 layers. Running Raven's documented script with `BUNDLE_URL=.../onnx/portuguese` fails at `tokenizer.model` because `prepare_models.sh` hard-codes the English tokenizer SHA. Candidate tokenizer SHA-256: `3aa51309c55f114771c156aaeb86f6fc325991364aa3c38af74aecf1cbd0fade`; candidate bundle metadata SHA-256: `389ab9d942f044a6a71d04e86ba89b100dee21ed91ca9d099b19ac45b122d242`. |
+| P0.20 `french_24l` conversion | Blocked in converter | The pinned community mirror exposes a `french_24l` candidate with 72 flow state entries / 24 layers, explicitly not compact. Running Raven's documented script with `BUNDLE_URL=.../onnx/french_24l` fails at `tokenizer.model` because `prepare_models.sh` hard-codes the English tokenizer SHA. Candidate tokenizer SHA-256: `521c85bdb2da10618f4be52021ed1cb2a7a6299b040708487f133193f7b305e2`; candidate bundle metadata SHA-256: `8a5fe6c59985e3ccb5a6ccb1ffb2e84ac08488c5bfa704053618851436741427`. Runtime/exporter work remains required for layer-count independence before French local support claims. |
 | P0.23 sibling clone boundary | Recorded | Sibling lacks checked-in `public/assistant/pocket-tts/src/encode-worker.js`; reusable runtime patches are separated from rejected clone/model/cache shortcuts. |
 | P0.24 decisions/revisions/hashes | Recorded | Source revisions live in the manifest; generated reports are produced under ignored artifacts. |
 
@@ -32,6 +32,8 @@ PocketTTS-Raven spike. Generated JSON reports belong under ignored
 
 - Single English bundle URL and static `spm_vocab.json` must become
   manifest-selected per language pack.
+- `prepare_models.sh` pins English hashes in `BUNDLE_FILES`; non-English
+  candidate conversion fails immediately at tokenizer hash verification.
 - `modelSet(lsdSteps)` and fixed graph filenames must become
   `(languageBundleId, qualityTier, memoryClass)` pack selection.
 - Six-layer state shape assumptions must be derived from ONNX graph/config;
@@ -51,6 +53,4 @@ python tools/pockettts-raven/raven_gate.py conversion \
   --pack english_2026-04 --dry-run
 ```
 
-Expected status without source assets: `blocked`, first failure
-`.artifacts/pockettts/w0-raven/source-assets/english_2026-04/tokenizer.model`
-missing.
+Expected status for the prepared ignored upstream checkout: `ready-for-real-conversion`.

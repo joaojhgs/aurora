@@ -127,17 +127,37 @@ def validate_manifest_data(data: dict[str, Any]) -> None:
 
 def command_manifest(args: argparse.Namespace) -> int:
     data = load_manifest(args.manifest)
+    readiness = manifest_readiness(data)
     write_json(
         args.output,
         {
-            "status": "pass",
+            "status": "ready" if readiness["unpinned_asset_count"] == 0 else "incomplete",
             "checked_at_unix": int(time.time()),
             "manifest": str(args.manifest),
             "pack_count": len(data["packs"]),
             "required_packs": sorted(REQUIRED_PACKS),
+            "readiness": readiness,
         },
     )
     return 0
+
+
+def manifest_readiness(data: dict[str, Any]) -> dict[str, Any]:
+    unpinned: list[dict[str, str]] = []
+    pinned = 0
+    for pack_id, pack in data.get("packs", {}).items():
+        for asset_name, asset in pack.get("assets", {}).items():
+            digest = asset.get("sha256", "")
+            if isinstance(digest, str) and digest.startswith("TBD:"):
+                unpinned.append({"pack": pack_id, "asset": asset_name, "marker": digest})
+            else:
+                pinned += 1
+    return {
+        "pinned_asset_count": pinned,
+        "unpinned_asset_count": len(unpinned),
+        "unpinned_assets": unpinned,
+        "release_ready": len(unpinned) == 0,
+    }
 
 
 ASSUMPTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
@@ -249,7 +269,7 @@ def command_conversion(args: argparse.Namespace) -> int:
     failures: list[dict[str, Any]] = []
     verified: dict[str, Any] = {}
     for name, asset in pack["assets"].items():
-        path = args.source_root / args.pack / name
+        path = asset_path(args.source_root, args.pack, name)
         if not path.exists():
             failures.append({"asset": name, "reason": "missing", "expected_path": str(path)})
             continue
@@ -295,6 +315,19 @@ def command_conversion(args: argparse.Namespace) -> int:
     return 0 if status in {"dry-run-pass", "ready-for-real-conversion"} else 2
 
 
+def asset_path(source_root: Path, pack_id: str, name: str) -> Path:
+    candidates = (
+        source_root / pack_id / name,
+        source_root / name,
+        source_root / "models" / name,
+        source_root / "webdemo" / "models" / name,
+    )
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
 def command_benchmark(args: argparse.Namespace) -> int:
     manifest = load_manifest(args.manifest)
     pack = manifest["packs"][args.pack]
@@ -306,10 +339,7 @@ def command_benchmark(args: argparse.Namespace) -> int:
                 "checked_at_unix": int(time.time()),
                 "pack_id": args.pack,
                 "environment": environment_record(),
-                "first_failure": {
-                    "reason": "missing_runtime_report",
-                    "required": "JSON containing first_audio_ms, audio_duration_ms, generation_ms, peak_memory_mb, download_bytes, cancelled_stale_audio",
-                },
+                "first_failure": {"reason": "missing_runtime_report", "required": benchmark_required_fields()},
                 "thermal_claim": "not measured",
                 "mobile_claim": "not measured",
                 "pack_layers": pack["layers"],
@@ -317,21 +347,86 @@ def command_benchmark(args: argparse.Namespace) -> int:
         )
         return 2
     data = json.loads(args.input.read_text(encoding="utf-8"))
-    required = ("first_audio_ms", "audio_duration_ms", "generation_ms", "peak_memory_mb", "download_bytes", "cancelled_stale_audio")
+    required = benchmark_required_fields()
     missing = [key for key in required if key not in data]
     rtf = data["generation_ms"] / data["audio_duration_ms"] if not missing and data["audio_duration_ms"] else None
+    provenance_failures = benchmark_provenance_failures(data) if not missing else []
+    evidence_kind = data.get("evidence_kind")
+    metrics_pass = not missing and rtf is not None and rtf <= args.max_rtf and data["cancelled_stale_audio"] is False
+    if evidence_kind == "measured":
+        status = "pass" if metrics_pass and not provenance_failures else "blocked"
+        exit_code = 0 if status == "pass" else 2
+    elif evidence_kind in {"fixture", "synthetic"}:
+        status = "schema-only"
+        exit_code = 2
+    else:
+        status = "blocked"
+        exit_code = 2
     payload = {
-        "status": "pass" if not missing and rtf is not None and rtf <= args.max_rtf and data["cancelled_stale_audio"] is False else "review",
+        "status": status,
         "checked_at_unix": int(time.time()),
         "pack_id": args.pack,
         "pack_layers": pack["layers"],
+        "evidence_kind": evidence_kind,
         "metrics": data,
         "rtf": rtf,
         "limits": {"max_rtf": args.max_rtf},
         "missing": missing,
+        "provenance_failures": provenance_failures,
+        "release_evidence": status == "pass",
+        "first_failure": first_benchmark_failure(missing, provenance_failures, evidence_kind, metrics_pass),
     }
     write_json(args.output, payload)
-    return 0 if payload["status"] == "pass" else 2
+    return exit_code
+
+
+def benchmark_required_fields() -> tuple[str, ...]:
+    return (
+        "evidence_kind",
+        "first_audio_ms",
+        "audio_duration_ms",
+        "generation_ms",
+        "peak_memory_mb",
+        "download_bytes",
+        "cancelled_stale_audio",
+        "device",
+        "browser_or_runtime",
+        "thermal",
+        "source_commit",
+        "artifact_sha256",
+    )
+
+
+def benchmark_provenance_failures(data: dict[str, Any]) -> list[dict[str, str]]:
+    failures: list[dict[str, str]] = []
+    forbidden = {"", "fixture", "synthetic", "test", "unknown", "not-measured", "not measured", "n/a"}
+    for key in ("device", "browser_or_runtime", "thermal", "source_commit", "artifact_sha256"):
+        value = str(data.get(key, "")).strip()
+        if value.lower() in forbidden:
+            failures.append({"field": key, "reason": "not_measured", "value": value})
+    commit = str(data.get("source_commit", "")).strip()
+    if commit and not re.fullmatch(r"[0-9a-f]{7,64}", commit):
+        failures.append({"field": "source_commit", "reason": "not_a_git_sha", "value": commit})
+    digest = str(data.get("artifact_sha256", "")).strip()
+    if digest and not re.fullmatch(r"[0-9a-f]{64}", digest):
+        failures.append({"field": "artifact_sha256", "reason": "not_a_sha256", "value": digest})
+    return failures
+
+
+def first_benchmark_failure(
+    missing: list[str], provenance_failures: list[dict[str, str]], evidence_kind: Any, metrics_pass: bool
+) -> dict[str, Any] | None:
+    if missing:
+        return {"reason": "missing_fields", "fields": missing}
+    if evidence_kind in {"fixture", "synthetic"}:
+        return {"reason": "non_release_evidence_kind", "evidence_kind": evidence_kind}
+    if evidence_kind != "measured":
+        return {"reason": "invalid_evidence_kind", "evidence_kind": evidence_kind, "allowed": ["measured", "fixture", "synthetic"]}
+    if provenance_failures:
+        return {"reason": "invalid_measurement_provenance", "failure": provenance_failures[0]}
+    if not metrics_pass:
+        return {"reason": "metric_threshold_or_cancellation_failed"}
+    return None
 
 
 def environment_record() -> dict[str, Any]:
