@@ -132,6 +132,114 @@ def test_probe_reports_missing_optional_for_absent_module() -> None:
     assert result.status == "missing_optional"
 
 
+def test_hf_reference_parser_extracts_repo_file_and_revision() -> None:
+    ref = (
+        "hf://kyutai/pocket-tts/languages/english/model.safetensors"
+        "@39592ff23c9ef80098bb74895d104c26275fe2c9"
+    )
+
+    assert cli._hf_reference(ref) == {
+        "repo_id": "kyutai/pocket-tts",
+        "filename": "languages/english/model.safetensors",
+        "revision": "39592ff23c9ef80098bb74895d104c26275fe2c9",
+    }
+
+
+def test_expected_pockettts_config_set_is_exact() -> None:
+    assert sorted(cli.EXPECTED_POCKET_TTS_CONFIG_FILES) == [
+        "english.yaml",
+        "english_2026-01.yaml",
+        "english_2026-04.yaml",
+        "french_24l.yaml",
+        "german.yaml",
+        "german_24l.yaml",
+        "italian.yaml",
+        "italian_24l.yaml",
+        "portuguese.yaml",
+        "portuguese_24l.yaml",
+        "spanish.yaml",
+        "spanish_24l.yaml",
+    ]
+
+
+def test_pockettts_validation_rejects_empty_finite_audio() -> None:
+    failure = cli._pockettts_validation_failure(
+        {
+            "finite_audio": {"finite": True, "numel": 0},
+            "stream_audio": {"chunk_count": 1, "total_numel": 12, "all_finite": True},
+        }
+    )
+
+    assert failure is not None
+    assert failure["stage"] == "finite_audio_validation"
+
+
+def test_pockettts_validation_rejects_missing_or_nonfinite_stream() -> None:
+    missing_failure = cli._pockettts_validation_failure(
+        {
+            "finite_audio": {"finite": True, "numel": 12},
+            "stream_audio": {"chunk_count": 0, "total_numel": 0, "all_finite": True},
+        }
+    )
+    nonfinite_failure = cli._pockettts_validation_failure(
+        {
+            "finite_audio": {"finite": True, "numel": 12},
+            "stream_audio": {"chunk_count": 1, "total_numel": 12, "all_finite": False},
+        }
+    )
+
+    assert missing_failure is not None
+    assert missing_failure["stage"] == "stream_audio_validation"
+    assert nonfinite_failure is not None
+    assert nonfinite_failure["stage"] == "stream_audio_validation"
+
+
+def test_pockettts_validation_rejects_failed_config_smoke() -> None:
+    failure = cli._pockettts_validation_failure(
+        {
+            "finite_audio": {"finite": True, "numel": 12},
+            "stream_audio": {"chunk_count": 1, "total_numel": 12, "all_finite": True},
+            "config_smoke": [
+                {"language": "english", "status": "pass"},
+                {"language": "german", "status": "failure"},
+            ],
+        }
+    )
+
+    assert failure is not None
+    assert failure["stage"] == "config_smoke_validation"
+    assert failure["failed_configs"] == ["german"]
+
+
+def test_pockettts_config_smoke_continues_after_failure(monkeypatch) -> None:
+    class FakeModel:
+        sample_rate = 24000
+        has_voice_cloning = False
+        config = None
+
+    class FakeTTSModel:
+        calls: list[str] = []
+
+        @classmethod
+        def load_model(cls, language: str, quantize: bool):
+            assert quantize is False
+            cls.calls.append(language)
+            if language == "broken":
+                raise RuntimeError("boom")
+            return FakeModel()
+
+    monkeypatch.setattr(
+        cli,
+        "EXPECTED_POCKET_TTS_CONFIG_FILES",
+        {"alpha.yaml", "broken.yaml", "charlie.yaml"},
+    )
+
+    results = cli._smoke_pockettts_configs(FakeTTSModel)
+
+    assert FakeTTSModel.calls == ["alpha", "broken", "charlie"]
+    assert [result["status"] for result in results] == ["pass", "failure", "pass"]
+
+
 def test_report_writer_redacts_home_and_cwd(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     report = cli.build_report(

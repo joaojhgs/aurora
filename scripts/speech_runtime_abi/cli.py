@@ -8,6 +8,8 @@ run the probe command inside that environment.
 from __future__ import annotations
 
 import argparse
+import gc
+import hashlib
 import importlib.util
 import json
 import os
@@ -18,6 +20,7 @@ import sys
 import tempfile
 import textwrap
 import time
+import traceback
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -291,7 +294,7 @@ def _redact(value: Any) -> Any:
     if isinstance(value, str):
         home = str(Path.home())
         cwd = os.getcwd()
-        redacted = value.replace(home, "$HOME").replace(cwd, "$REPO")
+        redacted = value.replace(cwd, "$REPO").replace(home, "$HOME")
         redacted = re.sub(r"(?i)(token|secret|password|api[_-]?key)=([^\\s,;]+)", r"\\1=<redacted>", redacted)
         return redacted
     return value
@@ -553,6 +556,335 @@ def run_probes(probe_ids: set[str] | None, timeout: float, expected_numpy: str) 
     return [run_probe(spec, timeout=timeout, expected_numpy=expected_numpy) for spec in selected]
 
 
+def _max_rss_kib() -> int | None:
+    try:
+        import resource
+    except ImportError:  # pragma: no cover - non-Unix fallback.
+        return None
+    return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _hf_reference(ref: str) -> dict[str, str] | None:
+    if not ref.startswith("hf://"):
+        return None
+    value = ref.removeprefix("hf://")
+    parts = value.split("/")
+    if len(parts) < 3:
+        return None
+    filename = "/".join(parts[2:])
+    revision = None
+    if "@" in filename:
+        filename, revision = filename.rsplit("@", 1)
+    return {
+        "repo_id": "/".join(parts[:2]),
+        "filename": filename,
+        "revision": revision or "main",
+    }
+
+
+def _downloaded_ref_detail(name: str, ref: str) -> dict[str, Any]:
+    detail: dict[str, Any] = {"name": name, "ref": ref}
+    hf_ref = _hf_reference(ref)
+    if hf_ref is not None:
+        detail.update(hf_ref)
+    try:
+        if hf_ref is not None:
+            from huggingface_hub import hf_hub_download
+
+            path = Path(
+                hf_hub_download(
+                    repo_id=hf_ref["repo_id"],
+                    filename=hf_ref["filename"],
+                    revision=hf_ref["revision"],
+                )
+            )
+        else:
+            path = Path(ref)
+        detail.update(
+            {
+                "path": str(path),
+                "size_bytes": path.stat().st_size,
+                "sha256": _sha256_file(path),
+            }
+        )
+    except Exception as exc:  # pragma: no cover - exercised by integration probes.
+        detail.update(
+            {
+                "download_status": "failure",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+        )
+    return detail
+
+
+def _pockettts_model_refs(model: Any, voice: str | None) -> dict[str, str]:
+    refs: dict[str, str] = {}
+    config = getattr(model, "config", None)
+    if config is None:
+        return refs
+    for name in ("weights_path", "weights_path_without_voice_cloning"):
+        value = getattr(config, name, None)
+        if isinstance(value, str):
+            refs[f"config.{name}"] = value
+    flow_lm = getattr(config, "flow_lm", None)
+    lookup_table = getattr(flow_lm, "lookup_table", None)
+    tokenizer_path = getattr(lookup_table, "tokenizer_path", None)
+    if isinstance(tokenizer_path, str):
+        refs["config.flow_lm.lookup_table.tokenizer_path"] = tokenizer_path
+    origin = getattr(model, "origin", None)
+    if voice and origin is not None:
+        try:
+            from pocket_tts.utils.utils import get_predefined_voice
+
+            refs[f"voice.{voice}"] = get_predefined_voice(language=origin.stem, name=voice)
+        except Exception:
+            pass
+    return refs
+
+
+def _tensor_detail(tensor: Any, sample_rate: int | None = None) -> dict[str, Any]:
+    import torch
+
+    cpu = tensor.detach().cpu()
+    detail: dict[str, Any] = {
+        "shape": list(cpu.shape),
+        "dtype": str(cpu.dtype),
+        "numel": int(cpu.numel()),
+        "finite": bool(torch.isfinite(cpu).all()),
+        "mean_abs": float(cpu.abs().mean()) if cpu.numel() else 0.0,
+        "peak_abs": float(cpu.abs().max()) if cpu.numel() else 0.0,
+    }
+    if sample_rate and cpu.numel():
+        detail["duration_seconds"] = float(cpu.numel() / sample_rate)
+    return detail
+
+
+def _duration(start: float) -> float:
+    return round(time.perf_counter() - start, 6)
+
+
+def _failure(stage: str, exc: BaseException) -> dict[str, Any]:
+    return {
+        "stage": stage,
+        "error_type": type(exc).__name__,
+        "error": str(exc),
+        "traceback_tail": traceback.format_exc()[-1000:],
+    }
+
+
+def _pockettts_validation_failure(detail: dict[str, Any]) -> dict[str, Any] | None:
+    finite = detail.get("finite_audio", {})
+    if not finite.get("finite") or int(finite.get("numel", 0)) <= 0:
+        return {
+            "stage": "finite_audio_validation",
+            "error": "finite audio must be non-empty and entirely finite",
+            "finite_audio": finite,
+        }
+    stream = detail.get("stream_audio", {})
+    if int(stream.get("chunk_count", 0)) <= 0 or int(stream.get("total_numel", 0)) <= 0:
+        return {
+            "stage": "stream_audio_validation",
+            "error": "streaming audio must emit at least one non-empty chunk",
+            "stream_audio": stream,
+        }
+    if not stream.get("all_finite"):
+        return {
+            "stage": "stream_audio_validation",
+            "error": "all streaming chunks must be finite",
+            "stream_audio": stream,
+        }
+    failed_configs = [
+        item.get("language")
+        for item in detail.get("config_smoke", [])
+        if item.get("status") != "pass"
+    ]
+    if failed_configs:
+        return {
+            "stage": "config_smoke_validation",
+            "error": "all requested PocketTTS configs must load",
+            "failed_configs": failed_configs,
+        }
+    return None
+
+
+def run_pockettts_inference(
+    language: str,
+    voice: str,
+    text: str,
+    stream_text: str,
+    max_tokens: int,
+    frames_after_eos: int,
+    smoke_configs: bool,
+) -> list[CheckResult]:
+    detail: dict[str, Any] = {
+        "language": language,
+        "voice": voice,
+        "text_length": len(text),
+        "stream_text_length": len(stream_text),
+        "max_tokens": max_tokens,
+        "frames_after_eos": frames_after_eos,
+        "quantize": False,
+        "max_rss_kib_at_start": _max_rss_kib(),
+    }
+    timings: dict[str, float] = {}
+    try:
+        import importlib.metadata as metadata
+
+        import numpy as np
+        import torch
+        from pocket_tts import TTSModel
+
+        detail["versions"] = {
+            "numpy": np.__version__,
+            "pocket_tts": metadata.version("pocket-tts"),
+            "torch": torch.__version__,
+        }
+        detail["audio_extra_modules_available"] = {
+            "soundfile": _module_available("soundfile"),
+        }
+    except Exception as exc:
+        detail["first_failure"] = _failure("import", exc)
+        return [CheckResult(id="pockettts.inference", status="import_failure", detail=detail)]
+
+    if detail["versions"]["numpy"] != DEFAULT_NUMPY_VERSION:
+        detail["first_failure"] = {
+            "stage": "version_check",
+            "error": f"expected numpy {DEFAULT_NUMPY_VERSION}, got {detail['versions']['numpy']}",
+        }
+        return [CheckResult(id="pockettts.inference", status="abi_failure", detail=detail)]
+    if detail["versions"]["pocket_tts"] != "2.1.0":
+        detail["first_failure"] = {
+            "stage": "version_check",
+            "error": f"expected pocket-tts 2.1.0, got {detail['versions']['pocket_tts']}",
+        }
+        return [CheckResult(id="pockettts.inference", status="runtime_failure", detail=detail)]
+
+    try:
+        started = time.perf_counter()
+        model = TTSModel.load_model(language=language, quantize=False)
+        timings["load_model_seconds"] = _duration(started)
+        sample_rate = getattr(model, "sample_rate", None)
+        detail.update(
+            {
+                "sample_rate": sample_rate,
+                "has_voice_cloning": bool(getattr(model, "has_voice_cloning", False)),
+                "origin": str(getattr(model, "origin", "")),
+                "max_rss_kib_after_load": _max_rss_kib(),
+            }
+        )
+        refs = _pockettts_model_refs(model, voice)
+        detail["downloaded_refs"] = [
+            _downloaded_ref_detail(name, ref) for name, ref in sorted(refs.items())
+        ]
+    except Exception as exc:
+        detail["timings"] = timings
+        detail["first_failure"] = _failure("load_model", exc)
+        return [CheckResult(id="pockettts.inference", status="runtime_failure", detail=detail)]
+
+    try:
+        started = time.perf_counter()
+        state = model.get_state_for_audio_prompt(voice)
+        timings["get_state_seconds"] = _duration(started)
+        detail["state_keys"] = sorted(str(key) for key in state)
+        detail["max_rss_kib_after_state"] = _max_rss_kib()
+    except Exception as exc:
+        detail["timings"] = timings
+        detail["first_failure"] = _failure("get_state_for_audio_prompt", exc)
+        return [CheckResult(id="pockettts.inference", status="runtime_failure", detail=detail)]
+
+    try:
+        started = time.perf_counter()
+        audio = model.generate_audio(
+            state,
+            text,
+            max_tokens=max_tokens,
+            frames_after_eos=frames_after_eos,
+            copy_state=True,
+        )
+        timings["generate_audio_seconds"] = _duration(started)
+        detail["finite_audio"] = _tensor_detail(audio, sample_rate)
+        detail["max_rss_kib_after_generate_audio"] = _max_rss_kib()
+    except Exception as exc:
+        detail["timings"] = timings
+        detail["first_failure"] = _failure("generate_audio", exc)
+        return [CheckResult(id="pockettts.inference", status="runtime_failure", detail=detail)]
+
+    try:
+        started = time.perf_counter()
+        chunks = [
+            _tensor_detail(chunk, sample_rate)
+            for chunk in model.generate_audio_stream(
+                state,
+                stream_text,
+                max_tokens=max_tokens,
+                frames_after_eos=frames_after_eos,
+                copy_state=True,
+            )
+        ]
+        timings["generate_audio_stream_seconds"] = _duration(started)
+        detail["stream_audio"] = {
+            "chunk_count": len(chunks),
+            "chunks": chunks,
+            "total_numel": sum(int(chunk["numel"]) for chunk in chunks),
+            "all_finite": all(bool(chunk["finite"]) for chunk in chunks),
+        }
+        detail["max_rss_kib_after_stream"] = _max_rss_kib()
+    except Exception as exc:
+        detail["timings"] = timings
+        detail["first_failure"] = _failure("generate_audio_stream", exc)
+        return [CheckResult(id="pockettts.inference", status="runtime_failure", detail=detail)]
+
+    if smoke_configs:
+        detail["config_smoke"] = _smoke_pockettts_configs(TTSModel)
+
+    detail["timings"] = timings
+    detail["max_rss_kib_at_end"] = _max_rss_kib()
+    validation_failure = _pockettts_validation_failure(detail)
+    if validation_failure is not None:
+        detail["first_failure"] = validation_failure
+        return [CheckResult(id="pockettts.inference", status="runtime_failure", detail=detail)]
+    return [CheckResult(id="pockettts.inference", status="pass", detail=detail)]
+
+
+def _smoke_pockettts_configs(tts_model_class: Any) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for config_name in sorted(EXPECTED_POCKET_TTS_CONFIG_FILES):
+        language = config_name.removesuffix(".yaml")
+        started = time.perf_counter()
+        result: dict[str, Any] = {"language": language, "config_file": config_name}
+        try:
+            model = tts_model_class.load_model(language=language, quantize=False)
+            result.update(
+                {
+                    "status": "pass",
+                    "seconds": _duration(started),
+                    "sample_rate": getattr(model, "sample_rate", None),
+                    "has_voice_cloning": bool(getattr(model, "has_voice_cloning", False)),
+                    "refs": [
+                        _downloaded_ref_detail(name, ref)
+                        for name, ref in sorted(_pockettts_model_refs(model, None).items())
+                    ],
+                    "max_rss_kib": _max_rss_kib(),
+                }
+            )
+            del model
+            gc.collect()
+        except Exception as exc:  # pragma: no cover - integration probe path.
+            result.update({"status": "failure", "seconds": _duration(started)})
+            result["first_failure"] = _failure(f"load_model:{language}", exc)
+        results.append(result)
+    return results
+
+
 def build_report(kind: str, results: list[CheckResult], root: Path) -> dict[str, Any]:
     return {
         "schema": SCHEMA_VERSION,
@@ -599,14 +931,38 @@ def main(argv: list[str] | None = None) -> int:
     probe_parser.add_argument("--expected-numpy", default=DEFAULT_NUMPY_VERSION)
     probe_parser.set_defaults(command="probe")
 
+    infer_parser = subparsers.add_parser(
+        "pockettts-infer",
+        help="Load PocketTTS 2.1.0 and run finite plus streaming inference.",
+    )
+    infer_parser.add_argument("--language", default="english")
+    infer_parser.add_argument("--voice", default="alba")
+    infer_parser.add_argument("--text", default="Hello.")
+    infer_parser.add_argument("--stream-text", default="Hi.")
+    infer_parser.add_argument("--max-tokens", type=int, default=12)
+    infer_parser.add_argument("--frames-after-eos", type=int, default=1)
+    infer_parser.add_argument("--smoke-configs", action="store_true")
+    infer_parser.set_defaults(command="pockettts-infer")
+
     args = parser.parse_args(argv)
     root = args.root.resolve()
     if args.command == "scan":
         results = scan_manifests(root)
         report = build_report("manifest_scan", results, root)
-    else:
+    elif args.command == "probe":
         probe_ids = set(args.probe) if args.probe else None
         results = run_probes(probe_ids, timeout=args.timeout, expected_numpy=args.expected_numpy)
         report = build_report("interpreter_probe", results, root)
+    else:
+        results = run_pockettts_inference(
+            language=args.language,
+            voice=args.voice,
+            text=args.text,
+            stream_text=args.stream_text,
+            max_tokens=args.max_tokens,
+            frames_after_eos=args.frames_after_eos,
+            smoke_configs=args.smoke_configs,
+        )
+        report = build_report("pockettts_inference_probe", results, root)
     write_report(report, args.output)
     return exit_code(results)
