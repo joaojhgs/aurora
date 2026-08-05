@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import io
 import json
+import tarfile
 import tomllib
+import zipfile
 from pathlib import Path
 
 from scripts.speech_runtime_abi import cli
@@ -253,3 +256,306 @@ def test_report_writer_redacts_home_and_cwd(tmp_path: Path, monkeypatch) -> None
 
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert "$REPO" in payload["results"][0]["detail"]["value"]
+
+
+def test_artifact_scan_detects_nested_archive_model_weight_path(tmp_path: Path) -> None:
+    inner = tmp_path / "inner.zip"
+    with zipfile.ZipFile(inner, "w") as archive:
+        archive.writestr("models/voice_embedding.safetensors", b"safe placeholder")
+    outer = tmp_path / "outer.zip"
+    with zipfile.ZipFile(outer, "w") as archive:
+        archive.write(inner, "nested/inner.zip")
+
+    result = cli.scan_artifacts(
+        [outer],
+        root=tmp_path,
+        limits=cli.ArtifactScanLimits(),
+    )[0]
+
+    assert result.status == "failure"
+    finding_paths = {finding["path"] for finding in result.detail["findings"]}
+    assert "outer.zip!nested/inner.zip!models/voice_embedding.safetensors" in finding_paths
+
+
+def test_artifact_scan_rejects_unsafe_archive_paths(tmp_path: Path) -> None:
+    archive_path = tmp_path / "bad.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("../escape.txt", b"nope")
+
+    result = cli.scan_artifacts(
+        [archive_path],
+        root=tmp_path,
+        limits=cli.ArtifactScanLimits(),
+    )[0]
+
+    assert result.status == "failure"
+    assert result.detail["limit_failures"] == [
+        {"path": "bad.zip!../escape.txt", "reason": "unsafe_archive_member_path"}
+    ]
+
+
+def test_artifact_scan_detects_binary_needles(tmp_path: Path) -> None:
+    binary = tmp_path / "bundle.bin"
+    binary.write_bytes(b"\x00\x01livekit-wakeword\x00")
+
+    result = cli.scan_artifacts(
+        [binary],
+        root=tmp_path,
+        limits=cli.ArtifactScanLimits(),
+    )[0]
+
+    assert result.status == "failure"
+    assert {finding["rule_id"] for finding in result.detail["findings"]} == {
+        "dependency.livekit",
+        "dependency.livekit_wakeword",
+    }
+
+
+def test_artifact_scan_fails_closed_on_member_scan_limit(tmp_path: Path) -> None:
+    archive_path = tmp_path / "large.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("assets/blob.bin", b"0123456789")
+
+    result = cli.scan_artifacts(
+        [archive_path],
+        root=tmp_path,
+        limits=cli.ArtifactScanLimits(max_content_scan_bytes=4),
+    )[0]
+
+    assert result.status == "failure"
+    reasons = {failure["reason"] for failure in result.detail["limit_failures"]}
+    assert "archive_member_content_scan_truncated" in reasons
+
+
+def test_artifact_scan_detects_blocked_release_dependency_text(tmp_path: Path) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("sherpa-onnx==1.10.0\n", encoding="utf-8")
+
+    result = cli.scan_artifacts(
+        [requirements],
+        root=tmp_path,
+        limits=cli.ArtifactScanLimits(),
+    )[0]
+
+    assert result.status == "failure"
+    assert result.detail["findings"][0]["category"] == "benchmark_or_training_only_dependency"
+
+
+def test_artifact_package_block_rules_cover_every_training_only_package() -> None:
+    rule_ids = {rule["id"] for rule in cli.ARTIFACT_PACKAGE_BLOCK_RULES}
+
+    assert rule_ids == {
+        f"dependency.{package.replace('-', '_')}"
+        for package in cli.BENCHMARK_OR_TRAINING_ONLY_PACKAGES
+    }
+
+
+def test_artifact_scan_detects_generic_livekit_release_dependency(tmp_path: Path) -> None:
+    closure = tmp_path / "closure.txt"
+    closure.write_text("livekit==1.0.0\n", encoding="utf-8")
+
+    result = cli.scan_artifacts(
+        [closure],
+        root=tmp_path,
+        limits=cli.ArtifactScanLimits(),
+    )[0]
+
+    assert result.status == "failure"
+    assert result.detail["findings"][0]["rule_id"] == "dependency.livekit"
+
+
+def test_artifact_scan_detects_model_extension_without_name_token(tmp_path: Path) -> None:
+    model = tmp_path / "en_us.onnx"
+    model.write_bytes(b"placeholder")
+
+    result = cli.scan_artifacts(
+        [model],
+        root=tmp_path,
+        limits=cli.ArtifactScanLimits(),
+    )[0]
+
+    assert result.status == "failure"
+    assert result.detail["findings"][0]["rule_id"] == "asset.model_or_voice_weight_extension"
+
+
+def test_artifact_scan_detects_audio_dataset_input_extension(tmp_path: Path) -> None:
+    sample = tmp_path / "sample.wav"
+    sample.write_bytes(b"RIFFplaceholder")
+
+    result = cli.scan_artifacts(
+        [sample],
+        root=tmp_path,
+        limits=cli.ArtifactScanLimits(),
+    )[0]
+
+    assert result.status == "failure"
+    assert result.detail["findings"][0]["rule_id"] == "asset.audio_dataset_input"
+
+
+def test_artifact_scan_detects_secrets_without_leaking_secret_values(tmp_path: Path) -> None:
+    secret_file = tmp_path / "env.txt"
+    secret_file.write_text(
+        "\n".join(
+            [
+                "OPENAI_API_KEY=sk-test-secret-value-should-not-appear",
+                "Authorization: Bearer sk-test-bearer-value-should-not-appear",
+                "token=abcdef1234567890abcdef1234567890",
+                "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+                "-----BEGIN PRIVATE KEY-----",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli.scan_artifacts(
+        [secret_file],
+        root=tmp_path,
+        limits=cli.ArtifactScanLimits(),
+    )[0]
+
+    assert result.status == "failure"
+    finding = result.detail["findings"][0]
+    assert finding["rule_id"] == "secret.release_credentials"
+    assert set(finding["matches"]) >= {
+        "authorization_bearer",
+        "generic_secret_assignment",
+        "named_credential_assignment",
+        "openai_api_key",
+        "private_key",
+    }
+    assert "sk-test-secret-value" not in json.dumps(finding)
+    assert "wJalrXUtnFEMI" not in json.dumps(finding)
+
+
+def test_artifact_scan_detects_named_credentials_inside_archive(tmp_path: Path) -> None:
+    archive_path = tmp_path / "secrets.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr(
+            "env/.env",
+            "\n".join(
+                [
+                    "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+                    "GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz1234567890",
+                    "SERVICE_PASSWORD=AuroraSecret1234567890Value",
+                ]
+            ),
+        )
+
+    result = cli.scan_artifacts(
+        [archive_path],
+        root=tmp_path,
+        limits=cli.ArtifactScanLimits(),
+    )[0]
+
+    assert result.status == "failure"
+    findings = result.detail["findings"]
+    assert {finding["path"] for finding in findings} == {
+        "secrets.zip",
+        "secrets.zip!env/.env",
+    }
+    finding = next(item for item in findings if item["path"] == "secrets.zip!env/.env")
+    assert finding["rule_id"] == "secret.release_credentials"
+    assert set(finding["matches"]) >= {
+        "github_token",
+        "named_credential_assignment",
+    }
+    serialized = json.dumps(findings)
+    assert "ghp_abcdefghijklmnopqrstuvwxyz" not in serialized
+    assert "wJalrXUtnFEMI" not in serialized
+
+
+def test_artifact_scan_allows_ordinary_source_and_config_key_names(tmp_path: Path) -> None:
+    source = tmp_path / "app.js"
+    source.write_text(
+        "\n".join(
+            [
+                "const apiKey = process.env.AURORA_LIGHTWEIGHT_ASSISTANT_API_KEY?.trim()",
+                "const token = extractMeshInviteToken(trimmed)",
+                "flags.password = this._list.readUInt8(this._pos)",
+                '{"accessKeyLabel": "Access key", "tokenState": "pending"}',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli.scan_artifacts(
+        [source],
+        root=tmp_path,
+        limits=cli.ArtifactScanLimits(),
+    )[0]
+
+    assert result.status == "pass"
+
+
+def test_artifact_scan_detects_python_sidecar_markers(tmp_path: Path) -> None:
+    report = tmp_path / "prep.json"
+    report.write_text(
+        '{"pythonSidecarStaged": true, "externalBin": ["aurora-sidecar"]}',
+        encoding="utf-8",
+    )
+
+    result = cli.scan_artifacts(
+        [report],
+        root=tmp_path,
+        limits=cli.ArtifactScanLimits(),
+    )[0]
+
+    assert result.status == "failure"
+    assert result.detail["findings"][0]["rule_id"] == "runtime.python_sidecar_marker"
+
+
+def test_artifact_scan_allows_empty_sidecar_report_markers(tmp_path: Path) -> None:
+    report = tmp_path / "prep.json"
+    report.write_text(
+        '{"pythonSidecarStaged": false, "externalBin": []}',
+        encoding="utf-8",
+    )
+
+    result = cli.scan_artifacts(
+        [report],
+        root=tmp_path,
+        limits=cli.ArtifactScanLimits(),
+    )[0]
+
+    assert result.status == "pass"
+
+
+def test_artifact_scan_detects_python_sidecar_path_marker(tmp_path: Path) -> None:
+    sidecar = tmp_path / "bin" / "aurora-sidecar"
+    sidecar.parent.mkdir()
+    sidecar.write_bytes(b"binary placeholder")
+
+    result = cli.scan_artifacts(
+        [sidecar],
+        root=tmp_path,
+        limits=cli.ArtifactScanLimits(),
+    )[0]
+
+    assert result.status == "failure"
+    assert result.detail["findings"][0]["matches"] == ["aurora_sidecar_path"]
+
+
+def test_artifact_scan_streams_tar_and_stops_at_member_limit(tmp_path: Path) -> None:
+    archive_path = tmp_path / "many.tar"
+    with tarfile.open(archive_path, "w") as archive:
+        for index in range(2):
+            data = f"file-{index}".encode()
+            info = tarfile.TarInfo(f"item-{index}.txt")
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+
+    result = cli.scan_artifacts(
+        [archive_path],
+        root=tmp_path,
+        limits=cli.ArtifactScanLimits(max_archive_members=1),
+    )[0]
+
+    assert result.status == "failure"
+    assert result.detail["limit_failures"] == [
+        {
+            "path": "many.tar",
+            "reason": "archive_member_count_exceeds_limit",
+            "member_count": 2,
+            "limit_members": 1,
+        }
+    ]

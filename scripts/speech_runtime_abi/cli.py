@@ -11,16 +11,19 @@ import argparse
 import gc
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import platform
 import re
 import subprocess
 import sys
+import tarfile
 import tempfile
 import textwrap
 import time
 import traceback
+import zipfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -91,6 +94,157 @@ RELEASE_EXTRA_PREFIXES = (
     "local-",
     "full-local-",
     "all",
+)
+
+ARCHIVE_SUFFIXES = (
+    ".zip",
+    ".whl",
+    ".jar",
+    ".apk",
+    ".aab",
+    ".ipa",
+    ".tar",
+    ".tgz",
+    ".tar.gz",
+    ".tar.bz2",
+    ".tbz2",
+    ".tar.xz",
+    ".txz",
+)
+
+def _artifact_package_rule(package: str) -> dict[str, Any]:
+    normalized = package.lower().replace("_", "-")
+    rule_name = normalized.replace("-", "_")
+    return {
+        "id": f"dependency.{rule_name}",
+        "category": "benchmark_or_training_only_dependency",
+        "needles": tuple(sorted({normalized, normalized.replace("-", "_")})),
+    }
+
+
+ARTIFACT_PACKAGE_BLOCK_RULES: tuple[dict[str, Any], ...] = tuple(
+    _artifact_package_rule(package) for package in sorted(BENCHMARK_OR_TRAINING_ONLY_PACKAGES)
+)
+
+ARTIFACT_BLOCK_RULES: tuple[dict[str, Any], ...] = (
+    *ARTIFACT_PACKAGE_BLOCK_RULES,
+    {
+        "id": "secret.release_credentials",
+        "category": "secret_or_credential",
+        "content_regexes": (
+            (
+                "openai_api_key",
+                re.compile(rb"(?i)\bOPENAI_API_KEY\s*=\s*['\"]?[^ \r\n'\"]{8,}"),
+            ),
+            (
+                "authorization_bearer",
+                re.compile(rb"(?i)\bAuthorization\s*:\s*Bearer\s+[A-Za-z0-9._~+/=-]{8,}"),
+            ),
+            (
+                "bearer_token",
+                re.compile(rb"(?i)\bBearer\s+(?:sk-[A-Za-z0-9._-]{8,}|[A-Za-z0-9._~+/=-]{20,})"),
+            ),
+            (
+                "github_token",
+                re.compile(
+                    rb"(?i)(?:^|[\s{,;])['\"]?[A-Za-z0-9_]*TOKEN[A-Za-z0-9_]*['\"]?"
+                    rb"\s*(?:=|:)\s*['\"]?"
+                    rb"(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})"
+                ),
+            ),
+            (
+                "private_key",
+                re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----"),
+            ),
+            (
+                "named_credential_assignment",
+                re.compile(
+                    rb"(?:^|[\s{,;])['\"]?"
+                    rb"[A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|API_KEY|ACCESS_KEY|PRIVATE_KEY|KEY)[A-Z0-9_]*"
+                    rb"['\"]?\s*(?:=|:)\s*['\"]?"
+                    rb"(?=[A-Za-z0-9/+_=-]{24,})(?=[A-Za-z0-9/+_=-]*[A-Z])"
+                    rb"(?=[A-Za-z0-9/+_=-]*[a-z])(?=[A-Za-z0-9/+_=-]*[0-9+/=])"
+                    rb"[A-Za-z0-9/+_=-]{24,}(?=$|[\s,;}\]'\"])"
+                ),
+            ),
+            (
+                "generic_secret_assignment",
+                re.compile(
+                    rb"(?i)(?:^|[\s{,;])(?:token|secret|api[_-]?key)\s*=\s*['\"]?"
+                    rb"(?=[A-Za-z0-9._~+/=-]{16,})(?=[A-Za-z0-9._~+/=-]*\d)"
+                    rb"[A-Za-z0-9._~+/=-]{16,}"
+                ),
+            ),
+        ),
+    },
+    {
+        "id": "runtime.python_sidecar_marker",
+        "category": "python_sidecar_runtime_marker",
+        "allow_path_regexes": (re.compile(r"^scripts/build\.py$"),),
+        "path_regexes": (
+            (
+                "aurora_sidecar_path",
+                re.compile(r"(?i)(^|[/_.-])aurora-sidecar($|[/_.-])"),
+            ),
+        ),
+        "content_regexes": (
+            ("python_sidecar_staged", re.compile(rb'"pythonSidecarStaged"\s*:\s*true')),
+            ("non_empty_external_bin", re.compile(rb'"externalBin"\s*:\s*\[[^\]]*[A-Za-z0-9_]')),
+        ),
+    },
+    {
+        "id": "asset.raven_or_kws",
+        "category": "raven_kws_asset_or_input",
+        "needles": (
+            "raven",
+            "kws-",
+            "kws_",
+            "/kws/",
+            "keyword-spotting",
+            "keyword_spotting",
+            "wakeword-training",
+            "wakeword_training",
+        ),
+    },
+    {
+        "id": "asset.training_dataset",
+        "category": "training_dataset_or_benchmark_input",
+        "needles": (
+            "librispeech",
+            "common_voice",
+            "common-voice",
+            "voxpopuli",
+            "training-data",
+            "training_data",
+            "benchmark-data",
+            "benchmark_data",
+            "sherpa-benchmark",
+            "sherpa_benchmark",
+        ),
+    },
+    {
+        "id": "asset.model_or_voice_weight_extension",
+        "category": "model_or_voice_weight",
+        "path_regex": re.compile(
+            r"(?i)(\.safetensors|\.pt|\.pth|\.ckpt|\.onnx|\.tflite|\.gguf|\.model)$"
+        ),
+    },
+    {
+        "id": "asset.model_or_voice_binary",
+        "category": "model_or_voice_weight",
+        "path_regex": re.compile(
+            r"(?i)(^|[/_.-])("
+            r"model|weights?|checkpoint|voice|embedding|speaker|tokenizer"
+            r")([/_.-]|$).*\.bin$"
+        ),
+    },
+    {
+        "id": "asset.audio_dataset_input",
+        "category": "training_audio_dataset_or_prompt_input",
+        "path_regex": re.compile(
+            r"(?i)(\.wav|\.flac|\.mp3|\.ogg|\.opus|\.m4a|\.aac|\.webm)$"
+        ),
+    },
 )
 
 PROBES: tuple[dict[str, Any], ...] = (
@@ -885,6 +1039,424 @@ def _smoke_pockettts_configs(tts_model_class: Any) -> list[dict[str, Any]]:
     return results
 
 
+@dataclass(frozen=True)
+class ArtifactScanLimits:
+    max_file_bytes: int = 128 * 1024 * 1024
+    max_member_bytes: int = 128 * 1024 * 1024
+    max_content_scan_bytes: int = 8 * 1024 * 1024
+    max_archive_members: int = 20000
+    max_nested_depth: int = 3
+
+
+def _is_archive_name(name: str) -> bool:
+    lowered = name.lower()
+    return lowered.endswith(ARCHIVE_SUFFIXES)
+
+
+def _safe_archive_member_name(name: str) -> bool:
+    normalized = name.replace("\\", "/")
+    path = Path(normalized)
+    return not path.is_absolute() and ".." not in path.parts and not normalized.startswith("/")
+
+
+def _display_path(path: Path, root: Path) -> str:
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _digest_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _rule_matches(rule: dict[str, Any], virtual_path: str, data: bytes) -> list[str]:
+    matches: list[str] = []
+    if any(pattern.search(virtual_path) for pattern in rule.get("allow_path_regexes", ())):
+        return matches
+    lowered_path = virtual_path.lower()
+    content = data.lower()
+    for needle in rule.get("needles", ()):
+        encoded = str(needle).lower().encode()
+        if str(needle).lower() in lowered_path or encoded in content:
+            matches.append(str(needle))
+    path_regex = rule.get("path_regex")
+    if path_regex is not None and path_regex.search(virtual_path):
+        matches.append("path_regex")
+    for path_label, path_regex in rule.get("path_regexes", ()):
+        if path_regex.search(virtual_path):
+            matches.append(str(path_label))
+    for content_label, content_regex in rule.get("content_regexes", ()):
+        if content_regex.search(data):
+            matches.append(str(content_label))
+    return sorted(set(matches))
+
+
+def _scan_record(
+    records: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+    virtual_path: str,
+    size_bytes: int,
+    sha256: str,
+    content: bytes,
+    source_kind: str,
+) -> None:
+    records.append(
+        {
+            "path": virtual_path,
+            "source_kind": source_kind,
+            "size_bytes": size_bytes,
+            "sha256": sha256,
+        }
+    )
+    for rule in ARTIFACT_BLOCK_RULES:
+        matches = _rule_matches(rule, virtual_path, content)
+        if matches:
+            findings.append(
+                {
+                    "rule_id": rule["id"],
+                    "category": rule["category"],
+                    "path": virtual_path,
+                    "matches": matches[:12],
+                    "size_bytes": size_bytes,
+                    "sha256": sha256,
+                }
+            )
+
+
+def _read_limited(handle: Any, limit: int) -> tuple[bytes, bool]:
+    data = handle.read(limit + 1)
+    return data[:limit], len(data) > limit
+
+
+def _scan_regular_file(
+    path: Path,
+    root: Path,
+    limits: ArtifactScanLimits,
+    records: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+    limit_failures: list[dict[str, Any]],
+) -> None:
+    stat = path.stat()
+    virtual_path = _display_path(path, root)
+    sha256 = _sha256_file(path)
+    if stat.st_size > limits.max_file_bytes:
+        limit_failures.append(
+            {
+                "path": virtual_path,
+                "reason": "file_size_exceeds_limit",
+                "size_bytes": stat.st_size,
+                "limit_bytes": limits.max_file_bytes,
+                "sha256": sha256,
+            }
+        )
+        content = b""
+    else:
+        with path.open("rb") as handle:
+            content, truncated = _read_limited(handle, limits.max_content_scan_bytes)
+        if truncated:
+            limit_failures.append(
+                {
+                    "path": virtual_path,
+                    "reason": "content_scan_truncated",
+                    "size_bytes": stat.st_size,
+                    "limit_bytes": limits.max_content_scan_bytes,
+                    "sha256": sha256,
+                }
+            )
+    _scan_record(records, findings, virtual_path, stat.st_size, sha256, content, "file")
+
+    if _is_archive_name(path.name):
+        _scan_archive_path(path, virtual_path, limits, records, findings, limit_failures, depth=0)
+
+
+def _scan_zip_bytes(
+    data: bytes,
+    virtual_path: str,
+    limits: ArtifactScanLimits,
+    records: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+    limit_failures: list[dict[str, Any]],
+    depth: int,
+) -> None:
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        _scan_zip_archive(archive, virtual_path, limits, records, findings, limit_failures, depth)
+
+
+def _scan_zip_archive(
+    archive: zipfile.ZipFile,
+    virtual_path: str,
+    limits: ArtifactScanLimits,
+    records: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+    limit_failures: list[dict[str, Any]],
+    depth: int,
+) -> None:
+    infos = archive.infolist()
+    if len(infos) > limits.max_archive_members:
+        limit_failures.append(
+            {
+                "path": virtual_path,
+                "reason": "archive_member_count_exceeds_limit",
+                "member_count": len(infos),
+                "limit_members": limits.max_archive_members,
+            }
+        )
+        return
+    for info in infos:
+        if info.is_dir():
+            continue
+        member_name = info.filename
+        member_path = f"{virtual_path}!{member_name}"
+        if not _safe_archive_member_name(member_name):
+            limit_failures.append(
+                {"path": member_path, "reason": "unsafe_archive_member_path"}
+            )
+            continue
+        if info.file_size > limits.max_member_bytes:
+            limit_failures.append(
+                {
+                    "path": member_path,
+                    "reason": "archive_member_size_exceeds_limit",
+                    "size_bytes": info.file_size,
+                    "limit_bytes": limits.max_member_bytes,
+                }
+            )
+            content = b""
+            sha256 = ""
+        else:
+            with archive.open(info, "r") as handle:
+                content, truncated = _read_limited(handle, limits.max_content_scan_bytes)
+            sha256 = _digest_bytes(content) if info.file_size <= len(content) else ""
+            if truncated:
+                limit_failures.append(
+                    {
+                        "path": member_path,
+                        "reason": "archive_member_content_scan_truncated",
+                        "size_bytes": info.file_size,
+                        "limit_bytes": limits.max_content_scan_bytes,
+                    }
+                )
+        _scan_record(
+            records,
+            findings,
+            member_path,
+            int(info.file_size),
+            sha256,
+            content,
+            "zip_member",
+        )
+        if content and _is_archive_name(member_name):
+            if depth >= limits.max_nested_depth:
+                limit_failures.append(
+                    {
+                        "path": member_path,
+                        "reason": "nested_archive_depth_exceeds_limit",
+                        "limit_depth": limits.max_nested_depth,
+                    }
+                )
+                continue
+            _scan_archive_bytes(
+                content,
+                member_path,
+                limits,
+                records,
+                findings,
+                limit_failures,
+                depth + 1,
+            )
+
+
+def _scan_tar_bytes(
+    data: bytes,
+    virtual_path: str,
+    limits: ArtifactScanLimits,
+    records: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+    limit_failures: list[dict[str, Any]],
+    depth: int,
+) -> None:
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as archive:
+        _scan_tar_archive(archive, virtual_path, limits, records, findings, limit_failures, depth)
+
+
+def _scan_tar_archive(
+    archive: tarfile.TarFile,
+    virtual_path: str,
+    limits: ArtifactScanLimits,
+    records: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+    limit_failures: list[dict[str, Any]],
+    depth: int,
+) -> None:
+    member_count = 0
+    for member in archive:
+        member_count += 1
+        if member_count > limits.max_archive_members:
+            limit_failures.append(
+                {
+                    "path": virtual_path,
+                    "reason": "archive_member_count_exceeds_limit",
+                    "member_count": member_count,
+                    "limit_members": limits.max_archive_members,
+                }
+            )
+            return
+        if not member.isfile():
+            continue
+        member_name = member.name
+        member_path = f"{virtual_path}!{member_name}"
+        if not _safe_archive_member_name(member_name):
+            limit_failures.append(
+                {"path": member_path, "reason": "unsafe_archive_member_path"}
+            )
+            continue
+        if member.size > limits.max_member_bytes:
+            limit_failures.append(
+                {
+                    "path": member_path,
+                    "reason": "archive_member_size_exceeds_limit",
+                    "size_bytes": member.size,
+                    "limit_bytes": limits.max_member_bytes,
+                }
+            )
+            content = b""
+        else:
+            extracted = archive.extractfile(member)
+            if extracted is None:
+                continue
+            with extracted:
+                content, truncated = _read_limited(extracted, limits.max_content_scan_bytes)
+            if truncated:
+                limit_failures.append(
+                    {
+                        "path": member_path,
+                        "reason": "archive_member_content_scan_truncated",
+                        "size_bytes": member.size,
+                        "limit_bytes": limits.max_content_scan_bytes,
+                    }
+                )
+        sha256 = _digest_bytes(content) if member.size <= len(content) else ""
+        _scan_record(
+            records,
+            findings,
+            member_path,
+            int(member.size),
+            sha256,
+            content,
+            "tar_member",
+        )
+        if content and _is_archive_name(member_name):
+            if depth >= limits.max_nested_depth:
+                limit_failures.append(
+                    {
+                        "path": member_path,
+                        "reason": "nested_archive_depth_exceeds_limit",
+                        "limit_depth": limits.max_nested_depth,
+                    }
+                )
+                continue
+            _scan_archive_bytes(
+                content,
+                member_path,
+                limits,
+                records,
+                findings,
+                limit_failures,
+                depth + 1,
+            )
+
+
+def _scan_archive_bytes(
+    data: bytes,
+    virtual_path: str,
+    limits: ArtifactScanLimits,
+    records: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+    limit_failures: list[dict[str, Any]],
+    depth: int,
+) -> None:
+    try:
+        _scan_zip_bytes(data, virtual_path, limits, records, findings, limit_failures, depth)
+        return
+    except zipfile.BadZipFile:
+        pass
+    try:
+        _scan_tar_bytes(data, virtual_path, limits, records, findings, limit_failures, depth)
+    except tarfile.TarError:
+        limit_failures.append({"path": virtual_path, "reason": "unsupported_or_corrupt_archive"})
+
+
+def _scan_archive_path(
+    path: Path,
+    virtual_path: str,
+    limits: ArtifactScanLimits,
+    records: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+    limit_failures: list[dict[str, Any]],
+    depth: int,
+) -> None:
+    try:
+        if zipfile.is_zipfile(path):
+            with zipfile.ZipFile(path) as archive:
+                _scan_zip_archive(archive, virtual_path, limits, records, findings, limit_failures, depth)
+            return
+        if tarfile.is_tarfile(path):
+            with tarfile.open(path, mode="r:*") as archive:
+                _scan_tar_archive(archive, virtual_path, limits, records, findings, limit_failures, depth)
+            return
+        limit_failures.append({"path": virtual_path, "reason": "unsupported_or_corrupt_archive"})
+    except (OSError, zipfile.BadZipFile, tarfile.TarError) as exc:
+        limit_failures.append(
+            {
+                "path": virtual_path,
+                "reason": "archive_read_failure",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+        )
+
+
+def scan_artifacts(paths: list[Path], root: Path, limits: ArtifactScanLimits) -> list[CheckResult]:
+    records: list[dict[str, Any]] = []
+    findings: list[dict[str, Any]] = []
+    limit_failures: list[dict[str, Any]] = []
+    missing: list[str] = []
+    scanned_roots: list[str] = []
+
+    for path in paths:
+        candidate = path if path.is_absolute() else root / path
+        if not candidate.exists():
+            missing.append(_display_path(candidate, root))
+            continue
+        scanned_roots.append(_display_path(candidate, root))
+        if candidate.is_dir():
+            for file_path in sorted(item for item in candidate.rglob("*") if item.is_file()):
+                _scan_regular_file(file_path, root, limits, records, findings, limit_failures)
+        elif candidate.is_file():
+            _scan_regular_file(candidate, root, limits, records, findings, limit_failures)
+
+    status = "pass"
+    if missing or findings or limit_failures:
+        status = "failure"
+    return [
+        CheckResult(
+            id="artifact.release_forbidden_content",
+            status=status,
+            detail={
+                "scanned_roots": scanned_roots,
+                "missing": missing,
+                "file_count": len(records),
+                "findings": findings,
+                "limit_failures": limit_failures,
+                "records": records[:5000],
+                "records_truncated": len(records) > 5000,
+                "limits": asdict(limits),
+            },
+        )
+    ]
+
+
 def build_report(kind: str, results: list[CheckResult], root: Path) -> dict[str, Any]:
     return {
         "schema": SCHEMA_VERSION,
@@ -944,6 +1516,18 @@ def main(argv: list[str] | None = None) -> int:
     infer_parser.add_argument("--smoke-configs", action="store_true")
     infer_parser.set_defaults(command="pockettts-infer")
 
+    artifact_parser = subparsers.add_parser(
+        "artifact-scan",
+        help="Fail-closed scan of release artifacts or build inputs for forbidden speech assets.",
+    )
+    artifact_parser.add_argument("paths", nargs="+", type=Path)
+    artifact_parser.add_argument("--max-file-bytes", type=int, default=128 * 1024 * 1024)
+    artifact_parser.add_argument("--max-member-bytes", type=int, default=128 * 1024 * 1024)
+    artifact_parser.add_argument("--max-content-scan-bytes", type=int, default=8 * 1024 * 1024)
+    artifact_parser.add_argument("--max-archive-members", type=int, default=20000)
+    artifact_parser.add_argument("--max-nested-depth", type=int, default=3)
+    artifact_parser.set_defaults(command="artifact-scan")
+
     args = parser.parse_args(argv)
     root = args.root.resolve()
     if args.command == "scan":
@@ -953,7 +1537,7 @@ def main(argv: list[str] | None = None) -> int:
         probe_ids = set(args.probe) if args.probe else None
         results = run_probes(probe_ids, timeout=args.timeout, expected_numpy=args.expected_numpy)
         report = build_report("interpreter_probe", results, root)
-    else:
+    elif args.command == "pockettts-infer":
         results = run_pockettts_inference(
             language=args.language,
             voice=args.voice,
@@ -964,5 +1548,15 @@ def main(argv: list[str] | None = None) -> int:
             smoke_configs=args.smoke_configs,
         )
         report = build_report("pockettts_inference_probe", results, root)
+    else:
+        limits = ArtifactScanLimits(
+            max_file_bytes=args.max_file_bytes,
+            max_member_bytes=args.max_member_bytes,
+            max_content_scan_bytes=args.max_content_scan_bytes,
+            max_archive_members=args.max_archive_members,
+            max_nested_depth=args.max_nested_depth,
+        )
+        results = scan_artifacts(args.paths, root=root, limits=limits)
+        report = build_report("artifact_scan", results, root)
     write_report(report, args.output)
     return exit_code(results)
