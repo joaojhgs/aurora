@@ -72,6 +72,10 @@ The command receives `--candidate-id`, `--fixture-id`, `--audio`, and
 copies stdout, stderr, audio paths, reference transcripts, or hypotheses into
 reports.
 
+Local `artifacts/` and `reports/` directories are ignored. Use them for
+downloaded models, private fixture manifests with local audio paths, and
+redacted run outputs.
+
 ## Decision Rule Inputs
 
 The section 16 STT gate requires WER by language/noise bucket, fixed and auto
