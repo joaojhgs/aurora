@@ -20,6 +20,7 @@ RAVEN_UPSTREAM_COMMIT = "abd26158ab50f954616eaf42296b09c4856489d7"
 KYUTAI_POCKET_TTS_V2_1_0_COMMIT = "058886528d0b6f2f2d4022de2e244a5260729e6e"
 COMMUNITY_ONNX_MAIN_COMMIT = "58a6d00cf13d239b6748cb0769f35c580a8f606c"
 SIBLING_HEAD = "7342bb0fbe2af04b66b6e54c17b4ac8f765eb989"
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 REQUIRED_PACKS = {
     "english_2026-04": {"language": "en", "layers": 6, "state_slots": 18, "tier": "compact"},
@@ -66,11 +67,44 @@ def sha256_file(path: Path) -> str:
 
 
 def write_json(path: Path | None, payload: dict[str, Any]) -> None:
+    payload = sanitize_report(payload)
     if path is None:
         print(json.dumps(payload, indent=2, sort_keys=True))
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def sanitize_report(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: sanitize_report(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [sanitize_report(item) for item in value]
+    if isinstance(value, str):
+        repo = str(REPO_ROOT)
+        home = str(Path.home())
+        if value.startswith(repo) or value.startswith(home):
+            return public_path(value)
+    return value
+
+
+def public_path(path: Path | str | None) -> str | None:
+    if path is None:
+        return None
+    raw = Path(path)
+    try:
+        resolved = raw.resolve(strict=False)
+    except OSError:
+        resolved = raw
+    try:
+        return resolved.relative_to(REPO_ROOT).as_posix() or "."
+    except ValueError:
+        pass
+    home = Path.home().resolve()
+    try:
+        return f"~/{resolved.relative_to(home).as_posix()}"
+    except ValueError:
+        return str(raw) if not raw.is_absolute() else "<outside-repo>"
 
 
 def load_manifest(path: Path) -> dict[str, Any]:
@@ -128,18 +162,19 @@ def validate_manifest_data(data: dict[str, Any]) -> None:
 def command_manifest(args: argparse.Namespace) -> int:
     data = load_manifest(args.manifest)
     readiness = manifest_readiness(data)
+    status = "ready" if readiness["unpinned_asset_count"] == 0 else "incomplete"
     write_json(
         args.output,
         {
-            "status": "ready" if readiness["unpinned_asset_count"] == 0 else "incomplete",
+            "status": status,
             "checked_at_unix": int(time.time()),
-            "manifest": str(args.manifest),
+            "manifest": public_path(args.manifest),
             "pack_count": len(data["packs"]),
             "required_packs": sorted(REQUIRED_PACKS),
             "readiness": readiness,
         },
     )
-    return 0
+    return 0 if status == "ready" else 2
 
 
 def manifest_readiness(data: dict[str, Any]) -> dict[str, Any]:
@@ -225,10 +260,11 @@ def command_provenance(args: argparse.Namespace) -> int:
             if path.is_file() and path.suffix.lower() in {".js", ".ts", ".py", ".cpp", ".hpp", ".md", ".json", ".sh"}:
                 assumptions.extend(scan_file(path, root))
     missing_encoder = not (sibling / "public/assistant/pocket-tts/src/encode-worker.js").exists()
+    status = "pass" if upstream_head == RAVEN_UPSTREAM_COMMIT and sibling_head == SIBLING_HEAD else "review"
     write_json(
         args.output,
         {
-            "status": "pass" if upstream_head == RAVEN_UPSTREAM_COMMIT and sibling_head == SIBLING_HEAD else "review",
+            "status": status,
             "checked_at_unix": int(time.time()),
             "manifest_sha256": sha256_file(args.manifest),
             "plan_sha256": manifest.get("plan_sha256"),
@@ -260,7 +296,7 @@ def command_provenance(args: argparse.Namespace) -> int:
             "assumptions": assumptions,
         },
     )
-    return 0
+    return 0 if status == "pass" else 2
 
 
 def command_conversion(args: argparse.Namespace) -> int:
@@ -271,16 +307,16 @@ def command_conversion(args: argparse.Namespace) -> int:
     for name, asset in pack["assets"].items():
         path = asset_path(args.source_root, args.pack, name)
         if not path.exists():
-            failures.append({"asset": name, "reason": "missing", "expected_path": str(path)})
+            failures.append({"asset": name, "reason": "missing", "expected_path": public_path(path)})
             continue
         got = sha256_file(path)
         if asset["sha256"].startswith("TBD:"):
-            failures.append({"asset": name, "reason": "manifest_hash_not_pinned", "actual_sha256": got, "path": str(path)})
+            failures.append({"asset": name, "reason": "manifest_hash_not_pinned", "actual_sha256": got, "path": public_path(path)})
             continue
         if got != asset["sha256"]:
-            failures.append({"asset": name, "reason": "sha256_mismatch", "expected": asset["sha256"], "actual": got, "path": str(path)})
+            failures.append({"asset": name, "reason": "sha256_mismatch", "expected": asset["sha256"], "actual": got, "path": public_path(path)})
             continue
-        verified[name] = {"path": str(path), "sha256": got, "size_bytes": path.stat().st_size}
+        verified[name] = {"path": public_path(path), "sha256": got, "size_bytes": path.stat().st_size}
     graph_check = {
         "expected_layers": pack["layers"],
         "expected_state_slots": pack["state_slots"],
@@ -302,7 +338,7 @@ def command_conversion(args: argparse.Namespace) -> int:
             "checked_at_unix": int(time.time()),
             "pack_id": args.pack,
             "dry_run": bool(args.dry_run),
-            "source_root": str(args.source_root),
+            "source_root": public_path(args.source_root),
             "environment": environment_record(),
             "verified_assets": verified,
             "graph_check": graph_check,
@@ -435,8 +471,8 @@ def environment_record() -> dict[str, Any]:
         "platform": platform.platform(),
         "machine": platform.machine(),
         "processor": platform.processor(),
-        "cwd": os.getcwd(),
-        "tools": {name: shutil.which(name) for name in ("git", "uv", "curl", "cmake", "node")},
+        "cwd": public_path(os.getcwd()),
+        "tools": {name: public_path(found) if found else None for name in ("git", "uv", "curl", "cmake", "node") for found in [shutil.which(name)]},
     }
 
 

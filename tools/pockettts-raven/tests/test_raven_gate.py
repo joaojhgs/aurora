@@ -24,21 +24,34 @@ def run_cli(*args: str) -> subprocess.CompletedProcess[str]:
 def test_manifest_validates_pinned_sources_and_required_packs() -> None:
     result = run_cli("manifest", str(MANIFEST))
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 2
     payload = json.loads(result.stdout)
     assert payload["status"] == "incomplete"
+    assert payload["manifest"] == "tests/fixtures/local_speech/raven/pinned_raven_manifest.json"
     assert payload["required_packs"] == ["english_2026-04", "french_24l", "portuguese"]
     assert payload["readiness"]["unpinned_asset_count"] == 14
     assert payload["readiness"]["release_ready"] is False
 
 
 def test_conversion_dry_run_reports_missing_assets_without_claiming_reproduction() -> None:
-    result = run_cli("conversion", "--manifest", str(MANIFEST), "--pack", "english_2026-04", "--dry-run")
+    result = run_cli(
+        "conversion",
+        "--manifest",
+        str(MANIFEST),
+        "--pack",
+        "english_2026-04",
+        "--source-root",
+        str(REPO / ".artifacts/pockettts/w0-raven/source-assets"),
+        "--dry-run",
+    )
 
     assert result.returncode == 2
     payload = json.loads(result.stdout)
     assert payload["status"] == "blocked"
     assert payload["first_failure"]["reason"] == "missing"
+    assert payload["first_failure"]["expected_path"].startswith(".artifacts/pockettts/w0-raven/source-assets")
+    assert str(REPO) not in result.stdout
+    assert str(Path.home()) not in result.stdout
     assert "conversion not reproduced" in payload["claim"]
 
 
@@ -82,6 +95,27 @@ def test_measured_benchmark_requires_real_provenance(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["status"] == "blocked"
     assert payload["first_failure"]["reason"] == "invalid_measurement_provenance"
+
+
+def test_provenance_review_exits_nonzero_and_redacts_paths(tmp_path: Path) -> None:
+    missing_sibling = tmp_path / "missing-sibling"
+    missing_upstream = tmp_path / "missing-upstream"
+
+    result = run_cli(
+        "provenance",
+        "--manifest",
+        str(MANIFEST),
+        "--sibling",
+        str(missing_sibling),
+        "--upstream",
+        str(missing_upstream),
+    )
+
+    assert result.returncode == 2
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "review"
+    assert str(REPO) not in result.stdout
+    assert str(Path.home()) not in result.stdout
 
 
 def test_french_24l_is_not_labeled_compact() -> None:
