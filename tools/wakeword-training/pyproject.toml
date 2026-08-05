@@ -7,7 +7,7 @@ dependencies = []
 
 [project.optional-dependencies]
 runtime-smoke = [
-    "numpy>=1.26,<3",
+    "numpy==2.4.6",
     "onnxruntime==1.20.1",
     "openwakeword==0.6.0",
 ]

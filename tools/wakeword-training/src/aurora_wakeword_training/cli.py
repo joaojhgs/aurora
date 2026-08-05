@@ -105,9 +105,9 @@ def training_plan(language: str, phrase: str) -> dict[str, Any]:
     config_path = ARTIFACT_ROOT / "training-configs" / f"{model_name}.json"
     write_json(config_path, config)
     sync_command = (
-        "uv sync --extra livekit-train-voxcpm"
+        "uv sync --locked --extra livekit-train-voxcpm"
         if language == "pt"
-        else "uv sync --extra livekit-train"
+        else "uv sync --locked --extra livekit-train"
     )
     return {
         "schema_version": 1,
@@ -213,11 +213,22 @@ def write_feasibility_configs() -> dict[str, Any]:
         path = write_text(config_dir / filename, text)
         configs[language] = {"path": repo_relative(path), "sha256": sha256(path)}
 
+    runbook = feasibility_runbook(configs)
+    runbook_path = write_json(ARTIFACT_ROOT / "reports" / "livekit-w0-feasibility-runbook.json", runbook)
+    return {"schema_version": 1, "runbook": repo_relative(runbook_path), "configs": configs}
+
+
+def feasibility_runbook(configs: dict[str, dict[str, str]]) -> dict[str, Any]:
+    espeak_root = (ARTIFACT_ROOT / "espeak-root").resolve()
+    espeak_bin = espeak_root / "usr" / "bin"
+    espeak_lib = espeak_root / "usr" / "lib" / "x86_64-linux-gnu"
+    espeak_data = espeak_lib / "espeak-ng-data"
     runbook = {
         "schema_version": 1,
         "purpose": "Reproduce W0 LiveKit wakeword feasibility without committing datasets or models.",
         "versions": {
             "livekit-wakeword": LIVEKIT_WAKEWORD_VERSION,
+            "numpy": "2.4.6",
             "voxcpm": VOXCPM_VERSION,
             "voxcpm2_hf_revision": VOXCPM2_REVISION,
             "mit_rirs_revision": MIT_RIRS_REVISION,
@@ -228,25 +239,25 @@ def write_feasibility_configs() -> dict[str, Any]:
         "configs": configs,
         "hermetic_espeak_env": {
             "ESPEAK_ROOT": repo_relative(ARTIFACT_ROOT / "espeak-root"),
-            "PATH_PREFIX": "$ESPEAK_ROOT/usr/bin",
-            "LD_LIBRARY_PATH_PREFIX": "$ESPEAK_ROOT/usr/lib/x86_64-linux-gnu",
-            "ESPEAK_DATA_PATH": "$ESPEAK_ROOT/usr/lib/x86_64-linux-gnu/espeak-ng-data",
+            "PATH_PREFIX": str(espeak_bin),
+            "LD_LIBRARY_PATH_PREFIX": str(espeak_lib),
+            "ESPEAK_DATA_PATH": str(espeak_data),
         },
         "bounded_commands": [
             "cd tools/wakeword-training",
-            "uv sync --extra runtime-smoke --extra livekit-train-voxcpm",
-            "uv run livekit-wakeword setup --config ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_en_test.yaml",
-            "ESPEAK_ROOT=\"$PWD/../../.artifacts/pockettts/w0-kws/espeak-root\" timeout 300 env PATH=\"$ESPEAK_ROOT/usr/bin:$PATH\" LD_LIBRARY_PATH=\"$ESPEAK_ROOT/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH\" ESPEAK_DATA_PATH=\"$ESPEAK_ROOT/usr/lib/x86_64-linux-gnu/espeak-ng-data\" uv run livekit-wakeword generate ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_en_test.yaml",
-            "timeout 300 uv run livekit-wakeword augment ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_en_test.yaml",
-            "timeout 300 uv run livekit-wakeword train ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_en_test.yaml",
-            "timeout 300 uv run livekit-wakeword export ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_en_test.yaml",
-            "uv run aurora-wakeword-training validate-export --model ../../.artifacts/pockettts/w0-kws/livekit-run/en-output/aurora_en_hey_aurora_test/aurora_en_hey_aurora_test.onnx --positive-dir ../../.artifacts/pockettts/w0-kws/livekit-run/en-output/aurora_en_hey_aurora_test/positive_test --negative-dir ../../.artifacts/pockettts/w0-kws/livekit-run/en-output/aurora_en_hey_aurora_test/negative_test --label en",
-            "uv run livekit-wakeword setup --config ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_pt_one_clip.yaml",
-            "timeout 420 uv run livekit-wakeword generate ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_pt_one_clip.yaml",
-            "timeout 300 uv run livekit-wakeword augment ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_pt_one_clip.yaml",
-            "timeout 300 uv run livekit-wakeword train ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_pt_one_clip.yaml",
-            "timeout 300 uv run livekit-wakeword export ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_pt_one_clip.yaml",
-            "uv run aurora-wakeword-training validate-export --model ../../.artifacts/pockettts/w0-kws/livekit-run/pt-output/aurora_pt_ola_aurora_one_clip/aurora_pt_ola_aurora_one_clip.onnx --positive-dir ../../.artifacts/pockettts/w0-kws/livekit-run/pt-output/aurora_pt_ola_aurora_one_clip/positive_test --negative-dir ../../.artifacts/pockettts/w0-kws/livekit-run/pt-output/aurora_pt_ola_aurora_one_clip/negative_test --label pt",
+            "uv sync --locked --extra runtime-smoke --extra livekit-train-voxcpm",
+            "uv run --locked livekit-wakeword setup --config ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_en_test.yaml",
+            f'timeout 300 env PATH="{espeak_bin}:$PATH" LD_LIBRARY_PATH="{espeak_lib}:$LD_LIBRARY_PATH" ESPEAK_DATA_PATH="{espeak_data}" uv run --locked livekit-wakeword generate ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_en_test.yaml',
+            "timeout 300 uv run --locked livekit-wakeword augment ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_en_test.yaml",
+            "timeout 300 uv run --locked livekit-wakeword train ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_en_test.yaml",
+            "timeout 300 uv run --locked livekit-wakeword export ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_en_test.yaml",
+            "uv run --locked aurora-wakeword-training validate-export --model ../../.artifacts/pockettts/w0-kws/livekit-run/en-output/aurora_en_hey_aurora_test/aurora_en_hey_aurora_test.onnx --positive-dir ../../.artifacts/pockettts/w0-kws/livekit-run/en-output/aurora_en_hey_aurora_test/positive_test --negative-dir ../../.artifacts/pockettts/w0-kws/livekit-run/en-output/aurora_en_hey_aurora_test/negative_test --label en",
+            "uv run --locked livekit-wakeword setup --config ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_pt_one_clip.yaml",
+            "timeout 420 uv run --locked livekit-wakeword generate ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_pt_one_clip.yaml",
+            "timeout 300 uv run --locked livekit-wakeword augment ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_pt_one_clip.yaml",
+            "timeout 300 uv run --locked livekit-wakeword train ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_pt_one_clip.yaml",
+            "timeout 300 uv run --locked livekit-wakeword export ../../.artifacts/pockettts/w0-kws/livekit-run/configs/aurora_pt_one_clip.yaml",
+            "uv run --locked aurora-wakeword-training validate-export --model ../../.artifacts/pockettts/w0-kws/livekit-run/pt-output/aurora_pt_ola_aurora_one_clip/aurora_pt_ola_aurora_one_clip.onnx --positive-dir ../../.artifacts/pockettts/w0-kws/livekit-run/pt-output/aurora_pt_ola_aurora_one_clip/positive_test --negative-dir ../../.artifacts/pockettts/w0-kws/livekit-run/pt-output/aurora_pt_ola_aurora_one_clip/negative_test --label pt",
         ],
         "known_outcome": {
             "en": "Export is loadable but scores do not separate positives from negatives on the tiny synthetic feasibility set.",
@@ -255,8 +266,7 @@ def write_feasibility_configs() -> dict[str, Any]:
         },
         "output_policy": "All generated audio, datasets, models, and reports stay under .artifacts/pockettts/w0-kws/.",
     }
-    runbook_path = write_json(ARTIFACT_ROOT / "reports" / "livekit-w0-feasibility-runbook.json", runbook)
-    return {"schema_version": 1, "runbook": repo_relative(runbook_path), "configs": configs}
+    return runbook
 
 
 def score_separation(positive_scores: list[float], negative_scores: list[float], threshold: float) -> dict[str, Any]:
@@ -282,6 +292,31 @@ def score_separation(positive_scores: list[float], negative_scores: list[float],
     }
 
 
+def release_disposition(label: str, separation: dict[str, Any]) -> dict[str, Any]:
+    if label == "en":
+        boundary = "EN scores do not separate positives and negatives on the tiny synthetic feasibility set."
+    elif label == "pt":
+        boundary = "PT one-clip export has high false positives on its negative samples."
+    else:
+        boundary = "Tiny synthetic feasibility evidence is not an integration or release gate."
+    if separation.get("passed"):
+        boundary = (
+            "Scores separated on supplied clips, but integration remains blocked because corpus FAR/FRR "
+            "and Python/browser parity are absent."
+        )
+    return {
+        "frontend_feasibility": "loadable_and_scored",
+        "integration_status": "blocked",
+        "release_status": "failed",
+        "reason": boundary,
+        "required_before_integration": [
+            "real labeled corpus FAR/FRR",
+            "Python/browser mel+embedding+classifier frame-score parity",
+            "TypeScript trained-pack import remains absent until parity exists",
+        ],
+    }
+
+
 def validate_export(model: Path, positive_dir: Path, negative_dir: Path, label: str, threshold: float) -> dict[str, Any]:
     resources = TOOL_ROOT / ".venv" / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages" / "livekit" / "wakeword" / "resources"
     melspec = resources / "melspectrogram.onnx"
@@ -298,6 +333,9 @@ def validate_export(model: Path, positive_dir: Path, negative_dir: Path, label: 
         return {
             "schema_version": 1,
             "status": "failed",
+            "frontend_feasibility": "not_loadable",
+            "integration_status": "blocked",
+            "release_status": "failed",
             "label": label,
             "missing": missing,
             "reason": "export validation is fail-closed when any frontend component or sample directory is missing",
@@ -336,15 +374,13 @@ def validate_export(model: Path, positive_dir: Path, negative_dir: Path, label: 
         [item["max_score"] for item in negatives],
         threshold,
     )
-    if label == "en" and not separation["passed"]:
-        expected_boundary = "EN scores do not separate positives and negatives on the tiny synthetic feasibility set."
-    elif label == "pt" and not separation["passed"]:
-        expected_boundary = "PT one-clip export has high false positives on its negative samples."
-    else:
-        expected_boundary = "Unexpected pass; this still requires a real corpus before product integration."
+    disposition = release_disposition(label, separation)
     return {
         "schema_version": 1,
-        "status": "passed" if separation["passed"] else "failed",
+        "status": "failed",
+        "frontend_feasibility": disposition["frontend_feasibility"],
+        "integration_status": disposition["integration_status"],
+        "release_status": disposition["release_status"],
         "label": label,
         "model": repo_relative(model),
         "frontend": {
@@ -359,7 +395,8 @@ def validate_export(model: Path, positive_dir: Path, negative_dir: Path, label: 
         "positive_scores": positives,
         "negative_scores": negatives,
         "separation": separation,
-        "expected_boundary": expected_boundary,
+        "expected_boundary": disposition["reason"],
+        "required_before_integration": disposition["required_before_integration"],
         "typescript_trained_pack_import": "absent",
         "quality_claim": "unavailable until validated with a real labeled corpus and browser parity",
     }

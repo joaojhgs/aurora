@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import importlib.util
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -157,6 +158,32 @@ class KwsFeasibilityTests(unittest.TestCase):
         self.assertFalse(en_result["positive_all_above_threshold"])
         self.assertFalse(pt_result["passed"])
         self.assertFalse(pt_result["negatives_below_threshold"])
+
+    def test_scores_separated_still_blocks_release_without_corpus_and_parity(self) -> None:
+        separation = wakeword_cli.score_separation([0.9, 0.8], [0.1, 0.2], 0.5)
+        disposition = wakeword_cli.release_disposition("en", separation)
+        self.assertTrue(separation["passed"])
+        self.assertEqual(disposition["integration_status"], "blocked")
+        self.assertEqual(disposition["release_status"], "failed")
+        self.assertIn("corpus FAR/FRR", disposition["reason"])
+        self.assertIn("Python/browser", disposition["reason"])
+
+    def test_generated_runbook_uses_locked_uv_and_resolved_espeak_paths(self) -> None:
+        configs = {
+            "en": {"path": ".artifacts/example-en.yaml", "sha256": "0" * 64},
+            "pt": {"path": ".artifacts/example-pt.yaml", "sha256": "1" * 64},
+        }
+        with patch.dict(os.environ, {}, clear=True):
+            runbook = wakeword_cli.feasibility_runbook(configs)
+
+        commands = runbook["bounded_commands"]
+        uv_commands = [command for command in commands if "uv sync" in command or "uv run" in command]
+        self.assertTrue(uv_commands)
+        self.assertTrue(all("uv sync --locked" in command or "uv run --locked" in command for command in uv_commands))
+        espeak_commands = [command for command in commands if "ESPEAK_DATA_PATH" in command]
+        self.assertEqual(len(espeak_commands), 1)
+        self.assertNotIn("$ESPEAK_ROOT", espeak_commands[0])
+        self.assertIn(str(wakeword_cli.ARTIFACT_ROOT / "espeak-root" / "usr" / "bin"), espeak_commands[0])
 
     def test_validate_export_fails_closed_when_frontend_missing(self) -> None:
         result = wakeword_cli.validate_export(
