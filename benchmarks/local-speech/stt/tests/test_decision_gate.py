@@ -5,6 +5,7 @@ from stt.decision_gate import (
     REQUIRED_LANGUAGE_MODES,
     REQUIRED_LANGUAGES,
     REQUIRED_SURFACES,
+    _surface,
     build_decision,
     main,
 )
@@ -76,6 +77,7 @@ def _run(
         "target_surface": surface,
         "device_profile": f"{surface}-gate-fixture",
         "evidence_kind": "measured" if status == "ok" else "failed",
+        "latency_statistic": "p95" if status == "ok" else None,
         "runtime_provenance": {"engine": "gate-fixture", "model_sha256": "2" * 64},
         "utterance_count": 10 if status == "ok" else 0,
     }
@@ -143,6 +145,71 @@ def test_decision_blocks_missing_portuguese_noise_and_device_matrix():
     assert decision["decision"] == "decision_blocked"
     assert "candidate_missing_cell:pt/noise/auto/android-webview" in decision["failed_gates"]
     assert "baseline_missing_cell:pt/noise/auto/android-webview" in decision["failed_gates"]
+
+
+def test_decision_blocks_weak_baseline_evidence():
+    baseline_runs = _complete_runs("baseline", latency=1800.0)
+    baseline_runs[0].pop("runtime_provenance")
+    baseline_runs[1]["thermal_state"] = "not_measured"
+    baseline_runs[2]["peak_memory_mb"] = None
+    baseline_runs[3]["device_profile"] = ""
+    baseline_runs[3]["browser_features"] = []
+    baseline_runs[4].pop("latency_statistic")
+    candidate = _report("candidate", _complete_runs("candidate", latency=1200.0))
+
+    decision = build_decision(
+        baseline_report=_report("baseline", baseline_runs),
+        candidate_report=candidate,
+        baseline_id="baseline",
+        candidate_id="candidate",
+    )
+
+    assert decision["decision"] == "decision_blocked"
+    assert any(gate.startswith("baseline_provenance_missing:") for gate in decision["failed_gates"])
+    assert any(gate.startswith("baseline_thermal_missing:") for gate in decision["failed_gates"])
+    assert any(gate.startswith("baseline_memory_missing:") for gate in decision["failed_gates"])
+    assert any(
+        gate.startswith("baseline_device_identity_missing:") for gate in decision["failed_gates"]
+    )
+    assert any(
+        gate.startswith("baseline_p95_statistic_unproven:") for gate in decision["failed_gates"]
+    )
+
+
+def test_decision_blocks_unproven_candidate_p95_statistic():
+    baseline = _report("baseline", _complete_runs("baseline", latency=1800.0))
+    candidate_runs = _complete_runs("candidate", latency=1200.0)
+    candidate_runs[0].pop("latency_statistic")
+
+    decision = build_decision(
+        baseline_report=baseline,
+        candidate_report=_report("candidate", candidate_runs),
+        baseline_id="baseline",
+        candidate_id="candidate",
+    )
+
+    assert decision["decision"] == "decision_blocked"
+    assert any(
+        gate.startswith("candidate_p95_statistic_unproven:") for gate in decision["failed_gates"]
+    )
+
+
+def test_mobile_webviews_are_detected_before_generic_chrome():
+    android = {
+        "browser_features": [
+            "Mozilla/5.0 (Linux; Android 15; Pixel) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Version/4.0 Chrome/145.0 Mobile Safari/537.36 wv"
+        ]
+    }
+    ios = {
+        "browser_features": [
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/145.0 Mobile/15E148 Safari/604.1"
+        ]
+    }
+
+    assert _surface(android) == "android-webview"
+    assert _surface(ios) == "ios-webview"
 
 
 def test_decision_blocks_all_failed_runs():

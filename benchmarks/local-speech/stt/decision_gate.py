@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from common.redaction import validate_report_redacted
 from common.schema import stable_json_dumps, stable_sha256, validate_report_schema
+from common.scoring import percentile
 
 DECISION_SCHEMA_VERSION = "aurora.local_speech.stt.decision.v0.2"
 REQUIRED_LANGUAGES = ("en", "pt")
@@ -98,7 +99,7 @@ def build_decision(
             * len(REQUIRED_SURFACES)
         ),
         "matched_cell_count": len(cell_summaries),
-        "max_candidate_p95_finalization_latency_ms": _max_metric(
+        "max_candidate_finalization_latency_ms": _max_metric(
             candidate_ok, "finalization_latency_ms"
         ),
         "max_candidate_peak_memory_mb": _max_metric(candidate_ok, "peak_memory_mb"),
@@ -187,18 +188,34 @@ def _compare_cell(
     failed_gates: set[str],
 ) -> dict[str, Any]:
     cell_name = _cell_name(key)
-    baseline_p95 = _max_metric(baseline, "finalization_latency_ms")
-    candidate_p95 = _max_metric(candidate, "finalization_latency_ms")
+    baseline_p95 = _cell_p95_latency(
+        "baseline",
+        cell_name,
+        baseline,
+        failed_gates,
+    )
+    candidate_p95 = _cell_p95_latency(
+        "candidate",
+        cell_name,
+        candidate,
+        failed_gates,
+    )
     baseline_wer = _max_metric(baseline, "wer")
     candidate_wer = _max_metric(candidate, "wer")
+    baseline_memory = _max_metric(baseline, "peak_memory_mb")
     candidate_memory = _max_metric(candidate, "peak_memory_mb")
+    baseline_utterances = _cell_utterance_count(baseline)
     candidate_utterances = sum(int(run.get("utterance_count", 1)) for run in candidate)
     wer_regression = None
 
+    if baseline_utterances < MIN_UTTERANCES_PER_CELL:
+        failed_gates.add(f"baseline_insufficient_utterances:{cell_name}")
     if candidate_utterances < MIN_UTTERANCES_PER_CELL:
         failed_gates.add(f"candidate_insufficient_utterances:{cell_name}")
     if baseline_p95 is None:
         failed_gates.add(f"baseline_latency_missing:{cell_name}")
+    elif baseline_p95 > _latency_target_ms(key[3]):
+        failed_gates.add(f"baseline_latency_target_missed:{cell_name}")
     if candidate_p95 is None:
         failed_gates.add(f"candidate_latency_missing:{cell_name}")
     elif candidate_p95 > _latency_target_ms(key[3]):
@@ -211,14 +228,24 @@ def _compare_cell(
         wer_regression = round(candidate_wer - baseline_wer, 6)
         if wer_regression > MAX_WER_REGRESSION:
             failed_gates.add(f"candidate_wer_regression:{cell_name}")
+    if baseline_memory is None:
+        failed_gates.add(f"baseline_memory_missing:{cell_name}")
+    elif baseline_memory > MEMORY_BUDGET_MB:
+        failed_gates.add(f"baseline_memory_budget_missed:{cell_name}")
     if candidate_memory is None:
         failed_gates.add(f"candidate_memory_missing:{cell_name}")
     elif candidate_memory > MEMORY_BUDGET_MB:
         failed_gates.add(f"candidate_memory_budget_missed:{cell_name}")
+    if any(_thermal_missing(run) for run in baseline):
+        failed_gates.add(f"baseline_thermal_missing:{cell_name}")
     if any(_thermal_missing(run) for run in candidate):
         failed_gates.add(f"candidate_thermal_missing:{cell_name}")
+    if any(not _has_measured_provenance(run) for run in baseline):
+        failed_gates.add(f"baseline_provenance_missing:{cell_name}")
     if any(not _has_measured_provenance(run) for run in candidate):
         failed_gates.add(f"candidate_provenance_missing:{cell_name}")
+    if any(not _has_device_identity(run) for run in baseline):
+        failed_gates.add(f"baseline_device_identity_missing:{cell_name}")
     if any(not _has_device_identity(run) for run in candidate):
         failed_gates.add(f"candidate_device_identity_missing:{cell_name}")
 
@@ -227,12 +254,14 @@ def _compare_cell(
         "bucket": key[1],
         "language_mode": key[2],
         "target_surface": key[3],
+        "baseline_utterances": baseline_utterances,
         "candidate_utterances": candidate_utterances,
         "baseline_p95_finalization_latency_ms": baseline_p95,
         "candidate_p95_finalization_latency_ms": candidate_p95,
         "baseline_worst_wer": baseline_wer,
         "candidate_worst_wer": candidate_wer,
         "wer_regression": wer_regression,
+        "baseline_peak_memory_mb": baseline_memory,
         "candidate_peak_memory_mb": candidate_memory,
     }
 
@@ -242,12 +271,12 @@ def _surface(run: dict[str, Any]) -> str | None:
     if isinstance(explicit, str) and explicit:
         return explicit
     features = [str(item).lower() for item in run.get("browser_features", [])]
-    if any("headlesschrome" in item or "chrome/" in item for item in features):
-        return "desktop-browser"
     if any("android" in item and "wv" in item for item in features):
         return "android-webview"
     if any("iphone" in item or "ipad" in item for item in features):
         return "ios-webview"
+    if any("headlesschrome" in item or "chrome/" in item for item in features):
+        return "desktop-browser"
     return None
 
 
@@ -274,6 +303,38 @@ def _cell_name(key: tuple[str, str, str, str]) -> str:
 
 def _latency_target_ms(surface: str) -> float:
     return DESKTOP_P95_TARGET_MS if surface == "desktop-browser" else MOBILE_P95_TARGET_MS
+
+
+def _cell_p95_latency(
+    role: str,
+    cell_name: str,
+    runs: list[dict[str, Any]],
+    failed_gates: set[str],
+) -> float | None:
+    if _cell_utterance_count(runs) < MIN_UTTERANCES_PER_CELL:
+        return None
+    latencies = [
+        float(run["finalization_latency_ms"])
+        for run in runs
+        if run.get("finalization_latency_ms") is not None
+    ]
+    if len(latencies) >= MIN_UTTERANCES_PER_CELL:
+        return round(percentile(latencies, 95), 6)
+    summary_runs = [
+        run
+        for run in runs
+        if run.get("latency_statistic") == "p95"
+        and int(run.get("utterance_count", 0)) >= MIN_UTTERANCES_PER_CELL
+        and run.get("finalization_latency_ms") is not None
+    ]
+    if summary_runs:
+        return max(float(run["finalization_latency_ms"]) for run in summary_runs)
+    failed_gates.add(f"{role}_p95_statistic_unproven:{cell_name}")
+    return None
+
+
+def _cell_utterance_count(runs: list[dict[str, Any]]) -> int:
+    return sum(int(run.get("utterance_count", 1)) for run in runs)
 
 
 def _max_metric(runs: list[dict[str, Any]], key: str) -> float | None:

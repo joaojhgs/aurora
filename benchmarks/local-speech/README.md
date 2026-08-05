@@ -28,16 +28,17 @@ The initial STT bake-off tracks the approved plan candidates:
 
 | Candidate ID | Role | Upstream source | Current harness status |
 | --- | --- | --- | --- |
-| `transformersjs-whisper-webgpu-wasm` | Compatibility baseline/fallback | <https://huggingface.co/docs/transformers.js/en/index> | External adapter required |
-| `transformersjs-moonshine-onnx` | Short-form latency candidate | <https://huggingface.co/onnx-community/moonshine-base-ONNX> | External adapter required |
+| `transformersjs-whisper-webgpu-wasm` | Compatibility baseline/fallback, measured `.en` variant | <https://huggingface.co/Xenova/whisper-tiny.en> | External adapter required; English fixed-language coverage only until a multilingual artifact is pinned |
+| `transformersjs-moonshine-onnx` | Short-form latency candidate | <https://huggingface.co/onnx-community/moonshine-tiny-ONNX> | External adapter required |
 | `sherpa-onnx-wasm-streaming` | Streaming/mobile candidate | <https://k2-fsa.github.io/sherpa/onnx/wasm/index.html> | External adapter required |
 | `whisper-cpp-wasm` | Portability fallback | <https://github.com/ggml-org/whisper.cpp> | External adapter required |
 | `fixture-smoke` | Harness smoke only | local fixture manifest | Deterministic offline smoke |
 
-Exact engine revisions, package versions, downloaded model hashes, browser
-feature probes, and device details are recorded in benchmark result JSON. Values
-left as `TBD-*` in `stt/candidates.json` are decision inputs that must be filled
-by the integration owner or a device/browser benchmark runner before release.
+Exact engine revisions, immutable model revisions, package versions, downloaded
+model hashes, browser feature probes, and device details are recorded in
+benchmark result JSON. Values left as `TBD-*` in `stt/candidates.json` are
+decision inputs that must be filled by the integration owner or a device/browser
+benchmark runner before release.
 
 ## Running
 

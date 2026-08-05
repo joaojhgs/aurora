@@ -60,6 +60,33 @@ def test_external_candidates_record_unavailable_without_fabricated_metrics():
     assert report["evidence_status"] == "blocked_no_ok_runs"
 
 
+def test_measured_english_whisper_metadata_does_not_claim_portuguese_or_auto():
+    candidates = load_candidates(ROOT / "benchmarks/local-speech/stt/candidates.json")
+    whisper = next(
+        candidate
+        for candidate in candidates
+        if candidate.candidate_id == "transformersjs-whisper-webgpu-wasm"
+    )
+    moonshine = next(
+        candidate
+        for candidate in candidates
+        if candidate.candidate_id == "transformersjs-moonshine-onnx"
+    )
+
+    assert whisper.supported_languages == ["en"]
+    assert whisper.supports_auto_language is False
+    assert whisper.source_url == "https://huggingface.co/Xenova/whisper-tiny.en"
+    assert all(
+        artifact["revision"] == "79fb389fc764e7c395bd330e9531d9d32ada7049"
+        for artifact in whisper.model_artifacts
+    )
+    assert moonshine.source_url == "https://huggingface.co/onnx-community/moonshine-tiny-ONNX"
+    assert all(
+        artifact["revision"] == "a6da1241cd305dcd64eab1edbd615f2bb9aabb95"
+        for artifact in moonshine.model_artifacts
+    )
+
+
 def test_real_all_failed_cli_writes_report_and_exits_2(tmp_path):
     output = tmp_path / "unavailable.json"
 
