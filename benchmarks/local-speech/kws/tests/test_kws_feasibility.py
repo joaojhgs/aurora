@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import contextlib
-import io
 import importlib.util
+import io
 import os
 import sys
 import unittest
@@ -19,11 +19,20 @@ def load_module(name: str, path: Path):
     return module
 
 
-kws_benchmark = load_module("kws_benchmark", Path(__file__).resolve().parents[1] / "kws_benchmark.py")
-trained_pack_parity = load_module("trained_pack_parity", Path(__file__).resolve().parents[1] / "trained_pack_parity.py")
+kws_benchmark = load_module(
+    "kws_benchmark", Path(__file__).resolve().parents[1] / "kws_benchmark.py"
+)
+trained_pack_parity = load_module(
+    "trained_pack_parity", Path(__file__).resolve().parents[1] / "trained_pack_parity.py"
+)
 wakeword_cli = load_module(
     "aurora_wakeword_training_cli",
-    Path(__file__).resolve().parents[4] / "tools" / "wakeword-training" / "src" / "aurora_wakeword_training" / "cli.py",
+    Path(__file__).resolve().parents[4]
+    / "tools"
+    / "wakeword-training"
+    / "src"
+    / "aurora_wakeword_training"
+    / "cli.py",
 )
 
 
@@ -177,13 +186,22 @@ class KwsFeasibilityTests(unittest.TestCase):
             runbook = wakeword_cli.feasibility_runbook(configs)
 
         commands = runbook["bounded_commands"]
-        uv_commands = [command for command in commands if "uv sync" in command or "uv run" in command]
+        uv_commands = [
+            command for command in commands if "uv sync" in command or "uv run" in command
+        ]
         self.assertTrue(uv_commands)
-        self.assertTrue(all("uv sync --locked" in command or "uv run --locked" in command for command in uv_commands))
+        self.assertTrue(
+            all(
+                "uv sync --locked" in command or "uv run --locked" in command
+                for command in uv_commands
+            )
+        )
         espeak_commands = [command for command in commands if "ESPEAK_DATA_PATH" in command]
         self.assertEqual(len(espeak_commands), 1)
         self.assertNotIn("$ESPEAK_ROOT", espeak_commands[0])
-        self.assertIn(str(wakeword_cli.ARTIFACT_ROOT / "espeak-root" / "usr" / "bin"), espeak_commands[0])
+        self.assertIn(
+            str(wakeword_cli.ARTIFACT_ROOT / "espeak-root" / "usr" / "bin"), espeak_commands[0]
+        )
 
     def test_validate_export_fails_closed_when_frontend_missing(self) -> None:
         result = wakeword_cli.validate_export(

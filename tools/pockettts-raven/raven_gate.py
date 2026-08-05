@@ -156,20 +156,30 @@ def validate_manifest_data(data: dict[str, Any]) -> None:
         conversion = pack.get("conversion", {})
         command = conversion.get("command", "")
         if "/resolve/main/" in command:
-            errors.append(f"{pack_id}.conversion.command must not use mutable Hugging Face resolve/main")
+            errors.append(
+                f"{pack_id}.conversion.command must not use mutable Hugging Face resolve/main"
+            )
         if "huggingface.co/" in command and not IMMUTABLE_HF_RESOLVE.search(command):
-            errors.append(f"{pack_id}.conversion.command must pin Hugging Face URLs to a 40-character commit")
+            errors.append(
+                f"{pack_id}.conversion.command must pin Hugging Face URLs to a 40-character commit"
+            )
         if pack_id == "french_24l":
             if conversion.get("observed_attention_tail_replacements") != 24:
-                errors.append("french_24l.conversion.observed_attention_tail_replacements must be 24")
+                errors.append(
+                    "french_24l.conversion.observed_attention_tail_replacements must be 24"
+                )
             if conversion.get("observed_state_slots") != 72:
                 errors.append("french_24l.conversion.observed_state_slots must be 72")
             patch = conversion.get("layer_inference_patch", {})
             patch_path = REPO_ROOT / str(patch.get("path", ""))
             if not patch_path.is_file():
-                errors.append("french_24l.conversion.layer_inference_patch.path must point to a tracked patch")
+                errors.append(
+                    "french_24l.conversion.layer_inference_patch.path must point to a tracked patch"
+                )
             elif patch.get("sha256") != sha256_file(patch_path):
-                errors.append("french_24l.conversion.layer_inference_patch.sha256 must match patch content")
+                errors.append(
+                    "french_24l.conversion.layer_inference_patch.sha256 must match patch content"
+                )
         assets = pack.get("assets", {})
         for asset_name in REQUIRED_ASSETS:
             asset = assets.get(asset_name)
@@ -177,7 +187,9 @@ def validate_manifest_data(data: dict[str, Any]) -> None:
                 errors.append(f"{pack_id}.assets.{asset_name} missing")
                 continue
             digest = asset.get("sha256")
-            if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}|TBD:[a-z0-9_.-]+", digest):
+            if not isinstance(digest, str) or not re.fullmatch(
+                r"[0-9a-f]{64}|TBD:[a-z0-9_.-]+", digest
+            ):
                 errors.append(f"{pack_id}.assets.{asset_name}.sha256 must be sha256 or TBD marker")
             if "size_bytes" not in asset:
                 errors.append(f"{pack_id}.assets.{asset_name}.size_bytes missing")
@@ -215,7 +227,10 @@ def manifest_readiness(data: dict[str, Any]) -> dict[str, Any]:
     candidate_packs: list[str] = []
     for pack_id, pack in data.get("packs", {}).items():
         conversion = pack.get("conversion", {})
-        if conversion.get("source_role") == "candidate-input" or "candidate" in str(conversion.get("expected_equivalence", "")).lower():
+        if (
+            conversion.get("source_role") == "candidate-input"
+            or "candidate" in str(conversion.get("expected_equivalence", "")).lower()
+        ):
             candidate_packs.append(pack_id)
         for asset_name, asset in pack.get("assets", {}).items():
             digest = asset.get("sha256", "")
@@ -224,7 +239,9 @@ def manifest_readiness(data: dict[str, Any]) -> dict[str, Any]:
             else:
                 pinned += 1
     release_evidence = data.get("release_evidence", {})
-    missing_release_gates = [gate for gate in REQUIRED_RELEASE_GATES if release_evidence.get(gate) is not True]
+    missing_release_gates = [
+        gate for gate in REQUIRED_RELEASE_GATES if release_evidence.get(gate) is not True
+    ]
     hash_pinned = len(unpinned) == 0
     release_blockers: list[dict[str, Any]] = []
     if candidate_packs:
@@ -250,17 +267,50 @@ def manifest_readiness(data: dict[str, Any]) -> dict[str, Any]:
 
 
 ASSUMPTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
-    ("english_only", re.compile(r"english_2026-04|spm_vocab\.json|MODEL_BASE|BUNDLE_URL"), "replace with manifest-selected language pack"),
-    ("six_layer_or_state_count", re.compile(r"\blsdSteps\b|state_17|18 state|layers 6|--layers 6|range\(6\)"), "derive layer/state count from graph/config"),
-    ("graph_identity", re.compile(r"flow_lm_main_delta_attn_flow|flow_lm_main_delta_attn_int8|mimi_decoder_delta_int8|mimi_decoder_delta_convtr"), "drive graph set from pack tier/runtime target"),
-    ("cache_or_memory", re.compile(r"SharedArrayBuffer|growth|768MB|1\.5GB|cache|prewarm|pool"), "preserve useful memory/cache pattern after resource gates"),
-    ("cancellation", re.compile(r"stop|stream_stop|AbortError|activeSpeechId|session"), "preserve cancellation/session isolation"),
-    ("clone_boundary", re.compile(r"encode-worker\.js|ptt_encode_voice|restoreVoice|cloneInner|joao\.emb"), "Aurora must own clone encoder/import lifecycle"),
+    (
+        "english_only",
+        re.compile(r"english_2026-04|spm_vocab\.json|MODEL_BASE|BUNDLE_URL"),
+        "replace with manifest-selected language pack",
+    ),
+    (
+        "six_layer_or_state_count",
+        re.compile(r"\blsdSteps\b|state_17|18 state|layers 6|--layers 6|range\(6\)"),
+        "derive layer/state count from graph/config",
+    ),
+    (
+        "graph_identity",
+        re.compile(
+            r"flow_lm_main_delta_attn_flow|flow_lm_main_delta_attn_int8|mimi_decoder_delta_int8|mimi_decoder_delta_convtr"
+        ),
+        "drive graph set from pack tier/runtime target",
+    ),
+    (
+        "cache_or_memory",
+        re.compile(r"SharedArrayBuffer|growth|768MB|1\.5GB|cache|prewarm|pool"),
+        "preserve useful memory/cache pattern after resource gates",
+    ),
+    (
+        "cancellation",
+        re.compile(r"stop|stream_stop|AbortError|activeSpeechId|session"),
+        "preserve cancellation/session isolation",
+    ),
+    (
+        "clone_boundary",
+        re.compile(r"encode-worker\.js|ptt_encode_voice|restoreVoice|cloneInner|joao\.emb"),
+        "Aurora must own clone encoder/import lifecycle",
+    ),
 )
 
 
 def run_git(args: list[str], cwd: Path) -> str:
-    proc = subprocess.run(["git", *args], cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
     return proc.stdout.strip() if proc.returncode == 0 else f"git failed: {proc.stdout.strip()}"
 
 
@@ -304,17 +354,36 @@ def command_provenance(args: argparse.Namespace) -> int:
     sibling = args.sibling
     upstream = args.upstream
     sibling_head = run_git(["rev-parse", "HEAD"], sibling) if sibling.exists() else "missing"
-    sibling_status = run_git(["status", "--short", "--branch"], sibling) if sibling.exists() else "missing"
+    sibling_status = (
+        run_git(["status", "--short", "--branch"], sibling) if sibling.exists() else "missing"
+    )
     upstream_head = run_git(["rev-parse", "HEAD"], upstream) if upstream.exists() else "missing"
     assumptions: list[dict[str, Any]] = []
-    for root in (upstream, sibling / "public/assistant/pocket-tts", sibling / "src/features/assistant/audio"):
+    for root in (
+        upstream,
+        sibling / "public/assistant/pocket-tts",
+        sibling / "src/features/assistant/audio",
+    ):
         if not root.exists():
             continue
         for path in root.rglob("*"):
-            if path.is_file() and path.suffix.lower() in {".js", ".ts", ".py", ".cpp", ".hpp", ".md", ".json", ".sh"}:
+            if path.is_file() and path.suffix.lower() in {
+                ".js",
+                ".ts",
+                ".py",
+                ".cpp",
+                ".hpp",
+                ".md",
+                ".json",
+                ".sh",
+            }:
                 assumptions.extend(scan_file(path, root))
     missing_encoder = not (sibling / "public/assistant/pocket-tts/src/encode-worker.js").exists()
-    status = "pass" if upstream_head == RAVEN_UPSTREAM_COMMIT and sibling_head == SIBLING_HEAD else "review"
+    status = (
+        "pass"
+        if upstream_head == RAVEN_UPSTREAM_COMMIT and sibling_head == SIBLING_HEAD
+        else "review"
+    )
     write_json(
         args.output,
         {
@@ -323,7 +392,11 @@ def command_provenance(args: argparse.Namespace) -> int:
             "manifest_sha256": sha256_file(args.manifest),
             "plan_sha256": manifest.get("plan_sha256"),
             "sources": manifest["sources"],
-            "observed": {"sibling_head": sibling_head, "sibling_status": sibling_status, "upstream_head": upstream_head},
+            "observed": {
+                "sibling_head": sibling_head,
+                "sibling_status": sibling_status,
+                "upstream_head": upstream_head,
+            },
             "sibling_hashes": file_hashes(sibling) if sibling.exists() else {},
             "clone_boundary": {
                 "disposable_encoder_present_in_sibling": not missing_encoder,
@@ -361,30 +434,57 @@ def command_conversion(args: argparse.Namespace) -> int:
     for name, asset in pack["assets"].items():
         path = asset_path(args.source_root, args.pack, name)
         if not path.exists():
-            failures.append({"asset": name, "reason": "missing", "expected_path": public_path(path)})
+            failures.append(
+                {"asset": name, "reason": "missing", "expected_path": public_path(path)}
+            )
             continue
         got = sha256_file(path)
         if asset["sha256"].startswith("TBD:"):
-            failures.append({"asset": name, "reason": "manifest_hash_not_pinned", "actual_sha256": got, "path": public_path(path)})
+            failures.append(
+                {
+                    "asset": name,
+                    "reason": "manifest_hash_not_pinned",
+                    "actual_sha256": got,
+                    "path": public_path(path),
+                }
+            )
             continue
         if got != asset["sha256"]:
-            failures.append({"asset": name, "reason": "sha256_mismatch", "expected": asset["sha256"], "actual": got, "path": public_path(path)})
+            failures.append(
+                {
+                    "asset": name,
+                    "reason": "sha256_mismatch",
+                    "expected": asset["sha256"],
+                    "actual": got,
+                    "path": public_path(path),
+                }
+            )
             continue
-        verified[name] = {"path": public_path(path), "sha256": got, "size_bytes": path.stat().st_size}
+        verified[name] = {
+            "path": public_path(path),
+            "sha256": got,
+            "size_bytes": path.stat().st_size,
+        }
     graph_check = {
         "expected_layers": pack["layers"],
         "expected_state_slots": pack["state_slots"],
-        "observed_attention_tail_replacements": pack.get("conversion", {}).get("observed_attention_tail_replacements"),
+        "observed_attention_tail_replacements": pack.get("conversion", {}).get(
+            "observed_attention_tail_replacements"
+        ),
         "observed_state_slots": pack.get("conversion", {}).get("observed_state_slots"),
         "state_slots_formula": "layers * 3",
     }
     graph_check["accepted"] = conversion_graph_check_accepted(args.pack, pack, graph_check)
-    status = "dry-run-pass" if args.dry_run and not failures and graph_check["accepted"] else "blocked"
+    status = (
+        "dry-run-pass" if args.dry_run and not failures and graph_check["accepted"] else "blocked"
+    )
     if not args.dry_run and not failures and graph_check["accepted"]:
         status = "ready-for-real-conversion"
     claim = f"{args.pack} conversion not reproduced"
     if status == "dry-run-pass":
-        claim = f"{args.pack} manifest structure is valid; real conversion was intentionally not run"
+        claim = (
+            f"{args.pack} manifest structure is valid; real conversion was intentionally not run"
+        )
     elif status == "ready-for-real-conversion":
         claim = f"{args.pack} inputs are present and hash-pinned; run the pinned Raven conversion script next"
     write_json(
@@ -420,7 +520,9 @@ def asset_path(source_root: Path, pack_id: str, name: str) -> Path:
     return candidates[0]
 
 
-def conversion_graph_check_accepted(pack_id: str, pack: dict[str, Any], graph_check: dict[str, Any]) -> bool:
+def conversion_graph_check_accepted(
+    pack_id: str, pack: dict[str, Any], graph_check: dict[str, Any]
+) -> bool:
     if pack["state_slots"] != pack["layers"] * 3:
         return False
     if pack_id != "french_24l":
@@ -445,7 +547,10 @@ def command_benchmark(args: argparse.Namespace) -> int:
                 "checked_at_unix": int(time.time()),
                 "pack_id": args.pack,
                 "environment": environment_record(),
-                "first_failure": {"reason": "missing_runtime_report", "required": benchmark_required_fields()},
+                "first_failure": {
+                    "reason": "missing_runtime_report",
+                    "required": benchmark_required_fields(),
+                },
                 "thermal_claim": "not measured",
                 "mobile_claim": "not measured",
                 "pack_layers": pack["layers"],
@@ -455,10 +560,19 @@ def command_benchmark(args: argparse.Namespace) -> int:
     data = json.loads(args.input.read_text(encoding="utf-8"))
     required = benchmark_required_fields()
     missing = [key for key in required if key not in data]
-    rtf = data["generation_ms"] / data["audio_duration_ms"] if not missing and data["audio_duration_ms"] else None
+    rtf = (
+        data["generation_ms"] / data["audio_duration_ms"]
+        if not missing and data["audio_duration_ms"]
+        else None
+    )
     provenance_failures = benchmark_provenance_failures(data) if not missing else []
     evidence_kind = data.get("evidence_kind")
-    metrics_pass = not missing and rtf is not None and rtf <= args.max_rtf and data["cancelled_stale_audio"] is False
+    metrics_pass = (
+        not missing
+        and rtf is not None
+        and rtf <= args.max_rtf
+        and data["cancelled_stale_audio"] is False
+    )
     if evidence_kind == "measured":
         status = "pass" if metrics_pass and not provenance_failures else "blocked"
         exit_code = 0 if status == "pass" else 2
@@ -480,7 +594,9 @@ def command_benchmark(args: argparse.Namespace) -> int:
         "missing": missing,
         "provenance_failures": provenance_failures,
         "release_evidence": status == "pass",
-        "first_failure": first_benchmark_failure(missing, provenance_failures, evidence_kind, metrics_pass),
+        "first_failure": first_benchmark_failure(
+            missing, provenance_failures, evidence_kind, metrics_pass
+        ),
     }
     write_json(args.output, payload)
     return exit_code
@@ -505,7 +621,16 @@ def benchmark_required_fields() -> tuple[str, ...]:
 
 def benchmark_provenance_failures(data: dict[str, Any]) -> list[dict[str, str]]:
     failures: list[dict[str, str]] = []
-    forbidden = {"", "fixture", "synthetic", "test", "unknown", "not-measured", "not measured", "n/a"}
+    forbidden = {
+        "",
+        "fixture",
+        "synthetic",
+        "test",
+        "unknown",
+        "not-measured",
+        "not measured",
+        "n/a",
+    }
     for key in ("device", "browser_or_runtime", "thermal", "source_commit", "artifact_sha256"):
         value = str(data.get(key, "")).strip()
         if value.lower() in forbidden:
@@ -520,14 +645,21 @@ def benchmark_provenance_failures(data: dict[str, Any]) -> list[dict[str, str]]:
 
 
 def first_benchmark_failure(
-    missing: list[str], provenance_failures: list[dict[str, str]], evidence_kind: Any, metrics_pass: bool
+    missing: list[str],
+    provenance_failures: list[dict[str, str]],
+    evidence_kind: Any,
+    metrics_pass: bool,
 ) -> dict[str, Any] | None:
     if missing:
         return {"reason": "missing_fields", "fields": missing}
     if evidence_kind in {"fixture", "synthetic"}:
         return {"reason": "non_release_evidence_kind", "evidence_kind": evidence_kind}
     if evidence_kind != "measured":
-        return {"reason": "invalid_evidence_kind", "evidence_kind": evidence_kind, "allowed": ["measured", "fixture", "synthetic"]}
+        return {
+            "reason": "invalid_evidence_kind",
+            "evidence_kind": evidence_kind,
+            "allowed": ["measured", "fixture", "synthetic"],
+        }
     if provenance_failures:
         return {"reason": "invalid_measurement_provenance", "failure": provenance_failures[0]}
     if not metrics_pass:
@@ -542,7 +674,11 @@ def environment_record() -> dict[str, Any]:
         "machine": platform.machine(),
         "processor": platform.processor(),
         "cwd": public_path(os.getcwd()),
-        "tools": {name: public_path(found) if found else None for name in ("git", "uv", "curl", "cmake", "node") for found in [shutil.which(name)]},
+        "tools": {
+            name: public_path(found) if found else None
+            for name in ("git", "uv", "curl", "cmake", "node")
+            for found in [shutil.which(name)]
+        },
     }
 
 
@@ -562,7 +698,9 @@ def build_parser() -> argparse.ArgumentParser:
     conversion = sub.add_parser("conversion")
     conversion.add_argument("--manifest", type=Path, required=True)
     conversion.add_argument("--pack", choices=sorted(REQUIRED_PACKS), required=True)
-    conversion.add_argument("--source-root", type=Path, default=Path(".artifacts/pockettts/w0-raven/source-assets"))
+    conversion.add_argument(
+        "--source-root", type=Path, default=Path(".artifacts/pockettts/w0-raven/source-assets")
+    )
     conversion.add_argument("--dry-run", action="store_true")
     conversion.add_argument("--output", type=Path)
     conversion.set_defaults(func=command_conversion)

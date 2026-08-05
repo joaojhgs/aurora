@@ -10,7 +10,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-
 TOOL_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = TOOL_ROOT.parents[1]
 ARTIFACT_ROOT = REPO_ROOT / ".artifacts" / "pockettts" / "w0-kws"
@@ -214,7 +213,9 @@ def write_feasibility_configs() -> dict[str, Any]:
         configs[language] = {"path": repo_relative(path), "sha256": sha256(path)}
 
     runbook = feasibility_runbook(configs)
-    runbook_path = write_json(ARTIFACT_ROOT / "reports" / "livekit-w0-feasibility-runbook.json", runbook)
+    runbook_path = write_json(
+        ARTIFACT_ROOT / "reports" / "livekit-w0-feasibility-runbook.json", runbook
+    )
     return {"schema_version": 1, "runbook": repo_relative(runbook_path), "configs": configs}
 
 
@@ -269,7 +270,9 @@ def feasibility_runbook(configs: dict[str, dict[str, str]]) -> dict[str, Any]:
     return runbook
 
 
-def score_separation(positive_scores: list[float], negative_scores: list[float], threshold: float) -> dict[str, Any]:
+def score_separation(
+    positive_scores: list[float], negative_scores: list[float], threshold: float
+) -> dict[str, Any]:
     if not positive_scores:
         return {"passed": False, "reason": "no positive WAVs were scored"}
     if not negative_scores:
@@ -282,7 +285,9 @@ def score_separation(positive_scores: list[float], negative_scores: list[float],
     passed = positive_all_above_threshold and negatives_below_threshold and separated
     return {
         "passed": passed,
-        "reason": "scores separate positives and negatives" if passed else "scores do not cleanly separate positives and negatives",
+        "reason": "scores separate positives and negatives"
+        if passed
+        else "scores do not cleanly separate positives and negatives",
         "threshold": threshold,
         "min_positive": min_positive,
         "max_negative": max_negative,
@@ -317,8 +322,19 @@ def release_disposition(label: str, separation: dict[str, Any]) -> dict[str, Any
     }
 
 
-def validate_export(model: Path, positive_dir: Path, negative_dir: Path, label: str, threshold: float) -> dict[str, Any]:
-    resources = TOOL_ROOT / ".venv" / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages" / "livekit" / "wakeword" / "resources"
+def validate_export(
+    model: Path, positive_dir: Path, negative_dir: Path, label: str, threshold: float
+) -> dict[str, Any]:
+    resources = (
+        TOOL_ROOT
+        / ".venv"
+        / "lib"
+        / f"python{sys.version_info.major}.{sys.version_info.minor}"
+        / "site-packages"
+        / "livekit"
+        / "wakeword"
+        / "resources"
+    )
     melspec = resources / "melspectrogram.onnx"
     embedding = resources / "embedding_model.onnx"
     required = {
@@ -444,8 +460,16 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(write_feasibility_configs(), indent=2, sort_keys=True))
         return 0
     if args.command == "validate-export":
-        payload = validate_export(Path(args.model), Path(args.positive_dir), Path(args.negative_dir), args.label, args.threshold)
-        report = write_json(ARTIFACT_ROOT / "reports" / f"livekit-{args.label}-validate-export.json", payload)
+        payload = validate_export(
+            Path(args.model),
+            Path(args.positive_dir),
+            Path(args.negative_dir),
+            args.label,
+            args.threshold,
+        )
+        report = write_json(
+            ARTIFACT_ROOT / "reports" / f"livekit-{args.label}-validate-export.json", payload
+        )
         print(json.dumps({"report": repo_relative(report), **payload}, indent=2, sort_keys=True))
         return 0 if payload["status"] == "passed" else 2
     if args.command == "smoke-python-import":

@@ -10,7 +10,11 @@ from pathlib import Path
 from scripts.speech_runtime_abi import cli
 
 
-def _write_project(root: Path, optional: dict[str, list[str]], lock_optional: dict[str, list[dict[str, str]]] | None = None) -> None:
+def _write_project(
+    root: Path,
+    optional: dict[str, list[str]],
+    lock_optional: dict[str, list[dict[str, str]]] | None = None,
+) -> None:
     optional_lines = []
     for extra, requirements in optional.items():
         optional_lines.append(f"{extra!r} = [")
@@ -98,10 +102,7 @@ def test_scan_rejects_realtimestt_and_release_benchmark_leak(tmp_path: Path) -> 
 
     assert results["pyproject.realtimestt_openrecall_ocr_absent"].status == "failure"
     assert results["pyproject.benchmark_training_release_leak"].status == "failure"
-    assert (
-        results["uv_lock.optional_realtimestt_openrecall_ocr_absent"].status
-        == "failure"
-    )
+    assert results["uv_lock.optional_realtimestt_openrecall_ocr_absent"].status == "failure"
 
 
 def test_scan_rejects_training_dependency_release_leak(tmp_path: Path) -> None:

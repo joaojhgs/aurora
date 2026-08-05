@@ -15,7 +15,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ARTIFACT_ROOT = REPO_ROOT / ".artifacts" / "pockettts" / "w0-kws"
 
@@ -29,7 +28,11 @@ SHERPA_REVISION = {
 SHERPA_LANGUAGE_PACKS = {
     "en": {"name": "English", "token_type": "bpe", "status": "supported_for_phrase_spike"},
     "zh": {"name": "Chinese", "token_type": "pinyin", "status": "supported_for_phrase_spike"},
-    "zh-en": {"name": "Chinese/English", "token_type": "mixed", "status": "requires_installed_pack_probe"},
+    "zh-en": {
+        "name": "Chinese/English",
+        "token_type": "mixed",
+        "status": "requires_installed_pack_probe",
+    },
 }
 
 DEFAULT_PHRASES = {
@@ -153,7 +156,11 @@ def smoke_import(engine: str) -> dict[str, Any]:
         imported = importlib.import_module(module)
     except Exception as exc:  # noqa: BLE001
         payload["status"] = "unavailable"
-        payload["first_failure"] = {"type": type(exc).__name__, "message": str(exc), "module": module}
+        payload["first_failure"] = {
+            "type": type(exc).__name__,
+            "message": str(exc),
+            "module": module,
+        }
     else:
         payload["status"] = "imported"
         payload["version"] = getattr(imported, "__version__", "unknown")
@@ -189,7 +196,9 @@ def _exact_model_match(model_dir: Path, role: str, quantized: bool) -> Path:
         matches = [path for path in candidates if not path.name.endswith(".int8.onnx")]
     if not matches:
         precision = "int8" if quantized else "fp32"
-        raise FileNotFoundError(f"missing {precision} sherpa {role} model in {_artifact_path(model_dir)}")
+        raise FileNotFoundError(
+            f"missing {precision} sherpa {role} model in {_artifact_path(model_dir)}"
+        )
     if len(matches) > 1:
         rel_matches = [_artifact_path(path) for path in matches]
         raise ValueError(f"ambiguous sherpa {role} model matches: {rel_matches}")

@@ -44,8 +44,14 @@ def test_manifest_validates_pinned_sources_and_required_packs() -> None:
     assert payload["readiness"]["hash_pinned"] is True
     assert payload["readiness"]["unpinned_asset_count"] == 0
     assert payload["readiness"]["release_ready"] is False
-    assert payload["readiness"]["candidate_input_packs"] == ["english_2026-04", "french_24l", "portuguese"]
-    assert {item["gate"] for item in payload["readiness"]["release_blockers"] if "gate" in item} == {
+    assert payload["readiness"]["candidate_input_packs"] == [
+        "english_2026-04",
+        "french_24l",
+        "portuguese",
+    ]
+    assert {
+        item["gate"] for item in payload["readiness"]["release_blockers"] if "gate" in item
+    } == {
         "official_source_provenance",
         "license_review",
         "conversion_equivalence",
@@ -119,14 +125,18 @@ def test_conversion_dry_run_reports_missing_assets_without_claiming_reproduction
     payload = json.loads(result.stdout)
     assert payload["status"] == "blocked"
     assert payload["first_failure"]["reason"] == "missing"
-    assert payload["first_failure"]["expected_path"].startswith(".artifacts/pockettts/w0-raven/source-assets")
+    assert payload["first_failure"]["expected_path"].startswith(
+        ".artifacts/pockettts/w0-raven/source-assets"
+    )
     assert str(REPO) not in result.stdout
     assert str(Path.home()) not in result.stdout
     assert "conversion not reproduced" in payload["claim"]
 
 
 def test_fixture_benchmark_report_is_schema_only_not_release_evidence() -> None:
-    result = run_cli("benchmark", "--manifest", str(MANIFEST), "--pack", "english_2026-04", "--input", str(BENCH))
+    result = run_cli(
+        "benchmark", "--manifest", str(MANIFEST), "--pack", "english_2026-04", "--input", str(BENCH)
+    )
 
     assert result.returncode == 2
     payload = json.loads(result.stdout)
@@ -159,7 +169,15 @@ def test_measured_benchmark_requires_real_provenance(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    result = run_cli("benchmark", "--manifest", str(MANIFEST), "--pack", "english_2026-04", "--input", str(report))
+    result = run_cli(
+        "benchmark",
+        "--manifest",
+        str(MANIFEST),
+        "--pack",
+        "english_2026-04",
+        "--input",
+        str(report),
+    )
 
     assert result.returncode == 2
     payload = json.loads(result.stdout)
@@ -205,13 +223,26 @@ def test_tokenizer_parity_vectors_are_pack_specific_and_hash_bound() -> None:
 
     for pack_id, pack_fixture in fixture["packs"].items():
         manifest_assets = manifest["packs"][pack_id]["assets"]
-        assert pack_fixture["tokenizer_model_sha256"] == manifest_assets["tokenizer.model"]["sha256"]
-        assert pack_fixture["derived_spm_vocab_sha256"] == manifest_assets["spm_vocab.json"]["sha256"]
+        assert (
+            pack_fixture["tokenizer_model_sha256"] == manifest_assets["tokenizer.model"]["sha256"]
+        )
+        assert (
+            pack_fixture["derived_spm_vocab_sha256"] == manifest_assets["spm_vocab.json"]["sha256"]
+        )
         assert pack_fixture["vector_count"] == len(pack_fixture["vectors"]) == 7
         assert any("12,50" in vector["text"] for vector in pack_fixture["vectors"])
-        assert any("l'h" in vector["text"] or "l\u2019" in vector["text"] for vector in pack_fixture["vectors"])
-        assert any("\t" in vector["text"] and "\n" in vector["text"] for vector in pack_fixture["vectors"])
-        byte_vector = next(vector for vector in pack_fixture["vectors"] if vector["text"].startswith("Byte fallback:"))
+        assert any(
+            "l'h" in vector["text"] or "l\u2019" in vector["text"]
+            for vector in pack_fixture["vectors"]
+        )
+        assert any(
+            "\t" in vector["text"] and "\n" in vector["text"] for vector in pack_fixture["vectors"]
+        )
+        byte_vector = next(
+            vector
+            for vector in pack_fixture["vectors"]
+            if vector["text"].startswith("Byte fallback:")
+        )
         assert 4 in byte_vector["ids"]
         assert {243, 244}.issubset(set(byte_vector["ids"]))
 

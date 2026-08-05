@@ -12,7 +12,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ARTIFACT_ROOT = REPO_ROOT / ".artifacts" / "pockettts" / "w0-kws"
 
@@ -93,11 +92,16 @@ def decide() -> dict[str, Any]:
         },
         "required_abi": asdict(OPENWAKEWORD_ABI),
         "browser_frontend_missing": missing,
-        "python_runtime_available": {"openwakeword": has_openwakeword, "onnxruntime": has_onnxruntime},
+        "python_runtime_available": {
+            "openwakeword": has_openwakeword,
+            "onnxruntime": has_onnxruntime,
+        },
         "golden_pcm": {
             "generated_at_runtime": True,
             "sample_rate_hz": OPENWAKEWORD_ABI.sample_rate_hz,
-            "sha256": hashlib.sha256(b"".join(v.to_bytes(2, "little", signed=True) for v in pcm)).hexdigest(),
+            "sha256": hashlib.sha256(
+                b"".join(v.to_bytes(2, "little", signed=True) for v in pcm)
+            ).hexdigest(),
             "frames": len(scores),
         },
         "reference_score_stream": scores,

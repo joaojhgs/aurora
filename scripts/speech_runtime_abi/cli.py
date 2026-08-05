@@ -112,6 +112,7 @@ ARCHIVE_SUFFIXES = (
     ".txz",
 )
 
+
 def _artifact_package_rule(package: str) -> dict[str, Any]:
     normalized = package.lower().replace("_", "-")
     rule_name = normalized.replace("-", "_")
@@ -241,9 +242,7 @@ ARTIFACT_BLOCK_RULES: tuple[dict[str, Any], ...] = (
     {
         "id": "asset.audio_dataset_input",
         "category": "training_audio_dataset_or_prompt_input",
-        "path_regex": re.compile(
-            r"(?i)(\.wav|\.flac|\.mp3|\.ogg|\.opus|\.m4a|\.aac|\.webm)$"
-        ),
+        "path_regex": re.compile(r"(?i)(\.wav|\.flac|\.mp3|\.ogg|\.opus|\.m4a|\.aac|\.webm)$"),
     },
 )
 
@@ -449,7 +448,9 @@ def _redact(value: Any) -> Any:
         home = str(Path.home())
         cwd = os.getcwd()
         redacted = value.replace(cwd, "$REPO").replace(home, "$HOME")
-        redacted = re.sub(r"(?i)(token|secret|password|api[_-]?key)=([^\\s,;]+)", r"\\1=<redacted>", redacted)
+        redacted = re.sub(
+            r"(?i)(token|secret|password|api[_-]?key)=([^\\s,;]+)", r"\\1=<redacted>", redacted
+        )
         return redacted
     return value
 
@@ -474,7 +475,9 @@ def _numpy_pin_issues(optional: dict[str, list[str]]) -> dict[str, list[str]]:
 
 
 def _is_release_extra(extra: str) -> bool:
-    return extra in {"all", "gateway", "runtime", "container"} or extra.startswith(RELEASE_EXTRA_PREFIXES)
+    return extra in {"all", "gateway", "runtime", "container"} or extra.startswith(
+        RELEASE_EXTRA_PREFIXES
+    )
 
 
 def load_pyproject(root: Path) -> dict[str, Any]:
@@ -634,7 +637,11 @@ def _probe_status(returncode: int, stdout: str, stderr: str, required: bool) -> 
             status=last_json["status"],
             detail=last_json.get("detail", {}),
         )
-    status = "abi_failure" if "numpy.dtype size changed" in stderr or "_ARRAY_API" in stderr else "runtime_failure"
+    status = (
+        "abi_failure"
+        if "numpy.dtype size changed" in stderr or "_ARRAY_API" in stderr
+        else "runtime_failure"
+    )
     if returncode != 0 and required:
         status = "abi_failure" if status == "abi_failure" else "import_failure"
     return CheckResult(id="unknown", status=status, detail={"stderr_tail": stderr[-1200:]})
@@ -705,7 +712,9 @@ def run_probe(spec: dict[str, Any], timeout: float, expected_numpy: str) -> Chec
     return result
 
 
-def run_probes(probe_ids: set[str] | None, timeout: float, expected_numpy: str) -> list[CheckResult]:
+def run_probes(
+    probe_ids: set[str] | None, timeout: float, expected_numpy: str
+) -> list[CheckResult]:
     selected = [spec for spec in PROBES if probe_ids is None or spec["id"] in probe_ids]
     return [run_probe(spec, timeout=timeout, expected_numpy=expected_numpy) for spec in selected]
 
@@ -1209,9 +1218,7 @@ def _scan_zip_archive(
         member_name = info.filename
         member_path = f"{virtual_path}!{member_name}"
         if not _safe_archive_member_name(member_name):
-            limit_failures.append(
-                {"path": member_path, "reason": "unsafe_archive_member_path"}
-            )
+            limit_failures.append({"path": member_path, "reason": "unsafe_archive_member_path"})
             continue
         if info.file_size > limits.max_member_bytes:
             limit_failures.append(
@@ -1307,9 +1314,7 @@ def _scan_tar_archive(
         member_name = member.name
         member_path = f"{virtual_path}!{member_name}"
         if not _safe_archive_member_name(member_name):
-            limit_failures.append(
-                {"path": member_path, "reason": "unsafe_archive_member_path"}
-            )
+            limit_failures.append({"path": member_path, "reason": "unsafe_archive_member_path"})
             continue
         if member.size > limits.max_member_bytes:
             limit_failures.append(
@@ -1399,11 +1404,15 @@ def _scan_archive_path(
     try:
         if zipfile.is_zipfile(path):
             with zipfile.ZipFile(path) as archive:
-                _scan_zip_archive(archive, virtual_path, limits, records, findings, limit_failures, depth)
+                _scan_zip_archive(
+                    archive, virtual_path, limits, records, findings, limit_failures, depth
+                )
             return
         if tarfile.is_tarfile(path):
             with tarfile.open(path, mode="r:*") as archive:
-                _scan_tar_archive(archive, virtual_path, limits, records, findings, limit_failures, depth)
+                _scan_tar_archive(
+                    archive, virtual_path, limits, records, findings, limit_failures, depth
+                )
             return
         limit_failures.append({"path": virtual_path, "reason": "unsupported_or_corrupt_archive"})
     except (OSError, zipfile.BadZipFile, tarfile.TarError) as exc:
@@ -1494,10 +1503,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=Path)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    scan_parser = subparsers.add_parser("scan", help="Scan pyproject and uv.lock dependency graphs.")
+    scan_parser = subparsers.add_parser(
+        "scan", help="Scan pyproject and uv.lock dependency graphs."
+    )
     scan_parser.set_defaults(command="scan")
 
-    probe_parser = subparsers.add_parser("probe", help="Probe imports/runtime paths in the current interpreter.")
+    probe_parser = subparsers.add_parser(
+        "probe", help="Probe imports/runtime paths in the current interpreter."
+    )
     probe_parser.add_argument("--probe", action="append", choices=[spec["id"] for spec in PROBES])
     probe_parser.add_argument("--timeout", type=float, default=20.0)
     probe_parser.add_argument("--expected-numpy", default=DEFAULT_NUMPY_VERSION)
