@@ -362,10 +362,15 @@ async def test_process_entrypoint_starts_and_stops_tts_service(monkeypatch) -> N
     bus = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
     service = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
 
-    class ShutdownEvent:
+    class ShutdownSignalWaiter:
+        def __init__(self, service_name: str) -> None:
+            events.append(f"install:{service_name}")
+
         async def wait(self) -> None:
             events.append("wait")
-            raise KeyboardInterrupt
+
+        def close(self) -> None:
+            events.append("close")
 
     monkeypatch.setattr(tts_main, "register_all_service_topics", lambda: events.append("topics"))
     monkeypatch.setattr(
@@ -374,12 +379,47 @@ async def test_process_entrypoint_starts_and_stops_tts_service(monkeypatch) -> N
         lambda service_name: events.append(service_name) or bus,
     )
     monkeypatch.setattr(tts_main, "TTSService", lambda: service)
-    monkeypatch.setattr(tts_main.asyncio, "Event", ShutdownEvent)
+    monkeypatch.setattr(tts_main, "ShutdownSignalWaiter", ShutdownSignalWaiter)
 
     await tts_main.main()
 
-    assert events == ["topics", "TTSService", "wait"]
+    assert events == ["install:TTSService", "topics", "TTSService", "wait", "close"]
     bus.start.assert_awaited_once_with()
     service.start.assert_awaited_once_with()
+    service.stop.assert_awaited_once_with()
+    bus.stop.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_process_entrypoint_stops_bus_when_tts_service_stop_fails(
+    monkeypatch,
+) -> None:
+    """stops the process bus even when service cleanup raises."""
+    from app.services.tts import __main__ as tts_main
+
+    class ShutdownSignalWaiter:
+        def __init__(self, _service_name: str) -> None:
+            pass
+
+        async def wait(self) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    bus = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
+    service = SimpleNamespace(
+        start=AsyncMock(),
+        stop=AsyncMock(side_effect=RuntimeError("stop failed")),
+    )
+
+    monkeypatch.setattr(tts_main, "register_all_service_topics", lambda: None)
+    monkeypatch.setattr(tts_main, "initialize_bus_for_service", lambda _service_name: bus)
+    monkeypatch.setattr(tts_main, "TTSService", lambda: service)
+    monkeypatch.setattr(tts_main, "ShutdownSignalWaiter", ShutdownSignalWaiter)
+
+    with pytest.raises(RuntimeError, match="stop failed"):
+        await tts_main.main()
+
     service.stop.assert_awaited_once_with()
     bus.stop.assert_awaited_once_with()
