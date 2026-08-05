@@ -1,0 +1,85 @@
+# Local Speech Benchmarks
+
+This directory contains non-production benchmark harnesses for Aurora local
+speech engine selection. The Phase 0 STT lane is intentionally isolated from
+production packages and lockfiles: it uses Python standard-library code plus
+externally supplied engine commands, so benchmark-only dependencies do not leak
+into release builds.
+
+## Scope
+
+- `common/` owns versioned result loading, scoring, aggregation, redaction, and
+  `result.schema.json`.
+- `stt/` owns candidate metadata, STT adapters, CLI runner, and focused tests.
+- `stt/fixture_manifest.schema.json` describes approved fixture manifests.
+- `tests/fixtures/local_speech/stt/` owns approved fixture metadata. Reports may
+  include fixture IDs and aggregate metrics only; raw audio, paths, transcripts,
+  command output, credentials, and private device identifiers are rejected.
+
+The current Aurora server STT contract accepts complete base64 audio through
+`Transcription.Transcribe`, defaults to 16 kHz mono PCM/WAV-style inputs, uses a
+fixed language when configured, and otherwise allows auto detection. This
+harness mirrors those fixed versus auto language modes for browser/mobile
+candidate evaluation.
+
+## Candidate Matrix
+
+The initial STT bake-off tracks the approved plan candidates:
+
+| Candidate ID | Role | Upstream source | Current harness status |
+| --- | --- | --- | --- |
+| `transformersjs-whisper-webgpu-wasm` | Compatibility baseline/fallback | <https://huggingface.co/docs/transformers.js/en/index> | External adapter required |
+| `transformersjs-moonshine-onnx` | Short-form latency candidate | <https://huggingface.co/onnx-community/moonshine-base-ONNX> | External adapter required |
+| `sherpa-onnx-wasm-streaming` | Streaming/mobile candidate | <https://k2-fsa.github.io/sherpa/onnx/wasm/index.html> | External adapter required |
+| `whisper-cpp-wasm` | Portability fallback | <https://github.com/ggml-org/whisper.cpp> | External adapter required |
+| `fixture-smoke` | Harness smoke only | local fixture manifest | Deterministic offline smoke |
+
+Exact engine revisions, package versions, downloaded model hashes, browser
+feature probes, and device details are recorded in benchmark result JSON. Values
+left as `TBD-*` in `stt/candidates.json` are decision inputs that must be filled
+by the integration owner or a device/browser benchmark runner before release.
+
+## Running
+
+Deterministic offline smoke:
+
+```bash
+uv run python benchmarks/local-speech/stt/run_benchmark.py \
+  --candidate fixture-smoke \
+  --run-id local-stt-smoke
+```
+
+Unavailable-candidate smoke without installing any benchmark engine:
+
+```bash
+uv run python benchmarks/local-speech/stt/run_benchmark.py \
+  --candidate whisper-cpp-wasm \
+  --external-command definitely-missing-aurora-stt-adapter
+```
+
+Real engine adapters should be supplied as an external JSON command:
+
+```bash
+uv run python benchmarks/local-speech/stt/run_benchmark.py \
+  --candidate transformersjs-whisper-webgpu-wasm \
+  --external-command node path/to/private/adapter.mjs
+```
+
+The command receives `--candidate-id`, `--fixture-id`, `--audio`, and
+`--language`. It must print one JSON object containing `text` and may include
+`finalization_latency_ms`, `initialization_ms`, `download_bytes`,
+`peak_memory_mb`, `thermal_state`, and `browser_features`. The harness never
+copies stdout, stderr, audio paths, reference transcripts, or hypotheses into
+reports.
+
+## Decision Rule Inputs
+
+The section 16 STT gate requires WER by language/noise bucket, fixed and auto
+language modes, finalization latency, initialization, download bytes, peak
+memory, thermal state, browser feature support, and failure buckets. A new
+mobile default must beat the quantized Whisper baseline by at least 25 percent
+in p50/p95 end-of-utterance latency with no required bucket regressing by more
+than two absolute WER points and no memory or thermal failure.
+
+This harness records those inputs; it does not make the final product decision
+without real browser/WebView/device runs.

@@ -1,0 +1,135 @@
+{
+  "candidates": [
+    {
+      "adapter": "manifest-smoke",
+      "candidate_id": "fixture-smoke",
+      "display_name": "Fixture smoke adapter",
+      "model_artifacts": [],
+      "notes": [
+        "Deterministic offline adapter for schema, redaction, and scoring smoke tests only.",
+        "Not a production candidate and excluded from engine decisions."
+      ],
+      "required_browser_features": [],
+      "revision": "aurora-harness-v0.1",
+      "role": "harness-smoke",
+      "source_url": "local:benchmarks/local-speech/stt",
+      "supported_languages": [
+        "en",
+        "pt"
+      ],
+      "supports_auto_language": true
+    },
+    {
+      "adapter": "external-json",
+      "candidate_id": "transformersjs-whisper-webgpu-wasm",
+      "display_name": "Transformers.js Whisper tiny/base",
+      "model_artifacts": [
+        {
+          "artifact_id": "whisper-tiny-or-base-onnx",
+          "sha256": "TBD-after-download",
+          "source": "https://huggingface.co/docs/transformers.js/en/index"
+        }
+      ],
+      "notes": [
+        "Baseline/fallback candidate from the approved plan.",
+        "Benchmark both WebGPU and WASM execution providers where available.",
+        "Run fixed language by forwarding the resolved language and auto by passing provider auto-detect."
+      ],
+      "required_browser_features": [
+        "webgpu-or-wasm",
+        "web-worker"
+      ],
+      "revision": "TBD-exact-npm-version-and-model-hash",
+      "role": "baseline-fallback",
+      "source_url": "https://huggingface.co/docs/transformers.js/en/index",
+      "supported_languages": [
+        "en",
+        "pt"
+      ],
+      "supports_auto_language": true
+    },
+    {
+      "adapter": "external-json",
+      "candidate_id": "transformersjs-moonshine-onnx",
+      "display_name": "Moonshine ONNX through Transformers.js",
+      "model_artifacts": [
+        {
+          "artifact_id": "moonshine-onnx",
+          "sha256": "TBD-after-download",
+          "source": "https://huggingface.co/onnx-community/moonshine-base-ONNX"
+        }
+      ],
+      "notes": [
+        "Short-form and mobile latency candidate.",
+        "Language coverage must be proven per selected model before any release claim."
+      ],
+      "required_browser_features": [
+        "webgpu-or-wasm",
+        "web-worker"
+      ],
+      "revision": "TBD-exact-npm-version-and-model-hash",
+      "role": "latency-candidate",
+      "source_url": "https://huggingface.co/onnx-community/moonshine-base-ONNX",
+      "supported_languages": [
+        "en"
+      ],
+      "supports_auto_language": false
+    },
+    {
+      "adapter": "external-json",
+      "candidate_id": "sherpa-onnx-wasm-streaming",
+      "display_name": "sherpa-onnx WASM streaming ASR",
+      "model_artifacts": [
+        {
+          "artifact_id": "sherpa-onnx-zipformer-or-moonshine",
+          "sha256": "TBD-after-download",
+          "source": "https://k2-fsa.github.io/sherpa/onnx/wasm/index.html"
+        }
+      ],
+      "notes": [
+        "Streaming/mobile candidate and possible shared runtime with KWS.",
+        "Package bytes, partial behavior, single-thread limits, and language coverage are release blockers."
+      ],
+      "required_browser_features": [
+        "wasm",
+        "web-worker"
+      ],
+      "revision": "TBD-exact-sherpa-onnx-version-and-model-hash",
+      "role": "streaming-candidate",
+      "source_url": "https://k2-fsa.github.io/sherpa/onnx/wasm/index.html",
+      "supported_languages": [
+        "en",
+        "pt"
+      ],
+      "supports_auto_language": true
+    },
+    {
+      "adapter": "external-json",
+      "candidate_id": "whisper-cpp-wasm",
+      "display_name": "whisper.cpp WASM tiny/base",
+      "model_artifacts": [
+        {
+          "artifact_id": "ggml-whisper-tiny-or-base",
+          "sha256": "TBD-after-download",
+          "source": "https://github.com/ggml-org/whisper.cpp"
+        }
+      ],
+      "notes": [
+        "Broad portability and diagnostic fallback candidate.",
+        "Memory and model size are material mobile decision inputs."
+      ],
+      "required_browser_features": [
+        "wasm",
+        "web-worker"
+      ],
+      "revision": "TBD-exact-git-commit-and-model-hash",
+      "role": "portability-fallback",
+      "source_url": "https://github.com/ggml-org/whisper.cpp",
+      "supported_languages": [
+        "en",
+        "pt"
+      ],
+      "supports_auto_language": true
+    }
+  ]
+}
