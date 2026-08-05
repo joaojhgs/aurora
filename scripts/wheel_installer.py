@@ -9,9 +9,19 @@ using pre-built wheels with fallback to source compilation.
 
 import os
 import platform
+import shutil
 import subprocess
 import sys
-from typing import Optional
+
+CPU_TORCH_INDEX_ARGS = [
+    "--extra-index-url=https://download.pytorch.org/whl/cpu",
+]
+CPU_TORCH_PACKAGES = [
+    "torch==2.6.0+cpu",
+    "torchaudio==2.6.0+cpu",
+    "torchvision==0.21.0+cpu",
+    *CPU_TORCH_INDEX_ARGS,
+]
 
 
 class WheelInstaller:
@@ -25,7 +35,7 @@ class WheelInstaller:
         # Pre-built wheel configurations
         self.wheel_configs = {
             "pytorch": {
-                "cpu": {"primary": ["torch==2.6.0", "torchaudio==2.6.0", "torchvision==0.21.0"]},
+                "cpu": {"primary": CPU_TORCH_PACKAGES},
                 "cuda": {
                     "primary": [
                         "torch==2.6.0+cu124",
@@ -42,26 +52,27 @@ class WheelInstaller:
                 },
                 "rocm": {
                     "primary": [
-                        "torch==2.6.0+rocm6.0",
-                        "torchaudio==2.6.0+rocm6.0",
-                        "--extra-index-url=https://download.pytorch.org/whl/rocm6.0",
+                        "torch==2.6.0+rocm6.2.4",
+                        "torchaudio==2.6.0+rocm6.2.4",
+                        "torchvision==0.21.0+rocm6.2.4",
+                        "--extra-index-url=https://download.pytorch.org/whl/rocm6.2.4",
                     ]
                 },
                 "metal": {
                     # Metal uses CPU torch packages - acceleration happens at framework level
-                    "primary": ["torch==2.6.0", "torchaudio==2.6.0", "torchvision==0.21.0"]
+                    "primary": CPU_TORCH_PACKAGES,
                 },
                 "vulkan": {
                     # Vulkan uses CPU torch packages - acceleration happens at framework level
-                    "primary": ["torch==2.6.0", "torchaudio==2.6.0", "torchvision==0.21.0"]
+                    "primary": CPU_TORCH_PACKAGES,
                 },
                 "sycl": {
                     # SYCL uses CPU torch packages - acceleration happens at framework level
-                    "primary": ["torch==2.6.0", "torchaudio==2.6.0", "torchvision==0.21.0"]
+                    "primary": CPU_TORCH_PACKAGES,
                 },
                 "rpc": {
                     # RPC uses CPU torch packages - acceleration happens at framework level
-                    "primary": ["torch==2.6.0", "torchaudio==2.6.0", "torchvision==0.21.0"]
+                    "primary": CPU_TORCH_PACKAGES,
                 },
             },
             "llama-cpp-python": {
@@ -216,10 +227,16 @@ class WheelInstaller:
         return True
 
     def _pip_install(self, args: list[str], env: dict[str, str] | None = None) -> bool:
-        """Execute pip install with given arguments"""
+        """Install packages into this interpreter, preferring uv over pip."""
+        command = self._install_command(args)
         try:
-            cmd = [sys.executable, "-m", "pip", "install"] + args
-            subprocess.run(cmd, check=True, capture_output=True, text=True, env=env or os.environ)
+            subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+                env=env or os.environ,
+            )
             return True
         except subprocess.CalledProcessError as e:
             print(f"📋 Installation failed: {e.stderr.strip()}")
@@ -227,6 +244,29 @@ class WheelInstaller:
         except Exception as e:
             print(f"📋 Installation error: {str(e)}")
             return False
+
+    def _install_command(self, args: list[str]) -> list[str]:
+        """Build a package-install command for the active Python interpreter."""
+
+        uv = shutil.which("uv")
+        if uv:
+            return [uv, "pip", "install", "--python", sys.executable, *args]
+        if self._pip_available():
+            return [sys.executable, "-m", "pip", "install", *args]
+        raise RuntimeError(
+            f"Neither uv nor pip is available for installing wheel packages into {sys.executable}."
+        )
+
+    def _pip_available(self) -> bool:
+        """Return whether pip can be imported by the active interpreter."""
+
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "--version"],
+            capture_output=True,
+            text=True,
+            env=os.environ,
+        )
+        return result.returncode == 0
 
     def install_llama_cpp_python(self, hardware: str = "cpu", advanced: bool = False) -> bool:
         """

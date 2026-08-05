@@ -36,6 +36,7 @@ class SidecarProfile:
     include_modules_data: bool = False
     max_artifact_mb: int | None = None
     excludes: tuple[str, ...] = ()
+    force_cpu_torch_wheels: bool = False
 
 
 HEAVY_LOCAL_AI_EXCLUDES = (
@@ -57,6 +58,22 @@ HEAVY_LOCAL_AI_EXCLUDES = (
     "triton",
     "tensorflow",
     "tflite_runtime",
+)
+
+CPU_TORCH_CONSTRAINTS = PROJECT_ROOT / "docker" / "services" / "constraints-tts-cpu.txt"
+CPU_TORCH_UV_INSTALL_ARGS = (
+    "--constraint",
+    str(CPU_TORCH_CONSTRAINTS),
+    "--extra-index-url",
+    "https://download.pytorch.org/whl/cpu",
+    "--index-strategy",
+    "unsafe-best-match",
+)
+CPU_TORCH_PIP_INSTALL_ARGS = (
+    "--constraint",
+    str(CPU_TORCH_CONSTRAINTS),
+    "--extra-index-url",
+    "https://download.pytorch.org/whl/cpu",
 )
 
 SIDE_CAR_CORE_EXTRAS = (
@@ -86,6 +103,7 @@ SIDECAR_PROFILES: dict[str, SidecarProfile] = {
         hardware="cpu",
         include_modules_data=False,
         max_artifact_mb=1800,
+        force_cpu_torch_wheels=True,
     ),
     "local-cuda": SidecarProfile(
         name="local-cuda",
@@ -110,6 +128,7 @@ SIDECAR_PROFILES: dict[str, SidecarProfile] = {
         hardware="metal",
         include_modules_data=False,
         max_artifact_mb=2500,
+        force_cpu_torch_wheels=True,
     ),
     "local-vulkan": SidecarProfile(
         name="local-vulkan",
@@ -118,6 +137,7 @@ SIDECAR_PROFILES: dict[str, SidecarProfile] = {
         hardware="vulkan",
         include_modules_data=False,
         max_artifact_mb=2500,
+        force_cpu_torch_wheels=True,
     ),
     "local-sycl": SidecarProfile(
         name="local-sycl",
@@ -126,6 +146,7 @@ SIDECAR_PROFILES: dict[str, SidecarProfile] = {
         hardware="sycl",
         include_modules_data=False,
         max_artifact_mb=2500,
+        force_cpu_torch_wheels=True,
     ),
     "local-rpc": SidecarProfile(
         name="local-rpc",
@@ -134,6 +155,7 @@ SIDECAR_PROFILES: dict[str, SidecarProfile] = {
         hardware="rpc",
         include_modules_data=False,
         max_artifact_mb=2500,
+        force_cpu_torch_wheels=True,
     ),
     "full": SidecarProfile(
         name="full",
@@ -142,6 +164,7 @@ SIDECAR_PROFILES: dict[str, SidecarProfile] = {
         hardware="cpu",
         include_modules_data=False,
         max_artifact_mb=6500,
+        force_cpu_torch_wheels=True,
     ),
 }
 
@@ -175,6 +198,14 @@ def format_extras(extras: tuple[str, ...]) -> str:
     return f".[{','.join(extras)}]"
 
 
+def profile_install_args(profile: SidecarProfile | None) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Return uv-only and pip-compatible install flags for a sidecar profile."""
+
+    if profile and profile.force_cpu_torch_wheels:
+        return CPU_TORCH_UV_INSTALL_ARGS, CPU_TORCH_PIP_INSTALL_ARGS
+    return (), ()
+
+
 def sidecar_dist_dir(profile: SidecarProfile) -> Path:
     """Return profile-specific sidecar output directory."""
 
@@ -205,13 +236,22 @@ def check_python_version():
     click.echo(f"✅ Python {version.major}.{version.minor}.{version.micro} is compatible")
 
 
-def install_python_packages(args: list[str]) -> None:
+def install_python_packages(
+    args: list[str],
+    *,
+    uv_args: tuple[str, ...] = (),
+    pip_args: tuple[str, ...] = (),
+) -> None:
     """Install Python packages using uv when available, falling back to pip."""
     uv = shutil.which("uv")
     if uv:
-        subprocess.run([uv, "pip", "install", *args], check=True, cwd=PROJECT_ROOT)
+        subprocess.run([uv, "pip", "install", *args, *uv_args], check=True, cwd=PROJECT_ROOT)
         return
-    subprocess.run([sys.executable, "-m", "pip", "install", *args], check=True, cwd=PROJECT_ROOT)
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", *args, *pip_args],
+        check=True,
+        cwd=PROJECT_ROOT,
+    )
 
 
 def remove_enum34_backport() -> None:
@@ -242,13 +282,24 @@ def ensure_dependencies(sidecar_profile: SidecarProfile | None = None):
         sys.exit(1)
 
     extras = sidecar_profile.extras if sidecar_profile else ("build", "runtime", "torch-cpu")
+    uv_install_args, pip_install_args = profile_install_args(sidecar_profile)
     click.echo(f"📦 Installing build dependencies: {format_extras(extras)}")
+    if sidecar_profile and sidecar_profile.force_cpu_torch_wheels:
+        click.echo("🧱 Enforcing CPU PyTorch wheels for this sidecar profile")
     try:
-        install_python_packages(["-e", format_extras(extras)])
+        install_python_packages(
+            ["-e", format_extras(extras)],
+            uv_args=uv_install_args,
+            pip_args=pip_install_args,
+        )
         remove_enum34_backport()
         click.echo("✅ Build dependencies installed")
     except subprocess.CalledProcessError as e:
         click.echo(f"❌ Failed to install build dependencies: {e}")
+        if sidecar_profile:
+            raise click.ClickException(
+                f"Failed to install dependencies for sidecar profile {sidecar_profile.name}"
+            ) from e
         click.echo("📦 Trying fallback installation...")
 
         # Fallback: Install core build tools only. Runtime imports may still fail if
@@ -294,8 +345,9 @@ def ensure_dependencies(sidecar_profile: SidecarProfile | None = None):
         )
         click.echo("✅ Dependencies optimized")
     except subprocess.CalledProcessError as e:
-        click.echo(f"⚠️  Wheel installer warning: {e}")
-        click.echo("📦 Continuing with installed pyproject dependencies...")
+        raise click.ClickException(
+            f"Wheel installer failed for sidecar profile {sidecar_profile.name}"
+        ) from e
 
 
 def clean_build_dirs():

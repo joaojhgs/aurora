@@ -34,7 +34,7 @@ COPY --chown=aurora:aurora docker/services/constraints-tts-cpu.txt /tmp/constrai
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv export --frozen --no-dev --no-emit-project --format requirements.txt \
       --extra service-tts --extra mode-processes \
-      --no-emit-package torch --no-emit-package torchaudio --no-emit-package torchvision \
+      --prune torch --prune torchaudio --prune torchvision \
       > /tmp/requirements.txt && \
     if [ "$TTS_HARDWARE" = "cuda" ]; then \
       uv pip install --system -r /tmp/requirements.txt \
@@ -44,8 +44,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     elif [ "$TTS_HARDWARE" = "rocm" ]; then \
       uv pip install --system -r /tmp/requirements.txt \
         && uv pip install --system \
-          torch==2.6.0+rocm6.0 torchaudio==2.6.0+rocm6.0 \
-          --extra-index-url=https://download.pytorch.org/whl/rocm6.0; \
+          torch==2.6.0+rocm6.2.4 torchaudio==2.6.0+rocm6.2.4 torchvision==0.21.0+rocm6.2.4 \
+          --extra-index-url=https://download.pytorch.org/whl/rocm6.2.4; \
     else \
       uv pip install --system \
         torch==2.6.0+cpu torchaudio==2.6.0+cpu torchvision==0.21.0+cpu \
