@@ -64,13 +64,18 @@ def training_plan(language: str, phrase: str) -> dict[str, Any]:
     }
     config_path = ARTIFACT_ROOT / "training-configs" / f"{model_name}.json"
     write_json(config_path, config)
+    sync_command = (
+        "uv sync --extra livekit-train-voxcpm"
+        if language == "pt"
+        else "uv sync --extra livekit-train"
+    )
     return {
         "schema_version": 1,
         "language": language,
         "phrase": phrase,
         "config_path": str(config_path),
         "recommended_commands": [
-            "uv sync --extra livekit-train",
+            sync_command,
             f"uv run livekit-wakeword setup --config {config_path}",
             f"uv run livekit-wakeword run {config_path}",
             f"uv run livekit-wakeword export {config_path}",

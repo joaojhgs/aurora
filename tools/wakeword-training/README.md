@@ -13,6 +13,7 @@ uv run aurora-wakeword-training inspect
 uv run aurora-wakeword-training plan --language en --phrase "hey aurora"
 uv run aurora-wakeword-training plan --language pt --phrase "ola aurora"
 uv run aurora-wakeword-training smoke-python-import
+uv sync --extra livekit-train-voxcpm  # only for multilingual VoxCPM training probes
 ```
 
 The `plan` command writes an ignored training config scaffold. It does not run
