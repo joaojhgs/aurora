@@ -44,7 +44,6 @@ HEAVY_LOCAL_AI_EXCLUDES = (
     "app.services.stt_wakeword",
     "app.services.stt_coordinator",
     "faster_whisper",
-    "RealtimeSTT",
     "openwakeword",
     "piper",
     "piper_phonemize",

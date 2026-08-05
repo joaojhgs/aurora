@@ -423,7 +423,7 @@ uv pip install -e .[service-stt-wakeword]
 ```bash
 uv pip install -e .[service-stt-transcription]
 ```
-- `faster-whisper`, `RealtimeSTT`
+- `faster-whisper`
 - `webrtcvad-wheels`
 - `ctranslate2`, `numpy`
 
@@ -668,4 +668,3 @@ redis-cli ping
 # Start Redis if needed
 redis-server
 ```
-

@@ -21,7 +21,7 @@ Aurora combines Python services, a typed message bus, a TypeScript SDK/UI layer,
 | Capability | Libraries / providers |
 | --- | --- |
 | LLM orchestration | LangGraph, LangChain, OpenAI, HuggingFace endpoint/local pipeline, llama.cpp profiles |
-| STT | faster-whisper / RealtimeSTT paths, service-specific STT packages |
+| STT | faster-whisper, WebRTC VAD, service-specific STT packages |
 | Wakeword | OpenWakeWord |
 | TTS | Piper / RealtimeTTS paths |
 | Embeddings/RAG | SQLite, sqlite-vec, OpenAI embeddings, optional local embeddings |

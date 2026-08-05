@@ -44,7 +44,7 @@ Aurora is a **privacy-first, modular voice assistant** for local automation and 
 
 ### Technology Stack
 
-- **Audio**: PyAudio, RealtimeSTT, faster-whisper, OpenWakeWord
+- **Audio**: PyAudio, faster-whisper, OpenWakeWord
 - **TTS**: Piper TTS, RealtimeTTS
 - **LLM**: LangChain, LangGraph, OpenAI, HuggingFace, llama.cpp
 - **Database**: SQLite with sqlite-vec for vector storage

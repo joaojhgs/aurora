@@ -48,7 +48,7 @@ uv run --extra test-all pytest tests/unit
 | Service extras | `service-db`, `service-tts`, `service-orchestrator`, `gateway` | Install only for services that need them, especially in containers. |
 | Mode extras | `mode-threads`, `mode-processes` | Process mode owns Redis/BullMQ dependencies. |
 | Hardware/local-model extras | `cuda`, `rocm`, `metal`, `vulkan`, `sycl`, `torch-cpu` | Keep explicit; do not include in Python-free client or API-only builds. |
-| Integration extras | `google`, `jira`, `github`, `slack`, `openrecall` | Optional plugin/tooling integrations. |
+| Integration extras | `google`, `jira`, `github`, `slack` | Optional plugin/tooling integrations. Submodules such as OpenRecall own and lock their dependencies independently. |
 | Test/dev extras | `dev`, `test-unit`, `test-integration`, `test-e2e`, `test-performance`, `test-all` | CI and local validation profiles. |
 
 ## Service dependency groups
