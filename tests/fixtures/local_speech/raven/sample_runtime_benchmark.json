@@ -1,0 +1,11 @@
+{
+  "first_audio_ms": 800,
+  "audio_duration_ms": 10000,
+  "generation_ms": 9000,
+  "peak_memory_mb": 512,
+  "download_bytes": 70254592,
+  "cancelled_stale_audio": false,
+  "device": "fixture",
+  "browser_or_runtime": "fixture",
+  "thermal": "not-measured"
+}
