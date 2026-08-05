@@ -23,6 +23,15 @@
       "status_note": "read-only prototype; untracked safaricheck.mjs observed and ignored"
     }
   },
+  "release_evidence": {
+    "official_source_provenance": false,
+    "license_review": false,
+    "conversion_equivalence": false,
+    "browser_runtime": false,
+    "mobile_runtime": false,
+    "thermal_measurement": false,
+    "cancellation_stale_audio": false
+  },
   "packs": {
     "english_2026-04": {
       "language": "en",
@@ -32,7 +41,8 @@
       "state_slots": 18,
       "claims_compact": true,
       "conversion": {
-        "command": "BUNDLE_URL=https://huggingface.co/KevinAHM/pocket-tts-onnx/resolve/main/onnx/english_2026-04 ./tools/prepare_models.sh --web",
+        "source_role": "candidate-input",
+        "command": "BUNDLE_URL=https://huggingface.co/KevinAHM/pocket-tts-onnx/resolve/58a6d00cf13d239b6748cb0769f35c580a8f606c/onnx/english_2026-04 ./tools/prepare_models.sh --web",
         "expected_equivalence": "Raven delta-KV and merged-flow equivalence against pinned English source graphs"
       },
       "assets": {
@@ -53,6 +63,7 @@
       "state_slots": 18,
       "claims_compact": true,
       "conversion": {
+        "source_role": "candidate-input",
         "command": "BUNDLE_URL=https://huggingface.co/KevinAHM/pocket-tts-onnx/resolve/58a6d00cf13d239b6748cb0769f35c580a8f606c/onnx/portuguese BUNDLE_FILES_MANIFEST=<observed-portuguese-hashes> ./tools/prepare_models.sh --web",
         "expected_equivalence": "Raven delta-KV and merged-flow equivalence against locally hash-pinned candidate ONNX source; candidate mirror is not official release proof",
         "observed_outputs": {
@@ -81,8 +92,16 @@
       "state_slots": 72,
       "claims_compact": false,
       "conversion": {
+        "source_role": "candidate-input",
         "command": "BUNDLE_URL=https://huggingface.co/KevinAHM/pocket-tts-onnx/resolve/58a6d00cf13d239b6748cb0769f35c580a8f606c/onnx/french_24l BUNDLE_FILES_MANIFEST=<observed-french_24l-hashes> ./tools/prepare_models.sh --web",
         "expected_equivalence": "Raven delta-KV and merged-flow equivalence against locally hash-pinned candidate ONNX source after graph-derived 24-layer AttentionTail coverage; candidate mirror is not official release proof",
+        "observed_attention_tail_replacements": 24,
+        "observed_state_slots": 72,
+        "layer_inference_patch": {
+          "path": "tools/pockettts-raven/patches/0001-raven-infer-attention-tail-layers.patch",
+          "sha256": "7660b938ea2e44149c774a432bb780aeee79a89694359ebf2a41407bb3088406",
+          "apply": "git apply --unidiff-zero --whitespace=error-all tools/pockettts-raven/patches/0001-raven-infer-attention-tail-layers.patch"
+        },
         "observed_outputs": {
           "flow_lm_main_delta_attn_flow_int8.onnx": {"sha256": "ce151eea3a47c2813be7f4d92ff3fab940bfe2f1f1df8425472658c734411991", "size_bytes": 314006315},
           "mimi_decoder_delta_int8.onnx": {"sha256": "f058edb4b2bfc2b811aeb618b7010603c37d2552a16ed4000a43861f8725fed0", "size_bytes": 22672933},

@@ -21,6 +21,16 @@ KYUTAI_POCKET_TTS_V2_1_0_COMMIT = "058886528d0b6f2f2d4022de2e244a5260729e6e"
 COMMUNITY_ONNX_MAIN_COMMIT = "58a6d00cf13d239b6748cb0769f35c580a8f606c"
 SIBLING_HEAD = "7342bb0fbe2af04b66b6e54c17b4ac8f765eb989"
 REPO_ROOT = Path(__file__).resolve().parents[2]
+IMMUTABLE_HF_RESOLVE = re.compile(r"https://huggingface\.co/[^/]+/[^/]+/resolve/[0-9a-f]{40}/")
+REQUIRED_RELEASE_GATES = (
+    "official_source_provenance",
+    "license_review",
+    "conversion_equivalence",
+    "browser_runtime",
+    "mobile_runtime",
+    "thermal_measurement",
+    "cancellation_stale_audio",
+)
 
 REQUIRED_PACKS = {
     "english_2026-04": {"language": "en", "layers": 6, "state_slots": 18, "tier": "compact"},
@@ -143,6 +153,23 @@ def validate_manifest_data(data: dict[str, Any]) -> None:
             errors.append(f"{pack_id}.state_slots must equal layers * 3")
         if pack_id == "french_24l" and pack.get("claims_compact") is not False:
             errors.append("french_24l must not claim compact support")
+        conversion = pack.get("conversion", {})
+        command = conversion.get("command", "")
+        if "/resolve/main/" in command:
+            errors.append(f"{pack_id}.conversion.command must not use mutable Hugging Face resolve/main")
+        if "huggingface.co/" in command and not IMMUTABLE_HF_RESOLVE.search(command):
+            errors.append(f"{pack_id}.conversion.command must pin Hugging Face URLs to a 40-character commit")
+        if pack_id == "french_24l":
+            if conversion.get("observed_attention_tail_replacements") != 24:
+                errors.append("french_24l.conversion.observed_attention_tail_replacements must be 24")
+            if conversion.get("observed_state_slots") != 72:
+                errors.append("french_24l.conversion.observed_state_slots must be 72")
+            patch = conversion.get("layer_inference_patch", {})
+            patch_path = REPO_ROOT / str(patch.get("path", ""))
+            if not patch_path.is_file():
+                errors.append("french_24l.conversion.layer_inference_patch.path must point to a tracked patch")
+            elif patch.get("sha256") != sha256_file(patch_path):
+                errors.append("french_24l.conversion.layer_inference_patch.sha256 must match patch content")
         assets = pack.get("assets", {})
         for asset_name in REQUIRED_ASSETS:
             asset = assets.get(asset_name)
@@ -162,7 +189,12 @@ def validate_manifest_data(data: dict[str, Any]) -> None:
 def command_manifest(args: argparse.Namespace) -> int:
     data = load_manifest(args.manifest)
     readiness = manifest_readiness(data)
-    status = "ready" if readiness["unpinned_asset_count"] == 0 else "incomplete"
+    if readiness["release_ready"]:
+        status = "release-ready"
+    elif readiness["hash_pinned"]:
+        status = "hash-pinned-candidate-blocked"
+    else:
+        status = "incomplete"
     write_json(
         args.output,
         {
@@ -174,24 +206,46 @@ def command_manifest(args: argparse.Namespace) -> int:
             "readiness": readiness,
         },
     )
-    return 0 if status == "ready" else 2
+    return 0 if status == "release-ready" else 2
 
 
 def manifest_readiness(data: dict[str, Any]) -> dict[str, Any]:
     unpinned: list[dict[str, str]] = []
     pinned = 0
+    candidate_packs: list[str] = []
     for pack_id, pack in data.get("packs", {}).items():
+        conversion = pack.get("conversion", {})
+        if conversion.get("source_role") == "candidate-input" or "candidate" in str(conversion.get("expected_equivalence", "")).lower():
+            candidate_packs.append(pack_id)
         for asset_name, asset in pack.get("assets", {}).items():
             digest = asset.get("sha256", "")
             if isinstance(digest, str) and digest.startswith("TBD:"):
                 unpinned.append({"pack": pack_id, "asset": asset_name, "marker": digest})
             else:
                 pinned += 1
+    release_evidence = data.get("release_evidence", {})
+    missing_release_gates = [gate for gate in REQUIRED_RELEASE_GATES if release_evidence.get(gate) is not True]
+    hash_pinned = len(unpinned) == 0
+    release_blockers: list[dict[str, Any]] = []
+    if candidate_packs:
+        release_blockers.append(
+            {
+                "reason": "candidate_input_source",
+                "packs": sorted(candidate_packs),
+                "required": "official provenance and license clearance before release readiness",
+            }
+        )
+    for gate in missing_release_gates:
+        release_blockers.append({"reason": "missing_release_gate", "gate": gate})
     return {
+        "hash_pinned": hash_pinned,
         "pinned_asset_count": pinned,
         "unpinned_asset_count": len(unpinned),
         "unpinned_assets": unpinned,
-        "release_ready": len(unpinned) == 0,
+        "candidate_input_packs": sorted(candidate_packs),
+        "missing_release_gates": missing_release_gates,
+        "release_blockers": release_blockers,
+        "release_ready": hash_pinned and not release_blockers,
     }
 
 
@@ -320,9 +374,11 @@ def command_conversion(args: argparse.Namespace) -> int:
     graph_check = {
         "expected_layers": pack["layers"],
         "expected_state_slots": pack["state_slots"],
+        "observed_attention_tail_replacements": pack.get("conversion", {}).get("observed_attention_tail_replacements"),
+        "observed_state_slots": pack.get("conversion", {}).get("observed_state_slots"),
         "state_slots_formula": "layers * 3",
-        "accepted": pack["state_slots"] == pack["layers"] * 3,
     }
+    graph_check["accepted"] = conversion_graph_check_accepted(args.pack, pack, graph_check)
     status = "dry-run-pass" if args.dry_run and not failures and graph_check["accepted"] else "blocked"
     if not args.dry_run and not failures and graph_check["accepted"]:
         status = "ready-for-real-conversion"
@@ -362,6 +418,20 @@ def asset_path(source_root: Path, pack_id: str, name: str) -> Path:
         if candidate.exists():
             return candidate
     return candidates[0]
+
+
+def conversion_graph_check_accepted(pack_id: str, pack: dict[str, Any], graph_check: dict[str, Any]) -> bool:
+    if pack["state_slots"] != pack["layers"] * 3:
+        return False
+    if pack_id != "french_24l":
+        return True
+    conversion = pack.get("conversion", {})
+    return (
+        conversion.get("observed_attention_tail_replacements") == 24
+        and conversion.get("observed_state_slots") == 72
+        and graph_check["expected_layers"] == 24
+        and graph_check["expected_state_slots"] == 72
+    )
 
 
 def command_benchmark(args: argparse.Namespace) -> int:
