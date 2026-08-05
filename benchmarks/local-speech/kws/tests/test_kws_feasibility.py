@@ -20,6 +20,10 @@ def load_module(name: str, path: Path):
 
 kws_benchmark = load_module("kws_benchmark", Path(__file__).resolve().parents[1] / "kws_benchmark.py")
 trained_pack_parity = load_module("trained_pack_parity", Path(__file__).resolve().parents[1] / "trained_pack_parity.py")
+wakeword_cli = load_module(
+    "aurora_wakeword_training_cli",
+    Path(__file__).resolve().parents[4] / "tools" / "wakeword-training" / "src" / "aurora_wakeword_training" / "cli.py",
+)
 
 
 class KwsFeasibilityTests(unittest.TestCase):
@@ -127,6 +131,43 @@ class KwsFeasibilityTests(unittest.TestCase):
         self.assertEqual(decision["decision"]["typescript_trained_pack_import"], "absent")
         self.assertTrue(decision["browser_frontend_missing"])
         self.assertEqual(decision["remote_continuous_wake_audio"], "rejected")
+
+    def test_legacy_training_plan_is_not_executable(self) -> None:
+        plan = wakeword_cli.training_plan("en", "hey aurora")
+        self.assertEqual(plan["status"], "template_only_not_executable")
+        self.assertNotIn("recommended_commands", plan)
+        self.assertIn("write-feasibility-configs", plan["replacement"])
+
+    def test_livekit_feasibility_configs_use_verified_schema(self) -> None:
+        en_name, en_config = wakeword_cli.livekit_config("en")
+        pt_name, pt_config = wakeword_cli.livekit_config("pt")
+        self.assertEqual(wakeword_cli.LIVEKIT_WAKEWORD_VERSION, "0.2.1")
+        self.assertEqual(en_name, "aurora_en_test.yaml")
+        self.assertIn("tts_backend: piper", en_config)
+        self.assertIn("n_samples: 8", en_config)
+        self.assertEqual(pt_name, "aurora_pt_one_clip.yaml")
+        self.assertIn("tts_backend: voxcpm", pt_config)
+        self.assertIn("inference_timesteps_list: [1]", pt_config)
+        self.assertIn("steps: 1", pt_config)
+
+    def test_score_separation_fails_closed_for_w0_scores(self) -> None:
+        en_result = wakeword_cli.score_separation([0.308, 0.307], [0.306, 0.311], 0.5)
+        pt_result = wakeword_cli.score_separation([0.568, 0.561], [0.564, 0.553], 0.5)
+        self.assertFalse(en_result["passed"])
+        self.assertFalse(en_result["positive_all_above_threshold"])
+        self.assertFalse(pt_result["passed"])
+        self.assertFalse(pt_result["negatives_below_threshold"])
+
+    def test_validate_export_fails_closed_when_frontend_missing(self) -> None:
+        result = wakeword_cli.validate_export(
+            Path("/tmp/missing-model.onnx"),
+            Path("/tmp/missing-positive"),
+            Path("/tmp/missing-negative"),
+            "en",
+            0.5,
+        )
+        self.assertEqual(result["status"], "failed")
+        self.assertIn("classifier", result["missing"])
 
 
 if __name__ == "__main__":

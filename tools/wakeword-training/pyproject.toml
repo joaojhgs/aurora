@@ -12,10 +12,10 @@ runtime-smoke = [
     "openwakeword==0.6.0",
 ]
 livekit-train = [
-    "livekit-wakeword[train,eval,export]>=0.1.0",
+    "livekit-wakeword[train,eval,export]==0.2.1",
 ]
 livekit-train-voxcpm = [
-    "livekit-wakeword[train,eval,export,voxcpm]>=0.1.0",
+    "livekit-wakeword[train,eval,export,voxcpm]==0.2.1",
 ]
 
 [project.scripts]
