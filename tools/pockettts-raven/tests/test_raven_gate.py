@@ -29,7 +29,7 @@ def test_manifest_validates_pinned_sources_and_required_packs() -> None:
     assert payload["status"] == "incomplete"
     assert payload["manifest"] == "tests/fixtures/local_speech/raven/pinned_raven_manifest.json"
     assert payload["required_packs"] == ["english_2026-04", "french_24l", "portuguese"]
-    assert payload["readiness"]["unpinned_asset_count"] == 14
+    assert payload["readiness"]["unpinned_asset_count"] == 2
     assert payload["readiness"]["release_ready"] is False
 
 

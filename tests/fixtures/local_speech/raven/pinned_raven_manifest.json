@@ -15,10 +15,10 @@
     "community_onnx_mirror": {
       "repo": "https://huggingface.co/KevinAHM/pocket-tts-onnx",
       "commit": "58a6d00cf13d239b6748cb0769f35c580a8f606c",
-      "use": "candidate input only; not release proof"
+      "use": "candidate input only; locally hash-pinned but not official release proof"
     },
     "sibling_sperandiodev": {
-      "path": "/home/developer/projects/sperandiodev",
+      "path": "~/projects/sperandiodev",
       "commit": "7342bb0fbe2af04b66b6e54c17b4ac8f765eb989",
       "status_note": "read-only prototype; untracked safaricheck.mjs observed and ignored"
     }
@@ -53,17 +53,23 @@
       "state_slots": 18,
       "claims_compact": true,
       "conversion": {
-        "command": "BUNDLE_URL=<immutable Portuguese source bundle> ./tools/prepare_models.sh --web",
-        "expected_equivalence": "must be reproduced from pinned official Kyutai weights or a hash-pinned reviewed ONNX source"
+        "command": "BUNDLE_URL=https://huggingface.co/KevinAHM/pocket-tts-onnx/resolve/58a6d00cf13d239b6748cb0769f35c580a8f606c/onnx/portuguese BUNDLE_FILES_MANIFEST=<observed-portuguese-hashes> ./tools/prepare_models.sh --web",
+        "expected_equivalence": "Raven delta-KV and merged-flow equivalence against locally hash-pinned candidate ONNX source; candidate mirror is not official release proof",
+        "observed_outputs": {
+          "flow_lm_main_delta_attn_flow_int8.onnx": {"sha256": "bce8d67c033e448dca619cc15a3fc4214ad3498d6496d998feed66cc3632d96a", "size_bytes": 86028189},
+          "mimi_decoder_delta_int8.onnx": {"sha256": "6fec2578b893ecf418fb822b68963608748199fc6aef9c05e80e16524edb97ae", "size_bytes": 22672933},
+          "mimi_decoder_delta_convtr_int8.onnx": {"sha256": "637d5bc0b15f9e612ff435270447892516edbecb458e832e8dc6f612b03c227e", "size_bytes": 22584497},
+          "webdemo/models/flow_lm_main_delta_flow_int8.onnx": {"sha256": "4278387c0e84ecb2770b83ed3e90d55d022fcce2fb6c480860250917ed0f19d5", "size_bytes": 86301327}
+        }
       },
       "assets": {
-        "tokenizer.model": {"sha256": "TBD:portuguese-tokenizer.model", "size_bytes": 0},
+        "tokenizer.model": {"sha256": "3aa51309c55f114771c156aaeb86f6fc325991364aa3c38af74aecf1cbd0fade", "size_bytes": 60995},
         "spm_vocab.json": {"sha256": "TBD:portuguese-spm_vocab.json", "size_bytes": 0},
-        "text_conditioner.onnx": {"sha256": "TBD:portuguese-text_conditioner.onnx", "size_bytes": 0},
-        "flow_lm_main_int8.onnx": {"sha256": "TBD:portuguese-flow_lm_main_int8.onnx", "size_bytes": 0},
-        "flow_lm_flow_int8.onnx": {"sha256": "TBD:portuguese-flow_lm_flow_int8.onnx", "size_bytes": 0},
-        "mimi_decoder_int8.onnx": {"sha256": "TBD:portuguese-mimi_decoder_int8.onnx", "size_bytes": 0},
-        "bos_before_voice.npy": {"sha256": "TBD:portuguese-bos_before_voice.npy", "size_bytes": 0}
+        "text_conditioner.onnx": {"sha256": "693523a9b8e8853a7130676fd0e8189939255411700f0207664715226a26c409", "size_bytes": 16388344},
+        "flow_lm_main_int8.onnx": {"sha256": "119e5ce926cadc273508565143c86a7a9cd86450fa99cad6a37a79ba50f9db02", "size_bytes": 76341079},
+        "flow_lm_flow_int8.onnx": {"sha256": "53c50fc75f892687920c316513715bfbefbdb3b7642786e287c7971df53edb26", "size_bytes": 9962530},
+        "mimi_decoder_int8.onnx": {"sha256": "691f89f074585c828914cecd5396e30e0e2a14dbfa4890bd1b5806d303daeb4e", "size_bytes": 22684077},
+        "bos_before_voice.npy": {"sha256": "9396378d581d63554cc30f2861e5d5b825650ff3dd3594a9ddc73d18df0973f1", "size_bytes": 4224}
       }
     },
     "french_24l": {
@@ -74,17 +80,22 @@
       "state_slots": 72,
       "claims_compact": false,
       "conversion": {
-        "command": "BUNDLE_URL=<immutable French 24-layer source bundle> ./tools/prepare_models.sh --web",
-        "expected_equivalence": "requires layer-count-agnostic exporter, graph rewrite, state/cache sizing, C++/WASM allocation, and cancellation proof"
+        "command": "BUNDLE_URL=https://huggingface.co/KevinAHM/pocket-tts-onnx/resolve/58a6d00cf13d239b6748cb0769f35c580a8f606c/onnx/french_24l BUNDLE_FILES_MANIFEST=<observed-french_24l-hashes> ./tools/prepare_models.sh",
+        "expected_equivalence": "native Raven delta-KV and merged-flow equivalence against locally hash-pinned candidate ONNX source; web/runtime work still requires layer-count and allocation proof",
+        "observed_outputs": {
+          "flow_lm_main_delta_attn_flow_int8.onnx": {"sha256": "a3c32bb0bd3b05dbad6b96368ee84865da98c90c64d06c8df23bae2b4de8a7a6", "size_bytes": 314087498},
+          "mimi_decoder_delta_int8.onnx": {"sha256": "f058edb4b2bfc2b811aeb618b7010603c37d2552a16ed4000a43861f8725fed0", "size_bytes": 22672933},
+          "mimi_decoder_delta_convtr_int8.onnx": {"sha256": "8f6d5d002558eb3f74787d7e9b999071c70123bbf046b3a1bc5008b98cc5ced0", "size_bytes": 22584497}
+        }
       },
       "assets": {
-        "tokenizer.model": {"sha256": "TBD:french_24l-tokenizer.model", "size_bytes": 0},
+        "tokenizer.model": {"sha256": "521c85bdb2da10618f4be52021ed1cb2a7a6299b040708487f133193f7b305e2", "size_bytes": 60173},
         "spm_vocab.json": {"sha256": "TBD:french_24l-spm_vocab.json", "size_bytes": 0},
-        "text_conditioner.onnx": {"sha256": "TBD:french_24l-text_conditioner.onnx", "size_bytes": 0},
-        "flow_lm_main_int8.onnx": {"sha256": "TBD:french_24l-flow_lm_main_int8.onnx", "size_bytes": 0},
-        "flow_lm_flow_int8.onnx": {"sha256": "TBD:french_24l-flow_lm_flow_int8.onnx", "size_bytes": 0},
-        "mimi_decoder_int8.onnx": {"sha256": "TBD:french_24l-mimi_decoder_int8.onnx", "size_bytes": 0},
-        "bos_before_voice.npy": {"sha256": "TBD:french_24l-bos_before_voice.npy", "size_bytes": 0}
+        "text_conditioner.onnx": {"sha256": "89d1b6ac55e618e42d2bd840438ce918bffb14960475ef091847ca39be641e65", "size_bytes": 16388344},
+        "flow_lm_main_int8.onnx": {"sha256": "6130a6b98fae175147d82752263e250fb7b8483c1ef5373753ad335c16f4a129", "size_bytes": 305144125},
+        "flow_lm_flow_int8.onnx": {"sha256": "d340c549d5a1e0e7b88a0fb26fcae53c3b76486872f4418398a395bb1bc88701", "size_bytes": 9962530},
+        "mimi_decoder_int8.onnx": {"sha256": "b329ff3de3aa95455d2dee1cf371943dec269dd8711008017501ca129cb18d8c", "size_bytes": 22684077},
+        "bos_before_voice.npy": {"sha256": "5759269802d691d49481b8e06d6a5649da85ea01135e270bd7641e3b091c7237", "size_bytes": 4224}
       }
     }
   }
