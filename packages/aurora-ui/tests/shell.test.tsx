@@ -103,6 +103,7 @@ import {
   parseMeshPermissionList,
   redactDiagnosticText,
   retainThinShellSnapshot,
+  assistantExecutionOptions,
   routePolicyDraftChange,
   routePolicyFromRoute,
   routePolicyScenarios,
@@ -1699,6 +1700,51 @@ describe('Aurora production shell', () => {
     expect(assistantErrorMessage(new AuroraError({ code: 'timeout', message: 'slow' }))).toContain('timed out')
     expect(assistantErrorMessage(new AuroraError({ code: 'auth', message: 'denied' }))).toContain('denied')
     expect(assistantErrorMessage(new AuroraError({ code: 'unavailable_service', message: 'down' }))).toContain('unavailable')
+  })
+
+  it('keeps default route policy on the local provider until explicit peer dispatch is selected', async () => {
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
+    const candidateRoute = enabledRoute(route(snapshot, 'assistant'), {
+      candidateProviders: [
+        {
+          id: 'local:Transcription',
+          providerId: 'local:Transcription',
+          providerKind: 'local',
+          peerId: null,
+          nodeName: 'This device',
+          serviceInstanceId: 'local:Transcription',
+          label: 'local / Transcription.Transcribe',
+          state: 'available-local',
+          selectable: true,
+          reason: 'available',
+          requiredAction: null
+        },
+        {
+          id: 'remote:peer-studio:Transcription',
+          providerId: 'remote:peer-studio:Transcription',
+          providerKind: 'remote',
+          peerId: 'peer-studio',
+          nodeName: 'Studio',
+          serviceInstanceId: 'remote:peer-studio:Transcription',
+          label: 'remote / Transcription.Transcribe',
+          state: 'available-remote',
+          selectable: true,
+          reason: 'available',
+          requiredAction: null
+        }
+      ]
+    })
+
+    expect(routePolicyFromRoute(candidateRoute)).toEqual(expect.objectContaining({
+      providerId: 'local:Transcription',
+      peerId: null,
+      serviceInstanceId: null
+    }))
+    expect(assistantExecutionOptions(candidateRoute)[1]?.routePolicy).toEqual(expect.objectContaining({
+      providerId: 'remote:peer-studio:Transcription',
+      peerId: 'peer-studio',
+      serviceInstanceId: 'remote:peer-studio:Transcription'
+    }))
   })
 
   it('wires admin services and contract explorer from Aurora SDK resources', async () => {
