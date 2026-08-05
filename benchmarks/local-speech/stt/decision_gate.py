@@ -13,7 +13,13 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from common.redaction import validate_report_redacted
-from common.schema import stable_json_dumps, stable_sha256, validate_report_schema
+from common.schema import (
+    Candidate,
+    load_candidates,
+    stable_json_dumps,
+    stable_sha256,
+    validate_report_schema,
+)
 from common.scoring import percentile
 
 DECISION_SCHEMA_VERSION = "aurora.local_speech.stt.decision.v0.2"
@@ -34,6 +40,7 @@ def build_decision(
     candidate_report: dict[str, Any],
     baseline_id: str,
     candidate_id: str,
+    candidates: list[Candidate] | None = None,
 ) -> dict[str, Any]:
     """Return a redacted decision input summary and gate verdict."""
 
@@ -42,11 +49,26 @@ def build_decision(
     baseline_runs = _runs_for(baseline_report, baseline_id)
     candidate_runs = _runs_for(candidate_report, candidate_id)
     failed_gates: set[str] = set()
+    candidate_index = {candidate.candidate_id: candidate for candidate in candidates or []}
+    baseline_metadata = candidate_index.get(baseline_id)
+    candidate_metadata = candidate_index.get(candidate_id)
+    if candidates is not None and baseline_metadata is None:
+        failed_gates.add("baseline_candidate_metadata_missing")
+    if candidates is not None and candidate_metadata is None:
+        failed_gates.add("candidate_metadata_missing")
 
     if _is_schema_only(baseline_report, baseline_id):
         failed_gates.add("baseline_schema_only_not_decision_evidence")
     if _is_schema_only(candidate_report, candidate_id):
         failed_gates.add("candidate_schema_only_not_decision_evidence")
+    if baseline_metadata is not None:
+        _check_report_candidate_metadata(
+            "baseline", baseline_report, baseline_metadata, failed_gates
+        )
+    if candidate_metadata is not None:
+        _check_report_candidate_metadata(
+            "candidate", candidate_report, candidate_metadata, failed_gates
+        )
 
     baseline_ok = [run for run in baseline_runs if run["status"] == "ok"]
     candidate_ok = [run for run in candidate_runs if run["status"] == "ok"]
@@ -58,11 +80,9 @@ def build_decision(
         failed_gates.add("candidate_fixed_mode_missing")
     if not _has_ok_mode(candidate_runs, "auto"):
         failed_gates.add("candidate_auto_mode_missing")
-    if any(run["status"] in {"failed", "unavailable", "unsupported"} for run in candidate_runs):
-        failed_gates.add("candidate_has_non_ok_required_mode")
 
-    baseline_cells = _index_ok_runs(baseline_ok)
-    candidate_cells = _index_ok_runs(candidate_ok)
+    baseline_cells = _index_runs(baseline_runs)
+    candidate_cells = _index_runs(candidate_runs)
     cell_summaries: list[dict[str, Any]] = []
 
     for language in REQUIRED_LANGUAGES:
@@ -70,8 +90,14 @@ def build_decision(
             for mode in REQUIRED_LANGUAGE_MODES:
                 for surface in REQUIRED_SURFACES:
                     key = (language, bucket, mode, surface)
-                    baseline_cell = baseline_cells.get(key, [])
-                    candidate_cell = candidate_cells.get(key, [])
+                    baseline_cell_runs = baseline_cells.get(key, [])
+                    candidate_cell_runs = candidate_cells.get(key, [])
+                    baseline_cell = [run for run in baseline_cell_runs if run["status"] == "ok"]
+                    candidate_cell = [run for run in candidate_cell_runs if run["status"] == "ok"]
+                    if _has_non_ok(baseline_cell_runs):
+                        failed_gates.add(f"baseline_non_ok_required_cell:{_cell_name(key)}")
+                    if _has_non_ok(candidate_cell_runs):
+                        failed_gates.add(f"candidate_non_ok_required_cell:{_cell_name(key)}")
                     if not baseline_cell:
                         failed_gates.add(f"baseline_missing_cell:{_cell_name(key)}")
                     if not candidate_cell:
@@ -79,6 +105,14 @@ def build_decision(
                     if not baseline_cell or not candidate_cell:
                         continue
                     summary = _compare_cell(key, baseline_cell, candidate_cell, failed_gates)
+                    if baseline_metadata is not None:
+                        _check_run_provenance(
+                            "baseline", baseline_metadata, baseline_cell, failed_gates
+                        )
+                    if candidate_metadata is not None:
+                        _check_run_provenance(
+                            "candidate", candidate_metadata, candidate_cell, failed_gates
+                        )
                     cell_summaries.append(summary)
 
     candidate_failure_buckets = sorted(
@@ -134,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         candidate_report=candidate_report,
         baseline_id=args.baseline_id,
         candidate_id=args.candidate_id,
+        candidates=load_candidates(args.candidates),
     )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -162,7 +197,7 @@ def _has_ok_mode(runs: list[dict[str, Any]], mode: str) -> bool:
     return any(run["language_mode"] == mode and run["status"] == "ok" for run in runs)
 
 
-def _index_ok_runs(
+def _index_runs(
     runs: list[dict[str, Any]],
 ) -> dict[tuple[str, str, str, str], list[dict[str, Any]]]:
     indexed: dict[tuple[str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
@@ -179,6 +214,10 @@ def _index_ok_runs(
             )
         ].append(run)
     return indexed
+
+
+def _has_non_ok(runs: list[dict[str, Any]]) -> bool:
+    return any(run["status"] in {"failed", "unavailable", "unsupported"} for run in runs)
 
 
 def _compare_cell(
@@ -268,16 +307,39 @@ def _compare_cell(
 
 def _surface(run: dict[str, Any]) -> str | None:
     explicit = run.get("target_surface")
+    observed = _observed_surface(run)
     if isinstance(explicit, str) and explicit:
+        if explicit not in REQUIRED_SURFACES:
+            return None
+        if observed is not None and observed != explicit:
+            return None
+        if _is_normal_mobile_browser(run):
+            return None
         return explicit
+    return observed
+
+
+def _observed_surface(run: dict[str, Any]) -> str | None:
     features = [str(item).lower() for item in run.get("browser_features", [])]
-    if any("android" in item and "wv" in item for item in features):
+    if any("android" in item and (" wv" in item or "; wv" in item) for item in features):
         return "android-webview"
-    if any("iphone" in item or "ipad" in item for item in features):
+    if any("ios-webview" in item for item in features):
         return "ios-webview"
+    if any("android" in item or "iphone" in item or "ipad" in item for item in features):
+        return None
     if any("headlesschrome" in item or "chrome/" in item for item in features):
         return "desktop-browser"
     return None
+
+
+def _is_normal_mobile_browser(run: dict[str, Any]) -> bool:
+    features = [str(item).lower() for item in run.get("browser_features", [])]
+    return any(
+        ("android" in item and "chrome/" in item and " wv" not in item and "; wv" not in item)
+        or ("iphone" in item and ("safari/" in item or "crios/" in item))
+        or ("ipad" in item and ("safari/" in item or "crios/" in item))
+        for item in features
+    )
 
 
 def _thermal_missing(run: dict[str, Any]) -> bool:
@@ -337,6 +399,77 @@ def _cell_utterance_count(runs: list[dict[str, Any]]) -> int:
     return sum(int(run.get("utterance_count", 1)) for run in runs)
 
 
+def _check_report_candidate_metadata(
+    role: str,
+    report: dict[str, Any],
+    candidate: Candidate,
+    failed_gates: set[str],
+) -> None:
+    decision = next(
+        (
+            item
+            for item in report.get("decisions", [])
+            if item.get("candidate_id") == candidate.candidate_id
+        ),
+        None,
+    )
+    if decision is None:
+        failed_gates.add(f"{role}_report_candidate_metadata_missing")
+        return
+    if decision.get("revision") != candidate.revision:
+        failed_gates.add(f"{role}_report_revision_mismatch")
+    if decision.get("model_artifacts") != candidate.model_artifacts:
+        failed_gates.add(f"{role}_report_model_artifacts_mismatch")
+
+
+def _check_run_provenance(
+    role: str,
+    candidate: Candidate,
+    runs: list[dict[str, Any]],
+    failed_gates: set[str],
+) -> None:
+    expected_revision = _expected_model_revision(candidate)
+    expected_artifact_set = _candidate_artifact_set_sha256(candidate)
+    for run in runs:
+        provenance = run.get("runtime_provenance")
+        if not isinstance(provenance, dict):
+            failed_gates.add(f"{role}_runtime_provenance_missing")
+            continue
+        if provenance.get("candidate_id") != candidate.candidate_id:
+            failed_gates.add(f"{role}_runtime_candidate_id_mismatch")
+        if expected_revision is None or provenance.get("model_revision") != expected_revision:
+            failed_gates.add(f"{role}_runtime_model_revision_mismatch")
+        if provenance.get("model_artifact_sha256") != expected_artifact_set:
+            failed_gates.add(f"{role}_runtime_model_artifact_hash_mismatch")
+        if provenance.get("package_pins") != candidate.revision:
+            failed_gates.add(f"{role}_runtime_package_pins_mismatch")
+
+
+def _expected_model_revision(candidate: Candidate) -> str | None:
+    revisions = {
+        artifact.get("revision")
+        for artifact in candidate.model_artifacts
+        if artifact.get("revision")
+    }
+    return revisions.pop() if len(revisions) == 1 else None
+
+
+def _candidate_artifact_set_sha256(candidate: Candidate) -> str:
+    return stable_sha256(
+        [
+            {
+                "artifact_id": artifact.get("artifact_id"),
+                "revision": artifact.get("revision"),
+                "sha256": artifact.get("sha256"),
+            }
+            for artifact in sorted(
+                candidate.model_artifacts,
+                key=lambda item: item.get("artifact_id", ""),
+            )
+        ]
+    )
+
+
 def _max_metric(runs: list[dict[str, Any]], key: str) -> float | None:
     values = [float(run[key]) for run in runs if run.get(key) is not None]
     return max(values) if values else None
@@ -357,6 +490,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--candidate-report", type=Path, required=True)
     parser.add_argument("--baseline-id", required=True)
     parser.add_argument("--candidate-id", required=True)
+    parser.add_argument(
+        "--candidates",
+        type=Path,
+        default=Path(__file__).resolve().parent / "candidates.json",
+    )
     parser.add_argument("--output", type=Path)
     return parser.parse_args(argv)
 

@@ -158,6 +158,16 @@ def _run_one(
     }
     if result.runtime_provenance:
         run["runtime_provenance"] = result.runtime_provenance
+    for key in (
+        "utterance_count",
+        "latency_statistic",
+        "evidence_kind",
+        "target_surface",
+        "device_profile",
+    ):
+        value = getattr(result, key)
+        if value is not None:
+            run[key] = value
     if result.status == "ok":
         assert result.hypothesis_text is not None
         wer = score_wer(fixture.reference_text, result.hypothesis_text)
@@ -194,6 +204,12 @@ def _matrix(
             "thermal_state",
             "browser_features",
             "failure_bucket",
+            "runtime_provenance",
+            "utterance_count",
+            "latency_statistic",
+            "evidence_kind",
+            "target_surface",
+            "device_profile",
         ],
     }
 

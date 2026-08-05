@@ -139,3 +139,29 @@ def test_report_redaction_rejects_transcripts_and_audio_paths():
         validate_report_redacted({"runs": [{"reference_text": "private"}]})
     with pytest.raises(RedactionError):
         validate_report_redacted({"runs": [{"fixture": "/tmp/private.wav"}]})
+
+
+def test_runtime_provenance_rejects_sensitive_keys_and_values():
+    safe = {
+        "runtime_provenance": {
+            "candidate_id": "candidate",
+            "model_revision": "revision",
+            "model_artifact_sha256": "a" * 64,
+            "package_pins": "pkg@1.0.0",
+            "browser_engine": "HeadlessChrome/145.0",
+        }
+    }
+    validate_report_redacted(safe)
+
+    blocked = [
+        {"runtime_provenance": {"model_path": "/tmp/model.onnx"}},
+        {"runtime_provenance": {"candidate_id": "candidate", "token": "secret"}},
+        {"runtime_provenance": {"candidate_id": "candidate", "device_id": "abc"}},
+        {"runtime_provenance": {"candidate_id": "candidate", "serial": "abc"}},
+        {"runtime_provenance": {"candidate_id": "candidate", "browser_engine": "/home/user"}},
+        {"runtime_provenance": {"candidate_id": "candidate", "model_id": "model.onnx"}},
+        {"runtime_provenance": {"candidate_id": "candidate", "package_pins": "Bearer secret"}},
+    ]
+    for payload in blocked:
+        with pytest.raises(RedactionError):
+            validate_report_redacted(payload)

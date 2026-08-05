@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from common.redaction import RedactionError, sanitize_runtime_provenance
 from common.schema import Candidate, Fixture, LanguageMode
 
 
@@ -28,6 +29,11 @@ class AdapterResult:
     browser_features: list[str] | None = None
     failure_bucket: str | None = None
     runtime_provenance: dict[str, str] | None = None
+    utterance_count: int | None = None
+    latency_statistic: str | None = None
+    evidence_kind: str | None = None
+    target_surface: str | None = None
+    device_profile: str | None = None
 
 
 class SttAdapter(Protocol):
@@ -124,6 +130,11 @@ class ExternalJsonAdapter:
         except json.JSONDecodeError:
             return AdapterResult(status="failed", failure_bucket="invalid_output")
 
+        try:
+            runtime_provenance = _runtime_provenance(payload)
+        except RedactionError:
+            return AdapterResult(status="failed", failure_bucket="runtime_provenance_rejected")
+
         status = str(payload.get("status", "ok"))
         if status != "ok":
             return AdapterResult(
@@ -134,7 +145,10 @@ class ExternalJsonAdapter:
                     for item in payload.get("browser_features", [])
                     if isinstance(item, str)
                 ],
-                runtime_provenance=_string_map(payload.get("runtime_provenance")),
+                runtime_provenance=runtime_provenance,
+                evidence_kind=_optional_str(payload.get("evidence_kind")),
+                target_surface=_optional_str(payload.get("target_surface")),
+                device_profile=_optional_str(payload.get("device_profile")),
             )
         text = payload.get("text")
         if not isinstance(text, str):
@@ -150,7 +164,12 @@ class ExternalJsonAdapter:
             browser_features=[
                 str(item) for item in payload.get("browser_features", []) if isinstance(item, str)
             ],
-            runtime_provenance=_string_map(payload.get("runtime_provenance")),
+            runtime_provenance=runtime_provenance,
+            utterance_count=_optional_int(payload.get("utterance_count")),
+            latency_statistic=_optional_str(payload.get("latency_statistic")),
+            evidence_kind=_optional_str(payload.get("evidence_kind")),
+            target_surface=_optional_str(payload.get("target_surface")),
+            device_profile=_optional_str(payload.get("device_profile")),
         )
 
 
@@ -191,7 +210,14 @@ def _optional_int(value: object) -> int | None:
     return int(value)
 
 
-def _string_map(value: object) -> dict[str, str] | None:
-    if not isinstance(value, dict):
+def _optional_str(value: object) -> str | None:
+    if value is None:
         return None
-    return {str(key): str(item) for key, item in value.items()}
+    return str(value)
+
+
+def _runtime_provenance(payload: dict[str, object]) -> dict[str, str] | None:
+    value = payload.get("runtime_provenance")
+    if value is None:
+        return None
+    return sanitize_runtime_provenance(value)

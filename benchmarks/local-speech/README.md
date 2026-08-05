@@ -71,10 +71,16 @@ The command receives `--candidate-id`, `--fixture-id`, `--audio`, and
 may include
 `finalization_latency_ms`, `initialization_ms`, `download_bytes`,
 `peak_memory_mb`, `thermal_state`, `browser_features`, and
-`runtime_provenance`. Non-ok runs may print `status` plus `failure_bucket`; the
-harness preserves those states without fabricating metrics. The harness never
-copies stdout, stderr, audio paths, reference transcripts, or hypotheses into
-reports.
+`runtime_provenance`. Selection-quality rows should also include
+`utterance_count`, `latency_statistic` (`p95` for pre-aggregated p95 rows),
+`evidence_kind`, `target_surface`, and `device_profile`. Non-ok runs may print
+`status` plus `failure_bucket`; the harness preserves those states without
+fabricating metrics. Runtime provenance is a whitelisted, redacted map for
+candidate ID, immutable model revision/hash set, package pins, runtime package
+versions, and browser/runtime name only. Paths, model paths, host/user/device
+IDs, serials, tokens, secrets, and local artifact paths are rejected. The
+harness never copies stdout, stderr, audio paths, reference transcripts, or
+hypotheses into reports.
 
 Local `artifacts/` and `reports/` directories are ignored. Use them for
 downloaded models, private fixture manifests with local audio paths, and

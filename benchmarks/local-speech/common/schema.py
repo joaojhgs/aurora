@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from .redaction import validate_report_redacted
+from .redaction import sanitize_runtime_provenance, validate_report_redacted
 from .scoring import percentile
 
 SCHEMA_VERSION = "aurora.local_speech.stt.benchmark.v0.1"
@@ -143,6 +143,12 @@ def validate_report_schema(report: dict[str, Any]) -> None:
             raise ValueError(f"successful run missing WER: {run['run_id']}")
         if "fixture_id" not in run or "candidate_id" not in run or "language_mode" not in run:
             raise ValueError(f"run missing identity fields: {run}")
+        if "runtime_provenance" in run:
+            sanitize_runtime_provenance(run["runtime_provenance"], location="$.runtime_provenance")
+        if "utterance_count" in run and int(run["utterance_count"]) < 0:
+            raise ValueError(f"negative utterance_count: {run['run_id']}")
+        if run.get("latency_statistic") not in (None, "p50", "p95", "single"):
+            raise ValueError(f"unsupported latency_statistic: {run['run_id']}")
 
 
 def aggregate_runs(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -178,8 +184,14 @@ def aggregate_runs(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "ok_runs": len(ok),
                 "failed_runs": len(failed),
                 "wer_mean": round(sum(wers) / len(wers), 6) if wers else None,
-                "finalization_latency_ms_p50": percentile(latencies, 50),
-                "finalization_latency_ms_p95": percentile(latencies, 95),
+                "finalization_latency_samples": len(latencies),
+                "finalization_latency_ms_p50": percentile(latencies, 50)
+                if len(latencies) >= 10
+                else None,
+                "finalization_latency_ms_p95": percentile(latencies, 95)
+                if len(latencies) >= 10
+                else None,
+                "finalization_latency_ms_max_observed": max(latencies) if latencies else None,
                 "failure_buckets": sorted(
                     {item.get("failure_bucket", "unknown") for item in failed}
                 ),
