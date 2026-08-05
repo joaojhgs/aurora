@@ -16,7 +16,7 @@ python tools/pockettts-raven/raven_gate.py manifest \
 
 python tools/pockettts-raven/raven_gate.py provenance \
   --manifest tests/fixtures/local_speech/raven/pinned_raven_manifest.json \
-  --sibling /home/developer/projects/sperandiodev \
+  --sibling ~/projects/sperandiodev \
   --upstream .artifacts/pockettts/w0-raven/source/pocket-tts-raven \
   --output .artifacts/pockettts/w0-raven/provenance.json
 
