@@ -1,0 +1,15 @@
+export {
+  TTSAudioChunkEventTTSAudioChunkEventSchema,
+  TTSSynthesizeInputTTSSynthesizeRequestSchema,
+  TTSSynthesizeOutputTTSSynthesizeResponseSchema,
+  TranscriptionTranscribeInputTranscribeAudioRequestSchema,
+  TranscriptionTranscribeOutputTranscribeAudioResponseSchema
+} from '@aurora/client/generated'
+
+export type {
+  TTSAudioChunkEventTTSAudioChunkEvent as LocalSpeechTtsAudioChunkEvent,
+  TTSSynthesizeInputTTSSynthesizeRequest as LocalSpeechTtsSynthesizeRequest,
+  TTSSynthesizeOutputTTSSynthesizeResponse as LocalSpeechTtsSynthesizeResponse,
+  TranscriptionTranscribeInputTranscribeAudioRequest as LocalSpeechTranscribeRequest,
+  TranscriptionTranscribeOutputTranscribeAudioResponse as LocalSpeechTranscribeResponse
+} from '@aurora/client/generated'
