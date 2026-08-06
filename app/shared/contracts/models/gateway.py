@@ -28,6 +28,7 @@ from app.shared.contracts.models.orchestrator import (
     OrchestratorInferChatRequest,
     OrchestratorInferChatResponse,
 )
+from app.shared.contracts.models.speech import SpeechMethodConstraints
 from app.shared.contracts.models.tooling import (
     ToolingGetExportCatalogRequest,
     ToolingGetExportCatalogResponse,
@@ -116,6 +117,7 @@ class MethodInfo(IOModel):
     callable_features: list[CallableFeatureContract] = Field(default_factory=list)
     public_infrastructure: bool = False
     method_type: str = "use"
+    speech_constraints: SpeechMethodConstraints | None = None
     # JSON Schema for input/output models (for OpenAPI generation)
     input_schema: dict[str, Any] | None = None
     output_schema: dict[str, Any] | None = None

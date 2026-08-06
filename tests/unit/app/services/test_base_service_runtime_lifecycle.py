@@ -11,6 +11,7 @@ import pytest_asyncio
 from app.messaging.local_bus import LocalBus
 from app.services.config.messages import ConfigChangedEvent
 from app.shared.contracts.models.common import EmptyInput
+from app.shared.contracts.models.speech import SpeechMethodConstraints
 from app.shared.contracts.registry import clear_registry, method_contract
 from app.shared.messaging.bus_init import set_bus as set_shared_bus
 from app.shared.services.base_service import BaseService
@@ -83,6 +84,12 @@ class CallableFeatureAnnouncementService(BaseService):
         method_type="use",
         required_perms=["TTS.Synthesize"],
         callable_feature_ids=["speech_synthesis"],
+        speech_constraints=SpeechMethodConstraints(
+            exact_languages=["en"],
+            ready_voice_ids=["standard:test:voice-a"],
+            resident_model_identity_digest="b" * 64,
+            speech_capability_revision=11,
+        ),
     )
     async def synthesize(self, _data: EmptyInput) -> RuntimeTestResponse:
         return RuntimeTestResponse()
@@ -214,6 +221,9 @@ async def test_service_announcement_carries_callable_feature_metadata(local_bus)
         assert method.required_perms == ["TTS.Synthesize"]
         assert method.callable_feature_ids == ["speech_synthesis"]
         assert method.callable_features[0].feature_id == "speech_synthesis"
+        assert method.speech_constraints is not None
+        assert method.speech_constraints.exact_languages == ["en"]
+        assert method.speech_constraints.speech_capability_revision == 11
         await service.stop()
     finally:
         local_bus.unsubscribe(GatewayMethods.SERVICE_ANNOUNCE, capture)

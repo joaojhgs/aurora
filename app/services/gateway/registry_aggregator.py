@@ -64,6 +64,9 @@ def _announcement_contract_fingerprint(announcement: ServiceAnnouncement) -> dic
                     tuple(sorted(feature.feature_id for feature in method.callable_features)),
                     method.public_infrastructure,
                     method.method_type,
+                    method.speech_constraints.model_dump_json()
+                    if method.speech_constraints is not None
+                    else None,
                     canonical_digest(method.input_schema)
                     if method.input_schema is not None
                     else None,
@@ -129,9 +132,7 @@ class RegistryAggregator:
             return
 
         # Subscribe to service announcements
-        await self._bus.subscribe_event(
-            GatewayMethods.SERVICE_ANNOUNCE, self._on_service_announce
-        )
+        await self._bus.subscribe_event(GatewayMethods.SERVICE_ANNOUNCE, self._on_service_announce)
         await self._bus.subscribe_event(GatewayMethods.SERVICE_DEPART, self._on_service_depart)
         await self._bus.subscribe_event(
             GatewayMethods.SERVICE_HEARTBEAT, self._on_service_heartbeat
@@ -221,6 +222,7 @@ class RegistryAggregator:
                             callable_features=m.callable_features,
                             public_infrastructure=m.public_infrastructure,
                             method_type=m.method_type,
+                            speech_constraints=m.speech_constraints,
                             input_schema=input_schema,
                             output_schema=output_schema,
                         )
@@ -651,6 +653,9 @@ def _normalized_method_snapshot(
         output_schema=method.output_schema,
         feature_ids=tuple(str(feature_id) for feature_id in method.callable_feature_ids),
         public_infrastructure=bool(method.public_infrastructure),
+        speech_constraints=method.speech_constraints.model_dump(mode="json")
+        if method.speech_constraints is not None
+        else None,
     )
 
 

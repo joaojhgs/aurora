@@ -991,6 +991,7 @@ class BaseService(ABC):
                         callable_features=method.callable_features,
                         public_infrastructure=method.public_infrastructure,
                         method_type=method.method_type,
+                        speech_constraints=method.speech_constraints,
                         input_schema=input_schema,
                         output_schema=output_schema,
                     )

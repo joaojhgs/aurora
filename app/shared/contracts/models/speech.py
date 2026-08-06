@@ -9,7 +9,7 @@ from typing import Annotated, Literal, cast
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from app.shared.contracts.registry import IOModel
+from app.shared.contracts.io_model import IOModel
 
 SPEECH_LANGUAGE_TABLE_REVISION: Literal["aurora-speech-language-v1"] = "aurora-speech-language-v1"
 SpeechLanguageTag = Literal["de", "en", "es", "fr", "it", "ja", "ko", "pt", "zh"]

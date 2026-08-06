@@ -36,6 +36,7 @@ from app.shared.contracts.mesh_surface import (
     PUBLIC_INFRASTRUCTURE_TOPICS,
     feature_contracts_for_module,
 )
+from app.shared.contracts.models.speech import SpeechMethodConstraints
 
 DEFAULT_PERMS = object()
 DEFAULT_CAPACITY = object()
@@ -55,6 +56,7 @@ def method(
     output_schema: dict | None = None,
     input_schema_hash: str | None = None,
     output_schema_hash: str | None = None,
+    speech_constraints: dict | SpeechMethodConstraints | None = None,
 ) -> NormalizedMethodSnapshot:
     required_permissions = (topic,) if perms is DEFAULT_PERMS else perms
     return NormalizedMethodSnapshot(
@@ -70,6 +72,7 @@ def method(
         output_schema_hash=output_schema_hash,
         feature_ids=features,
         public_infrastructure=public_infrastructure,
+        speech_constraints=speech_constraints,
     )
 
 
@@ -495,6 +498,54 @@ def test_empty_schema_and_capacity_presence_are_authority_significant() -> None:
         )
 
 
+def test_speech_constraints_are_canonical_and_change_projection_identity() -> None:
+    constraints_v1 = SpeechMethodConstraints(
+        exact_languages=["en", "de"],
+        ready_voice_ids=["standard:test:voice-a"],
+        resident_model_identity_digest="c" * 64,
+        speech_capability_revision=1,
+    )
+    constraints_v2 = constraints_v1.model_copy(update={"speech_capability_revision": 2})
+    constrained = method("TTS.Synthesize", speech_constraints=constraints_v1)
+    changed = method("TTS.Synthesize", speech_constraints=constraints_v2)
+    unconstrained = method("TTS.Synthesize")
+
+    synthesize_recipient = recipient("TTS.Synthesize")
+    constrained_result = project(
+        reg=registry(service(methods=(constrained,))), rec=synthesize_recipient
+    )
+    changed_result = project(reg=registry(service(methods=(changed,))), rec=synthesize_recipient)
+    unconstrained_result = project(
+        reg=registry(service(methods=(unconstrained,))), rec=synthesize_recipient
+    )
+
+    exported = constrained_result.services[0].methods[0]
+    assert exported.speech_constraints is not None
+    assert exported.speech_constraints["exact_languages"] == ("de", "en")
+    assert exported.to_canonical()["speech_constraints"]["speech_capability_revision"] == 1
+    assert (
+        constrained.to_canonical()["speech_constraints"]
+        == exported.to_canonical()["speech_constraints"]
+    )
+    assert constrained_result.cache_key.digest != changed_result.cache_key.digest
+    assert constrained_result.digest != changed_result.digest
+    assert constrained_result.canonical != changed_result.canonical
+    assert constrained_result.cache_key.digest != unconstrained_result.cache_key.digest
+    assert unconstrained_result.services[0].methods[0].speech_constraints is None
+
+
+def test_malformed_speech_constraints_are_rejected_by_normalized_snapshot() -> None:
+    with pytest.raises(ProviderExportError):
+        method(
+            "TTS.Synthesize",
+            speech_constraints={
+                "exact_languages": ["pt-BR"],
+                "resident_model_identity_digest": "d" * 64,
+                "speech_capability_revision": 1,
+            },
+        )
+
+
 def test_policy_max_concurrent_overlays_registry_capacity_and_changes_canonical_output() -> None:
     base_service = service(
         capacity={"max_concurrent": 9, "burst": {"window": "1s", "limit": 4}},
@@ -677,6 +728,7 @@ def test_partial_feature_keeps_method_but_not_feature_and_zero_method_service_om
     assert full.services[0].feature_ids == ("speech",)
     assert topics(partial) == ["TTS.Synthesize"]
     assert partial.services[0].methods[0].feature_ids == ("speech",)
+    assert partial.services[0].methods[0].speech_constraints is None
     assert partial.services[0].feature_ids == ()
     assert zero.services == ()
 

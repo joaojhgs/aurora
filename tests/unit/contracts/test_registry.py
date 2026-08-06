@@ -10,9 +10,12 @@ from app.shared.contracts.mesh_surface import (
     feature_contracts_for_topic,
     validate_callable_method_surface,
 )
+from app.shared.contracts.models.speech import SpeechMethodConstraints
+from app.shared.contracts.models.tts import TTSMethods
 from app.shared.contracts.registry import (
     CallableFeatureContract,
     IOModel,
+    MethodContract,
     all_contracts,
     clear_registry,
     export,
@@ -138,6 +141,76 @@ def test_export_import_roundtrip():
     # Test import
     imported_data = import_registry(exported)
     assert imported_data["digest"] == data["digest"]
+
+
+def test_registry_preserves_canonical_speech_constraints_in_export() -> None:
+    """Decorator metadata keeps typed speech constraints through registry export."""
+
+    from app.shared.contracts.registry import register_method
+
+    constraints = SpeechMethodConstraints(
+        exact_languages=["en", "de"],
+        ready_voice_ids=["standard:test:voice-a"],
+        resident_model_identity_digest="a" * 64,
+        speech_capability_revision=7,
+    )
+    register_module("TTS", "1.0.0")
+
+    @method_contract(
+        method_id=TTSMethods.SYNTHESIZE,
+        input_model=TestInput,
+        exposure="both",
+        required_perms=[TTSMethods.SYNTHESIZE],
+        callable_feature_ids=["speech_synthesis"],
+        speech_constraints=constraints.model_dump(mode="json"),
+    )
+    async def synthesize(req: TestInput) -> None:
+        pass
+
+    register_method("TTS", "Synthesize", synthesize, synthesize._contract_metadata)
+
+    contract = get_contract(TTSMethods.SYNTHESIZE)
+    exported = json.loads(export())
+    method_data = exported["modules"][0]["methods"][0]
+
+    assert contract is not None
+    assert contract.speech_constraints == constraints
+    assert method_data["speech_constraints"] == constraints.model_dump(mode="json")
+    assert method_data["speech_constraints"]["exact_languages"] == ["de", "en"]
+
+
+def test_registry_rejects_malformed_speech_constraints() -> None:
+    register_module("TTS", "1.0.0")
+
+    with pytest.raises(ValueError):
+        method_contract(
+            method_id=TTSMethods.SYNTHESIZE,
+            input_model=TestInput,
+            exposure="both",
+            required_perms=[TTSMethods.SYNTHESIZE],
+            callable_feature_ids=["speech_synthesis"],
+            speech_constraints={
+                "exact_languages": ["en"],
+                "speech_capability_revision": 1,
+                "unexpected": True,
+            },
+        )(lambda req: None)
+
+
+def test_method_contract_rejects_malformed_direct_speech_constraints() -> None:
+    with pytest.raises(ValueError):
+        MethodContract(
+            module="TTS",
+            module_version="1.0.0",
+            name="Synthesize",
+            bus_topic=TTSMethods.SYNTHESIZE,
+            input_model=TestInput,
+            speech_constraints={
+                "exact_languages": ["en"],
+                "speech_capability_revision": 1,
+                "unexpected": True,
+            },
+        )
 
 
 def test_mesh_callable_method_requires_permissions_and_feature_membership():

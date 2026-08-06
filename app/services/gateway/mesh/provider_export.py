@@ -15,11 +15,14 @@ from hashlib import sha256
 from types import MappingProxyType
 from typing import Any, Literal
 
+from pydantic import ValidationError
+
 from app.shared.auth.permissions import check_access
 from app.shared.contracts.mesh_surface import (
     PUBLIC_INFRASTRUCTURE_TOPICS,
     validate_callable_method_surface,
 )
+from app.shared.contracts.models.speech import SpeechMethodConstraints
 
 LEGACY_MANIFEST_PROTOCOL = "legacy-unfiltered-v0"
 ACTIVE_MANIFEST_PROTOCOL = "projection-v1"
@@ -161,6 +164,21 @@ def _schema_hash(schema: Mapping[str, Any] | None, explicit_hash: str | None) ->
     return supplied or expected
 
 
+def _speech_constraints_mapping(value: Any | None) -> Mapping[str, Any] | None:
+    if value is None:
+        return None
+    try:
+        if isinstance(value, SpeechMethodConstraints):
+            constraints = value
+        elif hasattr(value, "model_dump"):
+            constraints = SpeechMethodConstraints.model_validate(value.model_dump(mode="json"))
+        else:
+            constraints = SpeechMethodConstraints.model_validate(value)
+    except ValidationError as exc:
+        raise ProviderExportError(f"invalid speech_constraints: {exc}") from exc
+    return _mapping_proxy(constraints.model_dump(mode="json"))
+
+
 @dataclass(frozen=True, slots=True)
 class NormalizedMethodSnapshot:
     """Normalized immutable method metadata relevant to shadow provider export."""
@@ -178,6 +196,9 @@ class NormalizedMethodSnapshot:
     output_schema_hash: str | None = None
     feature_ids: tuple[str, ...] = ()
     public_infrastructure: bool = False
+    speech_constraints: Mapping[str, Any] | SpeechMethodConstraints | None = field(
+        default=None, repr=False, compare=False
+    )
     input_schema_present: bool = field(default=False, init=False)
     output_schema_present: bool = field(default=False, init=False)
 
@@ -205,6 +226,11 @@ class NormalizedMethodSnapshot:
             self,
             "public_infrastructure",
             _require_bool(self.public_infrastructure, "public_infrastructure"),
+        )
+        object.__setattr__(
+            self,
+            "speech_constraints",
+            _speech_constraints_mapping(self.speech_constraints),
         )
         raw_input_schema = self.input_schema
         raw_output_schema = self.output_schema
@@ -248,6 +274,9 @@ class NormalizedMethodSnapshot:
             if self.required_permissions is None
             else list(self.required_permissions),
             "public_infrastructure": self.public_infrastructure,
+            "speech_constraints": _to_plain(self.speech_constraints)
+            if self.speech_constraints is not None
+            else None,
             "summary": self.summary,
             "topic": self.topic,
         }
@@ -584,6 +613,9 @@ class ExportedMethod:
     output_schema: Mapping[str, Any] | None = field(default=None, repr=False, compare=False)
     feature_ids: tuple[str, ...] = ()
     public_infrastructure: bool = False
+    speech_constraints: Mapping[str, Any] | SpeechMethodConstraints | None = field(
+        default=None, repr=False, compare=False
+    )
     input_schema_present: bool = field(default=False, init=False)
     output_schema_present: bool = field(default=False, init=False)
 
@@ -603,6 +635,7 @@ class ExportedMethod:
             output_schema_hash=method.output_schema_hash,
             feature_ids=method.feature_ids,
             public_infrastructure=method.public_infrastructure,
+            speech_constraints=method.speech_constraints,
         )
 
     def __post_init__(self) -> None:
@@ -627,6 +660,11 @@ class ExportedMethod:
             "public_infrastructure",
             _require_bool(self.public_infrastructure, "export public_infrastructure"),
         )
+        object.__setattr__(
+            self,
+            "speech_constraints",
+            _speech_constraints_mapping(self.speech_constraints),
+        )
 
     def to_canonical(self) -> dict[str, Any]:
         return {
@@ -645,6 +683,9 @@ class ExportedMethod:
             "required_permissions": None
             if self.required_permissions is None
             else list(self.required_permissions),
+            "speech_constraints": _to_plain(self.speech_constraints)
+            if self.speech_constraints is not None
+            else None,
             "summary": self.summary,
             "topic": self.topic,
         }

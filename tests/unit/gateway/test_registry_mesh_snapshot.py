@@ -19,12 +19,17 @@ from app.services.gateway.mesh.provider_export import (
     project_provider_export,
 )
 from app.services.gateway.registry_aggregator import RegistryAggregator
+from app.shared.contracts.mesh_surface import (
+    feature_contracts_for_module,
+    feature_contracts_for_topic,
+)
 from app.shared.contracts.models.gateway import (
     MethodInfo,
     ServiceAnnouncement,
     ServiceDeparture,
     ServiceHeartbeat,
 )
+from app.shared.contracts.models.speech import SpeechMethodConstraints
 from app.shared.contracts.registry import (
     CallableFeatureContract,
     MethodContract,
@@ -221,6 +226,7 @@ def test_registry_snapshot_is_immutable_and_binds_schema_tags_and_permissions() 
 
     assert method.input_schema_hash == canonical_digest(method.input_schema)
     assert method.output_schema_hash == canonical_digest(method.output_schema)
+    assert method.speech_constraints is None
     assert snapshot.services[0].capacity_present is False
     assert dict(snapshot.services[0].capacity) == {}
     with pytest.raises(FrozenInstanceError):
@@ -284,64 +290,66 @@ async def test_thread_process_snapshot_manifest_and_projection_bytes_match(
 ) -> None:
     import app.shared.contracts.registry as contract_registry
 
-    feature = CallableFeatureContract(
-        feature_id="gateway_read",
-        module="Gateway",
-        label="Gateway Read",
-        summary="Read the gateway inventory.",
-        method_ids=("Gateway.GetServices",),
+    constraints = SpeechMethodConstraints(
+        exact_languages=["en", "de"],
+        ready_voice_ids=["standard:test:voice-a"],
+        resident_model_identity_digest="f" * 64,
+        speech_capability_revision=9,
     )
+    feature = feature_contracts_for_topic("TTS.Synthesize")[0]
     method_contract = MethodContract(
-        module="Gateway",
+        module="TTS",
         module_version="1.0.0",
-        name="GetServices",
-        summary="Get service inventory",
-        bus_topic="Gateway.GetServices",
-        required_perms=["Gateway.Read", "Gateway.GetServices"],
-        callable_feature_ids=["gateway_read"],
+        name="Synthesize",
+        summary="Synthesize audio",
+        bus_topic="TTS.Synthesize",
+        required_perms=["TTS.Synthesize"],
+        callable_feature_ids=["speech_synthesis"],
         callable_features=[feature],
         public_infrastructure=False,
         method_type="use",
         input_model=_ParityInput,
         output_model=_ParityOutput,
+        speech_constraints=constraints,
         exposure="both",
     )
     module_contract = ModuleContract(
-        module="Gateway",
+        module="TTS",
         version="1.0.0",
-        summary="Gateway service",
+        summary="TTS service",
         capabilities=["zeta", "alpha"],
         methods=[method_contract],
-        callable_features=[feature],
+        callable_features=list(feature_contracts_for_module("TTS")),
     )
     monkeypatch.setattr(
         contract_registry,
         "list_modules",
-        lambda: {"Gateway": module_contract},
+        lambda: {"TTS": module_contract},
     )
 
     thread_registry = RegistryAggregator(bus=SimpleNamespace(), mode="threads")
     process_registry = RegistryAggregator(bus=SimpleNamespace(), mode="processes")
     await thread_registry._load_from_local_registry()
     process_announcement = ServiceAnnouncement(
-        module="Gateway",
+        module="TTS",
         version="1.0.0",
-        summary="Gateway service",
+        summary="TTS service",
         capabilities=["alpha", "zeta"],
-        callable_features=[feature],
+        callable_features=list(feature_contracts_for_module("TTS")),
         methods=[
             MethodInfo(
-                name="GetServices",
-                summary="Get service inventory",
-                bus_topic="Gateway.GetServices",
+                name="Synthesize",
+                summary="Synthesize audio",
+                bus_topic="TTS.Synthesize",
                 exposure="both",
                 input_model=_ParityInput.__name__,
                 output_model=_ParityOutput.__name__,
-                required_perms=["Gateway.GetServices", "Gateway.Read"],
-                callable_feature_ids=["gateway_read"],
+                required_perms=["TTS.Synthesize"],
+                callable_feature_ids=["speech_synthesis"],
                 callable_features=[feature],
                 public_infrastructure=False,
                 method_type="use",
+                speech_constraints=constraints,
                 input_schema=_ParityInput.model_json_schema(),
                 output_schema=_ParityOutput.model_json_schema(),
             )
@@ -360,10 +368,13 @@ async def test_thread_process_snapshot_manifest_and_projection_bytes_match(
     assert thread_snapshot.services[0].methods[0].output_schema == (
         process_snapshot.services[0].methods[0].output_schema
     )
+    assert thread_snapshot.services[0].methods[0].speech_constraints == (
+        process_snapshot.services[0].methods[0].speech_constraints
+    )
 
     mesh_config = MeshConfig(
         enabled=True,
-        services={"Gateway": mesh_policy(share=True, max_concurrent=4)},
+        services={"TTS": mesh_policy(share=True, max_concurrent=4)},
     )
     thread_manifest = generate_manifest("provider", mesh_config, registry=thread_registry)
     process_manifest = generate_manifest("provider", mesh_config, registry=process_registry)
@@ -375,12 +386,12 @@ async def test_thread_process_snapshot_manifest_and_projection_bytes_match(
 
     policy = PolicySnapshot(
         revision="1",
-        services=(ServiceExportPolicy(service_id="Gateway", share=True, max_concurrent=4),),
+        services=(ServiceExportPolicy(service_id="TTS", share=True, max_concurrent=4),),
     )
     recipient = RecipientEvidence(
         peer_id="recipient",
         revision=1,
-        grants=(GrantEvidence("Gateway.GetServices"), GrantEvidence("Gateway.Read")),
+        grants=(GrantEvidence("TTS.Synthesize"),),
     )
     thread_projection = project_provider_export(
         provider_peer_id="provider",
