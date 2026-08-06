@@ -27,6 +27,7 @@ export async function runAndroidEmulatorSmoke() {
   installApk(apk)
   run(adb, ['logcat', '-c'])
   launchApp(appId)
+  dismissSystemUiAnrDialog()
 
   const payloadJson = waitForPayloadJson()
   if (!payloadJson) {
@@ -96,12 +97,31 @@ function launchApp(appId) {
   }
 }
 
+function dismissSystemUiAnrDialog() {
+  const result = spawnSync(adb, ['exec-out', 'uiautomator', 'dump', '/dev/tty'], {
+    encoding: 'utf8',
+    timeout: 15_000,
+  })
+  if (result.error || result.status !== 0) return
+  const output = `${result.stdout}\n${result.stderr}`
+  if (!output.includes("System UI isn't responding")) return
+  const wait = output.match(/text="Wait"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)
+  if (!wait) return
+  const [, left, top, right, bottom] = wait.map(Number)
+  run(adb, ['shell', 'input', 'tap', String(Math.floor((left + right) / 2)), String(Math.floor((top + bottom) / 2))])
+}
+
 async function waitForWebviewMount(appId) {
   const deadline = Date.now() + Number(process.env.AURORA_ANDROID_WEBVIEW_TIMEOUT_MS ?? 240_000)
   let lastState = null
   let lastError = null
+  let lastAnrCheckAt = 0
 
   while (Date.now() < deadline) {
+    if (Date.now() - lastAnrCheckAt > 5000) {
+      dismissSystemUiAnrDialog()
+      lastAnrCheckAt = Date.now()
+    }
     const pid = adbOutput(['shell', 'pidof', appId], { allowPidofNoProcess: true }).trim().split(/\s+/)[0]
     if (!pid) {
       const crashEvidence = recentAndroidCrashEvidence(appId)
