@@ -40,6 +40,19 @@ Gateway discovers service announcements and contract metadata, then creates Fast
 
 See [`GATEWAY.md`](GATEWAY.md).
 
+## Speech routing and voice contracts
+
+Provider-neutral speech routing is defined in `app/shared/contracts/models/speech.py` and carried through contract registration, service announcements, recipient projections, Gateway routing, generated SDK descriptors, and peer-host manifests.
+
+- Speech methods project `SpeechMethodConstraints`: exact languages, automatic-language support and coverage, declared locale fallbacks, ready logical voice IDs, a resident-model identity digest, and a monotonic speech capability revision.
+- Version 1 accepts exact language tags `de`, `en`, `es`, `fr`, `it`, `ja`, `ko`, `pt`, and `zh`. It declares no implicit locale fallback. TTS accepts an exact language or no language; it does not accept `auto`.
+- Logical voice IDs are provider-neutral: `standard:<group>:<name>` or `clone:<uuid>`. Filesystem paths, engine-specific speaker names, and raw model identifiers do not cross the public contract.
+- Routing derives an immutable language/voice requirement from the typed request. A remote provider with missing legacy capability evidence, an incompatible language, an unavailable logical voice, a stale lease, or insufficient permission is ineligible before text or audio is sent to it.
+- `SpeechRouteBinding` is trusted internal envelope/identity metadata, not a caller-set request field. It binds the selected service instance, projection digest/revision, provider lease epoch/revision, speech capability revision, and request-requirement digest. The target validates the binding again before capacity accounting or handler dispatch.
+- If target-side state changed, Aurora returns a sanitized `capability_changed` pre-accept result. Automatic use-method routing may resolve once more only when the first target proves the request was not accepted; explicit selectors, management methods, generic failures, timeouts, and post-accept work are never replayed to another provider.
+
+TTS discovery and synthesis are use surfaces. Voice-profile inventory and every profile/import mutation are manage surfaces. The exact permission declarations remain part of each method contract; see [`AUTH_AND_PERMISSIONS.md`](AUTH_AND_PERMISSIONS.md).
+
 ## Events and streaming
 
 Gateway event streams expose selected backend events through SDK-compatible shapes. The SDK event API preserves IDs, topics, correlation IDs, peer/target metadata, redaction metadata, and transport evidence.
@@ -82,7 +95,7 @@ Use `make check-sdk-backend-contracts` after changing allowlisted contract model
 
 Some SDK fixture coverage and descriptor drift is known debt rather than a strict schema failure. The conformance checker keeps that debt behind an explicit nonfatal finding budget: current debt may be ratcheted down, but new categories or count increases fail the gate. SDK, WebRTC, native bridge, persistence, and import/export boundaries should parse untrusted values through the shared validation wrapper and return redacted validation errors.
 
-The lightweight mesh-node implementation uses those generated contracts for the bounded TypeScript peer host and local Tooling provider. It may advertise only approved local tools through the existing Tooling contract shape; it must not introduce literal ad hoc bus topics, arbitrary SQL surfaces, generic native process execution, or a second hand-maintained wire DTO model.
+The lightweight mesh-node implementation uses those generated contracts for the bounded TypeScript peer host, speech handlers, and local Tooling provider. Generated peer-host descriptors preserve backend schemas, route metadata, permission casing, projection method type, callable features, and speech constraints. A peer host may advertise only methods granted to the recipient, and it does not accept inbound work until a structured manifest acknowledgement classifies every advertised service and matches the projection/auth evidence. It must not introduce literal ad hoc bus topics, arbitrary SQL surfaces, generic native process execution, or a second hand-maintained wire DTO model.
 
 Relevant package commands:
 

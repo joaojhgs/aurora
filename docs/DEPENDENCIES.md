@@ -193,10 +193,12 @@ Legacy `*:thin` package scripts remain compatibility aliases for the neutral `*:
 
 Android client artifact proof is package-content evidence, not device-runtime
 evidence. Current-main x86_64 debug APK and universal four-ABI debug AAB scans
-pass with no Python/sidecar/endpoint/secrets; emulator/device WebRTC proof
-still requires usable KVM access or an authorized physical device. iOS client
-source, policy, frontend, and overlay gates are Linux-safe, but simulator,
-Swift runtime, signing, and App Store proof require macOS/Xcode.
+pass with no Python/sidecar/endpoint/secrets, and a packaged API 30 application
+launch smoke passes on the workspace emulator. No API 35 packaged-WebView or
+Chrome WebRTC report is claimed from that launch-only smoke; run the API 35
+workflow or an authorized physical device for those lanes. iOS client source,
+policy, frontend, and overlay gates are Linux-safe, but simulator, Swift
+runtime, signing, and App Store proof require macOS/Xcode.
 
 See [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md) for sidecar build mechanics and signing boundaries.
 

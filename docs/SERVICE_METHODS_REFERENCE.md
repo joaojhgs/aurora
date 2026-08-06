@@ -71,29 +71,50 @@ Text-to-Speech synthesis and playback.
 
 | Method ID | Summary | Input | Output | Exposure | Pattern |
 |-----------|---------|-------|--------|----------|---------|
-| `TTS.Request` | Process TTS and play on server | `TTSRequest` | `EmptyOutput` | **internal** | Async (fire-and-forget) |
-| `TTS.Stop` | Stop server audio playback | `EmptyInput` | `EmptyOutput` | **internal** | Immediate |
+| `TTS.Request` | Process TTS and play on the selected device | `TTSRequest` | `EmptyOutput` | **both** | Use |
+| `TTS.GetCapabilities` | Return provider-neutral runtime readiness | `TTSGetCapabilitiesRequest` | `TTSGetCapabilitiesResponse` | **both** | Use |
+| `TTS.ListVoices` | List use-visible ready voices | `TTSListVoicesRequest` | `TTSListVoicesResponse` | **both** | Use |
+| `TTS.ListVoiceProfiles` | List administrative voice profiles | `TTSListVoiceProfilesRequest` | `TTSListVoiceProfilesResponse` | **both** | Manage |
+| `TTS.GetVoiceProfile` | Get one administrative voice profile | `TTSGetVoiceProfileRequest` | `TTSGetVoiceProfileResponse` | **both** | Manage |
+| `TTS.UpdateVoiceProfile` | Update voice-profile metadata | `TTSUpdateVoiceProfileRequest` | `TTSUpdateVoiceProfileResponse` | **both** | Manage |
+| `TTS.InstallVoiceProfile` | Install a manifest-known voice profile | `TTSInstallVoiceProfileRequest` | `TTSInstallVoiceProfileResponse` | **both** | Manage |
+| `TTS.RemoveVoiceProfile` | Remove installed voice artifacts | `TTSRemoveVoiceProfileRequest` | `TTSRemoveVoiceProfileResponse` | **both** | Manage |
+| `TTS.SetDefaultVoice` | Select the default logical voice | `TTSSetDefaultVoiceRequest` | `TTSSetDefaultVoiceResponse` | **both** | Manage |
+| `TTS.VoiceImportStart` | Start an owner-scoped bounded upload | `TTSVoiceImportStartRequest` | `TTSVoiceImportStartResponse` | **both** | Manage |
+| `TTS.VoiceImportChunk` | Append one ordered validated upload chunk | `TTSVoiceImportChunkRequest` | `TTSVoiceImportChunkResponse` | **both** | Manage |
+| `TTS.VoiceImportEnd` | Seal a complete upload | `TTSVoiceImportEndRequest` | `TTSVoiceImportEndResponse` | **both** | Manage |
+| `TTS.VoiceImportAbort` | Abort and clear a partial upload | `TTSVoiceImportAbortRequest` | `TTSVoiceImportAbortResponse` | **both** | Manage |
+| `TTS.CreateVoiceProfile` | Create a profile from a sealed import | `TTSCreateVoiceProfileRequest` | `TTSCreateVoiceProfileResponse` | **both** | Manage |
+| `TTS.DeleteVoiceProfile` | Delete a managed cloned profile | `TTSDeleteVoiceProfileRequest` | `TTSDeleteVoiceProfileResponse` | **both** | Manage |
+| `TTS.StreamStart` | Start an ordered text/audio stream | `TTSStreamStartRequest` | `EmptyOutput` | **both** | Use |
+| `TTS.StreamChunk` | Append one ordered text chunk | `TTSStreamChunkRequest` | `EmptyOutput` | **both** | Use |
+| `TTS.StreamEnd` | End an ordered stream | `TTSStreamEndRequest` | `EmptyOutput` | **both** | Use |
+| `TTS.Synthesize` | Synthesize and return audio data | `TTSSynthesizeRequest` | `TTSSynthesizeResponse` | **both** | Use |
+| `TTS.Stop` | Stop server audio playback or a scoped stream | `TTSStopRequest` | `EmptyOutput` | **internal** | Immediate |
 | `TTS.Pause` | Pause server audio playback | `EmptyInput` | `EmptyOutput` | **internal** | Immediate |
 | `TTS.Resume` | Resume server audio playback | `EmptyInput` | `EmptyOutput` | **internal** | Immediate |
-| `TTS.Synthesize` | Synthesize and return audio data | `TTSSynthesizeRequest` | `TTSSynthesizeResponse` | **both** | Synchronous |
 
 ### Method Details
 
-#### `TTS.Request` (Internal Only)
-**Purpose**: Synthesize text and play audio through server speakers.
+#### `TTS.Request` (Both)
+**Purpose**: Synthesize text and play audio on the locally or explicitly selected provider device.
 
 ```python
 # Input
 TTSRequest(
-    text: str,           # Text to synthesize
-    interrupt: bool = False  # Interrupt current playback
+    text: str,
+    voice: LogicalVoiceId | None = None,
+    language: SpeechLanguageTag | None = None,
+    speed: float = 1.0,
+    interrupt: bool = True,
+    mesh_selector: MeshAddressSelector | None = None,
 )
 
 # Output
-EmptyOutput()  # Fire-and-forget, emits TTS.Started/TTS.Completed events
+EmptyOutput()  # Fire-and-forget, emits TTS.Started/TTS.Stopped events
 ```
 
-**Why Internal**: Plays audio on server hardware - meaningless for remote API clients.
+The language is exact when present; `auto` is invalid for TTS. `voice` uses `standard:<group>:<name>` or `clone:<uuid>`. Remote playback still requires projection, permission, provider capability, and route-binding checks.
 
 #### `TTS.Synthesize` (Both)
 **Purpose**: Synthesize text and return audio data as base64.
@@ -101,11 +122,13 @@ EmptyOutput()  # Fire-and-forget, emits TTS.Started/TTS.Completed events
 ```python
 # Input
 TTSSynthesizeRequest(
-    text: str,                    # Text to synthesize
-    voice: str | None = None,     # Voice model (optional)
-    speed: float = 1.0,           # Playback speed
-    format: str = "wav",          # Output format: "wav" | "raw"
-    sample_rate: int = 22050      # Sample rate
+    text: str,
+    voice: LogicalVoiceId | None = None,
+    language: SpeechLanguageTag | None = None,
+    speed: float = 1.0,
+    format: str = "wav",
+    sample_rate: int | None = None,
+    mesh_selector: MeshAddressSelector | None = None,
 )
 
 # Output
@@ -120,6 +143,12 @@ TTSSynthesizeResponse(
 ```
 
 **Why Both**: Returns data that can be used anywhere - internal services or API clients.
+
+#### Voice discovery and management
+
+`GetCapabilities` and `ListVoices` are use-safe. `ListVoices` filters cloned voices to the authenticated owner or explicitly allowed peer and does not expose management/source metadata. Profile inventory plus every profile/import mutation requires `TTS.manage`.
+
+Management mutations use a payload-bound `operation_id`, emit required redacted audit intent before side effects, return an idempotent replay response for identical input, and reject the same operation ID with different input. Upload chunks are owner-scoped, ordered, bounded, hash-checked, frozen after sealing, and represented by an opaque sealed reference rather than a path.
 
 ---
 
@@ -773,44 +802,62 @@ AdminAction draft/confirm/audit envelope before forwarding.
 
 ### External API Endpoints (Gateway)
 
-These methods are exposed via HTTP POST at `/api/{service}/{method}`:
+These methods are exposed via HTTP POST at `/api/{Service}/{Method}`. The live Gateway registry remains authoritative for the complete route set.
 
 | Service | Method | Endpoint |
 |---------|--------|----------|
-| TTS | Synthesize | `POST /api/tts/synthesize` |
-| Transcription | ProcessAudio | `POST /api/transcription/processaudio` |
-| Transcription | Transcribe | `POST /api/transcription/transcribe` |
-| WakeWord | ProcessAudio | `POST /api/wakeword/processaudio` |
-| WakeWord | Detect | `POST /api/wakeword/detect` |
-| Orchestrator | ExternalUserInput | `POST /api/orchestrator/externaluserinput` |
-| Scheduler | Schedule | `POST /api/scheduler/schedule` |
-| Scheduler | ScheduleAction | `POST /api/scheduler/scheduleaction` |
-| Scheduler | Cancel | `POST /api/scheduler/cancel` |
-| Scheduler | Pause | `POST /api/scheduler/pause` |
-| Scheduler | Resume | `POST /api/scheduler/resume` |
-| Scheduler | ListJobs | `POST /api/scheduler/listjobs` |
-| DB | GetMessages | `POST /api/db/getmessages` |
-| DB | GetMessagesForDate | `POST /api/db/getmessagesfordate` |
-| DB | RAGListNamespaces | `POST /api/db/raglistnamespaces` |
-| DB | RAGSearchRemote | `POST /api/db/ragsearchremote` |
-| DB | RAGGetProvenance | `POST /api/db/raggetprovenance` |
-| DB | RAGExportNamespace | `POST /api/db/ragexportnamespace` |
-| DB | RAGImportNamespace | `POST /api/db/ragimportnamespace` |
-| Tooling | GetTools | `POST /api/tooling/gettools` |
-| Tooling | GetToolByName | `POST /api/tooling/gettoolbyname` |
-| Tooling | GetStats | `POST /api/tooling/getstats` |
-| Tooling | GetMCPStatus | `POST /api/tooling/getmcpstatus` |
-| Tooling | ExecuteTool | `POST /api/tooling/executetool` |
-| Config | Get | `POST /api/config/get` |
-| Config | Set | `POST /api/config/set` |
-| Config | Validate | `POST /api/config/validate` |
-| Config | GetPlugin | `POST /api/config/getplugin` |
-| Config | SetPlugin | `POST /api/config/setplugin` |
-| Gateway | PairingStart | `POST /api/gateway/pairingstart` |
-| Gateway | PairingConnect | `POST /api/gateway/pairingconnect` |
-| Gateway | PairingExchange | `POST /api/gateway/pairingexchange` |
-| Gateway | Login | `POST /api/gateway/login` |
-| Supervisor | GetStatus | `POST /api/supervisor/getstatus` |
+| TTS | Request | `POST /api/TTS/Request` |
+| TTS | GetCapabilities | `POST /api/TTS/GetCapabilities` |
+| TTS | ListVoices | `POST /api/TTS/ListVoices` |
+| TTS | ListVoiceProfiles | `POST /api/TTS/ListVoiceProfiles` |
+| TTS | GetVoiceProfile | `POST /api/TTS/GetVoiceProfile` |
+| TTS | UpdateVoiceProfile | `POST /api/TTS/UpdateVoiceProfile` |
+| TTS | InstallVoiceProfile | `POST /api/TTS/InstallVoiceProfile` |
+| TTS | RemoveVoiceProfile | `POST /api/TTS/RemoveVoiceProfile` |
+| TTS | SetDefaultVoice | `POST /api/TTS/SetDefaultVoice` |
+| TTS | VoiceImportStart | `POST /api/TTS/VoiceImportStart` |
+| TTS | VoiceImportChunk | `POST /api/TTS/VoiceImportChunk` |
+| TTS | VoiceImportEnd | `POST /api/TTS/VoiceImportEnd` |
+| TTS | VoiceImportAbort | `POST /api/TTS/VoiceImportAbort` |
+| TTS | CreateVoiceProfile | `POST /api/TTS/CreateVoiceProfile` |
+| TTS | DeleteVoiceProfile | `POST /api/TTS/DeleteVoiceProfile` |
+| TTS | StreamStart | `POST /api/TTS/StreamStart` |
+| TTS | StreamChunk | `POST /api/TTS/StreamChunk` |
+| TTS | StreamEnd | `POST /api/TTS/StreamEnd` |
+| TTS | Synthesize | `POST /api/TTS/Synthesize` |
+| Transcription | ProcessAudio | `POST /api/Transcription/ProcessAudio` |
+| Transcription | Transcribe | `POST /api/Transcription/Transcribe` |
+| WakeWord | ProcessAudio | `POST /api/WakeWord/ProcessAudio` |
+| WakeWord | Detect | `POST /api/WakeWord/Detect` |
+| Orchestrator | ExternalUserInput | `POST /api/Orchestrator/ExternalUserInput` |
+| Scheduler | Schedule | `POST /api/Scheduler/Schedule` |
+| Scheduler | ScheduleAction | `POST /api/Scheduler/ScheduleAction` |
+| Scheduler | Cancel | `POST /api/Scheduler/Cancel` |
+| Scheduler | Pause | `POST /api/Scheduler/Pause` |
+| Scheduler | Resume | `POST /api/Scheduler/Resume` |
+| Scheduler | ListJobs | `POST /api/Scheduler/ListJobs` |
+| DB | GetMessages | `POST /api/DB/GetMessages` |
+| DB | GetMessagesForDate | `POST /api/DB/GetMessagesForDate` |
+| DB | RAGListNamespaces | `POST /api/DB/RAGListNamespaces` |
+| DB | RAGSearchRemote | `POST /api/DB/RAGSearchRemote` |
+| DB | RAGGetProvenance | `POST /api/DB/RAGGetProvenance` |
+| DB | RAGExportNamespace | `POST /api/DB/RAGExportNamespace` |
+| DB | RAGImportNamespace | `POST /api/DB/RAGImportNamespace` |
+| Tooling | GetTools | `POST /api/Tooling/GetTools` |
+| Tooling | GetToolByName | `POST /api/Tooling/GetToolByName` |
+| Tooling | GetStats | `POST /api/Tooling/GetStats` |
+| Tooling | GetMCPStatus | `POST /api/Tooling/GetMCPStatus` |
+| Tooling | ExecuteTool | `POST /api/Tooling/ExecuteTool` |
+| Config | Get | `POST /api/Config/Get` |
+| Config | Set | `POST /api/Config/Set` |
+| Config | Validate | `POST /api/Config/Validate` |
+| Config | GetPlugin | `POST /api/Config/GetPlugin` |
+| Config | SetPlugin | `POST /api/Config/SetPlugin` |
+| Gateway | PairingStart | `POST /api/Gateway/PairingStart` |
+| Gateway | PairingConnect | `POST /api/Gateway/PairingConnect` |
+| Gateway | PairingExchange | `POST /api/Gateway/PairingExchange` |
+| Gateway | Login | `POST /api/Gateway/Login` |
+| Supervisor | GetStatus | `POST /api/Supervisor/GetStatus` |
 
 ### Internal-Only Methods
 
@@ -818,7 +865,6 @@ These are only accessible via the message bus:
 
 | Service | Method | Reason |
 |---------|--------|--------|
-| TTS | Request | Plays audio on server speakers |
 | TTS | Stop/Pause/Resume | Controls server audio playback |
 | Transcription | Control | Internal state management |
 | WakeWord | Control | Internal state management |

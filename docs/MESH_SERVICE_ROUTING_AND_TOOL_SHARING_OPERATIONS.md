@@ -18,6 +18,19 @@ gates.
   exact, wildcard, type, or global grant is denied. A grant does not override an
   unshared service, feature, method, group, or tool.
 
+## Speech provider routing
+
+Speech methods add a capability gate to export policy and RBAC. Recipient-specific projections carry exact-language coverage, automatic-language coverage, declared locale fallbacks, ready logical voice IDs, resident-model identity, and a speech capability revision.
+
+- TTS language selection is exact. A request without a language may use normal selection among providers with valid resident speech capability evidence; a request that names a language or logical voice may reach only a provider that projects that exact ready capability.
+- Automatic STT selection is eligible only when the provider explicitly supports automatic detection and covers the bounded candidate language set.
+- Legacy peers that omit speech constraints remain visible in route explanations but are non-routable for constrained speech work. Missing evidence is not treated as universal language or voice support.
+- Provider availability is lease-based. A newer ordered `provider_unavailable` tombstone withdraws the provider immediately; an older lease, manifest, or availability frame cannot resurrect it.
+- Route selection creates trusted `SpeechRouteBinding` metadata containing the service instance, projection digest/revision, provider lease epoch/revision, speech capability revision, and request-requirement digest. Callers cannot supply or override that binding through public TTS/STT payloads.
+- Gateway RPC and target services validate the binding against current state before capacity accounting, bus dispatch, or handler work. A structured pre-accept `capability_changed` result may trigger at most one automatic re-resolution for an unpinned use call. Explicit targets and management calls never escape their selected provider, and work is never replayed after acceptance is uncertain.
+
+Use `Gateway.ExplainRoute` with typed `speech` hints to inspect this decision without sending text, audio, or other request payload data. See [`GATEWAY.md`](GATEWAY.md).
+
 ## Forward migration
 
 Startup migrates legacy `mesh_sharing` routing fields into `mesh_routing`. If
@@ -109,6 +122,15 @@ authority from retained catalog rows.
   pages.
 - `baseline_required`: a delta-capable peer has no verified full baseline; it
   remains non-routable until a full snapshot succeeds.
+- `language_capability_unknown`: a speech provider omitted required language
+  capability evidence.
+- `language_incompatible`: the provider cannot serve the exact language or
+  bounded automatic-language candidate set.
+- `voice_unavailable`: the requested logical voice is not ready on the
+  provider.
+- `speech_route_binding_unavailable`: Aurora could not create current trusted
+  revision/lease binding evidence, so dispatch is blocked.
+- `provider_unavailable`: the active provider lease was withdrawn or expired.
 
 The redacted support bundle reports canonical reason codes, numeric revisions,
 projection counts, sync duration, retry counts, switch state, and protocol
