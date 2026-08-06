@@ -53,36 +53,20 @@ class PiperEngine(BaseEngine):
 
         Args:
             piper_path (Optional[str]): Full path to the piper executable.
-                                        If not provided, checks the PIPER_PATH environment variable.
-                                        If that's not set, defaults to 'piper.exe'.
+                                        If not provided, defaults to 'piper'.
             voice (Optional[PiperVoice]): A PiperVoice instance with the model and optional config.
             debug (bool): Enable debug logging.
-            sample_rate (Optional[int]): Sample rate for audio stream. If None, will be loaded from config.
+            sample_rate (Optional[int]): Sample rate for audio stream.
         """
-        # If piper_path is None, check environment variable or default to 'piper'.
-        if piper_path is None:
-            import os
-
-            env_path = os.getenv("AURORA_PIPER_PATH")
-            self.piper_path = env_path if env_path else "piper"
-        else:
-            self.piper_path = piper_path
+        self.piper_path = piper_path or "piper"
 
         self.voice = voice
         self.debug = debug
         self.queue = Queue()
 
-        # Cache sample rate to avoid repeated config requests during playback
-        if sample_rate is None:
-            import os
+        self._sample_rate = sample_rate if sample_rate is not None else 24000
 
-            # Use environment variable or default
-            env_rate = os.getenv("AURORA_TTS_SAMPLE_RATE")
-            self._sample_rate = int(env_rate) if env_rate else 24000
-        else:
-            self._sample_rate = sample_rate
-
-        # Cache hardware acceleration setting using environment variables (no config requests)
+        # Cache hardware acceleration setting using the shared helper.
         from app.helpers.getUseHardwareAcceleration import get_use_hardware_acceleration
 
         self._use_cuda = get_use_hardware_acceleration("tts")

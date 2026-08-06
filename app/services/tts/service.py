@@ -177,29 +177,13 @@ class TTSService(BaseService):
         self.stream = None  # Will be initialized in on_start()
 
     async def _get_model_paths(self):
-        """Get model paths from env vars or config."""
-        # Check environment variables first
-        model_file_env = os.getenv("AURORA_TTS_MODEL_FILE_PATH")
-        config_file_env = os.getenv("AURORA_TTS_MODEL_CONFIG_FILE_PATH")
-
-        # Fall back to config if env vars not set
-        if model_file_env is None:
-            tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
-            config_path = tts_cfg.model_file_path or "voice_models/en_US-lessac-medium.onnx"
-            model_file = resolve_path(config_path)
-        else:
-            model_file = resolve_path(model_file_env)
-
-        if config_file_env is None:
-            tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
-            config_path = (
-                tts_cfg.model_config_file_path or "voice_models/en_US-lessac-medium.onnx.txt"
-            )
-            config_file = resolve_path(config_path) if config_path else None
-        else:
-            config_file = resolve_path(config_file_env) if config_file_env else None
-
-        return str(model_file), str(config_file) if config_file else None
+        """Get model paths from shared config."""
+        tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+        model_path = resolve_path(
+            tts_cfg.model_file_path or "voice_models/en_US-lessac-medium.onnx"
+        )
+        config_path = tts_cfg.model_config_file_path or "voice_models/en_US-lessac-medium.onnx.txt"
+        return str(model_path), str(resolve_path(config_path)) if config_path else None
 
     async def _initialize_engine(self) -> None:
         """Initialize the RealtimeTTS engine with Piper voice."""
@@ -214,14 +198,12 @@ class TTSService(BaseService):
             # Get sample rate and executable path for caching. Tauri dev starts
             # Python from Rust, where PATH may not include .venv/bin even though
             # piper-tts is installed in the project environment. Prefer explicit
-            # env/config, then PATH, then the repo venv executable.
+            # config, then PATH, then the repo venv executable.
             tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
             sample_rate = (
                 tts_cfg.model_sample_rate if tts_cfg.model_sample_rate is not None else 22050
             )
-            configured_piper_path = (
-                os.getenv("AURORA_TTS_PIPER_PATH") or tts_cfg.piper_path or shutil.which("piper")
-            )
+            configured_piper_path = tts_cfg.piper_path or shutil.which("piper")
             venv_piper_path = resolve_path(".venv/bin/piper")
             if not configured_piper_path and venv_piper_path.exists():
                 configured_piper_path = str(venv_piper_path)
