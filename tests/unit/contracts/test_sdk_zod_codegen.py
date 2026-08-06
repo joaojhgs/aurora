@@ -109,6 +109,28 @@ def test_sdk_contract_integer_guard_rejects_one_sided_bounds() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "schema",
+    (
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "maximum": 10},
+        {"type": "integer", "exclusiveMinimum": 0},
+        {"type": "integer", "exclusiveMaximum": 10},
+    ),
+)
+def test_zod_codegen_rejects_one_sided_integer_bounds(schema: dict[str, object]) -> None:
+    compiler = ZodCompiler(
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", **schema},
+        ctx=CompileContext("Example.Bounds", "input", "BoundedInteger"),
+        symbol_prefix="BoundedInteger",
+    )
+
+    with pytest.raises(
+        UnsupportedSchemaError, match="integer schema must declare minimum and maximum bounds"
+    ):
+        compiler.compile_root()
+
+
 def test_zod_codegen_rejects_unsafe_regex_refs_literals_numbers_and_unions() -> None:
     cases = [
         (

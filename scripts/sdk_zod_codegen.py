@@ -1020,6 +1020,11 @@ class ZodCompiler:
                 if not _is_finite_number(value):
                     raise ctx.at(key).unsupported("numeric bound must be finite")
                 expression = f"{expression}.{method}({canonical_json(value)})"
+        if integer and "enum" not in schema and "const" not in schema:
+            has_lower_bound = "minimum" in schema or "exclusiveMinimum" in schema
+            has_upper_bound = "maximum" in schema or "exclusiveMaximum" in schema
+            if not has_lower_bound or not has_upper_bound:
+                raise ctx.unsupported("integer schema must declare minimum and maximum bounds")
         lower = schema.get("minimum", schema.get("exclusiveMinimum"))
         upper = schema.get("maximum", schema.get("exclusiveMaximum"))
         if _is_finite_number(lower) and _is_finite_number(upper) and lower > upper:
