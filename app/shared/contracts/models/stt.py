@@ -2,9 +2,14 @@
 
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, field_validator, model_validator
 
 from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.speech import (
+    SpeechLanguageTag,
+    normalize_speech_language,
+    normalize_speech_language_candidates,
+)
 from app.shared.contracts.registry import IOModel
 
 
@@ -340,9 +345,27 @@ class TranscribeAudioRequest(IOModel):
     format: str = "wav"  # "wav" | "raw" | "mp3"
     sample_rate: int = Field(default=16000, gt=0, description="Sample rate in Hz (must be > 0)")
     channels: int = 1
-    language: str | None = None  # ISO language code or None for auto-detect
+    language: SpeechLanguageTag | None = None  # Exact product language or None for auto-detect
+    auto_language_candidates: list[SpeechLanguageTag] = Field(default_factory=list, max_length=8)
     model: str = "realtime"  # "realtime" | "accurate"
     mesh_selector: MeshAddressSelector | None = None
+
+    @field_validator("language", mode="before")
+    @classmethod
+    def _normalize_language(cls, value: str | None) -> str | None:
+        normalized = normalize_speech_language(value, allow_auto=True)
+        return None if normalized == "auto" else normalized
+
+    @field_validator("auto_language_candidates", mode="before")
+    @classmethod
+    def _normalize_candidates(cls, value: list[str]) -> list[SpeechLanguageTag]:
+        return normalize_speech_language_candidates(value)
+
+    @model_validator(mode="after")
+    def _validate_language_shape(self) -> "TranscribeAudioRequest":
+        if self.language is not None and self.auto_language_candidates:
+            raise ValueError("exact STT language cannot include auto candidates")
+        return self
 
 
 class TranscribeAudioResponse(IOModel):

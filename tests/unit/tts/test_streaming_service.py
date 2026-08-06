@@ -214,7 +214,7 @@ async def test_stream_synthesis_receives_logical_voice_speed_and_sample_rate(ser
     await service._on_stream_start(
         TTSStreamStartRequest(
             stream_id="voice-stream",
-            voice="voice-a",
+            voice="standard:test:voice-a",
             speed=0.8,
             sample_rate=24000,
             format="raw",
@@ -227,7 +227,7 @@ async def test_stream_synthesis_receives_logical_voice_speed_and_sample_rate(ser
     )
 
     assert service.test_synth_requests[-1]["text"] == "voice audio"
-    assert service.test_synth_requests[-1]["voice"] == "voice-a"
+    assert service.test_synth_requests[-1]["voice"] == "standard:test:voice-a"
     assert service.test_synth_requests[-1]["speed"] == 0.8
     assert service.test_synth_requests[-1]["sample_rate"] == 24000
     assert service.test_synth_requests[-1]["request_id"] == "voice-stream:0"

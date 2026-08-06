@@ -147,7 +147,7 @@ class FakeProvider:
 
     async def synthesize(self, request) -> TTSSynthesisResult:
         self.requests.append(request)
-        if request.voice == "missing":
+        if request.voice == "standard:test:missing":
             raise TTSProviderError("unsupported_voice", "Requested voice is unavailable")
         return TTSSynthesisResult(
             audio=self.audio,
@@ -241,7 +241,7 @@ async def test_synthesize_maps_piper_failure_without_echoing_request_text(
 
     with pytest.raises(RuntimeError) as exc_info:
         await service.synthesize(
-            TTSSynthesizeRequest(text="private words", voice="missing", format="wav")
+            TTSSynthesizeRequest(text="private words", voice="standard:test:missing", format="wav")
         )
 
     assert str(exc_info.value) == "Requested voice is unavailable"
@@ -277,7 +277,7 @@ async def test_tts_request_validates_requested_voice_before_server_playback(
     """routes server playback voice selection through the active provider."""
     service._provider = FakeProvider()
 
-    await service._on_tts_request(TTSRequest(text="hello", voice="missing"))
+    await service._on_tts_request(TTSRequest(text="hello", voice="standard:test:missing"))
 
     service.stream.feed.assert_not_called()
     error_call = next(
