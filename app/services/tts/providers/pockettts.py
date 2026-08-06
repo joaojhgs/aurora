@@ -15,6 +15,8 @@ from typing import Any, Literal, cast
 
 from app.helpers.aurora_logger import log_debug, log_warning
 from app.services.tts.providers.base import (
+    MAX_TTS_SAMPLE_RATE,
+    MIN_TTS_SAMPLE_RATE,
     TTSProviderCapabilities,
     TTSProviderError,
     TTSProviderHealth,
@@ -195,6 +197,7 @@ class PocketTTSProviderConfig:
     frames_after_eos: int = 1
     model_revision: str = "pocket-tts-2.1.0"
     config_id: str | None = None
+    expected_sample_rate: int = 24000
 
 
 @dataclass(frozen=True)
@@ -276,6 +279,13 @@ def _validate_provider_config(config: PocketTTSProviderConfig) -> None:
         raise TTSProviderError("unavailable", "PocketTTS EOS threshold is unavailable")
     if config.lsd_decode_steps is not None and config.lsd_decode_steps <= 0:
         raise TTSProviderError("unavailable", "PocketTTS decode steps are unavailable")
+    if (
+        isinstance(config.expected_sample_rate, bool)
+        or not isinstance(config.expected_sample_rate, int)
+        or config.expected_sample_rate < MIN_TTS_SAMPLE_RATE
+        or config.expected_sample_rate > MAX_TTS_SAMPLE_RATE
+    ):
+        raise TTSProviderError("invalid_audio", "PocketTTS sample rate is unavailable")
 
 
 def _resident_identity(
@@ -592,6 +602,7 @@ class PocketTTSProvider:
         validate_synthesis_request(
             request,
             supported_formats=self.capabilities.supported_formats,
+            supported_sample_rate=self._config.expected_sample_rate,
         )
         loaded = await self._ready_loaded_state()
         validate_synthesis_request(
@@ -636,6 +647,7 @@ class PocketTTSProvider:
         validate_synthesis_request(
             request,
             supported_formats=self.capabilities.supported_formats,
+            supported_sample_rate=self._config.expected_sample_rate,
         )
         loaded = await self._ready_loaded_state()
         validate_synthesis_request(
@@ -724,7 +736,17 @@ class PocketTTSProvider:
                 **_load_model_kwargs(config),
             )
             _validate_loaded_model_device(model)
-            sample_rate = int(getattr(model, "sample_rate", 24000) or 24000)
+            raw_sample_rate = getattr(model, "sample_rate", 24000) or 24000
+            if isinstance(raw_sample_rate, bool):
+                raise TTSProviderError("invalid_audio", "PocketTTS sample rate is unavailable")
+            try:
+                sample_rate = int(raw_sample_rate)
+            except (TypeError, ValueError) as exc:
+                raise TTSProviderError(
+                    "invalid_audio", "PocketTTS sample rate is unavailable"
+                ) from exc
+            if sample_rate != config.expected_sample_rate:
+                raise TTSProviderError("invalid_audio", "PocketTTS sample rate is unavailable")
             voice_states = {
                 voice.voice_id: model.get_state_for_audio_prompt(voice.audio_prompt)
                 for voice in config.voices

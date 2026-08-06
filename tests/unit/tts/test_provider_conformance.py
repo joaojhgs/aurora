@@ -31,8 +31,10 @@ ProviderName = str
 class FakePocketTTSModel:
     """Small deterministic PocketTTS stand-in for provider conformance tests."""
 
+    load_calls: list[dict[str, object]] = []
     active_entries = 0
     max_active_entries = 0
+    sample_rate = 24000
     block_generation: threading.Event | None = None
     block_stream_after_first: threading.Event | None = None
     generation_started: threading.Event | None = None
@@ -41,14 +43,16 @@ class FakePocketTTSModel:
 
     def __init__(self, language: str) -> None:
         self.language = language
-        self.sample_rate = 24000
+        self.sample_rate = type(self).sample_rate
         self.device = "cpu"
         self.origin = type("Origin", (), {"name": f"{language}.safetensors"})()
 
     @classmethod
     def reset(cls) -> None:
+        cls.load_calls = []
         cls.active_entries = 0
         cls.max_active_entries = 0
+        cls.sample_rate = 24000
         cls.block_generation = None
         cls.block_stream_after_first = None
         cls.generation_started = None
@@ -67,6 +71,7 @@ class FakePocketTTSModel:
         eos_threshold: float | None = None,
     ) -> FakePocketTTSModel:
         del quantize, temp, lsd_decode_steps, noise_clamp, eos_threshold
+        cls.load_calls.append({"language": language})
         return cls(language)
 
     def get_state_for_audio_prompt(self, voice: str) -> dict[str, str]:
@@ -159,6 +164,7 @@ async def _make_provider(
                 model_file=str(model_path),
                 config_file=str(config_path),
                 display_name="Default Voice",
+                expected_sample_rate=case.sample_rate,
             ),
         )
     return PocketTTSProvider(
@@ -277,7 +283,19 @@ async def test_synthesize_normalizes_raw_and_wav_audio(
 async def test_rejects_unsupported_sample_rate_with_invalid_audio_error(
     case: ProviderCase, tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    provider = await _make_provider(case, tmp_path, monkeypatch)
+    piper_calls: list[object] = []
+
+    async def counted_piper_to_thread(func: Callable[..., object], *args: object, **kwargs: object):
+        del func, args, kwargs
+        piper_calls.append(object())
+        return b"\x00\x00", case.sample_rate
+
+    provider = await _make_provider(
+        case,
+        tmp_path,
+        monkeypatch,
+        piper_to_thread=counted_piper_to_thread if case.name == "piper" else None,
+    )
     await provider.start()
 
     with pytest.raises(TTSProviderError) as exc_info:
@@ -287,6 +305,30 @@ async def test_rejects_unsupported_sample_rate_with_invalid_audio_error(
 
     assert exc_info.value.code == "invalid_audio"
     assert str(case.sample_rate + 1000) not in str(exc_info.value)
+    assert piper_calls == []
+    assert FakePocketTTSModel.generation_calls == []
+    assert await provider.tracked_request_count() == 0
+    await provider.stop()
+
+
+@pytest.mark.asyncio
+async def test_pockettts_lazy_sample_rate_mismatch_rejects_before_model_load(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    provider = PocketTTSProvider(
+        PocketTTSProviderConfig(effective_language="en", max_tokens=4, preload=False),
+        model_class=FakePocketTTSModel,
+    )
+    await provider.start()
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await provider.synthesize(
+            TTSSynthesisRequest(text="hello", request_id="lazy-rate", sample_rate=16000)
+        )
+
+    assert exc_info.value.code == "invalid_audio"
+    assert FakePocketTTSModel.load_calls == []
+    assert FakePocketTTSModel.generation_calls == []
     assert await provider.tracked_request_count() == 0
     await provider.stop()
 

@@ -32,6 +32,7 @@ def test_piper_capabilities_are_active_only_with_one_resident_base_model(tmp_pat
             voice_id="default",
             model_file=str(model_path),
             config_file=str(config_path),
+            expected_sample_rate=16000,
         ),
     )
 
@@ -58,7 +59,11 @@ async def test_piper_rejects_non_active_voice_without_invoking_cli(tmp_path, mon
     monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
     provider = PiperTTSProvider(
         piper_path="piper",
-        voice=PiperVoiceConfig(voice_id="default", model_file=str(model_path)),
+        voice=PiperVoiceConfig(
+            voice_id="default",
+            model_file=str(model_path),
+            expected_sample_rate=16000,
+        ),
     )
     await provider.start()
 
@@ -110,6 +115,7 @@ async def test_piper_synthesis_runs_cli_off_event_loop(tmp_path, monkeypatch) ->
             voice_id="default",
             model_file=str(model_path),
             config_file=str(config_path),
+            expected_sample_rate=16000,
         ),
     )
     await provider.start()
@@ -137,6 +143,40 @@ async def test_piper_synthesis_runs_cli_off_event_loop(tmp_path, monkeypatch) ->
 
 
 @pytest.mark.asyncio
+async def test_piper_config_sample_rate_mismatch_rejects_before_cli_entry(
+    tmp_path, monkeypatch
+) -> None:
+    model_path = tmp_path / "voice.onnx"
+    config_path = tmp_path / "voice.onnx.json"
+    model_path.write_bytes(b"model")
+    config_path.write_text('{"audio": {"sample_rate": 16000}}', encoding="utf-8")
+    to_thread_calls: list[object] = []
+
+    async def fake_to_thread(*_args, **_kwargs):
+        to_thread_calls.append(object())
+        return b"\x01\x00", 16000
+
+    monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
+    provider = PiperTTSProvider(
+        piper_path="piper",
+        voice=PiperVoiceConfig(
+            voice_id="default",
+            model_file=str(model_path),
+            config_file=str(config_path),
+        ),
+    )
+    await provider.start()
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await provider.synthesize(TTSSynthesisRequest(text="hello", sample_rate=17000))
+
+    assert exc_info.value.code == "invalid_audio"
+    assert "17000" not in str(exc_info.value)
+    assert to_thread_calls == []
+    assert await provider.tracked_request_count() == 0
+
+
+@pytest.mark.asyncio
 async def test_piper_synthesis_maps_cli_failure_without_request_text_or_stderr(
     tmp_path, monkeypatch
 ) -> None:
@@ -157,7 +197,11 @@ async def test_piper_synthesis_maps_cli_failure_without_request_text_or_stderr(
     monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
     provider = PiperTTSProvider(
         piper_path="/usr/bin/piper",
-        voice=PiperVoiceConfig(voice_id="default", model_file=str(model_path)),
+        voice=PiperVoiceConfig(
+            voice_id="default",
+            model_file=str(model_path),
+            expected_sample_rate=16000,
+        ),
     )
     await provider.start()
 
@@ -190,7 +234,11 @@ async def test_piper_stream_emits_audio_then_final_marker(tmp_path, monkeypatch)
 
     provider = PiperTTSProvider(
         piper_path="piper",
-        voice=PiperVoiceConfig(voice_id="default", model_file=str(model_path)),
+        voice=PiperVoiceConfig(
+            voice_id="default",
+            model_file=str(model_path),
+            expected_sample_rate=16000,
+        ),
     )
     await provider.start()
     monkeypatch.setattr(provider, "synthesize", fake_synthesize)
@@ -210,7 +258,11 @@ async def test_piper_unknown_late_cancel_does_not_grow_state(tmp_path) -> None:
     model_path.write_bytes(b"model")
     provider = PiperTTSProvider(
         piper_path="piper",
-        voice=PiperVoiceConfig(voice_id="default", model_file=str(model_path)),
+        voice=PiperVoiceConfig(
+            voice_id="default",
+            model_file=str(model_path),
+            expected_sample_rate=16000,
+        ),
     )
     await provider.start()
 
@@ -238,7 +290,11 @@ async def test_piper_cancel_queued_request_prevents_synthesis(tmp_path, monkeypa
     monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
     provider = PiperTTSProvider(
         piper_path="piper",
-        voice=PiperVoiceConfig(voice_id="default", model_file=str(model_path)),
+        voice=PiperVoiceConfig(
+            voice_id="default",
+            model_file=str(model_path),
+            expected_sample_rate=16000,
+        ),
     )
     await provider.start()
     first_task = asyncio.create_task(
@@ -278,7 +334,11 @@ async def test_piper_cancel_active_request_drops_delivery_after_generation(
     monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
     provider = PiperTTSProvider(
         piper_path="piper",
-        voice=PiperVoiceConfig(voice_id="default", model_file=str(model_path)),
+        voice=PiperVoiceConfig(
+            voice_id="default",
+            model_file=str(model_path),
+            expected_sample_rate=16000,
+        ),
     )
     await provider.start()
     task = asyncio.create_task(
@@ -309,7 +369,11 @@ async def test_piper_late_cancel_after_completion_does_not_grow_state(
     monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
     provider = PiperTTSProvider(
         piper_path="piper",
-        voice=PiperVoiceConfig(voice_id="default", model_file=str(model_path)),
+        voice=PiperVoiceConfig(
+            voice_id="default",
+            model_file=str(model_path),
+            expected_sample_rate=16000,
+        ),
     )
     await provider.start()
 
@@ -336,7 +400,11 @@ async def test_piper_stop_during_active_synthesis_rejects_stale_audio(
     monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
     provider = PiperTTSProvider(
         piper_path="piper",
-        voice=PiperVoiceConfig(voice_id="default", model_file=str(model_path)),
+        voice=PiperVoiceConfig(
+            voice_id="default",
+            model_file=str(model_path),
+            expected_sample_rate=16000,
+        ),
     )
     await provider.start()
     task = asyncio.create_task(
@@ -381,7 +449,11 @@ async def test_piper_serializes_cli_entry(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
     provider = PiperTTSProvider(
         piper_path="piper",
-        voice=PiperVoiceConfig(voice_id="default", model_file=str(model_path)),
+        voice=PiperVoiceConfig(
+            voice_id="default",
+            model_file=str(model_path),
+            expected_sample_rate=16000,
+        ),
     )
     await provider.start()
     first = asyncio.create_task(

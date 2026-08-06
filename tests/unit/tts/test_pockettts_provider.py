@@ -30,6 +30,7 @@ class FakePocketTTSModel:
     max_active_entries = 0
     fail_load = False
     loaded_device = "cpu"
+    loaded_sample_rate = 24000
     block_generation: threading.Event | None = None
     block_stream_after_first: threading.Event | None = None
     forever_stream_after_first = False
@@ -37,7 +38,7 @@ class FakePocketTTSModel:
 
     def __init__(self, language: str) -> None:
         self.language = language
-        self.sample_rate = 24000
+        self.sample_rate = type(self).loaded_sample_rate
         self.device = type(self).loaded_device
         self.origin = type("Origin", (), {"name": f"{language}.safetensors"})()
         self.state_calls: list[str] = []
@@ -51,6 +52,7 @@ class FakePocketTTSModel:
         cls.max_active_entries = 0
         cls.fail_load = False
         cls.loaded_device = "cpu"
+        cls.loaded_sample_rate = 24000
         cls.block_generation = None
         cls.block_stream_after_first = None
         cls.forever_stream_after_first = False
@@ -674,6 +676,24 @@ async def test_pockettts_rejects_loaded_non_cpu_model() -> None:
 
     assert exc_info.value.code == "unavailable"
     assert str(exc_info.value) == "PocketTTS device is unavailable"
+    await provider.stop()
+
+
+@pytest.mark.asyncio
+async def test_pockettts_rejects_loaded_sample_rate_mismatch_before_voice_states() -> None:
+    FakePocketTTSModel.loaded_sample_rate = 16000
+    provider = PocketTTSProvider(
+        PocketTTSProviderConfig(effective_language="en", max_tokens=4),
+        model_class=FakePocketTTSModel,
+    )
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await provider.start()
+
+    assert exc_info.value.code == "invalid_audio"
+    assert str(exc_info.value) == "PocketTTS sample rate is unavailable"
+    assert FakePocketTTSModel.load_calls == [{"language": "english_2026-04", "quantize": False}]
+    assert FakePocketTTSModel.generation_calls == []
     await provider.stop()
 
 

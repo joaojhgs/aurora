@@ -137,6 +137,13 @@ def validate_synthesis_request(
         or sample_rate > MAX_TTS_SAMPLE_RATE
     ):
         raise TTSProviderError("invalid_audio", "Requested sample rate is unavailable")
+    if supported_sample_rate is not None and (
+        isinstance(supported_sample_rate, bool)
+        or not isinstance(supported_sample_rate, int)
+        or supported_sample_rate < MIN_TTS_SAMPLE_RATE
+        or supported_sample_rate > MAX_TTS_SAMPLE_RATE
+    ):
+        raise TTSProviderError("invalid_audio", "Requested sample rate is unavailable")
     if (
         supported_sample_rate is not None
         and sample_rate is not None

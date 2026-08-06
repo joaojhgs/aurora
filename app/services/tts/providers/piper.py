@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import io
+import json
 import os
 import subprocess
 import tempfile
@@ -35,6 +36,7 @@ class PiperVoiceConfig:
     model_file: str
     config_file: str | None = None
     display_name: str = "Piper"
+    expected_sample_rate: int | None = None
 
 
 def pcm_to_wav_bytes(audio: bytes, *, sample_rate: int, channels: int = 1) -> bytes:
@@ -76,6 +78,28 @@ def _piper_base_identity(voice: PiperVoiceConfig) -> str:
     identity.update(b"\0config:")
     identity.update(_file_digest(config_path).encode("ascii"))
     return f"piper:{voice.voice_id}:sha256:{identity.hexdigest()[:24]}"
+
+
+def _piper_config_sample_rate(config_file: str | None) -> int | None:
+    """Read Piper config sample rate without exposing the config path."""
+    if not config_file:
+        return None
+    path = Path(_absolute_path(config_file))
+    if not path.exists():
+        return None
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            config = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise TTSProviderError("invalid_audio", "Piper voice config is unavailable") from exc
+    if not isinstance(config, dict):
+        raise TTSProviderError("invalid_audio", "Piper voice config is unavailable")
+    audio = config.get("audio")
+    sample_rate = audio.get("sample_rate") if isinstance(audio, dict) else config.get("sample_rate")
+    try:
+        return int(sample_rate) if sample_rate is not None else None
+    except (TypeError, ValueError) as exc:
+        raise TTSProviderError("invalid_audio", "Piper voice config is unavailable") from exc
 
 
 def synthesize_piper_cli(
@@ -149,6 +173,7 @@ class PiperTTSProvider:
         self._voice = voice
         self._use_cuda = use_cuda
         self._debug = debug
+        self._expected_sample_rate: int | None = None
         self._started = False
         self._stopping = False
         self._queued_requests: set[str] = set()
@@ -176,6 +201,19 @@ class PiperTTSProvider:
         """Mark the provider ready after validating the active voice path."""
         if not Path(self._voice.model_file).exists():
             raise TTSProviderError("unavailable", "Piper voice model is unavailable")
+        expected_sample_rate = (
+            self._voice.expected_sample_rate
+            if self._voice.expected_sample_rate is not None
+            else _piper_config_sample_rate(self._voice.config_file)
+            if self._voice.config_file is not None
+            else None
+        )
+        self._expected_sample_rate = expected_sample_rate or 22050
+        validate_synthesis_request(
+            TTSSynthesisRequest(text="sample-rate-contract"),
+            supported_formats=self.capabilities.supported_formats,
+            supported_sample_rate=self._expected_sample_rate,
+        )
         async with self._state_lock:
             self._started = True
             self._stopping = False
@@ -273,6 +311,7 @@ class PiperTTSProvider:
         validate_synthesis_request(
             request,
             supported_formats=self.capabilities.supported_formats,
+            supported_sample_rate=self._expected_sample_rate,
         )
         self._resolve_voice(request.voice)
         await self._register_request(request.request_id)
@@ -290,7 +329,7 @@ class PiperTTSProvider:
                     debug=self._debug,
                 )
                 await self._reject_if_cancelled(request.request_id)
-            if request.sample_rate is not None and request.sample_rate != sample_rate:
+            if sample_rate != self._expected_sample_rate:
                 raise TTSProviderError("invalid_audio", "Requested sample rate is unavailable")
             output = (
                 pcm_to_wav_bytes(audio, sample_rate=sample_rate)
