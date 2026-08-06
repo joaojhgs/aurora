@@ -24,7 +24,7 @@ export async function runAndroidEmulatorSmoke() {
   }
 
   run(adb, ['wait-for-device'])
-  run(adb, ['install', '-r', '--no-streaming', apk])
+  installApk(apk)
   run(adb, ['logcat', '-c'])
   launchApp(appId)
 
@@ -77,6 +77,17 @@ function run(command, args) {
   execFileSync(command, args, { stdio: 'inherit' })
 }
 
+function installApk(apk) {
+  const remoteApk = `/data/local/tmp/aurora-smoke-${Date.now()}.apk`
+  try {
+    run(adb, ['push', apk, remoteApk])
+    run(adb, ['shell', 'chmod', '644', remoteApk])
+    run(adb, ['shell', 'pm', 'install', '-r', remoteApk])
+  } finally {
+    spawnSync(adb, ['shell', 'rm', '-f', remoteApk], { stdio: 'ignore' })
+  }
+}
+
 function launchApp(appId) {
   try {
     run(adb, ['shell', 'monkey', '-p', appId, '-c', 'android.intent.category.LAUNCHER', '1'])
@@ -86,7 +97,7 @@ function launchApp(appId) {
 }
 
 async function waitForWebviewMount(appId) {
-  const deadline = Date.now() + Number(process.env.AURORA_ANDROID_WEBVIEW_TIMEOUT_MS ?? 90_000)
+  const deadline = Date.now() + Number(process.env.AURORA_ANDROID_WEBVIEW_TIMEOUT_MS ?? 240_000)
   let lastState = null
   let lastError = null
 

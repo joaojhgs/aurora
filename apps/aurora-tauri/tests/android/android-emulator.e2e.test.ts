@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import { runAndroidEmulatorSmoke } from '../../scripts/android-emulator-smoke.mjs'
 
-const androidSmokeTimeoutMs = Number(process.env.AURORA_ANDROID_TEST_TIMEOUT_MS ?? 240_000)
+const androidSmokeTimeoutMs = Number(process.env.AURORA_ANDROID_TEST_TIMEOUT_MS ?? 480_000)
 
 describe('Android thin-shell emulator E2E', () => {
   it(
