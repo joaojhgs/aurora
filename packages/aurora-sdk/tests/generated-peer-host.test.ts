@@ -12,6 +12,21 @@ import {
   type ToolingPeerHostHandlers
 } from '../src/webrtc/index.js'
 
+const TTS_MANAGEMENT_METHOD_IDS = [
+  'TTS.ListVoiceProfiles',
+  'TTS.GetVoiceProfile',
+  'TTS.UpdateVoiceProfile',
+  'TTS.InstallVoiceProfile',
+  'TTS.RemoveVoiceProfile',
+  'TTS.SetDefaultVoice',
+  'TTS.VoiceImportStart',
+  'TTS.VoiceImportChunk',
+  'TTS.VoiceImportEnd',
+  'TTS.VoiceImportAbort',
+  'TTS.CreateVoiceProfile',
+  'TTS.DeleteVoiceProfile'
+] as const
+
 function peerGrant(allowedMethodIds: readonly string[]): LocalPeerGrantV1 {
   return {
     version: 1,
@@ -56,26 +71,29 @@ function compatibleAck(manifest: Record<string, unknown>): Record<string, unknow
 }
 
 describe('generated peer-host registration', () => {
-  it('derives schemas, manage projection, and permissions from generated descriptors', () => {
-    const descriptor = generatedPeerHostMethodDescriptor(
-      'TTS.UpdateVoiceProfile',
-      async () => { throw new Error('not called') }
-    )
+  it.each(TTS_MANAGEMENT_METHOD_IDS)(
+    'derives manage projection and permissions for %s',
+    (methodId) => {
+      const descriptor = generatedPeerHostMethodDescriptor(
+        methodId,
+        async () => { throw new Error('not called') }
+      )
 
-    expect(descriptor).toMatchObject({
-      methodId: 'TTS.UpdateVoiceProfile',
-      module: 'TTS',
-      name: 'UpdateVoiceProfile',
-      busTopic: 'TTS.UpdateVoiceProfile',
-      methodType: 'unary',
-      projectionMethodType: 'manage',
-      inputSchemaId: 'TTS.UpdateVoiceProfile.input.TTSUpdateVoiceProfileRequest',
-      outputSchemaId: 'TTS.UpdateVoiceProfile.output.TTSUpdateVoiceProfileResponse',
-      requiredPermissions: ['TTS.manage'],
-      callableFeatureIds: ['speech_voice_management'],
-      speechConstraints: null
-    })
-  })
+      expect(descriptor).toMatchObject({
+        methodId,
+        module: 'TTS',
+        name: methodId.slice('TTS.'.length),
+        busTopic: methodId,
+        methodType: 'unary',
+        projectionMethodType: 'manage',
+        requiredPermissions: ['TTS.manage'],
+        callableFeatureIds: ['speech_voice_management'],
+        speechConstraints: null
+      })
+      expect(descriptor.inputSchemaId.startsWith(`${methodId}.input.`)).toBe(true)
+      expect(descriptor.outputSchemaId.startsWith(`${methodId}.output.`)).toBe(true)
+    }
+  )
 
   it.each([
     'WakeWord.ProcessAudio',
@@ -124,12 +142,20 @@ describe('generated peer-host registration', () => {
       'TTS.UpdateVoiceProfile',
       ttsHandler
     )
+    for (const methodId of TTS_MANAGEMENT_METHOD_IDS) {
+      if (methodId === 'TTS.UpdateVoiceProfile') continue
+      registerGeneratedPeerHostMethod(
+        registry,
+        methodId,
+        async () => { throw new Error('not called') }
+      )
+    }
     const peerHost = new WebRtcPeerHost({
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry,
       authorizationStore: new SessionPeerHostAuthorizationStore([
-        peerGrant(['Tooling.GetTools', 'TTS.UpdateVoiceProfile'])
+        peerGrant(['Tooling.GetTools', ...TTS_MANAGEMENT_METHOD_IDS])
       ]),
       clock: () => 1_000,
       randomId: () => 'generated-contract-epoch'
@@ -149,15 +175,20 @@ describe('generated peer-host registration', () => {
       capabilities: [],
       available_feature_ids: ['speech_voice_management']
     })
-    expect(ttsService?.methods).toEqual([
-      expect.objectContaining({
-        bus_topic: 'TTS.UpdateVoiceProfile',
+    const projectedTtsMethods = new Map(
+      (ttsService?.methods as Array<Record<string, unknown>>)
+        .map((method) => [String(method.bus_topic), method])
+    )
+    expect(projectedTtsMethods.size).toBe(TTS_MANAGEMENT_METHOD_IDS.length)
+    for (const methodId of TTS_MANAGEMENT_METHOD_IDS) {
+      expect(projectedTtsMethods.get(methodId)).toEqual(expect.objectContaining({
+        bus_topic: methodId,
         method_type: 'manage',
         required_perms: ['TTS.manage'],
         callable_feature_ids: ['speech_voice_management'],
         speech_constraints: null
-      })
-    ])
+      }))
+    }
 
     const evidence = manifest.recipient_projection_evidence as Record<string, unknown>
     const serviceIds = services.map((service) => String(service.module))
