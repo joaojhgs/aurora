@@ -8,6 +8,7 @@ Supports building for Windows, macOS, and Linux from any platform.
 Integrates with Aurora's wheel installer for optimal dependency management.
 """
 
+import json
 import os
 import platform
 import shutil
@@ -494,17 +495,96 @@ def clean_build_dirs():
 
 
 DEFAULT_CONFIG_SOURCE = PROJECT_ROOT / "app/services/config/config_defaults.json"
+LOCAL_EMBEDDINGS_EXTRAS = frozenset({"service-db-local-embeddings", "embeddings-local"})
+SIDECAR_BUNDLE_CONFIG_DIR = BUILD_DIR / "sidecar-bundle-config"
 
 
-def prepare_bundle_config_json() -> Path:
+def sidecar_profile_bundles_local_embeddings(
+    sidecar_profile: SidecarProfile | None,
+) -> bool:
+    """Return whether the selected sidecar profile installs local embeddings support."""
+
+    return bool(sidecar_profile and LOCAL_EMBEDDINGS_EXTRAS.intersection(sidecar_profile.extras))
+
+
+def sidecar_profile_should_disable_local_embeddings(
+    sidecar_profile: SidecarProfile | None,
+) -> bool:
+    """Return whether bundled defaults must avoid local embeddings for this package."""
+
+    return bool(sidecar_profile and not sidecar_profile_bundles_local_embeddings(sidecar_profile))
+
+
+def build_bundle_config_defaults(sidecar_profile: SidecarProfile | None = None) -> dict:
+    """Build generated defaults for the selected frozen package profile."""
+
+    defaults = json.loads(DEFAULT_CONFIG_SOURCE.read_text(encoding="utf-8"))
+    if sidecar_profile_should_disable_local_embeddings(sidecar_profile):
+        defaults["services"]["db"]["embeddings"]["use_local"] = False
+    return defaults
+
+
+def prepare_bundle_config_defaults_json(sidecar_profile: SidecarProfile | None = None) -> Path:
+    """Stage generated config_defaults.json for the PyInstaller bundle."""
+
+    if sidecar_profile:
+        dest = (
+            SIDECAR_BUNDLE_CONFIG_DIR
+            / sidecar_profile.name
+            / "app/services/config/config_defaults.json"
+        )
+    else:
+        dest = BUILD_DIR / "app/services/config/config_defaults.json"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(
+        json.dumps(build_bundle_config_defaults(sidecar_profile), indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return dest
+
+
+def prepare_sidecar_bundle_app_tree(sidecar_profile: SidecarProfile) -> Path:
+    """Stage one app tree with profile-specific bundled defaults already applied."""
+
+    dest = SIDECAR_BUNDLE_CONFIG_DIR / sidecar_profile.name / "app"
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(
+        PROJECT_ROOT / "app",
+        dest,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
+    )
+    bundled_defaults = dest / "services/config/config_defaults.json"
+    bundled_defaults.write_text(
+        json.dumps(build_bundle_config_defaults(sidecar_profile), indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return dest
+
+
+def cleanup_sidecar_bundle_config_staging() -> None:
+    """Remove generated sidecar bundled-default staging files."""
+
+    shutil.rmtree(SIDECAR_BUNDLE_CONFIG_DIR, ignore_errors=True)
+
+
+def prepare_bundle_config_json(sidecar_profile: SidecarProfile | None = None) -> Path:
     """Copy schema-valid defaults to build/config.json for PyInstaller bundle.
 
     ``config.json`` is not tracked in git; bundled apps ship the same defaults
     as :file:`app/services/config/config_defaults.json`.
     """
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
-    dest = BUILD_DIR / "config.json"
-    shutil.copy2(DEFAULT_CONFIG_SOURCE, dest)
+    dest = (
+        SIDECAR_BUNDLE_CONFIG_DIR / sidecar_profile.name / "config.json"
+        if sidecar_profile
+        else BUILD_DIR / "config.json"
+    )
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(
+        json.dumps(build_bundle_config_defaults(sidecar_profile), indent=2) + "\n",
+        encoding="utf-8",
+    )
     return dest
 
 
@@ -516,6 +596,17 @@ def get_platform_args(
 ):
     """Get platform-specific PyInstaller arguments"""
     system = platform.system().lower()
+    app_data_source = (
+        prepare_sidecar_bundle_app_tree(sidecar_profile)
+        if sidecar_profile
+        else PROJECT_ROOT / "app"
+    )
+    data_args = [
+        f"--add-data={app_data_source}:app",
+    ]
+    if not sidecar_profile:
+        data_args.append(f"--add-data={prepare_bundle_config_defaults_json()}:app/services/config")
+    data_args.append(f"--add-data={prepare_bundle_config_json(sidecar_profile)}:.")
 
     common_args = [
         str(PROJECT_ROOT / "main.py"),
@@ -524,8 +615,7 @@ def get_platform_args(
         f"--workpath={BUILD_DIR}",
         f"--specpath={BUILD_DIR}",
         # Add data files
-        f"--add-data={PROJECT_ROOT / 'app'}:app",
-        f"--add-data={prepare_bundle_config_json()}:.",
+        *data_args,
         # Keep function docstrings in sidecars because LangChain's @tool
         # registration reads them at import time. PyInstaller optimize=2
         # matches Python -OO and strips those required docstrings.
@@ -850,6 +940,7 @@ def build_executable(
 
     finally:
         # Always restore enum34 and webrtcvad if they were backed up
+        cleanup_sidecar_bundle_config_staging()
         if enum34_backup:
             restore_enum34()
         if webrtcvad_backup:

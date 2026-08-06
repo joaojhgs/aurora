@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import tomllib
+import types
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -31,6 +32,15 @@ PYTORCH_CUDA_CHILDREN = {
     "nvidia-nvtx-cu12",
     "triton",
 }
+
+
+def pyinstaller_add_data_destinations(args: list[str]) -> list[str]:
+    destinations: list[str] = []
+    for arg in args:
+        if not arg.startswith("--add-data="):
+            continue
+        destinations.append(arg.rsplit(":", maxsplit=1)[1])
+    return destinations
 
 
 @pytest.mark.e2e
@@ -123,6 +133,143 @@ def test_local_profiles_are_explicit_and_profile_specific():
 
     args = build_script.get_platform_args()
     assert "--optimize=2" in args
+
+
+@pytest.mark.e2e
+def test_sidecar_profiles_without_local_embeddings_stage_bundled_defaults_disabled(
+    monkeypatch, tmp_path
+):
+    build_dir = tmp_path / "build"
+    monkeypatch.setattr(build_script, "BUILD_DIR", build_dir)
+    monkeypatch.setattr(build_script, "SIDECAR_BUNDLE_CONFIG_DIR", build_dir / "sidecar-config")
+    source_defaults = json.loads(build_script.DEFAULT_CONFIG_SOURCE.read_text(encoding="utf-8"))
+
+    assert source_defaults["services"]["db"]["embeddings"]["use_local"] is True
+
+    affected_profiles = [
+        profile
+        for profile in build_script.SIDECAR_PROFILES.values()
+        if not build_script.sidecar_profile_bundles_local_embeddings(profile)
+    ]
+    assert affected_profiles
+
+    for profile in affected_profiles:
+        bundled_defaults_path = build_script.prepare_bundle_config_defaults_json(profile)
+        bundled_config_path = build_script.prepare_bundle_config_json(profile)
+
+        bundled_defaults = json.loads(bundled_defaults_path.read_text(encoding="utf-8"))
+        bundled_config = json.loads(bundled_config_path.read_text(encoding="utf-8"))
+        assert bundled_defaults["services"]["db"]["embeddings"]["use_local"] is False
+        assert bundled_config["services"]["db"]["embeddings"]["use_local"] is False
+
+    source_after = json.loads(build_script.DEFAULT_CONFIG_SOURCE.read_text(encoding="utf-8"))
+    assert source_after["services"]["db"]["embeddings"]["use_local"] is True
+
+
+@pytest.mark.e2e
+def test_sidecar_profile_with_local_embeddings_keeps_bundled_defaults_enabled(
+    monkeypatch, tmp_path
+):
+    build_dir = tmp_path / "build"
+    monkeypatch.setattr(build_script, "BUILD_DIR", build_dir)
+    monkeypatch.setattr(build_script, "SIDECAR_BUNDLE_CONFIG_DIR", build_dir / "sidecar-config")
+    profile = build_script.SidecarProfile(
+        name="local-embeddings",
+        extras=("build", "sidecar-thin", "embeddings-local"),
+        description="test profile with local embeddings",
+    )
+
+    bundled_defaults_path = build_script.prepare_bundle_config_defaults_json(profile)
+    bundled_defaults = json.loads(bundled_defaults_path.read_text(encoding="utf-8"))
+
+    assert build_script.sidecar_profile_bundles_local_embeddings(profile) is True
+    assert bundled_defaults["services"]["db"]["embeddings"]["use_local"] is True
+
+
+@pytest.mark.e2e
+def test_get_platform_args_overrides_sidecar_bundled_config_defaults(monkeypatch, tmp_path):
+    build_dir = tmp_path / "build"
+    monkeypatch.setattr(build_script, "BUILD_DIR", build_dir)
+    monkeypatch.setattr(build_script, "SIDECAR_BUNDLE_CONFIG_DIR", build_dir / "sidecar-config")
+    profile = build_script.get_sidecar_profile("thin")
+
+    args = build_script.get_platform_args(
+        executable_name="aurora-sidecar",
+        onefile=True,
+        sidecar_profile=profile,
+        dist_dir=tmp_path / "dist",
+    )
+
+    bundled_defaults_path = (
+        build_dir / "sidecar-config/thin/app/services/config/config_defaults.json"
+    )
+    bundled_defaults = json.loads(bundled_defaults_path.read_text(encoding="utf-8"))
+    source_defaults = json.loads(build_script.DEFAULT_CONFIG_SOURCE.read_text(encoding="utf-8"))
+    add_data_destinations = pyinstaller_add_data_destinations(args)
+
+    assert bundled_defaults["services"]["db"]["embeddings"]["use_local"] is False
+    assert source_defaults["services"]["db"]["embeddings"]["use_local"] is True
+    assert add_data_destinations.count("app") == 1
+    assert "app/services/config" not in add_data_destinations
+    assert f"--add-data={build_dir / 'sidecar-config/thin/app'}:app" in args
+
+
+@pytest.mark.e2e
+def test_non_sidecar_platform_args_keep_existing_config_data_overlay(monkeypatch, tmp_path):
+    build_dir = tmp_path / "build"
+    monkeypatch.setattr(build_script, "BUILD_DIR", build_dir)
+
+    args = build_script.get_platform_args()
+    add_data_destinations = pyinstaller_add_data_destinations(args)
+
+    assert f"--add-data={build_script.PROJECT_ROOT / 'app'}:app" in args
+    assert add_data_destinations.count("app") == 1
+    assert add_data_destinations.count("app/services/config") == 1
+
+
+@pytest.mark.e2e
+def test_sidecar_bundled_config_staging_is_removed_after_build_failure(monkeypatch, tmp_path):
+    build_dir = tmp_path / "build"
+    dist_dir = tmp_path / "dist"
+    staging_dir = build_dir / "sidecar-config"
+    profile = build_script.get_sidecar_profile("thin")
+    pyinstaller_module = types.ModuleType("PyInstaller")
+    pyinstaller_main_module = types.ModuleType("PyInstaller.__main__")
+
+    def fail_pyinstaller(_args):
+        raise RuntimeError("simulated pyinstaller failure")
+
+    pyinstaller_main_module.run = fail_pyinstaller
+    pyinstaller_module.__main__ = pyinstaller_main_module
+
+    monkeypatch.setitem(sys.modules, "PyInstaller", pyinstaller_module)
+    monkeypatch.setitem(sys.modules, "PyInstaller.__main__", pyinstaller_main_module)
+    monkeypatch.setattr(build_script, "BUILD_DIR", build_dir)
+    monkeypatch.setattr(build_script, "DIST_DIR", dist_dir)
+    monkeypatch.setattr(build_script, "SIDECAR_BUNDLE_CONFIG_DIR", staging_dir)
+    monkeypatch.setattr(build_script, "handle_enum34_compatibility", lambda: None)
+    monkeypatch.setattr(build_script, "handle_webrtcvad_hook", lambda: None)
+    monkeypatch.setattr(build_script, "create_version_file", lambda: None)
+
+    success = build_script.build_executable(
+        executable_name="aurora-sidecar",
+        onefile=True,
+        sidecar_profile=profile,
+    )
+
+    assert success is False
+    assert not staging_dir.exists()
+    source_defaults = json.loads(build_script.DEFAULT_CONFIG_SOURCE.read_text(encoding="utf-8"))
+    assert source_defaults["services"]["db"]["embeddings"]["use_local"] is True
+
+
+@pytest.mark.e2e
+def test_runtime_smoke_fails_on_missing_local_embeddings_error():
+    script = Path("apps/aurora-tauri/scripts/sidecar-runtime-smoke.mjs").read_text(encoding="utf-8")
+
+    assert "hasMissingLocalEmbeddingsError(outputTail)" in script
+    assert "langchain-huggingface is required for local embeddings" in script
+    assert "packaged sidecar attempted unavailable local embeddings" in script
 
 
 @pytest.mark.e2e
