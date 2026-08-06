@@ -213,6 +213,21 @@ def test_wheel_installer_rocm_pytorch_backend_uses_resolvable_triplet():
 
 
 @pytest.mark.e2e
+def test_rocm_sidecar_excludes_only_nvidia_triton_backend():
+    profile = build_script.get_sidecar_profile("local-rocm")
+    args = build_script.get_platform_args(
+        executable_name="aurora-sidecar",
+        onefile=True,
+        sidecar_profile=profile,
+        dist_dir=Path("dist/sidecars/local-rocm"),
+    )
+
+    assert "--exclude-module=triton.backends.nvidia" in args
+    assert "--exclude-module=triton" not in args
+    assert "--exclude-module=torch" not in args
+
+
+@pytest.mark.e2e
 def test_wheel_installer_prefers_uv_targeting_current_interpreter(monkeypatch):
     installer = WheelInstaller()
     monkeypatch.setattr("scripts.wheel_installer.shutil.which", lambda name: "/usr/bin/uv")
@@ -252,6 +267,152 @@ def test_wheel_installer_fails_closed_without_uv_or_pip(monkeypatch):
 
     with pytest.raises(RuntimeError, match="Neither uv nor pip"):
         installer._install_command(["llama-cpp-python"])
+
+
+@pytest.mark.e2e
+def test_wheel_installer_builds_uv_uninstall_for_current_interpreter(monkeypatch):
+    installer = WheelInstaller()
+    monkeypatch.setattr("scripts.wheel_installer.shutil.which", lambda name: "/usr/bin/uv")
+
+    command = installer._uninstall_command(["torch", "triton"])
+
+    assert command == [
+        "/usr/bin/uv",
+        "pip",
+        "uninstall",
+        "--python",
+        sys.executable,
+        "torch",
+        "triton",
+    ]
+
+
+@pytest.mark.e2e
+def test_wheel_installer_skips_clean_matching_pytorch_backend(monkeypatch):
+    installer = WheelInstaller()
+    calls: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(
+        installer,
+        "_installed_distributions",
+        lambda: {
+            "torch": "2.6.0+rocm6.2.4",
+            "torchaudio": "2.6.0+rocm6.2.4",
+            "torchvision": "0.21.0+rocm6.2.4",
+            "onnxruntime": "1.20.1",
+            "pytorch-triton-rocm": "3.2.0",
+        },
+    )
+    monkeypatch.setattr(
+        installer, "_pip_uninstall", lambda packages: calls.append(("uninstall", packages)) or True
+    )
+    monkeypatch.setattr(
+        installer, "_pip_install", lambda packages: calls.append(("install", packages)) or True
+    )
+
+    assert installer.install_pytorch("rocm") is True
+    assert calls == []
+
+
+@pytest.mark.e2e
+def test_wheel_installer_cleans_cuda_contamination_before_rocm_install(monkeypatch):
+    installer = WheelInstaller()
+    calls: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(
+        installer,
+        "_installed_distributions",
+        lambda: {
+            "torch": "2.6.0+cu124",
+            "torchaudio": "2.6.0+cu124",
+            "torchvision": "0.21.0+cu124",
+            "nvidia-cublas-cu12": "12.4.5.8",
+            "nvidia-cudnn-cu12": "9.1.0.70",
+            "triton": "3.2.0",
+            "pytorch-triton-rocm": "3.2.0",
+            "onnxruntime": "1.20.1",
+        },
+    )
+    monkeypatch.setattr(
+        installer, "_pip_uninstall", lambda packages: calls.append(("uninstall", packages)) or True
+    )
+    monkeypatch.setattr(
+        installer, "_pip_install", lambda packages: calls.append(("install", packages)) or True
+    )
+
+    assert installer.install_pytorch("rocm") is True
+
+    assert calls[0] == (
+        "uninstall",
+        [
+            "nvidia-cublas-cu12",
+            "nvidia-cudnn-cu12",
+            "pytorch-triton-rocm",
+            "torch",
+            "torchaudio",
+            "torchvision",
+            "triton",
+        ],
+    )
+    assert calls[1][0] == "install"
+    assert "torch==2.6.0+rocm6.2.4" in calls[1][1]
+    assert calls[1][1].index("torch==2.6.0+rocm6.2.4") < calls[1][1].index(
+        "--extra-index-url=https://download.pytorch.org/whl/rocm6.2.4"
+    )
+
+
+@pytest.mark.e2e
+def test_wheel_installer_repairs_non_cuda_onnxruntime_gpu(monkeypatch):
+    installer = WheelInstaller()
+    calls: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(
+        installer,
+        "_installed_distributions",
+        lambda: {
+            "torch": "2.6.0+cpu",
+            "torchaudio": "2.6.0+cpu",
+            "torchvision": "0.21.0+cpu",
+            "onnxruntime": "1.20.1",
+            "onnxruntime-gpu": "1.23.2",
+        },
+    )
+    monkeypatch.setattr(
+        installer, "_pip_uninstall", lambda packages: calls.append(("uninstall", packages)) or True
+    )
+    monkeypatch.setattr(
+        installer, "_pip_install", lambda packages: calls.append(("install", packages)) or True
+    )
+
+    assert installer.install_pytorch("cpu") is True
+
+    assert calls == [
+        ("uninstall", ["onnxruntime-gpu"]),
+        ("install", ["--force-reinstall", "--no-deps", "onnxruntime==1.20.1", "numpy==2.2.6"]),
+    ]
+
+
+@pytest.mark.e2e
+def test_wheel_installer_fails_closed_when_backend_cleanup_fails(monkeypatch):
+    installer = WheelInstaller()
+    calls: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(
+        installer,
+        "_installed_distributions",
+        lambda: {
+            "torch": "2.6.0+cu124",
+            "torchaudio": "2.6.0+cu124",
+            "torchvision": "0.21.0+cu124",
+            "nvidia-cublas-cu12": "12.4.5.8",
+        },
+    )
+    monkeypatch.setattr(
+        installer, "_pip_uninstall", lambda packages: calls.append(("uninstall", packages)) or False
+    )
+    monkeypatch.setattr(
+        installer, "_pip_install", lambda packages: calls.append(("install", packages)) or True
+    )
+
+    assert installer.install_pytorch("rocm") is False
+    assert calls[0][0] == "uninstall"
+    assert not any(kind == "install" for kind, _packages in calls)
 
 
 @pytest.mark.e2e

@@ -120,6 +120,7 @@ SIDECAR_PROFILES: dict[str, SidecarProfile] = {
         hardware="rocm",
         include_modules_data=False,
         max_artifact_mb=6500,
+        excludes=("triton.backends.nvidia",),
     ),
     "local-metal": SidecarProfile(
         name="local-metal",
