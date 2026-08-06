@@ -118,20 +118,11 @@ uv sync --extra runtime --extra torch-cpu
 uv sync --extra runtime --extra torch-cpu
 ```
 
-### Basic Installation (Pip-Compatible)
+### Basic Runtime Installation
 
-```bash
-# Create venv first
-uv venv
-source .venv/bin/activate  # Linux/macOS
-# .venv\Scripts\activate   # Windows
-
-# Install in editable mode with runtime dependencies
-uv pip install -e .[runtime]
-
-# Or install with torch (CPU)
-uv pip install -e .[runtime,torch-cpu]
-```
+Runtime installs must use the native `uv sync` commands above. The `runtime`
+extra includes local speech packages whose Torch backend must be selected from
+the lock; an editable `uv pip install` does not preserve that selection.
 
 ### Service-Specific Dependencies (Native UV)
 
@@ -148,10 +139,12 @@ uv sync --extra service-db --extra service-scheduler --extra service-tooling
 
 ### Service-Specific Dependencies (Pip-Compatible)
 
-```bash
-# Install all service dependencies
-uv pip install -e .[all-services]
+`service-tts` and aggregate extras such as `all-services` are not safe through
+an unconstrained editable install because their Torch backend must be selected
+before PocketTTS is resolved. Use `uv sync` above for the aggregate environment,
+or the frozen TTS sequence in [TTSService (`service-tts`)](#ttsservice-service-tts).
 
+```bash
 # Install specific service dependencies
 uv pip install -e .[service-config]
 uv pip install -e .[service-db]
@@ -160,7 +153,6 @@ uv pip install -e .[service-tooling]
 uv pip install -e .[service-stt-wakeword]
 uv pip install -e .[service-stt-transcription]
 uv pip install -e .[service-stt-coordinator]
-uv pip install -e .[service-tts]
 uv pip install -e .[service-orchestrator]
 
 # Install multiple services at once
@@ -227,18 +219,10 @@ uv sync --extra runtime --extra torch-cpu --extra all-services --extra mode-proc
 uv sync --extra runtime --extra torch-cpu --extra all-services --extra mode-threads --extra dev --extra test-all
 ```
 
-### Complete Installation Examples (Pip-Compatible)
+### Complete Installation Examples
 
-```bash
-# Full installation with all services (threads mode)
-uv pip install -e .[runtime,torch-cpu,all-services,mode-threads]
-
-# Full installation with all services (processes mode)
-uv pip install -e .[runtime,torch-cpu,all-services,mode-processes]
-
-# Development setup
-uv pip install -e .[runtime,torch-cpu,all-services,mode-threads,dev,test-all]
-```
+Complete environments include TTS, so use the native locked `uv sync` examples
+above. Do not translate these aggregate extras into an editable `uv pip install`.
 
 ## Running the Full Application
 
@@ -339,11 +323,11 @@ uv run python -m app.services.tts
 # Example: Run only DB service
 uv pip install -e .[service-db,mode-processes]
 uv run python -m app.services.db
-
-# Example: Run only TTS service
-uv pip install -e .[service-tts,mode-processes]
-uv run python -m app.services.tts
 ```
+
+TTS is intentionally excluded from the pip-compatible examples. Use the frozen
+TTS install below, adding `--extra mode-processes` to its `uv export` command
+when running TTS as a process service.
 
 ## Service-Specific Dependencies
 
@@ -462,21 +446,18 @@ uv run python -m app.services.db
 uv run pytest
 ```
 
-### Development Setup (Pip-Compatible)
+### Development Setup
 
 ```bash
-# 1. Create venv
-uv venv
-source .venv/bin/activate
+# 1. Install the locked development environment
+uv sync --frozen --extra runtime --extra torch-cpu --extra all-services \
+  --extra mode-threads --extra dev --extra test-all
 
-# 2. Install all dependencies
-uv pip install -e .[runtime,torch-cpu,all-services,mode-threads,dev,test-all]
+# 2. Run the full application
+uv run python main.py
 
-# 3. Run the full application
-python main.py
-
-# 4. Or run individual services for testing
-python -m app.services.db
+# 3. Or run individual services for testing
+uv run python -m app.services.db
 ```
 
 ### Minimal Testing Setup (Native UV)
@@ -509,14 +490,15 @@ uv sync --extra runtime --extra torch-cpu --extra all-services --extra mode-proc
 uv run python main.py
 ```
 
-### Production Deployment (Processes Mode) - Pip-Compatible
+### Production Deployment (Processes Mode)
 
 ```bash
-# Install with processes mode (requires Redis)
-uv pip install -e .[runtime,torch-cpu,all-services,mode-processes]
+# Install the locked processes-mode environment (requires Redis)
+uv sync --frozen --extra runtime --extra torch-cpu --extra all-services \
+  --extra mode-processes
 
 # Start Redis first, then run services
-python main.py
+uv run python main.py
 ```
 
 ### Running Specific Service for Development (Native UV)
