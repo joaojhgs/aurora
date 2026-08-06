@@ -9,6 +9,7 @@ import subprocess
 import sys
 import wave
 from array import array
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -59,32 +60,43 @@ def _require_ffmpeg() -> tuple[str, str]:
     ffprobe = shutil.which("ffprobe")
     if not ffmpeg or not ffprobe:
         pytest.skip("FFmpeg tools are unavailable")
+    assert ffmpeg is not None
+    assert ffprobe is not None
     return ffmpeg, ffprobe
 
 
-def _to_mp4(source: bytes, tmp_path: Path) -> bytes:
+def _transcode_audio(
+    source: bytes,
+    tmp_path: Path,
+    *,
+    suffix: str,
+    codec: str,
+    extra_args: list[str] | None = None,
+) -> bytes:
     ffmpeg, _ = _require_ffmpeg()
+    tmp_path.mkdir(parents=True, exist_ok=True)
     source_path = tmp_path / "source.wav"
-    target_path = tmp_path / "source.mp4"
+    target_path = tmp_path / f"source{suffix}"
     source_path.write_bytes(source)
+    command = [
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-nostdin",
+        "-y",
+        "-i",
+        str(source_path),
+        "-map",
+        "0:a:0",
+        "-c:a",
+        codec,
+    ]
+    if extra_args:
+        command.extend(extra_args)
+    command.append(str(target_path))
     subprocess.run(
-        [
-            ffmpeg,
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-nostdin",
-            "-y",
-            "-i",
-            str(source_path),
-            "-map",
-            "0:a:0",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "128k",
-            str(target_path),
-        ],
+        command,
         check=True,
         capture_output=True,
         timeout=20,
@@ -93,9 +105,59 @@ def _to_mp4(source: bytes, tmp_path: Path) -> bytes:
 
 
 @pytest.mark.asyncio
-async def test_mp4_import_is_content_inspected_and_deterministic(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("case_id", "make_source", "declared_mime", "container", "codec"),
+    [
+        ("wav", lambda source, path: source, "audio/wav", "wav", "pcm_s16le"),
+        (
+            "mp3",
+            lambda source, path: _transcode_audio(
+                source, path, suffix=".mp3", codec="libmp3lame", extra_args=["-b:a", "128k"]
+            ),
+            "audio/mpeg",
+            "mp3",
+            "mp3",
+        ),
+        (
+            "m4a",
+            lambda source, path: _transcode_audio(
+                source, path, suffix=".m4a", codec="aac", extra_args=["-b:a", "128k"]
+            ),
+            "audio/x-m4a",
+            "mp4",
+            "aac",
+        ),
+        (
+            "webm",
+            lambda source, path: _transcode_audio(
+                source, path, suffix=".webm", codec="libopus", extra_args=["-b:a", "96k"]
+            ),
+            "audio/webm",
+            "webm",
+            "opus",
+        ),
+        (
+            "aac-in-mp4",
+            lambda source, path: _transcode_audio(
+                source, path, suffix=".mp4", codec="aac", extra_args=["-b:a", "128k"]
+            ),
+            "audio/mp4",
+            "mp4",
+            "aac",
+        ),
+    ],
+    ids=lambda value: value if isinstance(value, str) else None,
+)
+async def test_supported_imports_are_content_inspected_canonical_and_deterministic(
+    tmp_path: Path,
+    case_id: str,
+    make_source: Callable[[bytes, Path], bytes],
+    declared_mime: str,
+    container: str,
+    codec: str,
+) -> None:
     ffmpeg, ffprobe = _require_ffmpeg()
-    mp4 = _to_mp4(_wav_bytes(), tmp_path)
+    source = make_source(_wav_bytes(), tmp_path / case_id)
     scratch = tmp_path / "scratch"
     scratch.mkdir()
     importer = MediaImporter(
@@ -106,14 +168,19 @@ async def test_mp4_import_is_content_inspected_and_deterministic(tmp_path: Path)
 
     marker = tmp_path / "must-not-exist"
     malicious_name = f"voice.$(touch {marker}).wav"
-    first = await importer.import_bytes(mp4, source_name=malicious_name)
-    second = await importer.import_bytes(mp4, source_name="spoofed.wav")
+    first = await importer.import_bytes(
+        source, declared_mime=declared_mime, source_name=malicious_name
+    )
+    second = await importer.import_bytes(
+        source, declared_mime=declared_mime, source_name="spoofed.wav"
+    )
 
-    assert first.container == "mp4"
-    assert first.source_codec == "aac"
+    assert first.container == container
+    assert first.source_codec == codec
     assert first.sample_rate == 24_000
     assert first.channels == 1
-    assert 6.0 <= first.duration_s <= 6.7
+    assert importer.policy.min_duration_s <= first.duration_s <= importer.policy.max_duration_s
+    assert first.source_duration_s >= first.duration_s
     assert first.sha256 == second.sha256
     assert first.wav_bytes == second.wav_bytes
     assert not marker.exists()
@@ -214,7 +281,108 @@ async def test_multiple_audio_tracks_are_rejected(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_size_limit_and_cancellation_cleanup(tmp_path: Path) -> None:
+async def test_absent_audio_track_is_rejected_without_temp_leaks(tmp_path: Path) -> None:
+    ffmpeg, ffprobe = _require_ffmpeg()
+    source_path = tmp_path / "video-only.mp4"
+    subprocess.run(
+        [
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=16x16:d=7",
+            "-an",
+            "-c:v",
+            "mpeg4",
+            str(source_path),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=20,
+    )
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    importer = MediaImporter(ffmpeg_path=ffmpeg, ffprobe_path=ffprobe, temp_root=scratch)
+
+    with pytest.raises(MediaImportError) as exc_info:
+        await importer.import_bytes(source_path.read_bytes(), declared_mime="video/mp4")
+
+    assert exc_info.value.code == "audio_track_count"
+    assert list(scratch.iterdir()) == []
+
+
+@pytest.mark.asyncio
+async def test_declared_mime_mismatch_is_rejected_after_content_probe(tmp_path: Path) -> None:
+    ffmpeg, ffprobe = _require_ffmpeg()
+    importer = MediaImporter(ffmpeg_path=ffmpeg, ffprobe_path=ffprobe, temp_root=tmp_path)
+
+    with pytest.raises(MediaImportError) as exc_info:
+        await importer.import_bytes(_wav_bytes(), declared_mime="audio/mpeg")
+
+    assert exc_info.value.code == "unsupported_media"
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "source",
+    [
+        lambda path: _transcode_audio(
+            _wav_bytes(), path, suffix=".mp3", codec="libmp3lame", extra_args=["-b:a", "128k"]
+        )[:128],
+        lambda path: _transcode_audio(
+            _wav_bytes(), path, suffix=".webm", codec="libopus", extra_args=["-b:a", "96k"]
+        )[:256],
+    ],
+    ids=("truncated-mp3", "truncated-webm"),
+)
+async def test_truncated_supported_containers_are_rejected_without_temp_leaks(
+    tmp_path: Path,
+    source: Callable[[Path], bytes],
+) -> None:
+    ffmpeg, ffprobe = _require_ffmpeg()
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    importer = MediaImporter(ffmpeg_path=ffmpeg, ffprobe_path=ffprobe, temp_root=scratch)
+
+    with pytest.raises(MediaImportError) as exc_info:
+        await importer.import_bytes(source(tmp_path / "encoded"))
+
+    assert exc_info.value.code in {"invalid_media", "duration_out_of_range"}
+    assert list(scratch.iterdir()) == []
+
+
+@pytest.mark.asyncio
+async def test_small_source_large_decoded_output_is_bounded(tmp_path: Path) -> None:
+    ffmpeg, ffprobe = _require_ffmpeg()
+    importer = MediaImporter(ffmpeg_path=ffmpeg, ffprobe_path=ffprobe, temp_root=tmp_path)
+
+    with pytest.raises(MediaImportError) as exc_info:
+        await importer._run_process(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import sys; "
+                    "sys.stdout.buffer.write(b'x' * (24000 * 4 * 18)); "
+                    "sys.stdout.flush()"
+                ),
+            ],
+            output_limit=math.ceil(8.0 * 24_000 * 4),
+        )
+
+    assert exc_info.value.code == "invalid_media"
+
+
+@pytest.mark.asyncio
+async def test_size_limit_and_cancellation_cleanup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     ffmpeg, ffprobe = _require_ffmpeg()
     importer = MediaImporter(ffmpeg_path=ffmpeg, ffprobe_path=ffprobe, temp_root=tmp_path)
 
@@ -230,7 +398,7 @@ async def test_size_limit_and_cancellation_cleanup(tmp_path: Path) -> None:
         await asyncio.Future()
         raise AssertionError("unreachable")
 
-    importer._run_process = never_finishes  # type: ignore[method-assign]
+    monkeypatch.setattr(importer, "_run_process", never_finishes)
     task = asyncio.create_task(importer.import_bytes(_wav_bytes()))
     await asyncio.wait_for(entered.wait(), timeout=1)
     task.cancel()

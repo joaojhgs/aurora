@@ -143,6 +143,7 @@ class MediaImporter:
         self,
         source: bytes,
         *,
+        declared_mime: str | None = None,
         source_name: str | None = None,
         selection: MediaSelection | None = None,
     ) -> MediaImportResult:
@@ -153,6 +154,7 @@ class MediaImporter:
 
         Args:
             source: Complete bounded source object.
+            declared_mime: Optional caller-declared media type to compare with probed content.
             source_name: Untrusted display-only name supplied by the caller.
             selection: Optional bounded region for a source longer than the limit.
 
@@ -175,6 +177,7 @@ class MediaImporter:
             source_path = temp_path / "source.bin"
             await self._run_blocking(source_path.write_bytes, source)
             probe = await self._probe(source_path)
+            self._validate_declared_mime(declared_mime, probe.container)
             selected_duration = self._validate_selection(probe.duration_s, selection)
             pcm = await self._decode(source_path, selection, selected_duration)
             wav_bytes, duration_s = await self._run_blocking(self._normalize_pcm, pcm)
@@ -478,6 +481,28 @@ class MediaImporter:
         if container == "mp4":
             return bool(accepted.intersection({"mp4", "m4a"}))
         return container in accepted
+
+    def _validate_declared_mime(self, declared_mime: str | None, container: str) -> None:
+        if declared_mime is None:
+            return
+        normalized = declared_mime.split(";", 1)[0].strip().lower()
+        expected_container = {
+            "audio/aac": "mp4",
+            "audio/mp4": "mp4",
+            "audio/mpeg": "mp3",
+            "audio/mp3": "mp3",
+            "audio/wav": "wav",
+            "audio/wave": "wav",
+            "audio/webm": "webm",
+            "audio/x-m4a": "mp4",
+            "audio/x-wav": "wav",
+            "video/mp4": "mp4",
+            "video/webm": "webm",
+        }.get(normalized)
+        if expected_container is None:
+            raise MediaImportError("unsupported_media", "Choose a supported audio file.")
+        if expected_container != container:
+            raise MediaImportError("unsupported_media", "Choose a supported audio file.")
 
     @staticmethod
     def _read_duration(stream: dict[str, Any], format_data: dict[str, Any]) -> float | None:

@@ -152,6 +152,21 @@ class VoiceStateArtifactHandle:
     fd: int
 
 
+@dataclass(frozen=True)
+class ExportedCloneVoiceState:
+    """Registry-native clone-state payload with integrity metadata but no path exposure."""
+
+    voice_id: str
+    runtime_target: str
+    language_bundle: str
+    compatibility_group: str
+    artifact_revision: str
+    sha256: str
+    size_bytes: int
+    format: VoiceStateArtifactFormat
+    artifact_bytes: bytes
+
+
 class VoiceArtifactManifest(BaseModel):
     """Bounded artifact descriptor from an Aurora voice manifest."""
 
@@ -175,7 +190,7 @@ class VoiceArtifactManifest(BaseModel):
     redistribution: LicenseRedistribution
     upstream_source: str | None = Field(default=None, max_length=240)
 
-    @field_validator(  # type: ignore[untyped-decorator]
+    @field_validator(
         "asset_id",
         "runtime_target",
         "language_bundle",
@@ -188,27 +203,27 @@ class VoiceArtifactManifest(BaseModel):
             raise ValueError("invalid component")
         return value
 
-    @field_validator("logical_voice_id")  # type: ignore[untyped-decorator]
+    @field_validator("logical_voice_id")
     @classmethod
     def _validate_standard_voice_id(cls, value: str) -> str:
         if not _STANDARD_ID_RE.fullmatch(value):
             raise ValueError("standard voice id required")
         return value
 
-    @field_validator("sha256")  # type: ignore[untyped-decorator]
+    @field_validator("sha256")
     @classmethod
     def _validate_hash(cls, value: str) -> str:
         if not _SHA256_RE.fullmatch(value):
             raise ValueError("invalid sha256")
         return value
 
-    @field_validator("relative_path")  # type: ignore[untyped-decorator]
+    @field_validator("relative_path")
     @classmethod
     def _validate_relative_path(cls, value: str) -> str:
         _safe_relative_path(value)
         return value
 
-    @model_validator(mode="after")  # type: ignore[untyped-decorator]
+    @model_validator(mode="after")
     def _validate_sizes(self) -> VoiceArtifactManifest:
         if self.unpacked_size_bytes < self.size_bytes:
             raise ValueError("unpacked size cannot be smaller than packed size")
@@ -227,14 +242,14 @@ class VoicePackManifest(BaseModel):
     minimum_runtime_version: str = Field(min_length=1, max_length=64)
     assets: tuple[VoiceArtifactManifest, ...] = Field(min_length=1, max_length=_MAX_ASSETS)
 
-    @field_validator("pack_id")  # type: ignore[untyped-decorator]
+    @field_validator("pack_id")
     @classmethod
     def _validate_pack_id(cls, value: str) -> str:
         if not _COMPONENT_RE.fullmatch(value):
             raise ValueError("invalid pack id")
         return value
 
-    @model_validator(mode="after")  # type: ignore[untyped-decorator]
+    @model_validator(mode="after")
     def _validate_pack_voice_ids(self) -> VoicePackManifest:
         for asset in self.assets:
             match = _STANDARD_ID_RE.fullmatch(asset.logical_voice_id)
@@ -251,13 +266,13 @@ class _PersistedArtifact(BaseModel):
     sha256: str = Field(min_length=64, max_length=64)
     format: VoiceStateArtifactFormat = "safetensors"
 
-    @field_validator("relative_ref")  # type: ignore[untyped-decorator]
+    @field_validator("relative_ref")
     @classmethod
     def _validate_ref(cls, value: str) -> str:
         _safe_relative_path(value)
         return value
 
-    @field_validator("sha256")  # type: ignore[untyped-decorator]
+    @field_validator("sha256")
     @classmethod
     def _validate_sha(cls, value: str) -> str:
         if not _SHA256_RE.fullmatch(value):
@@ -470,6 +485,18 @@ class VoiceRegistry:
                 resident_base_identity,
             )
 
+    async def export_clone_voice_state(
+        self, voice_id: str, resident_base_identity: VoiceBaseIdentity
+    ) -> ExportedCloneVoiceState:
+        """Return verified clone-state bytes for same-base manage operations only."""
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._with_fs_lock,
+                self._export_clone_voice_state_locked,
+                voice_id,
+                resident_base_identity,
+            )
+
     async def delete_voice(self, voice_id: str) -> None:
         """Quarantine, commit, and delete profile artifacts for a logical voice."""
         async with self._lock:
@@ -615,6 +642,8 @@ class VoiceRegistry:
         visibility: ProfileVisibility,
         clone_uuid: uuid.UUID | None,
     ) -> VoiceProfileInventoryEntry:
+        if source_retention:
+            raise VoiceArtifactError("retained clone source storage is unavailable")
         if not artifact_bytes:
             raise VoiceArtifactError("clone artifact is empty")
         if len(artifact_bytes) > self._max_clone_artifact_bytes:
@@ -665,7 +694,7 @@ class VoiceRegistry:
                         format="safetensors",
                     ),
                 ),
-                source_retained=source_retention,
+                source_retained=False,
             )
             self._write_state(
                 state.model_copy(update={"profiles": {**state.profiles, profile_key: profile}})
@@ -732,6 +761,47 @@ class VoiceRegistry:
     def _resolve_voice_state_artifact_locked(
         self, voice_id: str, resident_base_identity: VoiceBaseIdentity
     ) -> VoiceStateArtifactHandle:
+        return self._verified_voice_state_artifact_locked(voice_id, resident_base_identity)
+
+    def _export_clone_voice_state_locked(
+        self, voice_id: str, resident_base_identity: VoiceBaseIdentity
+    ) -> ExportedCloneVoiceState:
+        artifact = self._verified_voice_state_artifact_locked(
+            voice_id,
+            resident_base_identity,
+            required_kind="clone",
+        )
+        try:
+            payload = _read_all_from_fd(artifact.fd, expected_size=artifact.size_bytes)
+        finally:
+            os.close(artifact.fd)
+        return ExportedCloneVoiceState(
+            voice_id=artifact.voice_id,
+            runtime_target=artifact.runtime_target,
+            language_bundle=artifact.language_bundle,
+            compatibility_group=artifact.compatibility_group,
+            artifact_revision=artifact.artifact_revision,
+            sha256=artifact.sha256,
+            size_bytes=artifact.size_bytes,
+            format=artifact.format,
+            artifact_bytes=payload,
+        )
+
+    def _verified_voice_state_artifact_locked(
+        self,
+        voice_id: str,
+        resident_base_identity: VoiceBaseIdentity,
+        *,
+        required_kind: ProfileKind | None = None,
+    ) -> VoiceStateArtifactHandle:
+        profile = self._select_profile_locked(voice_id, resident_base_identity)
+        if required_kind is not None and profile.kind != required_kind:
+            raise VoiceSelectionError("voice is not available for this operation")
+        return self._open_profile_voice_state_artifact(profile)
+
+    def _select_profile_locked(
+        self, voice_id: str, resident_base_identity: VoiceBaseIdentity
+    ) -> _PersistedProfile:
         validate_logical_voice_id(voice_id)
         matches = [
             profile
@@ -744,7 +814,11 @@ class VoiceRegistry:
             raise VoiceSelectionError("voice is not ready for resident base identity")
         if len(matches) > 1:
             matches.sort(key=lambda profile: profile.artifact_revision, reverse=True)
-        profile = matches[0]
+        return matches[0]
+
+    def _open_profile_voice_state_artifact(
+        self, profile: _PersistedProfile
+    ) -> VoiceStateArtifactHandle:
         _validate_supported_voice_state_runtime(profile.runtime_target)
         if len(profile.artifacts) != 1:
             raise VoiceArtifactError("voice state profile must have exactly one artifact")
@@ -1244,6 +1318,23 @@ def _verify_open_file(fd: int, *, expected_size: int, expected_sha256: str) -> N
         raise VoiceArtifactError("artifact size mismatch")
     if digest.hexdigest() != expected_sha256:
         raise VoiceArtifactError("artifact hash mismatch")
+
+
+def _read_all_from_fd(fd: int, *, expected_size: int) -> bytes:
+    chunks: list[bytes] = []
+    size = 0
+    os.lseek(fd, 0, os.SEEK_SET)
+    while True:
+        chunk = os.read(fd, 1024 * 1024)
+        if not chunk:
+            break
+        size += len(chunk)
+        if size > expected_size:
+            raise VoiceArtifactError("artifact size mismatch")
+        chunks.append(chunk)
+    if size != expected_size:
+        raise VoiceArtifactError("artifact size mismatch")
+    return b"".join(chunks)
 
 
 def _read_exact_fd(fd: int, byte_count: int, *, error_message: str) -> bytes:

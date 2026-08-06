@@ -10,10 +10,12 @@ import shutil
 import struct
 import uuid
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
 from app.services.tts.voice_registry import (
+    ExportedCloneVoiceState,
     VoiceArtifactError,
     VoiceBaseIdentity,
     VoiceManifestError,
@@ -120,8 +122,11 @@ def _write_manifest(path: Path, manifest: dict[str, object]) -> Path:
     return path
 
 
-def _read_state(registry_root: Path) -> dict[str, object]:
-    return json.loads((registry_root / "voice_registry.json").read_text(encoding="utf-8"))
+def _read_state(registry_root: Path) -> dict[str, Any]:
+    return cast(
+        dict[str, Any],
+        json.loads((registry_root / "voice_registry.json").read_text(encoding="utf-8")),
+    )
 
 
 def _open_fd_count() -> int | None:
@@ -452,6 +457,165 @@ async def test_clone_profiles_are_private_by_default_and_do_not_retain_source(
     state_json = (tmp_path / "registry" / "voice_registry.json").read_text(encoding="utf-8")
     assert "raw-source-secret-never-store" not in state_json
     assert "speaker.embedding" not in state_json
+
+
+@pytest.mark.asyncio
+async def test_clone_source_retention_is_rejected_until_encrypted_storage_exists(
+    tmp_path: Path,
+) -> None:
+    registry = VoiceRegistry(tmp_path / "registry")
+
+    with pytest.raises(VoiceArtifactError, match="retained clone source storage is unavailable"):
+        await registry.create_clone_profile(
+            display_name="My Voice",
+            runtime_target="pockettts-python",
+            language_bundle="en-us-compact",
+            compatibility_group="pockettts-en-compact-v1",
+            artifact_revision="clone-rev-a",
+            artifact_bytes=_safetensors_bytes(),
+            source_audio=b"raw-source-secret-never-store",
+            source_retention=True,
+            clone_uuid=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+        )
+
+    assert await registry.inventory() == ()
+    assert not (tmp_path / "registry" / "voice_registry.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_clone_export_returns_verified_same_base_bytes_without_fd_leak(
+    tmp_path: Path,
+) -> None:
+    registry_root = tmp_path / "registry"
+    registry = VoiceRegistry(registry_root)
+    data = _multi_tensor_safetensors_bytes()
+    clone = await registry.create_clone_profile(
+        display_name="Exportable",
+        runtime_target="pockettts-python",
+        language_bundle="en-us-compact",
+        compatibility_group="pockettts-en-compact-v1",
+        artifact_revision="clone-rev-a",
+        artifact_bytes=data,
+        clone_uuid=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+    )
+    identity = VoiceBaseIdentity("pockettts-python", "en-us-compact", "pockettts-en-compact-v1")
+    before_fds = _open_fd_count()
+
+    exported = await VoiceRegistry(registry_root).export_clone_voice_state(clone.voice_id, identity)
+
+    assert isinstance(exported, ExportedCloneVoiceState)
+    assert exported.voice_id == clone.voice_id
+    assert exported.runtime_target == identity.runtime_target
+    assert exported.language_bundle == identity.language_bundle
+    assert exported.compatibility_group == identity.compatibility_group
+    assert exported.artifact_revision == "clone-rev-a"
+    assert exported.sha256 == _sha256(data)
+    assert exported.size_bytes == len(data)
+    assert exported.format == "safetensors"
+    assert exported.artifact_bytes == data
+    after_fds = _open_fd_count()
+    if before_fds is not None and after_fds is not None:
+        assert after_fds == before_fds
+
+
+@pytest.mark.asyncio
+async def test_clone_export_rejects_cross_group_and_standard_voice(
+    tmp_path: Path,
+) -> None:
+    registry_root = tmp_path / "registry"
+    registry = VoiceRegistry(registry_root)
+    clone = await registry.create_clone_profile(
+        display_name="Exportable",
+        runtime_target="pockettts-python",
+        language_bundle="en-us-compact",
+        compatibility_group="pockettts-en-compact-v1",
+        artifact_revision="clone-rev-a",
+        artifact_bytes=_safetensors_bytes(),
+        clone_uuid=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+    )
+    artifact_root = tmp_path / "pack"
+    artifact_root.joinpath("voices").mkdir(parents=True)
+    standard_data = _safetensors_bytes(
+        {"speaker.embedding": ("F32", [2], b"\x00\x00@@\x00\x00\x80@")}
+    )
+    artifact_root.joinpath("voices/alloy.safetensors").write_bytes(standard_data)
+    manifest_path = _write_manifest(
+        tmp_path / "manifest.json", _manifest(assets=[_asset(standard_data)])
+    )
+    await registry.install_standard_pack(manifest_path, artifact_root)
+
+    with pytest.raises(VoiceSelectionError):
+        await VoiceRegistry(registry_root).export_clone_voice_state(
+            clone.voice_id,
+            VoiceBaseIdentity("pockettts-python", "en-us-compact", "pockettts-en-large-v2"),
+        )
+    with pytest.raises(VoiceSelectionError):
+        await VoiceRegistry(registry_root).export_clone_voice_state(
+            "standard:starter_en:alloy",
+            VoiceBaseIdentity("pockettts-python", "en-us-compact", "pockettts-en-compact-v1"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_clone_export_rejects_tamper_symlink_and_deleted_profiles(
+    tmp_path: Path,
+) -> None:
+    registry_root = tmp_path / "registry"
+    identity = VoiceBaseIdentity("pockettts-python", "en-us-compact", "pockettts-en-compact-v1")
+
+    tamper_registry = VoiceRegistry(registry_root / "tamper")
+    tampered = await tamper_registry.create_clone_profile(
+        display_name="Tampered",
+        runtime_target="pockettts-python",
+        language_bundle="en-us-compact",
+        compatibility_group="pockettts-en-compact-v1",
+        artifact_revision="clone-rev-a",
+        artifact_bytes=_safetensors_bytes(),
+        clone_uuid=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+    )
+    (registry_root / "tamper" / tampered.artifact_refs[0]).write_bytes(
+        _multi_tensor_safetensors_bytes()
+    )
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(registry_root / "tamper").export_clone_voice_state(
+            tampered.voice_id, identity
+        )
+
+    symlink_registry = VoiceRegistry(registry_root / "symlink")
+    linked = await symlink_registry.create_clone_profile(
+        display_name="Linked",
+        runtime_target="pockettts-python",
+        language_bundle="en-us-compact",
+        compatibility_group="pockettts-en-compact-v1",
+        artifact_revision="clone-rev-a",
+        artifact_bytes=_safetensors_bytes(),
+        clone_uuid=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+    )
+    link_path = registry_root / "symlink" / linked.artifact_refs[0]
+    same_byte_target = link_path.with_name("same-bytes.safetensors")
+    shutil.copyfile(link_path, same_byte_target)
+    link_path.unlink()
+    link_path.symlink_to(same_byte_target.name)
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(registry_root / "symlink").export_clone_voice_state(
+            linked.voice_id, identity
+        )
+
+    deleted_registry = VoiceRegistry(registry_root / "deleted")
+    deleted = await deleted_registry.create_clone_profile(
+        display_name="Deleted",
+        runtime_target="pockettts-python",
+        language_bundle="en-us-compact",
+        compatibility_group="pockettts-en-compact-v1",
+        artifact_revision="clone-rev-a",
+        artifact_bytes=_safetensors_bytes(),
+        clone_uuid=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+    )
+    await deleted_registry.delete_voice(deleted.voice_id)
+    with pytest.raises(VoiceSelectionError):
+        await VoiceRegistry(registry_root / "deleted").export_clone_voice_state(
+            deleted.voice_id, identity
+        )
 
 
 @pytest.mark.asyncio
@@ -1048,7 +1212,7 @@ async def test_cross_instance_filesystem_lock_prevents_lost_updates(tmp_path: Pa
             ),
             clone_uuid=uuid.UUID(f"12345678-1234-4234-9234-{index:012d}"),
         )
-        return profile.voice_id
+        return str(profile.voice_id)
 
     created_ids = await asyncio.gather(*(create(index) for index in range(12)))
     inventory = await VoiceRegistry(registry_root).inventory()
