@@ -15,6 +15,7 @@ import math
 import os
 import re
 import shutil
+import stat
 import struct
 import uuid
 from dataclasses import dataclass
@@ -55,6 +56,8 @@ _MAX_ASSETS = 128
 _MAX_SAFETENSORS_HEADER_BYTES = 1024 * 1024
 _DEFAULT_MAX_CLONE_ARTIFACT_BYTES = 64 * 1024 * 1024
 _O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+_O_DIRECTORY = getattr(os, "O_DIRECTORY", 0)
+_SUPPORTED_VOICE_STATE_RUNTIMES = frozenset({"pockettts-python"})
 _SAFETENSORS_DTYPES: dict[str, int] = {
     "BOOL": 1,
     "U8": 1,
@@ -142,10 +145,11 @@ class VoiceStateArtifactHandle:
     language_bundle: str
     compatibility_group: str
     artifact_revision: str
-    path: Path
+    relative_ref: str
     sha256: str
     size_bytes: int
     format: VoiceStateArtifactFormat
+    fd: int
 
 
 class VoiceArtifactManifest(BaseModel):
@@ -504,8 +508,8 @@ class VoiceRegistry:
         try:
             staged_root.mkdir(parents=True)
             for asset in manifest.assets:
-                if _requires_safetensors(asset.runtime_target):
-                    _validate_safetensors_name(asset.relative_path)
+                _validate_supported_voice_state_runtime(asset.runtime_target)
+                _validate_safetensors_name(asset.relative_path)
                 source_path = _resolve_safe_child(source_root, asset.relative_path)
                 if not source_path.is_file():
                     raise VoiceArtifactError("artifact missing")
@@ -513,8 +517,7 @@ class VoiceRegistry:
                 _verify_file(
                     source_path, expected_size=asset.size_bytes, expected_sha256=asset.sha256
                 )
-                if _requires_safetensors(asset.runtime_target):
-                    _validate_safetensors_file(source_path, expected_size=asset.size_bytes)
+                _validate_safetensors_file(source_path, expected_size=asset.size_bytes)
                 profile_key = _profile_key(
                     asset.logical_voice_id,
                     asset.runtime_target,
@@ -537,8 +540,7 @@ class VoiceRegistry:
                     expected_size=asset.size_bytes,
                     expected_sha256=asset.sha256,
                 )
-                if _requires_safetensors(asset.runtime_target):
-                    _validate_safetensors_file(staged_file, expected_size=asset.size_bytes)
+                _validate_safetensors_file(staged_file, expected_size=asset.size_bytes)
                 staged_profiles.append(
                     (
                         _PersistedProfile(
@@ -616,6 +618,7 @@ class VoiceRegistry:
             raise VoiceArtifactError("clone artifact is empty")
         if len(artifact_bytes) > self._max_clone_artifact_bytes:
             raise VoiceArtifactError("clone artifact exceeds configured size limit")
+        _validate_supported_voice_state_runtime(runtime_target)
         for value in (runtime_target, language_bundle, compatibility_group, artifact_revision):
             if not _COMPONENT_RE.fullmatch(value):
                 raise VoiceArtifactError("invalid clone compatibility component")
@@ -638,8 +641,7 @@ class VoiceRegistry:
             staging_dir.mkdir(parents=True)
             staged_file = staging_dir / staged_name
             _write_bytes_no_follow(staged_file, artifact_bytes)
-            if _requires_safetensors(runtime_target):
-                _validate_safetensors_file(staged_file, expected_size=len(artifact_bytes))
+            _validate_safetensors_file(staged_file, expected_size=len(artifact_bytes))
             _verify_file(staged_file, expected_size=len(artifact_bytes), expected_sha256=digest)
             os.replace(staging_dir, final_dir)
             _fsync_dir(self._artifacts_dir)
@@ -742,30 +744,38 @@ class VoiceRegistry:
         if len(matches) > 1:
             matches.sort(key=lambda profile: profile.artifact_revision, reverse=True)
         profile = matches[0]
+        _validate_supported_voice_state_runtime(profile.runtime_target)
         if len(profile.artifacts) != 1:
             raise VoiceArtifactError("voice state profile must have exactly one artifact")
         artifact = profile.artifacts[0]
         if artifact.format != "safetensors":
             raise VoiceArtifactError("voice state artifact format is invalid")
+        artifact_ref = _validate_artifact_ref_ownership(artifact.relative_ref, profile.profile_key)
+        _reject_lexical_symlink_components(self._real_root(), artifact.relative_ref)
         artifact_path = self._resolve_registry_ref(artifact.relative_ref)
-        _reject_symlink_path(self._real_root(), artifact_path)
-        _validate_safetensors_name(artifact.relative_ref)
-        _verify_file(
-            artifact_path,
-            expected_size=artifact.size_bytes,
-            expected_sha256=artifact.sha256,
-        )
-        _validate_safetensors_file(artifact_path, expected_size=artifact.size_bytes)
+        if artifact_path != self._real_root().joinpath(*artifact_ref.parts):
+            raise VoiceArtifactError("registry artifact ref does not match profile")
+        fd = _open_registry_artifact_no_symlinks(self._real_root(), artifact_ref)
+        try:
+            _verify_open_file(
+                fd, expected_size=artifact.size_bytes, expected_sha256=artifact.sha256
+            )
+            _validate_safetensors_fd(fd, expected_size=artifact.size_bytes)
+            os.lseek(fd, 0, os.SEEK_SET)
+        except Exception:
+            os.close(fd)
+            raise
         return VoiceStateArtifactHandle(
             voice_id=profile.voice_id,
             runtime_target=profile.runtime_target,
             language_bundle=profile.language_bundle,
             compatibility_group=profile.compatibility_group,
             artifact_revision=profile.artifact_revision,
-            path=artifact_path,
+            relative_ref=artifact.relative_ref,
             sha256=artifact.sha256,
             size_bytes=artifact.size_bytes,
             format=artifact.format,
+            fd=fd,
         )
 
     def _delete_voice_locked(self, voice_id: str) -> None:
@@ -858,30 +868,29 @@ class VoiceRegistry:
             ):
                 if not _COMPONENT_RE.fullmatch(value):
                     raise VoiceArtifactError("registry state profile component is invalid")
+            _validate_supported_voice_state_runtime(profile.runtime_target)
             if not profile.artifacts:
                 raise VoiceArtifactError("registry state profile has no artifacts")
             for artifact in profile.artifacts:
+                _validate_artifact_ref_ownership(artifact.relative_ref, profile_key)
                 artifact_path = self._resolve_registry_ref(
                     artifact.relative_ref, must_exist=require_artifacts
                 )
-                if profile_key not in artifact_path.parts:
-                    raise VoiceArtifactError("registry artifact ref does not match profile")
                 if artifact.relative_ref in seen_refs:
                     raise VoiceArtifactError("registry artifact ref is duplicated")
                 seen_refs.add(artifact.relative_ref)
-                if _requires_safetensors(profile.runtime_target):
-                    if artifact.format != "safetensors":
-                        raise VoiceArtifactError("registry artifact format is invalid")
-                    _validate_safetensors_name(artifact.relative_ref)
+                if artifact.format != "safetensors":
+                    raise VoiceArtifactError("registry artifact format is invalid")
+                _validate_safetensors_name(artifact.relative_ref)
                 if require_artifacts:
+                    _reject_lexical_symlink_components(self._real_root(), artifact.relative_ref)
                     _reject_symlink_path(self._real_root(), artifact_path)
                     _verify_file(
                         artifact_path,
                         expected_size=artifact.size_bytes,
                         expected_sha256=artifact.sha256,
                     )
-                    if _requires_safetensors(profile.runtime_target):
-                        _validate_safetensors_file(artifact_path, expected_size=artifact.size_bytes)
+                    _validate_safetensors_file(artifact_path, expected_size=artifact.size_bytes)
         for key, record in state.deletions.items():
             if key != record.profile_key or not _PROFILE_KEY_RE.fullmatch(record.profile_key):
                 raise VoiceArtifactError("registry deletion record is invalid")
@@ -975,8 +984,18 @@ def _read_manifest(path: Path) -> VoicePackManifest:
         raise VoiceManifestError("invalid voice manifest") from exc
 
 
-def _requires_safetensors(runtime_target: str) -> bool:
-    return "pockettts" in runtime_target.lower()
+def _validate_supported_voice_state_runtime(runtime_target: str) -> None:
+    if runtime_target not in _SUPPORTED_VOICE_STATE_RUNTIMES:
+        raise VoiceArtifactError("voice state runtime is not supported")
+
+
+def _validate_artifact_ref_ownership(relative_ref: str, profile_key: str) -> PurePosixPath:
+    ref = _safe_relative_path(relative_ref)
+    parts = ref.parts
+    if len(parts) != 3 or parts[0] != "artifacts" or parts[1] != profile_key:
+        raise VoiceArtifactError("registry artifact ref does not match profile")
+    _validate_safetensors_name(relative_ref)
+    return ref
 
 
 def _validate_safetensors_name(path: str) -> None:
@@ -986,35 +1005,42 @@ def _validate_safetensors_name(path: str) -> None:
 
 
 def _validate_safetensors_file(path: Path, *, expected_size: int) -> None:
-    if expected_size < 9:
-        raise VoiceArtifactError("safetensors artifact is truncated")
     fd = _open_no_follow_read(path)
     try:
-        actual_size = os.fstat(fd).st_size
-        if actual_size != expected_size:
-            raise VoiceArtifactError("safetensors artifact size mismatch")
-        header_prefix = os.read(fd, 8)
-        if len(header_prefix) != 8:
-            raise VoiceArtifactError("safetensors artifact is truncated")
-        header_size = struct.unpack("<Q", header_prefix)[0]
-        if header_size < 2 or header_size > _MAX_SAFETENSORS_HEADER_BYTES:
-            raise VoiceArtifactError("safetensors header size is invalid")
-        if header_size > actual_size - 8:
-            raise VoiceArtifactError("safetensors header exceeds artifact size")
-        header_bytes = os.read(fd, header_size)
-        if len(header_bytes) != header_size:
-            raise VoiceArtifactError("safetensors header is truncated")
-        data_size = actual_size - 8 - header_size
-        _validate_safetensors_header(header_bytes, data_size=data_size)
+        _validate_safetensors_fd(fd, expected_size=expected_size)
     finally:
         os.close(fd)
 
 
+def _validate_safetensors_fd(fd: int, *, expected_size: int) -> None:
+    if expected_size < 9:
+        raise VoiceArtifactError("safetensors artifact is truncated")
+    os.lseek(fd, 0, os.SEEK_SET)
+    actual_size = os.fstat(fd).st_size
+    if actual_size != expected_size:
+        raise VoiceArtifactError("safetensors artifact size mismatch")
+    header_prefix = _read_exact_fd(fd, 8, error_message="safetensors artifact is truncated")
+    header_size = struct.unpack("<Q", header_prefix)[0]
+    if header_size < 2 or header_size > _MAX_SAFETENSORS_HEADER_BYTES:
+        raise VoiceArtifactError("safetensors header size is invalid")
+    if header_size > actual_size - 8:
+        raise VoiceArtifactError("safetensors header exceeds artifact size")
+    header_bytes = _read_exact_fd(fd, header_size, error_message="safetensors header is truncated")
+    data_size = actual_size - 8 - header_size
+    _validate_safetensors_header(header_bytes, data_size=data_size)
+
+
 def _validate_safetensors_header(header_bytes: bytes, *, data_size: int) -> None:
+    if not header_bytes or header_bytes[0] != ord("{"):
+        raise VoiceArtifactError("safetensors header is invalid")
     try:
-        header = json.loads(header_bytes.decode("utf-8"), object_pairs_hook=_json_no_duplicates)
+        header_text = header_bytes.decode("utf-8")
+        decoder = json.JSONDecoder(object_pairs_hook=_json_no_duplicates)
+        header, end_index = decoder.raw_decode(header_text)
     except (UnicodeDecodeError, json.JSONDecodeError, VoiceArtifactError) as exc:
         raise VoiceArtifactError("safetensors header is invalid") from exc
+    if any(character != " " for character in header_text[end_index:]):
+        raise VoiceArtifactError("safetensors header padding is invalid")
     if not isinstance(header, dict):
         raise VoiceArtifactError("safetensors header must be an object")
     spans: list[tuple[int, int]] = []
@@ -1036,13 +1062,13 @@ def _validate_safetensors_header(header_bytes: bytes, *, data_size: int) -> None
         if not isinstance(dtype, str) or dtype not in _SAFETENSORS_DTYPES:
             raise VoiceArtifactError("safetensors tensor dtype is invalid")
         if not isinstance(shape, list) or not all(
-            isinstance(dimension, int) and dimension >= 0 for dimension in shape
+            type(dimension) is int and dimension >= 0 for dimension in shape
         ):
             raise VoiceArtifactError("safetensors tensor shape is invalid")
         if not isinstance(offsets, list) or len(offsets) != 2:
             raise VoiceArtifactError("safetensors tensor offsets are invalid")
         start, end = offsets
-        if not isinstance(start, int) or not isinstance(end, int):
+        if type(start) is not int or type(end) is not int:
             raise VoiceArtifactError("safetensors tensor offsets are invalid")
         if start < 0 or end < start or end > data_size:
             raise VoiceArtifactError("safetensors tensor offsets exceed data")
@@ -1118,6 +1144,20 @@ def _reject_symlink_path(root: Path, path: Path) -> None:
             raise VoiceArtifactError("path uses symlink")
 
 
+def _reject_lexical_symlink_components(root: Path, relative_ref: str) -> None:
+    current = root
+    if stat.S_ISLNK(os.lstat(current).st_mode):
+        raise VoiceArtifactError("path uses symlink")
+    for part in _safe_relative_path(relative_ref).parts:
+        current = current / part
+        try:
+            mode = os.lstat(current).st_mode
+        except FileNotFoundError as exc:
+            raise VoiceArtifactError("artifact missing") from exc
+        if stat.S_ISLNK(mode):
+            raise VoiceArtifactError("path uses symlink")
+
+
 def _reject_symlink_ancestors(path: Path) -> None:
     current = path if path.exists() else path.parent
     checked: list[Path] = []
@@ -1127,6 +1167,32 @@ def _reject_symlink_ancestors(path: Path) -> None:
     for candidate in reversed(checked):
         if candidate.exists() and candidate.is_symlink():
             raise VoiceArtifactError("path uses symlink")
+
+
+def _open_registry_artifact_no_symlinks(root: Path, relative_ref: PurePosixPath) -> int:
+    dir_fd = os.open(root, os.O_RDONLY | _O_DIRECTORY | _O_NOFOLLOW)
+    close_dir_fd = True
+    try:
+        parts = relative_ref.parts
+        for part in parts[:-1]:
+            next_fd = os.open(part, os.O_RDONLY | _O_DIRECTORY | _O_NOFOLLOW, dir_fd=dir_fd)
+            os.close(dir_fd)
+            dir_fd = next_fd
+        file_fd = os.open(parts[-1], os.O_RDONLY | _O_NOFOLLOW, dir_fd=dir_fd)
+        close_dir_fd = False
+        os.close(dir_fd)
+        return file_fd
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise VoiceArtifactError("path uses symlink") from exc
+        if exc.errno == errno.ENOTDIR:
+            raise VoiceArtifactError("artifact path is invalid") from exc
+        if exc.errno == errno.ENOENT:
+            raise VoiceArtifactError("artifact missing") from exc
+        raise
+    finally:
+        if close_dir_fd:
+            os.close(dir_fd)
 
 
 def _verify_file(path: Path, *, expected_size: int, expected_sha256: str) -> None:
@@ -1149,6 +1215,34 @@ def _verify_file(path: Path, *, expected_size: int, expected_sha256: str) -> Non
         raise VoiceArtifactError("artifact size mismatch")
     if digest.hexdigest() != expected_sha256:
         raise VoiceArtifactError("artifact hash mismatch")
+
+
+def _verify_open_file(fd: int, *, expected_size: int, expected_sha256: str) -> None:
+    digest = hashlib.sha256()
+    size = 0
+    os.lseek(fd, 0, os.SEEK_SET)
+    while True:
+        chunk = os.read(fd, 1024 * 1024)
+        if not chunk:
+            break
+        size += len(chunk)
+        digest.update(chunk)
+    if size != expected_size:
+        raise VoiceArtifactError("artifact size mismatch")
+    if digest.hexdigest() != expected_sha256:
+        raise VoiceArtifactError("artifact hash mismatch")
+
+
+def _read_exact_fd(fd: int, byte_count: int, *, error_message: str) -> bytes:
+    chunks: list[bytes] = []
+    remaining = byte_count
+    while remaining:
+        chunk = os.read(fd, remaining)
+        if not chunk:
+            raise VoiceArtifactError(error_message)
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
 
 
 def _copy_verified_file(

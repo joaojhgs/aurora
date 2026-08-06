@@ -50,6 +50,15 @@ def _safetensors_from_header(header: bytes, payload: bytes = b"") -> bytes:
     return struct.pack("<Q", len(header)) + header + payload
 
 
+def _padded_safetensors_bytes(padding: bytes) -> bytes:
+    payload = b"\x00\x00\x80?\x00\x00\x00@"
+    header = (
+        b'{"__metadata__":{"format":"aurora-test"},'
+        b'"speaker.embedding":{"dtype":"F32","shape":[2],"data_offsets":[0,8]}}' + padding
+    )
+    return _safetensors_from_header(header, payload)
+
+
 def _multi_tensor_safetensors_bytes() -> bytes:
     return _safetensors_bytes(
         {
@@ -601,6 +610,20 @@ async def test_clone_artifacts_are_bounded_stored_hashed_and_verified(tmp_path: 
             b'{"speaker.embedding":{"dtype":"F32","shape":[2],"data_offsets":[0,4]}}',
             b"\x00\x00\x80?\x00\x00\x00@",
         ),
+        _safetensors_from_header(
+            b'{"speaker.embedding":{"dtype":"F32","shape":[true],"data_offsets":[0,4]}}',
+            b"\x00\x00\x80?",
+        ),
+        _safetensors_from_header(
+            b'{"speaker.embedding":{"dtype":"F32","shape":[1],"data_offsets":[false,4]}}',
+            b"\x00\x00\x80?",
+        ),
+        _safetensors_from_header(
+            b' {"speaker.embedding":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}}',
+            b"\x00\x00\x80?",
+        ),
+        _padded_safetensors_bytes(b"\t"),
+        _padded_safetensors_bytes(b"\n"),
     ],
 )
 async def test_invalid_safetensors_state_artifacts_are_rejected_atomically(
@@ -655,6 +678,63 @@ async def test_standard_pack_rejects_pockettts_extension_mismatch_atomically(
 
 
 @pytest.mark.asyncio
+async def test_safetensors_header_accepts_spec_space_padding(tmp_path: Path) -> None:
+    registry = VoiceRegistry(tmp_path / "registry")
+    artifact_root = tmp_path / "pack"
+    artifact_root.joinpath("voices").mkdir(parents=True)
+    data = _padded_safetensors_bytes(b"   ")
+    artifact_root.joinpath("voices/alloy.safetensors").write_bytes(data)
+    manifest_path = _write_manifest(tmp_path / "manifest.json", _manifest(assets=[_asset(data)]))
+
+    installed = await registry.install_standard_pack(manifest_path, artifact_root)
+    clone = await registry.create_clone_profile(
+        display_name="Padded Clone",
+        runtime_target="pockettts-python",
+        language_bundle="en-us-compact",
+        compatibility_group="pockettts-en-compact-v1",
+        artifact_revision="padded-rev",
+        artifact_bytes=data,
+    )
+
+    assert installed[0].voice_id == "standard:starter_en:alloy"
+    assert clone.voice_id.startswith("clone:")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("runtime_target", ["notpockettts-python", "pockettts", "pockettts-js"])
+async def test_registry_rejects_noncanonical_runtime_targets_atomically(
+    tmp_path: Path, runtime_target: str
+) -> None:
+    registry = VoiceRegistry(tmp_path / "registry")
+    artifact_root = tmp_path / "pack"
+    artifact_root.joinpath("voices").mkdir(parents=True)
+    data = _safetensors_bytes()
+    artifact_root.joinpath("voices/alloy.safetensors").write_bytes(data)
+    manifest_path = _write_manifest(
+        tmp_path / "manifest.json",
+        _manifest(assets=[_asset(data, runtime=runtime_target)]),
+    )
+
+    with pytest.raises(VoiceArtifactError):
+        await registry.install_standard_pack(manifest_path, artifact_root)
+    with pytest.raises(VoiceArtifactError):
+        await registry.create_clone_profile(
+            display_name="Wrong Runtime",
+            runtime_target=runtime_target,
+            language_bundle="en-us-compact",
+            compatibility_group="pockettts-en-compact-v1",
+            artifact_revision="bad-runtime-rev",
+            artifact_bytes=data,
+        )
+
+    assert await registry.inventory() == ()
+    assert (
+        not (tmp_path / "registry" / "artifacts").exists()
+        or list((tmp_path / "registry" / "artifacts").iterdir()) == []
+    )
+
+
+@pytest.mark.asyncio
 async def test_resolver_returns_verified_path_safe_safetensors_handle_after_restart(
     tmp_path: Path,
 ) -> None:
@@ -683,8 +763,11 @@ async def test_resolver_returns_verified_path_safe_safetensors_handle_after_rest
     assert handle.sha256 == _sha256(data)
     assert handle.size_bytes == len(data)
     assert handle.format == "safetensors"
-    assert handle.path == registry_root / installed[0].artifact_refs[0]
-    assert handle.path.suffix == ".safetensors"
+    assert handle.relative_ref == installed[0].artifact_refs[0]
+    assert handle.relative_ref.endswith(".safetensors")
+    os.lseek(handle.fd, 8, os.SEEK_SET)
+    assert os.read(handle.fd, 1) == b"{"
+    os.close(handle.fd)
 
 
 @pytest.mark.asyncio
@@ -729,6 +812,79 @@ async def test_resolver_rejects_post_install_replacement_and_symlink_swap(
     artifact_path.symlink_to(outside)
     with pytest.raises(VoiceArtifactError):
         await registry.resolve_voice_state_artifact("standard:starter_en:alloy", identity)
+
+
+@pytest.mark.asyncio
+async def test_resolver_rejects_same_byte_in_root_symlink_swap(tmp_path: Path) -> None:
+    registry_root = tmp_path / "registry"
+    registry = VoiceRegistry(registry_root)
+    artifact_root = tmp_path / "pack"
+    artifact_root.joinpath("voices").mkdir(parents=True)
+    data = _safetensors_bytes()
+    artifact_root.joinpath("voices/alloy.safetensors").write_bytes(data)
+    manifest_path = _write_manifest(tmp_path / "manifest.json", _manifest(assets=[_asset(data)]))
+    installed = await registry.install_standard_pack(manifest_path, artifact_root)
+    identity = VoiceBaseIdentity("pockettts-python", "en-us-compact", "pockettts-en-compact-v1")
+    artifact_path = registry_root / installed[0].artifact_refs[0]
+    same_byte_target = artifact_path.with_name("same-bytes.safetensors")
+    shutil.copyfile(artifact_path, same_byte_target)
+
+    artifact_path.unlink()
+    artifact_path.symlink_to(same_byte_target.name)
+
+    with pytest.raises(VoiceArtifactError):
+        await registry.resolve_voice_state_artifact("standard:starter_en:alloy", identity)
+
+
+@pytest.mark.asyncio
+async def test_resolver_rejects_lexical_profile_directory_symlink_swap(
+    tmp_path: Path,
+) -> None:
+    registry_root = tmp_path / "registry"
+    registry = VoiceRegistry(registry_root)
+    artifact_root = tmp_path / "pack"
+    artifact_root.joinpath("voices").mkdir(parents=True)
+    data = _safetensors_bytes()
+    artifact_root.joinpath("voices/alloy.safetensors").write_bytes(data)
+    manifest_path = _write_manifest(tmp_path / "manifest.json", _manifest(assets=[_asset(data)]))
+    installed = await registry.install_standard_pack(manifest_path, artifact_root)
+    identity = VoiceBaseIdentity("pockettts-python", "en-us-compact", "pockettts-en-compact-v1")
+    profile_dir = registry_root / "artifacts" / installed[0].profile_key
+    replacement_dir = registry_root / "artifacts" / "same_byte_replacement"
+    shutil.copytree(profile_dir, replacement_dir)
+
+    shutil.rmtree(profile_dir)
+    profile_dir.symlink_to(replacement_dir.name, target_is_directory=True)
+
+    with pytest.raises(VoiceArtifactError):
+        await registry.resolve_voice_state_artifact("standard:starter_en:alloy", identity)
+
+
+@pytest.mark.asyncio
+async def test_resolver_rejects_forged_artifact_ref_outside_profile_dir(
+    tmp_path: Path,
+) -> None:
+    registry_root = tmp_path / "registry"
+    registry = VoiceRegistry(registry_root)
+    artifact_root = tmp_path / "pack"
+    artifact_root.joinpath("voices").mkdir(parents=True)
+    data = _safetensors_bytes()
+    artifact_root.joinpath("voices/alloy.safetensors").write_bytes(data)
+    manifest_path = _write_manifest(tmp_path / "manifest.json", _manifest(assets=[_asset(data)]))
+    installed = await registry.install_standard_pack(manifest_path, artifact_root)
+    identity = VoiceBaseIdentity("pockettts-python", "en-us-compact", "pockettts-en-compact-v1")
+    state_path = registry_root / "voice_registry.json"
+    state = _read_state(registry_root)
+    profile = state["profiles"][installed[0].profile_key]
+    profile["artifacts"][0]["relative_ref"] = (
+        "artifacts/ffffffffffffffffffffffffffffffff/alloy.safetensors"
+    )
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(registry_root).resolve_voice_state_artifact(
+            "standard:starter_en:alloy", identity
+        )
 
 
 @pytest.mark.asyncio
