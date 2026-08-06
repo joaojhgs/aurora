@@ -485,6 +485,22 @@ describe('WebRtcPeerSession', () => {
     expect(channel.bufferedAmountLowThreshold).toBe(4)
   })
 
+  it('cancels a backpressured authorized send through its abort signal', async () => {
+    const { session, channel } = await authorizedAnswerer({
+      dataChannelFlowLimits: { lowWatermarkBytes: 4, highWatermarkBytes: 8, maxQueueBytes: 4096 }
+    })
+    const abort = new AbortController()
+    channel.bufferedAmount = 16
+    const send = session.sendFrame({ cancelled: true }, abort.signal)
+    await flush()
+    expect(channel.sent).toEqual([])
+
+    abort.abort('subscription closed')
+
+    await expect(send).rejects.toThrow('Aurora WebRTC data channel send failed')
+    expect(channel.sent).toEqual([])
+  })
+
   it('aborts pending sends if the DataChannel closes before drain and does not call send', async () => {
     const { session, channel } = await authorizedAnswerer({
       dataChannelFlowLimits: { lowWatermarkBytes: 4, highWatermarkBytes: 8, maxQueueBytes: 4096 }

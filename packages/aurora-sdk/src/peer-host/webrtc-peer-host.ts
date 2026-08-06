@@ -8,7 +8,9 @@ import type { AuthenticatedPeerContext, PeerRevocationEvent, PeerRelationshipSel
 import type {
   PeerHostCallContext,
   PeerHostAuthorizationDecision,
+  PeerHostEventEmitOptions,
   PeerHostEventDescriptor,
+  PeerHostEventEmissionValidator,
   PeerHostErrorBody,
   PeerHostFrameSender,
   PeerHostIdentity,
@@ -19,6 +21,14 @@ import type {
 } from './types.js'
 
 type ActiveWork = { abort: AbortController; cleanup(reason: string): void; settled: boolean; kind: 'call' | 'stream' | 'subscription' }
+type SubscriptionEmissionState = {
+  acknowledged: boolean
+  failed: boolean
+  pending: Record<string, unknown>[]
+  queuedSends: number
+  sendChain: Promise<void>
+  validators: Map<string, PeerHostEventEmissionValidator>
+}
 type ManifestEvidence = {
   projectionDigest: string
   registryRevision: string
@@ -36,6 +46,9 @@ const ACTIVE_VERSION = 'v1'
 const ACTIVE_TIER = 'projection'
 const TOOLING_PROVIDER_CAPABILITIES = Object.freeze(['tool_discovery', 'tool_execution'] as const)
 const MAX_STALE_MANIFEST_ACK_RETRIES = 3
+const DEFAULT_MAX_EVENT_BYTES = 64 * 1024
+const MAX_SUBSCRIPTION_EVENT_QUEUE = 32
+const MAX_EVENT_CORRELATION_ID_LENGTH = 128
 
 export class WebRtcPeerHost {
   readonly lease: ProviderLeaseController
@@ -440,6 +453,15 @@ export class WebRtcPeerHost {
       })
       return
     }
+    if (this.active.has(frame.id)) {
+      await sender.sendFrame({
+        type: 'subscribe_rejected',
+        id: frame.id,
+        reason: 'duplicate_subscription_id',
+        rejected_topics: frame.topics
+      })
+      return
+    }
     const events = frame.topics.map((topic) => this.options.registry.getEvent(topic))
     if (events.some((event) => event === undefined)) {
       await sender.sendFrame({ type: 'subscribe_rejected', id: frame.id, reason: 'topic_not_registered', rejected_topics: frame.topics })
@@ -470,8 +492,23 @@ export class WebRtcPeerHost {
       }
     }
     const abort = new AbortController()
-    const timer = setTimeout(() => this.handleCancel(frame.id), Math.max(1, frame.ttl_seconds ?? 60) * 1000)
+    const timer = setTimeout(() => {
+      void this.handleUnsubscribe(frame.id).catch(() => undefined)
+    }, Math.max(1, frame.ttl_seconds ?? 60) * 1000)
     const handles: Array<{ close(reason?: string): void | Promise<void> }> = []
+    const emission: SubscriptionEmissionState = {
+      acknowledged: false,
+      failed: false,
+      pending: [],
+      queuedSends: 0,
+      sendChain: Promise.resolve(),
+      validators: new Map(
+        (events as PeerHostEventDescriptor[]).flatMap((event) => {
+          const validator = event.createEmissionValidator?.()
+          return validator === undefined ? [] : [[event.topic, validator] as const]
+        })
+      )
+    }
     const active: ActiveWork = {
       abort,
       kind: 'subscription',
@@ -487,12 +524,21 @@ export class WebRtcPeerHost {
         const ttlSeconds = frame.ttl_seconds ?? 60
         const subscribeContext = {
           id: frame.id,
+          topic: event.topic,
           remotePeerId,
           topics: frame.topics,
           correlationIds: frame.correlation_ids ?? [],
           ttlSeconds,
           signal: abort.signal,
-          receivedAtMs: nowMs
+          receivedAtMs: nowMs,
+          emit: (value: unknown, options?: PeerHostEventEmitOptions) => this.emitSubscriptionEvent(
+            event,
+            value,
+            options,
+            frame,
+            active,
+            emission
+          )
         }
         if (epochContext !== undefined) Object.assign(subscribeContext, { authenticatedPeerContext: epochContext })
         const handle = await this.options.registry.openSubscription(event, subscribeContext)
@@ -502,23 +548,52 @@ export class WebRtcPeerHost {
         }
         if (handle) handles.push(handle)
       }
+      if (emission.failed) throw new Error('peer-host subscription event queue overflow')
     } catch {
       if (!this.finishActive(frame.id, active, 'subscription_rejected')) return
       await sender.sendFrame({ type: 'subscribe_rejected', id: frame.id, reason: 'handler_failed', rejected_topics: frame.topics })
       return
     }
     if (abort.signal.aborted || active.settled || this.active.get(frame.id) !== active) return
+    try {
+      await sender.sendFrame({
+        type: 'subscribed',
+        id: frame.id,
+        subscription_id: frame.id,
+        accepted: true,
+        accepted_topics: frame.topics,
+        rejected_topics: [],
+        correlation_ids: frame.correlation_ids ?? [],
+        ttl_seconds: frame.ttl_seconds ?? 60,
+        reason: null,
+        idempotent: false
+      }, abort.signal)
+      const buffered = emission.pending.splice(0)
+      emission.acknowledged = true
+      const delivered = await Promise.all(
+        buffered.map((eventFrame) => this.scheduleSubscriptionEvent(frame.id, active, emission, eventFrame))
+      )
+      if (delivered.some((sent) => !sent)) return
+    } catch (error) {
+      active.abort.abort('event_send_failed')
+      this.finishActive(frame.id, active, 'event_send_failed')
+      throw error
+    }
+  }
+
+  async handleUnsubscribe(id: string): Promise<void> {
+    const sender = this.requireSender()
+    const active = this.active.get(id)
+    const removed = active?.kind === 'subscription'
+    if (removed && active) {
+      active.abort.abort('remote_unsubscribed')
+      this.finishActive(id, active, 'remote_unsubscribed')
+    }
     await sender.sendFrame({
-      type: 'subscribed',
-      id: frame.id,
-      subscription_id: frame.id,
-      accepted: true,
-      accepted_topics: frame.topics,
-      rejected_topics: [],
-      correlation_ids: frame.correlation_ids ?? [],
-      ttl_seconds: frame.ttl_seconds ?? 60,
-      reason: null,
-      idempotent: false
+      type: 'unsubscribed',
+      id,
+      subscription_id: id,
+      removed
     })
   }
 
@@ -605,6 +680,92 @@ export class WebRtcPeerHost {
     } finally {
       this.finishActive(frame.id, active)
     }
+  }
+
+  private async emitSubscriptionEvent(
+    event: PeerHostEventDescriptor,
+    value: unknown,
+    options: PeerHostEventEmitOptions | undefined,
+    subscription: SubscribeFrame,
+    active: ActiveWork,
+    emission: SubscriptionEmissionState
+  ): Promise<boolean> {
+    if (active.settled || active.abort.signal.aborted || this.active.get(subscription.id) !== active) return false
+    const queueDepth = emission.acknowledged ? emission.queuedSends : emission.pending.length
+    if (queueDepth >= MAX_SUBSCRIPTION_EVENT_QUEUE) {
+      emission.failed = true
+      if (emission.acknowledged) {
+        this.terminateSubscriptionDelivery(subscription.id, active, 'event_queue_overflow')
+      }
+      return false
+    }
+
+    const parsed = this.options.registry.parseEventOutput(event, value)
+    const correlationId = eventCorrelationId(parsed, options?.correlationId, subscription.correlation_ids ?? [])
+    const eventFrame: Record<string, unknown> = {
+      type: 'event',
+      topic: event.topic,
+      params: parsed
+    }
+    if (correlationId !== undefined) eventFrame.correlation_id = correlationId
+    const maxEventBytes = event.maxEventBytes ?? DEFAULT_MAX_EVENT_BYTES
+    if (utf8Bytes(JSON.stringify(eventFrame)) > maxEventBytes) {
+      throw new Error('peer-host event exceeds bounded payload size')
+    }
+    emission.validators.get(event.topic)?.(
+      parsed,
+      correlationId === undefined ? {} : { correlationId }
+    )
+
+    if (!emission.acknowledged) {
+      emission.pending.push(eventFrame)
+      return true
+    }
+    return await this.scheduleSubscriptionEvent(subscription.id, active, emission, eventFrame)
+  }
+
+  private scheduleSubscriptionEvent(
+    subscriptionId: string,
+    active: ActiveWork,
+    emission: SubscriptionEmissionState,
+    eventFrame: Record<string, unknown>
+  ): Promise<boolean> {
+    if (active.settled || active.abort.signal.aborted || this.active.get(subscriptionId) !== active) {
+      return Promise.resolve(false)
+    }
+    if (emission.queuedSends >= MAX_SUBSCRIPTION_EVENT_QUEUE) {
+      emission.failed = true
+      this.terminateSubscriptionDelivery(subscriptionId, active, 'event_queue_overflow')
+      return Promise.resolve(false)
+    }
+    emission.queuedSends += 1
+    const delivery = emission.sendChain.then(async () => {
+      if (active.settled || active.abort.signal.aborted || this.active.get(subscriptionId) !== active) return false
+      await this.requireSender().sendFrame(eventFrame, active.abort.signal)
+      return !active.settled && !active.abort.signal.aborted && this.active.get(subscriptionId) === active
+    })
+    emission.sendChain = delivery.then(() => undefined, () => undefined)
+    return delivery.catch((error) => {
+      this.terminateSubscriptionDelivery(subscriptionId, active, 'event_send_failed')
+      throw error
+    }).finally(() => {
+      emission.queuedSends -= 1
+    })
+  }
+
+  private terminateSubscriptionDelivery(
+    subscriptionId: string,
+    active: ActiveWork,
+    reason: string
+  ): void {
+    active.abort.abort(reason)
+    if (!this.finishActive(subscriptionId, active, reason)) return
+    void this.sender?.sendFrame({
+      type: 'unsubscribed',
+      id: subscriptionId,
+      subscription_id: subscriptionId,
+      removed: true
+    }).catch(() => undefined)
   }
 
   private callContext(frame: CallFrame, method: PeerHostMethodDescriptor, remotePeerId: string, identity: PeerHostIdentity, signal: AbortSignal, receivedAtMs: number, deadlineAtMs: number, authenticatedPeerContext?: AuthenticatedPeerContext): PeerHostCallContext {
@@ -884,6 +1045,37 @@ function revocationTerminalError(event: PeerRevocationEvent): PeerHostErrorBody 
     reason_code: 'peer_authority_revoked',
     error_ref: String(event.revokedAtMs).slice(0, 64)
   }
+}
+
+function eventCorrelationId(
+  value: unknown,
+  explicitCorrelationId: string | undefined,
+  allowedCorrelationIds: readonly string[]
+): string | undefined {
+  const payloadCorrelationId = isRecord(value) && typeof value.correlation_id === 'string'
+    ? value.correlation_id
+    : undefined
+  if (
+    explicitCorrelationId !== undefined
+    && payloadCorrelationId !== undefined
+    && explicitCorrelationId !== payloadCorrelationId
+  ) {
+    throw new Error('peer-host event correlation does not match payload')
+  }
+  const correlationId = explicitCorrelationId ?? payloadCorrelationId
+  if (
+    correlationId !== undefined
+    && (correlationId.length === 0 || correlationId.length > MAX_EVENT_CORRELATION_ID_LENGTH)
+  ) {
+    throw new Error('peer-host event correlation is not a bounded identifier')
+  }
+  if (
+    allowedCorrelationIds.length > 0
+    && (correlationId === undefined || !allowedCorrelationIds.includes(correlationId))
+  ) {
+    throw new Error('peer-host event correlation is outside the subscription scope')
+  }
+  return correlationId
 }
 
 function utf8Bytes(value: string): number {

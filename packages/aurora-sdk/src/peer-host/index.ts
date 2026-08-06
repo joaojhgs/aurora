@@ -73,10 +73,14 @@ export type {
 export {
   PeerHostContractRegistry,
   createToolingPeerHostRegistry,
+  generatedPeerHostEventDescriptor,
   generatedPeerHostMethodDescriptor,
+  registerGeneratedPeerHostEvent,
   registerGeneratedPeerHostMethod
 } from './contract-registry.js'
 export type {
+  GeneratedPeerHostEventHandler,
+  GeneratedPeerHostEventRegistrationOptions,
   GeneratedPeerHostMethodHandler,
   GeneratedPeerHostMethodId,
   GeneratedPeerHostRegistrationOptions,
@@ -97,6 +101,10 @@ export type {
   PeerHostAuthorizeRequest,
   PeerHostCallContext,
   PeerHostErrorBody,
+  PeerHostEventEmitOptions,
+  PeerHostEventDescriptor,
+  PeerHostEventEmissionContext,
+  PeerHostEventEmissionValidator,
   PeerHostFrameSender,
   PeerHostIdentity,
   PeerHostManifest,
@@ -105,5 +113,6 @@ export type {
   PeerHostMethodType,
   PeerHostOptions,
   PeerHostSubscribeContext,
+  PeerHostSubscriptionHandle,
   ProviderLeaseRecord
 } from './types.js'

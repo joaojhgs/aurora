@@ -1,5 +1,23 @@
 export { AuroraClient, ModelRuntimeClient } from './client.js'
-export { GeneratedContractClient, generatedBackendContract } from './generated-contracts.js'
+export {
+  GeneratedContractClient,
+  generatedBackendContract,
+  generatedBackendEventContract
+} from './generated-contracts.js'
+export type {
+  GeneratedBackendContract,
+  GeneratedBackendEventContract,
+  GeneratedBackendEventDescriptor,
+  GeneratedBackendEventInput,
+  GeneratedBackendEventOutput,
+  GeneratedBackendEventSchema,
+  GeneratedBackendEventTopic,
+  GeneratedBackendMethodDescriptor,
+  GeneratedBackendMethodId,
+  GeneratedBackendMethodInput,
+  GeneratedBackendMethodOutput,
+  GeneratedBackendMethodParsedInput
+} from './generated-contracts.js'
 export { SpeechClient, SttClient, TranscriptionClient, TtsClient, WakeWordClient } from './speech.js'
 export { AdminActionClient, ApprovalClient, adminActionAudit } from './admin.js'
 export { BACKUP_METHODS, BackupClient } from './backup.js'

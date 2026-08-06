@@ -10,7 +10,9 @@ import {
   SessionPeerHostAuthorizationStore,
   WebRtcPeerHost,
   createToolingPeerHostRegistry,
+  generatedPeerHostEventDescriptor,
   type GeneratedPeerHostMethodHandler,
+  type GeneratedPeerHostEventHandler,
   type LocalPeerGrantV1,
   type PeerHostAuthorizationStore,
   type PeerHostCallContext
@@ -218,6 +220,26 @@ async function flush(): Promise<void> {
 async function waitForTimeoutWork(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 5))
   await flush()
+}
+
+type TtsAudioChunk = Parameters<Parameters<GeneratedPeerHostEventHandler<'TTS.AudioChunk'>>[0]['emit']>[0]
+
+function ttsAudioChunk(patch: Partial<TtsAudioChunk> = {}): TtsAudioChunk {
+  return {
+    stream_id: 'stream-1',
+    sequence: 0,
+    audio_data: 'AQI=',
+    format: 'pcm_s16le',
+    sample_rate: 24_000,
+    channels: 1,
+    duration_ms: 1,
+    text: 'hello',
+    source_sequence: 0,
+    is_final: false,
+    reason: null,
+    correlation_id: 'corr-1',
+    ...patch
+  }
 }
 
 describe('WebRtcPeerHost', () => {
@@ -842,6 +864,231 @@ describe('WebRtcPeerHost', () => {
     expect(opened).toHaveBeenCalledTimes(1)
     expect(allowed.getActiveWorkCount()).toBe(1)
     expect(allowedSent.at(-1)).toMatchObject({ type: 'subscribed', id: 'sub-ok' })
+  })
+
+  it('delivers generated TTS events only after subscription acknowledgement with scoped ordered frames', async () => {
+    let subscriptionContext: Parameters<GeneratedPeerHostEventHandler<'TTS.AudioChunk'>>[0] | undefined
+    const close = vi.fn()
+    const registry = new PeerHostContractRegistry().register({
+      methodId: 'Tooling.GetTools',
+      methodType: 'unary',
+      inputSchemaId: 'Tooling.GetTools.input',
+      outputSchemaId: 'Tooling.GetTools.output',
+      inputSchema: z.any(),
+      outputSchema: z.any(),
+      requiredPermissions: ['Tooling.GetTools'],
+      handler: async () => ({ count: 0, tools: [] })
+    }).registerEvent(generatedPeerHostEventDescriptor('TTS.AudioChunk', async (context) => {
+      subscriptionContext = context
+      expect(await context.emit(ttsAudioChunk())).toBe(true)
+      return { close }
+    }))
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry,
+      authorizationStore: new SessionPeerHostAuthorizationStore([
+        grant({ allowedMethodIds: ['Tooling.GetTools', 'TTS.AudioChunk'] })
+      ]),
+      clock: () => 1000,
+      randomId: () => 'epoch-1'
+    })
+    const sent: Array<Record<string, unknown>> = []
+    peerHost.attach({ sendFrame: async (frame) => { sent.push(frame) } })
+    const manifest = await peerHost.startEpoch('peer-a')
+    peerHost.markManifestAcknowledged(ackFromManifest(manifest))
+
+    await peerHost.handleSubscribe({
+      type: 'subscribe',
+      id: 'tts-sub',
+      topics: ['TTS.AudioChunk'],
+      correlation_ids: ['corr-1'],
+      ttl_seconds: 60
+    }, 'peer-a')
+
+    expect(subscriptionContext).toBeDefined()
+    const subscriptionFrames = sent.filter((frame) => frame.type === 'subscribed' || frame.type === 'event')
+    expect(subscriptionFrames.map((frame) => frame.type)).toEqual(['subscribed', 'event'])
+    expect(subscriptionFrames[1]).toMatchObject({
+      type: 'event',
+      topic: 'TTS.AudioChunk',
+      correlation_id: 'corr-1',
+      params: { stream_id: 'stream-1', sequence: 0, source_sequence: 0, is_final: false }
+    })
+    const context = subscriptionContext as Parameters<GeneratedPeerHostEventHandler<'TTS.AudioChunk'>>[0]
+    await expect(context.emit(ttsAudioChunk({
+      sequence: 1,
+      source_sequence: 1,
+      correlation_id: null
+    }))).rejects.toThrow('outside the subscription scope')
+    await expect(context.emit(
+      ttsAudioChunk({ sequence: 1, source_sequence: 1, correlation_id: null }),
+      { correlationId: 'corr-1' }
+    )).rejects.toThrow('correlation does not match payload')
+    await expect(context.emit(ttsAudioChunk({
+      sequence: 2,
+      source_sequence: 1
+    }))).rejects.toThrow('sequence is not monotonic')
+    await expect(context.emit(ttsAudioChunk({
+      sequence: 1,
+      source_sequence: 2
+    }))).rejects.toThrow('source sequence is not ordered')
+    await expect(context.emit(ttsAudioChunk({
+      sequence: 1,
+      audio_data: 'A'.repeat(64 * 1024),
+      source_sequence: 1
+    }))).rejects.toThrow('exceeds bounded payload size')
+    await expect(context.emit(ttsAudioChunk({
+      sequence: 1,
+      source_sequence: null,
+      is_final: true,
+      duration_ms: 0
+    }))).rejects.toThrow('final marker is invalid')
+    expect(await context.emit(ttsAudioChunk({
+      sequence: 1,
+      audio_data: '',
+      sample_rate: 24_000,
+      duration_ms: 0,
+      text: null,
+      source_sequence: null,
+      is_final: true,
+      reason: 'completed'
+    }))).toBe(true)
+    await expect(context.emit(ttsAudioChunk({
+      sequence: 2,
+      source_sequence: 1
+    }))).rejects.toThrow('sequence is not monotonic')
+
+    expect(sent.filter((frame) => frame.type === 'event')).toHaveLength(2)
+    expect(sent.some((frame) => frame.type === 'chunk' || frame.type === 'eof')).toBe(false)
+    await peerHost.handleUnsubscribe('tts-sub')
+    expect(close).toHaveBeenCalledWith('remote_unsubscribed')
+    expect(sent.at(-1)).toMatchObject({
+      type: 'unsubscribed',
+      id: 'tts-sub',
+      subscription_id: 'tts-sub',
+      removed: true
+    })
+    expect(await context.emit(ttsAudioChunk({ sequence: 2, source_sequence: 1 }))).toBe(false)
+    expect(sent.filter((frame) => frame.type === 'event')).toHaveLength(2)
+  })
+
+  it('aborts a backpressured event send when its subscription is removed', async () => {
+    let subscriptionContext: Parameters<GeneratedPeerHostEventHandler<'TTS.AudioChunk'>>[0] | undefined
+    const registry = new PeerHostContractRegistry().register({
+      methodId: 'Tooling.GetTools',
+      methodType: 'unary',
+      inputSchemaId: 'Tooling.GetTools.input',
+      outputSchemaId: 'Tooling.GetTools.output',
+      inputSchema: z.any(),
+      outputSchema: z.any(),
+      requiredPermissions: ['Tooling.GetTools'],
+      handler: async () => ({ count: 0, tools: [] })
+    }).registerEvent(generatedPeerHostEventDescriptor('TTS.AudioChunk', (context) => {
+      subscriptionContext = context
+    }))
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry,
+      authorizationStore: new SessionPeerHostAuthorizationStore([
+        grant({ allowedMethodIds: ['Tooling.GetTools', 'TTS.AudioChunk'] })
+      ]),
+      clock: () => 1000,
+      randomId: () => 'epoch-1'
+    })
+    const sent: Array<Record<string, unknown>> = []
+    peerHost.attach({
+      sendFrame: async (frame, signal) => {
+        if (frame.type === 'event') {
+          await new Promise<void>((resolve) => {
+            if (signal?.aborted) return resolve()
+            signal?.addEventListener('abort', () => resolve(), { once: true })
+          })
+          if (signal?.aborted) throw new Error('send aborted')
+        }
+        sent.push(frame)
+      }
+    })
+    const manifest = await peerHost.startEpoch('peer-a')
+    peerHost.markManifestAcknowledged(ackFromManifest(manifest))
+    await peerHost.handleSubscribe({
+      type: 'subscribe',
+      id: 'blocked-sub',
+      topics: ['TTS.AudioChunk'],
+      correlation_ids: ['corr-1'],
+      ttl_seconds: 60
+    }, 'peer-a')
+    const context = subscriptionContext as Parameters<GeneratedPeerHostEventHandler<'TTS.AudioChunk'>>[0]
+    const emission = context.emit(ttsAudioChunk())
+    await flush()
+
+    await peerHost.handleUnsubscribe('blocked-sub')
+    await expect(emission).rejects.toThrow('send aborted')
+    expect(sent.some((frame) => frame.type === 'event')).toBe(false)
+    expect(sent.at(-1)).toMatchObject({ type: 'unsubscribed', id: 'blocked-sub', removed: true })
+  })
+
+  it('bounds queued event sends and terminates the subscription on overflow', async () => {
+    let subscriptionContext: Parameters<GeneratedPeerHostEventHandler<'TTS.AudioChunk'>>[0] | undefined
+    const registry = new PeerHostContractRegistry().register({
+      methodId: 'Tooling.GetTools',
+      methodType: 'unary',
+      inputSchemaId: 'Tooling.GetTools.input',
+      outputSchemaId: 'Tooling.GetTools.output',
+      inputSchema: z.any(),
+      outputSchema: z.any(),
+      requiredPermissions: ['Tooling.GetTools'],
+      handler: async () => ({ count: 0, tools: [] })
+    }).registerEvent(generatedPeerHostEventDescriptor('TTS.AudioChunk', (context) => {
+      subscriptionContext = context
+    }))
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry,
+      authorizationStore: new SessionPeerHostAuthorizationStore([
+        grant({ allowedMethodIds: ['Tooling.GetTools', 'TTS.AudioChunk'] })
+      ]),
+      clock: () => 1000,
+      randomId: () => 'epoch-1'
+    })
+    const sent: Array<Record<string, unknown>> = []
+    peerHost.attach({
+      sendFrame: async (frame, signal) => {
+        if (frame.type === 'event') {
+          await new Promise<void>((resolve) => {
+            if (signal?.aborted) return resolve()
+            signal?.addEventListener('abort', () => resolve(), { once: true })
+          })
+          if (signal?.aborted) throw new Error('send aborted')
+        }
+        sent.push(frame)
+      }
+    })
+    const manifest = await peerHost.startEpoch('peer-a')
+    peerHost.markManifestAcknowledged(ackFromManifest(manifest))
+    await peerHost.handleSubscribe({
+      type: 'subscribe',
+      id: 'overflow-sub',
+      topics: ['TTS.AudioChunk'],
+      correlation_ids: ['corr-1'],
+      ttl_seconds: 60
+    }, 'peer-a')
+    const context = subscriptionContext as Parameters<GeneratedPeerHostEventHandler<'TTS.AudioChunk'>>[0]
+    const queued = Array.from({ length: 32 }, (_, sequence) => context.emit(ttsAudioChunk({
+      sequence,
+      source_sequence: 0
+    })))
+    await flush()
+
+    expect(await context.emit(ttsAudioChunk({ sequence: 32, source_sequence: 0 }))).toBe(false)
+    await Promise.allSettled(queued)
+    await flush()
+
+    expect(peerHost.getActiveWorkCount()).toBe(0)
+    expect(sent.some((frame) => frame.type === 'event')).toBe(false)
+    expect(sent.at(-1)).toMatchObject({ type: 'unsubscribed', id: 'overflow-sub', removed: true })
   })
 
   it('uses authenticated authority context instead of forged caller identity or effective permissions', async () => {

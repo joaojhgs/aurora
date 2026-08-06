@@ -424,8 +424,13 @@ export class WebRtcPeerSession {
     }
   }
 
-  async sendFrame(frame: unknown): Promise<void> {
-    return this.enqueueFrame(frame, 'Aurora WebRTC peer session is not authorized', () => this.state === 'authorized')
+  async sendFrame(frame: unknown, signal?: AbortSignal): Promise<void> {
+    return this.enqueueFrame(
+      frame,
+      'Aurora WebRTC peer session is not authorized',
+      () => this.state === 'authorized',
+      signal
+    )
   }
 
   async confirmSas(code: string, approval?: PeerPairingApproval): Promise<void> {
@@ -938,16 +943,23 @@ export class WebRtcPeerSession {
     )
   }
 
-  private async enqueueFrame(frame: unknown, errorMessage: string, isAllowed: () => boolean): Promise<void> {
+  private async enqueueFrame(
+    frame: unknown,
+    errorMessage: string,
+    isAllowed: () => boolean,
+    signal?: AbortSignal
+  ): Promise<void> {
     const job = this.sendQueue.then(async () => {
+      if (signal?.aborted) throw new Error('Aurora WebRTC data channel send aborted')
       if (!isAllowed()) throw new Error(errorMessage)
       const sealed = await this.options.codec.seal(frame)
+      if (signal?.aborted) throw new Error('Aurora WebRTC data channel send aborted')
       const channel = this.channel
       const flow = this.channelFlow
       if (channel?.readyState !== 'open' || flow === undefined) {
         throw new Error(errorMessage)
       }
-      const sent = await flow.send(sealed)
+      const sent = await flow.send(sealed, signal)
       if (!sent) throw new Error('Aurora WebRTC data channel send failed')
     })
     this.sendQueue = job.catch(() => undefined)

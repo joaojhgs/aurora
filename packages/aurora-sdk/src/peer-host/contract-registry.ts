@@ -1,14 +1,26 @@
 import {
   generatedBackendContract,
+  generatedBackendEventContract,
+  type GeneratedBackendEventOutput,
+  type GeneratedBackendEventTopic,
   type GeneratedBackendMethodId,
   type GeneratedBackendMethodOutput,
   type GeneratedBackendMethodParsedInput
 } from '../generated-contracts.js'
 import { parseBoundary } from '../validation/index.js'
-import type { PeerHostCallContext, PeerHostEventDescriptor, PeerHostSubscribeContext, PeerHostSubscriptionHandle, PeerHostMethodDescriptor } from './types.js'
+import type {
+  PeerHostCallContext,
+  PeerHostEventDescriptor,
+  PeerHostEventEmissionValidator,
+  PeerHostMethodDescriptor,
+  PeerHostSubscribeContext,
+  PeerHostSubscriptionHandle
+} from './types.js'
 
 const DEFAULT_METHOD_BYTES = 256 * 1024
+const DEFAULT_EVENT_BYTES = 64 * 1024
 const DEFAULT_TIMEOUT_MS = 30_000
+const MAX_EVENT_STREAM_ID_LENGTH = 256
 const TOOLING_PROVIDER_CAPABILITIES = Object.freeze(['tool_discovery', 'tool_execution'] as const)
 const GENERATED_PEER_HOST_BLOCKED_METHODS = new Set<GeneratedBackendMethodId>([
   'Gateway.ExplainRoute',
@@ -33,6 +45,15 @@ export interface GeneratedPeerHostRegistrationOptions {
   readonly serviceCapabilities?: readonly string[]
   readonly serviceVersion?: string
   readonly maxConcurrent?: number
+}
+
+export type GeneratedPeerHostEventHandler<TTopic extends GeneratedBackendEventTopic> = (
+  context: PeerHostSubscribeContext<GeneratedBackendEventOutput<TTopic>>
+) => Promise<PeerHostSubscriptionHandle | void> | PeerHostSubscriptionHandle | void
+
+export interface GeneratedPeerHostEventRegistrationOptions {
+  readonly maxTtlSeconds?: number
+  readonly maxEventBytes?: number
 }
 
 export class PeerHostContractRegistry {
@@ -163,6 +184,45 @@ export function registerGeneratedPeerHostMethod<
   return registry.register(generatedPeerHostMethodDescriptor(methodId, handler, options))
 }
 
+/** Build an authorized peer-host event descriptor from generated contract metadata. */
+export function generatedPeerHostEventDescriptor<TTopic extends GeneratedBackendEventTopic>(
+  topic: TTopic,
+  handler: GeneratedPeerHostEventHandler<TTopic>,
+  options: GeneratedPeerHostEventRegistrationOptions = {}
+): PeerHostEventDescriptor<GeneratedBackendEventOutput<TTopic>> {
+  const contract = generatedBackendEventContract(topic)
+  const descriptor = contract.descriptor
+  if (!descriptor.authorized || !descriptor.bounded || descriptor.remote_raw_audio_route) {
+    throw new Error(`generated peer-host event is not safe for remote projection: ${topic}`)
+  }
+  const createEmissionValidator = generatedEventEmissionValidatorFactory(topic)
+  return {
+    topic,
+    module: descriptor.module,
+    name: descriptor.name,
+    outputSchemaId: descriptor.schema_id,
+    outputSchema: contract.outputSchema as unknown as PeerHostEventDescriptor<
+      GeneratedBackendEventOutput<TTopic>
+    >['outputSchema'],
+    requiredPermissions: descriptor.required_perms,
+    maxTtlSeconds: options.maxTtlSeconds ?? 120,
+    maxEventBytes: options.maxEventBytes ?? DEFAULT_EVENT_BYTES,
+    orderedEventGroup: descriptor.ordered_event_group,
+    ...(createEmissionValidator === undefined ? {} : { createEmissionValidator }),
+    handler
+  }
+}
+
+/** Register one generated backend event as an authorized peer-host subscription. */
+export function registerGeneratedPeerHostEvent<TTopic extends GeneratedBackendEventTopic>(
+  registry: PeerHostContractRegistry,
+  topic: TTopic,
+  handler: GeneratedPeerHostEventHandler<TTopic>,
+  options: GeneratedPeerHostEventRegistrationOptions = {}
+): PeerHostContractRegistry {
+  return registry.registerEvent(generatedPeerHostEventDescriptor(topic, handler, options))
+}
+
 function assertGeneratedPeerHostMethod(
   methodId: GeneratedBackendMethodId
 ): asserts methodId is GeneratedPeerHostMethodId {
@@ -205,4 +265,91 @@ export function createToolingPeerHostRegistry(
     handlers.executeTool
   )
   return registry
+}
+
+type TtsAudioSequenceState = {
+  nextSequence: number
+  lastSourceSequence: number | null
+  final: boolean
+}
+
+function generatedEventEmissionValidatorFactory<TTopic extends GeneratedBackendEventTopic>(
+  topic: TTopic
+): (() => PeerHostEventEmissionValidator<GeneratedBackendEventOutput<TTopic>>) | undefined {
+  if (topic !== 'TTS.AudioChunk') return undefined
+  return createTtsAudioChunkEmissionValidator as () => PeerHostEventEmissionValidator<
+    GeneratedBackendEventOutput<TTopic>
+  >
+}
+
+function createTtsAudioChunkEmissionValidator(): PeerHostEventEmissionValidator<unknown> {
+  const streams = new Map<string, TtsAudioSequenceState>()
+  return (value, context) => {
+    if (!isRecord(value)) throw new Error('TTS audio event must be an object')
+    const streamId = value.stream_id
+    const sequence = value.sequence
+    const sourceSequence = value.source_sequence
+    const isFinal = value.is_final
+    const audioData = value.audio_data
+    const durationMs = value.duration_ms
+    const payloadCorrelationId = value.correlation_id
+    if (
+      typeof streamId !== 'string'
+      || streamId.length === 0
+      || streamId.length > MAX_EVENT_STREAM_ID_LENGTH
+    ) {
+      throw new Error('TTS audio event stream_id is not a bounded identifier')
+    }
+    if (!Number.isSafeInteger(sequence) || (sequence as number) < 0) {
+      throw new Error('TTS audio event sequence is invalid')
+    }
+    if (typeof isFinal !== 'boolean' || typeof audioData !== 'string') {
+      throw new Error('TTS audio event terminal fields are invalid')
+    }
+    if (sourceSequence !== null && sourceSequence !== undefined && !Number.isSafeInteger(sourceSequence)) {
+      throw new Error('TTS audio event source sequence is invalid')
+    }
+    if (
+      context.correlationId !== undefined
+      && payloadCorrelationId !== context.correlationId
+    ) {
+      throw new Error('TTS audio event correlation does not match payload')
+    }
+    const stateKey = `${context.correlationId ?? ''}\u0000${streamId}`
+    const previous = streams.get(stateKey)
+    const expectedSequence = previous?.nextSequence ?? 0
+    if (sequence !== expectedSequence || previous?.final) {
+      throw new Error('TTS audio event sequence is not monotonic')
+    }
+    if (isFinal) {
+      if (
+        audioData !== ''
+        || (sourceSequence !== null && sourceSequence !== undefined)
+        || durationMs !== 0
+      ) {
+        throw new Error('TTS audio event final marker is invalid')
+      }
+    } else {
+      if (!Number.isSafeInteger(sourceSequence) || (sourceSequence as number) < 0) {
+        throw new Error('TTS audio event source sequence is required')
+      }
+      const lastSourceSequence = previous?.lastSourceSequence
+      if (
+        lastSourceSequence === undefined || lastSourceSequence === null
+          ? sourceSequence !== 0
+          : sourceSequence !== lastSourceSequence && sourceSequence !== lastSourceSequence + 1
+      ) {
+        throw new Error('TTS audio event source sequence is not ordered')
+      }
+    }
+    streams.set(stateKey, {
+      nextSequence: (sequence as number) + 1,
+      lastSourceSequence: isFinal ? (previous?.lastSourceSequence ?? null) : sourceSequence as number,
+      final: isFinal
+    })
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }

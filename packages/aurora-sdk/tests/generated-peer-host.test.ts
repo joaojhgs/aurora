@@ -5,7 +5,9 @@ import {
   SessionPeerHostAuthorizationStore,
   WebRtcPeerHost,
   createToolingPeerHostRegistry,
+  generatedPeerHostEventDescriptor,
   generatedPeerHostMethodDescriptor,
+  registerGeneratedPeerHostEvent,
   registerGeneratedPeerHostMethod,
   type CallFrame,
   type LocalPeerGrantV1,
@@ -71,6 +73,37 @@ function compatibleAck(manifest: Record<string, unknown>): Record<string, unknow
 }
 
 describe('generated peer-host registration', () => {
+  it('derives authorized bounded event metadata and validator types', () => {
+    const registry = new PeerHostContractRegistry()
+    const handler = async () => undefined
+    const descriptor = generatedPeerHostEventDescriptor('TTS.AudioChunk', handler)
+
+    expect(descriptor).toMatchObject({
+      topic: 'TTS.AudioChunk',
+      module: 'TTS',
+      name: 'AudioChunk',
+      outputSchemaId: 'TTS.AudioChunk.event.TTSAudioChunkEvent',
+      requiredPermissions: ['TTS.use'],
+      maxTtlSeconds: 120,
+      maxEventBytes: 64 * 1024,
+      orderedEventGroup: 'tts_text_stream'
+    })
+    expect(() => descriptor.outputSchema.parse({
+      stream_id: 'stream-1',
+      sequence: 0,
+      audio_data: '',
+      format: 'pcm_s16le',
+      sample_rate: 24_000,
+      channels: 1,
+      duration_ms: 10,
+      source_sequence: 0,
+      is_final: false,
+      correlation_id: 'corr-1'
+    })).toThrow()
+    registerGeneratedPeerHostEvent(registry, 'TTS.AudioChunk', handler)
+    expect(registry.listEvents().map((event) => event.topic)).toEqual(['TTS.AudioChunk'])
+  })
+
   it.each(TTS_MANAGEMENT_METHOD_IDS)(
     'derives manage projection and permissions for %s',
     (methodId) => {

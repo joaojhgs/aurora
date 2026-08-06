@@ -2,6 +2,7 @@ import type { z } from 'zod/v4'
 
 import { AuroraError } from './errors.js'
 import {
+  backendContractEventDescriptorByTopic,
   backendContractMethodDescriptorById,
   backendContractSchemaById
 } from './generated/backend-contracts.zod.js'
@@ -14,6 +15,7 @@ import {
 } from './validation/index.js'
 
 type GeneratedDescriptorMap = typeof backendContractMethodDescriptorById
+type GeneratedEventDescriptorMap = typeof backendContractEventDescriptorByTopic
 type GeneratedSchemaMap = typeof backendContractSchemaById
 
 export type GeneratedBackendMethodId = keyof GeneratedDescriptorMap
@@ -43,6 +45,22 @@ export type GeneratedBackendMethodOutput<TMethodId extends GeneratedBackendMetho
   GeneratedBackendMethodOutputSchema<TMethodId>
 >
 
+export type GeneratedBackendEventTopic = keyof GeneratedEventDescriptorMap
+export type GeneratedBackendEventDescriptor<TTopic extends GeneratedBackendEventTopic> =
+  GeneratedEventDescriptorMap[TTopic]
+type GeneratedEventSchemaId<TTopic extends GeneratedBackendEventTopic> = Extract<
+  GeneratedBackendEventDescriptor<TTopic>['schema_id'],
+  keyof GeneratedSchemaMap
+>
+export type GeneratedBackendEventSchema<TTopic extends GeneratedBackendEventTopic> =
+  GeneratedSchemaMap[GeneratedEventSchemaId<TTopic>]
+export type GeneratedBackendEventInput<TTopic extends GeneratedBackendEventTopic> = z.input<
+  GeneratedBackendEventSchema<TTopic>
+>
+export type GeneratedBackendEventOutput<TTopic extends GeneratedBackendEventTopic> = z.output<
+  GeneratedBackendEventSchema<TTopic>
+>
+
 export interface GeneratedBackendContract<TMethodId extends GeneratedBackendMethodId> {
   readonly descriptor: GeneratedBackendMethodDescriptor<TMethodId>
   readonly inputSchema: GeneratedBackendMethodInputSchema<TMethodId>
@@ -58,6 +76,22 @@ export function generatedBackendContract<TMethodId extends GeneratedBackendMetho
     inputSchema: backendContractSchemaById[descriptor.input_schema_id],
     outputSchema: backendContractSchemaById[descriptor.output_schema_id]
   } as GeneratedBackendContract<TMethodId>
+}
+
+export interface GeneratedBackendEventContract<TTopic extends GeneratedBackendEventTopic> {
+  readonly descriptor: GeneratedBackendEventDescriptor<TTopic>
+  readonly outputSchema: GeneratedBackendEventSchema<TTopic>
+}
+
+/** Resolve an event descriptor and validator from the generated backend inventory. */
+export function generatedBackendEventContract<TTopic extends GeneratedBackendEventTopic>(
+  topic: TTopic
+): GeneratedBackendEventContract<TTopic> {
+  const descriptor = backendContractEventDescriptorByTopic[topic]
+  return {
+    descriptor,
+    outputSchema: backendContractSchemaById[descriptor.schema_id]
+  } as GeneratedBackendEventContract<TTopic>
 }
 
 const GENERATED_CLIENT_BLOCKED_METHODS = new Set<GeneratedBackendMethodId>([
