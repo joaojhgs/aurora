@@ -744,6 +744,86 @@ describe('WebRtcPeerHost', () => {
     ]))
   })
 
+  it('preserves generated TTS delivery ownership when another request reuses its work ID', async () => {
+    let subscriptionContext: Parameters<GeneratedPeerHostEventHandler<'TTS.AudioChunk'>>[0] | undefined
+    const callHandler = vi.fn(async () => ({ count: 0, tools: [] }))
+    const close = vi.fn()
+    const registry = new PeerHostContractRegistry().register({
+      methodId: 'Tooling.GetTools',
+      methodType: 'unary',
+      inputSchemaId: 'Tooling.GetTools.input',
+      outputSchemaId: 'Tooling.GetTools.output',
+      inputSchema: z.any(),
+      outputSchema: z.any(),
+      requiredPermissions: ['Tooling.GetTools'],
+      handler: callHandler
+    }).registerEvent(generatedPeerHostEventDescriptor('TTS.AudioChunk', (context) => {
+      subscriptionContext = context
+      return { close }
+    }))
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry,
+      authorizationStore: new SessionPeerHostAuthorizationStore([
+        grant({ allowedMethodIds: ['Tooling.GetTools', 'TTS.AudioChunk'] })
+      ]),
+      clock: () => 1000,
+      randomId: () => 'epoch-1'
+    })
+    const sent: Array<Record<string, unknown>> = []
+    peerHost.attach({ sendFrame: async (frame) => { sent.push(frame) } })
+    const manifest = await peerHost.startEpoch('peer-a')
+    peerHost.markManifestAcknowledged(ackFromManifest(manifest))
+    const subscription = {
+      type: 'subscribe' as const,
+      id: 'shared-tts-work-id',
+      topics: ['TTS.AudioChunk'],
+      correlation_ids: ['corr-1'],
+      ttl_seconds: 60
+    }
+
+    await peerHost.handleSubscribe(subscription, 'peer-a')
+    expect(peerHost.getActiveWorkCount()).toBe(1)
+    expect(subscriptionContext).toBeDefined()
+
+    await peerHost.handleCall({
+      type: 'call',
+      id: subscription.id,
+      method: 'Tooling.GetTools',
+      params: {},
+      identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] }
+    }, 'peer-a')
+
+    expect(callHandler).not.toHaveBeenCalled()
+    expect(sent.at(-1)).toMatchObject({
+      type: 'error',
+      id: subscription.id,
+      error: { code: 409, reason_code: 'request_in_progress' }
+    })
+    expect(peerHost.getActiveWorkCount()).toBe(1)
+    expect(close).not.toHaveBeenCalled()
+
+    await peerHost.handleSubscribe(subscription, 'peer-a')
+    expect(sent.at(-1)).toMatchObject({
+      type: 'subscribe_rejected',
+      id: subscription.id,
+      reason: 'request_in_progress'
+    })
+    expect(sent.filter((frame) => frame.type === 'subscribed' && frame.id === subscription.id)).toHaveLength(1)
+    expect(peerHost.getActiveWorkCount()).toBe(1)
+
+    const context = subscriptionContext as Parameters<GeneratedPeerHostEventHandler<'TTS.AudioChunk'>>[0]
+    expect(await context.emit(ttsAudioChunk())).toBe(true)
+    await peerHost.handleUnsubscribe(subscription.id)
+
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(close).toHaveBeenCalledWith('remote_unsubscribed')
+    expect(peerHost.getActiveWorkCount()).toBe(0)
+    expect(await context.emit(ttsAudioChunk({ sequence: 1, source_sequence: 1 }))).toBe(false)
+    expect(sent.filter((frame) => frame.type === 'event')).toHaveLength(1)
+  })
+
   it('authorizes registered subscriptions before activation and rejects hostile subscription attempts', async () => {
     const opened = vi.fn(() => ({ close: vi.fn() }))
     const registry = new PeerHostContractRegistry().register({
