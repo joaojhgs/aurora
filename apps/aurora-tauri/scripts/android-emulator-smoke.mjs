@@ -1,5 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
+import os from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -12,6 +13,8 @@ const NATIVE_PAYLOAD_LOGCAT_ARGS = [
   '*:S',
 ]
 
+const adb = resolveAdbCommand()
+
 export async function runAndroidEmulatorSmoke() {
   const appId = process.env.AURORA_ANDROID_APP_ID ?? 'dev.aurora.desktop'
   const apk = process.env.AURORA_ANDROID_APK ?? findApk()
@@ -20,9 +23,9 @@ export async function runAndroidEmulatorSmoke() {
     throw new Error('No Android APK found. Run pnpm --filter @aurora/tauri-ui android:build:apk first.')
   }
 
-  run('adb', ['wait-for-device'])
-  run('adb', ['install', '-r', apk])
-  run('adb', ['logcat', '-c'])
+  run(adb, ['wait-for-device'])
+  run(adb, ['install', '-r', apk])
+  run(adb, ['logcat', '-c'])
   launchApp(appId)
 
   const payloadJson = waitForPayloadJson()
@@ -76,9 +79,9 @@ function run(command, args) {
 
 function launchApp(appId) {
   try {
-    run('adb', ['shell', 'monkey', '-p', appId, '-c', 'android.intent.category.LAUNCHER', '1'])
+    run(adb, ['shell', 'monkey', '-p', appId, '-c', 'android.intent.category.LAUNCHER', '1'])
   } catch {
-    run('adb', ['shell', 'am', 'start', '-n', `${appId}/.MainActivity`])
+    run(adb, ['shell', 'am', 'start', '-n', `${appId}/.MainActivity`])
   }
 }
 
@@ -122,7 +125,7 @@ async function waitForWebviewMount(appId) {
       lastError = error
     } finally {
       if (port) {
-        spawnSync('adb', ['forward', '--remove', `tcp:${port}`], { stdio: 'ignore' })
+        spawnSync(adb, ['forward', '--remove', `tcp:${port}`], { stdio: 'ignore' })
       }
     }
 
@@ -300,11 +303,11 @@ function isStableAuroraWebviewState(state) {
 }
 
 function adbOutput(args, { allowPidofNoProcess = false } = {}) {
-  const result = spawnSync('adb', args, { encoding: 'utf8' })
+  const result = spawnSync(adb, args, { encoding: 'utf8' })
   if (result.error) throw result.error
   if (result.status !== 0) {
     if (allowPidofNoProcess && isPidofNoProcessResult(args, result)) return result.stdout
-    throw new Error(`adb ${args.join(' ')} failed: ${`${result.stdout}\n${result.stderr}`.trim()}`)
+    throw new Error(`${adb} ${args.join(' ')} failed: ${`${result.stdout}\n${result.stderr}`.trim()}`)
   }
   return result.stdout
 }
@@ -319,7 +322,7 @@ function isPidofNoProcessResult(args, result) {
 }
 
 function recentAndroidCrashEvidence(appId) {
-  const result = spawnSync('adb', ['logcat', '-d', '-t', '300'], { encoding: 'utf8' })
+  const result = spawnSync(adb, ['logcat', '-d', '-t', '300'], { encoding: 'utf8' })
   if (result.error || result.status !== 0) return ''
 
   return `${result.stdout}\n${result.stderr}`
@@ -344,7 +347,7 @@ function sleep(milliseconds) {
 function waitForPayloadJson() {
   const deadline = Date.now() + Number(process.env.AURORA_ANDROID_SMOKE_TIMEOUT_MS ?? 60_000)
   while (Date.now() < deadline) {
-    const logcat = spawnSync('adb', NATIVE_PAYLOAD_LOGCAT_ARGS, { encoding: 'utf8' })
+    const logcat = spawnSync(adb, NATIVE_PAYLOAD_LOGCAT_ARGS, { encoding: 'utf8' })
     if (logcat.error) {
       throw logcat.error
     }
@@ -354,6 +357,21 @@ function waitForPayloadJson() {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000)
   }
   return null
+}
+
+function resolveAdbCommand() {
+  const candidates = [
+    process.env.ADB,
+    process.env.ANDROID_HOME ? join(process.env.ANDROID_HOME, 'platform-tools', 'adb') : undefined,
+    process.env.ANDROID_SDK_ROOT ? join(process.env.ANDROID_SDK_ROOT, 'platform-tools', 'adb') : undefined,
+    join(os.homedir(), 'Android/Sdk/platform-tools/adb'),
+    join(os.homedir(), '.local/share/android-sdk/platform-tools/adb'),
+    'adb',
+  ].filter(Boolean)
+  return candidates.find((candidate) => {
+    if (candidate === 'adb') return spawnSync(candidate, ['version'], { stdio: 'ignore' }).status === 0
+    return existsSync(candidate) && spawnSync(candidate, ['version'], { stdio: 'ignore' }).status === 0
+  }) ?? 'adb'
 }
 
 function extractChunkedPayload(output) {

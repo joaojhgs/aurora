@@ -7,6 +7,7 @@ import { existsSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import http from 'node:http'
 import net from 'node:net'
+import os from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -76,6 +77,7 @@ const artifactDir =
 const interopTimeoutMs = Number(
   process.env.AURORA_ANDROID_WEBRTC_TIMEOUT_MS ?? 180_000,
 )
+const adb = resolveAdbCommand()
 const interopLane = (() => {
   const lane = process.env.AURORA_ANDROID_WEBRTC_LANE ?? 'turn'
   if (lane !== 'direct' && lane !== 'stun' && lane !== 'turn') {
@@ -370,11 +372,11 @@ async function createInteropResources() {
     if (closed) return
     closed = true
     cdpClient?.close()
-    spawnSync('adb', ['shell', 'am', 'force-stop', appId], {
+    spawnSync(adb, ['shell', 'am', 'force-stop', appId], {
       stdio: 'ignore',
     })
     for (const port of reversedPorts) {
-      spawnSync('adb', ['reverse', '--remove', `tcp:${port}`], {
+      spawnSync(adb, ['reverse', '--remove', `tcp:${port}`], {
         stdio: 'ignore',
       })
     }
@@ -630,7 +632,7 @@ async function resolveHostIpv4(): Promise<string> {
 }
 
 function ensureAndroidAppInstalled(): void {
-  const installed = spawnSync('adb', ['shell', 'pm', 'path', appId], {
+  const installed = spawnSync(adb, ['shell', 'pm', 'path', appId], {
     encoding: 'utf8',
   })
   if (installed.status === 0 && installed.stdout.includes('package:')) return
@@ -712,13 +714,13 @@ async function connectAndroidWebView(
         ...client,
         close() {
           client.close()
-          spawnSync('adb', ['forward', '--remove', `tcp:${port}`], {
+          spawnSync(adb, ['forward', '--remove', `tcp:${port}`], {
             stdio: 'ignore',
           })
         },
       }
     } catch {
-      spawnSync('adb', ['forward', '--remove', `tcp:${port}`], {
+      spawnSync(adb, ['forward', '--remove', `tcp:${port}`], {
         stdio: 'ignore',
       })
       await sleep(500)
@@ -1067,39 +1069,63 @@ async function waitForChild(
 }
 
 function adbOutput(args: string[]): string {
-  const result = spawnSync('adb', args, { encoding: 'utf8' })
+  const result = spawnSync(adb, args, { encoding: 'utf8' })
   if (result.error) throw result.error
   if (result.status !== 0) {
     throw new Error(
-      `adb ${args.join(' ')} failed: ${`${result.stdout}\n${result.stderr}`.trim()}`,
+      `${adb} ${args.join(' ')} failed: ${`${result.stdout}\n${result.stderr}`.trim()}`,
     )
   }
   return result.stdout
 }
 
 function adbOutputOrEmpty(args: string[]): string {
-  const result = spawnSync('adb', args, { encoding: 'utf8' })
+  const result = spawnSync(adb, args, { encoding: 'utf8' })
   if (result.error) throw result.error
   return result.status === 0 ? result.stdout : ''
 }
 
 function run(command: string, args: string[], cwd = appRoot): void {
-  const result = spawnSync(command, args, {
+  const resolvedCommand = command === 'adb' ? adb : command
+  const result = spawnSync(resolvedCommand, args, {
     cwd,
     stdio: 'inherit',
   })
   if (result.error) throw result.error
   if (result.status !== 0) {
     throw new Error(
-      `${command} ${args.join(' ')} failed with status ${result.status}`,
+      `${resolvedCommand} ${args.join(' ')} failed with status ${result.status}`,
     )
   }
+}
+
+function resolveAdbCommand(): string {
+  const candidates = [
+    process.env.ADB,
+    process.env.ANDROID_HOME
+      ? join(process.env.ANDROID_HOME, 'platform-tools', 'adb')
+      : undefined,
+    process.env.ANDROID_SDK_ROOT
+      ? join(process.env.ANDROID_SDK_ROOT, 'platform-tools', 'adb')
+      : undefined,
+    join(os.homedir(), 'Android/Sdk/platform-tools/adb'),
+    join(os.homedir(), '.local/share/android-sdk/platform-tools/adb'),
+    'adb',
+  ].filter((candidate): candidate is string => Boolean(candidate))
+  return (
+    candidates.find(
+      (candidate) =>
+        (candidate === 'adb'
+          || existsSync(candidate))
+        && spawnSync(candidate, ['version'], { stdio: 'ignore' }).status === 0,
+    ) ?? 'adb'
+  )
 }
 
 function launchAndroidApp(packageId: string): void {
   const component = `${packageId}/.MainActivity`
   const direct = spawnSync(
-    'adb',
+    adb,
     ['shell', 'am', 'start', '-W', '-n', component],
     { cwd: appRoot, encoding: 'utf8' },
   )
@@ -1107,7 +1133,7 @@ function launchAndroidApp(packageId: string): void {
   if (direct.status === 0) return
 
   const fallback = spawnSync(
-    'adb',
+    adb,
     [
       'shell',
       'monkey',
