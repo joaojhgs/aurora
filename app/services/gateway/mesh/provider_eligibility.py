@@ -12,6 +12,11 @@ from app.services.gateway.mesh.policy_store import MeshPolicySnapshot
 from app.shared.auth.permissions import check_access
 from app.shared.contracts.mesh_compatibility import MeshCompatibilityReasonCode
 from app.shared.contracts.models.gateway import MethodInfo
+from app.shared.contracts.models.speech import (
+    LogicalVoiceId,
+    SpeechLanguageRequirement,
+    SpeechMethodConstraints,
+)
 
 from .version_compat import is_compatible
 
@@ -23,6 +28,14 @@ ProviderEligibilityReason = (
         "provider_unavailable",
     ]
 )
+
+
+@dataclass(frozen=True, slots=True)
+class SpeechRouteConstraints:
+    """Immutable request-derived speech routing requirements."""
+
+    language_requirement: SpeechLanguageRequirement | None = None
+    voice_id: LogicalVoiceId | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +52,7 @@ class OutboundRouteRequirements:
     version_policy: str = "compatible"
     attempted_peer_ids: frozenset[str] = frozenset()
     explicit_peer_id: str | None = None
+    speech_constraints: SpeechRouteConstraints | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +106,9 @@ class ProviderEligibilityDecision:
     active_calls: int = 0
     max_concurrent: int = 0
     available_capacity: int | None = None
+    speech_capability_revision: int | None = None
+    resident_model_identity_digest: str | None = None
+    speech_requirement_digest: str | None = None
 
 
 def evaluate_outbound_provider(
@@ -202,6 +219,7 @@ def evaluate_outbound_provider(
         "method_type": method.method_type,
         "required_perms": tuple(method.required_perms),
         "granted_permissions": tuple(sorted(provider.grants or ())),
+        **_speech_decision_metadata(method.speech_constraints, requirements.speech_constraints),
     }
     if provider.local_authority_state is not None:
         if provider.local_authority_state != "active" or provider.local_grants is None:
@@ -244,6 +262,19 @@ def evaluate_outbound_provider(
             eligible=False,
             reason_code="permission_denied",
             reason=f"recipient grants do not satisfy {requirements.topic}",
+        )
+
+    speech_decision = _evaluate_speech_route_constraints(
+        method.speech_constraints,
+        requirements.speech_constraints,
+    )
+    if speech_decision is not None:
+        reason_code, reason = speech_decision
+        return _decision(
+            **method_base,
+            eligible=False,
+            reason_code=reason_code,
+            reason=reason,
         )
 
     required_features = tuple(routing.required_provider_feature_ids if routing else ())
@@ -311,6 +342,81 @@ def _find_exact_method(service: PeerServiceInfo, topic: str) -> MethodInfo | Non
         if method.bus_topic == topic:
             return method
     return None
+
+
+def _evaluate_speech_route_constraints(
+    method_constraints: SpeechMethodConstraints | None,
+    request_constraints: SpeechRouteConstraints | None,
+) -> tuple[ProviderEligibilityReason, str] | None:
+    if request_constraints is None:
+        return None
+    if method_constraints is None:
+        return (
+            "language_capability_unknown",
+            "provider did not advertise speech route constraints",
+        )
+    if method_constraints.resident_model_identity_digest is None:
+        return (
+            "language_capability_unknown",
+            "provider did not advertise ready speech model identity",
+        )
+
+    language_requirement = request_constraints.language_requirement
+    if language_requirement is not None:
+        if language_requirement.mode == "exact":
+            language = language_requirement.language
+            exact_languages = set(method_constraints.exact_languages)
+            fallback_languages = {
+                fallback.requested_language
+                for fallback in method_constraints.locale_fallbacks
+                if fallback.served_language in exact_languages
+            }
+            if language not in exact_languages and language not in fallback_languages:
+                return (
+                    "language_incompatible",
+                    "provider is not ready for the requested exact speech language",
+                )
+        else:
+            candidates = set(language_requirement.auto_language_candidates)
+            if not method_constraints.supports_auto_detect:
+                return (
+                    "language_incompatible",
+                    "provider does not support speech language auto-detect",
+                )
+            if not candidates.issubset(set(method_constraints.auto_detect_languages)):
+                return (
+                    "language_incompatible",
+                    "provider cannot auto-detect every requested speech language candidate",
+                )
+
+    if (
+        request_constraints.voice_id is not None
+        and request_constraints.voice_id not in method_constraints.ready_voice_ids
+    ):
+        return ("voice_unavailable", "provider is not ready for the requested logical voice")
+    return None
+
+
+def _speech_decision_metadata(
+    method_constraints: SpeechMethodConstraints | None,
+    request_constraints: SpeechRouteConstraints | None,
+) -> dict[str, object]:
+    if request_constraints is None:
+        return {}
+    language_requirement = request_constraints.language_requirement
+    metadata: dict[str, object] = {
+        "speech_requirement_digest": language_requirement.digest
+        if language_requirement is not None
+        else None,
+    }
+    if method_constraints is not None:
+        metadata.update(
+            {
+                "speech_capability_revision": method_constraints.speech_capability_revision,
+                "resident_model_identity_digest": method_constraints.resident_model_identity_digest,
+            }
+        )
+    return metadata
 
 
 def _is_stale(

@@ -44,9 +44,10 @@ class _RoutingTable:
         mesh_config: Any | None = None,
         selector: MeshAddressSelector | None = None,
         policy_snapshot: Any | None = None,
+        speech_constraints: Any | None = None,
     ) -> _Route:
         assert topic == OrchestratorMethods.STREAM_INFER_CHAT
-        _ = routing_config, mesh_config, policy_snapshot
+        _ = routing_config, mesh_config, policy_snapshot, speech_constraints
         assert selector is not None
         return _Route(target="remote", peer_id=selector.peer_id)
 
@@ -59,8 +60,9 @@ class _RoutingTable:
         mesh_config: Any | None = None,
         selector: MeshAddressSelector | None = None,
         policy_snapshot: Any | None = None,
+        speech_constraints: Any | None = None,
     ) -> _Route:
-        _ = routing_config, mesh_config, selector, policy_snapshot
+        _ = routing_config, mesh_config, selector, policy_snapshot, speech_constraints
         return _Route(target="error", peer_id=failed_peer_id, error_message="no fallback")
 
     def get_negotiated_peers(self) -> list[Any]:

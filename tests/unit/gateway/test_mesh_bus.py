@@ -11,12 +11,18 @@ from app.messaging.mesh_bus import MeshBus
 from app.services.gateway.config import MeshConfig
 from app.services.gateway.mesh.models import RouteDecision
 from app.services.gateway.mesh.policy_store import MeshPolicySnapshot, MeshPolicyStore
+from app.services.gateway.mesh.provider_eligibility import SpeechRouteConstraints
 from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.stt import TranscribeAudioRequest, TranscriptionMethods
+from app.shared.contracts.models.tts import TTSMethods, TTSSynthesizeRequest
 from tests.unit.gateway.mesh_policy_helpers import mesh_policy
 
 
 class FakePayload(BaseModel):
     text: str = "hello"
+    language: str | None = None
+    voice: str | None = None
+    auto_language_candidates: list[str] = []
     dispatch_selector: MeshAddressSelector | None = None
     mesh_selector: MeshAddressSelector | None = None
     selector: MeshAddressSelector | None = None
@@ -277,7 +283,66 @@ class TestMeshBusPublish:
             mesh_config=ANY,
             selector=selector,
             policy_snapshot=ANY,
+            speech_constraints=ANY,
         )
+        assert isinstance(
+            routing_table.resolve.call_args.kwargs["speech_constraints"],
+            SpeechRouteConstraints,
+        )
+
+    @pytest.mark.asyncio
+    async def test_publish_derives_exact_speech_constraints_once(self, mesh_bus, routing_table):
+        await mesh_bus.publish(
+            TTSMethods.SYNTHESIZE,
+            TTSSynthesizeRequest(text="hello", language="de"),
+            event=False,
+        )
+
+        constraints = routing_table.resolve.call_args.kwargs["speech_constraints"]
+        assert isinstance(constraints, SpeechRouteConstraints)
+        assert constraints.language_requirement is not None
+        assert constraints.language_requirement.mode == "exact"
+        assert constraints.language_requirement.language == "de"
+        assert constraints.voice_id is None
+
+    @pytest.mark.asyncio
+    async def test_request_derives_auto_speech_constraints_for_transcription(
+        self, mesh_bus, routing_table
+    ):
+        await mesh_bus.request(
+            TranscriptionMethods.TRANSCRIBE,
+            TranscribeAudioRequest(
+                audio_data="AAAA",
+                language=None,
+                auto_language_candidates=["en", "de"],
+            ),
+        )
+
+        constraints = routing_table.resolve.call_args.kwargs["speech_constraints"]
+        assert isinstance(constraints, SpeechRouteConstraints)
+        assert constraints.language_requirement is not None
+        assert constraints.language_requirement.mode == "auto"
+        assert constraints.language_requirement.auto_language_candidates == ["de", "en"]
+
+    @pytest.mark.asyncio
+    async def test_stream_request_derives_omitted_language_tts_constraints(
+        self, mesh_bus, routing_table
+    ):
+        routing_table.resolve.return_value = RouteDecision(target="none", module="TTS")
+
+        with pytest.raises(RuntimeError, match="No route available"):
+            _ = [
+                chunk
+                async for chunk in mesh_bus.stream_request(
+                    TTSMethods.STREAM_START,
+                    FakePayload(),
+                )
+            ]
+
+        constraints = routing_table.resolve.call_args.kwargs["speech_constraints"]
+        assert isinstance(constraints, SpeechRouteConstraints)
+        assert constraints.language_requirement is None
+        assert constraints.voice_id is None
 
     @pytest.mark.asyncio
     async def test_command_remote_route(self, mesh_bus, inner_bus, routing_table, peer_bridge):
@@ -496,6 +561,7 @@ class TestMeshBusRequest:
             mesh_config=ANY,
             selector=dispatch,
             policy_snapshot=ANY,
+            speech_constraints=ANY,
         )
 
     @pytest.mark.asyncio
@@ -512,6 +578,7 @@ class TestMeshBusRequest:
             mesh_config=ANY,
             selector=None,
             policy_snapshot=ANY,
+            speech_constraints=ANY,
         )
 
     @pytest.mark.asyncio
@@ -530,6 +597,7 @@ class TestMeshBusRequest:
             mesh_config=ANY,
             selector=None,
             policy_snapshot=ANY,
+            speech_constraints=None,
         )
 
     @pytest.mark.asyncio
@@ -551,6 +619,7 @@ class TestMeshBusRequest:
             mesh_config=ANY,
             selector=None,
             policy_snapshot=ANY,
+            speech_constraints=None,
         )
 
     @pytest.mark.asyncio
@@ -575,6 +644,7 @@ class TestMeshBusRequest:
             mesh_config=ANY,
             selector=expected_selector,
             policy_snapshot=ANY,
+            speech_constraints=None,
         )
 
     @pytest.mark.asyncio
@@ -593,6 +663,7 @@ class TestMeshBusRequest:
             mesh_config=None,
             selector=None,
             policy_snapshot=None,
+            speech_constraints=None,
         ):
             assert topic == OrchestratorMethods.EXTERNAL_USER_INPUT
             if selector == expected_selector:
@@ -616,6 +687,7 @@ class TestMeshBusRequest:
             mesh_config=ANY,
             selector=expected_selector,
             policy_snapshot=ANY,
+            speech_constraints=None,
         )
         peer_bridge.call.assert_awaited_once_with(
             "assistant-peer",
@@ -659,6 +731,7 @@ class TestMeshBusRequest:
             mesh_config=ANY,
             selector=selector,
             policy_snapshot=ANY,
+            speech_constraints=None,
         )
         peer_bridge.call.assert_awaited_once()
         assert peer_bridge.call.await_args.args[:3] == (
@@ -710,6 +783,9 @@ class TestMeshBusRequest:
         result = await mesh_bus.request("TTS.Request", FakePayload())
         assert result.ok is True
         inner_bus.request.assert_awaited_once()
+        constraints = routing_table.resolve.call_args.kwargs["speech_constraints"]
+        assert isinstance(constraints, SpeechRouteConstraints)
+        assert routing_table.resolve_fallback.call_args.kwargs["speech_constraints"] is constraints
 
     @pytest.mark.asyncio
     async def test_remote_request_fallbacks_across_all_unattempted_provider_failures(
@@ -753,6 +829,9 @@ class TestMeshBusRequest:
         assert routing_table.resolve.call_args.kwargs["policy_snapshot"] is snapshot
         assert all(call["topic"] == "TTS.Request" for call in registry.candidate_calls)
         assert all(call["policy_snapshot"] is snapshot for call in registry.candidate_calls)
+        constraints = routing_table.resolve.call_args.kwargs["speech_constraints"]
+        assert isinstance(constraints, SpeechRouteConstraints)
+        assert all(call["speech_constraints"] is constraints for call in registry.candidate_calls)
         assert all(
             call["policy_snapshot"].revision == snapshot.revision
             for call in registry.candidate_calls
@@ -951,6 +1030,7 @@ class TestMeshBusStreamRequest:
             "mesh_config": ANY,
             "selector": selector,
             "policy_snapshot": ANY,
+            "speech_constraints": None,
         }
         inner_bus.stream_request.assert_not_called()
         inner_bus.request.assert_not_awaited()
@@ -995,6 +1075,7 @@ class TestMeshBusStreamRequest:
             "mesh_config": ANY,
             "selector": selector,
             "policy_snapshot": ANY,
+            "speech_constraints": None,
         }
         inner_bus.stream_request.assert_not_called()
         inner_bus.request.assert_not_awaited()

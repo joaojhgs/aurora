@@ -25,6 +25,7 @@ from app.services.gateway.mesh.provider_eligibility import (
     OutboundProviderSnapshot,
     OutboundRouteRequirements,
     ProviderEligibilityDecision,
+    SpeechRouteConstraints,
     evaluate_outbound_provider,
 )
 from app.services.gateway.mesh.provider_export import ACTIVE_MANIFEST_PROTOCOL
@@ -628,6 +629,7 @@ class PeerRegistry:
         exclude: list[str] | None = None,
         peer_selection: str | None = None,
         policy_snapshot: MeshPolicySnapshot | None = None,
+        speech_constraints: SpeechRouteConstraints | None = None,
     ) -> PeerState | None:
         """Get the best peer for a service based on routing policy.
 
@@ -659,6 +661,7 @@ class PeerRegistry:
                 exclude=exclude,
                 include_ineligible=False,
                 policy_snapshot=policy_snapshot,
+                speech_constraints=speech_constraints,
             )
         ]
 
@@ -677,6 +680,7 @@ class PeerRegistry:
         selector: MeshAddressSelector | None = None,
         include_ineligible: bool = True,
         policy_snapshot: MeshPolicySnapshot | None = None,
+        speech_constraints: SpeechRouteConstraints | None = None,
     ) -> list[ProviderCandidate]:
         """Return provider candidates with eligibility diagnostics.
 
@@ -708,6 +712,7 @@ class PeerRegistry:
                 selector_peer_id=selector_peer_id,
                 selector_error=selector_error,
                 captured_at=captured_at,
+                speech_constraints=speech_constraints,
             )
             if include_ineligible or candidate.eligible:
                 candidates.append(candidate)
@@ -728,6 +733,7 @@ class PeerRegistry:
         selector_peer_id: str | None,
         selector_error: str | None,
         captured_at: float,
+        speech_constraints: SpeechRouteConstraints | None,
     ) -> ProviderCandidate:
         if peer.peer_id in exclude:
             return _candidate(peer, service, False, "excluded_peer", "peer excluded from selection")
@@ -755,6 +761,7 @@ class PeerRegistry:
                 attempted_peer_ids=frozenset(),
                 explicit_peer_id=selector_peer_id,
                 captured_at=captured_at,
+                speech_constraints=speech_constraints,
             )
             return _candidate_from_decision(peer, service, decision)
 
@@ -780,6 +787,7 @@ class PeerRegistry:
         attempted_peer_ids: frozenset[str] = frozenset(),
         explicit_peer_id: str | None = None,
         captured_at: float | None = None,
+        speech_constraints: SpeechRouteConstraints | None = None,
     ) -> ProviderEligibilityDecision:
         """Evaluate one peer against one exact bus topic."""
 
@@ -797,6 +805,7 @@ class PeerRegistry:
             version_policy=version_policy or mesh_config.version_policy,
             attempted_peer_ids=attempted_peer_ids,
             explicit_peer_id=explicit_peer_id,
+            speech_constraints=speech_constraints,
         )
         return evaluate_outbound_provider(
             requirements,
@@ -852,6 +861,7 @@ class PeerRegistry:
                 policy_snapshot=policy_snapshot,
                 version_policy=version_policy,
                 captured_at=captured_at,
+                speech_constraints=None,
             )
             return _candidate_from_decision(peer, service, decision)
         if peer.status != "negotiated":

@@ -19,6 +19,7 @@ from app.shared.contracts.models.stt import STTMethods, TranscriptionMethods, Wa
 from app.shared.contracts.models.tts import TTSMethods
 
 from .models import RouteDecision
+from .provider_eligibility import SpeechRouteConstraints
 
 if TYPE_CHECKING:
     from app.services.gateway.config import MeshConfig, MeshServicePolicy
@@ -60,6 +61,7 @@ class RoutingTable:
         exclude: list[str] | None = None,
         selector: MeshAddressSelector | None = None,
         policy_snapshot: MeshPolicySnapshot | None = None,
+        speech_constraints: SpeechRouteConstraints | None = None,
     ) -> RouteDecision:
         """Determine where to route a message.
 
@@ -106,6 +108,7 @@ class RoutingTable:
                 mesh_config=mesh_config,
                 selector=selector,
                 policy_snapshot=policy_snapshot,
+                speech_constraints=speech_constraints,
             )
 
         # No routing config or mesh disabled → always local
@@ -152,6 +155,7 @@ class RoutingTable:
                 exclude=exclude or [],
                 peer_selection=mesh_config.peer_selection,
                 policy_snapshot=policy_snapshot,
+                speech_constraints=speech_constraints,
             )
             if best:
                 # Get the service version from the peer's manifest
@@ -206,6 +210,7 @@ class RoutingTable:
         mesh_config: MeshConfig,
         selector: MeshAddressSelector,
         policy_snapshot: MeshPolicySnapshot | None = None,
+        speech_constraints: SpeechRouteConstraints | None = None,
     ) -> RouteDecision:
         peer_id, conflict_error, provider_kind = _selector_target(selector, module)
         if conflict_error:
@@ -276,6 +281,7 @@ class RoutingTable:
             policy_snapshot=policy_snapshot,
             version_policy=mesh_config.version_policy,
             explicit_peer_id=peer_id,
+            speech_constraints=speech_constraints,
         )
         if not decision.eligible:
             return _route_error(
@@ -302,6 +308,7 @@ class RoutingTable:
         failed_peer_id: str | None = None,
         selector: MeshAddressSelector | None = None,
         policy_snapshot: MeshPolicySnapshot | None = None,
+        speech_constraints: SpeechRouteConstraints | None = None,
     ) -> RouteDecision:
         """Resolve a fallback route after a primary route failure.
 
@@ -359,6 +366,7 @@ class RoutingTable:
                 exclude=exclude,
                 peer_selection=mesh_config.peer_selection,
                 policy_snapshot=policy_snapshot,
+                speech_constraints=speech_constraints,
             )
             if best:
                 version = ""

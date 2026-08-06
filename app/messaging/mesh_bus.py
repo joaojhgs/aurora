@@ -40,8 +40,11 @@ from app.helpers.aurora_logger import log_debug, log_error, log_warning
 from app.messaging.bus import Handler, MessageBus, QueryResult
 from app.services.gateway.config import MeshConfig
 from app.services.gateway.mesh.policy_store import MeshPolicyProvider, MeshPolicySnapshot
+from app.services.gateway.mesh.provider_eligibility import SpeechRouteConstraints
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
+from app.shared.contracts.models.speech import SpeechLanguageRequirement
+from app.shared.contracts.models.stt import TranscriptionMethods
 from app.shared.contracts.models.tts import TTSMethods
 from app.shared.mesh.tracing import ensure_correlation_id, get_payload_correlation_id
 
@@ -70,6 +73,7 @@ class _RoutingTableLike(Protocol):
         mesh_config: Any | None = None,
         selector: MeshAddressSelector | None = None,
         policy_snapshot: MeshPolicySnapshot | None = None,
+        speech_constraints: SpeechRouteConstraints | None = None,
     ) -> _RouteLike: ...
 
     def resolve_fallback(
@@ -81,6 +85,7 @@ class _RoutingTableLike(Protocol):
         failed_peer_id: str,
         selector: MeshAddressSelector | None = None,
         policy_snapshot: MeshPolicySnapshot | None = None,
+        speech_constraints: SpeechRouteConstraints | None = None,
     ) -> _RouteLike: ...
 
     def get_negotiated_peers(self) -> list[_PeerLike]: ...
@@ -307,6 +312,7 @@ class MeshBus:
 
         # For commands, check routing
         selector = _extract_mesh_selector(message, topic=topic)
+        speech_constraints = _extract_speech_route_constraints(message, topic=topic)
         trace_id = ensure_correlation_id(message, correlation_id)
         policy_snapshot = self._operation_snapshot()
         mesh_config = policy_snapshot.mesh_config
@@ -318,6 +324,7 @@ class MeshBus:
             mesh_config=mesh_config,
             selector=selector,
             policy_snapshot=policy_snapshot,
+            speech_constraints=speech_constraints,
         )
         log_debug(
             f"MeshBus: Routing command {topic} → target={route.target}, "
@@ -379,6 +386,7 @@ class MeshBus:
                         policy_snapshot=policy_snapshot,
                         attempted=attempted,
                         selector=selector,
+                        speech_constraints=speech_constraints,
                     )
                     continue
                 try:
@@ -418,6 +426,7 @@ class MeshBus:
                     policy_snapshot=policy_snapshot,
                     attempted=attempted,
                     selector=selector,
+                    speech_constraints=speech_constraints,
                 )
 
             terminal = self._terminal_fallback_route(
@@ -428,6 +437,7 @@ class MeshBus:
                 attempted=attempted,
                 selector=selector,
                 current_route=current_route,
+                speech_constraints=speech_constraints,
             )
             if terminal.target == "error":
                 raise RuntimeError(
@@ -536,6 +546,7 @@ class MeshBus:
             QueryResult containing the response data or error
         """
         selector = _extract_mesh_selector(message, topic=topic)
+        speech_constraints = _extract_speech_route_constraints(message, topic=topic)
         trace_id = ensure_correlation_id(message, correlation_id)
         policy_snapshot = self._operation_snapshot()
         mesh_config = policy_snapshot.mesh_config
@@ -546,6 +557,7 @@ class MeshBus:
             mesh_config=mesh_config,
             selector=selector,
             policy_snapshot=policy_snapshot,
+            speech_constraints=speech_constraints,
         )
         log_debug(
             f"MeshBus: Routing request {topic} → target={route.target}, "
@@ -604,6 +616,7 @@ class MeshBus:
                         policy_snapshot=policy_snapshot,
                         attempted=attempted,
                         selector=selector,
+                        speech_constraints=speech_constraints,
                     )
                     continue
                 try:
@@ -641,6 +654,7 @@ class MeshBus:
                     policy_snapshot=policy_snapshot,
                     attempted=attempted,
                     selector=selector,
+                    speech_constraints=speech_constraints,
                 )
 
             terminal = self._terminal_fallback_route(
@@ -651,6 +665,7 @@ class MeshBus:
                 attempted=attempted,
                 selector=selector,
                 current_route=current_route,
+                speech_constraints=speech_constraints,
             )
             if terminal.target == "error":
                 return QueryResult(
@@ -746,6 +761,7 @@ class MeshBus:
     ) -> AsyncIterator[Any]:
         """Request a stream, using PeerBridge streaming when routed remote."""
         selector = _extract_mesh_selector(message, topic=topic)
+        speech_constraints = _extract_speech_route_constraints(message, topic=topic)
         trace_id = ensure_correlation_id(message, correlation_id)
         policy_snapshot = self._operation_snapshot()
         mesh_config = policy_snapshot.mesh_config
@@ -756,6 +772,7 @@ class MeshBus:
             mesh_config=mesh_config,
             selector=selector,
             policy_snapshot=policy_snapshot,
+            speech_constraints=speech_constraints,
         )
 
         if route.target == "error":
@@ -817,6 +834,7 @@ class MeshBus:
                         policy_snapshot=policy_snapshot,
                         attempted=attempted,
                         selector=selector,
+                        speech_constraints=speech_constraints,
                     )
                     continue
                 try:
@@ -850,6 +868,7 @@ class MeshBus:
                     policy_snapshot=policy_snapshot,
                     attempted=attempted,
                     selector=selector,
+                    speech_constraints=speech_constraints,
                 )
 
             terminal = self._terminal_fallback_route(
@@ -860,6 +879,7 @@ class MeshBus:
                 attempted=attempted,
                 selector=selector,
                 current_route=current_route,
+                speech_constraints=speech_constraints,
             )
             if terminal.target == "error":
                 raise RuntimeError(
@@ -927,6 +947,7 @@ class MeshBus:
         policy_snapshot: MeshPolicySnapshot,
         attempted: set[str],
         selector: MeshAddressSelector | None,
+        speech_constraints: SpeechRouteConstraints | None,
     ) -> _RouteLike:
         mesh_config = policy_snapshot.mesh_config
         if selector and selector.has_routing_target():
@@ -952,6 +973,7 @@ class MeshBus:
                     selector=selector,
                     include_ineligible=False,
                     policy_snapshot=policy_snapshot,
+                    speech_constraints=speech_constraints,
                 )
             except Exception as error:
                 log_warning(f"MeshBus: Provider fallback enumeration failed: {error}")
@@ -986,6 +1008,7 @@ class MeshBus:
             failed_peer_id=failed_peer_id,
             selector=selector,
             policy_snapshot=policy_snapshot,
+            speech_constraints=speech_constraints,
         )
 
     def _terminal_fallback_route(
@@ -998,6 +1021,7 @@ class MeshBus:
         attempted: set[str],
         selector: MeshAddressSelector | None,
         current_route: _RouteLike,
+        speech_constraints: SpeechRouteConstraints | None,
     ) -> _RouteLike:
         mesh_config = policy_snapshot.mesh_config
         if current_route.target == "error":
@@ -1037,6 +1061,7 @@ class MeshBus:
                 failed_peer_id=failed_peer_id,
                 selector=selector,
                 policy_snapshot=policy_snapshot,
+                speech_constraints=speech_constraints,
             )
             if fallback.target != "remote":
                 return fallback
@@ -1192,6 +1217,40 @@ def _route_query_error(route: Any, *, fallback: str) -> str:
     if getattr(route, "error_code", None) == "selector_permission_denied":
         return "permission_denied"
     return getattr(route, "error_message", None) or fallback
+
+
+def _extract_speech_route_constraints(message: Any, *, topic: str) -> SpeechRouteConstraints | None:
+    """Return immutable speech routing constraints derived from request data."""
+
+    language = _payload_value(message, "language")
+    if topic in {TTSMethods.REQUEST, TTSMethods.SYNTHESIZE, TTSMethods.STREAM_START}:
+        voice_id = _payload_value(message, "voice")
+        return SpeechRouteConstraints(
+            language_requirement=SpeechLanguageRequirement(mode="exact", language=language)
+            if language is not None
+            else None,
+            voice_id=voice_id,
+        )
+
+    if topic == TranscriptionMethods.TRANSCRIBE:
+        if language is not None:
+            language_requirement = SpeechLanguageRequirement(mode="exact", language=language)
+        else:
+            language_requirement = SpeechLanguageRequirement(
+                mode="auto",
+                auto_language_candidates=list(
+                    _payload_value(message, "auto_language_candidates") or []
+                ),
+            )
+        return SpeechRouteConstraints(language_requirement=language_requirement)
+
+    return None
+
+
+def _payload_value(message: Any, field_name: str) -> Any:
+    if isinstance(message, Mapping):
+        return message.get(field_name)
+    return getattr(message, field_name, None)
 
 
 def _extract_mesh_selector(message: Any, *, topic: str | None = None) -> MeshAddressSelector | None:
