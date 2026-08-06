@@ -64,7 +64,6 @@ class BullMQBus:
         self._wildcard_patterns: dict[str, list[Handler]] = defaultdict(list)
         self._event_handlers: dict[str, list[Handler]] = defaultdict(list)
         self._event_wildcard_patterns: dict[str, list[Handler]] = defaultdict(list)
-        self._event_channels: set[str] = set()
         self._event_patterns: set[str] = set()
         self._event_pattern_tasks: dict[str, asyncio.Task[None]] = {}
         self._event_pattern_readiness_lock = asyncio.Lock()
@@ -329,17 +328,11 @@ class BullMQBus:
             asyncio.create_task(self._async_register_event_queue(topic, queue_name))
             return
 
-        if pattern:
-            if topic in self._event_patterns or topic in self._event_pattern_tasks:
-                return
-            self._event_pattern_tasks[topic] = asyncio.create_task(
-                self._async_subscribe_event_topic(topic, pattern=True)
-            )
-        else:
-            if topic in self._event_channels:
-                return
-            self._event_channels.add(topic)
-            asyncio.create_task(self._async_subscribe_event_topic(topic, pattern=False))
+        if topic in self._event_patterns or topic in self._event_pattern_tasks:
+            return
+        self._event_pattern_tasks[topic] = asyncio.create_task(
+            self._async_subscribe_event_topic(topic, pattern=True)
+        )
 
     async def _ensure_event_subscription_ready(self, topic: str, *, pattern: bool) -> None:
         """Create event transport resources and wait until Redis has acknowledged them."""

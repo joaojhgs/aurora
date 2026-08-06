@@ -227,10 +227,9 @@ async def test_start_service(service, mock_bus):
         assert service._enabled is True
 
         # Verify subscriptions - at least the microphone stream
-        assert any(
-            call.args[0] == AudioTopics.STREAM_MICROPHONE
-            for call in mock_bus.subscribe.call_args_list
-        ), "Missing subscription to STREAM_MICROPHONE"
+        mock_bus.subscribe_event.assert_any_await(
+            AudioTopics.STREAM_MICROPHONE, service._on_audio_chunk
+        )
 
 
 @pytest.mark.asyncio
