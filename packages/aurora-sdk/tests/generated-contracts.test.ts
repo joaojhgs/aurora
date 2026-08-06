@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod/v4'
 
 import {
+  backendContractEventDescriptorByTopic,
+  backendContractEventDescriptors,
   backendContractMethodDescriptorById,
   backendContractMethodDescriptors,
   backendContractSchemaById,
@@ -25,6 +27,7 @@ type ContractSchemaItem = {
   method_id: string
   direction: string
   model_name: string
+  schema_hash: string
   schema: Record<string, unknown>
   vectors: {
     positive?: { accepted: true; input: unknown; normalized: unknown }
@@ -137,6 +140,7 @@ const auroraMetadataKeys = [
   'x-aurora-tts-import-chunk-request-invariant',
   'x-aurora-tts-import-chunk-response-invariant',
   'x-aurora-tts-import-start-response-invariant',
+  'x-aurora-tts-audio-chunk-event-invariant',
   'x-aurora-tts-operation-id',
   'x-aurora-tts-profile-descriptor-invariant',
   'x-aurora-tts-profile-list-invariant',
@@ -257,6 +261,7 @@ const normalizeJsonSchema = (schema: unknown, root: unknown = schema, seenRefs =
         'x-aurora-tts-import-chunk-request-invariant',
         'x-aurora-tts-import-chunk-response-invariant',
         'x-aurora-tts-import-start-response-invariant',
+        'x-aurora-tts-audio-chunk-event-invariant',
         'x-aurora-tts-operation-id',
         'x-aurora-tts-profile-descriptor-invariant',
         'x-aurora-tts-profile-list-invariant',
@@ -808,8 +813,9 @@ describe('generated backend contracts', () => {
       'Transcription.ProcessAudio',
       'Transcription.Transcribe',
     ])
-    expect(contractSchema.schemas).toHaveLength(60)
+    expect(contractSchema.schemas).toHaveLength(61)
     expect(contractSchema.method_descriptors).toHaveLength(30)
+    expect(contractSchema.event_descriptors).toHaveLength(1)
     expect(contractSchema.tooling_provider_allowlist).toHaveLength(4)
     const descriptors = Object.fromEntries(
       contractSchema.method_descriptors.map((descriptor: Record<string, unknown>) => [
@@ -826,6 +832,25 @@ describe('generated backend contracts', () => {
         event_topic: 'TTS.AudioChunk'
       })
     }
+    const eventDescriptor = contractSchema.event_descriptors[0]
+    const eventSchema = contractSchema.schemas.find(
+      (item: ContractSchemaItem) => item.schema_id === 'TTS.AudioChunk.event.TTSAudioChunkEvent'
+    )
+    expect(eventDescriptor).toEqual({
+      event_topic: 'TTS.AudioChunk',
+      module: 'TTS',
+      name: 'AudioChunk',
+      topic: 'TTS.AudioChunk',
+      model: 'TTSAudioChunkEvent',
+      schema_id: 'TTS.AudioChunk.event.TTSAudioChunkEvent',
+      schema_hash: eventSchema?.schema_hash,
+      required_permission: 'TTS.use',
+      required_perms: ['TTS.use'],
+      bounded: true,
+      authorized: true,
+      ordered_event_group: 'tts_text_stream',
+      remote_raw_audio_route: false
+    })
     expect(descriptors['Transcription.ProcessAudio']?.streaming).toEqual({
       rpc_kind: 'unary',
       ordered_command_group: null,
@@ -917,5 +942,77 @@ describe('generated backend contracts', () => {
       expect(backendContractMethodDescriptorById[methodId].streaming.ordered_command_group).toBeNull()
     }
     expect(backendContractMethodDescriptors.every((descriptor) => descriptor.speech_constraints === null)).toBe(true)
+  })
+
+  it('keeps generated event descriptors event-only and validates TTS audio chunks', () => {
+    const eventDescriptor = backendContractEventDescriptorByTopic['TTS.AudioChunk']
+    expect(backendContractEventDescriptors).toHaveLength(1)
+    expect(eventDescriptor).toEqual(contractSchema.event_descriptors[0])
+    expect(eventDescriptor.schema_id).toBe('TTS.AudioChunk.event.TTSAudioChunkEvent')
+    expect(eventDescriptor.required_permission).toBe('TTS.use')
+    expect(eventDescriptor.remote_raw_audio_route).toBe(false)
+    expect(backendContractMethodDescriptorById).not.toHaveProperty('TTS.AudioChunk')
+
+    const schema = backendContractSchemaById['TTS.AudioChunk.event.TTSAudioChunkEvent']
+    expect(schema.safeParse({
+      stream_id: 'stream-1',
+      sequence: 1,
+      source_sequence: 0,
+      audio_data: '',
+      format: 'raw',
+      sample_rate: 0,
+      channels: 1,
+      duration_ms: 0,
+      is_final: true,
+      reason: 'completed'
+    }).success).toBe(true)
+    expect(schema.safeParse({
+      stream_id: 'stream-1',
+      sequence: 1,
+      source_sequence: 0,
+      audio_data: '',
+      format: 'raw',
+      sample_rate: 24000,
+      channels: 1,
+      duration_ms: 1,
+      is_final: false
+    }).success).toBe(false)
+    expect(schema.safeParse({
+      stream_id: 'stream-1',
+      sequence: 2 ** 53,
+      audio_data: 'AA==',
+      format: 'raw',
+      sample_rate: 24000,
+      channels: 1,
+      duration_ms: 1
+    }).success).toBe(false)
+    expect(schema.safeParse({
+      stream_id: 'stream-1',
+      sequence: 0,
+      source_sequence: 2 ** 53,
+      audio_data: 'AA==',
+      format: 'raw',
+      sample_rate: 24000,
+      channels: 1,
+      duration_ms: 1
+    }).success).toBe(false)
+    expect(schema.safeParse({
+      stream_id: 'stream-1',
+      sequence: 0,
+      audio_data: 'AA==',
+      format: 'raw',
+      sample_rate: 192001,
+      channels: 1,
+      duration_ms: 1
+    }).success).toBe(false)
+    expect(schema.safeParse({
+      stream_id: 'stream-1',
+      sequence: 0,
+      audio_data: 'AA==',
+      format: 'raw',
+      sample_rate: 24000,
+      channels: 9,
+      duration_ms: 1
+    }).success).toBe(false)
   })
 })

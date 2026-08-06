@@ -34,6 +34,25 @@
   ],
   "allowlist_hash": "da59fdb5ddc90445dcbc909c42ead19a9e131b715838afd4ceb8550606f6b551",
   "artifact": "aurora-sdk-backend-contracts",
+  "event_descriptors": [
+    {
+      "authorized": true,
+      "bounded": true,
+      "event_topic": "TTS.AudioChunk",
+      "model": "TTSAudioChunkEvent",
+      "module": "TTS",
+      "name": "AudioChunk",
+      "ordered_event_group": "tts_text_stream",
+      "remote_raw_audio_route": false,
+      "required_permission": "TTS.use",
+      "required_perms": [
+        "TTS.use"
+      ],
+      "schema_hash": "8f2a4c111920f068e5dae7ac8c6ea4dd031f7f50989af157d3c68fa5989760a6",
+      "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent",
+      "topic": "TTS.AudioChunk"
+    }
+  ],
   "generator_format_version": "aurora-sdk-zod-codegen-v1",
   "method_descriptors": [
     {
@@ -1896,6 +1915,263 @@
       "schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b",
       "schema_id": "STTCoordinator.StopListening.output.EmptyOutput",
       "vectors": {}
+    },
+    {
+      "direction": "event",
+      "method_id": "TTS.AudioChunk",
+      "model_name": "TTSAudioChunkEvent",
+      "pydantic_mode": "serialization",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Synthesized audio chunk emitted for a TTS streaming session.",
+        "properties": {
+          "audio_data": {
+            "title": "Audio Data",
+            "type": "string"
+          },
+          "channels": {
+            "default": 1,
+            "maximum": 8,
+            "minimum": 1,
+            "title": "Channels",
+            "type": "integer"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Correlation Id"
+          },
+          "duration_ms": {
+            "minimum": 0,
+            "title": "Duration Ms",
+            "type": "number"
+          },
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "is_final": {
+            "default": false,
+            "title": "Is Final",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          },
+          "sample_rate": {
+            "maximum": 192000,
+            "minimum": 0,
+            "title": "Sample Rate",
+            "type": "integer"
+          },
+          "sequence": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "source_sequence": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Sequence"
+          },
+          "stream_id": {
+            "title": "Stream Id",
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Text"
+          }
+        },
+        "required": [
+          "audio_data",
+          "duration_ms",
+          "format",
+          "sample_rate",
+          "sequence",
+          "stream_id"
+        ],
+        "title": "TTSAudioChunkEvent",
+        "type": "object",
+        "x-aurora-extra-behavior": "strip",
+        "x-aurora-tts-audio-chunk-event-invariant": true
+      },
+      "schema_hash": "8f2a4c111920f068e5dae7ac8c6ea4dd031f7f50989af157d3c68fa5989760a6",
+      "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent",
+      "vectors": {
+        "negative": {
+          "accepted": false,
+          "input": {
+            "audio_data": "AA==",
+            "channels": 1,
+            "duration_ms": 12.5,
+            "format": "raw",
+            "sample_rate": 24000,
+            "sequence": 9007199254740992,
+            "stream_id": "stream-1"
+          },
+          "issue_category": "less_than_equal",
+          "issue_path": "$.sequence"
+        },
+        "negative_cases": [
+          {
+            "accepted": false,
+            "input": {
+              "audio_data": "AA==",
+              "channels": 1,
+              "duration_ms": 12.5,
+              "format": "raw",
+              "sample_rate": 24000,
+              "sequence": 9007199254740992,
+              "stream_id": "stream-1"
+            },
+            "issue_category": "less_than_equal",
+            "issue_path": "$.sequence"
+          },
+          {
+            "accepted": false,
+            "input": {
+              "audio_data": "",
+              "channels": 1,
+              "correlation_id": "corr-tts-1",
+              "duration_ms": 12.5,
+              "format": "raw",
+              "is_final": false,
+              "reason": null,
+              "sample_rate": 24000,
+              "sequence": 0,
+              "source_sequence": 0,
+              "stream_id": "stream-1",
+              "text": "hello"
+            },
+            "issue_category": "value_error",
+            "issue_path": "$"
+          },
+          {
+            "accepted": false,
+            "input": {
+              "audio_data": "AA==",
+              "channels": 1,
+              "correlation_id": "corr-tts-1",
+              "duration_ms": 12.5,
+              "format": "raw",
+              "is_final": false,
+              "reason": null,
+              "sample_rate": 24000,
+              "sequence": 0,
+              "source_sequence": 9007199254740992,
+              "stream_id": "stream-1",
+              "text": "hello"
+            },
+            "issue_category": "less_than_equal",
+            "issue_path": "$.source_sequence"
+          },
+          {
+            "accepted": false,
+            "input": {
+              "audio_data": "AA==",
+              "channels": 1,
+              "correlation_id": "corr-tts-1",
+              "duration_ms": 12.5,
+              "format": "raw",
+              "is_final": false,
+              "reason": null,
+              "sample_rate": 192001,
+              "sequence": 0,
+              "source_sequence": 0,
+              "stream_id": "stream-1",
+              "text": "hello"
+            },
+            "issue_category": "less_than_equal",
+            "issue_path": "$.sample_rate"
+          },
+          {
+            "accepted": false,
+            "input": {
+              "audio_data": "AA==",
+              "channels": 0,
+              "correlation_id": "corr-tts-1",
+              "duration_ms": 12.5,
+              "format": "raw",
+              "is_final": false,
+              "reason": null,
+              "sample_rate": 24000,
+              "sequence": 0,
+              "source_sequence": 0,
+              "stream_id": "stream-1",
+              "text": "hello"
+            },
+            "issue_category": "greater_than_equal",
+            "issue_path": "$.channels"
+          }
+        ],
+        "positive": {
+          "accepted": true,
+          "input": {
+            "audio_data": "AA==",
+            "channels": 1,
+            "correlation_id": "corr-tts-1",
+            "duration_ms": 12.5,
+            "format": "raw",
+            "is_final": false,
+            "reason": null,
+            "sample_rate": 24000,
+            "sequence": 0,
+            "source_sequence": 0,
+            "stream_id": "stream-1",
+            "text": "hello"
+          },
+          "normalized": {
+            "audio_data": "AA==",
+            "channels": 1,
+            "correlation_id": "corr-tts-1",
+            "duration_ms": 12.5,
+            "format": "raw",
+            "is_final": false,
+            "reason": null,
+            "sample_rate": 24000,
+            "sequence": 0,
+            "source_sequence": 0,
+            "stream_id": "stream-1",
+            "text": "hello"
+          },
+          "normalized_hash": "dfa9799bb419c86562e22b480e08c9f8786e10ad6d1074367f0acf667c8faa66"
+        }
+      }
     },
     {
       "direction": "input",

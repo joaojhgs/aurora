@@ -52,6 +52,7 @@ try:
         STRING_NON_BLANK_MARKER,
         STRING_TRIMMED_MARKER,
         STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
+        TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
         TTS_CAPABILITIES_INVARIANT_MARKER,
         TTS_CREATE_PROFILE_RESPONSE_INVARIANT_MARKER,
         TTS_DELETE_PROFILE_REQUEST_INVARIANT_MARKER,
@@ -94,6 +95,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct script execution
         STRING_NON_BLANK_MARKER,
         STRING_TRIMMED_MARKER,
         STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
+        TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
         TTS_CAPABILITIES_INVARIANT_MARKER,
         TTS_CREATE_PROFILE_RESPONSE_INVARIANT_MARKER,
         TTS_DELETE_PROFILE_REQUEST_INVARIANT_MARKER,
@@ -172,6 +174,7 @@ SDK_PROVIDER_REQUIRED_PERMISSION_OVERRIDES = {
     "Tooling.GetExportCatalog": "Tooling.GetTools",
     "Tooling.PrepareExecution": "Tooling.ExecuteTool",
 }
+SDK_EVENT_ALLOWLIST: tuple[str, ...] = ("TTS.AudioChunk",)
 
 SERVICE_CLASSES: tuple[tuple[str, str, str], ...] = (
     ("Config", "app.services.config.service", "ConfigService"),
@@ -783,6 +786,7 @@ _MODEL_INVARIANT_VERIFIERS = {
     ("TTSVoiceImportChunkResponse", "_validate_acknowledgement"): (
         TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER
     ),
+    ("TTSAudioChunkEvent", "_validate_audio_payload"): TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
     ("TranscribeAudioRequest", "_validate_language_shape"): STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
 }
 for _key, _marker in _MODEL_INVARIANT_VERIFIERS.items():
@@ -1186,6 +1190,10 @@ def _contract_schema_id(method_id: str, direction: str, model_name: str) -> str:
     return f"{method_id}.{direction}.{model_name}"
 
 
+def _event_schema_id(event_topic: str, model_name: str) -> str:
+    return f"{event_topic}.event.{model_name}"
+
+
 def _streaming_shape(method_id: str) -> dict[str, Any]:
     if method_id in {"TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd"}:
         return {
@@ -1404,6 +1412,7 @@ def _annotate_tts_validator_fields(title: str, schema: dict[str, Any]) -> None:
         "TTSVoiceImportStartResponse": TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
         "TTSVoiceImportChunkRequest": TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
         "TTSVoiceImportChunkResponse": TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
+        "TTSAudioChunkEvent": TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
         "TranscribeAudioRequest": STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
     }
     marker = invariant_markers.get(title)
@@ -1624,6 +1633,20 @@ def _positive_fixture(model_name: str) -> Any | None:
             "argument_visibility": {},
             "unexpected": "stripped",
         },
+        "TTSAudioChunkEvent": {
+            "stream_id": "stream-1",
+            "sequence": 0,
+            "audio_data": "AA==",
+            "format": "raw",
+            "sample_rate": 24000,
+            "channels": 1,
+            "duration_ms": 12.5,
+            "text": "hello",
+            "source_sequence": 0,
+            "is_final": False,
+            "reason": None,
+            "correlation_id": "corr-tts-1",
+        },
     }
     return fixtures.get(model_name)
 
@@ -1679,6 +1702,15 @@ def _negative_fixture(model_name: str) -> Any | None:
             "ok": True,
             "args_hash": "a" * 64,
         },
+        "TTSAudioChunkEvent": {
+            "stream_id": "stream-1",
+            "sequence": 2**53,
+            "audio_data": "AA==",
+            "format": "raw",
+            "sample_rate": 24000,
+            "channels": 1,
+            "duration_ms": 12.5,
+        },
     }
     return fixtures.get(model_name)
 
@@ -1733,6 +1765,17 @@ def _negative_fixtures(model_name: str) -> list[Any]:
                 {"top_k": -(2**53)},
             ]
         )
+    if model_name == "TTSAudioChunkEvent":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.extend(
+                [
+                    {**base, "audio_data": ""},
+                    {**base, "source_sequence": 2**53},
+                    {**base, "sample_rate": 192001},
+                    {**base, "channels": 0},
+                ]
+            )
     return cases
 
 
@@ -1777,6 +1820,7 @@ def build_sdk_contract_schema() -> dict[str, Any]:
     contracts = all_contracts()
     schemas: list[dict[str, Any]] = []
     method_descriptors: list[dict[str, Any]] = []
+    event_descriptors: list[dict[str, Any]] = []
     from app.shared.contracts.models.tooling import (
         ToolingExecuteToolRequest,
         ToolingExecuteToolResponse,
@@ -1787,6 +1831,7 @@ def build_sdk_contract_schema() -> dict[str, Any]:
         ToolingPrepareExecutionRequest,
         ToolingPrepareExecutionResponse,
     )
+    from app.shared.contracts.models.tts import TTSAudioChunkEvent
 
     static_models = {
         "Tooling.ExecuteTool": (ToolingExecuteToolRequest, ToolingExecuteToolResponse),
@@ -1799,6 +1844,19 @@ def build_sdk_contract_schema() -> dict[str, Any]:
             ToolingPrepareExecutionRequest,
             ToolingPrepareExecutionResponse,
         ),
+    }
+    event_models = {
+        "TTS.AudioChunk": {
+            "module": "TTS",
+            "name": "AudioChunk",
+            "topic": "TTS.AudioChunk",
+            "model": TTSAudioChunkEvent,
+            "required_permission": "TTS.use",
+            "bounded": True,
+            "authorized": True,
+            "ordered_event_group": "tts_text_stream",
+            "remote_raw_audio_route": False,
+        }
     }
     method_metadata: dict[str, dict[str, Any]] = {}
     for method_id in SDK_CONTRACT_ALLOWLIST:
@@ -1903,6 +1961,52 @@ def build_sdk_contract_schema() -> dict[str, Any]:
         )
         method_descriptors.append(descriptor)
 
+    for event_topic in SDK_EVENT_ALLOWLIST:
+        metadata = event_models.get(event_topic)
+        if metadata is None:
+            raise ValueError(
+                f"Allowlisted event is not registered for SDK generation: {event_topic}"
+            )
+        model = metadata["model"]
+        model_name = _model_name(model) or str(model)
+        schema = _model_wire_schema(model, mode="serialization")
+        schema_id = _event_schema_id(event_topic, model_name)
+        _assert_validator_extension_coverage(
+            method_id=event_topic,
+            direction="event",
+            root_model=model,
+            schema=schema,
+        )
+        _assert_no_unbounded_integer_schema(schema, context=schema_id)
+        schema_item = {
+            "schema_id": schema_id,
+            "method_id": event_topic,
+            "direction": "event",
+            "pydantic_mode": "serialization",
+            "model_name": model_name,
+            "schema": schema,
+            "schema_hash": sha256_json(schema),
+            "vectors": _validation_vectors(model, method_id=event_topic, direction="event"),
+        }
+        schemas.append(schema_item)
+        event_descriptors.append(
+            {
+                "event_topic": event_topic,
+                "module": metadata["module"],
+                "name": metadata["name"],
+                "topic": metadata["topic"],
+                "model": model_name,
+                "schema_id": schema_item["schema_id"],
+                "schema_hash": schema_item["schema_hash"],
+                "required_permission": metadata["required_permission"],
+                "required_perms": [metadata["required_permission"]],
+                "bounded": metadata["bounded"],
+                "authorized": metadata["authorized"],
+                "ordered_event_group": metadata["ordered_event_group"],
+                "remote_raw_audio_route": metadata["remote_raw_audio_route"],
+            }
+        )
+
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "artifact": "aurora-sdk-backend-contracts",
@@ -1915,6 +2019,7 @@ def build_sdk_contract_schema() -> dict[str, Any]:
             list(SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST)
         ),
         "method_descriptors": method_descriptors,
+        "event_descriptors": event_descriptors,
         "schemas": sorted(schemas, key=lambda item: item["schema_id"]),
     }
 

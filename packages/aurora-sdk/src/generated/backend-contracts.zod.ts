@@ -158,6 +158,7 @@ function validateTtsProfileMutationResponseInvariant(value: Record<string, unkno
 function validateTtsImportStartResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (typeof value.max_chunk_bytes === 'number' && typeof value.max_chunks === 'number' && typeof value.accepted_total_bytes === 'number' && value.max_chunk_bytes * value.max_chunks < value.accepted_total_bytes) addInvariantIssue(ctx, ['accepted_total_bytes'], 'upload session capacity is below accepted total bytes'); }
 function validateTtsImportChunkRequestInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { let decoded: Uint8Array; if (typeof value.chunk_data !== 'string') return; try { decoded = base64ToBytes(value.chunk_data) } catch { addInvariantIssue(ctx, ['chunk_data'], 'chunk_data must be valid base64'); return } if (decoded.length === 0) addInvariantIssue(ctx, ['chunk_data'], 'decoded chunk must not be empty'); if (decoded.length > 49152) addInvariantIssue(ctx, ['chunk_data'], 'decoded chunk exceeds limit'); if (typeof value.chunk_sha256 === 'string' && bytesToHex(sha256(decoded)) !== value.chunk_sha256) addInvariantIssue(ctx, ['chunk_sha256'], 'chunk SHA-256 mismatch'); if (new TextEncoder().encode(JSON.stringify(value)).length > 131072) addInvariantIssue(ctx, [], 'voice import chunk request exceeds JSON limit'); }
 function validateTtsImportChunkResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (typeof value.sequence === 'number' && value.next_sequence !== value.sequence + 1) addInvariantIssue(ctx, ['next_sequence'], 'next_sequence must acknowledge exactly one chunk'); if (value.status === 'duplicate' && value.idempotent !== true) addInvariantIssue(ctx, ['idempotent'], 'duplicate chunk acknowledgement must be idempotent'); if (value.status === 'accepted' && value.idempotent === true) addInvariantIssue(ctx, ['idempotent'], 'first chunk acknowledgement cannot be idempotent'); }
+function validateTtsAudioChunkEventInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (value.is_final !== true && value.audio_data === '') addInvariantIssue(ctx, [], 'non-final audio chunk requires audio data'); }
 function validateSttTranscribeLanguageShape(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (value.language !== null && value.language !== undefined && listIds(value, 'auto_language_candidates').length > 0) addInvariantIssue(ctx, ['auto_language_candidates'], 'exact STT language cannot include auto candidates'); }
 
 const GatewayExplainRouteInputRouteExplainRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
@@ -297,6 +298,22 @@ export const STTCoordinatorStopListeningOutputEmptyOutputSchema = z.object({
 
 }).meta({"x-aurora-extra-behavior":"strip"})
 export type STTCoordinatorStopListeningOutputEmptyOutput = z.infer<typeof STTCoordinatorStopListeningOutputEmptyOutputSchema>
+
+export const TTSAudioChunkEventTTSAudioChunkEventSchema = z.object({
+  "audio_data": z.string(),
+  "channels": z.number().finite().multipleOf(1).min(1).max(8).prefault(1).meta({"default":1}).optional(),
+  "correlation_id": z.string().nullable().prefault(null).meta({"default":null}).optional(),
+  "duration_ms": z.number().finite().min(0),
+  "format": z.string(),
+  "is_final": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "reason": z.string().nullable().prefault(null).meta({"default":null}).optional(),
+  "sample_rate": z.number().finite().multipleOf(1).min(0).max(192000),
+  "sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "source_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
+  "stream_id": z.string(),
+  "text": z.string().nullable().prefault(null).meta({"default":null}).optional()
+}).superRefine((value, ctx) => validateTtsAudioChunkEventInvariant(value, ctx)).meta({"x-aurora-extra-behavior":"strip","x-aurora-tts-audio-chunk-event-invariant":true})
+export type TTSAudioChunkEventTTSAudioChunkEvent = z.infer<typeof TTSAudioChunkEventTTSAudioChunkEventSchema>
 
 const TTSCreateVoiceProfileInputTTSCreateVoiceProfileRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
@@ -1397,6 +1414,7 @@ export const backendContractSchemas = {
   STTCoordinatorListenOutputSTTListenResponseSchema,
   STTCoordinatorStopListeningInputSTTStopListeningRequestSchema,
   STTCoordinatorStopListeningOutputEmptyOutputSchema,
+  TTSAudioChunkEventTTSAudioChunkEventSchema,
   TTSCreateVoiceProfileInputTTSCreateVoiceProfileRequestSchema,
   TTSCreateVoiceProfileOutputTTSCreateVoiceProfileResponseSchema,
   TTSDeleteVoiceProfileInputTTSDeleteVoiceProfileRequestSchema,
@@ -1460,6 +1478,7 @@ export const backendContractSchemaById = {
   "STTCoordinator.Listen.output.STTListenResponse": STTCoordinatorListenOutputSTTListenResponseSchema,
   "STTCoordinator.StopListening.input.STTStopListeningRequest": STTCoordinatorStopListeningInputSTTStopListeningRequestSchema,
   "STTCoordinator.StopListening.output.EmptyOutput": STTCoordinatorStopListeningOutputEmptyOutputSchema,
+  "TTS.AudioChunk.event.TTSAudioChunkEvent": TTSAudioChunkEventTTSAudioChunkEventSchema,
   "TTS.CreateVoiceProfile.input.TTSCreateVoiceProfileRequest": TTSCreateVoiceProfileInputTTSCreateVoiceProfileRequestSchema,
   "TTS.CreateVoiceProfile.output.TTSCreateVoiceProfileResponse": TTSCreateVoiceProfileOutputTTSCreateVoiceProfileResponseSchema,
   "TTS.DeleteVoiceProfile.input.TTSDeleteVoiceProfileRequest": TTSDeleteVoiceProfileInputTTSDeleteVoiceProfileRequestSchema,
@@ -2478,4 +2497,28 @@ export const backendContractMethodDescriptorById = {
   "WakeWord.Detect": {"method_id": "WakeWord.Detect", "module": "WakeWord", "name": "Detect", "topic": "WakeWord.Detect", "bus_topic": "WakeWord.Detect", "route_path": "/api/WakeWord/Detect", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.Detect"], "callable_feature_ids": ["wake_word_detection"], "input_model": "WakeWordDetectRequest", "output_model": "WakeWordDetectResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.Detect.input.WakeWordDetectRequest", "output_schema_id": "WakeWord.Detect.output.WakeWordDetectResponse", "input_schema_hash": "6d84e293fe9bf90a30317d78b1e8043cb52d45e13e8fce5ceb84e63185984735", "output_schema_hash": "c9675c0beade1d9158903798837dc11ae51429775bf4368ceb4783bdfdb793cf"},
   "Transcription.ProcessAudio": {"method_id": "Transcription.ProcessAudio", "module": "Transcription", "name": "ProcessAudio", "topic": "Transcription.ProcessAudio", "bus_topic": "Transcription.ProcessAudio", "route_path": "/api/Transcription/ProcessAudio", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.ProcessAudio"], "callable_feature_ids": ["audio_transcription"], "input_model": "STTAudioChunk", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.ProcessAudio.input.STTAudioChunk", "output_schema_id": "Transcription.ProcessAudio.output.EmptyOutput", "input_schema_hash": "3670479489138802e7d52d4b7d5623c52b363cd4166db2ee7916f6449a10233e", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
   "Transcription.Transcribe": {"method_id": "Transcription.Transcribe", "module": "Transcription", "name": "Transcribe", "topic": "Transcription.Transcribe", "bus_topic": "Transcription.Transcribe", "route_path": "/api/Transcription/Transcribe", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.Transcribe"], "callable_feature_ids": ["audio_transcription"], "input_model": "TranscribeAudioRequest", "output_model": "TranscribeAudioResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.Transcribe.input.TranscribeAudioRequest", "output_schema_id": "Transcription.Transcribe.output.TranscribeAudioResponse", "input_schema_hash": "00a0d251f18c3afec3b2593dfe57999a7fdaae76d3b937b3bdec90bbd3a7f56f", "output_schema_hash": "b7ac3e6f267b25a27363d98499342a6364bdb49530363ed96918d544a92fce5f"},
+} as const
+
+export const backendContractEventDescriptors = [
+  {
+    "event_topic": "TTS.AudioChunk",
+    "module": "TTS",
+    "name": "AudioChunk",
+    "topic": "TTS.AudioChunk",
+    "model": "TTSAudioChunkEvent",
+    "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent",
+    "schema_hash": "8f2a4c111920f068e5dae7ac8c6ea4dd031f7f50989af157d3c68fa5989760a6",
+    "required_permission": "TTS.use",
+    "required_perms": [
+      "TTS.use"
+    ],
+    "bounded": true,
+    "authorized": true,
+    "ordered_event_group": "tts_text_stream",
+    "remote_raw_audio_route": false
+  }
+] as const
+
+export const backendContractEventDescriptorByTopic = {
+  "TTS.AudioChunk": {"event_topic": "TTS.AudioChunk", "module": "TTS", "name": "AudioChunk", "topic": "TTS.AudioChunk", "model": "TTSAudioChunkEvent", "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent", "schema_hash": "8f2a4c111920f068e5dae7ac8c6ea4dd031f7f50989af157d3c68fa5989760a6", "required_permission": "TTS.use", "required_perms": ["TTS.use"], "bounded": true, "authorized": true, "ordered_event_group": "tts_text_stream", "remote_raw_audio_route": false},
 } as const

@@ -64,6 +64,7 @@ TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER = "x-aurora-tts-profile-mutation-
 TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER = "x-aurora-tts-import-start-response-invariant"
 TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER = "x-aurora-tts-import-chunk-request-invariant"
 TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER = "x-aurora-tts-import-chunk-response-invariant"
+TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER = "x-aurora-tts-audio-chunk-event-invariant"
 STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER = "x-aurora-stt-transcribe-language-shape"
 METADATA_KEYS = {
     "$schema",
@@ -103,6 +104,7 @@ METADATA_KEYS = {
     TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
     TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
     TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
+    TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
     STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
     "x-aurora-extra-behavior",
 }
@@ -508,6 +510,7 @@ class ZodCompiler:
             TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
             TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
             TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
+            TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
             STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
         )
         for marker in route_markers:
@@ -576,6 +579,7 @@ class ZodCompiler:
                 TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
                 TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
                 TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
+                TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
                 STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
                 "x-aurora-extra-behavior",
                 PROJECTION_IDENTITY_MARKER,
@@ -853,6 +857,7 @@ class ZodCompiler:
             (TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER, "validateTtsImportStartResponseInvariant"),
             (TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER, "validateTtsImportChunkRequestInvariant"),
             (TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER, "validateTtsImportChunkResponseInvariant"),
+            (TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER, "validateTtsAudioChunkEventInvariant"),
             (STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER, "validateSttTranscribeLanguageShape"),
         )
         if schema.get(TTS_CAPABILITIES_INVARIANT_MARKER) is True:
@@ -1213,6 +1218,7 @@ def render_zod_module(contract_schema: dict[str, Any]) -> str:
         "function validateTtsImportStartResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (typeof value.max_chunk_bytes === 'number' && typeof value.max_chunks === 'number' && typeof value.accepted_total_bytes === 'number' && value.max_chunk_bytes * value.max_chunks < value.accepted_total_bytes) addInvariantIssue(ctx, ['accepted_total_bytes'], 'upload session capacity is below accepted total bytes'); }",
         "function validateTtsImportChunkRequestInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { let decoded: Uint8Array; if (typeof value.chunk_data !== 'string') return; try { decoded = base64ToBytes(value.chunk_data) } catch { addInvariantIssue(ctx, ['chunk_data'], 'chunk_data must be valid base64'); return } if (decoded.length === 0) addInvariantIssue(ctx, ['chunk_data'], 'decoded chunk must not be empty'); if (decoded.length > 49152) addInvariantIssue(ctx, ['chunk_data'], 'decoded chunk exceeds limit'); if (typeof value.chunk_sha256 === 'string' && bytesToHex(sha256(decoded)) !== value.chunk_sha256) addInvariantIssue(ctx, ['chunk_sha256'], 'chunk SHA-256 mismatch'); if (new TextEncoder().encode(JSON.stringify(value)).length > 131072) addInvariantIssue(ctx, [], 'voice import chunk request exceeds JSON limit'); }",
         "function validateTtsImportChunkResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (typeof value.sequence === 'number' && value.next_sequence !== value.sequence + 1) addInvariantIssue(ctx, ['next_sequence'], 'next_sequence must acknowledge exactly one chunk'); if (value.status === 'duplicate' && value.idempotent !== true) addInvariantIssue(ctx, ['idempotent'], 'duplicate chunk acknowledgement must be idempotent'); if (value.status === 'accepted' && value.idempotent === true) addInvariantIssue(ctx, ['idempotent'], 'first chunk acknowledgement cannot be idempotent'); }",
+        "function validateTtsAudioChunkEventInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (value.is_final !== true && value.audio_data === '') addInvariantIssue(ctx, [], 'non-final audio chunk requires audio data'); }",
         "function validateSttTranscribeLanguageShape(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (value.language !== null && value.language !== undefined && listIds(value, 'auto_language_candidates').length > 0) addInvariantIssue(ctx, ['auto_language_candidates'], 'exact STT language cannot include auto candidates'); }",
         "",
     ]
@@ -1250,6 +1256,19 @@ def render_zod_module(contract_schema: dict[str, Any]) -> str:
     lines.append("export const backendContractMethodDescriptorById = {")
     for item in method_descriptors:
         lines.append(f"  {_ts_string(item['method_id'])}: {json.dumps(item, ensure_ascii=False)},")
+    lines.append("} as const")
+    lines.append("")
+    event_descriptors = contract_schema.get("event_descriptors", [])
+    lines.append(
+        "export const backendContractEventDescriptors = "
+        f"{json.dumps(event_descriptors, ensure_ascii=False, indent=2)} as const"
+    )
+    lines.append("")
+    lines.append("export const backendContractEventDescriptorByTopic = {")
+    for item in event_descriptors:
+        lines.append(
+            f"  {_ts_string(item['event_topic'])}: {json.dumps(item, ensure_ascii=False)},"
+        )
     lines.append("} as const")
     lines.append("")
     return "\n".join(lines)

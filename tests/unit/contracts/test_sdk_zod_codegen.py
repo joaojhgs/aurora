@@ -13,6 +13,7 @@ from scripts.sdk_zod_codegen import (
     SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER,
     STRING_NON_BLANK_MARKER,
     STRING_TRIMMED_MARKER,
+    TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
     UNIQUE_STRING_ARRAY_NORMALIZE_MARKER,
     CompileContext,
     UnsupportedSchemaError,
@@ -395,8 +396,9 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
         list(generate_backend_inventory.SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST)
     )
     assert len(schema["allowlist"]) == 30
-    assert len(schema["schemas"]) == 60
+    assert len(schema["schemas"]) == 61
     assert len(schema["method_descriptors"]) == 30
+    assert len(schema["event_descriptors"]) == 1
     assert len(provider["methods"]) == 4
     descriptors = {item["method_id"]: item for item in schema["method_descriptors"]}
     descriptor_ids = set(descriptors)
@@ -407,6 +409,40 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     assert all(not method_id.startswith("AudioSession.") for method_id in descriptor_ids)
     assert descriptors["TTS.CreateVoiceProfile"]["method_type"] == "manage"
     assert descriptors["TTS.CreateVoiceProfile"]["required_perms"] == ["TTS.manage"]
+    assert schema["event_descriptors"] == [
+        {
+            "event_topic": "TTS.AudioChunk",
+            "module": "TTS",
+            "name": "AudioChunk",
+            "topic": "TTS.AudioChunk",
+            "model": "TTSAudioChunkEvent",
+            "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent",
+            "schema_hash": schema["event_descriptors"][0]["schema_hash"],
+            "required_permission": "TTS.use",
+            "required_perms": ["TTS.use"],
+            "bounded": True,
+            "authorized": True,
+            "ordered_event_group": "tts_text_stream",
+            "remote_raw_audio_route": False,
+        }
+    ]
+    assert schema["event_descriptors"][0]["schema_hash"] == next(
+        item["schema_hash"]
+        for item in schema["schemas"]
+        if item["schema_id"] == "TTS.AudioChunk.event.TTSAudioChunkEvent"
+    )
+    event_schema = next(
+        item
+        for item in schema["schemas"]
+        if item["schema_id"] == "TTS.AudioChunk.event.TTSAudioChunkEvent"
+    )
+    assert event_schema["schema"][TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER] is True
+    assert any(
+        vector["issue_path"] == "$"
+        and vector["input"]["audio_data"] == ""
+        and vector["input"]["is_final"] is False
+        for vector in event_schema["vectors"]["negative_cases"]
+    )
     for method_id in ("TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd"):
         assert descriptors[method_id]["streaming"] == {
             "event_topic": "TTS.AudioChunk",
@@ -701,6 +737,28 @@ def test_authoritative_python_contracts_reject_out_of_range_integers() -> None:
         ToolingGetToolsRequest.model_validate({"top_k": 2**53})
     with pytest.raises(ValidationError):
         ToolingGetToolsRequest.model_validate({"top_k": -(2**53)})
+
+
+def test_authoritative_tts_audio_chunk_event_preserves_terminal_empty_audio_only() -> None:
+    from app.shared.contracts.models.tts import TTSAudioChunkEvent
+
+    terminal = {
+        "stream_id": "stream-1",
+        "sequence": 1,
+        "source_sequence": 0,
+        "audio_data": "",
+        "format": "raw",
+        "sample_rate": 0,
+        "channels": 1,
+        "duration_ms": 0,
+        "is_final": True,
+        "reason": "completed",
+    }
+
+    TTSAudioChunkEvent.model_validate(terminal)
+
+    with pytest.raises(ValidationError, match="non-final audio chunk requires audio data"):
+        TTSAudioChunkEvent.model_validate({**terminal, "is_final": False, "sample_rate": 24000})
 
 
 def _walk_schema_objects(value: object) -> list[dict[str, object]]:

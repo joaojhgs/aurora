@@ -969,17 +969,23 @@ class TTSAudioChunkEvent(IOModel):
     """Synthesized audio chunk emitted for a TTS streaming session."""
 
     stream_id: str
-    sequence: int = Field(ge=0)
+    sequence: int = Field(ge=0, le=TTS_MAX_STREAM_SEQUENCE)
     audio_data: str  # Base64-encoded audio
     format: str
-    sample_rate: int
-    channels: int = 1
+    sample_rate: int = Field(ge=0, le=TTS_MAX_SAMPLE_RATE)
+    channels: int = Field(default=1, ge=1, le=TTS_MAX_CHANNELS)
     duration_ms: float = Field(ge=0)
     text: str | None = None
-    source_sequence: int | None = Field(default=None, ge=0)
+    source_sequence: int | None = Field(default=None, ge=0, le=TTS_MAX_STREAM_SEQUENCE)
     is_final: bool = False
     reason: str | None = None
     correlation_id: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_audio_payload(self) -> TTSAudioChunkEvent:
+        if not self.is_final and self.audio_data == "":
+            raise ValueError("non-final audio chunk requires audio data")
+        return self
 
 
 class TTSControl(IOModel):
