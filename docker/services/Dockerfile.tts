@@ -38,15 +38,19 @@ RUN --mount=type=cache,target=/root/.cache/uv \
       --prune torch --prune torchaudio --prune torchvision \
       > /tmp/requirements.txt && \
     if [ "$TTS_HARDWARE" = "cuda" ]; then \
-      uv pip install --system -r /tmp/requirements.txt \
-        && uv pip install --system \
+      uv pip install --system \
           torch==2.6.0+cu124 torchaudio==2.6.0+cu124 torchvision==0.21.0+cu124 \
-          --extra-index-url=https://download.pytorch.org/whl/cu124; \
+          --extra-index-url=https://download.pytorch.org/whl/cu124 \
+        && uv pip install --system -r /tmp/requirements.txt \
+          --extra-index-url=https://download.pytorch.org/whl/cu124 \
+          --index-strategy unsafe-best-match; \
     elif [ "$TTS_HARDWARE" = "rocm" ]; then \
-      uv pip install --system -r /tmp/requirements.txt \
-        && uv pip install --system \
+      uv pip install --system \
           torch==2.6.0+rocm6.2.4 torchaudio==2.6.0+rocm6.2.4 torchvision==0.21.0+rocm6.2.4 \
-          --extra-index-url=https://download.pytorch.org/whl/rocm6.2.4; \
+          --extra-index-url=https://download.pytorch.org/whl/rocm6.2.4 \
+        && uv pip install --system -r /tmp/requirements.txt \
+          --extra-index-url=https://download.pytorch.org/whl/rocm6.2.4 \
+          --index-strategy unsafe-best-match; \
     else \
       uv pip install --system \
         torch==2.6.0+cpu torchaudio==2.6.0+cpu torchvision==0.21.0+cpu \

@@ -90,6 +90,11 @@ dependency-profile inputs and must remain outside packaged application artifacts
 Process-mode TTS keeps its managed downloads and voice state in the persistent
 `aurora_voice_models` volume mounted at `/app/voice_models`.
 
+Hardware-backed local speech installs establish the selected Torch triplet before
+resolving PocketTTS. The Docker and sidecar builders enforce that order. For a
+manual service environment, use the frozen-export sequence in `docs/UV_USAGE.md`;
+do not start from an unconstrained editable extra install.
+
 Tauri desktop packages stage a Python sidecar using `apps/aurora-tauri/scripts/prepare-sidecar.mjs` and `scripts/build.py`. Profiles are explicit so the default bundle does not install every local dependency.
 
 | Profile | Intent | Typical command |

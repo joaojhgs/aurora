@@ -380,7 +380,18 @@ uv pip install -e .[service-tooling]
 
 ### TTSService (`service-tts`)
 ```bash
-uv pip install -e .[service-tts]
+uv venv --python 3.11
+.venv/bin/python scripts/wheel_installer.py --package pytorch --hardware cpu
+uv export --frozen --no-dev --no-emit-project --format requirements.txt \
+  --extra service-tts \
+  --prune torch --prune torchaudio --prune torchvision \
+  --output-file /tmp/aurora-tts-requirements.txt
+uv pip install --python .venv/bin/python \
+  -r /tmp/aurora-tts-requirements.txt \
+  --constraint docker/services/constraints-tts-cpu.txt \
+  --extra-index-url https://download.pytorch.org/whl/cpu \
+  --index-strategy unsafe-best-match
+uv pip install --python .venv/bin/python --no-deps -e .
 ```
 - `realtimetts`, `piper-tts`, `piper-phonemize`, `pocket-tts[audio]`
 - `PyAudio`

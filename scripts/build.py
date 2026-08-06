@@ -13,6 +13,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -255,6 +256,64 @@ def install_python_packages(
     )
 
 
+def install_sidecar_profile_dependencies(sidecar_profile: SidecarProfile) -> None:
+    """Install one sidecar profile from the frozen lock for the current interpreter."""
+
+    uv = shutil.which("uv")
+    if not uv:
+        raise RuntimeError("uv is required for reproducible sidecar dependency installation")
+
+    uv_install_args, _pip_install_args = profile_install_args(sidecar_profile)
+    with tempfile.TemporaryDirectory(prefix="aurora-sidecar-deps-") as temp_dir:
+        requirements_path = Path(temp_dir) / "requirements.txt"
+        export_command = [
+            uv,
+            "export",
+            "--frozen",
+            "--no-dev",
+            "--no-emit-project",
+            "--quiet",
+            "--format",
+            "requirements.txt",
+        ]
+        for extra in sidecar_profile.extras:
+            export_command.extend(("--extra", extra))
+        if sidecar_profile.hardware:
+            for package in ("torch", "torchaudio", "torchvision"):
+                export_command.extend(("--prune", package))
+        export_command.extend(("--output-file", str(requirements_path)))
+
+        subprocess.run(export_command, check=True, cwd=PROJECT_ROOT)
+        subprocess.run(
+            [
+                uv,
+                "pip",
+                "install",
+                "--python",
+                sys.executable,
+                "-r",
+                str(requirements_path),
+                *uv_install_args,
+            ],
+            check=True,
+            cwd=PROJECT_ROOT,
+        )
+        subprocess.run(
+            [
+                uv,
+                "pip",
+                "install",
+                "--python",
+                sys.executable,
+                "--no-deps",
+                "-e",
+                str(PROJECT_ROOT),
+            ],
+            check=True,
+            cwd=PROJECT_ROOT,
+        )
+
+
 def remove_enum34_backport() -> None:
     """Remove enum34 in modern Python envs because PyInstaller refuses it."""
     uv = shutil.which("uv")
@@ -270,6 +329,26 @@ def remove_enum34_backport() -> None:
         click.echo("⚠️  Could not uninstall enum34 automatically; PyInstaller may fail")
         if result.stderr:
             click.echo(result.stderr.strip())
+
+
+def install_profile_hardware_wheels(
+    wheel_installer: Path,
+    sidecar_profile: SidecarProfile,
+) -> None:
+    """Install or reconcile the selected hardware wheels for a sidecar profile."""
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(wheel_installer),
+            "--hardware",
+            sidecar_profile.hardware,
+            "--package",
+            sidecar_profile.wheel_package,
+        ],
+        check=True,
+        cwd=PROJECT_ROOT,
+    )
 
 
 def ensure_dependencies(sidecar_profile: SidecarProfile | None = None):
@@ -288,11 +367,19 @@ def ensure_dependencies(sidecar_profile: SidecarProfile | None = None):
     if sidecar_profile and sidecar_profile.force_cpu_torch_wheels:
         click.echo("🧱 Enforcing CPU PyTorch wheels for this sidecar profile")
     try:
-        install_python_packages(
-            ["-e", format_extras(extras)],
-            uv_args=uv_install_args,
-            pip_args=pip_install_args,
-        )
+        if sidecar_profile and sidecar_profile.hardware:
+            click.echo(
+                "🎡 Installing selected hardware wheels before resolving local speech dependencies"
+            )
+            install_profile_hardware_wheels(wheel_installer, sidecar_profile)
+        if sidecar_profile:
+            install_sidecar_profile_dependencies(sidecar_profile)
+        else:
+            install_python_packages(
+                ["-e", format_extras(extras)],
+                uv_args=uv_install_args,
+                pip_args=pip_install_args,
+            )
         remove_enum34_backport()
         click.echo("✅ Build dependencies installed")
     except subprocess.CalledProcessError as e:
@@ -328,22 +415,11 @@ def ensure_dependencies(sidecar_profile: SidecarProfile | None = None):
 
     # Run wheel installer only for profiles that actually need local ML wheels.
     click.echo(
-        "🎡 Running wheel installer for "
+        "🎡 Verifying wheel selection for "
         f"{sidecar_profile.hardware} packages ({sidecar_profile.wheel_package})..."
     )
     try:
-        subprocess.run(
-            [
-                sys.executable,
-                str(wheel_installer),
-                "--hardware",
-                sidecar_profile.hardware,
-                "--package",
-                sidecar_profile.wheel_package,
-            ],
-            check=True,
-            cwd=PROJECT_ROOT,
-        )
+        install_profile_hardware_wheels(wheel_installer, sidecar_profile)
         click.echo("✅ Dependencies optimized")
     except subprocess.CalledProcessError as e:
         raise click.ClickException(

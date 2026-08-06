@@ -8,9 +8,9 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
-import yaml
 
 from scripts import build as build_script
 from scripts.wheel_installer import WheelInstaller
@@ -177,8 +177,10 @@ def test_tts_docker_cpu_requirements_export_prunes_pytorch_subtrees():
 @pytest.mark.e2e
 def test_tts_process_image_uses_a_persistent_voice_model_cache():
     dockerfile = Path("docker/services/Dockerfile.tts").read_text(encoding="utf-8")
-    compose = yaml.safe_load(Path("docker-compose.process.yml").read_text(encoding="utf-8"))
-    tts_service = compose["services"]["tts-service"]
+    compose = Path("docker-compose.process.yml").read_text(encoding="utf-8")
+    tts_service = compose.split("  # TTS Service", maxsplit=1)[1].split(
+        "  # STT Transcription Service", maxsplit=1
+    )[0]
 
     assert "HF_HOME=/app/voice_models/pockettts/huggingface" in dockerfile
     assert "/app/voice_models/pockettts/voices" in dockerfile
@@ -187,9 +189,98 @@ def test_tts_process_image_uses_a_persistent_voice_model_cache():
         "COPY --chown=aurora:aurora pyproject.toml uv.lock ./"
     ) < dockerfile.index("COPY --chown=aurora:aurora app/ app/")
 
-    assert "HF_HOME=/app/voice_models/pockettts/huggingface" in tts_service["environment"]
-    assert "aurora_voice_models:/app/voice_models" in tts_service["volumes"]
-    assert compose["volumes"]["aurora_voice_models"]["driver"] == "local"
+    assert "HF_HOME=/app/voice_models/pockettts/huggingface" in tts_service
+    assert "aurora_voice_models:/app/voice_models" in tts_service
+    assert "\n  aurora_voice_models:\n    driver: local\n" in compose
+
+
+@pytest.mark.e2e
+def test_tts_docker_installs_selected_gpu_backend_before_pockettts_requirements():
+    dockerfile = Path("docker/services/Dockerfile.tts").read_text(encoding="utf-8")
+    cuda_branch = dockerfile.split('if [ "$TTS_HARDWARE" = "cuda" ]; then', maxsplit=1)[1].split(
+        'elif [ "$TTS_HARDWARE" = "rocm" ]; then', maxsplit=1
+    )[0]
+    rocm_branch = dockerfile.split('elif [ "$TTS_HARDWARE" = "rocm" ]; then', maxsplit=1)[1].split(
+        "else", maxsplit=1
+    )[0]
+
+    assert cuda_branch.index("torch==2.6.0+cu124") < cuda_branch.index("-r /tmp/requirements.txt")
+    assert rocm_branch.index("torch==2.6.0+rocm6.2.4") < rocm_branch.index(
+        "-r /tmp/requirements.txt"
+    )
+    assert "https://download.pytorch.org/whl/cu124" in cuda_branch
+    assert "https://download.pytorch.org/whl/rocm6.2.4" in rocm_branch
+
+
+@pytest.mark.e2e
+def test_sidecar_installs_hardware_wheels_before_dependency_resolution(monkeypatch):
+    events: list[str] = []
+    profile = build_script.get_sidecar_profile("local-rocm")
+
+    monkeypatch.setattr(
+        build_script,
+        "install_profile_hardware_wheels",
+        lambda *_args: events.append("hardware"),
+    )
+    monkeypatch.setattr(
+        build_script,
+        "install_sidecar_profile_dependencies",
+        lambda *_args, **_kwargs: events.append("dependencies"),
+    )
+    monkeypatch.setattr(
+        build_script,
+        "remove_enum34_backport",
+        lambda: events.append("cleanup"),
+    )
+    monkeypatch.setitem(sys.modules, "PyInstaller", SimpleNamespace(__version__="test"))
+
+    build_script.ensure_dependencies(profile)
+
+    assert events == ["hardware", "dependencies", "cleanup", "hardware"]
+
+
+@pytest.mark.e2e
+def test_sidecar_dependency_install_uses_frozen_pruned_lock(monkeypatch):
+    commands: list[list[str]] = []
+    profile = build_script.get_sidecar_profile("local-rocm")
+
+    monkeypatch.setattr(build_script.shutil, "which", lambda name: "/usr/bin/uv")
+    monkeypatch.setattr(
+        build_script.subprocess,
+        "run",
+        lambda command, **_kwargs: commands.append(command)
+        or subprocess.CompletedProcess(command, 0),
+    )
+
+    build_script.install_sidecar_profile_dependencies(profile)
+
+    export_command, requirements_command, project_command = commands
+    assert export_command[:3] == ["/usr/bin/uv", "export", "--frozen"]
+    assert "--no-dev" in export_command
+    assert "--no-emit-project" in export_command
+    for extra in profile.extras:
+        assert ["--extra", extra] == export_command[
+            export_command.index(extra) - 1 : export_command.index(extra) + 1
+        ]
+    for package in ("torch", "torchaudio", "torchvision"):
+        assert ["--prune", package] == export_command[
+            export_command.index(package) - 1 : export_command.index(package) + 1
+        ]
+    assert requirements_command[:5] == [
+        "/usr/bin/uv",
+        "pip",
+        "install",
+        "--python",
+        sys.executable,
+    ]
+    assert project_command[:6] == [
+        "/usr/bin/uv",
+        "pip",
+        "install",
+        "--python",
+        sys.executable,
+        "--no-deps",
+    ]
 
 
 @pytest.mark.e2e
@@ -478,7 +569,8 @@ def test_sidecar_dependency_install_failure_is_fatal(monkeypatch):
     def fail_install(*args, **kwargs):
         raise subprocess.CalledProcessError(1, ["uv", "pip", "install"])
 
-    monkeypatch.setattr(build_script, "install_python_packages", fail_install)
+    monkeypatch.setattr(build_script, "install_profile_hardware_wheels", lambda *_args: None)
+    monkeypatch.setattr(build_script, "install_sidecar_profile_dependencies", fail_install)
 
     with pytest.raises(build_script.click.ClickException, match="local-cpu"):
         build_script.ensure_dependencies(profile)
