@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   canonicalizeManifest,
   verifyLocalSpeechManifest,
+  type LocalSpeechAssetManifest,
   type LocalSpeechPackManifest
 } from '../src/index.js'
 import {
@@ -11,6 +12,25 @@ import {
 } from '../src/test-doubles/index.js'
 
 const assetHash = 'a'.repeat(64)
+
+function supportAsset(assetId: string): LocalSpeechAssetManifest {
+  return {
+    assetId,
+    feature: 'tts',
+    runtimeTarget: 'web',
+    language: 'en',
+    locale: 'en-US',
+    byteSize: 128,
+    url: `/speech/${assetId}.bin`,
+    sha256: assetHash,
+    compression: 'none',
+    license: 'test-license',
+    attribution: 'Aurora test fixture',
+    upstreamSource: 'aurora-test',
+    upstreamRevision: 'fixture-1',
+    redistribution: 'internal-only'
+  }
+}
 
 function manifest(overrides: Partial<LocalSpeechPackManifest> = {}): LocalSpeechPackManifest {
   const unsigned: LocalSpeechPackManifest = {
@@ -39,6 +59,7 @@ function manifest(overrides: Partial<LocalSpeechPackManifest> = {}): LocalSpeech
         upstreamSource: 'aurora-test',
         upstreamRevision: 'fixture-1',
         redistribution: 'internal-only',
+        dependencies: ['tokenizer', 'conditioner', 'bos'],
         raven: {
           canonicalConfigId: 'pockettts-raven-en-6l',
           sourceCheckpointRevision: 'source-1',
@@ -56,7 +77,10 @@ function manifest(overrides: Partial<LocalSpeechPackManifest> = {}): LocalSpeech
           defaultEos: '</s>',
           voiceStateCompatibilityGroupId: 'raven-en-v1'
         }
-      }
+      },
+      supportAsset('tokenizer'),
+      supportAsset('conditioner'),
+      supportAsset('bos')
     ]
   }
   const withOverrides = { ...unsigned, ...overrides }
@@ -145,5 +169,52 @@ describe('local speech manifests', () => {
     await expect(
       verifyLocalSpeechManifest(broken, { trustedKeys: [createDeterministicTrustedKey()] })
     ).rejects.toThrow(/unknown asset/)
+  })
+
+  it('rejects Raven packs with a missing referenced asset even when the dependency is omitted too', async () => {
+    const current = manifest()
+    const broken = manifest({
+      assets: current.assets
+        .filter((asset) => asset.assetId !== 'tokenizer')
+        .map((asset) =>
+          asset.assetId === 'raven-en-model'
+            ? { ...asset, dependencies: (asset.dependencies ?? []).filter((dependency) => dependency !== 'tokenizer') }
+            : asset
+        )
+    })
+
+    await expect(
+      verifyLocalSpeechManifest(broken, { trustedKeys: [createDeterministicTrustedKey()] })
+    ).rejects.toThrow(/Raven tokenizerAssetId references unknown asset tokenizer/)
+  })
+
+  it('rejects Raven packs whose required asset reference is revoked', async () => {
+    const current = manifest()
+    const broken = manifest({
+      assets: current.assets.map((asset) =>
+        asset.assetId === 'tokenizer'
+          ? { ...asset, revocation: { revoked: true, reason: 'security' as const, since: '2026-08-06' } }
+          : asset
+      )
+    })
+
+    await expect(
+      verifyLocalSpeechManifest(broken, { trustedKeys: [createDeterministicTrustedKey()] })
+    ).rejects.toThrow(/Raven tokenizerAssetId references revoked asset tokenizer/)
+  })
+
+  it('rejects Raven metadata attached to a different model asset', async () => {
+    const current = manifest()
+    const broken = manifest({
+      assets: current.assets.map((asset) =>
+        asset.assetId === 'raven-en-model' && asset.raven
+          ? { ...asset, raven: { ...asset.raven, modelAssetId: 'conditioner' } }
+          : asset
+      )
+    })
+
+    await expect(
+      verifyLocalSpeechManifest(broken, { trustedKeys: [createDeterministicTrustedKey()] })
+    ).rejects.toThrow(/modelAssetId must match containing asset/)
   })
 })

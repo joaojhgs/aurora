@@ -152,11 +152,42 @@ export function assertManifestShape(manifest: LocalSpeechPackManifest): void {
     }
   }
 
+  const assetsById = new Map(manifest.assets.map((asset) => [asset.assetId, asset] as const))
   const revokedAssetIds = new Set(
     manifest.assets.filter((asset) => asset.revocation?.revoked === true).map((asset) => asset.assetId)
   )
   for (const asset of manifest.assets) {
     if (asset.revocation?.revoked === true) continue
+    if (asset.raven) {
+      const ravenReferences = [
+        ['tokenizerAssetId', asset.raven.tokenizerAssetId],
+        ['textConditionerAssetId', asset.raven.textConditionerAssetId],
+        ['bosAssetId', asset.raven.bosAssetId],
+        ['modelAssetId', asset.raven.modelAssetId]
+      ] as const
+      for (const [field, referencedAssetId] of ravenReferences) {
+        const referencedAsset = assetsById.get(referencedAssetId)
+        if (!referencedAsset) {
+          throw new Error(`Raven ${field} references unknown asset ${referencedAssetId}`)
+        }
+        if (referencedAsset.revocation?.revoked === true) {
+          throw new Error(`Raven ${field} references revoked asset ${referencedAssetId}`)
+        }
+      }
+      if (asset.raven.modelAssetId !== asset.assetId) {
+        throw new Error(`Raven modelAssetId must match containing asset ${asset.assetId}`)
+      }
+      const dependencies = new Set(asset.dependencies ?? [])
+      for (const referencedAssetId of [
+        asset.raven.tokenizerAssetId,
+        asset.raven.textConditionerAssetId,
+        asset.raven.bosAssetId
+      ]) {
+        if (!dependencies.has(referencedAssetId)) {
+          throw new Error(`Raven asset ${asset.assetId} must declare dependency ${referencedAssetId}`)
+        }
+      }
+    }
     const revokedDependency = (asset.dependencies ?? []).find((dependency) => revokedAssetIds.has(dependency))
     if (revokedDependency) {
       throw new Error(`active asset ${asset.assetId} depends on revoked asset ${revokedDependency}`)
