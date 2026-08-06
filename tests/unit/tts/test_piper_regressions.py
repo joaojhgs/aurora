@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import io
-import subprocess
 import sys
 import types
 import wave
@@ -14,7 +13,16 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from app.services.tts.providers.base import (
+    TTSProviderCapabilities,
+    TTSProviderError,
+    TTSProviderHealth,
+    TTSSynthesisResult,
+    TTSVoiceInfo,
+    VoiceSelectionMode,
+)
 from app.services.tts.service import TTSService
+from app.shared.config.models import Piper, Providers, Tts
 from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.gateway import GatewayMethods
 from app.shared.contracts.models.tts import (
@@ -106,6 +114,55 @@ def _decode_wav(encoded_audio: str) -> tuple[bytes, int, int, int]:
         )
 
 
+class FakeProvider:
+    """Minimal provider double for service-boundary tests."""
+
+    def __init__(self, *, audio: bytes = b"\x01\x00\x02\x00", sample_rate: int = 22050):
+        self.requests = []
+        self.audio = audio
+        self.sample_rate = sample_rate
+        self.stopped = False
+        self.voices = (TTSVoiceInfo("default", "Default", True),)
+
+    @property
+    def capabilities(self) -> TTSProviderCapabilities:
+        return TTSProviderCapabilities(
+            provider_id="fake",
+            voice_selection_mode=VoiceSelectionMode.ACTIVE_ONLY,
+        )
+
+    async def start(self) -> None:
+        pass
+
+    async def stop(self) -> None:
+        self.stopped = True
+
+    async def health(self) -> TTSProviderHealth:
+        return TTSProviderHealth("fake", True, "default", "fake:base")
+
+    async def list_voices(self):
+        return self.voices
+
+    async def synthesize(self, request) -> TTSSynthesisResult:
+        self.requests.append(request)
+        if request.voice == "missing":
+            raise TTSProviderError("unsupported_voice", "Requested voice is unavailable")
+        return TTSSynthesisResult(
+            audio=self.audio,
+            audio_format=request.audio_format,
+            sample_rate=self.sample_rate,
+            channels=1,
+            duration_ms=(len(self.audio) / (self.sample_rate * 2)) * 1000,
+            voice=request.voice or "default",
+        )
+
+    def stream(self, request):
+        raise NotImplementedError
+
+    async def cancel(self, request_id: str) -> None:
+        pass
+
+
 @pytest.mark.asyncio
 async def test_synthesize_returns_golden_wav_container_for_piper_pcm(
     service: TTSService, monkeypatch
@@ -113,7 +170,7 @@ async def test_synthesize_returns_golden_wav_container_for_piper_pcm(
     """returns a mono 16-bit WAV container when Piper finite synthesis requests wav."""
     pcm = b"\x01\x00\x02\x00\x03\x00\x04\x00"
 
-    async def synthesize(text: str) -> tuple[bytes, int]:
+    async def synthesize(text: str, **kwargs) -> tuple[bytes, int]:
         assert text == "golden text"
         return pcm, 22050
 
@@ -135,7 +192,7 @@ async def test_synthesize_returns_golden_raw_pcm_for_piper_pcm(
     """returns raw PCM bytes when Piper finite synthesis requests raw."""
     pcm = b"\x10\x00\x20\x00"
 
-    async def synthesize(_text: str) -> tuple[bytes, int]:
+    async def synthesize(_text: str, **kwargs) -> tuple[bytes, int]:
         return pcm, 24000
 
     monkeypatch.setattr(service, "_synthesize_to_bytes", synthesize)
@@ -149,85 +206,43 @@ async def test_synthesize_returns_golden_raw_pcm_for_piper_pcm(
 
 
 @pytest.mark.asyncio
-async def test_piper_finite_synthesis_invokes_cli_off_event_loop(
-    service: TTSService, tmp_path, monkeypatch
+async def test_synthesize_routes_voice_speed_and_sample_rate_to_provider(
+    service: TTSService,
 ) -> None:
-    """runs the Piper CLI through asyncio.to_thread for finite synthesis."""
-    model_path = tmp_path / "voice.onnx"
-    config_path = tmp_path / "voice.onnx.json"
-    model_path.write_bytes(b"model")
-    config_path.write_text("{}", encoding="utf-8")
-    service.engine = SimpleNamespace(piper_path="/usr/bin/piper", _use_cuda="disabled")
-    run_calls: list[dict[str, object]] = []
-    to_thread_calls: list[object] = []
+    """sends logical voice and synthesis options through the provider boundary."""
+    provider = FakeProvider(audio=b"\x05\x00\x06\x00", sample_rate=16000)
+    service._provider = provider
 
-    async def get_model_paths() -> tuple[str, str]:
-        return str(model_path), str(config_path)
-
-    def fake_run(cmd, *, input, capture_output, check, shell):
-        output_path = cmd[cmd.index("-f") + 1]
-        with wave.open(output_path, "wb") as wav_file:
-            wav_file.setnchannels(1)
-            wav_file.setsampwidth(2)
-            wav_file.setframerate(16000)
-            wav_file.writeframes(b"\x05\x00\x06\x00")
-        run_calls.append(
-            {
-                "cmd": cmd,
-                "input": input,
-                "capture_output": capture_output,
-                "check": check,
-                "shell": shell,
-            }
-        )
-
-    async def fake_to_thread(func, *args, **kwargs):
-        to_thread_calls.append(func)
-        return func(*args, **kwargs)
-
-    monkeypatch.setattr(service, "_get_model_paths", get_model_paths)
-    monkeypatch.setattr(subprocess, "run", fake_run)
-    monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
-
-    audio, sample_rate = await service._synthesize_to_bytes("threaded")
+    audio, sample_rate = await service._synthesize_to_bytes(
+        "threaded",
+        request_id="request-1",
+        voice="voice-a",
+        sample_rate=24000,
+        speed=0.75,
+    )
 
     assert audio == b"\x05\x00\x06\x00"
     assert sample_rate == 16000
-    assert to_thread_calls == [fake_run]
-    assert run_calls[0]["cmd"][:6] == [
-        "/usr/bin/piper",
-        "-m",
-        str(model_path),
-        "-f",
-        run_calls[0]["cmd"][4],
-        "-c",
-    ]
-    assert run_calls[0]["cmd"][6] == str(config_path)
-    assert run_calls[0]["input"] == b"threaded"
-    assert run_calls[0]["capture_output"] is True
-    assert run_calls[0]["check"] is True
-    assert run_calls[0]["shell"] is False
+    assert provider.requests[-1].text == "threaded"
+    assert provider.requests[-1].request_id == "request-1"
+    assert provider.requests[-1].voice == "voice-a"
+    assert provider.requests[-1].sample_rate == 24000
+    assert provider.requests[-1].speed == 0.75
 
 
 @pytest.mark.asyncio
 async def test_synthesize_maps_piper_failure_without_echoing_request_text(
-    service: TTSService, monkeypatch
+    service: TTSService,
 ) -> None:
     """maps Piper failures without including the requested text in the error."""
-
-    async def fail_synthesis(_text: str) -> tuple[bytes, int]:
-        raise subprocess.CalledProcessError(
-            returncode=1,
-            cmd=["piper"],
-            stderr=b"model unavailable",
-        )
-
-    monkeypatch.setattr(service, "_synthesize_to_bytes", fail_synthesis)
+    service._provider = FakeProvider()
 
     with pytest.raises(RuntimeError) as exc_info:
-        await service.synthesize(TTSSynthesizeRequest(text="private words", format="wav"))
+        await service.synthesize(
+            TTSSynthesizeRequest(text="private words", voice="missing", format="wav")
+        )
 
-    assert str(exc_info.value) == "Piper synthesis failed: model unavailable"
+    assert str(exc_info.value) == "Requested voice is unavailable"
     assert "private words" not in str(exc_info.value)
 
 
@@ -237,7 +252,7 @@ async def test_tts_request_error_event_does_not_include_request_text(
 ) -> None:
     """publishes a TTS error event without copying request text into the payload."""
 
-    async def fail_playback(_text: str, _request_id: str) -> None:
+    async def fail_playback(_text: str, _request_id: str, **kwargs) -> None:
         raise RuntimeError("audio output unavailable")
 
     monkeypatch.setattr(service, "_play_text", fail_playback)
@@ -251,6 +266,23 @@ async def test_tts_request_error_event_does_not_include_request_text(
     assert not hasattr(error_call.args[1], "text")
     assert error_call.kwargs["event"] is True
     assert error_call.kwargs["mesh"] is False
+
+
+@pytest.mark.asyncio
+async def test_tts_request_validates_requested_voice_before_server_playback(
+    service: TTSService, mock_bus
+) -> None:
+    """routes server playback voice selection through the active provider."""
+    service._provider = FakeProvider()
+
+    await service._on_tts_request(TTSRequest(text="hello", voice="missing"))
+
+    service.stream.feed.assert_not_called()
+    error_call = next(
+        call for call in mock_bus.publish.await_args_list if call.args[0] == TTSMethods.ERROR
+    )
+    assert error_call.args[1].error == "Requested voice is unavailable"
+    assert not hasattr(error_call.args[1], "text")
 
 
 @pytest.mark.asyncio
@@ -287,21 +319,69 @@ async def test_resume_controls_paused_playback(service: TTSService, mock_bus) ->
 
 
 @pytest.mark.asyncio
-async def test_start_initializes_piper_stream_and_stop_stops_it(
+async def test_get_model_paths_prefers_nested_piper_config_over_legacy_flat(
+    service: TTSService, tmp_path
+) -> None:
+    """uses canonical provider paths instead of legacy flat compatibility fields."""
+    nested_model = tmp_path / "nested.onnx"
+    nested_config = tmp_path / "nested.onnx.json"
+    flat_model = tmp_path / "flat.onnx"
+    flat_config = tmp_path / "flat.onnx.json"
+    nested_model.write_bytes(b"nested")
+    nested_config.write_text("{}", encoding="utf-8")
+    flat_model.write_bytes(b"flat")
+    flat_config.write_text("{}", encoding="utf-8")
+    tts_cfg = Tts(
+        model_file_path=str(flat_model),
+        model_config_file_path=str(flat_config),
+        providers=Providers(
+            piper=Piper(
+                model_file_path=str(nested_model),
+                model_config_file_path=str(nested_config),
+            )
+        ),
+    )
+
+    model_path, config_path = await service._get_model_paths(tts_cfg)
+
+    assert model_path == str(nested_model)
+    assert config_path == str(nested_config)
+
+
+@pytest.mark.asyncio
+async def test_start_initializes_piper_stream_from_nested_piper_config(
     service: TTSService,
     fake_realtimetts,
     fake_piper_engine,
     monkeypatch,
+    tmp_path,
 ) -> None:
-    """starts the current Piper stream and stops it during shutdown."""
-
-    async def get_model_paths() -> tuple[str, str]:
-        return "/tmp/current.onnx", "/tmp/current.onnx.json"
+    """starts Piper from canonical nested config and ignores legacy flat values."""
+    nested_model = tmp_path / "nested.onnx"
+    nested_config = tmp_path / "nested.onnx.json"
+    nested_model.write_bytes(b"model")
+    nested_config.write_text("{}", encoding="utf-8")
+    flat_model = tmp_path / "flat.onnx"
+    flat_config = tmp_path / "flat.onnx.json"
 
     async def fake_config(*_args, **_kwargs):
-        return SimpleNamespace(model_sample_rate=16000, piper_path="/opt/piper")
+        return Tts(
+            default_voice_id="nested-voice",
+            hardware_acceleration=False,
+            model_file_path=str(flat_model),
+            model_config_file_path=str(flat_config),
+            model_sample_rate=8000,
+            piper_path="/legacy/piper",
+            providers=Providers(
+                piper=Piper(
+                    model_file_path=str(nested_model),
+                    model_config_file_path=str(nested_config),
+                    model_sample_rate=16000,
+                    executable_path="/opt/nested-piper",
+                )
+            ),
+        )
 
-    monkeypatch.setattr(service, "_get_model_paths", get_model_paths)
     monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
     monkeypatch.setattr("app.services.tts.service.shutil.which", lambda _name: None)
 
@@ -311,10 +391,41 @@ async def test_start_initializes_piper_stream_and_stop_stops_it(
     engine = fake_piper_engine.PiperEngine.instances[-1]
     stream = fake_realtimetts.TextToAudioStream.instances[-1]
     assert service._loop is asyncio.get_running_loop()
-    assert engine.piper_path == "/opt/piper"
+    assert engine.piper_path == "/opt/nested-piper"
+    assert engine.voice.model_file == str(nested_model)
+    assert engine.voice.config_file == str(nested_config)
     assert engine._sample_rate == 16000
     assert stream.engine is engine
     stream.stop.assert_called_once_with()
+    assert service._provider is None
+
+
+@pytest.mark.asyncio
+async def test_failed_reload_keeps_existing_provider_and_stream(
+    service: TTSService, monkeypatch
+) -> None:
+    """does not tear down a healthy runtime when replacement construction fails."""
+    old_provider = FakeProvider()
+    old_stream = Mock()
+    old_stream.stop = Mock()
+    service._provider = old_provider
+    service.stream = old_stream
+    service.engine = object()
+    service._playing = True
+    service._current_request_id = "playing"
+
+    async def fail_build_runtime():
+        raise RuntimeError("new config invalid")
+
+    monkeypatch.setattr(service, "_build_runtime", fail_build_runtime)
+
+    await service.reload("services.tts")
+
+    assert service._provider is old_provider
+    assert service.stream is old_stream
+    assert old_provider.stopped is False
+    old_stream.stop.assert_not_called()
+    assert service._playing is True
 
 
 @pytest.mark.asyncio

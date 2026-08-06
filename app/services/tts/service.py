@@ -12,15 +12,19 @@ from __future__ import annotations
 import asyncio
 import base64
 import io
-import os
 import shutil
-import subprocess
-import tempfile
 import wave
 from dataclasses import dataclass, field
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.messaging import Envelope
+from app.services.tts.playback import create_realtime_piper_stream
+from app.services.tts.providers.base import (
+    TTSProvider,
+    TTSProviderError,
+    TTSSynthesisRequest as ProviderSynthesisRequest,
+)
+from app.services.tts.providers.piper import PiperTTSProvider, PiperVoiceConfig
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import Tts
@@ -174,54 +178,87 @@ class TTSService(BaseService):
         self._loop: asyncio.AbstractEventLoop | None = None
         self._stream_states: dict[str, _TTSStreamState] = {}
         self._stream_state_lock = asyncio.Lock()
+        self._provider: TTSProvider | None = None
         self.stream = None  # Will be initialized in on_start()
 
-    async def _get_model_paths(self):
-        """Get model paths from shared config."""
-        tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
-        model_path = resolve_path(
-            tts_cfg.model_file_path or "voice_models/en_US-lessac-medium.onnx"
+    async def _get_model_paths(self, tts_cfg: Tts | None = None) -> tuple[str, str | None]:
+        """Get Piper model paths from canonical config with flat-key compatibility."""
+        tts_cfg = tts_cfg or await config_api.aget(ConfigKeys.services.tts, Tts)
+        piper_cfg = tts_cfg.providers.piper if tts_cfg.providers else None
+        model_path = (
+            piper_cfg.model_file_path
+            if piper_cfg and piper_cfg.model_file_path
+            else tts_cfg.model_file_path or "voice_models/en_US-lessac-medium.onnx"
         )
-        config_path = tts_cfg.model_config_file_path or "voice_models/en_US-lessac-medium.onnx.txt"
-        return str(model_path), str(resolve_path(config_path)) if config_path else None
+        config_path = (
+            piper_cfg.model_config_file_path
+            if piper_cfg and piper_cfg.model_config_file_path
+            else tts_cfg.model_config_file_path or "voice_models/en_US-lessac-medium.onnx.txt"
+        )
+        model_file = resolve_path(model_path)
+        config_file = resolve_path(config_path) if config_path else None
+        return str(model_file), str(config_file) if config_file else None
+
+    def _resolve_piper_executable(self, tts_cfg: Tts) -> str:
+        """Resolve the Piper executable from canonical config and local PATH."""
+        piper_cfg = tts_cfg.providers.piper if tts_cfg.providers else None
+        configured_piper_path = (
+            piper_cfg.executable_path
+            if piper_cfg and piper_cfg.executable_path
+            else tts_cfg.piper_path or shutil.which("piper")
+        )
+        venv_piper_path = resolve_path(".venv/bin/piper")
+        if not configured_piper_path and venv_piper_path.exists():
+            configured_piper_path = str(venv_piper_path)
+        return configured_piper_path or "piper"
+
+    async def _build_runtime(self) -> tuple[TTSProvider, object, object]:
+        """Build provider plus local playback stream without mutating current state."""
+        tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+        if tts_cfg.provider not in (None, "piper"):
+            raise TTSProviderError("unavailable", "Configured TTS provider is unavailable")
+
+        model_file, config_file = await self._get_model_paths(tts_cfg)
+        piper_path = self._resolve_piper_executable(tts_cfg)
+        piper_cfg = tts_cfg.providers.piper if tts_cfg.providers else None
+        sample_rate = (
+            piper_cfg.model_sample_rate
+            if piper_cfg and piper_cfg.model_sample_rate is not None
+            else tts_cfg.model_sample_rate if tts_cfg.model_sample_rate is not None else 22050
+        )
+        voice_id = tts_cfg.default_voice_id or "default"
+        voice_config = PiperVoiceConfig(
+            voice_id=voice_id,
+            model_file=model_file,
+            config_file=config_file,
+            display_name="Piper",
+        )
+        provider = PiperTTSProvider(
+            piper_path=piper_path,
+            voice=voice_config,
+            use_cuda=bool(tts_cfg.hardware_acceleration),
+        )
+        await provider.start()
+        engine, stream = create_realtime_piper_stream(
+            piper_path=piper_path,
+            model_file=model_file,
+            config_file=config_file,
+            sample_rate=sample_rate,
+            on_audio_stream_start=self._on_audio_start,
+            on_audio_stream_stop=self._on_audio_stop,
+        )
+        return provider, engine, stream
 
     async def _initialize_engine(self) -> None:
-        """Initialize the RealtimeTTS engine with Piper voice."""
+        """Initialize the configured TTS provider and local playback stream."""
         try:
-            from RealtimeTTS import PiperVoice, TextToAudioStream
-
-            from app.services.tts.piper_engine import PiperEngine
-
-            # Get voice model paths from env vars or config
-            model_file, config_file = await self._get_model_paths()
-
-            # Get sample rate and executable path for caching. Tauri dev starts
-            # Python from Rust, where PATH may not include .venv/bin even though
-            # piper-tts is installed in the project environment. Prefer explicit
-            # config, then PATH, then the repo venv executable.
-            tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
-            sample_rate = (
-                tts_cfg.model_sample_rate if tts_cfg.model_sample_rate is not None else 22050
-            )
-            configured_piper_path = tts_cfg.piper_path or shutil.which("piper")
-            venv_piper_path = resolve_path(".venv/bin/piper")
-            if not configured_piper_path and venv_piper_path.exists():
-                configured_piper_path = str(venv_piper_path)
-            piper_path = configured_piper_path or "piper"
-
-            # Create Piper voice
-            voice = PiperVoice(model_file=model_file, config_file=config_file)
-
-            # Create Piper engine with cached sample rate
-            self.engine = PiperEngine(piper_path=piper_path, voice=voice, sample_rate=sample_rate)
-
-            # Create audio stream with callbacks
-            self.stream = TextToAudioStream(
-                self.engine,
-                frames_per_buffer=256,
-                on_audio_stream_start=self._on_audio_start,
-                on_audio_stream_stop=self._on_audio_stop,
-            )
+            provider, engine, stream = await self._build_runtime()
+            old_provider = self._provider
+            self._provider = provider
+            self.engine = engine
+            self.stream = stream
+            if old_provider is not None:
+                await old_provider.stop()
 
             log_info("TTS engine initialized successfully")
 
@@ -276,6 +313,9 @@ class TTSService(BaseService):
         # Stop any ongoing playback
         if hasattr(self, "stream"):
             self.stream.stop()
+        if self._provider is not None:
+            await self._provider.stop()
+            self._provider = None
 
     async def reload(self, config_section: str | None = None) -> None:
         """Reload service configuration.
@@ -293,13 +333,23 @@ class TTSService(BaseService):
         ):
             log_info("TTS configuration changed, reinitializing engine...")
             try:
-                # Stop current playback if active
-                if self._playing and hasattr(self, "stream"):
-                    self.stream.stop()
-                    self._playing = False
+                new_provider, new_engine, new_stream = await self._build_runtime()
+                old_provider = self._provider
+                old_stream = self.stream
 
-                # Reinitialize engine with new config
-                await self._initialize_engine()
+                await self._clear_tts_streams("config_reloaded")
+                if self._playing and old_stream is not None:
+                    old_stream.stop()
+                    self._playing = False
+                    self._paused = False
+                    self._current_text = None
+                    self._current_request_id = None
+
+                self._provider = new_provider
+                self.engine = new_engine
+                self.stream = new_stream
+                if old_provider is not None:
+                    await old_provider.stop()
                 log_info("TTS engine reinitialized successfully")
             except Exception as e:
                 log_error(f"Failed to reinitialize TTS engine: {e}", exc_info=True)
@@ -339,7 +389,7 @@ class TTSService(BaseService):
             request_id = str(uuid.uuid4())
 
             # Start playback
-            await self._play_text(request.text, request_id)
+            await self._play_text(request.text, request_id, voice=request.voice, speed=request.speed)
 
             return EmptyOutput()
 
@@ -637,7 +687,19 @@ class TTSService(BaseService):
             log_error(f"Error resuming TTS: {e}", exc_info=True)
             return EmptyOutput()
 
-    async def _play_text(self, text: str, request_id: str) -> None:
+    async def _ensure_voice_available(self, voice: str | None) -> None:
+        """Validate a logical voice against the active provider."""
+        if voice is None:
+            return
+        if self._provider is None:
+            raise RuntimeError("TTS provider not initialized")
+        voices = await self._provider.list_voices()
+        if not any(item.voice_id == voice and item.ready for item in voices):
+            raise RuntimeError("Requested voice is unavailable")
+
+    async def _play_text(
+        self, text: str, request_id: str, *, voice: str | None = None, speed: float = 1.0
+    ) -> None:
         """Play text-to-speech audio using RealtimeTTS.
 
         Args:
@@ -645,6 +707,7 @@ class TTSService(BaseService):
             request_id: Request ID for tracking
         """
         try:
+            await self._ensure_voice_available(voice)
             self._playing = True
             self._current_text = text
             self._current_request_id = request_id
@@ -700,7 +763,16 @@ class TTSService(BaseService):
             )
             log_info(f"TTS playback stopped: {reason}")
 
-    async def _synthesize_to_bytes(self, text: str) -> tuple[bytes, int]:
+    async def _synthesize_to_bytes(
+        self,
+        text: str,
+        *,
+        request_id: str | None = None,
+        voice: str | None = None,
+        audio_format: str = "raw",
+        sample_rate: int | None = None,
+        speed: float = 1.0,
+    ) -> tuple[bytes, int]:
         """Synthesize text to audio bytes without playing.
 
         Args:
@@ -709,60 +781,22 @@ class TTSService(BaseService):
         Returns:
             Tuple of (audio_bytes, sample_rate)
         """
-        if not hasattr(self, "engine") or self.engine is None:
-            raise RuntimeError("TTS engine not initialized")
-
-        # Get voice model paths
-        model_file, config_file = await self._get_model_paths()
-
-        # Build the piper command
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_wav_file:
-            output_wav_path = tmp_wav_file.name
-
+        if self._provider is None:
+            raise RuntimeError("TTS provider not initialized")
         try:
-            # Use absolute paths
-            model_file_abs = (
-                os.path.abspath(model_file) if not os.path.isabs(model_file) else model_file
-            )
-
-            cmd_list = [self.engine.piper_path, "-m", model_file_abs, "-f", output_wav_path]
-
-            # Add config file if available
-            if config_file:
-                config_file_abs = (
-                    os.path.abspath(config_file) if not os.path.isabs(config_file) else config_file
+            result = await self._provider.synthesize(
+                ProviderSynthesisRequest(
+                    text=text,
+                    request_id=request_id,
+                    voice=voice,
+                    audio_format=audio_format,  # type: ignore[arg-type]
+                    sample_rate=sample_rate,
+                    speed=speed,
                 )
-                if os.path.exists(config_file_abs):
-                    cmd_list.extend(["-c", config_file_abs])
-
-            # Add CUDA if configured
-            if hasattr(self.engine, "_use_cuda") and self.engine._use_cuda == "cuda":
-                cmd_list.extend(["--cuda"])
-
-            log_debug(f"Synthesizing with piper: {cmd_list}")
-
-            # Run piper off the event loop so streaming synthesis does not block
-            # bus delivery or other service work while the engine generates audio.
-            await asyncio.to_thread(
-                subprocess.run,
-                cmd_list,
-                input=text.encode("utf-8"),
-                capture_output=True,
-                check=True,
-                shell=False,
             )
-
-            # Read the synthesized WAV file
-            with wave.open(output_wav_path, "rb") as wf:
-                sample_rate = wf.getframerate()
-                audio_data = wf.readframes(wf.getnframes())
-
-            return audio_data, sample_rate
-
-        finally:
-            # Clean up temp file
-            if os.path.isfile(output_wav_path):
-                os.remove(output_wav_path)
+        except TTSProviderError as exc:
+            raise RuntimeError(str(exc)) from exc
+        return result.audio, result.sample_rate
 
     @method_contract(
         method_id=TTSMethods.SYNTHESIZE,
@@ -790,7 +824,12 @@ class TTSService(BaseService):
             log_info(f"TTS synthesize request: '{request.text[:50]}...' format={request.format}")
 
             # Synthesize audio
-            audio_bytes, sample_rate = await self._synthesize_to_bytes(request.text)
+            audio_bytes, sample_rate = await self._synthesize_to_bytes(
+                request.text,
+                voice=request.voice,
+                sample_rate=request.sample_rate,
+                speed=request.speed,
+            )
 
             # Calculate duration
             # PCM 16-bit mono: duration = num_bytes / (sample_rate * 2)
@@ -824,10 +863,6 @@ class TTSService(BaseService):
                 text=request.text,
             )
 
-        except subprocess.CalledProcessError as e:
-            error_msg = f"Piper synthesis failed: {e.stderr.decode('utf-8', errors='replace')}"
-            log_error(error_msg)
-            raise RuntimeError(error_msg) from e
         except Exception as e:
             log_error(f"Error in TTS synthesis: {e}", exc_info=True)
             raise
@@ -890,7 +925,13 @@ class TTSService(BaseService):
                 if text_sequence is None or text is None or audio_sequence is None:
                     return
 
-                audio_bytes, sample_rate = await self._synthesize_to_bytes(text)
+                audio_bytes, sample_rate = await self._synthesize_to_bytes(
+                    text,
+                    request_id=f"{stream_id}:{text_sequence}",
+                    voice=stream_epoch.voice,
+                    sample_rate=stream_epoch.requested_sample_rate,
+                    speed=stream_epoch.speed,
+                )
                 output_bytes, duration_ms = self._format_audio_bytes(
                     audio_bytes, sample_rate, audio_format
                 )
@@ -918,17 +959,22 @@ class TTSService(BaseService):
                     correlation_id=correlation_id,
                 )
                 if play_on_server:
-                    await self._play_stream_text(text, stream_id)
+                    await self._play_stream_text(
+                        text, stream_id, voice=stream_epoch.voice, speed=stream_epoch.speed
+                    )
         finally:
             async with self._stream_state_lock:
                 state = self._stream_states.get(stream_id)
                 if state is not None:
                     state.draining = False
 
-    async def _play_stream_text(self, text: str, stream_id: str) -> None:
+    async def _play_stream_text(
+        self, text: str, stream_id: str, *, voice: str | None = None, speed: float = 1.0
+    ) -> None:
         """Feed streamed text to the local server audio output without restarting playback."""
         if not text.strip():
             return
+        await self._ensure_voice_available(voice)
         if not self._playing:
             self._playing = True
             self._current_text = text
