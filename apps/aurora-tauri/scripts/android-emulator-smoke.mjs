@@ -88,9 +88,14 @@ async function waitForWebviewMount(appId) {
   let lastError = null
 
   while (Date.now() < deadline) {
-    const pid = adbOutput(['shell', 'pidof', appId], { allowNonzero: true }).trim().split(/\s+/)[0]
+    const pid = adbOutput(['shell', 'pidof', appId], { allowPidofNoProcess: true }).trim().split(/\s+/)[0]
     if (!pid) {
-      lastError = new Error(`Android package ${appId} is not running.`)
+      const crashEvidence = recentAndroidCrashEvidence(appId)
+      lastError = new Error(
+        crashEvidence
+          ? `Android package ${appId} is not running. Recent crash evidence:\n${crashEvidence}`
+          : `Android package ${appId} is not running.`,
+      )
       await sleep(1000)
       continue
     }
@@ -294,14 +299,42 @@ function isStableAuroraWebviewState(state) {
     && state.mobileNavigationPosition === 'fixed'
 }
 
-function adbOutput(args, { allowNonzero = false } = {}) {
+function adbOutput(args, { allowPidofNoProcess = false } = {}) {
   const result = spawnSync('adb', args, { encoding: 'utf8' })
   if (result.error) throw result.error
   if (result.status !== 0) {
-    if (allowNonzero) return result.stdout
+    if (allowPidofNoProcess && isPidofNoProcessResult(args, result)) return result.stdout
     throw new Error(`adb ${args.join(' ')} failed: ${`${result.stdout}\n${result.stderr}`.trim()}`)
   }
   return result.stdout
+}
+
+function isPidofNoProcessResult(args, result) {
+  return args[0] === 'shell'
+    && args[1] === 'pidof'
+    && args.length === 3
+    && result.status === 1
+    && result.stdout.trim() === ''
+    && result.stderr.trim() === ''
+}
+
+function recentAndroidCrashEvidence(appId) {
+  const result = spawnSync('adb', ['logcat', '-d', '-t', '300'], { encoding: 'utf8' })
+  if (result.error || result.status !== 0) return ''
+
+  return `${result.stdout}\n${result.stderr}`
+    .split(/\r?\n/)
+    .filter((line) => {
+      const lower = line.toLowerCase()
+      return line.includes(appId)
+        || line.includes('FATAL EXCEPTION')
+        || line.includes('AndroidRuntime')
+        || lower.includes('force finishing')
+        || lower.includes('has died')
+    })
+    .slice(-40)
+    .join('\n')
+    .trim()
 }
 
 function sleep(milliseconds) {

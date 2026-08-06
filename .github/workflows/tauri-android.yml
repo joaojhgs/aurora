@@ -159,6 +159,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         env:
           AURORA_ANDROID_APK: ${{ github.workspace }}/apps/aurora-tauri/reports/android-client-smoke.apk
+          AURORA_ANDROID_TEST_TIMEOUT_MS: "900000"
         with:
           api-level: 30
           target: default
@@ -170,6 +171,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         env:
           AURORA_ANDROID_APK: ${{ github.workspace }}/apps/aurora-tauri/reports/android-client-smoke.apk
+          AURORA_ANDROID_TEST_TIMEOUT_MS: "900000"
         with:
           api-level: 35
           target: google_apis
