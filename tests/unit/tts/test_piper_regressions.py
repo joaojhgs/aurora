@@ -401,6 +401,37 @@ async def test_start_initializes_piper_stream_from_nested_piper_config(
 
 
 @pytest.mark.asyncio
+async def test_build_runtime_stops_started_provider_when_stream_construction_fails(
+    service: TTSService, monkeypatch
+) -> None:
+    """cleans up the replacement provider if local playback stream construction fails."""
+    new_provider = FakeProvider()
+
+    async def fake_model_paths(_tts_cfg):
+        return "/models/voice.onnx", "/models/voice.onnx.json"
+
+    async def fake_config(*_args, **_kwargs):
+        return Tts(providers=Providers(piper=Piper()))
+
+    def fail_stream(**_kwargs):
+        raise RuntimeError("stream unavailable")
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr(service, "_get_model_paths", fake_model_paths)
+    monkeypatch.setattr(
+        "app.services.tts.service.PiperTTSProvider",
+        lambda **_kwargs: new_provider,
+    )
+    monkeypatch.setattr("app.services.tts.service.create_realtime_piper_stream", fail_stream)
+
+    with pytest.raises(RuntimeError, match="stream unavailable"):
+        await service._build_runtime()
+
+    assert new_provider.stopped is True
+    assert service._provider is None
+
+
+@pytest.mark.asyncio
 async def test_failed_reload_keeps_existing_provider_and_stream(
     service: TTSService, monkeypatch
 ) -> None:
@@ -426,6 +457,47 @@ async def test_failed_reload_keeps_existing_provider_and_stream(
     assert old_provider.stopped is False
     old_stream.stop.assert_not_called()
     assert service._playing is True
+
+
+@pytest.mark.asyncio
+async def test_reload_stops_new_provider_and_keeps_old_runtime_on_pre_swap_failure(
+    service: TTSService, monkeypatch
+) -> None:
+    """retains the active runtime and stops the replacement if reload fails before swap."""
+    old_provider = FakeProvider()
+    new_provider = FakeProvider()
+    old_engine = object()
+    new_engine = object()
+    old_stream = Mock()
+    old_stream.stop = Mock()
+    new_stream = Mock()
+    service._provider = old_provider
+    service.engine = old_engine
+    service.stream = old_stream
+    service._playing = True
+    service._paused = True
+    service._current_request_id = "playing"
+
+    async def build_runtime():
+        return new_provider, new_engine, new_stream
+
+    async def fail_clear(_reason: str):
+        raise RuntimeError("clear failed")
+
+    monkeypatch.setattr(service, "_build_runtime", build_runtime)
+    monkeypatch.setattr(service, "_clear_tts_streams", fail_clear)
+
+    await service.reload("services.tts")
+
+    assert service._provider is old_provider
+    assert service.engine is old_engine
+    assert service.stream is old_stream
+    assert old_provider.stopped is False
+    assert new_provider.stopped is True
+    old_stream.stop.assert_not_called()
+    assert service._playing is True
+    assert service._paused is True
+    assert service._current_request_id == "playing"
 
 
 @pytest.mark.asyncio

@@ -181,6 +181,15 @@ class TTSService(BaseService):
         self._provider: TTSProvider | None = None
         self.stream = None  # Will be initialized in on_start()
 
+    async def _stop_provider_safely(self, provider: TTSProvider, context: str) -> None:
+        """Stop a provider during cleanup without masking the original failure."""
+        try:
+            await provider.stop()
+        except Exception as cleanup_error:
+            log_error(
+                f"Failed to stop TTS provider after {context}: {cleanup_error}", exc_info=True
+            )
+
     async def _get_model_paths(self, tts_cfg: Tts | None = None) -> tuple[str, str | None]:
         """Get Piper model paths from canonical config with flat-key compatibility."""
         tts_cfg = tts_cfg or await config_api.aget(ConfigKeys.services.tts, Tts)
@@ -224,7 +233,9 @@ class TTSService(BaseService):
         sample_rate = (
             piper_cfg.model_sample_rate
             if piper_cfg and piper_cfg.model_sample_rate is not None
-            else tts_cfg.model_sample_rate if tts_cfg.model_sample_rate is not None else 22050
+            else tts_cfg.model_sample_rate
+            if tts_cfg.model_sample_rate is not None
+            else 22050
         )
         voice_id = tts_cfg.default_voice_id or "default"
         voice_config = PiperVoiceConfig(
@@ -239,14 +250,18 @@ class TTSService(BaseService):
             use_cuda=bool(tts_cfg.hardware_acceleration),
         )
         await provider.start()
-        engine, stream = create_realtime_piper_stream(
-            piper_path=piper_path,
-            model_file=model_file,
-            config_file=config_file,
-            sample_rate=sample_rate,
-            on_audio_stream_start=self._on_audio_start,
-            on_audio_stream_stop=self._on_audio_stop,
-        )
+        try:
+            engine, stream = create_realtime_piper_stream(
+                piper_path=piper_path,
+                model_file=model_file,
+                config_file=config_file,
+                sample_rate=sample_rate,
+                on_audio_stream_start=self._on_audio_start,
+                on_audio_stream_stop=self._on_audio_stop,
+            )
+        except Exception:
+            await self._stop_provider_safely(provider, "runtime construction failure")
+            raise
         return provider, engine, stream
 
     async def _initialize_engine(self) -> None:
@@ -332,6 +347,8 @@ class TTSService(BaseService):
             or config_section == "services.tts"
         ):
             log_info("TTS configuration changed, reinitializing engine...")
+            new_provider: TTSProvider | None = None
+            new_runtime_installed = False
             try:
                 new_provider, new_engine, new_stream = await self._build_runtime()
                 old_provider = self._provider
@@ -348,10 +365,13 @@ class TTSService(BaseService):
                 self._provider = new_provider
                 self.engine = new_engine
                 self.stream = new_stream
+                new_runtime_installed = True
                 if old_provider is not None:
                     await old_provider.stop()
                 log_info("TTS engine reinitialized successfully")
             except Exception as e:
+                if new_provider is not None and not new_runtime_installed:
+                    await self._stop_provider_safely(new_provider, "reload pre-swap failure")
                 log_error(f"Failed to reinitialize TTS engine: {e}", exc_info=True)
         else:
             log_debug(f"TTS service reloaded for section: {config_section}")
@@ -389,7 +409,9 @@ class TTSService(BaseService):
             request_id = str(uuid.uuid4())
 
             # Start playback
-            await self._play_text(request.text, request_id, voice=request.voice, speed=request.speed)
+            await self._play_text(
+                request.text, request_id, voice=request.voice, speed=request.speed
+            )
 
             return EmptyOutput()
 
