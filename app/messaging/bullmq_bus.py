@@ -66,6 +66,8 @@ class BullMQBus:
         self._event_wildcard_patterns: dict[str, list[Handler]] = defaultdict(list)
         self._event_channels: set[str] = set()
         self._event_patterns: set[str] = set()
+        self._event_pattern_tasks: dict[str, asyncio.Task[None]] = {}
+        self._event_pattern_readiness_lock = asyncio.Lock()
         self._event_worker_queues: dict[str, str] = {}
         self._redis = None
         self._pubsub = None
@@ -103,10 +105,14 @@ class BullMQBus:
             raise RuntimeError("BullMQ not available. Install with: pip install bullmq")
 
         self._started = True
-        for topic in list(self._event_handlers):
-            self._ensure_event_subscription(topic, pattern=False)
-        for pattern in list(self._event_wildcard_patterns):
-            self._ensure_event_subscription(pattern, pattern=True)
+        try:
+            for topic in list(self._event_handlers):
+                await self._ensure_event_subscription_ready(topic, pattern=False)
+            for pattern in list(self._event_wildcard_patterns):
+                await self._ensure_event_subscription_ready(pattern, pattern=True)
+        except Exception:
+            self._started = False
+            raise
         log_info(f"BullMQBus started with Redis at {self.redis_url}")
 
     async def stop(self) -> None:
@@ -144,6 +150,15 @@ class BullMQBus:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._pubsub_task
             self._pubsub_task = None
+
+        for task in list(self._event_pattern_tasks.values()):
+            task.cancel()
+        if self._event_pattern_tasks:
+            await asyncio.gather(
+                *self._event_pattern_tasks.values(),
+                return_exceptions=True,
+            )
+            self._event_pattern_tasks.clear()
 
         if self._pubsub is not None:
             try:
@@ -223,6 +238,36 @@ class BullMQBus:
 
             log_debug(f"Subscribed handler to topic: {topic}")
 
+    async def subscribe_event(self, topic: str, handler: Handler) -> None:
+        """Subscribe to an event topic and wait for Redis/BullMQ readiness."""
+        if not self._available:
+            raise RuntimeError("BullMQ not available")
+        if not self._is_event_topic(topic, event=True):
+            raise ValueError(f"Topic cannot be subscribed as an event: {topic}")
+
+        pattern = "*" in topic
+        handlers = (
+            self._event_wildcard_patterns[topic] if pattern else self._event_handlers[topic]
+        )
+        transport_was_ready = (
+            topic in self._event_patterns if pattern else topic in self._event_worker_queues
+        )
+        handlers.append(handler)
+        try:
+            await self._ensure_event_subscription_ready(topic, pattern=pattern)
+            log_debug(f"Subscribed event handler to topic: {topic}")
+        except Exception:
+            with contextlib.suppress(ValueError):
+                handlers.remove(handler)
+            if not handlers:
+                if pattern:
+                    self._event_wildcard_patterns.pop(topic, None)
+                else:
+                    self._event_handlers.pop(topic, None)
+            if not transport_was_ready and not pattern:
+                await self._rollback_event_subscription(topic, pattern=pattern)
+            raise
+
     def unsubscribe(self, topic: str, handler: Handler) -> None:
         """Remove a handler previously registered with ``subscribe``."""
         if "*" in topic:
@@ -285,25 +330,77 @@ class BullMQBus:
             return
 
         if pattern:
-            if topic in self._event_patterns:
+            if topic in self._event_patterns or topic in self._event_pattern_tasks:
                 return
-            self._event_patterns.add(topic)
+            self._event_pattern_tasks[topic] = asyncio.create_task(
+                self._async_subscribe_event_topic(topic, pattern=True)
+            )
         else:
             if topic in self._event_channels:
                 return
             self._event_channels.add(topic)
+            asyncio.create_task(self._async_subscribe_event_topic(topic, pattern=False))
 
-        asyncio.create_task(self._async_subscribe_event_topic(topic, pattern=pattern))
+    async def _ensure_event_subscription_ready(self, topic: str, *, pattern: bool) -> None:
+        """Create event transport resources and wait until Redis has acknowledged them."""
+        if not self._started:
+            return
+        if not pattern:
+            queue_name = self._event_worker_queues.get(topic)
+            if queue_name is None:
+                queue_name = f"event.{topic}.{uuid_lib.uuid4()}"
+                self._event_worker_queues[topic] = queue_name
+                self._create_worker(queue_name)
+            await self._register_event_queue_ready(topic, queue_name)
+            return
+
+        if topic in self._event_patterns:
+            return
+        async with self._event_pattern_readiness_lock:
+            if topic in self._event_patterns:
+                return
+            pending_task = self._event_pattern_tasks.get(topic)
+            if pending_task is not None:
+                await pending_task
+                if topic in self._event_patterns:
+                    return
+            try:
+                await self._subscribe_event_topic_ready(topic, pattern=True)
+                self._event_patterns.add(topic)
+            except Exception:
+                self._event_patterns.discard(topic)
+                raise
+
+    async def _rollback_event_subscription(self, topic: str, *, pattern: bool) -> None:
+        """Undo readiness state created for a failed subscribe_event call."""
+        if pattern:
+            self._event_patterns.discard(topic)
+            self._event_pattern_tasks.pop(topic, None)
+            return
+
+        queue_name = self._event_worker_queues.pop(topic, None)
+        if queue_name is None:
+            return
+        if self._redis is not None:
+            with contextlib.suppress(Exception):
+                await self._redis.srem(self._event_subscriber_key(topic), queue_name)
+        worker = self._workers.pop(queue_name, None)
+        if worker is not None:
+            with contextlib.suppress(Exception):
+                await worker.close()
 
     @staticmethod
     def _event_subscriber_key(topic: str) -> str:
         return f"aurora:event-subscribers:{topic}"
 
+    async def _register_event_queue_ready(self, topic: str, queue_name: str) -> None:
+        redis = await self._get_redis()
+        await redis.sadd(self._event_subscriber_key(topic), queue_name)
+        log_info(f"Registered BullMQ event fanout queue: {topic} -> {queue_name}")
+
     async def _async_register_event_queue(self, topic: str, queue_name: str) -> None:
         try:
-            redis = await self._get_redis()
-            await redis.sadd(self._event_subscriber_key(topic), queue_name)
-            log_info(f"Registered BullMQ event fanout queue: {topic} -> {queue_name}")
+            await self._register_event_queue_ready(topic, queue_name)
         except Exception as e:
             log_error(f"Error registering event fanout queue {queue_name}: {e}", exc_info=True)
 
@@ -326,15 +423,23 @@ class BullMQBus:
 
     async def _async_subscribe_event_topic(self, topic: str, *, pattern: bool) -> None:
         try:
-            pubsub = await self._ensure_pubsub()
+            await self._subscribe_event_topic_ready(topic, pattern=pattern)
             if pattern:
-                await pubsub.psubscribe(topic)
-            else:
-                await pubsub.subscribe(topic)
-            self._ensure_pubsub_listener()
-            log_info(f"Subscribed Redis pub/sub event channel: {topic}")
+                self._event_patterns.add(topic)
         except Exception as e:
             log_error(f"Error subscribing to event channel {topic}: {e}", exc_info=True)
+        finally:
+            if pattern:
+                self._event_pattern_tasks.pop(topic, None)
+
+    async def _subscribe_event_topic_ready(self, topic: str, *, pattern: bool) -> None:
+        pubsub = await self._ensure_pubsub()
+        if pattern:
+            await pubsub.psubscribe(topic)
+        else:
+            await pubsub.subscribe(topic)
+        self._ensure_pubsub_listener()
+        log_info(f"Subscribed Redis pub/sub event channel: {topic}")
 
     async def _pubsub_listener(self) -> None:
         """Redis pub/sub listener for broadcast events."""

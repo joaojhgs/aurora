@@ -282,17 +282,17 @@ class STTCoordinatorService(BaseService):
             )
 
         # Subscribe to wake word detection events
-        self.bus.subscribe(WakeWordMethods.DETECTED, self._on_wake_word_detected, event=True)
+        await self.bus.subscribe_event(WakeWordMethods.DETECTED, self._on_wake_word_detected)
 
         # Subscribe to transcription result events
-        self.bus.subscribe(
-            TranscriptionMethods.RESULT, self._on_transcription_result, event=True
+        await self.bus.subscribe_event(
+            TranscriptionMethods.RESULT, self._on_transcription_result
         )
-        self.bus.subscribe(TTSMethods.STARTED, self._on_tts_lifecycle_event, event=True)
-        self.bus.subscribe(TTSMethods.STOPPED, self._on_tts_lifecycle_event, event=True)
-        self.bus.subscribe(TTSMethods.PAUSED, self._on_tts_lifecycle_event, event=True)
-        self.bus.subscribe(TTSMethods.RESUMED, self._on_tts_lifecycle_event, event=True)
-        self.bus.subscribe(TTSMethods.ERROR, self._on_tts_lifecycle_event, event=True)
+        await self.bus.subscribe_event(TTSMethods.STARTED, self._on_tts_lifecycle_event)
+        await self.bus.subscribe_event(TTSMethods.STOPPED, self._on_tts_lifecycle_event)
+        await self.bus.subscribe_event(TTSMethods.PAUSED, self._on_tts_lifecycle_event)
+        await self.bus.subscribe_event(TTSMethods.RESUMED, self._on_tts_lifecycle_event)
+        await self.bus.subscribe_event(TTSMethods.ERROR, self._on_tts_lifecycle_event)
 
         if not self._ambient_transcription_enabled:
             try:

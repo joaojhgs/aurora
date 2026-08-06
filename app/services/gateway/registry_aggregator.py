@@ -129,12 +129,12 @@ class RegistryAggregator:
             return
 
         # Subscribe to service announcements
-        self._bus.subscribe(
-            GatewayMethods.SERVICE_ANNOUNCE, self._on_service_announce, event=True
+        await self._bus.subscribe_event(
+            GatewayMethods.SERVICE_ANNOUNCE, self._on_service_announce
         )
-        self._bus.subscribe(GatewayMethods.SERVICE_DEPART, self._on_service_depart, event=True)
-        self._bus.subscribe(
-            GatewayMethods.SERVICE_HEARTBEAT, self._on_service_heartbeat, event=True
+        await self._bus.subscribe_event(GatewayMethods.SERVICE_DEPART, self._on_service_depart)
+        await self._bus.subscribe_event(
+            GatewayMethods.SERVICE_HEARTBEAT, self._on_service_heartbeat
         )
 
         self._subscribed = True

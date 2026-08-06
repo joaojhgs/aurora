@@ -267,7 +267,7 @@ class OrchestratorService(BaseService):
         # Actually, we can use a contract if we define the input model correctly.
         # STTUserSpeechCaptured is an Event, not a Request.
         # But we can treat it        # Subscribe to STT events
-        self.bus.subscribe(STTMethods.USER_SPEECH_CAPTURED, self._on_transcription, event=True)
+        await self.bus.subscribe_event(STTMethods.USER_SPEECH_CAPTURED, self._on_transcription)
 
     async def on_stop(self) -> None:
         """Stop the orchestrator service."""

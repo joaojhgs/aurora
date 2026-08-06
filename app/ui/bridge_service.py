@@ -62,13 +62,13 @@ class UIBridge(QObject):
         # Subscribe to relevant events using typed topics
         # NOTE: LocalBus now delivers messages concurrently, so subscription order doesn't matter
         # USER_SPEECH_CAPTURED signals end of "listening" state → transition to "processing"
-        self.bus.subscribe(STTMethods.USER_SPEECH_CAPTURED, self._on_transcription, event=True)
-        self.bus.subscribe(STTMethods.SESSION_STARTED, self._on_stt_session_started, event=True)
+        await self.bus.subscribe_event(STTMethods.USER_SPEECH_CAPTURED, self._on_transcription)
+        await self.bus.subscribe_event(STTMethods.SESSION_STARTED, self._on_stt_session_started)
 
         # Subscribe to orchestrator and TTS events
-        self.bus.subscribe(OrchestratorMethods.RESPONSE, self._on_llm_response, event=True)
-        self.bus.subscribe(TTSMethods.STARTED, self._on_tts_started, event=True)
-        self.bus.subscribe(TTSMethods.STOPPED, self._on_tts_stopped, event=True)
+        await self.bus.subscribe_event(OrchestratorMethods.RESPONSE, self._on_llm_response)
+        await self.bus.subscribe_event(TTSMethods.STARTED, self._on_tts_started)
+        await self.bus.subscribe_event(TTSMethods.STOPPED, self._on_tts_stopped)
 
         # Connect UI signals to bus messages
         self._connect_ui_signals()

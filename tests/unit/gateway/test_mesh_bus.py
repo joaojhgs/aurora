@@ -1058,6 +1058,15 @@ class TestMeshBusSubscribe:
         mesh_bus.subscribe("TTS.Started", handler, event=True)
         inner_bus.subscribe.assert_called_once_with("TTS.Started", handler, event=True)
 
+    @pytest.mark.asyncio
+    async def test_subscribe_event_delegates_to_inner_readiness(self, mesh_bus, inner_bus):
+        handler = MagicMock()
+        inner_bus.subscribe_event = AsyncMock()
+
+        await mesh_bus.subscribe_event("TTS.Started", handler)
+
+        inner_bus.subscribe_event.assert_awaited_once_with("TTS.Started", handler)
+
 
 class TestMeshBusLifecycle:
     """Tests for MeshBus start/stop."""

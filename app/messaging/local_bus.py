@@ -147,6 +147,10 @@ class LocalBus:
                 name=f"local-bus-event-worker:{topic}",
             )
 
+    async def subscribe_event(self, topic: str, handler: Handler) -> None:
+        """Subscribe to an event topic and return when the local worker is ready."""
+        self.subscribe(topic, handler, event=True)
+
     def unsubscribe(self, topic: str, handler: Handler) -> None:
         """Remove a handler previously registered with ``subscribe``."""
         handlers = self._subs.get(topic)

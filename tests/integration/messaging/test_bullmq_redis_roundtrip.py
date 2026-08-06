@@ -166,9 +166,8 @@ class TestBullMQRedisRoundtrip:
         async def second_handler(env: Envelope) -> None:
             received["second"].append(env.payload if isinstance(env.payload, dict) else {})
 
-        first.subscribe(topic, first_handler, event=True)
-        second.subscribe(topic, second_handler, event=True)
-        await asyncio.sleep(0.75)
+        await first.subscribe_event(topic, first_handler)
+        await second.subscribe_event(topic, second_handler)
 
         try:
             await first.publish(topic, _PingPayload(x=11), event=True, origin="integration-test")
@@ -188,6 +187,44 @@ class TestBullMQRedisRoundtrip:
             await first.stop()
 
     @pytest.mark.asyncio
+    async def test_pre_start_event_subscription_is_ready_after_start(
+        self, isolated_redis_url
+    ) -> None:
+        """Event subscriptions added before start are ready when awaited start returns."""
+        ns = uuid.uuid4().hex[:12]
+        topic = f"AuroraTest.Bullmq.{ns}.PreStart.Event"
+
+        subscriber = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        publisher = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        received: list[dict[str, object]] = []
+
+        async def handler(env: Envelope) -> None:
+            received.append(env.payload if isinstance(env.payload, dict) else {})
+
+        await subscriber.subscribe_event(topic, handler)
+        await subscriber.start()
+        await publisher.start()
+
+        try:
+            await publisher.publish(
+                topic,
+                _PingPayload(x=17),
+                event=True,
+                origin="integration-test",
+            )
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 15.0
+            while loop.time() < deadline:
+                if received:
+                    break
+                await asyncio.sleep(0.05)
+
+            assert received == [{"x": 17}]
+        finally:
+            await publisher.stop()
+            await subscriber.stop()
+
+    @pytest.mark.asyncio
     async def test_event_publish_reaches_wildcard_subscriber_from_separate_publisher(
         self, isolated_redis_url
     ) -> None:
@@ -205,8 +242,7 @@ class TestBullMQRedisRoundtrip:
         async def wildcard_handler(env: Envelope) -> None:
             received.append(env.payload if isinstance(env.payload, dict) else {})
 
-        subscriber.subscribe(pattern, wildcard_handler, event=True)
-        await asyncio.sleep(0.75)
+        await subscriber.subscribe_event(pattern, wildcard_handler)
 
         try:
             await publisher.publish(
@@ -248,9 +284,8 @@ class TestBullMQRedisRoundtrip:
         async def wildcard_handler(env: Envelope) -> None:
             received["wildcard"].append(env.payload if isinstance(env.payload, dict) else {})
 
-        subscriber.subscribe(topic, exact_handler, event=True)
-        subscriber.subscribe(pattern, wildcard_handler, event=True)
-        await asyncio.sleep(0.75)
+        await subscriber.subscribe_event(topic, exact_handler)
+        await subscriber.subscribe_event(pattern, wildcard_handler)
 
         try:
             await publisher.publish(

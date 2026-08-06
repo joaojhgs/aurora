@@ -145,7 +145,12 @@ class BaseService(ABC):
 
         self._runtime_state = "starting"
         self._set_started(True)
-        self._subscribe_to_config_changes()
+        try:
+            await self._subscribe_to_config_changes()
+        except Exception:
+            self._set_started(False)
+            self._runtime_state = "inactive"
+            raise
 
         if await self._is_runtime_enabled():
             await self.activate(reason="startup")
@@ -328,7 +333,7 @@ class BaseService(ABC):
             except Exception as e:
                 log_error(f"Failed to unregister config observer: {e}")
 
-    def _subscribe_to_config_changes(self) -> None:
+    async def _subscribe_to_config_changes(self) -> None:
         """Subscribe to config change events.
 
         This method subscribes to Config.Changed events and calls reload() when config changes.
@@ -337,18 +342,19 @@ class BaseService(ABC):
             return
         if self._config_change_subscription is not None:
             return
+        from app.shared.contracts.models.config import ConfigMethods
+
+        async def on_config_changed(envelope: Any) -> None:
+            """Handle config change event."""
+            await self._handle_config_changed(envelope.payload)
+
         try:
-            from app.shared.contracts.models.config import ConfigMethods
-
-            async def on_config_changed(envelope: Any) -> None:
-                """Handle config change event."""
-                await self._handle_config_changed(envelope.payload)
-
-            self.bus.subscribe(ConfigMethods.UPDATED, on_config_changed, event=True)
-            self._config_change_subscription = (ConfigMethods.UPDATED, on_config_changed)
-            log_debug(f"{self.module} subscribed to config changes")
+            await self.bus.subscribe_event(ConfigMethods.UPDATED, on_config_changed)
         except Exception as e:
             log_error(f"Failed to subscribe to config changes: {e}")
+            raise
+        self._config_change_subscription = (ConfigMethods.UPDATED, on_config_changed)
+        log_debug(f"{self.module} subscribed to config changes")
 
     def _unsubscribe_from_config_changes(self) -> None:
         """Remove the config change subscription when the process is stopping."""

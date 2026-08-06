@@ -25,6 +25,9 @@ class _DummyBus:
     def subscribe(self, topic, handler, *, event: bool = False) -> None:
         pass
 
+    async def subscribe_event(self, topic, handler) -> None:
+        pass
+
     def unsubscribe(self, topic, handler) -> None:
         pass
 

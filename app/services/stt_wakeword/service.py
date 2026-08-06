@@ -109,8 +109,8 @@ class WakeWordService(BaseService):
         # Initialize wake word backend
         await self._initialize_backend()
 
-        # Subscribe to audio stream (subscribe is not async)
-        self.bus.subscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk, event=True)
+        # Subscribe to audio stream
+        await self.bus.subscribe_event(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
 
         self._running = True
         self._enabled = True

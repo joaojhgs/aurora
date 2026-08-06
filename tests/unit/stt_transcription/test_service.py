@@ -45,6 +45,7 @@ def mock_bus():
     """Create a mock message bus."""
     bus = Mock(spec=MessageBus)
     bus.subscribe = Mock()
+    bus.subscribe_event = AsyncMock()
     bus.publish = AsyncMock()
     return bus
 

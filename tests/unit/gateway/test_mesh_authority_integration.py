@@ -219,6 +219,9 @@ class _FakeBus:
     def subscribe(self, topic: str, handler: object, *, event: bool = False) -> None:
         self.subscribed.append((topic, handler, event))
 
+    async def subscribe_event(self, topic: str, handler: object) -> None:
+        self.subscribed.append((topic, handler, True))
+
     def unsubscribe(self, topic: str, handler: object) -> None:
         self.unsubscribed.append((topic, handler))
 

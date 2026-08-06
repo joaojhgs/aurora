@@ -366,10 +366,9 @@ class ToolingService(BaseService):
                 self._remote_catalog_retention_loop()
             )
 
-        self.bus.subscribe(
+        await self.bus.subscribe_event(
             MeshEvents.PEER_PERMISSIONS_UPDATED,
             self._on_mesh_peer_permissions_updated,
-            event=True,
         )
 
         # Emit initialization event

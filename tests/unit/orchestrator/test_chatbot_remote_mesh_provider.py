@@ -49,6 +49,9 @@ class _StreamBus:
     def subscribe(self, topic, handler, *, event: bool = False) -> None:
         self.handlers[topic] = handler
 
+    async def subscribe_event(self, topic, handler) -> None:
+        self.handlers[topic] = handler
+
     def unsubscribe(self, *args, **kwargs) -> None:
         pass
 

@@ -234,6 +234,15 @@ class MessageBus(Protocol):
         """
         ...
 
+    async def subscribe_event(self, topic: str, handler: Handler) -> None:
+        """Subscribe to a broadcast event and wait for transport readiness.
+
+        This is the readiness-aware event subscription API. Existing
+        ``subscribe(..., event=True)`` remains a synchronous compatibility path
+        for callers that do not need startup ordering guarantees.
+        """
+        ...
+
     def unsubscribe(self, topic: str, handler: Handler) -> None:
         """Remove a previously registered topic handler.
 

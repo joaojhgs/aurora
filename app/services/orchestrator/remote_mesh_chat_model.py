@@ -205,7 +205,7 @@ class RemoteMeshChatModel(BaseModel):
             if chunk_event.stream_id == stream_id:
                 self._enqueue_gateway_stream_event(queue, chunk_event)
 
-        self.bus.subscribe(GatewayMethods.MESH_INFER_CHAT_CHUNK, _on_chunk, event=True)
+        await self.bus.subscribe_event(GatewayMethods.MESH_INFER_CHAT_CHUNK, _on_chunk)
         try:
             result = await self.bus.request(
                 self._stream_topic,

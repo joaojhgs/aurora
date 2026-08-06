@@ -1148,6 +1148,14 @@ class MeshBus:
         """
         self._inner.subscribe(topic, handler, event=event)
 
+    async def subscribe_event(self, topic: str, handler: Handler) -> None:
+        """Subscribe to a local event through the wrapped bus and await readiness."""
+        subscribe_event = getattr(self._inner, "subscribe_event", None)
+        if callable(subscribe_event):
+            await subscribe_event(topic, handler)
+            return
+        self._inner.subscribe(topic, handler, event=True)
+
     def unsubscribe(self, topic: str, handler: Handler) -> None:
         """Unsubscribe from the inner local bus."""
         self._inner.unsubscribe(topic, handler)

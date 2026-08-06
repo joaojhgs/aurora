@@ -73,6 +73,7 @@ def mock_bus():
     """Fixture for a mocked MessageBus."""
     bus = MagicMock(spec=MessageBus)
     bus.subscribe = MagicMock()
+    bus.subscribe_event = AsyncMock()
     bus.publish = AsyncMock()
     bus.request = AsyncMock(return_value=MagicMock(ok=False, error="not flushed"))
     bus.start = AsyncMock()

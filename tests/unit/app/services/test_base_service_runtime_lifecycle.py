@@ -166,6 +166,25 @@ async def test_config_event_decodes_dict_and_pydantic_payloads(local_bus) -> Non
 
 
 @pytest.mark.asyncio
+async def test_config_subscription_failure_blocks_service_start() -> None:
+    """A service must not report started if config event readiness fails."""
+
+    class FailingConfigBus:
+        async def subscribe_event(self, topic, handler) -> None:
+            raise RuntimeError("config listener unavailable")
+
+    set_shared_bus(FailingConfigBus())
+    service = RuntimeLifecycleService()
+
+    with pytest.raises(RuntimeError, match="config listener unavailable"):
+        await service.start()
+
+    assert service._started is False
+    assert service._runtime_state == "inactive"
+    assert service._config_change_subscription is None
+
+
+@pytest.mark.asyncio
 async def test_service_announcement_carries_callable_feature_metadata(local_bus) -> None:
     from app.shared.contracts.models.gateway import GatewayMethods, ServiceAnnouncement
 

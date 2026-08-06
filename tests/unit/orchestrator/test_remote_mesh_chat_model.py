@@ -110,6 +110,9 @@ async def test_astream_maps_openai_chunks_for_chatbot_accumulation(bus, mesh_sel
     def subscribe(topic, handler, *, event: bool = False):
         handlers[topic] = handler
 
+    async def subscribe_event(topic, handler):
+        handlers[topic] = handler
+
     async def request(topic, payload, **kwargs):
         assert topic == GatewayMethods.STREAM_MESH_INFER_CHAT
         await handlers[GatewayMethods.MESH_INFER_CHAT_CHUNK](
@@ -131,6 +134,7 @@ async def test_astream_maps_openai_chunks_for_chatbot_accumulation(bus, mesh_sel
         )
 
     bus.subscribe = Mock(side_effect=subscribe)
+    bus.subscribe_event = AsyncMock(side_effect=subscribe_event)
     bus.unsubscribe = Mock()
     bus.request.side_effect = request
     model = RemoteMeshChatModel(bus=bus, mesh_selector=mesh_selector)
@@ -193,6 +197,9 @@ async def test_astream_uses_gateway_stream_proxy_when_bus_is_not_meshbus(mesh_se
         def subscribe(self, *args, **kwargs) -> None:
             self.handlers[args[0]] = args[1]
 
+        async def subscribe_event(self, topic, handler) -> None:
+            self.handlers[topic] = handler
+
         def unsubscribe(self, *args, **kwargs) -> None:
             pass
 
@@ -241,6 +248,9 @@ async def test_astream_cancels_gateway_proxy_when_consumer_stops(mesh_selector):
 
         def subscribe(self, *args, **kwargs) -> None:
             self.handlers[args[0]] = args[1]
+
+        async def subscribe_event(self, topic, handler) -> None:
+            self.handlers[topic] = handler
 
         def unsubscribe(self, *args, **kwargs) -> None:
             pass
