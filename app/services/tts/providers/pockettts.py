@@ -14,7 +14,7 @@ import queue
 import shutil
 import tempfile
 import threading
-from collections.abc import AsyncIterator, Iterable, Mapping
+from collections.abc import AsyncIterator, Callable, Iterable, Mapping
 from concurrent.futures import Executor, Future
 from dataclasses import dataclass
 from pathlib import Path
@@ -875,6 +875,7 @@ class PocketTTSProvider:
         self._config = config
         self._model_class = model_class
         self._executor: _DaemonSingleWorkerExecutor | None = None
+        self._executor_shutdown_task: asyncio.Task[bool] | None = None
         self._entry_lock = asyncio.Lock()
         self._load_lock = asyncio.Lock()
         self._state_lock = asyncio.Lock()
@@ -985,6 +986,10 @@ class PocketTTSProvider:
     async def stop(self) -> None:
         """Stop accepting work and wait for active model entry to drain."""
         wakeups: list[Any]
+        was_cancelled = False
+        streams_drained = False
+        executor_drained = False
+        entry_drained = False
         async with self._state_lock:
             self._started = False
             self._stopping = True
@@ -994,16 +999,33 @@ class PocketTTSProvider:
             wakeups = list(self._stream_wakeups.values())
         for wakeup in wakeups:
             wakeup()
-        streams_drained = await self._drain_stream_futures(self._stream_drain_timeout_s())
-        entry_draining = self._entry_lock.locked()
-        if not entry_draining:
-            async with self._entry_lock:
-                pass
-        executor_drained = await self._shutdown_executor(
-            wait=True,
-            cancel_futures=True,
-        )
-        stopped_cleanly = streams_drained and executor_drained
+        try:
+            streams_drained = await self._drain_stream_futures(self._stream_drain_timeout_s())
+        except asyncio.CancelledError:
+            was_cancelled = True
+        if not self._entry_lock.locked():
+            try:
+                async with self._entry_lock:
+                    pass
+            except asyncio.CancelledError:
+                was_cancelled = True
+        try:
+            executor_drained = await self._shutdown_executor(
+                wait=True,
+                cancel_futures=True,
+            )
+        except asyncio.CancelledError:
+            was_cancelled = True
+        await asyncio.sleep(0)
+        entry_drained = not self._entry_lock.locked()
+        stopped_cleanly = streams_drained and executor_drained and entry_drained
+        await self._mark_stopped(stopped_cleanly=stopped_cleanly)
+        if was_cancelled:
+            raise asyncio.CancelledError
+        if not stopped_cleanly:
+            raise TTSProviderError("resource_exhausted", "TTS provider is busy")
+
+    async def _mark_stopped(self, *, stopped_cleanly: bool) -> None:
         async with self._state_lock:
             self._loaded = None
             self._queued_requests.clear()
@@ -1014,8 +1036,6 @@ class PocketTTSProvider:
             self._stopping = not stopped_cleanly
             if not stopped_cleanly:
                 self._last_error = "PocketTTS model work did not stop"
-        if not stopped_cleanly:
-            raise TTSProviderError("resource_exhausted", "TTS provider is busy")
 
     async def health(self) -> TTSProviderHealth:
         """Return readiness for the loaded PocketTTS base model."""
@@ -1473,17 +1493,59 @@ class PocketTTSProvider:
 
     async def _shutdown_executor(self, *, wait: bool, cancel_futures: bool) -> bool:
         executor = self._executor
-        self._executor = None
         if executor is None:
             return True
-        if wait:
-            return await asyncio.to_thread(
-                executor.shutdown_bounded,
-                self._stream_drain_timeout_s(),
-                cancel_futures=cancel_futures,
+        shutdown_task = self._executor_shutdown_task
+        if shutdown_task is not None and shutdown_task.done():
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                drained = shutdown_task.result()
+                if drained:
+                    self._executor = None
+                    self._executor_shutdown_task = None
+                    return True
+            self._executor_shutdown_task = None
+            shutdown_task = None
+        if shutdown_task is None:
+            shutdown_task = asyncio.create_task(
+                asyncio.to_thread(
+                    executor.shutdown_bounded,
+                    self._stream_drain_timeout_s(),
+                    cancel_futures=cancel_futures,
+                )
             )
-        executor.shutdown(wait=False, cancel_futures=cancel_futures)
-        return True
+            self._executor_shutdown_task = shutdown_task
+            shutdown_task.add_done_callback(self._clear_executor_when_drained(executor))
+        if not wait:
+            return False
+        try:
+            drained = await asyncio.shield(shutdown_task)
+        except asyncio.CancelledError:
+            if shutdown_task.done():
+                drained = False
+                with contextlib.suppress(Exception):
+                    drained = shutdown_task.result()
+                    if drained:
+                        self._executor = None
+                        self._executor_shutdown_task = None
+                    return drained
+            else:
+                raise
+        if drained:
+            self._executor = None
+            self._executor_shutdown_task = None
+        return drained
+
+    def _clear_executor_when_drained(
+        self, executor: _DaemonSingleWorkerExecutor
+    ) -> Callable[[asyncio.Task[bool]], None]:
+        def clear(done: asyncio.Task[bool]) -> None:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                drained = done.result()
+                if drained and self._executor is executor:
+                    self._executor = None
+                    self._executor_shutdown_task = None
+
+        return clear
 
     def _track_stream_future(self, future: asyncio.Future[Any]) -> None:
         self._stream_futures.add(future)

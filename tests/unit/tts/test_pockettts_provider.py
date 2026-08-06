@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import inspect
 import os
@@ -926,6 +927,120 @@ async def test_pockettts_stream_stop_reports_blocked_executor_producer_then_rest
     assert health.ready is False
     assert restarted_health.ready is True
     assert not any(thread.name == "aurora-pockettts-stream" for thread in threading.enumerate())
+
+
+@pytest.mark.asyncio
+async def test_pockettts_cancelled_stop_mid_stream_drain_keeps_survivor_for_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    release = threading.Event()
+    FakePocketTTSModel.block_stream_after_first = release
+    voice = _voice_state(effective_language="es", quality_tier="quality")
+    fd = voice.artifact_handle.fd
+    provider = PocketTTSProvider(
+        _pockettts_config(
+            effective_language="es",
+            quality_tier="quality",
+            voices=(voice,),
+            max_tokens=4,
+            request_timeout_s=0.1,
+            queue_timeout_s=0.05,
+        ),
+        model_class=FakePocketTTSModel,
+    )
+    await provider.start()
+    stream = provider.stream(TTSSynthesisRequest(text="hola", request_id="stream-cancel"))
+    first = await asyncio.wait_for(stream.__anext__(), timeout=1)
+    original_drain = provider._drain_stream_futures
+    drain_started = asyncio.Event()
+
+    async def blocked_drain(timeout_s: float) -> bool:
+        del timeout_s
+        drain_started.set()
+        await asyncio.sleep(10)
+        return False
+
+    monkeypatch.setattr(provider, "_drain_stream_futures", blocked_drain)
+    stop_task = asyncio.create_task(provider.stop())
+    await asyncio.wait_for(drain_started.wait(), timeout=1)
+    stop_task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await stop_task
+    health = await provider.health()
+
+    assert first.audio == b"\x00 "
+    assert health.ready is False
+    assert health.error == "PocketTTS model work did not stop"
+    assert provider._executor is not None
+    assert _fd_is_closed(fd)
+
+    monkeypatch.setattr(provider, "_drain_stream_futures", original_drain)
+    release.set()
+    while provider._stream_futures:
+        await asyncio.sleep(0.01)
+    await stream.aclose()
+    await provider.stop()
+
+    assert _pockettts_worker_threads() == []
+
+
+@pytest.mark.asyncio
+async def test_pockettts_cancelled_stop_mid_executor_shutdown_keeps_executor_for_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    release = threading.Event()
+    FakePocketTTSModel.block_generation = release
+    voice = _voice_state()
+    fd = voice.artifact_handle.fd
+    provider = PocketTTSProvider(
+        _pockettts_config(
+            voices=(voice,),
+            max_tokens=4,
+            request_timeout_s=5,
+            queue_timeout_s=0.05,
+        ),
+        model_class=FakePocketTTSModel,
+    )
+    await provider.start()
+    synthesis = asyncio.create_task(
+        provider.synthesize(TTSSynthesisRequest(text="blocked", request_id="synth-cancel"))
+    )
+    deadline = asyncio.get_running_loop().time() + 1
+    while FakePocketTTSModel.active_entries == 0:
+        if asyncio.get_running_loop().time() > deadline:
+            pytest.fail("synthesis did not enter")
+        await asyncio.sleep(0.01)
+    executor = provider._ensure_executor()
+    original_shutdown = executor.shutdown_bounded
+    shutdown_started = threading.Event()
+
+    def slow_shutdown(timeout_s: float, *, cancel_futures: bool = False) -> bool:
+        shutdown_started.set()
+        time.sleep(0.2)
+        return original_shutdown(timeout_s, cancel_futures=cancel_futures)
+
+    monkeypatch.setattr(executor, "shutdown_bounded", slow_shutdown)
+    stop_task = asyncio.create_task(provider.stop())
+    assert await asyncio.to_thread(shutdown_started.wait, 1)
+    stop_task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await stop_task
+    health = await provider.health()
+
+    assert health.ready is False
+    assert health.error == "PocketTTS model work did not stop"
+    assert provider._executor is executor
+    assert _fd_is_closed(fd)
+
+    monkeypatch.setattr(executor, "shutdown_bounded", original_shutdown)
+    release.set()
+    with contextlib.suppress(TTSProviderError, asyncio.CancelledError):
+        await asyncio.wait_for(synthesis, timeout=1)
+    await provider.stop()
+
+    assert _pockettts_worker_threads() == []
 
 
 def test_pockettts_forever_stream_subprocess_exits_after_bounded_stop_failure() -> None:
