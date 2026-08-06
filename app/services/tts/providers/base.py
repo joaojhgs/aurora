@@ -36,6 +36,7 @@ class TTSProviderCapabilities:
     supports_finite_synthesis: bool = True
     supports_streaming: bool = True
     supports_cancel: bool = True
+    supports_inflight_cancel: bool = False
     supported_formats: tuple[AudioFormat, ...] = ("raw", "wav")
 
 
