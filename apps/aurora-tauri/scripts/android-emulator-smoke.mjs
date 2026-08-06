@@ -24,7 +24,7 @@ export async function runAndroidEmulatorSmoke() {
   }
 
   run(adb, ['wait-for-device'])
-  run(adb, ['install', '-r', apk])
+  run(adb, ['install', '-r', '--no-streaming', apk])
   run(adb, ['logcat', '-c'])
   launchApp(appId)
 
