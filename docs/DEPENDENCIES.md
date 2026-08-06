@@ -153,9 +153,27 @@ from Aurora's MIT-licensed package code. Cloned voice states are sensitive local
 data managed by the voice registry; do not copy them into images, sidecars, logs,
 or support bundles.
 
-Until approved standard-pack manifests are present, service wiring accepts only
-the built-in `standard:alba` logical PocketTTS voice ID and rejects additional
-preload/default voice IDs rather than guessing a local asset.
+PocketTTS standard voices are registry-installed artifacts, not provider
+built-ins. The service accepts provider-neutral
+`standard:<pack>:<voice>` IDs only when the local `VoiceRegistry` contains an
+exact ready `pockettts-python` voice-state artifact whose language bundle and
+compatibility group match the selected resident PocketTTS base. Default and
+preload voice IDs fail closed when no compatible registry entry exists; Aurora
+does not guess from upstream PocketTTS voice names and does not accept a bare
+`standard:alba` ID.
+
+Current upstream provenance is intentionally treated as input to a future
+manifest, not as release approval. Kyutai publishes the
+[`pocket-tts`](https://github.com/kyutai-labs/pocket-tts) package code under
+MIT, the
+[`kyutai/pocket-tts-without-voice-cloning`](https://huggingface.co/kyutai/pocket-tts-without-voice-cloning)
+model card lists `cc-by-4.0`, and Kyutai's
+[`tts-voices`](https://huggingface.co/kyutai/tts-voices) card lists per-source
+voice licenses including CC BY 4.0 and non-commercial sources. Kyutai also lists
+prohibited uses for unlawful, deceptive, or non-consensual voice use. Do not
+enable redistribution or automatic download for any PocketTTS model or voice
+asset until an approved Aurora manifest records the exact upstream repo, path,
+revision, SHA-256, size, license, attribution, and redistribution decision.
 
 Tauri desktop packages stage a Python sidecar using `apps/aurora-tauri/scripts/prepare-sidecar.mjs` and `scripts/build.py`. Profiles are explicit so the default bundle does not install every local dependency.
 
