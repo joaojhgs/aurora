@@ -101,3 +101,83 @@ async def test_auto_language_sends_auto_to_transcription_with_primary_policy() -
             )
         ]
         assert set_language_calls
+
+
+@pytest.mark.asyncio
+async def test_system_reload_updates_next_session_language() -> None:
+    bus = MagicMock(spec=MessageBus)
+    bus.subscribe = MagicMock()
+    bus.publish = AsyncMock()
+    bus.request = AsyncMock(return_value=MagicMock(ok=True))
+    system_config = System(primary_language="en", voice_language="en")
+
+    with (
+        patch("app.shared.services.base_service.get_bus_singleton", return_value=bus),
+        patch("app.services.stt_coordinator.service.pyaudio") as mock_pyaudio,
+        patch("app.services.stt_coordinator.service.config_api") as mock_config,
+    ):
+        mock_pyaudio.PyAudio.return_value = MagicMock()
+        mock_pyaudio.paInt16 = 8
+
+        async def aget(key, default_or_model=None, *args, **kwargs):
+            if default_or_model is Coordinator:
+                return _coordinator_config()
+            if default_or_model is System:
+                return system_config
+            raise AssertionError(f"unexpected config request: {key}")
+
+        mock_config.aget = AsyncMock(side_effect=aget)
+        service = STTCoordinatorService()
+
+        await service._load_config()
+        system_config = System(primary_language="pt", voice_language="fr")
+        await service.reload("system")
+        await service._start_session("manual", session_id="reload-session")
+
+    set_language_calls = [
+        call
+        for call in bus.publish.call_args_list
+        if call.args[:2]
+        == (
+            TranscriptionMethods.CONTROL,
+            TranscriptionControl(action="set_language", language="fr"),
+        )
+    ]
+    assert set_language_calls
+
+
+@pytest.mark.asyncio
+async def test_failed_system_reload_retains_previous_language_policy() -> None:
+    bus = MagicMock(spec=MessageBus)
+    bus.subscribe = MagicMock()
+    bus.publish = AsyncMock()
+    bus.request = AsyncMock(return_value=MagicMock(ok=True))
+    fail_system_reload = False
+
+    with (
+        patch("app.shared.services.base_service.get_bus_singleton", return_value=bus),
+        patch("app.services.stt_coordinator.service.pyaudio") as mock_pyaudio,
+        patch("app.services.stt_coordinator.service.config_api") as mock_config,
+    ):
+        mock_pyaudio.PyAudio.return_value = MagicMock()
+        mock_pyaudio.paInt16 = 8
+
+        async def aget(key, default_or_model=None, *args, **kwargs):
+            if default_or_model is Coordinator:
+                return _coordinator_config()
+            if default_or_model is System:
+                if fail_system_reload:
+                    raise RuntimeError("system unavailable")
+                return System(primary_language="en", voice_language="de")
+            raise AssertionError(f"unexpected config request: {key}")
+
+        mock_config.aget = AsyncMock(side_effect=aget)
+        service = STTCoordinatorService()
+
+        await service._load_config()
+        fail_system_reload = True
+        with pytest.raises(RuntimeError, match="system unavailable"):
+            await service.reload("system")
+
+        assert service._language_policy.stt_language == "de"
+        assert service._language_policy.model_language == "de"

@@ -360,6 +360,11 @@ class STTCoordinatorService(BaseService):
         """
         log_info(f"Reloading STT coordinator configuration (section: {config_section})")
 
+        if config_section == "system":
+            self._language_policy = await self._read_language_policy()
+            log_info("STT coordinator language policy reloaded")
+            return
+
         # If STT or audio config changed, reload
         if (
             config_section is None
@@ -387,13 +392,7 @@ class STTCoordinatorService(BaseService):
     async def _load_config(self) -> None:
         """Load configuration from configuration service."""
         coord_config = await config_api.aget(ConfigKeys.services.stt.coordinator, Coordinator)
-        system_config = await config_api.aget(ConfigKeys.system, System)
-        if not isinstance(system_config, System):
-            system_config = System()
-        self._language_policy = resolve_speech_language_policy(
-            system_config.primary_language,
-            system_config.voice_language,
-        )
+        self._language_policy = await self._read_language_policy()
 
         # Audio configuration
         audio_input = coord_config.audio_input or AudioInput()
@@ -426,6 +425,17 @@ class STTCoordinatorService(BaseService):
         ambient = coord_config.ambient_transcription or AmbientTranscription()
         self._ambient_transcription_enabled = (
             ambient.enable if ambient.enable is not None else False
+        )
+
+    async def _read_language_policy(self):
+        """Read canonical speech language policy without mutating other coordinator state."""
+
+        system_config = await config_api.aget(ConfigKeys.system, System)
+        if not isinstance(system_config, System):
+            system_config = System()
+        return resolve_speech_language_policy(
+            system_config.primary_language,
+            system_config.voice_language,
         )
 
     def _initialize_pyaudio(self) -> None:
