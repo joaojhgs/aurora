@@ -39,6 +39,7 @@ def mock_bus():
     bus = Mock()
     bus.publish = AsyncMock()
     bus.subscribe = Mock()
+    bus.subscribe_event = AsyncMock()
     bus.unsubscribe = Mock()
     bus_init.set_bus(bus)
     yield bus
