@@ -229,6 +229,140 @@ def test_invalid_speech_schema_values_are_strictly_rejected(payload: dict, match
         _normalize(payload)
 
 
+@pytest.mark.parametrize(
+    ("payload", "match"),
+    [
+        (
+            {"services": {"tts": {"default_voice_id": 12}}},
+            "services.tts.default_voice_id",
+        ),
+        (
+            {"services": {"tts": {"providers": {"piper": {"model_file_path": 12}}}}},
+            "services.tts.providers.piper.model_file_path",
+        ),
+        (
+            {"services": {"tts": {"providers": {"piper": {"model_config_file_path": False}}}}},
+            "services.tts.providers.piper.model_config_file_path",
+        ),
+        (
+            {"services": {"tts": {"providers": {"piper": {"executable_path": []}}}}},
+            "services.tts.providers.piper.executable_path",
+        ),
+        (
+            {"services": {"tts": {"providers": {"pockettts": {"custom_config_path": 12}}}}},
+            "services.tts.providers.pockettts.custom_config_path",
+        ),
+        (
+            {"services": {"tts": {"providers": {"pockettts": {"cache_dir": False}}}}},
+            "services.tts.providers.pockettts.cache_dir",
+        ),
+        (
+            {"services": {"tts": {"providers": {"pockettts": {"voice_state_dir": []}}}}},
+            "services.tts.providers.pockettts.voice_state_dir",
+        ),
+        (
+            {"services": {"tts": {"providers": {"pockettts": {"preload_model": "yes"}}}}},
+            "services.tts.providers.pockettts.preload_model",
+        ),
+        (
+            {"services": {"tts": {"providers": {"pockettts": {"preload_voice_ids": "v1"}}}}},
+            "services.tts.providers.pockettts.preload_voice_ids",
+        ),
+        (
+            {"services": {"tts": {"providers": {"pockettts": {"preload_voice_ids": [7]}}}}},
+            "services.tts.providers.pockettts.preload_voice_ids.0",
+        ),
+        (
+            {"services": {"tts": {"providers": {"pockettts": {"temperature": "warm"}}}}},
+            "services.tts.providers.pockettts.temperature",
+        ),
+        (
+            {"services": {"tts": {"providers": {"pockettts": {"noise_clamp": "quiet"}}}}},
+            "services.tts.providers.pockettts.noise_clamp",
+        ),
+        (
+            {"services": {"tts": {"providers": {"pockettts": {"eos_threshold": "low"}}}}},
+            "services.tts.providers.pockettts.eos_threshold",
+        ),
+        (
+            {"services": {"tts": {"providers": {"pockettts": {"quantize": "false"}}}}},
+            "services.tts.providers.pockettts.quantize",
+        ),
+        (
+            {"services": {"tts": {"voice_registry": {"manifest_path": False}}}},
+            "services.tts.voice_registry.manifest_path",
+        ),
+        (
+            {"services": {"tts": {"voice_registry": {"asset_base_url": 42}}}},
+            "services.tts.voice_registry.asset_base_url",
+        ),
+        (
+            {"services": {"tts": {"voice_registry": {"cache_dir": []}}}},
+            "services.tts.voice_registry.cache_dir",
+        ),
+        (
+            {"services": {"tts": {"voice_registry": {"verify_sha256": "yes"}}}},
+            "services.tts.voice_registry.verify_sha256",
+        ),
+        (
+            {"services": {"tts": {"voice_registry": {"standard_pack_enabled": "true"}}}},
+            "services.tts.voice_registry.standard_pack_enabled",
+        ),
+        (
+            {"services": {"tts": {"voice_registry": {"cloning_enabled": "true"}}}},
+            "services.tts.voice_registry.cloning_enabled",
+        ),
+        (
+            {"services": {"tts": {"voice_registry": {"retain_clone_source": "false"}}}},
+            "services.tts.voice_registry.retain_clone_source",
+        ),
+        (
+            {"services": {"tts": {"voice_registry": {"clone_min_duration_s": "6"}}}},
+            "services.tts.voice_registry.clone_min_duration_s",
+        ),
+        (
+            {"services": {"tts": {"voice_registry": {"clone_max_duration_s": []}}}},
+            "services.tts.voice_registry.clone_max_duration_s",
+        ),
+        (
+            {"services": {"tts": {"voice_registry": {"clone_max_source_bytes": 1.5}}}},
+            "services.tts.voice_registry.clone_max_source_bytes",
+        ),
+        (
+            {"services": {"tts": {"voice_registry": {"clone_max_wire_bytes": "2097152"}}}},
+            "services.tts.voice_registry.clone_max_wire_bytes",
+        ),
+        (
+            {"services": {"tts": {"voice_registry": {"accepted_import_formats": "wav"}}}},
+            "services.tts.voice_registry.accepted_import_formats",
+        ),
+        (
+            {"services": {"tts": {"voice_registry": {"accepted_import_formats": [7]}}}},
+            "services.tts.voice_registry.accepted_import_formats",
+        ),
+    ],
+)
+def test_new_speech_schema_type_errors_fail_closed(payload: dict, match: str) -> None:
+    with pytest.raises(ValueError, match=match):
+        _normalize(payload)
+
+
+def test_unrelated_schema_violations_remain_advisory_for_compatibility() -> None:
+    manager = _manager()
+
+    from app.services.config import config_manager as config_manager_module
+
+    calls: list[str] = []
+    original_warning = config_manager_module.log_warning
+    config_manager_module.log_warning = lambda message, *args, **kwargs: calls.append(str(message))
+    try:
+        manager._validate_config({"ui": {"window_width": -1}})
+    finally:
+        config_manager_module.log_warning = original_warning
+
+    assert any("JSON Schema constraint violation" in call for call in calls)
+
+
 def test_unknown_fields_outside_new_speech_objects_stay_compatible() -> None:
     manager = _manager()
     manager._validate_config({"ui": {"activate": False, "unknown_future_key": True}})

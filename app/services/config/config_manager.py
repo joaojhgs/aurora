@@ -44,6 +44,15 @@ _SPEECH_LANGUAGE_RELOAD_SERVICES = [
     "stt_coordinator",
     "gateway",
 ]
+_STRICT_SPEECH_SCHEMA_PATHS = {
+    "system.primary_language",
+    "system.voice_language",
+    "services.tts.provider",
+    "services.tts.fallback_provider",
+    "services.tts.default_voice_id",
+    "services.tts.providers",
+    "services.tts.voice_registry",
+}
 
 
 class ConfigManager:
@@ -1846,9 +1855,19 @@ class ConfigManager:
             validator = jsonschema.Draft7Validator(self._schema)
             for error in validator.iter_errors(config_data):
                 path = ".".join(str(p) for p in error.absolute_path) or "(root)"
+                if self._is_strict_speech_schema_path(path):
+                    raise ValueError(f"JSON Schema constraint violation at {path}: {error.message}")
                 log_warning("JSON Schema constraint violation at %s: %s", path, error.message)
         except Exception as e:
+            if isinstance(e, ValueError):
+                raise
             log_warning("JSON Schema validation could not run: %s", e)
+
+    def _is_strict_speech_schema_path(self, path: str) -> bool:
+        return any(
+            path == strict_path or path.startswith(f"{strict_path}.")
+            for strict_path in _STRICT_SPEECH_SCHEMA_PATHS
+        )
 
     def validate_current_config(self) -> list[str]:
         """Validate current configuration and return list of validation errors"""
