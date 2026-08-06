@@ -107,7 +107,7 @@ async def test_bind_tools_formats_tools_and_preserves_original(bus, mesh_selecto
 async def test_astream_maps_openai_chunks_for_chatbot_accumulation(bus, mesh_selector):
     handlers = {}
 
-    def subscribe(topic, handler):
+    def subscribe(topic, handler, *, event: bool = False):
         handlers[topic] = handler
 
     async def request(topic, payload, **kwargs):

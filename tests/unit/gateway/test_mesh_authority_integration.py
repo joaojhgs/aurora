@@ -209,15 +209,15 @@ def _reconnect_proof(record: _ReconnectChallengeRecord) -> dict[str, str]:
 
 class _FakeBus:
     def __init__(self, result: QueryResult | None = None):
-        self.subscribed: list[tuple[str, object]] = []
+        self.subscribed: list[tuple[str, object, bool]] = []
         self.unsubscribed: list[tuple[str, object]] = []
         self.request = AsyncMock(
             return_value=result or QueryResult(ok=True, data={"authorities": []})
         )
         self.publish = AsyncMock()
 
-    def subscribe(self, topic: str, handler: object) -> None:
-        self.subscribed.append((topic, handler))
+    def subscribe(self, topic: str, handler: object, *, event: bool = False) -> None:
+        self.subscribed.append((topic, handler, event))
 
     def unsubscribe(self, topic: str, handler: object) -> None:
         self.unsubscribed.append((topic, handler))
@@ -258,7 +258,7 @@ async def test_canonical_subscribe_unsubscribe_only(monkeypatch) -> None:
 
     await service.on_start()
 
-    topics = [topic for topic, _handler in bus.subscribed]
+    topics = [topic for topic, _handler, _event in bus.subscribed]
     assert MeshEvents.PEER_AUTHORITY_CHANGED in topics
     assert MeshEvents.PEER_APPROVED not in topics
     assert MeshEvents.PEER_PERMISSIONS_UPDATED not in topics

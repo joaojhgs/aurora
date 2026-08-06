@@ -167,7 +167,7 @@ class BullMQBus:
         self._started = False
         log_info("BullMQBus stopped")
 
-    def subscribe(self, topic: str, handler: Handler) -> None:
+    def subscribe(self, topic: str, handler: Handler, *, event: bool = False) -> None:
         """Subscribe to a topic with a handler.
 
         Creates a BullMQ worker to process jobs for the topic.
@@ -175,6 +175,7 @@ class BullMQBus:
         Args:
             topic: Topic name (supports wildcards like "TTS.*")
             handler: Async function to handle messages
+            event: True when subscribing to broadcast fanout instead of a command queue
 
         Raises:
             ValueError: If topic validation is enabled and topic is invalid
@@ -188,7 +189,7 @@ class BullMQBus:
         # We don't validate subscriptions because services may subscribe to events
         # that are published by other services without contracts.
 
-        if self._is_event_topic(topic):
+        if self._is_event_topic(topic, event=event):
             if "*" in topic:
                 self._event_wildcard_patterns[topic].append(handler)
                 self._ensure_event_subscription(topic, pattern=True)
@@ -257,12 +258,14 @@ class BullMQBus:
             except ValueError:
                 pass
 
-    def _is_event_topic(self, topic: str) -> bool:
+    def _is_event_topic(self, topic: str, *, event: bool = False) -> bool:
         """Return True when a subscription should use broadcast fanout."""
         if topic.startswith("reply."):
             return False
-        if "*" in topic:
+        if event:
             return True
+        if "*" in topic:
+            return False
         if not self._validate_topics:
             return False
         contracts = all_contracts()

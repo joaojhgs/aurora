@@ -130,7 +130,27 @@ class TestBullMQBusInterface:
         bus = BullMQBus(validate_topics=False)
 
         assert bus._is_event_topic("AuroraTest.Bullmq.Dynamic.Ping") is False
-        assert bus._is_event_topic("AuroraTest.Bullmq.Dynamic.*") is True
+        assert bus._is_event_topic("AuroraTest.Bullmq.Dynamic.*") is False
+        assert bus._is_event_topic("AuroraTest.Bullmq.Dynamic.Ping", event=True) is True
+        assert bus._is_event_topic("reply.SampleMessage.123", event=True) is False
+
+    async def test_validation_disabled_explicit_event_registers_fanout(self, mock_bullmq):
+        """Explicit event subscriptions use fanout even when contract validation is disabled."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+        bus._async_register_event_queue = AsyncMock()
+
+        await bus.start()
+
+        handler = AsyncMock()
+        bus.subscribe("AuroraTest.Bullmq.Dynamic.Event", handler, event=True)
+
+        assert "AuroraTest.Bullmq.Dynamic.Event" in bus._event_handlers
+        assert "AuroraTest.Bullmq.Dynamic.Event" not in bus._handlers
+        assert "AuroraTest.Bullmq.Dynamic.Event" in bus._event_worker_queues
+        mock_bullmq["Worker"].assert_called()
 
     async def test_subscribe_direct_topic(self, mock_bullmq):
         """Test subscribing to a direct topic (no wildcards)."""
@@ -155,7 +175,7 @@ class TestBullMQBusInterface:
         bus._Worker = mock_bullmq["Worker"]
 
         handler = AsyncMock()
-        bus.subscribe("Config.Updated", handler)
+        bus.subscribe("Config.Updated", handler, event=True)
 
         assert "Config.Updated" in bus._event_handlers
         assert handler in bus._event_handlers["Config.Updated"]

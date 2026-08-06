@@ -112,12 +112,13 @@ class LocalBus:
         self._evt_workers_started.clear()
         log_info("LocalBus stopped")
 
-    def subscribe(self, topic: str, handler: Handler) -> None:
+    def subscribe(self, topic: str, handler: Handler, *, event: bool = False) -> None:
         """Subscribe to a topic with a handler.
 
         Args:
             topic: Topic name (supports wildcards like "TTS.*")
             handler: Async function to handle messages
+            event: True when the handler consumes broadcast events
 
         Raises:
             ValueError: If topic validation is enabled and topic is invalid
@@ -135,7 +136,7 @@ class LocalBus:
         # concrete topic only — do not start an idle worker for the pattern key.
         # Request reply topics are unique and one-shot, so publish() delivers them
         # directly instead of creating a permanent worker for every request.
-        if "*" in topic or topic.startswith("reply."):
+        if "*" in topic or topic.startswith("reply.") or not event:
             return
 
         # Start event worker for this topic if not already started

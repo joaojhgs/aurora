@@ -215,7 +215,7 @@ class TestLifecycle:
         # Verify subscriptions - at least the audio stream subscription
         assert service.bus.subscribe.call_count >= 1
         service.bus.subscribe.assert_any_call(
-            AudioTopics.STREAM_MICROPHONE, service._on_audio_chunk
+            AudioTopics.STREAM_MICROPHONE, service._on_audio_chunk, event=True
         )
         # Service uses auto-subscription via contracts
         # TODO: Update test for contract-based API

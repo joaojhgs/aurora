@@ -369,6 +369,7 @@ class ToolingService(BaseService):
         self.bus.subscribe(
             MeshEvents.PEER_PERMISSIONS_UPDATED,
             self._on_mesh_peer_permissions_updated,
+            event=True,
         )
 
         # Emit initialization event

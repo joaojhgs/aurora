@@ -128,8 +128,12 @@ async def local_bus():
 
 @pytest.mark.asyncio
 async def test_config_event_decodes_dict_and_pydantic_payloads(local_bus) -> None:
+    from app.shared.contracts.models.config import ConfigMethods
+
     service = RuntimeLifecycleService()
     await service.start()
+
+    assert ConfigMethods.UPDATED in local_bus._evt_worker_tasks
 
     await service._handle_config_changed(
         {

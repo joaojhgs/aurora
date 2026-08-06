@@ -298,7 +298,7 @@ def create_gateway_app(
                 queue.put_nowait(payload)
 
         async def event_generator():
-            bus.subscribe(AuroraMethods.EVENT_STREAM, on_event)
+            bus.subscribe(AuroraMethods.EVENT_STREAM, on_event, event=True)
             try:
                 if backfill or last_event_id or replay_from:
                     async for event in _stream_backfill_events(

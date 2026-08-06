@@ -344,7 +344,7 @@ class BaseService(ABC):
                 """Handle config change event."""
                 await self._handle_config_changed(envelope.payload)
 
-            self.bus.subscribe(ConfigMethods.UPDATED, on_config_changed)
+            self.bus.subscribe(ConfigMethods.UPDATED, on_config_changed, event=True)
             self._config_change_subscription = (ConfigMethods.UPDATED, on_config_changed)
             log_debug(f"{self.module} subscribed to config changes")
         except Exception as e:

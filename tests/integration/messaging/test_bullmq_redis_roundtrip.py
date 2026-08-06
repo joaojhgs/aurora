@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
+from urllib.parse import urlsplit, urlunsplit
 
 import pytest
 from pydantic import BaseModel
@@ -30,6 +31,11 @@ def _redis_url() -> str:
     return os.environ.get("REDIS_URL", "redis://127.0.0.1:6379")
 
 
+def _redis_db_url(db: int) -> str:
+    parsed = urlsplit(_redis_url())
+    return urlunsplit((parsed.scheme, parsed.netloc, f"/{db}", parsed.query, parsed.fragment))
+
+
 @pytest.fixture
 def redis_live():
     """Skip if Redis is not reachable (no redis-py or connection error)."""
@@ -42,6 +48,19 @@ def redis_live():
         pytest.skip("Redis not reachable — start Redis or set REDIS_URL")
     yield client
     client.close()
+
+
+@pytest.fixture
+def isolated_redis_url(redis_live):
+    """Use a dedicated Redis DB for live BullMQ fanout checks."""
+    url = _redis_db_url(15)
+    client = redis_sync.Redis.from_url(url, decode_responses=True)
+    client.flushdb()
+    try:
+        yield url
+    finally:
+        client.flushdb()
+        client.close()
 
 
 class _PingPayload(BaseModel):
@@ -126,3 +145,44 @@ class TestBullMQRedisRoundtrip:
         finally:
             await client.stop()
             await server.stop()
+
+    @pytest.mark.asyncio
+    async def test_event_publish_fans_out_to_two_explicit_subscribers(
+        self, isolated_redis_url
+    ) -> None:
+        """One event=True publish reaches two independent validate_topics=False subscribers."""
+        ns = uuid.uuid4().hex[:12]
+        topic = f"AuroraTest.Bullmq.{ns}.Event"
+
+        first = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        second = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        await first.start()
+        await second.start()
+        received: dict[str, list[dict[str, object]]] = {"first": [], "second": []}
+
+        async def first_handler(env: Envelope) -> None:
+            received["first"].append(env.payload if isinstance(env.payload, dict) else {})
+
+        async def second_handler(env: Envelope) -> None:
+            received["second"].append(env.payload if isinstance(env.payload, dict) else {})
+
+        first.subscribe(topic, first_handler, event=True)
+        second.subscribe(topic, second_handler, event=True)
+        await asyncio.sleep(0.75)
+
+        try:
+            await first.publish(topic, _PingPayload(x=11), event=True, origin="integration-test")
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 15.0
+            while loop.time() < deadline:
+                if len(received["first"]) == 1 and len(received["second"]) == 1:
+                    break
+                await asyncio.sleep(0.05)
+
+            assert received == {
+                "first": [{"x": 11}],
+                "second": [{"x": 11}],
+            }
+        finally:
+            await second.stop()
+            await first.stop()

@@ -22,7 +22,7 @@ class _DummyBus:
         self.events = events or []
         self.requests: list[tuple[str, Any]] = []
 
-    def subscribe(self, topic, handler) -> None:
+    def subscribe(self, topic, handler, *, event: bool = False) -> None:
         pass
 
     def unsubscribe(self, topic, handler) -> None:

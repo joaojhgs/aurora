@@ -110,7 +110,7 @@ class WakeWordService(BaseService):
         await self._initialize_backend()
 
         # Subscribe to audio stream (subscribe is not async)
-        self.bus.subscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
+        self.bus.subscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk, event=True)
 
         self._running = True
         self._enabled = True

@@ -46,7 +46,7 @@ class _StreamBus:
             data=GatewayStreamMeshInferChatStartResponse(stream_id=payload.stream_id),
         )
 
-    def subscribe(self, topic, handler) -> None:
+    def subscribe(self, topic, handler, *, event: bool = False) -> None:
         self.handlers[topic] = handler
 
     def unsubscribe(self, *args, **kwargs) -> None:

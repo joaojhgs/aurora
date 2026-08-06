@@ -1051,7 +1051,12 @@ class TestMeshBusSubscribe:
     def test_subscribe_delegates_to_inner(self, mesh_bus, inner_bus):
         handler = MagicMock()
         mesh_bus.subscribe("TTS.*", handler)
-        inner_bus.subscribe.assert_called_once_with("TTS.*", handler)
+        inner_bus.subscribe.assert_called_once_with("TTS.*", handler, event=False)
+
+    def test_subscribe_forwards_event_intent_to_inner(self, mesh_bus, inner_bus):
+        handler = MagicMock()
+        mesh_bus.subscribe("TTS.Started", handler, event=True)
+        inner_bus.subscribe.assert_called_once_with("TTS.Started", handler, event=True)
 
 
 class TestMeshBusLifecycle:

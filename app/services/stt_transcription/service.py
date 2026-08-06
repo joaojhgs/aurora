@@ -187,7 +187,7 @@ class TranscriptionService(BaseService):
         await self._load_models()
 
         # Subscribe to audio stream
-        self.bus.subscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
+        self.bus.subscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk, event=True)
 
         # Start processing thread
         self._start_processing_thread()

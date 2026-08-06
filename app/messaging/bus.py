@@ -224,12 +224,13 @@ class MessageBus(Protocol):
         """
         ...
 
-    def subscribe(self, topic: str, handler: Handler) -> None:
+    def subscribe(self, topic: str, handler: Handler, *, event: bool = False) -> None:
         """Subscribe to a topic with a handler.
 
         Args:
             topic: Topic pattern (supports wildcards, e.g., "TTS.*")
             handler: Async function to handle messages
+            event: True when subscribing to broadcast events; False for commands/replies.
         """
         ...
 

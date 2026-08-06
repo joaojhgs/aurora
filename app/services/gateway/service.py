@@ -1239,18 +1239,24 @@ class GatewayService(BaseService):
 
     async def on_start(self) -> None:
         """Service-specific startup logic."""
-        self.bus.subscribe(self._event_stream_subscription_topic, self._capture_gateway_event)
         self.bus.subscribe(
-            self._mesh_authority_event_topic, self._handle_mesh_peer_authority_changed
+            self._event_stream_subscription_topic, self._capture_gateway_event, event=True
+        )
+        self.bus.subscribe(
+            self._mesh_authority_event_topic,
+            self._handle_mesh_peer_authority_changed,
+            event=True,
         )
         self.bus.subscribe(
             self._tooling_projection_invalidation_topic,
             self._handle_tooling_projection_invalidated,
+            event=True,
         )
         self._tooling_invalidation_subscription_ready = True
         self.bus.subscribe(
             self._tooling_projection_readiness_topic,
             self._handle_tooling_projection_readiness_changed,
+            event=True,
         )
         self._audio_session_service._bus = self.bus
         await self._audio_session_service.start()

@@ -632,7 +632,7 @@ class ConfigAPI:
                     getattr(payload, "new_value", None),
                 )
 
-            self.bus.subscribe(ConfigMethods.UPDATED, on_config_changed)
+            self.bus.subscribe(ConfigMethods.UPDATED, on_config_changed, event=True)
         except Exception as e:
             log_error(f"Error adding config observer: {e}")
 

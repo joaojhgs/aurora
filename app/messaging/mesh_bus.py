@@ -1135,7 +1135,7 @@ class MeshBus:
 
     # ── Subscribe ────────────────────────────────────────────────────────
 
-    def subscribe(self, topic: str, handler: Handler) -> None:
+    def subscribe(self, topic: str, handler: Handler, *, event: bool = False) -> None:
         """Subscribe always goes to the inner bus (local delivery).
 
         Remote services don't subscribe to our local bus — they subscribe
@@ -1144,8 +1144,9 @@ class MeshBus:
         Args:
             topic: Topic pattern (supports wildcards)
             handler: Async function to handle messages
+            event: True when subscribing to broadcast events
         """
-        self._inner.subscribe(topic, handler)
+        self._inner.subscribe(topic, handler, event=event)
 
     def unsubscribe(self, topic: str, handler: Handler) -> None:
         """Unsubscribe from the inner local bus."""
