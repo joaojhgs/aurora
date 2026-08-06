@@ -7,8 +7,10 @@ import {
   ToolingGetToolsInputToolingGetToolsRequestSchema,
   ToolingGetToolsOutputToolingGetToolsResponseSchema,
   ToolingPrepareExecutionInputToolingPrepareExecutionRequestSchema,
+  type ToolingPrepareExecutionOutputToolingPrepareExecutionResponse,
   ToolingPrepareExecutionOutputToolingPrepareExecutionResponseSchema
 } from '../generated/backend-contracts.zod.js'
+import type { ToolingPeerHostHandlers } from '../peer-host/contract-registry.js'
 import type { PeerHostCallContext } from '../peer-host/types.js'
 import type { JsonObject, ToolingPrepareExecutionResponse } from '../types.js'
 import { parseBoundary } from '../validation/index.js'
@@ -135,7 +137,12 @@ export function createLocalToolingProviderHandlers(options: LocalToolingProvider
       }
       const prepared = await options.policy.prepare(entry, request, executionContext(context))
       await audit(options, context, auditFromPrepared('prepare', prepared, context, options, prepared.policy_decision.allowed ? 'allowed' : 'denied', prepared.policy_decision.reason))
-      return parseBoundary('Tooling.PrepareExecution.output.ToolingPrepareExecutionResponse', ToolingPrepareExecutionOutputToolingPrepareExecutionResponseSchema, prepared, { boundary: 'webrtc-frame' })
+      return parseBoundary(
+        'Tooling.PrepareExecution.output.ToolingPrepareExecutionResponse',
+        ToolingPrepareExecutionOutputToolingPrepareExecutionResponseSchema,
+        prepared,
+        { boundary: 'webrtc-frame' }
+      ) as unknown as ValidatedToolingPrepareExecutionResponse
     },
 
     async executeTool(input: unknown, context: PeerHostCallContext) {
@@ -274,7 +281,7 @@ export function createLocalToolingProviderHandlers(options: LocalToolingProvider
         return response
       }
     }
-  }
+  } satisfies ToolingPeerHostHandlers
 }
 
 function denyPrepared(
@@ -374,7 +381,15 @@ function normalizeExecuteRequest(request: Record<string, unknown> & {
   ) as unknown as LocalToolExecuteRequest
 }
 
-function deniedPrepare(request: LocalToolExecuteRequest, context: PeerHostCallContext, reason: string, options: LocalToolingProviderOptions): ToolingPrepareExecutionResponse {
+type ValidatedToolingPrepareExecutionResponse = ToolingPrepareExecutionResponse
+  & ToolingPrepareExecutionOutputToolingPrepareExecutionResponse
+
+function deniedPrepare(
+  request: LocalToolExecuteRequest,
+  context: PeerHostCallContext,
+  reason: string,
+  options: LocalToolingProviderOptions
+): ValidatedToolingPrepareExecutionResponse {
   return parseBoundary('Tooling.PrepareExecution.output.ToolingPrepareExecutionResponse', ToolingPrepareExecutionOutputToolingPrepareExecutionResponseSchema, {
     ok: false,
     policy_decision: {
@@ -398,7 +413,7 @@ function deniedPrepare(request: LocalToolExecuteRequest, context: PeerHostCallCo
     display_args_preview: {},
     argument_visibility: {},
     secrets_redacted: true
-  }, { boundary: 'webrtc-frame' }) as unknown as ToolingPrepareExecutionResponse
+  }, { boundary: 'webrtc-frame' }) as unknown as ValidatedToolingPrepareExecutionResponse
 }
 
 function deniedExecute(request: LocalToolExecuteRequest, status: 'not_found' | 'denied', reason: string, options: LocalToolingProviderOptions): ToolingExecuteToolOutputToolingExecuteToolResponse {

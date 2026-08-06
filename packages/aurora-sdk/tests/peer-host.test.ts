@@ -10,6 +10,7 @@ import {
   SessionPeerHostAuthorizationStore,
   WebRtcPeerHost,
   createToolingPeerHostRegistry,
+  type GeneratedPeerHostMethodHandler,
   type LocalPeerGrantV1,
   type PeerHostAuthorizationStore,
   type PeerHostCallContext
@@ -72,7 +73,7 @@ function authenticatedContext(patch: Partial<AuthenticatedPeerContext> = {}): Au
 }
 
 async function host(
-  handler: (input: unknown, context: PeerHostCallContext) => Promise<unknown> | unknown = vi.fn(async () => ({ count: 0, tools: [] })),
+  handler: GeneratedPeerHostMethodHandler<'Tooling.GetTools'> = vi.fn(async () => ({ count: 0, tools: [] })),
   store: PeerHostAuthorizationStore = new SessionPeerHostAuthorizationStore([grant()]),
   manifestContext?: AuthenticatedPeerContext
 ) {

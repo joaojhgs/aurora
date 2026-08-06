@@ -4,10 +4,12 @@ import {
   PeerHostContractRegistry,
   SessionPeerHostAuthorizationStore,
   WebRtcPeerHost,
+  createToolingPeerHostRegistry,
   generatedPeerHostMethodDescriptor,
   registerGeneratedPeerHostMethod,
   type CallFrame,
-  type LocalPeerGrantV1
+  type LocalPeerGrantV1,
+  type ToolingPeerHostHandlers
 } from '../src/webrtc/index.js'
 
 function peerGrant(allowedMethodIds: readonly string[]): LocalPeerGrantV1 {
@@ -75,16 +77,35 @@ describe('generated peer-host registration', () => {
     })
   })
 
-  it('fails closed when a caller bypasses the wake-audio type exclusion', () => {
+  it.each([
+    'WakeWord.ProcessAudio',
+    'Transcription.ProcessAudio'
+  ])('fails closed when a caller bypasses the continuous-audio type exclusion for %s', (methodId) => {
     const unsafeDescriptor = generatedPeerHostMethodDescriptor as unknown as (
       methodId: string,
       handler: () => Promise<unknown>
     ) => unknown
 
     expect(() => unsafeDescriptor(
-      'WakeWord.ProcessAudio',
+      methodId,
       async () => ({})
-    )).toThrow('continuous wake audio cannot be hosted across devices')
+    )).toThrow('continuous audio capture cannot be hosted across devices')
+  })
+
+  it('keeps Tooling registry handlers bound to generated method types', () => {
+    const handlers: ToolingPeerHostHandlers = {
+      getTools: async () => { throw new Error('not called') },
+      getExportCatalog: async () => { throw new Error('not called') },
+      prepareExecution: async () => { throw new Error('not called') },
+      executeTool: async () => { throw new Error('not called') }
+    }
+
+    expect(createToolingPeerHostRegistry(handlers).list().map((method) => method.methodId)).toEqual([
+      'Tooling.ExecuteTool',
+      'Tooling.GetExportCatalog',
+      'Tooling.GetTools',
+      'Tooling.PrepareExecution'
+    ])
   })
 
   it('groups mixed generated services and requires every advertised service ACK', async () => {

@@ -12,12 +12,13 @@ const DEFAULT_TIMEOUT_MS = 30_000
 const TOOLING_PROVIDER_CAPABILITIES = Object.freeze(['tool_discovery', 'tool_execution'] as const)
 const GENERATED_PEER_HOST_BLOCKED_METHODS = new Set<GeneratedBackendMethodId>([
   'Gateway.ExplainRoute',
-  'WakeWord.ProcessAudio'
+  'WakeWord.ProcessAudio',
+  'Transcription.ProcessAudio'
 ])
 
 export type GeneratedPeerHostMethodId = Exclude<
   GeneratedBackendMethodId,
-  'Gateway.ExplainRoute' | 'WakeWord.ProcessAudio'
+  'Gateway.ExplainRoute' | 'WakeWord.ProcessAudio' | 'Transcription.ProcessAudio'
 >
 
 export type GeneratedPeerHostMethodHandler<TMethodId extends GeneratedPeerHostMethodId> = (
@@ -166,38 +167,42 @@ function assertGeneratedPeerHostMethod(
   methodId: GeneratedBackendMethodId
 ): asserts methodId is GeneratedPeerHostMethodId {
   if (!GENERATED_PEER_HOST_BLOCKED_METHODS.has(methodId)) return
-  if (methodId === 'WakeWord.ProcessAudio') {
-    throw new Error('continuous wake audio cannot be hosted across devices')
+  if (methodId === 'WakeWord.ProcessAudio' || methodId === 'Transcription.ProcessAudio') {
+    throw new Error('continuous audio capture cannot be hosted across devices')
   }
   throw new Error('gateway route inspection cannot be registered as a peer-host service')
 }
 
-export function createToolingPeerHostRegistry(handlers: {
-  getTools(input: unknown, context: PeerHostCallContext): Promise<unknown> | unknown
-  getExportCatalog(input: unknown, context: PeerHostCallContext): Promise<unknown> | unknown
-  prepareExecution(input: unknown, context: PeerHostCallContext): Promise<unknown> | unknown
-  executeTool(input: unknown, context: PeerHostCallContext): Promise<unknown> | unknown
-}): PeerHostContractRegistry {
+export interface ToolingPeerHostHandlers {
+  readonly getTools: GeneratedPeerHostMethodHandler<'Tooling.GetTools'>
+  readonly getExportCatalog: GeneratedPeerHostMethodHandler<'Tooling.GetExportCatalog'>
+  readonly prepareExecution: GeneratedPeerHostMethodHandler<'Tooling.PrepareExecution'>
+  readonly executeTool: GeneratedPeerHostMethodHandler<'Tooling.ExecuteTool'>
+}
+
+export function createToolingPeerHostRegistry(
+  handlers: ToolingPeerHostHandlers
+): PeerHostContractRegistry {
   const registry = new PeerHostContractRegistry()
   registerGeneratedPeerHostMethod(
     registry,
     'Tooling.GetTools',
-    handlers.getTools as GeneratedPeerHostMethodHandler<'Tooling.GetTools'>
+    handlers.getTools
   )
   registerGeneratedPeerHostMethod(
     registry,
     'Tooling.GetExportCatalog',
-    handlers.getExportCatalog as GeneratedPeerHostMethodHandler<'Tooling.GetExportCatalog'>
+    handlers.getExportCatalog
   )
   registerGeneratedPeerHostMethod(
     registry,
     'Tooling.PrepareExecution',
-    handlers.prepareExecution as GeneratedPeerHostMethodHandler<'Tooling.PrepareExecution'>
+    handlers.prepareExecution
   )
   registerGeneratedPeerHostMethod(
     registry,
     'Tooling.ExecuteTool',
-    handlers.executeTool as GeneratedPeerHostMethodHandler<'Tooling.ExecuteTool'>
+    handlers.executeTool
   )
   return registry
 }

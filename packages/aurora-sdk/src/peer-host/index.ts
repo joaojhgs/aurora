@@ -79,7 +79,8 @@ export {
 export type {
   GeneratedPeerHostMethodHandler,
   GeneratedPeerHostMethodId,
-  GeneratedPeerHostRegistrationOptions
+  GeneratedPeerHostRegistrationOptions,
+  ToolingPeerHostHandlers
 } from './contract-registry.js'
 export {
   DEFAULT_PROVIDER_LEASE_RENEW_MS,

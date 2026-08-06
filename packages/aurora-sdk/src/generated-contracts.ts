@@ -61,12 +61,13 @@ export function generatedBackendContract<TMethodId extends GeneratedBackendMetho
 }
 
 const GENERATED_CLIENT_BLOCKED_METHODS = new Set<GeneratedBackendMethodId>([
-  'WakeWord.ProcessAudio'
+  'WakeWord.ProcessAudio',
+  'Transcription.ProcessAudio'
 ])
 
 export type GeneratedBackendClientMethodId = Exclude<
   GeneratedBackendMethodId,
-  'WakeWord.ProcessAudio'
+  'WakeWord.ProcessAudio' | 'Transcription.ProcessAudio'
 >
 
 export interface GeneratedContractRequestOptions {
@@ -141,7 +142,7 @@ function assertGeneratedClientMethod(
   if (GENERATED_CLIENT_BLOCKED_METHODS.has(methodId)) {
     throw new AuroraError({
       code: 'privacy_blocked',
-      message: 'Continuous wake audio cannot be sent to another device.',
+      message: 'Continuous audio capture cannot be sent to another device.',
       method: methodId,
       busTopic: methodId
     })

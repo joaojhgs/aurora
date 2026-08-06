@@ -84,22 +84,25 @@ describe('generated speech client', () => {
     expect(JSON.stringify(result.error.detail)).not.toContain('private transcript')
   })
 
-  it('does not expose or dispatch continuous wake-audio transport', async () => {
+  it.each([
+    ['WakeWord.ProcessAudio', 'wakeWord'],
+    ['Transcription.ProcessAudio', 'transcription']
+  ] as const)('does not expose or dispatch continuous audio through %s', async (methodId, namespace) => {
     let calls = 0
-    const transport = MockAuroraTransport.empty().register('WakeWord.ProcessAudio', () => {
+    const transport = MockAuroraTransport.empty().register(methodId, () => {
       calls += 1
       return {}
     })
     const client = new AuroraClient({ transport })
 
-    expect('processAudio' in client.speech.wakeWord).toBe(false)
+    expect('processAudio' in client.speech[namespace]).toBe(false)
     const unsafeContracts = client.contracts as unknown as {
       requestResult(methodId: string, input: unknown): Promise<{
         ok: boolean
         error?: { code?: string; message?: string }
       }>
     }
-    const result = await unsafeContracts.requestResult('WakeWord.ProcessAudio', {
+    const result = await unsafeContracts.requestResult(methodId, {
       channels: 1,
       data: 'c2FtcGxl',
       sample_rate: 16_000
@@ -109,7 +112,7 @@ describe('generated speech client', () => {
       ok: false,
       error: {
         code: 'privacy_blocked',
-        message: 'Continuous wake audio cannot be sent to another device.'
+        message: 'Continuous audio capture cannot be sent to another device.'
       }
     })
     expect(calls).toBe(0)

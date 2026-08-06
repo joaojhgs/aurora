@@ -217,16 +217,8 @@ export class WakeWordClient extends SpeechNamespaceClient {
   }
 }
 
-/** Focused audio transcription operations backed by generated contracts. */
+/** Bounded audio transcription operations backed by generated contracts. */
 export class TranscriptionClient extends SpeechNamespaceClient {
-  /** Append a focused audio chunk to the transcription service. */
-  processAudio(
-    input: SpeechInput<'Transcription.ProcessAudio'>,
-    options?: GeneratedContractRequestOptions
-  ): SpeechResult<'Transcription.ProcessAudio'> {
-    return this.request('Transcription.ProcessAudio', input, options)
-  }
-
   /** Transcribe a bounded audio payload. */
   transcribe(
     input: SpeechInput<'Transcription.Transcribe'>,
