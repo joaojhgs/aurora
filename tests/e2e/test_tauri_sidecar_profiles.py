@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tomllib
@@ -341,21 +340,31 @@ def test_prepare_sidecar_profiles_stage_profile_report_with_fake_binary(tmp_path
 
 
 @pytest.mark.e2e
-def test_prepare_sidecar_desktop_local_minimal_uses_thin_build_output():
+def test_prepare_sidecar_desktop_local_minimal_uses_thin_build_output(tmp_path):
     sidecar_dir = Path("dist/sidecars/thin")
-    fake = sidecar_dir / "aurora-sidecar"
+    fake = tmp_path / "thin-build" / "aurora-sidecar"
     output_dir = Path("apps/aurora-tauri/src-tauri/binaries")
+    target_triple = "test-thin-build-output"
+    extension = ".exe" if sys.platform == "win32" else ""
+    output_path = output_dir / f"aurora-sidecar-{target_triple}{extension}"
     report_path = Path("apps/aurora-tauri/reports/sidecar-prepare.json")
     release_config_path = Path("apps/aurora-tauri/src-tauri/tauri.release.conf.json")
-    shutil.rmtree(sidecar_dir, ignore_errors=True)
+    real_sidecar_dir_exists = sidecar_dir.exists()
     fake.parent.mkdir(parents=True, exist_ok=True)
     fake.write_text("#!/bin/sh\necho fake thin sidecar\n", encoding="utf-8")
     fake.chmod(0o755)
+    existing_output = output_path.read_bytes() if output_path.exists() else None
+    existing_report = report_path.read_bytes() if report_path.exists() else None
+    existing_release_config = (
+        release_config_path.read_bytes() if release_config_path.exists() else None
+    )
 
     env = {
         **os.environ,
         "AURORA_TAURI_SIDECAR_AUTOBUILD": "0",
+        "AURORA_TAURI_SIDECAR_BUILD_OUTPUT": str(fake),
         "AURORA_TAURI_SIDECAR_MAX_MB": "1",
+        "AURORA_TAURI_TARGET_TRIPLE": target_triple,
     }
     result = subprocess.run(
         [
@@ -376,12 +385,20 @@ def test_prepare_sidecar_desktop_local_minimal_uses_thin_build_output():
         report = json.loads(report_path.read_text(encoding="utf-8"))
         assert report["sidecarProfile"] == "desktop-local-minimal"
         assert report["sourceKind"] == "existing-build-output"
+        assert sidecar_dir.exists() is real_sidecar_dir_exists
     finally:
-        shutil.rmtree(sidecar_dir, ignore_errors=True)
-        for generated in output_dir.glob("aurora-sidecar-*"):
-            generated.unlink()
-        report_path.unlink(missing_ok=True)
-        release_config_path.unlink(missing_ok=True)
+        if existing_output is None:
+            output_path.unlink(missing_ok=True)
+        else:
+            output_path.write_bytes(existing_output)
+        if existing_report is None:
+            report_path.unlink(missing_ok=True)
+        else:
+            report_path.write_bytes(existing_report)
+        if existing_release_config is None:
+            release_config_path.unlink(missing_ok=True)
+        else:
+            release_config_path.write_bytes(existing_release_config)
 
 
 @pytest.mark.e2e
