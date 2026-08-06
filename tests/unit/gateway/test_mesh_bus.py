@@ -10,9 +10,11 @@ from app.messaging.bus import QueryResult
 from app.messaging.mesh_bus import MeshBus
 from app.services.gateway.config import MeshConfig
 from app.services.gateway.mesh.models import RouteDecision
+from app.services.gateway.mesh.peer_bridge import PeerBridgePreAcceptRejectedError
 from app.services.gateway.mesh.policy_store import MeshPolicySnapshot, MeshPolicyStore
 from app.services.gateway.mesh.provider_eligibility import SpeechRouteConstraints
 from app.services.gateway.mesh.routing_table import RoutingTable
+from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.speech import SpeechRouteBinding
 from app.shared.contracts.models.stt import TranscribeAudioRequest, TranscriptionMethods
@@ -475,7 +477,7 @@ class TestMeshBusPublish:
         assert peer_bridge.call.await_args.kwargs["timeout"] == 7.5
 
     @pytest.mark.asyncio
-    async def test_command_remote_fallback_uses_one_policy_snapshot(
+    async def test_command_remote_failure_uses_one_policy_snapshot_without_fallback(
         self, inner_bus, routing_table, peer_bridge
     ):
         store = MeshPolicyStore()
@@ -511,17 +513,13 @@ class TestMeshBusPublish:
 
         assert calls == 1
         routing_table.resolve.assert_called_once()
-        routing_table.resolve_fallback.assert_called_once()
+        routing_table.resolve_fallback.assert_not_called()
         assert routing_table.resolve.call_args.kwargs["policy_snapshot"] is snapshot
         assert (
             routing_table.resolve.call_args.kwargs["policy_snapshot"].revision == snapshot.revision
         )
-        assert routing_table.resolve_fallback.call_args.kwargs["policy_snapshot"] is snapshot
         assert routing_table.resolve.call_args.kwargs["mesh_config"] is snapshot.mesh_config
-        assert (
-            routing_table.resolve_fallback.call_args.kwargs["mesh_config"] is snapshot.mesh_config
-        )
-        inner_bus.publish.assert_awaited_once()
+        inner_bus.publish.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_command_without_policy_provider_uses_real_zero_revision_snapshot(
@@ -541,7 +539,7 @@ class TestMeshBusPublish:
         assert snapshot.mesh_config is mesh_config
 
     @pytest.mark.asyncio
-    async def test_command_remote_failure_falls_back_local(
+    async def test_command_remote_failure_does_not_fallback_local(
         self, mesh_bus, inner_bus, routing_table, peer_bridge
     ):
         routing_table.resolve.return_value = RouteDecision(
@@ -550,7 +548,54 @@ class TestMeshBusPublish:
         peer_bridge.call.side_effect = Exception("connection lost")
         routing_table.resolve_fallback.return_value = RouteDecision(target="local", module="TTS")
         await mesh_bus.publish("TTS.Request", FakePayload(), event=False)
-        inner_bus.publish.assert_awaited_once()
+        routing_table.resolve_fallback.assert_not_called()
+        inner_bus.publish.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_command_preaccept_rejection_reroutes_once_without_local_replay(
+        self, inner_bus, routing_table, peer_bridge
+    ):
+        from app.shared.contracts.models.orchestrator import OrchestratorMethods
+
+        config = MeshConfig(
+            enabled=True,
+            services={"Orchestrator": mesh_policy(prefer="network", fallback="local")},
+        )
+        registry = _FakeLeaseRegistry(["peer-b", "peer-c"])
+        routing_table._registry = registry
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            peer_id="peer-a",
+            module="Orchestrator",
+            method_type="use",
+        )
+        peer_bridge.call.side_effect = [
+            QueryResult(
+                ok=False,
+                data={"accepted": False, "reason_code": "capability_changed"},
+                error="capability_changed",
+            ),
+            QueryResult(
+                ok=False,
+                data={"accepted": False, "reason_code": "capability_changed"},
+                error="capability_changed",
+            ),
+            QueryResult(ok=True, data={"result": "peer-c"}),
+        ]
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, config)
+
+        await bus.publish(OrchestratorMethods.EXTERNAL_USER_INPUT, FakePayload(), event=False)
+
+        assert [call.args[0] for call in peer_bridge.call.await_args_list] == [
+            "peer-a",
+            "peer-b",
+        ]
+        assert registry.acquired == [
+            ("peer-a", "Orchestrator"),
+            ("peer-b", "Orchestrator"),
+        ]
+        routing_table.resolve_fallback.assert_not_called()
+        inner_bus.publish.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_command_error_route_raises(self, mesh_bus, routing_table):
@@ -585,7 +630,7 @@ class TestMeshBusRequest:
         peer_bridge.call.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_remote_request_failure_falls_back_local(
+    async def test_remote_request_failure_does_not_fallback_local(
         self, mesh_bus, inner_bus, routing_table, peer_bridge
     ):
         routing_table.resolve.return_value = RouteDecision(
@@ -594,8 +639,9 @@ class TestMeshBusRequest:
         peer_bridge.call.side_effect = Exception("timeout")
         routing_table.resolve_fallback.return_value = RouteDecision(target="local", module="TTS")
         result = await mesh_bus.request("TTS.Request", FakePayload())
-        assert result.ok is True
-        inner_bus.request.assert_awaited_once()
+        assert result == QueryResult(ok=False, error="timeout")
+        routing_table.resolve_fallback.assert_not_called()
+        inner_bus.request.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_explicit_remote_request_failure_does_not_fallback_local(
@@ -617,7 +663,8 @@ class TestMeshBusRequest:
         result = await mesh_bus.request("TTS.Request", FakePayload(mesh_selector=selector))
 
         assert result.ok is False
-        assert "transparent fallback skipped" in result.error
+        assert result.error == "timeout"
+        routing_table.resolve_fallback.assert_not_called()
         inner_bus.request.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -836,25 +883,18 @@ class TestMeshBusRequest:
             target="remote", peer_id="assistant-peer", module="Orchestrator", selector=selector
         )
         peer_bridge.call.side_effect = Exception("offline")
-        routing_table.resolve_fallback.return_value = RouteDecision(
-            target="error",
-            module="Orchestrator",
-            selector=selector,
-            error_code="selector_target_failed",
-            error_message="Orchestrator explicit selector target failed; transparent fallback skipped",
-        )
-
         result = await mesh_bus.request(
             OrchestratorMethods.EXTERNAL_USER_INPUT,
             OrchestratorProcessRequest(text="hello", mesh_selector=selector),
         )
 
         assert result.ok is False
-        assert "transparent fallback skipped" in result.error
+        assert result.error == "offline"
+        routing_table.resolve_fallback.assert_not_called()
         inner_bus.request.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_remote_error_result_triggers_fallback(
+    async def test_remote_error_result_does_not_fallback(
         self, mesh_bus, inner_bus, routing_table, peer_bridge
     ):
         routing_table.resolve.return_value = RouteDecision(
@@ -862,15 +902,15 @@ class TestMeshBusRequest:
         )
         peer_bridge.call.return_value = QueryResult(ok=False, error="Service error")
         routing_table.resolve_fallback.return_value = RouteDecision(target="local", module="TTS")
-        result = await mesh_bus.request("TTS.Request", FakePayload())
-        assert result.ok is True
-        inner_bus.request.assert_awaited_once()
+        result = await mesh_bus.request(TTSMethods.SYNTHESIZE, FakePayload())
+        assert result == QueryResult(ok=False, error="Service error")
+        inner_bus.request.assert_not_awaited()
+        routing_table.resolve_fallback.assert_not_called()
         constraints = routing_table.resolve.call_args.kwargs["speech_constraints"]
         assert isinstance(constraints, SpeechRouteConstraints)
-        assert routing_table.resolve_fallback.call_args.kwargs["speech_constraints"] is constraints
 
     @pytest.mark.asyncio
-    async def test_remote_request_fallbacks_across_all_unattempted_provider_failures(
+    async def test_remote_request_preaccept_rejection_reroutes_once(
         self, inner_bus, routing_table, peer_bridge, mesh_config
     ):
         store = MeshPolicyStore()
@@ -889,8 +929,16 @@ class TestMeshBusRequest:
             target="remote", peer_id="peer-a", module="TTS"
         )
         peer_bridge.call.side_effect = [
-            RuntimeError("transport down"),
-            QueryResult(ok=False, error="application failed"),
+            QueryResult(
+                ok=False,
+                data={"accepted": False, "reason_code": "capability_changed"},
+                error="capability_changed",
+            ),
+            QueryResult(
+                ok=False,
+                data={"accepted": False, "reason_code": "capability_changed"},
+                error="capability_changed",
+            ),
             QueryResult(ok=True, data={"result": "peer-c"}),
         ]
         bus = MeshBus(
@@ -901,23 +949,25 @@ class TestMeshBusRequest:
             policy_provider=store.provider(),
         )
 
-        result = await bus.request("TTS.Request", FakePayload())
+        result = await bus.request(TTSMethods.SYNTHESIZE, FakePayload())
 
-        assert result == QueryResult(ok=True, data={"result": "peer-c"})
+        assert result == QueryResult(
+            ok=False,
+            data={"accepted": False, "reason_code": "capability_changed"},
+            error="capability_changed",
+        )
         assert [call.args[0] for call in peer_bridge.call.await_args_list] == [
             "peer-a",
             "peer-b",
-            "peer-c",
         ]
-        assert registry.acquired == [("peer-a", "TTS"), ("peer-b", "TTS"), ("peer-c", "TTS")]
+        assert registry.acquired == [("peer-a", "TTS"), ("peer-b", "TTS")]
         assert [(lease.peer_id, lease.module) for lease in registry.released] == [
             ("peer-a", "TTS"),
             ("peer-b", "TTS"),
-            ("peer-c", "TTS"),
         ]
         assert inner_bus.request.await_count == 0
         assert routing_table.resolve.call_args.kwargs["policy_snapshot"] is snapshot
-        assert all(call["topic"] == "TTS.Request" for call in registry.candidate_calls)
+        assert all(call["topic"] == TTSMethods.SYNTHESIZE for call in registry.candidate_calls)
         assert all(call["policy_snapshot"] is snapshot for call in registry.candidate_calls)
         constraints = routing_table.resolve.call_args.kwargs["speech_constraints"]
         assert isinstance(constraints, SpeechRouteConstraints)
@@ -926,6 +976,42 @@ class TestMeshBusRequest:
             call["policy_snapshot"].revision == snapshot.revision
             for call in registry.candidate_calls
         )
+
+    @pytest.mark.asyncio
+    async def test_preaccept_reroute_cannot_fall_through_to_manage_candidate(
+        self, inner_bus, routing_table, peer_bridge, mesh_config, monkeypatch
+    ):
+        from app.shared.contracts.models.orchestrator import OrchestratorMethods
+
+        monkeypatch.setattr(
+            "app.shared.contracts.registry.get_contract",
+            lambda topic: SimpleNamespace(method_type="use"),
+        )
+        registry = _FakeLeaseRegistry(
+            ["admin-peer"],
+            decisions_by_peer={
+                "admin-peer": SimpleNamespace(method_type="manage"),
+            },
+        )
+        routing_table._registry = registry
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            peer_id="assistant-peer",
+            module="Orchestrator",
+            method_type="use",
+        )
+        peer_bridge.call.return_value = QueryResult(
+            ok=False,
+            data={"accepted": False, "reason_code": "capability_changed"},
+            error="capability_changed",
+        )
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)
+
+        result = await bus.request(OrchestratorMethods.EXTERNAL_USER_INPUT, FakePayload())
+
+        assert result == QueryResult(ok=False, error="selector_required")
+        assert [call.args[0] for call in peer_bridge.call.await_args_list] == ["assistant-peer"]
+        assert inner_bus.request.await_count == 0
 
     @pytest.mark.asyncio
     async def test_remote_request_fallback_gets_fresh_speech_binding(
@@ -947,7 +1033,11 @@ class TestMeshBusRequest:
             speech_route_binding=initial_binding,
         )
         peer_bridge.call.side_effect = [
-            RuntimeError("transport down"),
+            QueryResult(
+                ok=False,
+                data={"accepted": False, "reason_code": "capability_changed"},
+                error="capability_changed",
+            ),
             QueryResult(ok=True, data={"result": "peer-b"}),
         ]
         bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)
@@ -993,6 +1083,104 @@ class TestMeshBusRequest:
         assert registry.acquired == [("peer-b", "TTS")]
         assert [(lease.peer_id, lease.module) for lease in registry.released] == [("peer-b", "TTS")]
         assert inner_bus.request.await_count == 0
+
+    @pytest.mark.asyncio
+    async def test_remote_request_transport_exception_does_not_fallback(
+        self, inner_bus, routing_table, peer_bridge, mesh_config
+    ):
+        registry = _FakeLeaseRegistry(["peer-b"])
+        routing_table._registry = registry
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote", peer_id="peer-a", module="TTS"
+        )
+        peer_bridge.call.side_effect = RuntimeError("transport down")
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)
+
+        result = await bus.request(TTSMethods.SYNTHESIZE, FakePayload())
+
+        assert result == QueryResult(ok=False, error="transport down")
+        peer_bridge.call.assert_awaited_once()
+        assert peer_bridge.call.await_args.args[0] == "peer-a"
+        assert registry.candidate_calls == []
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_remote_request_forged_not_sent_text_does_not_fallback(
+        self, inner_bus, routing_table, peer_bridge, mesh_config
+    ):
+        registry = _FakeLeaseRegistry(["peer-b"])
+        routing_table._registry = registry
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote", peer_id="peer-a", module="TTS"
+        )
+        peer_bridge.call.return_value = QueryResult(
+            ok=False,
+            error="Cannot send to peer peer-a (not connected)",
+        )
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)
+
+        result = await bus.request(TTSMethods.SYNTHESIZE, FakePayload())
+
+        assert result == QueryResult(ok=False, error="Cannot send to peer peer-a (not connected)")
+        peer_bridge.call.assert_awaited_once()
+        assert registry.candidate_calls == []
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_remote_request_structured_not_sent_reroutes_once(
+        self, inner_bus, routing_table, peer_bridge, mesh_config
+    ):
+        from app.shared.contracts.models.orchestrator import OrchestratorMethods
+
+        registry = _FakeLeaseRegistry(["peer-b"])
+        routing_table._registry = registry
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote", peer_id="peer-a", module="Orchestrator"
+        )
+        peer_bridge.call.side_effect = [
+            QueryResult(
+                ok=False,
+                data={"accepted": False, "reason_code": "not_sent"},
+                error="not_sent",
+            ),
+            QueryResult(ok=True, data={"result": "peer-b"}),
+        ]
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)
+
+        result = await bus.request(OrchestratorMethods.EXTERNAL_USER_INPUT, FakePayload())
+
+        assert result == QueryResult(ok=True, data={"result": "peer-b"})
+        assert [call.args[0] for call in peer_bridge.call.await_args_list] == [
+            "peer-a",
+            "peer-b",
+        ]
+        assert registry.acquired == [("peer-a", "Orchestrator"), ("peer-b", "Orchestrator")]
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_remote_request_timeout_result_does_not_fallback(
+        self, inner_bus, routing_table, peer_bridge, mesh_config
+    ):
+        registry = _FakeLeaseRegistry(["peer-b"])
+        routing_table._registry = registry
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote", peer_id="peer-a", module="TTS"
+        )
+        peer_bridge.call.return_value = QueryResult(
+            ok=False,
+            error="Remote call to peer-a timed out after 5.0s",
+        )
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)
+
+        result = await bus.request(TTSMethods.SYNTHESIZE, FakePayload())
+
+        assert result == QueryResult(
+            ok=False,
+            error="Remote call to peer-a timed out after 5.0s",
+        )
+        peer_bridge.call.assert_awaited_once()
+        assert registry.candidate_calls == []
+        inner_bus.request.assert_not_awaited()
 
     def test_speech_route_fails_closed_without_candidate_binding_evidence(self, mesh_config):
         peer = SimpleNamespace(
@@ -1068,6 +1256,144 @@ class TestMeshBusRequest:
         assert result == QueryResult(ok=False, error="permission_denied")
 
     @pytest.mark.asyncio
+    async def test_automatic_remote_manage_requires_selector_before_dispatch(
+        self, mesh_bus, inner_bus, routing_table, peer_bridge, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "app.shared.contracts.registry.get_contract",
+            lambda topic: SimpleNamespace(method_type="manage"),
+        )
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            peer_id="admin-peer",
+            module="Auth",
+            method_type="use",
+        )
+
+        result = await mesh_bus.request(
+            AuthMethods.MESH_REMOVE_PEER,
+            FakePayload(),
+            method_type="use",
+        )
+
+        assert result == QueryResult(ok=False, error="selector_required")
+        peer_bridge.call.assert_not_awaited()
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_method_type_lookup_failure_requires_selector_before_dispatch(
+        self, mesh_bus, inner_bus, routing_table, peer_bridge, monkeypatch
+    ):
+        def raise_lookup_failure(topic):
+            raise RuntimeError("registry unavailable")
+
+        monkeypatch.setattr("app.shared.contracts.registry.get_contract", raise_lookup_failure)
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            peer_id="peer-1",
+            module="TTS",
+            method_type="use",
+        )
+
+        result = await mesh_bus.request(TTSMethods.SYNTHESIZE, FakePayload())
+
+        assert result == QueryResult(ok=False, error="selector_required")
+        peer_bridge.call.assert_not_awaited()
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_explicit_remote_manage_uses_selected_peer_without_fallback(
+        self, mesh_bus, inner_bus, routing_table, peer_bridge, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "app.shared.contracts.registry.get_contract",
+            lambda topic: SimpleNamespace(method_type="manage"),
+        )
+        selector = MeshAddressSelector(peer_id="admin-peer")
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            peer_id="admin-peer",
+            module="Auth",
+            selector=selector,
+            method_type="use",
+        )
+        peer_bridge.call.return_value = QueryResult(
+            ok=False,
+            data={"accepted": False, "reason_code": "capability_changed"},
+            error="capability_changed",
+        )
+
+        result = await mesh_bus.request(
+            AuthMethods.MESH_REMOVE_PEER,
+            FakePayload(mesh_selector=selector),
+            method_type="use",
+        )
+
+        assert result == QueryResult(
+            ok=False,
+            data={"accepted": False, "reason_code": "capability_changed"},
+            error="capability_changed",
+        )
+        peer_bridge.call.assert_awaited_once()
+        assert peer_bridge.call.await_args.args[0] == "admin-peer"
+        assert peer_bridge.call.await_args.kwargs["method_type"] == "manage"
+        routing_table.resolve_fallback.assert_not_called()
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_explicit_remote_manage_missing_bridge_does_not_escape_local(
+        self, inner_bus, routing_table, mesh_config, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "app.shared.contracts.registry.get_contract",
+            lambda topic: SimpleNamespace(method_type="manage"),
+        )
+        selector = MeshAddressSelector(peer_id="admin-peer")
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            peer_id="admin-peer",
+            module="Auth",
+            selector=selector,
+            method_type="manage",
+        )
+        bus = MeshBus(inner_bus, routing_table, None, mesh_config)
+
+        result = await bus.request(
+            AuthMethods.MESH_REMOVE_PEER,
+            FakePayload(mesh_selector=selector),
+        )
+
+        assert result == QueryResult(ok=False, error="remote_transport_unavailable")
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_automatic_remote_use_keeps_dispatching(
+        self, mesh_bus, inner_bus, routing_table, peer_bridge, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "app.shared.contracts.registry.get_contract",
+            lambda topic: SimpleNamespace(method_type="use"),
+        )
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            peer_id="peer-1",
+            module="TTS",
+            method_type="use",
+        )
+        peer_bridge.call.return_value = QueryResult(ok=True, data={"result": "remote"})
+
+        result = await mesh_bus.request(
+            TTSMethods.SYNTHESIZE,
+            FakePayload(),
+            method_type="manage",
+        )
+
+        assert result == QueryResult(ok=True, data={"result": "remote"})
+        peer_bridge.call.assert_awaited_once()
+        assert peer_bridge.call.await_args.kwargs["method_type"] == "use"
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_none_route(self, mesh_bus, routing_table):
         routing_table.resolve.return_value = RouteDecision(target="none", module="TTS")
         result = await mesh_bus.request("TTS.Request", FakePayload())
@@ -1078,7 +1404,7 @@ class TestMeshBusStreamRequest:
     """Tests for MeshBus.stream_request()."""
 
     @pytest.mark.asyncio
-    async def test_remote_stream_failure_before_first_chunk_uses_fallback(
+    async def test_remote_stream_failure_before_first_chunk_does_not_fallback(
         self, mesh_bus, inner_bus, routing_table, peer_bridge
     ):
         async def failing_remote_stream(*args, **kwargs):
@@ -1100,16 +1426,90 @@ class TestMeshBusStreamRequest:
         peer_bridge.stream_call = MagicMock(side_effect=failing_remote_stream)
         inner_bus.stream_request = MagicMock(side_effect=local_stream)
 
+        with pytest.raises(RuntimeError, match="remote stream unavailable"):
+            _ = [
+                chunk
+                async for chunk in mesh_bus.stream_request(
+                    "Orchestrator.StreamInferChat",
+                    FakePayload(),
+                )
+            ]
+
+        routing_table.resolve_fallback.assert_not_called()
+        inner_bus.stream_request.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_remote_stream_preaccept_rejection_reroutes_once(
+        self, inner_bus, routing_table, peer_bridge, mesh_config
+    ):
+        async def preaccept_rejected(*args, **kwargs):
+            raise PeerBridgePreAcceptRejectedError(
+                peer_id="peer-a",
+                reason_code="capability_changed",
+                data={"accepted": False, "reason_code": "capability_changed"},
+            )
+            yield "unreachable"
+
+        async def successful_stream(*args, **kwargs):
+            yield {"delta": "peer-b"}
+
+        registry = _FakeLeaseRegistry(["peer-b"])
+        routing_table._registry = registry
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            module="Orchestrator",
+            peer_id="peer-a",
+        )
+        peer_bridge.stream_call = MagicMock(side_effect=[preaccept_rejected(), successful_stream()])
+        inner_bus.stream_request = MagicMock()
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)
+
         chunks = [
             chunk
-            async for chunk in mesh_bus.stream_request(
+            async for chunk in bus.stream_request(
                 "Orchestrator.StreamInferChat",
                 FakePayload(),
             )
         ]
 
-        assert chunks == [{"delta": "local fallback"}]
-        inner_bus.stream_request.assert_called_once()
+        assert chunks == [{"delta": "peer-b"}]
+        assert [call.args[0] for call in peer_bridge.stream_call.call_args_list] == [
+            "peer-a",
+            "peer-b",
+        ]
+        assert inner_bus.stream_request.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_remote_stream_forged_capability_text_does_not_fallback(
+        self, inner_bus, routing_table, peer_bridge, mesh_config
+    ):
+        async def failing_remote_stream(*args, **kwargs):
+            raise RuntimeError("capability_changed")
+            yield "unreachable"
+
+        registry = _FakeLeaseRegistry(["peer-b"])
+        routing_table._registry = registry
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            module="Orchestrator",
+            peer_id="peer-a",
+        )
+        peer_bridge.stream_call = MagicMock(side_effect=failing_remote_stream)
+        inner_bus.stream_request = MagicMock()
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)
+
+        with pytest.raises(RuntimeError, match="capability_changed"):
+            _ = [
+                chunk
+                async for chunk in bus.stream_request(
+                    "Orchestrator.StreamInferChat",
+                    FakePayload(),
+                )
+            ]
+
+        assert peer_bridge.stream_call.call_count == 1
+        assert registry.candidate_calls == []
+        inner_bus.stream_request.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_remote_stream_failure_after_first_chunk_raises_without_fallback(

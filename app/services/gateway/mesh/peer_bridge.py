@@ -42,6 +42,17 @@ _TOOL_ID_DISPATCH_TOPICS = frozenset(
     }
 )
 
+
+class PeerBridgePreAcceptRejectedError(RuntimeError):
+    """Remote stream was rejected before provider-side work was accepted."""
+
+    def __init__(self, *, peer_id: str, reason_code: str, data: Any | None = None) -> None:
+        super().__init__(reason_code)
+        self.peer_id = peer_id
+        self.reason_code = reason_code
+        self.data = data
+
+
 if TYPE_CHECKING:
     from app.services.gateway.mesh.latency import LatencyMonitor
     from app.services.gateway.mesh.peer_registry import PeerRegistry
@@ -302,7 +313,8 @@ class PeerBridge:
                 self._pending_calls.pop(pending_key, None)
                 return QueryResult(
                     ok=False,
-                    error=f"Cannot send to peer {peer_id} (not connected)",
+                    data={"accepted": False, "reason_code": "not_sent"},
+                    error="not_sent",
                 )
 
             log_debug(
@@ -371,7 +383,7 @@ class PeerBridge:
         try:
             sent = await self._send_to_peer(peer_id, json.dumps(msg))
             if not sent:
-                raise ConnectionError(f"Cannot send to peer {peer_id} (not connected)")
+                raise PeerBridgePreAcceptRejectedError(peer_id=peer_id, reason_code="not_sent")
 
             while True:
                 item = await asyncio.wait_for(queue.get(), timeout=timeout)
@@ -381,6 +393,16 @@ class PeerBridge:
                 elif kind == "eof":
                     completed = True
                     return
+                elif kind == "preaccept_rejected":
+                    completed = True
+                    reason_code = (
+                        data.get("reason_code") if isinstance(data, dict) else "capability_changed"
+                    )
+                    raise PeerBridgePreAcceptRejectedError(
+                        peer_id=peer_id,
+                        reason_code=reason_code or "capability_changed",
+                        data=data,
+                    )
                 elif kind == "error":
                     completed = True
                     raise RuntimeError(data or "Remote stream error")
@@ -429,7 +451,7 @@ class PeerBridge:
             elif msg_type == "result":
                 result_data = msg.get("result")
                 if _is_capability_changed_result(result_data):
-                    self._enqueue_stream_item(stream_queue, ("error", "capability_changed"))
+                    self._enqueue_stream_item(stream_queue, ("preaccept_rejected", result_data))
                 else:
                     self._enqueue_stream_item(stream_queue, ("result", result_data))
             elif msg_type == "error":

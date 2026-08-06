@@ -145,6 +145,17 @@ class RoutingTable:
             # Local is preferred, but we note remote is available for fallback
             return RouteDecision(target="local", module=module)
 
+        if prefer in ("network", "network_only") and _registered_method_type(topic) in {
+            "lookup_failed",
+            "manage",
+        }:
+            return _route_error(
+                module=module,
+                selector=selector,
+                code="selector_required",
+                message=f"{topic} requires an explicit mesh selector",
+            )
+
         if prefer in ("network", "network_only"):
             # Try to find a remote peer
             get_best_candidate = getattr(self._registry, "get_best_provider_candidate", None)
@@ -180,6 +191,19 @@ class RoutingTable:
             else:
                 best = candidate.peer
             if best:
+                projected_method_type = (
+                    candidate.decision.method_type
+                    if candidate is not None and candidate.decision is not None
+                    else None
+                )
+                selected_method_type = _authoritative_method_type(topic, projected_method_type)
+                if selected_method_type == "manage":
+                    return _route_error(
+                        module=module,
+                        selector=selector,
+                        code="selector_required",
+                        message=f"{topic} requires an explicit mesh selector",
+                    )
                 # Get the service version from the peer's manifest
                 version = ""
                 if best.manifest:
@@ -207,6 +231,7 @@ class RoutingTable:
                     version=version,
                     latency_ms=best.latency_ms,
                     speech_route_binding=binding,
+                    method_type=selected_method_type,
                 )
 
             # No remote peer available
@@ -342,6 +367,7 @@ class RoutingTable:
             latency_ms=peer.latency_ms,
             selector=selector,
             speech_route_binding=binding,
+            method_type=decision.method_type,
         )
 
     def resolve_fallback(
@@ -435,6 +461,19 @@ class RoutingTable:
             else:
                 best = candidate.peer
             if best:
+                projected_method_type = (
+                    candidate.decision.method_type
+                    if candidate is not None and candidate.decision is not None
+                    else None
+                )
+                selected_method_type = _authoritative_method_type(topic, projected_method_type)
+                if selected_method_type == "manage":
+                    return _route_error(
+                        module=module,
+                        selector=selector,
+                        code="selector_required",
+                        message=f"{topic} requires an explicit mesh selector",
+                    )
                 version = ""
                 if best.manifest:
                     for svc in best.manifest.shared_services:
@@ -460,6 +499,7 @@ class RoutingTable:
                     version=version,
                     latency_ms=best.latency_ms,
                     speech_route_binding=binding,
+                    method_type=selected_method_type,
                 )
             # No more remote peers → try local as last resort
             return RouteDecision(target="local", module=module)
@@ -512,6 +552,26 @@ def _requires_explicit_audio_selector(topic: str) -> bool:
 def _is_real_provider_candidate(candidate: object) -> bool:
     peer = getattr(candidate, "peer", None)
     return isinstance(getattr(peer, "peer_id", None), str)
+
+
+def _registered_method_type(topic: str) -> str | None:
+    try:
+        from app.shared.contracts.registry import get_contract
+
+        contract = get_contract(topic)
+    except Exception:
+        return "lookup_failed"
+    method_type = getattr(contract, "method_type", None)
+    return method_type if method_type in {"use", "manage"} else None
+
+
+def _authoritative_method_type(topic: str, projected_method_type: str | None) -> str | None:
+    registered_method_type = _registered_method_type(topic)
+    if registered_method_type in {"lookup_failed", "manage"} or projected_method_type == "manage":
+        return "manage"
+    if registered_method_type == "use" or projected_method_type == "use":
+        return "use"
+    return None
 
 
 def _selector_target(

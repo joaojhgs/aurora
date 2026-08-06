@@ -1,5 +1,8 @@
 """Unit tests for the mesh RoutingTable."""
 
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
 import pytest
 
 from app.services.gateway.config import MeshConfig
@@ -13,6 +16,7 @@ from app.services.gateway.mesh.models import (
 from app.services.gateway.mesh.peer_registry import PeerRegistry
 from app.services.gateway.mesh.policy_store import MeshPolicyStore
 from app.services.gateway.mesh.routing_table import RoutingTable, _extract_module
+from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.gateway import MethodInfo
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
@@ -553,6 +557,91 @@ class TestRoutingTableResolve:
 
         assert route.target == "local"
         assert route.module == "WakeWord"
+
+    def test_registered_manage_requires_explicit_selector(self, mesh_config, monkeypatch):
+        monkeypatch.setattr(
+            "app.shared.contracts.registry.get_contract",
+            lambda topic: SimpleNamespace(method_type="manage"),
+        )
+        config = _config_with_service(mesh_config, "Auth", mesh_policy(prefer="network"))
+        registry = MagicMock()
+        table = RoutingTable(config, registry)
+
+        route = table.resolve(
+            AuthMethods.MESH_REMOVE_PEER,
+            routing_config=config.services["Auth"],
+            mesh_config=config,
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_required"
+        registry.get_best_provider_candidate.assert_not_called()
+
+    def test_projected_manage_requires_explicit_selector(self, mesh_config, monkeypatch):
+        monkeypatch.setattr(
+            "app.shared.contracts.registry.get_contract",
+            lambda topic: SimpleNamespace(method_type="use"),
+        )
+        config = _config_with_service(mesh_config, "Auth", mesh_policy(prefer="network"))
+        registry = MagicMock()
+        registry.get_best_provider_candidate.return_value = SimpleNamespace(
+            peer=SimpleNamespace(
+                peer_id="admin-peer",
+                latency_ms=1.0,
+                manifest=SimpleNamespace(
+                    shared_services=[SimpleNamespace(module="Auth", version="1.0.0")]
+                ),
+            ),
+            service=SimpleNamespace(module="Auth", version="1.0.0"),
+            decision=SimpleNamespace(method_type="manage"),
+        )
+        table = RoutingTable(config, registry)
+
+        route = table.resolve(
+            AuthMethods.MESH_REMOVE_PEER,
+            routing_config=config.services["Auth"],
+            mesh_config=config,
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_required"
+        registry.get_best_provider_candidate.assert_called_once()
+
+    def test_method_type_lookup_failure_requires_explicit_selector(self, mesh_config, monkeypatch):
+        def raise_lookup_failure(topic):
+            raise RuntimeError("registry unavailable")
+
+        monkeypatch.setattr("app.shared.contracts.registry.get_contract", raise_lookup_failure)
+        config = _config_with_service(mesh_config, "Auth", mesh_policy(prefer="network"))
+        registry = MagicMock()
+        table = RoutingTable(config, registry)
+
+        route = table.resolve(
+            AuthMethods.MESH_REMOVE_PEER,
+            routing_config=config.services["Auth"],
+            mesh_config=config,
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_required"
+        registry.get_best_provider_candidate.assert_not_called()
+
+    def test_local_preferred_manage_without_selector_remains_local(self, mesh_config, monkeypatch):
+        monkeypatch.setattr(
+            "app.shared.contracts.registry.get_contract",
+            lambda topic: SimpleNamespace(method_type="manage"),
+        )
+        config = _config_with_service(mesh_config, "Auth", mesh_policy(prefer="local"))
+        table = RoutingTable(config, MagicMock())
+
+        route = table.resolve(
+            AuthMethods.MESH_REMOVE_PEER,
+            routing_config=config.services["Auth"],
+            mesh_config=config,
+        )
+
+        assert route.target == "local"
+        assert route.module == "Auth"
 
     @pytest.mark.asyncio
     async def test_explicit_audio_selector_routes_to_selected_peer(

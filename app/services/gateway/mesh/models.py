@@ -267,6 +267,7 @@ class RouteDecision(BaseModel):
     error_code: str | None = None
     error_message: str | None = None
     speech_route_binding: SpeechRouteBinding | None = None
+    method_type: str | None = None
 
 
 class CapacityUpdate(BaseModel):

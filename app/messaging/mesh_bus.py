@@ -39,6 +39,7 @@ from pydantic import BaseModel
 from app.helpers.aurora_logger import log_debug, log_error, log_warning
 from app.messaging.bus import Handler, MessageBus, QueryResult
 from app.services.gateway.config import MeshConfig
+from app.services.gateway.mesh.peer_bridge import PeerBridgePreAcceptRejectedError
 from app.services.gateway.mesh.policy_store import MeshPolicyProvider, MeshPolicySnapshot
 from app.services.gateway.mesh.provider_eligibility import (
     SpeechRouteConstraints,
@@ -62,6 +63,7 @@ class _RouteLike(Protocol):
     module: str
     error_message: str | None
     speech_route_binding: SpeechRouteBinding | None
+    method_type: str | None
 
 
 class _PeerLike(Protocol):
@@ -368,6 +370,9 @@ class MeshBus:
             f"correlation_id={trace_id}"
         )
 
+        if _remote_manage_requires_selector(topic, route, selector):
+            raise RuntimeError(f"{topic} requires an explicit mesh selector")
+
         if route.target == "local":
             await self._inner.publish(
                 topic,
@@ -398,14 +403,17 @@ class MeshBus:
         if route.target == "remote" and route.peer_id and self._peer_bridge:
             attempted: set[str] = set()
             current_route = route
+            reroute_used = False
             while current_route.target == "remote" and current_route.peer_id:
+                if _remote_manage_requires_selector(topic, current_route, selector):
+                    raise RuntimeError(f"{topic} requires an explicit mesh selector")
                 peer_id = current_route.peer_id
                 log_debug(f"MeshBus: Routing command {topic} to remote peer {peer_id}")
                 attempted.add(peer_id)
                 lease = await self._acquire_capacity_lease(peer_id, current_route.module)
                 if lease is None:
                     log_warning(f"MeshBus: Remote publish provider {peer_id} is at capacity")
-                    if selector and selector.has_routing_target():
+                    if reroute_used or (selector and selector.has_routing_target()):
                         current_route = SimpleNamespace(
                             target="error",
                             peer_id=None,
@@ -416,6 +424,7 @@ class MeshBus:
                             ),
                         )
                         break
+                    reroute_used = True
                     current_route = self._next_remote_route(
                         topic=topic,
                         module=current_route.module,
@@ -428,6 +437,7 @@ class MeshBus:
                     continue
                 try:
                     route_binding = getattr(current_route, "speech_route_binding", None)
+                    trusted_method_type = _trusted_method_type(topic, current_route, method_type)
                     result = await self._peer_bridge.call(
                         peer_id,
                         topic,
@@ -437,7 +447,7 @@ class MeshBus:
                         principal_id=principal_id,
                         effective_perms=effective_perms,
                         identity_source=identity_source,
-                        method_type=method_type,
+                        method_type=trusted_method_type,
                         caller_peer_id=caller_peer_id,
                         auth_grant_revision=auth_grant_revision,
                         manifest_revision=manifest_revision,
@@ -445,28 +455,38 @@ class MeshBus:
                     )
                 except Exception as e:
                     log_warning(f"MeshBus: Remote publish to {peer_id} failed: {e}")
+                    return
                 finally:
                     await self._release_capacity_lease(lease)
                 if "result" in locals():
                     try:
                         if isinstance(result, QueryResult) and not result.ok:
+                            if (
+                                not reroute_used
+                                and not (selector and selector.has_routing_target())
+                                and _is_retryable_preaccept_result(result)
+                            ):
+                                reroute_used = True
+                                current_route = self._next_remote_route(
+                                    topic=topic,
+                                    module=current_route.module,
+                                    routing_config=routing_config,
+                                    policy_snapshot=policy_snapshot,
+                                    attempted=attempted,
+                                    selector=selector,
+                                    speech_constraints=speech_constraints,
+                                )
+                                continue
                             log_warning(
                                 f"MeshBus: Remote publish to {peer_id} returned "
-                                f"application-level error: {result.error}; attempting fallback",
+                                f"application-level error: {result.error}",
                             )
+                            return
                         else:
                             return
                     finally:
                         del result
-                current_route = self._next_remote_route(
-                    topic=topic,
-                    module=current_route.module,
-                    routing_config=routing_config,
-                    policy_snapshot=policy_snapshot,
-                    attempted=attempted,
-                    selector=selector,
-                    speech_constraints=speech_constraints,
-                )
+                break
 
             terminal = self._terminal_fallback_route(
                 topic=topic,
@@ -511,6 +531,9 @@ class MeshBus:
                     correlation_id=trace_id,
                 )
                 return
+
+        if route.target == "remote":
+            raise RuntimeError("remote_transport_unavailable")
 
         if route.target == "error":
             raise RuntimeError(route.error_message or f"No remote peer available for {topic}")
@@ -631,6 +654,9 @@ class MeshBus:
             f"correlation_id={trace_id}"
         )
 
+        if _remote_manage_requires_selector(topic, route, selector):
+            return QueryResult(ok=False, error="selector_required")
+
         if route.target == "local":
             return await self._inner.request(
                 topic,
@@ -658,14 +684,17 @@ class MeshBus:
         if route.target == "remote" and route.peer_id and self._peer_bridge:
             attempted: set[str] = set()
             current_route = route
+            reroute_used = False
             while current_route.target == "remote" and current_route.peer_id:
+                if _remote_manage_requires_selector(topic, current_route, selector):
+                    return QueryResult(ok=False, error="selector_required")
                 peer_id = current_route.peer_id
                 log_debug(f"MeshBus: Routing request {topic} to remote peer {peer_id}")
                 attempted.add(peer_id)
                 lease = await self._acquire_capacity_lease(peer_id, current_route.module)
                 if lease is None:
                     log_warning(f"MeshBus: Remote request provider {peer_id} is at capacity")
-                    if selector and selector.has_routing_target():
+                    if reroute_used or (selector and selector.has_routing_target()):
                         current_route = SimpleNamespace(
                             target="error",
                             peer_id=None,
@@ -676,6 +705,7 @@ class MeshBus:
                             ),
                         )
                         break
+                    reroute_used = True
                     current_route = self._next_remote_route(
                         topic=topic,
                         module=current_route.module,
@@ -688,6 +718,7 @@ class MeshBus:
                     continue
                 try:
                     route_binding = getattr(current_route, "speech_route_binding", None)
+                    trusted_method_type = _trusted_method_type(topic, current_route, method_type)
                     result = await self._peer_bridge.call(
                         peer_id,
                         topic,
@@ -697,7 +728,7 @@ class MeshBus:
                         principal_id=principal_id,
                         effective_perms=effective_perms,
                         identity_source=identity_source,
-                        method_type=method_type,
+                        method_type=trusted_method_type,
                         caller_peer_id=caller_peer_id,
                         auth_grant_revision=auth_grant_revision,
                         manifest_revision=manifest_revision,
@@ -705,26 +736,36 @@ class MeshBus:
                     )
                 except Exception as e:
                     log_warning(f"MeshBus: Remote request to {peer_id} failed: {e}")
+                    return QueryResult(ok=False, error=str(e))
                 finally:
                     await self._release_capacity_lease(lease)
                 if "result" in locals():
                     try:
                         if result.ok:
                             return result
+                        if (
+                            not reroute_used
+                            and not (selector and selector.has_routing_target())
+                            and _is_retryable_preaccept_result(result)
+                        ):
+                            reroute_used = True
+                            current_route = self._next_remote_route(
+                                topic=topic,
+                                module=current_route.module,
+                                routing_config=routing_config,
+                                policy_snapshot=policy_snapshot,
+                                attempted=attempted,
+                                selector=selector,
+                                speech_constraints=speech_constraints,
+                            )
+                            continue
                         log_warning(
                             f"MeshBus: Remote request to {peer_id} returned error: {result.error}"
                         )
+                        return result
                     finally:
                         del result
-                current_route = self._next_remote_route(
-                    topic=topic,
-                    module=current_route.module,
-                    routing_config=routing_config,
-                    policy_snapshot=policy_snapshot,
-                    attempted=attempted,
-                    selector=selector,
-                    speech_constraints=speech_constraints,
-                )
+                break
 
             terminal = self._terminal_fallback_route(
                 topic=topic,
@@ -770,6 +811,9 @@ class MeshBus:
                     speech_route_binding=speech_route_binding,
                     correlation_id=trace_id,
                 )
+
+        if route.target == "remote":
+            return QueryResult(ok=False, error="remote_transport_unavailable")
 
         if route.target == "error":
             return QueryResult(
@@ -873,6 +917,9 @@ class MeshBus:
             speech_constraints=speech_constraints,
         )
 
+        if _remote_manage_requires_selector(topic, route, selector):
+            raise RuntimeError("selector_required")
+
         if route.target == "error":
             raise RuntimeError(route.error_message or f"No remote peer available for {topic}")
 
@@ -909,23 +956,20 @@ class MeshBus:
             attempted: set[str] = set()
             current_route = route
             yielded_remote_chunk = False
+            reroute_used = False
             while current_route.target == "remote" and current_route.peer_id:
+                if _remote_manage_requires_selector(topic, current_route, selector):
+                    raise RuntimeError("selector_required")
                 peer_id = current_route.peer_id
                 attempted.add(peer_id)
                 lease = await self._acquire_capacity_lease(peer_id, current_route.module)
                 if lease is None:
                     log_warning(f"MeshBus: Remote stream provider {peer_id} is at capacity")
-                    if selector and selector.has_routing_target():
-                        current_route = SimpleNamespace(
-                            target="error",
-                            peer_id=None,
-                            module=current_route.module,
-                            error_message=(
-                                f"{current_route.module} explicit selector target "
-                                f"'{peer_id}' is at capacity"
-                            ),
+                    if reroute_used or (selector and selector.has_routing_target()):
+                        raise RuntimeError(
+                            f"{current_route.module} provider '{peer_id}' is at capacity"
                         )
-                        break
+                    reroute_used = True
                     current_route = self._next_remote_route(
                         topic=topic,
                         module=current_route.module,
@@ -938,6 +982,7 @@ class MeshBus:
                     continue
                 try:
                     route_binding = getattr(current_route, "speech_route_binding", None)
+                    trusted_method_type = _trusted_method_type(topic, current_route, method_type)
                     async for item in self._peer_bridge.stream_call(
                         peer_id,
                         topic,
@@ -947,7 +992,7 @@ class MeshBus:
                         principal_id=principal_id,
                         effective_perms=effective_perms,
                         identity_source=identity_source,
-                        method_type=method_type,
+                        method_type=trusted_method_type,
                         caller_peer_id=caller_peer_id,
                         auth_grant_revision=auth_grant_revision,
                         manifest_revision=manifest_revision,
@@ -959,18 +1004,27 @@ class MeshBus:
                 except Exception as e:
                     if yielded_remote_chunk:
                         raise
+                    if (
+                        not reroute_used
+                        and not (selector and selector.has_routing_target())
+                        and _is_retryable_preaccept_error(e)
+                    ):
+                        reroute_used = True
+                        current_route = self._next_remote_route(
+                            topic=topic,
+                            module=current_route.module,
+                            routing_config=routing_config,
+                            policy_snapshot=policy_snapshot,
+                            attempted=attempted,
+                            selector=selector,
+                            speech_constraints=speech_constraints,
+                        )
+                        continue
                     log_warning(f"MeshBus: Remote stream request to {peer_id} failed: {e}")
+                    raise
                 finally:
                     await self._release_capacity_lease(lease)
-                current_route = self._next_remote_route(
-                    topic=topic,
-                    module=current_route.module,
-                    routing_config=routing_config,
-                    policy_snapshot=policy_snapshot,
-                    attempted=attempted,
-                    selector=selector,
-                    speech_constraints=speech_constraints,
-                )
+                break
 
             terminal = self._terminal_fallback_route(
                 topic=topic,
@@ -1013,6 +1067,9 @@ class MeshBus:
                 ):
                     yield item
                 return
+
+        if route.target == "remote":
+            raise RuntimeError("remote_transport_unavailable")
 
         raise RuntimeError(f"No route available for {topic}")
 
@@ -1087,7 +1144,10 @@ class MeshBus:
                         service = getattr(candidate, "service", None)
                         binding = (
                             speech_route_binding_from_decision(candidate.decision)
-                            if getattr(candidate, "decision", None) is not None
+                            if (
+                                speech_constraints is not None
+                                and getattr(candidate, "decision", None) is not None
+                            )
                             else None
                         )
                         if speech_constraints is not None and binding is None:
@@ -1100,6 +1160,17 @@ class MeshBus:
                             latency_ms=getattr(peer, "latency_ms", None),
                             error_message=None,
                             speech_route_binding=binding,
+                            method_type=_trusted_method_type(
+                                topic,
+                                SimpleNamespace(
+                                    method_type=(
+                                        getattr(candidate.decision, "method_type", None)
+                                        if getattr(candidate, "decision", None) is not None
+                                        else None
+                                    )
+                                ),
+                                None,
+                            ),
                         )
                 return SimpleNamespace(
                     target="none",
@@ -1330,6 +1401,65 @@ def _route_query_error(route: Any, *, fallback: str) -> str:
     if getattr(route, "error_code", None) == "selector_permission_denied":
         return "permission_denied"
     return getattr(route, "error_message", None) or fallback
+
+
+def _registered_method_type(topic: str) -> str | None:
+    try:
+        from app.shared.contracts.registry import get_contract
+
+        contract = get_contract(topic)
+    except Exception:
+        return "lookup_failed"
+    method_type = getattr(contract, "method_type", None)
+    return method_type if method_type in {"use", "manage"} else None
+
+
+def _trusted_method_type(
+    topic: str,
+    route: Any,
+    _caller_method_type: str | None,
+) -> str | None:
+    """Return method type from authoritative route/registry metadata only."""
+
+    route_method_type = getattr(route, "method_type", None)
+    registered_method_type = _registered_method_type(topic)
+    if route_method_type == "manage" or registered_method_type in {"lookup_failed", "manage"}:
+        return "manage"
+    if route_method_type == "use" or registered_method_type == "use":
+        return "use"
+    return None
+
+
+def _remote_manage_requires_selector(
+    topic: str,
+    route: Any,
+    selector: MeshAddressSelector | None,
+) -> bool:
+    if getattr(route, "target", None) != "remote":
+        return False
+    if selector is not None and selector.has_routing_target():
+        return False
+    return _trusted_method_type(topic, route, None) == "manage"
+
+
+def _is_retryable_preaccept_result(result: QueryResult) -> bool:
+    """Return True only for bounded pre-accept outcomes that did no remote work."""
+
+    if result.ok:
+        return False
+    if isinstance(result.data, dict) and result.data.get("accepted") is False:
+        return result.data.get("reason_code") in {
+            "capability_changed",
+            "not_sent",
+        }
+    return False
+
+
+def _is_retryable_preaccept_error(error: Exception) -> bool:
+    return isinstance(error, PeerBridgePreAcceptRejectedError) and error.reason_code in {
+        "capability_changed",
+        "not_sent",
+    }
 
 
 def _speech_route_binding_kwarg(
