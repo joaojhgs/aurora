@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
+from importlib import metadata as importlib_metadata
 from pathlib import Path
 
 import click
@@ -281,6 +282,7 @@ def install_sidecar_profile_dependencies(sidecar_profile: SidecarProfile) -> Non
         if sidecar_profile.hardware:
             for package in ("torch", "torchaudio", "torchvision"):
                 export_command.extend(("--prune", package))
+        export_command.extend(("--prune", "enum34"))
         export_command.extend(("--output-file", str(requirements_path)))
 
         subprocess.run(export_command, check=True, cwd=PROJECT_ROOT)
@@ -314,21 +316,71 @@ def install_sidecar_profile_dependencies(sidecar_profile: SidecarProfile) -> Non
         )
 
 
+def _remove_invalid_pvporcupine_enum34_requirement() -> bool:
+    """Repair the known Python-2-era dependency metadata in pvporcupine 1.9.5."""
+    try:
+        distribution = importlib_metadata.distribution("pvporcupine")
+    except importlib_metadata.PackageNotFoundError:
+        return False
+    if distribution.version != "1.9.5":
+        return False
+
+    metadata_entry = next(
+        (
+            entry
+            for entry in distribution.files or ()
+            if entry.name == "METADATA" and entry.parent.name.endswith(".dist-info")
+        ),
+        None,
+    )
+    if metadata_entry is None:
+        raise RuntimeError("pvporcupine package metadata is unavailable")
+
+    metadata_path = Path(str(distribution.locate_file(metadata_entry)))
+    original = metadata_path.read_text(encoding="utf-8")
+    kept_lines = [
+        line
+        for line in original.splitlines(keepends=True)
+        if line.rstrip("\r\n").casefold() != "requires-dist: enum34"
+    ]
+    if len(kept_lines) == len(original.splitlines(keepends=True)):
+        return False
+    metadata_path.write_text("".join(kept_lines), encoding="utf-8")
+    return True
+
+
 def remove_enum34_backport() -> None:
-    """Remove enum34 in modern Python envs because PyInstaller refuses it."""
+    """Remove enum34 and repair the pinned pvporcupine metadata on modern Python."""
     uv = shutil.which("uv")
     command = (
-        [uv, "pip", "uninstall", "enum34"]
+        [uv, "pip", "uninstall", "--python", sys.executable, "enum34"]
         if uv
         else [sys.executable, "-m", "pip", "uninstall", "-y", "enum34"]
     )
     result = subprocess.run(command, cwd=PROJECT_ROOT, capture_output=True, text=True)
-    if result.returncode == 0:
-        click.echo("✅ Removed obsolete enum34 backport for PyInstaller compatibility")
-    elif "not installed" not in (result.stdout + result.stderr).lower():
-        click.echo("⚠️  Could not uninstall enum34 automatically; PyInstaller may fail")
-        if result.stderr:
-            click.echo(result.stderr.strip())
+    if result.returncode != 0 and "not installed" not in (result.stdout + result.stderr).lower():
+        raise subprocess.CalledProcessError(
+            result.returncode,
+            command,
+            output=result.stdout,
+            stderr=result.stderr,
+        )
+    repaired_metadata = _remove_invalid_pvporcupine_enum34_requirement()
+    click.echo("✅ Removed obsolete enum34 backport for PyInstaller compatibility")
+    if repaired_metadata:
+        click.echo("✅ Reconciled pvporcupine dependency metadata for modern Python")
+
+
+def check_sidecar_dependency_health() -> None:
+    """Fail the build when the selected sidecar environment is inconsistent."""
+    uv = shutil.which("uv")
+    if not uv:
+        raise RuntimeError("uv is required for sidecar dependency validation")
+    subprocess.run(
+        [uv, "pip", "check", "--python", sys.executable],
+        check=True,
+        cwd=PROJECT_ROOT,
+    )
 
 
 def install_profile_hardware_wheels(
@@ -336,13 +388,16 @@ def install_profile_hardware_wheels(
     sidecar_profile: SidecarProfile,
 ) -> None:
     """Install or reconcile the selected hardware wheels for a sidecar profile."""
+    hardware = sidecar_profile.hardware
+    if hardware is None:
+        raise ValueError("sidecar profile does not select a hardware backend")
 
     subprocess.run(
         [
             sys.executable,
             str(wheel_installer),
             "--hardware",
-            sidecar_profile.hardware,
+            hardware,
             "--package",
             sidecar_profile.wheel_package,
         ],
@@ -410,6 +465,8 @@ def ensure_dependencies(sidecar_profile: SidecarProfile | None = None):
         sys.exit(1)
 
     if not sidecar_profile or not sidecar_profile.hardware:
+        if sidecar_profile:
+            check_sidecar_dependency_health()
         click.echo("🎡 Wheel installer skipped for thin/no-hardware build profile")
         return
 
@@ -420,6 +477,7 @@ def ensure_dependencies(sidecar_profile: SidecarProfile | None = None):
     )
     try:
         install_profile_hardware_wheels(wheel_installer, sidecar_profile)
+        check_sidecar_dependency_health()
         click.echo("✅ Dependencies optimized")
     except subprocess.CalledProcessError as e:
         raise click.ClickException(

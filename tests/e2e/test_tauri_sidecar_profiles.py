@@ -232,11 +232,16 @@ def test_sidecar_installs_hardware_wheels_before_dependency_resolution(monkeypat
         "remove_enum34_backport",
         lambda: events.append("cleanup"),
     )
+    monkeypatch.setattr(
+        build_script,
+        "check_sidecar_dependency_health",
+        lambda: events.append("check"),
+    )
     monkeypatch.setitem(sys.modules, "PyInstaller", SimpleNamespace(__version__="test"))
 
     build_script.ensure_dependencies(profile)
 
-    assert events == ["hardware", "dependencies", "cleanup", "hardware"]
+    assert events == ["hardware", "dependencies", "cleanup", "hardware", "check"]
 
 
 @pytest.mark.e2e
@@ -266,6 +271,9 @@ def test_sidecar_dependency_install_uses_frozen_pruned_lock(monkeypatch):
         assert ["--prune", package] == export_command[
             export_command.index(package) - 1 : export_command.index(package) + 1
         ]
+    assert export_command[
+        export_command.index("enum34") - 1 : export_command.index("enum34") + 1
+    ] == ["--prune", "enum34"]
     assert requirements_command[:5] == [
         "/usr/bin/uv",
         "pip",
@@ -281,6 +289,60 @@ def test_sidecar_dependency_install_uses_frozen_pruned_lock(monkeypatch):
         sys.executable,
         "--no-deps",
     ]
+
+
+@pytest.mark.e2e
+def test_enum34_cleanup_targets_active_interpreter_and_repairs_metadata(monkeypatch):
+    commands: list[list[str]] = []
+    repairs: list[bool] = []
+    monkeypatch.setattr(build_script.shutil, "which", lambda name: "/usr/bin/uv")
+    monkeypatch.setattr(
+        build_script.subprocess,
+        "run",
+        lambda command, **_kwargs: commands.append(command)
+        or subprocess.CompletedProcess(command, 0, stdout="", stderr=""),
+    )
+    monkeypatch.setattr(
+        build_script,
+        "_remove_invalid_pvporcupine_enum34_requirement",
+        lambda: repairs.append(True) or True,
+    )
+
+    build_script.remove_enum34_backport()
+
+    assert commands == [["/usr/bin/uv", "pip", "uninstall", "--python", sys.executable, "enum34"]]
+    assert repairs == [True]
+
+
+@pytest.mark.e2e
+def test_pvporcupine_metadata_repair_removes_only_enum34(monkeypatch, tmp_path):
+    metadata_path = tmp_path / "pvporcupine-1.9.5.dist-info" / "METADATA"
+    metadata_path.parent.mkdir()
+    metadata_path.write_text(
+        "Metadata-Version: 2.1\n"
+        "Name: pvporcupine\n"
+        "Version: 1.9.5\n"
+        "Requires-Dist: enum34\n"
+        "Requires-Dist: numpy\n",
+        encoding="utf-8",
+    )
+    metadata_entry = Path("pvporcupine-1.9.5.dist-info/METADATA")
+    distribution = SimpleNamespace(
+        version="1.9.5",
+        files=(metadata_entry,),
+        locate_file=lambda _entry: metadata_path,
+    )
+    monkeypatch.setattr(
+        build_script.importlib_metadata,
+        "distribution",
+        lambda _name: distribution,
+    )
+
+    assert build_script._remove_invalid_pvporcupine_enum34_requirement() is True
+
+    repaired = metadata_path.read_text(encoding="utf-8")
+    assert "Requires-Dist: enum34" not in repaired
+    assert "Requires-Dist: numpy" in repaired
 
 
 @pytest.mark.e2e
