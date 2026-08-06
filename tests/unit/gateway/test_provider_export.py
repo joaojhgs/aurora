@@ -37,6 +37,7 @@ from app.shared.contracts.mesh_surface import (
     feature_contracts_for_module,
 )
 from app.shared.contracts.models.speech import SpeechMethodConstraints
+from app.shared.contracts.models.tts import TTSMethods
 
 DEFAULT_PERMS = object()
 DEFAULT_CAPACITY = object()
@@ -630,6 +631,51 @@ def test_multi_permission_requires_all_permissions() -> None:
     assert topics(partial) == []
     assert reason_counts(partial) == {"permissions_denied": 1}
     assert topics(complete) == ["TTS.Combo"]
+
+
+def test_tts_use_only_projection_omits_voice_management_methods() -> None:
+    result = project(
+        reg=registry(
+            service(
+                methods=(
+                    method(
+                        TTSMethods.LIST_VOICES,
+                        perms=("TTS.use",),
+                        features=("speech_voice_discovery",),
+                    ),
+                    method(
+                        TTSMethods.SYNTHESIZE,
+                        perms=(TTSMethods.SYNTHESIZE,),
+                        features=("speech_synthesis",),
+                    ),
+                    method(
+                        TTSMethods.LIST_VOICE_PROFILES,
+                        method_type="manage",
+                        perms=("TTS.manage",),
+                        features=("speech_voice_management",),
+                    ),
+                    method(
+                        TTSMethods.CREATE_VOICE_PROFILE,
+                        method_type="manage",
+                        perms=("TTS.manage",),
+                        features=("speech_voice_management",),
+                    ),
+                ),
+                feature_members={
+                    "speech_voice_discovery": (TTSMethods.LIST_VOICES,),
+                    "speech_synthesis": (TTSMethods.SYNTHESIZE,),
+                    "speech_voice_management": (
+                        TTSMethods.CREATE_VOICE_PROFILE,
+                        TTSMethods.LIST_VOICE_PROFILES,
+                    ),
+                },
+            )
+        ),
+        rec=recipient("TTS.use"),
+    )
+
+    assert topics(result) == [TTSMethods.LIST_VOICES, TTSMethods.SYNTHESIZE]
+    assert reason_counts(result) == {"permissions_denied": 2}
 
 
 def test_gate_order_is_locked_through_public_infra() -> None:

@@ -46,6 +46,7 @@ from app.shared.contracts.models.tts import (
     TTSDeleteVoiceProfileRequest,
     TTSGetCapabilitiesRequest,
     TTSInstallVoiceProfileRequest,
+    TTSListVoiceProfilesRequest,
     TTSListVoicesRequest,
     TTSMethods,
     TTSRequest,
@@ -880,6 +881,68 @@ async def test_remote_list_voices_omits_clones_until_visibility_support(mock_bus
     assert [voice.voice_id for voice in remote.voices] == ["standard:starter_en:alba"]
     assert remote.voices[0].selection_mode == "shared_model_state"
     assert remote.voices[0].visible_scope == "public"
+
+
+@pytest.mark.asyncio
+async def test_use_safe_voice_list_stays_distinct_from_management_inventory(
+    monkeypatch, mock_bus
+) -> None:
+    service = TTSService()
+    clone_id = "clone:00000000-0000-4000-8000-000000000001"
+    service._provider = FakeVoiceListingProvider(
+        (
+            TTSVoiceInfo("standard:starter_en:alba", "Alba", True, "en"),
+            TTSVoiceInfo(clone_id, "Private Clone", True, "en"),
+        )
+    )
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=clone_id,
+            display_name="Private Clone",
+            kind="clone",
+            ready_state="ready",
+            language_bundle="en",
+            compatibility_group="pockettts-private-group",
+            artifact_revision="clone-rev-private",
+            artifact_refs=("artifacts/private/path/voice-state.safetensors",),
+            source_retained=True,
+            visibility="private",
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    remote = await service.list_voices(
+        TTSListVoicesRequest(),
+        Envelope(
+            type=TTSMethods.LIST_VOICES,
+            payload={},
+            origin="external",
+            principal_id="principal-a",
+            caller_peer_id="peer-a",
+        ),
+    )
+    profiles = await service.list_voice_profiles(
+        TTSListVoiceProfilesRequest(include_unavailable=True)
+    )
+
+    assert [voice.voice_id for voice in remote.voices] == ["standard:starter_en:alba"]
+    assert "profiles" not in remote.model_dump()
+    assert "allowed_peer_ids" not in remote.model_dump_json()
+    profile_payload = profiles.model_dump(mode="json")
+    clone_profile = next(
+        profile for profile in profile_payload["profiles"] if profile["voice_id"] == clone_id
+    )
+    assert clone_profile["retained_source"] is True
+    assert clone_profile["storage"]["artifact_count"] == 1
+    encoded_profiles = profiles.model_dump_json()
+    assert "artifact_refs" not in encoded_profiles
+    assert "voice-state.safetensors" not in encoded_profiles
+    assert "source_audio" not in encoded_profiles
 
 
 @pytest.mark.asyncio

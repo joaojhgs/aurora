@@ -2333,6 +2333,74 @@ async def test_explicit_auth_share_still_requires_method_permissions(
 
 
 @pytest.mark.asyncio
+async def test_tts_manage_rpc_uses_registry_method_type_not_forged_caller_metadata(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    """A caller cannot downgrade a registered manage method by forging use metadata."""
+
+    topic = TTSMethods.LIST_VOICE_PROFILES
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="TTS",
+        version="1.0",
+        methods=[
+            MethodInfo(
+                name="ListVoiceProfiles",
+                bus_topic=topic,
+                exposure="both",
+                required_perms=["TTS.manage"],
+                method_type="manage",
+            )
+        ],
+    )
+    projected_method = SimpleNamespace(
+        topic=topic,
+        required_permissions=("TTS.manage",),
+        method_type="use",
+        speech_constraints=None,
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("TTS.use"),
+        mesh_config=_make_mesh_config(
+            enabled=True,
+            sharing={"TTS": _make_sharing_entry(share=True)},
+        ),
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(
+            services=[
+                SimpleNamespace(
+                    service_id="TTS",
+                    capacity={"max_concurrent": 0},
+                    methods=[projected_method],
+                )
+            ]
+        ),
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "tts-forged-manage",
+                "method": topic,
+                "identity": {"method_type": "use"},
+                "params": {"method_type": "use", "include_unavailable": True},
+            }
+        )
+    )
+
+    resp = json.loads(mock_send_fn.call_args[0][0])
+    assert resp["type"] == "error"
+    assert resp["error"]["code"] == 403
+    assert resp["error"]["message"] == "Forbidden"
+    mock_bus.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_handle_call_datetime_in_response(rpc_handler, mock_registry, mock_bus):
     """RPC result containing a datetime must be serialized via ISO-8601."""
     from datetime import datetime, timedelta
