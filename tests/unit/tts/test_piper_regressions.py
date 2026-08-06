@@ -360,7 +360,7 @@ async def test_start_initializes_piper_stream_from_nested_piper_config(
     nested_model = tmp_path / "nested.onnx"
     nested_config = tmp_path / "nested.onnx.json"
     nested_model.write_bytes(b"model")
-    nested_config.write_text("{}", encoding="utf-8")
+    nested_config.write_text('{"audio": {"sample_rate": 16000}}', encoding="utf-8")
     flat_model = tmp_path / "flat.onnx"
     flat_config = tmp_path / "flat.onnx.json"
 

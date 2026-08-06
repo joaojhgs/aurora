@@ -16,6 +16,8 @@ from pathlib import Path
 
 from app.helpers.aurora_logger import log_debug, log_warning
 from app.services.tts.providers.base import (
+    MAX_TTS_SAMPLE_RATE,
+    MIN_TTS_SAMPLE_RATE,
     TTSProviderCapabilities,
     TTSProviderError,
     TTSProviderHealth,
@@ -80,13 +82,13 @@ def _piper_base_identity(voice: PiperVoiceConfig) -> str:
     return f"piper:{voice.voice_id}:sha256:{identity.hexdigest()[:24]}"
 
 
-def _piper_config_sample_rate(config_file: str | None) -> int | None:
+def _piper_config_sample_rate(config_file: str | None) -> int:
     """Read Piper config sample rate without exposing the config path."""
     if not config_file:
-        return None
+        raise TTSProviderError("invalid_audio", "Piper voice config is unavailable")
     path = Path(_absolute_path(config_file))
     if not path.exists():
-        return None
+        raise TTSProviderError("invalid_audio", "Piper voice config is unavailable")
     try:
         with path.open("r", encoding="utf-8") as handle:
             config = json.load(handle)
@@ -96,10 +98,14 @@ def _piper_config_sample_rate(config_file: str | None) -> int | None:
         raise TTSProviderError("invalid_audio", "Piper voice config is unavailable")
     audio = config.get("audio")
     sample_rate = audio.get("sample_rate") if isinstance(audio, dict) else config.get("sample_rate")
-    try:
-        return int(sample_rate) if sample_rate is not None else None
-    except (TypeError, ValueError) as exc:
-        raise TTSProviderError("invalid_audio", "Piper voice config is unavailable") from exc
+    if (
+        isinstance(sample_rate, bool)
+        or not isinstance(sample_rate, int)
+        or sample_rate < MIN_TTS_SAMPLE_RATE
+        or sample_rate > MAX_TTS_SAMPLE_RATE
+    ):
+        raise TTSProviderError("invalid_audio", "Piper voice config is unavailable")
+    return sample_rate
 
 
 def synthesize_piper_cli(
@@ -205,10 +211,8 @@ class PiperTTSProvider:
             self._voice.expected_sample_rate
             if self._voice.expected_sample_rate is not None
             else _piper_config_sample_rate(self._voice.config_file)
-            if self._voice.config_file is not None
-            else None
         )
-        self._expected_sample_rate = expected_sample_rate or 22050
+        self._expected_sample_rate = expected_sample_rate
         validate_synthesis_request(
             TTSSynthesisRequest(text="sample-rate-contract"),
             supported_formats=self.capabilities.supported_formats,

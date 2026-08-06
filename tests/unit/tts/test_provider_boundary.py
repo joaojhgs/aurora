@@ -177,6 +177,87 @@ async def test_piper_config_sample_rate_mismatch_rejects_before_cli_entry(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("config_name", "config_content"),
+    [
+        ("missing-source", None),
+        ("empty", ""),
+        ("malformed", "{"),
+        ("missing-rate", '{"audio": {}}'),
+        ("bool-rate", '{"audio": {"sample_rate": true}}'),
+        ("float-rate", '{"audio": {"sample_rate": 16000.0}}'),
+        ("string-rate", '{"audio": {"sample_rate": "16000"}}'),
+        ("out-of-range-rate", '{"audio": {"sample_rate": 1}}'),
+    ],
+)
+async def test_piper_rejects_missing_or_invalid_config_sample_rate_before_readiness(
+    config_name: str,
+    config_content: str | None,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    model_path = tmp_path / "voice.onnx"
+    model_path.write_bytes(b"model")
+    config_path = tmp_path / f"{config_name}.json"
+    if config_content is not None:
+        config_path.write_text(config_content, encoding="utf-8")
+    to_thread_calls: list[object] = []
+
+    async def fake_to_thread(*_args, **_kwargs):
+        to_thread_calls.append(object())
+        return b"\x01\x00", 16000
+
+    monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
+    provider = PiperTTSProvider(
+        piper_path="piper",
+        voice=PiperVoiceConfig(
+            voice_id="default",
+            model_file=str(model_path),
+            config_file=str(config_path),
+        ),
+    )
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await provider.start()
+
+    assert exc_info.value.code == "invalid_audio"
+    assert str(exc_info.value) == "Piper voice config is unavailable"
+    assert to_thread_calls == []
+    assert await provider.tracked_request_count() == 0
+    health = await provider.health()
+    assert health.ready is False
+
+
+@pytest.mark.asyncio
+async def test_piper_rejects_absent_sample_rate_source_before_readiness(
+    tmp_path, monkeypatch
+) -> None:
+    model_path = tmp_path / "voice.onnx"
+    model_path.write_bytes(b"model")
+    to_thread_calls: list[object] = []
+
+    async def fake_to_thread(*_args, **_kwargs):
+        to_thread_calls.append(object())
+        return b"\x01\x00", 16000
+
+    monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
+    provider = PiperTTSProvider(
+        piper_path="piper",
+        voice=PiperVoiceConfig(voice_id="default", model_file=str(model_path)),
+    )
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await provider.start()
+
+    assert exc_info.value.code == "invalid_audio"
+    assert str(exc_info.value) == "Piper voice config is unavailable"
+    assert to_thread_calls == []
+    assert await provider.tracked_request_count() == 0
+    health = await provider.health()
+    assert health.ready is False
+
+
+@pytest.mark.asyncio
 async def test_piper_synthesis_maps_cli_failure_without_request_text_or_stderr(
     tmp_path, monkeypatch
 ) -> None:
