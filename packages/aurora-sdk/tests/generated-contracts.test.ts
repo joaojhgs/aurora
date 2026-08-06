@@ -5,7 +5,11 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod/v4'
 
 import {
+  backendContractMethodDescriptorById,
+  backendContractMethodDescriptors,
   backendContractSchemaById,
+  GatewayExplainRouteInputRouteExplainRequestSchema,
+  TTSGetCapabilitiesOutputTTSGetCapabilitiesResponseSchema,
   ToolingExecuteToolInputToolingExecuteToolRequestSchema,
   ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchema,
   ToolingGetToolsInputToolingGetToolsRequestSchema
@@ -112,8 +116,35 @@ const auroraMetadataKeys = [
   'x-aurora-extra-behavior',
   'x-aurora-projection-identity',
   'x-aurora-projection-page-termination',
+  'x-aurora-bounded-nonblank-string-set-normalize',
+  'x-aurora-logical-voice-array-normalize',
+  'x-aurora-route-explain-no-raw-payload',
+  'x-aurora-route-explain-selector-fields',
+  'x-aurora-route-explain-speech-no-raw-payload',
+  'x-aurora-speech-language-array-normalize',
+  'x-aurora-speech-language-auto-null',
+  'x-aurora-speech-language-requirement',
+  'x-aurora-speech-language-string-normalize',
+  'x-aurora-speech-locale-fallback',
+  'x-aurora-speech-method-constraints',
   'x-aurora-string-non-blank',
   'x-aurora-string-trimmed',
+  'x-aurora-tts-capabilities-invariant',
+  'x-aurora-tts-create-profile-response-invariant',
+  'x-aurora-tts-delete-profile-request-invariant',
+  'x-aurora-tts-delete-profile-response-invariant',
+  'x-aurora-tts-get-profile-response-invariant',
+  'x-aurora-tts-import-chunk-request-invariant',
+  'x-aurora-tts-import-chunk-response-invariant',
+  'x-aurora-tts-import-start-response-invariant',
+  'x-aurora-tts-operation-id',
+  'x-aurora-tts-profile-descriptor-invariant',
+  'x-aurora-tts-profile-list-invariant',
+  'x-aurora-tts-profile-mutation-response-invariant',
+  'x-aurora-tts-update-profile-patch-invariant',
+  'x-aurora-tts-voice-descriptor-invariant',
+  'x-aurora-tts-voice-list-invariant',
+  'x-aurora-stt-transcribe-language-shape',
   'x-aurora-unique-string-array-normalize'
 ]
 
@@ -176,7 +207,14 @@ const normalizeJsonSchema = (schema: unknown, root: unknown = schema, seenRefs =
       return jsonValueMarker
     }
     if (target !== undefined && !seenRefs.has(node.$ref)) {
-      return normalizeJsonSchema(target, root, new Set([...seenRefs, node.$ref]))
+      const resolved = normalizeJsonSchema(target, root, new Set([...seenRefs, node.$ref]))
+      const siblings = Object.fromEntries(
+        Object.entries(node).filter(([key, value]) => key !== '$ref' && value !== undefined)
+      )
+      if (Object.keys(siblings).length === 0 || !resolved || typeof resolved !== 'object' || Array.isArray(resolved)) {
+        return resolved
+      }
+      return normalizeJsonSchema({ ...(resolved as Record<string, unknown>), ...siblings }, root, seenRefs)
     }
   }
   const normalized: Record<string, unknown> = {}
@@ -196,10 +234,37 @@ const normalizeJsonSchema = (schema: unknown, root: unknown = schema, seenRefs =
         'title',
         'description',
         'x-aurora-extra-behavior',
+        'x-aurora-bounded-nonblank-string-set-normalize',
+        'x-aurora-logical-voice-array-normalize',
         'x-aurora-projection-identity',
         'x-aurora-projection-page-termination',
+        'x-aurora-route-explain-no-raw-payload',
+        'x-aurora-route-explain-selector-fields',
+        'x-aurora-route-explain-speech-no-raw-payload',
+        'x-aurora-speech-language-array-normalize',
+        'x-aurora-speech-language-auto-null',
+        'x-aurora-speech-language-requirement',
+        'x-aurora-speech-language-string-normalize',
+        'x-aurora-speech-locale-fallback',
+        'x-aurora-speech-method-constraints',
         'x-aurora-string-non-blank',
         'x-aurora-string-trimmed',
+        'x-aurora-tts-capabilities-invariant',
+        'x-aurora-tts-create-profile-response-invariant',
+        'x-aurora-tts-delete-profile-request-invariant',
+        'x-aurora-tts-delete-profile-response-invariant',
+        'x-aurora-tts-get-profile-response-invariant',
+        'x-aurora-tts-import-chunk-request-invariant',
+        'x-aurora-tts-import-chunk-response-invariant',
+        'x-aurora-tts-import-start-response-invariant',
+        'x-aurora-tts-operation-id',
+        'x-aurora-tts-profile-descriptor-invariant',
+        'x-aurora-tts-profile-list-invariant',
+        'x-aurora-tts-profile-mutation-response-invariant',
+        'x-aurora-tts-update-profile-patch-invariant',
+        'x-aurora-tts-voice-descriptor-invariant',
+        'x-aurora-tts-voice-list-invariant',
+        'x-aurora-stt-transcribe-language-shape',
         'x-aurora-unique-string-array-normalize'
       ].includes(key)
     ) {
@@ -366,9 +431,260 @@ describe('generated backend contracts', () => {
           ...item.schema
         })
       )
-      const extraBehavior = collectExtraBehavior(item.schema)
-      expect(extraBehavior, item.schema_id).toEqual(expect.arrayContaining(['strip']))
-      expect(extraBehavior, item.schema_id).not.toContain('forbid')
+      expect(new Set(collectExtraBehavior(generated)), item.schema_id).toEqual(
+        new Set(collectExtraBehavior(item.schema))
+      )
+    }
+  })
+
+  it('rejects RouteExplain raw payload fields without echoing submitted values', () => {
+    const rawSecret = 'secret text that must not appear in issues'
+    const cases = [
+      {
+        payload: { topic: 'TTS.Request', nested: { messages: rawSecret } },
+        path: 'messages'
+      },
+      {
+        payload: { topic: 'TTS.Request', selector: { peer_id: 'peer-1', raw_peer: rawSecret } },
+        path: 'selector'
+      },
+      {
+        payload: { topic: 'TTS.Request', speech: { input: rawSecret } },
+        path: 'speech'
+      }
+    ]
+
+    for (const item of cases) {
+      const result = GatewayExplainRouteInputRouteExplainRequestSchema.safeParse(item.payload)
+      expect(result.success, item.path).toBe(false)
+      if (!result.success) {
+        const issueText = JSON.stringify(result.error.issues)
+        expect(issueText).toContain(item.path)
+        expect(issueText).not.toContain(rawSecret)
+      }
+    }
+  })
+
+  it('materializes speech language requirement defaults before digesting', () => {
+    const parsed = GatewayExplainRouteInputRouteExplainRequestSchema.parse({
+      topic: 'TTS.Request',
+      speech: {
+        language_requirement: {
+          mode: 'exact',
+          language: 'EN'
+        }
+      }
+    }) as {
+      speech?: {
+        language_requirement?: {
+          auto_language_candidates?: string[]
+          digest?: string | null
+        } | null
+      } | null
+    }
+
+    expect(parsed.speech?.language_requirement?.auto_language_candidates).toEqual([])
+    expect(parsed.speech?.language_requirement?.digest).toBe(
+      'a3214d460e738357e872cdb92c328bd9c44b282acf6e2ca1d0104184528d0037'
+    )
+  })
+
+  it('materializes TTS capability output format defaults before readiness checks', () => {
+    const parsed = TTSGetCapabilitiesOutputTTSGetCapabilitiesResponseSchema.parse({
+      capabilities: {
+        ready: true,
+        model_status: 'ready',
+        supported_language_pack_ids: ['base', 'base'],
+        installed_language_pack_ids: ['base'],
+        resident_language_pack_ids: ['base'],
+        resident_language_packs: [{ pack_id: 'base', ready_languages: ['en'] }],
+        ready_languages: ['en'],
+        sample_rates: [24000, 16000, 24000],
+        resident_base_model_count: 1
+      }
+    }) as {
+      capabilities: {
+        output_formats?: string[]
+        sample_rates?: number[]
+        supported_language_pack_ids?: string[]
+      }
+    }
+
+    expect(parsed.capabilities.output_formats).toEqual(['wav', 'raw'])
+    expect(parsed.capabilities.sample_rates).toEqual([16000, 24000])
+    expect(parsed.capabilities.supported_language_pack_ids).toEqual(['base'])
+    expect(
+      TTSGetCapabilitiesOutputTTSGetCapabilitiesResponseSchema.safeParse({
+        capabilities: { ready: true, model_status: 'ready' }
+      }).success
+    ).toBe(false)
+  })
+
+  it('normalizes exact and automatic speech language inputs like Pydantic', () => {
+    const ttsSchema = backendContractSchemaById['TTS.Synthesize.input.TTSSynthesizeRequest']
+    expect(ttsSchema.parse({ text: 'hello', language: ' EN ' })).toMatchObject({ language: 'en' })
+    expect(ttsSchema.parse({ text: 'hello', language: '   ' })).toMatchObject({ language: null })
+    expect(ttsSchema.safeParse({ text: 'hello', language: 'auto' }).success).toBe(false)
+    expect(ttsSchema.safeParse({ text: 'hello', language: 'pt-BR' }).success).toBe(false)
+    expect(ttsSchema.safeParse({ text: 'hello', language: 'pt_BR' }).success).toBe(false)
+
+    const sttSchema = backendContractSchemaById['Transcription.Transcribe.input.TranscribeAudioRequest']
+    expect(
+      sttSchema.parse({
+        audio_data: 'AA==',
+        language: ' AUTO ',
+        auto_language_candidates: [' EN ', 'de', 'en']
+      })
+    ).toMatchObject({
+      language: null,
+      auto_language_candidates: ['de', 'en']
+    })
+    expect(
+      sttSchema.safeParse({
+        audio_data: 'AA==',
+        language: 'en',
+        auto_language_candidates: ['de', 'en']
+      }).success
+    ).toBe(false)
+  })
+
+  it('rejects stale speech language requirement digests', () => {
+    expect(
+      GatewayExplainRouteInputRouteExplainRequestSchema.safeParse({
+        topic: 'TTS.Request',
+        speech: {
+          language_requirement: {
+            mode: 'exact',
+            language: 'en',
+            digest: '0'.repeat(64)
+          }
+        }
+      }).success
+    ).toBe(false)
+  })
+
+  it('normalizes mutation identifiers and bounded peer sets before validation', () => {
+    const installSchema = backendContractSchemaById['TTS.InstallVoiceProfile.input.TTSInstallVoiceProfileRequest']
+    expect(
+      installSchema.parse({
+        operation_id: ' operation-1 ',
+        voice_id: 'standard:starter:voice'
+      })
+    ).toMatchObject({ operation_id: 'operation-1' })
+    expect(
+      installSchema.safeParse({
+        operation_id: ` ${'a'.repeat(127)} `,
+        voice_id: 'standard:starter:voice'
+      }).success
+    ).toBe(false)
+
+    const updateSchema = backendContractSchemaById['TTS.UpdateVoiceProfile.input.TTSUpdateVoiceProfileRequest']
+    expect(
+      updateSchema.parse({
+        operation_id: 'update-1',
+        voice_id: 'standard:starter:voice',
+        visibility: 'allowed_peers',
+        allowed_peer_ids: ['peer-b', 'peer-a', 'peer-b']
+      })
+    ).toMatchObject({ allowed_peer_ids: ['peer-a', 'peer-b'] })
+    expect(
+      updateSchema.safeParse({
+        operation_id: 'update-1',
+        voice_id: 'standard:starter:voice',
+        visibility: 'private',
+        allowed_peer_ids: ['peer-a']
+      }).success
+    ).toBe(false)
+  })
+
+  it('enforces clone-only create and delete response identities', () => {
+    const cloneVoice = 'clone:123e4567-e89b-42d3-a456-426614174000'
+    const standardVoice = 'standard:starter:voice'
+    const createSchema = backendContractSchemaById['TTS.CreateVoiceProfile.output.TTSCreateVoiceProfileResponse']
+    const deleteSchema = backendContractSchemaById['TTS.DeleteVoiceProfile.output.TTSDeleteVoiceProfileResponse']
+
+    expect(
+      createSchema.safeParse({ status: 'created', voice_id: cloneVoice, revision: 'revision-1' }).success
+    ).toBe(true)
+    expect(
+      createSchema.safeParse({ status: 'created', voice_id: standardVoice, revision: 'revision-1' }).success
+    ).toBe(false)
+    expect(
+      createSchema.safeParse({ status: 'created', voice_id: cloneVoice, revision: null }).success
+    ).toBe(false)
+    expect(
+      deleteSchema.safeParse({ status: 'deleted', voice_id: cloneVoice, revision: 'revision-2' }).success
+    ).toBe(true)
+    expect(
+      deleteSchema.safeParse({ status: 'deleted', voice_id: standardVoice, revision: 'revision-2' }).success
+    ).toBe(false)
+    expect(
+      deleteSchema.safeParse({ status: 'deleted', voice_id: cloneVoice, revision: null }).success
+    ).toBe(false)
+  })
+
+  it('enforces TTS profile descriptor invariants', () => {
+    const schema = backendContractSchemaById['TTS.GetVoiceProfile.output.TTSGetVoiceProfileResponse']
+    const profile = {
+      voice_id: 'clone:123e4567-e89b-42d3-a456-426614174000',
+      kind: 'cloned',
+      display_name: 'Clone',
+      revision: 'revision-1'
+    }
+    expect(schema.safeParse({ found: true, profile }).success).toBe(true)
+    expect(schema.safeParse({ found: false, profile }).success).toBe(false)
+    expect(
+      schema.safeParse({
+        found: true,
+        profile: { ...profile, kind: 'standard' }
+      }).success
+    ).toBe(false)
+  })
+
+  it('rejects malformed, empty, oversized, and hash-mismatched voice import chunks', () => {
+    const schema = backendContractSchemaById['TTS.VoiceImportChunk.input.TTSVoiceImportChunkRequest']
+    const toBase64 = (value: Uint8Array): string => {
+      let binary = ''
+      for (const byte of value) binary += String.fromCharCode(byte)
+      return btoa(binary)
+    }
+    const bytes = new TextEncoder().encode('hello')
+    const valid = {
+      operation_id: 'chunk-1',
+      upload_id: 'upload-1',
+      sequence: 0,
+      chunk_data: toBase64(bytes),
+      chunk_sha256: createHash('sha256').update(bytes).digest('hex')
+    }
+
+    expect(schema.safeParse(valid).success).toBe(true)
+    expect(schema.safeParse({ ...valid, chunk_data: '!!!!' }).success).toBe(false)
+    expect(schema.safeParse({ ...valid, chunk_data: '' }).success).toBe(false)
+    expect(schema.safeParse({ ...valid, chunk_sha256: '0'.repeat(64) }).success).toBe(false)
+    const oversized = new Uint8Array(49_153)
+    expect(
+      schema.safeParse({
+        ...valid,
+        chunk_data: toBase64(oversized),
+        chunk_sha256: createHash('sha256').update(oversized).digest('hex')
+      }).success
+    ).toBe(false)
+  })
+
+  it('accepts STT audio chunk binary-format fields as strings', () => {
+    for (const schemaId of [
+      'WakeWord.ProcessAudio.input.STTAudioChunk',
+      'Transcription.ProcessAudio.input.STTAudioChunk'
+    ] as const) {
+      const parsed = backendContractSchemaById[schemaId].parse({
+        data: '\u0000normal UTF-8 text',
+        channels: 1,
+        sample_rate: 16000
+      })
+      expect(parsed).toMatchObject({
+        data: '\u0000normal UTF-8 text',
+        format: 'pcm_s16le'
+      })
     }
   })
 
@@ -465,11 +781,79 @@ describe('generated backend contracts', () => {
       'Tooling.GetExportCatalog',
       'Tooling.PrepareExecution',
       'Tooling.ExecuteTool',
+      'Gateway.ExplainRoute',
+      'TTS.GetCapabilities',
+      'TTS.ListVoices',
+      'TTS.ListVoiceProfiles',
+      'TTS.GetVoiceProfile',
+      'TTS.UpdateVoiceProfile',
+      'TTS.InstallVoiceProfile',
+      'TTS.RemoveVoiceProfile',
+      'TTS.SetDefaultVoice',
+      'TTS.VoiceImportStart',
+      'TTS.VoiceImportChunk',
+      'TTS.VoiceImportEnd',
+      'TTS.VoiceImportAbort',
+      'TTS.CreateVoiceProfile',
+      'TTS.DeleteVoiceProfile',
+      'TTS.Request',
+      'TTS.StreamStart',
+      'TTS.StreamChunk',
+      'TTS.StreamEnd',
+      'TTS.Synthesize',
+      'STTCoordinator.Listen',
+      'STTCoordinator.StopListening',
+      'WakeWord.ProcessAudio',
+      'WakeWord.Detect',
+      'Transcription.ProcessAudio',
+      'Transcription.Transcribe',
     ])
+    expect(contractSchema.schemas).toHaveLength(60)
+    expect(contractSchema.method_descriptors).toHaveLength(30)
+    expect(contractSchema.tooling_provider_allowlist).toHaveLength(4)
+    const descriptors = Object.fromEntries(
+      contractSchema.method_descriptors.map((descriptor: Record<string, unknown>) => [
+        descriptor.method_id,
+        descriptor
+      ])
+    ) as Record<string, Record<string, unknown>>
+    for (const methodId of ['TTS.StreamStart', 'TTS.StreamChunk', 'TTS.StreamEnd']) {
+      expect(descriptors[methodId]?.streaming).toEqual({
+        rpc_kind: 'unary',
+        ordered_command_group: 'tts_text_stream',
+        request_stream: false,
+        response_stream: false,
+        event_topic: 'TTS.AudioChunk'
+      })
+    }
+    expect(descriptors['Transcription.ProcessAudio']?.streaming).toEqual({
+      rpc_kind: 'unary',
+      ordered_command_group: null,
+      request_stream: false,
+      response_stream: false,
+      event_topic: null
+    })
+    for (const methodId of [
+      'TTS.ListVoiceProfiles',
+      'TTS.GetVoiceProfile',
+      'TTS.UpdateVoiceProfile',
+      'TTS.InstallVoiceProfile',
+      'TTS.RemoveVoiceProfile',
+      'TTS.SetDefaultVoice',
+      'TTS.VoiceImportStart',
+      'TTS.VoiceImportChunk',
+      'TTS.VoiceImportEnd',
+      'TTS.VoiceImportAbort',
+      'TTS.CreateVoiceProfile',
+      'TTS.DeleteVoiceProfile'
+    ]) {
+      expect(descriptors[methodId]?.method_type, methodId).toBe('manage')
+      expect(descriptors[methodId]?.required_perms, methodId).toEqual(['TTS.manage'])
+    }
     expect(manifest.generator_format_version).toBe('aurora-sdk-zod-codegen-v1')
     expect(manifest.zod_version).toBe('4.4.3')
     expect(providerInventory.provider_service_instance_id).toBe('local:aurora-sdk-local-provider-v1:Tooling')
-    expect(providerInventory.methods.map((method: ProviderMethod) => method.method_id)).toEqual(contractSchema.allowlist)
+    expect(providerInventory.methods.map((method: ProviderMethod) => method.method_id)).toEqual(contractSchema.tooling_provider_allowlist)
     const providerMethods = Object.fromEntries(providerInventory.methods.map((method: ProviderMethod) => [method.method_id, method]))
     expect(providerMethods['Tooling.GetExportCatalog'].required_permission).toBe('Tooling.GetTools')
     expect(providerMethods['Tooling.PrepareExecution'].required_permission).toBe('Tooling.ExecuteTool')
@@ -512,5 +896,26 @@ describe('generated backend contracts', () => {
     expect(providerInventory.canonical_digest_vectors.order_independent_final_checksum.digest).toBe(
       computeProjectionChecksum(providerInventory.canonical_digest_vectors.order_independent_final_checksum)
     )
+  })
+
+  it('keeps generated method descriptors aligned with SDK coverage and streaming metadata', () => {
+    const descriptorIds = backendContractMethodDescriptors.map((descriptor) => descriptor.method_id)
+    expect(descriptorIds).toEqual(contractSchema.allowlist)
+    expect(new Set(descriptorIds).size).toBe(30)
+    expect(Object.keys(backendContractMethodDescriptorById).sort()).toEqual([...descriptorIds].sort())
+
+    for (const methodId of ['TTS.StreamStart', 'TTS.StreamChunk', 'TTS.StreamEnd'] as const) {
+      expect(backendContractMethodDescriptorById[methodId].streaming).toEqual({
+        rpc_kind: 'unary',
+        ordered_command_group: 'tts_text_stream',
+        request_stream: false,
+        response_stream: false,
+        event_topic: 'TTS.AudioChunk'
+      })
+    }
+    for (const methodId of ['WakeWord.ProcessAudio', 'Transcription.ProcessAudio'] as const) {
+      expect(backendContractMethodDescriptorById[methodId].streaming.ordered_command_group).toBeNull()
+    }
+    expect(backendContractMethodDescriptors.every((descriptor) => descriptor.speech_constraints === null)).toBe(true)
   })
 })

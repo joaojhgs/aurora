@@ -12,6 +12,10 @@ from app.shared.contracts.models.speech import (
 )
 from app.shared.contracts.registry import IOModel
 
+MAX_AUDIO_SAMPLE_RATE = 192_000
+MAX_AUDIO_CHANNELS = 8
+MAX_AUDIO_SAMPLE_WIDTH = 8
+
 
 # Module identifiers
 class STTModule:
@@ -183,10 +187,10 @@ class STTAudioChunk(IOModel):
     """Audio chunk for processing."""
 
     data: bytes
-    sample_rate: int
-    channels: int
+    sample_rate: int = Field(gt=0, le=MAX_AUDIO_SAMPLE_RATE)
+    channels: int = Field(ge=1, le=MAX_AUDIO_CHANNELS)
     format: str = "pcm_s16le"
-    sample_width: int | None = None  # Bytes per sample (derived from format if not provided)
+    sample_width: int | None = Field(default=None, ge=1, le=MAX_AUDIO_SAMPLE_WIDTH)
     mesh_selector: MeshAddressSelector | None = None
     session_id: str | None = None
     consent_token: str | None = None
@@ -343,8 +347,13 @@ class TranscribeAudioRequest(IOModel):
 
     audio_data: str  # Base64-encoded audio
     format: str = "wav"  # "wav" | "raw" | "mp3"
-    sample_rate: int = Field(default=16000, gt=0, description="Sample rate in Hz (must be > 0)")
-    channels: int = 1
+    sample_rate: int = Field(
+        default=16000,
+        gt=0,
+        le=MAX_AUDIO_SAMPLE_RATE,
+        description="Sample rate in Hz (must be > 0)",
+    )
+    channels: int = Field(default=1, ge=1, le=MAX_AUDIO_CHANNELS)
     language: SpeechLanguageTag | None = None  # Exact product language or None for auto-detect
     auto_language_candidates: list[SpeechLanguageTag] = Field(default_factory=list, max_length=8)
     model: str = "realtime"  # "realtime" | "accurate"
@@ -385,8 +394,8 @@ class WakeWordDetectRequest(IOModel):
     """
 
     audio_data: str  # Base64-encoded audio chunk
-    sample_rate: int = 16000
-    channels: int = 1
+    sample_rate: int = Field(default=16000, gt=0, le=MAX_AUDIO_SAMPLE_RATE)
+    channels: int = Field(default=1, ge=1, le=MAX_AUDIO_CHANNELS)
     format: str = "raw"  # "raw" (PCM 16-bit) | "wav"
     mesh_selector: MeshAddressSelector | None = None
 

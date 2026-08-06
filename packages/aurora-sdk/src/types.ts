@@ -1137,6 +1137,7 @@ export interface MethodInfo {
   required_perms: string[]
   callable_feature_ids?: string[]
   callable_features?: CallableFeatureContract[]
+  speech_constraints?: JsonObject | null
   public_infrastructure?: boolean
   method_type: ContractMethodType
   input_schema?: JsonObject | null
@@ -1929,6 +1930,7 @@ export interface MethodDescriptor {
   requiredPermissions: string[]
   callableFeatureIds: string[]
   callableFeatures: CallableFeatureContract[]
+  speechConstraints: JsonObject | null
   publicInfrastructure: boolean
   inputSchema: JsonObject | null
   outputSchema: JsonObject | null
@@ -1961,6 +1963,7 @@ export interface BackendInventoryMethod {
   required_perms: string[]
   callable_feature_ids?: string[]
   callable_features?: CallableFeatureContract[]
+  speech_constraints?: JsonObject | null
   public_infrastructure?: boolean
   input_model?: string | null
   output_model?: string | null

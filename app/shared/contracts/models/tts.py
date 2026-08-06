@@ -6,7 +6,7 @@ import base64
 import binascii
 import hashlib
 import re
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
@@ -29,6 +29,10 @@ VOICE_IMPORT_MAX_SEQUENCE = VOICE_IMPORT_MAX_CHUNKS - 1
 VOICE_IMPORT_MAX_JSON_BYTES = 128 * 1024
 VOICE_IMPORT_MAX_BASE64_CHARS = 65_536
 VOICE_IMPORT_MAX_DURATION_MS = 15_000
+TTS_MIN_SAMPLE_RATE = 8_000
+TTS_MAX_SAMPLE_RATE = 192_000
+TTS_MAX_CHANNELS = 8
+TTS_MAX_STREAM_SEQUENCE = MAX_JS_SAFE_INTEGER
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _OPERATION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
@@ -156,7 +160,7 @@ class TTSSynthesizeRequest(IOModel):
     language: SpeechLanguageTag | None = None
     speed: float = 1.0
     format: str = "wav"  # "wav" | "raw"
-    sample_rate: int | None = None  # None = use model default
+    sample_rate: int | None = Field(default=None, gt=0, le=TTS_MAX_SAMPLE_RATE)
     mesh_selector: MeshAddressSelector | None = None
 
     @field_validator("language", mode="before")
@@ -178,8 +182,8 @@ class TTSSynthesizeResponse(IOModel):
 
     audio_data: str  # Base64-encoded audio
     format: str
-    sample_rate: int
-    channels: int
+    sample_rate: int = Field(gt=0, le=TTS_MAX_SAMPLE_RATE)
+    channels: int = Field(ge=1, le=TTS_MAX_CHANNELS)
     duration_ms: float
     text: str
 
@@ -196,7 +200,7 @@ class TTSStreamStartRequest(IOModel):
     language: SpeechLanguageTag | None = None
     speed: float = 1.0
     format: str = "wav"  # "wav" | "raw"
-    sample_rate: int | None = None  # None = use model default
+    sample_rate: int | None = Field(default=None, gt=0, le=TTS_MAX_SAMPLE_RATE)
     interrupt: bool = True  # Stop current server playback/streams before starting
     play_on_server: bool = True  # Also play chunks through local server audio output
     mesh_selector: MeshAddressSelector | None = None
@@ -256,7 +260,9 @@ class TTSCapabilities(_StrictTTSIOModel):
     output_formats: list[TTSOutputFormat] = Field(
         default_factory=_default_output_formats, max_length=2
     )
-    sample_rates: list[int] = Field(default_factory=list, max_length=16)
+    sample_rates: list[Annotated[int, Field(ge=TTS_MIN_SAMPLE_RATE, le=TTS_MAX_SAMPLE_RATE)]] = (
+        Field(default_factory=list, max_length=16)
+    )
     streaming: bool = False
     cancellation: bool = False
     cloning: bool = False
@@ -692,7 +698,7 @@ class TTSVoiceImportStartRequest(_TTSMutationRequest):
     expected_total_bytes: int = Field(gt=0, le=VOICE_IMPORT_MAX_TOTAL_BYTES)
     sha256: str
     format: Literal["wav", "pcm_s16le"]
-    sample_rate: int = Field(gt=0, le=192000)
+    sample_rate: int = Field(gt=0, le=TTS_MAX_SAMPLE_RATE)
     channels: int = Field(default=1, ge=1, le=2)
     sample_width_bytes: int = Field(default=2, ge=1, le=4)
     duration_ms: int | None = Field(default=None, gt=0, le=VOICE_IMPORT_MAX_DURATION_MS)
@@ -942,7 +948,7 @@ class TTSStreamChunkRequest(IOModel):
     """Ordered text chunk for an active TTS streaming session."""
 
     stream_id: str
-    sequence: int = Field(ge=0)
+    sequence: int = Field(ge=0, le=TTS_MAX_STREAM_SEQUENCE)
     text: str
     is_final: bool = False
     mesh_selector: MeshAddressSelector | None = None
@@ -953,7 +959,7 @@ class TTSStreamEndRequest(IOModel):
     """End an ordered TTS streaming session."""
 
     stream_id: str
-    final_sequence: int | None = Field(default=None, ge=0)
+    final_sequence: int | None = Field(default=None, ge=0, le=TTS_MAX_STREAM_SEQUENCE)
     reason: str = "completed"
     mesh_selector: MeshAddressSelector | None = None
     correlation_id: str | None = None

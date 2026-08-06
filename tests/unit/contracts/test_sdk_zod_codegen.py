@@ -6,9 +6,11 @@ from pydantic import Field, ValidationError, field_validator
 
 from scripts import generate_backend_inventory
 from scripts.sdk_zod_codegen import (
+    BOUNDED_NONBLANK_STRING_SET_MARKER,
     JSON_VALUE_MARKER,
     PROJECTION_IDENTITY_MARKER,
     PROJECTION_PAGE_TERMINATION_MARKER,
+    SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER,
     STRING_NON_BLANK_MARKER,
     STRING_TRIMMED_MARKER,
     UNIQUE_STRING_ARRAY_NORMALIZE_MARKER,
@@ -75,7 +77,7 @@ def test_zod_codegen_maps_only_validated_string_formats() -> None:
                         "format": fmt,
                     },
                 }
-                for fmt in ("duration", "hostname", "ipv4", "ipv6")
+                for fmt in ("duration", "hostname", "ipv4", "ipv6", "binary")
             ]
         }
     )
@@ -84,6 +86,7 @@ def test_zod_codegen_maps_only_validated_string_formats() -> None:
     assert "z.hostname()" in rendered
     assert "z.ipv4()" in rendered
     assert "z.ipv6()" in rendered
+    assert '.meta({"format":"binary"})' in rendered
 
 
 def test_zod_codegen_rejects_unsafe_regex_refs_literals_numbers_and_unions() -> None:
@@ -154,6 +157,22 @@ def test_zod_codegen_rejects_unsafe_regex_refs_literals_numbers_and_unions() -> 
                 "type": "array",
                 "items": {"type": "integer"},
                 UNIQUE_STRING_ARRAY_NORMALIZE_MARKER: True,
+            },
+            "only applies to string arrays",
+        ),
+        (
+            {
+                "type": "array",
+                "items": {"type": "integer"},
+                BOUNDED_NONBLANK_STRING_SET_MARKER: True,
+            },
+            "only applies to string arrays",
+        ),
+        (
+            {
+                "type": "array",
+                "items": {"type": "integer"},
+                SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER: True,
             },
             "only applies to string arrays",
         ),
@@ -315,19 +334,52 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     assert manifest["zod_version"] == "4.4.3"
     assert provider["provider_service_instance_id"] == "local:aurora-sdk-local-provider-v1:Tooling"
     assert {item["method_id"] for item in provider["methods"]} == set(
-        generate_backend_inventory.SDK_CONTRACT_ALLOWLIST
+        generate_backend_inventory.SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST
     )
     provider_methods = {item["method_id"]: item for item in provider["methods"]}
     assert provider_methods["Tooling.GetExportCatalog"]["required_permission"] == "Tooling.GetTools"
     assert (
         provider_methods["Tooling.PrepareExecution"]["required_permission"] == "Tooling.ExecuteTool"
     )
-    assert schema["allowlist"] == [
-        "Tooling.GetTools",
-        "Tooling.GetExportCatalog",
-        "Tooling.PrepareExecution",
-        "Tooling.ExecuteTool",
-    ]
+    assert schema["allowlist"] == list(generate_backend_inventory.SDK_CONTRACT_ALLOWLIST)
+    assert schema["tooling_provider_allowlist"] == (
+        list(generate_backend_inventory.SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST)
+    )
+    assert len(schema["allowlist"]) == 30
+    assert len(schema["schemas"]) == 60
+    assert len(schema["method_descriptors"]) == 30
+    assert len(provider["methods"]) == 4
+    descriptors = {item["method_id"]: item for item in schema["method_descriptors"]}
+    descriptor_ids = set(descriptors)
+    assert descriptor_ids == set(generate_backend_inventory.SDK_CONTRACT_ALLOWLIST)
+    assert "Gateway.ExplainRoute" in descriptor_ids
+    assert "TTS.Synthesize" in descriptor_ids
+    assert "STTCoordinator.Listen" in descriptor_ids
+    assert all(not method_id.startswith("AudioSession.") for method_id in descriptor_ids)
+    assert descriptors["TTS.CreateVoiceProfile"]["method_type"] == "manage"
+    assert descriptors["TTS.CreateVoiceProfile"]["required_perms"] == ["TTS.manage"]
+    for method_id in ("TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd"):
+        assert descriptors[method_id]["streaming"] == {
+            "event_topic": "TTS.AudioChunk",
+            "ordered_command_group": "tts_text_stream",
+            "request_stream": False,
+            "response_stream": False,
+            "rpc_kind": "unary",
+        }
+    assert descriptors["Transcription.ProcessAudio"]["streaming"] == {
+        "event_topic": None,
+        "ordered_command_group": None,
+        "request_stream": False,
+        "response_stream": False,
+        "rpc_kind": "unary",
+    }
+    assert all(
+        descriptor["input_schema_id"]
+        and descriptor["output_schema_id"]
+        and descriptor["input_schema_hash"]
+        and descriptor["output_schema_hash"]
+        for descriptor in descriptors.values()
+    )
     assert (
         provider["canonical_digest_vectors"]["identity_digest"]["reordered_json_a"]
         != provider["canonical_digest_vectors"]["identity_digest"]["reordered_json_b"]

@@ -417,11 +417,13 @@ def _compare_descriptors(
     live: dict[str, MethodDescriptor],
     sdk: dict[str, MethodDescriptor],
     *,
+    generated_sdk_method_ids: set[str] | None = None,
     strict_sdk_coverage: bool,
     strict_field_drift: bool,
 ) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
-    for bus_topic in sorted(set(live) - set(sdk)):
+    generated_coverage = generated_sdk_method_ids or set()
+    for bus_topic in sorted(set(live) - set(sdk) - generated_coverage):
         kind = "missing_sdk_fixture_method" if strict_sdk_coverage else "sdk_fixture_coverage_gap"
         issues.append({"fatal": strict_sdk_coverage, "kind": kind, "bus_topic": bus_topic})
     for bus_topic in sorted(set(sdk) - set(live)):
@@ -798,6 +800,38 @@ def _check_generated_contract_artifacts(
                 }
             )
 
+    allowlist = [
+        method_id for method_id in schema.get("allowlist", []) if isinstance(method_id, str)
+    ]
+    method_descriptors = schema.get("method_descriptors") or []
+    descriptor_method_ids = [
+        descriptor.get("method_id")
+        for descriptor in method_descriptors
+        if isinstance(descriptor, dict) and isinstance(descriptor.get("method_id"), str)
+    ]
+    duplicate_descriptor_ids = sorted(
+        method_id
+        for method_id in set(descriptor_method_ids)
+        if descriptor_method_ids.count(method_id) > 1
+    )
+    if duplicate_descriptor_ids:
+        issues.append(
+            {
+                "fatal": True,
+                "kind": "generated_method_descriptor_duplicate_ids",
+                "method_ids": duplicate_descriptor_ids,
+            }
+        )
+    if descriptor_method_ids != allowlist:
+        issues.append(
+            {
+                "fatal": True,
+                "kind": "generated_method_descriptor_allowlist_mismatch",
+                "allowlist": allowlist,
+                "method_descriptors": descriptor_method_ids,
+            }
+        )
+
     evidence = {
         "checked": True,
         "schema_artifact": _rel(schema_path),
@@ -805,6 +839,7 @@ def _check_generated_contract_artifacts(
         "manifest_artifact": _rel(manifest_path),
         "tooling_provider_artifact": _rel(tooling_provider_path),
         "schema_count": len(schema.get("schemas", [])),
+        "method_ids": descriptor_method_ids,
         "tooling_provider_methods": len(provider_methods),
         "content_hashes": expected_hashes,
     }
@@ -832,17 +867,6 @@ def build_report(
     issues.extend(_check_inventory_metadata(inventory, strict_imports=strict_imports))
     sdk_type_issues, sdk_type_surface = _check_sdk_type_surface(inventory, sdk_types_path)
     issues.extend(sdk_type_issues)
-    issues.extend(
-        _compare_descriptors(
-            live_methods,
-            sdk_methods,
-            strict_sdk_coverage=strict_sdk_coverage,
-            strict_field_drift=strict_field_drift,
-        )
-    )
-    issues.extend(
-        _compare_builtins(live_builtins, sdk_builtins, strict_sdk_coverage=strict_sdk_coverage)
-    )
     generated_issues, generated_evidence = _check_generated_contract_artifacts(
         schema_path=sdk_schema_path,
         zod_path=sdk_zod_path,
@@ -850,6 +874,18 @@ def build_report(
         tooling_provider_path=tooling_provider_path,
     )
     issues.extend(generated_issues)
+    issues.extend(
+        _compare_descriptors(
+            live_methods,
+            sdk_methods,
+            generated_sdk_method_ids=set(generated_evidence.get("method_ids", [])),
+            strict_sdk_coverage=strict_sdk_coverage,
+            strict_field_drift=strict_field_drift,
+        )
+    )
+    issues.extend(
+        _compare_builtins(live_builtins, sdk_builtins, strict_sdk_coverage=strict_sdk_coverage)
+    )
     issues.extend(_find_secret_values(inventory))
     fatal_issues = [issue for issue in issues if issue.get("fatal", True)]
 

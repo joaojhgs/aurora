@@ -30,6 +30,7 @@ SUPPORTED_STRING_FORMATS = {
     "ipv6",
     "uri",
     "uuid",
+    "binary",
 }
 JSON_VALUE_MARKER = "x-aurora-json-value"
 STRING_TRIMMED_MARKER = "x-aurora-string-trimmed"
@@ -37,6 +38,33 @@ STRING_NON_BLANK_MARKER = "x-aurora-string-non-blank"
 PROJECTION_PAGE_TERMINATION_MARKER = "x-aurora-projection-page-termination"
 PROJECTION_IDENTITY_MARKER = "x-aurora-projection-identity"
 UNIQUE_STRING_ARRAY_NORMALIZE_MARKER = "x-aurora-unique-string-array-normalize"
+BOUNDED_NONBLANK_STRING_SET_MARKER = "x-aurora-bounded-nonblank-string-set-normalize"
+SPEECH_LANGUAGE_STRING_NORMALIZE_MARKER = "x-aurora-speech-language-string-normalize"
+SPEECH_LANGUAGE_AUTO_NULL_MARKER = "x-aurora-speech-language-auto-null"
+SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER = "x-aurora-speech-language-array-normalize"
+LOGICAL_VOICE_ARRAY_NORMALIZE_MARKER = "x-aurora-logical-voice-array-normalize"
+TTS_OPERATION_ID_MARKER = "x-aurora-tts-operation-id"
+ROUTE_EXPLAIN_NO_RAW_PAYLOAD_MARKER = "x-aurora-route-explain-no-raw-payload"
+ROUTE_EXPLAIN_SELECTOR_FIELDS_MARKER = "x-aurora-route-explain-selector-fields"
+ROUTE_EXPLAIN_SPEECH_NO_RAW_PAYLOAD_MARKER = "x-aurora-route-explain-speech-no-raw-payload"
+SPEECH_LANGUAGE_REQUIREMENT_MARKER = "x-aurora-speech-language-requirement"
+SPEECH_LOCALE_FALLBACK_MARKER = "x-aurora-speech-locale-fallback"
+SPEECH_METHOD_CONSTRAINTS_MARKER = "x-aurora-speech-method-constraints"
+TTS_CAPABILITIES_INVARIANT_MARKER = "x-aurora-tts-capabilities-invariant"
+TTS_VOICE_DESCRIPTOR_INVARIANT_MARKER = "x-aurora-tts-voice-descriptor-invariant"
+TTS_VOICE_LIST_INVARIANT_MARKER = "x-aurora-tts-voice-list-invariant"
+TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER = "x-aurora-tts-profile-descriptor-invariant"
+TTS_PROFILE_LIST_INVARIANT_MARKER = "x-aurora-tts-profile-list-invariant"
+TTS_GET_PROFILE_RESPONSE_INVARIANT_MARKER = "x-aurora-tts-get-profile-response-invariant"
+TTS_UPDATE_PROFILE_PATCH_INVARIANT_MARKER = "x-aurora-tts-update-profile-patch-invariant"
+TTS_CREATE_PROFILE_RESPONSE_INVARIANT_MARKER = "x-aurora-tts-create-profile-response-invariant"
+TTS_DELETE_PROFILE_REQUEST_INVARIANT_MARKER = "x-aurora-tts-delete-profile-request-invariant"
+TTS_DELETE_PROFILE_RESPONSE_INVARIANT_MARKER = "x-aurora-tts-delete-profile-response-invariant"
+TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER = "x-aurora-tts-profile-mutation-response-invariant"
+TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER = "x-aurora-tts-import-start-response-invariant"
+TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER = "x-aurora-tts-import-chunk-request-invariant"
+TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER = "x-aurora-tts-import-chunk-response-invariant"
+STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER = "x-aurora-stt-transcribe-language-shape"
 METADATA_KEYS = {
     "$schema",
     "title",
@@ -49,6 +77,33 @@ METADATA_KEYS = {
     PROJECTION_PAGE_TERMINATION_MARKER,
     PROJECTION_IDENTITY_MARKER,
     UNIQUE_STRING_ARRAY_NORMALIZE_MARKER,
+    BOUNDED_NONBLANK_STRING_SET_MARKER,
+    SPEECH_LANGUAGE_STRING_NORMALIZE_MARKER,
+    SPEECH_LANGUAGE_AUTO_NULL_MARKER,
+    SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER,
+    LOGICAL_VOICE_ARRAY_NORMALIZE_MARKER,
+    TTS_OPERATION_ID_MARKER,
+    ROUTE_EXPLAIN_NO_RAW_PAYLOAD_MARKER,
+    ROUTE_EXPLAIN_SELECTOR_FIELDS_MARKER,
+    ROUTE_EXPLAIN_SPEECH_NO_RAW_PAYLOAD_MARKER,
+    SPEECH_LANGUAGE_REQUIREMENT_MARKER,
+    SPEECH_LOCALE_FALLBACK_MARKER,
+    SPEECH_METHOD_CONSTRAINTS_MARKER,
+    TTS_CAPABILITIES_INVARIANT_MARKER,
+    TTS_VOICE_DESCRIPTOR_INVARIANT_MARKER,
+    TTS_VOICE_LIST_INVARIANT_MARKER,
+    TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER,
+    TTS_PROFILE_LIST_INVARIANT_MARKER,
+    TTS_GET_PROFILE_RESPONSE_INVARIANT_MARKER,
+    TTS_UPDATE_PROFILE_PATCH_INVARIANT_MARKER,
+    TTS_CREATE_PROFILE_RESPONSE_INVARIANT_MARKER,
+    TTS_DELETE_PROFILE_REQUEST_INVARIANT_MARKER,
+    TTS_DELETE_PROFILE_RESPONSE_INVARIANT_MARKER,
+    TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER,
+    TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
+    TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
+    TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
+    STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
     "x-aurora-extra-behavior",
 }
 PYTHON_ONLY_REGEX_TOKENS = (
@@ -352,26 +407,64 @@ class ZodCompiler:
                     "JSON value marker cannot be combined with other schema keywords"
                 )
             return
-        for marker in (STRING_TRIMMED_MARKER, STRING_NON_BLANK_MARKER):
+        for marker in (STRING_TRIMMED_MARKER, STRING_NON_BLANK_MARKER, TTS_OPERATION_ID_MARKER):
             if marker in schema:
                 if schema.get(marker) is not True:
                     raise ctx.at(marker).unsupported(f"{marker} must be literal true")
-                if schema.get("type") != "string":
-                    raise ctx.at(marker).unsupported(f"{marker} only applies to string schemas")
-        if UNIQUE_STRING_ARRAY_NORMALIZE_MARKER in schema:
-            if schema.get(UNIQUE_STRING_ARRAY_NORMALIZE_MARKER) is not True:
-                raise ctx.at(UNIQUE_STRING_ARRAY_NORMALIZE_MARKER).unsupported(
-                    f"{UNIQUE_STRING_ARRAY_NORMALIZE_MARKER} must be literal true"
+                options = schema.get("anyOf") or schema.get("oneOf") or ()
+                nullable_string_like = bool(options) and any(
+                    isinstance(option, dict) and option.get("type") == "string"
+                    for option in options
                 )
+                if schema.get("type") != "string" and not nullable_string_like:
+                    raise ctx.at(marker).unsupported(f"{marker} only applies to string schemas")
+        for marker in (
+            SPEECH_LANGUAGE_STRING_NORMALIZE_MARKER,
+            SPEECH_LANGUAGE_AUTO_NULL_MARKER,
+        ):
+            if marker not in schema:
+                continue
+            if schema.get(marker) is not True:
+                raise ctx.at(marker).unsupported(f"{marker} must be literal true")
+            options = schema.get("anyOf") or schema.get("oneOf") or ()
+            string_like = schema.get("type") == "string" or (
+                isinstance(schema.get("enum"), list)
+                and bool(schema["enum"])
+                and all(isinstance(item, str) for item in schema["enum"])
+            )
+            nullable_string_like = bool(options) and any(
+                isinstance(option, dict)
+                and (
+                    option.get("type") == "string"
+                    or (
+                        isinstance(option.get("enum"), list)
+                        and bool(option["enum"])
+                        and all(isinstance(item, str) for item in option["enum"])
+                    )
+                )
+                for option in options
+            )
+            if not string_like and not nullable_string_like:
+                raise ctx.at(marker).unsupported(
+                    f"{marker} only applies to string or nullable string schemas"
+                )
+        for marker in (
+            UNIQUE_STRING_ARRAY_NORMALIZE_MARKER,
+            BOUNDED_NONBLANK_STRING_SET_MARKER,
+            SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER,
+            LOGICAL_VOICE_ARRAY_NORMALIZE_MARKER,
+        ):
+            if marker not in schema:
+                continue
+            if schema.get(marker) is not True:
+                raise ctx.at(marker).unsupported(f"{marker} must be literal true")
             items = schema.get("items")
             if (
                 schema.get("type") != "array"
                 or not isinstance(items, dict)
                 or items.get("type") != "string"
             ):
-                raise ctx.at(UNIQUE_STRING_ARRAY_NORMALIZE_MARKER).unsupported(
-                    f"{UNIQUE_STRING_ARRAY_NORMALIZE_MARKER} only applies to string arrays"
-                )
+                raise ctx.at(marker).unsupported(f"{marker} only applies to string arrays")
         for marker in (PROJECTION_PAGE_TERMINATION_MARKER, PROJECTION_IDENTITY_MARKER):
             if marker not in schema:
                 continue
@@ -399,24 +492,96 @@ class ZodCompiler:
                 or not required_fields.issubset(properties)
             ):
                 raise ctx.at(marker).unsupported(f"{marker} only applies to export page objects")
+        route_markers = (
+            ROUTE_EXPLAIN_NO_RAW_PAYLOAD_MARKER,
+            ROUTE_EXPLAIN_SELECTOR_FIELDS_MARKER,
+            ROUTE_EXPLAIN_SPEECH_NO_RAW_PAYLOAD_MARKER,
+            SPEECH_LANGUAGE_REQUIREMENT_MARKER,
+            SPEECH_LOCALE_FALLBACK_MARKER,
+            SPEECH_METHOD_CONSTRAINTS_MARKER,
+            TTS_CAPABILITIES_INVARIANT_MARKER,
+            TTS_VOICE_DESCRIPTOR_INVARIANT_MARKER,
+            TTS_VOICE_LIST_INVARIANT_MARKER,
+            TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER,
+            TTS_PROFILE_LIST_INVARIANT_MARKER,
+            TTS_GET_PROFILE_RESPONSE_INVARIANT_MARKER,
+            TTS_UPDATE_PROFILE_PATCH_INVARIANT_MARKER,
+            TTS_CREATE_PROFILE_RESPONSE_INVARIANT_MARKER,
+            TTS_DELETE_PROFILE_REQUEST_INVARIANT_MARKER,
+            TTS_DELETE_PROFILE_RESPONSE_INVARIANT_MARKER,
+            TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER,
+            TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
+            TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
+            TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
+            STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
+        )
+        for marker in route_markers:
+            if marker not in schema:
+                continue
+            if schema.get(marker) is not True:
+                raise ctx.at(marker).unsupported(f"{marker} must be literal true")
+            if schema.get("type") != "object" or not isinstance(schema.get("properties"), dict):
+                raise ctx.at(marker).unsupported(f"{marker} only applies to object schemas")
 
     def _apply_default(self, expression: str, schema: dict[str, Any], ctx: CompileContext) -> str:
         if "default" in schema:
             default = schema["default"]
             if not _is_json_value(default):
                 raise ctx.at("default").unsupported("default must be a finite JSON value")
-            expression = f"{expression}.default({canonical_json(default)})"
+            expression = f"{expression}.prefault({canonical_json(default)})"
+        options = schema.get("anyOf") or schema.get("oneOf") or ()
+        nullable = any(
+            isinstance(option, dict) and option.get("type") == "null" for option in options
+        )
+        if schema.get(SPEECH_LANGUAGE_STRING_NORMALIZE_MARKER) is True:
+            expression = (
+                "z.preprocess((value) => normalizeSpeechLanguageValue(value, false, "
+                f"{str(nullable).lower()}), {expression})"
+            )
+        if schema.get(SPEECH_LANGUAGE_AUTO_NULL_MARKER) is True:
+            expression = (
+                "z.preprocess((value) => normalizeSpeechLanguageValue(value, true, true), "
+                f"{expression})"
+            )
         return self._apply_metadata(expression, schema)
 
     def _apply_metadata(self, expression: str, schema: dict[str, Any]) -> str:
         metadata = {
             key: schema[key]
             for key in (
+                "default",
                 JSON_VALUE_MARKER,
                 STRING_TRIMMED_MARKER,
                 STRING_NON_BLANK_MARKER,
                 PROJECTION_PAGE_TERMINATION_MARKER,
                 UNIQUE_STRING_ARRAY_NORMALIZE_MARKER,
+                BOUNDED_NONBLANK_STRING_SET_MARKER,
+                SPEECH_LANGUAGE_STRING_NORMALIZE_MARKER,
+                SPEECH_LANGUAGE_AUTO_NULL_MARKER,
+                SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER,
+                LOGICAL_VOICE_ARRAY_NORMALIZE_MARKER,
+                TTS_OPERATION_ID_MARKER,
+                ROUTE_EXPLAIN_NO_RAW_PAYLOAD_MARKER,
+                ROUTE_EXPLAIN_SELECTOR_FIELDS_MARKER,
+                ROUTE_EXPLAIN_SPEECH_NO_RAW_PAYLOAD_MARKER,
+                SPEECH_LANGUAGE_REQUIREMENT_MARKER,
+                SPEECH_LOCALE_FALLBACK_MARKER,
+                SPEECH_METHOD_CONSTRAINTS_MARKER,
+                TTS_CAPABILITIES_INVARIANT_MARKER,
+                TTS_VOICE_DESCRIPTOR_INVARIANT_MARKER,
+                TTS_VOICE_LIST_INVARIANT_MARKER,
+                TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER,
+                TTS_PROFILE_LIST_INVARIANT_MARKER,
+                TTS_GET_PROFILE_RESPONSE_INVARIANT_MARKER,
+                TTS_UPDATE_PROFILE_PATCH_INVARIANT_MARKER,
+                TTS_CREATE_PROFILE_RESPONSE_INVARIANT_MARKER,
+                TTS_DELETE_PROFILE_REQUEST_INVARIANT_MARKER,
+                TTS_DELETE_PROFILE_RESPONSE_INVARIANT_MARKER,
+                TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER,
+                TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
+                TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
+                TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
+                STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
                 "x-aurora-extra-behavior",
                 PROJECTION_IDENTITY_MARKER,
             )
@@ -594,6 +759,117 @@ class ZodCompiler:
                 " }"
                 "})"
             )
+        if schema.get(ROUTE_EXPLAIN_NO_RAW_PAYLOAD_MARKER) is True:
+            expression = (
+                f"z.preprocess((value, ctx) => {{"
+                " for (const issue of routeExplainRawPayloadIssues(value)) ctx.addIssue(issue);"
+                f" return value"
+                f"}}, {expression})"
+            )
+        if schema.get(ROUTE_EXPLAIN_SELECTOR_FIELDS_MARKER) is True:
+            expression = (
+                f"z.preprocess((value, ctx) => {{"
+                " for (const issue of routeExplainSelectorIssues(value)) ctx.addIssue(issue);"
+                f" return value"
+                f"}}, {expression})"
+            )
+        if schema.get(ROUTE_EXPLAIN_SPEECH_NO_RAW_PAYLOAD_MARKER) is True:
+            expression = (
+                f"z.preprocess((value, ctx) => {{"
+                " for (const issue of routeExplainSpeechRawPayloadIssues(value)) ctx.addIssue(issue);"
+                f" return value"
+                f"}}, {expression})"
+            )
+        if schema.get(SPEECH_LANGUAGE_REQUIREMENT_MARKER) is True:
+            expression = (
+                f"{expression}.superRefine((value, ctx) => {{"
+                " const mode = value.mode;"
+                " const language = value.language;"
+                " const candidates = Array.isArray(value.auto_language_candidates) ? value.auto_language_candidates : [];"
+                " if (mode === 'exact') {"
+                " if (language === null || language === undefined) ctx.addIssue({ code: 'custom', path: ['language'], message: 'exact language requirement needs language' });"
+                " if (candidates.length > 0) ctx.addIssue({ code: 'custom', path: ['auto_language_candidates'], message: 'exact language requirement cannot include auto candidates' });"
+                " } else if (mode === 'auto') {"
+                " if (language !== null && language !== undefined) ctx.addIssue({ code: 'custom', path: ['language'], message: 'auto language requirement cannot include exact language' });"
+                " }"
+                " if (!isSortedStringList(candidates)) ctx.addIssue({ code: 'custom', path: ['auto_language_candidates'], message: 'auto language candidates must be sorted' });"
+                " const expectedDigest = speechLanguageRequirementDigest(value);"
+                " if (value.digest !== null && value.digest !== undefined && value.digest !== expectedDigest) ctx.addIssue({ code: 'custom', path: ['digest'], message: 'language requirement digest mismatch' });"
+                "})"
+                ".overwrite((value) => { const normalized = { ...value, auto_language_candidates: Array.isArray(value.auto_language_candidates) ? value.auto_language_candidates : [] }; return { ...normalized, digest: speechLanguageRequirementDigest(normalized) } })"
+            )
+        if schema.get(SPEECH_LOCALE_FALLBACK_MARKER) is True:
+            expression = (
+                f"{expression}.superRefine((value, ctx) => {{"
+                " if (!isDeclaredSpeechLocaleFallback(value.requested_language, value.served_language)) ctx.addIssue({ code: 'custom', message: 'locale fallback is not declared by the language table' });"
+                "})"
+            )
+        if schema.get(SPEECH_METHOD_CONSTRAINTS_MARKER) is True:
+            expression = (
+                f"{expression}.overwrite((value) => ({{ ...value,"
+                " exact_languages: Array.isArray(value.exact_languages) ? sortUniqueCodePointStrings(value.exact_languages) : value.exact_languages,"
+                " auto_detect_languages: Array.isArray(value.auto_detect_languages) ? sortUniqueCodePointStrings(value.auto_detect_languages) : value.auto_detect_languages,"
+                " ready_voice_ids: Array.isArray(value.ready_voice_ids) ? sortUniqueCodePointStrings(value.ready_voice_ids) : value.ready_voice_ids,"
+                " locale_fallbacks: normalizeSpeechLocaleFallbacks(value.locale_fallbacks)"
+                " }))"
+                ".superRefine((value, ctx) => {"
+                " const exact = Array.isArray(value.exact_languages) ? value.exact_languages : [];"
+                " const auto = Array.isArray(value.auto_detect_languages) ? value.auto_detect_languages : [];"
+                " const fallbacks = Array.isArray(value.locale_fallbacks) ? value.locale_fallbacks : [];"
+                " const voices = Array.isArray(value.ready_voice_ids) ? value.ready_voice_ids : [];"
+                " const exactSet = new Set(exact);"
+                " if (new Set(exact).size !== exact.length || !isSortedStringList(exact)) ctx.addIssue({ code: 'custom', path: ['exact_languages'], message: 'exact languages must be unique and sorted' });"
+                " if (new Set(auto).size !== auto.length || !isSortedStringList(auto)) ctx.addIssue({ code: 'custom', path: ['auto_detect_languages'], message: 'auto detect languages must be unique and sorted' });"
+                " if (new Set(voices).size !== voices.length || !isSortedStringList(voices)) ctx.addIssue({ code: 'custom', path: ['ready_voice_ids'], message: 'ready voice ids must be unique and sorted' });"
+                " if (value.supports_auto_detect === true) {"
+                " if (auto.length < 2) ctx.addIssue({ code: 'custom', path: ['auto_detect_languages'], message: 'auto coverage must contain at least two languages' });"
+                " for (const language of auto) if (!exactSet.has(language)) ctx.addIssue({ code: 'custom', path: ['auto_detect_languages'], message: 'auto coverage must be a subset of exact languages' });"
+                " } else if (auto.length > 0) ctx.addIssue({ code: 'custom', path: ['auto_detect_languages'], message: 'auto coverage requires supports_auto_detect' });"
+                " for (const [index, fallback] of fallbacks.entries()) {"
+                " if (fallback && typeof fallback === 'object' && !exactSet.has((fallback as Record<string, unknown>).served_language as string)) ctx.addIssue({ code: 'custom', path: ['locale_fallbacks', index, 'served_language'], message: 'fallback served language must be exact-ready' });"
+                " }"
+                " if ((exact.length > 0 || fallbacks.length > 0 || voices.length > 0 || value.supports_auto_detect === true) && (value.resident_model_identity_digest === null || value.resident_model_identity_digest === undefined)) ctx.addIssue({ code: 'custom', path: ['resident_model_identity_digest'], message: 'ready speech constraints require a resident model identity' });"
+                "})"
+            )
+        invariant_helpers = (
+            (TTS_CAPABILITIES_INVARIANT_MARKER, "validateTtsCapabilitiesInvariant"),
+            (TTS_VOICE_DESCRIPTOR_INVARIANT_MARKER, "validateTtsVoiceDescriptorInvariant"),
+            (TTS_VOICE_LIST_INVARIANT_MARKER, "validateTtsVoiceListInvariant"),
+            (TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER, "validateTtsProfileDescriptorInvariant"),
+            (TTS_PROFILE_LIST_INVARIANT_MARKER, "validateTtsProfileListInvariant"),
+            (TTS_GET_PROFILE_RESPONSE_INVARIANT_MARKER, "validateTtsGetProfileResponseInvariant"),
+            (TTS_UPDATE_PROFILE_PATCH_INVARIANT_MARKER, "validateTtsUpdateProfilePatchInvariant"),
+            (
+                TTS_CREATE_PROFILE_RESPONSE_INVARIANT_MARKER,
+                "validateTtsCreateProfileResponseInvariant",
+            ),
+            (
+                TTS_DELETE_PROFILE_REQUEST_INVARIANT_MARKER,
+                "validateTtsDeleteProfileRequestInvariant",
+            ),
+            (
+                TTS_DELETE_PROFILE_RESPONSE_INVARIANT_MARKER,
+                "validateTtsDeleteProfileResponseInvariant",
+            ),
+            (
+                TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER,
+                "validateTtsProfileMutationResponseInvariant",
+            ),
+            (TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER, "validateTtsImportStartResponseInvariant"),
+            (TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER, "validateTtsImportChunkRequestInvariant"),
+            (TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER, "validateTtsImportChunkResponseInvariant"),
+            (STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER, "validateSttTranscribeLanguageShape"),
+        )
+        if schema.get(TTS_CAPABILITIES_INVARIANT_MARKER) is True:
+            expression = (
+                f"{expression}.overwrite((value) => ({{ ...value,"
+                " output_formats: Array.isArray(value.output_formats) ? value.output_formats : ['wav', 'raw'],"
+                " sample_rates: Array.isArray(value.sample_rates) ? sortUniqueNumbers(value.sample_rates) : value.sample_rates"
+                " }))"
+            )
+        for marker, helper in invariant_helpers:
+            if schema.get(marker) is True:
+                expression = f"{expression}.superRefine((value, ctx) => {helper}(value, ctx))"
         return expression
 
     def _compile_array(self, schema: dict[str, Any], ctx: CompileContext) -> str:
@@ -622,7 +898,24 @@ class ZodCompiler:
                 f"{expression}.superRefine((value, ctx) => {{"
                 " if (value.some((item) => codePointLength(item) === 0 || item !== item.trim() || codePointLength(item) > 512))"
                 " ctx.addIssue({ code: 'custom', message: 'legacy IDs must be non-empty, trimmed, and bounded' });"
-                "}).overwrite((value) => [...new Set(value)].sort())"
+                "}).overwrite((value) => sortUniqueCodePointStrings(value))"
+            )
+        if schema.get(BOUNDED_NONBLANK_STRING_SET_MARKER) is True:
+            expression = (
+                f"{expression}.superRefine((value, ctx) => {{"
+                " if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256))"
+                " ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });"
+                "}).overwrite((value) => sortUniqueCodePointStrings(value))"
+            )
+        if schema.get(SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER) is True:
+            expression = (
+                f"z.preprocess((value) => normalizeSpeechLanguageArrayValue(value), {expression})"
+            )
+        if schema.get(LOGICAL_VOICE_ARRAY_NORMALIZE_MARKER) is True:
+            expression = (
+                f"z.preprocess((value) => Array.isArray(value) && value.every((item) => typeof item === 'string')"
+                f" ? sortUniqueCodePointStrings(value) : value, {expression})"
+                ".overwrite((value) => sortUniqueCodePointStrings(value))"
             )
         return expression
 
@@ -663,7 +956,21 @@ class ZodCompiler:
         if schema.get(STRING_TRIMMED_MARKER) is True:
             expression = f"{expression}.regex(/^(?!\\s)(?:[\\s\\S]*\\S)?$/)"
         if schema.get(STRING_NON_BLANK_MARKER) is True:
-            expression = f"{expression}.regex(/^(?=.*\\S)[\\s\\S]*$/)"
+            if "pattern" in schema:
+                expression = (
+                    f"{expression}.refine((value) => value.trim().length > 0, "
+                    "{ message: 'string must not be blank' })"
+                )
+            else:
+                expression = f"{expression}.regex(/^(?=.*\\S)[\\s\\S]*$/)"
+        if schema.get(TTS_OPERATION_ID_MARKER) is True:
+            expression = (
+                f"{expression}.superRefine((value, ctx) => {{"
+                " const trimmed = value.trim();"
+                " if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(trimmed))"
+                " ctx.addIssue({ code: 'custom', message: 'operation_id must be a non-blank portable identifier' });"
+                "}).overwrite((value) => value.trim())"
+            )
         if "format" in schema:
             fmt = schema["format"]
             if fmt not in SUPPORTED_STRING_FORMATS:
@@ -688,6 +995,8 @@ class ZodCompiler:
                 expression = f"{expression}.pipe(z.ipv4())"
             elif fmt == "ipv6":
                 expression = f"{expression}.pipe(z.ipv6())"
+            elif fmt == "binary":
+                expression = f"{expression}.meta({canonical_json({'format': 'binary'})})"
         return expression
 
     def _validate_js_regex(self, pattern: str, ctx: CompileContext) -> None:
@@ -746,10 +1055,13 @@ def render_zod_module(contract_schema: dict[str, Any]) -> str:
     lines = [
         "/* eslint-disable */",
         "// Generated by scripts/generate_backend_inventory.py. Do not edit by hand.",
+        "import { sha256 } from '@noble/hashes/sha2.js'",
         "import { z } from 'zod/v4'",
         "",
         "type JsonPrimitive = string | number | boolean | null",
         "type JsonValue = JsonPrimitive | { [key: string]: JsonValue | undefined } | JsonValue[]",
+        "type AuroraCustomIssue = { code: 'custom'; path?: Array<string | number>; message: string }",
+        "type AuroraRefinementContext = { addIssue: (issue: AuroraCustomIssue) => void }",
         "",
         "const toolingProjectionTextEncoder = new TextEncoder()",
         "const TOOLING_PROJECTION_SAFE_BYTES = new Set([0x2D, 0x2E, 0x5F, 0x7E])",
@@ -760,6 +1072,33 @@ def render_zod_module(contract_schema: dict[str, Any]) -> str:
         ")",
         "",
         "function codePointLength(value: string): number { return Array.from(value).length }",
+        "function compareCodePointStrings(left: string, right: string): number {",
+        "  const leftPoints = Array.from(left)",
+        "  const rightPoints = Array.from(right)",
+        "  const count = Math.min(leftPoints.length, rightPoints.length)",
+        "  for (let index = 0; index < count; index += 1) {",
+        "    const leftPoint = leftPoints[index]?.codePointAt(0) ?? 0",
+        "    const rightPoint = rightPoints[index]?.codePointAt(0) ?? 0",
+        "    if (leftPoint !== rightPoint) return leftPoint - rightPoint",
+        "  }",
+        "  return leftPoints.length - rightPoints.length",
+        "}",
+        "function sortUniqueCodePointStrings<T extends string>(value: T[]): T[] { return [...new Set(value)].sort(compareCodePointStrings) }",
+        "function sortUniqueNumbers(value: number[]): number[] { return [...new Set(value)].sort((left, right) => left - right) }",
+        "function normalizeSpeechLanguageValue(value: unknown, autoAsNull = false, blankAsNull = false): unknown { if (typeof value !== 'string') return value; const normalized = value.trim().replaceAll('_', '-').toLowerCase(); if ((blankAsNull && normalized.length === 0) || (autoAsNull && normalized === 'auto')) return null; return normalized }",
+        "function normalizeSpeechLanguageArrayValue(value: unknown): unknown { if (!Array.isArray(value)) return value; const normalized = value.map((item) => normalizeSpeechLanguageValue(item)); return normalized.every((item): item is string => typeof item === 'string') ? sortUniqueCodePointStrings(normalized) : normalized }",
+        "function normalizeSpeechLocaleFallbacks(value: unknown): unknown { if (!Array.isArray(value)) return value; const byKey = new Map<string, Record<string, unknown>>(); for (const item of value) { if (!item || typeof item !== 'object' || Array.isArray(item)) return value; const fallback = item as Record<string, unknown>; byKey.set(`${String(fallback.requested_language)}\\u0000${String(fallback.served_language)}`, fallback) } return [...byKey.entries()].sort(([left], [right]) => compareCodePointStrings(left, right)).map(([, fallback]) => fallback) }",
+        "function bytesToHex(value: Uint8Array): string { return Array.from(value, (byte) => byte.toString(16).padStart(2, '0')).join('') }",
+        "function base64ToBytes(value: string): Uint8Array { if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) throw new Error('invalid base64'); const decoded = atob(value); const bytes = new Uint8Array(decoded.length); for (let index = 0; index < decoded.length; index += 1) bytes[index] = decoded.charCodeAt(index); return bytes }",
+        "function canonicalJson(value: unknown): string {",
+        "  if (value === null || typeof value !== 'object') return JSON.stringify(value)",
+        "  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(',')}]`",
+        "  const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) => compareCodePointStrings(left, right))",
+        "  return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(',')}}`",
+        "}",
+        "function speechLanguageRequirementDigest(value: Record<string, unknown>): string {",
+        "  return bytesToHex(sha256(new TextEncoder().encode(canonicalJson({ auto_language_candidates: Array.isArray(value.auto_language_candidates) ? value.auto_language_candidates : [], language: value.language ?? null, mode: value.mode, table_revision: typeof value.table_revision === 'string' ? value.table_revision : 'aurora-speech-language-v1' }))))",
+        "}",
         "",
         "function hasControlCharacter(value: string): boolean {",
         "  for (const character of value) {",
@@ -808,6 +1147,74 @@ def render_zod_module(contract_schema: dict[str, Any]) -> str:
         "  return globalToolId === `aurora-tool:v1:${percentEncodeRfc3986Utf8ForProjection(providerPeerId)}:Tooling:${percentEncodeRfc3986Utf8ForProjection(toolContractId)}`",
         "}",
         "",
+        "const ROUTE_EXPLAIN_RAW_PAYLOAD_KEYS = new Set(['text', 'audio', 'audio_data', 'payload', 'message', 'messages', 'input', 'params'])",
+        "const ROUTE_EXPLAIN_SELECTOR_FIELDS = new Set(['peer_id', 'provider_id', 'service_instance_id', 'resource_namespace', 'tool_id', 'hardware_target', 'data_scope'])",
+        "const DECLARED_SPEECH_LOCALE_FALLBACKS = new Set<string>()",
+        "",
+        "function routeExplainRawPayloadIssues(value: unknown): AuroraCustomIssue[] {",
+        "  const issues: AuroraCustomIssue[] = []",
+        "  const visit = (item: unknown, path: Array<string | number>): void => {",
+        "    if (Array.isArray(item)) { item.forEach((entry, index) => visit(entry, [...path, index])); return }",
+        "    if (!item || typeof item !== 'object') return",
+        "    for (const [key, child] of Object.entries(item as Record<string, unknown>)) {",
+        "      if (ROUTE_EXPLAIN_RAW_PAYLOAD_KEYS.has(key)) issues.push({ code: 'custom', path: [...path, key], message: 'route explanations must not include request payload fields' })",
+        "      if (path.length === 0 && key === 'speech') continue",
+        "      visit(child, [...path, key])",
+        "    }",
+        "  }",
+        "  visit(value, [])",
+        "  return issues",
+        "}",
+        "",
+        "function routeExplainSelectorIssues(value: unknown): AuroraCustomIssue[] {",
+        "  const issues: AuroraCustomIssue[] = []",
+        "  if (!value || typeof value !== 'object' || Array.isArray(value)) return issues",
+        "  const selector = (value as Record<string, unknown>).selector",
+        "  if (!selector || typeof selector !== 'object' || Array.isArray(selector)) return issues",
+        "  for (const key of Object.keys(selector as Record<string, unknown>)) {",
+        "    if (!ROUTE_EXPLAIN_SELECTOR_FIELDS.has(key)) issues.push({ code: 'custom', path: ['selector', key], message: 'route explanation selectors must use typed selector fields' })",
+        "  }",
+        "  return issues",
+        "}",
+        "",
+        "function routeExplainSpeechRawPayloadIssues(value: unknown): AuroraCustomIssue[] {",
+        "  const issues: AuroraCustomIssue[] = []",
+        "  if (!value || typeof value !== 'object' || Array.isArray(value)) return issues",
+        "  const speech = (value as Record<string, unknown>).speech",
+        "  if (!speech || typeof speech !== 'object' || Array.isArray(speech)) return issues",
+        "  for (const key of Object.keys(speech as Record<string, unknown>)) {",
+        "    if (ROUTE_EXPLAIN_RAW_PAYLOAD_KEYS.has(key)) issues.push({ code: 'custom', path: ['speech', key], message: 'speech route hints must not include request payload fields' })",
+        "  }",
+        "  return issues",
+        "}",
+        "",
+        "function isSortedStringList(value: unknown[]): boolean {",
+        "  return value.every((item, index) => typeof item === 'string' && (index === 0 || compareCodePointStrings(String(value[index - 1]), item) <= 0))",
+        "}",
+        "",
+        "function isDeclaredSpeechLocaleFallback(requested: unknown, served: unknown): boolean {",
+        "  return typeof requested === 'string' && typeof served === 'string' && DECLARED_SPEECH_LOCALE_FALLBACKS.has(`${requested}->${served}`)",
+        "}",
+        "",
+        "function addInvariantIssue(ctx: AuroraRefinementContext, path: Array<string | number>, message: string): void { ctx.addIssue({ code: 'custom', path, message }) }",
+        "function listIds(value: unknown, field: string): string[] { if (!value || typeof value !== 'object') return []; const raw = (value as Record<string, unknown>)[field]; return Array.isArray(raw) ? raw.filter((item): item is string => typeof item === 'string') : [] }",
+        "function optionalString(value: Record<string, unknown>, field: string): string | null | undefined { const raw = value[field]; return typeof raw === 'string' || raw === null || raw === undefined ? raw : undefined }",
+        "function validateTtsCapabilitiesInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const supported = new Set(listIds(value, 'supported_language_pack_ids')); const installedIds = listIds(value, 'installed_language_pack_ids'); const installed = new Set(installedIds); const residentIds = listIds(value, 'resident_language_pack_ids'); const resident = new Set(residentIds); const bindings = Array.isArray(value.resident_language_packs) ? value.resident_language_packs as Record<string, unknown>[] : []; const bindingIds = bindings.map((binding) => binding.pack_id).filter((id): id is string => typeof id === 'string'); for (const id of installedIds) if (!supported.has(id)) addInvariantIssue(ctx, ['installed_language_pack_ids'], 'installed packs must be supported'); for (const id of residentIds) if (!installed.has(id)) addInvariantIssue(ctx, ['resident_language_pack_ids'], 'resident packs must be installed'); if (bindingIds.length !== new Set(bindingIds).size) addInvariantIssue(ctx, ['resident_language_packs'], 'resident language pack bindings must be unique'); if (bindingIds.length !== resident.size || bindingIds.some((id) => !resident.has(id))) addInvariantIssue(ctx, ['resident_language_packs'], 'resident language pack ids and bindings must match'); const boundReadyLanguages = new Set(bindings.flatMap((binding) => listIds(binding, 'ready_languages'))); const readyLanguages = new Set(listIds(value, 'ready_languages')); if (boundReadyLanguages.size !== readyLanguages.size || [...boundReadyLanguages].some((language) => !readyLanguages.has(language))) addInvariantIssue(ctx, ['ready_languages'], 'ready languages must match resident language pack bindings'); if (typeof value.resident_base_model_count === 'number' && typeof value.max_resident_base_models === 'number' && value.resident_base_model_count > value.max_resident_base_models) addInvariantIssue(ctx, ['resident_base_model_count'], 'resident base model count exceeds limit'); if (value.ready !== true && readyLanguages.size > 0) addInvariantIssue(ctx, ['ready_languages'], 'ready=false cannot advertise ready languages'); if (value.ready === true) { if (value.model_status !== 'ready' && value.model_status !== 'degraded') addInvariantIssue(ctx, ['model_status'], 'ready capability needs a usable model status'); if (readyLanguages.size === 0 || resident.size === 0) addInvariantIssue(ctx, ['ready_languages'], 'ready capability needs resident languages and packs'); if (value.resident_base_model_count !== undefined && value.resident_base_model_count !== null && Number(value.resident_base_model_count) < 1) addInvariantIssue(ctx, ['resident_base_model_count'], 'ready capability needs a resident base model'); if (listIds(value, 'output_formats').length === 0 || !Array.isArray(value.sample_rates) || value.sample_rates.length === 0) addInvariantIssue(ctx, ['output_formats'], 'ready capability needs output formats and sample rates'); } else if (value.model_status === 'ready') addInvariantIssue(ctx, ['model_status'], 'model_status=ready requires ready=true'); if (value.cloning === true) { if (listIds(value, 'accepted_clone_import_formats').length === 0) addInvariantIssue(ctx, ['accepted_clone_import_formats'], 'cloning needs at least one accepted import format'); if (Number(value.max_clone_import_bytes) < 1 || Number(value.max_clone_chunk_bytes) < 1) addInvariantIssue(ctx, ['max_clone_import_bytes'], 'cloning needs positive import limits'); } else if (listIds(value, 'accepted_clone_import_formats').length > 0 || Number(value.max_clone_import_bytes) !== 0 || Number(value.max_clone_chunk_bytes) !== 0) addInvariantIssue(ctx, ['cloning'], 'cloning=false cannot advertise clone import support'); }",
+        "function validateTtsVoiceDescriptorInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const voiceId = optionalString(value, 'voice_id'); if (value.kind === 'standard' && (!voiceId || !voiceId.startsWith('standard:'))) addInvariantIssue(ctx, ['voice_id'], 'standard voice kind needs a standard logical voice id'); if (value.kind === 'cloned' && (!voiceId || !voiceId.startsWith('clone:'))) addInvariantIssue(ctx, ['voice_id'], 'cloned voice kind needs a clone logical voice id'); if (value.ready === true && listIds(value, 'compatible_language_pack_ids').length === 0) addInvariantIssue(ctx, ['compatible_language_pack_ids'], 'ready voice needs a compatible language pack'); }",
+        "function validateTtsVoiceListInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const voices = Array.isArray(value.voices) ? value.voices as Record<string, unknown>[] : []; const ids = voices.map((voice) => voice.voice_id).filter((id): id is string => typeof id === 'string'); if (voices.some((voice) => voice.ready !== true)) addInvariantIssue(ctx, ['voices'], 'use-safe voice list cannot contain unready voices'); if (new Set(ids).size !== ids.length) addInvariantIssue(ctx, ['voices'], 'use-safe voice list cannot contain duplicate voices'); }",
+        "function validateTtsProfileDescriptorInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const voiceId = optionalString(value, 'voice_id'); if (value.kind === 'standard' && (!voiceId || !voiceId.startsWith('standard:'))) addInvariantIssue(ctx, ['voice_id'], 'standard profile kind needs a standard logical voice id'); if (value.kind === 'cloned' && (!voiceId || !voiceId.startsWith('clone:'))) addInvariantIssue(ctx, ['voice_id'], 'cloned profile kind needs a clone logical voice id'); if (value.ready === true && value.installed !== true) addInvariantIssue(ctx, ['installed'], 'ready profile must be installed'); if ((value.default === true || value.active === true) && value.ready !== true) addInvariantIssue(ctx, ['ready'], 'default or active profile must be ready'); if (value.kind === 'standard' && value.retained_source === true) addInvariantIssue(ctx, ['retained_source'], 'standard profile cannot retain clone source'); if (value.visibility === 'private' && listIds(value, 'allowed_peer_ids').length > 0) addInvariantIssue(ctx, ['allowed_peer_ids'], 'private profile cannot expose allowed peers'); }",
+        "function validateTtsProfileListInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const profiles = Array.isArray(value.profiles) ? value.profiles as Record<string, unknown>[] : []; const ids = profiles.map((profile) => profile.voice_id).filter((id): id is string => typeof id === 'string'); if (new Set(ids).size !== ids.length) addInvariantIssue(ctx, ['profiles'], 'voice profile list cannot contain duplicate profiles'); }",
+        "function validateTtsGetProfileResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (value.found === true && (value.profile === null || value.profile === undefined)) addInvariantIssue(ctx, ['profile'], 'found voice profile response requires profile'); if (value.found === false && value.profile !== null && value.profile !== undefined) addInvariantIssue(ctx, ['profile'], 'missing voice profile response cannot include profile'); }",
+        "function validateTtsUpdateProfilePatchInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (value.display_name === undefined && value.enabled === undefined && value.visibility === undefined && value.allowed_peer_ids === undefined) addInvariantIssue(ctx, [], 'voice profile update must include a change'); if (value.visibility === 'private' && listIds(value, 'allowed_peer_ids').length > 0) addInvariantIssue(ctx, ['allowed_peer_ids'], 'private visibility cannot include allowed peers'); }",
+        "function validateTtsCreateProfileResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const ok = value.status === 'created' || value.status === 'queued' || value.status === 'ready'; const voiceId = optionalString(value, 'voice_id'); if ((ok && value.revision === null) || (ok && value.revision === undefined)) addInvariantIssue(ctx, ['revision'], 'successful create result needs revision'); if ((ok && value.voice_id === null) || (ok && value.voice_id === undefined)) addInvariantIssue(ctx, ['voice_id'], 'successful create result needs voice_id'); if (voiceId && !voiceId.startsWith('clone:')) addInvariantIssue(ctx, ['voice_id'], 'created profile must use a clone logical voice id'); }",
+        "function validateTtsDeleteProfileRequestInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const voiceId = optionalString(value, 'voice_id'); if (!voiceId || !voiceId.startsWith('clone:')) addInvariantIssue(ctx, ['voice_id'], 'only cloned voice profiles can be deleted'); }",
+        "function validateTtsDeleteProfileResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const voiceId = optionalString(value, 'voice_id'); if (!voiceId || !voiceId.startsWith('clone:')) addInvariantIssue(ctx, ['voice_id'], 'deleted profile result must use a clone logical voice id'); }",
+        "function validateTtsProfileMutationResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const status = value.status; if ((status !== 'rejected' && status !== 'not_found' && value.revision === null) || (status !== 'rejected' && status !== 'not_found' && value.revision === undefined)) addInvariantIssue(ctx, ['revision'], 'successful or conflicting mutation result needs revision'); }",
+        "function validateTtsImportStartResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (typeof value.max_chunk_bytes === 'number' && typeof value.max_chunks === 'number' && typeof value.accepted_total_bytes === 'number' && value.max_chunk_bytes * value.max_chunks < value.accepted_total_bytes) addInvariantIssue(ctx, ['accepted_total_bytes'], 'upload session capacity is below accepted total bytes'); }",
+        "function validateTtsImportChunkRequestInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { let decoded: Uint8Array; if (typeof value.chunk_data !== 'string') return; try { decoded = base64ToBytes(value.chunk_data) } catch { addInvariantIssue(ctx, ['chunk_data'], 'chunk_data must be valid base64'); return } if (decoded.length === 0) addInvariantIssue(ctx, ['chunk_data'], 'decoded chunk must not be empty'); if (decoded.length > 49152) addInvariantIssue(ctx, ['chunk_data'], 'decoded chunk exceeds limit'); if (typeof value.chunk_sha256 === 'string' && bytesToHex(sha256(decoded)) !== value.chunk_sha256) addInvariantIssue(ctx, ['chunk_sha256'], 'chunk SHA-256 mismatch'); if (new TextEncoder().encode(JSON.stringify(value)).length > 131072) addInvariantIssue(ctx, [], 'voice import chunk request exceeds JSON limit'); }",
+        "function validateTtsImportChunkResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (typeof value.sequence === 'number' && value.next_sequence !== value.sequence + 1) addInvariantIssue(ctx, ['next_sequence'], 'next_sequence must acknowledge exactly one chunk'); if (value.status === 'duplicate' && value.idempotent !== true) addInvariantIssue(ctx, ['idempotent'], 'duplicate chunk acknowledgement must be idempotent'); if (value.status === 'accepted' && value.idempotent === true) addInvariantIssue(ctx, ['idempotent'], 'first chunk acknowledgement cannot be idempotent'); }",
+        "function validateSttTranscribeLanguageShape(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (value.language !== null && value.language !== undefined && listIds(value, 'auto_language_candidates').length > 0) addInvariantIssue(ctx, ['auto_language_candidates'], 'exact STT language cannot include auto candidates'); }",
+        "",
     ]
     schema_exports: list[str] = []
     for item in schemas:
@@ -832,6 +1239,17 @@ def render_zod_module(contract_schema: dict[str, Any]) -> str:
     lines.append("export const backendContractSchemaById = {")
     for item in schemas:
         lines.append(f"  {_ts_string(item['schema_id'])}: {schema_symbol(item['schema_id'])},")
+    lines.append("} as const")
+    lines.append("")
+    method_descriptors = contract_schema.get("method_descriptors", [])
+    lines.append(
+        "export const backendContractMethodDescriptors = "
+        f"{json.dumps(method_descriptors, ensure_ascii=False, indent=2)} as const"
+    )
+    lines.append("")
+    lines.append("export const backendContractMethodDescriptorById = {")
+    for item in method_descriptors:
+        lines.append(f"  {_ts_string(item['method_id'])}: {json.dumps(item, ensure_ascii=False)},")
     lines.append("} as const")
     lines.append("")
     return "\n".join(lines)

@@ -29,6 +29,7 @@ from app.shared.contracts.models.orchestrator import (
     OrchestratorInferChatResponse,
 )
 from app.shared.contracts.models.speech import (
+    MAX_JS_SAFE_INTEGER,
     LogicalVoiceId,
     SpeechLanguageRequirement,
     SpeechMethodConstraints,
@@ -1084,9 +1085,9 @@ class RouteCandidateDecision(IOModel):
     projection_revision: str = ""
     projection_digest: str = ""
     latency_ms: float | None = None
-    active_calls: int = 0
-    max_concurrent: int = 0
-    available_capacity: int | None = None
+    active_calls: int = Field(default=0, ge=0, le=MAX_JS_SAFE_INTEGER)
+    max_concurrent: int = Field(default=0, ge=0, le=MAX_JS_SAFE_INTEGER)
+    available_capacity: int | None = Field(default=None, ge=0, le=MAX_JS_SAFE_INTEGER)
     policy: CapabilityPolicyDecisionInfo = Field(default_factory=CapabilityPolicyDecisionInfo)
     freshness: CapabilityFreshnessInfo = Field(default_factory=CapabilityFreshnessInfo)
     auth_rbac_state: str = "unknown"
