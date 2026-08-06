@@ -854,7 +854,6 @@ class PocketTTSProvider:
                 with contextlib.suppress(RuntimeError):
                     loop.call_soon_threadsafe(self._release_entry_lock)
 
-        release_on_exit = False
         producer = threading.Thread(
             target=produce,
             name="aurora-pockettts-stream",
@@ -883,33 +882,27 @@ class PocketTTSProvider:
                 try:
                     kind, payload = await asyncio.wait_for(bridge.get(), timeout=timeout_s)
                 except TimeoutError as exc:
-                    release_on_exit = False
                     stop_event.set()
                     log_warning("PocketTTS stream timed out")
                     raise TTSProviderError("resource_exhausted", "TTS provider is busy") from exc
                 except asyncio.CancelledError:
-                    release_on_exit = False
                     stop_event.set()
                     raise
                 if kind == "chunk":
                     yield payload
                     continue
                 if kind == "done":
-                    release_on_exit = True
                     break
                 if kind == "cancelled":
                     await self._reject_if_cancelled(request_id)
                     raise TTSProviderError("cancelled", "TTS request was cancelled")
                 log_debug(f"PocketTTS stream failure type={type(payload).__name__}")
-                release_on_exit = True
                 raise TTSProviderError("unavailable", "PocketTTS synthesis failed")
         finally:
             stop_event.set()
             if request_id is not None:
                 async with self._state_lock:
                     self._stream_wakeups.pop(request_id, None)
-            if release_on_exit:
-                self._release_entry_lock()
 
     async def _acquire_entry_lock(self, queue_timeout_s: float) -> None:
         try:

@@ -427,6 +427,51 @@ async def test_pockettts_stream_cancel_wakes_forever_generator_without_default_t
 
 
 @pytest.mark.asyncio
+async def test_pockettts_stream_completion_hands_gate_to_queued_synthesis_until_done() -> None:
+    release_stream = threading.Event()
+    release_synthesis = threading.Event()
+    FakePocketTTSModel.block_stream_after_first = release_stream
+    FakePocketTTSModel.block_generation = release_synthesis
+    provider = PocketTTSProvider(
+        PocketTTSProviderConfig(
+            effective_language="es",
+            quality_tier="quality",
+            max_tokens=4,
+            queue_timeout_s=0.05,
+            request_timeout_s=5,
+        ),
+        model_class=FakePocketTTSModel,
+    )
+    await provider.start()
+    stream = provider.stream(TTSSynthesisRequest(text="hola", request_id="stream-race"))
+    first = await asyncio.wait_for(stream.__anext__(), timeout=1)
+    queued_synthesis = asyncio.create_task(
+        provider.synthesize(TTSSynthesisRequest(text="queued", request_id="synth-race"))
+    )
+
+    release_stream.set()
+    rest = [chunk async for chunk in stream]
+    deadline = asyncio.get_running_loop().time() + 1
+    while FakePocketTTSModel.active_entries == 0:
+        if asyncio.get_running_loop().time() > deadline:
+            pytest.fail("queued synthesis did not enter after stream completion")
+        await asyncio.sleep(0.01)
+    with pytest.raises(TTSProviderError) as busy:
+        blocked_stream = provider.stream(TTSSynthesisRequest(text="blocked", request_id="stream-2"))
+        await blocked_stream.__anext__()
+
+    assert first.audio == b"\x00 "
+    assert [(chunk.sequence, chunk.is_final) for chunk in rest] == [(1, False), (2, True)]
+    assert busy.value.code == "resource_exhausted"
+    assert FakePocketTTSModel.max_active_entries == 1
+    release_synthesis.set()
+    result = await queued_synthesis
+    assert result.audio
+    assert await provider.tracked_request_count() == 0
+    await provider.stop()
+
+
+@pytest.mark.asyncio
 async def test_pockettts_serializes_model_entry_and_cancels_active_delivery() -> None:
     release = threading.Event()
     FakePocketTTSModel.block_generation = release
