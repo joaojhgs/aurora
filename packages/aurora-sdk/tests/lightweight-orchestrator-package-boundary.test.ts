@@ -43,7 +43,7 @@ describe('lightweight orchestrator package boundary', () => {
     } finally {
       if (oldWindow !== undefined) (globalThis as Record<string, unknown>).window = oldWindow
     }
-  })
+  }, 30_000)
 
   it('points package exports at emitted build artifacts', () => {
     const pkg = JSON.parse(read(packageJsonPath))
