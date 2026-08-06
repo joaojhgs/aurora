@@ -10,11 +10,12 @@ import importlib.metadata
 import importlib.resources
 import math
 import os
+import queue
 import shutil
 import tempfile
 import threading
 from collections.abc import AsyncIterator, Iterable, Mapping
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Executor, Future
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -42,6 +43,98 @@ from app.services.tts.voice_registry import (
 )
 
 PocketTTSQualityTier = Literal["compact", "quality"]
+
+
+class _DaemonSingleWorkerExecutor(Executor):
+    """Single-worker executor without ThreadPoolExecutor atexit joining."""
+
+    def __init__(self, *, thread_name_prefix: str) -> None:
+        self._thread_name_prefix = thread_name_prefix
+        self._tasks: queue.Queue[tuple[Future[Any], Any, tuple[Any, ...]] | None] = queue.Queue()
+        self._lock = threading.Lock()
+        self._shutdown = False
+        self._thread: threading.Thread | None = None
+
+    def submit(self, fn: Any, /, *args: Any, **kwargs: Any) -> Future[Any]:
+        if kwargs:
+
+            def call() -> Any:
+                return fn(*args, **kwargs)
+
+            task_args: tuple[Any, ...] = ()
+        else:
+            call = fn
+            task_args = args
+        future: Future[Any] = Future()
+        with self._lock:
+            if self._shutdown:
+                raise RuntimeError("PocketTTS executor is shut down")
+            self._ensure_thread_locked()
+            self._tasks.put((future, call, task_args))
+        return future
+
+    def shutdown(self, wait: bool = True, *, cancel_futures: bool = False) -> None:
+        with self._lock:
+            self._shutdown = True
+            if cancel_futures:
+                self._cancel_queued_locked()
+            thread = self._thread
+            self._tasks.put(None)
+        if wait and thread is not None:
+            thread.join()
+
+    def shutdown_bounded(self, timeout_s: float, *, cancel_futures: bool = False) -> bool:
+        with self._lock:
+            self._shutdown = True
+            if cancel_futures:
+                self._cancel_queued_locked()
+            thread = self._thread
+            self._tasks.put(None)
+        if thread is None:
+            return True
+        thread.join(timeout_s)
+        return not thread.is_alive()
+
+    def _ensure_thread_locked(self) -> None:
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._thread = threading.Thread(
+            target=self._worker,
+            name=f"{self._thread_name_prefix}_0",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def _cancel_queued_locked(self) -> None:
+        retained: list[tuple[Future[Any], Any, tuple[Any, ...]] | None] = []
+        while True:
+            try:
+                task = self._tasks.get_nowait()
+            except queue.Empty:
+                break
+            if task is None:
+                retained.append(task)
+                continue
+            future, _fn, _args = task
+            future.cancel()
+        for task in retained:
+            self._tasks.put(task)
+
+    def _worker(self) -> None:
+        while True:
+            task = self._tasks.get()
+            if task is None:
+                return
+            future, fn, args = task
+            if not future.set_running_or_notify_cancel():
+                continue
+            try:
+                result = fn(*args)
+            except BaseException as exc:
+                future.set_exception(exc)
+            else:
+                future.set_result(result)
+
 
 _PRODUCT_LANGUAGE_ALIASES: Mapping[str, str] = {
     "en": "english",
@@ -781,7 +874,7 @@ class PocketTTSProvider:
     ) -> None:
         self._config = config
         self._model_class = model_class
-        self._executor: ThreadPoolExecutor | None = None
+        self._executor: _DaemonSingleWorkerExecutor | None = None
         self._entry_lock = asyncio.Lock()
         self._load_lock = asyncio.Lock()
         self._state_lock = asyncio.Lock()
@@ -906,10 +999,11 @@ class PocketTTSProvider:
         if not entry_draining:
             async with self._entry_lock:
                 pass
-        await self._shutdown_executor(
-            wait=(not entry_draining and streams_drained),
+        executor_drained = await self._shutdown_executor(
+            wait=True,
             cancel_futures=True,
         )
+        stopped_cleanly = streams_drained and executor_drained
         async with self._state_lock:
             self._loaded = None
             self._queued_requests.clear()
@@ -917,10 +1011,10 @@ class PocketTTSProvider:
             self._cancelled_requests.clear()
             self._stream_wakeups.clear()
             self._close_owned_voice_fds_locked()
-            self._stopping = not streams_drained
-            if not streams_drained:
-                self._last_error = "PocketTTS stream did not stop"
-        if not streams_drained:
+            self._stopping = not stopped_cleanly
+            if not stopped_cleanly:
+                self._last_error = "PocketTTS model work did not stop"
+        if not stopped_cleanly:
             raise TTSProviderError("resource_exhausted", "TTS provider is busy")
 
     async def health(self) -> TTSProviderHealth:
@@ -1370,23 +1464,26 @@ class PocketTTSProvider:
 
         future.add_done_callback(release)
 
-    def _ensure_executor(self) -> ThreadPoolExecutor:
+    def _ensure_executor(self) -> _DaemonSingleWorkerExecutor:
         if self._executor is None:
-            self._executor = ThreadPoolExecutor(
-                max_workers=1,
+            self._executor = _DaemonSingleWorkerExecutor(
                 thread_name_prefix="aurora-pockettts",
             )
         return self._executor
 
-    async def _shutdown_executor(self, *, wait: bool, cancel_futures: bool) -> None:
+    async def _shutdown_executor(self, *, wait: bool, cancel_futures: bool) -> bool:
         executor = self._executor
         self._executor = None
-        if executor is not None:
-            await asyncio.to_thread(
-                executor.shutdown,
-                wait,
+        if executor is None:
+            return True
+        if wait:
+            return await asyncio.to_thread(
+                executor.shutdown_bounded,
+                self._stream_drain_timeout_s(),
                 cancel_futures=cancel_futures,
             )
+        executor.shutdown(wait=False, cancel_futures=cancel_futures)
+        return True
 
     def _track_stream_future(self, future: asyncio.Future[Any]) -> None:
         self._stream_futures.add(future)

@@ -6,6 +6,8 @@ import asyncio
 import hashlib
 import inspect
 import os
+import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -254,6 +256,12 @@ def _fd_is_closed(fd: int) -> bool:
     except OSError:
         return True
     return False
+
+
+def _pockettts_worker_threads() -> list[threading.Thread]:
+    return [
+        thread for thread in threading.enumerate() if thread.name.startswith("aurora-pockettts")
+    ]
 
 
 def test_pockettts_official_api_signature_conformance_without_model_download() -> None:
@@ -511,6 +519,7 @@ async def test_pockettts_start_loads_model_and_multiple_voice_states() -> None:
         ("clone:00000000-0000-4000-8000-000000000001", "Local", True, "german"),
     ]
     await provider.stop()
+    assert _pockettts_worker_threads() == []
 
 
 @pytest.mark.asyncio
@@ -917,6 +926,249 @@ async def test_pockettts_stream_stop_reports_blocked_executor_producer_then_rest
     assert health.ready is False
     assert restarted_health.ready is True
     assert not any(thread.name == "aurora-pockettts-stream" for thread in threading.enumerate())
+
+
+def test_pockettts_forever_stream_subprocess_exits_after_bounded_stop_failure() -> None:
+    code = r"""
+import asyncio
+import hashlib
+import os
+import tempfile
+import threading
+import time
+from pathlib import Path
+
+from app.services.tts.providers.base import TTSSynthesisRequest, TTSProviderError
+from app.services.tts.providers.pockettts import (
+    PocketTTSProvider,
+    PocketTTSProviderConfig,
+    PocketTTSVoiceStateConfig,
+    resolve_pockettts_base_identity_spec,
+)
+from app.services.tts.voice_registry import VoiceStateArtifactHandle
+
+
+class Tensor:
+    shape = (1,)
+    dtype = "float32"
+    def isfinite(self):
+        return type("Finite", (), {"all": lambda self: True})()
+
+
+class Model:
+    @classmethod
+    def load_model(cls, *, language, quantize, **kwargs):
+        del quantize, kwargs
+        return cls(language)
+    def __init__(self, language):
+        self.sample_rate = 24000
+        self.device = "cpu"
+        self.origin = type("Origin", (), {"name": f"{language}.safetensors"})()
+    def get_state_for_audio_prompt(self, voice: Path):
+        assert voice.read_bytes()
+        return {"voice": {"offset": Tensor()}, "decoder_cache": {"state": Tensor()}}
+    def generate_audio_stream(self, state, text, **kwargs):
+        yield [0.25]
+        while True:
+            time.sleep(0.05)
+
+
+def voice_state(config):
+    payload = b"state"
+    f = tempfile.TemporaryFile()
+    f.write(payload)
+    f.flush()
+    f.seek(0)
+    fd = os.dup(f.fileno())
+    f.close()
+    identity = resolve_pockettts_base_identity_spec(config).voice_base_identity
+    return PocketTTSVoiceStateConfig(
+        voice_id="standard:starter_en:alba",
+        artifact_handle=VoiceStateArtifactHandle(
+            voice_id="standard:starter_en:alba",
+            runtime_target=identity.runtime_target,
+            language_bundle=identity.language_bundle,
+            compatibility_group=identity.compatibility_group,
+            artifact_revision="rev1",
+            relative_ref="artifacts/profile/voice-state.safetensors",
+            sha256=hashlib.sha256(payload).hexdigest(),
+            size_bytes=len(payload),
+            format="safetensors",
+            fd=fd,
+        ),
+    )
+
+
+async def main():
+    base = PocketTTSProviderConfig(
+        effective_language="en",
+        request_timeout_s=0.1,
+        queue_timeout_s=0.05,
+        max_tokens=4,
+        package_version="2.1.0",
+        config_yaml_bytes=b"model: pockettts-model.safetensors\nrevision: test\n",
+        config_asset_refs=("pockettts-model.safetensors",),
+    )
+    provider = PocketTTSProvider(
+        PocketTTSProviderConfig(**{**base.__dict__, "voices": (voice_state(base),)}),
+        model_class=Model,
+    )
+    await provider.start()
+    stream = provider.stream(TTSSynthesisRequest(text="hola", request_id="forever"))
+    first = await stream.__anext__()
+    assert first.audio
+    try:
+        await provider.stop()
+    except TTSProviderError as exc:
+        assert exc.code == "resource_exhausted"
+    else:
+        raise AssertionError("stop should fail for non-cooperative stream")
+    health = await provider.health()
+    assert health.ready is False
+    print("clean-exit")
+
+asyncio.run(main())
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=Path(__file__).resolve().parents[3],
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "clean-exit" in result.stdout
+
+
+def test_pockettts_forever_synthesis_subprocess_exits_after_bounded_stop_failure() -> None:
+    code = r"""
+import asyncio
+import hashlib
+import os
+import tempfile
+import time
+from pathlib import Path
+
+from app.services.tts.providers.base import TTSSynthesisRequest, TTSProviderError
+from app.services.tts.providers.pockettts import (
+    PocketTTSProvider,
+    PocketTTSProviderConfig,
+    PocketTTSVoiceStateConfig,
+    resolve_pockettts_base_identity_spec,
+)
+from app.services.tts.voice_registry import VoiceStateArtifactHandle
+
+
+class Tensor:
+    shape = (1,)
+    dtype = "float32"
+    def isfinite(self):
+        return type("Finite", (), {"all": lambda self: True})()
+
+
+class Model:
+    active_entries = 0
+
+    @classmethod
+    def load_model(cls, *, language, quantize, **kwargs):
+        del quantize, kwargs
+        return cls(language)
+    def __init__(self, language):
+        self.sample_rate = 24000
+        self.device = "cpu"
+        self.origin = type("Origin", (), {"name": f"{language}.safetensors"})()
+    def get_state_for_audio_prompt(self, voice: Path):
+        assert voice.read_bytes()
+        return {"voice": {"offset": Tensor()}, "decoder_cache": {"state": Tensor()}}
+    def generate_audio(self, state, text, **kwargs):
+        type(self).active_entries += 1
+        while True:
+            time.sleep(0.05)
+
+
+def voice_state(config):
+    payload = b"state"
+    f = tempfile.TemporaryFile()
+    f.write(payload)
+    f.flush()
+    f.seek(0)
+    fd = os.dup(f.fileno())
+    f.close()
+    identity = resolve_pockettts_base_identity_spec(config).voice_base_identity
+    return PocketTTSVoiceStateConfig(
+        voice_id="standard:starter_en:alba",
+        artifact_handle=VoiceStateArtifactHandle(
+            voice_id="standard:starter_en:alba",
+            runtime_target=identity.runtime_target,
+            language_bundle=identity.language_bundle,
+            compatibility_group=identity.compatibility_group,
+            artifact_revision="rev1",
+            relative_ref="artifacts/profile/voice-state.safetensors",
+            sha256=hashlib.sha256(payload).hexdigest(),
+            size_bytes=len(payload),
+            format="safetensors",
+            fd=fd,
+        ),
+    )
+
+
+async def main():
+    base = PocketTTSProviderConfig(
+        effective_language="en",
+        request_timeout_s=0.1,
+        queue_timeout_s=0.05,
+        max_tokens=4,
+        package_version="2.1.0",
+        config_yaml_bytes=b"model: pockettts-model.safetensors\nrevision: test\n",
+        config_asset_refs=("pockettts-model.safetensors",),
+    )
+    provider = PocketTTSProvider(
+        PocketTTSProviderConfig(**{**base.__dict__, "voices": (voice_state(base),)}),
+        model_class=Model,
+    )
+    await provider.start()
+    task = asyncio.create_task(
+        provider.synthesize(TTSSynthesisRequest(text="hola", request_id="forever"))
+    )
+    deadline = asyncio.get_running_loop().time() + 1
+    while Model.active_entries == 0:
+        if asyncio.get_running_loop().time() > deadline:
+            raise AssertionError("synthesis did not enter")
+        await asyncio.sleep(0.01)
+    try:
+        await provider.stop()
+    except TTSProviderError as exc:
+        assert exc.code == "resource_exhausted"
+    else:
+        raise AssertionError("stop should fail for non-cooperative synthesis")
+    health = await provider.health()
+    assert health.ready is False
+    assert health.error == "PocketTTS model work did not stop"
+    task.cancel()
+    try:
+        await asyncio.wait_for(task, timeout=0.1)
+    except (asyncio.CancelledError, TimeoutError, TTSProviderError):
+        pass
+    print("clean-exit")
+
+asyncio.run(main())
+"""
+    started_at = time.monotonic()
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=Path(__file__).resolve().parents[3],
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    elapsed_s = time.monotonic() - started_at
+
+    assert result.returncode == 0, result.stderr
+    assert "clean-exit" in result.stdout
+    assert elapsed_s < 3
 
 
 @pytest.mark.asyncio
