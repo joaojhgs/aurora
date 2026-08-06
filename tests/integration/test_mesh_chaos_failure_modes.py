@@ -191,7 +191,9 @@ class TestMeshChaosFallbacks:
         result = await mesh_bus.request(OrchestratorMethods.USER_INPUT, ChaosPayload())
 
         assert result.ok is False
-        assert "data channel closed" in result.error
+        assert result.error == "No available device can handle this action."
+        assert result.data == {"reason_code": "remote_transport_unavailable"}
+        assert "data channel closed" not in result.error
         assert len(bridge.calls) == 1
         assert bridge.calls[0][0:2] == ("orchestrator-peer", OrchestratorMethods.USER_INPUT)
         assert bridge.calls[0][2]
@@ -331,7 +333,8 @@ class TestMeshChaosSafeHardFailures:
         result = await mesh_bus.request(ToolingMethods.EXECUTE_TOOL, payload)
 
         assert result.ok is False
-        assert "not negotiated" in result.error
+        assert result.error == "The selected device is unavailable."
+        assert result.data == {"reason_code": "selector_peer_stale"}
         assert bridge.calls == []
         inner_bus.request.assert_not_awaited()
 
@@ -364,7 +367,8 @@ class TestMeshChaosSafeHardFailures:
         result = await mesh_bus.request(ToolingMethods.EXECUTE_TOOL, payload)
 
         assert result.ok is False
-        assert "not allowed by policy" in result.error
+        assert result.error == "The selected device is not allowed to handle this action."
+        assert result.data == {"reason_code": "selector_peer_unauthorized"}
         assert bridge.calls == []
         inner_bus.request.assert_not_awaited()
 
@@ -390,7 +394,8 @@ class TestMeshChaosSafeHardFailures:
         result = await mesh_bus.request(ToolingMethods.EXECUTE_TOOL, payload)
 
         assert result.ok is False
-        assert "at capacity" in result.error
+        assert result.error == "The selected device is busy."
+        assert result.data == {"reason_code": "selector_provider_at_capacity"}
         assert bridge.calls == []
         inner_bus.request.assert_not_awaited()
 
@@ -406,7 +411,8 @@ class TestMeshChaosSafeHardFailures:
         result = await mesh_bus.request(ToolingMethods.EXECUTE_TOOL, ChaosPayload())
 
         assert result.ok is False
-        assert "No route available" in result.error
+        assert result.error == "No available device can handle this action."
+        assert result.data == {"reason_code": "no_route"}
         inner_bus.request.assert_not_awaited()
 
     @pytest.mark.asyncio

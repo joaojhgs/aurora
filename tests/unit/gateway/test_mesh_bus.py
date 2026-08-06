@@ -13,6 +13,7 @@ from app.services.gateway.mesh.models import RouteDecision
 from app.services.gateway.mesh.peer_bridge import PeerBridgePreAcceptRejectedError
 from app.services.gateway.mesh.policy_store import MeshPolicySnapshot, MeshPolicyStore
 from app.services.gateway.mesh.provider_eligibility import SpeechRouteConstraints
+from app.services.gateway.mesh.route_errors import RouteDispatchError
 from app.services.gateway.mesh.routing_table import RoutingTable
 from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.mesh import MeshAddressSelector
@@ -375,7 +376,10 @@ class TestMeshBusPublish:
     ):
         routing_table.resolve.return_value = RouteDecision(target="none", module="TTS")
 
-        with pytest.raises(RuntimeError, match="No route available"):
+        with pytest.raises(
+            RouteDispatchError,
+            match="No available device can handle this action",
+        ) as exc_info:
             _ = [
                 chunk
                 async for chunk in mesh_bus.stream_request(
@@ -383,6 +387,7 @@ class TestMeshBusPublish:
                     FakePayload(),
                 )
             ]
+        assert exc_info.value.reason_code == "no_route"
 
         constraints = routing_table.resolve.call_args.kwargs["speech_constraints"]
         assert isinstance(constraints, SpeechRouteConstraints)
@@ -502,7 +507,7 @@ class TestMeshBusPublish:
             target="remote", peer_id="peer-1", module="TTS", method_type="use"
         )
         routing_table.resolve_fallback.return_value = RouteDecision(target="local", module="TTS")
-        peer_bridge.call.side_effect = Exception("offline")
+        peer_bridge.call.side_effect = Exception("offline raw-secret-token")
         bus = MeshBus(
             inner_bus,
             routing_table,
@@ -511,8 +516,16 @@ class TestMeshBusPublish:
             policy_provider=provider,
         )
 
-        await bus.publish("TTS.Request", FakePayload(), event=False)
+        with pytest.raises(
+            RouteDispatchError,
+            match="No available device can handle this action",
+        ) as exc_info:
+            await bus.publish("TTS.Request", FakePayload(), event=False)
 
+        assert exc_info.value.reason_code == "remote_transport_unavailable"
+        assert exc_info.value.__cause__ is None
+        assert exc_info.value.__suppress_context__ is True
+        assert "offline raw-secret-token" not in str(exc_info.value)
         assert calls == 1
         routing_table.resolve.assert_called_once()
         routing_table.resolve_fallback.assert_not_called()
@@ -547,9 +560,50 @@ class TestMeshBusPublish:
         routing_table.resolve.return_value = RouteDecision(
             target="remote", peer_id="peer-1", module="TTS", method_type="use"
         )
-        peer_bridge.call.side_effect = Exception("connection lost")
+        peer_bridge.call.side_effect = Exception("connection lost raw-secret-token")
         routing_table.resolve_fallback.return_value = RouteDecision(target="local", module="TTS")
-        await mesh_bus.publish("TTS.Request", FakePayload(), event=False)
+        with pytest.raises(
+            RouteDispatchError,
+            match="No available device can handle this action",
+        ) as exc_info:
+            await mesh_bus.publish("TTS.Request", FakePayload(), event=False)
+
+        assert exc_info.value.reason_code == "remote_transport_unavailable"
+        assert exc_info.value.__cause__ is None
+        assert exc_info.value.__suppress_context__ is True
+        assert "connection lost raw-secret-token" not in str(exc_info.value)
+        routing_table.resolve_fallback.assert_not_called()
+        inner_bus.publish.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_explicit_command_remote_failure_uses_safe_selector_error_without_fallback(
+        self, mesh_bus, inner_bus, routing_table, peer_bridge
+    ):
+        selector = MeshAddressSelector(peer_id="peer-1")
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            peer_id="peer-1",
+            module="TTS",
+            selector=selector,
+            method_type="use",
+        )
+        peer_bridge.call.side_effect = Exception("explicit connection lost raw-secret-token")
+        routing_table.resolve_fallback.return_value = RouteDecision(target="local", module="TTS")
+
+        with pytest.raises(
+            RouteDispatchError,
+            match="The selected device is unavailable",
+        ) as exc_info:
+            await mesh_bus.publish(
+                "TTS.Request",
+                FakePayload(mesh_selector=selector),
+                event=False,
+            )
+
+        assert exc_info.value.reason_code == "remote_transport_unavailable"
+        assert exc_info.value.__cause__ is None
+        assert exc_info.value.__suppress_context__ is True
+        assert "explicit connection lost raw-secret-token" not in str(exc_info.value)
         routing_table.resolve_fallback.assert_not_called()
         inner_bus.publish.assert_not_awaited()
 
@@ -608,7 +662,7 @@ class TestMeshBusPublish:
     @pytest.mark.asyncio
     async def test_command_error_route_raises(self, mesh_bus, routing_table):
         routing_table.resolve.return_value = RouteDecision(target="error", module="TTS")
-        with pytest.raises(RuntimeError, match="No remote peer"):
+        with pytest.raises(RuntimeError, match="This action is unavailable"):
             await mesh_bus.publish("TTS.Request", FakePayload(), event=False)
 
     @pytest.mark.asyncio
@@ -644,10 +698,15 @@ class TestMeshBusRequest:
         routing_table.resolve.return_value = RouteDecision(
             target="remote", peer_id="peer-1", module="TTS", method_type="use"
         )
-        peer_bridge.call.side_effect = Exception("timeout")
+        peer_bridge.call.side_effect = Exception("timeout raw-secret-token")
         routing_table.resolve_fallback.return_value = RouteDecision(target="local", module="TTS")
         result = await mesh_bus.request("TTS.Request", FakePayload())
-        assert result == QueryResult(ok=False, error="timeout")
+        assert result == QueryResult(
+            ok=False,
+            error="No available device can handle this action.",
+            data={"reason_code": "remote_transport_unavailable"},
+        )
+        assert "timeout raw-secret-token" not in result.error
         routing_table.resolve_fallback.assert_not_called()
         inner_bus.request.assert_not_awaited()
 
@@ -659,7 +718,7 @@ class TestMeshBusRequest:
         routing_table.resolve.return_value = RouteDecision(
             target="remote", peer_id="peer-1", module="TTS", selector=selector
         )
-        peer_bridge.call.side_effect = Exception("timeout")
+        peer_bridge.call.side_effect = Exception("timeout raw-secret-token")
         routing_table.resolve_fallback.return_value = RouteDecision(
             target="error",
             module="TTS",
@@ -671,7 +730,9 @@ class TestMeshBusRequest:
         result = await mesh_bus.request("TTS.Request", FakePayload(mesh_selector=selector))
 
         assert result.ok is False
-        assert result.error == "timeout"
+        assert result.error == "The selected device is unavailable."
+        assert result.data == {"reason_code": "remote_transport_unavailable"}
+        assert "timeout raw-secret-token" not in result.error
         routing_table.resolve_fallback.assert_not_called()
         inner_bus.request.assert_not_awaited()
 
@@ -891,14 +952,16 @@ class TestMeshBusRequest:
         routing_table.resolve.return_value = RouteDecision(
             target="remote", peer_id="assistant-peer", module="Orchestrator", selector=selector
         )
-        peer_bridge.call.side_effect = Exception("offline")
+        peer_bridge.call.side_effect = Exception("offline raw-secret-token")
         result = await mesh_bus.request(
             OrchestratorMethods.EXTERNAL_USER_INPUT,
             OrchestratorProcessRequest(text="hello", mesh_selector=selector),
         )
 
         assert result.ok is False
-        assert result.error == "offline"
+        assert result.error == "The selected device is unavailable."
+        assert result.data == {"reason_code": "remote_transport_unavailable"}
+        assert "offline raw-secret-token" not in result.error
         routing_table.resolve_fallback.assert_not_called()
         inner_bus.request.assert_not_awaited()
 
@@ -1018,7 +1081,11 @@ class TestMeshBusRequest:
 
         result = await bus.request(OrchestratorMethods.EXTERNAL_USER_INPUT, FakePayload())
 
-        assert result == QueryResult(ok=False, error="selector_required")
+        assert result == QueryResult(
+            ok=False,
+            error="Choose a device for this action.",
+            data={"reason_code": "selector_required"},
+        )
         assert [call.args[0] for call in peer_bridge.call.await_args_list] == ["assistant-peer"]
         assert inner_bus.request.await_count == 0
 
@@ -1106,12 +1173,17 @@ class TestMeshBusRequest:
         routing_table.resolve.return_value = RouteDecision(
             target="remote", peer_id="peer-a", module="TTS", method_type="use"
         )
-        peer_bridge.call.side_effect = RuntimeError("transport down")
+        peer_bridge.call.side_effect = RuntimeError("transport down raw-secret-token")
         bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)
 
         result = await bus.request(TTSMethods.SYNTHESIZE, FakePayload())
 
-        assert result == QueryResult(ok=False, error="transport down")
+        assert result == QueryResult(
+            ok=False,
+            error="No available device can handle this action.",
+            data={"reason_code": "remote_transport_unavailable"},
+        )
+        assert "transport down raw-secret-token" not in result.error
         peer_bridge.call.assert_awaited_once()
         assert peer_bridge.call.await_args.args[0] == "peer-a"
         assert registry.candidate_calls == []
@@ -1255,7 +1327,8 @@ class TestMeshBusRequest:
         routing_table.resolve.return_value = RouteDecision(target="error", module="TTS")
         result = await mesh_bus.request("TTS.Request", FakePayload())
         assert result.ok is False
-        assert "No remote peer" in result.error
+        assert result.error == "This action is unavailable."
+        assert result.data == {"reason_code": "route_unavailable"}
 
     @pytest.mark.asyncio
     async def test_permission_denied_route_returns_stable_authorization_code(
@@ -1273,7 +1346,11 @@ class TestMeshBusRequest:
 
         result = await mesh_bus.request("Tooling.ExecuteTool", FakePayload())
 
-        assert result == QueryResult(ok=False, error="permission_denied")
+        assert result == QueryResult(
+            ok=False,
+            error="No allowed device can handle this action.",
+            data={"reason_code": "selector_permission_denied"},
+        )
 
     @pytest.mark.asyncio
     async def test_automatic_remote_manage_requires_selector_before_dispatch(
@@ -1296,7 +1373,11 @@ class TestMeshBusRequest:
             method_type="use",
         )
 
-        assert result == QueryResult(ok=False, error="selector_required")
+        assert result == QueryResult(
+            ok=False,
+            error="Choose a device for this action.",
+            data={"reason_code": "selector_required"},
+        )
         peer_bridge.call.assert_not_awaited()
         inner_bus.request.assert_not_awaited()
 
@@ -1317,7 +1398,11 @@ class TestMeshBusRequest:
 
         result = await mesh_bus.request(TTSMethods.SYNTHESIZE, FakePayload())
 
-        assert result == QueryResult(ok=False, error="selector_required")
+        assert result == QueryResult(
+            ok=False,
+            error="Choose a device for this action.",
+            data={"reason_code": "selector_required"},
+        )
         peer_bridge.call.assert_not_awaited()
         inner_bus.request.assert_not_awaited()
 
@@ -1334,7 +1419,11 @@ class TestMeshBusRequest:
 
         result = await mesh_bus.request(TTSMethods.SYNTHESIZE, FakePayload())
 
-        assert result == QueryResult(ok=False, error="selector_required")
+        assert result == QueryResult(
+            ok=False,
+            error="Choose a device for this action.",
+            data={"reason_code": "selector_required"},
+        )
         peer_bridge.call.assert_not_awaited()
         inner_bus.request.assert_not_awaited()
 
@@ -1370,7 +1459,11 @@ class TestMeshBusRequest:
 
         result = await mesh_bus.request(TTSMethods.SYNTHESIZE, FakePayload())
 
-        assert result == QueryResult(ok=False, error="selector_required")
+        assert result == QueryResult(
+            ok=False,
+            error="Choose a device for this action.",
+            data={"reason_code": "selector_required"},
+        )
         peer_bridge.call.assert_not_awaited()
         inner_bus.request.assert_not_awaited()
 
@@ -1482,7 +1575,11 @@ class TestMeshBusRequest:
             FakePayload(mesh_selector=selector),
         )
 
-        assert result == QueryResult(ok=False, error="remote_transport_unavailable")
+        assert result == QueryResult(
+            ok=False,
+            error="The selected device is unavailable.",
+            data={"reason_code": "remote_transport_unavailable"},
+        )
         inner_bus.request.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -1527,7 +1624,7 @@ class TestMeshBusStreamRequest:
         self, mesh_bus, inner_bus, routing_table, peer_bridge
     ):
         async def failing_remote_stream(*args, **kwargs):
-            raise RuntimeError("remote stream unavailable")
+            raise RuntimeError("remote stream unavailable raw-secret-token")
             yield "unreachable"
 
         async def local_stream(*args, **kwargs):
@@ -1546,7 +1643,10 @@ class TestMeshBusStreamRequest:
         peer_bridge.stream_call = MagicMock(side_effect=failing_remote_stream)
         inner_bus.stream_request = MagicMock(side_effect=local_stream)
 
-        with pytest.raises(RuntimeError, match="remote stream unavailable"):
+        with pytest.raises(
+            RouteDispatchError,
+            match="No available device can handle this action",
+        ) as exc_info:
             _ = [
                 chunk
                 async for chunk in mesh_bus.stream_request(
@@ -1555,6 +1655,10 @@ class TestMeshBusStreamRequest:
                 )
             ]
 
+        assert exc_info.value.reason_code == "remote_transport_unavailable"
+        assert exc_info.value.__cause__ is None
+        assert exc_info.value.__suppress_context__ is True
+        assert "remote stream unavailable raw-secret-token" not in str(exc_info.value)
         routing_table.resolve_fallback.assert_not_called()
         inner_bus.stream_request.assert_not_called()
 
@@ -1604,11 +1708,59 @@ class TestMeshBusStreamRequest:
         assert inner_bus.stream_request.call_count == 0
 
     @pytest.mark.asyncio
+    async def test_explicit_remote_stream_preaccept_rejection_preserves_reason_without_reroute(
+        self, inner_bus, routing_table, peer_bridge, mesh_config
+    ):
+        async def preaccept_rejected(*args, **kwargs):
+            raise PeerBridgePreAcceptRejectedError(
+                peer_id="peer-a",
+                reason_code="capability_changed",
+                data={"accepted": False, "reason_code": "capability_changed"},
+            )
+            yield "unreachable"
+
+        selector = MeshAddressSelector(peer_id="peer-a")
+        registry = _FakeLeaseRegistry(
+            ["peer-b"],
+            decisions_by_peer={"peer-b": SimpleNamespace(method_type="use")},
+        )
+        routing_table._registry = registry
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            module="Orchestrator",
+            peer_id="peer-a",
+            selector=selector,
+            method_type="use",
+        )
+        peer_bridge.stream_call = MagicMock(side_effect=preaccept_rejected)
+        inner_bus.stream_request = MagicMock()
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)
+
+        with pytest.raises(
+            RouteDispatchError,
+            match="The selected device is unavailable",
+        ) as exc_info:
+            _ = [
+                chunk
+                async for chunk in bus.stream_request(
+                    "Orchestrator.StreamInferChat",
+                    FakePayload(mesh_selector=selector),
+                )
+            ]
+
+        assert exc_info.value.reason_code == "capability_changed"
+        assert exc_info.value.__cause__ is None
+        assert exc_info.value.__suppress_context__ is True
+        assert peer_bridge.stream_call.call_count == 1
+        assert registry.candidate_calls == []
+        inner_bus.stream_request.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_remote_stream_forged_capability_text_does_not_fallback(
         self, inner_bus, routing_table, peer_bridge, mesh_config
     ):
         async def failing_remote_stream(*args, **kwargs):
-            raise RuntimeError("capability_changed")
+            raise RuntimeError("capability_changed raw-secret-token")
             yield "unreachable"
 
         registry = _FakeLeaseRegistry(
@@ -1626,7 +1778,10 @@ class TestMeshBusStreamRequest:
         inner_bus.stream_request = MagicMock()
         bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)
 
-        with pytest.raises(RuntimeError, match="capability_changed"):
+        with pytest.raises(
+            RouteDispatchError,
+            match="No available device can handle this action",
+        ) as exc_info:
             _ = [
                 chunk
                 async for chunk in bus.stream_request(
@@ -1635,6 +1790,10 @@ class TestMeshBusStreamRequest:
                 )
             ]
 
+        assert exc_info.value.reason_code == "remote_transport_unavailable"
+        assert exc_info.value.__cause__ is None
+        assert exc_info.value.__suppress_context__ is True
+        assert "capability_changed raw-secret-token" not in str(exc_info.value)
         assert peer_bridge.stream_call.call_count == 1
         assert registry.candidate_calls == []
         inner_bus.stream_request.assert_not_called()
@@ -1645,7 +1804,7 @@ class TestMeshBusStreamRequest:
     ):
         async def failing_remote_stream(*args, **kwargs):
             yield {"delta": "remote first"}
-            raise RuntimeError("remote stream interrupted")
+            raise RuntimeError("remote stream interrupted raw-secret-token")
 
         async def local_stream(*args, **kwargs):
             yield {"delta": "must not fallback"}
@@ -1664,13 +1823,20 @@ class TestMeshBusStreamRequest:
         inner_bus.stream_request = MagicMock(side_effect=local_stream)
 
         chunks = []
-        with pytest.raises(RuntimeError, match="remote stream interrupted"):
+        with pytest.raises(
+            RouteDispatchError,
+            match="No available device can handle this action",
+        ) as exc_info:
             async for chunk in mesh_bus.stream_request(
                 "Orchestrator.StreamInferChat",
                 FakePayload(),
             ):
                 chunks.append(chunk)
 
+        assert exc_info.value.reason_code == "remote_transport_unavailable"
+        assert exc_info.value.__cause__ is None
+        assert exc_info.value.__suppress_context__ is True
+        assert "remote stream interrupted raw-secret-token" not in str(exc_info.value)
         assert chunks == [{"delta": "remote first"}]
         routing_table.resolve_fallback.assert_not_called()
         inner_bus.stream_request.assert_not_called()
@@ -1727,7 +1893,10 @@ class TestMeshBusStreamRequest:
             error_message="Orchestrator explicit selector target failed; transparent fallback skipped",
         )
 
-        with pytest.raises(RuntimeError, match="transparent fallback skipped"):
+        with pytest.raises(
+            RouteDispatchError,
+            match="The selected device cannot handle this action",
+        ) as exc_info:
             _ = [
                 chunk
                 async for chunk in mesh_bus.stream_request(
@@ -1739,6 +1908,7 @@ class TestMeshBusStreamRequest:
                     ),
                 )
             ]
+        assert exc_info.value.reason_code == "selector_target_failed"
 
         routing_table.resolve.assert_called_once()
         assert routing_table.resolve.call_args.args == (OrchestratorMethods.STREAM_INFER_CHAT,)
@@ -1772,7 +1942,10 @@ class TestMeshBusStreamRequest:
             error_message="Orchestrator explicit selector target failed; transparent fallback skipped",
         )
 
-        with pytest.raises(RuntimeError, match="No route available"):
+        with pytest.raises(
+            RouteDispatchError,
+            match="The selected device cannot handle this action",
+        ) as exc_info:
             _ = [
                 chunk
                 async for chunk in mesh_bus.stream_request(
@@ -1784,6 +1957,7 @@ class TestMeshBusStreamRequest:
                     ),
                 )
             ]
+        assert exc_info.value.reason_code == "selector_target_failed"
 
         routing_table.resolve.assert_called_once()
         assert routing_table.resolve.call_args.args == (OrchestratorMethods.STREAM_INFER_CHAT,)

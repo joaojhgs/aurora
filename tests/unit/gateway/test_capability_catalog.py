@@ -18,10 +18,16 @@ from app.shared.contracts.models.gateway import (
     GatewayMethods,
     MethodInfo,
     RouteExplainRequest,
+    RouteExplainSpeechConstraints,
     ServiceAnnouncement,
 )
 from app.shared.contracts.models.mesh import MeshAddressSelector
-from app.shared.contracts.models.stt import AudioSessionMethods, WakeWordMethods
+from app.shared.contracts.models.speech import SpeechLanguageRequirement, SpeechMethodConstraints
+from app.shared.contracts.models.stt import (
+    AudioSessionMethods,
+    TranscriptionMethods,
+    WakeWordMethods,
+)
 from app.shared.contracts.models.tts import TTSMethods
 from app.shared.contracts.registry import clear_registry, list_modules
 from tests.unit.gateway.mesh_policy_helpers import mesh_policy
@@ -407,6 +413,216 @@ async def test_route_explain_threads_one_policy_snapshot_to_routing_and_candidat
 
 
 @pytest.mark.asyncio
+async def test_route_explain_threads_speech_constraints_to_route_and_candidates(monkeypatch):
+    mesh_config = MeshConfig(
+        enabled=True,
+        node_name="local-node",
+        services={"TTS": mesh_policy(share=True, prefer="network", fallback="error")},
+    )
+    registry = PeerRegistry(mesh_config)
+    routing_table = RoutingTable(mesh_config, registry)
+    method = _canonical_method(TTSMethods.SYNTHESIZE)
+    method.speech_constraints = SpeechMethodConstraints(
+        exact_languages=["en"],
+        resident_model_identity_digest="a" * 64,
+        speech_capability_revision=1,
+    )
+    await registry.register_peer("peer-a", "alpha")
+    await registry.update_manifest(
+        "peer-a",
+        verified_peer_manifest(
+            "peer-a",
+            [
+                PeerServiceInfo(
+                    module="TTS",
+                    version="1.0.0",
+                    methods=[method],
+                    max_concurrent=4,
+                    digest="digest-tts",
+                )
+            ],
+        ),
+    )
+    observed = []
+    original_resolve = routing_table.resolve
+    original_candidates = registry.get_provider_candidates
+
+    def resolve_spy(*args, **kwargs):
+        observed.append(("resolve", kwargs.get("speech_constraints")))
+        return original_resolve(*args, **kwargs)
+
+    def candidates_spy(*args, **kwargs):
+        observed.append(("candidates", kwargs.get("speech_constraints")))
+        return original_candidates(*args, **kwargs)
+
+    monkeypatch.setattr(routing_table, "resolve", resolve_spy)
+    monkeypatch.setattr(registry, "get_provider_candidates", candidates_spy)
+
+    response = explain_route(
+        request=RouteExplainRequest(
+            topic=TTSMethods.SYNTHESIZE,
+            speech=RouteExplainSpeechConstraints(
+                language_requirement=SpeechLanguageRequirement(mode="exact", language="de")
+            ),
+        ),
+        mesh_config=mesh_config,
+        registry=registry,
+        routing_table=routing_table,
+        local_peer_id="local-peer",
+    )
+
+    assert response.selected_target == "error"
+    assert response.candidates[0].reason_code == "language_incompatible"
+    assert response.candidates[0].blockers[0].message == (
+        "No compatible device can handle this voice request."
+    )
+    assert all(item[1] is not None for item in observed)
+    assert {item[1].requirement_digest for item in observed} == {observed[0][1].requirement_digest}
+
+
+@pytest.mark.asyncio
+async def test_route_explain_ignores_speech_hints_for_non_speech_topics(monkeypatch):
+    mesh_config = MeshConfig(
+        enabled=True,
+        node_name="local-node",
+        services={"Tooling": mesh_policy(share=True, prefer="network")},
+    )
+    registry = PeerRegistry(mesh_config)
+    routing_table = RoutingTable(mesh_config, registry)
+    await registry.register_peer("peer-a", "alpha")
+    await registry.update_manifest(
+        "peer-a",
+        verified_peer_manifest("peer-a", [_remote_service("Tooling", "1.0.0")]),
+    )
+    observed = []
+    original_resolve = routing_table.resolve
+    original_candidates = registry.get_provider_candidates
+
+    def resolve_spy(*args, **kwargs):
+        observed.append(kwargs.get("speech_constraints"))
+        return original_resolve(*args, **kwargs)
+
+    def candidates_spy(*args, **kwargs):
+        observed.append(kwargs.get("speech_constraints"))
+        return original_candidates(*args, **kwargs)
+
+    monkeypatch.setattr(routing_table, "resolve", resolve_spy)
+    monkeypatch.setattr(registry, "get_provider_candidates", candidates_spy)
+
+    response = explain_route(
+        request=RouteExplainRequest(
+            topic="Tooling.Execute",
+            speech=RouteExplainSpeechConstraints(
+                language_requirement=SpeechLanguageRequirement(mode="exact", language="de")
+            ),
+        ),
+        mesh_config=mesh_config,
+        registry=registry,
+        routing_table=routing_table,
+        local_peer_id="local-peer",
+    )
+
+    assert response.selected_target == "remote"
+    assert all(item is None for item in observed)
+
+
+def test_route_explain_rejects_voice_hints_for_transcription():
+    mesh_config = MeshConfig(enabled=True, services={"Transcription": mesh_policy(share=True)})
+
+    with pytest.raises(ValueError, match="voice hints"):
+        explain_route(
+            request=RouteExplainRequest(
+                topic=TranscriptionMethods.TRANSCRIBE,
+                speech=RouteExplainSpeechConstraints(voice_id="standard:core:default"),
+            ),
+            mesh_config=mesh_config,
+        )
+
+
+def test_route_explain_rejects_tts_auto_language_hints():
+    mesh_config = MeshConfig(enabled=True, services={"TTS": mesh_policy(share=True)})
+
+    with pytest.raises(ValueError, match="exact speech language"):
+        explain_route(
+            request=RouteExplainRequest(
+                topic=TTSMethods.SYNTHESIZE,
+                speech=RouteExplainSpeechConstraints(
+                    language_requirement=SpeechLanguageRequirement(
+                        mode="auto",
+                        auto_language_candidates=["en", "de"],
+                    )
+                ),
+            ),
+            mesh_config=mesh_config,
+        )
+
+
+def test_route_explain_speech_hints_reject_raw_payload_extras_without_echoing_values():
+    with pytest.raises(ValueError) as exc_info:
+        RouteExplainRequest(
+            topic=TTSMethods.SYNTHESIZE,
+            speech={"text": "raw secret text", "audio": "raw-audio-bytes"},
+        )
+
+    error_text = str(exc_info.value)
+    assert "speech route hints must not include request payload fields" in error_text
+    assert "raw secret text" not in error_text
+    assert "raw-audio-bytes" not in error_text
+
+
+def test_route_explain_rejects_top_level_raw_payload_fields_without_echoing_values():
+    with pytest.raises(ValueError) as exc_info:
+        RouteExplainRequest.model_validate(
+            {
+                "topic": TTSMethods.SYNTHESIZE,
+                "text": "top-level raw secret text",
+                "audio": "top-level-raw-audio",
+                "payload": {"token": "top-level-raw-token"},
+            }
+        )
+
+    error_text = str(exc_info.value)
+    assert "route explanations must not include request payload fields" in error_text
+    assert "top-level raw secret text" not in error_text
+    assert "top-level-raw-audio" not in error_text
+    assert "top-level-raw-token" not in error_text
+
+
+def test_route_explain_rejects_recursive_raw_payload_fields_without_echoing_values():
+    with pytest.raises(ValueError) as exc_info:
+        RouteExplainRequest.model_validate(
+            {
+                "topic": TTSMethods.SYNTHESIZE,
+                "selector": {
+                    "peer_id": "peer-1",
+                    "data_scope": {"payload": "nested selector raw secret"},
+                },
+            }
+        )
+
+    error_text = str(exc_info.value)
+    assert "route explanations must not include request payload fields" in error_text
+    assert "nested selector raw secret" not in error_text
+
+
+def test_route_explain_rejects_unknown_selector_fields_without_echoing_values():
+    with pytest.raises(ValueError) as exc_info:
+        RouteExplainRequest.model_validate(
+            {
+                "topic": TTSMethods.SYNTHESIZE,
+                "selector": {
+                    "peer_id": "peer-1",
+                    "unknown_selector_field": "selector secret value",
+                },
+            }
+        )
+
+    error_text = str(exc_info.value)
+    assert "route explanation selectors must use typed selector fields" in error_text
+    assert "selector secret value" not in error_text
+
+
+@pytest.mark.asyncio
 async def test_catalog_selectors_round_trip_through_route_explain():
     mesh_config = MeshConfig(
         enabled=True,
@@ -664,6 +880,7 @@ async def test_route_explain_reports_selector_validation_failure():
     assert response.selected_target == "error"
     assert response.selector_valid is False
     assert response.selector_validation_code == "selector_peer_not_found"
+    assert response.selector_validation_message == "The selected device is unavailable."
     assert response.security_privacy_blockers[0].code == "selector_peer_not_found"
 
 

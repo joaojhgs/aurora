@@ -45,10 +45,11 @@ from app.services.gateway.mesh.provider_eligibility import (
     SpeechRouteConstraints,
     speech_route_binding_from_decision,
 )
+from app.services.gateway.mesh.route_errors import RouteDispatchError, public_route_error
+from app.services.gateway.mesh.speech_constraints import extract_speech_route_constraints
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
-from app.shared.contracts.models.speech import SpeechLanguageRequirement, SpeechRouteBinding
-from app.shared.contracts.models.stt import TranscriptionMethods
+from app.shared.contracts.models.speech import SpeechRouteBinding
 from app.shared.contracts.models.tts import TTSMethods
 from app.shared.mesh.tracing import ensure_correlation_id, get_payload_correlation_id
 
@@ -61,6 +62,7 @@ class _RouteLike(Protocol):
     target: str
     peer_id: str | None
     module: str
+    error_code: str | None
     error_message: str | None
     speech_route_binding: SpeechRouteBinding | None
     method_type: str | None
@@ -350,7 +352,7 @@ class MeshBus:
 
         # For commands, check routing
         selector = _extract_mesh_selector(message, topic=topic)
-        speech_constraints = _extract_speech_route_constraints(message, topic=topic)
+        speech_constraints = extract_speech_route_constraints(message, topic=topic)
         trace_id = ensure_correlation_id(message, correlation_id)
         policy_snapshot = self._operation_snapshot()
         mesh_config = policy_snapshot.mesh_config
@@ -371,7 +373,10 @@ class MeshBus:
         )
 
         if _remote_manage_requires_selector(topic, route, selector):
-            raise RuntimeError(f"{topic} requires an explicit mesh selector")
+            raise _route_runtime_error(
+                SimpleNamespace(target="error", error_code="selector_required"),
+                selector=selector,
+            )
 
         if route.target == "local":
             await self._inner.publish(
@@ -406,7 +411,10 @@ class MeshBus:
             reroute_used = False
             while current_route.target == "remote" and current_route.peer_id:
                 if _remote_manage_requires_selector(topic, current_route, selector):
-                    raise RuntimeError(f"{topic} requires an explicit mesh selector")
+                    raise _route_runtime_error(
+                        SimpleNamespace(target="error", error_code="selector_required"),
+                        selector=selector,
+                    )
                 peer_id = current_route.peer_id
                 log_debug(f"MeshBus: Routing command {topic} to remote peer {peer_id}")
                 attempted.add(peer_id)
@@ -418,6 +426,7 @@ class MeshBus:
                             target="error",
                             peer_id=None,
                             module=current_route.module,
+                            error_code=_capacity_denied_reason_code(selector),
                             error_message=(
                                 f"{current_route.module} explicit selector target "
                                 f"'{peer_id}' is at capacity"
@@ -455,7 +464,7 @@ class MeshBus:
                     )
                 except Exception as e:
                     log_warning(f"MeshBus: Remote publish to {peer_id} failed: {e}")
-                    return
+                    raise _remote_transport_runtime_error(e, selector=selector) from None
                 finally:
                     await self._release_capacity_lease(lease)
                 if "result" in locals():
@@ -499,8 +508,10 @@ class MeshBus:
                 speech_constraints=speech_constraints,
             )
             if terminal.target == "error":
-                raise RuntimeError(
-                    terminal.error_message or f"No fallback route available for {topic}"
+                raise _route_runtime_error(
+                    terminal,
+                    selector=selector,
+                    fallback_reason_code="no_fallback_route",
                 )
             if terminal.target == "none":
                 log_warning(f"MeshBus: No fallback route for {topic} (target=none)")
@@ -533,10 +544,13 @@ class MeshBus:
                 return
 
         if route.target == "remote":
-            raise RuntimeError("remote_transport_unavailable")
+            raise _route_runtime_error(
+                SimpleNamespace(target="remote", error_code="remote_transport_unavailable"),
+                selector=selector,
+            )
 
         if route.target == "error":
-            raise RuntimeError(route.error_message or f"No remote peer available for {topic}")
+            raise _route_runtime_error(route, selector=selector)
 
         if route.target == "none":
             log_warning(f"MeshBus: No route for {topic} (target=none), dropping command")
@@ -635,7 +649,7 @@ class MeshBus:
             )
 
         selector = _extract_mesh_selector(message, topic=topic)
-        speech_constraints = _extract_speech_route_constraints(message, topic=topic)
+        speech_constraints = extract_speech_route_constraints(message, topic=topic)
         trace_id = ensure_correlation_id(message, correlation_id)
         policy_snapshot = self._operation_snapshot()
         mesh_config = policy_snapshot.mesh_config
@@ -655,7 +669,11 @@ class MeshBus:
         )
 
         if _remote_manage_requires_selector(topic, route, selector):
-            return QueryResult(ok=False, error="selector_required")
+            return _route_query_result(
+                SimpleNamespace(target="error", error_code="selector_required"),
+                selector=selector,
+                fallback_reason_code="selector_required",
+            )
 
         if route.target == "local":
             return await self._inner.request(
@@ -687,7 +705,11 @@ class MeshBus:
             reroute_used = False
             while current_route.target == "remote" and current_route.peer_id:
                 if _remote_manage_requires_selector(topic, current_route, selector):
-                    return QueryResult(ok=False, error="selector_required")
+                    return _route_query_result(
+                        SimpleNamespace(target="error", error_code="selector_required"),
+                        selector=selector,
+                        fallback_reason_code="selector_required",
+                    )
                 peer_id = current_route.peer_id
                 log_debug(f"MeshBus: Routing request {topic} to remote peer {peer_id}")
                 attempted.add(peer_id)
@@ -699,6 +721,7 @@ class MeshBus:
                             target="error",
                             peer_id=None,
                             module=current_route.module,
+                            error_code=_capacity_denied_reason_code(selector),
                             error_message=(
                                 f"{current_route.module} explicit selector target "
                                 f"'{peer_id}' is at capacity"
@@ -736,7 +759,7 @@ class MeshBus:
                     )
                 except Exception as e:
                     log_warning(f"MeshBus: Remote request to {peer_id} failed: {e}")
-                    return QueryResult(ok=False, error=str(e))
+                    return _remote_transport_query_result(e, selector=selector)
                 finally:
                     await self._release_capacity_lease(lease)
                 if "result" in locals():
@@ -778,15 +801,17 @@ class MeshBus:
                 speech_constraints=speech_constraints,
             )
             if terminal.target == "error":
-                return QueryResult(
-                    ok=False,
-                    error=_route_query_error(
-                        terminal,
-                        fallback=f"No fallback route available for {topic}",
-                    ),
+                return _route_query_result(
+                    terminal,
+                    selector=selector,
+                    fallback_reason_code="no_fallback_route",
                 )
             if terminal.target == "none":
-                return QueryResult(ok=False, error=f"No fallback route available for {topic}")
+                return _route_query_result(
+                    terminal,
+                    selector=selector,
+                    fallback_reason_code="no_fallback_route",
+                )
             if terminal.target == "local":
                 log_debug(f"MeshBus: Falling back to local for {topic}")
                 return await self._inner.request(
@@ -813,19 +838,25 @@ class MeshBus:
                 )
 
         if route.target == "remote":
-            return QueryResult(ok=False, error="remote_transport_unavailable")
+            return _route_query_result(
+                route,
+                selector=selector,
+                fallback_reason_code="remote_transport_unavailable",
+            )
 
         if route.target == "error":
-            return QueryResult(
-                ok=False,
-                error=_route_query_error(
-                    route,
-                    fallback=f"No remote peer available for {topic}",
-                ),
+            return _route_query_result(
+                route,
+                selector=selector,
+                fallback_reason_code="route_unavailable",
             )
 
         if route.target == "none":
-            return QueryResult(ok=False, error=f"No route available for {topic}")
+            return _route_query_result(
+                route,
+                selector=selector,
+                fallback_reason_code="no_route",
+            )
 
         # Default: deliver locally
         return await self._inner.request(
@@ -903,7 +934,7 @@ class MeshBus:
             return
 
         selector = _extract_mesh_selector(message, topic=topic)
-        speech_constraints = _extract_speech_route_constraints(message, topic=topic)
+        speech_constraints = extract_speech_route_constraints(message, topic=topic)
         trace_id = ensure_correlation_id(message, correlation_id)
         policy_snapshot = self._operation_snapshot()
         mesh_config = policy_snapshot.mesh_config
@@ -918,13 +949,16 @@ class MeshBus:
         )
 
         if _remote_manage_requires_selector(topic, route, selector):
-            raise RuntimeError("selector_required")
+            raise _route_runtime_error(
+                SimpleNamespace(target="error", error_code="selector_required"),
+                selector=selector,
+            )
 
         if route.target == "error":
-            raise RuntimeError(route.error_message or f"No remote peer available for {topic}")
+            raise _route_runtime_error(route, selector=selector)
 
         if route.target == "none":
-            raise RuntimeError(f"No route available for {topic}")
+            raise _route_runtime_error(route, selector=selector, fallback_reason_code="no_route")
 
         if route.target == "local":
             async for item in self._stream_local_request(
@@ -959,15 +993,22 @@ class MeshBus:
             reroute_used = False
             while current_route.target == "remote" and current_route.peer_id:
                 if _remote_manage_requires_selector(topic, current_route, selector):
-                    raise RuntimeError("selector_required")
+                    raise _route_runtime_error(
+                        SimpleNamespace(target="error", error_code="selector_required"),
+                        selector=selector,
+                    )
                 peer_id = current_route.peer_id
                 attempted.add(peer_id)
                 lease = await self._acquire_capacity_lease(peer_id, current_route.module)
                 if lease is None:
                     log_warning(f"MeshBus: Remote stream provider {peer_id} is at capacity")
                     if reroute_used or (selector and selector.has_routing_target()):
-                        raise RuntimeError(
-                            f"{current_route.module} provider '{peer_id}' is at capacity"
+                        raise _route_runtime_error(
+                            SimpleNamespace(
+                                target="error",
+                                error_code=_capacity_denied_reason_code(selector),
+                            ),
+                            selector=selector,
                         )
                     reroute_used = True
                     current_route = self._next_remote_route(
@@ -1002,8 +1043,9 @@ class MeshBus:
                         yield item
                     return
                 except Exception as e:
+                    log_warning(f"MeshBus: Remote stream request to {peer_id} failed: {e}")
                     if yielded_remote_chunk:
-                        raise
+                        raise _remote_transport_runtime_error(e, selector=selector) from None
                     if (
                         not reroute_used
                         and not (selector and selector.has_routing_target())
@@ -1020,8 +1062,7 @@ class MeshBus:
                             speech_constraints=speech_constraints,
                         )
                         continue
-                    log_warning(f"MeshBus: Remote stream request to {peer_id} failed: {e}")
-                    raise
+                    raise _remote_transport_runtime_error(e, selector=selector) from None
                 finally:
                     await self._release_capacity_lease(lease)
                 break
@@ -1037,11 +1078,17 @@ class MeshBus:
                 speech_constraints=speech_constraints,
             )
             if terminal.target == "error":
-                raise RuntimeError(
-                    terminal.error_message or f"No fallback route available for {topic}"
+                raise _route_runtime_error(
+                    terminal,
+                    selector=selector,
+                    fallback_reason_code="no_fallback_route",
                 )
             if terminal.target == "none":
-                raise RuntimeError(f"No fallback route available for {topic}")
+                raise _route_runtime_error(
+                    terminal,
+                    selector=selector,
+                    fallback_reason_code="no_fallback_route",
+                )
             if terminal.target == "local":
                 async for item in self._stream_local_request(
                     topic,
@@ -1069,9 +1116,13 @@ class MeshBus:
                 return
 
         if route.target == "remote":
-            raise RuntimeError("remote_transport_unavailable")
+            raise _route_runtime_error(
+                route,
+                selector=selector,
+                fallback_reason_code="remote_transport_unavailable",
+            )
 
-        raise RuntimeError(f"No route available for {topic}")
+        raise _route_runtime_error(route, selector=selector, fallback_reason_code="no_route")
 
     def _registry(self) -> Any | None:
         """Return the real PeerRegistry behind RoutingTable when available."""
@@ -1395,12 +1446,82 @@ def _module_from_topic(topic: str) -> str:
     return topic.split(".", 1)[0] if "." in topic else topic
 
 
-def _route_query_error(route: Any, *, fallback: str) -> str:
-    """Return a stable authorization code without exposing routing internals."""
+def _route_query_result(
+    route: Any,
+    *,
+    selector: MeshAddressSelector | None,
+    fallback_reason_code: str,
+) -> QueryResult:
+    public_error = public_route_error(
+        route,
+        explicit_target=bool(selector and selector.has_routing_target()),
+        fallback_reason_code=fallback_reason_code,
+    )
+    return QueryResult(
+        ok=False,
+        error=public_error.message,
+        data={"reason_code": public_error.reason_code},
+    )
 
-    if getattr(route, "error_code", None) == "selector_permission_denied":
-        return "permission_denied"
-    return getattr(route, "error_message", None) or fallback
+
+def _route_runtime_error(
+    route: Any,
+    *,
+    selector: MeshAddressSelector | None,
+    fallback_reason_code: str = "route_unavailable",
+) -> RouteDispatchError:
+    public_error = public_route_error(
+        route,
+        explicit_target=bool(selector and selector.has_routing_target()),
+        fallback_reason_code=fallback_reason_code,
+    )
+    return RouteDispatchError(public_error.message, reason_code=public_error.reason_code)
+
+
+def _remote_transport_reason_code(error: Exception) -> str:
+    if isinstance(error, PeerBridgePreAcceptRejectedError) and error.reason_code:
+        return error.reason_code
+    return "remote_transport_unavailable"
+
+
+def _remote_transport_route(error: Exception) -> SimpleNamespace:
+    return SimpleNamespace(
+        target="remote",
+        peer_id=None,
+        module="",
+        error_code=_remote_transport_reason_code(error),
+        error_message=None,
+    )
+
+
+def _remote_transport_query_result(
+    error: Exception,
+    *,
+    selector: MeshAddressSelector | None,
+) -> QueryResult:
+    return _route_query_result(
+        _remote_transport_route(error),
+        selector=selector,
+        fallback_reason_code="remote_transport_unavailable",
+    )
+
+
+def _remote_transport_runtime_error(
+    error: Exception,
+    *,
+    selector: MeshAddressSelector | None,
+) -> RouteDispatchError:
+    return _route_runtime_error(
+        _remote_transport_route(error),
+        selector=selector,
+        fallback_reason_code="remote_transport_unavailable",
+    )
+
+
+def _capacity_denied_reason_code(selector: MeshAddressSelector | None) -> str:
+    if selector is not None and selector.has_routing_target():
+        return "selector_provider_at_capacity"
+    return "provider_at_capacity"
 
 
 def _registered_method_type(topic: str) -> str | None:
@@ -1466,41 +1587,6 @@ def _speech_route_binding_kwarg(
     binding: SpeechRouteBinding | None,
 ) -> dict[str, SpeechRouteBinding]:
     return {"speech_route_binding": binding} if binding is not None else {}
-
-
-def _extract_speech_route_constraints(message: Any, *, topic: str) -> SpeechRouteConstraints | None:
-    """Return immutable speech routing constraints derived from request data."""
-
-    language = _payload_value(message, "language")
-    if topic in {TTSMethods.REQUEST, TTSMethods.SYNTHESIZE, TTSMethods.STREAM_START}:
-        voice_id = _payload_value(message, "voice")
-        return SpeechRouteConstraints(
-            topic=topic,
-            language_requirement=SpeechLanguageRequirement(mode="exact", language=language)
-            if language is not None
-            else None,
-            voice_id=voice_id,
-        )
-
-    if topic == TranscriptionMethods.TRANSCRIBE:
-        if language is not None:
-            language_requirement = SpeechLanguageRequirement(mode="exact", language=language)
-        else:
-            language_requirement = SpeechLanguageRequirement(
-                mode="auto",
-                auto_language_candidates=list(
-                    _payload_value(message, "auto_language_candidates") or []
-                ),
-            )
-        return SpeechRouteConstraints(topic=topic, language_requirement=language_requirement)
-
-    return None
-
-
-def _payload_value(message: Any, field_name: str) -> Any:
-    if isinstance(message, Mapping):
-        return message.get(field_name)
-    return getattr(message, field_name, None)
 
 
 def _extract_mesh_selector(message: Any, *, topic: str | None = None) -> MeshAddressSelector | None:
