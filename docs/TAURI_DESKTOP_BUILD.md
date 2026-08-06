@@ -31,14 +31,19 @@ Closing the Tauri window hides Aurora to the tray; explicit tray Quit or Ctrl-C 
 | Profile | Purpose | Dependency shape | CI behavior |
 | --- | --- | --- | --- |
 | `desktop-local-minimal` | Default local desktop package and smoke build. Gateway/config/auth/db/tooling/orchestrator only. | Maps to the Python builder's internal `thin` dependency profile; no STT/TTS/local model deps. | Real Linux Tauri bundle. |
-| `local-cpu` | Offline/local assistant with STT/TTS/audio and CPU ML wheels. | `aurora[build,sidecar-local-audio,torch-cpu]`; includes Piper and PocketTTS code, while model and voice assets remain external; wheel installer uses `--hardware cpu`. | Profile staging smoke; release runner may build the full artifact. |
-| `local-cuda` | NVIDIA CUDA local assistant. | `aurora[build,sidecar-local-audio,cuda]`; wheel installer uses `--hardware cuda`. | Profile staging smoke; GPU runner/release runner builds actual artifact. |
-| `local-rocm` | AMD ROCm local assistant. | `aurora[build,sidecar-local-audio,rocm]`; wheel installer uses `--hardware rocm`. | Profile staging smoke; GPU runner/release runner builds actual artifact. |
-| `local-metal` | macOS Metal local assistant. | `aurora[build,sidecar-local-audio,metal]`; wheel installer uses `--hardware metal`. | Profile staging smoke; macOS release runner builds actual artifact. |
+| `local-cpu` | Offline/local assistant with STT/TTS/audio and CPU ML wheels. | `aurora[build,sidecar-local-audio,torch-cpu]`; includes Piper and `pocket-tts[audio]==2.1.0` code, while base weights, standard voice packs, and cloned voice states remain external; wheel installer uses `--hardware cpu` before resolving PocketTTS. | Profile staging smoke; release runner may build the full artifact. |
+| `local-cuda` | NVIDIA CUDA local assistant. | `aurora[build,sidecar-local-audio,cuda]`; wheel installer uses `--hardware cuda` before resolving PocketTTS. | Profile staging smoke; GPU runner/release runner builds actual artifact. |
+| `local-rocm` | AMD ROCm local assistant. | `aurora[build,sidecar-local-audio,rocm]`; wheel installer uses `--hardware rocm` before resolving PocketTTS. | Profile staging smoke; GPU runner/release runner builds actual artifact. |
+| `local-metal` | macOS Metal local assistant. | `aurora[build,sidecar-local-audio,metal]`; wheel installer uses `--hardware metal` before resolving PocketTTS. | Profile staging smoke; macOS release runner builds actual artifact. |
 | `local-vulkan`, `local-sycl`, `local-rpc` | Explicit accelerator/distributed variants. | `sidecar-local-audio` plus the matching pyproject accelerator extra. | Profile staging smoke; dedicated release runners build actual artifacts. |
 | `full` | Legacy diagnostic all-in-one bundle. | `aurora[build,runtime,torch-cpu]`; intentionally large. | Profile staging smoke only unless explicitly requested. |
 
 The prior 3GB+ artifact came from the old default installing `runtime,torch-cpu`, copying all `modules/`, and allowing PyInstaller to collect optional ML/audio/CUDA-like native libraries. That is now an explicit profile decision, not the default.
+
+PocketTTS package code and PocketTTS model data are separate release concerns.
+The local audio profiles can package provider code, but they must not package
+licensed base models, starter voice packs, cloned voice states, or attribution
+material unless a separate approved model/voice manifest explicitly permits it.
 
 ## One-command local desktop bundle
 

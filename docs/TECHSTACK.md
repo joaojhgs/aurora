@@ -23,10 +23,10 @@ Aurora combines Python services, a typed message bus, a TypeScript SDK/UI layer,
 | LLM orchestration | LangGraph, LangChain, OpenAI, HuggingFace endpoint/local pipeline, llama.cpp profiles |
 | STT | faster-whisper, WebRTC VAD, service-specific STT packages |
 | Wakeword | OpenWakeWord |
-| TTS | Piper / RealtimeTTS paths |
+| TTS | Piper default path; optional PocketTTS provider through `pocket-tts[audio]==2.1.0`; RealtimeTTS path |
 | Embeddings/RAG | SQLite, sqlite-vec, OpenAI embeddings, optional local embeddings |
 
-Heavy local model stacks are optional. See [`DEPENDENCIES.md`](DEPENDENCIES.md) for install profiles and sidecar bundle profiles.
+Heavy local model stacks are optional. Speech packages and model data are separate: install profiles provide provider code, while model weights, voice packs, and cloned voice state remain external managed data. See [`DEPENDENCIES.md`](DEPENDENCIES.md) for install profiles and sidecar bundle profiles.
 
 ## UI and client stack
 

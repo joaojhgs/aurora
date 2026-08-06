@@ -377,10 +377,14 @@ uv pip install --python .venv/bin/python \
   --index-strategy unsafe-best-match
 uv pip install --python .venv/bin/python --no-deps -e .
 ```
-- `realtimetts`, `piper-tts`, `piper-phonemize`, `pocket-tts[audio]`
+- `realtimetts`, `piper-tts`, `piper-phonemize`, `pocket-tts[audio]==2.1.0`
 - `PyAudio`
 - `torch`, `torchaudio`, `torchvision`
 - `onnxruntime`
+
+The package install includes PocketTTS provider code only. Base weights,
+standard voice packs, and cloned voice-state artifacts remain managed data under
+`voice_models/` or the process-mode `/app/voice_models` volume.
 
 ### OrchestratorService (`service-orchestrator`)
 ```bash
