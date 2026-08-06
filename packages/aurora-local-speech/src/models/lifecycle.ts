@@ -26,10 +26,20 @@ export type LocalSpeechInstallEvent =
 
 export interface LocalSpeechLifecycleSnapshot {
   readonly packId: string
+  readonly packVersion: string
   readonly state: LocalSpeechInstallState
   readonly revision: number
   readonly updatedAt: number
   readonly errorCode?: string
+}
+
+export interface LocalSpeechPackIdentity {
+  readonly packId: string
+  readonly packVersion: string
+}
+
+export function localSpeechPackLifecycleKey(packId: string, packVersion: string): string {
+  return `${encodeURIComponent(packId)}@${encodeURIComponent(packVersion)}`
 }
 
 const transitions: Readonly<
@@ -49,10 +59,11 @@ const transitions: Readonly<
 
 export function createLifecycleSnapshot(
   packId: string,
+  packVersion: string,
   now = 0,
   state: LocalSpeechInstallState = 'not-installed'
 ): LocalSpeechLifecycleSnapshot {
-  return { packId, state, revision: 0, updatedAt: now }
+  return { packId, packVersion, state, revision: 0, updatedAt: now }
 }
 
 export function applyLifecycleEvent(
@@ -65,6 +76,7 @@ export function applyLifecycleEvent(
   const errorCode = nextState === 'failed' ? options.errorCode ?? 'unknown' : undefined
   return {
     packId: snapshot.packId,
+    packVersion: snapshot.packVersion,
     state: nextState,
     revision: snapshot.revision + 1,
     updatedAt: options.now ?? snapshot.updatedAt,

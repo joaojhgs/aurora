@@ -151,6 +151,17 @@ export function assertManifestShape(manifest: LocalSpeechPackManifest): void {
       if (!assetIds.has(dependency)) throw new Error(`asset ${asset.assetId} depends on unknown asset ${dependency}`)
     }
   }
+
+  const revokedAssetIds = new Set(
+    manifest.assets.filter((asset) => asset.revocation?.revoked === true).map((asset) => asset.assetId)
+  )
+  for (const asset of manifest.assets) {
+    if (asset.revocation?.revoked === true) continue
+    const revokedDependency = (asset.dependencies ?? []).find((dependency) => revokedAssetIds.has(dependency))
+    if (revokedDependency) {
+      throw new Error(`active asset ${asset.assetId} depends on revoked asset ${revokedDependency}`)
+    }
+  }
 }
 
 export function listActiveAssets(manifest: LocalSpeechPackManifest): readonly LocalSpeechAssetManifest[] {

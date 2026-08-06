@@ -1,4 +1,4 @@
-import type { LocalSpeechInstallState, LocalSpeechLifecycleSnapshot } from '../models/lifecycle.js'
+import type { LocalSpeechInstallState, LocalSpeechLifecycleSnapshot, LocalSpeechPackIdentity } from '../models/lifecycle.js'
 import type { LocalSpeechAssetManifest } from '../models/manifest.js'
 import type { LocalSpeechVerifiedManifest } from '../models/trust.js'
 
@@ -35,7 +35,7 @@ export interface LocalSpeechDownloadTask {
 
 export interface LocalSpeechModelStorePort {
   getStatus(): Promise<LocalSpeechStoreStatus>
-  getLifecycle(packId: string): Promise<LocalSpeechLifecycleSnapshot | null>
+  getLifecycle(packId: string, packVersion: string): Promise<LocalSpeechLifecycleSnapshot | null>
   setLifecycle(snapshot: LocalSpeechLifecycleSnapshot): Promise<void>
   reserveAsset(asset: LocalSpeechAssetManifest, packId: string, packVersion: string): Promise<LocalSpeechDownloadTask>
   promoteAsset(storageKey: string, sha256: string, byteSize: number): Promise<LocalSpeechStoredAsset>
@@ -46,8 +46,8 @@ export interface LocalSpeechModelStorePort {
 
 export interface LocalSpeechActivationPort {
   activatePack(verifiedManifest: LocalSpeechVerifiedManifest): Promise<LocalSpeechLifecycleSnapshot>
-  deactivatePack(packId: string): Promise<LocalSpeechLifecycleSnapshot>
-  getActivePack(): Promise<string | null>
+  deactivatePack(packId: string, packVersion: string): Promise<LocalSpeechLifecycleSnapshot>
+  getActivePack(): Promise<LocalSpeechPackIdentity | null>
 }
 
 export interface LocalSpeechConcurrencyPort {

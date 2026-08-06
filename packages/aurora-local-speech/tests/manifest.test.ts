@@ -91,6 +91,27 @@ describe('local speech manifests', () => {
 
     expect(verified.manifest.packId).toBe('raven-en-starter')
     expect(verified.keyId).toBe('test-key')
+    expect(verified.verificationMode).toBe('signature')
+    expect(Object.isFrozen(verified.manifest.assets[0])).toBe(true)
+  })
+
+  it('allows unsigned manifests only when a release hash policy matches', async () => {
+    const { signature: _signature, ...unsigned } = manifest()
+    const verified = await verifyLocalSpeechManifest(unsigned, {
+      hashCanonicalManifest: deterministicManifestHash,
+      expectedManifestHash: deterministicManifestHash(canonicalizeManifest(unsigned))
+    })
+
+    expect(verified.verificationMode).toBe('release-hash')
+    expect(verified.keyId).toBeUndefined()
+  })
+
+  it('rejects unsigned manifests when no release hash policy is configured', async () => {
+    const { signature: _signature, ...unsigned } = manifest()
+
+    await expect(
+      verifyLocalSpeechManifest(unsigned, {})
+    ).rejects.toThrow(/unsigned/)
   })
 
   it('rejects revoked packs before activation', async () => {

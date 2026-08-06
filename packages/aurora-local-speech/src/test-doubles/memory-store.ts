@@ -1,8 +1,10 @@
 import {
   applyLifecycleEvent,
+  localSpeechPackLifecycleKey,
+  type LocalSpeechPackIdentity,
   type LocalSpeechLifecycleSnapshot
 } from '../models/lifecycle.js'
-import type { LocalSpeechVerifiedManifest } from '../models/trust.js'
+import { assertLocalSpeechVerifiedManifest, type LocalSpeechVerifiedManifest } from '../models/trust.js'
 import type {
   LocalSpeechActivationPort,
   LocalSpeechConcurrencyPort,
@@ -30,25 +32,31 @@ export class InMemoryLocalSpeechStore
   private readonly reservations = new Map<string, Reservation>()
   private readonly lockChains = new Map<string, Promise<void>>()
   private residencyLockChain: Promise<void> = Promise.resolve()
-  private activePack: string | null = null
+  private activePack: LocalSpeechPackIdentity | null = null
 
-  constructor(private readonly options: { readonly now?: () => number; readonly bytesAvailable?: number | null } = {}) {}
+  constructor(
+    private readonly options: {
+      readonly now?: () => number
+      readonly bytesAvailable?: number | null
+      readonly persistent?: boolean
+    } = {}
+  ) {}
 
   async getStatus(): Promise<LocalSpeechStoreStatus> {
     const bytesUsed = Array.from(this.assets.values()).reduce((sum, asset) => sum + asset.byteSize, 0)
     return {
       bytesUsed,
       bytesAvailable: this.options.bytesAvailable ?? null,
-      persistent: true
+      persistent: this.options.persistent ?? false
     }
   }
 
-  async getLifecycle(packId: string): Promise<LocalSpeechLifecycleSnapshot | null> {
-    return this.lifecycles.get(packId) ?? null
+  async getLifecycle(packId: string, packVersion: string): Promise<LocalSpeechLifecycleSnapshot | null> {
+    return this.lifecycles.get(localSpeechPackLifecycleKey(packId, packVersion)) ?? null
   }
 
   async setLifecycle(snapshot: LocalSpeechLifecycleSnapshot): Promise<void> {
-    this.lifecycles.set(snapshot.packId, snapshot)
+    this.lifecycles.set(localSpeechPackLifecycleKey(snapshot.packId, snapshot.packVersion), snapshot)
   }
 
   async reserveAsset(asset: {
@@ -109,8 +117,10 @@ export class InMemoryLocalSpeechStore
     for (const [storageKey, reservation] of this.reservations) {
       if (reservation.packId === packId) this.reservations.delete(storageKey)
     }
-    this.lifecycles.delete(packId)
-    if (this.activePack === packId) this.activePack = null
+    for (const [lifecycleKey, snapshot] of this.lifecycles) {
+      if (snapshot.packId === packId) this.lifecycles.delete(lifecycleKey)
+    }
+    if (this.activePack?.packId === packId) this.activePack = null
   }
 
   async listAssets(packId?: string): Promise<readonly LocalSpeechStoredAsset[]> {
@@ -119,14 +129,33 @@ export class InMemoryLocalSpeechStore
   }
 
   async activatePack(verifiedManifest: LocalSpeechVerifiedManifest): Promise<LocalSpeechLifecycleSnapshot> {
+    return this.withResidencyLock(() => this.activatePackUnlocked(verifiedManifest))
+  }
+
+  private async activatePackUnlocked(verifiedManifest: LocalSpeechVerifiedManifest): Promise<LocalSpeechLifecycleSnapshot> {
+    assertLocalSpeechVerifiedManifest(verifiedManifest)
     const manifest = verifiedManifest.manifest
-    const current = this.lifecycles.get(manifest.packId)
+    const current = this.lifecycles.get(localSpeechPackLifecycleKey(manifest.packId, manifest.packVersion))
     if (!current || current.state !== 'ready') {
       throw new Error(`cannot activate ${manifest.packId}; lifecycle is not ready`)
     }
 
-    for (const asset of manifest.assets) {
-      if (asset.revocation?.revoked === true) continue
+    const activeAssets = manifest.assets.filter((asset) => asset.revocation?.revoked !== true)
+    if (activeAssets.length === 0) {
+      throw new Error(`cannot activate ${manifest.packId}; manifest has no active assets`)
+    }
+
+    const revokedAssetIds = new Set(
+      manifest.assets.filter((asset) => asset.revocation?.revoked === true).map((asset) => asset.assetId)
+    )
+    for (const asset of activeAssets) {
+      const revokedDependency = (asset.dependencies ?? []).find((dependency) => revokedAssetIds.has(dependency))
+      if (revokedDependency) {
+        throw new Error(`cannot activate ${manifest.packId}; asset ${asset.assetId} depends on revoked asset ${revokedDependency}`)
+      }
+    }
+
+    for (const asset of activeAssets) {
       const stored = this.assets.get(localSpeechAssetStorageKey(manifest.packId, manifest.packVersion, asset.assetId))
       if (!stored) throw new Error(`cannot activate ${manifest.packId}; missing asset ${asset.assetId}`)
       if (stored.sha256 !== asset.sha256 || stored.byteSize !== asset.byteSize) {
@@ -134,29 +163,41 @@ export class InMemoryLocalSpeechStore
       }
     }
 
-    if (this.activePack && this.activePack !== manifest.packId) {
-      const previous = this.lifecycles.get(this.activePack)
+    if (
+      this.activePack &&
+      (this.activePack.packId !== manifest.packId || this.activePack.packVersion !== manifest.packVersion)
+    ) {
+      const previous = this.lifecycles.get(
+        localSpeechPackLifecycleKey(this.activePack.packId, this.activePack.packVersion)
+      )
       if (previous?.state === 'active') {
-        this.lifecycles.set(previous.packId, applyLifecycleEvent(previous, 'deactivate', { now: this.now() }))
+        this.lifecycles.set(
+          localSpeechPackLifecycleKey(previous.packId, previous.packVersion),
+          applyLifecycleEvent(previous, 'deactivate', { now: this.now() })
+        )
       }
     }
 
     const active = applyLifecycleEvent(current, 'activate', { now: this.now() })
-    this.lifecycles.set(manifest.packId, active)
-    this.activePack = manifest.packId
+    this.lifecycles.set(localSpeechPackLifecycleKey(manifest.packId, manifest.packVersion), active)
+    this.activePack = { packId: manifest.packId, packVersion: manifest.packVersion }
     return active
   }
 
-  async deactivatePack(packId: string): Promise<LocalSpeechLifecycleSnapshot> {
-    const current = this.lifecycles.get(packId)
+  async deactivatePack(packId: string, packVersion: string): Promise<LocalSpeechLifecycleSnapshot> {
+    return this.withResidencyLock(() => this.deactivatePackUnlocked(packId, packVersion))
+  }
+
+  private async deactivatePackUnlocked(packId: string, packVersion: string): Promise<LocalSpeechLifecycleSnapshot> {
+    const current = this.lifecycles.get(localSpeechPackLifecycleKey(packId, packVersion))
     if (!current) throw new Error(`cannot deactivate ${packId}; lifecycle is missing`)
     const next = applyLifecycleEvent(current, 'deactivate', { now: this.now() })
-    this.lifecycles.set(packId, next)
-    if (this.activePack === packId) this.activePack = null
+    this.lifecycles.set(localSpeechPackLifecycleKey(packId, packVersion), next)
+    if (this.activePack?.packId === packId && this.activePack.packVersion === packVersion) this.activePack = null
     return next
   }
 
-  async getActivePack(): Promise<string | null> {
+  async getActivePack(): Promise<LocalSpeechPackIdentity | null> {
     return this.activePack
   }
 
