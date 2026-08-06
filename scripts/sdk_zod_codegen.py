@@ -411,12 +411,7 @@ class ZodCompiler:
             if marker in schema:
                 if schema.get(marker) is not True:
                     raise ctx.at(marker).unsupported(f"{marker} must be literal true")
-                options = schema.get("anyOf") or schema.get("oneOf") or ()
-                nullable_string_like = bool(options) and any(
-                    isinstance(option, dict) and option.get("type") == "string"
-                    for option in options
-                )
-                if schema.get("type") != "string" and not nullable_string_like:
+                if schema.get("type") != "string":
                     raise ctx.at(marker).unsupported(f"{marker} only applies to string schemas")
         for marker in (
             SPEECH_LANGUAGE_STRING_NORMALIZE_MARKER,

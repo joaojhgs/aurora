@@ -1,3 +1,7 @@
+import hashlib
+import json
+from pathlib import Path
+
 from scripts.check_sdk_backend_conformance import (
     DEFAULT_NONFATAL_FINDING_BUDGETS,
     DEFAULT_NONFATAL_FINDING_TOTAL_BUDGET,
@@ -32,6 +36,41 @@ def _method(bus_topic: str) -> MethodDescriptor:
     )
 
 
+def _write_generated_artifacts(
+    root: Path, schema: dict[str, object]
+) -> tuple[Path, Path, Path, Path]:
+    schema_path = root / "backend-contracts.schema.json"
+    zod_path = root / "backend-contracts.zod.ts"
+    manifest_path = root / "backend-contracts.manifest.json"
+    provider_path = root / "tooling-local-provider-v1.json"
+    provider = {
+        "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+        "methods": [],
+    }
+    zod_source = "export const ok = true\n"
+
+    def digest_json(value: object) -> str:
+        return hashlib.sha256(
+            json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
+        ).hexdigest()
+
+    schema_path.write_text(json.dumps(schema))
+    zod_path.write_text(zod_source)
+    provider_path.write_text(json.dumps(provider))
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "content_hashes": {
+                    "backend-contracts.schema.json": digest_json(schema),
+                    "backend-contracts.zod.ts": hashlib.sha256(zod_source.encode()).hexdigest(),
+                    "tooling-local-provider-v1.json": digest_json(provider),
+                }
+            }
+        )
+    )
+    return schema_path, zod_path, manifest_path, provider_path
+
+
 def test_generated_contracts_count_as_sdk_method_coverage() -> None:
     generated = _method("TTS.Synthesize")
     uncovered = _method("Example.Uncovered")
@@ -54,42 +93,13 @@ def test_generated_contracts_count_as_sdk_method_coverage() -> None:
 
 
 def test_generated_contract_coverage_requires_matching_descriptors(tmp_path) -> None:
-    schema_path = tmp_path / "backend-contracts.schema.json"
-    zod_path = tmp_path / "backend-contracts.zod.ts"
-    manifest_path = tmp_path / "backend-contracts.manifest.json"
-    provider_path = tmp_path / "tooling-local-provider-v1.json"
-
     schema = {
         "allowlist": ["TTS.Synthesize"],
         "method_descriptors": [],
         "schemas": [],
     }
-    provider = {
-        "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
-        "methods": [],
-    }
-    zod_source = "export const ok = true\n"
-    import hashlib
-    import json
-
-    def digest_json(value):
-        return hashlib.sha256(
-            json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
-        ).hexdigest()
-
-    schema_path.write_text(json.dumps(schema))
-    zod_path.write_text(zod_source)
-    provider_path.write_text(json.dumps(provider))
-    manifest_path.write_text(
-        json.dumps(
-            {
-                "content_hashes": {
-                    "backend-contracts.schema.json": digest_json(schema),
-                    "backend-contracts.zod.ts": hashlib.sha256(zod_source.encode()).hexdigest(),
-                    "tooling-local-provider-v1.json": digest_json(provider),
-                }
-            }
-        )
+    schema_path, zod_path, manifest_path, provider_path = _write_generated_artifacts(
+        tmp_path, schema
     )
 
     issues, evidence = _check_generated_contract_artifacts(
@@ -105,6 +115,48 @@ def test_generated_contract_coverage_requires_matching_descriptors(tmp_path) -> 
         "kind": "generated_method_descriptor_allowlist_mismatch",
         "allowlist": ["TTS.Synthesize"],
         "method_descriptors": [],
+    } in issues
+
+
+def test_generated_contract_descriptors_must_match_live_registry(tmp_path) -> None:
+    live = _method("TTS.Synthesize")
+    descriptor = {
+        "method_id": live.bus_topic,
+        "bus_topic": live.bus_topic,
+        "module": live.module,
+        "name": live.name,
+        "route_path": live.route_path,
+        "route_kind": live.route_kind,
+        "exposure": live.exposure,
+        "method_type": "manage",
+        "required_perms": list(live.required_perms),
+        "input_model": live.input_model,
+        "output_model": live.output_model,
+    }
+    schema = {
+        "allowlist": [live.bus_topic],
+        "method_descriptors": [descriptor],
+        "schemas": [],
+    }
+    schema_path, zod_path, manifest_path, provider_path = _write_generated_artifacts(
+        tmp_path, schema
+    )
+
+    issues, _evidence = _check_generated_contract_artifacts(
+        schema_path=schema_path,
+        zod_path=zod_path,
+        manifest_path=manifest_path,
+        tooling_provider_path=provider_path,
+        live_methods={live.bus_topic: live},
+    )
+
+    assert {
+        "fatal": True,
+        "kind": "generated_method_descriptor_drift",
+        "method_id": live.bus_topic,
+        "field": "method_type",
+        "generated": "manage",
+        "live": "use",
     } in issues
 
 

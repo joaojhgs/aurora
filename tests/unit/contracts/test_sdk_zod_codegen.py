@@ -89,6 +89,26 @@ def test_zod_codegen_maps_only_validated_string_formats() -> None:
     assert '.meta({"format":"binary"})' in rendered
 
 
+def test_sdk_contract_integer_guard_rejects_one_sided_bounds() -> None:
+    for schema in (
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "maximum": 10},
+        {"type": "integer", "exclusiveMinimum": 0},
+        {"type": "integer", "exclusiveMaximum": 10},
+    ):
+        with pytest.raises(ValueError, match="minimum and maximum"):
+            generate_backend_inventory._assert_no_unbounded_integer_schema(
+                schema, context="Example.Bounds"
+            )
+
+    generate_backend_inventory._assert_no_unbounded_integer_schema(
+        {"type": "integer", "minimum": 0, "maximum": 10}, context="Example.Bounds"
+    )
+    generate_backend_inventory._assert_no_unbounded_integer_schema(
+        {"type": "integer", "enum": [1, 2]}, context="Example.Bounds"
+    )
+
+
 def test_zod_codegen_rejects_unsafe_regex_refs_literals_numbers_and_unions() -> None:
     cases = [
         (
@@ -200,6 +220,13 @@ def test_zod_codegen_rejects_unsafe_regex_refs_literals_numbers_and_unions() -> 
         (
             {"type": "object", STRING_NON_BLANK_MARKER: False},
             "must be literal true",
+        ),
+        (
+            {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                STRING_NON_BLANK_MARKER: True,
+            },
+            "only applies to string schemas",
         ),
         (
             {
@@ -418,6 +445,54 @@ def test_sdk_contract_outputs_do_not_overwrite_on_render_failure(
         generate_backend_inventory.write_sdk_contract_outputs(**paths)
 
     assert {path.read_text(encoding="utf-8") for path in paths.values()} == {"old"}
+
+
+def test_sdk_contract_outputs_preserve_backup_after_incomplete_rollback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = {
+        "schema_output": tmp_path / "backend-contracts.schema.json",
+        "zod_output": tmp_path / "backend-contracts.zod.ts",
+        "manifest_output": tmp_path / "backend-contracts.manifest.json",
+        "tooling_provider_output": tmp_path / "tooling-local-provider-v1.json",
+    }
+    for path in paths.values():
+        path.write_text("old", encoding="utf-8")
+
+    def fail_with_recovery_backup(staged_outputs: list[tuple[Path, Path, str]]) -> None:
+        target, _tmp, _hash = staged_outputs[0]
+        target.replace(generate_backend_inventory._promotion_backup_path(target))
+        raise RuntimeError("rollback interrupted")
+
+    monkeypatch.setattr(
+        generate_backend_inventory,
+        "_promote_staged_outputs",
+        fail_with_recovery_backup,
+    )
+
+    with pytest.raises(RuntimeError, match="rollback interrupted"):
+        generate_backend_inventory.write_sdk_contract_outputs(**paths)
+
+    backup = generate_backend_inventory._promotion_backup_path(paths["schema_output"])
+    assert backup.read_text(encoding="utf-8") == "old"
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "maximum": 10},
+        {"type": "integer"},
+    ],
+)
+def test_sdk_contract_schema_rejects_one_sided_or_unbounded_integers(
+    schema: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError, match="must declare minimum and maximum"):
+        generate_backend_inventory._assert_no_unbounded_integer_schema(
+            schema,
+            context="Example.Integer",
+        )
 
 
 def test_validator_extension_audit_rejects_unmapped_nested_validator() -> None:

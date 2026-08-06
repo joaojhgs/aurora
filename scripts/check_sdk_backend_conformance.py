@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Any
 
@@ -59,6 +59,8 @@ class MethodDescriptor:
     required_perms: tuple[str, ...]
     input_model: str | None
     output_model: str | None
+    callable_feature_ids: tuple[str, ...] = ()
+    speech_constraints: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -183,6 +185,8 @@ def _method_from_inventory(item: dict[str, Any]) -> MethodDescriptor:
         required_perms=tuple(item.get("required_perms") or ()),
         input_model=item.get("input_model"),
         output_model=item.get("output_model"),
+        callable_feature_ids=tuple(item.get("callable_feature_ids") or ()),
+        speech_constraints=item.get("speech_constraints"),
     )
 
 
@@ -717,6 +721,7 @@ def _check_generated_contract_artifacts(
     zod_path: Path,
     manifest_path: Path,
     tooling_provider_path: Path,
+    live_methods: dict[str, MethodDescriptor] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     issues: list[dict[str, Any]] = []
     for path in (schema_path, zod_path, manifest_path, tooling_provider_path):
@@ -800,15 +805,75 @@ def _check_generated_contract_artifacts(
                 }
             )
 
-    allowlist = [
-        method_id for method_id in schema.get("allowlist", []) if isinstance(method_id, str)
-    ]
-    method_descriptors = schema.get("method_descriptors") or []
-    descriptor_method_ids = [
-        descriptor.get("method_id")
-        for descriptor in method_descriptors
-        if isinstance(descriptor, dict) and isinstance(descriptor.get("method_id"), str)
-    ]
+    raw_allowlist = schema.get("allowlist")
+    allowlist = raw_allowlist if isinstance(raw_allowlist, list) else []
+    if not isinstance(raw_allowlist, list) or not all(
+        isinstance(method_id, str) and method_id for method_id in allowlist
+    ):
+        issues.append({"fatal": True, "kind": "generated_contract_allowlist_invalid"})
+        allowlist = []
+    duplicate_allowlist_ids = sorted(
+        method_id for method_id in set(allowlist) if allowlist.count(method_id) > 1
+    )
+    if duplicate_allowlist_ids:
+        issues.append(
+            {
+                "fatal": True,
+                "kind": "generated_contract_allowlist_duplicate_ids",
+                "method_ids": duplicate_allowlist_ids,
+            }
+        )
+
+    raw_method_descriptors = schema.get("method_descriptors")
+    method_descriptors = raw_method_descriptors if isinstance(raw_method_descriptors, list) else []
+    if not isinstance(raw_method_descriptors, list):
+        issues.append({"fatal": True, "kind": "generated_method_descriptors_invalid"})
+    descriptor_method_ids: list[str] = []
+    parsed_descriptors: dict[str, MethodDescriptor] = {}
+    for index, descriptor in enumerate(method_descriptors):
+        if not isinstance(descriptor, dict):
+            issues.append(
+                {
+                    "fatal": True,
+                    "kind": "generated_method_descriptor_invalid",
+                    "index": index,
+                }
+            )
+            continue
+        method_id = descriptor.get("method_id")
+        if not isinstance(method_id, str) or not method_id:
+            issues.append(
+                {
+                    "fatal": True,
+                    "kind": "generated_method_descriptor_missing_id",
+                    "index": index,
+                }
+            )
+            continue
+        descriptor_method_ids.append(method_id)
+        try:
+            parsed = _method_from_inventory(descriptor)
+        except (TypeError, ValueError) as exc:
+            issues.append(
+                {
+                    "fatal": True,
+                    "kind": "generated_method_descriptor_invalid",
+                    "method_id": method_id,
+                    "error": str(exc),
+                }
+            )
+            continue
+        if parsed.bus_topic != method_id:
+            issues.append(
+                {
+                    "fatal": True,
+                    "kind": "generated_method_descriptor_topic_mismatch",
+                    "method_id": method_id,
+                    "bus_topic": parsed.bus_topic,
+                }
+            )
+            continue
+        parsed_descriptors[method_id] = parsed
     duplicate_descriptor_ids = sorted(
         method_id
         for method_id in set(descriptor_method_ids)
@@ -831,6 +896,34 @@ def _check_generated_contract_artifacts(
                 "method_descriptors": descriptor_method_ids,
             }
         )
+
+    if live_methods is not None:
+        descriptor_fields = tuple(field.name for field in fields(MethodDescriptor))
+        for method_id, generated in sorted(parsed_descriptors.items()):
+            live = live_methods.get(method_id)
+            if live is None:
+                issues.append(
+                    {
+                        "fatal": True,
+                        "kind": "stale_generated_method_descriptor",
+                        "method_id": method_id,
+                    }
+                )
+                continue
+            for field in descriptor_fields:
+                generated_value = getattr(generated, field)
+                live_value = getattr(live, field)
+                if generated_value != live_value:
+                    issues.append(
+                        {
+                            "fatal": True,
+                            "kind": "generated_method_descriptor_drift",
+                            "method_id": method_id,
+                            "field": field,
+                            "generated": generated_value,
+                            "live": live_value,
+                        }
+                    )
 
     evidence = {
         "checked": True,
@@ -872,6 +965,7 @@ def build_report(
         zod_path=sdk_zod_path,
         manifest_path=sdk_manifest_path,
         tooling_provider_path=tooling_provider_path,
+        live_methods=live_methods,
     )
     issues.extend(generated_issues)
     issues.extend(

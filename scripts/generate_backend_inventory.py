@@ -483,9 +483,14 @@ def _assert_field_pattern(pattern: str):
 
 def _assert_string_field_non_blank(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
     for field_schema in _validator_field_schemas(entry, schema):
-        if field_schema.get(STRING_NON_BLANK_MARKER) is not True and not any(
+        direct_marker = (
+            field_schema.get("type") == "string"
+            and field_schema.get(STRING_NON_BLANK_MARKER) is True
+        )
+        nested_marker = any(
             option.get(STRING_NON_BLANK_MARKER) is True for option in _string_options(field_schema)
-        ):
+        )
+        if not direct_marker and not nested_marker:
             raise ValueError(f"{entry.error_context()}: missing {STRING_NON_BLANK_MARKER}")
 
 
@@ -816,8 +821,10 @@ def _assert_no_unbounded_integer_schema(schema: Any, *, context: str, pointer: s
         schema.get("type") == "integer"
         and "enum" not in schema
         and "const" not in schema
-        and ("minimum" not in schema and "exclusiveMinimum" not in schema)
-        and ("maximum" not in schema and "exclusiveMaximum" not in schema)
+        and (
+            ("minimum" not in schema and "exclusiveMinimum" not in schema)
+            or ("maximum" not in schema and "exclusiveMaximum" not in schema)
+        )
     ):
         raise ValueError(f"{context} {pointer}: integer schema must declare minimum and maximum")
     for key, item in schema.items():
@@ -1366,8 +1373,8 @@ def _annotate_optional_string_pattern(schema: dict[str, Any], pattern: str) -> N
 
 
 def _annotate_optional_string_marker(schema: dict[str, Any], marker: str) -> None:
-    schema[marker] = True
     if schema.get("type") == "string":
+        schema[marker] = True
         return
     for option in schema.get("anyOf") or ():
         if isinstance(option, dict) and option.get("type") == "string":
@@ -2319,11 +2326,9 @@ def write_sdk_contract_outputs(
         _verify_staged_outputs(staged_outputs)
         _promote_staged_outputs(staged_outputs)
     finally:
-        for target_path, tmp_path, _expected_hash in staged_outputs:
+        for _target_path, tmp_path, _expected_hash in staged_outputs:
             with contextlib.suppress(FileNotFoundError):
                 tmp_path.unlink()
-            with contextlib.suppress(FileNotFoundError):
-                _promotion_backup_path(target_path).unlink()
 
 
 def build_inventory() -> dict[str, Any]:
