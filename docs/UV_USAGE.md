@@ -122,7 +122,10 @@ uv sync --extra runtime --extra torch-cpu
 
 Runtime installs must use the native `uv sync` commands above. The `runtime`
 extra includes local speech packages whose Torch backend must be selected from
-the lock; an editable `uv pip install` does not preserve that selection.
+the lock; an editable `uv pip install` does not preserve that selection. The
+same rule applies to profiles that transitively include `runtime`, including
+`third-party`, `local-huggingface`, `local-huggingface-gpu`, `dev-local-*`, and
+full local/third-party profiles.
 
 ### Service-Specific Dependencies (Native UV)
 
@@ -139,10 +142,11 @@ uv sync --extra service-db --extra service-scheduler --extra service-tooling
 
 ### Service-Specific Dependencies (Pip-Compatible)
 
-`service-tts` and aggregate extras such as `all-services` are not safe through
-an unconstrained editable install because their Torch backend must be selected
-before PocketTTS is resolved. Use `uv sync` above for the aggregate environment,
-or the frozen TTS sequence in [TTSService (`service-tts`)](#ttsservice-service-tts).
+`service-tts`, aggregate extras such as `all-services`, and profiles that
+transitively include `runtime` are not safe through an unconstrained editable
+install because their Torch backend must be selected before PocketTTS is
+resolved. Use `uv sync` above for the aggregate environment, or the frozen TTS
+sequence in [TTSService (`service-tts`)](#ttsservice-service-tts).
 
 ```bash
 # Install specific service dependencies
@@ -642,9 +646,13 @@ If a service fails to start due to missing dependencies:
 # Check what's installed
 uv pip list
 
-# Install missing service dependencies
-uv pip install -e .[service-<name>]
+# Example: install missing DB service dependencies
+uv sync --extra service-db
 ```
+
+Use the matching non-TTS service extra for the service you are troubleshooting.
+For `service-tts`, use the frozen TTS sequence above so the Torch backend is
+selected before PocketTTS is resolved.
 
 ### Import Errors
 

@@ -107,45 +107,31 @@ brew link portaudio
 
 **Third-party API providers (easiest setup):**
 ```bash
-# Using UV (recommended - faster dependency resolution)
 uv sync --extra third-party
-
-# Or using pip
-pip install -e .[third-party]
 ```
 
 **Local models with CPU:**
 ```bash
-# Using UV (recommended)
 uv sync --extra local-huggingface
-
-# Or using pip
-pip install -e .[local-huggingface]
 ```
 
 **Local models with GPU:**
 ```bash
-# Using UV (recommended)
 uv sync --extra local-huggingface-gpu
-
-# Or using pip
-pip install -e .[local-huggingface-gpu]
 ```
 
 **Development environment:**
 ```bash
-# Using UV (recommended)
 uv sync --extra dev-local-gpu
-
-# Or using pip
-pip install -e .[dev-local-gpu]
 ```
 
-TTS profiles include PocketTTS, so install them with the locked `uv sync`
-workflow or the frozen TTS sequence in [UV Usage Guide](UV_USAGE.md). Do not use
-an unconstrained editable install for `runtime`, `service-tts`, or
-`all-services`; those profiles must select the Torch backend before resolving
-`pocket-tts[audio]==2.1.0`.
+These profiles transitively include the `runtime` speech stack. Install
+runtime-bearing profiles with the locked `uv sync` workflow or the hardware-first
+frozen TTS sequence in [UV Usage Guide](UV_USAGE.md). Do not use an
+unconstrained editable install for profiles that include `runtime`,
+`service-tts`, `all-services`, `third-party`, `local-huggingface`,
+`local-huggingface-gpu`, or `dev-local-*`; those profiles must select the Torch
+backend before resolving `pocket-tts[audio]==2.1.0`.
 
 **See [UV Usage Guide](UV_USAGE.md) for complete UV documentation.**
 
@@ -493,7 +479,10 @@ After installation and configuration:
 python main.py
 ```
 
-The assistant will start with your configured settings. The first run may take longer as it downloads and initializes models.
+The assistant will start with your configured settings. The first run may take
+longer as it downloads and initializes enabled user-managed model assets. This
+does not include PocketTTS standard voice packs or cloned voice states unless an
+approved manifest or user-managed asset supplies them.
 
 ---
 
@@ -599,33 +588,22 @@ python scripts/wheel_installer.py --package pytorch --hardware metal
 
 #### Permission Errors
 ```bash
-# Use pip user install (avoid sudo/administrator)
-pip install --user -e .[third-party]
-
-# Or use virtual environment
-python -m venv aurora_env
-source aurora_env/bin/activate  # Linux/macOS
-# or
-aurora_env\Scripts\activate  # Windows
-pip install -e .[third-party]
+# Create a local virtual environment and install without sudo/administrator
+uv venv --python 3.11
+uv sync --extra third-party
 ```
 
 #### Package Conflicts
 ```bash
 # Clean install in new virtual environment
-python -m venv fresh_aurora_env
-source fresh_aurora_env/bin/activate  # Linux/macOS
-# or
-fresh_aurora_env\Scripts\activate  # Windows
-
-# Install Aurora
-pip install -e .[third-party]
+uv venv --clear --python 3.11
+uv sync --extra third-party
 ```
 
 #### Wheel Installation Issues
 ```bash
-# Force reinstall with no cache
-pip install --no-cache-dir --force-reinstall -e .[third-party]
+# Refresh package metadata and wheels during the locked sync
+uv sync --refresh --extra third-party
 
 # Use wheel installer for troubleshooting
 python scripts/wheel_installer.py --hardware cpu --verbose
@@ -661,7 +639,8 @@ nano .env  # or your preferred editor
 - Close other applications to free RAM
 
 #### Slow Startup
-- First run downloads models automatically
+- First run may download enabled user-managed model assets automatically
+- PocketTTS standard voice packs and cloned voice states are not auto-downloaded without an approved manifest or user-managed asset
 - Subsequent runs should be faster
 - Consider using SSD storage for model files
 
@@ -688,9 +667,9 @@ nano .env  # or your preferred editor
 | User Type | Recommended Method | Command |
 |-----------|-------------------|---------|
 | **First-time User** | Guided Setup | `./setup.sh` (Linux/macOS) or `setup.bat` (Windows) |
-| **Developer** | Development Install | `pip install -e .[dev-local-gpu]` |
-| **API User** | Third-party APIs | `pip install -e .[third-party]` |
-| **Privacy-focused** | Local Models | `pip install -e .[local-huggingface-gpu]` |
+| **Developer** | Development Install | `uv sync --extra dev-local-gpu` |
+| **API User** | Third-party APIs | `uv sync --extra third-party` |
+| **Privacy-focused** | Local Models | `uv sync --extra local-huggingface-gpu` |
 | **Advanced User** | Manual Wheels | `python scripts/wheel_installer.py --hardware cuda` |
 
 Choose the method that best fits your use case and technical expertise!
