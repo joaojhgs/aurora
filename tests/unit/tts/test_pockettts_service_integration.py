@@ -15,6 +15,7 @@ from app.services.tts.providers.base import (
     TTSProviderCapabilities,
     TTSProviderError,
     TTSProviderHealth,
+    TTSStreamChunk,
     TTSSynthesisResult,
     TTSVoiceInfo,
     VoiceSelectionMode,
@@ -25,7 +26,9 @@ from app.shared.contracts.models.tts import (
     TTSAudioChunkEvent,
     TTSMethods,
     TTSRequest,
+    TTSStopRequest,
     TTSStreamChunkRequest,
+    TTSStreamEndRequest,
     TTSStreamStartRequest,
 )
 from app.shared.messaging import bus_init
@@ -54,7 +57,10 @@ class FakePCMPlayback:
         self.paused = 0
         self.resumed = 0
 
-    def play_pcm_async(self, audio: bytes, *, sample_rate: int) -> None:
+    def play_pcm_async(
+        self, audio: bytes, *, sample_rate: int, playback_id: int | None = None
+    ) -> None:
+        del playback_id
         self.played.append((audio, sample_rate))
 
     def stop(self) -> None:
@@ -88,6 +94,13 @@ class FakePocketProvider:
         self.stopped = False
         self.cancelled: list[str] = []
         self.requests = []
+        self.stream_requests = []
+        self.synthesize_started = asyncio.Event()
+        self.release_synthesis = asyncio.Event()
+        self.block_synthesis = False
+        self.stream_started = asyncio.Event()
+        self.release_stream = asyncio.Event()
+        self.block_stream_after_first = False
         self.__class__.instances.append(self)
 
     @property
@@ -111,6 +124,12 @@ class FakePocketProvider:
 
     async def synthesize(self, request) -> TTSSynthesisResult:
         self.requests.append(request)
+        self.synthesize_started.set()
+        if self.block_synthesis:
+            while request.request_id not in self.cancelled and not self.release_synthesis.is_set():
+                await asyncio.sleep(0.01)
+            if request.request_id in self.cancelled:
+                raise TTSProviderError("cancelled", "TTS request was cancelled")
         return TTSSynthesisResult(
             audio=b"\x01\x00\x02\x00",
             audio_format=request.audio_format,
@@ -120,8 +139,35 @@ class FakePocketProvider:
             voice=request.voice or "standard:alba",
         )
 
-    def stream(self, request):
-        raise NotImplementedError
+    async def stream(self, request):
+        self.stream_requests.append(request)
+        self.stream_started.set()
+        yield TTSStreamChunk(
+            sequence=0,
+            audio=b"\x03\x00",
+            sample_rate=24000,
+            channels=1,
+            duration_ms=1 / 24000 * 1000,
+        )
+        if self.block_stream_after_first:
+            while request.request_id not in self.cancelled and not self.release_stream.is_set():
+                await asyncio.sleep(0.01)
+            if request.request_id in self.cancelled:
+                raise TTSProviderError("cancelled", "TTS request was cancelled")
+        yield TTSStreamChunk(
+            sequence=1,
+            audio=b"\x04\x00",
+            sample_rate=24000,
+            channels=1,
+            duration_ms=1 / 24000 * 1000,
+        )
+        yield TTSStreamChunk(
+            sequence=2,
+            audio=b"",
+            sample_rate=24000,
+            channels=1,
+            is_final=True,
+        )
 
     async def cancel(self, request_id: str) -> None:
         self.cancelled.append(request_id)
@@ -237,7 +283,7 @@ async def test_piper_remains_default_and_uses_text_playback(monkeypatch, mock_bu
 
 
 @pytest.mark.asyncio
-async def test_pockettts_request_playback_uses_single_synthesis_and_cancels_provider(
+async def test_pockettts_request_playback_uses_single_synthesis_and_stops_playback(
     mock_bus,
 ) -> None:
     service = TTSService()
@@ -251,9 +297,32 @@ async def test_pockettts_request_playback_uses_single_synthesis_and_cancels_prov
 
     assert [request.text for request in provider.requests] == ["hello"]
     assert playback.played == [(b"\x01\x00\x02\x00", 24000)]
-    assert provider.cancelled == ["request-1"]
+    assert provider.cancelled == []
     topics = [call.args[0] for call in mock_bus.publish.await_args_list]
     assert topics == [TTSMethods.STARTED, TTSMethods.STOPPED]
+
+
+@pytest.mark.asyncio
+async def test_pockettts_stop_during_synthesis_cancels_and_suppresses_late_events(
+    mock_bus,
+) -> None:
+    service = TTSService()
+    provider = FakePocketProvider(None)
+    provider.block_synthesis = True
+    playback = FakePCMPlayback()
+    service._provider = provider
+    service.stream = playback
+
+    request_task = asyncio.create_task(service._on_tts_request(TTSRequest(text="pending")))
+    await asyncio.wait_for(provider.synthesize_started.wait(), timeout=1)
+
+    await service._on_stop(TTSStopRequest(reason="interrupted"))
+    await asyncio.wait_for(request_task, timeout=1)
+
+    assert provider.cancelled
+    assert playback.played == []
+    assert mock_bus.publish.await_args_list == []
+    assert service._playing is False
 
 
 @pytest.mark.asyncio
@@ -274,10 +343,48 @@ async def test_pockettts_stream_events_and_server_playback_reuse_synthesized_pcm
     )
 
     events = _audio_events(mock_bus)
-    assert [(event.sequence, event.is_final) for event in events] == [(0, False), (1, True)]
-    assert base64.b64decode(events[0].audio_data) == b"\x01\x00\x02\x00"
-    assert playback.played == [(b"\x01\x00\x02\x00", 24000)]
-    assert [request.text for request in provider.requests] == ["first"]
+    assert [(event.sequence, event.is_final) for event in events] == [
+        (0, False),
+        (1, False),
+        (2, True),
+    ]
+    assert [base64.b64decode(event.audio_data) for event in events[:-1]] == [
+        b"\x03\x00",
+        b"\x04\x00",
+    ]
+    assert playback.played == [(b"\x03\x00", 24000), (b"\x04\x00", 24000)]
+    assert provider.requests == []
+    assert [request.text for request in provider.stream_requests] == ["first"]
+
+
+@pytest.mark.asyncio
+async def test_pockettts_stream_clear_cancels_active_provider_stream(mock_bus) -> None:
+    service = TTSService()
+    provider = FakePocketProvider(None)
+    provider.block_stream_after_first = True
+    playback = FakePCMPlayback()
+    service._provider = provider
+    service.stream = playback
+
+    await service._on_stream_start(
+        TTSStreamStartRequest(stream_id="stream-cancel", format="raw", play_on_server=True)
+    )
+    chunk_task = asyncio.create_task(
+        service._on_stream_chunk(
+            TTSStreamChunkRequest(stream_id="stream-cancel", sequence=0, text="first")
+        )
+    )
+    await asyncio.wait_for(provider.stream_started.wait(), timeout=1)
+    while not _audio_events(mock_bus):
+        await asyncio.sleep(0.01)
+
+    await service._on_stop(TTSStopRequest(reason="interrupted"))
+    await asyncio.wait_for(chunk_task, timeout=1)
+
+    assert provider.cancelled == ["stream-cancel:0"]
+    terminal_events = [event for event in _audio_events(mock_bus) if event.is_final]
+    assert terminal_events[-1].stream_id == "stream-cancel"
+    assert terminal_events[-1].reason == "interrupted"
 
 
 @pytest.mark.asyncio
@@ -309,12 +416,41 @@ async def test_pockettts_reload_failure_keeps_old_provider_and_playback(
 
 
 @pytest.mark.asyncio
+async def test_pockettts_successful_reload_closes_old_playback_when_idle(
+    mock_bus, monkeypatch
+) -> None:
+    service = TTSService()
+    old_provider = FakePocketProvider(None)
+    new_provider = FakePocketProvider(None)
+    old_playback = FakePCMPlayback()
+    new_playback = FakePCMPlayback()
+    service._provider = old_provider
+    service.stream = old_playback
+    service.engine = object()
+
+    async def build_runtime():
+        return new_provider, None, new_playback
+
+    monkeypatch.setattr(service, "_build_runtime", build_runtime)
+
+    await service.reload("services.tts")
+
+    assert service._provider is new_provider
+    assert service.stream is new_playback
+    assert old_provider.stopped is True
+    assert old_playback.stopped == 1
+
+
+@pytest.mark.asyncio
 async def test_pockettts_request_error_when_pcm_output_unavailable(mock_bus) -> None:
     service = TTSService()
     service._provider = FakePocketProvider(None)
 
     class UnavailablePCM(FakePCMPlayback):
-        def play_pcm_async(self, audio: bytes, *, sample_rate: int) -> None:
+        def play_pcm_async(
+            self, audio: bytes, *, sample_rate: int, playback_id: int | None = None
+        ) -> None:
+            del playback_id
             raise RuntimeError("TTS audio output unavailable")
 
     service.stream = UnavailablePCM()
@@ -322,9 +458,8 @@ async def test_pockettts_request_error_when_pcm_output_unavailable(mock_bus) -> 
     await service._on_tts_request(TTSRequest(text="hello"))
 
     topics = [call.args[0] for call in mock_bus.publish.await_args_list]
-    assert TTSMethods.STARTED not in topics
-    assert TTSMethods.STOPPED not in topics
-    assert topics == [TTSMethods.ERROR]
+    assert topics == [TTSMethods.STARTED, TTSMethods.ERROR, TTSMethods.STOPPED]
+    assert mock_bus.publish.await_args_list[-1].args[1].reason == "failed"
     assert service._playing is False
 
 

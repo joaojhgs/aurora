@@ -8,10 +8,20 @@ import queue
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from types import ModuleType
 from typing import Any, Protocol
 
 from app.helpers.aurora_logger import log_debug, log_warning
+
+
+@dataclass
+class _PCMWorker:
+    generation: int
+    playback_id: int | None
+    work_queue: queue.Queue[tuple[bytes, int]]
+    stop_event: threading.Event
+    thread: threading.Thread
 
 
 class ServerPlayback(Protocol):
@@ -71,51 +81,71 @@ class PCMServerPlayback:
         *,
         on_audio_stream_start: Callable[[], None],
         on_audio_stream_stop: Callable[[], None],
+        on_audio_stream_error: Callable[..., None] | None = None,
         frames_per_buffer: int = 1024,
     ) -> None:
         self._on_audio_stream_start = on_audio_stream_start
         self._on_audio_stream_stop = on_audio_stream_stop
+        self._on_audio_stream_error = on_audio_stream_error
         self._frames_per_buffer = max(1, frames_per_buffer)
         self._lock = threading.Lock()
-        self._stop_event = threading.Event()
         self._pause_event = threading.Event()
-        self._thread: threading.Thread | None = None
-        self._queue: queue.Queue[tuple[bytes, int]] = queue.Queue()
+        self._generation = 0
+        self._worker: _PCMWorker | None = None
         self._pyaudio: ModuleType | None = None
         self._audio: Any | None = None
         self._pyaudio_unavailable = False
         self._warned_unavailable = False
 
-    def play_pcm_async(self, audio: bytes, *, sample_rate: int) -> None:
+    def play_pcm_async(
+        self, audio: bytes, *, sample_rate: int, playback_id: int | None = None
+    ) -> None:
         """Queue raw 16-bit mono PCM bytes for asynchronous playback."""
+        if isinstance(sample_rate, bool) or not isinstance(sample_rate, int) or sample_rate <= 0:
+            raise RuntimeError("TTS audio output unavailable")
         if self._ensure_pyaudio() is None:
             raise RuntimeError("TTS audio output unavailable")
         with self._lock:
-            self._queue.put((bytes(audio), int(sample_rate)))
-            if self._thread is None or not self._thread.is_alive():
-                self._stop_event.clear()
+            worker = self._worker
+            if worker is None or not worker.thread.is_alive() or worker.stop_event.is_set():
+                self._generation += 1
                 self._pause_event.clear()
-                self._thread = threading.Thread(
+                work_queue: queue.Queue[tuple[bytes, int]] = queue.Queue()
+                stop_event = threading.Event()
+                generation = self._generation
+                thread = threading.Thread(
                     target=self._play_queue,
+                    args=(generation, playback_id, work_queue, stop_event),
                     name="aurora-tts-pcm-playback",
                     daemon=True,
                 )
-                self._thread.start()
+                worker = _PCMWorker(
+                    generation=generation,
+                    playback_id=playback_id,
+                    work_queue=work_queue,
+                    stop_event=stop_event,
+                    thread=thread,
+                )
+                self._worker = worker
+                thread.start()
+            worker.work_queue.put((bytes(audio), int(sample_rate)))
 
     def stop(self) -> None:
         """Stop current PCM playback."""
         with self._lock:
-            thread = self._thread
-            self._thread = None
-            self._stop_event.set()
+            worker = self._worker
+            self._worker = None
             self._pause_event.clear()
+            if worker is None:
+                return
+            worker.stop_event.set()
             while True:
                 try:
-                    self._queue.get_nowait()
+                    worker.work_queue.get_nowait()
                 except queue.Empty:
                     break
-        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
-            thread.join(timeout=0.5)
+        if worker.thread.is_alive() and worker.thread is not threading.current_thread():
+            worker.thread.join(timeout=0.5)
 
     def pause(self) -> None:
         """Pause current PCM playback."""
@@ -151,20 +181,31 @@ class PCMServerPlayback:
         self._pyaudio = module
         return module
 
-    def _play_queue(self) -> None:
-        self._on_audio_stream_start()
+    def _invoke_callback(self, callback: Callable[..., None], playback_id: int | None) -> None:
+        try:
+            callback(playback_id)
+        except TypeError:
+            callback()
+
+    def _play_queue(
+        self,
+        generation: int,
+        playback_id: int | None,
+        work_queue: queue.Queue[tuple[bytes, int]],
+        stop_event: threading.Event,
+    ) -> None:
+        self._invoke_callback(self._on_audio_stream_start, playback_id)
         stop_callback_sent = False
         try:
-            while not self._stop_event.is_set():
+            while not stop_event.is_set() and self._is_active_generation(generation):
                 try:
-                    item = self._queue.get(timeout=0.05)
+                    item = work_queue.get(timeout=0.05)
                 except queue.Empty:
                     with self._lock:
-                        if self._queue.empty():
-                            self._on_audio_stream_stop()
+                        if work_queue.empty() and self._is_active_generation(generation):
+                            self._invoke_callback(self._on_audio_stream_stop, playback_id)
                             stop_callback_sent = True
-                            if self._thread is threading.current_thread():
-                                self._thread = None
+                            self._worker = None
                             return
                     continue
                 pyaudio = self._ensure_pyaudio()
@@ -172,18 +213,38 @@ class PCMServerPlayback:
                     raise RuntimeError("TTS audio output unavailable")
                 if self._audio is None:
                     raise RuntimeError("TTS audio output unavailable")
-                self._play_pcm_item(self._audio, pyaudio, item[0], item[1])
+                self._play_pcm_item(self._audio, pyaudio, item[0], item[1], generation, stop_event)
         except Exception as exc:
             log_debug(f"TTS PCM playback failure type={type(exc).__name__}")
+            if self._on_audio_stream_error is not None and self._is_active_generation(generation):
+                self._invoke_error_callback(playback_id, exc)
         finally:
             if not stop_callback_sent:
                 with self._lock:
-                    self._on_audio_stream_stop()
-                    if self._thread is threading.current_thread():
-                        self._thread = None
+                    self._invoke_callback(self._on_audio_stream_stop, playback_id)
+                    if self._is_active_generation(generation):
+                        self._worker = None
+
+    def _is_active_generation(self, generation: int) -> bool:
+        worker = self._worker
+        return worker is not None and worker.generation == generation
+
+    def _invoke_error_callback(self, playback_id: int | None, exc: Exception) -> None:
+        if self._on_audio_stream_error is None:
+            return
+        try:
+            self._on_audio_stream_error(playback_id, exc)
+        except TypeError:
+            self._on_audio_stream_error(exc)
 
     def _play_pcm_item(
-        self, audio_output: Any, pyaudio: ModuleType, audio: bytes, sample_rate: int
+        self,
+        audio_output: Any,
+        pyaudio: ModuleType,
+        audio: bytes,
+        sample_rate: int,
+        generation: int,
+        stop_event: threading.Event,
     ) -> None:
         stream = audio_output.open(
             format=pyaudio.paInt16,
@@ -195,11 +256,15 @@ class PCMServerPlayback:
         try:
             width = self._frames_per_buffer * 2
             for offset in range(0, len(audio), width):
-                if self._stop_event.is_set():
+                if stop_event.is_set() or not self._is_active_generation(generation):
                     break
-                while self._pause_event.is_set() and not self._stop_event.is_set():
+                while (
+                    self._pause_event.is_set()
+                    and not stop_event.is_set()
+                    and self._is_active_generation(generation)
+                ):
                     time.sleep(0.01)
-                if self._stop_event.is_set():
+                if stop_event.is_set() or not self._is_active_generation(generation):
                     break
                 stream.write(audio[offset : offset + width])
         finally:
@@ -238,9 +303,11 @@ def create_pcm_playback(
     *,
     on_audio_stream_start: Callable[[], None],
     on_audio_stream_stop: Callable[[], None],
+    on_audio_stream_error: Callable[..., None] | None = None,
 ) -> PCMServerPlayback:
     """Create provider-neutral PCM playback for local server audio."""
     return PCMServerPlayback(
         on_audio_stream_start=on_audio_stream_start,
         on_audio_stream_stop=on_audio_stream_stop,
+        on_audio_stream_error=on_audio_stream_error,
     )

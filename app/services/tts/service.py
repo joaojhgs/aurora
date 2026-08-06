@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import io
 import shutil
 import wave
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
@@ -22,6 +24,7 @@ from app.services.tts.playback import create_pcm_playback, create_realtime_piper
 from app.services.tts.providers.base import (
     TTSProvider,
     TTSProviderError,
+    TTSStreamChunk as ProviderStreamChunk,
     TTSSynthesisRequest as ProviderSynthesisRequest,
 )
 from app.services.tts.providers.piper import PiperTTSProvider, PiperVoiceConfig
@@ -82,6 +85,7 @@ class _TTSStreamState:
     end_reason: str = "completed"
     emitted_sample_rate: int = 0
     draining: bool = False
+    provider_request_ids: set[str] = field(default_factory=set)
 
 
 def _clean_envelope_string(value: object) -> str | None:
@@ -185,6 +189,10 @@ class TTSService(BaseService):
         self._stream_states: dict[str, _TTSStreamState] = {}
         self._stream_state_lock = asyncio.Lock()
         self._provider: TTSProvider | None = None
+        self._playback_generation = 0
+        self._current_playback_generation: int | None = None
+        self._playback_started = False
+        self._active_playback_provider_request_ids: set[str] = set()
         self.stream = None  # Will be initialized in on_start()
 
     async def _stop_provider_safely(self, provider: TTSProvider, context: str) -> None:
@@ -196,16 +204,16 @@ class TTSService(BaseService):
                 f"Failed to stop TTS provider after {context}: {cleanup_error}", exc_info=True
             )
 
-    def _stop_playback_stream(self, stream: object | None) -> None:
+    async def _stop_playback_stream(self, stream: object | None) -> None:
         """Stop and close a local playback stream when supported."""
         if stream is None:
             return
         stop = getattr(stream, "stop", None)
         if callable(stop):
-            stop()
+            await asyncio.to_thread(stop)
         close = getattr(stream, "close", None)
         if callable(close):
-            close()
+            await asyncio.to_thread(close)
 
     async def _get_model_paths(self, tts_cfg: Tts | None = None) -> tuple[str, str | None]:
         """Get Piper model paths from canonical config with flat-key compatibility."""
@@ -302,8 +310,9 @@ class TTSService(BaseService):
         provider = PocketTTSProvider(provider_config)
         await provider.start()
         stream = create_pcm_playback(
-            on_audio_stream_start=self._on_audio_start,
-            on_audio_stream_stop=self._on_audio_stop,
+            on_audio_stream_start=self._on_pcm_audio_start,
+            on_audio_stream_stop=self._on_pcm_audio_stop,
+            on_audio_stream_error=self._on_pcm_audio_error,
         )
         return provider, None, stream
 
@@ -397,6 +406,63 @@ class TTSService(BaseService):
                 self._loop,
             )
 
+    def _on_pcm_audio_start(self, playback_id: int | None = None) -> None:
+        """Called when tokenized PCM audio starts playing."""
+        del playback_id
+        self._on_audio_start()
+
+    def _on_pcm_audio_stop(self, playback_id: int | None = None) -> None:
+        """Called when tokenized PCM audio finishes normally."""
+        restore_volume_except_current()
+        if playback_id is None or self._loop is None:
+            return
+        asyncio.run_coroutine_threadsafe(
+            self._complete_pcm_playback(playback_id, "completed"),
+            self._loop,
+        )
+
+    def _on_pcm_audio_error(
+        self, playback_id: int | None = None, error: Exception | None = None
+    ) -> None:
+        """Called when tokenized PCM audio output fails."""
+        restore_volume_except_current()
+        if playback_id is None or self._loop is None:
+            return
+        asyncio.run_coroutine_threadsafe(
+            self._fail_pcm_playback(playback_id, error),
+            self._loop,
+        )
+
+    async def _complete_pcm_playback(self, playback_id: int, reason: str) -> None:
+        """Emit terminal playback event only for the current committed PCM playback."""
+        if playback_id != self._current_playback_generation:
+            return
+        if not self._playing or not self._playback_started:
+            return
+        request_id = self._current_request_id
+        self._clear_playback_state()
+        await self.bus.publish(
+            TTSMethods.STOPPED,
+            TTSStopped(request_id=request_id, reason=reason),
+            event=True,
+            mesh=False,
+            origin="internal",
+        )
+
+    async def _fail_pcm_playback(self, playback_id: int, error: Exception | None = None) -> None:
+        """Publish playback failure for the current PCM playback."""
+        if playback_id != self._current_playback_generation:
+            return
+        request_id = self._current_request_id
+        await self.bus.publish(
+            TTSMethods.ERROR,
+            TTSErrorEvent(request_id=request_id or "", error="TTS audio output failed"),
+            event=True,
+            mesh=False,
+            origin="internal",
+        )
+        await self._complete_pcm_playback(playback_id, "failed")
+
     async def on_start(self) -> None:
         """Start the TTS service."""
         log_info("Starting TTS service...")
@@ -410,12 +476,12 @@ class TTSService(BaseService):
     async def on_stop(self) -> None:
         """Stop the TTS service."""
         log_info("Stopping TTS service...")
-        self._playing = False
+        await self._stop_playback("service_stopped")
         await self._clear_tts_streams("service_stopped")
 
         # Stop any ongoing playback
         if hasattr(self, "stream"):
-            self._stop_playback_stream(self.stream)
+            await self._stop_playback_stream(self.stream)
         if self._provider is not None:
             await self._provider.stop()
             self._provider = None
@@ -444,7 +510,7 @@ class TTSService(BaseService):
 
                 await self._clear_tts_streams("config_reloaded")
                 if self._playing and old_stream is not None:
-                    self._stop_playback_stream(old_stream)
+                    await self._stop_playback_stream(old_stream)
                     self._playing = False
                     self._paused = False
                     self._current_text = None
@@ -456,6 +522,8 @@ class TTSService(BaseService):
                 new_runtime_installed = True
                 if old_provider is not None:
                     await old_provider.stop()
+                if old_stream is not None:
+                    await self._stop_playback_stream(old_stream)
                 log_info("TTS engine reinitialized successfully")
             except Exception as e:
                 if new_provider is not None and not new_runtime_installed:
@@ -807,6 +875,43 @@ class TTSService(BaseService):
         if not any(item.voice_id == voice and item.ready for item in voices):
             raise RuntimeError("Requested voice is unavailable")
 
+    def _begin_playback_request(self, request_id: str, text: str) -> int:
+        """Register a provider-backed playback request before synthesis starts."""
+        self._playback_generation += 1
+        self._current_playback_generation = self._playback_generation
+        self._playing = True
+        self._paused = False
+        self._playback_started = False
+        self._current_text = text
+        self._current_request_id = request_id
+        self._active_playback_provider_request_ids.add(request_id)
+        return self._playback_generation
+
+    def _is_current_playback(self, playback_id: int) -> bool:
+        """Return whether a provider-backed playback token is still current."""
+        return self._current_playback_generation == playback_id and self._playing
+
+    def _clear_playback_state(self) -> None:
+        """Clear current local playback state."""
+        self._playing = False
+        self._paused = False
+        self._playback_started = False
+        self._current_text = None
+        self._current_request_id = None
+        self._current_playback_generation = None
+        self._active_playback_provider_request_ids.clear()
+
+    async def _cancel_active_playback_provider_requests(self) -> None:
+        """Cancel provider requests backing local playback."""
+        if self._provider is None:
+            self._active_playback_provider_request_ids.clear()
+            return
+        request_ids = tuple(self._active_playback_provider_request_ids)
+        self._active_playback_provider_request_ids.clear()
+        for request_id in request_ids:
+            with contextlib.suppress(Exception):
+                await self._provider.cancel(request_id)
+
     async def _play_text(
         self, text: str, request_id: str, *, voice: str | None = None, speed: float = 1.0
     ) -> None:
@@ -819,18 +924,29 @@ class TTSService(BaseService):
         try:
             await self._ensure_voice_available(voice)
             if getattr(self.stream, "supports_pcm", False) is True:
-                audio_bytes, sample_rate = await self._synthesize_to_bytes(
-                    text,
-                    request_id=request_id,
-                    voice=voice,
-                    speed=speed,
-                )
+                playback_id = self._begin_playback_request(request_id, text)
+                try:
+                    audio_bytes, sample_rate = await self._synthesize_to_bytes(
+                        text,
+                        request_id=request_id,
+                        voice=voice,
+                        speed=speed,
+                    )
+                except Exception:
+                    if not self._is_current_playback(playback_id):
+                        return
+                    raise
+                finally:
+                    self._active_playback_provider_request_ids.discard(request_id)
+                if not self._is_current_playback(playback_id):
+                    return
                 await self._play_audio_bytes(
                     audio_bytes,
                     sample_rate,
                     request_id=request_id,
                     text=text,
                     append=False,
+                    playback_id=playback_id,
                 )
                 return
 
@@ -870,6 +986,7 @@ class TTSService(BaseService):
         request_id: str,
         text: str,
         append: bool,
+        playback_id: int | None = None,
     ) -> None:
         """Queue provider-produced PCM bytes for local server playback."""
         if getattr(self.stream, "supports_pcm", False) is not True:
@@ -879,18 +996,8 @@ class TTSService(BaseService):
         previous_request_id = self._current_request_id
         previous_paused = self._paused
         if not append or not self._playing:
-            self._playing = True
-            self._paused = False
-            self._current_text = text
-            self._current_request_id = request_id
-            try:
-                self.stream.play_pcm_async(audio_bytes, sample_rate=sample_rate)
-            except Exception:
-                self._playing = was_playing
-                self._paused = previous_paused
-                self._current_text = previous_text
-                self._current_request_id = previous_request_id
-                raise
+            if playback_id is None or not self._is_current_playback(playback_id):
+                playback_id = self._begin_playback_state(request_id, text)
             await self.bus.publish(
                 TTSMethods.STARTED,
                 TTSStarted(request_id=request_id, text=text),
@@ -898,15 +1005,62 @@ class TTSService(BaseService):
                 mesh=False,
                 origin="internal",
             )
+            self._playback_started = True
+            try:
+                await asyncio.to_thread(
+                    self.stream.play_pcm_async,
+                    audio_bytes,
+                    sample_rate=sample_rate,
+                    playback_id=playback_id,
+                )
+            except Exception:
+                self._playing = was_playing
+                self._paused = previous_paused
+                self._current_text = previous_text
+                self._current_request_id = previous_request_id
+                await self._publish_playback_failure(request_id, playback_id)
+                return
             log_info(f"Playing TTS: {text[:50]}...")
             return
 
         self._current_text = f"{self._current_text or ''}{text}"
+        playback_id = self._current_playback_generation
+        if playback_id is None:
+            return
         try:
-            self.stream.play_pcm_async(audio_bytes, sample_rate=sample_rate)
+            await asyncio.to_thread(
+                self.stream.play_pcm_async,
+                audio_bytes,
+                sample_rate=sample_rate,
+                playback_id=playback_id,
+            )
         except Exception:
             self._current_text = previous_text
-            raise
+            await self._publish_playback_failure(request_id, playback_id)
+
+    def _begin_playback_state(self, request_id: str, text: str) -> int:
+        """Register local playback state that is not backed by active synthesis."""
+        self._playback_generation += 1
+        self._current_playback_generation = self._playback_generation
+        self._playing = True
+        self._paused = False
+        self._playback_started = False
+        self._current_text = text
+        self._current_request_id = request_id
+        return self._playback_generation
+
+    async def _publish_playback_failure(self, request_id: str | None, playback_id: int) -> None:
+        """Publish TTS output failure and failed terminal event for current playback."""
+        if playback_id != self._current_playback_generation:
+            return
+        await self.bus.publish(
+            TTSMethods.ERROR,
+            TTSErrorEvent(request_id=request_id or "", error="TTS audio output failed"),
+            event=True,
+            mesh=False,
+            origin="internal",
+        )
+        await self._complete_pcm_playback(playback_id, "failed")
 
     async def _stop_playback(self, reason: str) -> None:
         """Stop current TTS playback.
@@ -917,25 +1071,23 @@ class TTSService(BaseService):
         if self._playing:
             # Capture request_id before clearing state
             request_id = self._current_request_id
+            started = self._playback_started or self._current_playback_generation is None
 
-            if self._provider is not None and request_id is not None:
-                await self._provider.cancel(request_id)
+            await self._cancel_active_playback_provider_requests()
 
             # Stop audio stream
-            self._stop_playback_stream(self.stream)
+            await self._stop_playback_stream(self.stream)
 
-            self._playing = False
-            self._paused = False
-            self._current_text = None
-            self._current_request_id = None
+            self._clear_playback_state()
 
-            await self.bus.publish(
-                TTSMethods.STOPPED,
-                TTSStopped(request_id=request_id, reason=reason),
-                event=True,
-                mesh=False,
-                origin="internal",
-            )
+            if started:
+                await self.bus.publish(
+                    TTSMethods.STOPPED,
+                    TTSStopped(request_id=request_id, reason=reason),
+                    event=True,
+                    mesh=False,
+                    origin="internal",
+                )
             log_info(f"TTS playback stopped: {reason}")
 
     async def _synthesize_to_bytes(
@@ -1077,7 +1229,6 @@ class TTSService(BaseService):
                     else:
                         text_sequence = state.next_text_sequence
                         text = state.pending.pop(text_sequence)
-                        audio_sequence = state.next_audio_sequence
                         audio_format = state.audio_format
                         play_on_server = state.play_on_server
                         correlation_id = state.correlation_id
@@ -1085,7 +1236,6 @@ class TTSService(BaseService):
                         principal_id = state.principal_id
                         stream_epoch = state
                         state.next_text_sequence += 1
-                        state.next_audio_sequence += 1
                         final_event = None
 
                 if final_event is not None:
@@ -1097,56 +1247,122 @@ class TTSService(BaseService):
                     )
                     return
 
-                if text_sequence is None or text is None or audio_sequence is None:
+                if text_sequence is None or text is None:
                     return
 
-                audio_bytes, sample_rate = await self._synthesize_to_bytes(
-                    text,
-                    request_id=f"{stream_id}:{text_sequence}",
-                    voice=stream_epoch.voice,
-                    sample_rate=stream_epoch.requested_sample_rate,
-                    speed=stream_epoch.speed,
-                )
-                output_bytes, duration_ms = self._format_audio_bytes(
-                    audio_bytes, sample_rate, audio_format
-                )
+                provider_request_id = f"{stream_id}:{text_sequence}"
                 async with self._stream_state_lock:
                     state = self._stream_states.get(stream_id)
                     if state is not stream_epoch:
                         return
-                    state.emitted_sample_rate = sample_rate
-                await self._publish_audio_chunk(
-                    TTSAudioChunkEvent(
-                        stream_id=stream_id,
-                        sequence=audio_sequence,
-                        audio_data=base64.b64encode(output_bytes).decode("utf-8"),
-                        format=audio_format,
-                        sample_rate=sample_rate,
-                        channels=1,
-                        duration_ms=duration_ms,
-                        text=text,
-                        source_sequence=text_sequence,
-                        is_final=False,
-                        correlation_id=correlation_id,
-                    ),
-                    caller_peer_id=caller_peer_id,
-                    principal_id=principal_id,
-                    correlation_id=correlation_id,
-                )
-                if play_on_server:
-                    await self._play_stream_audio(
+                    state.provider_request_ids.add(provider_request_id)
+                try:
+                    async for provider_chunk in self._stream_provider_audio_chunks(
                         text,
-                        stream_id,
-                        audio_bytes,
-                        sample_rate,
+                        request_id=provider_request_id,
                         voice=stream_epoch.voice,
+                        sample_rate=stream_epoch.requested_sample_rate,
                         speed=stream_epoch.speed,
-                    )
+                    ):
+                        if provider_chunk.is_final:
+                            continue
+                        audio_bytes = provider_chunk.audio
+                        sample_rate = provider_chunk.sample_rate
+                        output_bytes, duration_ms = self._format_audio_bytes(
+                            audio_bytes, sample_rate, audio_format
+                        )
+                        async with self._stream_state_lock:
+                            state = self._stream_states.get(stream_id)
+                            if state is not stream_epoch:
+                                return
+                            audio_sequence = state.next_audio_sequence
+                            state.next_audio_sequence += 1
+                            state.emitted_sample_rate = sample_rate
+                        await self._publish_audio_chunk(
+                            TTSAudioChunkEvent(
+                                stream_id=stream_id,
+                                sequence=audio_sequence,
+                                audio_data=base64.b64encode(output_bytes).decode("utf-8"),
+                                format=audio_format,
+                                sample_rate=sample_rate,
+                                channels=1,
+                                duration_ms=duration_ms,
+                                text=text,
+                                source_sequence=text_sequence,
+                                is_final=False,
+                                correlation_id=correlation_id,
+                            ),
+                            caller_peer_id=caller_peer_id,
+                            principal_id=principal_id,
+                            correlation_id=correlation_id,
+                        )
+                        if play_on_server:
+                            await self._play_stream_audio(
+                                text,
+                                stream_id,
+                                audio_bytes,
+                                sample_rate,
+                                voice=stream_epoch.voice,
+                                speed=stream_epoch.speed,
+                            )
+                finally:
+                    async with self._stream_state_lock:
+                        state = self._stream_states.get(stream_id)
+                        if state is stream_epoch:
+                            state.provider_request_ids.discard(provider_request_id)
         finally:
             async with self._stream_state_lock:
                 state = self._stream_states.get(stream_id)
                 if state is not None:
                     state.draining = False
+
+    async def _stream_provider_audio_chunks(
+        self,
+        text: str,
+        *,
+        request_id: str,
+        voice: str | None,
+        sample_rate: int | None,
+        speed: float,
+    ) -> AsyncIterator[ProviderStreamChunk]:
+        """Stream provider audio chunks for a logical stream text chunk."""
+        if self._provider is None:
+            audio, resolved_sample_rate = await self._synthesize_to_bytes(
+                text,
+                request_id=request_id,
+                voice=voice,
+                sample_rate=sample_rate,
+                speed=speed,
+            )
+            yield ProviderStreamChunk(
+                sequence=0,
+                audio=audio,
+                sample_rate=resolved_sample_rate,
+                channels=1,
+                duration_ms=(len(audio) / (resolved_sample_rate * 2)) * 1000,
+            )
+            yield ProviderStreamChunk(
+                sequence=1,
+                audio=b"",
+                sample_rate=resolved_sample_rate,
+                channels=1,
+                is_final=True,
+            )
+            return
+        try:
+            async for chunk in self._provider.stream(
+                ProviderSynthesisRequest(
+                    text=text,
+                    request_id=request_id,
+                    voice=voice,
+                    audio_format="raw",
+                    sample_rate=sample_rate,
+                    speed=speed,
+                )
+            ):
+                yield chunk
+        except TTSProviderError as exc:
+            raise RuntimeError(str(exc)) from exc
 
     async def _play_stream_audio(
         self,
@@ -1215,6 +1431,8 @@ class TTSService(BaseService):
         self, audio_bytes: bytes, sample_rate: int, audio_format: str
     ) -> tuple[bytes, float]:
         """Format raw PCM audio bytes for stream events."""
+        if isinstance(sample_rate, bool) or not isinstance(sample_rate, int) or sample_rate <= 0:
+            raise RuntimeError("TTS provider returned an invalid sample rate")
         duration_ms = (len(audio_bytes) / (sample_rate * 2)) * 1000
         if audio_format == "wav":
             wav_buffer = io.BytesIO()
@@ -1280,6 +1498,7 @@ class TTSService(BaseService):
                     self._stream_states.pop(state.stream_id, None)
 
         for state in states:
+            await self._cancel_stream_provider_requests(state)
             state.end_reason = reason
             await self._publish_audio_chunk(
                 self._build_final_audio_chunk_event(state),
@@ -1287,6 +1506,17 @@ class TTSService(BaseService):
                 principal_id=state.principal_id,
                 correlation_id=state.correlation_id,
             )
+
+    async def _cancel_stream_provider_requests(self, state: _TTSStreamState) -> None:
+        """Cancel provider work backing a logical stream."""
+        if self._provider is None:
+            state.provider_request_ids.clear()
+            return
+        request_ids = tuple(state.provider_request_ids)
+        state.provider_request_ids.clear()
+        for request_id in request_ids:
+            with contextlib.suppress(Exception):
+                await self._provider.cancel(request_id)
 
     async def _publish_stream_error(
         self,
