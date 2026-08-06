@@ -56,6 +56,7 @@ from app.services.tooling.projection_cursor import (
 )
 from app.services.tooling.tools_manager import ToolsManager, set_tools_manager
 from app.shared.config.interface import ConfigAPI
+from app.shared.config.keys import ConfigKeys
 from app.shared.contracts.models.auth import (
     AuditLogRequest,
     AuthMethods,
@@ -800,6 +801,19 @@ class ToolingService(BaseService):
         """
 
         try:
+            auth_enabled = await self._config.aget(
+                str(ConfigKeys.services.auth.enabled),
+                default=True,
+                config_timeout=15.0,
+            )
+            if auth_enabled is False:
+                self._stable_peer_id = None
+                log_warning(
+                    "Stable Tooling identity skipped because Auth is disabled; local catalog "
+                    "remains legacy and non-exportable until Auth is enabled."
+                )
+                return
+
             result = await self.bus.request(
                 AuthMethods.LOAD_MESH_IDENTITY,
                 MeshIdentityLoadRequest(),

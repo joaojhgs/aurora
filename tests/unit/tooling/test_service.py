@@ -760,6 +760,40 @@ class TestToolingServiceInitialization:
         assert isinstance(tools_init_calls[0][0][1], ToolsInitialized)
 
     @pytest.mark.asyncio
+    async def test_stable_peer_id_load_skips_auth_request_when_auth_disabled(
+        self, tooling_service, mock_bus
+    ):
+        """Disabled Auth keeps Tooling on the legacy local identity path without retry delay."""
+
+        tooling_service._config.aget = AsyncMock(return_value=False)
+        mock_bus.request.side_effect = AssertionError("Auth identity should not be requested")
+
+        await asyncio.wait_for(tooling_service._load_stable_tooling_peer_id(), timeout=0.05)
+        await asyncio.wait_for(tooling_service._load_stable_tooling_peer_id(), timeout=0.05)
+
+        assert tooling_service._config.aget.await_count == 2
+        mock_bus.request.assert_not_awaited()
+        assert tooling_service._stable_peer_id is None
+
+    @pytest.mark.asyncio
+    async def test_stable_peer_id_load_requests_auth_identity_when_auth_enabled(
+        self, tooling_service, mock_bus
+    ):
+        """Enabled Auth remains the source of canonical Tooling peer identity."""
+
+        tooling_service._config.aget = AsyncMock(return_value=True)
+        mock_bus.request.return_value = QueryResult(
+            ok=True,
+            data={"peer_id": "peer-tooling-stable", "node_name": "tooling-node"},
+        )
+
+        await tooling_service._load_stable_tooling_peer_id()
+
+        mock_bus.request.assert_awaited_once()
+        assert mock_bus.request.await_args.args[0] == AuthMethods.LOAD_MESH_IDENTITY
+        assert tooling_service._stable_peer_id == "peer-tooling-stable"
+
+    @pytest.mark.asyncio
     async def test_start_publishes_readiness_before_deferred_retention(
         self, tooling_service, mock_bus
     ):
