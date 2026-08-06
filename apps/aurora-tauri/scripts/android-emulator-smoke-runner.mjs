@@ -55,8 +55,10 @@ export async function acquireAndroidSmokeLock({
 export async function runSerializedAndroidSmoke() {
   const release = await acquireAndroidSmokeLock()
   try {
-    const executable = process.platform === 'win32' ? 'vitest.cmd' : 'vitest'
+    const executable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
     return await runChild(executable, [
+      'exec',
+      'vitest',
       'run',
       '--environment',
       'node',
