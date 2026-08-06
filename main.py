@@ -61,7 +61,7 @@ async def main_async():
         # Subscribe to config changes for dynamic gateway control
         # Note: This is normally called in on_start(), but main.py calls start_services() directly
         log_info(">>> Subscribing to config changes...")
-        supervisor._subscribe_to_config_changes()
+        await supervisor._subscribe_to_config_changes()
         log_info("✓ Config change subscription active")
 
         # Start OpenRecall if enabled
@@ -148,7 +148,7 @@ def main_with_ui():
 
             # Subscribe to config changes for dynamic gateway control
             # Note: This is normally called in on_start(), but main.py calls start_services() directly
-            supervisor._subscribe_to_config_changes()
+            supervisor_loop.run_until_complete(supervisor._subscribe_to_config_changes())
             log_info("✓ Config change subscription active")
 
             # Signal that we're ready
@@ -207,6 +207,7 @@ def main_with_ui():
 
     # Send initial greeting
     from app.messaging.priority_helpers import get_interactive_priority
+
     greeting_future = asyncio.run_coroutine_threadsafe(
         supervisor.bus.publish(
             TTSMethods.REQUEST,
