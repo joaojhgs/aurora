@@ -382,9 +382,17 @@ async def test_pockettts_stream_clear_cancels_active_provider_stream(mock_bus) -
     await asyncio.wait_for(chunk_task, timeout=1)
 
     assert provider.cancelled == ["stream-cancel:0"]
+    topics = [call.args[0] for call in mock_bus.publish.await_args_list]
+    assert topics == [
+        TTSMethods.AUDIO_CHUNK,
+        TTSMethods.STARTED,
+        TTSMethods.STOPPED,
+        TTSMethods.AUDIO_CHUNK,
+    ]
     terminal_events = [event for event in _audio_events(mock_bus) if event.is_final]
-    assert terminal_events[-1].stream_id == "stream-cancel"
-    assert terminal_events[-1].reason == "interrupted"
+    assert len(terminal_events) == 1
+    assert terminal_events[0].stream_id == "stream-cancel"
+    assert terminal_events[0].reason == "interrupted"
 
 
 @pytest.mark.asyncio

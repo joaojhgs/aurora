@@ -1305,6 +1305,12 @@ class TTSService(BaseService):
                                 voice=stream_epoch.voice,
                                 speed=stream_epoch.speed,
                             )
+                except TTSProviderError as exc:
+                    if exc.code == "cancelled" and await self._stream_state_was_cleared(
+                        stream_id, stream_epoch
+                    ):
+                        return
+                    raise RuntimeError(str(exc)) from exc
                 finally:
                     async with self._stream_state_lock:
                         state = self._stream_states.get(stream_id)
@@ -1349,20 +1355,24 @@ class TTSService(BaseService):
                 is_final=True,
             )
             return
-        try:
-            async for chunk in self._provider.stream(
-                ProviderSynthesisRequest(
-                    text=text,
-                    request_id=request_id,
-                    voice=voice,
-                    audio_format="raw",
-                    sample_rate=sample_rate,
-                    speed=speed,
-                )
-            ):
-                yield chunk
-        except TTSProviderError as exc:
-            raise RuntimeError(str(exc)) from exc
+        async for chunk in self._provider.stream(
+            ProviderSynthesisRequest(
+                text=text,
+                request_id=request_id,
+                voice=voice,
+                audio_format="raw",
+                sample_rate=sample_rate,
+                speed=speed,
+            )
+        ):
+            yield chunk
+
+    async def _stream_state_was_cleared(
+        self, stream_id: str, stream_epoch: _TTSStreamState
+    ) -> bool:
+        """Return whether a stream was removed while provider work was in flight."""
+        async with self._stream_state_lock:
+            return self._stream_states.get(stream_id) is not stream_epoch
 
     async def _play_stream_audio(
         self,
