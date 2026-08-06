@@ -20,6 +20,7 @@ from collections import defaultdict
 from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.shared.contracts.models.speech import SpeechRouteBinding
 from app.shared.contracts.registry import all_contracts
 
 from .bus import Envelope, Handler, QueryResult, query_result_from_reply_payload
@@ -245,9 +246,7 @@ class BullMQBus:
             raise ValueError(f"Topic cannot be subscribed as an event: {topic}")
 
         pattern = "*" in topic
-        handlers = (
-            self._event_wildcard_patterns[topic] if pattern else self._event_handlers[topic]
-        )
+        handlers = self._event_wildcard_patterns[topic] if pattern else self._event_handlers[topic]
         transport_was_ready = (
             topic in self._event_patterns if pattern else topic in self._event_worker_queues
         )
@@ -473,6 +472,7 @@ class BullMQBus:
                         projected_method_id=data.get("projected_method_id"),
                         projected_method_topics=data.get("projected_method_topics"),
                         projected_method_set_digest=data.get("projected_method_set_digest"),
+                        speech_route_binding=data.get("speech_route_binding"),
                     )
                     await self._deliver_event_wildcards(actual_topic, env)
                 except Exception as e:
@@ -531,6 +531,7 @@ class BullMQBus:
                     projected_method_id=job_data.get("projected_method_id"),
                     projected_method_topics=job_data.get("projected_method_topics"),
                     projected_method_set_digest=job_data.get("projected_method_set_digest"),
+                    speech_route_binding=job_data.get("speech_route_binding"),
                 )
 
                 if queue_name in self._event_worker_queues.values():
@@ -701,6 +702,7 @@ class BullMQBus:
         projected_method_id: str | None = None,
         projected_method_topics: list[str] | None = None,
         projected_method_set_digest: str | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
         correlation_id: str | None = None,
     ) -> None:
         """Publish a message to a topic.
@@ -765,6 +767,7 @@ class BullMQBus:
                 "projected_method_id": projected_method_id,
                 "projected_method_topics": projected_method_topics,
                 "projected_method_set_digest": projected_method_set_digest,
+                "speech_route_binding": _dump_speech_route_binding(speech_route_binding),
                 "correlation_id": correlation_id,
                 "priority": priority,
                 "attempts": 0,
@@ -844,6 +847,7 @@ class BullMQBus:
             "projected_method_id": projected_method_id,
             "projected_method_topics": projected_method_topics,
             "projected_method_set_digest": projected_method_set_digest,
+            "speech_route_binding": _dump_speech_route_binding(speech_route_binding),
             "correlation_id": correlation_id,
         }
 
@@ -895,6 +899,7 @@ class BullMQBus:
         projected_method_id: str | None = None,
         projected_method_topics: list[str] | None = None,
         projected_method_set_digest: str | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
         correlation_id: str | None = None,
     ) -> QueryResult:
         """Send a request and wait for a response.
@@ -975,6 +980,7 @@ class BullMQBus:
                 projected_method_id=projected_method_id,
                 projected_method_topics=projected_method_topics,
                 projected_method_set_digest=projected_method_set_digest,
+                speech_route_binding=speech_route_binding,
                 correlation_id=request_correlation_id,
             )
 
@@ -997,3 +1003,9 @@ class BullMQBus:
             Dictionary containing bus metrics
         """
         return dict(self._stats)
+
+
+def _dump_speech_route_binding(binding: SpeechRouteBinding | None) -> dict | None:
+    if binding is None:
+        return None
+    return binding.model_dump(mode="json")

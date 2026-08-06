@@ -927,7 +927,7 @@ class TestProviderQueries:
         candidates = registry.get_provider_candidates(
             "TTS",
             topic=TTSMethods.SYNTHESIZE,
-            speech_constraints=SpeechRouteConstraints(),
+            speech_constraints=SpeechRouteConstraints(topic=TTSMethods.SYNTHESIZE),
         )
 
         assert candidates[0].eligible is False
@@ -956,13 +956,17 @@ class TestProviderQueries:
             "TTS",
             topic=TTSMethods.SYNTHESIZE,
             speech_constraints=SpeechRouteConstraints(
-                language_requirement=SpeechLanguageRequirement(mode="exact", language="de")
+                topic=TTSMethods.SYNTHESIZE,
+                language_requirement=SpeechLanguageRequirement(mode="exact", language="de"),
             ),
         )
         voice_candidates = registry.get_provider_candidates(
             "TTS",
             topic=TTSMethods.SYNTHESIZE,
-            speech_constraints=SpeechRouteConstraints(voice_id="standard:en:nova"),
+            speech_constraints=SpeechRouteConstraints(
+                topic=TTSMethods.SYNTHESIZE,
+                voice_id="standard:en:nova",
+            ),
         )
 
         assert language_candidates[0].eligible is False
@@ -1016,11 +1020,13 @@ class TestProviderQueries:
                     ],
                 ),
             )
+            await registry.apply_provider_lease(_lease(peer_id=peer_id), now_ms=1000)
 
         request_constraints = SpeechRouteConstraints(
+            topic=TranscriptionMethods.TRANSCRIBE,
             language_requirement=SpeechLanguageRequirement(
                 mode="auto", auto_language_candidates=["en", "fr"]
-            )
+            ),
         )
         candidates = registry.get_provider_candidates(
             "Transcription",
@@ -1051,19 +1057,26 @@ class TestProviderQueries:
                 ],
             ),
         )
+        await registry.apply_provider_lease(_lease(peer_id="peer-a"), now_ms=1000)
         requirement = SpeechLanguageRequirement(mode="exact", language="de")
 
         candidates = registry.get_provider_candidates(
             "TTS",
             topic=TTSMethods.SYNTHESIZE,
-            speech_constraints=SpeechRouteConstraints(language_requirement=requirement),
+            speech_constraints=SpeechRouteConstraints(
+                topic=TTSMethods.SYNTHESIZE,
+                language_requirement=requirement,
+            ),
         )
 
         decision = candidates[0].decision
         assert candidates[0].eligible is True
         assert decision.speech_capability_revision == 42
         assert decision.resident_model_identity_digest == "a" * 64
-        assert decision.speech_requirement_digest == requirement.digest
+        assert decision.speech_requirement_digest != requirement.digest
+        assert decision.provider_lease_epoch == "epoch-1"
+        assert decision.provider_lease_revision == 1
+        assert decision.service_instance_id == "remote:peer-a:TTS"
 
     @pytest.mark.parametrize(
         ("allowed_peers", "expected_reasons"),

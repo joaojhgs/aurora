@@ -328,6 +328,50 @@ class TestPeerBridgeOnResponse:
         assert result.data == {"data": 42}
 
     @pytest.mark.asyncio
+    async def test_capability_changed_result_is_unsuccessful(self, bridge):
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        bridge._pending_calls[("peer-1", "req-cap")] = fut
+
+        bridge.on_response(
+            "peer-1",
+            {
+                "type": "result",
+                "id": "req-cap",
+                "result": {
+                    "accepted": False,
+                    "reason_code": "capability_changed",
+                    "error": "capability_changed",
+                },
+            },
+        )
+
+        result = fut.result()
+        assert result.ok is False
+        assert result.error == "capability_changed"
+        assert result.data["accepted"] is False
+
+    @pytest.mark.asyncio
+    async def test_stream_capability_changed_result_enqueues_error(self, bridge):
+        queue: asyncio.Queue = asyncio.Queue()
+        bridge._pending_streams[("peer-1", "req-stream")] = queue
+
+        bridge.on_response(
+            "peer-1",
+            {
+                "type": "result",
+                "id": "req-stream",
+                "result": {
+                    "accepted": False,
+                    "reason_code": "capability_changed",
+                    "error": "capability_changed",
+                },
+            },
+        )
+
+        assert await queue.get() == ("error", "capability_changed")
+
+    @pytest.mark.asyncio
     async def test_error_response(self, bridge):
         loop = asyncio.get_running_loop()
         fut = loop.create_future()

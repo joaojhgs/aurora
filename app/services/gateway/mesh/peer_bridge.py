@@ -28,6 +28,7 @@ from app.helpers.aurora_logger import log_debug, log_error, log_warning
 from app.messaging.bus import QueryResult
 from app.services.gateway.webrtc.peer_protocol import CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
+from app.shared.contracts.models.speech import SpeechRouteBinding
 from app.shared.contracts.models.tooling import ToolingMethods
 from app.shared.contracts.models.tts import TTSMethods
 
@@ -95,25 +96,37 @@ def _rpc_call_message(
     caller_peer_id: str | None,
     auth_grant_revision: int | None,
     manifest_revision: int | None,
+    speech_route_binding: SpeechRouteBinding | None,
 ) -> dict[str, Any]:
     """Build the wire payload for one peer RPC call."""
 
+    identity = {
+        "principal_id": principal_id,
+        "effective_perms": effective_perms,
+        "source": identity_source,
+        "method_type": method_type,
+        "caller_peer_id": caller_peer_id,
+        "auth_grant_revision": auth_grant_revision,
+        "manifest_revision": manifest_revision,
+    }
+    if speech_route_binding is not None:
+        identity["speech_route_binding"] = speech_route_binding.model_dump(mode="json")
     return {
         "type": "call",
         "id": req_id,
         "correlation_id": req_id,
         "method": topic,
         "params": params,
-        "identity": {
-            "principal_id": principal_id,
-            "effective_perms": effective_perms,
-            "source": identity_source,
-            "method_type": method_type,
-            "caller_peer_id": caller_peer_id,
-            "auth_grant_revision": auth_grant_revision,
-            "manifest_revision": manifest_revision,
-        },
+        "identity": identity,
     }
+
+
+def _is_capability_changed_result(result_data: Any) -> bool:
+    return (
+        isinstance(result_data, dict)
+        and result_data.get("accepted") is False
+        and result_data.get("reason_code") == "capability_changed"
+    )
 
 
 class PeerBridge:
@@ -237,6 +250,7 @@ class PeerBridge:
         caller_peer_id: str | None = None,
         auth_grant_revision: int | None = None,
         manifest_revision: int | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
     ) -> QueryResult:
         """Send an RPC call to a remote peer and wait for the response.
 
@@ -272,6 +286,7 @@ class PeerBridge:
             caller_peer_id=caller_peer_id,
             auth_grant_revision=auth_grant_revision,
             manifest_revision=manifest_revision,
+            speech_route_binding=speech_route_binding,
         )
 
         # Create a future for the response
@@ -327,6 +342,7 @@ class PeerBridge:
         caller_peer_id: str | None = None,
         auth_grant_revision: int | None = None,
         manifest_revision: int | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
     ) -> AsyncIterator[Any]:
         """Send an RPC call to a remote peer and yield streamed chunks."""
         if self._peer_role(peer_id) == "consumer":
@@ -345,6 +361,7 @@ class PeerBridge:
             caller_peer_id=caller_peer_id,
             auth_grant_revision=auth_grant_revision,
             manifest_revision=manifest_revision,
+            speech_route_binding=speech_route_binding,
         )
         queue: asyncio.Queue = asyncio.Queue(maxsize=_STREAM_QUEUE_MAXSIZE)
         pending_key = (peer_id, req_id)
@@ -410,7 +427,11 @@ class PeerBridge:
             elif msg_type == "eof":
                 self._enqueue_stream_item(stream_queue, ("eof", None))
             elif msg_type == "result":
-                self._enqueue_stream_item(stream_queue, ("result", msg.get("result")))
+                result_data = msg.get("result")
+                if _is_capability_changed_result(result_data):
+                    self._enqueue_stream_item(stream_queue, ("error", "capability_changed"))
+                else:
+                    self._enqueue_stream_item(stream_queue, ("result", result_data))
             elif msg_type == "error":
                 error = msg.get("error", {})
                 if isinstance(error, dict):
@@ -437,7 +458,10 @@ class PeerBridge:
 
         if msg_type == "result":
             result_data = msg.get("result")
-            fut.set_result(QueryResult(ok=True, data=result_data))
+            if _is_capability_changed_result(result_data):
+                fut.set_result(QueryResult(ok=False, data=result_data, error="capability_changed"))
+            else:
+                fut.set_result(QueryResult(ok=True, data=result_data))
         elif msg_type == "error":
             error = msg.get("error", {})
             if isinstance(error, dict):

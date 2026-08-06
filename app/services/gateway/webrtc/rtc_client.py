@@ -801,6 +801,24 @@ class RTCClient:
             and (service_id is None or service_id in ready.compatible_services)
         )
 
+    def _local_provider_binding_state_for_session(
+        self,
+        session_peer_id: str,
+    ) -> tuple[_ManifestAckExpectation, int] | None:
+        stable_peer_id = self._peer_stable_ids.get(session_peer_id)
+        if not stable_peer_id:
+            return None
+        ready = self._local_provider_ready.get(stable_peer_id)
+        if (
+            ready is None
+            or ready.session_peer_id != session_peer_id
+            or self._stable_peer_sessions.get(stable_peer_id) != session_peer_id
+            or not self._has_authenticated_stable_peer(stable_peer_id)
+        ):
+            return None
+        revision = self._local_provider_lease_revisions.get(stable_peer_id, 0)
+        return ready, revision
+
     async def _send_local_provider_unavailable(
         self,
         stable_peer_id: str,
@@ -5138,6 +5156,9 @@ class RTCClient:
             event_topic_authorizer=self._event_topic_authorizer,
             provider_readiness_provider=lambda service_id, peer=peer: (
                 self._is_local_provider_ready_for_session(peer, service_id)
+            ),
+            provider_binding_state_provider=lambda peer=peer: (
+                self._local_provider_binding_state_for_session(peer)
             ),
         )
         self._rpc_handlers[peer] = handler

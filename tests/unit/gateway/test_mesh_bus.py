@@ -12,7 +12,9 @@ from app.services.gateway.config import MeshConfig
 from app.services.gateway.mesh.models import RouteDecision
 from app.services.gateway.mesh.policy_store import MeshPolicySnapshot, MeshPolicyStore
 from app.services.gateway.mesh.provider_eligibility import SpeechRouteConstraints
+from app.services.gateway.mesh.routing_table import RoutingTable
 from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.speech import SpeechRouteBinding
 from app.shared.contracts.models.stt import TranscribeAudioRequest, TranscriptionMethods
 from app.shared.contracts.models.tts import TTSMethods, TTSSynthesizeRequest
 from tests.unit.gateway.mesh_policy_helpers import mesh_policy
@@ -29,10 +31,49 @@ class FakePayload(BaseModel):
     inference_selector: MeshAddressSelector | None = None
 
 
+def _speech_binding(peer_id: str, *, revision: int) -> SpeechRouteBinding:
+    digest = f"{revision:064x}"
+    return SpeechRouteBinding(
+        service_instance_id=f"remote:{peer_id}:TTS",
+        projection_digest=digest,
+        projection_revision=f"projection-{revision}",
+        provider_lease_epoch=f"epoch-{revision}",
+        provider_lease_revision=revision,
+        speech_capability_revision=revision,
+        requirement_digest="f" * 64,
+    )
+
+
+def _decision_for_binding(peer_id: str, binding: SpeechRouteBinding) -> SimpleNamespace:
+    return SimpleNamespace(
+        peer_id=peer_id,
+        topic=TTSMethods.SYNTHESIZE,
+        module="TTS",
+        eligible=True,
+        reason_code="eligible",
+        reason="eligible",
+        policy_revision=1,
+        projection_digest=binding.projection_digest,
+        speech_requirement_digest=binding.requirement_digest,
+        service_instance_id=binding.service_instance_id,
+        projection_binding_revision=binding.projection_revision,
+        provider_lease_epoch=binding.provider_lease_epoch,
+        provider_lease_revision=binding.provider_lease_revision,
+        speech_capability_revision=binding.speech_capability_revision,
+    )
+
+
 class _FakeLeaseRegistry:
-    def __init__(self, peers: list[str], *, capacity_denied: set[str] | None = None):
+    def __init__(
+        self,
+        peers: list[str],
+        *,
+        capacity_denied: set[str] | None = None,
+        decisions_by_peer: dict[str, object] | None = None,
+    ):
         self.peers = peers
         self.capacity_denied = capacity_denied or set()
+        self.decisions_by_peer = decisions_by_peer or {}
         self.acquired: list[tuple[str, str]] = []
         self.released: list[object] = []
         self.candidate_calls: list[dict[str, object]] = []
@@ -46,6 +87,7 @@ class _FakeLeaseRegistry:
                 peer=SimpleNamespace(peer_id=peer_id, latency_ms=1.0),
                 service=SimpleNamespace(module=module, version="1.0.0"),
                 eligible=True,
+                decision=self.decisions_by_peer.get(peer_id),
             )
             for peer_id in self.peers
             if peer_id not in excluded
@@ -352,6 +394,46 @@ class TestMeshBusPublish:
         await mesh_bus.publish("TTS.Request", FakePayload(), event=False)
         peer_bridge.call.assert_awaited_once()
         inner_bus.publish.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_request_remote_route_passes_selected_speech_binding(
+        self, mesh_bus, inner_bus, routing_table, peer_bridge
+    ):
+        binding = _speech_binding("peer-1", revision=11)
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            peer_id="peer-1",
+            module="TTS",
+            speech_route_binding=binding,
+        )
+
+        result = await mesh_bus.request(
+            TTSMethods.SYNTHESIZE,
+            TTSSynthesizeRequest(text="hello", language="en"),
+        )
+
+        assert result.ok is True
+        peer_bridge.call.assert_awaited_once()
+        assert peer_bridge.call.await_args.kwargs["speech_route_binding"] == binding
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_inbound_validated_speech_binding_forces_local_dispatch_without_reroute(
+        self, mesh_bus, inner_bus, routing_table, peer_bridge
+    ):
+        binding = _speech_binding("peer-1", revision=11)
+
+        result = await mesh_bus.request(
+            TTSMethods.SYNTHESIZE,
+            TTSSynthesizeRequest(text="hello", language="en"),
+            speech_route_binding=binding,
+        )
+
+        assert result.ok is True
+        routing_table.resolve.assert_not_called()
+        peer_bridge.call.assert_not_awaited()
+        inner_bus.request.assert_awaited_once()
+        assert inner_bus.request.await_args.kwargs["speech_route_binding"] == binding
 
     @pytest.mark.asyncio
     async def test_command_uses_one_live_snapshot_for_timeout_and_routing(
@@ -793,7 +875,15 @@ class TestMeshBusRequest:
     ):
         store = MeshPolicyStore()
         snapshot = store.replace(mesh_config, source_revision=123)
-        registry = _FakeLeaseRegistry(["peer-a", "peer-b", "peer-c"])
+        peer_b_binding = _speech_binding("peer-b", revision=22)
+        peer_c_binding = _speech_binding("peer-c", revision=33)
+        registry = _FakeLeaseRegistry(
+            ["peer-a", "peer-b", "peer-c"],
+            decisions_by_peer={
+                "peer-b": _decision_for_binding("peer-b", peer_b_binding),
+                "peer-c": _decision_for_binding("peer-c", peer_c_binding),
+            },
+        )
         routing_table._registry = registry
         routing_table.resolve.return_value = RouteDecision(
             target="remote", peer_id="peer-a", module="TTS"
@@ -838,10 +928,56 @@ class TestMeshBusRequest:
         )
 
     @pytest.mark.asyncio
+    async def test_remote_request_fallback_gets_fresh_speech_binding(
+        self, inner_bus, routing_table, peer_bridge, mesh_config
+    ):
+        initial_binding = _speech_binding("peer-a", revision=11)
+        fallback_binding = _speech_binding("peer-b", revision=22)
+        registry = _FakeLeaseRegistry(
+            ["peer-b"],
+            decisions_by_peer={
+                "peer-b": _decision_for_binding("peer-b", fallback_binding),
+            },
+        )
+        routing_table._registry = registry
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            peer_id="peer-a",
+            module="TTS",
+            speech_route_binding=initial_binding,
+        )
+        peer_bridge.call.side_effect = [
+            RuntimeError("transport down"),
+            QueryResult(ok=True, data={"result": "peer-b"}),
+        ]
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)
+
+        result = await bus.request(
+            TTSMethods.SYNTHESIZE,
+            TTSSynthesizeRequest(text="hello", language="en"),
+        )
+
+        assert result == QueryResult(ok=True, data={"result": "peer-b"})
+        assert [call.args[0] for call in peer_bridge.call.await_args_list] == [
+            "peer-a",
+            "peer-b",
+        ]
+        assert [
+            call.kwargs["speech_route_binding"] for call in peer_bridge.call.await_args_list
+        ] == [initial_binding, fallback_binding]
+        assert initial_binding != fallback_binding
+        assert inner_bus.request.await_count == 0
+
+    @pytest.mark.asyncio
     async def test_remote_request_capacity_failure_reselects_without_dispatching_busy_peer(
         self, inner_bus, routing_table, peer_bridge, mesh_config
     ):
-        registry = _FakeLeaseRegistry(["peer-a", "peer-b"], capacity_denied={"peer-a"})
+        peer_b_binding = _speech_binding("peer-b", revision=22)
+        registry = _FakeLeaseRegistry(
+            ["peer-a", "peer-b"],
+            capacity_denied={"peer-a"},
+            decisions_by_peer={"peer-b": _decision_for_binding("peer-b", peer_b_binding)},
+        )
         routing_table._registry = registry
         routing_table.resolve.return_value = RouteDecision(
             target="remote", peer_id="peer-a", module="TTS"
@@ -857,6 +993,54 @@ class TestMeshBusRequest:
         assert registry.acquired == [("peer-b", "TTS")]
         assert [(lease.peer_id, lease.module) for lease in registry.released] == [("peer-b", "TTS")]
         assert inner_bus.request.await_count == 0
+
+    def test_speech_route_fails_closed_without_candidate_binding_evidence(self, mesh_config):
+        peer = SimpleNamespace(
+            peer_id="peer-1",
+            status="negotiated",
+            latency_ms=1.0,
+            manifest=SimpleNamespace(
+                shared_services=[SimpleNamespace(module="TTS", version="1.0.0")]
+            ),
+        )
+        service = SimpleNamespace(module="TTS", version="1.0.0")
+        decision_without_binding = SimpleNamespace(
+            eligible=True,
+            reason_code="eligible",
+            reason="eligible",
+            speech_requirement_digest=None,
+        )
+        registry = MagicMock()
+        registry.get_best_provider_candidate.return_value = SimpleNamespace(
+            peer=peer,
+            service=service,
+            eligible=True,
+            decision=None,
+        )
+        registry.get_peer.return_value = peer
+        registry.get_peer_service.return_value = service
+        registry.evaluate_provider_for_topic.return_value = decision_without_binding
+        table = RoutingTable(mesh_config, registry)
+        constraints = SpeechRouteConstraints(topic=TTSMethods.SYNTHESIZE)
+
+        automatic = table.resolve(
+            TTSMethods.SYNTHESIZE,
+            routing_config=mesh_config.services["TTS"],
+            mesh_config=mesh_config,
+            speech_constraints=constraints,
+        )
+        explicit = table.resolve(
+            TTSMethods.SYNTHESIZE,
+            routing_config=mesh_config.services["TTS"],
+            mesh_config=mesh_config,
+            selector=MeshAddressSelector(peer_id="peer-1"),
+            speech_constraints=constraints,
+        )
+
+        assert automatic.target == "error"
+        assert automatic.error_code == "speech_route_binding_unavailable"
+        assert explicit.target == "error"
+        assert explicit.error_code == "speech_route_binding_unavailable"
 
     @pytest.mark.asyncio
     async def test_error_route(self, mesh_bus, routing_table):

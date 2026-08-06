@@ -33,6 +33,11 @@ from app.shared.contracts.models.scheduler import (
     SchedulerScheduleActionRequest,
     SchedulerScheduleJobRequest,
 )
+from app.shared.contracts.models.speech import (
+    SpeechMethodConstraints,
+    SpeechRouteBinding,
+    compute_speech_projection_binding_revision,
+)
 from app.shared.contracts.models.tooling import (
     ToolingConfirmExecutionRequest,
     ToolingCreateApprovalGrantRequest,
@@ -49,7 +54,9 @@ from app.shared.contracts.models.tooling import (
     ToolingUpsertSourcePolicyRequest,
     ToolingUpsertToolPolicyOverrideRequest,
 )
+from app.shared.contracts.models.tts import TTSMethods, TTSRequest
 from app.shared.contracts.registry import all_contracts, clear_registry
+from app.shared.contracts.speech_routing import compute_speech_route_requirement_digest_for_payload
 from tests.unit.gateway.mesh_policy_helpers import mesh_policy
 
 
@@ -1282,6 +1289,322 @@ async def test_mesh_gate_allows_shared_service(
     assert resp["type"] == "result"
 
 
+def _speech_constraints(revision: int = 11) -> SpeechMethodConstraints:
+    return SpeechMethodConstraints(
+        exact_languages=["en"],
+        ready_voice_ids=["standard:en:nova"],
+        resident_model_identity_digest="a" * 64,
+        speech_capability_revision=revision,
+    )
+
+
+def _provider_readiness(*, revision: int = 3) -> SimpleNamespace:
+    return SimpleNamespace(
+        connection_epoch="epoch-1",
+        projection_digest="b" * 64,
+        registry_revision="registry-1",
+        export_policy_revision="policy-1",
+        auth_grant_revision=1,
+        compatible_services=("TTS",),
+        revision=revision,
+    )
+
+
+def _speech_binding(payload, *, readiness: SimpleNamespace, capability_revision: int = 11):
+    return SpeechRouteBinding(
+        service_instance_id="remote:provider-a:TTS",
+        projection_digest=readiness.projection_digest,
+        projection_revision=compute_speech_projection_binding_revision(
+            projection_digest=readiness.projection_digest,
+            registry_revision=readiness.registry_revision,
+            policy_revision=readiness.export_policy_revision,
+            auth_grant_revision=readiness.auth_grant_revision,
+        ),
+        provider_lease_epoch=readiness.connection_epoch,
+        provider_lease_revision=readiness.revision,
+        speech_capability_revision=capability_revision,
+        requirement_digest=compute_speech_route_requirement_digest_for_payload(
+            TTSMethods.REQUEST,
+            payload,
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_speech_route_binding_validates_before_rpc_dispatch(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    payload = SimpleNamespace(text="hi", language="en", voice="standard:en:nova")
+    readiness = _provider_readiness()
+    binding = _speech_binding(payload, readiness=readiness)
+    constraints = _speech_constraints()
+    projection = _active_projection(
+        services=[
+            _projected_service("TTS", TTSMethods.REQUEST, speech_constraints=constraints),
+        ],
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms(TTSMethods.REQUEST),
+        mesh_config=_make_mesh_config(
+            enabled=True,
+            sharing={"TTS": _make_sharing_entry(share=True)},
+        ),
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: projection,
+        provider_readiness_provider=lambda service_id: service_id == "TTS",
+        provider_binding_state_provider=lambda: (readiness, readiness.revision),
+    )
+    handler._find_method = AsyncMock(  # noqa: SLF001
+        return_value=(
+            "TTS",
+            SimpleNamespace(
+                name="Request",
+                bus_topic=TTSMethods.REQUEST,
+                exposure="external",
+                required_perms=[TTSMethods.REQUEST],
+                method_type="use",
+                input_model=TTSRequest,
+            ),
+        )
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"accepted": True})
+
+    await handler.on_parsed_message(
+        {
+            "type": "call",
+            "id": "speech-ok",
+            "method": TTSMethods.REQUEST,
+            "params": {"text": "hi", "language": "en", "voice": "standard:en:nova"},
+            "identity": {"speech_route_binding": binding.model_dump(mode="json")},
+        }
+    )
+
+    mock_bus.request.assert_awaited_once()
+    assert mock_bus.request.call_args.kwargs["speech_route_binding"] == binding
+
+
+@pytest.mark.asyncio
+async def test_speech_route_boundary_capability_changed_maps_to_sanitized_rpc_result(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    payload = SimpleNamespace(text="hi", language="en", voice="standard:en:nova")
+    readiness = _provider_readiness()
+    binding = _speech_binding(payload, readiness=readiness)
+    constraints = _speech_constraints()
+    projection = _active_projection(
+        services=[
+            _projected_service("TTS", TTSMethods.REQUEST, speech_constraints=constraints),
+        ],
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms(TTSMethods.REQUEST),
+        mesh_config=_make_mesh_config(
+            enabled=True,
+            sharing={"TTS": _make_sharing_entry(share=True)},
+        ),
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: projection,
+        provider_readiness_provider=lambda service_id: service_id == "TTS",
+        provider_binding_state_provider=lambda: (readiness, readiness.revision),
+    )
+    handler._find_method = AsyncMock(  # noqa: SLF001
+        return_value=(
+            "TTS",
+            SimpleNamespace(
+                name="Request",
+                bus_topic=TTSMethods.REQUEST,
+                exposure="external",
+                required_perms=[TTSMethods.REQUEST],
+                method_type="use",
+                input_model=TTSRequest,
+            ),
+        )
+    )
+    mock_bus.request.return_value = QueryResult(
+        ok=False,
+        error="capability_changed",
+        data={"code": "CAPABILITY_CHANGED"},
+    )
+
+    await handler.on_parsed_message(
+        {
+            "type": "call",
+            "id": "speech-boundary-change",
+            "method": TTSMethods.REQUEST,
+            "params": {"text": "hi", "language": "en", "voice": "standard:en:nova"},
+            "identity": {"speech_route_binding": binding.model_dump(mode="json")},
+        }
+    )
+
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "result"
+    assert response["result"]["accepted"] is False
+    assert response["result"]["reason_code"] == "capability_changed"
+
+
+@pytest.mark.asyncio
+async def test_speech_route_binding_in_params_is_ignored_in_favor_of_identity(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    payload = SimpleNamespace(text="hi", language="en", voice="standard:en:nova")
+    readiness = _provider_readiness()
+    binding = _speech_binding(payload, readiness=readiness)
+    forged = binding.model_copy(update={"provider_lease_revision": 99})
+    constraints = _speech_constraints()
+    projection = _active_projection(
+        services=[
+            _projected_service("TTS", TTSMethods.REQUEST, speech_constraints=constraints),
+        ],
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms(TTSMethods.REQUEST),
+        mesh_config=_make_mesh_config(
+            enabled=True,
+            sharing={"TTS": _make_sharing_entry(share=True)},
+        ),
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: projection,
+        provider_readiness_provider=lambda service_id: service_id == "TTS",
+        provider_binding_state_provider=lambda: (readiness, readiness.revision),
+    )
+    handler._find_method = AsyncMock(  # noqa: SLF001
+        return_value=(
+            "TTS",
+            SimpleNamespace(
+                name="Request",
+                bus_topic=TTSMethods.REQUEST,
+                exposure="external",
+                required_perms=[TTSMethods.REQUEST],
+                method_type="use",
+                input_model=TTSRequest,
+            ),
+        )
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"accepted": True})
+
+    await handler.on_parsed_message(
+        {
+            "type": "call",
+            "id": "speech-param-forge",
+            "method": TTSMethods.REQUEST,
+            "params": {
+                "text": "hi",
+                "language": "en",
+                "voice": "standard:en:nova",
+                "speech_route_binding": forged.model_dump(mode="json"),
+            },
+            "identity": {"speech_route_binding": binding.model_dump(mode="json")},
+        }
+    )
+
+    mock_bus.request.assert_awaited_once()
+    assert mock_bus.request.call_args.kwargs["speech_route_binding"] == binding
+    typed_request = mock_bus.request.call_args.args[1]
+    assert not hasattr(typed_request, "speech_route_binding")
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [
+        pytest.param(lambda b: b.model_copy(update={"provider_lease_revision": 2}), id="lease"),
+        pytest.param(
+            lambda b: b.model_copy(update={"projection_digest": "c" * 64}), id="projection"
+        ),
+        pytest.param(
+            lambda b: b.model_copy(update={"service_instance_id": "remote:other:TTS"}),
+            id="service-instance",
+        ),
+        pytest.param(
+            lambda b: b.model_copy(update={"speech_capability_revision": 99}),
+            id="capability",
+        ),
+        pytest.param(lambda b: b.model_copy(update={"requirement_digest": "d" * 64}), id="need"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_speech_route_binding_adversarial_changes_fail_pre_dispatch(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mutator,
+):
+    payload = SimpleNamespace(text="hi", language="en", voice="standard:en:nova")
+    readiness = _provider_readiness()
+    constraints = _speech_constraints()
+    projection = _active_projection(
+        services=[
+            _projected_service("TTS", TTSMethods.REQUEST, speech_constraints=constraints),
+        ],
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms(TTSMethods.REQUEST),
+        mesh_config=_make_mesh_config(
+            enabled=True,
+            sharing={"TTS": _make_sharing_entry(share=True)},
+        ),
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: projection,
+        provider_readiness_provider=lambda service_id: service_id == "TTS",
+        provider_binding_state_provider=lambda: (readiness, readiness.revision),
+    )
+    handler._find_method = AsyncMock(  # noqa: SLF001
+        return_value=(
+            "TTS",
+            SimpleNamespace(
+                name="Request",
+                bus_topic=TTSMethods.REQUEST,
+                exposure="external",
+                required_perms=[TTSMethods.REQUEST],
+                method_type="use",
+                input_model=TTSRequest,
+            ),
+        )
+    )
+    binding = mutator(_speech_binding(payload, readiness=readiness))
+
+    await handler.on_parsed_message(
+        {
+            "type": "call",
+            "id": "speech-stale",
+            "method": TTSMethods.REQUEST,
+            "params": {
+                "text": "hi",
+                "language": "en",
+                "voice": "standard:en:nova",
+                "speech_route_binding": binding.model_dump(mode="json"),
+            },
+            "identity": {"speech_route_binding": binding.model_dump(mode="json")},
+        }
+    )
+
+    mock_bus.request.assert_not_called()
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "result"
+    assert response["result"] == {
+        "accepted": False,
+        "reason_code": "capability_changed",
+        "error": "capability_changed",
+    }
+
+
 @pytest.mark.parametrize(
     ("allowed_peers", "peer_id", "expected_type"),
     [
@@ -2372,14 +2695,25 @@ def _active_projection(
     routable: bool = True,
 ):
     return SimpleNamespace(
-        cache_key=SimpleNamespace(recipient_peer_id=recipient, provider_peer_id="provider-a"),
+        cache_key=SimpleNamespace(
+            recipient_peer_id=recipient,
+            provider_peer_id="provider-a",
+            registry_revision="registry-1",
+            policy_revision="policy-1",
+            authority_revision=1,
+        ),
         readiness=readiness,
         routable=routable,
         services=services or [],
     )
 
 
-def _projected_service(module: str, *topics: str, capacity: int = 0):
+def _projected_service(
+    module: str,
+    *topics: str,
+    capacity: int = 0,
+    speech_constraints: SpeechMethodConstraints | None = None,
+):
     return SimpleNamespace(
         service_id=module,
         capacity={"max_concurrent": capacity},
@@ -2388,6 +2722,9 @@ def _projected_service(module: str, *topics: str, capacity: int = 0):
                 topic=topic,
                 required_permissions=(topic,),
                 method_type="use",
+                speech_constraints=speech_constraints.model_dump(mode="json")
+                if speech_constraints is not None
+                else None,
             )
             for topic in topics
         ],

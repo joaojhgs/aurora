@@ -12,6 +12,9 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 from app.shared.contracts.io_model import IOModel
 
 SPEECH_LANGUAGE_TABLE_REVISION: Literal["aurora-speech-language-v1"] = "aurora-speech-language-v1"
+SPEECH_ROUTE_REQUIREMENT_REVISION: Literal["aurora-speech-route-requirement-v1"] = (
+    "aurora-speech-route-requirement-v1"
+)
 SpeechLanguageTag = Literal["de", "en", "es", "fr", "it", "ja", "ko", "pt", "zh"]
 NormalizedSpeechLanguage = SpeechLanguageTag | Literal["auto"]
 
@@ -160,6 +163,45 @@ class SpeechLanguageRequirement(IOModel):
 
         payload = json.dumps(self.canonical_payload(), separators=(",", ":"), sort_keys=True)
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def compute_speech_route_requirement_digest(
+    *,
+    topic: str,
+    language_requirement: SpeechLanguageRequirement | None,
+    voice_id: LogicalVoiceId | None = None,
+) -> str:
+    """Return the canonical digest for one request-derived speech route need."""
+
+    payload = {
+        "language_requirement": (
+            language_requirement.canonical_payload() if language_requirement is not None else None
+        ),
+        "revision": SPEECH_ROUTE_REQUIREMENT_REVISION,
+        "topic": topic,
+        "voice_id": voice_id,
+    }
+    canonical = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def compute_speech_projection_binding_revision(
+    *,
+    projection_digest: str,
+    registry_revision: str,
+    policy_revision: str,
+    auth_grant_revision: int,
+) -> str:
+    """Return a canonical revision binding projection content and auth evidence."""
+
+    payload = {
+        "auth_grant_revision": auth_grant_revision,
+        "policy_revision": policy_revision,
+        "projection_digest": projection_digest,
+        "registry_revision": registry_revision,
+    }
+    canonical = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 class SpeechLocaleFallback(IOModel):

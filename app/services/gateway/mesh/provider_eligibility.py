@@ -16,6 +16,9 @@ from app.shared.contracts.models.speech import (
     LogicalVoiceId,
     SpeechLanguageRequirement,
     SpeechMethodConstraints,
+    SpeechRouteBinding,
+    compute_speech_projection_binding_revision,
+    compute_speech_route_requirement_digest,
 )
 
 from .version_compat import is_compatible
@@ -34,8 +37,19 @@ ProviderEligibilityReason = (
 class SpeechRouteConstraints:
     """Immutable request-derived speech routing requirements."""
 
+    topic: str
     language_requirement: SpeechLanguageRequirement | None = None
     voice_id: LogicalVoiceId | None = None
+
+    @property
+    def requirement_digest(self) -> str:
+        """Canonical digest over every speech requirement derived from the request."""
+
+        return compute_speech_route_requirement_digest(
+            topic=self.topic,
+            language_requirement=self.language_requirement,
+            voice_id=self.voice_id,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +92,8 @@ class OutboundProviderSnapshot:
     grants: frozenset[str] | None = None
     local_authority_state: str | None = None
     local_grants: frozenset[str] | None = None
+    provider_lease_epoch: str | None = None
+    provider_lease_revision: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +125,10 @@ class ProviderEligibilityDecision:
     speech_capability_revision: int | None = None
     resident_model_identity_digest: str | None = None
     speech_requirement_digest: str | None = None
+    service_instance_id: str | None = None
+    projection_binding_revision: str | None = None
+    provider_lease_epoch: str | None = None
+    provider_lease_revision: int | None = None
 
 
 def evaluate_outbound_provider(
@@ -128,11 +148,24 @@ def evaluate_outbound_provider(
         "projection_policy_revision": provider.policy_revision,
         "auth_grant_revision": provider.auth_grant_revision,
         "projection_digest": provider.projection_digest,
+        "projection_binding_revision": compute_speech_projection_binding_revision(
+            projection_digest=provider.projection_digest,
+            registry_revision=provider.registry_revision,
+            policy_revision=provider.policy_revision,
+            auth_grant_revision=provider.auth_grant_revision,
+        )
+        if provider.projection_digest and provider.registry_revision and provider.policy_revision
+        else None,
         "service_version": service.version if service else "",
         "service_digest": service.digest if service else "",
         "active_calls": provider.active_calls_for_module,
         "max_concurrent": service.max_concurrent if service else 0,
         "available_capacity": _available_capacity(service, provider.active_calls_for_module),
+        "service_instance_id": _service_instance_id(provider.peer_id, requirements.module)
+        if service is not None
+        else None,
+        "provider_lease_epoch": provider.provider_lease_epoch,
+        "provider_lease_revision": provider.provider_lease_revision,
     }
 
     if provider.peer_id in requirements.attempted_peer_ids:
@@ -328,6 +361,27 @@ def evaluate_outbound_provider(
             reason="provider is at capacity",
         )
 
+    if requirements.speech_constraints is not None:
+        missing_binding_fields = [
+            name
+            for name, value in {
+                "projection_digest": provider.projection_digest,
+                "projection_binding_revision": method_base.get("projection_binding_revision"),
+                "service_instance_id": method_base.get("service_instance_id"),
+                "provider_lease_epoch": provider.provider_lease_epoch,
+                "provider_lease_revision": provider.provider_lease_revision,
+                "speech_capability_revision": method_base.get("speech_capability_revision"),
+            }.items()
+            if value is None or value == ""
+        ]
+        if missing_binding_fields:
+            return _decision(
+                **method_base,
+                eligible=False,
+                reason_code="provider_unavailable",
+                reason="provider speech route binding metadata is unavailable",
+            )
+
     return _decision(
         **method_base, eligible=True, reason_code="eligible", reason="eligible provider"
     )
@@ -403,11 +457,8 @@ def _speech_decision_metadata(
 ) -> dict[str, object]:
     if request_constraints is None:
         return {}
-    language_requirement = request_constraints.language_requirement
     metadata: dict[str, object] = {
-        "speech_requirement_digest": language_requirement.digest
-        if language_requirement is not None
-        else None,
+        "speech_requirement_digest": request_constraints.requirement_digest,
     }
     if method_constraints is not None:
         metadata.update(
@@ -442,3 +493,33 @@ def _available_capacity(service: PeerServiceInfo | None, active_calls: int) -> i
     if service is None or service.max_concurrent <= 0:
         return None
     return max(service.max_concurrent - active_calls, 0)
+
+
+def _service_instance_id(peer_id: str, module: str) -> str:
+    return f"remote:{peer_id}:{module}"
+
+
+def speech_route_binding_from_decision(
+    decision: ProviderEligibilityDecision,
+) -> SpeechRouteBinding | None:
+    """Build trusted route metadata from the actually selected provider decision."""
+
+    if not decision.eligible or decision.speech_requirement_digest is None:
+        return None
+    if (
+        decision.service_instance_id is None
+        or decision.projection_binding_revision is None
+        or decision.provider_lease_epoch is None
+        or decision.provider_lease_revision is None
+        or decision.speech_capability_revision is None
+    ):
+        return None
+    return SpeechRouteBinding(
+        service_instance_id=decision.service_instance_id,
+        projection_digest=decision.projection_digest,
+        projection_revision=decision.projection_binding_revision or "",
+        provider_lease_epoch=decision.provider_lease_epoch,
+        provider_lease_revision=decision.provider_lease_revision,
+        speech_capability_revision=decision.speech_capability_revision,
+        requirement_digest=decision.speech_requirement_digest,
+    )

@@ -651,24 +651,49 @@ class PeerRegistry:
         Returns:
             Best matching PeerState, or None if no suitable peer found
         """
-        candidates = [
-            candidate.peer
-            for candidate in self.get_provider_candidates(
-                module=module,
-                topic=topic,
-                routing_config=routing_config,
-                version_policy=version_policy,
-                exclude=exclude,
-                include_ineligible=False,
-                policy_snapshot=policy_snapshot,
-                speech_constraints=speech_constraints,
-            )
-        ]
+        candidate = self.get_best_provider_candidate(
+            module=module,
+            topic=topic,
+            routing_config=routing_config,
+            version_policy=version_policy,
+            exclude=exclude,
+            peer_selection=peer_selection,
+            policy_snapshot=policy_snapshot,
+            speech_constraints=speech_constraints,
+        )
+        return candidate.peer if candidate is not None else None
 
-        if not candidates:
+    def get_best_provider_candidate(
+        self,
+        module: str,
+        topic: str | None = None,
+        routing_config: MeshServicePolicy | None = None,
+        version_policy: str = "compatible",
+        exclude: list[str] | None = None,
+        peer_selection: str | None = None,
+        policy_snapshot: MeshPolicySnapshot | None = None,
+        speech_constraints: SpeechRouteConstraints | None = None,
+    ) -> ProviderCandidate | None:
+        """Return the selected eligible candidate with its immutable decision evidence."""
+
+        candidates = self.get_provider_candidates(
+            module=module,
+            topic=topic,
+            routing_config=routing_config,
+            version_policy=version_policy,
+            exclude=exclude,
+            include_ineligible=False,
+            policy_snapshot=policy_snapshot,
+            speech_constraints=speech_constraints,
+        )
+        peers = [candidate.peer for candidate in candidates]
+        selected = self._select_peer(peers, peer_selection=peer_selection)
+        if selected is None:
             return None
-
-        return self._select_peer(candidates, peer_selection=peer_selection)
+        for candidate in candidates:
+            if candidate.peer.peer_id == selected.peer_id:
+                return candidate
+        return None
 
     def get_provider_candidates(
         self,
@@ -813,6 +838,7 @@ class PeerRegistry:
                 peer=peer,
                 module=module,
                 service=service,
+                provider_lease=self._provider_leases.get(peer.peer_id),
                 local_authority=self._local_peer_authority.get(peer.peer_id),
                 local_authority_absent=peer.peer_id in self._local_peer_authority_absent,
             ),
@@ -1135,6 +1161,7 @@ def _provider_snapshot(
     peer: PeerState,
     module: str,
     service: PeerServiceInfo | None,
+    provider_lease: ProviderLeaseState | None = None,
     local_authority: MeshPeerAuthoritySnapshot | None = None,
     local_authority_absent: bool = False,
 ) -> OutboundProviderSnapshot:
@@ -1171,6 +1198,8 @@ def _provider_snapshot(
             if local_authority is not None and local_authority.state == "active"
             else (frozenset() if local_authority_absent else None)
         ),
+        provider_lease_epoch=provider_lease.connection_epoch if provider_lease else None,
+        provider_lease_revision=provider_lease.availability_revision if provider_lease else None,
     )
 
 

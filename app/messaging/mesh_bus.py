@@ -40,10 +40,13 @@ from app.helpers.aurora_logger import log_debug, log_error, log_warning
 from app.messaging.bus import Handler, MessageBus, QueryResult
 from app.services.gateway.config import MeshConfig
 from app.services.gateway.mesh.policy_store import MeshPolicyProvider, MeshPolicySnapshot
-from app.services.gateway.mesh.provider_eligibility import SpeechRouteConstraints
+from app.services.gateway.mesh.provider_eligibility import (
+    SpeechRouteConstraints,
+    speech_route_binding_from_decision,
+)
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
-from app.shared.contracts.models.speech import SpeechLanguageRequirement
+from app.shared.contracts.models.speech import SpeechLanguageRequirement, SpeechRouteBinding
 from app.shared.contracts.models.stt import TranscriptionMethods
 from app.shared.contracts.models.tts import TTSMethods
 from app.shared.mesh.tracing import ensure_correlation_id, get_payload_correlation_id
@@ -58,6 +61,7 @@ class _RouteLike(Protocol):
     peer_id: str | None
     module: str
     error_message: str | None
+    speech_route_binding: SpeechRouteBinding | None
 
 
 class _PeerLike(Protocol):
@@ -107,6 +111,7 @@ class _PeerBridgeLike(Protocol):
         caller_peer_id: str | None = None,
         auth_grant_revision: int | None = None,
         manifest_revision: int | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
     ) -> QueryResult: ...
 
     def stream_call(
@@ -124,6 +129,7 @@ class _PeerBridgeLike(Protocol):
         caller_peer_id: str | None = None,
         auth_grant_revision: int | None = None,
         manifest_revision: int | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
     ) -> AsyncIterator[Any]: ...
 
     def fire_event(
@@ -218,6 +224,7 @@ class MeshBus:
         projected_method_id: str | None = None,
         projected_method_topics: list[str] | None = None,
         projected_method_set_digest: str | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
         correlation_id: str | None = None,
     ) -> None:
         """Publish with mesh routing.
@@ -241,6 +248,33 @@ class MeshBus:
             max_attempts: Maximum retry attempts
             reply_to: Optional reply topic for request/response pattern
         """
+        if speech_route_binding is not None:
+            await self._inner.publish(
+                topic,
+                message,
+                event=event,
+                priority=priority,
+                origin=origin,
+                reliable=reliable,
+                ttl_ms=ttl_ms,
+                max_attempts=max_attempts,
+                reply_to=reply_to,
+                principal_id=principal_id,
+                effective_perms=effective_perms,
+                identity_source=identity_source,
+                method_type=method_type,
+                caller_peer_id=caller_peer_id,
+                auth_grant_revision=auth_grant_revision,
+                manifest_revision=manifest_revision,
+                projected_service_id=projected_service_id,
+                projected_method_id=projected_method_id,
+                projected_method_topics=projected_method_topics,
+                projected_method_set_digest=projected_method_set_digest,
+                speech_route_binding=speech_route_binding,
+                correlation_id=correlation_id,
+            )
+            return
+
         # Events always go local first
         if event:
             event_correlation_id = correlation_id or get_payload_correlation_id(message)
@@ -263,6 +297,8 @@ class MeshBus:
                 manifest_revision=manifest_revision,
                 projected_service_id=projected_service_id,
                 projected_method_id=projected_method_id,
+                projected_method_topics=projected_method_topics,
+                projected_method_set_digest=projected_method_set_digest,
                 correlation_id=event_correlation_id,
             )
             # Forward events to connected peers when mesh=True and module is shared
@@ -354,6 +390,7 @@ class MeshBus:
                 projected_method_id=projected_method_id,
                 projected_method_topics=projected_method_topics,
                 projected_method_set_digest=projected_method_set_digest,
+                speech_route_binding=speech_route_binding,
                 correlation_id=trace_id,
             )
             return
@@ -390,6 +427,7 @@ class MeshBus:
                     )
                     continue
                 try:
+                    route_binding = getattr(current_route, "speech_route_binding", None)
                     result = await self._peer_bridge.call(
                         peer_id,
                         topic,
@@ -403,6 +441,7 @@ class MeshBus:
                         caller_peer_id=caller_peer_id,
                         auth_grant_revision=auth_grant_revision,
                         manifest_revision=manifest_revision,
+                        **_speech_route_binding_kwarg(route_binding),
                     )
                 except Exception as e:
                     log_warning(f"MeshBus: Remote publish to {peer_id} failed: {e}")
@@ -468,6 +507,7 @@ class MeshBus:
                     projected_method_id=projected_method_id,
                     projected_method_topics=projected_method_topics,
                     projected_method_set_digest=projected_method_set_digest,
+                    speech_route_binding=speech_route_binding,
                     correlation_id=trace_id,
                 )
                 return
@@ -501,6 +541,7 @@ class MeshBus:
             projected_method_id=projected_method_id,
             projected_method_topics=projected_method_topics,
             projected_method_set_digest=projected_method_set_digest,
+            speech_route_binding=speech_route_binding,
             correlation_id=trace_id,
         )
 
@@ -527,6 +568,7 @@ class MeshBus:
         projected_method_id: str | None = None,
         projected_method_topics: list[str] | None = None,
         projected_method_set_digest: str | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
         correlation_id: str | None = None,
     ) -> QueryResult:
         """Request with mesh routing.
@@ -545,6 +587,30 @@ class MeshBus:
         Returns:
             QueryResult containing the response data or error
         """
+        if speech_route_binding is not None:
+            return await self._inner.request(
+                topic,
+                message,
+                priority=priority,
+                origin=origin,
+                timeout=timeout,
+                ttl_ms=ttl_ms,
+                max_attempts=max_attempts,
+                principal_id=principal_id,
+                effective_perms=effective_perms,
+                identity_source=identity_source,
+                method_type=method_type,
+                caller_peer_id=caller_peer_id,
+                auth_grant_revision=auth_grant_revision,
+                manifest_revision=manifest_revision,
+                projected_service_id=projected_service_id,
+                projected_method_id=projected_method_id,
+                projected_method_topics=projected_method_topics,
+                projected_method_set_digest=projected_method_set_digest,
+                speech_route_binding=speech_route_binding,
+                correlation_id=correlation_id,
+            )
+
         selector = _extract_mesh_selector(message, topic=topic)
         speech_constraints = _extract_speech_route_constraints(message, topic=topic)
         trace_id = ensure_correlation_id(message, correlation_id)
@@ -585,6 +651,7 @@ class MeshBus:
                 projected_method_id=projected_method_id,
                 projected_method_topics=projected_method_topics,
                 projected_method_set_digest=projected_method_set_digest,
+                speech_route_binding=speech_route_binding,
                 correlation_id=trace_id,
             )
 
@@ -620,6 +687,7 @@ class MeshBus:
                     )
                     continue
                 try:
+                    route_binding = getattr(current_route, "speech_route_binding", None)
                     result = await self._peer_bridge.call(
                         peer_id,
                         topic,
@@ -633,6 +701,7 @@ class MeshBus:
                         caller_peer_id=caller_peer_id,
                         auth_grant_revision=auth_grant_revision,
                         manifest_revision=manifest_revision,
+                        **_speech_route_binding_kwarg(route_binding),
                     )
                 except Exception as e:
                     log_warning(f"MeshBus: Remote request to {peer_id} failed: {e}")
@@ -698,6 +767,7 @@ class MeshBus:
                     projected_method_id=projected_method_id,
                     projected_method_topics=projected_method_topics,
                     projected_method_set_digest=projected_method_set_digest,
+                    speech_route_binding=speech_route_binding,
                     correlation_id=trace_id,
                 )
 
@@ -733,6 +803,7 @@ class MeshBus:
             projected_method_id=projected_method_id,
             projected_method_topics=projected_method_topics,
             projected_method_set_digest=projected_method_set_digest,
+            speech_route_binding=speech_route_binding,
             correlation_id=trace_id,
         )
 
@@ -757,9 +828,36 @@ class MeshBus:
         projected_method_id: str | None = None,
         projected_method_topics: list[str] | None = None,
         projected_method_set_digest: str | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
         correlation_id: str | None = None,
     ) -> AsyncIterator[Any]:
         """Request a stream, using PeerBridge streaming when routed remote."""
+        if speech_route_binding is not None:
+            async for item in self._stream_local_request(
+                topic,
+                message,
+                priority=priority,
+                origin=origin,
+                timeout=timeout,
+                ttl_ms=ttl_ms,
+                max_attempts=max_attempts,
+                principal_id=principal_id,
+                effective_perms=effective_perms,
+                identity_source=identity_source,
+                method_type=method_type,
+                caller_peer_id=caller_peer_id,
+                auth_grant_revision=auth_grant_revision,
+                manifest_revision=manifest_revision,
+                projected_service_id=projected_service_id,
+                projected_method_id=projected_method_id,
+                projected_method_topics=projected_method_topics,
+                projected_method_set_digest=projected_method_set_digest,
+                speech_route_binding=speech_route_binding,
+                correlation_id=correlation_id,
+            ):
+                yield item
+            return
+
         selector = _extract_mesh_selector(message, topic=topic)
         speech_constraints = _extract_speech_route_constraints(message, topic=topic)
         trace_id = ensure_correlation_id(message, correlation_id)
@@ -801,6 +899,7 @@ class MeshBus:
                 projected_method_id=projected_method_id,
                 projected_method_topics=projected_method_topics,
                 projected_method_set_digest=projected_method_set_digest,
+                speech_route_binding=speech_route_binding,
                 correlation_id=trace_id,
             ):
                 yield item
@@ -838,6 +937,7 @@ class MeshBus:
                     )
                     continue
                 try:
+                    route_binding = getattr(current_route, "speech_route_binding", None)
                     async for item in self._peer_bridge.stream_call(
                         peer_id,
                         topic,
@@ -851,6 +951,7 @@ class MeshBus:
                         caller_peer_id=caller_peer_id,
                         auth_grant_revision=auth_grant_revision,
                         manifest_revision=manifest_revision,
+                        **_speech_route_binding_kwarg(route_binding),
                     ):
                         yielded_remote_chunk = True
                         yield item
@@ -907,6 +1008,7 @@ class MeshBus:
                     projected_method_id=projected_method_id,
                     projected_method_topics=projected_method_topics,
                     projected_method_set_digest=projected_method_set_digest,
+                    speech_route_binding=speech_route_binding,
                     correlation_id=trace_id,
                 ):
                     yield item
@@ -983,6 +1085,13 @@ class MeshBus:
                     peer_id = getattr(peer, "peer_id", None)
                     if peer_id and peer_id not in attempted:
                         service = getattr(candidate, "service", None)
+                        binding = (
+                            speech_route_binding_from_decision(candidate.decision)
+                            if getattr(candidate, "decision", None) is not None
+                            else None
+                        )
+                        if speech_constraints is not None and binding is None:
+                            continue
                         return SimpleNamespace(
                             target="remote",
                             peer_id=peer_id,
@@ -990,6 +1099,7 @@ class MeshBus:
                             version=getattr(service, "version", ""),
                             latency_ms=getattr(peer, "latency_ms", None),
                             error_message=None,
+                            speech_route_binding=binding,
                         )
                 return SimpleNamespace(
                     target="none",
@@ -1093,6 +1203,7 @@ class MeshBus:
         projected_method_id: str | None,
         projected_method_topics: list[str] | None,
         projected_method_set_digest: str | None,
+        speech_route_binding: SpeechRouteBinding | None,
         correlation_id: str | None,
     ) -> AsyncIterator[Any]:
         """Stream from the wrapped local bus or adapt request data into stream items."""
@@ -1118,6 +1229,7 @@ class MeshBus:
                 projected_method_id=projected_method_id,
                 projected_method_topics=projected_method_topics,
                 projected_method_set_digest=projected_method_set_digest,
+                speech_route_binding=speech_route_binding,
                 correlation_id=correlation_id,
             )
             if inspect.isawaitable(stream):
@@ -1151,6 +1263,7 @@ class MeshBus:
             projected_method_id=projected_method_id,
             projected_method_topics=projected_method_topics,
             projected_method_set_digest=projected_method_set_digest,
+            speech_route_binding=speech_route_binding,
             correlation_id=correlation_id,
         )
         if not result.ok:
@@ -1219,6 +1332,12 @@ def _route_query_error(route: Any, *, fallback: str) -> str:
     return getattr(route, "error_message", None) or fallback
 
 
+def _speech_route_binding_kwarg(
+    binding: SpeechRouteBinding | None,
+) -> dict[str, SpeechRouteBinding]:
+    return {"speech_route_binding": binding} if binding is not None else {}
+
+
 def _extract_speech_route_constraints(message: Any, *, topic: str) -> SpeechRouteConstraints | None:
     """Return immutable speech routing constraints derived from request data."""
 
@@ -1226,6 +1345,7 @@ def _extract_speech_route_constraints(message: Any, *, topic: str) -> SpeechRout
     if topic in {TTSMethods.REQUEST, TTSMethods.SYNTHESIZE, TTSMethods.STREAM_START}:
         voice_id = _payload_value(message, "voice")
         return SpeechRouteConstraints(
+            topic=topic,
             language_requirement=SpeechLanguageRequirement(mode="exact", language=language)
             if language is not None
             else None,
@@ -1242,7 +1362,7 @@ def _extract_speech_route_constraints(message: Any, *, topic: str) -> SpeechRout
                     _payload_value(message, "auto_language_candidates") or []
                 ),
             )
-        return SpeechRouteConstraints(language_requirement=language_requirement)
+        return SpeechRouteConstraints(topic=topic, language_requirement=language_requirement)
 
     return None
 
