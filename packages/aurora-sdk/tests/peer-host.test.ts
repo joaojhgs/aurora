@@ -349,6 +349,60 @@ describe('WebRtcPeerHost', () => {
     expect(JSON.stringify(await session.localAudit.listAudit())).not.toMatch(/peer-verifier|room-a|tokenHashHex|proofHex|bearer|[a-f0-9]{64}/u)
   })
 
+  it('records a redacted rejected manifest snapshot when no active grant exists', async () => {
+    const backend = new MemoryLocalDataBackend()
+    const session = await backend.open('profile-1', 'node-1')
+    const resolver = new PeerAuthorityResolver({
+      verifierStore: new DenyAllInboundCredentialVerifierStore(),
+      grantRepository: new MemoryPeerGrantRepository(),
+      challengeStore: new NoopReconnectChallengeStore(),
+      auditSink: new LocalDataPeerAuditSink({
+        auditRepository: session.localAudit,
+        profileId: 'profile-1',
+        localNodeId: 'node-1',
+        randomId: () => 'audit-manifest-rejected'
+      })
+    })
+
+    const registry = createToolingPeerHostRegistry({
+      getTools: async () => ({ count: 0, tools: [] }),
+      getExportCatalog: async () => { throw new Error('not implemented') },
+      prepareExecution: async () => { throw new Error('not implemented') },
+      executeTool: async () => { throw new Error('not implemented') }
+    })
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry,
+      authorizationStore: new PeerAuthorityHostAuthorizationStore(resolver),
+      clock: () => 1000,
+      randomId: () => 'epoch-1'
+    })
+    peerHost.attach({ sendFrame: async () => undefined })
+    await peerHost.startEpoch('peer-a', authenticatedContext())
+
+    await expect(session.localAudit.listAudit()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'audit-manifest-rejected',
+        peerId: 'peer-a',
+        action: 'manifest.snapshot',
+        decision: 'rejected',
+        resultStatus: 'rejected',
+        connectionEpoch: 'epoch-1',
+        correlationId: 'manifest:epoch-1',
+        redactedDetailJson: expect.objectContaining({
+          redacted: true,
+          secretsRedacted: true,
+          reasonCode: 'grant_not_found',
+          authorityState: 'unknown'
+        })
+      })
+    ])
+    expect(JSON.stringify(await session.localAudit.listAudit())).not.toMatch(
+      /peer-verifier|room-a|tokenHashHex|proofHex|bearer|[a-f0-9]{64}/u
+    )
+  })
+
   it('keeps generated Tooling registry permissions aligned for export catalog reads', () => {
     const registry = createToolingPeerHostRegistry({
       getTools: async () => ({ count: 0, tools: [] }),
@@ -453,6 +507,51 @@ describe('WebRtcPeerHost', () => {
     expect(sent.filter((frame) => (frame as any).type === 'provider_lease')).toHaveLength(1)
     await peerHost.handleCall({ type: 'call', id: 'ready', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } }, 'peer-a')
     expect(handler).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries one unchanged manifest at most three times without opening the provider', async () => {
+    const handler = vi.fn(async () => ({ count: 0, tools: [] }))
+    const registry = createToolingPeerHostRegistry({
+      getTools: handler,
+      getExportCatalog: async () => { throw new Error('not implemented') },
+      prepareExecution: async () => { throw new Error('not implemented') },
+      executeTool: async () => { throw new Error('not implemented') }
+    })
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry,
+      authorizationStore: new SessionPeerHostAuthorizationStore([
+        grant({ allowedMethodIds: ['Tooling.GetTools'] })
+      ]),
+      clock: () => 1000,
+      randomId: () => 'epoch-1'
+    })
+    const sent: unknown[] = []
+    peerHost.attach({ sendFrame: async (frame) => { sent.push(frame) } })
+    const manifest = await peerHost.startEpoch('peer-a')
+    const staleAck = ackFromManifest(manifest, { projection_digest: '1'.repeat(64) })
+
+    await expect(peerHost.retryManifestAfterStaleAcknowledgement(staleAck)).resolves.toBe(true)
+    await expect(peerHost.retryManifestAfterStaleAcknowledgement(staleAck)).resolves.toBe(true)
+    await expect(peerHost.retryManifestAfterStaleAcknowledgement(staleAck)).resolves.toBe(true)
+    await expect(peerHost.retryManifestAfterStaleAcknowledgement(staleAck)).resolves.toBe(false)
+
+    expect(sent).toEqual([manifest, manifest, manifest])
+    expect(sent.filter((frame) => (frame as any).type === 'provider_lease')).toHaveLength(0)
+    await peerHost.handleCall({
+      type: 'call',
+      id: 'still-closed',
+      method: 'Tooling.GetTools',
+      params: {},
+      identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] }
+    }, 'peer-a')
+    expect(handler).not.toHaveBeenCalled()
+    expect(sent.at(-1)).toMatchObject({
+      type: 'error',
+      id: 'still-closed',
+      error: { code: 425 }
+    })
   })
 
   it('never dispatches malformed, oversized, unauthorized, expired, or revoked calls', async () => {
