@@ -7,7 +7,6 @@ import contextlib
 import hashlib
 import importlib
 import math
-import queue
 import threading
 from collections.abc import AsyncIterator, Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
@@ -355,13 +354,17 @@ def _duration_ms(audio: bytes, sample_rate: int, channels: int = 1) -> float:
 
 
 def _generation_kwargs(config: PocketTTSProviderConfig) -> dict[str, Any]:
-    kwargs: dict[str, Any] = {
+    return {
         "max_tokens": config.max_tokens,
         "frames_after_eos": config.frames_after_eos,
         "copy_state": True,
     }
+
+
+def _load_model_kwargs(config: PocketTTSProviderConfig) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {}
     if config.temperature is not None:
-        kwargs["temperature"] = config.temperature
+        kwargs["temp"] = config.temperature
     if config.lsd_decode_steps is not None:
         kwargs["lsd_decode_steps"] = config.lsd_decode_steps
     if config.noise_clamp is not None:
@@ -369,6 +372,40 @@ def _generation_kwargs(config: PocketTTSProviderConfig) -> dict[str, Any]:
     if config.eos_threshold is not None:
         kwargs["eos_threshold"] = config.eos_threshold
     return kwargs
+
+
+def _device_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    device_type = getattr(value, "type", None)
+    if isinstance(device_type, str):
+        return device_type
+    return str(value).split(":", maxsplit=1)[0].lower()
+
+
+def _iter_model_device_values(model: Any) -> Iterable[str]:
+    for attr in ("device", "_device"):
+        device = _device_value(getattr(model, attr, None))
+        if device:
+            yield device
+    config = getattr(model, "config", None)
+    device = _device_value(getattr(config, "device", None))
+    if device:
+        yield device
+    parameters = getattr(model, "parameters", None)
+    if callable(parameters):
+        with contextlib.suppress(Exception):
+            for parameter in parameters():
+                device = _device_value(getattr(parameter, "device", None))
+                if device:
+                    yield device
+                    return
+
+
+def _validate_loaded_model_device(model: Any) -> None:
+    devices = tuple(_iter_model_device_values(model))
+    if any(device != "cpu" for device in devices):
+        raise TTSProviderError("unavailable", "PocketTTS device is unavailable")
 
 
 class PocketTTSProvider:
@@ -395,6 +432,7 @@ class PocketTTSProvider:
         self._queued_requests: set[str] = set()
         self._active_requests: set[str] = set()
         self._cancelled_requests: set[str] = set()
+        self._stream_wakeups: dict[str, Any] = {}
         self._last_error: str | None = None
 
     @property
@@ -457,18 +495,28 @@ class PocketTTSProvider:
 
     async def stop(self) -> None:
         """Stop accepting work and wait for active model entry to drain."""
+        wakeups: list[Any]
         async with self._state_lock:
             self._started = False
             self._stopping = True
             self._reloading = False
             self._cancelled_requests.update(self._queued_requests)
             self._cancelled_requests.update(self._active_requests)
-        async with self._entry_lock:
-            pass
+            wakeups = list(self._stream_wakeups.values())
+        for wakeup in wakeups:
+            wakeup()
+        entry_draining = self._entry_lock.locked()
+        if not entry_draining:
+            async with self._entry_lock:
+                pass
         executor = self._executor
         self._executor = None
         if executor is not None:
-            await asyncio.to_thread(executor.shutdown, True, cancel_futures=True)
+            await asyncio.to_thread(
+                executor.shutdown,
+                not entry_draining,
+                cancel_futures=True,
+            )
         async with self._state_lock:
             self._loaded = None
             self._queued_requests.clear()
@@ -521,9 +569,13 @@ class PocketTTSProvider:
 
     async def cancel(self, request_id: str) -> None:
         """Mark queued or active work as cancelled."""
+        wakeup = None
         async with self._state_lock:
             if request_id in self._queued_requests or request_id in self._active_requests:
                 self._cancelled_requests.add(request_id)
+                wakeup = self._stream_wakeups.get(request_id)
+        if wakeup is not None:
+            wakeup()
 
     async def tracked_request_count(self) -> int:
         """Return tracked request state count for lifecycle tests."""
@@ -652,8 +704,9 @@ class PocketTTSProvider:
             model = model_class.load_model(
                 language=config_info.config_id,
                 quantize=config.quantize,
-                device=config.device,
+                **_load_model_kwargs(config),
             )
+            _validate_loaded_model_device(model)
             sample_rate = int(getattr(model, "sample_rate", 24000) or 24000)
             voice_states = {
                 voice.voice_id: model.get_state_for_audio_prompt(voice.audio_prompt)
@@ -772,15 +825,20 @@ class PocketTTSProvider:
     ) -> AsyncIterator[Any]:
         await self._acquire_entry_lock(queue_timeout_s)
         loop = asyncio.get_running_loop()
-        bridge: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=2)
+        bridge: asyncio.Queue[tuple[str, Any]] = asyncio.Queue(maxsize=2)
         stop_event = threading.Event()
 
         def put_item(item: tuple[str, Any]) -> None:
             while not stop_event.is_set():
                 try:
-                    bridge.put(item, timeout=0.05)
+                    put_future = asyncio.run_coroutine_threadsafe(bridge.put(item), loop)
+                except RuntimeError:
                     return
-                except queue.Full:
+                try:
+                    put_future.result(timeout=0.05)
+                    return
+                except TimeoutError:
+                    put_future.cancel()
                     continue
 
         def produce() -> None:
@@ -792,39 +850,64 @@ class PocketTTSProvider:
                 put_item(("done", None))
             except Exception as exc:
                 put_item(("error", exc))
+            finally:
+                with contextlib.suppress(RuntimeError):
+                    loop.call_soon_threadsafe(self._release_entry_lock)
 
-        release_on_exit = True
-        future: asyncio.Future[Any] | None = None
+        release_on_exit = False
+        producer = threading.Thread(
+            target=produce,
+            name="aurora-pockettts-stream",
+            daemon=True,
+        )
+
+        def wake_consumer() -> None:
+            def put_cancelled() -> None:
+                if bridge.full():
+                    with contextlib.suppress(asyncio.QueueEmpty):
+                        bridge.get_nowait()
+                with contextlib.suppress(asyncio.QueueFull):
+                    bridge.put_nowait(("cancelled", None))
+
+            with contextlib.suppress(RuntimeError):
+                loop.call_soon_threadsafe(put_cancelled)
+
         try:
             await self._activate_request(request_id)
             await self._reject_if_cancelled(request_id)
-            future = loop.run_in_executor(self._ensure_executor(), produce)
+            if request_id is not None:
+                async with self._state_lock:
+                    self._stream_wakeups[request_id] = wake_consumer
+            producer.start()
             while True:
                 try:
-                    kind, payload = await asyncio.wait_for(
-                        asyncio.to_thread(bridge.get),
-                        timeout=timeout_s,
-                    )
+                    kind, payload = await asyncio.wait_for(bridge.get(), timeout=timeout_s)
                 except TimeoutError as exc:
                     release_on_exit = False
                     stop_event.set()
-                    self._release_entry_lock_when_done(future)
                     log_warning("PocketTTS stream timed out")
                     raise TTSProviderError("resource_exhausted", "TTS provider is busy") from exc
                 except asyncio.CancelledError:
                     release_on_exit = False
                     stop_event.set()
-                    self._release_entry_lock_when_done(future)
                     raise
                 if kind == "chunk":
                     yield payload
                     continue
                 if kind == "done":
+                    release_on_exit = True
                     break
+                if kind == "cancelled":
+                    await self._reject_if_cancelled(request_id)
+                    raise TTSProviderError("cancelled", "TTS request was cancelled")
                 log_debug(f"PocketTTS stream failure type={type(payload).__name__}")
+                release_on_exit = True
                 raise TTSProviderError("unavailable", "PocketTTS synthesis failed")
         finally:
             stop_event.set()
+            if request_id is not None:
+                async with self._state_lock:
+                    self._stream_wakeups.pop(request_id, None)
             if release_on_exit:
                 self._release_entry_lock()
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import threading
 import time
 
@@ -28,13 +29,16 @@ class FakePocketTTSModel:
     active_entries = 0
     max_active_entries = 0
     fail_load = False
+    loaded_device = "cpu"
     block_generation: threading.Event | None = None
     block_stream_after_first: threading.Event | None = None
+    forever_stream_after_first = False
     stream_completed = False
 
     def __init__(self, language: str) -> None:
         self.language = language
         self.sample_rate = 24000
+        self.device = type(self).loaded_device
         self.origin = type("Origin", (), {"name": f"{language}.safetensors"})()
         self.state_calls: list[str] = []
         self.generated_texts: list[str] = []
@@ -46,15 +50,35 @@ class FakePocketTTSModel:
         cls.active_entries = 0
         cls.max_active_entries = 0
         cls.fail_load = False
+        cls.loaded_device = "cpu"
         cls.block_generation = None
         cls.block_stream_after_first = None
+        cls.forever_stream_after_first = False
         cls.stream_completed = False
 
     @classmethod
-    def load_model(cls, *, language: str, quantize: bool, device: str) -> FakePocketTTSModel:
+    def load_model(
+        cls,
+        *,
+        language: str,
+        quantize: bool,
+        temp: float | None = None,
+        lsd_decode_steps: int | None = None,
+        noise_clamp: float | None = None,
+        eos_threshold: float | None = None,
+    ) -> FakePocketTTSModel:
         if cls.fail_load:
             raise RuntimeError("/secret/model/path failed")
-        cls.load_calls.append({"language": language, "quantize": quantize, "device": device})
+        call = {"language": language, "quantize": quantize}
+        if temp is not None:
+            call["temp"] = temp
+        if lsd_decode_steps is not None:
+            call["lsd_decode_steps"] = lsd_decode_steps
+        if noise_clamp is not None:
+            call["noise_clamp"] = noise_clamp
+        if eos_threshold is not None:
+            call["eos_threshold"] = eos_threshold
+        cls.load_calls.append(call)
         return cls(language)
 
     def get_state_for_audio_prompt(self, voice: str) -> dict[str, str]:
@@ -98,6 +122,9 @@ class FakePocketTTSModel:
         assert kwargs["copy_state"] is True
         type(self).generation_calls.append({"state": state, "text": text, **kwargs})
         yield [0.25]
+        if type(self).forever_stream_after_first:
+            while True:
+                time.sleep(0.05)
         event = type(self).block_stream_after_first
         if event is not None:
             while not event.is_set():
@@ -109,6 +136,21 @@ class FakePocketTTSModel:
 @pytest.fixture(autouse=True)
 def reset_fake_model():
     FakePocketTTSModel.reset()
+
+
+def test_pockettts_official_api_signature_conformance_without_model_download() -> None:
+    pocket_tts = pytest.importorskip("pocket_tts")
+    load_signature = inspect.signature(pocket_tts.TTSModel.load_model)
+    finite_signature = inspect.signature(pocket_tts.TTSModel.generate_audio)
+    stream_signature = inspect.signature(pocket_tts.TTSModel.generate_audio_stream)
+
+    assert "device" not in load_signature.parameters
+    for name in ("temp", "lsd_decode_steps", "noise_clamp", "eos_threshold"):
+        assert name in load_signature.parameters
+        assert name not in finite_signature.parameters
+        assert name not in stream_signature.parameters
+    for signature in (finite_signature, stream_signature):
+        assert {"max_tokens", "frames_after_eos", "copy_state"}.issubset(signature.parameters)
 
 
 def test_pockettts_inventory_contains_exact_pinned_configs() -> None:
@@ -196,9 +238,7 @@ async def test_pockettts_start_loads_model_and_multiple_voice_states() -> None:
 
     await provider.start()
 
-    assert FakePocketTTSModel.load_calls == [
-        {"language": "german_24l", "quantize": False, "device": "cpu"}
-    ]
+    assert FakePocketTTSModel.load_calls == [{"language": "german_24l", "quantize": False}]
     assert provider.capabilities.voice_selection_mode is VoiceSelectionMode.SHARED_MODEL_STATE
     assert provider.capabilities.max_resident_base_models == 1
     assert provider.capabilities.supports_inflight_cancel is False
@@ -234,9 +274,7 @@ async def test_pockettts_preload_false_lazy_loads_once_for_concurrent_requests()
 
     assert first.audio
     assert second.audio
-    assert FakePocketTTSModel.load_calls == [
-        {"language": "english_2026-04", "quantize": False, "device": "cpu"}
-    ]
+    assert FakePocketTTSModel.load_calls == [{"language": "english_2026-04", "quantize": False}]
     assert FakePocketTTSModel.max_active_entries == 1
     await provider.stop()
 
@@ -256,8 +294,8 @@ async def test_pockettts_restart_after_stop_recreates_executor() -> None:
 
     assert result.audio
     assert FakePocketTTSModel.load_calls == [
-        {"language": "english_2026-04", "quantize": False, "device": "cpu"},
-        {"language": "english_2026-04", "quantize": False, "device": "cpu"},
+        {"language": "english_2026-04", "quantize": False},
+        {"language": "english_2026-04", "quantize": False},
     ]
     await provider.stop()
 
@@ -355,6 +393,37 @@ async def test_pockettts_stream_cancellation_stops_delivery_without_state_leak()
     assert exc_info.value.code == "cancelled"
     assert await provider.tracked_request_count() == 0
     await provider.stop()
+
+
+@pytest.mark.asyncio
+async def test_pockettts_stream_cancel_wakes_forever_generator_without_default_thread_leak() -> (
+    None
+):
+    FakePocketTTSModel.forever_stream_after_first = True
+    provider = PocketTTSProvider(
+        PocketTTSProviderConfig(
+            effective_language="es",
+            quality_tier="quality",
+            max_tokens=4,
+            queue_timeout_s=0.05,
+            request_timeout_s=5,
+        ),
+        model_class=FakePocketTTSModel,
+    )
+    await provider.start()
+    stream = provider.stream(TTSSynthesisRequest(text="hola", request_id="stream-forever"))
+    first = await asyncio.wait_for(stream.__anext__(), timeout=1)
+
+    await provider.cancel("stream-forever")
+    with pytest.raises(TTSProviderError) as exc_info:
+        await asyncio.wait_for(stream.__anext__(), timeout=0.5)
+    with pytest.raises(TTSProviderError) as busy:
+        await provider.synthesize(TTSSynthesisRequest(text="blocked"))
+    await asyncio.wait_for(provider.stop(), timeout=0.5)
+
+    assert first.audio == b"\x00 "
+    assert exc_info.value.code == "cancelled"
+    assert busy.value.code == "resource_exhausted"
 
 
 @pytest.mark.asyncio
@@ -503,13 +572,19 @@ async def test_pockettts_forwards_supported_settings_and_omits_null_temperature(
     await provider.synthesize(TTSSynthesisRequest(text="settings"))
 
     assert FakePocketTTSModel.load_calls == [
-        {"language": "portuguese_24l", "quantize": True, "device": "cpu"}
+        {
+            "language": "portuguese_24l",
+            "quantize": True,
+            "lsd_decode_steps": 8,
+            "noise_clamp": 0.25,
+            "eos_threshold": 0.5,
+        }
     ]
     generation = FakePocketTTSModel.generation_calls[-1]
-    assert "temperature" not in generation
-    assert generation["lsd_decode_steps"] == 8
-    assert generation["noise_clamp"] == 0.25
-    assert generation["eos_threshold"] == 0.5
+    assert "temp" not in generation
+    assert "lsd_decode_steps" not in generation
+    assert "noise_clamp" not in generation
+    assert "eos_threshold" not in generation
     await provider.stop()
 
 
@@ -538,6 +613,22 @@ async def test_pockettts_rejects_unsupported_provider_and_request_settings() -> 
 
     assert device_error.value.code == "unavailable"
     assert await provider.tracked_request_count() == 0
+    await provider.stop()
+
+
+@pytest.mark.asyncio
+async def test_pockettts_rejects_loaded_non_cpu_model() -> None:
+    FakePocketTTSModel.loaded_device = "cuda"
+    provider = PocketTTSProvider(
+        PocketTTSProviderConfig(effective_language="en", max_tokens=4),
+        model_class=FakePocketTTSModel,
+    )
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await provider.start()
+
+    assert exc_info.value.code == "unavailable"
+    assert str(exc_info.value) == "PocketTTS device is unavailable"
     await provider.stop()
 
 
