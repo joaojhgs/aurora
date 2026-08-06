@@ -76,6 +76,18 @@ class System(BaseConfigModel):
     """
     Base directory for voice/model files
     """
+    primary_language: Literal["en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"] | None = Field(
+        "en", title="Primary language"
+    )
+    """
+    Language Aurora uses whenever one device language is required.
+    """
+    voice_language: Literal["auto", "en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"] | None = (
+        Field("auto", title="Voice language")
+    )
+    """
+    Automatic detects speech while spoken replies and wake listening use the primary language.
+    """
 
 
 class Cors(BaseConfigModel):
@@ -272,6 +284,75 @@ class Auth(BaseConfigModel):
     """
     Audit log retention period in days
     """
+
+
+class Piper(BaseConfigModel):
+    model_file_path: str | None = "voice_models/en_US-lessac-medium.onnx"
+    """
+    Path to the Piper model file
+    """
+    model_config_file_path: str | None = "voice_models/en_US-lessac-medium.onnx.txt"
+    """
+    Path to the Piper model configuration file
+    """
+    model_sample_rate: int | None = Field(22050, ge=8000, le=48000)
+    """
+    Sample rate for Piper output
+    """
+    executable_path: str | None = ""
+    """
+    Path to Piper executable
+    """
+
+
+class Pockettts(BaseConfigModel):
+    quality_tier: Literal["compact", "quality"] | None = "compact"
+    custom_config_path: str | None = None
+    cache_dir: str | None = "voice_models/pockettts"
+    voice_state_dir: str | None = "voice_models/pockettts/voices"
+    device: Literal["cpu"] | None = "cpu"
+    initialization_timeout_s: float | None = Field(120.0, ge=1.0)
+    request_timeout_s: float | None = Field(120.0, ge=1.0)
+    max_concurrent_requests: int | None = Field(1, ge=1, le=1)
+    preload_model: bool | None = True
+    preload_voice_ids: list[str] | None = []
+    temperature: float | None = None
+    lsd_decode_steps: int | None = Field(1, ge=1)
+    noise_clamp: float | None = None
+    eos_threshold: float | None = -4.0
+    quantize: bool | None = False
+
+
+class Providers(BaseConfigModel):
+    piper: Piper | None = Field({}, validate_default=True)
+    """
+    Piper provider settings
+    """
+    pockettts: Pockettts | None = Field({}, validate_default=True)
+    """
+    PocketTTS provider settings
+    """
+
+
+class VoiceRegistry(BaseConfigModel):
+    manifest_path: str | None = "voice_models/voices.manifest.json"
+    asset_base_url: str | None = None
+    cache_dir: str | None = "voice_models/voice-pack"
+    verify_sha256: bool | None = True
+    standard_pack_enabled: bool | None = True
+    cloning_enabled: bool | None = True
+    retain_clone_source: bool | None = False
+    clone_min_duration_s: float | None = Field(6.0, ge=0.1)
+    clone_max_duration_s: float | None = Field(15.0, ge=0.1)
+    clone_max_source_bytes: int | None = Field(20971520, ge=1)
+    clone_max_wire_bytes: int | None = Field(2097152, ge=1)
+    accepted_import_formats: list[Literal["wav", "mp3", "mp4", "m4a", "webm"]] | None = [
+        "wav",
+        "mp3",
+        "mp4",
+        "m4a",
+        "webm",
+    ]
 
 
 class AmbientTranscription(BaseConfigModel):
@@ -895,11 +976,31 @@ class Tts(BaseConfigModel):
     """
     Enable TTS service
     """
+    provider: Literal["piper", "pockettts"] | None = "piper"
+    """
+    Text-to-speech provider
+    """
+    fallback_provider: Literal["piper", "pockettts"] | None = None
+    """
+    Explicit fallback provider used only when configured
+    """
+    default_voice_id: str | None = None
+    """
+    Default logical voice for this device
+    """
     mesh_sharing: MeshSharing | None = None
     mesh_routing: MeshRouting | None = None
     hardware_acceleration: bool | None = False
     """
     Enable hardware acceleration for TTS
+    """
+    providers: Providers | None = Field({}, validate_default=True)
+    """
+    Provider-specific text-to-speech settings
+    """
+    voice_registry: VoiceRegistry | None = Field({}, validate_default=True)
+    """
+    Logical voice registry settings
     """
     model_file_path: str | None = "voice_models/en_US-lessac-medium.onnx"
     """

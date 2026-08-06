@@ -646,6 +646,64 @@ class _ServicesToolingPluginsSlackConfigPath(ConfigPath):
         return self
 
 
+class _ServicesTtsProvidersPiperConfigPath(ConfigPath):
+    executable_path: ConfigPath
+    model_config_file_path: ConfigPath
+    model_file_path: ConfigPath
+    model_sample_rate: ConfigPath
+
+    def __new__(cls) -> _ServicesTtsProvidersPiperConfigPath:
+        self = super().__new__(cls, "services.tts.providers.piper")
+        self.executable_path = ConfigPath("services.tts.providers.piper.executable_path")
+        self.model_config_file_path = ConfigPath(
+            "services.tts.providers.piper.model_config_file_path"
+        )
+        self.model_file_path = ConfigPath("services.tts.providers.piper.model_file_path")
+        self.model_sample_rate = ConfigPath("services.tts.providers.piper.model_sample_rate")
+        return self
+
+
+class _ServicesTtsProvidersPocketttsConfigPath(ConfigPath):
+    cache_dir: ConfigPath
+    custom_config_path: ConfigPath
+    device: ConfigPath
+    eos_threshold: ConfigPath
+    initialization_timeout_s: ConfigPath
+    lsd_decode_steps: ConfigPath
+    max_concurrent_requests: ConfigPath
+    noise_clamp: ConfigPath
+    preload_model: ConfigPath
+    preload_voice_ids: ConfigPath
+    quality_tier: ConfigPath
+    quantize: ConfigPath
+    request_timeout_s: ConfigPath
+    temperature: ConfigPath
+    voice_state_dir: ConfigPath
+
+    def __new__(cls) -> _ServicesTtsProvidersPocketttsConfigPath:
+        self = super().__new__(cls, "services.tts.providers.pockettts")
+        self.cache_dir = ConfigPath("services.tts.providers.pockettts.cache_dir")
+        self.custom_config_path = ConfigPath("services.tts.providers.pockettts.custom_config_path")
+        self.device = ConfigPath("services.tts.providers.pockettts.device")
+        self.eos_threshold = ConfigPath("services.tts.providers.pockettts.eos_threshold")
+        self.initialization_timeout_s = ConfigPath(
+            "services.tts.providers.pockettts.initialization_timeout_s"
+        )
+        self.lsd_decode_steps = ConfigPath("services.tts.providers.pockettts.lsd_decode_steps")
+        self.max_concurrent_requests = ConfigPath(
+            "services.tts.providers.pockettts.max_concurrent_requests"
+        )
+        self.noise_clamp = ConfigPath("services.tts.providers.pockettts.noise_clamp")
+        self.preload_model = ConfigPath("services.tts.providers.pockettts.preload_model")
+        self.preload_voice_ids = ConfigPath("services.tts.providers.pockettts.preload_voice_ids")
+        self.quality_tier = ConfigPath("services.tts.providers.pockettts.quality_tier")
+        self.quantize = ConfigPath("services.tts.providers.pockettts.quantize")
+        self.request_timeout_s = ConfigPath("services.tts.providers.pockettts.request_timeout_s")
+        self.temperature = ConfigPath("services.tts.providers.pockettts.temperature")
+        self.voice_state_dir = ConfigPath("services.tts.providers.pockettts.voice_state_dir")
+        return self
+
+
 class _ServicesDbEmbeddingsConfigPath(ConfigPath):
     use_local: ConfigPath
 
@@ -1200,6 +1258,52 @@ class _ServicesTtsMeshSharingConfigPath(ConfigPath):
         return self
 
 
+class _ServicesTtsProvidersConfigPath(ConfigPath):
+    piper: _ServicesTtsProvidersPiperConfigPath
+    pockettts: _ServicesTtsProvidersPocketttsConfigPath
+
+    def __new__(cls) -> _ServicesTtsProvidersConfigPath:
+        self = super().__new__(cls, "services.tts.providers")
+        self.piper = _ServicesTtsProvidersPiperConfigPath()
+        self.pockettts = _ServicesTtsProvidersPocketttsConfigPath()
+        return self
+
+
+class _ServicesTtsVoiceRegistryConfigPath(ConfigPath):
+    accepted_import_formats: ConfigPath
+    asset_base_url: ConfigPath
+    cache_dir: ConfigPath
+    clone_max_duration_s: ConfigPath
+    clone_max_source_bytes: ConfigPath
+    clone_max_wire_bytes: ConfigPath
+    clone_min_duration_s: ConfigPath
+    cloning_enabled: ConfigPath
+    manifest_path: ConfigPath
+    retain_clone_source: ConfigPath
+    standard_pack_enabled: ConfigPath
+    verify_sha256: ConfigPath
+
+    def __new__(cls) -> _ServicesTtsVoiceRegistryConfigPath:
+        self = super().__new__(cls, "services.tts.voice_registry")
+        self.accepted_import_formats = ConfigPath(
+            "services.tts.voice_registry.accepted_import_formats"
+        )
+        self.asset_base_url = ConfigPath("services.tts.voice_registry.asset_base_url")
+        self.cache_dir = ConfigPath("services.tts.voice_registry.cache_dir")
+        self.clone_max_duration_s = ConfigPath("services.tts.voice_registry.clone_max_duration_s")
+        self.clone_max_source_bytes = ConfigPath(
+            "services.tts.voice_registry.clone_max_source_bytes"
+        )
+        self.clone_max_wire_bytes = ConfigPath("services.tts.voice_registry.clone_max_wire_bytes")
+        self.clone_min_duration_s = ConfigPath("services.tts.voice_registry.clone_min_duration_s")
+        self.cloning_enabled = ConfigPath("services.tts.voice_registry.cloning_enabled")
+        self.manifest_path = ConfigPath("services.tts.voice_registry.manifest_path")
+        self.retain_clone_source = ConfigPath("services.tts.voice_registry.retain_clone_source")
+        self.standard_pack_enabled = ConfigPath("services.tts.voice_registry.standard_pack_enabled")
+        self.verify_sha256 = ConfigPath("services.tts.voice_registry.verify_sha256")
+        return self
+
+
 class _ServicesAuthConfigPath(ConfigPath):
     api_keys: ConfigPath
     audit_enabled: ConfigPath
@@ -1343,7 +1447,9 @@ class _ServicesToolingConfigPath(ConfigPath):
 
 
 class _ServicesTtsConfigPath(ConfigPath):
+    default_voice_id: ConfigPath
     enabled: ConfigPath
+    fallback_provider: ConfigPath
     hardware_acceleration: ConfigPath
     mesh_routing: _ServicesTtsMeshRoutingConfigPath
     mesh_sharing: _ServicesTtsMeshSharingConfigPath
@@ -1351,10 +1457,15 @@ class _ServicesTtsConfigPath(ConfigPath):
     model_file_path: ConfigPath
     model_sample_rate: ConfigPath
     piper_path: ConfigPath
+    provider: ConfigPath
+    providers: _ServicesTtsProvidersConfigPath
+    voice_registry: _ServicesTtsVoiceRegistryConfigPath
 
     def __new__(cls) -> _ServicesTtsConfigPath:
         self = super().__new__(cls, "services.tts")
+        self.default_voice_id = ConfigPath("services.tts.default_voice_id")
         self.enabled = ConfigPath("services.tts.enabled")
+        self.fallback_provider = ConfigPath("services.tts.fallback_provider")
         self.hardware_acceleration = ConfigPath("services.tts.hardware_acceleration")
         self.mesh_routing = _ServicesTtsMeshRoutingConfigPath()
         self.mesh_sharing = _ServicesTtsMeshSharingConfigPath()
@@ -1362,6 +1473,9 @@ class _ServicesTtsConfigPath(ConfigPath):
         self.model_file_path = ConfigPath("services.tts.model_file_path")
         self.model_sample_rate = ConfigPath("services.tts.model_sample_rate")
         self.piper_path = ConfigPath("services.tts.piper_path")
+        self.provider = ConfigPath("services.tts.provider")
+        self.providers = _ServicesTtsProvidersConfigPath()
+        self.voice_registry = _ServicesTtsVoiceRegistryConfigPath()
         return self
 
 
@@ -1422,10 +1536,14 @@ class _ServicesConfigPath(ConfigPath):
 
 class _SystemConfigPath(ConfigPath):
     models_dir: ConfigPath
+    primary_language: ConfigPath
+    voice_language: ConfigPath
 
     def __new__(cls) -> _SystemConfigPath:
         self = super().__new__(cls, "system")
         self.models_dir = ConfigPath("system.models_dir")
+        self.primary_language = ConfigPath("system.primary_language")
+        self.voice_language = ConfigPath("system.voice_language")
         return self
 
 

@@ -17,7 +17,9 @@
     }
   },
   "system": {
-    "models_dir": "voice_models/"
+    "models_dir": "voice_models/",
+    "primary_language": "en",
+    "voice_language": "auto"
   },
   "services": {
     "gateway": {
@@ -81,6 +83,9 @@
     },
     "tts": {
       "enabled": false,
+      "provider": "piper",
+      "fallback_provider": null,
+      "default_voice_id": null,
       "mesh_sharing": {
         "share": false,
         "max_concurrent": 10,
@@ -103,6 +108,51 @@
         "require_explicit_selector": false
       },
       "hardware_acceleration": false,
+      "providers": {
+        "piper": {
+          "model_file_path": "voice_models/en_US-lessac-medium.onnx",
+          "model_config_file_path": "voice_models/en_US-lessac-medium.onnx.txt",
+          "model_sample_rate": 22050,
+          "executable_path": ""
+        },
+        "pockettts": {
+          "quality_tier": "compact",
+          "custom_config_path": null,
+          "cache_dir": "voice_models/pockettts",
+          "voice_state_dir": "voice_models/pockettts/voices",
+          "device": "cpu",
+          "initialization_timeout_s": 120.0,
+          "request_timeout_s": 120.0,
+          "max_concurrent_requests": 1,
+          "preload_model": true,
+          "preload_voice_ids": [],
+          "temperature": null,
+          "lsd_decode_steps": 1,
+          "noise_clamp": null,
+          "eos_threshold": -4.0,
+          "quantize": false
+        }
+      },
+      "voice_registry": {
+        "manifest_path": "voice_models/voices.manifest.json",
+        "asset_base_url": null,
+        "cache_dir": "voice_models/voice-pack",
+        "verify_sha256": true,
+        "standard_pack_enabled": true,
+        "cloning_enabled": true,
+        "retain_clone_source": false,
+        "clone_min_duration_s": 6.0,
+        "clone_max_duration_s": 15.0,
+        "clone_max_source_bytes": 20971520,
+        "clone_max_wire_bytes": 2097152,
+        "accepted_import_formats": [
+          "wav",
+          "mp3",
+          "mp4",
+          "m4a",
+          "webm"
+        ]
+      },
       "model_file_path": "voice_models/en_US-lessac-medium.onnx",
       "model_config_file_path": "voice_models/en_US-lessac-medium.onnx.txt",
       "model_sample_rate": 22050,
