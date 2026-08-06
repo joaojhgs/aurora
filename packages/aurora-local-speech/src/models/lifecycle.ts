@@ -18,6 +18,7 @@ export type LocalSpeechInstallEvent =
   | 'download-complete'
   | 'verify-ok'
   | 'activate'
+  | 'deactivate'
   | 'fail'
   | 'revoke'
   | 'remove'
@@ -39,7 +40,7 @@ const transitions: Readonly<
   downloading: { pause: 'paused', 'download-complete': 'verifying', fail: 'failed', remove: 'removing', revoke: 'revoked' },
   verifying: { 'verify-ok': 'ready', fail: 'failed', remove: 'removing', revoke: 'revoked' },
   ready: { activate: 'active', remove: 'removing', revoke: 'revoked' },
-  active: { remove: 'removing', revoke: 'revoked' },
+  active: { deactivate: 'ready', remove: 'removing', revoke: 'revoked' },
   paused: { resume: 'downloading', remove: 'removing', revoke: 'revoked', fail: 'failed' },
   failed: { enqueue: 'queued', remove: 'removing', revoke: 'revoked' },
   revoked: { remove: 'removing' },

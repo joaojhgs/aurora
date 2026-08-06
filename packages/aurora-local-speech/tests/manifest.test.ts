@@ -101,6 +101,16 @@ describe('local speech manifests', () => {
     ).rejects.toThrow(/revoked/)
   })
 
+  it('rejects unsigned packs before activation', async () => {
+    const { signature: _signature, ...unsigned } = manifest()
+
+    await expect(
+      verifyLocalSpeechManifest(unsigned, {
+        trustedKeys: [createDeterministicTrustedKey()]
+      })
+    ).rejects.toThrow(/unsigned/)
+  })
+
   it('rejects incomplete asset dependency graphs', async () => {
     const broken = manifest({
       assets: [

@@ -1,9 +1,8 @@
 import {
   applyLifecycleEvent,
-  createLifecycleSnapshot,
   type LocalSpeechLifecycleSnapshot
 } from '../models/lifecycle.js'
-import type { LocalSpeechPackManifest } from '../models/manifest.js'
+import type { LocalSpeechVerifiedManifest } from '../models/trust.js'
 import type {
   LocalSpeechActivationPort,
   LocalSpeechConcurrencyPort,
@@ -12,14 +11,25 @@ import type {
   LocalSpeechStoreStatus,
   LocalSpeechStoredAsset
 } from '../storage/ports.js'
+import { localSpeechAssetStorageKey } from '../storage/ports.js'
+
+interface Reservation {
+  readonly storageKey: string
+  readonly packId: string
+  readonly packVersion: string
+  readonly assetId: string
+  readonly expectedSha256: string
+  readonly expectedBytes: number
+}
 
 export class InMemoryLocalSpeechStore
   implements LocalSpeechModelStorePort, LocalSpeechActivationPort, LocalSpeechConcurrencyPort
 {
   private readonly assets = new Map<string, LocalSpeechStoredAsset>()
   private readonly lifecycles = new Map<string, LocalSpeechLifecycleSnapshot>()
-  private readonly reservations = new Map<string, { readonly packId: string; readonly expectedSha256: string; readonly expectedBytes: number }>()
-  private readonly locks = new Set<string>()
+  private readonly reservations = new Map<string, Reservation>()
+  private readonly lockChains = new Map<string, Promise<void>>()
+  private residencyLockChain: Promise<void> = Promise.resolve()
   private activePack: string | null = null
 
   constructor(private readonly options: { readonly now?: () => number; readonly bytesAvailable?: number | null } = {}) {}
@@ -46,14 +56,20 @@ export class InMemoryLocalSpeechStore
     readonly url: string
     readonly sha256: string
     readonly byteSize: number
-  }, packId: string): Promise<LocalSpeechDownloadTask> {
-    this.reservations.set(asset.assetId, {
+  }, packId: string, packVersion: string): Promise<LocalSpeechDownloadTask> {
+    const storageKey = localSpeechAssetStorageKey(packId, packVersion, asset.assetId)
+    this.reservations.set(storageKey, {
+      storageKey,
       packId,
+      packVersion,
+      assetId: asset.assetId,
       expectedSha256: asset.sha256,
       expectedBytes: asset.byteSize
     })
     return {
+      storageKey,
       packId,
+      packVersion,
       assetId: asset.assetId,
       url: asset.url,
       expectedSha256: asset.sha256,
@@ -61,35 +77,37 @@ export class InMemoryLocalSpeechStore
     }
   }
 
-  async promoteAsset(assetId: string, sha256: string, byteSize: number): Promise<LocalSpeechStoredAsset> {
-    const reservation = this.reservations.get(assetId)
-    if (!reservation) throw new Error(`asset ${assetId} was not reserved`)
-    if (reservation.expectedSha256 !== sha256) throw new Error(`asset ${assetId} hash mismatch`)
-    if (reservation.expectedBytes !== byteSize) throw new Error(`asset ${assetId} byte size mismatch`)
+  async promoteAsset(storageKey: string, sha256: string, byteSize: number): Promise<LocalSpeechStoredAsset> {
+    const reservation = this.reservations.get(storageKey)
+    if (!reservation) throw new Error(`asset ${storageKey} was not reserved`)
+    if (reservation.expectedSha256 !== sha256) throw new Error(`asset ${storageKey} hash mismatch`)
+    if (reservation.expectedBytes !== byteSize) throw new Error(`asset ${storageKey} byte size mismatch`)
 
     const stored: LocalSpeechStoredAsset = {
-      assetId,
+      storageKey,
+      assetId: reservation.assetId,
       packId: reservation.packId,
+      packVersion: reservation.packVersion,
       sha256,
       byteSize,
       state: 'ready',
       storedAt: this.now()
     }
-    this.assets.set(assetId, stored)
-    this.reservations.delete(assetId)
+    this.assets.set(storageKey, stored)
+    this.reservations.delete(storageKey)
     return stored
   }
 
-  async getAsset(assetId: string): Promise<LocalSpeechStoredAsset | null> {
-    return this.assets.get(assetId) ?? null
+  async getAsset(packId: string, packVersion: string, assetId: string): Promise<LocalSpeechStoredAsset | null> {
+    return this.assets.get(localSpeechAssetStorageKey(packId, packVersion, assetId)) ?? null
   }
 
   async removePack(packId: string): Promise<void> {
-    for (const [assetId, asset] of this.assets) {
-      if (asset.packId === packId) this.assets.delete(assetId)
+    for (const [storageKey, asset] of this.assets) {
+      if (asset.packId === packId) this.assets.delete(storageKey)
     }
-    for (const [assetId, reservation] of this.reservations) {
-      if (reservation.packId === packId) this.reservations.delete(assetId)
+    for (const [storageKey, reservation] of this.reservations) {
+      if (reservation.packId === packId) this.reservations.delete(storageKey)
     }
     this.lifecycles.delete(packId)
     if (this.activePack === packId) this.activePack = null
@@ -100,26 +118,41 @@ export class InMemoryLocalSpeechStore
     return packId ? assets.filter((asset) => asset.packId === packId) : assets
   }
 
-  async activatePack(manifest: LocalSpeechPackManifest): Promise<LocalSpeechLifecycleSnapshot> {
-    const missingAsset = manifest.assets.find((asset) => asset.revocation?.revoked !== true && !this.assets.has(asset.assetId))
-    if (missingAsset) throw new Error(`cannot activate ${manifest.packId}; missing asset ${missingAsset.assetId}`)
+  async activatePack(verifiedManifest: LocalSpeechVerifiedManifest): Promise<LocalSpeechLifecycleSnapshot> {
+    const manifest = verifiedManifest.manifest
+    const current = this.lifecycles.get(manifest.packId)
+    if (!current || current.state !== 'ready') {
+      throw new Error(`cannot activate ${manifest.packId}; lifecycle is not ready`)
+    }
 
-    const current =
-      this.lifecycles.get(manifest.packId) ??
-      applyLifecycleEvent(createLifecycleSnapshot(manifest.packId, this.now()), 'enqueue', { now: this.now() })
-    const ready = current.state === 'ready' ? current : { ...current, state: 'ready' as const }
-    const active = applyLifecycleEvent(ready, 'activate', { now: this.now() })
+    for (const asset of manifest.assets) {
+      if (asset.revocation?.revoked === true) continue
+      const stored = this.assets.get(localSpeechAssetStorageKey(manifest.packId, manifest.packVersion, asset.assetId))
+      if (!stored) throw new Error(`cannot activate ${manifest.packId}; missing asset ${asset.assetId}`)
+      if (stored.sha256 !== asset.sha256 || stored.byteSize !== asset.byteSize) {
+        throw new Error(`cannot activate ${manifest.packId}; asset ${asset.assetId} does not match manifest`)
+      }
+    }
+
+    if (this.activePack && this.activePack !== manifest.packId) {
+      const previous = this.lifecycles.get(this.activePack)
+      if (previous?.state === 'active') {
+        this.lifecycles.set(previous.packId, applyLifecycleEvent(previous, 'deactivate', { now: this.now() }))
+      }
+    }
+
+    const active = applyLifecycleEvent(current, 'activate', { now: this.now() })
     this.lifecycles.set(manifest.packId, active)
     this.activePack = manifest.packId
     return active
   }
 
   async deactivatePack(packId: string): Promise<LocalSpeechLifecycleSnapshot> {
-    if (this.activePack === packId) this.activePack = null
     const current = this.lifecycles.get(packId)
-    if (!current) return createLifecycleSnapshot(packId, this.now())
-    const next = { ...current, state: 'ready' as const, revision: current.revision + 1, updatedAt: this.now() }
+    if (!current) throw new Error(`cannot deactivate ${packId}; lifecycle is missing`)
+    const next = applyLifecycleEvent(current, 'deactivate', { now: this.now() })
     this.lifecycles.set(packId, next)
+    if (this.activePack === packId) this.activePack = null
     return next
   }
 
@@ -127,17 +160,34 @@ export class InMemoryLocalSpeechStore
     return this.activePack
   }
 
-  async withModelLock<T>(packId: string, task: () => Promise<T>): Promise<T> {
-    if (this.locks.has(packId)) throw new Error(`local speech pack ${packId} is already locked`)
-    this.locks.add(packId)
-    try {
-      return await task()
-    } finally {
-      this.locks.delete(packId)
-    }
+  async withResidencyLock<T>(task: () => Promise<T>): Promise<T> {
+    const result = this.enqueueAfter(this.residencyLockChain, task)
+    this.residencyLockChain = result.then(
+      () => undefined,
+      () => undefined
+    )
+    return result
+  }
+
+  async withPackLock<T>(packId: string, task: () => Promise<T>): Promise<T> {
+    const current = this.lockChains.get(packId) ?? Promise.resolve()
+    const result = this.enqueueAfter(current, task)
+    this.lockChains.set(
+      packId,
+      result.then(
+        () => undefined,
+        () => undefined
+      )
+    )
+    return result
   }
 
   private now(): number {
     return this.options.now?.() ?? 0
+  }
+
+  private async enqueueAfter<T>(current: Promise<void>, task: () => Promise<T>): Promise<T> {
+    await current
+    return task()
   }
 }
