@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import importlib
 import math
+import queue
+import threading
 from collections.abc import AsyncIterator, Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from app.helpers.aurora_logger import log_debug, log_warning
 from app.services.tts.providers.base import (
@@ -180,6 +183,11 @@ class PocketTTSProviderConfig:
     )
     preload: bool = True
     quantize: bool = False
+    device: str = "cpu"
+    temperature: float | None = None
+    lsd_decode_steps: int | None = None
+    noise_clamp: float | None = None
+    eos_threshold: float | None = None
     request_timeout_s: float = 30.0
     queue_timeout_s: float = 5.0
     init_timeout_s: float = 60.0
@@ -224,6 +232,8 @@ def resolve_pockettts_config(
         info = POCKETTTS_CONFIGS.get(config_id)
         if info is None or info.product_language != product_language:
             raise TTSProviderError("unsupported_voice", "PocketTTS config is unavailable")
+        if info.quality_tier != quality_tier:
+            raise TTSProviderError("unsupported_voice", "PocketTTS config tier is unavailable")
         if info.compatibility_only and config_id not in _ENGLISH_LEGACY_CONFIGS:
             raise TTSProviderError("unsupported_voice", "PocketTTS config is unavailable")
         return info
@@ -243,6 +253,29 @@ def _load_pockettts_model_class() -> Any:
         return module.TTSModel
     except AttributeError as exc:
         raise TTSProviderError("unavailable", "PocketTTS is unavailable") from exc
+
+
+def _validate_timeout(name: str, value: float) -> None:
+    if not math.isfinite(value) or value <= 0:
+        raise TTSProviderError("resource_exhausted", f"PocketTTS {name} is unavailable")
+
+
+def _validate_provider_config(config: PocketTTSProviderConfig) -> None:
+    if config.device != "cpu":
+        raise TTSProviderError("unavailable", "PocketTTS device is unavailable")
+    if not config.voices:
+        raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+    _validate_timeout("request timeout", config.request_timeout_s)
+    _validate_timeout("queue timeout", config.queue_timeout_s)
+    _validate_timeout("init timeout", config.init_timeout_s)
+    if config.temperature is not None and not math.isfinite(config.temperature):
+        raise TTSProviderError("unavailable", "PocketTTS temperature is unavailable")
+    if config.noise_clamp is not None and not math.isfinite(config.noise_clamp):
+        raise TTSProviderError("unavailable", "PocketTTS noise clamp is unavailable")
+    if config.eos_threshold is not None and not math.isfinite(config.eos_threshold):
+        raise TTSProviderError("unavailable", "PocketTTS EOS threshold is unavailable")
+    if config.lsd_decode_steps is not None and config.lsd_decode_steps <= 0:
+        raise TTSProviderError("unavailable", "PocketTTS decode steps are unavailable")
 
 
 def _resident_identity(
@@ -321,6 +354,23 @@ def _duration_ms(audio: bytes, sample_rate: int, channels: int = 1) -> float:
     return (len(audio) / (sample_rate * channels * 2)) * 1000
 
 
+def _generation_kwargs(config: PocketTTSProviderConfig) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {
+        "max_tokens": config.max_tokens,
+        "frames_after_eos": config.frames_after_eos,
+        "copy_state": True,
+    }
+    if config.temperature is not None:
+        kwargs["temperature"] = config.temperature
+    if config.lsd_decode_steps is not None:
+        kwargs["lsd_decode_steps"] = config.lsd_decode_steps
+    if config.noise_clamp is not None:
+        kwargs["noise_clamp"] = config.noise_clamp
+    if config.eos_threshold is not None:
+        kwargs["eos_threshold"] = config.eos_threshold
+    return kwargs
+
+
 class PocketTTSProvider:
     """Provider wrapper for official PocketTTS model inference."""
 
@@ -334,12 +384,14 @@ class PocketTTSProvider:
     ) -> None:
         self._config = config
         self._model_class = model_class
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="aurora-pockettts")
+        self._executor: ThreadPoolExecutor | None = None
         self._entry_lock = asyncio.Lock()
+        self._load_lock = asyncio.Lock()
         self._state_lock = asyncio.Lock()
         self._loaded: _LoadedPocketTTSState | None = None
         self._started = False
         self._stopping = False
+        self._reloading = False
         self._queued_requests: set[str] = set()
         self._active_requests: set[str] = set()
         self._cancelled_requests: set[str] = set()
@@ -366,15 +418,15 @@ class PocketTTSProvider:
 
     async def start(self) -> None:
         """Load PocketTTS resources when preload is enabled."""
+        _validate_provider_config(self._config)
+        self._ensure_executor()
         if not self._config.preload:
             async with self._state_lock:
                 self._started = True
                 self._stopping = False
+                self._last_error = None
             return
-        loaded = await asyncio.wait_for(
-            self._build_loaded_state(self._config),
-            timeout=self._config.init_timeout_s,
-        )
+        loaded = await self._build_loaded_state(self._config)
         async with self._state_lock:
             self._loaded = loaded
             self._started = True
@@ -383,19 +435,24 @@ class PocketTTSProvider:
 
     async def reload(self, config: PocketTTSProviderConfig) -> None:
         """Atomically reload PocketTTS resources, retaining old state on failure."""
+        _validate_provider_config(config)
+        async with self._state_lock:
+            if self._stopping:
+                raise TTSProviderError("unavailable", "TTS provider is unavailable")
+            self._reloading = True
         try:
-            loaded = await asyncio.wait_for(
-                self._build_loaded_state(config),
-                timeout=config.init_timeout_s,
-            )
+            async with self._load_lock:
+                loaded = await self._build_loaded_state(config)
         except TTSProviderError as exc:
             async with self._state_lock:
                 self._last_error = str(exc)
+                self._reloading = False
             raise
         async with self._state_lock:
             self._config = config
             self._loaded = loaded
             self._started = True
+            self._reloading = False
             self._last_error = None
 
     async def stop(self) -> None:
@@ -403,11 +460,15 @@ class PocketTTSProvider:
         async with self._state_lock:
             self._started = False
             self._stopping = True
+            self._reloading = False
             self._cancelled_requests.update(self._queued_requests)
             self._cancelled_requests.update(self._active_requests)
         async with self._entry_lock:
             pass
-        await asyncio.to_thread(self._executor.shutdown, True, cancel_futures=True)
+        executor = self._executor
+        self._executor = None
+        if executor is not None:
+            await asyncio.to_thread(executor.shutdown, True, cancel_futures=True)
         async with self._state_lock:
             self._loaded = None
             self._queued_requests.clear()
@@ -418,7 +479,12 @@ class PocketTTSProvider:
     async def health(self) -> TTSProviderHealth:
         """Return readiness for the loaded PocketTTS base model."""
         async with self._state_lock:
-            ready = self._started and self._loaded is not None and not self._stopping
+            ready = (
+                self._started
+                and self._loaded is not None
+                and not self._stopping
+                and not self._reloading
+            )
             loaded = self._loaded
             error = None if ready else self._last_error or "unavailable"
             active_voice = next(iter(loaded.voice_states), None) if loaded is not None else None
@@ -432,9 +498,13 @@ class PocketTTSProvider:
 
     async def list_voices(self) -> tuple[TTSVoiceInfo, ...]:
         """Return ready logical voice states for the resident base model."""
+        if self._config.preload is False:
+            await self._ensure_loaded()
         async with self._state_lock:
             loaded = self._loaded
-            ready = self._started and loaded is not None and not self._stopping
+            ready = (
+                self._started and loaded is not None and not self._stopping and not self._reloading
+            )
             config = self._config
         if loaded is None:
             return ()
@@ -467,6 +537,7 @@ class PocketTTSProvider:
     async def synthesize(self, request: TTSSynthesisRequest) -> TTSSynthesisResult:
         """Synthesize finite audio through PocketTTS without blocking the loop."""
         loaded = await self._ready_loaded_state()
+        self._validate_request(request, loaded)
         voice_id, voice_state = self._resolve_voice(loaded, request.voice)
         await self._register_request(request.request_id)
         try:
@@ -476,9 +547,7 @@ class PocketTTSProvider:
                 lambda: loaded.model.generate_audio(
                     voice_state,
                     request.text,
-                    max_tokens=loaded.config.max_tokens,
-                    frames_after_eos=loaded.config.frames_after_eos,
-                    copy_state=True,
+                    **_generation_kwargs(loaded.config),
                 ),
                 timeout_s=loaded.config.request_timeout_s,
                 queue_timeout_s=loaded.config.queue_timeout_s,
@@ -504,25 +573,22 @@ class PocketTTSProvider:
     async def stream(self, request: TTSSynthesisRequest) -> AsyncIterator[TTSStreamChunk]:
         """Stream ordered PocketTTS chunks normalized to PCM."""
         loaded = await self._ready_loaded_state()
+        self._validate_request(request, loaded)
         _voice_id, voice_state = self._resolve_voice(loaded, request.voice)
         await self._register_request(request.request_id)
         try:
             await self._reject_if_cancelled(request.request_id)
-            chunks = await self._run_model_entry(
+            sequence = 0
+            async for chunk in self._stream_model_entry(
                 request.request_id,
-                lambda: list(
-                    loaded.model.generate_audio_stream(
-                        voice_state,
-                        request.text,
-                        max_tokens=loaded.config.max_tokens,
-                        frames_after_eos=loaded.config.frames_after_eos,
-                        copy_state=True,
-                    )
+                lambda: loaded.model.generate_audio_stream(
+                    voice_state,
+                    request.text,
+                    **_generation_kwargs(loaded.config),
                 ),
                 timeout_s=loaded.config.request_timeout_s,
                 queue_timeout_s=loaded.config.queue_timeout_s,
-            )
-            for sequence, chunk in enumerate(chunks):
+            ):
                 await self._reject_if_cancelled(request.request_id)
                 pcm = _audio_to_pcm16(chunk)
                 yield TTSStreamChunk(
@@ -532,8 +598,9 @@ class PocketTTSProvider:
                     channels=1,
                     duration_ms=_duration_ms(pcm, loaded.sample_rate),
                 )
+                sequence += 1
             yield TTSStreamChunk(
-                sequence=len(chunks),
+                sequence=sequence,
                 audio=b"",
                 sample_rate=loaded.sample_rate,
                 channels=1,
@@ -544,11 +611,36 @@ class PocketTTSProvider:
 
     async def _ready_loaded_state(self) -> _LoadedPocketTTSState:
         async with self._state_lock:
-            if not self._started or self._loaded is None or self._stopping:
+            if not self._started or self._stopping:
                 raise TTSProviderError("unavailable", "TTS provider is unavailable")
-            return self._loaded
+            if self._reloading:
+                raise TTSProviderError("capability_changed", "TTS provider is changing")
+            loaded = self._loaded
+        if loaded is None:
+            return await self._ensure_loaded()
+        return loaded
+
+    async def _ensure_loaded(self) -> _LoadedPocketTTSState:
+        async with self._load_lock:
+            async with self._state_lock:
+                if not self._started or self._stopping:
+                    raise TTSProviderError("unavailable", "TTS provider is unavailable")
+                if self._reloading:
+                    raise TTSProviderError("capability_changed", "TTS provider is changing")
+                loaded = self._loaded
+                config = self._config
+            if loaded is not None:
+                return loaded
+            loaded = await self._build_loaded_state(config)
+            async with self._state_lock:
+                if self._stopping or self._reloading:
+                    raise TTSProviderError("capability_changed", "TTS provider is changing")
+                self._loaded = loaded
+                self._last_error = None
+            return loaded
 
     async def _build_loaded_state(self, config: PocketTTSProviderConfig) -> _LoadedPocketTTSState:
+        _validate_provider_config(config)
         config_info = resolve_pockettts_config(
             config.effective_language,
             config.quality_tier,
@@ -557,7 +649,11 @@ class PocketTTSProvider:
 
         def load() -> _LoadedPocketTTSState:
             model_class = self._model_class or _load_pockettts_model_class()
-            model = model_class.load_model(language=config_info.config_id, quantize=config.quantize)
+            model = model_class.load_model(
+                language=config_info.config_id,
+                quantize=config.quantize,
+                device=config.device,
+            )
             sample_rate = int(getattr(model, "sample_rate", 24000) or 24000)
             voice_states = {
                 voice.voice_id: model.get_state_for_audio_prompt(voice.audio_prompt)
@@ -576,11 +672,14 @@ class PocketTTSProvider:
                 ),
             )
 
-        return await self._run_model_entry(
-            None,
-            load,
-            timeout_s=config.init_timeout_s,
-            queue_timeout_s=config.queue_timeout_s,
+        return cast(
+            _LoadedPocketTTSState,
+            await self._run_model_entry(
+                None,
+                load,
+                timeout_s=config.init_timeout_s,
+                queue_timeout_s=config.queue_timeout_s,
+            ),
         )
 
     def _resolve_voice(self, loaded: _LoadedPocketTTSState, voice: str | None) -> tuple[str, Any]:
@@ -588,6 +687,16 @@ class PocketTTSProvider:
         if voice_id is None or voice_id not in loaded.voice_states:
             raise TTSProviderError("unsupported_voice", "Requested voice is unavailable")
         return voice_id, loaded.voice_states[voice_id]
+
+    def _validate_request(
+        self, request: TTSSynthesisRequest, loaded: _LoadedPocketTTSState
+    ) -> None:
+        if request.audio_format not in self.capabilities.supported_formats:
+            raise TTSProviderError("invalid_audio", "Requested audio format is unavailable")
+        if request.sample_rate is not None and request.sample_rate != loaded.sample_rate:
+            raise TTSProviderError("invalid_audio", "Requested sample rate is unavailable")
+        if request.speed != 1.0:
+            raise TTSProviderError("invalid_audio", "Requested speech speed is unavailable")
 
     async def _register_request(self, request_id: str | None) -> None:
         if request_id is None:
@@ -625,26 +734,124 @@ class PocketTTSProvider:
         timeout_s: float,
         queue_timeout_s: float,
     ) -> Any:
-        try:
-            await asyncio.wait_for(self._entry_lock.acquire(), timeout=queue_timeout_s)
-        except TimeoutError as exc:
-            raise TTSProviderError("resource_exhausted", "TTS provider is busy") from exc
+        await self._acquire_entry_lock(queue_timeout_s)
+        release_on_exit = True
+        future: asyncio.Future[Any] | None = None
         try:
             await self._activate_request(request_id)
             await self._reject_if_cancelled(request_id)
             loop = asyncio.get_running_loop()
+            future = loop.run_in_executor(self._ensure_executor(), func)
             try:
-                return await asyncio.wait_for(
-                    loop.run_in_executor(self._executor, func),
-                    timeout=timeout_s,
-                )
+                return await asyncio.wait_for(asyncio.shield(future), timeout=timeout_s)
             except TimeoutError as exc:
+                release_on_exit = False
+                self._release_entry_lock_when_done(future)
                 log_warning("PocketTTS model entry timed out")
                 raise TTSProviderError("resource_exhausted", "TTS provider is busy") from exc
+            except asyncio.CancelledError:
+                release_on_exit = False
+                self._release_entry_lock_when_done(future)
+                raise
             except TTSProviderError:
                 raise
             except Exception as exc:
                 log_debug(f"PocketTTS provider failure type={type(exc).__name__}")
                 raise TTSProviderError("unavailable", "PocketTTS synthesis failed") from exc
         finally:
+            if release_on_exit:
+                self._release_entry_lock()
+
+    async def _stream_model_entry(
+        self,
+        request_id: str | None,
+        stream_factory: Any,
+        *,
+        timeout_s: float,
+        queue_timeout_s: float,
+    ) -> AsyncIterator[Any]:
+        await self._acquire_entry_lock(queue_timeout_s)
+        loop = asyncio.get_running_loop()
+        bridge: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=2)
+        stop_event = threading.Event()
+
+        def put_item(item: tuple[str, Any]) -> None:
+            while not stop_event.is_set():
+                try:
+                    bridge.put(item, timeout=0.05)
+                    return
+                except queue.Full:
+                    continue
+
+        def produce() -> None:
+            try:
+                for chunk in stream_factory():
+                    if stop_event.is_set():
+                        break
+                    put_item(("chunk", chunk))
+                put_item(("done", None))
+            except Exception as exc:
+                put_item(("error", exc))
+
+        release_on_exit = True
+        future: asyncio.Future[Any] | None = None
+        try:
+            await self._activate_request(request_id)
+            await self._reject_if_cancelled(request_id)
+            future = loop.run_in_executor(self._ensure_executor(), produce)
+            while True:
+                try:
+                    kind, payload = await asyncio.wait_for(
+                        asyncio.to_thread(bridge.get),
+                        timeout=timeout_s,
+                    )
+                except TimeoutError as exc:
+                    release_on_exit = False
+                    stop_event.set()
+                    self._release_entry_lock_when_done(future)
+                    log_warning("PocketTTS stream timed out")
+                    raise TTSProviderError("resource_exhausted", "TTS provider is busy") from exc
+                except asyncio.CancelledError:
+                    release_on_exit = False
+                    stop_event.set()
+                    self._release_entry_lock_when_done(future)
+                    raise
+                if kind == "chunk":
+                    yield payload
+                    continue
+                if kind == "done":
+                    break
+                log_debug(f"PocketTTS stream failure type={type(payload).__name__}")
+                raise TTSProviderError("unavailable", "PocketTTS synthesis failed")
+        finally:
+            stop_event.set()
+            if release_on_exit:
+                self._release_entry_lock()
+
+    async def _acquire_entry_lock(self, queue_timeout_s: float) -> None:
+        try:
+            await asyncio.wait_for(self._entry_lock.acquire(), timeout=queue_timeout_s)
+        except TimeoutError as exc:
+            raise TTSProviderError("resource_exhausted", "TTS provider is busy") from exc
+
+    def _release_entry_lock(self) -> None:
+        if self._entry_lock.locked():
             self._entry_lock.release()
+
+    def _release_entry_lock_when_done(self, future: asyncio.Future[Any]) -> None:
+        loop = asyncio.get_running_loop()
+
+        def release(_future: asyncio.Future[Any]) -> None:
+            with contextlib.suppress(asyncio.CancelledError):
+                _future.exception()
+            loop.call_soon_threadsafe(self._release_entry_lock)
+
+        future.add_done_callback(release)
+
+    def _ensure_executor(self) -> ThreadPoolExecutor:
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor(
+                max_workers=1,
+                thread_name_prefix="aurora-pockettts",
+            )
+        return self._executor
