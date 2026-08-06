@@ -49,11 +49,14 @@ from app.shared.contracts.models.tts import (
     TTSListVoiceProfilesRequest,
     TTSListVoicesRequest,
     TTSMethods,
+    TTSRemoveVoiceProfileRequest,
     TTSRequest,
+    TTSSetDefaultVoiceRequest,
     TTSStopRequest,
     TTSStreamChunkRequest,
     TTSStreamEndRequest,
     TTSStreamStartRequest,
+    TTSUpdateVoiceProfileRequest,
     TTSVoiceImportAbortRequest,
     TTSVoiceImportChunkRequest,
     TTSVoiceImportEndRequest,
@@ -1002,6 +1005,94 @@ async def test_voice_import_audit_is_redacted_and_idempotency_is_payload_bound(
     assert "secrets_redacted" in details
     assert audit_call.kwargs["origin"] == "internal"
     assert audit_call.kwargs["timeout"] == 5.0
+
+
+@pytest.mark.parametrize(
+    ("method_name", "mutation_request", "mismatched_request"),
+    [
+        pytest.param(
+            "update_voice_profile",
+            TTSUpdateVoiceProfileRequest(
+                operation_id="update-replay",
+                voice_id="standard:starter_en:alba",
+                display_name="Private Voice Label",
+                visibility="allowed_peers",
+                allowed_peer_ids=["peer-secret"],
+            ),
+            TTSUpdateVoiceProfileRequest(
+                operation_id="update-replay",
+                voice_id="standard:starter_en:alba",
+                display_name="Different Private Label",
+            ),
+            id="update",
+        ),
+        pytest.param(
+            "remove_voice_profile",
+            TTSRemoveVoiceProfileRequest(
+                operation_id="remove-replay",
+                voice_id="standard:starter_en:alba",
+            ),
+            TTSRemoveVoiceProfileRequest(
+                operation_id="remove-replay",
+                voice_id="standard:starter_en:bela",
+            ),
+            id="remove",
+        ),
+        pytest.param(
+            "set_default_voice",
+            TTSSetDefaultVoiceRequest(
+                operation_id="default-replay",
+                voice_id="standard:starter_en:alba",
+                expected_revision="voice-rev-0",
+            ),
+            TTSSetDefaultVoiceRequest(
+                operation_id="default-replay",
+                voice_id="standard:starter_en:alba",
+                expected_revision="voice-rev-forged",
+            ),
+            id="set-default",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_voice_management_replay_is_audited_once_and_payload_bound(
+    mock_bus,
+    method_name,
+    mutation_request,
+    mismatched_request,
+) -> None:
+    mock_bus.request = AsyncMock()
+    service = TTSService()
+    envelope = Envelope(
+        type=getattr(TTSMethods, method_name.upper()),
+        payload={},
+        principal_id="principal-a",
+        caller_peer_id="peer-a",
+        correlation_id="correlation-a",
+    )
+    method = getattr(service, method_name)
+
+    first = await method(mutation_request, envelope)
+    replay = await method(mutation_request, envelope)
+
+    assert first.idempotent is False
+    assert replay.idempotent is True
+    assert mock_bus.request.await_count == 1
+    audit_call = mock_bus.request.await_args_list[0]
+    assert audit_call.args[0] == AuthMethods.STORE_AUDIT_EVENT
+    details = json.loads(audit_call.args[1].details)
+    assert details["method"] == method_name
+    assert details["operation_id"] == mutation_request.operation_id
+    assert details["correlation_id"] == "correlation-a"
+    assert details["secrets_redacted"] is True
+    encoded_details = audit_call.args[1].details
+    assert "Private Voice Label" not in encoded_details
+    assert "peer-secret" not in encoded_details
+
+    with pytest.raises(ValueError, match="operation_id payload mismatch"):
+        await method(mismatched_request, envelope)
+
+    assert mock_bus.request.await_count == 1
 
 
 @pytest.mark.asyncio

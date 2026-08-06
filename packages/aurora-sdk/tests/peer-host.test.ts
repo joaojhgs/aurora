@@ -566,6 +566,62 @@ describe('WebRtcPeerHost', () => {
     expect(peerHost.getActiveWorkCount()).toBe(0)
   })
 
+  it('preserves active subscription ownership when duplicate work IDs collide', async () => {
+    const handler = vi.fn(async () => ({ count: 0, tools: [] }))
+    const close = vi.fn()
+    const { peerHost, sent, broadcaster } = await authorityHost({
+      handler,
+      subscriptionClose: close
+    })
+    const subscription = {
+      type: 'subscribe' as const,
+      id: 'shared-work-id',
+      topics: ['Tooling.ProjectionInvalidated'],
+      correlation_ids: [],
+      ttl_seconds: 60
+    }
+
+    await peerHost.handleSubscribe(subscription, 'peer-a', authenticatedContext())
+    expect(peerHost.getActiveWorkCount()).toBe(1)
+
+    await peerHost.handleCall({
+      type: 'call',
+      id: 'shared-work-id',
+      method: 'Tooling.GetTools',
+      params: {},
+      identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] }
+    }, 'peer-a', authenticatedContext())
+
+    expect(handler).not.toHaveBeenCalled()
+    expect(sent.at(-1)).toMatchObject({
+      type: 'error',
+      id: 'shared-work-id',
+      error: { code: 409, reason_code: 'request_in_progress' }
+    })
+    expect(peerHost.getActiveWorkCount()).toBe(1)
+    expect(close).not.toHaveBeenCalled()
+
+    await peerHost.handleSubscribe(subscription, 'peer-a', authenticatedContext())
+    expect(sent.at(-1)).toMatchObject({
+      type: 'subscribe_rejected',
+      id: 'shared-work-id',
+      reason: 'request_in_progress'
+    })
+    expect(sent.filter((frame) => (frame as any).type === 'subscribed' && (frame as any).id === 'shared-work-id')).toHaveLength(1)
+    expect(peerHost.getActiveWorkCount()).toBe(1)
+    expect(close).not.toHaveBeenCalled()
+
+    await broadcaster.publish(revocationEvent())
+    await flush()
+
+    expect(peerHost.getActiveWorkCount()).toBe(0)
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(close).toHaveBeenCalledWith('peer_authority_revoked')
+    expect(sent).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'unsubscribed', id: 'shared-work-id', subscription_id: 'shared-work-id', removed: true })
+    ]))
+  })
+
   it('authorizes registered subscriptions before activation and rejects hostile subscription attempts', async () => {
     const opened = vi.fn(() => ({ close: vi.fn() }))
     const registry = new PeerHostContractRegistry().register({

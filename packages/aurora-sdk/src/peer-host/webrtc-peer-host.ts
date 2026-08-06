@@ -55,6 +55,8 @@ export class WebRtcPeerHost {
   private unsubscribeRevocation: (() => void) | null = null
   private timeoutSendFailureCount = 0
   private lastTimeoutFailureReason: 'timeout_send_failed' | null = null
+  private readonly reservedWorkIds = new Set<string>()
+  private readonly inFlightCallIds = new Set<string>()
 
   constructor(options: PeerHostOptions) {
     const randomId = options.randomId ?? (() => `host-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`)
@@ -323,71 +325,102 @@ export class WebRtcPeerHost {
 
   async handleCall(frame: CallFrame, remotePeerId: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {
     const sender = this.requireSender()
-    const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext)
-    const method = this.options.registry.get(frame.method)
-    if (!method) {
-      await sender.sendFrame(errorFrame(frame.id, 404, 'method not found', 'method_not_found'))
+    if (this.reservedWorkIds.has(frame.id)) {
+      await sender.sendFrame(
+        errorFrame(frame.id, 409, 'request is already active', 'request_in_progress')
+      )
       return
     }
-    if (this.authorityRevoked) {
-      await sender.sendFrame(errorFrame(frame.id, 403, 'peer authority revoked', 'peer_authority_revoked'))
-      return
-    }
-    if (!this.acceptingInbound || !this.lease.isActive()) {
-      await sender.sendFrame(errorFrame(frame.id, 425, 'provider is not ready', 'provider_not_ready'))
-      return
-    }
-    const requestBytes = utf8Bytes(JSON.stringify(frame.params ?? {}))
-    const maxBytes = method.maxRequestBytes ?? this.options.maxRequestBytes
-    if (requestBytes > maxBytes) {
-      await sender.sendFrame(errorFrame(frame.id, 413, 'request too large', 'request_too_large'))
-      return
-    }
-    const identity = identityFromAuthority(epochContext, frame.identity, remotePeerId)
-    const nowMs = Math.floor(this.options.clock())
-    const deadlineAtMs = nowMs + (method.timeoutMs ?? this.options.defaultTimeoutMs)
-    const authorizeRequest = {
-      remotePeerId,
-      methodId: method.methodId,
-      requiredPermissions: method.requiredPermissions,
-      identity,
-      nowMs
-    }
-    if (epochContext !== undefined) Object.assign(authorizeRequest, { authenticatedPeerContext: epochContext })
-    const decision = await this.options.authorizationStore.authorize(authorizeRequest)
-    if (!decision.allowed) {
-      await sender.sendFrame(errorFrame(frame.id, 403, 'not authorized', decision.reasonCode ?? 'not_authorized'))
-      return
-    }
-    const authorizedIdentity = identityFromAuthority(epochContext, frame.identity, remotePeerId, decision, this.effectivePermissionsForGrant(decision))
-    if (method.methodType === 'stream') {
-      await this.handleStreamCall(method, frame, remotePeerId, authorizedIdentity, nowMs, deadlineAtMs, epochContext)
-      return
-    }
-    const abort = new AbortController()
-    const active: ActiveWork = {
-      abort,
-      kind: 'call',
-      settled: false,
-      cleanup: () => clearTimeout(timer)
-    }
-    const timer = setTimeout(() => {
-      void this.timeoutWork(frame.id, active)
-    }, Math.max(1, deadlineAtMs - nowMs))
-    this.active.set(frame.id, active)
+    this.reservedWorkIds.add(frame.id)
+    this.inFlightCallIds.add(frame.id)
     try {
-      const context = this.callContext(frame, method, remotePeerId, authorizedIdentity, abort.signal, nowMs, deadlineAtMs, epochContext)
-      const result = await this.options.registry.dispatch(method, frame.params ?? {}, context)
-      if (this.finishActive(frame.id, active)) await sender.sendFrame({ type: 'result', id: frame.id, result })
-    } catch (error) {
-      if (this.finishActive(frame.id, active)) await sender.sendFrame({ type: 'error', id: frame.id, correlation_id: frame.id, error: redactError(error, this.options.randomId) })
+      const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext)
+      const method = this.options.registry.get(frame.method)
+      if (!method) {
+        await sender.sendFrame(errorFrame(frame.id, 404, 'method not found', 'method_not_found'))
+        return
+      }
+      if (this.authorityRevoked) {
+        await sender.sendFrame(errorFrame(frame.id, 403, 'peer authority revoked', 'peer_authority_revoked'))
+        return
+      }
+      if (!this.acceptingInbound || !this.lease.isActive()) {
+        await sender.sendFrame(errorFrame(frame.id, 425, 'provider is not ready', 'provider_not_ready'))
+        return
+      }
+      const requestBytes = utf8Bytes(JSON.stringify(frame.params ?? {}))
+      const maxBytes = method.maxRequestBytes ?? this.options.maxRequestBytes
+      if (requestBytes > maxBytes) {
+        await sender.sendFrame(errorFrame(frame.id, 413, 'request too large', 'request_too_large'))
+        return
+      }
+      const identity = identityFromAuthority(epochContext, frame.identity, remotePeerId)
+      const nowMs = Math.floor(this.options.clock())
+      const deadlineAtMs = nowMs + (method.timeoutMs ?? this.options.defaultTimeoutMs)
+      const authorizeRequest = {
+        remotePeerId,
+        methodId: method.methodId,
+        requiredPermissions: method.requiredPermissions,
+        identity,
+        nowMs
+      }
+      if (epochContext !== undefined) Object.assign(authorizeRequest, { authenticatedPeerContext: epochContext })
+      const decision = await this.options.authorizationStore.authorize(authorizeRequest)
+      if (!decision.allowed) {
+        await sender.sendFrame(errorFrame(frame.id, 403, 'not authorized', decision.reasonCode ?? 'not_authorized'))
+        return
+      }
+      const authorizedIdentity = identityFromAuthority(epochContext, frame.identity, remotePeerId, decision, this.effectivePermissionsForGrant(decision))
+      if (method.methodType === 'stream') {
+        await this.handleStreamCall(method, frame, remotePeerId, authorizedIdentity, nowMs, deadlineAtMs, epochContext)
+        return
+      }
+      const abort = new AbortController()
+      const active: ActiveWork = {
+        abort,
+        kind: 'call',
+        settled: false,
+        cleanup: () => clearTimeout(timer)
+      }
+      const timer = setTimeout(() => {
+        void this.timeoutWork(frame.id, active)
+      }, Math.max(1, deadlineAtMs - nowMs))
+      this.active.set(frame.id, active)
+      try {
+        const context = this.callContext(frame, method, remotePeerId, authorizedIdentity, abort.signal, nowMs, deadlineAtMs, epochContext)
+        const result = await this.options.registry.dispatch(method, frame.params ?? {}, context)
+        if (this.finishActive(frame.id, active)) await sender.sendFrame({ type: 'result', id: frame.id, result })
+      } catch (error) {
+        if (this.finishActive(frame.id, active)) await sender.sendFrame({ type: 'error', id: frame.id, correlation_id: frame.id, error: redactError(error, this.options.randomId) })
+      } finally {
+        this.finishActive(frame.id, active)
+      }
     } finally {
-      this.finishActive(frame.id, active)
+      this.inFlightCallIds.delete(frame.id)
+      this.reservedWorkIds.delete(frame.id)
     }
   }
 
   async handleSubscribe(frame: SubscribeFrame, remotePeerId: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {
     const sender = this.requireSender()
+    if (this.reservedWorkIds.has(frame.id)) {
+      await sender.sendFrame({
+        type: 'subscribe_rejected',
+        id: frame.id,
+        reason: 'request_in_progress',
+        rejected_topics: frame.topics
+      })
+      return
+    }
+    this.reservedWorkIds.add(frame.id)
+    try {
+      await this.handleReservedSubscribe(frame, remotePeerId, authenticatedPeerContext, sender)
+    } finally {
+      if (!this.active.has(frame.id)) this.reservedWorkIds.delete(frame.id)
+    }
+  }
+
+  private async handleReservedSubscribe(frame: SubscribeFrame, remotePeerId: string, authenticatedPeerContext: AuthenticatedPeerContext | undefined, sender: PeerHostFrameSender): Promise<void> {
     const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext)
     if (this.authorityRevoked) {
       await sender.sendFrame({
@@ -636,6 +669,7 @@ export class WebRtcPeerHost {
     active.settled = true
     active.cleanup(reason)
     this.active.delete(id)
+    if (!this.inFlightCallIds.has(id)) this.reservedWorkIds.delete(id)
     return true
   }
 

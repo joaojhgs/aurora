@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   PeerHostContractRegistry,
@@ -6,6 +6,7 @@ import {
   WebRtcPeerHost,
   generatedPeerHostMethodDescriptor,
   registerGeneratedPeerHostMethod,
+  type CallFrame,
   type LocalPeerGrantV1
 } from '../src/webrtc/index.js'
 
@@ -21,6 +22,34 @@ function peerGrant(allowedMethodIds: readonly string[]): LocalPeerGrantV1 {
     resourceScopes: [],
     createdAtMs: 1,
     grantRevision: 3
+  }
+}
+
+function compatibleAck(manifest: Record<string, unknown>): Record<string, unknown> {
+  const services = (manifest.shared_services as Array<Record<string, unknown>>)
+    .map((service) => String(service.module))
+    .sort()
+  const evidence = manifest.recipient_projection_evidence as Record<string, unknown>
+  return {
+    type: 'manifest_ack',
+    compatible_services: services,
+    incompatible_services: [],
+    unused_services: [],
+    active_protocol: 'projection-v1',
+    active_version: 'v1',
+    active_tier: 'projection',
+    protocol_revision: 'v1',
+    registry_revision: evidence.registry_revision,
+    export_policy_revision: evidence.policy_revision,
+    auth_grant_revision: evidence.auth_grant_revision,
+    projection_digest: evidence.projection_digest,
+    services: services.map((serviceId) => ({
+      service_id: serviceId,
+      service_label: '',
+      status: 'compatible',
+      reason_codes: [],
+      reason: ''
+    }))
   }
 }
 
@@ -65,10 +94,14 @@ describe('generated peer-host registration', () => {
       'Tooling.GetTools',
       async () => { throw new Error('not called') }
     )
+    const ttsHandler = vi.fn(async () => ({
+      voice_id: 'standard:starter:voice',
+      status: 'rejected' as const
+    }))
     registerGeneratedPeerHostMethod(
       registry,
       'TTS.UpdateVoiceProfile',
-      async () => { throw new Error('not called') }
+      ttsHandler
     )
     const peerHost = new WebRtcPeerHost({
       localPeerId: 'local-peer',
@@ -80,7 +113,8 @@ describe('generated peer-host registration', () => {
       clock: () => 1_000,
       randomId: () => 'generated-contract-epoch'
     })
-    peerHost.attach({ sendFrame: async () => undefined })
+    const sent: unknown[] = []
+    peerHost.attach({ sendFrame: async (frame) => { sent.push(frame) } })
 
     const manifest = await peerHost.startEpoch('peer-a')
     const services = manifest.shared_services as Array<Record<string, unknown>>
@@ -125,6 +159,24 @@ describe('generated peer-host registration', () => {
       ]
     }
     expect(peerHost.markManifestAcknowledged(incompleteAck)).toBe(false)
+    await peerHost.handleCall({
+      type: 'call',
+      id: 'tts-incompatible',
+      method: 'TTS.UpdateVoiceProfile',
+      params: {
+        operation_id: 'update-incompatible',
+        voice_id: 'standard:starter:voice',
+        enabled: true
+      },
+      identity: { caller_peer_id: 'peer-a', effective_perms: ['TTS.manage'] }
+    }, 'peer-a')
+    expect(ttsHandler).not.toHaveBeenCalled()
+    expect(sent.at(-1)).toMatchObject({
+      type: 'error',
+      id: 'tts-incompatible',
+      error: { code: 425, reason_code: 'provider_not_ready' }
+    })
+    expect(sent.filter((frame) => (frame as { type?: string }).type === 'provider_lease')).toHaveLength(0)
 
     const completeAck = {
       ...incompleteAck,
@@ -139,5 +191,150 @@ describe('generated peer-host registration', () => {
       }))
     }
     expect(peerHost.markManifestAcknowledged(completeAck)).toBe(true)
+    await peerHost.handleCall({
+      type: 'call',
+      id: 'tts-compatible',
+      method: 'TTS.UpdateVoiceProfile',
+      params: {
+        operation_id: 'update-compatible',
+        voice_id: 'standard:starter:voice',
+        enabled: true
+      },
+      identity: { caller_peer_id: 'peer-a', effective_perms: ['TTS.manage'] }
+    }, 'peer-a')
+    expect(ttsHandler).toHaveBeenCalledTimes(1)
+    expect(sent.at(-1)).toMatchObject({
+      type: 'result',
+      id: 'tts-compatible',
+      result: {
+        voice_id: 'standard:starter:voice',
+        status: 'rejected',
+        idempotent: false
+      }
+    })
+  })
+
+  it('projects only granted TTS methods and rejects forged manage authority pre-dispatch', async () => {
+    const registry = new PeerHostContractRegistry()
+    const synthesisHandler = vi.fn(async () => ({
+      audio_data: '',
+      channels: 1,
+      duration_ms: 0,
+      format: 'wav',
+      sample_rate: 24_000,
+      text: 'hello'
+    }))
+    const manageHandler = vi.fn(async () => ({
+      voice_id: 'standard:starter:voice',
+      status: 'rejected' as const
+    }))
+    registerGeneratedPeerHostMethod(registry, 'TTS.Synthesize', synthesisHandler)
+    registerGeneratedPeerHostMethod(registry, 'TTS.UpdateVoiceProfile', manageHandler)
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry,
+      authorizationStore: new SessionPeerHostAuthorizationStore([
+        peerGrant(['TTS.Synthesize'])
+      ]),
+      clock: () => 1_000,
+      randomId: () => 'tts-use-only-epoch'
+    })
+    const sent: unknown[] = []
+    peerHost.attach({ sendFrame: async (frame) => { sent.push(frame) } })
+
+    const manifest = await peerHost.startEpoch('peer-a')
+    const services = manifest.shared_services as Array<Record<string, unknown>>
+    expect(services).toHaveLength(1)
+    expect(services[0]?.module).toBe('TTS')
+    expect(services[0]?.methods).toEqual([
+      expect.objectContaining({
+        bus_topic: 'TTS.Synthesize',
+        method_type: 'use',
+        required_perms: ['TTS.Synthesize']
+      })
+    ])
+    expect(peerHost.markManifestAcknowledged(compatibleAck(manifest))).toBe(true)
+
+    await peerHost.handleCall({
+      type: 'call',
+      id: 'forged-manage',
+      method: 'TTS.UpdateVoiceProfile',
+      params: {
+        operation_id: 'forged-manage',
+        voice_id: 'standard:starter:voice',
+        enabled: true
+      },
+      identity: { caller_peer_id: 'peer-a', effective_perms: ['TTS.manage'] }
+    }, 'peer-a')
+
+    expect(manageHandler).not.toHaveBeenCalled()
+    expect(synthesisHandler).not.toHaveBeenCalled()
+    expect(sent.at(-1)).toMatchObject({
+      type: 'error',
+      id: 'forged-manage',
+      error: { code: 403 }
+    })
+  })
+
+  it('rejects duplicate active generated TTS call IDs and allows reuse after cleanup', async () => {
+    let notifyStarted!: () => void
+    let releaseHandler!: () => void
+    const started = new Promise<void>((resolve) => { notifyStarted = resolve })
+    const blocked = new Promise<void>((resolve) => { releaseHandler = resolve })
+    const handler = vi.fn(async () => {
+      notifyStarted()
+      await blocked
+      return {
+        voice_id: 'standard:starter:voice',
+        status: 'rejected' as const
+      }
+    })
+    const registry = new PeerHostContractRegistry()
+    registerGeneratedPeerHostMethod(registry, 'TTS.UpdateVoiceProfile', handler)
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry,
+      authorizationStore: new SessionPeerHostAuthorizationStore([
+        peerGrant(['TTS.UpdateVoiceProfile'])
+      ]),
+      clock: () => 1_000,
+      randomId: () => 'tts-idempotency-epoch'
+    })
+    const sent: unknown[] = []
+    peerHost.attach({ sendFrame: async (frame) => { sent.push(frame) } })
+    const manifest = await peerHost.startEpoch('peer-a')
+    expect(peerHost.markManifestAcknowledged(compatibleAck(manifest))).toBe(true)
+    const frame: CallFrame = {
+      type: 'call',
+      id: 'tts-active-call',
+      method: 'TTS.UpdateVoiceProfile',
+      params: {
+        operation_id: 'active-call',
+        voice_id: 'standard:starter:voice',
+        enabled: true
+      },
+      identity: { caller_peer_id: 'peer-a', effective_perms: ['TTS.manage'] }
+    }
+
+    const firstCall = peerHost.handleCall(frame, 'peer-a')
+    await started
+    await peerHost.handleCall(frame, 'peer-a')
+
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(sent.at(-1)).toMatchObject({
+      type: 'error',
+      id: 'tts-active-call',
+      error: { code: 409, reason_code: 'request_in_progress' }
+    })
+
+    releaseHandler()
+    await firstCall
+    expect(sent.at(-1)).toMatchObject({ type: 'result', id: 'tts-active-call' })
+
+    await peerHost.handleCall(frame, 'peer-a')
+    expect(handler).toHaveBeenCalledTimes(2)
+    expect(sent.at(-1)).toMatchObject({ type: 'result', id: 'tts-active-call' })
   })
 })
