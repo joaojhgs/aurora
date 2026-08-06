@@ -34,6 +34,15 @@ from app.shared.config.models import Model as AppConfig
 
 _PREVIEW_TOKEN_TTL_SECONDS = 300
 _MAX_PREVIEW_TOKENS = 128
+_SPEECH_LANGUAGES = {"en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"}
+_VOICE_LANGUAGES = {"auto", *_SPEECH_LANGUAGES}
+_SPEECH_LANGUAGE_RELOAD_SERVICES = [
+    "tts",
+    "stt_transcription",
+    "stt_wakeword",
+    "stt_coordinator",
+    "gateway",
+]
 
 
 class ConfigManager:
@@ -65,6 +74,7 @@ class ConfigManager:
             self._preview_secret = secrets.token_bytes(32)
             self._preview_tokens: dict[str, dict[str, Any]] = {}
             self._migration_warning_emitted = False
+            self._speech_config_warning_emitted = False
             self.mesh_policy_rbac_report: dict[str, Any] | None = None
             self.mesh_policy_rbac_report_path: str | None = None
             self.mesh_policy_legacy_allowlist_evidence: dict[str, Any] | None = None
@@ -312,8 +322,231 @@ class ConfigManager:
         validated = AppConfig.model_validate(config_data)
         defaults = self._to_json_safe(validated.model_dump(exclude_unset=False))
         normalized = self._deep_merge_preserving_unknown(defaults, self._to_json_safe(config_data))
+        self._apply_speech_config_compatibility(normalized, config_data)
+        self._validate_speech_config_shape(normalized)
         self._validate_json_schema(normalized)
         return normalized
+
+    def _apply_speech_config_compatibility(
+        self,
+        normalized: dict[str, Any],
+        source: dict[str, Any],
+    ) -> None:
+        """Populate canonical speech config without persisting legacy migrations."""
+        system = self._ensure_dict(normalized, "system")
+        source_system = source.get("system") if isinstance(source.get("system"), dict) else {}
+
+        services = self._ensure_dict(normalized, "services")
+        source_services = source.get("services") if isinstance(source.get("services"), dict) else {}
+        source_stt = (
+            source_services.get("stt") if isinstance(source_services.get("stt"), dict) else {}
+        )
+        legacy_stt_language = source_stt.get("language") if isinstance(source_stt, dict) else None
+
+        if "primary_language" not in source_system:
+            if legacy_stt_language in _SPEECH_LANGUAGES:
+                system["primary_language"] = legacy_stt_language
+            else:
+                system["primary_language"] = self._env_config_value("system.primary_language", "en")
+        if "voice_language" not in source_system:
+            if legacy_stt_language in _SPEECH_LANGUAGES:
+                system["voice_language"] = legacy_stt_language
+            elif legacy_stt_language == "":
+                system["voice_language"] = "auto"
+            else:
+                system["voice_language"] = self._env_config_value("system.voice_language", "auto")
+
+        tts = self._ensure_dict(services, "tts")
+        source_tts = (
+            source_services.get("tts") if isinstance(source_services.get("tts"), dict) else {}
+        )
+
+        if "provider" not in source_tts:
+            tts["provider"] = self._env_config_value("services.tts.provider", "piper")
+        if "fallback_provider" not in source_tts:
+            tts["fallback_provider"] = self._env_config_value(
+                "services.tts.fallback_provider", None
+            )
+        tts.setdefault("default_voice_id", None)
+
+        providers = self._ensure_dict(tts, "providers")
+        piper = self._ensure_dict(providers, "piper")
+        pockettts = self._ensure_dict(providers, "pockettts")
+        voice_registry = self._ensure_dict(tts, "voice_registry")
+
+        legacy_to_canonical = {
+            "model_file_path": "model_file_path",
+            "model_config_file_path": "model_config_file_path",
+            "model_sample_rate": "model_sample_rate",
+            "piper_path": "executable_path",
+        }
+        piper_defaults = {
+            "model_file_path": "voice_models/en_US-lessac-medium.onnx",
+            "model_config_file_path": "voice_models/en_US-lessac-medium.onnx.txt",
+            "model_sample_rate": 22050,
+            "executable_path": "",
+        }
+        source_piper = (
+            source_tts.get("providers", {}).get("piper", {})
+            if isinstance(source_tts.get("providers"), dict)
+            else {}
+        )
+        if not isinstance(source_piper, dict):
+            source_piper = {}
+        legacy_used = False
+        for legacy_key, canonical_key in legacy_to_canonical.items():
+            if canonical_key in source_piper:
+                continue
+            if legacy_key in source_tts and self._is_value_set(source_tts.get(legacy_key)):
+                piper[canonical_key] = deepcopy(source_tts[legacy_key])
+                legacy_used = True
+            elif (
+                env_value := self._env_config_value(
+                    f"services.tts.providers.piper.{canonical_key}", None
+                )
+            ) is not None:
+                piper[canonical_key] = env_value
+            else:
+                piper.setdefault(canonical_key, piper_defaults[canonical_key])
+
+        if legacy_used and not getattr(self, "_speech_config_warning_emitted", False):
+            log_warning(
+                "deprecated_speech_config_loaded migration_path=services.tts.providers.piper "
+                "source=flat_tts_piper persisted=false"
+            )
+            self._speech_config_warning_emitted = True
+
+        pockettts_defaults = {
+            "quality_tier": "compact",
+            "custom_config_path": None,
+            "cache_dir": "voice_models/pockettts",
+            "voice_state_dir": "voice_models/pockettts/voices",
+            "device": "cpu",
+            "initialization_timeout_s": 120.0,
+            "request_timeout_s": 120.0,
+            "max_concurrent_requests": 1,
+            "preload_model": True,
+            "preload_voice_ids": [],
+            "temperature": None,
+            "lsd_decode_steps": 1,
+            "noise_clamp": None,
+            "eos_threshold": -4.0,
+            "quantize": False,
+        }
+        for key, value in pockettts_defaults.items():
+            pockettts.setdefault(key, deepcopy(value))
+
+        voice_registry_defaults = {
+            "manifest_path": "voice_models/voices.manifest.json",
+            "asset_base_url": None,
+            "cache_dir": "voice_models/voice-pack",
+            "verify_sha256": True,
+            "standard_pack_enabled": True,
+            "cloning_enabled": True,
+            "retain_clone_source": False,
+            "clone_min_duration_s": 6.0,
+            "clone_max_duration_s": 15.0,
+            "clone_max_source_bytes": 20971520,
+            "clone_max_wire_bytes": 2097152,
+            "accepted_import_formats": ["wav", "mp3", "mp4", "m4a", "webm"],
+        }
+        for key, value in voice_registry_defaults.items():
+            voice_registry.setdefault(key, deepcopy(value))
+
+    def _validate_speech_config_shape(self, config_data: dict[str, Any]) -> None:
+        """Reject unknown fields only for the new speech config objects."""
+        allowed_objects = {
+            "services.tts.providers": {"piper", "pockettts"},
+            "services.tts.providers.piper": {
+                "model_file_path",
+                "model_config_file_path",
+                "model_sample_rate",
+                "executable_path",
+            },
+            "services.tts.providers.pockettts": {
+                "quality_tier",
+                "custom_config_path",
+                "cache_dir",
+                "voice_state_dir",
+                "device",
+                "initialization_timeout_s",
+                "request_timeout_s",
+                "max_concurrent_requests",
+                "preload_model",
+                "preload_voice_ids",
+                "temperature",
+                "lsd_decode_steps",
+                "noise_clamp",
+                "eos_threshold",
+                "quantize",
+            },
+            "services.tts.voice_registry": {
+                "manifest_path",
+                "asset_base_url",
+                "cache_dir",
+                "verify_sha256",
+                "standard_pack_enabled",
+                "cloning_enabled",
+                "retain_clone_source",
+                "clone_min_duration_s",
+                "clone_max_duration_s",
+                "clone_max_source_bytes",
+                "clone_max_wire_bytes",
+                "accepted_import_formats",
+            },
+        }
+        for object_path, allowed_keys in allowed_objects.items():
+            value = self._lookup_path(config_data, object_path, None)
+            if value is None:
+                continue
+            if not isinstance(value, dict):
+                raise ValueError(f"{object_path} must be an object")
+            unknown = sorted(set(value) - allowed_keys)
+            if unknown:
+                raise ValueError(
+                    f"Unknown configuration field(s) under {object_path}: {', '.join(unknown)}"
+                )
+
+        primary_language = self._lookup_path(config_data, "system.primary_language", "en")
+        voice_language = self._lookup_path(config_data, "system.voice_language", "auto")
+        if primary_language not in _SPEECH_LANGUAGES:
+            raise ValueError(
+                f"system.primary_language must be one of: {', '.join(sorted(_SPEECH_LANGUAGES))}"
+            )
+        if voice_language not in _VOICE_LANGUAGES:
+            raise ValueError(
+                "system.voice_language must be auto or one of: "
+                f"{', '.join(sorted(_SPEECH_LANGUAGES))}"
+            )
+
+        provider = self._lookup_path(config_data, "services.tts.provider", "piper")
+        fallback_provider = self._lookup_path(config_data, "services.tts.fallback_provider", None)
+        if provider not in {"piper", "pockettts"}:
+            raise ValueError("services.tts.provider must be piper or pockettts")
+        if fallback_provider not in {None, "piper", "pockettts"}:
+            raise ValueError("services.tts.fallback_provider must be null, piper, or pockettts")
+        if fallback_provider == provider:
+            raise ValueError("services.tts.fallback_provider must differ from provider")
+
+    def _ensure_dict(self, parent: dict[str, Any], key: str) -> dict[str, Any]:
+        value = parent.get(key)
+        if not isinstance(value, dict):
+            value = {}
+            parent[key] = value
+        return value
+
+    def _env_config_value(self, config_path: str, default: Any) -> Any:
+        env_info = ENV_CONFIG_MAP.get(config_path)
+        if env_info is None:
+            return default
+        env_var, converter = env_info
+        env_val = os.environ.get(env_var)
+        if env_val is None or env_val == "":
+            return default
+        try:
+            return converter(env_val)
+        except (TypeError, ValueError):
+            return default
 
     def _deep_merge_preserving_unknown(
         self, base: dict[str, Any], overlay: dict[str, Any]
@@ -324,6 +557,8 @@ class ConfigManager:
                 result[key] = deepcopy(value)
             elif isinstance(value, dict) and isinstance(result.get(key), dict):
                 result[key] = self._deep_merge_preserving_unknown(result[key], value)
+            else:
+                result[key] = deepcopy(value)
         return result
 
     def _normalize_change_list(self, changes: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1290,6 +1525,21 @@ class ConfigManager:
         return "default" if default_value is not None else "unset"
 
     def _affected_services_for_key(self, key_path: str) -> list[str]:
+        if key_path in {
+            "system.primary_language",
+            "system.voice_language",
+            "services.stt.language",
+        }:
+            return list(_SPEECH_LANGUAGE_RELOAD_SERVICES)
+        if (
+            key_path == "services.tts"
+            or key_path.startswith("services.tts.provider")
+            or key_path.startswith("services.tts.fallback_provider")
+            or key_path.startswith("services.tts.default_voice_id")
+            or key_path.startswith("services.tts.providers")
+            or key_path.startswith("services.tts.voice_registry")
+        ):
+            return ["tts", "gateway"]
         parts = key_path.split(".")
         if len(parts) >= 2 and parts[0] == "services":
             return [parts[1]]
@@ -1450,13 +1700,19 @@ class ConfigManager:
         JSON Schema validation is advisory (logs warnings for constraint
         violations like patternProperties that Pydantic codegen cannot model).
         """
-        AppConfig.model_validate(config_data)
-        self._validate_json_schema(config_data)
+        validated = AppConfig.model_validate(config_data)
+        defaults = self._to_json_safe(validated.model_dump(exclude_unset=False))
+        normalized = self._deep_merge_preserving_unknown(defaults, self._to_json_safe(config_data))
+        self._apply_speech_config_compatibility(normalized, config_data)
+        self._validate_speech_config_shape(normalized)
+        self._validate_json_schema(normalized)
 
     def _validate_runtime_lifecycle_policy(self, config_data: dict[str, Any]) -> None:
         """Validate runtime lifecycle rules that schema shape cannot express."""
         services = config_data.get("services", {})
         config_service = services.get("config", {})
+        if not isinstance(config_service, dict):
+            return
         if config_service.get("enabled") is False:
             raise ValueError(
                 "services.config.enabled=false is not supported at runtime; "
