@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
+from urllib.parse import urlsplit, urlunsplit
 
 from app.helpers.aurora_logger import log_debug, log_warning
 from app.services.tts.providers.base import (
@@ -326,18 +327,32 @@ def _pockettts_package_version(config: PocketTTSProviderConfig) -> str:
         return config.model_revision
 
 
+def _normalize_config_asset_ref(value: object) -> str:
+    if not isinstance(value, str):
+        raise TTSProviderError("unavailable", "PocketTTS config is unavailable")
+    raw = value.strip()
+    if not raw or "\\" in raw:
+        raise TTSProviderError("unavailable", "PocketTTS config is unavailable")
+    parsed = urlsplit(raw)
+    if parsed.scheme:
+        if parsed.scheme != "hf" or not parsed.netloc or not parsed.path:
+            raise TTSProviderError("unavailable", "PocketTTS config is unavailable")
+        parts = [part for part in parsed.path.split("/") if part not in ("", ".")]
+        if not parts or any(part == ".." for part in parts):
+            raise TTSProviderError("unavailable", "PocketTTS config is unavailable")
+        return urlunsplit(("hf", parsed.netloc, "/" + "/".join(parts), "", ""))
+    if raw.startswith("/") or raw.startswith("~") or (len(raw) >= 3 and raw[1:3] == ":/"):
+        raise TTSProviderError("unavailable", "PocketTTS config is unavailable")
+    parts = [part for part in raw.split("/") if part not in ("", ".")]
+    if not parts or any(part == ".." for part in parts):
+        raise TTSProviderError("unavailable", "PocketTTS config is unavailable")
+    return "/".join(parts)
+
+
 def _normalized_config_asset_refs(raw_refs: Iterable[object]) -> tuple[str, ...]:
     cleaned: set[str] = set()
     for value in raw_refs:
-        if not isinstance(value, str):
-            continue
-        normalized = value.strip().replace("\\", "/")
-        if not normalized:
-            continue
-        parts = [part for part in normalized.split("/") if part not in ("", ".")]
-        if not parts or any(part == ".." for part in parts):
-            continue
-        cleaned.add("/".join(parts))
+        cleaned.add(_normalize_config_asset_ref(value))
     return tuple(sorted(cleaned))
 
 
@@ -719,7 +734,7 @@ def _iter_model_device_values(model: Any) -> Iterable[str]:
 
 def _validate_loaded_model_device(model: Any) -> None:
     devices = tuple(_iter_model_device_values(model))
-    if any(device != "cpu" for device in devices):
+    if not devices or any(device != "cpu" for device in devices):
         raise TTSProviderError("unavailable", "PocketTTS device is unavailable")
 
 
@@ -727,22 +742,25 @@ def _validate_loaded_model_identity(model: Any, config_info: PocketTTSConfigInfo
     """Reject a loaded model that does not look like the selected config."""
     expected = config_info.config_id.lower()
     product_language = config_info.product_language.lower()
-    strict_observed: list[str] = []
+    origin_observed: str | None = None
+    config_observed: list[str] = []
     language_observed: list[str] = []
     origin = getattr(model, "origin", None)
     if origin is not None:
         origin_name = getattr(origin, "name", None)
         if isinstance(origin_name, str):
-            strict_observed.append(Path(origin_name).stem.lower())
+            origin_observed = Path(origin_name).stem.lower()
     model_config = getattr(model, "config", None)
     for attr in ("config_id", "name"):
         value = getattr(model_config, attr, None)
         if isinstance(value, str):
-            strict_observed.append(Path(value).stem.lower())
+            config_observed.append(Path(value).stem.lower())
     language = getattr(model_config, "language", None)
     if isinstance(language, str):
         language_observed.append(language.lower())
-    if strict_observed and expected not in strict_observed:
+    if origin_observed != expected:
+        raise TTSProviderError("unavailable", "PocketTTS config is unavailable")
+    if config_observed and expected not in config_observed:
         raise TTSProviderError("unavailable", "PocketTTS config is unavailable")
     if language_observed and not any(
         value in {expected, product_language} for value in language_observed
@@ -775,6 +793,7 @@ class PocketTTSProvider:
         self._active_requests: set[str] = set()
         self._cancelled_requests: set[str] = set()
         self._stream_wakeups: dict[str, Any] = {}
+        self._stream_futures: set[asyncio.Future[Any]] = set()
         self._last_error: str | None = None
         self._owned_voice_fds: set[int] = {
             voice.artifact_handle.fd for voice in config.voices if voice.artifact_handle.fd >= 0
@@ -816,13 +835,15 @@ class PocketTTSProvider:
                 self._started = True
                 self._stopping = False
                 self._last_error = None
+        except asyncio.CancelledError:
+            async with self._state_lock:
+                self._close_owned_voice_fds_locked()
+            await self._shutdown_executor(wait=False, cancel_futures=True)
+            raise
         except Exception:
             async with self._state_lock:
                 self._close_owned_voice_fds_locked()
-            executor = self._executor
-            self._executor = None
-            if executor is not None:
-                await asyncio.to_thread(executor.shutdown, True, cancel_futures=True)
+            await self._shutdown_executor(wait=True, cancel_futures=True)
             raise
 
     async def reload(self, config: PocketTTSProviderConfig) -> None:
@@ -844,12 +865,23 @@ class PocketTTSProvider:
         try:
             async with self._load_lock:
                 loaded = await self._build_loaded_state(config)
+        except asyncio.CancelledError:
+            async with self._state_lock:
+                self._reloading = False
+                self._close_voice_fds_locked(new_fds)
+            raise
         except TTSProviderError as exc:
             async with self._state_lock:
                 self._last_error = str(exc)
                 self._reloading = False
                 self._close_voice_fds_locked(new_fds)
             raise
+        except Exception as exc:
+            async with self._state_lock:
+                self._last_error = "unavailable"
+                self._reloading = False
+                self._close_voice_fds_locked(new_fds)
+            raise TTSProviderError("unavailable", "PocketTTS reload failed") from exc
         async with self._state_lock:
             self._config = config
             self._loaded = loaded
@@ -869,25 +901,27 @@ class PocketTTSProvider:
             wakeups = list(self._stream_wakeups.values())
         for wakeup in wakeups:
             wakeup()
+        streams_drained = await self._drain_stream_futures(self._stream_drain_timeout_s())
         entry_draining = self._entry_lock.locked()
         if not entry_draining:
             async with self._entry_lock:
                 pass
-        executor = self._executor
-        self._executor = None
-        if executor is not None:
-            await asyncio.to_thread(
-                executor.shutdown,
-                not entry_draining,
-                cancel_futures=True,
-            )
+        await self._shutdown_executor(
+            wait=(not entry_draining and streams_drained),
+            cancel_futures=True,
+        )
         async with self._state_lock:
             self._loaded = None
             self._queued_requests.clear()
             self._active_requests.clear()
             self._cancelled_requests.clear()
+            self._stream_wakeups.clear()
             self._close_owned_voice_fds_locked()
-            self._stopping = False
+            self._stopping = not streams_drained
+            if not streams_drained:
+                self._last_error = "PocketTTS stream did not stop"
+        if not streams_drained:
+            raise TTSProviderError("resource_exhausted", "TTS provider is busy")
 
     async def health(self) -> TTSProviderHealth:
         """Return readiness for the loaded PocketTTS base model."""
@@ -1092,15 +1126,10 @@ class PocketTTSProvider:
             )
             _validate_loaded_model_device(model)
             _validate_loaded_model_identity(model, config_info)
-            raw_sample_rate = getattr(model, "sample_rate", 24000) or 24000
-            if isinstance(raw_sample_rate, bool):
+            raw_sample_rate = getattr(model, "sample_rate", None)
+            if isinstance(raw_sample_rate, bool) or not isinstance(raw_sample_rate, int):
                 raise TTSProviderError("invalid_audio", "PocketTTS sample rate is unavailable")
-            try:
-                sample_rate = int(raw_sample_rate)
-            except (TypeError, ValueError) as exc:
-                raise TTSProviderError(
-                    "invalid_audio", "PocketTTS sample rate is unavailable"
-                ) from exc
+            sample_rate = raw_sample_rate
             if sample_rate != config.expected_sample_rate:
                 raise TTSProviderError("invalid_audio", "PocketTTS sample rate is unavailable")
             voice_states: dict[str, Any] = {}
@@ -1232,6 +1261,7 @@ class PocketTTSProvider:
         loop = asyncio.get_running_loop()
         bridge: asyncio.Queue[tuple[str, Any]] = asyncio.Queue(maxsize=2)
         stop_event = threading.Event()
+        producer_future: asyncio.Future[Any] | None = None
 
         def put_item(item: tuple[str, Any]) -> None:
             while not stop_event.is_set():
@@ -1259,13 +1289,9 @@ class PocketTTSProvider:
                 with contextlib.suppress(RuntimeError):
                     loop.call_soon_threadsafe(self._release_entry_lock)
 
-        producer = threading.Thread(
-            target=produce,
-            name="aurora-pockettts-stream",
-            daemon=True,
-        )
-
         def wake_consumer() -> None:
+            stop_event.set()
+
             def put_cancelled() -> None:
                 if bridge.full():
                     with contextlib.suppress(asyncio.QueueEmpty):
@@ -1282,7 +1308,10 @@ class PocketTTSProvider:
             if request_id is not None:
                 async with self._state_lock:
                     self._stream_wakeups[request_id] = wake_consumer
-            producer.start()
+            producer_future = asyncio.ensure_future(
+                loop.run_in_executor(self._ensure_executor(), produce)
+            )
+            self._track_stream_future(producer_future)
             while True:
                 try:
                     kind, payload = await asyncio.wait_for(bridge.get(), timeout=timeout_s)
@@ -1308,6 +1337,18 @@ class PocketTTSProvider:
             if request_id is not None:
                 async with self._state_lock:
                     self._stream_wakeups.pop(request_id, None)
+            if producer_future is not None:
+                try:
+                    await asyncio.wait_for(
+                        asyncio.shield(producer_future),
+                        timeout=max(0.1, min(timeout_s, 5.0)),
+                    )
+                except TimeoutError:
+                    log_warning("PocketTTS stream producer did not stop before drain timeout")
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    pass
 
     async def _acquire_entry_lock(self, queue_timeout_s: float) -> None:
         try:
@@ -1336,6 +1377,43 @@ class PocketTTSProvider:
                 thread_name_prefix="aurora-pockettts",
             )
         return self._executor
+
+    async def _shutdown_executor(self, *, wait: bool, cancel_futures: bool) -> None:
+        executor = self._executor
+        self._executor = None
+        if executor is not None:
+            await asyncio.to_thread(
+                executor.shutdown,
+                wait,
+                cancel_futures=cancel_futures,
+            )
+
+    def _track_stream_future(self, future: asyncio.Future[Any]) -> None:
+        self._stream_futures.add(future)
+
+        def discard(done: asyncio.Future[Any]) -> None:
+            self._stream_futures.discard(done)
+
+        future.add_done_callback(discard)
+
+    def _stream_drain_timeout_s(self) -> float:
+        loaded = self._loaded
+        timeout = (
+            loaded.config.request_timeout_s
+            if loaded is not None
+            else self._config.request_timeout_s
+        )
+        return max(0.1, min(timeout, 5.0))
+
+    async def _drain_stream_futures(self, timeout_s: float) -> bool:
+        futures = tuple(self._stream_futures)
+        if not futures:
+            return True
+        done, pending = await asyncio.wait(futures, timeout=timeout_s)
+        for future in done:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                future.exception()
+        return not pending
 
     def _discard_owned_voice_fd(self, fd: int) -> None:
         self._owned_voice_fds.discard(fd)

@@ -359,6 +359,26 @@ def test_pockettts_identity_changes_with_config_bytes_and_refs_and_has_no_paths(
     assert "\\" not in base.health_identity
 
 
+def test_pockettts_identity_preserves_hf_uri_authority_and_rejects_unsafe_refs() -> None:
+    first = resolve_pockettts_base_identity_spec(
+        _pockettts_config(config_yaml_bytes=b"model: hf://org/repo/model.safetensors\n")
+    )
+    second = resolve_pockettts_base_identity_spec(
+        _pockettts_config(config_yaml_bytes=b"model: hf://other/repo/model.safetensors\n")
+    )
+
+    assert first.health_identity != second.health_identity
+    for ref in (
+        b"model: hf:/org/repo/model.safetensors\n",
+        b"model: /tmp/model.safetensors\n",
+        b"model: ../model.safetensors\n",
+        b"model: C:/model.safetensors\n",
+    ):
+        with pytest.raises(TTSProviderError) as exc_info:
+            resolve_pockettts_base_identity_spec(_pockettts_config(config_yaml_bytes=ref))
+        assert exc_info.value.code == "unavailable"
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -582,6 +602,137 @@ async def test_pockettts_rejects_loaded_model_config_mismatch_before_voice_impor
     assert _fd_is_closed(fd)
 
 
+@pytest.mark.parametrize(
+    ("missing", "expected_code"),
+    [
+        ("device", "unavailable"),
+        ("origin", "unavailable"),
+        ("sample_rate", "invalid_audio"),
+        ("float_sample_rate", "invalid_audio"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_pockettts_rejects_missing_required_model_metadata(
+    missing: str, expected_code: str
+) -> None:
+    class MissingMetadataModel(FakePocketTTSModel):
+        def __init__(self, language: str) -> None:
+            super().__init__(language)
+            if missing == "device":
+                del self.device
+            elif missing == "origin":
+                del self.origin
+            elif missing == "sample_rate":
+                del self.sample_rate
+            elif missing == "float_sample_rate":
+                self.sample_rate = 24000.0
+
+    voice = _voice_state()
+    fd = voice.artifact_handle.fd
+    provider = PocketTTSProvider(
+        _pockettts_config(voices=(voice,)),
+        model_class=MissingMetadataModel,
+    )
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await provider.start()
+
+    assert exc_info.value.code == expected_code
+    assert FakePocketTTSModel.imported_payloads == []
+    assert _fd_is_closed(fd)
+
+
+@pytest.mark.asyncio
+async def test_pockettts_start_cancellation_closes_fds_and_clears_executor() -> None:
+    class BlockingLoadModel(FakePocketTTSModel):
+        started = threading.Event()
+        release = threading.Event()
+
+        @classmethod
+        def load_model(cls, *, language: str, quantize: bool, **kwargs) -> FakePocketTTSModel:
+            del kwargs
+            cls.load_calls.append({"language": language, "quantize": quantize})
+            cls.started.set()
+            cls.release.wait()
+            return cls(language)
+
+    voice = _voice_state()
+    fd = voice.artifact_handle.fd
+    provider = PocketTTSProvider(
+        _pockettts_config(voices=(voice,), init_timeout_s=5),
+        model_class=BlockingLoadModel,
+    )
+    task = asyncio.create_task(provider.start())
+    await asyncio.to_thread(BlockingLoadModel.started.wait)
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, timeout=1)
+    BlockingLoadModel.release.set()
+    await asyncio.sleep(0.05)
+
+    assert _fd_is_closed(fd)
+    assert provider._executor is None
+
+
+@pytest.mark.asyncio
+async def test_pockettts_reload_cancellation_closes_new_fds_and_keeps_old_state() -> None:
+    class SecondLoadBlockingModel(FakePocketTTSModel):
+        load_count = 0
+        started = threading.Event()
+        release = threading.Event()
+
+        @classmethod
+        def load_model(cls, *, language: str, quantize: bool, **kwargs) -> FakePocketTTSModel:
+            del kwargs
+            cls.load_count += 1
+            cls.load_calls.append({"language": language, "quantize": quantize})
+            if cls.load_count == 2:
+                cls.started.set()
+                cls.release.wait()
+            return cls(language)
+
+    provider = PocketTTSProvider(
+        _pockettts_config(effective_language="en", max_tokens=4),
+        model_class=SecondLoadBlockingModel,
+    )
+    await provider.start()
+    original_health = await provider.health()
+    new_voice = _voice_state(
+        "standard:starter_de:anna",
+        "Anna",
+        effective_language="de",
+        quality_tier="quality",
+    )
+    new_fd = new_voice.artifact_handle.fd
+    reload_task = asyncio.create_task(
+        provider.reload(
+            _pockettts_config(
+                effective_language="de",
+                quality_tier="quality",
+                max_tokens=4,
+                voices=(new_voice,),
+            )
+        )
+    )
+    await asyncio.to_thread(SecondLoadBlockingModel.started.wait)
+
+    reload_task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(reload_task, timeout=1)
+    SecondLoadBlockingModel.release.set()
+    await asyncio.sleep(0.05)
+
+    assert _fd_is_closed(new_fd)
+    health = await provider.health()
+    assert health.ready is True
+    assert health.base_identity == original_health.base_identity
+    assert (await provider.synthesize(TTSSynthesisRequest(text="still works"))).voice == (
+        "standard:starter_en:alba"
+    )
+    await provider.stop()
+
+
 @pytest.mark.asyncio
 async def test_pockettts_preload_false_lazy_loads_once_for_concurrent_requests() -> None:
     provider = PocketTTSProvider(
@@ -726,17 +877,16 @@ async def test_pockettts_stream_cancellation_stops_delivery_without_state_leak()
 
 
 @pytest.mark.asyncio
-async def test_pockettts_stream_cancel_wakes_forever_generator_without_default_thread_leak() -> (
-    None
-):
-    FakePocketTTSModel.forever_stream_after_first = True
+async def test_pockettts_stream_stop_reports_blocked_executor_producer_then_restarts() -> None:
+    release = threading.Event()
+    FakePocketTTSModel.block_stream_after_first = release
     provider = PocketTTSProvider(
         _pockettts_config(
             effective_language="es",
             quality_tier="quality",
             max_tokens=4,
             queue_timeout_s=0.05,
-            request_timeout_s=5,
+            request_timeout_s=0.1,
         ),
         model_class=FakePocketTTSModel,
     )
@@ -744,16 +894,29 @@ async def test_pockettts_stream_cancel_wakes_forever_generator_without_default_t
     stream = provider.stream(TTSSynthesisRequest(text="hola", request_id="stream-forever"))
     first = await asyncio.wait_for(stream.__anext__(), timeout=1)
 
-    await provider.cancel("stream-forever")
-    with pytest.raises(TTSProviderError) as exc_info:
-        await asyncio.wait_for(stream.__anext__(), timeout=0.5)
     with pytest.raises(TTSProviderError) as busy:
         await provider.synthesize(TTSSynthesisRequest(text="blocked"))
-    await asyncio.wait_for(provider.stop(), timeout=0.5)
+    with pytest.raises(TTSProviderError) as stop_error:
+        await asyncio.wait_for(provider.stop(), timeout=1)
+    health = await provider.health()
+    release.set()
+    while provider._stream_futures:
+        await asyncio.sleep(0.01)
+    await stream.aclose()
+    restarted = PocketTTSProvider(
+        _pockettts_config(effective_language="es", quality_tier="quality", max_tokens=4),
+        model_class=FakePocketTTSModel,
+    )
+    await restarted.start()
+    restarted_health = await restarted.health()
+    await restarted.stop()
 
     assert first.audio == b"\x00 "
-    assert exc_info.value.code == "cancelled"
     assert busy.value.code == "resource_exhausted"
+    assert stop_error.value.code == "resource_exhausted"
+    assert health.ready is False
+    assert restarted_health.ready is True
+    assert not any(thread.name == "aurora-pockettts-stream" for thread in threading.enumerate())
 
 
 @pytest.mark.asyncio

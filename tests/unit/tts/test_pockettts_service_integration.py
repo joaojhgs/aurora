@@ -53,6 +53,7 @@ def mock_bus():
     FakeVoiceRegistry.resolved = []
     FakeVoiceRegistry.opened_fds = []
     FakeVoiceRegistry.fail_resolve_for = None
+    FakeVoiceRegistry.cancel_resolve_for = None
     bus = Mock()
     bus.publish = AsyncMock()
     bus.subscribe = Mock()
@@ -233,6 +234,7 @@ class FakeVoiceRegistry:
     resolved: list[str] = []
     opened_fds: list[int] = []
     fail_resolve_for: str | None = None
+    cancel_resolve_for: str | None = None
 
     def __init__(self, root) -> None:
         self.root = root
@@ -242,6 +244,8 @@ class FakeVoiceRegistry:
         return self.entries
 
     async def resolve_voice_state_artifact(self, voice_id: str, identity):
+        if voice_id == self.cancel_resolve_for:
+            raise asyncio.CancelledError()
         if voice_id == self.fail_resolve_for:
             raise RuntimeError("registry storage unavailable")
         self.resolved.append(voice_id)
@@ -445,6 +449,35 @@ async def test_pockettts_partial_resolution_failure_closes_opened_registry_handl
         await TTSService()._build_runtime()
 
     assert exc_info.value.code == "unsupported_voice"
+    assert FakePocketProvider.instances == []
+    assert len(FakeVoiceRegistry.opened_fds) == 1
+    assert _fd_is_closed(FakeVoiceRegistry.opened_fds[0])
+
+
+@pytest.mark.asyncio
+async def test_pockettts_partial_resolution_cancellation_closes_opened_registry_handles(
+    monkeypatch, mock_bus
+) -> None:
+    clone_id = "clone:00000000-0000-4000-8000-000000000001"
+    tts_cfg = Tts(
+        provider="pockettts",
+        default_voice_id="standard:starter_en:alba",
+        providers=Providers(pockettts=Pockettts(preload_voice_ids=[clone_id])),
+    )
+    fake_config = await _fake_config_for(tts_cfg, System(primary_language="en"))
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.PocketTTSProvider", FakePocketProvider)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    FakeVoiceRegistry.entries = (
+        _catalog_entry("standard:starter_en:alba", display_name="Alba"),
+        _catalog_entry(clone_id, display_name="Local", kind="clone"),
+    )
+    FakeVoiceRegistry.cancel_resolve_for = clone_id
+
+    with pytest.raises(asyncio.CancelledError):
+        await TTSService()._build_runtime()
+
     assert FakePocketProvider.instances == []
     assert len(FakeVoiceRegistry.opened_fds) == 1
     assert _fd_is_closed(FakeVoiceRegistry.opened_fds[0])

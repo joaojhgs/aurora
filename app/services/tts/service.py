@@ -352,6 +352,9 @@ class TTSService(BaseService):
         except VoiceRegistryError as exc:
             _close_voice_config_handles(resolved)
             raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable") from exc
+        except asyncio.CancelledError:
+            _close_voice_config_handles(resolved)
+            raise
         except Exception as exc:
             _close_voice_config_handles(resolved)
             raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable") from exc
