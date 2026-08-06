@@ -18,16 +18,21 @@ from dataclasses import dataclass, field
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.messaging import Envelope
-from app.services.tts.playback import create_realtime_piper_stream
+from app.services.tts.playback import create_pcm_playback, create_realtime_piper_stream
 from app.services.tts.providers.base import (
     TTSProvider,
     TTSProviderError,
     TTSSynthesisRequest as ProviderSynthesisRequest,
 )
 from app.services.tts.providers.piper import PiperTTSProvider, PiperVoiceConfig
+from app.services.tts.providers.pockettts import (
+    PocketTTSProvider,
+    PocketTTSProviderConfig,
+    PocketTTSVoiceStateConfig,
+)
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
-from app.shared.config.models import Tts
+from app.shared.config.models import System, Tts
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.tts import (
     TTSAudioChunkEvent,
@@ -51,6 +56,7 @@ from app.shared.messaging.models.tts_models import (
 )
 from app.shared.path_utils import resolve_path
 from app.shared.services.base_service import BaseService
+from app.shared.speech_language_policy import resolve_speech_language_policy
 
 config_api = ConfigAPI()
 _GLOBAL_TTS_STREAM_CLEAR = object()
@@ -190,6 +196,17 @@ class TTSService(BaseService):
                 f"Failed to stop TTS provider after {context}: {cleanup_error}", exc_info=True
             )
 
+    def _stop_playback_stream(self, stream: object | None) -> None:
+        """Stop and close a local playback stream when supported."""
+        if stream is None:
+            return
+        stop = getattr(stream, "stop", None)
+        if callable(stop):
+            stop()
+        close = getattr(stream, "close", None)
+        if callable(close):
+            close()
+
     async def _get_model_paths(self, tts_cfg: Tts | None = None) -> tuple[str, str | None]:
         """Get Piper model paths from canonical config with flat-key compatibility."""
         tts_cfg = tts_cfg or await config_api.aget(ConfigKeys.services.tts, Tts)
@@ -221,9 +238,80 @@ class TTSService(BaseService):
             configured_piper_path = str(venv_piper_path)
         return configured_piper_path or "piper"
 
+    async def _effective_tts_language(self) -> str:
+        """Resolve provider-neutral language policy for language-bound TTS models."""
+        system_cfg = await config_api.aget(ConfigKeys.system, System)
+        if not isinstance(system_cfg, System):
+            system_cfg = System()
+        policy = resolve_speech_language_policy(
+            system_cfg.primary_language,
+            system_cfg.voice_language,
+        )
+        return policy.model_language
+
+    def _pockettts_voice_configs(self, tts_cfg: Tts) -> tuple[PocketTTSVoiceStateConfig, ...]:
+        """Build ready PocketTTS voice states from currently supported local config."""
+        pocket_cfg = tts_cfg.providers.pockettts if tts_cfg.providers else None
+        configured_voice_ids = list(pocket_cfg.preload_voice_ids or ()) if pocket_cfg else []
+        default_voice_id = tts_cfg.default_voice_id or "standard:alba"
+        voice_ids = tuple(dict.fromkeys([default_voice_id, *configured_voice_ids]))
+        unsupported = [voice_id for voice_id in voice_ids if voice_id != "standard:alba"]
+        if unsupported:
+            raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+        return (
+            PocketTTSVoiceStateConfig(
+                voice_id="standard:alba",
+                audio_prompt="alba",
+                display_name="Alba",
+            ),
+        )
+
+    async def _build_pockettts_runtime(self, tts_cfg: Tts) -> tuple[TTSProvider, object, object]:
+        """Build PocketTTS provider plus provider-neutral PCM playback."""
+        pocket_cfg = tts_cfg.providers.pockettts if tts_cfg.providers else None
+        if pocket_cfg is not None and pocket_cfg.custom_config_path:
+            raise TTSProviderError("unsupported_voice", "PocketTTS custom config is unavailable")
+        provider_config = PocketTTSProviderConfig(
+            effective_language=await self._effective_tts_language(),
+            quality_tier=(
+                pocket_cfg.quality_tier if pocket_cfg and pocket_cfg.quality_tier else "compact"
+            ),
+            voices=self._pockettts_voice_configs(tts_cfg),
+            preload=(
+                pocket_cfg.preload_model
+                if pocket_cfg and pocket_cfg.preload_model is not None
+                else True
+            ),
+            quantize=bool(pocket_cfg.quantize) if pocket_cfg else False,
+            device=(pocket_cfg.device if pocket_cfg and pocket_cfg.device else "cpu"),
+            temperature=pocket_cfg.temperature if pocket_cfg else None,
+            lsd_decode_steps=pocket_cfg.lsd_decode_steps if pocket_cfg else None,
+            noise_clamp=pocket_cfg.noise_clamp if pocket_cfg else None,
+            eos_threshold=pocket_cfg.eos_threshold if pocket_cfg else None,
+            request_timeout_s=(
+                pocket_cfg.request_timeout_s
+                if pocket_cfg and pocket_cfg.request_timeout_s is not None
+                else 120.0
+            ),
+            init_timeout_s=(
+                pocket_cfg.initialization_timeout_s
+                if pocket_cfg and pocket_cfg.initialization_timeout_s is not None
+                else 120.0
+            ),
+        )
+        provider = PocketTTSProvider(provider_config)
+        await provider.start()
+        stream = create_pcm_playback(
+            on_audio_stream_start=self._on_audio_start,
+            on_audio_stream_stop=self._on_audio_stop,
+        )
+        return provider, None, stream
+
     async def _build_runtime(self) -> tuple[TTSProvider, object, object]:
         """Build provider plus local playback stream without mutating current state."""
         tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+        if tts_cfg.provider == "pockettts":
+            return await self._build_pockettts_runtime(tts_cfg)
         if tts_cfg.provider not in (None, "piper"):
             raise TTSProviderError("unavailable", "Configured TTS provider is unavailable")
 
@@ -327,7 +415,7 @@ class TTSService(BaseService):
 
         # Stop any ongoing playback
         if hasattr(self, "stream"):
-            self.stream.stop()
+            self._stop_playback_stream(self.stream)
         if self._provider is not None:
             await self._provider.stop()
             self._provider = None
@@ -356,7 +444,7 @@ class TTSService(BaseService):
 
                 await self._clear_tts_streams("config_reloaded")
                 if self._playing and old_stream is not None:
-                    old_stream.stop()
+                    self._stop_playback_stream(old_stream)
                     self._playing = False
                     self._paused = False
                     self._current_text = None
@@ -722,7 +810,7 @@ class TTSService(BaseService):
     async def _play_text(
         self, text: str, request_id: str, *, voice: str | None = None, speed: float = 1.0
     ) -> None:
-        """Play text-to-speech audio using RealtimeTTS.
+        """Play text-to-speech audio using the active local playback runtime.
 
         Args:
             text: Text to speak
@@ -730,6 +818,22 @@ class TTSService(BaseService):
         """
         try:
             await self._ensure_voice_available(voice)
+            if getattr(self.stream, "supports_pcm", False) is True:
+                audio_bytes, sample_rate = await self._synthesize_to_bytes(
+                    text,
+                    request_id=request_id,
+                    voice=voice,
+                    speed=speed,
+                )
+                await self._play_audio_bytes(
+                    audio_bytes,
+                    sample_rate,
+                    request_id=request_id,
+                    text=text,
+                    append=False,
+                )
+                return
+
             self._playing = True
             self._current_text = text
             self._current_request_id = request_id
@@ -758,6 +862,52 @@ class TTSService(BaseService):
             self._current_request_id = None
             raise
 
+    async def _play_audio_bytes(
+        self,
+        audio_bytes: bytes,
+        sample_rate: int,
+        *,
+        request_id: str,
+        text: str,
+        append: bool,
+    ) -> None:
+        """Queue provider-produced PCM bytes for local server playback."""
+        if getattr(self.stream, "supports_pcm", False) is not True:
+            raise RuntimeError("TTS playback does not accept provider audio")
+        was_playing = self._playing
+        previous_text = self._current_text
+        previous_request_id = self._current_request_id
+        previous_paused = self._paused
+        if not append or not self._playing:
+            self._playing = True
+            self._paused = False
+            self._current_text = text
+            self._current_request_id = request_id
+            try:
+                self.stream.play_pcm_async(audio_bytes, sample_rate=sample_rate)
+            except Exception:
+                self._playing = was_playing
+                self._paused = previous_paused
+                self._current_text = previous_text
+                self._current_request_id = previous_request_id
+                raise
+            await self.bus.publish(
+                TTSMethods.STARTED,
+                TTSStarted(request_id=request_id, text=text),
+                event=True,
+                mesh=False,
+                origin="internal",
+            )
+            log_info(f"Playing TTS: {text[:50]}...")
+            return
+
+        self._current_text = f"{self._current_text or ''}{text}"
+        try:
+            self.stream.play_pcm_async(audio_bytes, sample_rate=sample_rate)
+        except Exception:
+            self._current_text = previous_text
+            raise
+
     async def _stop_playback(self, reason: str) -> None:
         """Stop current TTS playback.
 
@@ -768,8 +918,11 @@ class TTSService(BaseService):
             # Capture request_id before clearing state
             request_id = self._current_request_id
 
+            if self._provider is not None and request_id is not None:
+                await self._provider.cancel(request_id)
+
             # Stop audio stream
-            self.stream.stop()
+            self._stop_playback_stream(self.stream)
 
             self._playing = False
             self._paused = False
@@ -981,8 +1134,13 @@ class TTSService(BaseService):
                     correlation_id=correlation_id,
                 )
                 if play_on_server:
-                    await self._play_stream_text(
-                        text, stream_id, voice=stream_epoch.voice, speed=stream_epoch.speed
+                    await self._play_stream_audio(
+                        text,
+                        stream_id,
+                        audio_bytes,
+                        sample_rate,
+                        voice=stream_epoch.voice,
+                        speed=stream_epoch.speed,
                     )
         finally:
             async with self._stream_state_lock:
@@ -990,13 +1148,29 @@ class TTSService(BaseService):
                 if state is not None:
                     state.draining = False
 
-    async def _play_stream_text(
-        self, text: str, stream_id: str, *, voice: str | None = None, speed: float = 1.0
+    async def _play_stream_audio(
+        self,
+        text: str,
+        stream_id: str,
+        audio_bytes: bytes,
+        sample_rate: int,
+        *,
+        voice: str | None = None,
+        speed: float = 1.0,
     ) -> None:
         """Feed streamed text to the local server audio output without restarting playback."""
         if not text.strip():
             return
         await self._ensure_voice_available(voice)
+        if getattr(self.stream, "supports_pcm", False) is True:
+            await self._play_audio_bytes(
+                audio_bytes,
+                sample_rate,
+                request_id=stream_id,
+                text=text,
+                append=True,
+            )
+            return
         if not self._playing:
             self._playing = True
             self._current_text = text
