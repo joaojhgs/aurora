@@ -5,9 +5,16 @@ import type { AuroraEvent } from '../src/types.js'
 import {
   CAP_FRAGMENTATION_V1,
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+  PeerHostContractRegistry,
   PeerProtocolLimits,
+  SessionPeerHostAuthorizationStore,
   WebRtcMeshPeerBridge,
+  WebRtcPeerHost,
   buildProtocolHello,
+  generatedPeerHostEventDescriptor,
+  generatedPeerHostMethodDescriptor,
+  type GeneratedPeerHostEventHandler,
+  type LocalPeerGrantV1,
   type PeerSessionSnapshot
 } from '../src/webrtc/index.js'
 
@@ -90,6 +97,34 @@ async function waitForSentCount(session: FakeAuthorizedSession, count: number): 
   while (session.sent.length < count) {
     if (Date.now() >= deadline) throw new Error(`timed out waiting for ${count} sent frames`)
     await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
+function compatibleManifestAck(manifest: Record<string, unknown>): Record<string, unknown> {
+  const services = (manifest.shared_services as Array<Record<string, unknown>>)
+    .map((service) => String(service.module))
+    .sort()
+  const evidence = manifest.recipient_projection_evidence as Record<string, unknown>
+  return {
+    type: 'manifest_ack',
+    compatible_services: services,
+    incompatible_services: [],
+    unused_services: [],
+    active_protocol: 'projection-v1',
+    active_version: 'v1',
+    active_tier: 'projection',
+    protocol_revision: 'v1',
+    registry_revision: evidence.registry_revision,
+    export_policy_revision: evidence.policy_revision,
+    auth_grant_revision: evidence.auth_grant_revision,
+    projection_digest: evidence.projection_digest,
+    services: services.map((serviceId) => ({
+      service_id: serviceId,
+      service_label: '',
+      status: 'compatible',
+      reason_codes: [],
+      reason: ''
+    }))
   }
 }
 
@@ -422,6 +457,146 @@ describe('WebRtcMeshPeerBridge with MeshP2PTransport and AuroraClient', () => {
       value: { kind: 'tts_audio_chunk', ttsAudio: { final: true } }
     })
     await expect(iterator.next()).resolves.toMatchObject({ done: true })
+  })
+
+  it('reassembles fragmented generated TTS events into one consumer audio chunk', async () => {
+    const fragmentLimits = new PeerProtocolLimits({
+      fragmentPayloadBytes: 1024,
+      maxLogicalBytes: 128 * 1024,
+      maxPeerAggregateBytes: 128 * 1024,
+      incompleteTtlSeconds: 30,
+      maxFragments: 256
+    })
+    const { session: consumerSession, bridge: consumerBridge, client } = makeClient(['sub-fragmented-audio'])
+    consumerSession.emit(buildProtocolHello({
+      role: 'provider',
+      capabilities: [CAP_FRAGMENTATION_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1],
+      limits: fragmentLimits
+    }))
+    const consumerStream = client.events.streamAssistant<Record<string, unknown>, Record<string, unknown>>(
+      { correlation_id: 'corr-fragmented-audio' },
+      { correlationId: 'corr-fragmented-audio', reconnect: false }
+    )
+    const consumerIterator = consumerStream[Symbol.asyncIterator]()
+    const nextAudio = consumerIterator.next()
+    await waitForSentCount(consumerSession, 1)
+    expect(consumerSession.sent[0]).toMatchObject({
+      type: 'subscribe',
+      id: 'sub-fragmented-audio'
+    })
+    consumerSession.emit({
+      type: 'subscribed',
+      id: 'sub-fragmented-audio',
+      subscription_id: 'sub-fragmented-audio',
+      accepted: true,
+      accepted_topics: ['Orchestrator.Response', 'TTS.AudioChunk'],
+      rejected_topics: [],
+      correlation_ids: ['corr-fragmented-audio'],
+      ttl_seconds: 60,
+      reason: null,
+      idempotent: false
+    })
+    await consumerStream.ready
+
+    let providerContext: Parameters<GeneratedPeerHostEventHandler<'TTS.AudioChunk'>>[0] | undefined
+    const providerRegistry = new PeerHostContractRegistry()
+      .register(generatedPeerHostMethodDescriptor('TTS.Synthesize', async () => ({
+        audio_data: '',
+        channels: 1,
+        duration_ms: 0,
+        format: 'wav',
+        sample_rate: 24_000,
+        text: ''
+      })))
+      .registerEvent(generatedPeerHostEventDescriptor('TTS.AudioChunk', (context) => {
+        providerContext = context
+      }))
+    const providerGrant: LocalPeerGrantV1 = {
+      version: 1,
+      grantId: 'fragmented-audio-grant',
+      tokenId: 'fragmented-audio-token',
+      claimantPeerId: 'peer-remote',
+      allowedMethodIds: ['TTS.Synthesize', 'TTS.AudioChunk'],
+      allowedToolContractIds: [],
+      capabilityPackIds: [],
+      resourceScopes: [],
+      createdAtMs: 1,
+      grantRevision: 1
+    }
+    const providerHost = new WebRtcPeerHost({
+      localPeerId: 'local-provider',
+      nodeName: 'Provider',
+      registry: providerRegistry,
+      authorizationStore: new SessionPeerHostAuthorizationStore([providerGrant]),
+      clock: () => 1000,
+      randomId: () => 'provider-epoch'
+    })
+    const providerSession = new FakeAuthorizedSession()
+    const providerBridge = new WebRtcMeshPeerBridge({
+      session: providerSession,
+      remotePeerId: 'peer-remote',
+      localPeerRole: 'provider',
+      peerHost: providerHost,
+      fragmentationThresholdBytes: 256,
+      randomId: () => 'fragmented-audio-message'
+    })
+    providerSession.emit(buildProtocolHello({
+      role: 'consumer',
+      capabilities: [CAP_FRAGMENTATION_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1],
+      limits: fragmentLimits
+    }))
+    const manifest = await providerHost.startEpoch('peer-remote')
+    expect(providerHost.markManifestAcknowledged(compatibleManifestAck(manifest))).toBe(true)
+    await providerHost.handleSubscribe({
+      type: 'subscribe',
+      id: 'provider-fragmented-audio',
+      topics: ['TTS.AudioChunk'],
+      correlation_ids: ['corr-fragmented-audio'],
+      ttl_seconds: 60
+    }, 'peer-remote')
+    expect(providerContext).toBeDefined()
+    providerSession.sent = []
+
+    const audioData = Buffer.from('a'.repeat(4096), 'utf8').toString('base64')
+    const context = providerContext as Parameters<GeneratedPeerHostEventHandler<'TTS.AudioChunk'>>[0]
+    expect(await context.emit({
+      stream_id: 'fragmented-stream',
+      sequence: 0,
+      audio_data: audioData,
+      format: 'pcm_s16le',
+      sample_rate: 24_000,
+      channels: 1,
+      duration_ms: 85,
+      text: 'fragmented speech',
+      source_sequence: 0,
+      is_final: false,
+      reason: null,
+      correlation_id: 'corr-fragmented-audio'
+    })).toBe(true)
+
+    expect(providerSession.sent.length).toBeGreaterThan(1)
+    expect(providerSession.sent.every((frame) => frame.type === 'fragment')).toBe(true)
+    for (const fragment of providerSession.sent) consumerSession.emit(fragment)
+    expect(consumerBridge.getDiagnostics().receivedFragmentCount).toBe(providerSession.sent.length)
+
+    await expect(nextAudio).resolves.toMatchObject({
+      done: false,
+      value: {
+        kind: 'tts.audio_chunk',
+        topic: 'TTS.AudioChunk',
+        payload: {
+          stream_id: 'fragmented-stream',
+          sequence: 0,
+          audio_data: audioData,
+          correlation_id: 'corr-fragmented-audio'
+        }
+      }
+    })
+
+    await consumerIterator.return?.()
+    await providerHost.handleUnsubscribe('provider-fragmented-audio')
+    consumerBridge.close()
+    providerBridge.close()
   })
 
   it('closes a streaming TTS response when its final audio arrives before assistant completion', async () => {
