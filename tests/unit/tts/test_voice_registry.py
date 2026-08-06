@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
+import shutil
 import uuid
 from pathlib import Path
 
@@ -74,6 +76,14 @@ def _asset(
 def _write_manifest(path: Path, manifest: dict[str, object]) -> Path:
     path.write_text(json.dumps(manifest), encoding="utf-8")
     return path
+
+
+def _read_state(registry_root: Path) -> dict[str, object]:
+    return json.loads((registry_root / "voice_registry.json").read_text(encoding="utf-8"))
+
+
+def _write_state(registry_root: Path, state: dict[str, object]) -> None:
+    (registry_root / "voice_registry.json").write_text(json.dumps(state), encoding="utf-8")
 
 
 @pytest.mark.parametrize(
@@ -350,3 +360,284 @@ async def test_atomic_promotion_failure_rolls_back_metadata_and_artifacts(
     assert not artifact_dir.exists() or list(artifact_dir.iterdir()) == []
     tmp_dir = tmp_path / "registry" / ".tmp"
     assert not tmp_dir.exists() or list(tmp_dir.iterdir()) == []
+
+
+@pytest.mark.asyncio
+async def test_multi_asset_pack_verifies_everything_before_first_promotion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    registry = VoiceRegistry(tmp_path / "registry")
+    artifact_root = tmp_path / "pack"
+    artifact_root.joinpath("voices").mkdir(parents=True)
+    good = b"good state"
+    bad = b"bad state"
+    artifact_root.joinpath("voices/good.state").write_bytes(good)
+    artifact_root.joinpath("voices/bad.state").write_bytes(b"tampered")
+    manifest_path = _write_manifest(
+        tmp_path / "manifest.json",
+        _manifest(
+            assets=[
+                _asset(good, voice="alloy", path="voices/good.state"),
+                _asset(bad, voice="verse", path="voices/bad.state", revision="rev-b"),
+            ]
+        ),
+    )
+    promoted: list[tuple[Path, Path]] = []
+    original_replace = os.replace
+
+    def record_replace(src: Path | str, dst: Path | str) -> None:
+        if Path(src).is_dir():
+            promoted.append((Path(src), Path(dst)))
+        original_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", record_replace)
+
+    with pytest.raises(VoiceArtifactError):
+        await registry.install_standard_pack(manifest_path, artifact_root)
+
+    assert promoted == []
+    assert await registry.inventory() == ()
+
+
+@pytest.mark.asyncio
+async def test_partial_multi_asset_promotion_rolls_back_every_promoted_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    registry = VoiceRegistry(tmp_path / "registry")
+    artifact_root = tmp_path / "pack"
+    artifact_root.joinpath("voices").mkdir(parents=True)
+    first = b"first state"
+    second = b"second state"
+    artifact_root.joinpath("voices/first.state").write_bytes(first)
+    artifact_root.joinpath("voices/second.state").write_bytes(second)
+    manifest_path = _write_manifest(
+        tmp_path / "manifest.json",
+        _manifest(
+            assets=[
+                _asset(first, voice="alloy", path="voices/first.state"),
+                _asset(second, voice="verse", path="voices/second.state", revision="rev-b"),
+            ]
+        ),
+    )
+    original_replace = os.replace
+    directory_promotions = 0
+
+    def fail_second_directory_promotion(src: Path | str, dst: Path | str) -> None:
+        nonlocal directory_promotions
+        if Path(src).is_dir() and ".tmp" in Path(src).parts:
+            directory_promotions += 1
+            if directory_promotions == 2:
+                raise OSError("simulated second promotion failure")
+        original_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", fail_second_directory_promotion)
+
+    with pytest.raises(OSError):
+        await registry.install_standard_pack(manifest_path, artifact_root)
+
+    assert await registry.inventory() == ()
+    artifact_dir = tmp_path / "registry" / "artifacts"
+    assert artifact_dir.exists()
+    assert list(artifact_dir.iterdir()) == []
+
+
+@pytest.mark.asyncio
+async def test_persisted_state_rejects_tampered_profile_key_and_artifact_ref(
+    tmp_path: Path,
+) -> None:
+    registry_root = tmp_path / "registry"
+    registry = VoiceRegistry(registry_root)
+    artifact_root = tmp_path / "pack"
+    artifact_root.joinpath("voices").mkdir(parents=True)
+    data = b"state"
+    artifact_root.joinpath("voices/alloy.state").write_bytes(data)
+    manifest_path = _write_manifest(tmp_path / "manifest.json", _manifest(assets=[_asset(data)]))
+    installed = await registry.install_standard_pack(manifest_path, artifact_root)
+    profile_key = installed[0].profile_key
+
+    original_state = _read_state(registry_root)
+    state = json.loads(json.dumps(original_state))
+    profile = state["profiles"][profile_key]
+    state["profiles"] = {"0" * 32: {**profile, "profile_key": "0" * 32}}
+    _write_state(registry_root, state)
+
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(registry_root).inventory()
+
+    state = json.loads(json.dumps(original_state))
+    state["profiles"][profile_key]["artifacts"][0]["relative_ref"] = "../../../outside"
+    _write_state(registry_root, state)
+
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(registry_root).delete_voice("standard:starter_en:alloy")
+    assert not (tmp_path / "outside").exists()
+
+
+@pytest.mark.asyncio
+async def test_state_load_and_selection_verify_artifact_hash_and_size(tmp_path: Path) -> None:
+    registry_root = tmp_path / "registry"
+    registry = VoiceRegistry(registry_root)
+    artifact_root = tmp_path / "pack"
+    artifact_root.joinpath("voices").mkdir(parents=True)
+    data = b"state"
+    artifact_root.joinpath("voices/alloy.state").write_bytes(data)
+    manifest_path = _write_manifest(tmp_path / "manifest.json", _manifest(assets=[_asset(data)]))
+    installed = await registry.install_standard_pack(manifest_path, artifact_root)
+    artifact_path = registry_root / installed[0].artifact_refs[0]
+    artifact_path.write_bytes(b"changed")
+
+    identity = VoiceBaseIdentity("pockettts-python", "en-us-compact", "pockettts-en-compact-v1")
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(registry_root).select_voice("standard:starter_en:alloy", identity)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "protected_name", ["artifacts", ".tmp", "voice_registry.json", ".voice_registry.lock"]
+)
+async def test_registry_rejects_protected_symlink_paths(
+    tmp_path: Path, protected_name: str
+) -> None:
+    root = tmp_path / "registry"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    protected_path = root / protected_name
+    protected_path.symlink_to(outside, target_is_directory=protected_name != "voice_registry.json")
+
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(root).inventory()
+
+
+@pytest.mark.asyncio
+async def test_registry_rejects_symlinked_root(tmp_path: Path) -> None:
+    real_root = tmp_path / "real"
+    real_root.mkdir()
+    linked_root = tmp_path / "linked"
+    linked_root.symlink_to(real_root, target_is_directory=True)
+
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(linked_root).inventory()
+
+
+@pytest.mark.asyncio
+async def test_clone_artifacts_are_bounded_stored_hashed_and_verified(tmp_path: Path) -> None:
+    registry_root = tmp_path / "registry"
+    registry = VoiceRegistry(registry_root, max_clone_artifact_bytes=8)
+
+    with pytest.raises(VoiceArtifactError):
+        await registry.create_clone_profile(
+            display_name="Too Large",
+            runtime_target="pockettts-python",
+            language_bundle="en-us-compact",
+            compatibility_group="pockettts-en-compact-v1",
+            artifact_revision="rev-a",
+            artifact_bytes=b"123456789",
+        )
+
+    created = await registry.create_clone_profile(
+        display_name="Small",
+        runtime_target="pockettts-python",
+        language_bundle="en-us-compact",
+        compatibility_group="pockettts-en-compact-v1",
+        artifact_revision="rev-a",
+        artifact_bytes=b"12345678",
+        clone_uuid=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+    )
+    state = _read_state(registry_root)
+    artifact = state["profiles"][created.profile_key]["artifacts"][0]
+    assert artifact["size_bytes"] == 8
+    assert artifact["sha256"] == _sha256(b"12345678")
+
+    (registry_root / created.artifact_refs[0]).write_bytes(b"87654321")
+    identity = VoiceBaseIdentity("pockettts-python", "en-us-compact", "pockettts-en-compact-v1")
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(registry_root).select_voice(created.voice_id, identity)
+
+
+@pytest.mark.asyncio
+async def test_delete_surfaces_tombstone_delete_failure_and_restart_finishes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    registry_root = tmp_path / "registry"
+    registry = VoiceRegistry(registry_root)
+    clone = await registry.create_clone_profile(
+        display_name="Sensitive",
+        runtime_target="pockettts-python",
+        language_bundle="en-us-compact",
+        compatibility_group="pockettts-en-compact-v1",
+        artifact_revision="rev-a",
+        artifact_bytes=b"private-state",
+        clone_uuid=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+    )
+    original_rmtree = shutil.rmtree
+
+    def fail_tombstone_delete(path: Path | str) -> None:
+        if "tombstones" in Path(path).parts:
+            raise OSError("simulated delete failure")
+        original_rmtree(path)
+
+    monkeypatch.setattr(shutil, "rmtree", fail_tombstone_delete)
+
+    with pytest.raises(OSError):
+        await registry.delete_voice(clone.voice_id)
+
+    state = _read_state(registry_root)
+    assert state["profiles"] == {}
+    assert clone.profile_key in state["deletions"]
+    assert not (registry_root / "artifacts" / clone.profile_key).exists()
+    assert (registry_root / "tombstones" / clone.profile_key).exists()
+
+    monkeypatch.setattr(shutil, "rmtree", original_rmtree)
+    assert await VoiceRegistry(registry_root).inventory() == ()
+    assert not (registry_root / "tombstones" / clone.profile_key).exists()
+    assert _read_state(registry_root)["deletions"] == {}
+
+
+@pytest.mark.asyncio
+async def test_restart_finishes_delete_after_crash_between_quarantine_and_state_commit(
+    tmp_path: Path,
+) -> None:
+    registry_root = tmp_path / "registry"
+    registry = VoiceRegistry(registry_root)
+    clone = await registry.create_clone_profile(
+        display_name="Sensitive",
+        runtime_target="pockettts-python",
+        language_bundle="en-us-compact",
+        compatibility_group="pockettts-en-compact-v1",
+        artifact_revision="rev-a",
+        artifact_bytes=b"private-state",
+        clone_uuid=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+    )
+    artifacts_dir = registry_root / "artifacts" / clone.profile_key
+    tombstone_dir = registry_root / "tombstones" / clone.profile_key
+    os.replace(artifacts_dir, tombstone_dir)
+
+    assert await VoiceRegistry(registry_root).inventory() == ()
+    assert not tombstone_dir.exists()
+    state = _read_state(registry_root)
+    assert state["profiles"] == {}
+    assert state["deletions"] == {}
+
+
+@pytest.mark.asyncio
+async def test_cross_instance_filesystem_lock_prevents_lost_updates(tmp_path: Path) -> None:
+    registry_root = tmp_path / "registry"
+
+    async def create(index: int) -> str:
+        profile = await VoiceRegistry(registry_root).create_clone_profile(
+            display_name=f"Voice {index}",
+            runtime_target="pockettts-python",
+            language_bundle="en-us-compact",
+            compatibility_group="pockettts-en-compact-v1",
+            artifact_revision=f"rev-{index}",
+            artifact_bytes=f"state-{index}".encode("ascii"),
+            clone_uuid=uuid.UUID(f"12345678-1234-4234-9234-{index:012d}"),
+        )
+        return profile.voice_id
+
+    created_ids = await asyncio.gather(*(create(index) for index in range(12)))
+    inventory = await VoiceRegistry(registry_root).inventory()
+
+    assert {entry.voice_id for entry in inventory} == set(created_ids)
+    assert len(inventory) == 12

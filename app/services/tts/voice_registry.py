@@ -8,6 +8,7 @@ It intentionally has no bus, SDK, download, provider, or service wiring.
 from __future__ import annotations
 
 import asyncio
+import errno
 import hashlib
 import json
 import os
@@ -16,9 +17,22 @@ import shutil
 import uuid
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from types import TracebackType
 from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+
+fcntl_module: Any | None
+try:  # pragma: no cover - platform dependent
+    import fcntl as fcntl_module
+except ImportError:  # pragma: no cover - platform dependent
+    fcntl_module = None
+
+msvcrt_module: Any | None
+try:  # pragma: no cover - platform dependent
+    import msvcrt as msvcrt_module
+except ImportError:  # pragma: no cover - platform dependent
+    msvcrt_module = None
 
 LogicalVoiceKind = Literal["standard", "clone"]
 ProfileKind = Literal["standard", "clone"]
@@ -31,9 +45,12 @@ _CLONE_ID_RE = re.compile(
     r"^clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
 )
 _COMPONENT_RE = re.compile(r"^[a-z0-9][a-z0-9_.:+-]{0,95}$")
+_PROFILE_KEY_RE = re.compile(r"^[0-9a-f]{32}$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _MAX_JSON_BYTES = 512 * 1024
 _MAX_ASSETS = 128
+_DEFAULT_MAX_CLONE_ARTIFACT_BYTES = 64 * 1024 * 1024
+_O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 
 
 class VoiceRegistryError(ValueError):
@@ -188,6 +205,27 @@ class VoicePackManifest(BaseModel):
         return self
 
 
+class _PersistedArtifact(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    relative_ref: str
+    size_bytes: int = Field(ge=0, le=512 * 1024 * 1024)
+    sha256: str = Field(min_length=64, max_length=64)
+
+    @field_validator("relative_ref")  # type: ignore[untyped-decorator]
+    @classmethod
+    def _validate_ref(cls, value: str) -> str:
+        _safe_relative_path(value)
+        return value
+
+    @field_validator("sha256")  # type: ignore[untyped-decorator]
+    @classmethod
+    def _validate_sha(cls, value: str) -> str:
+        if not _SHA256_RE.fullmatch(value):
+            raise ValueError("invalid sha256")
+        return value
+
+
 class _PersistedProfile(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
@@ -201,10 +239,23 @@ class _PersistedProfile(BaseModel):
     language_bundle: str
     compatibility_group: str
     artifact_revision: str
-    artifact_refs: tuple[str, ...]
+    artifacts: tuple[_PersistedArtifact, ...]
     source_retained: bool = False
     license_name: str | None = None
     attribution: str | None = None
+
+    @property
+    def artifact_refs(self) -> tuple[str, ...]:
+        """Return metadata-only artifact refs for administrative callers."""
+        return tuple(artifact.relative_ref for artifact in self.artifacts)
+
+
+class _DeletionRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    profile_key: str
+    voice_id: str
+    tombstone_ref: str
 
 
 class _RegistryState(BaseModel):
@@ -212,6 +263,56 @@ class _RegistryState(BaseModel):
 
     schema_version: Literal[1] = 1
     profiles: dict[str, _PersistedProfile] = Field(default_factory=dict)
+    deletions: dict[str, _DeletionRecord] = Field(default_factory=dict)
+
+
+class _FileLock:
+    """Small fail-closed cross-process exclusive lock."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self._fd: int | None = None
+
+    def __enter__(self) -> _FileLock:
+        flags = os.O_RDWR | os.O_CREAT | _O_NOFOLLOW
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        try:
+            self._fd = os.open(self.path, flags, 0o600)
+        except OSError as exc:
+            if exc.errno == errno.ELOOP:
+                raise VoiceArtifactError("registry lock path uses symlink") from exc
+            raise
+        try:
+            if fcntl_module is not None:
+                fcntl_module.flock(self._fd, fcntl_module.LOCK_EX)
+            elif msvcrt_module is not None:  # pragma: no cover - platform dependent
+                msvcrt_module.locking(self._fd, msvcrt_module.LK_LOCK, 1)
+            else:  # pragma: no cover - platform dependent
+                raise VoiceArtifactError("filesystem locking is unavailable")
+        except Exception:
+            os.close(self._fd)
+            self._fd = None
+            raise
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        del exc_type, exc, traceback
+        if self._fd is None:
+            return
+        try:
+            if fcntl_module is not None:
+                fcntl_module.flock(self._fd, fcntl_module.LOCK_UN)
+            elif msvcrt_module is not None:  # pragma: no cover - platform dependent
+                msvcrt_module.locking(self._fd, msvcrt_module.LK_UNLCK, 1)
+        finally:
+            os.close(self._fd)
+            self._fd = None
 
 
 def validate_logical_voice_id(voice_id: str) -> LogicalVoiceKind:
@@ -226,11 +327,21 @@ def validate_logical_voice_id(voice_id: str) -> LogicalVoiceKind:
 class VoiceRegistry:
     """Provider-neutral local registry for standard and cloned TTS voice states."""
 
-    def __init__(self, root: Path | str) -> None:
+    def __init__(
+        self,
+        root: Path | str,
+        *,
+        max_clone_artifact_bytes: int = _DEFAULT_MAX_CLONE_ARTIFACT_BYTES,
+    ) -> None:
+        if max_clone_artifact_bytes < 1:
+            raise VoiceArtifactError("clone artifact limit must be positive")
         self.root = Path(root)
+        self._max_clone_artifact_bytes = max_clone_artifact_bytes
         self._artifacts_dir = self.root / "artifacts"
         self._tmp_dir = self.root / ".tmp"
+        self._tombstones_dir = self.root / "tombstones"
         self._state_path = self.root / "voice_registry.json"
+        self._lock_path = self.root / ".voice_registry.lock"
         self._lock = asyncio.Lock()
 
     async def install_standard_pack(
@@ -239,7 +350,10 @@ class VoiceRegistry:
         """Parse, verify, and atomically promote a standard voice pack manifest."""
         async with self._lock:
             return await asyncio.to_thread(
-                self._install_standard_pack_sync, Path(manifest_path), Path(artifact_root)
+                self._with_fs_lock,
+                self._install_standard_pack_locked,
+                Path(manifest_path),
+                Path(artifact_root),
             )
 
     async def create_clone_profile(
@@ -260,7 +374,8 @@ class VoiceRegistry:
         del source_audio
         async with self._lock:
             return await asyncio.to_thread(
-                self._create_clone_profile_sync,
+                self._with_fs_lock,
+                self._create_clone_profile_locked,
                 display_name,
                 runtime_target,
                 language_bundle,
@@ -281,13 +396,16 @@ class VoiceRegistry:
         """Return the redacted use-safe catalog."""
         async with self._lock:
             return await asyncio.to_thread(
-                self._catalog_sync, resident_base_identity, include_private
+                self._with_fs_lock,
+                self._catalog_locked,
+                resident_base_identity,
+                include_private,
             )
 
     async def inventory(self) -> tuple[VoiceProfileInventoryEntry, ...]:
         """Return administrative profile metadata without artifact payload bytes."""
         async with self._lock:
-            return await asyncio.to_thread(self._inventory_sync)
+            return await asyncio.to_thread(self._with_fs_lock, self._inventory_locked)
 
     async def select_voice(
         self, voice_id: str, resident_base_identity: VoiceBaseIdentity
@@ -295,83 +413,140 @@ class VoiceRegistry:
         """Select a ready voice only when it matches the supplied resident identity."""
         async with self._lock:
             return await asyncio.to_thread(
-                self._select_voice_sync, voice_id, resident_base_identity
+                self._with_fs_lock,
+                self._select_voice_locked,
+                voice_id,
+                resident_base_identity,
             )
 
     async def delete_voice(self, voice_id: str) -> None:
-        """Delete profile metadata and promoted artifacts for a logical voice."""
+        """Quarantine, commit, and delete profile artifacts for a logical voice."""
         async with self._lock:
-            await asyncio.to_thread(self._delete_voice_sync, voice_id)
+            await asyncio.to_thread(self._with_fs_lock, self._delete_voice_locked, voice_id)
 
-    def _install_standard_pack_sync(
+    def _with_fs_lock(self, func, *args):  # type: ignore[no-untyped-def]
+        self._ensure_layout()
+        with _FileLock(self._lock_path):
+            self._ensure_layout()
+            self._finish_pending_deletions()
+            return func(*args)
+
+    def _install_standard_pack_locked(
         self, manifest_path: Path, artifact_root: Path
     ) -> tuple[VoiceProfileInventoryEntry, ...]:
         manifest = _read_manifest(manifest_path)
-        source_root = artifact_root.resolve(strict=True)
+        source_root = _real_directory_root(artifact_root)
         state = self._read_state()
-        installed: list[_PersistedProfile] = []
-        self._ensure_dirs()
+        staged_root = self._tmp_dir / f"install.{uuid.uuid4().hex}"
+        staged_profiles: list[tuple[_PersistedProfile, Path]] = []
+        promoted_dirs: list[Path] = []
 
-        for asset in manifest.assets:
-            source_path = _resolve_safe_child(source_root, asset.relative_path)
-            if not source_path.is_file():
-                raise VoiceArtifactError("artifact missing")
-            _reject_symlink_path(source_root, source_path)
-            _verify_file(source_path, expected_size=asset.size_bytes, expected_sha256=asset.sha256)
-
-            profile_key = _profile_key(
+        profile_keys = {
+            _profile_key(
                 asset.logical_voice_id,
                 asset.runtime_target,
                 asset.language_bundle,
                 asset.compatibility_group,
                 asset.artifact_revision,
             )
-            if profile_key in state.profiles:
-                raise VoiceArtifactError("profile already installed")
-            final_dir = self._artifacts_dir / profile_key
-            if final_dir.exists():
-                raise VoiceArtifactError("artifact destination already exists")
+            for asset in manifest.assets
+        }
+        if len(profile_keys) != len(manifest.assets):
+            raise VoiceArtifactError("manifest contains duplicate profile state")
 
-            staging_dir = self._tmp_dir / f"{profile_key}.{uuid.uuid4().hex}"
-            try:
-                staging_dir.mkdir(parents=True)
-                staged_file = staging_dir / Path(asset.relative_path).name
-                shutil.copyfile(source_path, staged_file)
+        try:
+            staged_root.mkdir(parents=True)
+            for asset in manifest.assets:
+                source_path = _resolve_safe_child(source_root, asset.relative_path)
+                if not source_path.is_file():
+                    raise VoiceArtifactError("artifact missing")
+                _reject_symlink_path(source_root, source_path)
                 _verify_file(
-                    staged_file, expected_size=asset.size_bytes, expected_sha256=asset.sha256
+                    source_path, expected_size=asset.size_bytes, expected_sha256=asset.sha256
                 )
-                _fsync_file(staged_file)
-                os.replace(staging_dir, final_dir)
-            except Exception:
-                shutil.rmtree(staging_dir, ignore_errors=True)
-                raise
-
-            installed.append(
-                _PersistedProfile(
-                    profile_key=profile_key,
-                    voice_id=asset.logical_voice_id,
-                    display_name=asset.display_name,
-                    kind="standard",
-                    visibility="public",
-                    ready_state="ready",
-                    runtime_target=asset.runtime_target,
-                    language_bundle=asset.language_bundle,
-                    compatibility_group=asset.compatibility_group,
-                    artifact_revision=asset.artifact_revision,
-                    artifact_refs=(str(Path("artifacts") / profile_key / staged_file.name),),
-                    source_retained=False,
-                    license_name=asset.license_name,
-                    attribution=asset.attribution,
+                profile_key = _profile_key(
+                    asset.logical_voice_id,
+                    asset.runtime_target,
+                    asset.language_bundle,
+                    asset.compatibility_group,
+                    asset.artifact_revision,
                 )
-            )
+                if profile_key in state.profiles or profile_key in state.deletions:
+                    raise VoiceArtifactError("profile already installed")
+                final_dir = _profile_dir(self._artifacts_dir, profile_key)
+                if final_dir.exists():
+                    raise VoiceArtifactError("artifact destination already exists")
 
-        updated = state.model_copy(
-            update={"profiles": {**state.profiles, **{p.profile_key: p for p in installed}}}
-        )
-        self._write_state(updated)
-        return tuple(_inventory_entry(profile) for profile in installed)
+                profile_stage = staged_root / profile_key
+                profile_stage.mkdir()
+                staged_file = profile_stage / Path(asset.relative_path).name
+                _copy_verified_file(
+                    source_path,
+                    staged_file,
+                    expected_size=asset.size_bytes,
+                    expected_sha256=asset.sha256,
+                )
+                staged_profiles.append(
+                    (
+                        _PersistedProfile(
+                            profile_key=profile_key,
+                            voice_id=asset.logical_voice_id,
+                            display_name=asset.display_name,
+                            kind="standard",
+                            visibility="public",
+                            ready_state="ready",
+                            runtime_target=asset.runtime_target,
+                            language_bundle=asset.language_bundle,
+                            compatibility_group=asset.compatibility_group,
+                            artifact_revision=asset.artifact_revision,
+                            artifacts=(
+                                _PersistedArtifact(
+                                    relative_ref=str(
+                                        PurePosixPath("artifacts") / profile_key / staged_file.name
+                                    ),
+                                    size_bytes=asset.size_bytes,
+                                    sha256=asset.sha256,
+                                ),
+                            ),
+                            source_retained=False,
+                            license_name=asset.license_name,
+                            attribution=asset.attribution,
+                        ),
+                        profile_stage,
+                    )
+                )
 
-    def _create_clone_profile_sync(
+            for profile, staged_dir in staged_profiles:
+                final_dir = _profile_dir(self._artifacts_dir, profile.profile_key)
+                os.replace(staged_dir, final_dir)
+                _fsync_dir(self._artifacts_dir)
+                promoted_dirs.append(final_dir)
+
+            installed = {profile.profile_key: profile for profile, _ in staged_profiles}
+            updated = state.model_copy(update={"profiles": {**state.profiles, **installed}})
+            self._write_state(updated)
+        except Exception:
+            rollback_errors: list[Exception] = []
+            for directory in promoted_dirs:
+                try:
+                    _remove_tree(directory)
+                except Exception as exc:  # pragma: no cover - hard to trigger portably
+                    rollback_errors.append(exc)
+            try:
+                if staged_root.exists():
+                    _remove_tree(staged_root)
+            except Exception as exc:  # pragma: no cover - hard to trigger portably
+                rollback_errors.append(exc)
+            if rollback_errors:
+                raise VoiceArtifactError("artifact rollback failed") from rollback_errors[0]
+            raise
+        finally:
+            if staged_root.exists():
+                _remove_tree(staged_root)
+
+        return tuple(_inventory_entry(profile) for profile, _ in staged_profiles)
+
+    def _create_clone_profile_locked(
         self,
         display_name: str,
         runtime_target: str,
@@ -385,6 +560,8 @@ class VoiceRegistry:
     ) -> VoiceProfileInventoryEntry:
         if not artifact_bytes:
             raise VoiceArtifactError("clone artifact is empty")
+        if len(artifact_bytes) > self._max_clone_artifact_bytes:
+            raise VoiceArtifactError("clone artifact exceeds configured size limit")
         for value in (runtime_target, language_bundle, compatibility_group, artifact_revision):
             if not _COMPONENT_RE.fullmatch(value):
                 raise VoiceArtifactError("invalid clone compatibility component")
@@ -395,44 +572,53 @@ class VoiceRegistry:
         profile_key = _profile_key(
             clone_id, runtime_target, language_bundle, compatibility_group, artifact_revision
         )
-        self._ensure_dirs()
         state = self._read_state()
-        if profile_key in state.profiles:
+        if profile_key in state.profiles or profile_key in state.deletions:
             raise VoiceArtifactError("profile already installed")
 
-        final_dir = self._artifacts_dir / profile_key
+        final_dir = _profile_dir(self._artifacts_dir, profile_key)
         staging_dir = self._tmp_dir / f"{profile_key}.{uuid.uuid4().hex}"
         staged_name = "voice-state.bin"
+        digest = hashlib.sha256(artifact_bytes).hexdigest()
         try:
             staging_dir.mkdir(parents=True)
             staged_file = staging_dir / staged_name
-            staged_file.write_bytes(artifact_bytes)
-            _fsync_file(staged_file)
+            _write_bytes_no_follow(staged_file, artifact_bytes)
+            _verify_file(staged_file, expected_size=len(artifact_bytes), expected_sha256=digest)
             os.replace(staging_dir, final_dir)
+            _fsync_dir(self._artifacts_dir)
+            profile = _PersistedProfile(
+                profile_key=profile_key,
+                voice_id=clone_id,
+                display_name=display_name.strip(),
+                kind="clone",
+                visibility=visibility,
+                ready_state="ready",
+                runtime_target=runtime_target,
+                language_bundle=language_bundle,
+                compatibility_group=compatibility_group,
+                artifact_revision=artifact_revision,
+                artifacts=(
+                    _PersistedArtifact(
+                        relative_ref=str(PurePosixPath("artifacts") / profile_key / staged_name),
+                        size_bytes=len(artifact_bytes),
+                        sha256=digest,
+                    ),
+                ),
+                source_retained=source_retention,
+            )
+            self._write_state(
+                state.model_copy(update={"profiles": {**state.profiles, profile_key: profile}})
+            )
         except Exception:
-            shutil.rmtree(staging_dir, ignore_errors=True)
+            if final_dir.exists():
+                _remove_tree(final_dir)
+            if staging_dir.exists():
+                _remove_tree(staging_dir)
             raise
-
-        profile = _PersistedProfile(
-            profile_key=profile_key,
-            voice_id=clone_id,
-            display_name=display_name.strip(),
-            kind="clone",
-            visibility=visibility,
-            ready_state="ready",
-            runtime_target=runtime_target,
-            language_bundle=language_bundle,
-            compatibility_group=compatibility_group,
-            artifact_revision=artifact_revision,
-            artifact_refs=(str(Path("artifacts") / profile_key / staged_name),),
-            source_retained=source_retention,
-        )
-        self._write_state(
-            state.model_copy(update={"profiles": {**state.profiles, profile_key: profile}})
-        )
         return _inventory_entry(profile)
 
-    def _catalog_sync(
+    def _catalog_locked(
         self,
         resident_base_identity: VoiceBaseIdentity | None,
         include_private: bool,
@@ -458,7 +644,7 @@ class VoiceRegistry:
             )
         return tuple(sorted(entries, key=lambda entry: (entry.voice_id, entry.language_bundle)))
 
-    def _inventory_sync(self) -> tuple[VoiceProfileInventoryEntry, ...]:
+    def _inventory_locked(self) -> tuple[VoiceProfileInventoryEntry, ...]:
         return tuple(
             sorted(
                 (_inventory_entry(profile) for profile in self._read_state().profiles.values()),
@@ -466,7 +652,7 @@ class VoiceRegistry:
             )
         )
 
-    def _select_voice_sync(
+    def _select_voice_locked(
         self, voice_id: str, resident_base_identity: VoiceBaseIdentity
     ) -> VoiceProfileInventoryEntry:
         validate_logical_voice_id(voice_id)
@@ -483,56 +669,201 @@ class VoiceRegistry:
             matches.sort(key=lambda profile: profile.artifact_revision, reverse=True)
         return _inventory_entry(matches[0])
 
-    def _delete_voice_sync(self, voice_id: str) -> None:
+    def _delete_voice_locked(self, voice_id: str) -> None:
         validate_logical_voice_id(voice_id)
         state = self._read_state()
         removed = [profile for profile in state.profiles.values() if profile.voice_id == voice_id]
         if not removed:
             return
-        remaining = {
-            key: profile for key, profile in state.profiles.items() if profile.voice_id != voice_id
-        }
-        self._write_state(state.model_copy(update={"profiles": remaining}))
-        for profile in removed:
-            shutil.rmtree(self._artifacts_dir / profile.profile_key, ignore_errors=True)
 
-    def _ensure_dirs(self) -> None:
+        deletions = dict(state.deletions)
+        remaining = dict(state.profiles)
+        for profile in removed:
+            profile_key = _expected_profile_key(profile)
+            source_dir = _profile_dir(self._artifacts_dir, profile_key)
+            tombstone_dir = _profile_dir(self._tombstones_dir, profile_key)
+            if tombstone_dir.exists():
+                raise VoiceArtifactError("profile deletion is already pending")
+            if source_dir.exists():
+                os.replace(source_dir, tombstone_dir)
+                _fsync_dir(self._artifacts_dir)
+                _fsync_dir(self._tombstones_dir)
+            deletions[profile_key] = _DeletionRecord(
+                profile_key=profile_key,
+                voice_id=profile.voice_id,
+                tombstone_ref=str(PurePosixPath("tombstones") / profile_key),
+            )
+            remaining.pop(profile_key, None)
+
+        self._write_state(state.model_copy(update={"profiles": remaining, "deletions": deletions}))
+        self._finish_pending_deletions()
+
+    def _ensure_layout(self) -> None:
+        _reject_symlink_ancestors(self.root)
+        if self.root.exists() and self.root.is_symlink():
+            raise VoiceArtifactError("registry root path uses symlink")
         self.root.mkdir(parents=True, exist_ok=True)
-        self._artifacts_dir.mkdir(parents=True, exist_ok=True)
-        self._tmp_dir.mkdir(parents=True, exist_ok=True)
+        self._real_root()
+        for directory in (self._artifacts_dir, self._tmp_dir, self._tombstones_dir):
+            if directory.exists() and directory.is_symlink():
+                raise VoiceArtifactError("registry protected path uses symlink")
+            directory.mkdir(parents=True, exist_ok=True)
+            _ensure_within_root(directory.resolve(strict=True), self._real_root())
+        for path in (self._state_path, self._lock_path):
+            if path.exists() and path.is_symlink():
+                raise VoiceArtifactError("registry protected file uses symlink")
+            _ensure_within_root(path.parent.resolve(strict=True), self._real_root())
 
     def _read_state(self) -> _RegistryState:
+        self._ensure_layout()
         if not self._state_path.exists():
             return _RegistryState()
+        if self._state_path.is_symlink():
+            raise VoiceArtifactError("registry state path uses symlink")
         if self._state_path.stat().st_size > _MAX_JSON_BYTES:
             raise VoiceArtifactError("registry state is too large")
         try:
-            return cast(
+            state = cast(
                 _RegistryState,
-                _RegistryState.model_validate_json(self._state_path.read_text(encoding="utf-8")),
+                _RegistryState.model_validate_json(_read_text_no_follow(self._state_path)),
             )
         except (OSError, ValidationError, ValueError) as exc:
             raise VoiceArtifactError("registry state is invalid") from exc
+        self._validate_state(state)
+        return state
 
     def _write_state(self, state: _RegistryState) -> None:
-        self._ensure_dirs()
+        self._validate_state(state, require_artifacts=False)
         payload = state.model_dump_json(indent=2).encode("utf-8")
         if len(payload) > _MAX_JSON_BYTES:
             raise VoiceArtifactError("registry state is too large")
         tmp_path = self._tmp_dir / f"voice-registry.{uuid.uuid4().hex}.json"
-        tmp_path.write_bytes(payload)
-        _fsync_file(tmp_path)
+        _write_bytes_no_follow(tmp_path, payload)
         os.replace(tmp_path, self._state_path)
+        _fsync_dir(self.root)
+
+    def _validate_state(self, state: _RegistryState, *, require_artifacts: bool = True) -> None:
+        seen_refs: set[str] = set()
+        for key, profile in state.profiles.items():
+            if key != profile.profile_key:
+                raise VoiceArtifactError("registry state profile key mismatch")
+            profile_key = _expected_profile_key(profile)
+            if key != profile_key:
+                raise VoiceArtifactError("registry state profile key is invalid")
+            validate_logical_voice_id(profile.voice_id)
+            for value in (
+                profile.runtime_target,
+                profile.language_bundle,
+                profile.compatibility_group,
+                profile.artifact_revision,
+            ):
+                if not _COMPONENT_RE.fullmatch(value):
+                    raise VoiceArtifactError("registry state profile component is invalid")
+            if not profile.artifacts:
+                raise VoiceArtifactError("registry state profile has no artifacts")
+            for artifact in profile.artifacts:
+                artifact_path = self._resolve_registry_ref(
+                    artifact.relative_ref, must_exist=require_artifacts
+                )
+                if profile_key not in artifact_path.parts:
+                    raise VoiceArtifactError("registry artifact ref does not match profile")
+                if artifact.relative_ref in seen_refs:
+                    raise VoiceArtifactError("registry artifact ref is duplicated")
+                seen_refs.add(artifact.relative_ref)
+                if require_artifacts:
+                    _reject_symlink_path(self._real_root(), artifact_path)
+                    _verify_file(
+                        artifact_path,
+                        expected_size=artifact.size_bytes,
+                        expected_sha256=artifact.sha256,
+                    )
+        for key, record in state.deletions.items():
+            if key != record.profile_key or not _PROFILE_KEY_RE.fullmatch(record.profile_key):
+                raise VoiceArtifactError("registry deletion record is invalid")
+            validate_logical_voice_id(record.voice_id)
+            tombstone_path = self._resolve_registry_ref(record.tombstone_ref, must_exist=False)
+            expected = _profile_dir(self._tombstones_dir, record.profile_key)
+            if tombstone_path != expected:
+                raise VoiceArtifactError("registry deletion tombstone path is invalid")
+
+    def _resolve_registry_ref(self, relative_ref: str, *, must_exist: bool = True) -> Path:
+        _safe_relative_path(relative_ref)
+        root = self._real_root()
+        candidate = root / relative_ref
+        if must_exist:
+            resolved = candidate.resolve(strict=True)
+        else:
+            resolved = root.joinpath(*PurePosixPath(relative_ref).parts)
+        _ensure_within_root(resolved, root)
+        return resolved
+
+    def _finish_pending_deletions(self) -> None:
+        state = self._read_state_without_recovery()
+        remaining_profiles = dict(state.profiles)
+        remaining_deletions = dict(state.deletions)
+        discovered = False
+        for tombstone_path in self._tombstones_dir.iterdir():
+            if not tombstone_path.is_dir():
+                raise VoiceArtifactError("invalid deletion tombstone entry")
+            profile_key = tombstone_path.name
+            if not _PROFILE_KEY_RE.fullmatch(profile_key):
+                raise VoiceArtifactError("invalid deletion tombstone entry")
+            if profile_key not in remaining_deletions:
+                profile = remaining_profiles.pop(profile_key, None)
+                if profile is None:
+                    _remove_tree(tombstone_path)
+                    _fsync_dir(self._tombstones_dir)
+                    continue
+                remaining_deletions[profile_key] = _DeletionRecord(
+                    profile_key=profile_key,
+                    voice_id=profile.voice_id,
+                    tombstone_ref=str(PurePosixPath("tombstones") / profile_key),
+                )
+                discovered = True
+
+        if discovered:
+            state = state.model_copy(
+                update={"profiles": remaining_profiles, "deletions": remaining_deletions}
+            )
+            self._write_state(state)
+
+        if not state.deletions:
+            return
+        remaining = dict(state.deletions)
+        for key, record in state.deletions.items():
+            tombstone_path = self._resolve_registry_ref(record.tombstone_ref, must_exist=False)
+            if tombstone_path.exists():
+                _remove_tree(tombstone_path)
+                _fsync_dir(self._tombstones_dir)
+            remaining.pop(key, None)
+        self._write_state(state.model_copy(update={"deletions": remaining}))
+
+    def _read_state_without_recovery(self) -> _RegistryState:
+        if not self._state_path.exists():
+            return _RegistryState()
+        if self._state_path.is_symlink():
+            raise VoiceArtifactError("registry state path uses symlink")
+        if self._state_path.stat().st_size > _MAX_JSON_BYTES:
+            raise VoiceArtifactError("registry state is too large")
+        try:
+            state = cast(
+                _RegistryState,
+                _RegistryState.model_validate_json(_read_text_no_follow(self._state_path)),
+            )
+        except (OSError, ValidationError, ValueError) as exc:
+            raise VoiceArtifactError("registry state is invalid") from exc
+        self._validate_state(state, require_artifacts=False)
+        return state
+
+    def _real_root(self) -> Path:
+        return self.root.resolve(strict=True)
 
 
 def _read_manifest(path: Path) -> VoicePackManifest:
     try:
         if path.stat().st_size > _MAX_JSON_BYTES:
             raise VoiceManifestError("manifest is too large")
-        return cast(
-            VoicePackManifest,
-            VoicePackManifest.model_validate_json(path.read_text(encoding="utf-8")),
-        )
+        return cast(VoicePackManifest, VoicePackManifest.model_validate_json(path.read_text()))
     except VoiceManifestError:
         raise
     except (OSError, ValidationError, ValueError) as exc:
@@ -548,36 +879,122 @@ def _safe_relative_path(value: str) -> PurePosixPath:
     return candidate
 
 
+def _real_directory_root(path: Path) -> Path:
+    if path.exists() and path.is_symlink():
+        raise VoiceArtifactError("artifact root path uses symlink")
+    root = path.resolve(strict=True)
+    if not root.is_dir():
+        raise VoiceArtifactError("artifact root is not a directory")
+    _reject_symlink_ancestors(path)
+    return root
+
+
 def _resolve_safe_child(root: Path, relative_path: str) -> Path:
     _safe_relative_path(relative_path)
-    candidate = (root / relative_path).resolve(strict=True)
-    if not _is_relative_to(candidate, root):
+    candidate = root / relative_path
+    resolved = candidate.resolve(strict=True)
+    if not _is_relative_to(resolved, root):
         raise VoiceArtifactError("artifact path escapes root")
-    return candidate
+    return resolved
 
 
 def _reject_symlink_path(root: Path, path: Path) -> None:
     current = root
+    if current.is_symlink():
+        raise VoiceArtifactError("path uses symlink")
     for part in path.relative_to(root).parts:
         current = current / part
         if current.is_symlink():
-            raise VoiceArtifactError("artifact path uses symlink")
+            raise VoiceArtifactError("path uses symlink")
+
+
+def _reject_symlink_ancestors(path: Path) -> None:
+    current = path if path.exists() else path.parent
+    checked: list[Path] = []
+    while current != current.parent:
+        checked.append(current)
+        current = current.parent
+    for candidate in reversed(checked):
+        if candidate.exists() and candidate.is_symlink():
+            raise VoiceArtifactError("path uses symlink")
 
 
 def _verify_file(path: Path, *, expected_size: int, expected_sha256: str) -> None:
     digest = hashlib.sha256()
     size = 0
-    with path.open("rb") as handle:
-        while True:
-            chunk = handle.read(1024 * 1024)
-            if not chunk:
-                break
-            size += len(chunk)
-            digest.update(chunk)
+    fd = _open_no_follow_read(path)
+    try:
+        with os.fdopen(fd, "rb") as handle:
+            fd = -1
+            while True:
+                chunk = handle.read(1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                digest.update(chunk)
+    finally:
+        if fd >= 0:
+            os.close(fd)
     if size != expected_size:
         raise VoiceArtifactError("artifact size mismatch")
     if digest.hexdigest() != expected_sha256:
         raise VoiceArtifactError("artifact hash mismatch")
+
+
+def _copy_verified_file(
+    source: Path, target: Path, *, expected_size: int, expected_sha256: str
+) -> None:
+    source_fd = _open_no_follow_read(source)
+    try:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _O_NOFOLLOW
+        target_fd = os.open(target, flags, 0o600)
+        try:
+            digest = hashlib.sha256()
+            size = 0
+            while True:
+                chunk = os.read(source_fd, 1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                digest.update(chunk)
+                os.write(target_fd, chunk)
+            if size != expected_size or digest.hexdigest() != expected_sha256:
+                raise VoiceArtifactError("artifact verification changed during copy")
+            os.fsync(target_fd)
+        finally:
+            os.close(target_fd)
+    finally:
+        os.close(source_fd)
+
+
+def _write_bytes_no_follow(path: Path, payload: bytes) -> None:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _O_NOFOLLOW
+    fd = os.open(path, flags, 0o600)
+    try:
+        os.write(fd, payload)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _read_text_no_follow(path: Path) -> str:
+    fd = _open_no_follow_read(path)
+    try:
+        with os.fdopen(fd, "r", encoding="utf-8") as handle:
+            fd = -1
+            return handle.read()
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
+def _open_no_follow_read(path: Path) -> int:
+    try:
+        return os.open(path, os.O_RDONLY | _O_NOFOLLOW)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise VoiceArtifactError("path uses symlink") from exc
+        raise
 
 
 def _profile_key(
@@ -594,6 +1011,25 @@ def _profile_key(
         ).encode("utf-8")
     ).hexdigest()
     return digest[:32]
+
+
+def _expected_profile_key(profile: _PersistedProfile) -> str:
+    expected = _profile_key(
+        profile.voice_id,
+        profile.runtime_target,
+        profile.language_bundle,
+        profile.compatibility_group,
+        profile.artifact_revision,
+    )
+    if profile.profile_key != expected or not _PROFILE_KEY_RE.fullmatch(profile.profile_key):
+        raise VoiceArtifactError("registry state profile key is invalid")
+    return expected
+
+
+def _profile_dir(parent: Path, profile_key: str) -> Path:
+    if not _PROFILE_KEY_RE.fullmatch(profile_key):
+        raise VoiceArtifactError("profile key is invalid")
+    return parent / profile_key
 
 
 def _profile_matches(profile: _PersistedProfile, identity: VoiceBaseIdentity) -> bool:
@@ -623,12 +1059,23 @@ def _inventory_entry(profile: _PersistedProfile) -> VoiceProfileInventoryEntry:
     )
 
 
-def _fsync_file(path: Path) -> None:
+def _remove_tree(path: Path) -> None:
+    if path.is_symlink():
+        raise VoiceArtifactError("refusing to delete symlink")
+    shutil.rmtree(path)
+
+
+def _fsync_dir(path: Path) -> None:
     fd = os.open(path, os.O_RDONLY)
     try:
         os.fsync(fd)
     finally:
         os.close(fd)
+
+
+def _ensure_within_root(path: Path, root: Path) -> None:
+    if not _is_relative_to(path, root):
+        raise VoiceArtifactError("path escapes registry root")
 
 
 def _is_relative_to(path: Path, root: Path) -> bool:
