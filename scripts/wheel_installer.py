@@ -357,16 +357,13 @@ class WheelInstaller:
         install_needed = not triplet_matches
 
         if not triplet_matches or incompatible:
-            cleanup_targets.update(
-                package for package in PYTORCH_TRIPLET if package in installed
-            )
+            cleanup_targets.update(package for package in PYTORCH_TRIPLET if package in installed)
             cleanup_targets.update(incompatible)
             if not triplet_matches:
                 cleanup_targets.update(
                     package
                     for package in installed
-                    if package.startswith("nvidia-")
-                    or package in {"triton", "pytorch-triton-rocm"}
+                    if package.startswith("nvidia-") or package in {"triton", "pytorch-triton-rocm"}
                 )
             install_needed = True
 
@@ -380,8 +377,7 @@ class WheelInstaller:
 
         if hardware != "cuda":
             ort_repair_needed = (
-                "onnxruntime-gpu" in installed
-                or installed.get("onnxruntime") != "1.20.1"
+                "onnxruntime-gpu" in installed or installed.get("onnxruntime") != "1.20.1"
             )
             if ort_repair_needed:
                 if "onnxruntime-gpu" in installed:
@@ -439,15 +435,11 @@ class WheelInstaller:
         if hardware == "rocm":
             if "triton" in installed:
                 incompatible.update(
-                    package
-                    for package in ("triton", "pytorch-triton-rocm")
-                    if package in installed
+                    package for package in ("triton", "pytorch-triton-rocm") if package in installed
                 )
         elif hardware != "cuda":
             incompatible.update(
-                package
-                for package in ("triton", "pytorch-triton-rocm")
-                if package in installed
+                package for package in ("triton", "pytorch-triton-rocm") if package in installed
             )
         elif "pytorch-triton-rocm" in installed:
             incompatible.add("pytorch-triton-rocm")
