@@ -5,6 +5,7 @@ import type { AuthenticatedPeerContext, PeerRevocationBroadcaster } from './auth
 
 export type PeerHostMethodType = 'unary' | 'stream' | 'event'
 export type PeerHostProjectionMethodType = 'use' | 'manage'
+export type PeerHostMethodExposure = 'internal' | 'external' | 'both'
 
 export interface PeerHostIdentity {
   readonly callerPeerId: string
@@ -52,13 +53,25 @@ export interface PeerHostErrorBody {
 
 export interface PeerHostMethodDescriptor<TInput = unknown, TOutput = unknown> {
   readonly methodId: string
+  readonly module?: string
+  readonly name?: string
+  readonly summary?: string
+  readonly busTopic?: string
+  readonly exposure?: PeerHostMethodExposure
   readonly methodType: PeerHostMethodType
   readonly projectionMethodType?: PeerHostProjectionMethodType
   readonly inputSchemaId: string
   readonly outputSchemaId: string
+  readonly inputModel?: string
+  readonly outputModel?: string
   readonly inputSchema: z.ZodType<TInput>
   readonly outputSchema: z.ZodType<TOutput>
   readonly requiredPermissions: readonly string[]
+  readonly callableFeatureIds?: readonly string[]
+  readonly speechConstraints?: JsonObject | null
+  readonly serviceCapabilities?: readonly string[]
+  readonly serviceVersion?: string
+  readonly maxConcurrent?: number
   readonly maxRequestBytes?: number
   readonly timeoutMs?: number
   readonly handler: (input: TInput, context: PeerHostCallContext) => Promise<TOutput> | TOutput

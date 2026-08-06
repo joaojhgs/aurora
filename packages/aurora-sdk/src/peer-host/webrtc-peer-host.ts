@@ -223,14 +223,11 @@ export class WebRtcPeerHost {
     const authority = await this.manifestAuthoritySnapshot(remotePeerId, epochContext, nowMs)
     const grantedMethodIds = new Set(authority.grantedMethodIds)
     const registryMethods = this.options.registry.list()
-    const registryDigest = digest({ services: [manifestService(registryMethods.map((method) => manifestMethod(method)).sort((left, right) => String(left.bus_topic).localeCompare(String(right.bus_topic))))] })
+    const registryDigest = digest({ services: manifestServices(registryMethods) })
     const registryRevision = registryDigest
     const policyDigest = digest({ recipient_peer_id: authority.recipientPeerId ?? '', granted_method_ids: sortedUnique(authority.grantedMethodIds) })
     const policyRevision = policyDigest
-    const methods = registryMethods
-      .filter((method) => grantedMethodIds.has(method.methodId))
-      .map((method) => manifestMethod(method))
-      .sort((left, right) => String(left.bus_topic).localeCompare(String(right.bus_topic)))
+    const methods = registryMethods.filter((method) => grantedMethodIds.has(method.methodId))
     const projectionReady = authority.authGrantState === 'active'
       && authority.authGrantRevision >= 1
       && typeof authority.recipientPeerId === 'string'
@@ -262,8 +259,7 @@ export class WebRtcPeerHost {
       ),
       ...(authority.grantedPermissions ?? [])
     ])
-    const service = methods.length > 0 ? manifestService(methods) : null
-    const sharedServices = service ? [service] : []
+    const sharedServices = manifestServices(methods)
     const projectionDigest = digest({
       provider_peer_id: this.options.localPeerId,
       services: sharedServices.map((item) => withoutDigest(item))
@@ -294,7 +290,9 @@ export class WebRtcPeerHost {
       grants
     }
     evidence.evidence_digest = digest(evidence)
-    const requiredServices = sharedServices.length > 0 ? ['Tooling'] : []
+    const requiredServices = sharedServices
+      .map((service) => service.module)
+      .filter((module): module is string => typeof module === 'string')
     this.pendingManifest = {
       projectionDigest,
       registryRevision,
@@ -712,36 +710,81 @@ function identityFromAuthority(context: AuthenticatedPeerContext | undefined, fr
   }
 }
 
-function manifestService(methods: Array<Record<string, unknown>>): Record<string, unknown> {
+function manifestServices(methods: readonly PeerHostMethodDescriptor[]): Array<Record<string, unknown>> {
+  const byModule = new Map<string, PeerHostMethodDescriptor[]>()
+  for (const method of methods) {
+    const module = methodModule(method)
+    const group = byModule.get(module) ?? []
+    group.push(method)
+    byModule.set(module, group)
+  }
+  return [...byModule.entries()]
+    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+    .map(([module, serviceMethods]) => manifestService(module, serviceMethods))
+}
+
+function manifestService(
+  module: string,
+  descriptors: readonly PeerHostMethodDescriptor[]
+): Record<string, unknown> {
+  const methods = descriptors
+    .map((method) => manifestMethod(method))
+    .sort((left, right) => String(left.bus_topic).localeCompare(String(right.bus_topic)))
+  const declaredCapabilities = sortedUnique(
+    descriptors.flatMap((method) => method.serviceCapabilities ?? [])
+  )
+  const capabilities = declaredCapabilities.length > 0
+    ? declaredCapabilities
+    : module === 'Tooling'
+      ? [...TOOLING_PROVIDER_CAPABILITIES]
+      : []
+  const versions = sortedUnique(
+    descriptors
+      .map((method) => method.serviceVersion)
+      .filter((version): version is string => typeof version === 'string' && version.length > 0)
+  )
+  const concurrencyLimits = descriptors
+    .map((method) => method.maxConcurrent)
+    .filter((value): value is number => typeof value === 'number' && Number.isInteger(value) && value > 0)
   const service = {
-    module: 'Tooling',
-    version: '0.0.0',
-    capabilities: [...TOOLING_PROVIDER_CAPABILITIES],
+    module,
+    version: versions[0] ?? '0.0.0',
+    capabilities,
     callable_features: [],
-    available_feature_ids: [],
+    available_feature_ids: sortedUnique(
+      descriptors.flatMap((method) => method.callableFeatureIds ?? [])
+    ),
     methods,
-    max_concurrent: 10
+    max_concurrent: concurrencyLimits.length > 0 ? Math.min(...concurrencyLimits) : 10
   }
   return { ...service, digest: digest(service) }
 }
 
 function manifestMethod(method: PeerHostMethodDescriptor): Record<string, unknown> {
-  const name = method.methodId.includes('.') ? method.methodId.split('.').at(-1) ?? method.methodId : method.methodId
+  const name = method.name
+    ?? (method.methodId.includes('.') ? method.methodId.split('.').at(-1) ?? method.methodId : method.methodId)
   return {
     name,
-    summary: '',
-    bus_topic: method.methodId,
-    exposure: 'both',
-    input_model: schemaName(method.inputSchemaId),
-    output_model: schemaName(method.outputSchemaId),
+    summary: method.summary ?? '',
+    bus_topic: method.busTopic ?? method.methodId,
+    exposure: method.exposure ?? 'both',
+    input_model: method.inputModel ?? schemaName(method.inputSchemaId),
+    output_model: method.outputModel ?? schemaName(method.outputSchemaId),
     required_perms: sortedUnique(method.requiredPermissions),
-    callable_feature_ids: [],
+    callable_feature_ids: sortedUnique(method.callableFeatureIds ?? []),
     callable_features: [],
+    speech_constraints: method.speechConstraints ?? null,
     public_infrastructure: false,
     method_type: projectionMethodType(method),
     input_schema: null,
     output_schema: null
   }
+}
+
+function methodModule(method: PeerHostMethodDescriptor): string {
+  if (method.module && method.module.length > 0) return method.module
+  const separator = method.methodId.indexOf('.')
+  return separator > 0 ? method.methodId.slice(0, separator) : 'Tooling'
 }
 
 function projectionMethodType(method: PeerHostMethodDescriptor): PeerHostProjectionMethodType {

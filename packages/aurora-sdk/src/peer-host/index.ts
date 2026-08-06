@@ -72,7 +72,14 @@ export type {
 } from './grant-management.js'
 export {
   PeerHostContractRegistry,
-  createToolingPeerHostRegistry
+  createToolingPeerHostRegistry,
+  generatedPeerHostMethodDescriptor,
+  registerGeneratedPeerHostMethod
+} from './contract-registry.js'
+export type {
+  GeneratedPeerHostMethodHandler,
+  GeneratedPeerHostMethodId,
+  GeneratedPeerHostRegistrationOptions
 } from './contract-registry.js'
 export {
   DEFAULT_PROVIDER_LEASE_RENEW_MS,
@@ -92,6 +99,7 @@ export type {
   PeerHostFrameSender,
   PeerHostIdentity,
   PeerHostManifest,
+  PeerHostMethodExposure,
   PeerHostMethodDescriptor,
   PeerHostMethodType,
   PeerHostOptions,
