@@ -217,9 +217,12 @@ async def test_start_service(service, mock_bus):
     # Set backend type since we're mocking _load_config
     service._backend_type = WakeWordBackendType.OPENWAKEWORD
 
+    load_config = AsyncMock(spec=service._load_config)
+    initialize_backend = AsyncMock(spec=service._initialize_backend)
+
     with (
-        patch.object(service, "_load_config", new_callable=AsyncMock),
-        patch.object(service, "_initialize_backend", new_callable=AsyncMock),
+        patch.object(service, "_load_config", new=load_config),
+        patch.object(service, "_initialize_backend", new=initialize_backend),
     ):
         await service.start()
 
