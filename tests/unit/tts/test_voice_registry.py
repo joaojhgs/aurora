@@ -124,6 +124,24 @@ def _read_state(registry_root: Path) -> dict[str, object]:
     return json.loads((registry_root / "voice_registry.json").read_text(encoding="utf-8"))
 
 
+def _open_fd_count() -> int | None:
+    fd_root = Path("/proc/self/fd")
+    if not fd_root.exists():
+        return None
+    return len(list(fd_root.iterdir()))
+
+
+def _assert_no_import_leftovers(registry_root: Path, before_fds: int | None) -> None:
+    assert not (registry_root / "voice_registry.json").exists()
+    artifacts_dir = registry_root / "artifacts"
+    tmp_dir = registry_root / ".tmp"
+    assert not artifacts_dir.exists() or list(artifacts_dir.iterdir()) == []
+    assert not tmp_dir.exists() or list(tmp_dir.iterdir()) == []
+    after_fds = _open_fd_count()
+    if before_fds is not None and after_fds is not None:
+        assert after_fds == before_fds
+
+
 def _write_state(registry_root: Path, state: dict[str, object]) -> None:
     (registry_root / "voice_registry.json").write_text(json.dumps(state), encoding="utf-8")
 
@@ -311,6 +329,68 @@ async def test_traversal_symlink_hash_and_size_fail_before_promotion(tmp_path: P
         not (registry_root / "artifacts").exists()
         or list((registry_root / "artifacts").iterdir()) == []
     )
+
+
+@pytest.mark.asyncio
+async def test_standard_pack_rejects_same_root_same_byte_source_file_symlink(
+    tmp_path: Path,
+) -> None:
+    registry_root = tmp_path / "registry"
+    artifact_root = tmp_path / "pack"
+    voices_dir = artifact_root / "voices"
+    voices_dir.mkdir(parents=True)
+    data = _safetensors_bytes()
+    real_source = voices_dir / "real.safetensors"
+    real_source.write_bytes(data)
+    symlink_source = voices_dir / "alloy.safetensors"
+    symlink_source.symlink_to(real_source.name)
+    manifest_path = _write_manifest(tmp_path / "manifest.json", _manifest(assets=[_asset(data)]))
+    before_fds = _open_fd_count()
+
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(registry_root).install_standard_pack(manifest_path, artifact_root)
+
+    _assert_no_import_leftovers(registry_root, before_fds)
+
+
+@pytest.mark.asyncio
+async def test_standard_pack_rejects_source_parent_directory_symlink(
+    tmp_path: Path,
+) -> None:
+    registry_root = tmp_path / "registry"
+    artifact_root = tmp_path / "pack"
+    real_voices_dir = artifact_root / "real_voices"
+    real_voices_dir.mkdir(parents=True)
+    data = _safetensors_bytes()
+    real_voices_dir.joinpath("alloy.safetensors").write_bytes(data)
+    artifact_root.joinpath("voices").symlink_to("real_voices", target_is_directory=True)
+    manifest_path = _write_manifest(tmp_path / "manifest.json", _manifest(assets=[_asset(data)]))
+    before_fds = _open_fd_count()
+
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(registry_root).install_standard_pack(manifest_path, artifact_root)
+
+    _assert_no_import_leftovers(registry_root, before_fds)
+
+
+@pytest.mark.asyncio
+async def test_standard_pack_rejects_manifest_file_symlink(tmp_path: Path) -> None:
+    registry_root = tmp_path / "registry"
+    artifact_root = tmp_path / "pack"
+    artifact_root.joinpath("voices").mkdir(parents=True)
+    data = _safetensors_bytes()
+    artifact_root.joinpath("voices/alloy.safetensors").write_bytes(data)
+    real_manifest = _write_manifest(
+        tmp_path / "real-manifest.json", _manifest(assets=[_asset(data)])
+    )
+    manifest_link = tmp_path / "manifest-link.json"
+    manifest_link.symlink_to(real_manifest.name)
+    before_fds = _open_fd_count()
+
+    with pytest.raises(VoiceManifestError):
+        await VoiceRegistry(registry_root).install_standard_pack(manifest_link, artifact_root)
+
+    _assert_no_import_leftovers(registry_root, before_fds)
 
 
 @pytest.mark.asyncio

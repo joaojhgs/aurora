@@ -510,6 +510,7 @@ class VoiceRegistry:
             for asset in manifest.assets:
                 _validate_supported_voice_state_runtime(asset.runtime_target)
                 _validate_safetensors_name(asset.relative_path)
+                _reject_lexical_symlink_components(artifact_root, asset.relative_path)
                 source_path = _resolve_safe_child(source_root, asset.relative_path)
                 if not source_path.is_file():
                     raise VoiceArtifactError("artifact missing")
@@ -974,14 +975,26 @@ class VoiceRegistry:
 
 
 def _read_manifest(path: Path) -> VoicePackManifest:
+    fd = -1
     try:
-        if path.stat().st_size > _MAX_JSON_BYTES:
+        _reject_symlink_ancestors(path)
+        mode = os.lstat(path).st_mode
+        if not stat.S_ISREG(mode):
+            raise VoiceManifestError("manifest is not a file")
+        fd = _open_no_follow_read(path)
+        size = os.fstat(fd).st_size
+        if size > _MAX_JSON_BYTES:
             raise VoiceManifestError("manifest is too large")
-        return cast(VoicePackManifest, VoicePackManifest.model_validate_json(path.read_text()))
+        with os.fdopen(fd, "r", encoding="utf-8") as handle:
+            fd = -1
+            return cast(VoicePackManifest, VoicePackManifest.model_validate_json(handle.read()))
     except VoiceManifestError:
         raise
     except (OSError, ValidationError, ValueError) as exc:
         raise VoiceManifestError("invalid voice manifest") from exc
+    finally:
+        if fd >= 0:
+            os.close(fd)
 
 
 def _validate_supported_voice_state_runtime(runtime_target: str) -> None:
