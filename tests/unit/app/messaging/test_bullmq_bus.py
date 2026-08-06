@@ -250,6 +250,8 @@ class TestBullMQBusInterface:
 
         assert bus._stats["published"] == 1
         assert mock_bullmq["queue_instance"].add.call_count == 2
+        assert len(bus._redis.published) == 1
+        assert bus._redis.published[0][0] == "Config.Updated"
 
     async def test_publish_with_reply_to(self, mock_bullmq):
         """Test publishing with reply_to parameter."""

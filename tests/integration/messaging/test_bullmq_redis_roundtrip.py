@@ -186,3 +186,43 @@ class TestBullMQRedisRoundtrip:
         finally:
             await second.stop()
             await first.stop()
+
+    @pytest.mark.asyncio
+    async def test_event_publish_reaches_wildcard_subscriber_from_separate_publisher(
+        self, isolated_redis_url
+    ) -> None:
+        """Wildcard event subscribers receive broadcasts from publisher-only processes."""
+        ns = uuid.uuid4().hex[:12]
+        topic = f"AuroraTest.Bullmq.{ns}.Gateway.Event"
+        pattern = f"AuroraTest.Bullmq.{ns}.*"
+
+        subscriber = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        publisher = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        await subscriber.start()
+        await publisher.start()
+        received: list[dict[str, object]] = []
+
+        async def wildcard_handler(env: Envelope) -> None:
+            received.append(env.payload if isinstance(env.payload, dict) else {})
+
+        subscriber.subscribe(pattern, wildcard_handler, event=True)
+        await asyncio.sleep(0.75)
+
+        try:
+            await publisher.publish(
+                topic,
+                _PingPayload(x=23),
+                event=True,
+                origin="integration-test",
+            )
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 15.0
+            while loop.time() < deadline:
+                if received:
+                    break
+                await asyncio.sleep(0.05)
+
+            assert received == [{"x": 23}]
+        finally:
+            await publisher.stop()
+            await subscriber.stop()

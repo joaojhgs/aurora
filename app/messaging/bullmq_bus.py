@@ -318,8 +318,11 @@ class BullMQBus:
         if self._pubsub is None:
             redis = await self._get_redis()
             self._pubsub = redis.pubsub()
-            self._pubsub_task = asyncio.create_task(self._pubsub_listener())
         return self._pubsub
+
+    def _ensure_pubsub_listener(self) -> None:
+        if self._pubsub_task is None or self._pubsub_task.done():
+            self._pubsub_task = asyncio.create_task(self._pubsub_listener())
 
     async def _async_subscribe_event_topic(self, topic: str, *, pattern: bool) -> None:
         try:
@@ -328,6 +331,7 @@ class BullMQBus:
                 await pubsub.psubscribe(topic)
             else:
                 await pubsub.subscribe(topic)
+            self._ensure_pubsub_listener()
             log_info(f"Subscribed Redis pub/sub event channel: {topic}")
         except Exception as e:
             log_error(f"Error subscribing to event channel {topic}: {e}", exc_info=True)
@@ -336,7 +340,10 @@ class BullMQBus:
         """Redis pub/sub listener for broadcast events."""
         try:
             async for message in self._pubsub.listen():
-                if message.get("type") not in {"message", "pmessage"}:
+                message_type = message.get("type")
+                if isinstance(message_type, bytes):
+                    message_type = message_type.decode("utf-8")
+                if message_type not in {"message", "pmessage"}:
                     continue
                 try:
                     raw = message.get("data")
@@ -686,8 +693,11 @@ class BullMQBus:
                         {"connection": self.redis_url},
                     )
                 await self._queues[queue_name].add(queue_name, job_data, job_opts)
-            if self._event_patterns:
-                await redis.publish(topic, json.dumps(job_data))
+            # Wildcard event subscribers live in other processes and are not
+            # visible through this publisher's local _event_patterns set.
+            # Always emit the pub/sub copy so remote pattern subscribers receive
+            # the broadcast; concrete subscribers still get durable queue fanout.
+            await redis.publish(topic, json.dumps(job_data))
             self._stats["published"] += 1
             log_debug(f"Published event {topic} to {len(subscriber_queues)} subscriber queue(s)")
             return
