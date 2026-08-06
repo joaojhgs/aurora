@@ -323,6 +323,7 @@ exe-runtime = [
 # of always bundling every STT/TTS/local-model dependency.
 sidecar-thin = [
     "aurora[service-config,service-auth,service-db,service-scheduler,service-tooling,service-orchestrator,gateway,mode-threads]",
+    "numpy==2.2.6",
 ]
 
 sidecar-local-audio = [

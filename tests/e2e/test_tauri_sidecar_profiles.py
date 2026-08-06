@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -58,6 +59,14 @@ def test_thin_sidecar_profile_avoids_full_runtime_and_local_ai_modules():
     assert "--exclude-module=app.services.tts" in args
     assert not any("modules:modules" in arg for arg in args)
     assert any(arg == "--distpath=dist/sidecars/thin" for arg in args)
+
+
+@pytest.mark.e2e
+def test_sidecar_thin_profile_pins_numpy_abi_version():
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    sidecar_thin = pyproject["project"]["optional-dependencies"]["sidecar-thin"]
+
+    assert "numpy==2.2.6" in sidecar_thin
 
 
 @pytest.mark.e2e
@@ -209,7 +218,7 @@ def test_wheel_installer_prefers_uv_targeting_current_interpreter(monkeypatch):
     installer = WheelInstaller()
     monkeypatch.setattr("scripts.wheel_installer.shutil.which", lambda name: "/usr/bin/uv")
 
-    command = installer._install_command(["torch==2.6.0+cpu"])
+    command = installer._install_command(["torch==2.6.0+cpu", "--prefer-binary"])
 
     assert command == [
         "/usr/bin/uv",

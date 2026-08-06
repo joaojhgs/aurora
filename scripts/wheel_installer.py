@@ -250,7 +250,8 @@ class WheelInstaller:
 
         uv = shutil.which("uv")
         if uv:
-            return [uv, "pip", "install", "--python", sys.executable, *args]
+            uv_args = [arg for arg in args if arg != "--prefer-binary"]
+            return [uv, "pip", "install", "--python", sys.executable, *uv_args]
         if self._pip_available():
             return [sys.executable, "-m", "pip", "install", *args]
         raise RuntimeError(
