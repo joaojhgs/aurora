@@ -376,7 +376,7 @@ class BullMQBus:
                         projected_method_topics=data.get("projected_method_topics"),
                         projected_method_set_digest=data.get("projected_method_set_digest"),
                     )
-                    await self._deliver_event(actual_topic, env)
+                    await self._deliver_event_wildcards(actual_topic, env)
                 except Exception as e:
                     log_error(f"Error handling Redis pub/sub event: {e}", exc_info=True)
         except asyncio.CancelledError:
@@ -384,15 +384,15 @@ class BullMQBus:
         except Exception as e:
             log_error(f"Redis pub/sub listener stopped unexpectedly: {e}", exc_info=True)
 
-    async def _deliver_event(self, topic: str, env: Envelope) -> None:
+    async def _deliver_event_wildcards(self, topic: str, env: Envelope) -> None:
+        """Deliver a Redis pub/sub event copy to wildcard event handlers only."""
         matching_handlers: list[Handler] = []
-        matching_handlers.extend(self._event_handlers.get(topic, []))
         for pattern, handlers in self._event_wildcard_patterns.items():
             if self._topic_matches(topic, pattern):
                 matching_handlers.extend(handlers)
 
         if not matching_handlers:
-            log_debug(f"No event handlers for topic: {topic}")
+            log_debug(f"No wildcard event handlers for topic: {topic}")
             return
 
         await asyncio.gather(*[self._call_handler(h, env) for h in matching_handlers])
@@ -435,29 +435,33 @@ class BullMQBus:
                     projected_method_set_digest=job_data.get("projected_method_set_digest"),
                 )
 
-                # Find matching handlers (direct + wildcard)
-                matching_handlers = []
+                if queue_name in self._event_worker_queues.values():
+                    matching_handlers = list(self._event_handlers.get(actual_topic, []))
+                    if not matching_handlers:
+                        log_debug(f"No exact event handlers for topic: {actual_topic}")
+                        return
 
-                # Direct handlers
-                matching_handlers.extend(self._handlers.get(actual_topic, []))
-                matching_handlers.extend(self._event_handlers.get(actual_topic, []))
+                    await asyncio.gather(*[self._call_handler(h, env) for h in matching_handlers])
+                    self._stats["delivered"] += len(matching_handlers)
+                else:
+                    # Find matching command handlers (direct + wildcard)
+                    matching_handlers = []
 
-                # Wildcard handlers
-                for pattern, handlers in self._wildcard_patterns.items():
-                    if self._topic_matches(actual_topic, pattern):
-                        matching_handlers.extend(handlers)
-                for pattern, handlers in self._event_wildcard_patterns.items():
-                    if self._topic_matches(actual_topic, pattern):
-                        matching_handlers.extend(handlers)
+                    # Direct handlers
+                    matching_handlers.extend(self._handlers.get(actual_topic, []))
 
-                if not matching_handlers:
-                    log_debug(f"No handlers for topic: {actual_topic}")
-                    return
+                    # Wildcard handlers
+                    for pattern, handlers in self._wildcard_patterns.items():
+                        if self._topic_matches(actual_topic, pattern):
+                            matching_handlers.extend(handlers)
 
-                # Execute all handlers concurrently
-                await asyncio.gather(*[self._call_handler(h, env) for h in matching_handlers])
+                    if not matching_handlers:
+                        log_debug(f"No handlers for topic: {actual_topic}")
+                        return
 
-                self._stats["delivered"] += 1
+                    # Execute all handlers concurrently
+                    await asyncio.gather(*[self._call_handler(h, env) for h in matching_handlers])
+                    self._stats["delivered"] += 1
                 log_debug(f"Processed job {job.id} for topic {actual_topic}")
 
                 # Do not resolve futures here; reply handling is managed by request()'s temporary subscriber

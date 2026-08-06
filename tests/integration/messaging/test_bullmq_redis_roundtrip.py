@@ -226,3 +226,50 @@ class TestBullMQRedisRoundtrip:
         finally:
             await publisher.stop()
             await subscriber.stop()
+
+    @pytest.mark.asyncio
+    async def test_event_publish_delivers_exact_and_wildcard_once_on_same_subscriber(
+        self, isolated_redis_url
+    ) -> None:
+        """Mixed exact and wildcard event handlers do not duplicate delivery."""
+        ns = uuid.uuid4().hex[:12]
+        topic = f"AuroraTest.Bullmq.{ns}.Gateway.Event"
+        pattern = f"AuroraTest.Bullmq.{ns}.*"
+
+        subscriber = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        publisher = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        await subscriber.start()
+        await publisher.start()
+        received: dict[str, list[dict[str, object]]] = {"exact": [], "wildcard": []}
+
+        async def exact_handler(env: Envelope) -> None:
+            received["exact"].append(env.payload if isinstance(env.payload, dict) else {})
+
+        async def wildcard_handler(env: Envelope) -> None:
+            received["wildcard"].append(env.payload if isinstance(env.payload, dict) else {})
+
+        subscriber.subscribe(topic, exact_handler, event=True)
+        subscriber.subscribe(pattern, wildcard_handler, event=True)
+        await asyncio.sleep(0.75)
+
+        try:
+            await publisher.publish(
+                topic,
+                _PingPayload(x=31),
+                event=True,
+                origin="integration-test",
+            )
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 15.0
+            while loop.time() < deadline:
+                if len(received["exact"]) == 1 and len(received["wildcard"]) == 1:
+                    break
+                await asyncio.sleep(0.05)
+
+            assert received == {
+                "exact": [{"x": 31}],
+                "wildcard": [{"x": 31}],
+            }
+        finally:
+            await publisher.stop()
+            await subscriber.stop()
