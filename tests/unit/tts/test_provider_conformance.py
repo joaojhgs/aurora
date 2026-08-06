@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
 import math
+import os
 import threading
 import time
 import wave
@@ -23,9 +25,20 @@ from app.services.tts.providers.pockettts import (
     PocketTTSProvider,
     PocketTTSProviderConfig,
     PocketTTSVoiceStateConfig,
+    resolve_pockettts_base_identity_spec,
 )
+from app.services.tts.voice_registry import VoiceStateArtifactHandle
 
 ProviderName = str
+_POCKETTTS_CONFIG_BYTES = b"language: english\nmodel: pockettts-model.safetensors\nrevision: test\n"
+
+
+class FakeTensor:
+    shape = (1,)
+    dtype = "float32"
+
+    def isfinite(self) -> object:
+        return type("Finite", (), {"all": lambda self: True})()
 
 
 class FakePocketTTSModel:
@@ -74,8 +87,10 @@ class FakePocketTTSModel:
         cls.load_calls.append({"language": language})
         return cls(language)
 
-    def get_state_for_audio_prompt(self, voice: str) -> dict[str, str]:
-        return {"voice": voice, "language": self.language}
+    def get_state_for_audio_prompt(self, voice) -> dict[str, object]:
+        assert voice.suffix == ".safetensors"
+        assert voice.read_bytes()
+        return {"voice": {"offset": FakeTensor()}, "decoder_cache": {"state": FakeTensor()}}
 
     def generate_audio(self, state: Any, text: str, **kwargs: object) -> list[float]:
         type(self).active_entries += 1
@@ -122,8 +137,8 @@ PROVIDERS = (
     ),
     ProviderCase(
         name="pockettts",
-        default_voice="standard:alba",
-        alternate_voice="standard:bruno",
+        default_voice="standard:starter_en:alba",
+        alternate_voice="standard:starter_en:bruno",
         sample_rate=24000,
         expected_raw_audio=b"\x00\x00\x00@\x00\xc0",
     ),
@@ -142,6 +157,62 @@ def _provider_id(case: ProviderCase) -> str:
 async def _fake_piper_to_thread(func: Callable[..., object], *args: object, **kwargs: object):
     del func, args, kwargs
     return b"\x00\x00\x00@", 16000
+
+
+def _pockettts_voice_state_config(
+    voice_id: str,
+    display_name: str,
+    tmp_path,
+) -> PocketTTSVoiceStateConfig:
+    payload = f"voice-state:{voice_id}".encode()
+    path = tmp_path / f"{voice_id.replace(':', '_')}.safetensors"
+    path.write_bytes(payload)
+    fd = os.open(path, os.O_RDONLY)
+    identity = resolve_pockettts_base_identity_spec(
+        PocketTTSProviderConfig(
+            effective_language="en",
+            voices=(),
+            package_version="2.1.0",
+            config_yaml_bytes=_POCKETTTS_CONFIG_BYTES,
+            config_asset_refs=("pockettts-model.safetensors",),
+        )
+    ).voice_base_identity
+    return PocketTTSVoiceStateConfig(
+        voice_id=voice_id,
+        display_name=display_name,
+        artifact_handle=VoiceStateArtifactHandle(
+            voice_id=voice_id,
+            runtime_target=identity.runtime_target,
+            language_bundle=identity.language_bundle,
+            compatibility_group=identity.compatibility_group,
+            artifact_revision="rev1",
+            relative_ref=f"artifacts/{voice_id}/voice-state.safetensors",
+            sha256=hashlib.sha256(payload).hexdigest(),
+            size_bytes=len(payload),
+            format="safetensors",
+            fd=fd,
+        ),
+    )
+
+
+def _pockettts_provider_config(
+    case: ProviderCase,
+    tmp_path,
+    *,
+    preload: bool = True,
+) -> PocketTTSProviderConfig:
+    return PocketTTSProviderConfig(
+        effective_language="en",
+        max_tokens=4,
+        preload=preload,
+        package_version="2.1.0",
+        config_yaml_bytes=_POCKETTTS_CONFIG_BYTES,
+        config_asset_refs=("pockettts-model.safetensors",),
+        voices=(
+            _pockettts_voice_state_config(case.default_voice, "Default Voice", tmp_path),
+            _pockettts_voice_state_config(case.alternate_voice, "Alternate Voice", tmp_path),
+        ),
+    )
 
 
 async def _make_provider(
@@ -168,22 +239,7 @@ async def _make_provider(
             ),
         )
     return PocketTTSProvider(
-        PocketTTSProviderConfig(
-            effective_language="en",
-            max_tokens=4,
-            voices=(
-                PocketTTSVoiceStateConfig(
-                    voice_id=case.default_voice,
-                    audio_prompt="alba",
-                    display_name="Default Voice",
-                ),
-                PocketTTSVoiceStateConfig(
-                    voice_id=case.alternate_voice,
-                    audio_prompt="bruno",
-                    display_name="Alternate Voice",
-                ),
-            ),
-        ),
+        _pockettts_provider_config(case, tmp_path),
         model_class=FakePocketTTSModel,
     )
 
@@ -316,7 +372,7 @@ async def test_pockettts_lazy_sample_rate_mismatch_rejects_before_model_load(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(effective_language="en", max_tokens=4, preload=False),
+        _pockettts_provider_config(PROVIDERS[1], tmp_path, preload=False),
         model_class=FakePocketTTSModel,
     )
     await provider.start()
@@ -599,7 +655,9 @@ async def test_pockettts_stream_emits_ordered_audio_chunks_and_final_marker(
     chunks = [
         chunk
         async for chunk in provider.stream(
-            TTSSynthesisRequest(text="stream", voice="standard:bruno", request_id="stream-1")
+            TTSSynthesisRequest(
+                text="stream", voice="standard:starter_en:bruno", request_id="stream-1"
+            )
         )
     ]
 
@@ -626,7 +684,7 @@ async def test_pockettts_serializes_one_base_model_entry_across_two_logical_voic
         provider.synthesize(
             TTSSynthesisRequest(
                 text="first",
-                voice="standard:alba",
+                voice="standard:starter_en:alba",
                 request_id="voice-state-1",
             )
         )
@@ -636,7 +694,7 @@ async def test_pockettts_serializes_one_base_model_entry_across_two_logical_voic
         provider.synthesize(
             TTSSynthesisRequest(
                 text="second",
-                voice="standard:bruno",
+                voice="standard:starter_en:bruno",
                 request_id="voice-state-2",
             )
         )
@@ -647,7 +705,10 @@ async def test_pockettts_serializes_one_base_model_entry_across_two_logical_voic
     release.set()
     results = await asyncio.gather(first, second)
 
-    assert [result.voice for result in results] == ["standard:alba", "standard:bruno"]
+    assert [result.voice for result in results] == [
+        "standard:starter_en:alba",
+        "standard:starter_en:bruno",
+    ]
     assert FakePocketTTSModel.max_active_entries == 1
     assert await provider.tracked_request_count() == 0
     await provider.stop()

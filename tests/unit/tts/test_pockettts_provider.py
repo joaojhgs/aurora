@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import inspect
+import os
+import tempfile
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -19,13 +23,35 @@ from app.services.tts.providers.pockettts import (
     PocketTTSProvider,
     PocketTTSProviderConfig,
     PocketTTSVoiceStateConfig,
+    resolve_pockettts_base_identity_spec,
     resolve_pockettts_config,
 )
+from app.services.tts.voice_registry import VoiceStateArtifactHandle
+
+_CONFIG_BYTES = b"language: english\nmodel: pockettts-model.safetensors\nrevision: test\n"
+_DEFAULT_VOICE_ID = "standard:starter_en:alba"
+
+
+class FakeTensor:
+    shape = (1,)
+    dtype = "float32"
+
+    def isfinite(self) -> object:
+        return type("Finite", (), {"all": lambda self: True})()
+
+
+class NonFiniteTensor(FakeTensor):
+    def isfinite(self) -> object:
+        return type("Finite", (), {"all": lambda self: False})()
 
 
 class FakePocketTTSModel:
     load_calls: list[dict[str, object]] = []
     generation_calls: list[dict[str, object]] = []
+    imported_payloads: list[bytes] = []
+    imported_suffixes: list[str] = []
+    imported_parent_modes: list[int] = []
+    imported_path_exists_after_read: list[Path] = []
     active_entries = 0
     max_active_entries = 0
     fail_load = False
@@ -41,13 +67,17 @@ class FakePocketTTSModel:
         self.sample_rate = type(self).loaded_sample_rate
         self.device = type(self).loaded_device
         self.origin = type("Origin", (), {"name": f"{language}.safetensors"})()
-        self.state_calls: list[str] = []
+        self.state_calls: list[Path] = []
         self.generated_texts: list[str] = []
 
     @classmethod
     def reset(cls) -> None:
         cls.load_calls = []
         cls.generation_calls = []
+        cls.imported_payloads = []
+        cls.imported_suffixes = []
+        cls.imported_parent_modes = []
+        cls.imported_path_exists_after_read = []
         cls.active_entries = 0
         cls.max_active_entries = 0
         cls.fail_load = False
@@ -83,9 +113,17 @@ class FakePocketTTSModel:
         cls.load_calls.append(call)
         return cls(language)
 
-    def get_state_for_audio_prompt(self, voice: str) -> dict[str, str]:
+    def get_state_for_audio_prompt(self, voice: Path) -> dict[str, object]:
+        assert isinstance(voice, Path)
+        assert voice.suffix == ".safetensors"
+        payload = voice.read_bytes()
+        assert payload
+        type(self).imported_payloads.append(payload)
+        type(self).imported_suffixes.append(voice.suffix)
+        type(self).imported_parent_modes.append(voice.parent.stat().st_mode & 0o777)
+        type(self).imported_path_exists_after_read.append(voice)
         self.state_calls.append(voice)
-        return {"voice": voice, "language": self.language}
+        return {"voice": {"offset": FakeTensor()}, "decoder_cache": {"state": FakeTensor()}}
 
     def generate_audio(
         self,
@@ -135,9 +173,87 @@ class FakePocketTTSModel:
         type(self).stream_completed = True
 
 
+class MalformedStateModel(FakePocketTTSModel):
+    state: object = {"cache": 1}
+
+    def get_state_for_audio_prompt(self, voice: Path) -> object:
+        type(self).imported_payloads.append(voice.read_bytes())
+        type(self).imported_suffixes.append(voice.suffix)
+        type(self).imported_parent_modes.append(voice.parent.stat().st_mode & 0o777)
+        type(self).imported_path_exists_after_read.append(voice)
+        self.state_calls.append(voice)
+        return type(self).state
+
+
 @pytest.fixture(autouse=True)
 def reset_fake_model():
     FakePocketTTSModel.reset()
+
+
+def _voice_state(
+    voice_id: str = _DEFAULT_VOICE_ID,
+    display_name: str = "Alba",
+    *,
+    effective_language: str = "en",
+    quality_tier: str = "compact",
+    config_id: str | None = None,
+    payload: bytes = b"fake safetensors state",
+) -> PocketTTSVoiceStateConfig:
+    with tempfile.TemporaryFile() as file:
+        file.write(payload)
+        file.flush()
+        file.seek(0)
+        fd = os.dup(file.fileno())
+    identity = resolve_pockettts_base_identity_spec(
+        PocketTTSProviderConfig(
+            effective_language=effective_language,
+            quality_tier=quality_tier,  # type: ignore[arg-type]
+            config_id=config_id,
+            voices=(),
+            package_version="2.1.0",
+            config_yaml_bytes=_CONFIG_BYTES,
+            config_asset_refs=("pockettts-model.safetensors",),
+        )
+    ).voice_base_identity
+    digest = hashlib.sha256(payload).hexdigest()
+    return PocketTTSVoiceStateConfig(
+        voice_id=voice_id,
+        display_name=display_name,
+        artifact_handle=VoiceStateArtifactHandle(
+            voice_id=voice_id,
+            runtime_target=identity.runtime_target,
+            language_bundle=identity.language_bundle,
+            compatibility_group=identity.compatibility_group,
+            artifact_revision="rev1",
+            relative_ref="artifacts/profile/voice-state.safetensors",
+            sha256=digest,
+            size_bytes=len(payload),
+            format="safetensors",
+            fd=fd,
+        ),
+    )
+
+
+def _pockettts_config(**kwargs: object) -> PocketTTSProviderConfig:
+    effective_language = str(kwargs.get("effective_language", "en"))
+    quality_tier = str(kwargs.get("quality_tier", "compact"))
+    kwargs.setdefault(
+        "voices",
+        (_voice_state(effective_language=effective_language, quality_tier=quality_tier),),
+    )
+    kwargs.setdefault("package_version", "2.1.0")
+    kwargs.setdefault("effective_language", effective_language)
+    kwargs.setdefault("config_yaml_bytes", _CONFIG_BYTES)
+    kwargs.setdefault("config_asset_refs", ("pockettts-model.safetensors",))
+    return PocketTTSProviderConfig(**kwargs)  # type: ignore[arg-type]
+
+
+def _fd_is_closed(fd: int) -> bool:
+    try:
+        os.fstat(fd)
+    except OSError:
+        return True
+    return False
 
 
 def test_pockettts_official_api_signature_conformance_without_model_download() -> None:
@@ -223,16 +339,133 @@ def test_pockettts_rejects_explicit_tier_mismatch_and_custom_config() -> None:
     assert custom_config.value.code == "unsupported_voice"
 
 
+def test_pockettts_identity_changes_with_config_bytes_and_refs_and_has_no_paths() -> None:
+    base = resolve_pockettts_base_identity_spec(
+        _pockettts_config(config_yaml_bytes=b"model: a.safetensors\nrevision: one\n")
+    )
+    changed_bytes = resolve_pockettts_base_identity_spec(
+        _pockettts_config(config_yaml_bytes=b"model: a.safetensors\nrevision: two\n")
+    )
+    changed_refs = resolve_pockettts_base_identity_spec(
+        _pockettts_config(
+            config_yaml_bytes=b"model: a.safetensors\nrevision: one\n",
+            config_asset_refs=("b.safetensors",),
+        )
+    )
+
+    assert base.health_identity != changed_bytes.health_identity
+    assert base.health_identity != changed_refs.health_identity
+    assert "/" not in base.health_identity
+    assert "\\" not in base.health_identity
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"config_yaml_bytes": b""},
+        {"config_yaml_bytes": b": not: yaml:"},
+        {"config_yaml_bytes": b"language: english\n"},
+    ],
+)
+def test_pockettts_identity_rejects_unusable_config_yaml(kwargs: dict[str, object]) -> None:
+    with pytest.raises(TTSProviderError) as exc_info:
+        resolve_pockettts_base_identity_spec(_pockettts_config(**kwargs))
+
+    assert exc_info.value.code == "unavailable"
+
+
+def test_pockettts_direct_identity_builder_rejects_unusable_config_yaml() -> None:
+    from app.services.tts.providers.pockettts import build_pockettts_base_identity_spec
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        build_pockettts_base_identity_spec(
+            config_info=resolve_pockettts_config("en", "compact"),
+            model_revision="pocket-tts-2.1.0",
+            package_version="2.1.0",
+            config_yaml_bytes=b"language: english\n",
+            config_asset_refs=(),
+        )
+
+    assert exc_info.value.code == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_pockettts_rejects_empty_and_duplicate_voice_configs_without_model_load() -> None:
+    empty = PocketTTSProvider(
+        _pockettts_config(voices=()),
+        model_class=FakePocketTTSModel,
+    )
+    with pytest.raises(TTSProviderError) as empty_error:
+        await empty.start()
+
+    first = _voice_state()
+    second = _voice_state()
+    duplicate = PocketTTSProvider(
+        _pockettts_config(voices=(first, second)),
+        model_class=FakePocketTTSModel,
+    )
+    with pytest.raises(TTSProviderError) as duplicate_error:
+        await duplicate.start()
+
+    assert empty_error.value.code == "unsupported_voice"
+    assert duplicate_error.value.code == "unsupported_voice"
+    assert _fd_is_closed(first.artifact_handle.fd)
+    assert _fd_is_closed(second.artifact_handle.fd)
+    assert FakePocketTTSModel.load_calls == []
+
+
+@pytest.mark.asyncio
+async def test_pockettts_rejects_oversized_voice_state_before_buffering() -> None:
+    voice = _voice_state()
+    fd = voice.artifact_handle.fd
+    oversized = PocketTTSVoiceStateConfig(
+        voice_id=voice.voice_id,
+        display_name=voice.display_name,
+        artifact_handle=VoiceStateArtifactHandle(
+            voice_id=voice.artifact_handle.voice_id,
+            runtime_target=voice.artifact_handle.runtime_target,
+            language_bundle=voice.artifact_handle.language_bundle,
+            compatibility_group=voice.artifact_handle.compatibility_group,
+            artifact_revision=voice.artifact_handle.artifact_revision,
+            relative_ref=voice.artifact_handle.relative_ref,
+            sha256=voice.artifact_handle.sha256,
+            size_bytes=65 * 1024 * 1024,
+            format=voice.artifact_handle.format,
+            fd=fd,
+        ),
+    )
+    provider = PocketTTSProvider(
+        _pockettts_config(voices=(oversized,)),
+        model_class=FakePocketTTSModel,
+    )
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await provider.start()
+
+    assert exc_info.value.code == "unsupported_voice"
+    assert _fd_is_closed(fd)
+
+
 @pytest.mark.asyncio
 async def test_pockettts_start_loads_model_and_multiple_voice_states() -> None:
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(
+        _pockettts_config(
             effective_language="de",
             quality_tier="quality",
             max_tokens=4,
             voices=(
-                PocketTTSVoiceStateConfig("standard:anna", "anna", "Anna"),
-                PocketTTSVoiceStateConfig("clone:local", "clone.wav", "Local"),
+                _voice_state(
+                    "standard:starter_de:anna",
+                    "Anna",
+                    effective_language="de",
+                    quality_tier="quality",
+                ),
+                _voice_state(
+                    "clone:00000000-0000-4000-8000-000000000001",
+                    "Local",
+                    effective_language="de",
+                    quality_tier="quality",
+                ),
             ),
         ),
         model_class=FakePocketTTSModel,
@@ -246,7 +479,7 @@ async def test_pockettts_start_loads_model_and_multiple_voice_states() -> None:
     assert provider.capabilities.supports_inflight_cancel is False
     health = await provider.health()
     assert health.ready is True
-    assert health.active_voice == "standard:anna"
+    assert health.active_voice == "standard:starter_de:anna"
     assert health.base_identity is not None
     assert health.base_identity.startswith("pockettts:german:german_24l:layers-24:sha256:")
     assert "clone.wav" not in health.base_identity
@@ -254,16 +487,105 @@ async def test_pockettts_start_loads_model_and_multiple_voice_states() -> None:
     assert [
         (voice.voice_id, voice.display_name, voice.ready, voice.language) for voice in voices
     ] == [
-        ("standard:anna", "Anna", True, "german"),
-        ("clone:local", "Local", True, "german"),
+        ("standard:starter_de:anna", "Anna", True, "german"),
+        ("clone:00000000-0000-4000-8000-000000000001", "Local", True, "german"),
     ]
     await provider.stop()
 
 
 @pytest.mark.asyncio
+async def test_pockettts_imports_verified_safetensors_path_and_closes_fd() -> None:
+    payload = b"verified voice state bytes"
+    voice = _voice_state(payload=payload)
+    fd = voice.artifact_handle.fd
+    provider = PocketTTSProvider(
+        _pockettts_config(voices=(voice,), max_tokens=4),
+        model_class=FakePocketTTSModel,
+    )
+
+    await provider.start()
+
+    imported_path = FakePocketTTSModel.imported_path_exists_after_read[-1]
+    assert FakePocketTTSModel.imported_payloads == [payload]
+    assert FakePocketTTSModel.imported_suffixes == [".safetensors"]
+    assert FakePocketTTSModel.imported_parent_modes == [0o700]
+    assert imported_path.exists() is False
+    assert imported_path.parent.exists() is False
+    assert _fd_is_closed(fd)
+    await provider.stop()
+
+
+@pytest.mark.asyncio
+async def test_pockettts_rejects_cross_identity_voice_state_and_closes_fd() -> None:
+    voice = _voice_state(effective_language="en")
+    fd = voice.artifact_handle.fd
+    provider = PocketTTSProvider(
+        _pockettts_config(effective_language="de", quality_tier="quality", voices=(voice,)),
+        model_class=FakePocketTTSModel,
+    )
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await provider.start()
+
+    assert exc_info.value.code == "unsupported_voice"
+    assert _fd_is_closed(fd)
+    assert FakePocketTTSModel.imported_payloads == []
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        {},
+        {"cache": 1},
+        {"voice": {"offset": NonFiniteTensor()}},
+        {"voice": {"cache": FakeTensor()}},
+    ],
+)
+@pytest.mark.asyncio
+async def test_pockettts_rejects_malformed_imported_state_before_readiness(state: object) -> None:
+    MalformedStateModel.state = state
+    voice = _voice_state()
+    fd = voice.artifact_handle.fd
+    provider = PocketTTSProvider(
+        _pockettts_config(voices=(voice,)),
+        model_class=MalformedStateModel,
+    )
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await provider.start()
+
+    assert exc_info.value.code == "unsupported_voice"
+    assert _fd_is_closed(fd)
+    health = await provider.health()
+    assert health.ready is False
+
+
+@pytest.mark.asyncio
+async def test_pockettts_rejects_loaded_model_config_mismatch_before_voice_import() -> None:
+    class WrongOriginModel(FakePocketTTSModel):
+        def __init__(self, language: str) -> None:
+            super().__init__(language)
+            self.origin = type("Origin", (), {"name": "spanish.safetensors"})()
+
+    voice = _voice_state(effective_language="de", quality_tier="quality")
+    fd = voice.artifact_handle.fd
+    provider = PocketTTSProvider(
+        _pockettts_config(effective_language="de", quality_tier="quality", voices=(voice,)),
+        model_class=WrongOriginModel,
+    )
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await provider.start()
+
+    assert exc_info.value.code == "unavailable"
+    assert FakePocketTTSModel.imported_payloads == []
+    assert _fd_is_closed(fd)
+
+
+@pytest.mark.asyncio
 async def test_pockettts_preload_false_lazy_loads_once_for_concurrent_requests() -> None:
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(effective_language="en", max_tokens=4, preload=False),
+        _pockettts_config(effective_language="en", max_tokens=4, preload=False),
         model_class=FakePocketTTSModel,
     )
     await provider.start()
@@ -284,13 +606,17 @@ async def test_pockettts_preload_false_lazy_loads_once_for_concurrent_requests()
 @pytest.mark.asyncio
 async def test_pockettts_restart_after_stop_recreates_executor() -> None:
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(effective_language="en", max_tokens=4),
+        _pockettts_config(effective_language="en", max_tokens=4),
         model_class=FakePocketTTSModel,
     )
     await provider.start()
     await provider.synthesize(TTSSynthesisRequest(text="before"))
     await provider.stop()
 
+    provider = PocketTTSProvider(
+        _pockettts_config(effective_language="en", max_tokens=4),
+        model_class=FakePocketTTSModel,
+    )
     await provider.start()
     result = await provider.synthesize(TTSSynthesisRequest(text="after"))
 
@@ -305,16 +631,16 @@ async def test_pockettts_restart_after_stop_recreates_executor() -> None:
 @pytest.mark.asyncio
 async def test_pockettts_synthesizes_provider_neutral_pcm_and_wav() -> None:
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(effective_language="en", max_tokens=4),
+        _pockettts_config(effective_language="en", max_tokens=4),
         model_class=FakePocketTTSModel,
     )
     await provider.start()
 
     raw = await provider.synthesize(
-        TTSSynthesisRequest(text="hello", voice="standard:alba", audio_format="raw")
+        TTSSynthesisRequest(text="hello", voice="standard:starter_en:alba", audio_format="raw")
     )
     wav = await provider.synthesize(
-        TTSSynthesisRequest(text="hello", voice="standard:alba", audio_format="wav")
+        TTSSynthesisRequest(text="hello", voice="standard:starter_en:alba", audio_format="wav")
     )
 
     assert raw.audio == b"\x00\x00\x00@\x00\xc0"
@@ -322,7 +648,7 @@ async def test_pockettts_synthesizes_provider_neutral_pcm_and_wav() -> None:
     assert raw.sample_rate == 24000
     assert raw.channels == 1
     assert raw.duration_ms == pytest.approx(3 / 24000 * 1000)
-    assert raw.voice == "standard:alba"
+    assert raw.voice == "standard:starter_en:alba"
     assert wav.audio.startswith(b"RIFF")
     assert wav.audio_format == "wav"
     await provider.stop()
@@ -331,7 +657,7 @@ async def test_pockettts_synthesizes_provider_neutral_pcm_and_wav() -> None:
 @pytest.mark.asyncio
 async def test_pockettts_stream_normalizes_ordered_chunks() -> None:
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(effective_language="es", quality_tier="quality", max_tokens=4),
+        _pockettts_config(effective_language="es", quality_tier="quality", max_tokens=4),
         model_class=FakePocketTTSModel,
     )
     await provider.start()
@@ -339,7 +665,9 @@ async def test_pockettts_stream_normalizes_ordered_chunks() -> None:
     chunks = [
         chunk
         async for chunk in provider.stream(
-            TTSSynthesisRequest(text="hola", voice="standard:alba", request_id="stream-1")
+            TTSSynthesisRequest(
+                text="hola", voice="standard:starter_en:alba", request_id="stream-1"
+            )
         )
     ]
 
@@ -357,7 +685,7 @@ async def test_pockettts_stream_yields_first_chunk_before_generator_completion()
     release = threading.Event()
     FakePocketTTSModel.block_stream_after_first = release
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(effective_language="es", quality_tier="quality", max_tokens=4),
+        _pockettts_config(effective_language="es", quality_tier="quality", max_tokens=4),
         model_class=FakePocketTTSModel,
     )
     await provider.start()
@@ -379,7 +707,7 @@ async def test_pockettts_stream_cancellation_stops_delivery_without_state_leak()
     release = threading.Event()
     FakePocketTTSModel.block_stream_after_first = release
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(effective_language="es", quality_tier="quality", max_tokens=4),
+        _pockettts_config(effective_language="es", quality_tier="quality", max_tokens=4),
         model_class=FakePocketTTSModel,
     )
     await provider.start()
@@ -403,7 +731,7 @@ async def test_pockettts_stream_cancel_wakes_forever_generator_without_default_t
 ):
     FakePocketTTSModel.forever_stream_after_first = True
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(
+        _pockettts_config(
             effective_language="es",
             quality_tier="quality",
             max_tokens=4,
@@ -435,7 +763,7 @@ async def test_pockettts_stream_completion_hands_gate_to_queued_synthesis_until_
     FakePocketTTSModel.block_stream_after_first = release_stream
     FakePocketTTSModel.block_generation = release_synthesis
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(
+        _pockettts_config(
             effective_language="es",
             quality_tier="quality",
             max_tokens=4,
@@ -478,7 +806,7 @@ async def test_pockettts_serializes_model_entry_and_cancels_active_delivery() ->
     release = threading.Event()
     FakePocketTTSModel.block_generation = release
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(
+        _pockettts_config(
             effective_language="en",
             max_tokens=4,
             request_timeout_s=5,
@@ -514,7 +842,7 @@ async def test_pockettts_timeout_keeps_entry_gate_until_blocking_call_finishes()
     release = threading.Event()
     FakePocketTTSModel.block_generation = release
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(
+        _pockettts_config(
             effective_language="en",
             max_tokens=4,
             request_timeout_s=0.05,
@@ -545,7 +873,7 @@ async def test_pockettts_reload_rejects_new_work_while_draining_then_swaps() -> 
     release = threading.Event()
     FakePocketTTSModel.block_generation = release
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(effective_language="en", max_tokens=4),
+        _pockettts_config(effective_language="en", max_tokens=4),
         model_class=FakePocketTTSModel,
     )
     await provider.start()
@@ -555,7 +883,7 @@ async def test_pockettts_reload_rejects_new_work_while_draining_then_swaps() -> 
     await asyncio.sleep(0.05)
     reload_task = asyncio.create_task(
         provider.reload(
-            PocketTTSProviderConfig(effective_language="de", quality_tier="quality", max_tokens=4)
+            _pockettts_config(effective_language="de", quality_tier="quality", max_tokens=4)
         )
     )
     await asyncio.sleep(0.05)
@@ -577,7 +905,7 @@ async def test_pockettts_reload_rejects_new_work_while_draining_then_swaps() -> 
 @pytest.mark.asyncio
 async def test_pockettts_failed_reload_retains_old_healthy_state() -> None:
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(effective_language="en", max_tokens=4),
+        _pockettts_config(effective_language="en", max_tokens=4),
         model_class=FakePocketTTSModel,
     )
     await provider.start()
@@ -586,7 +914,7 @@ async def test_pockettts_failed_reload_retains_old_healthy_state() -> None:
     FakePocketTTSModel.fail_load = True
     with pytest.raises(TTSProviderError) as exc_info:
         await provider.reload(
-            PocketTTSProviderConfig(effective_language="de", quality_tier="quality", max_tokens=4)
+            _pockettts_config(effective_language="de", quality_tier="quality", max_tokens=4)
         )
 
     assert exc_info.value.code == "unavailable"
@@ -594,14 +922,14 @@ async def test_pockettts_failed_reload_retains_old_healthy_state() -> None:
     assert health.ready is True
     assert health.base_identity == original_health.base_identity
     result = await provider.synthesize(TTSSynthesisRequest(text="still works"))
-    assert result.voice == "standard:alba"
+    assert result.voice == "standard:starter_en:alba"
     await provider.stop()
 
 
 @pytest.mark.asyncio
 async def test_pockettts_forwards_supported_settings_and_omits_null_temperature() -> None:
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(
+        _pockettts_config(
             effective_language="pt",
             quality_tier="quality",
             max_tokens=4,
@@ -638,14 +966,14 @@ async def test_pockettts_forwards_supported_settings_and_omits_null_temperature(
 @pytest.mark.asyncio
 async def test_pockettts_rejects_unsupported_provider_and_request_settings() -> None:
     unsupported_device = PocketTTSProvider(
-        PocketTTSProviderConfig(effective_language="en", max_tokens=4, device="cuda"),
+        _pockettts_config(effective_language="en", max_tokens=4, device="cuda"),
         model_class=FakePocketTTSModel,
     )
     with pytest.raises(TTSProviderError) as device_error:
         await unsupported_device.start()
 
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(effective_language="en", max_tokens=4),
+        _pockettts_config(effective_language="en", max_tokens=4),
         model_class=FakePocketTTSModel,
     )
     await provider.start()
@@ -667,7 +995,7 @@ async def test_pockettts_rejects_unsupported_provider_and_request_settings() -> 
 async def test_pockettts_rejects_loaded_non_cpu_model() -> None:
     FakePocketTTSModel.loaded_device = "cuda"
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(effective_language="en", max_tokens=4),
+        _pockettts_config(effective_language="en", max_tokens=4),
         model_class=FakePocketTTSModel,
     )
 
@@ -683,7 +1011,7 @@ async def test_pockettts_rejects_loaded_non_cpu_model() -> None:
 async def test_pockettts_rejects_loaded_sample_rate_mismatch_before_voice_states() -> None:
     FakePocketTTSModel.loaded_sample_rate = 16000
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(effective_language="en", max_tokens=4),
+        _pockettts_config(effective_language="en", max_tokens=4),
         model_class=FakePocketTTSModel,
     )
 
@@ -701,7 +1029,7 @@ async def test_pockettts_rejects_loaded_sample_rate_mismatch_before_voice_states
 async def test_pockettts_unavailable_errors_are_sanitized() -> None:
     FakePocketTTSModel.fail_load = True
     provider = PocketTTSProvider(
-        PocketTTSProviderConfig(effective_language="en", max_tokens=4),
+        _pockettts_config(effective_language="en", max_tokens=4),
         model_class=FakePocketTTSModel,
     )
 

@@ -6,11 +6,17 @@ import asyncio
 import contextlib
 import hashlib
 import importlib
+import importlib.metadata
+import importlib.resources
 import math
+import os
+import shutil
+import tempfile
 import threading
 from collections.abc import AsyncIterator, Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal, cast
 
 from app.helpers.aurora_logger import log_debug, log_warning
@@ -28,6 +34,11 @@ from app.services.tts.providers.base import (
     validate_synthesis_request,
 )
 from app.services.tts.providers.piper import pcm_to_wav_bytes
+from app.services.tts.voice_registry import (
+    VoiceBaseIdentity,
+    VoiceStateArtifactHandle,
+    validate_logical_voice_id,
+)
 
 PocketTTSQualityTier = Literal["compact", "quality"]
 
@@ -159,6 +170,8 @@ _CONFIG_BY_LANGUAGE_AND_TIER: Mapping[tuple[str, PocketTTSQualityTier], str] = {
 }
 
 _ENGLISH_LEGACY_CONFIGS = frozenset({"english", "english_2026-01"})
+_MAX_CONFIG_YAML_BYTES = 2 * 1024 * 1024
+_MAX_VOICE_STATE_BYTES = 64 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -166,7 +179,7 @@ class PocketTTSVoiceStateConfig:
     """Ready logical voice state loaded under one PocketTTS base model."""
 
     voice_id: str
-    audio_prompt: str
+    artifact_handle: VoiceStateArtifactHandle
     display_name: str | None = None
 
 
@@ -176,13 +189,7 @@ class PocketTTSProviderConfig:
 
     effective_language: str
     quality_tier: PocketTTSQualityTier = "compact"
-    voices: tuple[PocketTTSVoiceStateConfig, ...] = (
-        PocketTTSVoiceStateConfig(
-            voice_id="standard:alba",
-            audio_prompt="alba",
-            display_name="Alba",
-        ),
-    )
+    voices: tuple[PocketTTSVoiceStateConfig, ...] = ()
     preload: bool = True
     quantize: bool = False
     device: str = "cpu"
@@ -198,6 +205,9 @@ class PocketTTSProviderConfig:
     model_revision: str = "pocket-tts-2.1.0"
     config_id: str | None = None
     expected_sample_rate: int = 24000
+    package_version: str | None = None
+    config_yaml_bytes: bytes | None = None
+    config_asset_refs: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -268,6 +278,16 @@ def _validate_provider_config(config: PocketTTSProviderConfig) -> None:
         raise TTSProviderError("unavailable", "PocketTTS device is unavailable")
     if not config.voices:
         raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+    voice_ids = [voice.voice_id for voice in config.voices]
+    if len(set(voice_ids)) != len(voice_ids):
+        raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+    for voice in config.voices:
+        try:
+            validate_logical_voice_id(voice.voice_id)
+        except ValueError as exc:
+            raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable") from exc
+        if voice.artifact_handle.voice_id != voice.voice_id:
+            raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
     _validate_timeout("request timeout", config.request_timeout_s)
     _validate_timeout("queue timeout", config.queue_timeout_s)
     _validate_timeout("init timeout", config.init_timeout_s)
@@ -288,31 +308,315 @@ def _validate_provider_config(config: PocketTTSProviderConfig) -> None:
         raise TTSProviderError("invalid_audio", "PocketTTS sample rate is unavailable")
 
 
-def _resident_identity(
+@dataclass(frozen=True)
+class PocketTTSBaseIdentitySpec:
+    """Path-free identity shared by TTS service and PocketTTS provider."""
+
+    voice_base_identity: VoiceBaseIdentity
+    health_identity: str
+    config_info: PocketTTSConfigInfo
+
+
+def _pockettts_package_version(config: PocketTTSProviderConfig) -> str:
+    if config.package_version:
+        return config.package_version
+    try:
+        return importlib.metadata.version("pocket-tts")
+    except importlib.metadata.PackageNotFoundError:
+        return config.model_revision
+
+
+def _normalized_config_asset_refs(raw_refs: Iterable[object]) -> tuple[str, ...]:
+    cleaned: set[str] = set()
+    for value in raw_refs:
+        if not isinstance(value, str):
+            continue
+        normalized = value.strip().replace("\\", "/")
+        if not normalized:
+            continue
+        parts = [part for part in normalized.split("/") if part not in ("", ".")]
+        if not parts or any(part == ".." for part in parts):
+            continue
+        cleaned.add("/".join(parts))
+    return tuple(sorted(cleaned))
+
+
+def _load_packaged_config_yaml_bytes(config_id: str) -> bytes:
+    try:
+        root = importlib.resources.files("pocket_tts")
+    except (ModuleNotFoundError, AttributeError) as exc:
+        raise TTSProviderError("unavailable", "PocketTTS config is unavailable") from exc
+    candidates = (
+        root.joinpath("config", f"{config_id}.yaml"),
+        root.joinpath("config", f"{config_id}.yml"),
+        root.joinpath("configs", f"{config_id}.yaml"),
+        root.joinpath("configs", f"{config_id}.yml"),
+        root.joinpath(f"{config_id}.yaml"),
+        root.joinpath(f"{config_id}.yml"),
+    )
+    for resource in candidates:
+        try:
+            data = resource.read_bytes()
+        except (FileNotFoundError, IsADirectoryError, OSError):
+            continue
+        if data:
+            return data
+    raise TTSProviderError("unavailable", "PocketTTS config is unavailable")
+
+
+def _write_all(fd: int, data: bytes) -> None:
+    view = memoryview(data)
+    while view:
+        written = os.write(fd, view)
+        if written <= 0:
+            raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+        view = view[written:]
+
+
+def _extract_yaml_asset_refs(config_yaml_bytes: bytes) -> tuple[str, ...]:
+    if not config_yaml_bytes or len(config_yaml_bytes) > _MAX_CONFIG_YAML_BYTES:
+        raise TTSProviderError("unavailable", "PocketTTS config is unavailable")
+    try:
+        import yaml  # type: ignore[import-untyped]
+
+        parsed = yaml.safe_load(config_yaml_bytes)
+    except Exception as exc:
+        raise TTSProviderError("unavailable", "PocketTTS config is unavailable") from exc
+    if not isinstance(parsed, Mapping):
+        raise TTSProviderError("unavailable", "PocketTTS config is unavailable")
+    refs: list[str] = []
+
+    def visit(value: Any, key: str | None = None) -> None:
+        if isinstance(value, Mapping):
+            for child_key, child_value in value.items():
+                visit(child_value, str(child_key))
+            return
+        if isinstance(value, list | tuple):
+            for child in value:
+                visit(child, key)
+            return
+        if isinstance(value, str) and key is not None:
+            lowered = key.lower()
+            if any(token in lowered for token in ("path", "file", "repo", "revision", "model")):
+                refs.append(value)
+
+    visit(parsed)
+    normalized = _normalized_config_asset_refs(refs)
+    if not normalized:
+        raise TTSProviderError("unavailable", "PocketTTS config is unavailable")
+    return normalized
+
+
+def build_pockettts_base_identity_spec(
     *,
     config_info: PocketTTSConfigInfo,
     model_revision: str,
-    model: Any,
-) -> str:
-    """Build a path-free resident model identity."""
+    package_version: str,
+    config_yaml_bytes: bytes,
+    config_asset_refs: Iterable[str] = (),
+) -> PocketTTSBaseIdentitySpec:
+    """Build the strict path-free resident model and registry identity."""
+    parsed_refs = _extract_yaml_asset_refs(config_yaml_bytes)
+    normalized_refs = _normalized_config_asset_refs(config_asset_refs) or parsed_refs
+    if not normalized_refs:
+        raise TTSProviderError("unavailable", "PocketTTS config is unavailable")
+    yaml_digest = hashlib.sha256(config_yaml_bytes).hexdigest()
     digest = hashlib.sha256()
-    digest.update(b"pockettts-provider-v1")
+    digest.update(b"pockettts-provider-v2")
+    digest.update(b"\0package:")
+    digest.update(package_version.encode("utf-8"))
     digest.update(b"\0config:")
     digest.update(config_info.config_id.encode("utf-8"))
     digest.update(b"\0language:")
     digest.update(config_info.product_language.encode("utf-8"))
+    digest.update(b"\0tier:")
+    digest.update(config_info.quality_tier.encode("ascii"))
     digest.update(b"\0layers:")
     digest.update(str(config_info.layer_count).encode("ascii"))
     digest.update(b"\0revision:")
     digest.update(model_revision.encode("utf-8"))
-    origin = getattr(model, "origin", None)
-    if origin is not None:
-        digest.update(b"\0origin-name:")
-        digest.update(getattr(origin, "name", str(origin).split("/")[-1]).encode("utf-8"))
-    return (
+    digest.update(b"\0config-yaml-sha256:")
+    digest.update(yaml_digest.encode("ascii"))
+    for ref in normalized_refs:
+        digest.update(b"\0asset-ref:")
+        digest.update(ref.encode("utf-8"))
+    compatibility_group = (
         f"pockettts:{config_info.product_language}:{config_info.config_id}:"
         f"layers-{config_info.layer_count}:sha256:{digest.hexdigest()[:24]}"
     )
+    return PocketTTSBaseIdentitySpec(
+        voice_base_identity=VoiceBaseIdentity(
+            runtime_target="pockettts-python",
+            language_bundle=config_info.config_id,
+            compatibility_group=compatibility_group,
+        ),
+        health_identity=compatibility_group,
+        config_info=config_info,
+    )
+
+
+def resolve_pockettts_base_identity_spec(
+    config: PocketTTSProviderConfig,
+) -> PocketTTSBaseIdentitySpec:
+    """Resolve the shared PocketTTS base identity without loading model weights."""
+    config_info = resolve_pockettts_config(
+        config.effective_language,
+        config.quality_tier,
+        config_id=config.config_id,
+    )
+    config_yaml_bytes = (
+        config.config_yaml_bytes
+        if config.config_yaml_bytes is not None
+        else _load_packaged_config_yaml_bytes(config_info.config_id)
+    )
+    parsed_refs = _extract_yaml_asset_refs(config_yaml_bytes)
+    asset_refs = config.config_asset_refs or parsed_refs
+    if not asset_refs:
+        raise TTSProviderError("unavailable", "PocketTTS config is unavailable")
+    return build_pockettts_base_identity_spec(
+        config_info=config_info,
+        model_revision=config.model_revision,
+        package_version=_pockettts_package_version(config),
+        config_yaml_bytes=config_yaml_bytes,
+        config_asset_refs=asset_refs,
+    )
+
+
+def _close_fd_once(fd: int | None) -> None:
+    if fd is None or fd < 0:
+        return
+    with contextlib.suppress(OSError):
+        os.close(fd)
+
+
+def _read_verified_handle_bytes(handle: VoiceStateArtifactHandle) -> bytes:
+    if handle.format != "safetensors":
+        raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+    if (
+        isinstance(handle.size_bytes, bool)
+        or not isinstance(handle.size_bytes, int)
+        or handle.size_bytes <= 0
+        or handle.size_bytes > _MAX_VOICE_STATE_BYTES
+    ):
+        raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+    digest = hashlib.sha256()
+    remaining = handle.size_bytes
+    chunks: list[bytes] = []
+    os.lseek(handle.fd, 0, os.SEEK_SET)
+    while remaining:
+        chunk = os.read(handle.fd, min(1024 * 1024, remaining))
+        if not chunk:
+            raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+        chunks.append(chunk)
+        digest.update(chunk)
+        remaining -= len(chunk)
+    extra = os.read(handle.fd, 1)
+    if extra:
+        raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+    os.lseek(handle.fd, 0, os.SEEK_SET)
+    if digest.hexdigest() != handle.sha256:
+        raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+    return b"".join(chunks)
+
+
+def _materialize_voice_state_bytes(
+    model: Any, voice: PocketTTSVoiceStateConfig, artifact_bytes: bytes
+) -> Any:
+    tmp_dir = Path(tempfile.mkdtemp(prefix="aurora-pockettts-state-"))
+    try:
+        os.chmod(tmp_dir, 0o700)
+        temp_path = tmp_dir / f"{voice.voice_id.replace(':', '_')}.safetensors"
+        out_fd = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            _write_all(out_fd, artifact_bytes)
+            os.fsync(out_fd)
+        finally:
+            os.close(out_fd)
+        state = model.get_state_for_audio_prompt(temp_path)
+        _validate_voice_state_semantics(state)
+        return state
+    except TTSProviderError:
+        raise
+    except Exception as exc:
+        log_debug(f"PocketTTS voice state import failure type={type(exc).__name__}")
+        raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable") from exc
+    finally:
+        try:
+            shutil.rmtree(tmp_dir)
+        except Exception as exc:
+            raise TTSProviderError("unavailable", "PocketTTS voice cleanup failed") from exc
+
+
+def _validate_voice_state_semantics(state: Any) -> None:
+    """Reject obviously malformed imported PocketTTS state before readiness."""
+    if not isinstance(state, Mapping) or not state:
+        raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+    seen = 0
+    has_offset = False
+
+    def tensor_like(value: Any) -> bool:
+        shape = getattr(value, "shape", None)
+        if shape is None:
+            return False
+        try:
+            shape_values = tuple(int(dim) for dim in shape)
+        except (TypeError, ValueError) as exc:
+            raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable") from exc
+        if not shape_values or any(dim <= 0 or dim > 1_000_000 for dim in shape_values):
+            raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+        dtype = str(getattr(value, "dtype", ""))
+        if dtype and len(dtype) > 64:
+            raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+        finite = getattr(value, "isfinite", None)
+        finite_result: bool | None = None
+        if callable(finite):
+            with contextlib.suppress(Exception):
+                finite_value = finite()
+                all_method = getattr(finite_value, "all", None)
+                if callable(all_method):
+                    finite_value = all_method()
+                item_method = getattr(finite_value, "item", None)
+                if callable(item_method):
+                    finite_value = item_method()
+                if isinstance(finite_value, bool):
+                    finite_result = finite_value
+        if finite_result is False:
+            raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+        return True
+
+    def visit(value: Any, depth: int, key_path: tuple[str, ...]) -> bool:
+        nonlocal seen, has_offset
+        if depth > 8 or seen > 4096:
+            raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+        lowered_path = ".".join(key_path).lower()
+        if isinstance(value, Mapping):
+            if not value:
+                raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+            found_tensor = False
+            for key, child in value.items():
+                if not isinstance(key, str) or not key or len(key) > 240:
+                    raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+                seen += 1
+                if visit(child, depth + 1, (*key_path, key)):
+                    found_tensor = True
+            if ("offset" in lowered_path or "cache" in lowered_path) and not found_tensor:
+                raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+            return found_tensor
+        if isinstance(value, bytes | bytearray | memoryview | str):
+            raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+        if tensor_like(value):
+            if "offset" in lowered_path:
+                has_offset = True
+            return True
+        if ("offset" in lowered_path or "cache" in lowered_path) or not (
+            isinstance(value, int | float | bool) or value is None
+        ):
+            raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+        return False
+
+    visit(state, 0, ())
+    if not has_offset:
+        raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
 
 
 def _flatten_audio_values(audio: Any) -> list[float]:
@@ -419,6 +723,33 @@ def _validate_loaded_model_device(model: Any) -> None:
         raise TTSProviderError("unavailable", "PocketTTS device is unavailable")
 
 
+def _validate_loaded_model_identity(model: Any, config_info: PocketTTSConfigInfo) -> None:
+    """Reject a loaded model that does not look like the selected config."""
+    expected = config_info.config_id.lower()
+    product_language = config_info.product_language.lower()
+    strict_observed: list[str] = []
+    language_observed: list[str] = []
+    origin = getattr(model, "origin", None)
+    if origin is not None:
+        origin_name = getattr(origin, "name", None)
+        if isinstance(origin_name, str):
+            strict_observed.append(Path(origin_name).stem.lower())
+    model_config = getattr(model, "config", None)
+    for attr in ("config_id", "name"):
+        value = getattr(model_config, attr, None)
+        if isinstance(value, str):
+            strict_observed.append(Path(value).stem.lower())
+    language = getattr(model_config, "language", None)
+    if isinstance(language, str):
+        language_observed.append(language.lower())
+    if strict_observed and expected not in strict_observed:
+        raise TTSProviderError("unavailable", "PocketTTS config is unavailable")
+    if language_observed and not any(
+        value in {expected, product_language} for value in language_observed
+    ):
+        raise TTSProviderError("unavailable", "PocketTTS config is unavailable")
+
+
 class PocketTTSProvider:
     """Provider wrapper for official PocketTTS model inference."""
 
@@ -445,6 +776,9 @@ class PocketTTSProvider:
         self._cancelled_requests: set[str] = set()
         self._stream_wakeups: dict[str, Any] = {}
         self._last_error: str | None = None
+        self._owned_voice_fds: set[int] = {
+            voice.artifact_handle.fd for voice in config.voices if voice.artifact_handle.fd >= 0
+        }
 
     @property
     def capabilities(self) -> TTSProviderCapabilities:
@@ -467,26 +801,44 @@ class PocketTTSProvider:
 
     async def start(self) -> None:
         """Load PocketTTS resources when preload is enabled."""
-        _validate_provider_config(self._config)
-        self._ensure_executor()
-        if not self._config.preload:
+        try:
+            _validate_provider_config(self._config)
+            self._ensure_executor()
+            if not self._config.preload:
+                async with self._state_lock:
+                    self._started = True
+                    self._stopping = False
+                    self._last_error = None
+                return
+            loaded = await self._build_loaded_state(self._config)
             async with self._state_lock:
+                self._loaded = loaded
                 self._started = True
                 self._stopping = False
                 self._last_error = None
-            return
-        loaded = await self._build_loaded_state(self._config)
-        async with self._state_lock:
-            self._loaded = loaded
-            self._started = True
-            self._stopping = False
-            self._last_error = None
+        except Exception:
+            async with self._state_lock:
+                self._close_owned_voice_fds_locked()
+            executor = self._executor
+            self._executor = None
+            if executor is not None:
+                await asyncio.to_thread(executor.shutdown, True, cancel_futures=True)
+            raise
 
     async def reload(self, config: PocketTTSProviderConfig) -> None:
         """Atomically reload PocketTTS resources, retaining old state on failure."""
-        _validate_provider_config(config)
+        new_fds = self._voice_fds_from_config(config)
+        async with self._state_lock:
+            self._owned_voice_fds.update(new_fds)
+        try:
+            _validate_provider_config(config)
+        except Exception:
+            async with self._state_lock:
+                self._close_voice_fds_locked(new_fds)
+            raise
         async with self._state_lock:
             if self._stopping:
+                self._close_voice_fds_locked(new_fds)
                 raise TTSProviderError("unavailable", "TTS provider is unavailable")
             self._reloading = True
         try:
@@ -496,6 +848,7 @@ class PocketTTSProvider:
             async with self._state_lock:
                 self._last_error = str(exc)
                 self._reloading = False
+                self._close_voice_fds_locked(new_fds)
             raise
         async with self._state_lock:
             self._config = config
@@ -533,6 +886,7 @@ class PocketTTSProvider:
             self._queued_requests.clear()
             self._active_requests.clear()
             self._cancelled_requests.clear()
+            self._close_owned_voice_fds_locked()
             self._stopping = False
 
     async def health(self) -> TTSProviderHealth:
@@ -727,6 +1081,7 @@ class PocketTTSProvider:
             config.quality_tier,
             config_id=config.config_id,
         )
+        identity_spec = resolve_pockettts_base_identity_spec(config)
 
         def load() -> _LoadedPocketTTSState:
             model_class = self._model_class or _load_pockettts_model_class()
@@ -736,6 +1091,7 @@ class PocketTTSProvider:
                 **_load_model_kwargs(config),
             )
             _validate_loaded_model_device(model)
+            _validate_loaded_model_identity(model, config_info)
             raw_sample_rate = getattr(model, "sample_rate", 24000) or 24000
             if isinstance(raw_sample_rate, bool):
                 raise TTSProviderError("invalid_audio", "PocketTTS sample rate is unavailable")
@@ -747,21 +1103,41 @@ class PocketTTSProvider:
                 ) from exc
             if sample_rate != config.expected_sample_rate:
                 raise TTSProviderError("invalid_audio", "PocketTTS sample rate is unavailable")
-            voice_states = {
-                voice.voice_id: model.get_state_for_audio_prompt(voice.audio_prompt)
-                for voice in config.voices
-            }
+            voice_states: dict[str, Any] = {}
+            try:
+                for voice in config.voices:
+                    handle = voice.artifact_handle
+                    if handle.runtime_target != identity_spec.voice_base_identity.runtime_target:
+                        raise TTSProviderError(
+                            "unsupported_voice", "PocketTTS voice is unavailable"
+                        )
+                    if handle.language_bundle != identity_spec.voice_base_identity.language_bundle:
+                        raise TTSProviderError(
+                            "unsupported_voice", "PocketTTS voice is unavailable"
+                        )
+                    if (
+                        handle.compatibility_group
+                        != identity_spec.voice_base_identity.compatibility_group
+                    ):
+                        raise TTSProviderError(
+                            "unsupported_voice", "PocketTTS voice is unavailable"
+                        )
+                    artifact_bytes = _read_verified_handle_bytes(handle)
+                    self._close_owned_voice_fd(handle.fd)
+                    voice_states[voice.voice_id] = _materialize_voice_state_bytes(
+                        model, voice, artifact_bytes
+                    )
+            finally:
+                for voice in config.voices:
+                    handle = voice.artifact_handle
+                    self._close_owned_voice_fd(handle.fd)
             return _LoadedPocketTTSState(
                 config=config,
-                config_info=config_info,
+                config_info=identity_spec.config_info,
                 model=model,
                 sample_rate=sample_rate,
                 voice_states=voice_states,
-                base_identity=_resident_identity(
-                    config_info=config_info,
-                    model_revision=config.model_revision,
-                    model=model,
-                ),
+                base_identity=identity_spec.health_identity,
             )
 
         return cast(
@@ -960,3 +1336,29 @@ class PocketTTSProvider:
                 thread_name_prefix="aurora-pockettts",
             )
         return self._executor
+
+    def _discard_owned_voice_fd(self, fd: int) -> None:
+        self._owned_voice_fds.discard(fd)
+
+    def _close_owned_voice_fd(self, fd: int) -> None:
+        if fd in self._owned_voice_fds:
+            self._owned_voice_fds.discard(fd)
+            _close_fd_once(fd)
+
+    def _close_owned_voice_fds_locked(self) -> None:
+        fds = tuple(self._owned_voice_fds)
+        self._owned_voice_fds.clear()
+        for fd in fds:
+            _close_fd_once(fd)
+
+    def _close_voice_fds_locked(self, fds: Iterable[int]) -> None:
+        for fd in tuple(fds):
+            if fd in self._owned_voice_fds:
+                self._owned_voice_fds.discard(fd)
+                _close_fd_once(fd)
+
+    @staticmethod
+    def _voice_fds_from_config(config: PocketTTSProviderConfig) -> set[int]:
+        return {
+            voice.artifact_handle.fd for voice in config.voices if voice.artifact_handle.fd >= 0
+        }

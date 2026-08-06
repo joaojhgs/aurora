@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
+import hashlib
+import os
 import sys
+import tempfile
 import types
 from unittest.mock import AsyncMock, Mock
 
@@ -21,7 +25,15 @@ from app.services.tts.providers.base import (
     VoiceSelectionMode,
 )
 from app.services.tts.service import TTSService
-from app.shared.config.models import Piper, Pockettts, Providers, System, Tts
+from app.services.tts.voice_registry import VoiceCatalogEntry, VoiceStateArtifactHandle
+from app.shared.config.models import (
+    Piper,
+    Pockettts,
+    Providers,
+    System,
+    Tts,
+    VoiceRegistry as VoiceRegistryConfig,
+)
 from app.shared.contracts.models.tts import (
     TTSAudioChunkEvent,
     TTSMethods,
@@ -37,6 +49,10 @@ from app.shared.messaging import bus_init
 @pytest.fixture
 def mock_bus():
     FakePocketProvider.instances = []
+    FakeVoiceRegistry.entries = ()
+    FakeVoiceRegistry.resolved = []
+    FakeVoiceRegistry.opened_fds = []
+    FakeVoiceRegistry.fail_resolve_for = None
     bus = Mock()
     bus.publish = AsyncMock()
     bus.subscribe = Mock()
@@ -112,15 +128,18 @@ class FakePocketProvider:
 
     async def start(self) -> None:
         self.started = True
+        for voice in getattr(self.config, "voices", ()):
+            with contextlib.suppress(OSError):
+                os.close(voice.artifact_handle.fd)
 
     async def stop(self) -> None:
         self.stopped = True
 
     async def health(self) -> TTSProviderHealth:
-        return TTSProviderHealth("pockettts", True, "standard:alba", "pockettts:base")
+        return TTSProviderHealth("pockettts", True, "standard:starter_en:alba", "pockettts:base")
 
     async def list_voices(self) -> tuple[TTSVoiceInfo, ...]:
-        return (TTSVoiceInfo("standard:alba", "Alba", True, "german"),)
+        return (TTSVoiceInfo("standard:starter_en:alba", "Alba", True, "german"),)
 
     async def synthesize(self, request) -> TTSSynthesisResult:
         self.requests.append(request)
@@ -136,7 +155,7 @@ class FakePocketProvider:
             sample_rate=24000,
             channels=1,
             duration_ms=2 / 24000 * 1000,
-            voice=request.voice or "standard:alba",
+            voice=request.voice or "standard:starter_en:alba",
         )
 
     async def stream(self, request):
@@ -173,6 +192,12 @@ class FakePocketProvider:
         self.cancelled.append(request_id)
 
 
+class FailingStartPocketProvider(FakePocketProvider):
+    async def start(self) -> None:
+        await super().start()
+        raise TTSProviderError("unavailable", "PocketTTS is unavailable")
+
+
 class FakePiperProvider(FakePocketProvider):
     @property
     def capabilities(self) -> TTSProviderCapabilities:
@@ -180,6 +205,67 @@ class FakePiperProvider(FakePocketProvider):
             provider_id="piper",
             voice_selection_mode=VoiceSelectionMode.ACTIVE_ONLY,
         )
+
+
+def _registry_handle(voice_id: str, identity) -> VoiceStateArtifactHandle:
+    payload = f"registry-state:{voice_id}".encode()
+    with tempfile.TemporaryFile() as file:
+        file.write(payload)
+        file.flush()
+        file.seek(0)
+        fd = os.dup(file.fileno())
+    return VoiceStateArtifactHandle(
+        voice_id=voice_id,
+        runtime_target=identity.runtime_target,
+        language_bundle=identity.language_bundle,
+        compatibility_group=identity.compatibility_group,
+        artifact_revision="rev1",
+        relative_ref="artifacts/profile/voice-state.safetensors",
+        sha256=hashlib.sha256(payload).hexdigest(),
+        size_bytes=len(payload),
+        format="safetensors",
+        fd=fd,
+    )
+
+
+class FakeVoiceRegistry:
+    entries: tuple[VoiceCatalogEntry, ...] = ()
+    resolved: list[str] = []
+    opened_fds: list[int] = []
+    fail_resolve_for: str | None = None
+
+    def __init__(self, root) -> None:
+        self.root = root
+
+    async def catalog(self, identity, *, include_private: bool = False):
+        del identity, include_private
+        return self.entries
+
+    async def resolve_voice_state_artifact(self, voice_id: str, identity):
+        if voice_id == self.fail_resolve_for:
+            raise RuntimeError("registry storage unavailable")
+        self.resolved.append(voice_id)
+        handle = _registry_handle(voice_id, identity)
+        self.opened_fds.append(handle.fd)
+        return handle
+
+
+def _catalog_entry(
+    voice_id: str,
+    *,
+    display_name: str = "Voice",
+    kind: str = "standard",
+    ready: bool = True,
+    language_bundle: str = "english_2026-04",
+) -> VoiceCatalogEntry:
+    return VoiceCatalogEntry(
+        voice_id=voice_id,
+        display_name=display_name,
+        kind=kind,
+        ready=ready,
+        language_bundle=language_bundle,
+        runtime_target="pockettts-python",
+    )
 
 
 async def _fake_config_for(tts_cfg: Tts, system_cfg: System):
@@ -202,6 +288,14 @@ def _audio_events(mock_bus) -> list[TTSAudioChunkEvent]:
     ]
 
 
+def _fd_is_closed(fd: int) -> bool:
+    try:
+        os.fstat(fd)
+    except OSError:
+        return True
+    return False
+
+
 @pytest.mark.asyncio
 async def test_pockettts_runtime_uses_system_language_quality_and_no_realtimetts(
     monkeypatch, mock_bus
@@ -218,6 +312,18 @@ async def test_pockettts_runtime_uses_system_language_quality_and_no_realtimetts
 
     monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
     monkeypatch.setattr("app.services.tts.service.PocketTTSProvider", FakePocketProvider)
+    FakeVoiceRegistry.entries = (
+        VoiceCatalogEntry(
+            voice_id="standard:starter_de:anna",
+            display_name="Anna",
+            kind="standard",
+            ready=True,
+            language_bundle="german_24l",
+            runtime_target="pockettts-python",
+        ),
+    )
+    FakeVoiceRegistry.resolved = []
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
     monkeypatch.setattr("app.services.tts.service.create_pcm_playback", lambda **_kwargs: playback)
     monkeypatch.setattr(
         "app.services.tts.service.create_realtime_piper_stream",
@@ -232,7 +338,8 @@ async def test_pockettts_runtime_uses_system_language_quality_and_no_realtimetts
     assert stream is playback
     assert provider.config.effective_language == "de"
     assert provider.config.quality_tier == "quality"
-    assert provider.config.voices[0].voice_id == "standard:alba"
+    assert provider.config.voices[0].voice_id == "standard:starter_de:anna"
+    assert FakeVoiceRegistry.resolved == ["standard:starter_de:anna"]
 
 
 @pytest.mark.asyncio
@@ -255,6 +362,186 @@ async def test_pockettts_custom_config_fails_closed_before_provider_construction
 
     assert exc_info.value.code == "unsupported_voice"
     assert FakePocketProvider.instances == []
+
+
+@pytest.mark.asyncio
+async def test_pockettts_empty_registry_fails_before_provider_construction(
+    monkeypatch, mock_bus
+) -> None:
+    tts_cfg = Tts(
+        provider="pockettts",
+        providers=Providers(pockettts=Pockettts()),
+    )
+    fake_config = await _fake_config_for(tts_cfg, System(primary_language="en"))
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.PocketTTSProvider", FakePocketProvider)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await TTSService()._build_runtime()
+
+    assert exc_info.value.code == "unsupported_voice"
+    assert FakePocketProvider.instances == []
+    assert FakeVoiceRegistry.resolved == []
+
+
+@pytest.mark.asyncio
+async def test_pockettts_resolves_explicit_standard_and_clone_ids_in_order(
+    monkeypatch, mock_bus
+) -> None:
+    clone_id = "clone:00000000-0000-4000-8000-000000000001"
+    tts_cfg = Tts(
+        provider="pockettts",
+        default_voice_id="standard:starter_en:alba",
+        providers=Providers(
+            pockettts=Pockettts(
+                preload_voice_ids=[clone_id, "standard:starter_en:alba"],
+            )
+        ),
+    )
+    fake_config = await _fake_config_for(tts_cfg, System(primary_language="en"))
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.PocketTTSProvider", FakePocketProvider)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr("app.services.tts.service.create_pcm_playback", lambda **_kwargs: object())
+    FakeVoiceRegistry.entries = (
+        _catalog_entry("standard:starter_en:alba", display_name="Alba"),
+        _catalog_entry(clone_id, display_name="Local", kind="clone"),
+    )
+
+    provider, _engine, _stream = await TTSService()._build_runtime()
+
+    assert [voice.voice_id for voice in provider.config.voices] == [
+        "standard:starter_en:alba",
+        clone_id,
+    ]
+    assert FakeVoiceRegistry.resolved == ["standard:starter_en:alba", clone_id]
+
+
+@pytest.mark.asyncio
+async def test_pockettts_partial_resolution_failure_closes_opened_registry_handles(
+    monkeypatch, mock_bus
+) -> None:
+    clone_id = "clone:00000000-0000-4000-8000-000000000001"
+    tts_cfg = Tts(
+        provider="pockettts",
+        default_voice_id="standard:starter_en:alba",
+        providers=Providers(pockettts=Pockettts(preload_voice_ids=[clone_id])),
+    )
+    fake_config = await _fake_config_for(tts_cfg, System(primary_language="en"))
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.PocketTTSProvider", FakePocketProvider)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    FakeVoiceRegistry.entries = (
+        _catalog_entry("standard:starter_en:alba", display_name="Alba"),
+        _catalog_entry(clone_id, display_name="Local", kind="clone"),
+    )
+    FakeVoiceRegistry.fail_resolve_for = clone_id
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await TTSService()._build_runtime()
+
+    assert exc_info.value.code == "unsupported_voice"
+    assert FakePocketProvider.instances == []
+    assert len(FakeVoiceRegistry.opened_fds) == 1
+    assert _fd_is_closed(FakeVoiceRegistry.opened_fds[0])
+
+
+@pytest.mark.parametrize(
+    ("voice_id", "kind", "registry_config"),
+    [
+        (
+            "standard:starter_en:alba",
+            "standard",
+            VoiceRegistryConfig(standard_pack_enabled=False),
+        ),
+        (
+            "clone:00000000-0000-4000-8000-000000000001",
+            "clone",
+            VoiceRegistryConfig(cloning_enabled=False),
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_pockettts_disabled_registry_kind_fails_closed_before_provider_construction(
+    voice_id: str,
+    kind: str,
+    registry_config: VoiceRegistryConfig,
+    monkeypatch,
+    mock_bus,
+) -> None:
+    tts_cfg = Tts(
+        provider="pockettts",
+        default_voice_id=voice_id,
+        voice_registry=registry_config,
+        providers=Providers(pockettts=Pockettts()),
+    )
+    fake_config = await _fake_config_for(tts_cfg, System(primary_language="en"))
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.PocketTTSProvider", FakePocketProvider)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    FakeVoiceRegistry.entries = (_catalog_entry(voice_id, kind=kind),)
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await TTSService()._build_runtime()
+
+    assert exc_info.value.code == "unsupported_voice"
+    assert FakePocketProvider.instances == []
+    assert FakeVoiceRegistry.resolved == []
+
+
+@pytest.mark.asyncio
+async def test_pockettts_runtime_start_failure_stops_constructed_provider(
+    monkeypatch, mock_bus
+) -> None:
+    tts_cfg = Tts(
+        provider="pockettts",
+        providers=Providers(pockettts=Pockettts()),
+    )
+    fake_config = await _fake_config_for(tts_cfg, System(primary_language="en"))
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.PocketTTSProvider", FailingStartPocketProvider)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    FakeVoiceRegistry.entries = (_catalog_entry("standard:starter_en:alba"),)
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await TTSService()._build_runtime()
+
+    assert exc_info.value.code == "unavailable"
+    assert len(FailingStartPocketProvider.instances) == 1
+    assert FailingStartPocketProvider.instances[0].stopped is True
+
+
+@pytest.mark.asyncio
+async def test_pockettts_playback_construction_failure_stops_started_provider(
+    monkeypatch, mock_bus
+) -> None:
+    tts_cfg = Tts(
+        provider="pockettts",
+        providers=Providers(pockettts=Pockettts()),
+    )
+    fake_config = await _fake_config_for(tts_cfg, System(primary_language="en"))
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.PocketTTSProvider", FakePocketProvider)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr(
+        "app.services.tts.service.create_pcm_playback",
+        Mock(side_effect=RuntimeError("audio output unavailable")),
+    )
+    FakeVoiceRegistry.entries = (_catalog_entry("standard:starter_en:alba"),)
+
+    with pytest.raises(RuntimeError, match="audio output unavailable"):
+        await TTSService()._build_runtime()
+
+    assert len(FakePocketProvider.instances) == 1
+    assert FakePocketProvider.instances[0].started is True
+    assert FakePocketProvider.instances[0].stopped is True
 
 
 @pytest.mark.asyncio

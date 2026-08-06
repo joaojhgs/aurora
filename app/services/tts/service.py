@@ -13,10 +13,11 @@ import asyncio
 import base64
 import contextlib
 import io
+import os
 import shutil
 import wave
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.messaging import Envelope
@@ -32,7 +33,9 @@ from app.services.tts.providers.pockettts import (
     PocketTTSProvider,
     PocketTTSProviderConfig,
     PocketTTSVoiceStateConfig,
+    resolve_pockettts_base_identity_spec,
 )
+from app.services.tts.voice_registry import VoiceRegistry, VoiceRegistryError
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import System, Tts
@@ -152,6 +155,13 @@ def _stream_matches_owner(
     return True
 
 
+def _close_voice_config_handles(voices: list[PocketTTSVoiceStateConfig]) -> None:
+    """Close registry handles that have not yet been transferred to a provider."""
+    for voice in voices:
+        with contextlib.suppress(OSError):
+            os.close(voice.artifact_handle.fd)
+
+
 # TODO: Implement volume control functions
 def reduce_volume_except_current():
     """Placeholder for reducing system volume during TTS."""
@@ -257,22 +267,94 @@ class TTSService(BaseService):
         )
         return policy.model_language
 
-    def _pockettts_voice_configs(self, tts_cfg: Tts) -> tuple[PocketTTSVoiceStateConfig, ...]:
-        """Build ready PocketTTS voice states from currently supported local config."""
+    async def _pockettts_voice_configs(
+        self,
+        tts_cfg: Tts,
+        provider_config: PocketTTSProviderConfig,
+    ) -> tuple[PocketTTSVoiceStateConfig, ...]:
+        """Resolve ready PocketTTS voice states from the local voice registry."""
         pocket_cfg = tts_cfg.providers.pockettts if tts_cfg.providers else None
-        configured_voice_ids = list(pocket_cfg.preload_voice_ids or ()) if pocket_cfg else []
-        default_voice_id = tts_cfg.default_voice_id or "standard:alba"
-        voice_ids = tuple(dict.fromkeys([default_voice_id, *configured_voice_ids]))
-        unsupported = [voice_id for voice_id in voice_ids if voice_id != "standard:alba"]
-        if unsupported:
-            raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
-        return (
-            PocketTTSVoiceStateConfig(
-                voice_id="standard:alba",
-                audio_prompt="alba",
-                display_name="Alba",
-            ),
+        registry_cfg = tts_cfg.voice_registry
+        registry_cache_dir = (
+            registry_cfg.cache_dir
+            if registry_cfg and registry_cfg.cache_dir
+            else "voice_models/voice-pack"
         )
+        standard_enabled = (
+            registry_cfg.standard_pack_enabled
+            if registry_cfg and registry_cfg.standard_pack_enabled is not None
+            else True
+        )
+        cloning_enabled = (
+            registry_cfg.cloning_enabled
+            if registry_cfg and registry_cfg.cloning_enabled is not None
+            else True
+        )
+        registry = VoiceRegistry(resolve_path(registry_cache_dir))
+        identity = resolve_pockettts_base_identity_spec(provider_config).voice_base_identity
+        configured_voice_ids = list(pocket_cfg.preload_voice_ids or ()) if pocket_cfg else []
+        requested_voice_ids = tuple(
+            dict.fromkeys(
+                [
+                    *([tts_cfg.default_voice_id] if tts_cfg.default_voice_id else []),
+                    *configured_voice_ids,
+                ]
+            )
+        )
+        resolved: list[PocketTTSVoiceStateConfig] = []
+        try:
+
+            def kind_allowed(kind: str) -> bool:
+                return (kind == "standard" and standard_enabled) or (
+                    kind == "clone" and cloning_enabled
+                )
+
+            if requested_voice_ids:
+                catalog = await registry.catalog(identity, include_private=True)
+                entries = {entry.voice_id: entry for entry in catalog if entry.ready}
+                for voice_id in requested_voice_ids:
+                    entry = entries.get(voice_id)
+                    if entry is None or not kind_allowed(entry.kind):
+                        raise TTSProviderError(
+                            "unsupported_voice", "PocketTTS voice is unavailable"
+                        )
+                    resolved.append(
+                        PocketTTSVoiceStateConfig(
+                            voice_id=voice_id,
+                            display_name=entry.display_name,
+                            artifact_handle=await registry.resolve_voice_state_artifact(
+                                voice_id, identity
+                            ),
+                        )
+                    )
+                return tuple(resolved)
+            catalog = tuple(
+                entry
+                for entry in await registry.catalog(identity, include_private=True)
+                if entry.ready and kind_allowed(entry.kind)
+            )
+            if not catalog:
+                raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+            for entry in catalog:
+                resolved.append(
+                    PocketTTSVoiceStateConfig(
+                        voice_id=entry.voice_id,
+                        display_name=entry.display_name,
+                        artifact_handle=await registry.resolve_voice_state_artifact(
+                            entry.voice_id, identity
+                        ),
+                    )
+                )
+            return tuple(resolved)
+        except TTSProviderError:
+            _close_voice_config_handles(resolved)
+            raise
+        except VoiceRegistryError as exc:
+            _close_voice_config_handles(resolved)
+            raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable") from exc
+        except Exception as exc:
+            _close_voice_config_handles(resolved)
+            raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable") from exc
 
     async def _build_pockettts_runtime(self, tts_cfg: Tts) -> tuple[TTSProvider, object, object]:
         """Build PocketTTS provider plus provider-neutral PCM playback."""
@@ -284,7 +366,6 @@ class TTSService(BaseService):
             quality_tier=(
                 pocket_cfg.quality_tier if pocket_cfg and pocket_cfg.quality_tier else "compact"
             ),
-            voices=self._pockettts_voice_configs(tts_cfg),
             preload=(
                 pocket_cfg.preload_model
                 if pocket_cfg and pocket_cfg.preload_model is not None
@@ -307,13 +388,21 @@ class TTSService(BaseService):
                 else 120.0
             ),
         )
-        provider = PocketTTSProvider(provider_config)
-        await provider.start()
-        stream = create_pcm_playback(
-            on_audio_stream_start=self._on_pcm_audio_start,
-            on_audio_stream_stop=self._on_pcm_audio_stop,
-            on_audio_stream_error=self._on_pcm_audio_error,
+        provider_config = replace(
+            provider_config,
+            voices=await self._pockettts_voice_configs(tts_cfg, provider_config),
         )
+        provider = PocketTTSProvider(provider_config)
+        try:
+            await provider.start()
+            stream = create_pcm_playback(
+                on_audio_stream_start=self._on_pcm_audio_start,
+                on_audio_stream_stop=self._on_pcm_audio_stop,
+                on_audio_stream_error=self._on_pcm_audio_error,
+            )
+        except Exception:
+            await self._stop_provider_safely(provider, "PocketTTS runtime construction failure")
+            raise
         return provider, None, stream
 
     async def _build_runtime(self) -> tuple[TTSProvider, object, object]:
