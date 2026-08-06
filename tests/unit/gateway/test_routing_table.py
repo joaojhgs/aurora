@@ -626,6 +626,90 @@ class TestRoutingTableResolve:
         assert route.error_code == "selector_required"
         registry.get_best_provider_candidate.assert_not_called()
 
+    def test_missing_contract_without_projection_requires_explicit_selector(
+        self, mesh_config, monkeypatch
+    ):
+        monkeypatch.setattr("app.shared.contracts.registry.get_contract", lambda topic: None)
+        config = _config_with_service(mesh_config, "Auth", mesh_policy(prefer="network"))
+        registry = MagicMock()
+        registry.get_best_provider_candidate.return_value = SimpleNamespace(
+            peer=SimpleNamespace(
+                peer_id="admin-peer",
+                latency_ms=1.0,
+                manifest=SimpleNamespace(
+                    shared_services=[SimpleNamespace(module="Auth", version="1.0.0")]
+                ),
+            ),
+            service=SimpleNamespace(module="Auth", version="1.0.0"),
+            decision=SimpleNamespace(),
+        )
+        table = RoutingTable(config, registry)
+
+        route = table.resolve(
+            AuthMethods.MESH_REMOVE_PEER,
+            routing_config=config.services["Auth"],
+            mesh_config=config,
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_required"
+        registry.get_best_provider_candidate.assert_called_once()
+
+    def test_missing_contract_allows_projected_use(self, mesh_config, monkeypatch):
+        monkeypatch.setattr("app.shared.contracts.registry.get_contract", lambda topic: None)
+        config = _config_with_service(mesh_config, "TTS", mesh_policy(prefer="network"))
+        registry = MagicMock()
+        registry.get_best_provider_candidate.return_value = SimpleNamespace(
+            peer=SimpleNamespace(
+                peer_id="tts-peer",
+                latency_ms=1.0,
+                manifest=SimpleNamespace(
+                    shared_services=[SimpleNamespace(module="TTS", version="1.0.0")]
+                ),
+            ),
+            service=SimpleNamespace(module="TTS", version="1.0.0"),
+            decision=SimpleNamespace(method_type="use"),
+        )
+        table = RoutingTable(config, registry)
+
+        route = table.resolve(
+            TTSMethods.SYNTHESIZE,
+            routing_config=config.services["TTS"],
+            mesh_config=config,
+        )
+
+        assert route.target == "remote"
+        assert route.peer_id == "tts-peer"
+        assert route.method_type == "use"
+        registry.get_best_provider_candidate.assert_called_once()
+
+    def test_missing_contract_blocks_projected_manage(self, mesh_config, monkeypatch):
+        monkeypatch.setattr("app.shared.contracts.registry.get_contract", lambda topic: None)
+        config = _config_with_service(mesh_config, "Auth", mesh_policy(prefer="network"))
+        registry = MagicMock()
+        registry.get_best_provider_candidate.return_value = SimpleNamespace(
+            peer=SimpleNamespace(
+                peer_id="admin-peer",
+                latency_ms=1.0,
+                manifest=SimpleNamespace(
+                    shared_services=[SimpleNamespace(module="Auth", version="1.0.0")]
+                ),
+            ),
+            service=SimpleNamespace(module="Auth", version="1.0.0"),
+            decision=SimpleNamespace(method_type="manage"),
+        )
+        table = RoutingTable(config, registry)
+
+        route = table.resolve(
+            AuthMethods.MESH_REMOVE_PEER,
+            routing_config=config.services["Auth"],
+            mesh_config=config,
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_required"
+        registry.get_best_provider_candidate.assert_called_once()
+
     def test_local_preferred_manage_without_selector_remains_local(self, mesh_config, monkeypatch):
         monkeypatch.setattr(
             "app.shared.contracts.registry.get_contract",

@@ -1427,7 +1427,7 @@ def _trusted_method_type(
         return "manage"
     if route_method_type == "use" or registered_method_type == "use":
         return "use"
-    return None
+    return "manage"
 
 
 def _remote_manage_requires_selector(

@@ -62,6 +62,7 @@ def _decision_for_binding(peer_id: str, binding: SpeechRouteBinding) -> SimpleNa
         provider_lease_epoch=binding.provider_lease_epoch,
         provider_lease_revision=binding.provider_lease_revision,
         speech_capability_revision=binding.speech_capability_revision,
+        method_type="use",
     )
 
 
@@ -391,7 +392,7 @@ class TestMeshBusPublish:
     @pytest.mark.asyncio
     async def test_command_remote_route(self, mesh_bus, inner_bus, routing_table, peer_bridge):
         routing_table.resolve.return_value = RouteDecision(
-            target="remote", peer_id="peer-1", module="TTS"
+            target="remote", peer_id="peer-1", module="TTS", method_type="use"
         )
         await mesh_bus.publish("TTS.Request", FakePayload(), event=False)
         peer_bridge.call.assert_awaited_once()
@@ -407,6 +408,7 @@ class TestMeshBusPublish:
             peer_id="peer-1",
             module="TTS",
             speech_route_binding=binding,
+            method_type="use",
         )
 
         result = await mesh_bus.request(
@@ -455,7 +457,7 @@ class TestMeshBusPublish:
             source_revision=2,
         )
         routing_table.resolve.return_value = RouteDecision(
-            target="remote", peer_id="peer-1", module="TTS"
+            target="remote", peer_id="peer-1", module="TTS", method_type="use"
         )
         bus = MeshBus(
             inner_bus,
@@ -497,7 +499,7 @@ class TestMeshBusPublish:
             return store.current()
 
         routing_table.resolve.return_value = RouteDecision(
-            target="remote", peer_id="peer-1", module="TTS"
+            target="remote", peer_id="peer-1", module="TTS", method_type="use"
         )
         routing_table.resolve_fallback.return_value = RouteDecision(target="local", module="TTS")
         peer_bridge.call.side_effect = Exception("offline")
@@ -526,7 +528,7 @@ class TestMeshBusPublish:
         self, inner_bus, routing_table, peer_bridge, mesh_config
     ):
         routing_table.resolve.return_value = RouteDecision(
-            target="remote", peer_id="peer-1", module="TTS"
+            target="remote", peer_id="peer-1", module="TTS", method_type="use"
         )
         bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)
 
@@ -543,7 +545,7 @@ class TestMeshBusPublish:
         self, mesh_bus, inner_bus, routing_table, peer_bridge
     ):
         routing_table.resolve.return_value = RouteDecision(
-            target="remote", peer_id="peer-1", module="TTS"
+            target="remote", peer_id="peer-1", module="TTS", method_type="use"
         )
         peer_bridge.call.side_effect = Exception("connection lost")
         routing_table.resolve_fallback.return_value = RouteDecision(target="local", module="TTS")
@@ -561,7 +563,13 @@ class TestMeshBusPublish:
             enabled=True,
             services={"Orchestrator": mesh_policy(prefer="network", fallback="local")},
         )
-        registry = _FakeLeaseRegistry(["peer-b", "peer-c"])
+        registry = _FakeLeaseRegistry(
+            ["peer-b", "peer-c"],
+            decisions_by_peer={
+                "peer-b": SimpleNamespace(method_type="use"),
+                "peer-c": SimpleNamespace(method_type="use"),
+            },
+        )
         routing_table._registry = registry
         routing_table.resolve.return_value = RouteDecision(
             target="remote",
@@ -623,7 +631,7 @@ class TestMeshBusRequest:
     @pytest.mark.asyncio
     async def test_remote_request(self, mesh_bus, routing_table, peer_bridge):
         routing_table.resolve.return_value = RouteDecision(
-            target="remote", peer_id="peer-1", module="TTS"
+            target="remote", peer_id="peer-1", module="TTS", method_type="use"
         )
         result = await mesh_bus.request("TTS.Request", FakePayload())
         assert result.ok is True
@@ -634,7 +642,7 @@ class TestMeshBusRequest:
         self, mesh_bus, inner_bus, routing_table, peer_bridge
     ):
         routing_table.resolve.return_value = RouteDecision(
-            target="remote", peer_id="peer-1", module="TTS"
+            target="remote", peer_id="peer-1", module="TTS", method_type="use"
         )
         peer_bridge.call.side_effect = Exception("timeout")
         routing_table.resolve_fallback.return_value = RouteDecision(target="local", module="TTS")
@@ -801,6 +809,7 @@ class TestMeshBusRequest:
                     peer_id="assistant-peer",
                     module="Orchestrator",
                     selector=selector,
+                    method_type="use",
                 )
             return RouteDecision(target="local", module="Orchestrator", selector=selector)
 
@@ -827,7 +836,7 @@ class TestMeshBusRequest:
             principal_id=None,
             effective_perms=None,
             identity_source=None,
-            method_type=None,
+            method_type="use",
             caller_peer_id=None,
             auth_grant_revision=None,
             manifest_revision=None,
@@ -898,7 +907,7 @@ class TestMeshBusRequest:
         self, mesh_bus, inner_bus, routing_table, peer_bridge
     ):
         routing_table.resolve.return_value = RouteDecision(
-            target="remote", peer_id="peer-1", module="TTS"
+            target="remote", peer_id="peer-1", module="TTS", method_type="use"
         )
         peer_bridge.call.return_value = QueryResult(ok=False, error="Service error")
         routing_table.resolve_fallback.return_value = RouteDecision(target="local", module="TTS")
@@ -926,7 +935,7 @@ class TestMeshBusRequest:
         )
         routing_table._registry = registry
         routing_table.resolve.return_value = RouteDecision(
-            target="remote", peer_id="peer-a", module="TTS"
+            target="remote", peer_id="peer-a", module="TTS", method_type="use"
         )
         peer_bridge.call.side_effect = [
             QueryResult(
@@ -1031,6 +1040,7 @@ class TestMeshBusRequest:
             peer_id="peer-a",
             module="TTS",
             speech_route_binding=initial_binding,
+            method_type="use",
         )
         peer_bridge.call.side_effect = [
             QueryResult(
@@ -1070,7 +1080,7 @@ class TestMeshBusRequest:
         )
         routing_table._registry = registry
         routing_table.resolve.return_value = RouteDecision(
-            target="remote", peer_id="peer-a", module="TTS"
+            target="remote", peer_id="peer-a", module="TTS", method_type="use"
         )
         peer_bridge.call.return_value = QueryResult(ok=True, data={"result": "peer-b"})
         bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)
@@ -1088,10 +1098,13 @@ class TestMeshBusRequest:
     async def test_remote_request_transport_exception_does_not_fallback(
         self, inner_bus, routing_table, peer_bridge, mesh_config
     ):
-        registry = _FakeLeaseRegistry(["peer-b"])
+        registry = _FakeLeaseRegistry(
+            ["peer-b"],
+            decisions_by_peer={"peer-b": SimpleNamespace(method_type="use")},
+        )
         routing_table._registry = registry
         routing_table.resolve.return_value = RouteDecision(
-            target="remote", peer_id="peer-a", module="TTS"
+            target="remote", peer_id="peer-a", module="TTS", method_type="use"
         )
         peer_bridge.call.side_effect = RuntimeError("transport down")
         bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)
@@ -1108,10 +1121,13 @@ class TestMeshBusRequest:
     async def test_remote_request_forged_not_sent_text_does_not_fallback(
         self, inner_bus, routing_table, peer_bridge, mesh_config
     ):
-        registry = _FakeLeaseRegistry(["peer-b"])
+        registry = _FakeLeaseRegistry(
+            ["peer-b"],
+            decisions_by_peer={"peer-b": SimpleNamespace(method_type="use")},
+        )
         routing_table._registry = registry
         routing_table.resolve.return_value = RouteDecision(
-            target="remote", peer_id="peer-a", module="TTS"
+            target="remote", peer_id="peer-a", module="TTS", method_type="use"
         )
         peer_bridge.call.return_value = QueryResult(
             ok=False,
@@ -1132,10 +1148,13 @@ class TestMeshBusRequest:
     ):
         from app.shared.contracts.models.orchestrator import OrchestratorMethods
 
-        registry = _FakeLeaseRegistry(["peer-b"])
+        registry = _FakeLeaseRegistry(
+            ["peer-b"],
+            decisions_by_peer={"peer-b": SimpleNamespace(method_type="use")},
+        )
         routing_table._registry = registry
         routing_table.resolve.return_value = RouteDecision(
-            target="remote", peer_id="peer-a", module="Orchestrator"
+            target="remote", peer_id="peer-a", module="Orchestrator", method_type="use"
         )
         peer_bridge.call.side_effect = [
             QueryResult(
@@ -1164,7 +1183,7 @@ class TestMeshBusRequest:
         registry = _FakeLeaseRegistry(["peer-b"])
         routing_table._registry = registry
         routing_table.resolve.return_value = RouteDecision(
-            target="remote", peer_id="peer-a", module="TTS"
+            target="remote", peer_id="peer-a", module="TTS", method_type="use"
         )
         peer_bridge.call.return_value = QueryResult(
             ok=False,
@@ -1197,13 +1216,14 @@ class TestMeshBusRequest:
             reason_code="eligible",
             reason="eligible",
             speech_requirement_digest=None,
+            method_type="use",
         )
         registry = MagicMock()
         registry.get_best_provider_candidate.return_value = SimpleNamespace(
             peer=peer,
             service=service,
             eligible=True,
-            decision=None,
+            decision=decision_without_binding,
         )
         registry.get_peer.return_value = peer
         registry.get_peer_service.return_value = service
@@ -1300,6 +1320,105 @@ class TestMeshBusRequest:
         assert result == QueryResult(ok=False, error="selector_required")
         peer_bridge.call.assert_not_awaited()
         inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_missing_contract_requires_selector_before_dispatch(
+        self, mesh_bus, inner_bus, routing_table, peer_bridge, monkeypatch
+    ):
+        monkeypatch.setattr("app.shared.contracts.registry.get_contract", lambda topic: None)
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            peer_id="peer-1",
+            module="TTS",
+        )
+
+        result = await mesh_bus.request(TTSMethods.SYNTHESIZE, FakePayload())
+
+        assert result == QueryResult(ok=False, error="selector_required")
+        peer_bridge.call.assert_not_awaited()
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_missing_contract_allows_projected_use_before_dispatch(
+        self, mesh_bus, inner_bus, routing_table, peer_bridge, monkeypatch
+    ):
+        monkeypatch.setattr("app.shared.contracts.registry.get_contract", lambda topic: None)
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            peer_id="peer-1",
+            module="TTS",
+            method_type="use",
+        )
+
+        result = await mesh_bus.request(TTSMethods.SYNTHESIZE, FakePayload())
+
+        assert result == QueryResult(ok=True, data={"result": "remote"})
+        peer_bridge.call.assert_awaited_once()
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_missing_contract_blocks_projected_manage_before_dispatch(
+        self, mesh_bus, inner_bus, routing_table, peer_bridge, monkeypatch
+    ):
+        monkeypatch.setattr("app.shared.contracts.registry.get_contract", lambda topic: None)
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            peer_id="peer-1",
+            module="TTS",
+            method_type="manage",
+        )
+
+        result = await mesh_bus.request(TTSMethods.SYNTHESIZE, FakePayload())
+
+        assert result == QueryResult(ok=False, error="selector_required")
+        peer_bridge.call.assert_not_awaited()
+        inner_bus.request.assert_not_awaited()
+
+    def test_missing_contract_keeps_fallback_reselection_manage_classified(
+        self, inner_bus, routing_table, peer_bridge, mesh_config, monkeypatch
+    ):
+        monkeypatch.setattr("app.shared.contracts.registry.get_contract", lambda topic: None)
+        registry = _FakeLeaseRegistry(
+            ["peer-b", "peer-c"],
+            decisions_by_peer={
+                "peer-b": SimpleNamespace(method_type="use"),
+                "peer-c": SimpleNamespace(),
+            },
+        )
+        routing_table._registry = registry
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)
+
+        projected_use_route = bus._next_remote_route(
+            topic=TTSMethods.SYNTHESIZE,
+            module="TTS",
+            routing_config=mesh_config.services["TTS"],
+            policy_snapshot=MeshPolicySnapshot(
+                revision=1,
+                source_revision=None,
+                mesh_config=mesh_config,
+            ),
+            attempted=set(),
+            selector=None,
+            speech_constraints=None,
+        )
+        absent_projection_route = bus._next_remote_route(
+            topic=TTSMethods.SYNTHESIZE,
+            module="TTS",
+            routing_config=mesh_config.services["TTS"],
+            policy_snapshot=MeshPolicySnapshot(
+                revision=1,
+                source_revision=None,
+                mesh_config=mesh_config,
+            ),
+            attempted={"peer-b"},
+            selector=None,
+            speech_constraints=None,
+        )
+
+        assert projected_use_route.target == "remote"
+        assert projected_use_route.method_type == "use"
+        assert absent_projection_route.target == "remote"
+        assert absent_projection_route.method_type == "manage"
 
     @pytest.mark.asyncio
     async def test_explicit_remote_manage_uses_selected_peer_without_fallback(
@@ -1418,6 +1537,7 @@ class TestMeshBusStreamRequest:
             target="remote",
             module="Orchestrator",
             peer_id="peer-gpu",
+            method_type="use",
         )
         routing_table.resolve_fallback.return_value = RouteDecision(
             target="local",
@@ -1453,12 +1573,16 @@ class TestMeshBusStreamRequest:
         async def successful_stream(*args, **kwargs):
             yield {"delta": "peer-b"}
 
-        registry = _FakeLeaseRegistry(["peer-b"])
+        registry = _FakeLeaseRegistry(
+            ["peer-b"],
+            decisions_by_peer={"peer-b": SimpleNamespace(method_type="use")},
+        )
         routing_table._registry = registry
         routing_table.resolve.return_value = RouteDecision(
             target="remote",
             module="Orchestrator",
             peer_id="peer-a",
+            method_type="use",
         )
         peer_bridge.stream_call = MagicMock(side_effect=[preaccept_rejected(), successful_stream()])
         inner_bus.stream_request = MagicMock()
@@ -1487,12 +1611,16 @@ class TestMeshBusStreamRequest:
             raise RuntimeError("capability_changed")
             yield "unreachable"
 
-        registry = _FakeLeaseRegistry(["peer-b"])
+        registry = _FakeLeaseRegistry(
+            ["peer-b"],
+            decisions_by_peer={"peer-b": SimpleNamespace(method_type="use")},
+        )
         routing_table._registry = registry
         routing_table.resolve.return_value = RouteDecision(
             target="remote",
             module="Orchestrator",
             peer_id="peer-a",
+            method_type="use",
         )
         peer_bridge.stream_call = MagicMock(side_effect=failing_remote_stream)
         inner_bus.stream_request = MagicMock()
@@ -1526,6 +1654,7 @@ class TestMeshBusStreamRequest:
             target="remote",
             module="Orchestrator",
             peer_id="peer-gpu",
+            method_type="use",
         )
         routing_table.resolve_fallback.return_value = RouteDecision(
             target="local",
@@ -1554,12 +1683,16 @@ class TestMeshBusStreamRequest:
             yield {"delta": "first"}
             yield {"delta": "second"}
 
-        registry = _FakeLeaseRegistry(["peer-gpu"])
+        registry = _FakeLeaseRegistry(
+            ["peer-gpu"],
+            decisions_by_peer={"peer-gpu": SimpleNamespace(method_type="use")},
+        )
         routing_table._registry = registry
         routing_table.resolve.return_value = RouteDecision(
             target="remote",
             module="Orchestrator",
             peer_id="peer-gpu",
+            method_type="use",
         )
         peer_bridge.stream_call = MagicMock(side_effect=long_remote_stream)
         bus = MeshBus(inner_bus, routing_table, peer_bridge, mesh_config)

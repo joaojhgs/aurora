@@ -192,7 +192,7 @@ class RoutingTable:
                 best = candidate.peer
             if best:
                 projected_method_type = (
-                    candidate.decision.method_type
+                    getattr(candidate.decision, "method_type", None)
                     if candidate is not None and candidate.decision is not None
                     else None
                 )
@@ -213,7 +213,9 @@ class RoutingTable:
                             break
                 binding = (
                     speech_route_binding_from_decision(candidate.decision)
-                    if candidate is not None and candidate.decision is not None
+                    if speech_constraints is not None
+                    and candidate is not None
+                    and candidate.decision is not None
                     else None
                 )
                 if speech_constraints is not None and binding is None:
@@ -462,7 +464,7 @@ class RoutingTable:
                 best = candidate.peer
             if best:
                 projected_method_type = (
-                    candidate.decision.method_type
+                    getattr(candidate.decision, "method_type", None)
                     if candidate is not None and candidate.decision is not None
                     else None
                 )
@@ -482,7 +484,9 @@ class RoutingTable:
                             break
                 binding = (
                     speech_route_binding_from_decision(candidate.decision)
-                    if candidate is not None and candidate.decision is not None
+                    if speech_constraints is not None
+                    and candidate is not None
+                    and candidate.decision is not None
                     else None
                 )
                 if speech_constraints is not None and binding is None:
@@ -571,7 +575,7 @@ def _authoritative_method_type(topic: str, projected_method_type: str | None) ->
         return "manage"
     if registered_method_type == "use" or projected_method_type == "use":
         return "use"
-    return None
+    return "manage"
 
 
 def _selector_target(
