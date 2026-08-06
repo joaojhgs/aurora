@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+from collections import deque
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
@@ -19,7 +20,11 @@ from app.services.gateway.config import MeshConfig
 from app.services.gateway.mesh.policy_store import MeshPolicyStore
 from app.services.gateway.utils.crypto import aead_open
 from app.services.gateway.webrtc.rpc import RPCHandler
-from app.services.gateway.webrtc.rtc_client import RTCClient, _ManifestAckExpectation
+from app.services.gateway.webrtc.rtc_client import (
+    RTCClient,
+    _LocalProviderUnavailableQueue,
+    _ManifestAckExpectation,
+)
 from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
 
 
@@ -77,6 +82,34 @@ def _make_identity(
         effective_perms=frozenset(perms or ["TTS.*"]),
         source="webrtc_peer",
     )
+
+
+def _provider_expectation(
+    session_peer_id: str = "peer-a",
+    *,
+    connection_epoch: str = "local-epoch-1",
+) -> _ManifestAckExpectation:
+    return _ManifestAckExpectation(
+        session_peer_id=session_peer_id,
+        connection_epoch=connection_epoch,
+        projection_digest="projection-digest",
+        active_protocol="projection-v1",
+        active_version="v1",
+        active_tier="projection",
+        protocol_revision="v1",
+        registry_revision="registry-1",
+        export_policy_revision="policy-1",
+        auth_grant_revision=1,
+        advertised_services=("TTS",),
+        compatible_services=("TTS",),
+    )
+
+
+async def _drain_provider_unavailable(client: RTCClient) -> None:
+    tasks = [queue.task for queue in client._local_provider_unavailable_tasks.values()]  # noqa: SLF001
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await asyncio.sleep(0)
 
 
 async def _start_blocked_rtc_rpc(
@@ -322,20 +355,7 @@ async def test_disconnect_peer_success(client):
     client._mesh_peer_id = "local-provider"
     client._remember_stable_peer_id("peer-a", "stable-peer-a", "remote")
     client._peer_data_channels["peer-a"] = channel
-    client._local_provider_ready["stable-peer-a"] = _ManifestAckExpectation(
-        session_peer_id="peer-a",
-        connection_epoch="local-epoch-1",
-        projection_digest="projection-digest",
-        active_protocol="projection-v1",
-        active_version="v1",
-        active_tier="projection",
-        protocol_revision="v1",
-        registry_revision="registry-1",
-        export_policy_revision="policy-1",
-        auth_grant_revision=1,
-        advertised_services=("TTS",),
-        compatible_services=("TTS",),
-    )
+    client._local_provider_ready["stable-peer-a"] = _provider_expectation("peer-a")
     client._peer_registry = MagicMock()
     client._peer_registry.remove_peer = AsyncMock()
 
@@ -352,6 +372,310 @@ async def test_disconnect_peer_success(client):
     assert tombstone["connection_epoch"] == "local-epoch-1"
     pc.close.assert_called_once()
     timeout_task.cancel.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_provider_export_peer_invalidation_sends_snapshot_tombstone_before_reset(client):
+    client._mesh_peer_id = "local-provider"
+    client._stable_peer_sessions["stable-peer-a"] = "peer-a"
+    client._peer_stable_ids["peer-a"] = "stable-peer-a"
+    client._local_provider_ready["stable-peer-a"] = _provider_expectation(
+        "peer-a",
+        connection_epoch="epoch-before-reset",
+    )
+    client._local_provider_lease_revisions["stable-peer-a"] = 4
+    client._is_peer_session_active = MagicMock(return_value=True)  # type: ignore[method-assign]  # noqa: SLF001
+    client.send_to_peer_async = AsyncMock(return_value=True)  # type: ignore[method-assign]
+
+    client._invalidate_provider_export_peer("stable-peer-a")  # noqa: SLF001
+    assert "stable-peer-a" not in client._local_provider_ready  # noqa: SLF001
+
+    await _drain_provider_unavailable(client)
+
+    client.send_to_peer_async.assert_awaited_once()
+    peer_id, wire = client.send_to_peer_async.await_args.args
+    tombstone = json.loads(wire)
+    assert peer_id == "peer-a"
+    assert tombstone["type"] == "provider_unavailable"
+    assert tombstone["connection_epoch"] == "epoch-before-reset"
+    assert tombstone["availability_revision"] == 5
+    assert tombstone["reason_code"] == "provider_export_invalidated"
+    assert client._local_provider_unavailable_tasks == {}  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("trigger", ["direct", "config", "registry"])
+async def test_provider_export_all_invalidation_coalesces_per_peer_tombstone_task(
+    client,
+    trigger: str,
+):
+    client._mesh_peer_id = "local-provider"
+    client._stable_peer_sessions["stable-peer-a"] = "peer-a"
+    client._peer_stable_ids["peer-a"] = "stable-peer-a"
+    client._local_provider_ready["stable-peer-a"] = _provider_expectation("peer-a")
+    client._is_peer_session_active = MagicMock(return_value=True)  # type: ignore[method-assign]  # noqa: SLF001
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def send_when_released(_peer_id: str, _wire: str) -> bool:
+        started.set()
+        await release.wait()
+        return True
+
+    client.send_to_peer_async = AsyncMock(side_effect=send_when_released)  # type: ignore[method-assign]
+
+    if trigger == "config":
+        client.update_mesh_config(MeshConfig(enabled=True))
+    elif trigger == "registry":
+        client._invalidate_provider_export_registry()  # noqa: SLF001
+    else:
+        client._invalidate_provider_export_all()  # noqa: SLF001
+    await asyncio.wait_for(started.wait(), timeout=1.0)
+    client._invalidate_provider_export_all()  # noqa: SLF001
+    release.set()
+    await _drain_provider_unavailable(client)
+
+    client.send_to_peer_async.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_provider_unavailable_queue_preserves_new_epoch_after_blocked_old_send(client):
+    client._mesh_peer_id = "local-provider"
+    client._stable_peer_sessions["stable-peer-a"] = "old-session"
+    client._peer_stable_ids["old-session"] = "stable-peer-a"
+    client._local_provider_ready["stable-peer-a"] = _provider_expectation(
+        "old-session",
+        connection_epoch="old-epoch",
+    )
+    client._is_peer_session_active = MagicMock(return_value=True)  # type: ignore[method-assign]  # noqa: SLF001
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    sent: list[tuple[str, dict[str, object]]] = []
+
+    async def send_with_blocked_first(peer_id: str, wire: str) -> bool:
+        sent.append((peer_id, json.loads(wire)))
+        if len(sent) == 1:
+            first_started.set()
+            await release_first.wait()
+        return True
+
+    client.send_to_peer_async = AsyncMock(side_effect=send_with_blocked_first)  # type: ignore[method-assign]
+
+    client._invalidate_provider_export_all()  # noqa: SLF001
+    await asyncio.wait_for(first_started.wait(), timeout=1.0)
+
+    client._stable_peer_sessions["stable-peer-a"] = "new-session"
+    client._peer_stable_ids["new-session"] = "stable-peer-a"
+    client._local_provider_ready["stable-peer-a"] = _provider_expectation(
+        "new-session",
+        connection_epoch="new-epoch",
+    )
+    client._invalidate_provider_export_all()  # noqa: SLF001
+
+    release_first.set()
+    await _drain_provider_unavailable(client)
+
+    assert [peer_id for peer_id, _payload in sent] == ["old-session", "new-session"]
+    assert [payload["connection_epoch"] for _peer_id, payload in sent] == [
+        "old-epoch",
+        "new-epoch",
+    ]
+    assert [payload["availability_revision"] for _peer_id, payload in sent] == [1, 2]
+    assert all(
+        payload["reason_code"] == "provider_export_invalidated" for _peer_id, payload in sent
+    )
+    assert client._local_provider_unavailable_tasks == {}  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_provider_unavailable_restart_survives_stale_done_callback(client):
+    client._mesh_peer_id = "local-provider"
+    client._stable_peer_sessions["stable-peer-a"] = "peer-a"
+    client._peer_stable_ids["peer-a"] = "stable-peer-a"
+    client._local_provider_ready["stable-peer-a"] = _provider_expectation("peer-a")
+    client._is_peer_session_active = MagicMock(return_value=True)  # type: ignore[method-assign]  # noqa: SLF001
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def send_when_released(_peer_id: str, _wire: str) -> bool:
+        started.set()
+        await release.wait()
+        return True
+
+    completed_task = asyncio.create_task(asyncio.sleep(0))
+    await completed_task
+    client._local_provider_unavailable_tasks["stable-peer-a"] = (  # noqa: SLF001
+        _LocalProviderUnavailableQueue(deque(), completed_task)
+    )
+    client.send_to_peer_async = AsyncMock(side_effect=send_when_released)  # type: ignore[method-assign]
+
+    assert client._schedule_local_provider_unavailable(  # noqa: SLF001
+        "stable-peer-a",
+        reason_code="provider_export_invalidated",
+    )
+    replacement = client._local_provider_unavailable_tasks["stable-peer-a"].task  # noqa: SLF001
+    assert replacement is not completed_task
+    await asyncio.wait_for(started.wait(), timeout=1.0)
+
+    client._local_provider_unavailable_done("stable-peer-a", completed_task)  # noqa: SLF001
+
+    assert client._local_provider_unavailable_tasks["stable-peer-a"].task is replacement  # noqa: SLF001
+    release.set()
+    await _drain_provider_unavailable(client)
+
+    client.send_to_peer_async.assert_awaited_once()
+    assert client._local_provider_unavailable_tasks == {}  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_provider_unavailable_queue_continues_after_old_send_failure(client):
+    client._mesh_peer_id = "local-provider"
+    client._stable_peer_sessions["stable-peer-a"] = "old-session"
+    client._peer_stable_ids["old-session"] = "stable-peer-a"
+    client._local_provider_ready["stable-peer-a"] = _provider_expectation(
+        "old-session",
+        connection_epoch="old-epoch",
+    )
+    client._is_peer_session_active = MagicMock(return_value=True)  # type: ignore[method-assign]  # noqa: SLF001
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    sent: list[tuple[str, dict[str, object]]] = []
+
+    async def send_with_failed_first(peer_id: str, wire: str) -> bool:
+        sent.append((peer_id, json.loads(wire)))
+        if len(sent) == 1:
+            first_started.set()
+            await release_first.wait()
+            raise RuntimeError("old session send failed")
+        return True
+
+    client.send_to_peer_async = AsyncMock(side_effect=send_with_failed_first)  # type: ignore[method-assign]
+
+    client._invalidate_provider_export_all()  # noqa: SLF001
+    await asyncio.wait_for(first_started.wait(), timeout=1.0)
+
+    client._stable_peer_sessions["stable-peer-a"] = "new-session"
+    client._peer_stable_ids["new-session"] = "stable-peer-a"
+    client._local_provider_ready["stable-peer-a"] = _provider_expectation(
+        "new-session",
+        connection_epoch="new-epoch",
+    )
+    client._invalidate_provider_export_all()  # noqa: SLF001
+
+    release_first.set()
+    await _drain_provider_unavailable(client)
+
+    assert [peer_id for peer_id, _payload in sent] == ["old-session", "new-session"]
+    assert [payload["connection_epoch"] for _peer_id, payload in sent] == [
+        "old-epoch",
+        "new-epoch",
+    ]
+    assert [payload["availability_revision"] for _peer_id, payload in sent] == [1, 2]
+    assert client._diagnostic_errors[-1].code == "provider_unavailable_send_failed"  # noqa: SLF001
+    assert client._local_provider_unavailable_tasks == {}  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_provider_unavailable_queue_preserves_new_revision_for_same_epoch(client):
+    client._mesh_peer_id = "local-provider"
+    client._stable_peer_sessions["stable-peer-a"] = "peer-a"
+    client._peer_stable_ids["peer-a"] = "stable-peer-a"
+    client._local_provider_ready["stable-peer-a"] = _provider_expectation(
+        "peer-a",
+        connection_epoch="same-epoch",
+    )
+    client._local_provider_lease_revisions["stable-peer-a"] = 3
+    client._is_peer_session_active = MagicMock(return_value=True)  # type: ignore[method-assign]  # noqa: SLF001
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    sent: list[tuple[str, dict[str, object]]] = []
+
+    async def send_with_blocked_first(peer_id: str, wire: str) -> bool:
+        sent.append((peer_id, json.loads(wire)))
+        if len(sent) == 1:
+            first_started.set()
+            await release_first.wait()
+        return True
+
+    client.send_to_peer_async = AsyncMock(side_effect=send_with_blocked_first)  # type: ignore[method-assign]
+
+    client._invalidate_provider_export_all()  # noqa: SLF001
+    await asyncio.wait_for(first_started.wait(), timeout=1.0)
+
+    client._local_provider_ready["stable-peer-a"] = _provider_expectation(
+        "peer-a",
+        connection_epoch="same-epoch",
+    )
+    client._local_provider_lease_revisions["stable-peer-a"] = 5
+    client._invalidate_provider_export_all()  # noqa: SLF001
+
+    release_first.set()
+    await _drain_provider_unavailable(client)
+
+    assert [peer_id for peer_id, _payload in sent] == ["peer-a", "peer-a"]
+    assert [payload["connection_epoch"] for _peer_id, payload in sent] == [
+        "same-epoch",
+        "same-epoch",
+    ]
+    assert [payload["availability_revision"] for _peer_id, payload in sent] == [4, 6]
+    assert client._local_provider_unavailable_tasks == {}  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_registry_invalidation_sends_unavailable_before_refresh_reannounce(client):
+    client._mesh_peer_id = "local-provider"
+    client._stable_peer_sessions["stable-peer-a"] = "peer-a"
+    client._peer_stable_ids["peer-a"] = "stable-peer-a"
+    client._local_provider_ready["stable-peer-a"] = _provider_expectation("peer-a")
+    client._is_peer_session_active = MagicMock(return_value=True)  # type: ignore[method-assign]  # noqa: SLF001
+    events: list[str] = []
+
+    async def send_unavailable(_peer_id: str, _wire: str) -> bool:
+        events.append("unavailable")
+        return True
+
+    async def reannounce(_peer_id: str) -> bool:
+        events.append("reannounce")
+        return True
+
+    client.send_to_peer_async = AsyncMock(side_effect=send_unavailable)  # type: ignore[method-assign]
+    client.reannounce_manifest_for_peer = AsyncMock(side_effect=reannounce)  # type: ignore[method-assign]
+    client._peer_registry = MagicMock()  # noqa: SLF001
+    client._peer_registry.get_negotiated_peers.return_value = [
+        SimpleNamespace(peer_id="stable-peer-a")
+    ]
+
+    client._invalidate_provider_export_registry()  # noqa: SLF001
+    refresh_tasks = list(client._tooling_projection_refresh_tasks.values())  # noqa: SLF001
+    assert refresh_tasks
+    await asyncio.gather(*refresh_tasks, return_exceptions=True)
+
+    assert events == ["unavailable", "reannounce"]
+
+
+@pytest.mark.asyncio
+async def test_replaced_stable_session_sends_old_session_tombstone_before_reset(client):
+    client._mesh_peer_id = "local-provider"
+    client._stable_peer_sessions["stable-peer-a"] = "old-session"
+    client._peer_stable_ids["old-session"] = "stable-peer-a"
+    client._local_provider_ready["stable-peer-a"] = _provider_expectation(
+        "old-session",
+        connection_epoch="old-epoch",
+    )
+    client._is_peer_session_active = MagicMock(return_value=True)  # type: ignore[method-assign]  # noqa: SLF001
+    client.send_to_peer_async = AsyncMock(return_value=True)  # type: ignore[method-assign]
+
+    client._remember_stable_peer_id("new-session", "stable-peer-a")  # noqa: SLF001
+    await _drain_provider_unavailable(client)
+
+    client.send_to_peer_async.assert_awaited_once()
+    peer_id, wire = client.send_to_peer_async.await_args.args
+    tombstone = json.loads(wire)
+    assert peer_id == "old-session"
+    assert tombstone["connection_epoch"] == "old-epoch"
+    assert tombstone["reason_code"] == "session_replaced"
+    assert client._stable_peer_sessions["stable-peer-a"] == "new-session"  # noqa: SLF001
+    assert "stable-peer-a" not in client._local_provider_ready  # noqa: SLF001
 
 
 @pytest.mark.asyncio
@@ -611,6 +935,121 @@ async def test_close_cancels_reconnect_proof_tasks(client):
 
 
 @pytest.mark.asyncio
+async def test_close_drains_pending_provider_unavailable_tasks(client):
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def send_when_released(_peer_id: str, _wire: str) -> bool:
+        started.set()
+        await release.wait()
+        return True
+
+    client._mesh_peer_id = "local-provider"
+    client._stable_peer_sessions["stable-peer-a"] = "peer-a"
+    client._peer_stable_ids["peer-a"] = "stable-peer-a"
+    client._local_provider_ready["stable-peer-a"] = _provider_expectation("peer-a")
+    client._is_peer_session_active = MagicMock(return_value=True)  # type: ignore[method-assign]  # noqa: SLF001
+    client.send_to_peer_async = AsyncMock(side_effect=send_when_released)  # type: ignore[method-assign]
+
+    client._invalidate_provider_export_all()  # noqa: SLF001
+    await started.wait()
+    task = client._local_provider_unavailable_tasks["stable-peer-a"].task  # noqa: SLF001
+    release.set()
+
+    await client.close()
+
+    assert task.done()
+    assert task.result() is None
+    client.send_to_peer_async.assert_awaited_once()
+    assert client._local_provider_unavailable_tasks == {}  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_close_queues_new_ready_tombstone_after_blocked_old_tombstone(client):
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    sent: list[tuple[str, dict[str, object]]] = []
+
+    async def send_with_blocked_first(peer_id: str, wire: str) -> bool:
+        sent.append((peer_id, json.loads(wire)))
+        if len(sent) == 1:
+            first_started.set()
+            await release_first.wait()
+        return True
+
+    client._mesh_peer_id = "local-provider"
+    client._stable_peer_sessions["stable-peer-a"] = "old-session"
+    client._peer_stable_ids["old-session"] = "stable-peer-a"
+    client._local_provider_ready["stable-peer-a"] = _provider_expectation(
+        "old-session",
+        connection_epoch="old-epoch",
+    )
+    client._is_peer_session_active = MagicMock(return_value=True)  # type: ignore[method-assign]  # noqa: SLF001
+    client.send_to_peer_async = AsyncMock(side_effect=send_with_blocked_first)  # type: ignore[method-assign]
+
+    client._invalidate_provider_export_all()  # noqa: SLF001
+    await asyncio.wait_for(first_started.wait(), timeout=1.0)
+
+    client._stable_peer_sessions["stable-peer-a"] = "new-session"
+    client._peer_stable_ids["new-session"] = "stable-peer-a"
+    client._local_provider_ready["stable-peer-a"] = _provider_expectation(
+        "new-session",
+        connection_epoch="new-epoch",
+    )
+
+    close_task = asyncio.create_task(client.close())
+    await asyncio.sleep(0.05)
+
+    assert [peer_id for peer_id, _payload in sent] == ["old-session"]
+
+    release_first.set()
+    await asyncio.wait_for(close_task, timeout=1.0)
+
+    assert [peer_id for peer_id, _payload in sent] == ["old-session", "new-session"]
+    assert [payload["connection_epoch"] for _peer_id, payload in sent] == [
+        "old-epoch",
+        "new-epoch",
+    ]
+    assert [payload["reason_code"] for _peer_id, payload in sent] == [
+        "provider_export_invalidated",
+        "peer_closing",
+    ]
+    assert [payload["availability_revision"] for _peer_id, payload in sent] == [1, 2]
+    assert client._local_provider_unavailable_tasks == {}  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_close_bounds_blocked_provider_unavailable_drain(client):
+    started = asyncio.Event()
+
+    async def send_forever(_peer_id: str, _wire: str) -> bool:
+        started.set()
+        await asyncio.Event().wait()
+        return True
+
+    client._mesh_peer_id = "local-provider"
+    client._stable_peer_sessions["stable-peer-a"] = "peer-a"
+    client._peer_stable_ids["peer-a"] = "stable-peer-a"
+    client._local_provider_ready["stable-peer-a"] = _provider_expectation("peer-a")
+    client._is_peer_session_active = MagicMock(return_value=True)  # type: ignore[method-assign]  # noqa: SLF001
+    client.send_to_peer_async = AsyncMock(side_effect=send_forever)  # type: ignore[method-assign]
+
+    client._invalidate_provider_export_all()  # noqa: SLF001
+    await asyncio.wait_for(started.wait(), timeout=1.0)
+    task = client._local_provider_unavailable_tasks["stable-peer-a"].task  # noqa: SLF001
+
+    await asyncio.wait_for(client.close(), timeout=1.0)
+
+    assert task.done()
+    assert task.cancelled()
+    client.send_to_peer_async.assert_awaited_once()
+    assert client._diagnostic_errors[0].code == "provider_unavailable_shutdown_timeout"  # noqa: SLF001
+    assert client._local_provider_unavailable_tasks == {}  # noqa: SLF001
+    assert client._peer_send_queues == {}  # noqa: SLF001
+    assert client._peer_send_workers == {}  # noqa: SLF001
+
+
+@pytest.mark.asyncio
 async def test_set_rpc_bus_rewires_existing_rpc_handler_to_mesh_stream_path(client):
     """Mesh startup updates existing inbound handlers off the process bus."""
     import json
@@ -715,8 +1154,17 @@ async def test_disable_mesh_clears_runtime_fields_and_preserves_handler_fail_clo
     client._peer_bridge = MagicMock()
     client._mesh_peer_id = "local-peer"
     client._mesh_node_name = "local-node"
+    client._stable_peer_sessions["stable-peer"] = "session-peer"
+    client._peer_stable_ids["session-peer"] = "stable-peer"
+    client._local_provider_ready["stable-peer"] = _provider_expectation(
+        "session-peer",
+        connection_epoch="disable-epoch",
+    )
+    client._is_peer_session_active = MagicMock(return_value=True)  # type: ignore[method-assign]  # noqa: SLF001
+    client.send_to_peer_async = AsyncMock(return_value=True)  # type: ignore[method-assign]
 
     client.disable_mesh(policy_provider=store.provider())
+    await _drain_provider_unavailable(client)
 
     assert client._mesh_enabled is False
     assert client._mesh_config is None
@@ -724,6 +1172,12 @@ async def test_disable_mesh_clears_runtime_fields_and_preserves_handler_fail_clo
     assert client._peer_bridge is None
     assert client._mesh_peer_id is None
     assert client._mesh_node_name == ""
+    client.send_to_peer_async.assert_awaited_once()
+    tombstone = json.loads(client.send_to_peer_async.await_args.args[1])
+    assert tombstone["type"] == "provider_unavailable"
+    assert tombstone["peer_id"] == "local-peer"
+    assert tombstone["connection_epoch"] == "disable-epoch"
+    assert tombstone["reason_code"] == "mesh_disabled"
 
     await handler.on_message(
         json.dumps(

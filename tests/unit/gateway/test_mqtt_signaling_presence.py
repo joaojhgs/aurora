@@ -134,8 +134,14 @@ async def test_signaling_departure_cancels_reconnect_and_suppresses_pc_retry():
     rtc_client._pcs = {}
     rtc_client._reconnect_suppressed_pcs = set()
     rtc_client._cancel_negotiation_watchdog = MagicMock()
-    rtc_client._stable_peer_id_for_session = MagicMock(return_value=None)
-    rtc_client._invalidate_provider_export_peer = MagicMock()
+    rtc_client._stable_peer_id_for_session = MagicMock(return_value="stable-dead")
+    events: list[str] = []
+    rtc_client._send_local_provider_unavailable = AsyncMock(
+        side_effect=lambda *_args, **_kwargs: events.append("unavailable") or True
+    )
+    rtc_client._invalidate_provider_export_peer = MagicMock(
+        side_effect=lambda *_args, **_kwargs: events.append("invalidate")
+    )
 
     async def close_peer_connection(connection):
         await connection.close()
@@ -160,6 +166,16 @@ async def test_signaling_departure_cancels_reconnect_and_suppresses_pc_retry():
 
     assert retry_task.cancelled()
     assert pc in rtc_client._reconnect_suppressed_pcs
+    rtc_client._send_local_provider_unavailable.assert_awaited_once_with(
+        "stable-dead",
+        reason_code="peer_departed",
+        session_peer_id=peer,
+    )
+    rtc_client._invalidate_provider_export_peer.assert_called_once_with(
+        "stable-dead",
+        notify_provider_unavailable=False,
+    )
+    assert events == ["unavailable", "invalidate"]
     rtc_client._close_peer_connection.assert_awaited_once_with(pc)
     pc.close.assert_awaited_once()
 
