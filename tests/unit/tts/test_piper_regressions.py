@@ -21,6 +21,7 @@ from app.services.tts.providers.base import (
     TTSVoiceInfo,
     VoiceSelectionMode,
 )
+from app.services.tts.providers.piper import PiperTTSProvider
 from app.services.tts.service import TTSService
 from app.shared.config.models import Piper, Providers, Tts
 from app.shared.contracts.models.common import EmptyInput
@@ -386,16 +387,20 @@ async def test_start_initializes_piper_stream_from_nested_piper_config(
     monkeypatch.setattr("app.services.tts.service.shutil.which", lambda _name: None)
 
     await service.on_start()
-    await service.on_stop()
 
     engine = fake_piper_engine.PiperEngine.instances[-1]
     stream = fake_realtimetts.TextToAudioStream.instances[-1]
     assert service._loop is asyncio.get_running_loop()
+    assert isinstance(service._provider, PiperTTSProvider)
+    assert service._provider._voice.expected_sample_rate == 16000
     assert engine.piper_path == "/opt/nested-piper"
     assert engine.voice.model_file == str(nested_model)
     assert engine.voice.config_file == str(nested_config)
     assert engine._sample_rate == 16000
     assert stream.engine is engine
+
+    await service.on_stop()
+
     stream.stop.assert_called_once_with()
     assert service._provider is None
 

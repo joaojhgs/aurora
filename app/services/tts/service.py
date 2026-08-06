@@ -340,6 +340,7 @@ class TTSService(BaseService):
             model_file=model_file,
             config_file=config_file,
             display_name="Piper",
+            expected_sample_rate=sample_rate,
         )
         provider = PiperTTSProvider(
             piper_path=piper_path,
