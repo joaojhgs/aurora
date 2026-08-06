@@ -121,7 +121,9 @@ def test_flat_speech_config_logs_one_structured_deprecation_warning() -> None:
         call for call in calls if call.startswith("deprecated_speech_config_loaded")
     ]
     assert deprecation_calls == [
-        "deprecated_speech_config_loaded migration_path=services.tts.providers.piper "
+        "deprecated_speech_config_loaded "
+        "migration_path=system.primary_language,system.voice_language,"
+        "services.tts.providers.piper "
         "source=flat_tts_piper persisted=false"
     ]
 
@@ -155,6 +157,76 @@ def test_speech_config_rejects_unsupported_language() -> None:
 def test_speech_config_rejects_unknown_new_provider_field() -> None:
     with pytest.raises(ValueError, match="services.tts.providers.piper"):
         _normalize({"services": {"tts": {"providers": {"piper": {"surprise": True}}}}})
+
+
+@pytest.mark.parametrize(
+    ("payload", "match"),
+    [
+        (
+            {"services": {"tts": {"providers": []}}},
+            "services.tts.providers",
+        ),
+        (
+            {"services": {"tts": {"providers": {"piper": []}}}},
+            "services.tts.providers.piper",
+        ),
+        (
+            {"services": {"tts": {"providers": {"pockettts": []}}}},
+            "services.tts.providers.pockettts",
+        ),
+        (
+            {"services": {"tts": {"voice_registry": []}}},
+            "services.tts.voice_registry",
+        ),
+    ],
+)
+def test_malformed_canonical_speech_objects_are_rejected_before_defaults(
+    payload: dict, match: str
+) -> None:
+    with pytest.raises(ValueError, match=match):
+        _normalize(payload)
+
+
+@pytest.mark.parametrize(
+    ("payload", "match"),
+    [
+        (
+            {"system": {"primary_language": 42}},
+            "system.primary_language",
+        ),
+        (
+            {"system": {"voice_language": ["en"]}},
+            "system.voice_language",
+        ),
+        (
+            {"services": {"tts": {"providers": {"piper": {"model_sample_rate": 7999}}}}},
+            "model_sample_rate",
+        ),
+        (
+            {"services": {"tts": {"providers": {"pockettts": {"quality_tier": "ultra"}}}}},
+            "quality_tier",
+        ),
+        (
+            {"services": {"tts": {"providers": {"pockettts": {"device": "cuda"}}}}},
+            "device",
+        ),
+        (
+            {"services": {"tts": {"providers": {"pockettts": {"max_concurrent_requests": 2}}}}},
+            "max_concurrent_requests",
+        ),
+        (
+            {"services": {"tts": {"providers": {"pockettts": {"request_timeout_s": 0}}}}},
+            "request_timeout_s",
+        ),
+        (
+            {"services": {"tts": {"voice_registry": {"accepted_import_formats": ["wav", "exe"]}}}},
+            "accepted_import_formats",
+        ),
+    ],
+)
+def test_invalid_speech_schema_values_are_strictly_rejected(payload: dict, match: str) -> None:
+    with pytest.raises(ValueError, match=match):
+        _normalize(payload)
 
 
 def test_unknown_fields_outside_new_speech_objects_stay_compatible() -> None:

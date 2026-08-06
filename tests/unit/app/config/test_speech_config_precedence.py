@@ -92,3 +92,55 @@ def test_env_language_aliases_win_when_central_and_legacy_are_omitted(monkeypatc
 
     assert normalized["system"]["primary_language"] == "de"
     assert normalized["system"]["voice_language"] == "fr"
+
+
+def test_legacy_stt_language_env_seeds_central_language_before_defaults(monkeypatch) -> None:
+    monkeypatch.setenv("STT_LANGUAGE", "pt")
+    monkeypatch.setenv("AURORA_PRIMARY_LANGUAGE", "de")
+    monkeypatch.setenv("AURORA_VOICE_LANGUAGE", "fr")
+
+    normalized = _normalize({"services": {"stt": {}}})
+
+    assert normalized["system"]["primary_language"] == "pt"
+    assert normalized["system"]["voice_language"] == "pt"
+
+
+def test_empty_legacy_stt_language_env_sets_voice_auto_before_defaults(monkeypatch) -> None:
+    monkeypatch.setenv("STT_LANGUAGE", "")
+    monkeypatch.setenv("AURORA_PRIMARY_LANGUAGE", "de")
+    monkeypatch.setenv("AURORA_VOICE_LANGUAGE", "fr")
+
+    normalized = _normalize({"services": {"stt": {}}})
+
+    assert normalized["system"]["primary_language"] == "de"
+    assert normalized["system"]["voice_language"] == "auto"
+
+
+def test_legacy_stt_env_joins_single_structured_deprecation_warning(monkeypatch) -> None:
+    monkeypatch.setenv("STT_LANGUAGE", "pt")
+    manager = ConfigManager.__new__(ConfigManager)
+    manager.config_lock = threading.RLock()
+    manager._config = {}
+    manager._schema = manager._get_config_schema()
+    manager._speech_config_warning_emitted = False
+
+    from app.services.config import config_manager as config_manager_module
+
+    calls: list[str] = []
+    original_warning = config_manager_module.log_warning
+    config_manager_module.log_warning = lambda message, *args, **kwargs: calls.append(str(message))
+    try:
+        manager._normalize_config({"services": {"tts": {"model_file_path": "flat.onnx"}}})
+        manager._normalize_config({"services": {"tts": {"model_file_path": "again.onnx"}}})
+    finally:
+        config_manager_module.log_warning = original_warning
+
+    deprecation_calls = [
+        call for call in calls if call.startswith("deprecated_speech_config_loaded")
+    ]
+    assert deprecation_calls == [
+        "deprecated_speech_config_loaded "
+        "migration_path=system.primary_language,system.voice_language,"
+        "services.tts.providers.piper "
+        "source=STT_LANGUAGE,flat_tts_piper persisted=false"
+    ]

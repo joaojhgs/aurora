@@ -36,6 +36,7 @@ _PREVIEW_TOKEN_TTL_SECONDS = 300
 _MAX_PREVIEW_TOKENS = 128
 _SPEECH_LANGUAGES = {"en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"}
 _VOICE_LANGUAGES = {"auto", *_SPEECH_LANGUAGES}
+_VOICE_IMPORT_FORMATS = {"wav", "mp3", "mp4", "m4a", "webm"}
 _SPEECH_LANGUAGE_RELOAD_SERVICES = [
     "tts",
     "stt_transcription",
@@ -333,6 +334,7 @@ class ConfigManager:
         source: dict[str, Any],
     ) -> None:
         """Populate canonical speech config without persisting legacy migrations."""
+        self._validate_speech_source_shape(source)
         system = self._ensure_dict(normalized, "system")
         source_system = source.get("system") if isinstance(source.get("system"), dict) else {}
 
@@ -342,17 +344,31 @@ class ConfigManager:
             source_services.get("stt") if isinstance(source_services.get("stt"), dict) else {}
         )
         legacy_stt_language = source_stt.get("language") if isinstance(source_stt, dict) else None
+        legacy_env_stt_language = self._legacy_stt_language_env_value()
+        legacy_sources: set[str] = set()
 
         if "primary_language" not in source_system:
             if legacy_stt_language in _SPEECH_LANGUAGES:
                 system["primary_language"] = legacy_stt_language
+                legacy_sources.add("services.stt.language")
+            elif legacy_env_stt_language in _SPEECH_LANGUAGES:
+                system["primary_language"] = legacy_env_stt_language
+                legacy_sources.add("STT_LANGUAGE")
             else:
                 system["primary_language"] = self._env_config_value("system.primary_language", "en")
         if "voice_language" not in source_system:
             if legacy_stt_language in _SPEECH_LANGUAGES:
                 system["voice_language"] = legacy_stt_language
+                legacy_sources.add("services.stt.language")
             elif legacy_stt_language == "":
                 system["voice_language"] = "auto"
+                legacy_sources.add("services.stt.language")
+            elif legacy_env_stt_language in _SPEECH_LANGUAGES:
+                system["voice_language"] = legacy_env_stt_language
+                legacy_sources.add("STT_LANGUAGE")
+            elif legacy_env_stt_language == "":
+                system["voice_language"] = "auto"
+                legacy_sources.add("STT_LANGUAGE")
             else:
                 system["voice_language"] = self._env_config_value("system.voice_language", "auto")
 
@@ -400,6 +416,7 @@ class ConfigManager:
             if legacy_key in source_tts and self._is_value_set(source_tts.get(legacy_key)):
                 piper[canonical_key] = deepcopy(source_tts[legacy_key])
                 legacy_used = True
+                legacy_sources.add("flat_tts_piper")
             elif (
                 env_value := self._env_config_value(
                     f"services.tts.providers.piper.{canonical_key}", None
@@ -409,10 +426,14 @@ class ConfigManager:
             else:
                 piper.setdefault(canonical_key, piper_defaults[canonical_key])
 
-        if legacy_used and not getattr(self, "_speech_config_warning_emitted", False):
+        if (legacy_used or legacy_sources) and not getattr(
+            self, "_speech_config_warning_emitted", False
+        ):
             log_warning(
-                "deprecated_speech_config_loaded migration_path=services.tts.providers.piper "
-                "source=flat_tts_piper persisted=false"
+                "deprecated_speech_config_loaded "
+                "migration_path=system.primary_language,system.voice_language,"
+                "services.tts.providers.piper "
+                f"source={','.join(sorted(legacy_sources))} persisted=false"
             )
             self._speech_config_warning_emitted = True
 
@@ -452,6 +473,32 @@ class ConfigManager:
         }
         for key, value in voice_registry_defaults.items():
             voice_registry.setdefault(key, deepcopy(value))
+
+    def _validate_speech_source_shape(self, source: dict[str, Any]) -> None:
+        """Reject malformed canonical speech objects before compatibility defaults fill them."""
+        system = source.get("system")
+        if isinstance(system, dict):
+            for field in ("primary_language", "voice_language"):
+                if field in system and not isinstance(system[field], str):
+                    raise ValueError(f"system.{field} must be a string")
+        services = source.get("services")
+        if not isinstance(services, dict):
+            return
+        tts = services.get("tts")
+        if not isinstance(tts, dict):
+            return
+        self._require_dict_if_present(tts, "providers", "services.tts.providers")
+        providers = tts.get("providers")
+        if isinstance(providers, dict):
+            self._require_dict_if_present(providers, "piper", "services.tts.providers.piper")
+            self._require_dict_if_present(
+                providers, "pockettts", "services.tts.providers.pockettts"
+            )
+        self._require_dict_if_present(tts, "voice_registry", "services.tts.voice_registry")
+
+    def _require_dict_if_present(self, parent: dict[str, Any], key: str, object_path: str) -> None:
+        if key in parent and not isinstance(parent[key], dict):
+            raise ValueError(f"{object_path} must be an object")
 
     def _validate_speech_config_shape(self, config_data: dict[str, Any]) -> None:
         """Reject unknown fields only for the new speech config objects."""
@@ -527,6 +574,63 @@ class ConfigManager:
             raise ValueError("services.tts.fallback_provider must be null, piper, or pockettts")
         if fallback_provider == provider:
             raise ValueError("services.tts.fallback_provider must differ from provider")
+        self._validate_piper_config(config_data)
+        self._validate_pockettts_config(config_data)
+        self._validate_voice_registry_config(config_data)
+
+    def _validate_piper_config(self, config_data: dict[str, Any]) -> None:
+        sample_rate = self._lookup_path(
+            config_data, "services.tts.providers.piper.model_sample_rate", 22050
+        )
+        if not isinstance(sample_rate, int) or not 8000 <= sample_rate <= 48000:
+            raise ValueError(
+                "services.tts.providers.piper.model_sample_rate must be an integer "
+                "between 8000 and 48000"
+            )
+
+    def _validate_pockettts_config(self, config_data: dict[str, Any]) -> None:
+        pockettts_path = "services.tts.providers.pockettts"
+        quality_tier = self._lookup_path(config_data, f"{pockettts_path}.quality_tier", "compact")
+        if quality_tier not in {"compact", "quality"}:
+            raise ValueError(f"{pockettts_path}.quality_tier must be compact or quality")
+        device = self._lookup_path(config_data, f"{pockettts_path}.device", "cpu")
+        if device != "cpu":
+            raise ValueError(f"{pockettts_path}.device must be cpu")
+        max_concurrent = self._lookup_path(
+            config_data, f"{pockettts_path}.max_concurrent_requests", 1
+        )
+        if not isinstance(max_concurrent, int) or max_concurrent != 1:
+            raise ValueError(f"{pockettts_path}.max_concurrent_requests must be 1")
+        for field in ("initialization_timeout_s", "request_timeout_s"):
+            value = self._lookup_path(config_data, f"{pockettts_path}.{field}", 120.0)
+            if not isinstance(value, int | float) or value <= 0:
+                raise ValueError(f"{pockettts_path}.{field} must be greater than 0")
+        lsd_decode_steps = self._lookup_path(config_data, f"{pockettts_path}.lsd_decode_steps", 1)
+        if not isinstance(lsd_decode_steps, int) or lsd_decode_steps < 1:
+            raise ValueError(f"{pockettts_path}.lsd_decode_steps must be at least 1")
+
+    def _validate_voice_registry_config(self, config_data: dict[str, Any]) -> None:
+        registry_path = "services.tts.voice_registry"
+        formats = self._lookup_path(
+            config_data,
+            f"{registry_path}.accepted_import_formats",
+            ["wav", "mp3", "mp4", "m4a", "webm"],
+        )
+        if not isinstance(formats, list) or any(
+            item not in _VOICE_IMPORT_FORMATS for item in formats
+        ):
+            raise ValueError(
+                f"{registry_path}.accepted_import_formats must contain only: "
+                f"{', '.join(sorted(_VOICE_IMPORT_FORMATS))}"
+            )
+        for field in ("clone_min_duration_s", "clone_max_duration_s"):
+            value = self._lookup_path(config_data, f"{registry_path}.{field}", 1.0)
+            if not isinstance(value, int | float) or value <= 0:
+                raise ValueError(f"{registry_path}.{field} must be greater than 0")
+        for field in ("clone_max_source_bytes", "clone_max_wire_bytes"):
+            value = self._lookup_path(config_data, f"{registry_path}.{field}", 1)
+            if not isinstance(value, int) or value <= 0:
+                raise ValueError(f"{registry_path}.{field} must be greater than 0")
 
     def _ensure_dict(self, parent: dict[str, Any], key: str) -> dict[str, Any]:
         value = parent.get(key)
@@ -547,6 +651,19 @@ class ConfigManager:
             return converter(env_val)
         except (TypeError, ValueError):
             return default
+
+    def _legacy_stt_language_env_value(self) -> str | None:
+        """Return STT_LANGUAGE exactly because an empty value means auto-detect."""
+        env_info = ENV_CONFIG_MAP.get("services.stt.language")
+        if env_info is None:
+            return None
+        env_var, converter = env_info
+        if env_var not in os.environ:
+            return None
+        try:
+            return converter(os.environ[env_var])
+        except (TypeError, ValueError):
+            return None
 
     def _deep_merge_preserving_unknown(
         self, base: dict[str, Any], overlay: dict[str, Any]
