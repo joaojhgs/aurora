@@ -10,6 +10,7 @@ ENV AURORA_ENV=production
 ENV AURORA_ARCHITECTURE_MODE=processes
 ENV REDIS_URL=redis://redis:6379
 ENV UV_LINK_MODE=copy
+ENV HF_HOME=/app/voice_models/pockettts/huggingface
 
 RUN apt-get update && apt-get install -y \
     portaudio19-dev \
@@ -60,7 +61,14 @@ COPY --chown=aurora:aurora app/ app/
 COPY --chown=aurora:aurora modules/ modules/
 RUN uv pip install --system --no-deps -e .
 
-RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
+RUN mkdir -p \
+      /app/data \
+      /app/logs \
+      /app/cache \
+      /app/config \
+      /app/voice_models/pockettts/huggingface \
+      /app/voice_models/pockettts/voices \
+      /app/voice_models/voice-pack && \
     chown -R aurora:aurora /app
 
 USER aurora

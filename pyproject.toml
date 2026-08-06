@@ -72,8 +72,9 @@ runtime = [
     "piper-tts==1.2.0",
     "piper-phonemize==1.1.0",
     "realtimetts==0.4.47",
+    "pocket-tts[audio]==2.1.0",
     
-    # Machine Learning & AI Core (NO TORCH - added separately)
+    # Machine Learning & AI Core (hardware-specific Torch wheels are selected separately)
     "numpy==2.2.6",
     "scipy==1.15.1",
     "onnxruntime==1.20.1",
@@ -219,6 +220,7 @@ service-tts = [
     "realtimetts==0.4.47",
     "piper-tts==1.2.0",
     "piper-phonemize==1.1.0",
+    "pocket-tts[audio]==2.1.0",
     "PyAudio==0.2.14",
     "torch==2.6.0",
     "torchaudio==2.6.0",
@@ -333,6 +335,7 @@ sidecar-local-audio = [
     "realtimetts==0.4.47",
     "piper-tts==1.2.0",
     "piper-phonemize==1.1.0",
+    "pocket-tts[audio]==2.1.0",
     "PyAudio==0.2.14",
     "onnxruntime==1.20.1",
 ]

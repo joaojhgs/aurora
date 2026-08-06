@@ -10,6 +10,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+import yaml
 
 from scripts import build as build_script
 from scripts.wheel_installer import WheelInstaller
@@ -66,6 +67,41 @@ def test_sidecar_thin_profile_pins_numpy_abi_version():
     sidecar_thin = pyproject["project"]["optional-dependencies"]["sidecar-thin"]
 
     assert "numpy==2.2.6" in sidecar_thin
+
+
+@pytest.mark.e2e
+def test_pockettts_is_pinned_only_in_local_tts_profiles():
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    extras = pyproject["project"]["optional-dependencies"]
+    dependency = "pocket-tts[audio]==2.1.0"
+
+    assert dependency in extras["runtime"]
+    assert dependency in extras["service-tts"]
+    assert dependency in extras["sidecar-local-audio"]
+    assert dependency not in extras["sidecar-thin"]
+
+
+@pytest.mark.e2e
+def test_thin_sidecar_export_excludes_pockettts():
+    result = subprocess.run(
+        [
+            "uv",
+            "export",
+            "--frozen",
+            "--no-dev",
+            "--no-emit-project",
+            "--format",
+            "requirements.txt",
+            "--extra",
+            "sidecar-thin",
+        ],
+        cwd=Path.cwd(),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert not any(line.startswith("pocket-tts==") for line in result.stdout.splitlines())
 
 
 @pytest.mark.e2e
@@ -134,7 +170,26 @@ def test_tts_docker_cpu_requirements_export_prunes_pytorch_subtrees():
     assert "torch" not in exported_packages
     assert "torchaudio" not in exported_packages
     assert "torchvision" not in exported_packages
+    assert "pocket-tts" in exported_packages
     assert exported_packages.isdisjoint(PYTORCH_CUDA_CHILDREN)
+
+
+@pytest.mark.e2e
+def test_tts_process_image_uses_a_persistent_voice_model_cache():
+    dockerfile = Path("docker/services/Dockerfile.tts").read_text(encoding="utf-8")
+    compose = yaml.safe_load(Path("docker-compose.process.yml").read_text(encoding="utf-8"))
+    tts_service = compose["services"]["tts-service"]
+
+    assert "HF_HOME=/app/voice_models/pockettts/huggingface" in dockerfile
+    assert "/app/voice_models/pockettts/voices" in dockerfile
+    assert "/app/voice_models/voice-pack" in dockerfile
+    assert dockerfile.index(
+        "COPY --chown=aurora:aurora pyproject.toml uv.lock ./"
+    ) < dockerfile.index("COPY --chown=aurora:aurora app/ app/")
+
+    assert "HF_HOME=/app/voice_models/pockettts/huggingface" in tts_service["environment"]
+    assert "aurora_voice_models:/app/voice_models" in tts_service["volumes"]
+    assert compose["volumes"]["aurora_voice_models"]["driver"] == "local"
 
 
 @pytest.mark.e2e

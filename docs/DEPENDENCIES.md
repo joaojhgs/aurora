@@ -66,7 +66,7 @@ The service groups in `pyproject.toml` mirror Aurora process-mode boundaries:
 | `service-stt-wakeword` | Wake-word service dependencies. |
 | `service-stt-transcription` | Speech transcription service dependencies. |
 | `service-stt-coordinator` | Coordinator-side STT orchestration dependencies. |
-| `service-tts` | TTS/audio synthesis dependencies. |
+| `service-tts` | Piper and PocketTTS synthesis/audio dependencies. Model and voice assets remain separately managed data. |
 | `service-orchestrator` | LangGraph/LangChain orchestration and default LLM client support. |
 | `gateway` | FastAPI Gateway, WebRTC, ACL, and mesh transport dependencies. |
 | `all-services` | Convenience group for full local service runtime. |
@@ -83,6 +83,12 @@ The service groups in `pyproject.toml` mirror Aurora process-mode boundaries:
 | DB local embeddings | `service-db-local-embeddings` or `embeddings-local` | Heavy local embedding profile. |
 
 ## Tauri sidecar and client package profiles
+
+`sidecar-local-audio` carries both Piper and PocketTTS code. The `sidecar-thin`
+profile carries neither TTS runtime. Model weights and user voice state are not
+dependency-profile inputs and must remain outside packaged application artifacts.
+Process-mode TTS keeps its managed downloads and voice state in the persistent
+`aurora_voice_models` volume mounted at `/app/voice_models`.
 
 Tauri desktop packages stage a Python sidecar using `apps/aurora-tauri/scripts/prepare-sidecar.mjs` and `scripts/build.py`. Profiles are explicit so the default bundle does not install every local dependency.
 

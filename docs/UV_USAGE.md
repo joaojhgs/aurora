@@ -382,7 +382,7 @@ uv pip install -e .[service-tooling]
 ```bash
 uv pip install -e .[service-tts]
 ```
-- `realtimetts`, `piper-tts`, `piper-phonemize`
+- `realtimetts`, `piper-tts`, `piper-phonemize`, `pocket-tts[audio]`
 - `PyAudio`
 - `torch`, `torchaudio`, `torchvision`
 - `onnxruntime`

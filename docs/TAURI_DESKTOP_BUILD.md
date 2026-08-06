@@ -31,7 +31,7 @@ Closing the Tauri window hides Aurora to the tray; explicit tray Quit or Ctrl-C 
 | Profile | Purpose | Dependency shape | CI behavior |
 | --- | --- | --- | --- |
 | `desktop-local-minimal` | Default local desktop package and smoke build. Gateway/config/auth/db/tooling/orchestrator only. | Maps to the Python builder's internal `thin` dependency profile; no STT/TTS/local model deps. | Real Linux Tauri bundle. |
-| `local-cpu` | Offline/local assistant with STT/TTS/audio and CPU ML wheels. | `aurora[build,sidecar-local-audio,torch-cpu]`; wheel installer uses `--hardware cpu`. | Profile staging smoke; release runner may build the full artifact. |
+| `local-cpu` | Offline/local assistant with STT/TTS/audio and CPU ML wheels. | `aurora[build,sidecar-local-audio,torch-cpu]`; includes Piper and PocketTTS code, while model and voice assets remain external; wheel installer uses `--hardware cpu`. | Profile staging smoke; release runner may build the full artifact. |
 | `local-cuda` | NVIDIA CUDA local assistant. | `aurora[build,sidecar-local-audio,cuda]`; wheel installer uses `--hardware cuda`. | Profile staging smoke; GPU runner/release runner builds actual artifact. |
 | `local-rocm` | AMD ROCm local assistant. | `aurora[build,sidecar-local-audio,rocm]`; wheel installer uses `--hardware rocm`. | Profile staging smoke; GPU runner/release runner builds actual artifact. |
 | `local-metal` | macOS Metal local assistant. | `aurora[build,sidecar-local-audio,metal]`; wheel installer uses `--hardware metal`. | Profile staging smoke; macOS release runner builds actual artifact. |
