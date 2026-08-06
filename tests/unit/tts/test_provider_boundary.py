@@ -320,6 +320,47 @@ async def test_piper_late_cancel_after_completion_does_not_grow_state(
 
 
 @pytest.mark.asyncio
+async def test_piper_stop_during_active_synthesis_rejects_stale_audio(
+    tmp_path, monkeypatch
+) -> None:
+    model_path = tmp_path / "voice.onnx"
+    model_path.write_bytes(b"model")
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def fake_to_thread(*_args, **_kwargs):
+        entered.set()
+        await release.wait()
+        return b"\x01\x00", 16000
+
+    monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
+    provider = PiperTTSProvider(
+        piper_path="piper",
+        voice=PiperVoiceConfig(voice_id="default", model_file=str(model_path)),
+    )
+    await provider.start()
+    task = asyncio.create_task(
+        provider.synthesize(TTSSynthesisRequest(text="hello", request_id="request-1"))
+    )
+    await entered.wait()
+    stop_task = asyncio.create_task(provider.stop())
+    await asyncio.sleep(0)
+
+    assert stop_task.done() is False
+    release.set()
+    await stop_task
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await task
+
+    assert exc_info.value.code == "cancelled"
+    assert await provider.tracked_request_count() == 0
+    health = await provider.health()
+    assert health.ready is False
+    assert health.base_identity is None
+
+
+@pytest.mark.asyncio
 async def test_piper_serializes_cli_entry(tmp_path, monkeypatch) -> None:
     model_path = tmp_path / "voice.onnx"
     model_path.write_bytes(b"model")

@@ -149,6 +149,7 @@ class PiperTTSProvider:
         self._use_cuda = use_cuda
         self._debug = debug
         self._started = False
+        self._stopping = False
         self._queued_requests: set[str] = set()
         self._active_requests: set[str] = set()
         self._cancelled_requests: set[str] = set()
@@ -176,14 +177,22 @@ class PiperTTSProvider:
             raise TTSProviderError("unavailable", "Piper voice model is unavailable")
         async with self._state_lock:
             self._started = True
+            self._stopping = False
 
     async def stop(self) -> None:
-        """Release provider state."""
+        """Stop accepting work, cancel tracked work, and drain active synthesis."""
         async with self._state_lock:
             self._started = False
+            self._stopping = True
+            self._cancelled_requests.update(self._queued_requests)
+            self._cancelled_requests.update(self._active_requests)
+        async with self._execution_lock:
+            pass
+        async with self._state_lock:
             self._queued_requests.clear()
             self._active_requests.clear()
             self._cancelled_requests.clear()
+            self._stopping = False
 
     async def health(self) -> TTSProviderHealth:
         """Return readiness for the active Piper voice."""
