@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import math
 import threading
 import time
 import wave
@@ -272,21 +273,7 @@ async def test_synthesize_normalizes_raw_and_wav_audio(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "case",
-    [
-        pytest.param(
-            PROVIDERS[0],
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="Piper provider currently ignores requested sample_rate instead of "
-                "returning an invalid_audio provider error.",
-            ),
-        ),
-        PROVIDERS[1],
-    ],
-    ids=_provider_id,
-)
+@pytest.mark.parametrize("case", PROVIDERS, ids=_provider_id)
 async def test_rejects_unsupported_sample_rate_with_invalid_audio_error(
     case: ProviderCase, tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -331,34 +318,126 @@ async def test_unknown_voice_errors_are_sanitized_and_do_not_invoke_synthesis(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("case", PROVIDERS, ids=_provider_id)
-async def test_empty_text_does_not_leak_request_state(
+async def test_empty_text_rejects_before_provider_entry_and_cleans_state(
     case: ProviderCase, tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    provider = await _make_provider(case, tmp_path, monkeypatch)
+    piper_calls: list[object] = []
+
+    async def counted_piper_to_thread(func: Callable[..., object], *args: object, **kwargs: object):
+        del func, args, kwargs
+        piper_calls.append(object())
+        return b"\x00\x00", 16000
+
+    provider = await _make_provider(
+        case,
+        tmp_path,
+        monkeypatch,
+        piper_to_thread=counted_piper_to_thread if case.name == "piper" else None,
+    )
     await provider.start()
 
-    try:
+    with pytest.raises(TTSProviderError) as exc_info:
         await provider.synthesize(TTSSynthesisRequest(text="", request_id="empty"))
-    except TTSProviderError as exc:
-        assert exc.code in {"invalid_audio", "unavailable", "resource_exhausted"}
 
+    assert exc_info.value.code == "invalid_audio"
+    assert piper_calls == []
+    assert FakePocketTTSModel.generation_calls == []
     assert await provider.tracked_request_count() == 0
     await provider.stop()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("case", PROVIDERS, ids=_provider_id)
-async def test_oversized_text_does_not_leak_request_state(
+async def test_oversized_text_rejects_before_provider_entry_and_cleans_state(
+    case: ProviderCase, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    piper_calls: list[object] = []
+
+    async def counted_piper_to_thread(func: Callable[..., object], *args: object, **kwargs: object):
+        del func, args, kwargs
+        piper_calls.append(object())
+        return b"\x00\x00", 16000
+
+    provider = await _make_provider(
+        case,
+        tmp_path,
+        monkeypatch,
+        piper_to_thread=counted_piper_to_thread if case.name == "piper" else None,
+    )
+    await provider.start()
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await provider.synthesize(TTSSynthesisRequest(text="x" * 20_000, request_id="oversized"))
+
+    assert exc_info.value.code == "resource_exhausted"
+    assert piper_calls == []
+    assert FakePocketTTSModel.generation_calls == []
+    assert await provider.tracked_request_count() == 0
+    await provider.stop()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tts_request", "expected_code"),
+    [
+        (TTSSynthesisRequest(text="hello", audio_format="mp3"), "invalid_audio"),  # type: ignore[arg-type]
+        (TTSSynthesisRequest(text="hello", speed=1.25), "invalid_audio"),
+        (TTSSynthesisRequest(text="hello", speed=True), "invalid_audio"),  # type: ignore[arg-type]
+        (TTSSynthesisRequest(text="hello", speed=math.inf), "invalid_audio"),
+        (TTSSynthesisRequest(text="hello", sample_rate=0), "invalid_audio"),
+        (TTSSynthesisRequest(text=None), "invalid_audio"),  # type: ignore[arg-type]
+    ],
+)
+@pytest.mark.parametrize("case", PROVIDERS, ids=_provider_id)
+async def test_invalid_request_shape_rejects_before_provider_entry_and_cleans_state(
+    case: ProviderCase,
+    tts_request: TTSSynthesisRequest,
+    expected_code: str,
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    piper_calls: list[object] = []
+
+    async def counted_piper_to_thread(func: Callable[..., object], *args: object, **kwargs: object):
+        del func, args, kwargs
+        piper_calls.append(object())
+        return b"\x00\x00", 16000
+
+    provider = await _make_provider(
+        case,
+        tmp_path,
+        monkeypatch,
+        piper_to_thread=counted_piper_to_thread if case.name == "piper" else None,
+    )
+    await provider.start()
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await provider.synthesize(tts_request)
+
+    assert exc_info.value.code == expected_code
+    assert "hello" not in str(exc_info.value)
+    assert "None" not in str(exc_info.value)
+    assert piper_calls == []
+    assert FakePocketTTSModel.generation_calls == []
+    assert await provider.tracked_request_count() == 0
+    await provider.stop()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", PROVIDERS, ids=_provider_id)
+async def test_invalid_stream_request_cleans_state(
     case: ProviderCase, tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     provider = await _make_provider(case, tmp_path, monkeypatch)
     await provider.start()
 
-    try:
-        await provider.synthesize(TTSSynthesisRequest(text="x" * 20_000, request_id="oversized"))
-    except TTSProviderError as exc:
-        assert exc.code in {"invalid_audio", "unavailable", "resource_exhausted"}
+    with pytest.raises(TTSProviderError) as exc_info:
+        async for _chunk in provider.stream(
+            TTSSynthesisRequest(text=" ", request_id="invalid-stream")
+        ):
+            pass
 
+    assert exc_info.value.code == "invalid_audio"
     assert await provider.tracked_request_count() == 0
     await provider.stop()
 

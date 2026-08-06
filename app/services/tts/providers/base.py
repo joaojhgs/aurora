@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from enum import Enum
 from typing import Literal, Protocol, runtime_checkable
 
 AudioFormat = Literal["raw", "wav"]
+MAX_TTS_REQUEST_TEXT_CHARS = 10_000
+MIN_TTS_SAMPLE_RATE = 8_000
+MAX_TTS_SAMPLE_RATE = 192_000
 ProviderErrorCode = Literal[
     "unavailable",
     "unsupported_voice",
@@ -103,6 +107,50 @@ class TTSProviderError(RuntimeError):
     def __init__(self, code: ProviderErrorCode, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+def validate_synthesis_request(
+    request: TTSSynthesisRequest,
+    *,
+    supported_formats: tuple[AudioFormat, ...],
+    supported_sample_rate: int | None = None,
+) -> None:
+    """Reject unsupported provider requests before model entry.
+
+    Text is capped at ``MAX_TTS_REQUEST_TEXT_CHARS`` so providers never receive
+    unbounded user input. Current local providers support only normal speed
+    playback and optionally one concrete output sample rate.
+    """
+    if not isinstance(request.text, str):
+        raise TTSProviderError("invalid_audio", "TTS request text is unavailable")
+    if not request.text.strip():
+        raise TTSProviderError("invalid_audio", "TTS request text is unavailable")
+    if len(request.text) > MAX_TTS_REQUEST_TEXT_CHARS:
+        raise TTSProviderError("resource_exhausted", "TTS request text is too long")
+    if request.audio_format not in supported_formats:
+        raise TTSProviderError("invalid_audio", "Requested audio format is unavailable")
+    sample_rate = request.sample_rate
+    if sample_rate is not None and (
+        isinstance(sample_rate, bool)
+        or not isinstance(sample_rate, int)
+        or sample_rate < MIN_TTS_SAMPLE_RATE
+        or sample_rate > MAX_TTS_SAMPLE_RATE
+    ):
+        raise TTSProviderError("invalid_audio", "Requested sample rate is unavailable")
+    if (
+        supported_sample_rate is not None
+        and sample_rate is not None
+        and sample_rate != supported_sample_rate
+    ):
+        raise TTSProviderError("invalid_audio", "Requested sample rate is unavailable")
+    if (
+        isinstance(request.speed, bool)
+        or not isinstance(request.speed, (int, float))
+        or not math.isfinite(request.speed)
+    ):
+        raise TTSProviderError("invalid_audio", "Requested speech speed is unavailable")
+    if request.speed != 1.0:
+        raise TTSProviderError("invalid_audio", "Requested speech speed is unavailable")
 
 
 @runtime_checkable

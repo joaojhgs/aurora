@@ -23,6 +23,7 @@ from app.services.tts.providers.base import (
     TTSSynthesisResult,
     TTSVoiceInfo,
     VoiceSelectionMode,
+    validate_synthesis_request,
 )
 from app.services.tts.providers.piper import pcm_to_wav_bytes
 
@@ -588,8 +589,16 @@ class PocketTTSProvider:
 
     async def synthesize(self, request: TTSSynthesisRequest) -> TTSSynthesisResult:
         """Synthesize finite audio through PocketTTS without blocking the loop."""
+        validate_synthesis_request(
+            request,
+            supported_formats=self.capabilities.supported_formats,
+        )
         loaded = await self._ready_loaded_state()
-        self._validate_request(request, loaded)
+        validate_synthesis_request(
+            request,
+            supported_formats=self.capabilities.supported_formats,
+            supported_sample_rate=loaded.sample_rate,
+        )
         voice_id, voice_state = self._resolve_voice(loaded, request.voice)
         await self._register_request(request.request_id)
         try:
@@ -624,8 +633,16 @@ class PocketTTSProvider:
 
     async def stream(self, request: TTSSynthesisRequest) -> AsyncIterator[TTSStreamChunk]:
         """Stream ordered PocketTTS chunks normalized to PCM."""
+        validate_synthesis_request(
+            request,
+            supported_formats=self.capabilities.supported_formats,
+        )
         loaded = await self._ready_loaded_state()
-        self._validate_request(request, loaded)
+        validate_synthesis_request(
+            request,
+            supported_formats=self.capabilities.supported_formats,
+            supported_sample_rate=loaded.sample_rate,
+        )
         _voice_id, voice_state = self._resolve_voice(loaded, request.voice)
         await self._register_request(request.request_id)
         try:
@@ -740,16 +757,6 @@ class PocketTTSProvider:
         if voice_id is None or voice_id not in loaded.voice_states:
             raise TTSProviderError("unsupported_voice", "Requested voice is unavailable")
         return voice_id, loaded.voice_states[voice_id]
-
-    def _validate_request(
-        self, request: TTSSynthesisRequest, loaded: _LoadedPocketTTSState
-    ) -> None:
-        if request.audio_format not in self.capabilities.supported_formats:
-            raise TTSProviderError("invalid_audio", "Requested audio format is unavailable")
-        if request.sample_rate is not None and request.sample_rate != loaded.sample_rate:
-            raise TTSProviderError("invalid_audio", "Requested sample rate is unavailable")
-        if request.speed != 1.0:
-            raise TTSProviderError("invalid_audio", "Requested speech speed is unavailable")
 
     async def _register_request(self, request_id: str | None) -> None:
         if request_id is None:

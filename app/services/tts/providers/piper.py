@@ -23,6 +23,7 @@ from app.services.tts.providers.base import (
     TTSSynthesisResult,
     TTSVoiceInfo,
     VoiceSelectionMode,
+    validate_synthesis_request,
 )
 
 
@@ -269,6 +270,10 @@ class PiperTTSProvider:
         """Synthesize finite audio through Piper without blocking the event loop."""
         if not self._started:
             raise TTSProviderError("unavailable", "TTS provider is unavailable")
+        validate_synthesis_request(
+            request,
+            supported_formats=self.capabilities.supported_formats,
+        )
         self._resolve_voice(request.voice)
         await self._register_request(request.request_id)
         try:
@@ -285,6 +290,8 @@ class PiperTTSProvider:
                     debug=self._debug,
                 )
                 await self._reject_if_cancelled(request.request_id)
+            if request.sample_rate is not None and request.sample_rate != sample_rate:
+                raise TTSProviderError("invalid_audio", "Requested sample rate is unavailable")
             output = (
                 pcm_to_wav_bytes(audio, sample_rate=sample_rate)
                 if request.audio_format == "wav"
