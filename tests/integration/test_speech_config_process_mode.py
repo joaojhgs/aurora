@@ -5,6 +5,8 @@ temporary config file. They skip only when the process-mode dependencies or live
 Redis are unavailable.
 """
 
+# mypy: disable-error-code="untyped-decorator"
+
 from __future__ import annotations
 
 import asyncio
@@ -18,7 +20,7 @@ import time
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -230,7 +232,7 @@ async def _get_section(bus: BullMQBus, section: str | None = None) -> dict[str, 
     )
     assert result.ok, result.error
     assert isinstance(result.data, dict)
-    return result.data["config"]
+    return cast(dict[str, Any], result.data["config"])
 
 
 async def _set_config(bus: BullMQBus, key_path: str, value: Any) -> dict[str, Any]:
@@ -280,7 +282,7 @@ async def _commit_config(
 
 
 def _piper_config(config: dict[str, Any]) -> dict[str, Any]:
-    return config["providers"]["piper"]
+    return cast(dict[str, Any], config["providers"]["piper"])
 
 
 @pytest.mark.parametrize(
