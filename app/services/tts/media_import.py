@@ -487,7 +487,6 @@ class MediaImporter:
             return
         normalized = declared_mime.split(";", 1)[0].strip().lower()
         expected_container = {
-            "audio/aac": "mp4",
             "audio/mp4": "mp4",
             "audio/mpeg": "mp3",
             "audio/mp3": "mp3",

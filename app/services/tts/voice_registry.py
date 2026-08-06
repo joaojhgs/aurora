@@ -190,7 +190,7 @@ class VoiceArtifactManifest(BaseModel):
     redistribution: LicenseRedistribution
     upstream_source: str | None = Field(default=None, max_length=240)
 
-    @field_validator(
+    @field_validator(  # type: ignore[untyped-decorator]
         "asset_id",
         "runtime_target",
         "language_bundle",
@@ -203,27 +203,27 @@ class VoiceArtifactManifest(BaseModel):
             raise ValueError("invalid component")
         return value
 
-    @field_validator("logical_voice_id")
+    @field_validator("logical_voice_id")  # type: ignore[untyped-decorator]
     @classmethod
     def _validate_standard_voice_id(cls, value: str) -> str:
         if not _STANDARD_ID_RE.fullmatch(value):
             raise ValueError("standard voice id required")
         return value
 
-    @field_validator("sha256")
+    @field_validator("sha256")  # type: ignore[untyped-decorator]
     @classmethod
     def _validate_hash(cls, value: str) -> str:
         if not _SHA256_RE.fullmatch(value):
             raise ValueError("invalid sha256")
         return value
 
-    @field_validator("relative_path")
+    @field_validator("relative_path")  # type: ignore[untyped-decorator]
     @classmethod
     def _validate_relative_path(cls, value: str) -> str:
         _safe_relative_path(value)
         return value
 
-    @model_validator(mode="after")
+    @model_validator(mode="after")  # type: ignore[untyped-decorator]
     def _validate_sizes(self) -> VoiceArtifactManifest:
         if self.unpacked_size_bytes < self.size_bytes:
             raise ValueError("unpacked size cannot be smaller than packed size")
@@ -242,14 +242,14 @@ class VoicePackManifest(BaseModel):
     minimum_runtime_version: str = Field(min_length=1, max_length=64)
     assets: tuple[VoiceArtifactManifest, ...] = Field(min_length=1, max_length=_MAX_ASSETS)
 
-    @field_validator("pack_id")
+    @field_validator("pack_id")  # type: ignore[untyped-decorator]
     @classmethod
     def _validate_pack_id(cls, value: str) -> str:
         if not _COMPONENT_RE.fullmatch(value):
             raise ValueError("invalid pack id")
         return value
 
-    @model_validator(mode="after")
+    @model_validator(mode="after")  # type: ignore[untyped-decorator]
     def _validate_pack_voice_ids(self) -> VoicePackManifest:
         for asset in self.assets:
             match = _STANDARD_ID_RE.fullmatch(asset.logical_voice_id)
@@ -266,13 +266,13 @@ class _PersistedArtifact(BaseModel):
     sha256: str = Field(min_length=64, max_length=64)
     format: VoiceStateArtifactFormat = "safetensors"
 
-    @field_validator("relative_ref")
+    @field_validator("relative_ref")  # type: ignore[untyped-decorator]
     @classmethod
     def _validate_ref(cls, value: str) -> str:
         _safe_relative_path(value)
         return value
 
-    @field_validator("sha256")
+    @field_validator("sha256")  # type: ignore[untyped-decorator]
     @classmethod
     def _validate_sha(cls, value: str) -> str:
         if not _SHA256_RE.fullmatch(value):

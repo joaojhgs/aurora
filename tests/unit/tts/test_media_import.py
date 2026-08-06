@@ -329,6 +329,41 @@ async def test_declared_mime_mismatch_is_rejected_after_content_probe(tmp_path: 
 
 
 @pytest.mark.asyncio
+async def test_aac_in_mp4_requires_mp4_or_m4a_mime(tmp_path: Path) -> None:
+    ffmpeg, ffprobe = _require_ffmpeg()
+    mp4 = _transcode_audio(
+        _wav_bytes(),
+        tmp_path / "mp4",
+        suffix=".mp4",
+        codec="aac",
+        extra_args=["-b:a", "128k"],
+    )
+    m4a = _transcode_audio(
+        _wav_bytes(),
+        tmp_path / "m4a",
+        suffix=".m4a",
+        codec="aac",
+        extra_args=["-b:a", "128k"],
+    )
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    importer = MediaImporter(ffmpeg_path=ffmpeg, ffprobe_path=ffprobe, temp_root=scratch)
+
+    mp4_result = await importer.import_bytes(mp4, declared_mime="audio/mp4")
+    m4a_result = await importer.import_bytes(m4a, declared_mime="audio/x-m4a")
+
+    assert mp4_result.container == "mp4"
+    assert mp4_result.source_codec == "aac"
+    assert m4a_result.container == "mp4"
+    assert m4a_result.source_codec == "aac"
+    with pytest.raises(MediaImportError) as exc_info:
+        await importer.import_bytes(mp4, declared_mime="audio/aac")
+
+    assert exc_info.value.code == "unsupported_media"
+    assert list(scratch.iterdir()) == []
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "source",
     [
