@@ -32,6 +32,7 @@ VOICE_IMPORT_MAX_DURATION_MS = 15_000
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _OPERATION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+_SEALED_AUDIO_REF_RE = re.compile(r"^voice-import:[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$")
 TTSOutputFormat = Literal["wav", "raw"]
 
 
@@ -862,6 +863,13 @@ class TTSCreateVoiceProfileRequest(_TTSMutationRequest):
     def _validate_nonblank(cls, value: str) -> str:
         return _non_blank(value, "create profile field")
 
+    @field_validator("sealed_audio_ref")
+    @classmethod
+    def _validate_sealed_audio_ref(cls, value: str) -> str:
+        if not _SEALED_AUDIO_REF_RE.fullmatch(value):
+            raise ValueError("sealed_audio_ref must be an opaque voice import reference")
+        return value
+
     @field_validator("language", mode="before")
     @classmethod
     def _normalize_language(cls, value: str | None) -> str | None:
@@ -871,23 +879,33 @@ class TTSCreateVoiceProfileRequest(_TTSMutationRequest):
 class TTSCreateVoiceProfileResponse(_StrictTTSIOModel):
     """Created cloned voice profile response."""
 
-    voice_id: LogicalVoiceId
-    status: Literal["created", "queued", "ready"]
+    voice_id: LogicalVoiceId | None = None
+    status: Literal["created", "queued", "ready", "rejected", "unavailable"]
     accepted_duration_ms: int | None = Field(default=None, gt=0, le=VOICE_IMPORT_MAX_DURATION_MS)
-    revision: str = Field(min_length=1, max_length=256)
+    revision: str | None = Field(default=None, min_length=1, max_length=256)
     correlation_id: str | None = Field(default=None, max_length=256)
 
     @field_validator("voice_id")
     @classmethod
-    def _validate_voice_id(cls, value: str) -> str:
+    def _validate_voice_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         validated = validate_logical_voice_id(value)
         if not validated.startswith("clone:"):
             raise ValueError("created profile must use a clone logical voice id")
         return validated
 
+    @model_validator(mode="after")
+    def _validate_result_revision(self) -> TTSCreateVoiceProfileResponse:
+        if self.status in {"created", "queued", "ready"} and self.revision is None:
+            raise ValueError("successful create result needs revision")
+        if self.status in {"created", "queued", "ready"} and self.voice_id is None:
+            raise ValueError("successful create result needs voice_id")
+        return self
+
 
 class TTSDeleteVoiceProfileRequest(TTSInstallVoiceProfileRequest):
-    """Delete an owned cloned voice profile and derived state."""
+    """Delete a manager-authorized cloned voice profile and derived state."""
 
     @model_validator(mode="after")
     def _validate_clone_id(self) -> TTSDeleteVoiceProfileRequest:
@@ -897,7 +915,7 @@ class TTSDeleteVoiceProfileRequest(TTSInstallVoiceProfileRequest):
 
 
 class TTSDeleteVoiceProfileResponse(_StrictTTSIOModel):
-    """Deleted cloned voice profile response."""
+    """Manager-authorized cloned voice profile delete response."""
 
     voice_id: LogicalVoiceId
     status: Literal["deleted", "not_found", "rejected", "revision_conflict"] = "deleted"

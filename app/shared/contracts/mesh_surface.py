@@ -97,6 +97,33 @@ CALLABLE_FEATURES: tuple[CallableFeatureContract, ...] = (
         method_ids=("TTS.Synthesize",),
     ),
     CallableFeatureContract(
+        feature_id="speech_voice_discovery",
+        module="TTS",
+        label="Voice Discovery",
+        summary="Read TTS capabilities and use-safe voice choices.",
+        method_ids=("TTS.GetCapabilities", "TTS.ListVoices"),
+    ),
+    CallableFeatureContract(
+        feature_id="speech_voice_management",
+        module="TTS",
+        label="Voice Profile Management",
+        summary="Administer local TTS voice profiles and bounded voice imports.",
+        method_ids=(
+            "TTS.ListVoiceProfiles",
+            "TTS.GetVoiceProfile",
+            "TTS.UpdateVoiceProfile",
+            "TTS.InstallVoiceProfile",
+            "TTS.RemoveVoiceProfile",
+            "TTS.SetDefaultVoice",
+            "TTS.VoiceImportStart",
+            "TTS.VoiceImportChunk",
+            "TTS.VoiceImportEnd",
+            "TTS.VoiceImportAbort",
+            "TTS.CreateVoiceProfile",
+            "TTS.DeleteVoiceProfile",
+        ),
+    ),
+    CallableFeatureContract(
         feature_id="catalog_discovery",
         module="Tooling",
         label="Catalog Discovery",
@@ -280,8 +307,8 @@ _FEATURES_BY_TOPIC: dict[str, tuple[CallableFeatureContract, ...]] = {
 
 _FEATURE_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _EXPECTED_MODULE_COUNT = 8
-_EXPECTED_FEATURE_GROUP_COUNT = 26
-_EXPECTED_CALLABLE_METHOD_COUNT = 80
+_EXPECTED_FEATURE_GROUP_COUNT = 28
+_EXPECTED_CALLABLE_METHOD_COUNT = 94
 
 
 def feature_contracts_for_module(module: str) -> tuple[CallableFeatureContract, ...]:

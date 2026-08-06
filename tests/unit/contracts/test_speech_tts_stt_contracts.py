@@ -71,6 +71,23 @@ def test_language_requirement_normalizes_and_digests_exact() -> None:
     assert same.digest == requirement.digest
 
 
+def test_create_voice_profile_rejected_response_does_not_need_reserved_voice_id() -> None:
+    response = TTSCreateVoiceProfileResponse(status="unavailable")
+
+    assert response.voice_id is None
+    assert response.revision is None
+
+
+def test_create_voice_profile_requires_opaque_sealed_reference() -> None:
+    with pytest.raises(ValidationError, match="opaque voice import reference"):
+        TTSCreateVoiceProfileRequest(
+            operation_id="clone-a",
+            display_name="Clone",
+            sealed_audio_ref="../voice.wav",
+            consent=True,
+        )
+
+
 def test_language_requirement_normalizes_auto_candidates() -> None:
     requirement = SpeechLanguageRequirement.model_validate(
         {"mode": "auto", "auto_language_candidates": ["ES", "en", "es"]}
@@ -565,7 +582,7 @@ def test_voice_import_end_and_create_require_hash_operation_and_consent() -> Non
         TTSCreateVoiceProfileRequest.model_validate(
             {
                 "display_name": "Mine",
-                "sealed_audio_ref": "ref-1",
+                "sealed_audio_ref": "voice-import:ref-1",
                 "consent": False,
                 "operation_id": "create-1",
             }
@@ -573,7 +590,7 @@ def test_voice_import_end_and_create_require_hash_operation_and_consent() -> Non
     created = TTSCreateVoiceProfileRequest.model_validate(
         {
             "display_name": "Mine",
-            "sealed_audio_ref": "ref-1",
+            "sealed_audio_ref": "voice-import:ref-1",
             "language": "IT",
             "consent": True,
             "operation_id": "create-1",

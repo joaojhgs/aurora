@@ -12,12 +12,17 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import hashlib
 import io
+import json
 import os
 import shutil
+import uuid
 import wave
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.messaging import Envelope
@@ -35,22 +40,61 @@ from app.services.tts.providers.pockettts import (
     PocketTTSVoiceStateConfig,
     resolve_pockettts_base_identity_spec,
 )
-from app.services.tts.voice_registry import VoiceRegistry, VoiceRegistryError
+from app.services.tts.voice_registry import VoicePackManifest, VoiceRegistry, VoiceRegistryError
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import System, Tts
+from app.shared.contracts.models.auth import AuthMethods, StoreAuditEventRequest
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
+from app.shared.contracts.models.speech import (
+    SpeechStorageSummary,
+    normalize_exact_speech_language,
+    validate_logical_voice_id,
+)
 from app.shared.contracts.models.tts import (
+    VOICE_IMPORT_MAX_DURATION_MS,
     TTSAudioChunkEvent,
+    TTSCapabilities,
+    TTSCreateVoiceProfileRequest,
+    TTSCreateVoiceProfileResponse,
+    TTSDeleteVoiceProfileRequest,
+    TTSDeleteVoiceProfileResponse,
+    TTSGetCapabilitiesRequest,
+    TTSGetCapabilitiesResponse,
+    TTSGetVoiceProfileRequest,
+    TTSGetVoiceProfileResponse,
+    TTSInstallVoiceProfileRequest,
+    TTSInstallVoiceProfileResponse,
+    TTSListVoiceProfilesRequest,
+    TTSListVoiceProfilesResponse,
+    TTSListVoicesRequest,
+    TTSListVoicesResponse,
     TTSMethods,
     TTSModule,
+    TTSRemoveVoiceProfileRequest,
+    TTSRemoveVoiceProfileResponse,
     TTSRequest,
+    TTSResidentLanguagePack,
+    TTSSetDefaultVoiceRequest,
+    TTSSetDefaultVoiceResponse,
     TTSStopRequest,
     TTSStreamChunkRequest,
     TTSStreamEndRequest,
     TTSStreamStartRequest,
     TTSSynthesizeRequest,
     TTSSynthesizeResponse,
+    TTSUpdateVoiceProfileRequest,
+    TTSUpdateVoiceProfileResponse,
+    TTSVoiceDescriptor,
+    TTSVoiceImportAbortRequest,
+    TTSVoiceImportAbortResponse,
+    TTSVoiceImportChunkRequest,
+    TTSVoiceImportChunkResponse,
+    TTSVoiceImportEndRequest,
+    TTSVoiceImportEndResponse,
+    TTSVoiceImportStartRequest,
+    TTSVoiceImportStartResponse,
+    TTSVoiceProfileDescriptor,
 )
 from app.shared.contracts.registry import method_contract
 from app.shared.messaging.models.tts_models import (
@@ -66,6 +110,8 @@ from app.shared.speech_language_policy import resolve_speech_language_policy
 
 config_api = ConfigAPI()
 _GLOBAL_TTS_STREAM_CLEAR = object()
+_MAX_VOICE_IMPORT_SESSIONS = 64
+_MAX_VOICE_IMPORT_SESSIONS_PER_OWNER = 8
 
 
 @dataclass
@@ -89,6 +135,23 @@ class _TTSStreamState:
     emitted_sample_rate: int = 0
     draining: bool = False
     provider_request_ids: set[str] = field(default_factory=set)
+
+
+@dataclass
+class _VoiceImportSession:
+    upload_id: str
+    owner: str
+    operation_id: str
+    expected_total_bytes: int
+    expected_sha256: str
+    audio_format: str
+    sample_rate: int
+    channels: int
+    sample_width_bytes: int
+    duration_ms: int | None
+    expires_at: datetime
+    chunks: dict[int, bytes] = field(default_factory=dict)
+    sealed_ref: str | None = None
 
 
 def _clean_envelope_string(value: object) -> str | None:
@@ -162,6 +225,65 @@ def _close_voice_config_handles(voices: list[PocketTTSVoiceStateConfig]) -> None
             os.close(voice.artifact_handle.fd)
 
 
+def _profile_kind(kind: str) -> str:
+    return "cloned" if kind == "clone" else "standard"
+
+
+def _voice_language_pack(language: str | None) -> str | None:
+    if language is None:
+        return None
+    try:
+        return normalize_exact_speech_language(language)
+    except ValueError:
+        return None
+
+
+def _piper_voice_slug(value: str) -> str:
+    slug = "".join(ch if ch.isalnum() else "-" for ch in value.strip().lower())
+    slug = "-".join(part for part in slug.split("-") if part)
+    return slug[:64] or "default"
+
+
+def _duration_ms_from_frames(frames: int, sample_rate: int) -> int:
+    return round(frames * 1000 / sample_rate)
+
+
+def _validate_import_audio_payload(payload: bytes, session: _VoiceImportSession) -> None:
+    frame_size = session.channels * session.sample_width_bytes
+    if frame_size <= 0:
+        raise ValueError("voice import audio metadata is invalid")
+    if session.audio_format == "pcm_s16le":
+        if session.sample_width_bytes != 2:
+            raise ValueError("pcm_s16le voice import requires 16-bit samples")
+        if len(payload) % frame_size != 0:
+            raise ValueError("pcm_s16le voice import frame length mismatch")
+        frames = len(payload) // frame_size
+    elif session.audio_format == "wav":
+        try:
+            with wave.open(io.BytesIO(payload), "rb") as wav_file:
+                if wav_file.getnchannels() != session.channels:
+                    raise ValueError("wav voice import channel mismatch")
+                if wav_file.getsampwidth() != session.sample_width_bytes:
+                    raise ValueError("wav voice import sample width mismatch")
+                if wav_file.getframerate() != session.sample_rate:
+                    raise ValueError("wav voice import sample rate mismatch")
+                frames = wav_file.getnframes()
+                frame_bytes = wav_file.readframes(frames)
+        except (EOFError, wave.Error) as exc:
+            raise ValueError("wav voice import is malformed") from exc
+        if len(frame_bytes) != frames * frame_size:
+            raise ValueError("wav voice import frame length mismatch")
+    else:
+        raise ValueError("voice import format is unsupported")
+    if frames <= 0:
+        raise ValueError("voice import audio must contain frames")
+    duration_ms = _duration_ms_from_frames(frames, session.sample_rate)
+    if duration_ms > VOICE_IMPORT_MAX_DURATION_MS:
+        raise ValueError("voice import duration exceeds limit")
+    if session.duration_ms is not None and duration_ms != session.duration_ms:
+        raise ValueError("voice import duration mismatch")
+
+
 # TODO: Implement volume control functions
 def reduce_volume_except_current():
     """Placeholder for reducing system volume during TTS."""
@@ -198,6 +320,10 @@ class TTSService(BaseService):
         self._loop: asyncio.AbstractEventLoop | None = None
         self._stream_states: dict[str, _TTSStreamState] = {}
         self._stream_state_lock = asyncio.Lock()
+        self._voice_management_lock = asyncio.Lock()
+        self._voice_revision = 0
+        self._voice_operation_results: dict[tuple[str, str, str], tuple[str, Any]] = {}
+        self._voice_import_sessions: dict[str, _VoiceImportSession] = {}
         self._provider: TTSProvider | None = None
         self._playback_generation = 0
         self._current_playback_generation: int | None = None
@@ -426,13 +552,23 @@ class TTSService(BaseService):
             if tts_cfg.model_sample_rate is not None
             else 22050
         )
-        voice_id = tts_cfg.default_voice_id or "default"
+        effective_language = _voice_language_pack(await self._effective_tts_language())
+        if effective_language is None:
+            raise TTSProviderError("unsupported_voice", "TTS language is unavailable")
+        configured_voice_id = tts_cfg.default_voice_id
+        if configured_voice_id in {None, "default"}:
+            voice_id = f"standard:piper:{effective_language}"
+        elif ":" not in configured_voice_id:
+            voice_id = f"standard:piper:{_piper_voice_slug(configured_voice_id)}"
+        else:
+            voice_id = validate_logical_voice_id(configured_voice_id)
         voice_config = PiperVoiceConfig(
             voice_id=voice_id,
             model_file=model_file,
             config_file=config_file,
             display_name="Piper",
             expected_sample_rate=sample_rate,
+            language=effective_language,
         )
         provider = PiperTTSProvider(
             piper_path=piper_path,
@@ -565,12 +701,16 @@ class TTSService(BaseService):
 
         # Initialize TTS engine (needs async config access)
         await self._initialize_engine()
+        self._voice_revision += 1
 
     async def on_stop(self) -> None:
         """Stop the TTS service."""
         log_info("Stopping TTS service...")
         await self._stop_playback("service_stopped")
         await self._clear_tts_streams("service_stopped")
+        async with self._voice_management_lock:
+            self._voice_import_sessions.clear()
+            self._voice_operation_results.clear()
 
         # Stop any ongoing playback
         if hasattr(self, "stream"):
@@ -612,6 +752,7 @@ class TTSService(BaseService):
                 self._provider = new_provider
                 self.engine = new_engine
                 self.stream = new_stream
+                self._voice_revision += 1
                 new_runtime_installed = True
                 if old_provider is not None:
                     await old_provider.stop()
@@ -624,6 +765,991 @@ class TTSService(BaseService):
                 log_error(f"Failed to reinitialize TTS engine: {e}", exc_info=True)
         else:
             log_debug(f"TTS service reloaded for section: {config_section}")
+
+    def _voice_revision_token(self) -> str:
+        return f"voice-rev-{self._voice_revision}"
+
+    def _caller_owner(self, envelope: Envelope | None) -> str:
+        principal_id = _envelope_principal_id(envelope) or "local-principal"
+        peer_id = _envelope_caller_peer_id(envelope) or "local-peer"
+        return f"principal={principal_id}|peer={peer_id}"
+
+    async def _audit_voice_management(
+        self,
+        event: str,
+        request: object,
+        response: object,
+        envelope: Envelope | None,
+        *,
+        phase: str = "outcome",
+        audit_status: str | None = None,
+    ) -> None:
+        status = audit_status or getattr(response, "status", None)
+        details = {
+            "method": event,
+            "phase": phase,
+            "status": status,
+            "operation_id": getattr(request, "operation_id", None),
+            "voice_id": getattr(request, "voice_id", None),
+            "upload_present": bool(getattr(request, "upload_id", None)),
+            "sequence": getattr(request, "sequence", None),
+            "final_sequence": getattr(request, "final_sequence", None),
+            "expected_total_bytes": getattr(request, "expected_total_bytes", None),
+            "accepted_total_bytes": getattr(response, "accepted_total_bytes", None),
+            "received_bytes": getattr(response, "received_bytes", None),
+            "deleted_bytes": getattr(response, "deleted_bytes", None),
+            "peer_id": _envelope_caller_peer_id(envelope),
+            "correlation_id": _envelope_correlation_id(envelope),
+            "secrets_redacted": True,
+        }
+        try:
+            await self.bus.request(
+                AuthMethods.STORE_AUDIT_EVENT,
+                StoreAuditEventRequest(
+                    event=f"tts.voice_management.{event}",
+                    principal_id=_envelope_principal_id(envelope),
+                    details=json.dumps(details, sort_keys=True),
+                ),
+                timeout=5.0,
+                origin="internal",
+                principal_id=_envelope_principal_id(envelope),
+                correlation_id=_envelope_correlation_id(envelope),
+            )
+        except Exception as exc:
+            log_error(
+                f"TTS voice management audit failed: event={event} error={type(exc).__name__}"
+            )
+            raise
+
+    async def _audit_voice_management_rejection(
+        self, event: str, request: object, envelope: Envelope | None
+    ) -> None:
+        response = type("RejectedVoiceManagementResponse", (), {"status": "rejected"})()
+        await self._audit_voice_management(event, request, response, envelope, phase="outcome")
+
+    def _mutation_fingerprint(self, request: object) -> str:
+        payload = request.model_dump(mode="json") if hasattr(request, "model_dump") else {}
+        payload.pop("correlation_id", None)
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    def _mutation_key(
+        self, method: str, request: object, envelope: Envelope | None
+    ) -> tuple[str, str, str]:
+        operation_id = getattr(request, "operation_id", "")
+        return (self._caller_owner(envelope), method, str(operation_id))
+
+    def _cached_mutation(
+        self, method: str, request: object, envelope: Envelope | None
+    ) -> Any | None:
+        key = self._mutation_key(method, request, envelope)
+        cached = self._voice_operation_results.get(key)
+        if cached is None:
+            return None
+        fingerprint, response = cached
+        if fingerprint != self._mutation_fingerprint(request):
+            raise ValueError("operation_id payload mismatch")
+        if hasattr(response, "model_fields") and "idempotent" in response.model_fields:
+            return response.model_copy(update={"idempotent": True})
+        return response
+
+    def _cache_mutation(
+        self, method: str, request: object, response: Any, envelope: Envelope | None
+    ) -> Any:
+        if len(self._voice_operation_results) >= 256:
+            self._voice_operation_results.pop(next(iter(self._voice_operation_results)))
+        self._voice_operation_results[self._mutation_key(method, request, envelope)] = (
+            self._mutation_fingerprint(request),
+            response,
+        )
+        return response
+
+    def _voice_registry(self, tts_cfg: Tts | None = None) -> VoiceRegistry:
+        registry_cfg = tts_cfg.voice_registry if tts_cfg and tts_cfg.voice_registry else None
+        registry_cache_dir = (
+            registry_cfg.cache_dir
+            if registry_cfg and registry_cfg.cache_dir
+            else "voice_models/voice-pack"
+        )
+        return VoiceRegistry(resolve_path(registry_cache_dir))
+
+    async def _current_voice_profiles(self) -> list[TTSVoiceProfileDescriptor]:
+        tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+        registry_entries = []
+        if tts_cfg.provider == "pockettts":
+            with contextlib.suppress(Exception):
+                registry_entries = list(await self._voice_registry(tts_cfg).inventory())
+        active_voice_id: str | None = None
+        provider_ready = False
+        if self._provider is not None:
+            with contextlib.suppress(Exception):
+                health = await self._provider.health()
+                provider_ready = health.ready
+                active_voice_id = health.active_voice
+        profiles: list[TTSVoiceProfileDescriptor] = []
+        for entry in registry_entries:
+            is_active = provider_ready and entry.voice_id == active_voice_id
+            profiles.append(
+                TTSVoiceProfileDescriptor(
+                    voice_id=entry.voice_id,
+                    display_name=entry.display_name,
+                    kind=_profile_kind(entry.kind),  # type: ignore[arg-type]
+                    installed=True,
+                    ready=entry.ready_state == "ready",
+                    default=is_active,
+                    active=is_active,
+                    enabled=True,
+                    compatible_language_pack_ids=[entry.language_bundle],
+                    compatible_selection_group=entry.compatibility_group,
+                    revision=entry.artifact_revision,
+                    retained_source=entry.source_retained,
+                    storage=SpeechStorageSummary(artifact_count=len(entry.artifact_refs)),
+                    visibility="allowed_peers"
+                    if entry.visibility == "allowed_peers"
+                    else "private",
+                    allowed_peer_ids=[],
+                )
+            )
+        if profiles or self._provider is None:
+            return profiles
+        for voice in await self._provider.list_voices():
+            language = _voice_language_pack(voice.language)
+            if language is None:
+                continue
+            is_active = provider_ready and voice.voice_id == active_voice_id
+            profiles.append(
+                TTSVoiceProfileDescriptor(
+                    voice_id=voice.voice_id,
+                    display_name=voice.display_name,
+                    kind="cloned" if voice.voice_id.startswith("clone:") else "standard",
+                    installed=True,
+                    ready=voice.ready,
+                    default=is_active,
+                    active=is_active,
+                    enabled=True,
+                    compatible_language_pack_ids=[language],
+                    revision=self._voice_revision_token(),
+                )
+            )
+        return profiles
+
+    async def _list_voice_descriptors(
+        self, envelope: Envelope | None = None
+    ) -> list[TTSVoiceDescriptor]:
+        voices = await self._provider.list_voices() if self._provider is not None else ()
+        provider_caps = self._provider.capabilities if self._provider is not None else None
+        remote_caller = envelope is not None and (
+            envelope.origin == "external" or _envelope_caller_peer_id(envelope) is not None
+        )
+        descriptors: list[TTSVoiceDescriptor] = []
+        for voice in voices:
+            if not voice.ready:
+                continue
+            is_clone = voice.voice_id.startswith("clone:")
+            if remote_caller and is_clone:
+                continue
+            language = _voice_language_pack(voice.language)
+            if language is None:
+                continue
+            descriptors.append(
+                TTSVoiceDescriptor(
+                    voice_id=voice.voice_id,
+                    display_name=voice.display_name,
+                    kind="cloned" if is_clone else "standard",
+                    compatible_language_pack_ids=[language],
+                    ready=True,
+                    selection_mode=provider_caps.voice_selection_mode.value
+                    if provider_caps
+                    else "active_only",
+                    revision=self._voice_revision_token(),
+                    visible_scope="local" if is_clone else "public",
+                )
+            )
+        return descriptors
+
+    def _expire_voice_import_sessions(self) -> None:
+        now = datetime.now(UTC)
+        for upload_id, session in list(self._voice_import_sessions.items()):
+            if session.expires_at <= now:
+                del self._voice_import_sessions[upload_id]
+
+    @method_contract(
+        method_id=TTSMethods.GET_CAPABILITIES,
+        summary="Get TTS runtime capabilities",
+        input_model=TTSGetCapabilitiesRequest,
+        output_model=TTSGetCapabilitiesResponse,
+        exposure="both",
+        method_type="use",
+        required_perms=["TTS.use"],
+        callable_feature_ids=["speech_voice_discovery"],
+    )
+    async def get_capabilities(
+        self, request: TTSGetCapabilitiesRequest
+    ) -> TTSGetCapabilitiesResponse:
+        """Return provider-neutral TTS capabilities."""
+        provider = self._provider
+        ready = False
+        model_status = "unavailable"
+        sample_rates: list[int] = []
+        provider_caps = None
+        if provider is not None:
+            provider_caps = provider.capabilities
+            health = await provider.health()
+            ready = health.ready
+            model_status = "ready" if health.ready else "unavailable"
+            tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+            if tts_cfg.provider == "piper":
+                piper_cfg = tts_cfg.providers.piper if tts_cfg.providers else None
+                sample_rates = [
+                    piper_cfg.model_sample_rate
+                    if piper_cfg and piper_cfg.model_sample_rate is not None
+                    else tts_cfg.model_sample_rate
+                    if tts_cfg.model_sample_rate is not None
+                    else 22050
+                ]
+            else:
+                sample_rates = [24000]
+        language = _voice_language_pack(await self._effective_tts_language())
+        if language is None:
+            ready = False
+            model_status = "unavailable"
+            sample_rates = []
+            supported_pack_ids: list[str] = []
+        else:
+            pack_id = f"{language}-local"
+            supported_pack_ids = [pack_id]
+        selection_mode = (
+            provider_caps.voice_selection_mode.value if provider_caps else "active_only"
+        )
+        capabilities = TTSCapabilities(
+            ready=ready,
+            model_status=model_status,  # type: ignore[arg-type]
+            supported_language_pack_ids=supported_pack_ids,
+            installed_language_pack_ids=[pack_id] if ready else [],
+            resident_language_pack_ids=[pack_id] if ready else [],
+            resident_language_packs=[
+                TTSResidentLanguagePack(pack_id=pack_id, ready_languages=[language])
+            ]
+            if ready
+            else [],
+            ready_languages=[language] if ready else [],
+            output_formats=list(provider_caps.supported_formats)
+            if provider_caps
+            else ["wav", "raw"],
+            sample_rates=sample_rates if ready else [],
+            streaming=bool(provider_caps.supports_streaming) if provider_caps else False,
+            cancellation=bool(provider_caps.supports_cancel) if provider_caps else False,
+            cloning=False,
+            capability_revision=self._voice_revision,
+            voice_selection_mode=selection_mode,  # type: ignore[arg-type]
+            max_resident_base_models=provider_caps.max_resident_base_models if provider_caps else 1,
+            resident_base_model_count=1 if ready else 0,
+            requires_model_reload_for_voice_change=selection_mode == "active_only",
+            voice_state_memory_class="small_state"
+            if selection_mode == "shared_model_state"
+            else "none",
+        )
+        return TTSGetCapabilitiesResponse(
+            capabilities=capabilities,
+            correlation_id=request.correlation_id,
+        )
+
+    @method_contract(
+        method_id=TTSMethods.LIST_VOICES,
+        summary="List ready TTS voices",
+        input_model=TTSListVoicesRequest,
+        output_model=TTSListVoicesResponse,
+        exposure="both",
+        method_type="use",
+        required_perms=["TTS.use"],
+        callable_feature_ids=["speech_voice_discovery"],
+    )
+    async def list_voices(
+        self, request: TTSListVoicesRequest, envelope: Envelope | None = None
+    ) -> TTSListVoicesResponse:
+        """Return use-safe ready voices."""
+        voices = await self._list_voice_descriptors(envelope)
+        if request.language is not None:
+            voices = [
+                voice for voice in voices if request.language in voice.compatible_language_pack_ids
+            ]
+        return TTSListVoicesResponse(
+            voices=voices,
+            capability_revision=self._voice_revision,
+            correlation_id=request.correlation_id,
+        )
+
+    @method_contract(
+        method_id=TTSMethods.LIST_VOICE_PROFILES,
+        summary="List managed TTS voice profiles",
+        input_model=TTSListVoiceProfilesRequest,
+        output_model=TTSListVoiceProfilesResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def list_voice_profiles(
+        self, request: TTSListVoiceProfilesRequest
+    ) -> TTSListVoiceProfilesResponse:
+        """Return administrative voice profile metadata."""
+        profiles = await self._current_voice_profiles()
+        if not request.include_unavailable:
+            profiles = [profile for profile in profiles if profile.installed]
+        return TTSListVoiceProfilesResponse(
+            profiles=profiles,
+            capability_revision=self._voice_revision,
+            correlation_id=request.correlation_id,
+        )
+
+    @method_contract(
+        method_id=TTSMethods.GET_VOICE_PROFILE,
+        summary="Get one managed TTS voice profile",
+        input_model=TTSGetVoiceProfileRequest,
+        output_model=TTSGetVoiceProfileResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def get_voice_profile(
+        self, request: TTSGetVoiceProfileRequest
+    ) -> TTSGetVoiceProfileResponse:
+        """Return one administrative voice profile."""
+        for profile in await self._current_voice_profiles():
+            if profile.voice_id == request.voice_id:
+                return TTSGetVoiceProfileResponse(
+                    found=True,
+                    profile=profile,
+                    correlation_id=request.correlation_id,
+                )
+        return TTSGetVoiceProfileResponse(found=False, correlation_id=request.correlation_id)
+
+    @method_contract(
+        method_id=TTSMethods.UPDATE_VOICE_PROFILE,
+        summary="Update managed TTS voice profile metadata",
+        input_model=TTSUpdateVoiceProfileRequest,
+        output_model=TTSUpdateVoiceProfileResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def update_voice_profile(
+        self, request: TTSUpdateVoiceProfileRequest, envelope: Envelope | None = None
+    ) -> TTSUpdateVoiceProfileResponse:
+        """Reject metadata updates until durable profile metadata is available."""
+        async with self._voice_management_lock:
+            cached = self._cached_mutation("update_voice_profile", request, envelope)
+            if cached is not None:
+                return cached
+            response = TTSUpdateVoiceProfileResponse(
+                voice_id=request.voice_id,
+                status="rejected",
+                correlation_id=request.correlation_id,
+            )
+            await self._audit_voice_management("update_voice_profile", request, response, envelope)
+            self._cache_mutation("update_voice_profile", request, response, envelope)
+        return response
+
+    @method_contract(
+        method_id=TTSMethods.INSTALL_VOICE_PROFILE,
+        summary="Install a manifest-known TTS voice profile",
+        input_model=TTSInstallVoiceProfileRequest,
+        output_model=TTSInstallVoiceProfileResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def install_voice_profile(
+        self, request: TTSInstallVoiceProfileRequest, envelope: Envelope | None = None
+    ) -> TTSInstallVoiceProfileResponse:
+        """Install only the configured local voice-pack manifest."""
+        async with self._voice_management_lock:
+            cached = self._cached_mutation("install_voice_profile", request, envelope)
+            if cached is not None:
+                return cached
+            tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+            registry_cfg = tts_cfg.voice_registry
+            manifest_path = resolve_path(
+                registry_cfg.manifest_path
+                if registry_cfg and registry_cfg.manifest_path
+                else "voice_models/voices.manifest.json"
+            )
+            if not manifest_path.is_file():
+                response = TTSInstallVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="not_found",
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "install_voice_profile", request, response, envelope
+                )
+            else:
+                registry = self._voice_registry(tts_cfg)
+                try:
+                    manifest = VoicePackManifest.model_validate_json(
+                        manifest_path.read_text(encoding="utf-8")
+                    )
+                    target_assets = [
+                        asset
+                        for asset in manifest.assets
+                        if asset.logical_voice_id == request.voice_id
+                    ]
+                except (OSError, ValueError, TypeError):
+                    target_assets = []
+                if not target_assets or len(manifest.assets) != 1:
+                    target_asset = None
+                else:
+                    target_asset = target_assets[0]
+                if target_asset is None:
+                    response = TTSInstallVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="not_found" if not target_assets else "rejected",
+                        correlation_id=request.correlation_id,
+                    )
+                    await self._audit_voice_management(
+                        "install_voice_profile", request, response, envelope
+                    )
+                    self._cache_mutation("install_voice_profile", request, response, envelope)
+                    return response
+                current = next(
+                    (
+                        item
+                        for item in await registry.inventory()
+                        if item.voice_id == request.voice_id
+                    ),
+                    None,
+                )
+                if (
+                    current is not None
+                    and request.expected_revision is not None
+                    and request.expected_revision != current.artifact_revision
+                ):
+                    response = TTSInstallVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="revision_conflict",
+                        revision=current.artifact_revision,
+                        correlation_id=request.correlation_id,
+                    )
+                    await self._audit_voice_management(
+                        "install_voice_profile", request, response, envelope
+                    )
+                    self._cache_mutation("install_voice_profile", request, response, envelope)
+                    return response
+                if (
+                    current is not None
+                    and current.artifact_revision == target_asset.artifact_revision
+                ):
+                    response = TTSInstallVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="unchanged",
+                        revision=current.artifact_revision,
+                        correlation_id=request.correlation_id,
+                    )
+                    await self._audit_voice_management(
+                        "install_voice_profile", request, response, envelope
+                    )
+                    self._cache_mutation("install_voice_profile", request, response, envelope)
+                    return response
+                planned_response = TTSInstallVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="installed",
+                    revision=target_asset.artifact_revision,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "install_voice_profile",
+                    request,
+                    planned_response,
+                    envelope,
+                    phase="intent",
+                    audit_status="attempted",
+                )
+                try:
+                    installed = await registry.install_standard_pack(
+                        manifest_path, manifest_path.parent
+                    )
+                except VoiceRegistryError:
+                    log_error("TTS voice install failed: error=VoiceRegistryError")
+                    response = TTSInstallVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="rejected",
+                        correlation_id=request.correlation_id,
+                    )
+                    self._cache_mutation("install_voice_profile", request, response, envelope)
+                    return response
+                entry = next(
+                    (item for item in installed if item.voice_id == request.voice_id),
+                    None,
+                )
+                if entry is None:
+                    entry = next(
+                        (
+                            item
+                            for item in await registry.inventory()
+                            if item.voice_id == request.voice_id
+                        ),
+                        None,
+                    )
+                if entry is None:
+                    response = TTSInstallVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="not_found",
+                        correlation_id=request.correlation_id,
+                    )
+                else:
+                    self._voice_revision += 1
+                    response = TTSInstallVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="installed",
+                        revision=entry.artifact_revision,
+                        correlation_id=request.correlation_id,
+                    )
+            self._cache_mutation("install_voice_profile", request, response, envelope)
+        return response
+
+    @method_contract(
+        method_id=TTSMethods.REMOVE_VOICE_PROFILE,
+        summary="Remove installed TTS voice profile artifacts",
+        input_model=TTSRemoveVoiceProfileRequest,
+        output_model=TTSRemoveVoiceProfileResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def remove_voice_profile(
+        self, request: TTSRemoveVoiceProfileRequest, envelope: Envelope | None = None
+    ) -> TTSRemoveVoiceProfileResponse:
+        """Reject standard artifact removal until safe drain/eviction support exists."""
+        async with self._voice_management_lock:
+            cached = self._cached_mutation("remove_voice_profile", request, envelope)
+            if cached is not None:
+                return cached
+            response = TTSRemoveVoiceProfileResponse(
+                voice_id=request.voice_id,
+                status="rejected",
+                correlation_id=request.correlation_id,
+            )
+            await self._audit_voice_management("remove_voice_profile", request, response, envelope)
+            self._cache_mutation("remove_voice_profile", request, response, envelope)
+        return response
+
+    @method_contract(
+        method_id=TTSMethods.SET_DEFAULT_VOICE,
+        summary="Set the default TTS voice",
+        input_model=TTSSetDefaultVoiceRequest,
+        output_model=TTSSetDefaultVoiceResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def set_default_voice(
+        self, request: TTSSetDefaultVoiceRequest, envelope: Envelope | None = None
+    ) -> TTSSetDefaultVoiceResponse:
+        """Reject default changes until config-backed profile updates land."""
+        async with self._voice_management_lock:
+            cached = self._cached_mutation("set_default_voice", request, envelope)
+            if cached is not None:
+                return cached
+            response = TTSSetDefaultVoiceResponse(
+                voice_id=request.voice_id,
+                status="rejected",
+                revision=self._voice_revision_token(),
+                correlation_id=request.correlation_id,
+            )
+            await self._audit_voice_management("set_default_voice", request, response, envelope)
+            self._cache_mutation("set_default_voice", request, response, envelope)
+        return response
+
+    @method_contract(
+        method_id=TTSMethods.VOICE_IMPORT_START,
+        summary="Start a bounded TTS voice import upload",
+        input_model=TTSVoiceImportStartRequest,
+        output_model=TTSVoiceImportStartResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def voice_import_start(
+        self, request: TTSVoiceImportStartRequest, envelope: Envelope | None = None
+    ) -> TTSVoiceImportStartResponse:
+        """Create a bounded owner-scoped upload session."""
+        async with self._voice_management_lock:
+            cached = self._cached_mutation("voice_import_start", request, envelope)
+            if cached is not None:
+                return cached
+            self._expire_voice_import_sessions()
+            owner = self._caller_owner(envelope)
+            owner_session_count = sum(
+                1 for session in self._voice_import_sessions.values() if session.owner == owner
+            )
+            if (
+                len(self._voice_import_sessions) >= _MAX_VOICE_IMPORT_SESSIONS
+                or owner_session_count >= _MAX_VOICE_IMPORT_SESSIONS_PER_OWNER
+            ):
+                await self._audit_voice_management_rejection(
+                    "voice_import_start", request, envelope
+                )
+                raise ValueError("voice import session capacity reached")
+            upload_id = uuid.uuid4().hex
+            expires_at = datetime.now(UTC) + timedelta(minutes=15)
+            session = _VoiceImportSession(
+                upload_id=upload_id,
+                owner=owner,
+                operation_id=request.operation_id,
+                expected_total_bytes=request.expected_total_bytes,
+                expected_sha256=request.sha256,
+                audio_format=request.format,
+                sample_rate=request.sample_rate,
+                channels=request.channels,
+                sample_width_bytes=request.sample_width_bytes,
+                duration_ms=request.duration_ms,
+                expires_at=expires_at,
+            )
+            response = TTSVoiceImportStartResponse(
+                upload_id=upload_id,
+                expires_at=expires_at.isoformat(),
+                accepted_total_bytes=request.expected_total_bytes,
+                correlation_id=request.correlation_id,
+            )
+            await self._audit_voice_management(
+                "voice_import_start",
+                request,
+                response,
+                envelope,
+                phase="intent",
+                audit_status="attempted",
+            )
+            self._voice_import_sessions[upload_id] = session
+            self._cache_mutation("voice_import_start", request, response, envelope)
+        return response
+
+    @method_contract(
+        method_id=TTSMethods.VOICE_IMPORT_CHUNK,
+        summary="Append a bounded TTS voice import chunk",
+        input_model=TTSVoiceImportChunkRequest,
+        output_model=TTSVoiceImportChunkResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def voice_import_chunk(
+        self, request: TTSVoiceImportChunkRequest, envelope: Envelope | None = None
+    ) -> TTSVoiceImportChunkResponse:
+        """Accept exactly ordered owner-scoped upload chunks."""
+        async with self._voice_management_lock:
+            cached = self._cached_mutation("voice_import_chunk", request, envelope)
+            if cached is not None:
+                return cached
+            self._expire_voice_import_sessions()
+            session = self._voice_import_sessions.get(request.upload_id)
+            if session is None or session.owner != self._caller_owner(envelope):
+                await self._audit_voice_management_rejection(
+                    "voice_import_chunk", request, envelope
+                )
+                raise ValueError("voice import upload is unavailable")
+            if session.sealed_ref is not None:
+                await self._audit_voice_management_rejection(
+                    "voice_import_chunk", request, envelope
+                )
+                raise ValueError("voice import upload is sealed")
+            chunk = base64.b64decode(request.chunk_data, validate=True)
+            expected_sequence = len(session.chunks)
+            if request.sequence in session.chunks:
+                if session.chunks[request.sequence] != chunk:
+                    await self._audit_voice_management_rejection(
+                        "voice_import_chunk", request, envelope
+                    )
+                    raise ValueError("duplicate voice import chunk payload mismatch")
+                response = TTSVoiceImportChunkResponse(
+                    upload_id=request.upload_id,
+                    sequence=request.sequence,
+                    status="duplicate",
+                    received_bytes=sum(len(item) for item in session.chunks.values()),
+                    next_sequence=request.sequence + 1,
+                    idempotent=True,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "voice_import_chunk", request, response, envelope
+                )
+                self._cache_mutation("voice_import_chunk", request, response, envelope)
+            elif request.sequence != expected_sequence:
+                await self._audit_voice_management_rejection(
+                    "voice_import_chunk", request, envelope
+                )
+                raise ValueError("voice import chunks must arrive in order")
+            else:
+                received_bytes = sum(len(item) for item in session.chunks.values()) + len(chunk)
+                if received_bytes > session.expected_total_bytes:
+                    await self._audit_voice_management_rejection(
+                        "voice_import_chunk", request, envelope
+                    )
+                    raise ValueError("voice import exceeds expected total bytes")
+                response = TTSVoiceImportChunkResponse(
+                    upload_id=request.upload_id,
+                    sequence=request.sequence,
+                    status="accepted",
+                    received_bytes=received_bytes,
+                    next_sequence=request.sequence + 1,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "voice_import_chunk",
+                    request,
+                    response,
+                    envelope,
+                    phase="intent",
+                    audit_status="attempted",
+                )
+                session.chunks[request.sequence] = chunk
+                self._cache_mutation("voice_import_chunk", request, response, envelope)
+        return response
+
+    @method_contract(
+        method_id=TTSMethods.VOICE_IMPORT_END,
+        summary="Seal a bounded TTS voice import upload",
+        input_model=TTSVoiceImportEndRequest,
+        output_model=TTSVoiceImportEndResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def voice_import_end(
+        self, request: TTSVoiceImportEndRequest, envelope: Envelope | None = None
+    ) -> TTSVoiceImportEndResponse:
+        """Seal a complete owner-scoped upload into an opaque reference."""
+        async with self._voice_management_lock:
+            cached = self._cached_mutation("voice_import_end", request, envelope)
+            if cached is not None:
+                return cached
+            self._expire_voice_import_sessions()
+            session = self._voice_import_sessions.get(request.upload_id)
+            if session is None or session.owner != self._caller_owner(envelope):
+                await self._audit_voice_management_rejection("voice_import_end", request, envelope)
+                raise ValueError("voice import upload is unavailable")
+            if request.final_sequence != len(session.chunks) - 1:
+                await self._audit_voice_management_rejection("voice_import_end", request, envelope)
+                raise ValueError("voice import final sequence mismatch")
+            payload = b"".join(session.chunks[index] for index in sorted(session.chunks))
+            if len(payload) != session.expected_total_bytes:
+                await self._audit_voice_management_rejection("voice_import_end", request, envelope)
+                raise ValueError("voice import total bytes mismatch")
+            digest = hashlib.sha256(payload).hexdigest()
+            if digest != request.final_sha256 or digest != session.expected_sha256:
+                await self._audit_voice_management_rejection("voice_import_end", request, envelope)
+                raise ValueError("voice import digest mismatch")
+            try:
+                _validate_import_audio_payload(payload, session)
+            except ValueError:
+                await self._audit_voice_management_rejection("voice_import_end", request, envelope)
+                raise
+            sealed_ref = f"voice-import:{request.upload_id}"
+            response = TTSVoiceImportEndResponse(
+                sealed_audio_ref=sealed_ref,
+                accepted_total_bytes=len(payload),
+                final_sha256=digest,
+                expires_at=session.expires_at.isoformat(),
+                correlation_id=request.correlation_id,
+            )
+            await self._audit_voice_management(
+                "voice_import_end",
+                request,
+                response,
+                envelope,
+                phase="intent",
+                audit_status="attempted",
+            )
+            session.sealed_ref = sealed_ref
+            self._cache_mutation("voice_import_end", request, response, envelope)
+        return response
+
+    @method_contract(
+        method_id=TTSMethods.VOICE_IMPORT_ABORT,
+        summary="Abort a bounded TTS voice import upload",
+        input_model=TTSVoiceImportAbortRequest,
+        output_model=TTSVoiceImportAbortResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def voice_import_abort(
+        self, request: TTSVoiceImportAbortRequest, envelope: Envelope | None = None
+    ) -> TTSVoiceImportAbortResponse:
+        """Remove a partial owner-scoped upload."""
+        async with self._voice_management_lock:
+            cached = self._cached_mutation("voice_import_abort", request, envelope)
+            if cached is not None:
+                return cached
+            self._expire_voice_import_sessions()
+            session = self._voice_import_sessions.get(request.upload_id)
+            if session is None or session.owner != self._caller_owner(envelope):
+                response = TTSVoiceImportAbortResponse(
+                    upload_id=request.upload_id,
+                    status="not_found",
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "voice_import_abort", request, response, envelope
+                )
+            else:
+                deleted = sum(len(item) for item in session.chunks.values())
+                response = TTSVoiceImportAbortResponse(
+                    upload_id=request.upload_id,
+                    status="aborted",
+                    deleted_bytes=deleted,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "voice_import_abort",
+                    request,
+                    response,
+                    envelope,
+                    phase="intent",
+                    audit_status="attempted",
+                )
+                del self._voice_import_sessions[request.upload_id]
+            self._cache_mutation("voice_import_abort", request, response, envelope)
+        return response
+
+    @method_contract(
+        method_id=TTSMethods.CREATE_VOICE_PROFILE,
+        summary="Create a cloned TTS voice profile",
+        input_model=TTSCreateVoiceProfileRequest,
+        output_model=TTSCreateVoiceProfileResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def create_voice_profile(
+        self, request: TTSCreateVoiceProfileRequest, envelope: Envelope | None = None
+    ) -> TTSCreateVoiceProfileResponse:
+        """Reject clone creation until provider clone derivation is implemented."""
+        async with self._voice_management_lock:
+            cached = self._cached_mutation("create_voice_profile", request, envelope)
+            if cached is not None:
+                return cached
+            self._expire_voice_import_sessions()
+            session = next(
+                (
+                    item
+                    for item in self._voice_import_sessions.values()
+                    if item.sealed_ref == request.sealed_audio_ref
+                ),
+                None,
+            )
+            if session is None or session.owner != self._caller_owner(envelope):
+                response = TTSCreateVoiceProfileResponse(
+                    status="rejected",
+                    correlation_id=request.correlation_id,
+                )
+                consume_upload_id = None
+            else:
+                consume_upload_id = session.upload_id
+                response = TTSCreateVoiceProfileResponse(
+                    status="unavailable",
+                    correlation_id=request.correlation_id,
+                )
+            await self._audit_voice_management(
+                "create_voice_profile",
+                request,
+                response,
+                envelope,
+                phase="intent" if consume_upload_id is not None else "outcome",
+                audit_status="attempted" if consume_upload_id is not None else None,
+            )
+            if consume_upload_id is not None:
+                self._voice_import_sessions.pop(consume_upload_id, None)
+            response = TTSCreateVoiceProfileResponse(
+                status=response.status,
+                correlation_id=request.correlation_id,
+            )
+            self._cache_mutation("create_voice_profile", request, response, envelope)
+        return response
+
+    @method_contract(
+        method_id=TTSMethods.DELETE_VOICE_PROFILE,
+        summary="Delete a managed cloned TTS voice profile",
+        input_model=TTSDeleteVoiceProfileRequest,
+        output_model=TTSDeleteVoiceProfileResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def delete_voice_profile(
+        self, request: TTSDeleteVoiceProfileRequest, envelope: Envelope | None = None
+    ) -> TTSDeleteVoiceProfileResponse:
+        """Delete clone profiles through the local voice registry for authorized managers."""
+        async with self._voice_management_lock:
+            cached = self._cached_mutation("delete_voice_profile", request, envelope)
+            if cached is not None:
+                return cached
+            profile = next(
+                (
+                    item
+                    for item in await self._current_voice_profiles()
+                    if item.voice_id == request.voice_id
+                ),
+                None,
+            )
+            if profile is None:
+                response = TTSDeleteVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="not_found",
+                    correlation_id=request.correlation_id,
+                )
+            elif (
+                request.expected_revision is not None
+                and request.expected_revision != profile.revision
+            ):
+                response = TTSDeleteVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="revision_conflict",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+            elif profile.kind != "cloned" or profile.default or profile.active:
+                response = TTSDeleteVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="rejected",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+            else:
+                response = TTSDeleteVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="deleted",
+                    revision=f"voice-rev-{self._voice_revision + 1}",
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "delete_voice_profile",
+                    request,
+                    response,
+                    envelope,
+                    phase="intent",
+                    audit_status="attempted",
+                )
+                await self._voice_registry(
+                    await config_api.aget(ConfigKeys.services.tts, Tts)
+                ).delete_voice(request.voice_id)
+                self._voice_revision += 1
+            if response.status != "deleted":
+                await self._audit_voice_management(
+                    "delete_voice_profile", request, response, envelope
+                )
+            self._cache_mutation("delete_voice_profile", request, response, envelope)
+        return response
 
     @method_contract(
         method_id=TTSMethods.REQUEST,

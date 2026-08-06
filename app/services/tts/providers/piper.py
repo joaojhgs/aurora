@@ -39,6 +39,7 @@ class PiperVoiceConfig:
     config_file: str | None = None
     display_name: str = "Piper"
     expected_sample_rate: int | None = None
+    language: str | None = None
 
 
 def pcm_to_wav_bytes(audio: bytes, *, sample_rate: int, channels: int = 1) -> bytes:
@@ -258,6 +259,7 @@ class PiperTTSProvider:
                 voice_id=self._voice.voice_id,
                 display_name=self._voice.display_name,
                 ready=ready,
+                language=self._voice.language,
             ),
         )
 

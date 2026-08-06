@@ -6,14 +6,19 @@ import asyncio
 import base64
 import contextlib
 import hashlib
+import io
+import json
 import os
 import sys
 import tempfile
 import types
+import wave
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from app.messaging import Envelope
 from app.services.tts.playback import PCMServerPlayback
 from app.services.tts.providers.base import (
     TTSProviderCapabilities,
@@ -34,14 +39,24 @@ from app.shared.config.models import (
     Tts,
     VoiceRegistry as VoiceRegistryConfig,
 )
+from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.tts import (
     TTSAudioChunkEvent,
+    TTSCreateVoiceProfileRequest,
+    TTSDeleteVoiceProfileRequest,
+    TTSGetCapabilitiesRequest,
+    TTSInstallVoiceProfileRequest,
+    TTSListVoicesRequest,
     TTSMethods,
     TTSRequest,
     TTSStopRequest,
     TTSStreamChunkRequest,
     TTSStreamEndRequest,
     TTSStreamStartRequest,
+    TTSVoiceImportAbortRequest,
+    TTSVoiceImportChunkRequest,
+    TTSVoiceImportEndRequest,
+    TTSVoiceImportStartRequest,
 )
 from app.shared.messaging import bus_init
 
@@ -54,6 +69,9 @@ def mock_bus():
     FakeVoiceRegistry.opened_fds = []
     FakeVoiceRegistry.fail_resolve_for = None
     FakeVoiceRegistry.cancel_resolve_for = None
+    FakeVoiceRegistry.installed = []
+    FakeVoiceRegistry.deleted = []
+    FakeVoiceRegistry.install_calls = 0
     bus = Mock()
     bus.publish = AsyncMock()
     bus.subscribe = Mock()
@@ -208,6 +226,19 @@ class FakePiperProvider(FakePocketProvider):
         )
 
 
+class FakeVoiceListingProvider(FakePocketProvider):
+    def __init__(self, voices, *, active_voice: str | None = None) -> None:
+        super().__init__(None)
+        self._voices = tuple(voices)
+        self._active_voice = active_voice
+
+    async def health(self) -> TTSProviderHealth:
+        return TTSProviderHealth("pockettts", True, self._active_voice, "pockettts:base")
+
+    async def list_voices(self) -> tuple[TTSVoiceInfo, ...]:
+        return self._voices
+
+
 def _registry_handle(voice_id: str, identity) -> VoiceStateArtifactHandle:
     payload = f"registry-state:{voice_id}".encode()
     with tempfile.TemporaryFile() as file:
@@ -235,6 +266,9 @@ class FakeVoiceRegistry:
     opened_fds: list[int] = []
     fail_resolve_for: str | None = None
     cancel_resolve_for: str | None = None
+    installed = []
+    deleted: list[str] = []
+    install_calls = 0
 
     def __init__(self, root) -> None:
         self.root = root
@@ -242,6 +276,17 @@ class FakeVoiceRegistry:
     async def catalog(self, identity, *, include_private: bool = False):
         del identity, include_private
         return self.entries
+
+    async def inventory(self):
+        return self.installed
+
+    async def install_standard_pack(self, manifest_path, artifact_root):
+        del manifest_path, artifact_root
+        self.__class__.install_calls += 1
+        return tuple(self.installed)
+
+    async def delete_voice(self, voice_id: str):
+        self.deleted.append(voice_id)
 
     async def resolve_voice_state_artifact(self, voice_id: str, identity):
         if voice_id == self.cancel_resolve_for:
@@ -298,6 +343,138 @@ def _fd_is_closed(fd: int) -> bool:
     except OSError:
         return True
     return False
+
+
+def _wav_payload(*, sample_rate: int = 16000, channels: int = 1, frames: int = 1600) -> bytes:
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav_file:
+        wav_file.setnchannels(channels)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(b"\0\0" * channels * frames)
+    return buffer.getvalue()
+
+
+async def _sealed_voice_upload(service: TTSService, envelope: Envelope):
+    payload = _wav_payload()
+    digest = hashlib.sha256(payload).hexdigest()
+    started = await service.voice_import_start(
+        TTSVoiceImportStartRequest(
+            operation_id=f"start-{len(service._voice_import_sessions)}",
+            expected_total_bytes=len(payload),
+            sha256=digest,
+            format="wav",
+            sample_rate=16000,
+        ),
+        envelope,
+    )
+    await service.voice_import_chunk(
+        TTSVoiceImportChunkRequest(
+            operation_id=f"chunk-{started.upload_id}",
+            upload_id=started.upload_id,
+            sequence=0,
+            chunk_data=base64.b64encode(payload).decode(),
+            chunk_sha256=digest,
+        ),
+        envelope,
+    )
+    sealed = await service.voice_import_end(
+        TTSVoiceImportEndRequest(
+            operation_id=f"end-{started.upload_id}",
+            upload_id=started.upload_id,
+            final_sequence=0,
+            final_sha256=digest,
+        ),
+        envelope,
+    )
+    return started, sealed
+
+
+async def _start_voice_upload(
+    service: TTSService,
+    envelope: Envelope,
+    payload: bytes,
+    *,
+    operation_id: str,
+    expected_total_bytes: int | None = None,
+    sha256: str | None = None,
+    audio_format: str = "wav",
+    sample_rate: int = 16000,
+    channels: int = 1,
+    sample_width_bytes: int = 2,
+    duration_ms: int | None = None,
+):
+    return await service.voice_import_start(
+        TTSVoiceImportStartRequest(
+            operation_id=operation_id,
+            expected_total_bytes=expected_total_bytes or len(payload),
+            sha256=sha256 or hashlib.sha256(payload).hexdigest(),
+            format=audio_format,
+            sample_rate=sample_rate,
+            channels=channels,
+            sample_width_bytes=sample_width_bytes,
+            duration_ms=duration_ms,
+        ),
+        envelope,
+    )
+
+
+async def _append_voice_chunk(
+    service: TTSService,
+    envelope: Envelope,
+    upload_id: str,
+    payload: bytes,
+    *,
+    operation_id: str,
+    sequence: int = 0,
+):
+    return await service.voice_import_chunk(
+        TTSVoiceImportChunkRequest(
+            operation_id=operation_id,
+            upload_id=upload_id,
+            sequence=sequence,
+            chunk_data=base64.b64encode(payload).decode(),
+            chunk_sha256=hashlib.sha256(payload).hexdigest(),
+        ),
+        envelope,
+    )
+
+
+def _assert_redacted_rejection_audit(mock_bus, *, method: str, forbidden: list[str]) -> None:
+    audit_call = mock_bus.request.await_args_list[-1]
+    assert audit_call.args[0] == AuthMethods.STORE_AUDIT_EVENT
+    details = audit_call.args[1].details
+    assert details is not None
+    parsed = json.loads(details)
+    assert parsed["method"] == method
+    assert parsed["phase"] == "outcome"
+    assert parsed["status"] == "rejected"
+    assert parsed["secrets_redacted"] is True
+    assert "chunk_data" not in details
+    for value in forbidden:
+        assert value not in details
+
+
+def _last_audit_details(mock_bus) -> dict[str, object]:
+    audit_call = mock_bus.request.await_args_list[-1]
+    assert audit_call.args[0] == AuthMethods.STORE_AUDIT_EVENT
+    details = audit_call.args[1].details
+    assert details is not None
+    return json.loads(details)
+
+
+def _assert_intent_attempt_audit(mock_bus, *, method: str) -> None:
+    details = _last_audit_details(mock_bus)
+    assert details["method"] == method
+    assert details["phase"] == "intent"
+    assert details["status"] == "attempted"
+
+
+def _assert_outcome_audit(mock_bus, *, method: str, status: str) -> None:
+    details = _last_audit_details(mock_bus)
+    assert details["method"] == method
+    assert details["phase"] == "outcome"
+    assert details["status"] == status
 
 
 @pytest.mark.asyncio
@@ -600,6 +777,1138 @@ async def test_piper_remains_default_and_uses_text_playback(monkeypatch, mock_bu
     assert provider.capabilities.provider_id == "piper"
     assert engine is not None
     assert stream is playback
+
+
+def test_tts_voice_registration_contract_metadata() -> None:
+    expected_use = {
+        TTSMethods.GET_CAPABILITIES,
+        TTSMethods.LIST_VOICES,
+    }
+    expected_manage = {
+        TTSMethods.LIST_VOICE_PROFILES,
+        TTSMethods.GET_VOICE_PROFILE,
+        TTSMethods.UPDATE_VOICE_PROFILE,
+        TTSMethods.INSTALL_VOICE_PROFILE,
+        TTSMethods.REMOVE_VOICE_PROFILE,
+        TTSMethods.SET_DEFAULT_VOICE,
+        TTSMethods.VOICE_IMPORT_START,
+        TTSMethods.VOICE_IMPORT_CHUNK,
+        TTSMethods.VOICE_IMPORT_END,
+        TTSMethods.VOICE_IMPORT_ABORT,
+        TTSMethods.CREATE_VOICE_PROFILE,
+        TTSMethods.DELETE_VOICE_PROFILE,
+    }
+
+    for method_id in expected_use | expected_manage:
+        method_name = {
+            TTSMethods.GET_CAPABILITIES: "get_capabilities",
+            TTSMethods.LIST_VOICES: "list_voices",
+            TTSMethods.LIST_VOICE_PROFILES: "list_voice_profiles",
+            TTSMethods.GET_VOICE_PROFILE: "get_voice_profile",
+            TTSMethods.UPDATE_VOICE_PROFILE: "update_voice_profile",
+            TTSMethods.INSTALL_VOICE_PROFILE: "install_voice_profile",
+            TTSMethods.REMOVE_VOICE_PROFILE: "remove_voice_profile",
+            TTSMethods.SET_DEFAULT_VOICE: "set_default_voice",
+            TTSMethods.VOICE_IMPORT_START: "voice_import_start",
+            TTSMethods.VOICE_IMPORT_CHUNK: "voice_import_chunk",
+            TTSMethods.VOICE_IMPORT_END: "voice_import_end",
+            TTSMethods.VOICE_IMPORT_ABORT: "voice_import_abort",
+            TTSMethods.CREATE_VOICE_PROFILE: "create_voice_profile",
+            TTSMethods.DELETE_VOICE_PROFILE: "delete_voice_profile",
+        }[method_id]
+        metadata = getattr(TTSService, method_name)._contract_metadata
+        assert metadata["method_id"] == method_id
+        assert metadata["exposure"] == "both"
+        if method_id in expected_use:
+            assert metadata["method_type"] == "use"
+            assert metadata["required_perms"] == ["TTS.use"]
+            assert metadata["callable_feature_ids"] == ["speech_voice_discovery"]
+        else:
+            assert metadata["method_type"] == "manage"
+            assert metadata["required_perms"] == ["TTS.manage"]
+            assert metadata["callable_feature_ids"] == ["speech_voice_management"]
+
+
+@pytest.mark.asyncio
+async def test_voice_discovery_skips_provider_voices_without_exact_language(
+    monkeypatch, mock_bus
+) -> None:
+    service = TTSService()
+    service._provider = FakePocketProvider(None)
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+
+    voices = await service.list_voices(TTSListVoicesRequest())
+    capabilities = await service.get_capabilities(TTSGetCapabilitiesRequest())
+
+    assert voices.voices == []
+    assert capabilities.capabilities.ready is True
+    assert capabilities.capabilities.ready_languages == ["en"]
+
+
+@pytest.mark.asyncio
+async def test_remote_list_voices_omits_clones_until_visibility_support(mock_bus) -> None:
+    service = TTSService()
+    clone_id = "clone:00000000-0000-4000-8000-000000000001"
+    service._provider = FakeVoiceListingProvider(
+        (
+            TTSVoiceInfo("standard:starter_en:alba", "Alba", True, "en"),
+            TTSVoiceInfo(clone_id, "Clone", True, "en"),
+        )
+    )
+
+    local = await service.list_voices(TTSListVoicesRequest())
+    remote = await service.list_voices(
+        TTSListVoicesRequest(),
+        Envelope(
+            type=TTSMethods.LIST_VOICES,
+            payload={},
+            origin="external",
+            principal_id="principal-a",
+            caller_peer_id="peer-a",
+        ),
+    )
+
+    assert [voice.voice_id for voice in local.voices] == [
+        "standard:starter_en:alba",
+        clone_id,
+    ]
+    assert [voice.visible_scope for voice in local.voices] == ["public", "local"]
+    assert [voice.voice_id for voice in remote.voices] == ["standard:starter_en:alba"]
+    assert remote.voices[0].selection_mode == "shared_model_state"
+    assert remote.voices[0].visible_scope == "public"
+
+
+@pytest.mark.asyncio
+async def test_voice_import_audit_is_redacted_and_idempotency_is_payload_bound(
+    mock_bus,
+) -> None:
+    mock_bus.request = AsyncMock()
+    service = TTSService()
+    envelope = Envelope(
+        type=TTSMethods.VOICE_IMPORT_START,
+        payload={},
+        principal_id="principal-a",
+        caller_peer_id="peer-a",
+        correlation_id="corr-a",
+    )
+    payload = b"voice"
+    digest = hashlib.sha256(payload).hexdigest()
+
+    started = await service.voice_import_start(
+        TTSVoiceImportStartRequest(
+            operation_id="start-a",
+            expected_total_bytes=len(payload),
+            sha256=digest,
+            format="wav",
+            sample_rate=16000,
+        ),
+        envelope,
+    )
+    chunk = await service.voice_import_chunk(
+        TTSVoiceImportChunkRequest(
+            operation_id="chunk-a",
+            upload_id=started.upload_id,
+            sequence=0,
+            chunk_data=base64.b64encode(payload).decode(),
+            chunk_sha256=digest,
+        ),
+        envelope,
+    )
+
+    assert chunk.received_bytes == len(payload)
+    with pytest.raises(ValueError, match="payload mismatch"):
+        await service.voice_import_chunk(
+            TTSVoiceImportChunkRequest(
+                operation_id="chunk-a",
+                upload_id=started.upload_id,
+                sequence=0,
+                chunk_data=base64.b64encode(b"other").decode(),
+                chunk_sha256=hashlib.sha256(b"other").hexdigest(),
+            ),
+            envelope,
+        )
+    audit_call = mock_bus.request.await_args_list[-1]
+    assert audit_call.args[0] == AuthMethods.STORE_AUDIT_EVENT
+    details = audit_call.args[1].details
+    assert details is not None
+    assert "chunk_data" not in details
+    assert "secrets_redacted" in details
+    assert audit_call.kwargs["origin"] == "internal"
+    assert audit_call.kwargs["timeout"] == 5.0
+
+
+@pytest.mark.asyncio
+async def test_voice_import_invalid_chunks_emit_redacted_rejected_audits(mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    service = TTSService()
+    owner = Envelope(
+        type=TTSMethods.VOICE_IMPORT_START,
+        payload={},
+        principal_id="principal-a",
+        caller_peer_id="peer-a",
+    )
+    other_peer = Envelope(
+        type=TTSMethods.VOICE_IMPORT_START,
+        payload={},
+        principal_id="principal-a",
+        caller_peer_id="peer-b",
+    )
+    payload = b"voice"
+    upload = await _start_voice_upload(service, owner, payload, operation_id="chunk-invalid")
+
+    with pytest.raises(ValueError, match="unavailable"):
+        await _append_voice_chunk(
+            service, other_peer, upload.upload_id, payload, operation_id="chunk-wrong-owner"
+        )
+    _assert_redacted_rejection_audit(
+        mock_bus,
+        method="voice_import_chunk",
+        forbidden=[upload.upload_id, base64.b64encode(payload).decode()],
+    )
+
+    with pytest.raises(ValueError, match="order"):
+        await _append_voice_chunk(
+            service, owner, upload.upload_id, payload, operation_id="chunk-gap", sequence=1
+        )
+    _assert_redacted_rejection_audit(
+        mock_bus,
+        method="voice_import_chunk",
+        forbidden=[upload.upload_id, base64.b64encode(payload).decode()],
+    )
+
+    await _append_voice_chunk(
+        service, owner, upload.upload_id, payload, operation_id="chunk-original"
+    )
+    duplicate = await _append_voice_chunk(
+        service, owner, upload.upload_id, payload, operation_id="chunk-duplicate-same"
+    )
+    assert duplicate.status == "duplicate"
+    _assert_outcome_audit(mock_bus, method="voice_import_chunk", status="duplicate")
+    mismatch = b"other"
+    with pytest.raises(ValueError, match="payload mismatch"):
+        await _append_voice_chunk(
+            service, owner, upload.upload_id, mismatch, operation_id="chunk-duplicate"
+        )
+    _assert_redacted_rejection_audit(
+        mock_bus,
+        method="voice_import_chunk",
+        forbidden=[upload.upload_id, base64.b64encode(mismatch).decode()],
+    )
+
+    overflow_payload = b"12345"
+    overflow_upload = await _start_voice_upload(
+        service,
+        owner,
+        overflow_payload,
+        operation_id="chunk-overflow-start",
+        expected_total_bytes=4,
+        sha256=hashlib.sha256(overflow_payload).hexdigest(),
+    )
+    with pytest.raises(ValueError, match="exceeds"):
+        await _append_voice_chunk(
+            service,
+            owner,
+            overflow_upload.upload_id,
+            overflow_payload,
+            operation_id="chunk-overflow",
+        )
+    _assert_redacted_rejection_audit(
+        mock_bus,
+        method="voice_import_chunk",
+        forbidden=[overflow_upload.upload_id, base64.b64encode(overflow_payload).decode()],
+    )
+
+
+@pytest.mark.asyncio
+async def test_voice_import_chunk_rejects_new_chunks_after_seal(mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    service = TTSService()
+    owner = Envelope(type=TTSMethods.VOICE_IMPORT_START, payload={})
+    started, sealed = await _sealed_voice_upload(service, owner)
+    session = service._voice_import_sessions[started.upload_id]
+    original_chunks = dict(session.chunks)
+    original_sealed_ref = session.sealed_ref
+    extra_payload = b"\1\0"
+
+    with pytest.raises(ValueError, match="sealed"):
+        await _append_voice_chunk(
+            service,
+            owner,
+            started.upload_id,
+            extra_payload,
+            operation_id="chunk-after-seal",
+            sequence=1,
+        )
+
+    assert sealed.sealed_audio_ref == original_sealed_ref
+    assert session.sealed_ref == original_sealed_ref
+    assert session.chunks == original_chunks
+    assert not any(
+        key[1] == "voice_import_chunk" and key[2] == "chunk-after-seal"
+        for key in service._voice_operation_results
+    )
+    _assert_redacted_rejection_audit(
+        mock_bus,
+        method="voice_import_chunk",
+        forbidden=[started.upload_id, base64.b64encode(extra_payload).decode()],
+    )
+
+
+@pytest.mark.asyncio
+async def test_voice_import_invalid_end_attempts_emit_redacted_rejected_audits(
+    mock_bus,
+) -> None:
+    mock_bus.request = AsyncMock()
+    service = TTSService()
+    owner = Envelope(
+        type=TTSMethods.VOICE_IMPORT_START,
+        payload={},
+        principal_id="principal-a",
+        caller_peer_id="peer-a",
+    )
+    other_peer = Envelope(
+        type=TTSMethods.VOICE_IMPORT_START,
+        payload={},
+        principal_id="principal-a",
+        caller_peer_id="peer-b",
+    )
+    payload = _wav_payload()
+    digest = hashlib.sha256(payload).hexdigest()
+
+    wrong_owner_upload = await _start_voice_upload(
+        service, owner, payload, operation_id="end-wrong-owner-start"
+    )
+    await _append_voice_chunk(
+        service, owner, wrong_owner_upload.upload_id, payload, operation_id="end-wrong-owner-chunk"
+    )
+    with pytest.raises(ValueError, match="unavailable"):
+        await service.voice_import_end(
+            TTSVoiceImportEndRequest(
+                operation_id="end-wrong-owner",
+                upload_id=wrong_owner_upload.upload_id,
+                final_sequence=0,
+                final_sha256=digest,
+            ),
+            other_peer,
+        )
+    _assert_redacted_rejection_audit(
+        mock_bus, method="voice_import_end", forbidden=[wrong_owner_upload.upload_id]
+    )
+
+    sequence_upload = await _start_voice_upload(
+        service, owner, payload, operation_id="end-sequence-start"
+    )
+    await _append_voice_chunk(
+        service, owner, sequence_upload.upload_id, payload, operation_id="end-sequence-chunk"
+    )
+    with pytest.raises(ValueError, match="final sequence"):
+        await service.voice_import_end(
+            TTSVoiceImportEndRequest(
+                operation_id="end-sequence",
+                upload_id=sequence_upload.upload_id,
+                final_sequence=1,
+                final_sha256=digest,
+            ),
+            owner,
+        )
+    _assert_redacted_rejection_audit(
+        mock_bus, method="voice_import_end", forbidden=[sequence_upload.upload_id]
+    )
+
+    length_upload = await _start_voice_upload(
+        service,
+        owner,
+        payload,
+        operation_id="end-length-start",
+        expected_total_bytes=len(payload) + 1,
+    )
+    await _append_voice_chunk(
+        service, owner, length_upload.upload_id, payload, operation_id="end-length-chunk"
+    )
+    with pytest.raises(ValueError, match="total bytes"):
+        await service.voice_import_end(
+            TTSVoiceImportEndRequest(
+                operation_id="end-length",
+                upload_id=length_upload.upload_id,
+                final_sequence=0,
+                final_sha256=digest,
+            ),
+            owner,
+        )
+    _assert_redacted_rejection_audit(
+        mock_bus, method="voice_import_end", forbidden=[length_upload.upload_id]
+    )
+
+    hash_upload = await _start_voice_upload(service, owner, payload, operation_id="end-hash-start")
+    await _append_voice_chunk(
+        service, owner, hash_upload.upload_id, payload, operation_id="end-hash-chunk"
+    )
+    with pytest.raises(ValueError, match="digest"):
+        await service.voice_import_end(
+            TTSVoiceImportEndRequest(
+                operation_id="end-hash",
+                upload_id=hash_upload.upload_id,
+                final_sequence=0,
+                final_sha256="0" * 64,
+            ),
+            owner,
+        )
+    _assert_redacted_rejection_audit(
+        mock_bus, method="voice_import_end", forbidden=[hash_upload.upload_id]
+    )
+
+    malformed_payload = b"voice"
+    malformed_digest = hashlib.sha256(malformed_payload).hexdigest()
+    malformed_upload = await _start_voice_upload(
+        service,
+        owner,
+        malformed_payload,
+        operation_id="end-audio-start",
+        sha256=malformed_digest,
+    )
+    await _append_voice_chunk(
+        service,
+        owner,
+        malformed_upload.upload_id,
+        malformed_payload,
+        operation_id="end-audio-chunk",
+    )
+    with pytest.raises(ValueError, match="wav voice import"):
+        await service.voice_import_end(
+            TTSVoiceImportEndRequest(
+                operation_id="end-audio",
+                upload_id=malformed_upload.upload_id,
+                final_sequence=0,
+                final_sha256=malformed_digest,
+            ),
+            owner,
+        )
+    _assert_redacted_rejection_audit(
+        mock_bus,
+        method="voice_import_end",
+        forbidden=[malformed_upload.upload_id, "voice-import:"],
+    )
+
+    pcm_payload = b"\0\0" * 1600
+    pcm_digest = hashlib.sha256(pcm_payload).hexdigest()
+    pcm_upload = await _start_voice_upload(
+        service,
+        owner,
+        pcm_payload,
+        operation_id="end-pcm-duration-start",
+        sha256=pcm_digest,
+        audio_format="pcm_s16le",
+        duration_ms=101,
+    )
+    await _append_voice_chunk(
+        service,
+        owner,
+        pcm_upload.upload_id,
+        pcm_payload,
+        operation_id="end-pcm-duration-chunk",
+    )
+    with pytest.raises(ValueError, match="duration"):
+        await service.voice_import_end(
+            TTSVoiceImportEndRequest(
+                operation_id="end-pcm-duration",
+                upload_id=pcm_upload.upload_id,
+                final_sequence=0,
+                final_sha256=pcm_digest,
+            ),
+            owner,
+        )
+    _assert_redacted_rejection_audit(
+        mock_bus, method="voice_import_end", forbidden=[pcm_upload.upload_id]
+    )
+
+    over_limit_payload = b"\0\0" * 15001
+    over_limit_digest = hashlib.sha256(over_limit_payload).hexdigest()
+    over_limit_upload = await _start_voice_upload(
+        service,
+        owner,
+        over_limit_payload,
+        operation_id="end-pcm-over-limit-start",
+        sha256=over_limit_digest,
+        audio_format="pcm_s16le",
+        sample_rate=1000,
+        duration_ms=None,
+    )
+    await _append_voice_chunk(
+        service,
+        owner,
+        over_limit_upload.upload_id,
+        over_limit_payload,
+        operation_id="end-pcm-over-limit-chunk",
+    )
+    with pytest.raises(ValueError, match="duration exceeds limit"):
+        await service.voice_import_end(
+            TTSVoiceImportEndRequest(
+                operation_id="end-pcm-over-limit",
+                upload_id=over_limit_upload.upload_id,
+                final_sequence=0,
+                final_sha256=over_limit_digest,
+            ),
+            owner,
+        )
+    assert service._voice_import_sessions[over_limit_upload.upload_id].sealed_ref is None
+    _assert_redacted_rejection_audit(
+        mock_bus, method="voice_import_end", forbidden=[over_limit_upload.upload_id]
+    )
+
+
+@pytest.mark.asyncio
+async def test_voice_import_end_accepts_valid_pcm_s16le(mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    service = TTSService()
+    owner = Envelope(type=TTSMethods.VOICE_IMPORT_START, payload={})
+    payload = b"\0\0" * 1600
+    digest = hashlib.sha256(payload).hexdigest()
+
+    started = await _start_voice_upload(
+        service,
+        owner,
+        payload,
+        operation_id="pcm-start",
+        sha256=digest,
+        audio_format="pcm_s16le",
+        duration_ms=100,
+    )
+    await _append_voice_chunk(service, owner, started.upload_id, payload, operation_id="pcm-chunk")
+    sealed = await service.voice_import_end(
+        TTSVoiceImportEndRequest(
+            operation_id="pcm-end",
+            upload_id=started.upload_id,
+            final_sequence=0,
+            final_sha256=digest,
+        ),
+        owner,
+    )
+
+    assert sealed.status == "sealed"
+    assert sealed.sealed_audio_ref == f"voice-import:{started.upload_id}"
+    assert service._voice_import_sessions[started.upload_id].sealed_ref == sealed.sealed_audio_ref
+    _assert_intent_attempt_audit(mock_bus, method="voice_import_end")
+
+
+@pytest.mark.asyncio
+async def test_voice_import_abort_audits_outcome_and_intent_branches(mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    service = TTSService()
+    owner = Envelope(type=TTSMethods.VOICE_IMPORT_START, payload={})
+
+    missing = await service.voice_import_abort(
+        TTSVoiceImportAbortRequest(
+            operation_id="abort-missing",
+            upload_id="missing-upload",
+        ),
+        owner,
+    )
+    assert missing.status == "not_found"
+    _assert_outcome_audit(mock_bus, method="voice_import_abort", status="not_found")
+
+    payload = b"voice"
+    started = await _start_voice_upload(service, owner, payload, operation_id="abort-start")
+    await _append_voice_chunk(
+        service, owner, started.upload_id, payload, operation_id="abort-chunk"
+    )
+    aborted = await service.voice_import_abort(
+        TTSVoiceImportAbortRequest(
+            operation_id="abort-present",
+            upload_id=started.upload_id,
+        ),
+        owner,
+    )
+
+    assert aborted.status == "aborted"
+    assert started.upload_id not in service._voice_import_sessions
+    _assert_intent_attempt_audit(mock_bus, method="voice_import_abort")
+
+
+@pytest.mark.asyncio
+async def test_voice_import_start_fails_closed_when_audit_fails(mock_bus) -> None:
+    mock_bus.request = AsyncMock(side_effect=RuntimeError("audit unavailable"))
+    service = TTSService()
+    payload = b"voice"
+
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        await service.voice_import_start(
+            TTSVoiceImportStartRequest(
+                operation_id="start-fail",
+                expected_total_bytes=len(payload),
+                sha256=hashlib.sha256(payload).hexdigest(),
+                format="wav",
+                sample_rate=16000,
+            )
+        )
+
+    assert service._voice_import_sessions == {}
+    assert service._voice_operation_results == {}
+
+
+@pytest.mark.asyncio
+async def test_concurrent_voice_import_starts_respect_capacity(mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    service = TTSService()
+    service._voice_import_sessions = {
+        f"existing-{index}": types.SimpleNamespace(
+            owner="principal=principal-a|peer=peer-a",
+            expires_at=datetime.now(UTC) + timedelta(minutes=15),
+        )
+        for index in range(7)
+    }
+    envelope = Envelope(
+        type=TTSMethods.VOICE_IMPORT_START,
+        payload={},
+        principal_id="principal-a",
+        caller_peer_id="peer-a",
+    )
+    payload = b"voice"
+    digest = hashlib.sha256(payload).hexdigest()
+
+    results = await asyncio.gather(
+        *(
+            service.voice_import_start(
+                TTSVoiceImportStartRequest(
+                    operation_id=f"start-race-{index}",
+                    expected_total_bytes=len(payload),
+                    sha256=digest,
+                    format="wav",
+                    sample_rate=16000,
+                ),
+                envelope,
+            )
+            for index in range(2)
+        ),
+        return_exceptions=True,
+    )
+
+    assert sum(not isinstance(result, Exception) for result in results) == 1
+    assert sum(isinstance(result, ValueError) for result in results) == 1
+    assert len(service._voice_import_sessions) == 8
+    _assert_redacted_rejection_audit(mock_bus, method="voice_import_start", forbidden=[])
+
+
+@pytest.mark.asyncio
+async def test_voice_import_chunk_fails_closed_when_audit_fails(mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    service = TTSService()
+    owner = Envelope(type=TTSMethods.VOICE_IMPORT_START, payload={})
+    started = await service.voice_import_start(
+        TTSVoiceImportStartRequest(
+            operation_id="start-chunk-fail",
+            expected_total_bytes=5,
+            sha256=hashlib.sha256(b"voice").hexdigest(),
+            format="wav",
+            sample_rate=16000,
+        ),
+        owner,
+    )
+    mock_bus.request = AsyncMock(side_effect=RuntimeError("audit unavailable"))
+
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        await service.voice_import_chunk(
+            TTSVoiceImportChunkRequest(
+                operation_id="chunk-fail",
+                upload_id=started.upload_id,
+                sequence=0,
+                chunk_data=base64.b64encode(b"voice").decode(),
+                chunk_sha256=hashlib.sha256(b"voice").hexdigest(),
+            ),
+            owner,
+        )
+
+    assert service._voice_import_sessions[started.upload_id].chunks == {}
+    assert not any(key[1] == "voice_import_chunk" for key in service._voice_operation_results)
+
+
+@pytest.mark.asyncio
+async def test_voice_import_end_and_abort_fail_closed_when_audit_fails(mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    service = TTSService()
+    owner = Envelope(type=TTSMethods.VOICE_IMPORT_START, payload={})
+    started, _sealed = await _sealed_voice_upload(service, owner)
+    service._voice_operation_results = {
+        key: value
+        for key, value in service._voice_operation_results.items()
+        if key[1] not in {"voice_import_end", "voice_import_abort"}
+    }
+    service._voice_import_sessions[started.upload_id].sealed_ref = None
+    mock_bus.request = AsyncMock(side_effect=RuntimeError("audit unavailable"))
+
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        await service.voice_import_end(
+            TTSVoiceImportEndRequest(
+                operation_id="end-fail",
+                upload_id=started.upload_id,
+                final_sequence=0,
+                final_sha256=hashlib.sha256(_wav_payload()).hexdigest(),
+            ),
+            owner,
+        )
+    assert service._voice_import_sessions[started.upload_id].sealed_ref is None
+
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        await service.voice_import_abort(
+            TTSVoiceImportAbortRequest(
+                operation_id="abort-fail",
+                upload_id=started.upload_id,
+            ),
+            owner,
+        )
+    assert started.upload_id in service._voice_import_sessions
+
+
+@pytest.mark.asyncio
+async def test_voice_import_owner_and_create_profile_require_same_peer(mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    service = TTSService()
+    owner = Envelope(
+        type=TTSMethods.VOICE_IMPORT_START,
+        payload={},
+        principal_id="principal-a",
+        caller_peer_id="peer-a",
+    )
+    other_peer = Envelope(
+        type=TTSMethods.VOICE_IMPORT_START,
+        payload={},
+        principal_id="principal-a",
+        caller_peer_id="peer-b",
+    )
+    payload = _wav_payload()
+    digest = hashlib.sha256(payload).hexdigest()
+
+    started = await service.voice_import_start(
+        TTSVoiceImportStartRequest(
+            operation_id="start-b",
+            expected_total_bytes=len(payload),
+            sha256=digest,
+            format="wav",
+            sample_rate=16000,
+        ),
+        owner,
+    )
+    with pytest.raises(ValueError, match="unavailable"):
+        await service.voice_import_chunk(
+            TTSVoiceImportChunkRequest(
+                operation_id="chunk-other",
+                upload_id=started.upload_id,
+                sequence=0,
+                chunk_data=base64.b64encode(payload).decode(),
+                chunk_sha256=digest,
+            ),
+            other_peer,
+        )
+    await service.voice_import_chunk(
+        TTSVoiceImportChunkRequest(
+            operation_id="chunk-b",
+            upload_id=started.upload_id,
+            sequence=0,
+            chunk_data=base64.b64encode(payload).decode(),
+            chunk_sha256=digest,
+        ),
+        owner,
+    )
+    sealed = await service.voice_import_end(
+        TTSVoiceImportEndRequest(
+            operation_id="end-b",
+            upload_id=started.upload_id,
+            final_sequence=0,
+            final_sha256=digest,
+        ),
+        owner,
+    )
+
+    rejected = await service.create_voice_profile(
+        TTSCreateVoiceProfileRequest(
+            operation_id="create-other",
+            display_name="Clone",
+            sealed_audio_ref=sealed.sealed_audio_ref,
+            consent=True,
+        ),
+        other_peer,
+    )
+    unavailable = await service.create_voice_profile(
+        TTSCreateVoiceProfileRequest(
+            operation_id="create-owner",
+            display_name="Clone",
+            sealed_audio_ref=sealed.sealed_audio_ref,
+            consent=True,
+        ),
+        owner,
+    )
+
+    assert rejected.status == "rejected"
+    assert rejected.voice_id is None
+    assert unavailable.status == "unavailable"
+    assert unavailable.voice_id is None
+    reused = await service.create_voice_profile(
+        TTSCreateVoiceProfileRequest(
+            operation_id="create-owner-again",
+            display_name="Clone",
+            sealed_audio_ref=sealed.sealed_audio_ref,
+            consent=True,
+        ),
+        owner,
+    )
+    assert reused.status == "rejected"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_create_profile_consumes_sealed_ref_once(mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    service = TTSService()
+    owner = Envelope(type=TTSMethods.CREATE_VOICE_PROFILE, payload={})
+    _started, sealed = await _sealed_voice_upload(service, owner)
+
+    results = await asyncio.gather(
+        *(
+            service.create_voice_profile(
+                TTSCreateVoiceProfileRequest(
+                    operation_id=f"create-race-{index}",
+                    display_name="Clone",
+                    sealed_audio_ref=sealed.sealed_audio_ref,
+                    consent=True,
+                ),
+                owner,
+            )
+            for index in range(2)
+        )
+    )
+
+    assert sorted(result.status for result in results) == ["rejected", "unavailable"]
+
+
+@pytest.mark.asyncio
+async def test_install_voice_profile_prevalidates_configured_manifest(
+    tmp_path, monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    manifest = tmp_path / "voices.manifest.json"
+    manifest.write_text(
+        '{"schema_version":1,"pack_id":"starter_en","pack_version":"1",'
+        '"minimum_aurora_version":"1","minimum_runtime_version":"1","assets":[]}',
+        encoding="utf-8",
+    )
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            voice_registry=VoiceRegistryConfig(
+                manifest_path=str(manifest), cache_dir=str(tmp_path)
+            ),
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    response = await TTSService().install_voice_profile(
+        TTSInstallVoiceProfileRequest(
+            operation_id="install-a",
+            voice_id="standard:starter_en:alba",
+        )
+    )
+
+    assert response.status == "not_found"
+    assert FakeVoiceRegistry.install_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_install_voice_profile_rejects_multi_asset_manifest(
+    tmp_path, monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    manifest = tmp_path / "voices.manifest.json"
+    asset = (
+        '"asset_id":"alba","logical_voice_id":"standard:starter_en:alba",'
+        '"display_name":"Alba","runtime_target":"pockettts-python",'
+        '"language_bundle":"en","compatibility_group":"base",'
+        '"artifact_revision":"rev1","feature":"voice-state","size_bytes":0,'
+        f'"sha256":"{"0" * 64}","relative_path":"alba.safetensors",'
+        '"compression":"none","unpacked_size_bytes":0,"license_name":"test",'
+        '"redistribution":"approved"'
+    )
+    second = asset.replace("alba", "bela").replace(
+        "standard:starter_en:bela", "standard:starter_en:bela"
+    )
+    manifest.write_text(
+        '{"schema_version":1,"pack_id":"starter_en","pack_version":"1",'
+        '"minimum_aurora_version":"1","minimum_runtime_version":"1","assets":[{'
+        + asset
+        + "},{"
+        + second
+        + "}]}",
+        encoding="utf-8",
+    )
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            voice_registry=VoiceRegistryConfig(
+                manifest_path=str(manifest), cache_dir=str(tmp_path)
+            ),
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    response = await TTSService().install_voice_profile(
+        TTSInstallVoiceProfileRequest(
+            operation_id="install-multi",
+            voice_id="standard:starter_en:alba",
+        )
+    )
+
+    assert response.status == "rejected"
+    assert FakeVoiceRegistry.install_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_install_voice_profile_success_audits_intent_not_completed_outcome(
+    tmp_path, monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    manifest = tmp_path / "voices.manifest.json"
+    artifact = tmp_path / "alba.safetensors"
+    artifact.write_bytes(b"")
+    manifest.write_text(
+        '{"schema_version":1,"pack_id":"starter_en","pack_version":"1",'
+        '"minimum_aurora_version":"1","minimum_runtime_version":"1","assets":[{'
+        '"asset_id":"alba","logical_voice_id":"standard:starter_en:alba",'
+        '"display_name":"Alba","runtime_target":"pockettts-python",'
+        '"language_bundle":"en","compatibility_group":"base",'
+        '"artifact_revision":"rev1","feature":"voice-state","size_bytes":0,'
+        f'"sha256":"{hashlib.sha256(b"").hexdigest()}","relative_path":"alba.safetensors",'
+        '"compression":"none","unpacked_size_bytes":0,"license_name":"test",'
+        '"redistribution":"approved"}]}',
+        encoding="utf-8",
+    )
+
+    class InstallingVoiceRegistry(FakeVoiceRegistry):
+        async def inventory(self):
+            return []
+
+        async def install_standard_pack(self, manifest_path, artifact_root):
+            del manifest_path, artifact_root
+            self.__class__.install_calls += 1
+            return [
+                types.SimpleNamespace(
+                    voice_id="standard:starter_en:alba",
+                    artifact_revision="rev1",
+                )
+            ]
+
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            voice_registry=VoiceRegistryConfig(
+                manifest_path=str(manifest), cache_dir=str(tmp_path)
+            ),
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", InstallingVoiceRegistry)
+    service = TTSService()
+
+    response = await service.install_voice_profile(
+        TTSInstallVoiceProfileRequest(
+            operation_id="install-success",
+            voice_id="standard:starter_en:alba",
+        )
+    )
+
+    assert response.status == "installed"
+    assert response.revision == "rev1"
+    assert InstallingVoiceRegistry.install_calls == 1
+    _assert_intent_attempt_audit(mock_bus, method="install_voice_profile")
+
+
+@pytest.mark.asyncio
+async def test_install_voice_profile_fails_closed_when_audit_fails(
+    tmp_path, monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock(side_effect=RuntimeError("audit unavailable"))
+    manifest = tmp_path / "voices.manifest.json"
+    artifact = tmp_path / "alba.safetensors"
+    artifact.write_bytes(b"")
+    manifest.write_text(
+        '{"schema_version":1,"pack_id":"starter_en","pack_version":"1",'
+        '"minimum_aurora_version":"1","minimum_runtime_version":"1","assets":[{'
+        '"asset_id":"alba","logical_voice_id":"standard:starter_en:alba",'
+        '"display_name":"Alba","runtime_target":"pockettts-python",'
+        '"language_bundle":"en","compatibility_group":"base",'
+        '"artifact_revision":"rev1","feature":"voice-state","size_bytes":0,'
+        f'"sha256":"{hashlib.sha256(b"").hexdigest()}","relative_path":"alba.safetensors",'
+        '"compression":"none","unpacked_size_bytes":0,"license_name":"test",'
+        '"redistribution":"approved"}]}',
+        encoding="utf-8",
+    )
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            voice_registry=VoiceRegistryConfig(
+                manifest_path=str(manifest), cache_dir=str(tmp_path)
+            ),
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    service = TTSService()
+
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        await service.install_voice_profile(
+            TTSInstallVoiceProfileRequest(
+                operation_id="install-audit-fail",
+                voice_id="standard:starter_en:alba",
+            )
+        )
+
+    assert FakeVoiceRegistry.install_calls == 0
+    assert service._voice_revision == 0
+    assert service._voice_operation_results == {}
+
+
+@pytest.mark.asyncio
+async def test_delete_voice_profile_rejects_active_clone(monkeypatch, mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    clone_id = "clone:00000000-0000-4000-8000-000000000001"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=clone_id,
+            display_name="Clone",
+            kind="clone",
+            visibility="private",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            artifact_refs=("artifacts/clone/voice-state.safetensors",),
+            source_retained=False,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    service = TTSService()
+    service._provider = FakeVoiceListingProvider((), active_voice=clone_id)
+
+    response = await service.delete_voice_profile(
+        TTSDeleteVoiceProfileRequest(
+            operation_id="delete-active",
+            voice_id=clone_id,
+        )
+    )
+
+    assert response.status == "rejected"
+    assert FakeVoiceRegistry.deleted == []
+
+
+@pytest.mark.asyncio
+async def test_delete_voice_profile_success_audits_intent_not_completed_outcome(
+    monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    clone_id = "clone:00000000-0000-4000-8000-000000000001"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=clone_id,
+            display_name="Clone",
+            kind="clone",
+            visibility="private",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            artifact_refs=("artifacts/clone/voice-state.safetensors",),
+            source_retained=False,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    service = TTSService()
+    service._provider = FakeVoiceListingProvider((), active_voice=None)
+
+    response = await service.delete_voice_profile(
+        TTSDeleteVoiceProfileRequest(
+            operation_id="delete-success",
+            voice_id=clone_id,
+        )
+    )
+
+    assert response.status == "deleted"
+    assert FakeVoiceRegistry.deleted == [clone_id]
+    _assert_intent_attempt_audit(mock_bus, method="delete_voice_profile")
+
+
+@pytest.mark.asyncio
+async def test_delete_voice_profile_fails_closed_when_audit_fails(monkeypatch, mock_bus) -> None:
+    mock_bus.request = AsyncMock(side_effect=RuntimeError("audit unavailable"))
+    clone_id = "clone:00000000-0000-4000-8000-000000000001"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=clone_id,
+            display_name="Clone",
+            kind="clone",
+            visibility="private",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            artifact_refs=("artifacts/clone/voice-state.safetensors",),
+            source_retained=False,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    service = TTSService()
+    service._provider = FakeVoiceListingProvider((), active_voice=None)
+
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        await service.delete_voice_profile(
+            TTSDeleteVoiceProfileRequest(
+                operation_id="delete-audit-fail",
+                voice_id=clone_id,
+            )
+        )
+
+    assert FakeVoiceRegistry.deleted == []
+    assert service._voice_revision == 0
+    assert service._voice_operation_results == {}
+
+
+@pytest.mark.asyncio
+async def test_tts_on_stop_clears_voice_management_state(mock_bus) -> None:
+    service = TTSService()
+    service._voice_import_sessions["upload"] = types.SimpleNamespace()
+    service._voice_operation_results[("owner", "method", "op")] = ("hash", object())
+
+    await service.on_stop()
+
+    assert service._voice_import_sessions == {}
+    assert service._voice_operation_results == {}
 
 
 @pytest.mark.asyncio
