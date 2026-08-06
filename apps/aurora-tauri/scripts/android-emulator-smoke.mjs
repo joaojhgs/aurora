@@ -3,6 +3,15 @@ import { existsSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+const NATIVE_PAYLOAD_LOGCAT_ARGS = [
+  'logcat',
+  '-d',
+  '-t',
+  '2000',
+  'RustStdoutStderr:I',
+  '*:S',
+]
+
 export async function runAndroidEmulatorSmoke() {
   const appId = process.env.AURORA_ANDROID_APP_ID ?? 'dev.aurora.desktop'
   const apk = process.env.AURORA_ANDROID_APK ?? findApk()
@@ -79,7 +88,7 @@ async function waitForWebviewMount(appId) {
   let lastError = null
 
   while (Date.now() < deadline) {
-    const pid = adbOutput(['shell', 'pidof', appId]).trim().split(/\s+/)[0]
+    const pid = adbOutput(['shell', 'pidof', appId], { allowNonzero: true }).trim().split(/\s+/)[0]
     if (!pid) {
       lastError = new Error(`Android package ${appId} is not running.`)
       await sleep(1000)
@@ -285,10 +294,11 @@ function isStableAuroraWebviewState(state) {
     && state.mobileNavigationPosition === 'fixed'
 }
 
-function adbOutput(args) {
+function adbOutput(args, { allowNonzero = false } = {}) {
   const result = spawnSync('adb', args, { encoding: 'utf8' })
   if (result.error) throw result.error
   if (result.status !== 0) {
+    if (allowNonzero) return result.stdout
     throw new Error(`adb ${args.join(' ')} failed: ${`${result.stdout}\n${result.stderr}`.trim()}`)
   }
   return result.stdout
@@ -301,7 +311,7 @@ function sleep(milliseconds) {
 function waitForPayloadJson() {
   const deadline = Date.now() + Number(process.env.AURORA_ANDROID_SMOKE_TIMEOUT_MS ?? 60_000)
   while (Date.now() < deadline) {
-    const logcat = spawnSync('adb', ['logcat', '-d', '-t', '2000'], { encoding: 'utf8' })
+    const logcat = spawnSync('adb', NATIVE_PAYLOAD_LOGCAT_ARGS, { encoding: 'utf8' })
     if (logcat.error) {
       throw logcat.error
     }
