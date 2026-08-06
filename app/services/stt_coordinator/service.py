@@ -47,7 +47,7 @@ from app.messaging import (
 )
 from app.messaging.priority_helpers import get_interactive_priority, get_system_priority
 from app.shared.config.interface import ConfigAPI
-from app.shared.config.models import AmbientTranscription, AudioInput, Coordinator
+from app.shared.config.models import AmbientTranscription, AudioInput, Coordinator, System
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.stt import (
     STTAudioChunk,
@@ -70,6 +70,7 @@ from app.shared.messaging.models.stt_coordinator_models import (
     STTUserSpeechCaptured,
 )
 from app.shared.services.base_service import BaseService
+from app.shared.speech_language_policy import resolve_speech_language_policy
 
 config_api = ConfigAPI()
 
@@ -239,6 +240,7 @@ class STTCoordinatorService(BaseService):
         self._ambient_transcription_enabled = False
         self._tts_playing = False
         self._tts_interrupted_for_session = False
+        self._language_policy = resolve_speech_language_policy("en", "auto")
 
         # Timeout task
         self._timeout_task: asyncio.Task | None = None
@@ -385,6 +387,13 @@ class STTCoordinatorService(BaseService):
     async def _load_config(self) -> None:
         """Load configuration from configuration service."""
         coord_config = await config_api.aget(ConfigKeys.services.stt.coordinator, Coordinator)
+        system_config = await config_api.aget(ConfigKeys.system, System)
+        if not isinstance(system_config, System):
+            system_config = System()
+        self._language_policy = resolve_speech_language_policy(
+            system_config.primary_language,
+            system_config.voice_language,
+        )
 
         # Audio configuration
         audio_input = coord_config.audio_input or AudioInput()
@@ -863,6 +872,14 @@ class STTCoordinatorService(BaseService):
 
         # Enable transcription (unpause if paused)
         try:
+            await self.bus.publish(
+                TranscriptionMethods.CONTROL,
+                TranscriptionControl(
+                    action="set_language",
+                    language=self._language_policy.stt_language,
+                ),
+                event=False,
+            )
             await self.bus.publish(
                 TranscriptionMethods.CONTROL, TranscriptionControl(action="resume"), event=False
             )
