@@ -91,13 +91,17 @@ globalThis.runAuroraPhase4VoiceProbe = (timeoutMs = 120000) => new Promise((reso
           clearTimeout(timeout);
           clearInterval(ticker);
           resolve({
-            ok: Boolean(results.vadAsr && results.vadAsr.ok),
+            ok: Boolean(results.vadAsr && results.vadAsr.ok && results.kws && results.kws.ok),
             vad: results.vadAsr && results.vadAsr.vad,
             asr: results.vadAsr && results.vadAsr.asr,
             kws: results.kws,
-            kwsWithheld: Boolean(!results.kws || !results.kws.ok),
-            workerScope: Boolean(results.vadAsr && results.vadAsr.workerScope),
-            sharedArrayBuffer: Boolean(results.vadAsr && results.vadAsr.sharedArrayBuffer),
+            workerScope: Boolean(
+              results.vadAsr && results.vadAsr.workerScope && results.kws && results.kws.workerScope
+            ),
+            sharedArrayBuffer: Boolean(
+              results.vadAsr && results.vadAsr.sharedArrayBuffer &&
+              results.kws && results.kws.sharedArrayBuffer
+            ),
             mainThread: {
               elapsedMs: performance.now() - started,
               intervalTicks: ticks,
@@ -106,6 +110,8 @@ globalThis.runAuroraPhase4VoiceProbe = (timeoutMs = 120000) => new Promise((reso
             crossOriginIsolated: globalThis.crossOriginIsolated === true,
             progress,
           });
+        } else if (item.name === 'vadAsr') {
+          workers[1].worker.postMessage({ type: 'run' });
         }
       }
     };
@@ -117,8 +123,8 @@ globalThis.runAuroraPhase4VoiceProbe = (timeoutMs = 120000) => new Promise((reso
       }
       reject(new Error(event.message || `${item.name} worker error`));
     };
-    item.worker.postMessage({ type: 'run' });
   }
+  workers[0].worker.postMessage({ type: 'run' });
 });
 </script>
 """
@@ -709,7 +715,9 @@ def run_browser_probe(url: str, browser_name: str, timeout_ms: int) -> dict[str,
             try:
                 page = browser.new_page()
                 browser_logs: list[str] = []
-                page.on("console", lambda msg: browser_logs.append(f"console:{msg.type}:{msg.text}"))
+                page.on(
+                    "console", lambda msg: browser_logs.append(f"console:{msg.type}:{msg.text}")
+                )
                 page.on("pageerror", lambda exc: browser_logs.append(f"pageerror:{exc}"))
                 page.on(
                     "requestfailed",

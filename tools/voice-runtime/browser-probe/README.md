@@ -15,7 +15,8 @@ AURORA_VOICE_P4_ARTIFACT_ROOT=/path/to/p4-native-voice \
 
 The probe loads the combined `wasm-vad-asr` module, creates a Silero VAD and an
 offline Moonshine recognizer from the embedded package files, runs the pinned
-Moonshine test WAV inside the Worker, and records main-thread timer lag from the
-page. It also runs KWS in a separate Worker when `builds/wasm-kws/bin` contains
-the selected GigaSpeech data archive; failed KWS results are reported as
-withheld evidence without invalidating a passing VAD+ASR browser result.
+Moonshine test WAV inside a Worker, and records main-thread timer lag from the
+page. It then runs KWS in a second Worker with the selected GigaSpeech data
+archive. The workers run sequentially to bound peak memory, and a browser result
+passes only when VAD, ASR, KWS, worker scope, cross-origin isolation, and
+`SharedArrayBuffer` checks all pass.

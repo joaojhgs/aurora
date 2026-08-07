@@ -51,6 +51,8 @@ def test_worker_uses_dedicated_worker_and_real_vad_asr_assets() -> None:
     assert "sherpa-onnx-wasm-kws-main.js" in runner.KWS_WORKER_JS
     assert "createKws" in runner.KWS_WORKER_JS
     assert "FOREVER" in runner.KWS_WORKER_JS
+    assert "results.kws && results.kws.ok" in runner.INDEX_HTML
+    assert "workers[0].worker.postMessage" in runner.INDEX_HTML
 
 
 def test_server_serves_emscripten_default_wasm_basename(tmp_path: Path) -> None:
@@ -62,9 +64,7 @@ def test_server_serves_emscripten_default_wasm_basename(tmp_path: Path) -> None:
     with runner.serve_probe(tmp_path) as url:
         import urllib.request
 
-        response = urllib.request.urlopen(
-            f"{url}sherpa-onnx-wasm-main-vad-asr.wasm", timeout=5
-        )
+        response = urllib.request.urlopen(f"{url}sherpa-onnx-wasm-main-vad-asr.wasm", timeout=5)
 
     assert response.headers["Content-Type"] == "application/wasm"
     assert response.read() == b"\x00asm"
@@ -79,9 +79,7 @@ def test_server_serves_kws_emscripten_default_wasm_basename(tmp_path: Path) -> N
     with runner.serve_probe(tmp_path) as url:
         import urllib.request
 
-        response = urllib.request.urlopen(
-            f"{url}sherpa-onnx-wasm-kws-main.wasm", timeout=5
-        )
+        response = urllib.request.urlopen(f"{url}sherpa-onnx-wasm-kws-main.wasm", timeout=5)
 
     assert response.headers["Content-Type"] == "application/wasm"
     assert response.read() == b"\x00asm"
