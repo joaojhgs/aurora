@@ -257,16 +257,20 @@ describe('Assistant hosted browser voice runtime', () => {
     await vi.waitFor(() => expect(runtime.completeTurn).toHaveBeenCalledTimes(1))
     await vi.waitFor(() => expect(findComposerAction(container, 'stop')).toBeTruthy())
     await clickComposerAction(container, 'stop')
-    completion.resolve(undefined)
+    await clickButton(container, 'Push to talk')
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
     })
+    expect(runtime.start).toHaveBeenCalledTimes(1)
+    expect(runtime.cancel).not.toHaveBeenCalled()
+
+    completion.resolve(undefined)
+    await vi.waitFor(() => expect(runtime.start).toHaveBeenCalledTimes(2))
 
     expect(runtime.completeTurn).toHaveBeenCalledTimes(1)
     expect(runtime.abandonTurn).not.toHaveBeenCalled()
     expect(runtime.cancel).not.toHaveBeenCalled()
-    expect(findButton(container, 'Push to talk')).toBeTruthy()
   })
 
   it('does not abandon or cancel when lifecycle is lost during pending hosted completion', async () => {
@@ -291,16 +295,61 @@ describe('Assistant hosted browser voice runtime', () => {
       voiceRuntimeMock.create.mock.calls[0]?.[0].onAudioLifecycleLost?.('track-ended')
       await Promise.resolve()
     })
+    await clickButton(container, 'Push to talk')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(runtime.start).toHaveBeenCalledTimes(1)
+    expect(runtime.cancel).not.toHaveBeenCalled()
+
+    completion.resolve(undefined)
+    await vi.waitFor(() => expect(runtime.start).toHaveBeenCalledTimes(2))
+
+    expect(runtime.completeTurn).toHaveBeenCalledTimes(1)
+    expect(runtime.abandonTurn).not.toHaveBeenCalled()
+    expect(runtime.cancel).not.toHaveBeenCalled()
+  })
+
+  it('does not start or cancel early when reset is followed by immediate PTT during pending hosted completion', async () => {
+    const runtime = createRuntimeMock({ capturedPcm: new Int16Array([1, 2, 3, 4, 5]) })
+    const completion = deferred<undefined>()
+    runtime.completeTurn.mockReturnValueOnce(completion.promise)
+    voiceRuntimeMock.create.mockReturnValue(runtime)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    vi.spyOn(client.assistant, 'transcribeVoiceAudio').mockResolvedValue(successfulTranscription('hello aurora'))
+    vi.spyOn(client.assistant, 'streamMessage').mockImplementation(async function* () {
+      yield completedUpdate('done')
+    })
+    const container = renderAssistant(client, hostedSurface())
+
+    await clickButton(container, 'Push to talk')
+    await clickButton(container, 'Stop listening')
+    await vi.waitFor(() => expect(runtime.completeTurn).toHaveBeenCalledTimes(1))
+    await clickButton(container, 'New conversation')
+    await clickButton(container, 'Push to talk')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(runtime.start).toHaveBeenCalledTimes(1)
+    expect(runtime.cancel).not.toHaveBeenCalled()
+
     completion.resolve(undefined)
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
     })
+    await vi.waitFor(() => expect(findButton(container, 'Push to talk')).toBeTruthy())
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(runtime.start).toHaveBeenCalledTimes(2))
 
     expect(runtime.completeTurn).toHaveBeenCalledTimes(1)
     expect(runtime.abandonTurn).not.toHaveBeenCalled()
     expect(runtime.cancel).not.toHaveBeenCalled()
-    expect(findButton(container, 'Push to talk')).toBeTruthy()
   })
 
   it('disposes after unmount waits for pending hosted completion settlement', async () => {

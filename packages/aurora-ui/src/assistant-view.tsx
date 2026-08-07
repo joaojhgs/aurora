@@ -2421,7 +2421,10 @@ export function AssistantView({
   }
 
   function requestVoiceToggle() {
-    if (voiceToggleInFlightRef.current) return
+    const waitingForHostedSettlement = surfaceProfile.voiceCapture.usesBrowserVoiceRuntime
+      && voiceCaptureStatusRef.current === 'idle'
+      && browserVoiceTurnSettlementRef.current?.state === 'settling'
+    if (voiceToggleInFlightRef.current && !waitingForHostedSettlement) return
     voiceToggleInFlightRef.current = true
     const unlock = typeof window === 'undefined'
       ? null
@@ -2528,7 +2531,11 @@ export function AssistantView({
   function releaseBrowserVoiceCaptureForReason(reason: string) {
     const token = browserVoiceOperationTokenRef.current
     browserVoiceOperationTokenRef.current = token + 1
-    if (voiceCaptureStatusRef.current === 'processing') {
+    const settlement = browserVoiceTurnSettlementRef.current
+    if (
+      voiceCaptureStatusRef.current === 'processing'
+      || settlement?.token === token && settlement.state === 'settling'
+    ) {
       void settleBrowserVoiceTurn(token, 'cancel', reason)
       return
     }
@@ -2619,6 +2626,12 @@ export function AssistantView({
     await settlement.promise.catch(() => false)
   }
 
+  async function waitForSettlingBrowserVoiceTurn(): Promise<void> {
+    const settlement = browserVoiceTurnSettlementRef.current
+    if (!settlement || settlement.state !== 'settling' || !settlement.promise) return
+    await settlement.promise.catch(() => false)
+  }
+
   async function disposeBrowserVoiceRuntime() {
     const runtime = browserVoiceRuntimeRef.current
     browserVoiceRuntimeRef.current = null
@@ -2633,6 +2646,14 @@ export function AssistantView({
   async function startBrowserVoiceCapture(sessionId: string): Promise<boolean> {
     const token = browserVoiceOperationTokenRef.current + 1
     browserVoiceOperationTokenRef.current = token
+    await waitForSettlingBrowserVoiceTurn()
+    if (browserVoiceOperationTokenRef.current !== token) return false
+    if (!browserVoiceLifecycleEligibility().eligible) {
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.clear()
+      setVoiceCaptureStatus('idle')
+      return false
+    }
     browserVoiceTurnSettlementRef.current = { token, state: 'open', outcome: null, promise: null }
     activeVoiceSessionRef.current = sessionId
     ownedVoiceSessionIdsRef.current.add(sessionId)
