@@ -1,0 +1,112 @@
+{
+  "allowed_behavior": {
+    "kws": "withhold_release_capability",
+    "stt": "withhold_release_capability",
+    "tts": "task_unavailable",
+    "vad": "candidate_validation_only"
+  },
+  "candidate_validations": {
+    "kws": {
+      "advertised_languages": [],
+      "candidate_manifest": "tools/voice-runtime/model-packs/candidates/sherpa-gigaspeech-kws-en.candidate.manifest.json",
+      "candidate_pack_id": "aurora-candidate-sherpa-gigaspeech-kws-en",
+      "candidate_scope": "English demo evidence only",
+      "release_capability": false,
+      "release_index_eligible": false,
+      "supported_wake_phrases": [],
+      "unsatisfied_gates": [
+        "Aurora wake phrase assets are not approved",
+        "false-acceptance and false-rejection rates are not passed",
+        "accent and distance coverage is not passed",
+        "physical-device quality and resource gates are not passed",
+        "current signed manifest is non-production candidate trust, linux x86_64 desktop only, and interoperable:false"
+      ]
+    },
+    "stt": {
+      "advertised_languages": [],
+      "candidate_manifest": "tools/voice-runtime/model-packs/candidates/moonshine-tiny-en-stt.candidate.manifest.json",
+      "candidate_pack_id": "aurora-candidate-moonshine-tiny-en-stt",
+      "candidate_scope": "English linux evidence only",
+      "release_capability": false,
+      "release_index_eligible": false,
+      "unsatisfied_gates": [
+        "unsupported languages and device classes remain withheld",
+        "quality gate is not passed for release default selection",
+        "resource gate is not passed for release default selection",
+        "native and WASM release gates are not both passed",
+        "current signed manifest is non-production candidate trust, linux x86_64 desktop only, and interoperable:false"
+      ]
+    },
+    "tts": {
+      "advertised_languages": [],
+      "blocked_disposition": "tools/voice-runtime/model-packs/candidates/blocked-tts-disposition.json",
+      "candidate_manifest": null,
+      "candidate_pack_id": null,
+      "release_capability": false,
+      "release_index_eligible": false,
+      "selectable_model_pack": false,
+      "unsatisfied_gates": [
+        "PocketTTS inspected packs remain blocked",
+        "Piper and espeak chain remains blocked",
+        "Supertonic 3 remains blocked",
+        "no fallback or selectable TTS pack is available"
+      ]
+    },
+    "vad": {
+      "advertised_languages": [],
+      "candidate_manifest": "tools/voice-runtime/model-packs/candidates/silero-vad-v4.candidate.manifest.json",
+      "candidate_pack_id": "aurora-candidate-silero-vad-v4",
+      "candidate_scope": "selected candidate family with native and browser parity evidence",
+      "release_capability": false,
+      "release_index_eligible": false,
+      "unsatisfied_gates": [
+        "current signed manifest is non-production candidate trust",
+        "current signed manifest is linux x86_64 desktop only",
+        "current signed manifest is interoperable:false",
+        "mobile and physical-device release evidence is absent"
+      ]
+    }
+  },
+  "evidence_boundaries": {
+    "android": {
+      "emulator_compile_and_integration": true,
+      "physical_device_quality_or_resource_evidence": false,
+      "release_claim": false
+    },
+    "browser": {
+      "vad_parity_reference": ".artifacts/voice-runtime/vad-parity/20260807-095321/report.json",
+      "physical_device_claim": false,
+      "release_claim": false
+    },
+    "ios": {
+      "evidence_present": false,
+      "release_claim": false
+    },
+    "native_linux": {
+      "candidate_engine_validation": true,
+      "release_claim": false
+    }
+  },
+  "overall_status": "withheld",
+  "production_capabilities": {
+    "kws": false,
+    "stt": false,
+    "tts": false,
+    "vad": false
+  },
+  "release_index_eligible": {
+    "aurora-candidate-moonshine-tiny-en-stt": false,
+    "aurora-candidate-sherpa-gigaspeech-kws-en": false,
+    "aurora-candidate-silero-vad-v4": false
+  },
+  "schema_version": "aurora.voice.phase6.capability_disposition.v1",
+  "source_references": [
+    "tools/voice-runtime/model-packs/candidates/signed-candidate-trust.json",
+    "tools/voice-runtime/model-packs/candidates/phase6-candidate-provenance.json",
+    "tools/voice-runtime/model-packs/candidates/blocked-tts-disposition.json",
+    "tools/voice-runtime/model-packs/candidates/silero-vad-v4.candidate.manifest.json",
+    "tools/voice-runtime/model-packs/candidates/sherpa-gigaspeech-kws-en.candidate.manifest.json",
+    "tools/voice-runtime/model-packs/candidates/moonshine-tiny-en-stt.candidate.manifest.json"
+  ],
+  "trust_boundary": "checked-in candidate evidence only; not a release index and not production trust"
+}
