@@ -321,6 +321,7 @@ impl fmt::Debug for SpeechSegment {
 pub struct VoiceActivityDetector {
     inner: native::Detector,
     max_accept_samples: i32,
+    accept_budget: AcceptBudget,
     _not_send_sync: PhantomData<Rc<()>>,
 }
 
@@ -338,16 +339,21 @@ impl VoiceActivityDetector {
     pub fn new(config: &SileroVadConfig) -> Result<Self, VadError> {
         config.validate()?;
         let inner = native::Detector::new(config)?;
+        let accept_budget = AcceptBudget::from_config(config)?;
         Ok(Self {
             inner,
             max_accept_samples: config.window_size(),
+            accept_budget,
             _not_send_sync: PhantomData,
         })
     }
 
     pub fn accept_waveform(&mut self, pcm: &[f32]) -> Result<(), VadError> {
         validate_pcm(pcm, self.max_accept_samples)?;
-        self.inner.accept_waveform(pcm)
+        self.accept_budget.ensure_can_accept(pcm.len())?;
+        self.inner.accept_waveform(pcm)?;
+        self.accept_budget.record_accept(pcm.len());
+        Ok(())
     }
 
     pub fn detected(&self) -> Result<bool, VadError> {
@@ -359,15 +365,24 @@ impl VoiceActivityDetector {
     }
 
     pub fn drain_speech_segments(&mut self) -> Result<Vec<SpeechSegment>, VadError> {
-        self.inner.drain_speech_segments()
+        let segments = self.inner.drain_speech_segments()?;
+        self.accept_budget.record_drain(segments.len());
+        Ok(segments)
     }
 
     pub fn clear(&mut self) -> Result<(), VadError> {
-        self.inner.clear()
+        // Native Clear only drops completed segments; reset releases retained
+        // stream buffers so reopening the accept budget remains sound.
+        self.inner.clear()?;
+        self.inner.reset()?;
+        self.accept_budget.reset();
+        Ok(())
     }
 
     pub fn reset(&mut self) -> Result<(), VadError> {
-        self.inner.reset()
+        self.inner.reset()?;
+        self.accept_budget.reset();
+        Ok(())
     }
 
     pub fn flush(&mut self) -> Result<(), VadError> {
@@ -394,6 +409,7 @@ pub enum ErrorCode {
     WaveformEmpty,
     WaveformTooLong,
     WaveformChunkTooLong,
+    WaveformBufferedAcceptBudgetExceeded,
     WaveformNonFinite,
     WaveformOutOfRange,
     NativeUnavailable,
@@ -427,6 +443,9 @@ impl ErrorCode {
             Self::WaveformEmpty => "waveform.empty",
             Self::WaveformTooLong => "waveform.too_long",
             Self::WaveformChunkTooLong => "waveform.chunk_too_long",
+            Self::WaveformBufferedAcceptBudgetExceeded => {
+                "waveform.buffered_accept_budget_exceeded"
+            }
             Self::WaveformNonFinite => "waveform.nonfinite",
             Self::WaveformOutOfRange => "waveform.out_of_range",
             Self::NativeUnavailable => "native.unavailable",
@@ -526,6 +545,50 @@ pub fn validate_pcm(pcm: &[f32], max_accept_samples: i32) -> Result<(), VadError
         }
     }
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AcceptBudget {
+    max_buffered_accept_samples: usize,
+    accepted_samples_since_drain: usize,
+}
+
+impl AcceptBudget {
+    fn from_config(config: &SileroVadConfig) -> Result<Self, VadError> {
+        Ok(Self {
+            max_buffered_accept_samples: SegmentBounds::from_config(config)?.max_segment_samples(),
+            accepted_samples_since_drain: 0,
+        })
+    }
+
+    fn ensure_can_accept(self, sample_count: usize) -> Result<(), VadError> {
+        let accepted = self
+            .accepted_samples_since_drain
+            .checked_add(sample_count)
+            .ok_or(VadError::InvalidWaveform {
+                code: ErrorCode::WaveformBufferedAcceptBudgetExceeded,
+            })?;
+        if accepted > self.max_buffered_accept_samples {
+            return Err(VadError::InvalidWaveform {
+                code: ErrorCode::WaveformBufferedAcceptBudgetExceeded,
+            });
+        }
+        Ok(())
+    }
+
+    fn record_accept(&mut self, sample_count: usize) {
+        self.accepted_samples_since_drain += sample_count;
+    }
+
+    fn record_drain(&mut self, segment_count: usize) {
+        if segment_count > 0 {
+            self.reset();
+        }
+    }
+
+    fn reset(&mut self) {
+        self.accepted_samples_since_drain = 0;
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -784,6 +847,105 @@ mod tests {
         assert_eq!(error.code(), ErrorCode::WaveformChunkTooLong);
 
         validate_pcm(&too_long[..512], 512).expect("window-sized chunk should validate");
+    }
+
+    #[test]
+    fn accept_budget_allows_repeated_exact_windows_until_buffer_limit() {
+        let mut budget = accept_budget_for_test(1024);
+
+        reserve_and_record(&mut budget, 512).expect("first exact window fits");
+        reserve_and_record(&mut budget, 512).expect("second exact window fits");
+        let error = reserve_and_record(&mut budget, 512)
+            .expect_err("third exact window exceeds retained budget");
+
+        assert_eq!(
+            error.code(),
+            ErrorCode::WaveformBufferedAcceptBudgetExceeded
+        );
+        assert_eq!(budget.accepted_samples_since_drain, 1024);
+    }
+
+    #[test]
+    fn accept_budget_successful_drain_allows_reuse() {
+        let mut budget = accept_budget_for_test(512);
+
+        reserve_and_record(&mut budget, 512).expect("budget should fill exactly");
+        budget.record_drain(1);
+        reserve_and_record(&mut budget, 512).expect("successful drain reset should allow reuse");
+
+        assert_eq!(budget.accepted_samples_since_drain, 512);
+    }
+
+    #[test]
+    fn accept_budget_empty_drain_does_not_reset_retained_buffer_budget() {
+        let mut budget = accept_budget_for_test(512);
+
+        reserve_and_record(&mut budget, 512).expect("budget should fill exactly");
+        budget.record_drain(0);
+        let error = reserve_and_record(&mut budget, 1)
+            .expect_err("empty drain should not release retained buffer budget");
+
+        assert_eq!(
+            error.code(),
+            ErrorCode::WaveformBufferedAcceptBudgetExceeded
+        );
+        assert_eq!(budget.accepted_samples_since_drain, 512);
+    }
+
+    #[test]
+    fn accept_budget_clear_and_reset_allow_reuse() {
+        let mut budget = accept_budget_for_test(512);
+
+        reserve_and_record(&mut budget, 512).expect("budget should fill exactly");
+        budget.reset();
+        reserve_and_record(&mut budget, 512).expect("successful clear reset should allow reuse");
+        budget.reset();
+        reserve_and_record(&mut budget, 512).expect("successful detector reset should allow reuse");
+
+        assert_eq!(budget.accepted_samples_since_drain, 512);
+    }
+
+    #[test]
+    fn accept_budget_allows_short_tail_to_exact_limit() {
+        let mut budget = accept_budget_for_test(1024);
+
+        reserve_and_record(&mut budget, 512).expect("first exact window fits");
+        reserve_and_record(&mut budget, 511).expect("short tail below limit fits");
+        reserve_and_record(&mut budget, 1).expect("single-sample tail reaches exact limit");
+        let error =
+            reserve_and_record(&mut budget, 1).expect_err("one more sample exceeds exact limit");
+
+        assert_eq!(
+            error.code(),
+            ErrorCode::WaveformBufferedAcceptBudgetExceeded
+        );
+    }
+
+    #[test]
+    fn accept_budget_rejects_checked_overflow() {
+        let mut budget = accept_budget_for_test(usize::MAX);
+        budget.accepted_samples_since_drain = usize::MAX;
+        let error = budget
+            .ensure_can_accept(1)
+            .expect_err("checked add overflow should be rejected");
+
+        assert_eq!(
+            error.code(),
+            ErrorCode::WaveformBufferedAcceptBudgetExceeded
+        );
+    }
+
+    fn accept_budget_for_test(max_buffered_accept_samples: usize) -> AcceptBudget {
+        AcceptBudget {
+            max_buffered_accept_samples,
+            accepted_samples_since_drain: 0,
+        }
+    }
+
+    fn reserve_and_record(budget: &mut AcceptBudget, sample_count: usize) -> Result<(), VadError> {
+        budget.ensure_can_accept(sample_count)?;
+        budget.record_accept(sample_count);
+        Ok(())
     }
 
     #[test]

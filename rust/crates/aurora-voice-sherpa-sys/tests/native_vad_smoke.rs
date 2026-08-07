@@ -4,7 +4,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use aurora_voice_sherpa_sys::{SileroVadConfig, SpeechSegment, VoiceActivityDetector};
+use aurora_voice_sherpa_sys::{ErrorCode, SileroVadConfig, SpeechSegment, VoiceActivityDetector};
 
 #[test]
 fn silero_vad_matches_phase4_kws_pcm16_fixture() {
@@ -54,6 +54,62 @@ fn silero_vad_matches_phase4_kws_pcm16_fixture() {
     );
 }
 
+#[test]
+fn accept_budget_rejects_cumulative_accepts_until_drain_clear_or_reset() {
+    let model_path = env_path("AURORA_SHERPA_ONNX_MODEL");
+    let config = SileroVadConfig::new(model_path)
+        .with_threshold(0.25)
+        .with_min_silence_duration(0.001)
+        .with_min_speech_duration(0.001)
+        .with_max_speech_duration(0.032)
+        .with_window_size(512)
+        .with_sample_rate(16_000)
+        .with_num_threads(1)
+        .with_provider("cpu")
+        .with_buffer_size_seconds(0.032);
+    let exact_window = vec![0.0; 512];
+    let short_tail = vec![0.0; 1];
+
+    let mut detector = VoiceActivityDetector::new(&config).expect("detector should be created");
+    detector
+        .accept_waveform(&exact_window)
+        .expect("exact retained budget should be accepted");
+    detector
+        .flush()
+        .expect("flush should not reset accept budget");
+    assert_accept_budget_exceeded(&mut detector, &short_tail);
+
+    detector.clear().expect("clear should reset accept budget");
+    detector
+        .accept_waveform(&exact_window)
+        .expect("clear should allow reuse");
+
+    detector.reset().expect("reset should reset accept budget");
+    detector
+        .accept_waveform(&exact_window)
+        .expect("reset should allow reuse");
+
+    let empty_drain = detector
+        .drain_speech_segments()
+        .expect("empty drain should succeed without resetting accept budget");
+    assert!(
+        empty_drain.is_empty(),
+        "silent exact window should not enqueue a segment"
+    );
+    assert_accept_budget_exceeded(&mut detector, &short_tail);
+
+    detector
+        .reset()
+        .expect("reset should release retained silent window");
+    detector
+        .accept_waveform(&exact_window[..511])
+        .expect("short tail prefix should be accepted");
+    detector
+        .accept_waveform(&exact_window[..1])
+        .expect("short tail should reach exact retained budget");
+    assert_accept_budget_exceeded(&mut detector, &short_tail);
+}
+
 fn run_fixture(config: &SileroVadConfig, pcm: &[f32]) -> Vec<SpeechSegment> {
     let mut detector = VoiceActivityDetector::new(config).expect("detector should be created");
     accept_in_windows(&mut detector, pcm);
@@ -75,6 +131,16 @@ fn assert_segment_parity(segments: &[SpeechSegment]) {
     assert_eq!(segments.len(), 1);
     assert_eq!(segments[0].start, 5728);
     assert_eq!(segments[0].samples.len(), 93_696);
+}
+
+fn assert_accept_budget_exceeded(detector: &mut VoiceActivityDetector, pcm: &[f32]) {
+    let error = detector
+        .accept_waveform(pcm)
+        .expect_err("accept should be rejected before crossing native FFI");
+    assert_eq!(
+        error.code(),
+        ErrorCode::WaveformBufferedAcceptBudgetExceeded
+    );
 }
 
 fn env_path(name: &str) -> PathBuf {
