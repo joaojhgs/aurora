@@ -501,7 +501,7 @@ export function createAuroraTauriRuntime({
   if (isTauriRuntime()) {
     const nativeTransport = new TauriLocalTransport({ invoke, listen });
     const nativeVoice = isDesktopTauriRuntime()
-      ? createTauriNativeDesktopVoicePort()
+      ? createTauriNativeDesktopVoicePort({ invoke, listen })
       : undefined;
     const isMobileNative = isMobileTauriRuntime();
 

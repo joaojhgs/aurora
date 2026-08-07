@@ -1,5 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   NativeDesktopVoiceConnection,
   NativeDesktopVoiceControlRequest,
@@ -13,6 +11,8 @@ import type {
 } from "@aurora/ui";
 
 export const AURORA_NATIVE_VOICE_STATUS_EVENT = "aurora://native-voice-status";
+
+type UnlistenFn = () => void;
 
 const PHASES = new Set<NativeDesktopVoicePhase>([
   "unavailable",
@@ -71,47 +71,46 @@ export interface TauriNativeVoiceBridge {
   listen: NativeListen;
 }
 
-const defaultBridge: TauriNativeVoiceBridge = {
-  invoke,
-  listen,
-};
-
 export function createTauriNativeDesktopVoicePort(
-  bridge: TauriNativeVoiceBridge = defaultBridge,
+  bridge: TauriNativeVoiceBridge,
 ): NativeDesktopVoicePort {
   return {
     status: async () =>
       validateStatus(
-        await bridge.invoke<unknown>("aurora_native_voice_status", {
+        await safeInvoke(bridge, "aurora_native_voice_status", {
           request: {},
         }),
       ),
     start: async (request) =>
       validateStatus(
-        await bridge.invoke<unknown>("aurora_native_voice_start", {
+        await safeInvoke(bridge, "aurora_native_voice_start", {
           request: validateStartRequest(request),
         }),
       ),
     finish: async (request) =>
       validateStatus(
-        await bridge.invoke<unknown>("aurora_native_voice_finish", {
+        await safeInvoke(bridge, "aurora_native_voice_finish", {
           request: validateControlRequest(request),
         }),
       ),
     cancel: async (request) =>
       validateStatus(
-        await bridge.invoke<unknown>("aurora_native_voice_cancel", {
+        await safeInvoke(bridge, "aurora_native_voice_cancel", {
           request: validateControlRequest(request),
         }),
       ),
     subscribe: async (listener) => {
       let closed = false;
-      const unlisten = await bridge.listen<unknown>(
+      let lastSequence = 0;
+      const unlisten = await safeListen(
+        bridge,
         AURORA_NATIVE_VOICE_STATUS_EVENT,
         (event) => {
           if (closed) return;
           const parsed = parseEvent(event.payload);
-          if (parsed) listener(parsed);
+          if (!parsed || parsed.sequence <= lastSequence) return;
+          lastSequence = parsed.sequence;
+          listener(parsed);
         },
       );
       return () => {
@@ -121,6 +120,34 @@ export function createTauriNativeDesktopVoicePort(
       };
     },
   };
+}
+
+async function safeInvoke(
+  bridge: TauriNativeVoiceBridge,
+  command: string,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  try {
+    return await bridge.invoke<unknown>(command, args);
+  } catch {
+    throw nativeVoiceUnavailableError();
+  }
+}
+
+async function safeListen(
+  bridge: TauriNativeVoiceBridge,
+  event: string,
+  handler: (event: { payload: unknown }) => void,
+): Promise<UnlistenFn> {
+  try {
+    return await bridge.listen<unknown>(event, handler);
+  } catch {
+    throw nativeVoiceUnavailableError();
+  }
+}
+
+function nativeVoiceUnavailableError(): Error {
+  return new Error("Native voice is unavailable.");
 }
 
 function validateStartRequest(

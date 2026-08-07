@@ -259,6 +259,70 @@ describe("Tauri native desktop voice port", () => {
     expect(native.unlisten).toHaveBeenCalledOnce();
   });
 
+  it("drops stale and duplicate event sequences per subscription", async () => {
+    const native = bridge();
+    const port = createTauriNativeDesktopVoicePort(native);
+    const listener = vi.fn();
+
+    await port.subscribe(listener);
+    native.emit({
+      sequence: 2,
+      status: validStatus,
+    });
+    native.emit({
+      sequence: 1,
+      status: {
+        ...validStatus,
+        generation: 2,
+      },
+    });
+    native.emit({
+      sequence: 2,
+      status: {
+        ...validStatus,
+        generation: 3,
+      },
+    });
+
+    expect(listener).toHaveBeenCalledOnce();
+    expect(listener).toHaveBeenCalledWith({
+      sequence: 2,
+      status: validStatus,
+    });
+  });
+
+  it("sanitizes invoke failures without leaking sensitive native diagnostics", async () => {
+    const native = bridge({
+      invoke: (vi.fn(async <T,>() => {
+        throw new Error(
+          "failed token=secret-token endpoint=https://gateway.example.invalid model=private-model lease=voice-lease-1",
+        );
+      }) as TauriNativeVoiceBridge["invoke"]),
+    });
+    const port = createTauriNativeDesktopVoicePort(native);
+
+    await expect(port.status()).rejects.toThrow("Native voice is unavailable.");
+    await expect(port.status()).rejects.not.toThrow(/secret-token|gateway|private-model|voice-lease/u);
+  });
+
+  it("sanitizes listen failures without leaking sensitive native diagnostics", async () => {
+    const native = bridge({
+      listen: vi.fn(async () => {
+        throw new Error(
+          "listen failed token=secret-token endpoint=wss://voice.example.invalid model=private-model lease=voice-lease-1",
+        );
+      }),
+    });
+    const port = createTauriNativeDesktopVoicePort(native);
+
+    await expect(port.subscribe(vi.fn())).rejects.toThrow(
+      "Native voice is unavailable.",
+    );
+    await expect(port.subscribe(vi.fn())).rejects.not.toThrow(
+      /secret-token|voice\.example|private-model|voice-lease/u,
+    );
+  });
+
   it("exposes native voice only for real desktop Tauri surfaces", () => {
     expect(createAuroraTauriRuntime().nativeVoice).toBeUndefined();
 
@@ -295,5 +359,16 @@ describe("Tauri native desktop voice port", () => {
       "nativeVoice?: AuroraTauriRuntime[\"nativeVoice\"]",
     );
     expect(source).toContain("nativeVoice={nativeContext.nativeVoice}");
+  });
+
+  it("keeps native voice behind the aurora-client bridge injection boundary", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/native-voice.ts"),
+      "utf8",
+    );
+
+    expect(source).not.toContain("@tauri-apps/api/core");
+    expect(source).not.toMatch(/from ["']@tauri-apps\/api\/event["']/u);
+    expect(source).toContain("bridge: TauriNativeVoiceBridge");
   });
 });
