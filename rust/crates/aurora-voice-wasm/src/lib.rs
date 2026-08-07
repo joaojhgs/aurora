@@ -7,18 +7,23 @@ use aurora_voice_core::CancellationToken;
 use aurora_voice_engine::{
     apply_lifecycle_event, create_lifecycle_snapshot, file_storage_key, ActivePackIdentity,
     DownloadTask, ImmutableModelFile, InstallEvent, InstallState, LifecycleSnapshot,
-    ModelPackError, ModelPackFile, ModelStore, SelectedVariant, StoreStatus, StoredFile,
-    VerifiedManifest,
+    ModelPackError, ModelPackFile, ModelStore, ModelStoreScope, SelectedVariant, StoreStatus,
+    StoredFile, VerifiedManifest,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 
-const ACTIVE_KEY: &str = "aurora.voice.web-store.v1:active";
-const ROLLBACK_KEY: &str = "aurora.voice.web-store.v1:rollback";
+const ACTIVE_PREFIX: &str = "aurora.voice.web-store.v1:active:";
+const ROLLBACK_PREFIX: &str = "aurora.voice.web-store.v1:rollback:";
 const RESERVED_PREFIX: &str = "aurora.voice.web-store.v1:reserved:";
+const PROMOTION_PREFIX: &str = "aurora.voice.web-store.v1:promotion:";
 const LIFECYCLE_PREFIX: &str = "aurora.voice.web-store.v1:lifecycle:";
 const FILE_PREFIX: &str = "aurora.voice.web-store.v1:file:";
+const WITHDRAWAL_KEY: &str = "aurora.voice.web-store.v1:withdrawn";
+const HASH_CHUNK_BYTES: u64 = 64 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -34,6 +39,37 @@ pub struct WebPersistenceReport {
     pub evicted: bool,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+struct WithdrawalState {
+    corrupt: BTreeSet<String>,
+    revoked: BTreeSet<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct PromotionJournal {
+    storage_key: String,
+    pack_id: String,
+    pack_version: String,
+    file_id: String,
+    variant_id: String,
+    expected_sha256: String,
+    expected_bytes: u64,
+    stored_at: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct ActivePackRecord {
+    identity: ActivePackIdentity,
+    files: Vec<ActiveFileRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct ActiveFileRecord {
+    storage_key: String,
+    sha256: String,
+    byte_size: u64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WebRecoverySignal {
     Evicted,
@@ -42,11 +78,29 @@ pub enum WebRecoverySignal {
     Revoked,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WebFileStat {
+    pub byte_size: u64,
+}
+
+#[derive(Clone, PartialEq, Eq)]
 pub struct WebFetchRequest {
     pub url: String,
     pub offset: u64,
     pub max_bytes: u64,
+    pub timeout_millis: u64,
+}
+
+impl std::fmt::Debug for WebFetchRequest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("WebFetchRequest")
+            .field("url", &"<redacted>")
+            .field("offset", &self.offset)
+            .field("max_bytes", &self.max_bytes)
+            .field("timeout_millis", &self.timeout_millis)
+            .finish()
+    }
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -75,6 +129,8 @@ pub enum WebHostError {
     Store { code: &'static str },
     #[error("browser model download failed: {code}")]
     Network { code: &'static str },
+    #[error("browser model download timed out")]
+    Timeout,
     #[error("browser model download was cancelled")]
     Cancelled,
     #[error("browser model data did not match the manifest: {code}")]
@@ -86,6 +142,7 @@ impl From<WebHostError> for ModelPackError {
         match error {
             WebHostError::QuotaExceeded => Self::QuotaExceeded,
             WebHostError::Cancelled => Self::Store { code: "cancelled" },
+            WebHostError::Timeout => Self::Store { code: "timeout" },
             WebHostError::Unavailable => Self::Store {
                 code: "unavailable",
             },
@@ -102,8 +159,14 @@ pub trait WebModelStoreHost {
     async fn read_json(&self, key: &str) -> Result<Option<String>, WebHostError>;
     async fn write_json(&mut self, key: &str, value: &str) -> Result<(), WebHostError>;
     async fn delete_json(&mut self, key: &str) -> Result<(), WebHostError>;
+    async fn list_json_keys(&self, prefix: &str) -> Result<Vec<String>, WebHostError>;
     async fn staging_len(&self, storage_key: &str) -> Result<u64, WebHostError>;
-    async fn read_staging(&self, storage_key: &str) -> Result<Vec<u8>, WebHostError>;
+    async fn read_staging_chunk(
+        &self,
+        storage_key: &str,
+        offset: u64,
+        max_bytes: u64,
+    ) -> Result<WebFetchedChunk, WebHostError>;
     async fn append_staging(
         &mut self,
         storage_key: &str,
@@ -111,7 +174,16 @@ pub trait WebModelStoreHost {
         bytes: &[u8],
     ) -> Result<(), WebHostError>;
     async fn clear_staging(&mut self, storage_key: &str) -> Result<(), WebHostError>;
-    async fn promote_staging(&mut self, stored: &StoredFile) -> Result<(), WebHostError>;
+    async fn promoted_stat(&self, storage_key: &str) -> Result<Option<WebFileStat>, WebHostError>;
+    async fn read_promoted_chunk(
+        &self,
+        storage_key: &str,
+        offset: u64,
+        max_bytes: u64,
+    ) -> Result<WebFetchedChunk, WebHostError>;
+    async fn promote_staging_atomic(&mut self, storage_key: &str) -> Result<(), WebHostError>;
+    async fn delete_promoted(&mut self, storage_key: &str) -> Result<(), WebHostError>;
+    async fn list_promoted_keys(&self) -> Result<Vec<String>, WebHostError>;
     async fn remove_pack_data(&mut self, pack_id: &str) -> Result<(), WebHostError>;
 }
 
@@ -120,12 +192,14 @@ pub trait WebNetworkHost {
     async fn fetch_range(
         &mut self,
         request: WebFetchRequest,
+        cancellation: &CancellationToken,
     ) -> Result<WebFetchedChunk, WebHostError>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WebDownloadPolicy {
     pub max_chunk_bytes: u64,
+    pub fetch_timeout_millis: u64,
 }
 
 impl WebDownloadPolicy {
@@ -133,15 +207,34 @@ impl WebDownloadPolicy {
         if max_chunk_bytes == 0 {
             return Err(WebHostError::Store { code: "policy" });
         }
-        Ok(Self { max_chunk_bytes })
+        Ok(Self {
+            max_chunk_bytes,
+            fetch_timeout_millis: 30_000,
+        })
+    }
+
+    pub fn with_fetch_timeout_millis(mut self, timeout_millis: u64) -> Self {
+        self.fetch_timeout_millis = timeout_millis;
+        self
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct WebDownloadReceipt {
     pub byte_size: u64,
     pub sha256: String,
     pub resumed_from: u64,
+}
+
+impl std::fmt::Debug for WebDownloadReceipt {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("WebDownloadReceipt")
+            .field("byte_size", &self.byte_size)
+            .field("sha256", &"<redacted>")
+            .field("resumed_from", &self.resumed_from)
+            .finish()
+    }
 }
 
 #[derive(Debug)]
@@ -181,8 +274,8 @@ impl WebModelDownloader {
             offset = 0;
         }
         if offset == task.expected_bytes {
-            let bytes = store.read_staging(&task.storage_key).await?;
-            let digest = sha256_hex(&bytes);
+            let digest =
+                hash_staging_chunks(store, &task.storage_key, self.policy.max_chunk_bytes).await?;
             if digest == task.expected_sha256 {
                 progress(offset, task.expected_bytes);
                 return Ok(WebDownloadReceipt {
@@ -203,12 +296,19 @@ impl WebModelDownloader {
             }
             let remaining = task.expected_bytes.saturating_sub(offset);
             let chunk = network
-                .fetch_range(WebFetchRequest {
-                    url: task.url.clone(),
-                    offset,
-                    max_bytes: remaining.min(self.policy.max_chunk_bytes),
-                })
+                .fetch_range(
+                    WebFetchRequest {
+                        url: task.url.clone(),
+                        offset,
+                        max_bytes: remaining.min(self.policy.max_chunk_bytes),
+                        timeout_millis: self.policy.fetch_timeout_millis,
+                    },
+                    cancellation,
+                )
                 .await?;
+            if cancellation.is_cancelled() {
+                return Err(WebHostError::Cancelled);
+            }
             if chunk.bytes.is_empty() {
                 return Err(WebHostError::Network { code: "empty" });
             }
@@ -231,13 +331,12 @@ impl WebModelDownloader {
             }
         }
 
-        let bytes = store.read_staging(&task.storage_key).await?;
-        let byte_size =
-            u64::try_from(bytes.len()).map_err(|_| WebHostError::Integrity { code: "size" })?;
+        let byte_size = store.staging_len(&task.storage_key).await?;
         if byte_size != task.expected_bytes {
             return Err(WebHostError::Integrity { code: "size" });
         }
-        let sha256 = sha256_hex(&bytes);
+        let sha256 =
+            hash_staging_chunks(store, &task.storage_key, self.policy.max_chunk_bytes).await?;
         if sha256 != task.expected_sha256 {
             store.clear_staging(&task.storage_key).await?;
             return Err(WebHostError::Integrity { code: "hash" });
@@ -254,18 +353,11 @@ impl WebModelDownloader {
 pub struct WebModelStore<H> {
     host: H,
     now: u64,
-    withdrawn_corrupt: BTreeSet<String>,
-    withdrawn_revoked: BTreeSet<String>,
 }
 
 impl<H> WebModelStore<H> {
     pub fn new(host: H) -> Self {
-        Self {
-            host,
-            now: 0,
-            withdrawn_corrupt: BTreeSet::new(),
-            withdrawn_revoked: BTreeSet::new(),
-        }
+        Self { host, now: 0 }
     }
 
     pub fn host(&self) -> &H {
@@ -287,42 +379,211 @@ impl<H: WebModelStoreHost> WebModelStore<H> {
         pack_id: &str,
         signal: WebRecoverySignal,
     ) -> Result<(), ModelPackError> {
+        let mut state = self.withdrawal_state().await?;
         match signal {
             WebRecoverySignal::Evicted | WebRecoverySignal::Corrupt => {
-                self.withdrawn_corrupt.insert(pack_id.to_owned());
+                state.corrupt.insert(pack_id.to_owned());
                 self.clear_active_if_pack(pack_id).await?;
             }
             WebRecoverySignal::Revoked => {
-                self.withdrawn_revoked.insert(pack_id.to_owned());
+                state.revoked.insert(pack_id.to_owned());
                 self.clear_active_if_pack(pack_id).await?;
             }
             WebRecoverySignal::Recovered => {
-                self.withdrawn_corrupt.remove(pack_id);
+                state.corrupt.remove(pack_id);
             }
         }
+        write_json(&mut self.host, WITHDRAWAL_KEY, &state).await?;
         Ok(())
     }
 
-    fn ensure_not_withdrawn(&self, pack_id: &str) -> Result<(), ModelPackError> {
-        if self.withdrawn_corrupt.contains(pack_id) {
+    async fn ensure_not_withdrawn(&self, pack_id: &str) -> Result<(), ModelPackError> {
+        let state = self.withdrawal_state().await?;
+        if state.corrupt.contains(pack_id) {
             return Err(ModelPackError::Store { code: "corrupt" });
         }
-        if self.withdrawn_revoked.contains(pack_id) {
+        if state.revoked.contains(pack_id) {
             return Err(ModelPackError::Store { code: "revoked" });
         }
         Ok(())
     }
 
-    async fn clear_active_if_pack(&mut self, pack_id: &str) -> Result<(), ModelPackError> {
-        if self
-            .active_pack()
+    async fn withdrawal_state(&self) -> Result<WithdrawalState, ModelPackError> {
+        Ok(read_json(&self.host, WITHDRAWAL_KEY)
             .await?
-            .as_ref()
-            .is_some_and(|active| active.pack_id == pack_id)
-        {
-            self.host.delete_json(ACTIVE_KEY).await?;
+            .unwrap_or_default())
+    }
+
+    async fn clear_active_if_pack(&mut self, pack_id: &str) -> Result<(), ModelPackError> {
+        for key in self.host.list_json_keys(ACTIVE_PREFIX).await? {
+            let active: Option<ActivePackRecord> = read_json(&self.host, &key).await?;
+            if active
+                .as_ref()
+                .is_some_and(|active| active.identity.pack_id == pack_id)
+            {
+                self.host.delete_json(&key).await?;
+            }
         }
         Ok(())
+    }
+
+    pub async fn recover_promotions(&mut self) -> Result<(), ModelPackError> {
+        for key in self.host.list_json_keys(PROMOTION_PREFIX).await? {
+            let Some(journal): Option<PromotionJournal> = read_json(&self.host, &key).await? else {
+                continue;
+            };
+            let Some(stat) = self.host.promoted_stat(&journal.storage_key).await? else {
+                continue;
+            };
+            if stat.byte_size != journal.expected_bytes {
+                self.host.delete_promoted(&journal.storage_key).await?;
+                self.host.delete_json(&key).await?;
+                continue;
+            }
+            let (byte_size, sha256) =
+                hash_promoted_chunks(&self.host, &journal.storage_key, HASH_CHUNK_BYTES).await?;
+            if byte_size != journal.expected_bytes || sha256 != journal.expected_sha256 {
+                self.host.delete_promoted(&journal.storage_key).await?;
+                self.host.delete_json(&key).await?;
+                continue;
+            }
+            let stored = StoredFile {
+                storage_key: journal.storage_key.clone(),
+                pack_id: journal.pack_id,
+                pack_version: journal.pack_version,
+                file_id: journal.file_id,
+                variant_id: journal.variant_id,
+                sha256,
+                byte_size,
+                state: InstallState::Ready,
+                stored_at: journal.stored_at,
+            };
+            write_json(&mut self.host, &file_key(&stored.storage_key), &stored).await?;
+            self.host
+                .delete_json(&reservation_key(&stored.storage_key))
+                .await?;
+            self.host.delete_json(&key).await?;
+        }
+        for storage_key in self.host.list_promoted_keys().await? {
+            let has_file_metadata = self
+                .host
+                .read_json(&file_key(&storage_key))
+                .await?
+                .is_some();
+            let has_promotion_journal = self
+                .host
+                .read_json(&promotion_key(&storage_key))
+                .await?
+                .is_some();
+            if !has_file_metadata && !has_promotion_journal {
+                self.host.delete_promoted(&storage_key).await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn active_record(
+        &self,
+        scope: &ModelStoreScope,
+    ) -> Result<Option<ActivePackRecord>, ModelPackError> {
+        let Some(record): Option<ActivePackRecord> =
+            read_json(&self.host, &active_key(scope)).await?
+        else {
+            return Ok(None);
+        };
+        self.ensure_not_withdrawn(&record.identity.pack_id).await?;
+        for file in &record.files {
+            let Ok((byte_size, sha256)) =
+                hash_promoted_chunks(&self.host, &file.storage_key, HASH_CHUNK_BYTES).await
+            else {
+                return Ok(None);
+            };
+            if byte_size != file.byte_size || sha256 != file.sha256 {
+                return Ok(None);
+            }
+        }
+        Ok(Some(record))
+    }
+
+    async fn active_elsewhere(
+        &self,
+        excluded_scope: &ModelStoreScope,
+        pack_id: &str,
+        pack_version: &str,
+        variant_id: &str,
+    ) -> Result<bool, ModelPackError> {
+        let excluded_key = active_key(excluded_scope);
+        for key in self.host.list_json_keys(ACTIVE_PREFIX).await? {
+            if key == excluded_key {
+                continue;
+            }
+            let Some(record): Option<ActivePackRecord> = read_json(&self.host, &key).await? else {
+                continue;
+            };
+            if record.identity.pack_id == pack_id
+                && record.identity.pack_version == pack_version
+                && record.identity.variant_id == variant_id
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    async fn lifecycle_has_valid_backing(
+        &self,
+        snapshot: &LifecycleSnapshot,
+    ) -> Result<bool, ModelPackError> {
+        match snapshot.state {
+            InstallState::Ready => {
+                let mut found_file = false;
+                for key in self.host.list_json_keys(FILE_PREFIX).await? {
+                    let Some(file): Option<StoredFile> = read_json(&self.host, &key).await? else {
+                        continue;
+                    };
+                    if file.pack_id == snapshot.pack_id
+                        && file.pack_version == snapshot.pack_version
+                        && file.variant_id == snapshot.variant_id
+                    {
+                        found_file = true;
+                        let Ok((byte_size, sha256)) =
+                            hash_promoted_chunks(&self.host, &file.storage_key, HASH_CHUNK_BYTES)
+                                .await
+                        else {
+                            return Ok(false);
+                        };
+                        if byte_size != file.byte_size || sha256 != file.sha256 {
+                            return Ok(false);
+                        }
+                    }
+                }
+                Ok(found_file)
+            }
+            InstallState::Active => {
+                for key in self.host.list_json_keys(ACTIVE_PREFIX).await? {
+                    let Some(record): Option<ActivePackRecord> =
+                        read_json(&self.host, &key).await?
+                    else {
+                        continue;
+                    };
+                    let identity_matches = record.identity.pack_id == snapshot.pack_id
+                        && record.identity.pack_version == snapshot.pack_version
+                        && record.identity.variant_id == snapshot.variant_id;
+                    if !identity_matches {
+                        continue;
+                    }
+                    let valid_active = self
+                        .active_record(&record.identity.scope)
+                        .await?
+                        .is_some_and(|active| active.identity == record.identity);
+                    if valid_active {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
+            }
+            _ => Ok(true),
+        }
     }
 }
 
@@ -338,11 +599,23 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
         pack_version: &str,
         variant_id: &str,
     ) -> Result<Option<LifecycleSnapshot>, ModelPackError> {
-        read_json(
+        let Some(snapshot): Option<LifecycleSnapshot> = read_json(
             &self.host,
             &lifecycle_key(pack_id, pack_version, variant_id),
         )
-        .await
+        .await?
+        else {
+            return Ok(None);
+        };
+        let withdrawal = self.withdrawal_state().await?;
+        if withdrawal.corrupt.contains(pack_id) || withdrawal.revoked.contains(pack_id) {
+            return Ok(None);
+        }
+        if self.lifecycle_has_valid_backing(&snapshot).await? {
+            Ok(Some(snapshot))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn set_lifecycle(&mut self, snapshot: LifecycleSnapshot) -> Result<(), ModelPackError> {
@@ -367,18 +640,9 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
         if !selection.belongs_to(manifest) || !selection.file_ids().contains(&file.file_id) {
             return Err(ModelPackError::Store { code: "selection" });
         }
-        self.ensure_not_withdrawn(&manifest.manifest().pack_id)?;
+        self.ensure_not_withdrawn(&manifest.manifest().pack_id)
+            .await?;
         let status = self.status().await?;
-        if let Some(available) = status.bytes_available {
-            if status
-                .bytes_used
-                .saturating_add(status.bytes_reserved)
-                .saturating_add(file.byte_size)
-                > available
-            {
-                return Err(ModelPackError::QuotaExceeded);
-            }
-        }
         let storage_key = file_storage_key(
             &manifest.manifest().pack_id,
             &manifest.manifest().pack_version,
@@ -395,6 +659,30 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
             expected_bytes: file.byte_size,
             variant_id: selection.variant_id().to_owned(),
         };
+        if let Some(existing) = self.resume_metadata(&storage_key).await? {
+            if same_task(&existing, &task) {
+                return Ok(existing);
+            }
+            return Err(ModelPackError::Store {
+                code: "reservation",
+            });
+        }
+        if read_json::<StoredFile, _>(&self.host, &file_key(&storage_key))
+            .await?
+            .is_some()
+        {
+            return Ok(task);
+        }
+        if let Some(available) = status.bytes_available {
+            let required = status
+                .bytes_used
+                .checked_add(status.bytes_reserved)
+                .and_then(|used| used.checked_add(file.byte_size))
+                .ok_or(ModelPackError::QuotaExceeded)?;
+            if required > available {
+                return Err(ModelPackError::QuotaExceeded);
+            }
+        }
         write_json(&mut self.host, &reservation_key(&storage_key), &task).await?;
         Ok(task)
     }
@@ -423,33 +711,56 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
         if task.expected_bytes != byte_size {
             return Err(ModelPackError::Store { code: "size" });
         }
-        self.ensure_not_withdrawn(&task.pack_id)?;
-        let stored = StoredFile {
+        self.ensure_not_withdrawn(&task.pack_id).await?;
+        let journal = PromotionJournal {
             storage_key: storage_key.to_owned(),
             pack_id: task.pack_id,
             pack_version: task.pack_version,
             file_id: task.file_id,
             variant_id: task.variant_id,
-            sha256: sha256.to_owned(),
-            byte_size,
-            state: InstallState::Ready,
             stored_at: self.now,
+            expected_sha256: sha256.to_owned(),
+            expected_bytes: byte_size,
         };
-        self.host.promote_staging(&stored).await?;
+        write_json(&mut self.host, &promotion_key(storage_key), &journal).await?;
+        self.host.promote_staging_atomic(storage_key).await?;
+        let (actual_bytes, actual_hash) =
+            hash_promoted_chunks(&self.host, storage_key, HASH_CHUNK_BYTES).await?;
+        if actual_bytes != byte_size || actual_hash != sha256 {
+            self.host.delete_promoted(storage_key).await?;
+            return Err(ModelPackError::Store { code: "hash" });
+        }
+        let stored = StoredFile {
+            storage_key: storage_key.to_owned(),
+            pack_id: journal.pack_id,
+            pack_version: journal.pack_version,
+            file_id: journal.file_id,
+            variant_id: journal.variant_id,
+            sha256: actual_hash,
+            byte_size: actual_bytes,
+            state: InstallState::Ready,
+            stored_at: journal.stored_at,
+        };
         write_json(&mut self.host, &file_key(storage_key), &stored).await?;
         self.host.delete_json(&reservation_key(storage_key)).await?;
+        self.host.delete_json(&promotion_key(storage_key)).await?;
         Ok(stored)
     }
 
     async fn activate_pack(
         &mut self,
+        scope: ModelStoreScope,
         manifest: &VerifiedManifest,
         selection: &SelectedVariant,
     ) -> Result<LifecycleSnapshot, ModelPackError> {
         if !selection.belongs_to(manifest) {
             return Err(ModelPackError::Store { code: "selection" });
         }
-        self.ensure_not_withdrawn(&manifest.manifest().pack_id)?;
+        validate_scope_task(&scope, manifest, selection)?;
+        self.recover_promotions().await?;
+        self.ensure_not_withdrawn(&manifest.manifest().pack_id)
+            .await?;
+        let mut active_files = Vec::new();
         for file in manifest
             .manifest()
             .files
@@ -468,9 +779,19 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
                     .ok_or(ModelPackError::Store {
                         code: "missing_file",
                     })?;
-            if stored.sha256 != file.sha256 || stored.byte_size != file.byte_size {
+            if !stored_matches(&stored, manifest, selection, file) {
                 return Err(ModelPackError::Store { code: "corrupt" });
             }
+            let (byte_size, sha256) =
+                hash_promoted_chunks(&self.host, &key, HASH_CHUNK_BYTES).await?;
+            if sha256 != file.sha256 || byte_size != file.byte_size {
+                return Err(ModelPackError::Store { code: "corrupt" });
+            }
+            active_files.push(ActiveFileRecord {
+                storage_key: key,
+                sha256,
+                byte_size,
+            });
         }
 
         let current_key = lifecycle_key(
@@ -502,15 +823,15 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
         } else {
             apply_lifecycle_event(&current, InstallEvent::Activate, self.now, None)?
         };
-        let previous_active = self.active_pack().await?;
+        let previous_record = self.active_record(&scope).await?;
+        let previous_active = previous_record.as_ref().map(|record| &record.identity);
         let mut restore = BTreeMap::new();
+        let active_key = active_key(&scope);
+        let rollback_key = rollback_key(&scope);
+        restore.insert(active_key.clone(), self.host.read_json(&active_key).await?);
         restore.insert(
-            ACTIVE_KEY.to_owned(),
-            self.host.read_json(ACTIVE_KEY).await?,
-        );
-        restore.insert(
-            ROLLBACK_KEY.to_owned(),
-            self.host.read_json(ROLLBACK_KEY).await?,
+            rollback_key.clone(),
+            self.host.read_json(&rollback_key).await?,
         );
         restore.insert(
             current_key.clone(),
@@ -522,42 +843,59 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
         }
 
         let result: Result<(), ModelPackError> = async {
-            if let Some(active) = previous_active.as_ref() {
+            if let Some(active) = previous_active {
                 if active.pack_id != manifest.manifest().pack_id
                     || active.pack_version != manifest.manifest().pack_version
+                    || active.variant_id != selection.variant_id()
                 {
-                    write_json(&mut self.host, ROLLBACK_KEY, active).await?;
+                    if let Some(record) = previous_record.as_ref() {
+                        write_json(&mut self.host, &rollback_key, record).await?;
+                    }
                     if let Some(snapshot) = self
                         .lifecycle(&active.pack_id, &active.pack_version, &active.variant_id)
                         .await?
                     {
-                        let deactivated = apply_lifecycle_event(
-                            &snapshot,
-                            InstallEvent::Deactivate,
-                            self.now,
-                            None,
-                        )?;
-                        write_json(
-                            &mut self.host,
-                            &lifecycle_key(
-                                &deactivated.pack_id,
-                                &deactivated.pack_version,
-                                &deactivated.variant_id,
-                            ),
-                            &deactivated,
-                        )
-                        .await?;
+                        if !self
+                            .active_elsewhere(
+                                &scope,
+                                &active.pack_id,
+                                &active.pack_version,
+                                &active.variant_id,
+                            )
+                            .await?
+                        {
+                            let deactivated = apply_lifecycle_event(
+                                &snapshot,
+                                InstallEvent::Deactivate,
+                                self.now,
+                                None,
+                            )?;
+                            write_json(
+                                &mut self.host,
+                                &lifecycle_key(
+                                    &deactivated.pack_id,
+                                    &deactivated.pack_version,
+                                    &deactivated.variant_id,
+                                ),
+                                &deactivated,
+                            )
+                            .await?;
+                        }
                     }
                 }
             }
             write_json(&mut self.host, &current_key, &next).await?;
             write_json(
                 &mut self.host,
-                ACTIVE_KEY,
-                &ActivePackIdentity {
-                    pack_id: next.pack_id.clone(),
-                    pack_version: next.pack_version.clone(),
-                    variant_id: selection.variant_id().to_owned(),
+                &active_key,
+                &ActivePackRecord {
+                    identity: ActivePackIdentity {
+                        scope: scope.clone(),
+                        pack_id: next.pack_id.clone(),
+                        pack_version: next.pack_version.clone(),
+                        variant_id: selection.variant_id().to_owned(),
+                    },
+                    files: active_files,
                 },
             )
             .await?;
@@ -571,79 +909,149 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
         Ok(next)
     }
 
-    async fn rollback_active(&mut self) -> Result<Option<LifecycleSnapshot>, ModelPackError> {
-        let Some(rollback): Option<ActivePackIdentity> =
-            read_json(&self.host, ROLLBACK_KEY).await?
+    async fn rollback_active(
+        &mut self,
+        scope: ModelStoreScope,
+    ) -> Result<Option<LifecycleSnapshot>, ModelPackError> {
+        let Some(rollback_record): Option<ActivePackRecord> =
+            read_json(&self.host, &rollback_key(&scope)).await?
         else {
             return Ok(None);
         };
-        self.ensure_not_withdrawn(&rollback.pack_id)?;
-        if let Some(active) = self.active_pack().await? {
-            if let Some(snapshot) = self
-                .lifecycle(&active.pack_id, &active.pack_version, &active.variant_id)
-                .await?
-            {
-                let ready =
-                    apply_lifecycle_event(&snapshot, InstallEvent::Deactivate, self.now, None)?;
-                write_json(
-                    &mut self.host,
-                    &lifecycle_key(&ready.pack_id, &ready.pack_version, &ready.variant_id),
-                    &ready,
-                )
-                .await?;
-            }
-        }
-        let snapshot = self
-            .lifecycle(
+        let rollback = rollback_record.identity.clone();
+        self.ensure_not_withdrawn(&rollback.pack_id).await?;
+        let active_key = active_key(&scope);
+        let rollback_key = rollback_key(&scope);
+        let mut restore = BTreeMap::new();
+        restore.insert(active_key.clone(), self.host.read_json(&active_key).await?);
+        restore.insert(
+            rollback_key.clone(),
+            self.host.read_json(&rollback_key).await?,
+        );
+        restore.insert(
+            lifecycle_key(
                 &rollback.pack_id,
                 &rollback.pack_version,
                 &rollback.variant_id,
-            )
+            ),
+            self.host
+                .read_json(&lifecycle_key(
+                    &rollback.pack_id,
+                    &rollback.pack_version,
+                    &rollback.variant_id,
+                ))
+                .await?,
+        );
+        if let Some(active) = self
+            .active_record(&scope)
             .await?
-            .ok_or(ModelPackError::Store { code: "rollback" })?;
-        let active = apply_lifecycle_event(&snapshot, InstallEvent::Activate, self.now, None)?;
-        write_json(
-            &mut self.host,
-            &lifecycle_key(&active.pack_id, &active.pack_version, &active.variant_id),
-            &active,
-        )
-        .await?;
-        write_json(
-            &mut self.host,
-            ACTIVE_KEY,
-            &ActivePackIdentity {
-                pack_id: active.pack_id.clone(),
-                pack_version: active.pack_version.clone(),
-                variant_id: rollback.variant_id,
-            },
-        )
-        .await?;
-        self.host.delete_json(ROLLBACK_KEY).await?;
-        Ok(Some(active))
+            .map(|record| record.identity)
+        {
+            let active_lifecycle_key =
+                lifecycle_key(&active.pack_id, &active.pack_version, &active.variant_id);
+            restore.insert(
+                active_lifecycle_key.clone(),
+                self.host.read_json(&active_lifecycle_key).await?,
+            );
+        }
+
+        let result: Result<LifecycleSnapshot, ModelPackError> = async {
+            if let Some(active) = self
+                .active_record(&scope)
+                .await?
+                .map(|record| record.identity)
+            {
+                if let Some(snapshot) = self
+                    .lifecycle(&active.pack_id, &active.pack_version, &active.variant_id)
+                    .await?
+                {
+                    if !self
+                        .active_elsewhere(
+                            &scope,
+                            &active.pack_id,
+                            &active.pack_version,
+                            &active.variant_id,
+                        )
+                        .await?
+                    {
+                        let ready = apply_lifecycle_event(
+                            &snapshot,
+                            InstallEvent::Deactivate,
+                            self.now,
+                            None,
+                        )?;
+                        write_json(
+                            &mut self.host,
+                            &lifecycle_key(&ready.pack_id, &ready.pack_version, &ready.variant_id),
+                            &ready,
+                        )
+                        .await?;
+                    }
+                }
+            }
+            let snapshot = self
+                .lifecycle(
+                    &rollback.pack_id,
+                    &rollback.pack_version,
+                    &rollback.variant_id,
+                )
+                .await?
+                .ok_or(ModelPackError::Store { code: "rollback" })?;
+            let active = if snapshot.state == InstallState::Active {
+                snapshot
+            } else {
+                apply_lifecycle_event(&snapshot, InstallEvent::Activate, self.now, None)?
+            };
+            write_json(
+                &mut self.host,
+                &lifecycle_key(&active.pack_id, &active.pack_version, &active.variant_id),
+                &active,
+            )
+            .await?;
+            write_json(&mut self.host, &active_key, &rollback_record).await?;
+            self.host.delete_json(&rollback_key).await?;
+            Ok(active)
+        }
+        .await;
+        match result {
+            Ok(active) => Ok(Some(active)),
+            Err(error) => {
+                restore_json(&mut self.host, restore).await;
+                Err(error)
+            }
+        }
     }
 
     async fn remove_pack(&mut self, pack_id: &str) -> Result<(), ModelPackError> {
         self.host.remove_pack_data(pack_id).await?;
-        if self
-            .active_pack()
-            .await?
-            .as_ref()
-            .is_some_and(|active| active.pack_id == pack_id)
-        {
-            self.host.delete_json(ACTIVE_KEY).await?;
+        self.clear_active_if_pack(pack_id).await?;
+        for key in self.host.list_json_keys(ROLLBACK_PREFIX).await? {
+            let rollback: Option<ActivePackRecord> = read_json(&self.host, &key).await?;
+            if rollback
+                .as_ref()
+                .is_some_and(|record| record.identity.pack_id == pack_id)
+            {
+                self.host.delete_json(&key).await?;
+            }
         }
-        let rollback: Option<ActivePackIdentity> = read_json(&self.host, ROLLBACK_KEY).await?;
-        if rollback
-            .as_ref()
-            .is_some_and(|identity| identity.pack_id == pack_id)
-        {
-            self.host.delete_json(ROLLBACK_KEY).await?;
-        }
+        let mut withdrawal = self.withdrawal_state().await?;
+        withdrawal.corrupt.remove(pack_id);
+        withdrawal.revoked.remove(pack_id);
+        write_json(&mut self.host, WITHDRAWAL_KEY, &withdrawal).await?;
         Ok(())
     }
 
-    async fn active_pack(&self) -> Result<Option<ActivePackIdentity>, ModelPackError> {
-        read_json(&self.host, ACTIVE_KEY).await
+    async fn active_pack(
+        &self,
+        scope: ModelStoreScope,
+    ) -> Result<Option<ActivePackIdentity>, ModelPackError> {
+        if self.host.persistence_report().await?.evicted {
+            return Ok(None);
+        }
+        Ok(self
+            .active_record(&scope)
+            .await?
+            .map(|record| record.identity))
     }
 
     async fn open_immutable_file(
@@ -654,7 +1062,10 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
         if !selection.file_ids().contains(file_id) {
             return Err(ModelPackError::Store { code: "selection" });
         }
-        self.ensure_not_withdrawn(selection.pack_id())?;
+        if self.host.persistence_report().await?.evicted {
+            return Err(ModelPackError::Store { code: "evicted" });
+        }
+        self.ensure_not_withdrawn(selection.pack_id()).await?;
         let storage_key = file_storage_key(
             selection.pack_id(),
             selection.pack_version(),
@@ -666,8 +1077,17 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
             .ok_or(ModelPackError::Store {
                 code: "missing_file",
             })?;
-        if stored.variant_id != selection.variant_id() {
+        if stored.pack_id != selection.pack_id()
+            || stored.pack_version != selection.pack_version()
+            || stored.variant_id != selection.variant_id()
+            || stored.file_id != file_id
+        {
             return Err(ModelPackError::Store { code: "selection" });
+        }
+        let (byte_size, sha256) =
+            hash_promoted_chunks(&self.host, &storage_key, HASH_CHUNK_BYTES).await?;
+        if stored.byte_size != byte_size || stored.sha256 != sha256 {
+            return Err(ModelPackError::Store { code: "corrupt" });
         }
         Ok(ImmutableModelFile {
             storage_key: stored.storage_key,
@@ -688,6 +1108,8 @@ pub struct InMemoryWebHost {
     staging: BTreeMap<String, Vec<u8>>,
     files: BTreeMap<String, Vec<u8>>,
     fail_next_write: bool,
+    fail_next_write_after_promote: bool,
+    max_read_request: Cell<u64>,
 }
 
 impl std::fmt::Debug for InMemoryWebHost {
@@ -701,6 +1123,7 @@ impl std::fmt::Debug for InMemoryWebHost {
             .field("json_entries", &self.json.len())
             .field("staging_entries", &self.staging.len())
             .field("file_entries", &self.files.len())
+            .field("max_read_request", &self.max_read_request.get())
             .finish()
     }
 }
@@ -716,6 +1139,8 @@ impl InMemoryWebHost {
             staging: BTreeMap::new(),
             files: BTreeMap::new(),
             fail_next_write: false,
+            fail_next_write_after_promote: false,
+            max_read_request: Cell::new(0),
         }
     }
 
@@ -732,6 +1157,32 @@ impl InMemoryWebHost {
         self.fail_next_write = true;
     }
 
+    pub fn fail_next_write_after_promote(&mut self) {
+        self.fail_next_write_after_promote = true;
+    }
+
+    pub fn insert_json(&mut self, key: impl Into<String>, value: impl Into<String>) {
+        self.json.insert(key.into(), value.into());
+    }
+
+    pub fn insert_promoted(&mut self, storage_key: impl Into<String>, bytes: Vec<u8>) {
+        self.files.insert(storage_key.into(), bytes);
+    }
+
+    pub fn forge_stored_file(&mut self, storage_key: &str, stored: &StoredFile) {
+        if let Ok(value) = serde_json::to_string(stored) {
+            self.json.insert(file_key(storage_key), value);
+        }
+    }
+
+    pub fn max_observed_read_request(&self) -> u64 {
+        self.max_read_request.get()
+    }
+
+    pub fn promoted_contains(&self, storage_key: &str) -> bool {
+        self.files.contains_key(storage_key)
+    }
+
     fn maybe_fail(&mut self) -> Result<(), WebHostError> {
         if self.fail_next_write {
             self.fail_next_write = false;
@@ -743,20 +1194,59 @@ impl InMemoryWebHost {
         }
     }
 
-    fn used_bytes(&self) -> u64 {
-        self.files
-            .values()
-            .map(|bytes| u64::try_from(bytes.len()).unwrap_or(u64::MAX))
-            .sum()
+    fn used_bytes(&self) -> Result<u64, WebHostError> {
+        let mut seen_hashes = BTreeMap::new();
+        let mut total = 0_u64;
+        for bytes in self.files.values() {
+            let hash = sha256_hex(bytes);
+            let len =
+                u64::try_from(bytes.len()).map_err(|_| WebHostError::Integrity { code: "size" })?;
+            if let Some(previous) = seen_hashes.insert(hash, len) {
+                if previous != len {
+                    return Err(WebHostError::Store { code: "quota" });
+                }
+            } else {
+                total = total.checked_add(len).ok_or(WebHostError::QuotaExceeded)?;
+            }
+        }
+        Ok(total)
     }
 
-    fn reserved_bytes(&self) -> u64 {
-        self.json
+    fn reserved_bytes(&self) -> Result<u64, WebHostError> {
+        let mut promoted_hashes = BTreeMap::new();
+        for bytes in self.files.values() {
+            let hash = sha256_hex(bytes);
+            let len =
+                u64::try_from(bytes.len()).map_err(|_| WebHostError::Integrity { code: "size" })?;
+            promoted_hashes.insert(hash, len);
+        }
+        let mut seen_reservations = BTreeMap::new();
+        let mut total = 0_u64;
+        for task in self
+            .json
             .iter()
             .filter(|(key, _)| key.starts_with(RESERVED_PREFIX))
             .filter_map(|(_, value)| serde_json::from_str::<DownloadTask>(value).ok())
-            .map(|task| task.expected_bytes)
-            .sum()
+        {
+            if let Some(promoted_size) = promoted_hashes.get(&task.expected_sha256) {
+                if *promoted_size != task.expected_bytes {
+                    return Err(WebHostError::Store { code: "quota" });
+                }
+                continue;
+            }
+            if let Some(previous_size) =
+                seen_reservations.insert(task.expected_sha256.clone(), task.expected_bytes)
+            {
+                if previous_size != task.expected_bytes {
+                    return Err(WebHostError::Store { code: "quota" });
+                }
+                continue;
+            }
+            total = total
+                .checked_add(task.expected_bytes)
+                .ok_or(WebHostError::QuotaExceeded)?;
+        }
+        Ok(total)
     }
 }
 
@@ -765,8 +1255,8 @@ impl WebModelStoreHost for InMemoryWebHost {
     async fn persistence_report(&self) -> Result<WebPersistenceReport, WebHostError> {
         Ok(WebPersistenceReport {
             status: StoreStatus {
-                bytes_used: self.used_bytes(),
-                bytes_reserved: self.reserved_bytes(),
+                bytes_used: self.used_bytes()?,
+                bytes_reserved: self.reserved_bytes()?,
                 bytes_available: self.bytes_available,
                 persistent: self.persistent,
             },
@@ -791,6 +1281,15 @@ impl WebModelStoreHost for InMemoryWebHost {
         Ok(())
     }
 
+    async fn list_json_keys(&self, prefix: &str) -> Result<Vec<String>, WebHostError> {
+        Ok(self
+            .json
+            .keys()
+            .filter(|key| key.starts_with(prefix))
+            .cloned()
+            .collect())
+    }
+
     async fn staging_len(&self, storage_key: &str) -> Result<u64, WebHostError> {
         Ok(self
             .staging
@@ -799,8 +1298,15 @@ impl WebModelStoreHost for InMemoryWebHost {
             .unwrap_or(0))
     }
 
-    async fn read_staging(&self, storage_key: &str) -> Result<Vec<u8>, WebHostError> {
-        Ok(self.staging.get(storage_key).cloned().unwrap_or_default())
+    async fn read_staging_chunk(
+        &self,
+        storage_key: &str,
+        offset: u64,
+        max_bytes: u64,
+    ) -> Result<WebFetchedChunk, WebHostError> {
+        self.max_read_request
+            .set(self.max_read_request.get().max(max_bytes));
+        read_chunk(self.staging.get(storage_key), offset, max_bytes)
     }
 
     async fn append_staging(
@@ -821,12 +1327,12 @@ impl WebModelStoreHost for InMemoryWebHost {
         let additional =
             u64::try_from(bytes.len()).map_err(|_| WebHostError::Integrity { code: "size" })?;
         if let Some(available) = self.bytes_available {
-            if self
-                .used_bytes()
-                .saturating_add(self.reserved_bytes())
-                .saturating_add(additional)
-                > available
-            {
+            let required = self
+                .used_bytes()?
+                .checked_add(self.reserved_bytes()?)
+                .and_then(|used| used.checked_add(additional))
+                .ok_or(WebHostError::QuotaExceeded)?;
+            if required > available {
                 return Err(WebHostError::QuotaExceeded);
             }
         }
@@ -841,58 +1347,119 @@ impl WebModelStoreHost for InMemoryWebHost {
         Ok(())
     }
 
-    async fn promote_staging(&mut self, stored: &StoredFile) -> Result<(), WebHostError> {
+    async fn promoted_stat(&self, storage_key: &str) -> Result<Option<WebFileStat>, WebHostError> {
+        Ok(self.files.get(storage_key).map(|bytes| WebFileStat {
+            byte_size: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
+        }))
+    }
+
+    async fn read_promoted_chunk(
+        &self,
+        storage_key: &str,
+        offset: u64,
+        max_bytes: u64,
+    ) -> Result<WebFetchedChunk, WebHostError> {
+        self.max_read_request
+            .set(self.max_read_request.get().max(max_bytes));
+        read_chunk(self.files.get(storage_key), offset, max_bytes)
+    }
+
+    async fn promote_staging_atomic(&mut self, storage_key: &str) -> Result<(), WebHostError> {
         self.maybe_fail()?;
         let bytes = self
             .staging
-            .remove(&stored.storage_key)
+            .remove(storage_key)
             .ok_or(WebHostError::Store { code: "staging" })?;
-        let len =
-            u64::try_from(bytes.len()).map_err(|_| WebHostError::Integrity { code: "size" })?;
-        if len != stored.byte_size {
-            return Err(WebHostError::Integrity { code: "size" });
+        self.files.insert(storage_key.to_owned(), bytes);
+        if self.fail_next_write_after_promote {
+            self.fail_next_write_after_promote = false;
+            self.fail_next_write = true;
         }
-        self.files.insert(stored.storage_key.clone(), bytes);
         Ok(())
+    }
+
+    async fn delete_promoted(&mut self, storage_key: &str) -> Result<(), WebHostError> {
+        self.maybe_fail()?;
+        self.files.remove(storage_key);
+        Ok(())
+    }
+
+    async fn list_promoted_keys(&self) -> Result<Vec<String>, WebHostError> {
+        Ok(self.files.keys().cloned().collect())
     }
 
     async fn remove_pack_data(&mut self, pack_id: &str) -> Result<(), WebHostError> {
         self.maybe_fail()?;
-        let mut promoted_storage_keys = BTreeSet::new();
+        let mut storage_keys = BTreeSet::new();
         let metadata_keys: BTreeSet<String> = self
             .json
             .iter()
-            .filter(|(key, _)| key.starts_with(FILE_PREFIX) || key.starts_with(RESERVED_PREFIX))
             .filter_map(|(key, value)| {
-                if let Ok(file) = serde_json::from_str::<StoredFile>(value) {
-                    if file.pack_id == pack_id {
-                        promoted_storage_keys.insert(file.storage_key);
-                        return Some(key.clone());
+                if key.starts_with(FILE_PREFIX) {
+                    if let Ok(file) = serde_json::from_str::<StoredFile>(value) {
+                        if file.pack_id == pack_id {
+                            storage_keys.insert(file.storage_key);
+                            return Some(key.clone());
+                        }
                     }
                 }
-                serde_json::from_str::<DownloadTask>(value)
-                    .ok()
-                    .filter(|task| task.pack_id == pack_id)
-                    .map(|_| key.clone())
+                if key.starts_with(RESERVED_PREFIX) || key.starts_with(PROMOTION_PREFIX) {
+                    if let Ok(task) = serde_json::from_str::<DownloadTask>(value) {
+                        if task.pack_id == pack_id {
+                            storage_keys.insert(task.storage_key);
+                            return Some(key.clone());
+                        }
+                    }
+                    if let Ok(journal) = serde_json::from_str::<PromotionJournal>(value) {
+                        if journal.pack_id == pack_id {
+                            storage_keys.insert(journal.storage_key);
+                            return Some(key.clone());
+                        }
+                    }
+                }
+                if key.starts_with(LIFECYCLE_PREFIX) {
+                    return serde_json::from_str::<LifecycleSnapshot>(value)
+                        .ok()
+                        .filter(|snapshot| snapshot.pack_id == pack_id)
+                        .map(|_| key.clone());
+                }
+                None
             })
             .collect();
         for key in metadata_keys {
             self.json.remove(&key);
         }
-        for storage_key in promoted_storage_keys {
-            self.files.remove(&storage_key);
-        }
-        self.json.retain(|key, value| {
-            if key.starts_with(LIFECYCLE_PREFIX) {
-                serde_json::from_str::<LifecycleSnapshot>(value)
-                    .map(|snapshot| snapshot.pack_id != pack_id)
-                    .unwrap_or(true)
-            } else {
-                true
-            }
-        });
+        let prefix = pack_file_storage_prefix(pack_id);
+        self.staging
+            .retain(|key, _| !storage_keys.contains(key) && !key.starts_with(&prefix));
+        self.files
+            .retain(|key, _| !storage_keys.contains(key) && !key.starts_with(&prefix));
         Ok(())
     }
+}
+
+fn read_chunk(
+    bytes: Option<&Vec<u8>>,
+    offset: u64,
+    max_bytes: u64,
+) -> Result<WebFetchedChunk, WebHostError> {
+    let bytes = bytes.ok_or(WebHostError::Store {
+        code: "missing_file",
+    })?;
+    if max_bytes == 0 {
+        return Err(WebHostError::Store { code: "policy" });
+    }
+    let offset = usize::try_from(offset).map_err(|_| WebHostError::Integrity { code: "size" })?;
+    let max_bytes =
+        usize::try_from(max_bytes).map_err(|_| WebHostError::Integrity { code: "size" })?;
+    if offset > bytes.len() {
+        return Err(WebHostError::Store { code: "range" });
+    }
+    let end = offset.saturating_add(max_bytes).min(bytes.len());
+    Ok(WebFetchedChunk {
+        bytes: bytes[offset..end].to_vec(),
+        finished: end == bytes.len(),
+    })
 }
 
 #[derive(Clone)]
@@ -900,6 +1467,9 @@ pub struct InMemoryNetworkHost {
     assets: BTreeMap<String, Vec<u8>>,
     chunk_limit: usize,
     fail_after_chunks: Option<usize>,
+    timeout_next: bool,
+    cancel_next: bool,
+    cancel_after_start: bool,
     chunks_served: usize,
 }
 
@@ -910,6 +1480,9 @@ impl std::fmt::Debug for InMemoryNetworkHost {
             .field("asset_count", &self.assets.len())
             .field("chunk_limit", &self.chunk_limit)
             .field("fail_after_chunks", &self.fail_after_chunks)
+            .field("timeout_next", &self.timeout_next)
+            .field("cancel_next", &self.cancel_next)
+            .field("cancel_after_start", &self.cancel_after_start)
             .field("chunks_served", &self.chunks_served)
             .finish()
     }
@@ -921,6 +1494,9 @@ impl InMemoryNetworkHost {
             assets: BTreeMap::new(),
             chunk_limit: chunk_limit.max(1),
             fail_after_chunks: None,
+            timeout_next: false,
+            cancel_next: false,
+            cancel_after_start: false,
             chunks_served: 0,
         }
     }
@@ -935,6 +1511,25 @@ impl InMemoryNetworkHost {
 
     pub fn clear_failure(&mut self) {
         self.fail_after_chunks = None;
+        self.timeout_next = false;
+        self.cancel_next = false;
+        self.cancel_after_start = false;
+    }
+
+    pub fn timeout_next(&mut self) {
+        self.timeout_next = true;
+    }
+
+    pub fn cancel_next(&mut self) {
+        self.cancel_next = true;
+    }
+
+    pub fn cancel_after_start(&mut self) {
+        self.cancel_after_start = true;
+    }
+
+    pub fn chunks_served(&self) -> usize {
+        self.chunks_served
     }
 }
 
@@ -943,7 +1538,21 @@ impl WebNetworkHost for InMemoryNetworkHost {
     async fn fetch_range(
         &mut self,
         request: WebFetchRequest,
+        cancellation: &CancellationToken,
     ) -> Result<WebFetchedChunk, WebHostError> {
+        if request.timeout_millis == 0 || self.timeout_next {
+            self.timeout_next = false;
+            return Err(WebHostError::Timeout);
+        }
+        if self.cancel_next || cancellation.is_cancelled() {
+            self.cancel_next = false;
+            return Err(WebHostError::Cancelled);
+        }
+        if self.cancel_after_start {
+            self.cancel_after_start = false;
+            cancellation.cancel();
+            return Err(WebHostError::Cancelled);
+        }
         if self
             .fail_after_chunks
             .is_some_and(|limit| self.chunks_served >= limit)
@@ -1009,16 +1618,165 @@ async fn restore_json<H: WebModelStoreHost>(
     }
 }
 
+async fn hash_staging_chunks<H: WebModelStoreHost>(
+    host: &H,
+    storage_key: &str,
+    max_chunk_bytes: u64,
+) -> Result<String, WebHostError> {
+    let len = host.staging_len(storage_key).await?;
+    let (_count, digest) = hash_chunks(len, max_chunk_bytes, |offset, max_bytes| async move {
+        host.read_staging_chunk(storage_key, offset, max_bytes)
+            .await
+    })
+    .await?;
+    Ok(digest)
+}
+
+async fn hash_promoted_chunks<H: WebModelStoreHost>(
+    host: &H,
+    storage_key: &str,
+    max_chunk_bytes: u64,
+) -> Result<(u64, String), WebHostError> {
+    let stat = host
+        .promoted_stat(storage_key)
+        .await?
+        .ok_or(WebHostError::Store {
+            code: "missing_file",
+        })?;
+    let (count, digest) = hash_chunks(
+        stat.byte_size,
+        max_chunk_bytes,
+        |offset, max_bytes| async move {
+            host.read_promoted_chunk(storage_key, offset, max_bytes)
+                .await
+        },
+    )
+    .await?;
+    Ok((count, digest))
+}
+
+async fn hash_chunks<F, Fut>(
+    byte_size: u64,
+    max_chunk_bytes: u64,
+    mut read: F,
+) -> Result<(u64, String), WebHostError>
+where
+    F: FnMut(u64, u64) -> Fut,
+    Fut: std::future::Future<Output = Result<WebFetchedChunk, WebHostError>>,
+{
+    if max_chunk_bytes == 0 {
+        return Err(WebHostError::Store { code: "policy" });
+    }
+    let mut hasher = Sha256::new();
+    let mut offset = 0_u64;
+    while offset < byte_size {
+        let remaining = byte_size.saturating_sub(offset);
+        let chunk = read(offset, remaining.min(max_chunk_bytes)).await?;
+        if chunk.bytes.is_empty() {
+            return Err(WebHostError::Store { code: "chunk" });
+        }
+        let len = u64::try_from(chunk.bytes.len())
+            .map_err(|_| WebHostError::Integrity { code: "size" })?;
+        let next = offset
+            .checked_add(len)
+            .ok_or(WebHostError::Integrity { code: "size" })?;
+        if next > byte_size {
+            return Err(WebHostError::Integrity { code: "size" });
+        }
+        hasher.update(&chunk.bytes);
+        offset = next;
+    }
+    Ok((offset, encode_hex(&hasher.finalize())))
+}
+
 fn lifecycle_key(pack_id: &str, pack_version: &str, variant_id: &str) -> String {
     format!("{LIFECYCLE_PREFIX}{pack_id}@{pack_version}:{variant_id}")
+}
+
+fn active_key(scope: &ModelStoreScope) -> String {
+    format!(
+        "{ACTIVE_PREFIX}{}:{}",
+        scope.task().as_str(),
+        scope.slot_id()
+    )
+}
+
+fn rollback_key(scope: &ModelStoreScope) -> String {
+    format!(
+        "{ROLLBACK_PREFIX}{}:{}",
+        scope.task().as_str(),
+        scope.slot_id()
+    )
 }
 
 fn reservation_key(storage_key: &str) -> String {
     format!("{RESERVED_PREFIX}{storage_key}")
 }
 
+fn promotion_key(storage_key: &str) -> String {
+    format!("{PROMOTION_PREFIX}{storage_key}")
+}
+
 fn file_key(storage_key: &str) -> String {
     format!("{FILE_PREFIX}{storage_key}")
+}
+
+fn pack_file_storage_prefix(pack_id: &str) -> String {
+    format!("aurora.voice.model-file.v1:{pack_id}@")
+}
+
+fn same_task(left: &DownloadTask, right: &DownloadTask) -> bool {
+    left.storage_key == right.storage_key
+        && left.pack_id == right.pack_id
+        && left.pack_version == right.pack_version
+        && left.file_id == right.file_id
+        && left.expected_sha256 == right.expected_sha256
+        && left.expected_bytes == right.expected_bytes
+        && left.variant_id == right.variant_id
+}
+
+fn validate_scope_task(
+    scope: &ModelStoreScope,
+    manifest: &VerifiedManifest,
+    selection: &SelectedVariant,
+) -> Result<(), ModelPackError> {
+    let manifest_advertises_task = manifest
+        .manifest()
+        .tasks
+        .iter()
+        .any(|task| *task == scope.task());
+    let selected_has_primary_task = manifest
+        .manifest()
+        .files
+        .iter()
+        .any(|file| selection.file_ids().contains(&file.file_id) && file.task == scope.task());
+    if manifest_advertises_task && selected_has_primary_task {
+        Ok(())
+    } else {
+        Err(ModelPackError::Store { code: "task" })
+    }
+}
+
+fn stored_matches(
+    stored: &StoredFile,
+    manifest: &VerifiedManifest,
+    selection: &SelectedVariant,
+    file: &ModelPackFile,
+) -> bool {
+    stored.storage_key
+        == file_storage_key(
+            &manifest.manifest().pack_id,
+            &manifest.manifest().pack_version,
+            selection.variant_id(),
+            &file.file_id,
+        )
+        && stored.pack_id == manifest.manifest().pack_id
+        && stored.pack_version == manifest.manifest().pack_version
+        && stored.variant_id == selection.variant_id()
+        && stored.file_id == file.file_id
+        && stored.sha256 == file.sha256
+        && stored.byte_size == file.byte_size
+        && stored.state == InstallState::Ready
 }
 
 fn validate_digest(value: &str) -> Result<(), WebHostError> {
@@ -1034,5 +1792,15 @@ fn validate_digest(value: &str) -> Result<(), WebHostError> {
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
-    aurora_voice_engine::sha256_hex(bytes)
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    encode_hex(&hasher.finalize())
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    let mut output = String::with_capacity(bytes.len().saturating_mul(2));
+    for byte in bytes {
+        output.push_str(&format!("{byte:02x}"));
+    }
+    output
 }

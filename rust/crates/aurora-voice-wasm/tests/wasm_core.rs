@@ -5,12 +5,13 @@ use aurora_voice_core::{
     TimestampMicros,
 };
 use aurora_voice_engine::{
-    create_lifecycle_snapshot, select_verified_variant, verify_manifest, AbiRequirements,
-    BrowserFeature, CapabilityFlags, Compatibility, CompressionKind, DeviceClass, EngineKind,
-    InstallState, LanguageSupport, LicenseGrant, LicenseInfo, ManifestSignature, ModelPackError,
-    ModelPackFile, ModelPackManifest, ModelStore, PackTask, ProcessingMetadata, Provenance,
-    ResourceBudget, RuntimeGates, RuntimeSelection, RuntimeTarget, ShapeMetadata,
-    SignatureVerifier, TargetArch, TargetOs, TrustPolicy, VerifiedManifest,
+    create_lifecycle_snapshot, file_storage_key, select_verified_variant, verify_manifest,
+    AbiRequirements, BrowserFeature, CapabilityFlags, Compatibility, CompressionKind, DeviceClass,
+    DownloadTask, EngineKind, InstallState, LanguageSupport, LicenseGrant, LicenseInfo,
+    ManifestSignature, ModelPackError, ModelPackFile, ModelPackManifest, ModelStore,
+    ModelStoreScope, PackTask, ProcessingMetadata, Provenance, ResourceBudget, RuntimeGates,
+    RuntimeSelection, RuntimeTarget, ShapeMetadata, SignatureVerifier, StoredFile, TargetArch,
+    TargetOs, TrustPolicy, VerifiedManifest,
 };
 use aurora_voice_wasm::{
     BrowserPersistenceKind, InMemoryNetworkHost, InMemoryWebHost, WebDownloadPolicy, WebHostError,
@@ -106,12 +107,12 @@ async fn interrupted_install_resumes_from_staged_chunks() {
         .await
         .expect("ready lifecycle");
     store
-        .activate_pack(&manifest, &selection)
+        .activate_pack(scope(), &manifest, &selection)
         .await
         .expect("activate pack");
     assert_eq!(
         store
-            .active_pack()
+            .active_pack(scope())
             .await
             .expect("active lookup")
             .map(|active| active.pack_id),
@@ -148,14 +149,23 @@ async fn hash_mismatch_and_revocation_fail_closed() {
 
     install_ready(&mut store, &manifest, good).await;
     store
-        .activate_pack(&manifest, &selection)
+        .activate_pack(scope(), &manifest, &selection)
         .await
         .expect("activate before revocation");
     store
         .signal_recovery("pack", WebRecoverySignal::Revoked)
         .await
         .expect("signal revocation");
-    assert!(store.active_pack().await.expect("active lookup").is_none());
+    assert!(store
+        .active_pack(scope())
+        .await
+        .expect("active lookup")
+        .is_none());
+    assert!(store
+        .lifecycle("pack", "1", selection.variant_id())
+        .await
+        .expect("revoked lifecycle")
+        .is_none());
     assert_eq!(
         store.open_immutable_file(&selection, "model").await,
         Err(ModelPackError::Store { code: "revoked" })
@@ -236,7 +246,7 @@ async fn variants_and_versions_are_isolated() {
     install_ready(&mut store, &first, web_body).await;
     install_ready(&mut store, &second, second_body).await;
     store
-        .activate_pack(&first, &selection)
+        .activate_pack(scope(), &first, &selection)
         .await
         .expect("activate web variant");
     assert_eq!(
@@ -285,19 +295,21 @@ async fn activation_records_rollback_and_failed_activation_restores_active() {
     install_ready(&mut store, &second, second_body).await;
 
     store
-        .activate_pack(&first, &first_selection)
+        .activate_pack(scope(), &first, &first_selection)
         .await
         .expect("activate first");
     store.host_mut().fail_next_write();
     assert_eq!(
-        store.activate_pack(&second, &second_selection).await,
+        store
+            .activate_pack(scope(), &second, &second_selection)
+            .await,
         Err(ModelPackError::Store {
             code: "persistence"
         })
     );
     assert_eq!(
         store
-            .active_pack()
+            .active_pack(scope())
             .await
             .expect("active after failed activation")
             .map(|active| active.pack_id),
@@ -305,20 +317,35 @@ async fn activation_records_rollback_and_failed_activation_restores_active() {
     );
 
     store
-        .activate_pack(&second, &second_selection)
+        .activate_pack(scope(), &second, &second_selection)
         .await
         .expect("activate second");
     assert_eq!(
         store
-            .active_pack()
+            .active_pack(scope())
             .await
             .expect("active after second")
             .map(|active| active.pack_id),
         Some("pack-b".to_owned())
     );
+    store.host_mut().fail_next_write();
+    assert_eq!(
+        store.rollback_active(scope()).await,
+        Err(ModelPackError::Store {
+            code: "persistence"
+        })
+    );
     assert_eq!(
         store
-            .rollback_active()
+            .active_pack(scope())
+            .await
+            .expect("active after failed rollback")
+            .map(|active| active.pack_id),
+        Some("pack-b".to_owned())
+    );
+    assert_eq!(
+        store
+            .rollback_active(scope())
             .await
             .expect("rollback")
             .map(|snapshot| snapshot.pack_id),
@@ -355,14 +382,23 @@ async fn eviction_recovery_and_cancellation_are_explicit() {
 
     install_ready(&mut store, &manifest, body).await;
     store
-        .activate_pack(&manifest, &selection)
+        .activate_pack(scope(), &manifest, &selection)
         .await
         .expect("activate pack");
     store
         .signal_recovery("pack", WebRecoverySignal::Evicted)
         .await
         .expect("signal eviction");
-    assert!(store.active_pack().await.expect("active lookup").is_none());
+    assert!(store
+        .lifecycle("pack", "1", selection.variant_id())
+        .await
+        .expect("lifecycle after eviction")
+        .is_none());
+    assert!(store
+        .active_pack(scope())
+        .await
+        .expect("active lookup")
+        .is_none());
     assert_eq!(
         store.open_immutable_file(&selection, "model").await,
         Err(ModelPackError::Store { code: "corrupt" })
@@ -374,6 +410,438 @@ async fn eviction_recovery_and_cancellation_are_explicit() {
     assert!(store.open_immutable_file(&selection, "model").await.is_ok());
 }
 
+#[wasm_bindgen_test(async)]
+async fn promotion_crash_recovers_from_journal() {
+    let body = b"journal-model".to_vec();
+    let manifest = verified("pack", "1", &sha256(&body), body.len() as u64);
+    let selection = selection_for(&manifest);
+    let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
+    let task = store
+        .reserve_file(&manifest, &selection, &manifest.manifest().files[0])
+        .await
+        .expect("reserve");
+    let receipt = download_body(&mut store, &task, body).await;
+    store.host_mut().fail_next_write_after_promote();
+    assert_eq!(
+        store
+            .promote_file(&task.storage_key, &receipt.sha256, receipt.byte_size)
+            .await,
+        Err(ModelPackError::Store {
+            code: "persistence"
+        })
+    );
+    let host = store.host().clone();
+    let mut recreated = WebModelStore::new(host);
+    recreated
+        .recover_promotions()
+        .await
+        .expect("recover journaled promotion");
+    assert!(recreated
+        .resume_metadata(&task.storage_key)
+        .await
+        .unwrap()
+        .is_none());
+    assert!(recreated
+        .open_immutable_file(&selection, "model")
+        .await
+        .is_ok());
+}
+
+#[wasm_bindgen_test(async)]
+async fn forged_metadata_and_activation_rehash_fail_closed() {
+    let body = b"truth-model".to_vec();
+    let manifest = verified("pack", "1", &sha256(&body), body.len() as u64);
+    let selection = selection_for(&manifest);
+    let storage_key = file_storage_key("pack", "1", selection.variant_id(), "model");
+    let mut host = InMemoryWebHost::new(Some(1000));
+    host.insert_promoted(storage_key.clone(), b"tampered".to_vec());
+    host.forge_stored_file(
+        &storage_key,
+        &StoredFile {
+            storage_key: storage_key.clone(),
+            pack_id: "pack".to_owned(),
+            pack_version: "1".to_owned(),
+            file_id: "model".to_owned(),
+            variant_id: selection.variant_id().to_owned(),
+            sha256: sha256(&body),
+            byte_size: body.len() as u64,
+            state: InstallState::Ready,
+            stored_at: 0,
+        },
+    );
+    let mut store = WebModelStore::new(host);
+    store
+        .set_lifecycle(create_lifecycle_snapshot(
+            "pack",
+            "1",
+            selection.variant_id().to_owned(),
+            0,
+            InstallState::Ready,
+        ))
+        .await
+        .expect("ready lifecycle");
+    assert_eq!(
+        store.activate_pack(scope(), &manifest, &selection).await,
+        Err(ModelPackError::Store { code: "corrupt" })
+    );
+    assert_eq!(
+        store.open_immutable_file(&selection, "model").await,
+        Err(ModelPackError::Store { code: "corrupt" })
+    );
+}
+
+#[wasm_bindgen_test(async)]
+async fn persistent_withdrawal_survives_recreation_and_removal_clears_all_pack_state() {
+    let body = b"remove-model".to_vec();
+    let manifest = verified("pack", "1", &sha256(&body), body.len() as u64);
+    let selection = selection_for(&manifest);
+    let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
+    install_ready(&mut store, &manifest, body).await;
+    store
+        .activate_pack(scope(), &manifest, &selection)
+        .await
+        .expect("activate");
+    store
+        .signal_recovery("pack", WebRecoverySignal::Corrupt)
+        .await
+        .expect("persist corruption");
+
+    let mut recreated = WebModelStore::new(store.host().clone());
+    assert_eq!(
+        recreated.open_immutable_file(&selection, "model").await,
+        Err(ModelPackError::Store { code: "corrupt" })
+    );
+    assert!(recreated
+        .lifecycle("pack", "1", selection.variant_id())
+        .await
+        .expect("withdrawn lifecycle")
+        .is_none());
+    recreated.remove_pack("pack").await.expect("remove pack");
+    assert!(recreated
+        .active_pack(scope())
+        .await
+        .expect("active")
+        .is_none());
+    assert_eq!(
+        recreated.open_immutable_file(&selection, "model").await,
+        Err(ModelPackError::Store {
+            code: "missing_file"
+        })
+    );
+}
+
+#[wasm_bindgen_test(async)]
+async fn bounded_reads_timeout_cancel_and_idempotent_quota_hold() {
+    let body = b"bounded-read-model".to_vec();
+    let manifest = verified("pack", "1", &sha256(&body), body.len() as u64);
+    let selection = selection_for(&manifest);
+    let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
+    let task = store
+        .reserve_file(&manifest, &selection, &manifest.manifest().files[0])
+        .await
+        .expect("reserve");
+    let duplicate = store
+        .reserve_file(&manifest, &selection, &manifest.manifest().files[0])
+        .await
+        .expect("idempotent reserve");
+    assert_eq!(duplicate.storage_key, task.storage_key);
+    assert_eq!(
+        store.status().await.unwrap().bytes_reserved,
+        body.len() as u64
+    );
+
+    let mut network = InMemoryNetworkHost::new(4);
+    network.insert(task.url.clone(), body.clone());
+    network.timeout_next();
+    assert_eq!(
+        WebModelDownloader::new(WebDownloadPolicy::bounded(4).unwrap())
+            .download(
+                &mut network,
+                store.host_mut(),
+                &task,
+                &CancellationToken::new(),
+                |_downloaded, _expected| {}
+            )
+            .await,
+        Err(WebHostError::Timeout)
+    );
+    assert_eq!(
+        store.host().staging_len(&task.storage_key).await.unwrap(),
+        0
+    );
+
+    network.clear_failure();
+    network.cancel_after_start();
+    assert_eq!(
+        WebModelDownloader::new(WebDownloadPolicy::bounded(4).unwrap())
+            .download(
+                &mut network,
+                store.host_mut(),
+                &task,
+                &CancellationToken::new(),
+                |_downloaded, _expected| {}
+            )
+            .await,
+        Err(WebHostError::Cancelled)
+    );
+    assert_eq!(
+        store.host().staging_len(&task.storage_key).await.unwrap(),
+        0
+    );
+    assert_eq!(network.chunks_served(), 0);
+
+    let receipt = download_body_with_chunk(&mut store, &task, body, 3).await;
+    assert!(store.host().max_observed_read_request() <= 3);
+    store
+        .promote_file(&task.storage_key, &receipt.sha256, receipt.byte_size)
+        .await
+        .expect("promote");
+}
+
+#[wasm_bindgen_test(async)]
+async fn quota_deduplicates_reserved_hashes_and_rejects_conflicting_sizes() {
+    let mut host = InMemoryWebHost::new(Some(1000));
+    let first = DownloadTask {
+        storage_key: "first-key".to_owned(),
+        pack_id: "pack".to_owned(),
+        pack_version: "1".to_owned(),
+        file_id: "model-a".to_owned(),
+        url: "https://example.test/a".to_owned(),
+        expected_sha256: HASH_A.to_owned(),
+        expected_bytes: 10,
+        variant_id: "wasm-simd".to_owned(),
+    };
+    let second = DownloadTask {
+        storage_key: "second-key".to_owned(),
+        file_id: "model-b".to_owned(),
+        url: "https://example.test/b".to_owned(),
+        ..first.clone()
+    };
+    host.insert_json(
+        "aurora.voice.web-store.v1:reserved:first-key",
+        serde_json::to_string(&first).unwrap(),
+    );
+    host.insert_json(
+        "aurora.voice.web-store.v1:reserved:second-key",
+        serde_json::to_string(&second).unwrap(),
+    );
+    let store = WebModelStore::new(host.clone());
+    assert_eq!(store.status().await.unwrap().bytes_reserved, 10);
+
+    let conflicting = DownloadTask {
+        storage_key: "conflicting-key".to_owned(),
+        file_id: "model-c".to_owned(),
+        url: "https://example.test/c".to_owned(),
+        expected_bytes: 11,
+        ..first
+    };
+    host.insert_json(
+        "aurora.voice.web-store.v1:reserved:conflicting-key",
+        serde_json::to_string(&conflicting).unwrap(),
+    );
+    assert_eq!(
+        WebModelStore::new(host).status().await,
+        Err(ModelPackError::Store { code: "quota" })
+    );
+}
+
+#[wasm_bindgen_test(async)]
+async fn scoped_activation_keeps_independent_maps_and_variant_rollback() {
+    let first_body = b"variant-one".to_vec();
+    let second_body = b"variant-two".to_vec();
+    let first = verified("pack", "1", &sha256(&first_body), first_body.len() as u64);
+    let mut second_raw = manifest("pack", "1", &sha256(&second_body), second_body.len() as u64);
+    second_raw.files = vec![model_file(
+        "model-b",
+        &sha256(&second_body),
+        second_body.len() as u64,
+    )];
+    second_raw.variants = vec![variant(
+        "wasm-alt",
+        RuntimeTarget::Web,
+        TargetOs::Web,
+        TargetArch::Wasm32,
+        "model-b",
+        second_body.len() as u64,
+    )];
+    let second = verify_manifest(
+        second_raw,
+        &TrustPolicy::default(),
+        Some(&AcceptingVerifier),
+    )
+    .unwrap();
+    let first_selection = selection_for(&first);
+    let second_selection = selection_for(&second);
+    let scope_a = ModelStoreScope::new(PackTask::Stt, "slot-a").unwrap();
+    let scope_b = ModelStoreScope::new(PackTask::Stt, "slot-b").unwrap();
+    let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
+    install_ready(&mut store, &first, first_body).await;
+    install_ready(&mut store, &second, second_body).await;
+
+    store
+        .activate_pack(scope_a.clone(), &first, &first_selection)
+        .await
+        .expect("activate slot a first");
+    store
+        .activate_pack(scope_b.clone(), &first, &first_selection)
+        .await
+        .expect("activate slot b first");
+    store
+        .activate_pack(scope_a.clone(), &second, &second_selection)
+        .await
+        .expect("activate alternate variant");
+    assert_eq!(
+        store
+            .lifecycle("pack", "1", first_selection.variant_id())
+            .await
+            .expect("shared variant lifecycle")
+            .map(|snapshot| snapshot.state),
+        Some(InstallState::Active)
+    );
+    assert_eq!(
+        store
+            .active_pack(scope_b.clone())
+            .await
+            .unwrap()
+            .map(|active| active.variant_id),
+        Some("wasm-simd".to_owned())
+    );
+    assert_eq!(
+        store
+            .rollback_active(scope_a)
+            .await
+            .unwrap()
+            .map(|snapshot| snapshot.variant_id),
+        Some("wasm-simd".to_owned())
+    );
+}
+
+#[wasm_bindgen_test(async)]
+async fn dependency_files_do_not_have_to_match_scope_task_but_wrong_scope_rejects() {
+    let primary = b"primary-model".to_vec();
+    let tokenizer = b"tokenizer-data".to_vec();
+    let mut raw = manifest("pack", "1", &sha256(&primary), primary.len() as u64);
+    raw.tasks = vec![PackTask::Stt, PackTask::Tokenizer];
+    raw.files = vec![
+        model_file("model", &sha256(&primary), primary.len() as u64),
+        {
+            let mut file = model_file("tokenizer", &sha256(&tokenizer), tokenizer.len() as u64);
+            file.task = PackTask::Tokenizer;
+            file
+        },
+    ];
+    raw.variants[0].file_ids = vec!["model".to_owned(), "tokenizer".to_owned()];
+    raw.variants[0].resource_budget.max_download_bytes = (primary.len() + tokenizer.len()) as u64;
+    raw.variants[0].resource_budget.max_installed_bytes = (primary.len() + tokenizer.len()) as u64;
+    let verified = verify_manifest(raw, &TrustPolicy::default(), Some(&AcceptingVerifier))
+        .expect("verify mixed-task pack");
+    let selection = selection_for(&verified);
+    let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
+    install_file(&mut store, &verified, &selection, 0, primary).await;
+    install_file(&mut store, &verified, &selection, 1, tokenizer).await;
+    store
+        .set_lifecycle(create_lifecycle_snapshot(
+            "pack",
+            "1",
+            selection.variant_id().to_owned(),
+            0,
+            InstallState::Ready,
+        ))
+        .await
+        .expect("ready lifecycle");
+    assert!(store
+        .activate_pack(scope(), &verified, &selection)
+        .await
+        .is_ok());
+    assert_eq!(
+        store
+            .activate_pack(
+                ModelStoreScope::default_for_task(PackTask::Tts),
+                &verified,
+                &selection
+            )
+            .await,
+        Err(ModelPackError::Store { code: "task" })
+    );
+
+    let kws_only = b"kws-only".to_vec();
+    let mut raw = manifest("task-pack", "1", &sha256(&kws_only), kws_only.len() as u64);
+    raw.tasks = vec![PackTask::Stt, PackTask::Kws];
+    raw.files = vec![{
+        let mut file = model_file("kws", &sha256(&kws_only), kws_only.len() as u64);
+        file.task = PackTask::Kws;
+        file
+    }];
+    raw.variants[0].file_ids = vec!["kws".to_owned()];
+    raw.variants[0].resource_budget.max_download_bytes = kws_only.len() as u64;
+    raw.variants[0].resource_budget.max_installed_bytes = kws_only.len() as u64;
+    let verified = verify_manifest(raw, &TrustPolicy::default(), Some(&AcceptingVerifier))
+        .expect("verify kws-only selection");
+    let selection = selection_for(&verified);
+    assert_eq!(
+        WebModelStore::new(InMemoryWebHost::new(Some(1000)))
+            .activate_pack(scope(), &verified, &selection)
+            .await,
+        Err(ModelPackError::Store { code: "task" })
+    );
+}
+
+#[wasm_bindgen_test(async)]
+async fn duplicate_blobs_orphans_and_stale_active_bytes_fail_closed() {
+    let body = b"shared-blob".to_vec();
+    let hash = sha256(&body);
+    let key_a = file_storage_key("pack", "1", "wasm-simd", "model");
+    let key_b = file_storage_key("other", "1", "wasm-simd", "model");
+    let mut host = InMemoryWebHost::new(Some(1000));
+    host.insert_promoted(key_a.clone(), body.clone());
+    host.insert_promoted(key_b.clone(), body.clone());
+    let store = WebModelStore::new(host);
+    assert_eq!(store.status().await.unwrap().bytes_used, body.len() as u64);
+
+    let manifest = verified("pack", "1", &hash, body.len() as u64);
+    let selection = selection_for(&manifest);
+    let mut store = WebModelStore::new(store.host().clone());
+    store.host_mut().forge_stored_file(
+        &key_a,
+        &StoredFile {
+            storage_key: key_a.clone(),
+            pack_id: "pack".to_owned(),
+            pack_version: "1".to_owned(),
+            file_id: "model".to_owned(),
+            variant_id: "wasm-simd".to_owned(),
+            sha256: hash,
+            byte_size: body.len() as u64,
+            state: InstallState::Ready,
+            stored_at: 0,
+        },
+    );
+    store
+        .set_lifecycle(create_lifecycle_snapshot(
+            "pack",
+            "1",
+            "wasm-simd",
+            0,
+            InstallState::Ready,
+        ))
+        .await
+        .expect("ready lifecycle");
+    store
+        .activate_pack(scope(), &manifest, &selection)
+        .await
+        .expect("activate");
+    store.host_mut().delete_promoted(&key_a).await.unwrap();
+    assert!(store.active_pack(scope()).await.unwrap().is_none());
+    assert!(store
+        .lifecycle("pack", "1", "wasm-simd")
+        .await
+        .expect("stale lifecycle")
+        .is_none());
+
+    let mut cleanup = WebModelStore::new(store.host().clone());
+    cleanup.recover_promotions().await.unwrap();
+    assert!(!cleanup.host().promoted_contains(&key_b));
+}
+
 #[wasm_bindgen_test]
 fn debug_and_errors_do_not_include_raw_data_urls_or_hashes() {
     let mut host = InMemoryWebHost::new(Some(1000));
@@ -382,8 +850,19 @@ fn debug_and_errors_do_not_include_raw_data_urls_or_hashes() {
         bytes: b"raw-model-bytes".to_vec(),
         finished: false,
     };
+    let request = aurora_voice_wasm::WebFetchRequest {
+        url: "https://example.test/models/model?secret=token".to_owned(),
+        offset: 0,
+        max_bytes: 8,
+        timeout_millis: 1,
+    };
+    let receipt = aurora_voice_wasm::WebDownloadReceipt {
+        byte_size: 10,
+        sha256: HASH_A.to_owned(),
+        resumed_from: 0,
+    };
     let rendered = format!(
-        "{host:?} {chunk:?} {:?} {}",
+        "{host:?} {chunk:?} {request:?} {receipt:?} {:?} {}",
         WebHostError::Network {
             code: "interrupted"
         },
@@ -391,6 +870,7 @@ fn debug_and_errors_do_not_include_raw_data_urls_or_hashes() {
     );
     assert!(!rendered.contains("raw-model-bytes"));
     assert!(!rendered.contains("https://example.test"));
+    assert!(!rendered.contains("secret"));
     assert!(!rendered.contains(HASH_A));
 }
 
@@ -432,6 +912,53 @@ async fn install_ready(
         .expect("ready lifecycle");
 }
 
+async fn install_file(
+    store: &mut WebModelStore<InMemoryWebHost>,
+    manifest: &VerifiedManifest,
+    selection: &aurora_voice_engine::SelectedVariant,
+    file_index: usize,
+    body: Vec<u8>,
+) {
+    let file = &manifest.manifest().files[file_index];
+    let task = store
+        .reserve_file(manifest, selection, file)
+        .await
+        .expect("reserve file");
+    let receipt = download_body(store, &task, body).await;
+    store
+        .promote_file(&task.storage_key, &receipt.sha256, receipt.byte_size)
+        .await
+        .expect("promote file");
+}
+
+async fn download_body(
+    store: &mut WebModelStore<InMemoryWebHost>,
+    task: &aurora_voice_engine::DownloadTask,
+    body: Vec<u8>,
+) -> aurora_voice_wasm::WebDownloadReceipt {
+    download_body_with_chunk(store, task, body, 64).await
+}
+
+async fn download_body_with_chunk(
+    store: &mut WebModelStore<InMemoryWebHost>,
+    task: &aurora_voice_engine::DownloadTask,
+    body: Vec<u8>,
+    chunk_size: u64,
+) -> aurora_voice_wasm::WebDownloadReceipt {
+    let mut network = InMemoryNetworkHost::new(chunk_size as usize);
+    network.insert(task.url.clone(), body);
+    WebModelDownloader::new(WebDownloadPolicy::bounded(chunk_size).expect("policy"))
+        .download(
+            &mut network,
+            store.host_mut(),
+            task,
+            &CancellationToken::new(),
+            |_downloaded, _expected| {},
+        )
+        .await
+        .expect("download")
+}
+
 struct AcceptingVerifier;
 
 impl SignatureVerifier for AcceptingVerifier {
@@ -442,6 +969,10 @@ impl SignatureVerifier for AcceptingVerifier {
     ) -> Result<bool, ModelPackError> {
         Ok(signature.value == "signed")
     }
+}
+
+fn scope() -> ModelStoreScope {
+    ModelStoreScope::default_for_task(PackTask::Stt)
 }
 
 fn verified(id: &str, version: &str, hash: &str, size: u64) -> VerifiedManifest {
