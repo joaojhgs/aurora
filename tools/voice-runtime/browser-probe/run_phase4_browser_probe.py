@@ -21,8 +21,13 @@ from urllib.parse import unquote, urlparse
 ARTIFACT_ENV = "AURORA_VOICE_P4_ARTIFACT_ROOT"
 VAD_ASR_BUILD = Path("builds/wasm-vad-asr/bin")
 VAD_ASR_SOURCE = Path("sources/extracted/sherpa-onnx-1.13.4/wasm/vad-asr")
+KWS_BUILD = Path("builds/wasm-kws/bin")
+KWS_SOURCE = Path("sources/extracted/sherpa-onnx-1.13.4/wasm/kws")
 MOONSHINE_TEST_WAV = Path(
     "models/extracted/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/test_wavs/0.wav"
+)
+KWS_TEST_WAV = Path(
+    "models/extracted/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/test_wavs/1.wav"
 )
 REQUIRED_ARTIFACTS = (
     VAD_ASR_BUILD / "sherpa-onnx-wasm-main-vad-asr.js",
@@ -30,7 +35,12 @@ REQUIRED_ARTIFACTS = (
     VAD_ASR_BUILD / "sherpa-onnx-wasm-main-vad-asr.data",
     VAD_ASR_SOURCE / "sherpa-onnx-vad.js",
     VAD_ASR_SOURCE / "sherpa-onnx-asr.js",
+    KWS_BUILD / "sherpa-onnx-wasm-kws-main.js",
+    KWS_BUILD / "sherpa-onnx-wasm-kws-main.wasm",
+    KWS_BUILD / "sherpa-onnx-wasm-kws-main.data",
+    KWS_SOURCE / "sherpa-onnx-kws.js",
     MOONSHINE_TEST_WAV,
+    KWS_TEST_WAV,
 )
 
 INDEX_HTML = """<!doctype html>
@@ -38,13 +48,18 @@ INDEX_HTML = """<!doctype html>
 <title>Aurora Phase 4 Browser Voice Probe</title>
 <script>
 globalThis.runAuroraPhase4VoiceProbe = (timeoutMs = 120000) => new Promise((resolve, reject) => {
-  const worker = new Worker('/probe-worker.js');
+  const workers = [
+    { name: 'vadAsr', worker: new Worker('/probe-worker.js') },
+    { name: 'kws', worker: new Worker('/kws-worker.js') },
+  ];
   const started = performance.now();
   const progress = [];
   globalThis.__auroraPhase4ProbeProgress = progress;
   let ticks = 0;
   let maxLagMs = 0;
   let last = performance.now();
+  const results = {};
+  let pending = workers.length;
   const ticker = setInterval(() => {
     const now = performance.now();
     maxLagMs = Math.max(maxLagMs, now - last - 25);
@@ -53,37 +68,57 @@ globalThis.runAuroraPhase4VoiceProbe = (timeoutMs = 120000) => new Promise((reso
   }, 25);
   const timeout = setTimeout(() => {
     clearInterval(ticker);
-    worker.terminate();
+    for (const item of workers) {
+      item.worker.terminate();
+    }
     reject(new Error(`worker timed out with progress ${JSON.stringify(progress)}`));
   }, timeoutMs);
-  worker.onmessage = (event) => {
-    if (event.data && event.data.type === 'progress') {
-      progress.push({ label: event.data.label, elapsedMs: performance.now() - started });
-      return;
-    }
-    if (event.data && event.data.type === 'result') {
+  for (const item of workers) {
+    item.worker.onmessage = (event) => {
+      if (event.data && event.data.type === 'progress') {
+        progress.push({
+          worker: item.name,
+          label: event.data.label,
+          elapsedMs: performance.now() - started,
+        });
+        return;
+      }
+      if (event.data && event.data.type === 'result') {
+        results[item.name] = event.data.result;
+        pending -= 1;
+        item.worker.terminate();
+        if (pending === 0) {
+          clearTimeout(timeout);
+          clearInterval(ticker);
+          resolve({
+            ok: Boolean(results.vadAsr && results.vadAsr.ok),
+            vad: results.vadAsr && results.vadAsr.vad,
+            asr: results.vadAsr && results.vadAsr.asr,
+            kws: results.kws,
+            kwsWithheld: Boolean(!results.kws || !results.kws.ok),
+            workerScope: Boolean(results.vadAsr && results.vadAsr.workerScope),
+            sharedArrayBuffer: Boolean(results.vadAsr && results.vadAsr.sharedArrayBuffer),
+            mainThread: {
+              elapsedMs: performance.now() - started,
+              intervalTicks: ticks,
+              maxIntervalLagMs: maxLagMs,
+            },
+            crossOriginIsolated: globalThis.crossOriginIsolated === true,
+            progress,
+          });
+        }
+      }
+    };
+    item.worker.onerror = (event) => {
       clearTimeout(timeout);
       clearInterval(ticker);
-      worker.terminate();
-      resolve({
-        ...event.data.result,
-        mainThread: {
-          elapsedMs: performance.now() - started,
-          intervalTicks: ticks,
-          maxIntervalLagMs: maxLagMs,
-        },
-        crossOriginIsolated: globalThis.crossOriginIsolated === true,
-        progress,
-      });
-    }
-  };
-  worker.onerror = (event) => {
-    clearTimeout(timeout);
-    clearInterval(ticker);
-    worker.terminate();
-    reject(new Error(event.message || 'worker error'));
-  };
-  worker.postMessage({ type: 'run' });
+      for (const other of workers) {
+        other.worker.terminate();
+      }
+      reject(new Error(event.message || `${item.name} worker error`));
+    };
+    item.worker.postMessage({ type: 'run' });
+  }
 });
 </script>
 """
@@ -311,6 +346,210 @@ self.onmessage = async (event) => {
 };
 """
 
+KWS_WORKER_JS = r"""
+let lastDownloadBucket = -1;
+
+var Module = self.Module = {
+  locateFile: (path) => `/artifacts/builds/wasm-kws/bin/${path}`,
+  mainScriptUrlOrBlob: '/artifacts/builds/wasm-kws/bin/sherpa-onnx-wasm-kws-main.js',
+  print: (...args) => console.log(...args),
+  printErr: (...args) => console.error(...args),
+  monitorRunDependencies: (left) => postProgress(`run-dependencies:${left}`),
+  setStatus: (status) => {
+    if (!status) {
+      return;
+    }
+    const download = status.match(/Downloading data\.\.\. \((\d+)\/(\d+)\)/);
+    if (download) {
+      const loaded = Number(download[1]);
+      const total = Number(download[2]);
+      const bucket = Math.floor(loaded / (4 * 1024 * 1024));
+      if (bucket === lastDownloadBucket && loaded !== total) {
+        return;
+      }
+      lastDownloadBucket = bucket;
+    }
+    postProgress(`status:${status}`);
+  },
+};
+var Module = self.Module;
+
+function postProgress(label) {
+  self.postMessage({ type: 'progress', label });
+}
+
+function waitForRuntime() {
+  return new Promise((resolve, reject) => {
+    const prior = self.Module.onRuntimeInitialized;
+    self.Module.onRuntimeInitialized = () => {
+      if (typeof prior === 'function') {
+        prior();
+      }
+      resolve();
+    };
+    self.Module.onAbort = (reason) => reject(new Error(String(reason)));
+  });
+}
+
+async function loadProbeWav() {
+  const response = await fetch(
+    '/artifacts/models/extracted/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/test_wavs/1.wav'
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to load KWS probe WAV: ${response.status}`);
+  }
+  const view = new DataView(await response.arrayBuffer());
+  if (view.getUint32(0, false) !== 0x52494646 || view.getUint32(8, false) !== 0x57415645) {
+    throw new Error('KWS probe WAV is not RIFF/WAVE');
+  }
+  let offset = 12;
+  let sampleRate = 0;
+  let channels = 0;
+  let bitsPerSample = 0;
+  let dataOffset = 0;
+  let dataBytes = 0;
+  while (offset + 8 <= view.byteLength) {
+    const chunkId = view.getUint32(offset, false);
+    const chunkSize = view.getUint32(offset + 4, true);
+    const chunkData = offset + 8;
+    if (chunkId === 0x666d7420) {
+      const audioFormat = view.getUint16(chunkData, true);
+      channels = view.getUint16(chunkData + 2, true);
+      sampleRate = view.getUint32(chunkData + 4, true);
+      bitsPerSample = view.getUint16(chunkData + 14, true);
+      if (audioFormat !== 1 || channels < 1 || bitsPerSample !== 16) {
+        throw new Error(`Unsupported KWS probe WAV format ${audioFormat}/${channels}/${bitsPerSample}`);
+      }
+    } else if (chunkId === 0x64617461) {
+      dataOffset = chunkData;
+      dataBytes = chunkSize;
+    }
+    offset = chunkData + chunkSize + (chunkSize % 2);
+  }
+  if (!sampleRate || !dataOffset || !dataBytes) {
+    throw new Error('KWS probe WAV is missing fmt or data chunks');
+  }
+  const frames = dataBytes / (channels * 2);
+  const samples = new Float32Array(frames);
+  for (let frame = 0; frame < frames; frame += 1) {
+    let mixed = 0;
+    for (let channel = 0; channel < channels; channel += 1) {
+      mixed += view.getInt16(dataOffset + (frame * channels + channel) * 2, true) / 32768;
+    }
+    samples[frame] = mixed / channels;
+  }
+  return { sampleRate, samples };
+}
+
+async function loadKeywords() {
+  const response = await fetch(
+    '/artifacts/models/extracted/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/test_wavs/test_keywords.txt'
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to load KWS keywords: ${response.status}`);
+  }
+  return response.text();
+}
+
+function runKws(Module, probe, keywords) {
+  const kws = createKws(Module, {
+    featConfig: {
+      samplingRate: 16000,
+      featureDim: 80,
+    },
+    modelConfig: {
+      transducer: {
+        encoder: './encoder-epoch-12-avg-2-chunk-16-left-64.onnx',
+        decoder: './decoder-epoch-12-avg-2-chunk-16-left-64.onnx',
+        joiner: './joiner-epoch-12-avg-2-chunk-16-left-64.onnx',
+      },
+      tokens: './tokens.txt',
+      provider: 'cpu',
+      modelType: '',
+      numThreads: 1,
+      debug: 0,
+      modelingUnit: 'bpe',
+      bpeVocab: './bpe.model',
+    },
+    maxActivePaths: 4,
+    numTrailingBlanks: 1,
+    keywordsScore: 3.0,
+    keywordsThreshold: 0.1,
+    keywords,
+  });
+  const stream = kws.createStream();
+  const detections = [];
+  const started = performance.now();
+  stream.acceptWaveform(probe.sampleRate, probe.samples);
+  stream.acceptWaveform(16000, new Float32Array(Math.floor(16000 * 0.4)));
+  while (kws.isReady(stream)) {
+    kws.decode(stream);
+    const result = kws.getResult(stream);
+    if (result && result.keyword) {
+      detections.push(result);
+      kws.reset(stream);
+    }
+  }
+  const finalResult = kws.getResult(stream);
+  if (finalResult && finalResult.keyword) {
+    detections.push(finalResult);
+  }
+  const decodeMs = performance.now() - started;
+  stream.free();
+  kws.free();
+  return {
+    ok: detections.some((item) => String(item.keyword).toUpperCase().includes('FOREVER')),
+    detections,
+    sampleRate: probe.sampleRate,
+    decodeMs,
+  };
+}
+
+async function runProbe() {
+  postProgress('start');
+  const ready = waitForRuntime();
+  postProgress('import-runtime');
+  importScripts(
+    '/artifacts/builds/wasm-kws/bin/sherpa-onnx-wasm-kws-main.js',
+    '/artifacts/sources/extracted/sherpa-onnx-1.13.4/wasm/kws/sherpa-onnx-kws.js'
+  );
+  postProgress('await-runtime');
+  await ready;
+  postProgress('load-wav');
+  const probe = await loadProbeWav();
+  postProgress('load-keywords');
+  const keywords = await loadKeywords();
+  postProgress('run-kws');
+  const kws = runKws(self.Module, probe, keywords);
+  postProgress('complete');
+  return {
+    ok: kws.ok,
+    ...kws,
+    workerScope: typeof WorkerGlobalScope !== 'undefined',
+    sharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined',
+  };
+}
+
+self.onmessage = async (event) => {
+  if (!event.data || event.data.type !== 'run') {
+    return;
+  }
+  try {
+    const result = await runProbe();
+    self.postMessage({ type: 'result', result });
+  } catch (error) {
+    self.postMessage({
+      type: 'result',
+      result: {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : '',
+      },
+    });
+  }
+};
+"""
+
 
 class ProbeError(RuntimeError):
     """Raised when the browser probe cannot be configured."""
@@ -374,6 +613,9 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
         if path == "/probe-worker.js":
             self._send_bytes(WORKER_JS.encode("utf-8"), "text/javascript; charset=utf-8")
             return
+        if path == "/kws-worker.js":
+            self._send_bytes(KWS_WORKER_JS.encode("utf-8"), "text/javascript; charset=utf-8")
+            return
         if path.startswith("/artifacts/"):
             relative = Path(path.removeprefix("/artifacts/"))
             self._send_artifact(relative)
@@ -388,6 +630,14 @@ class ProbeRequestHandler(BaseHTTPRequestHandler):
             "/sherpa-onnx-wasm-main-vad-asr.data",
         ):
             relative = VAD_ASR_BUILD / Path(path).name
+            self._send_artifact(relative)
+            return
+        if path in (
+            "/sherpa-onnx-wasm-kws-main.js",
+            "/sherpa-onnx-wasm-kws-main.wasm",
+            "/sherpa-onnx-wasm-kws-main.data",
+        ):
+            relative = KWS_BUILD / Path(path).name
             self._send_artifact(relative)
             return
         self.send_error(HTTPStatus.NOT_FOUND, "not found")

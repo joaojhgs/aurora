@@ -36,6 +36,7 @@ later implementation phases:
 | --- | --- | --- | --- |
 | sherpa-onnx source archive | `v1.13.4`, tag commit `142807252687d81b40d6315f23470a1512a00de3` | `3243cb386d3a4ac87596adf7d2c89fddf23e2948b154942b987b4d91c1fee295` | Pinned |
 | ONNX Runtime source archive | `v1.27.0`, commit `8f0278c77bf44b0cc83c098c6c722b92a36ac4b5` | `b41d09905a3c2f3a25709d1dcce8ef3942a4c2799d1046f74be7b6bbebc45e6a` | Pinned |
+| ONNX Runtime Linux x64 probe package | `1.27.0`, glibc 2.17 release | `9f0c0a6998f1b94c399eeddcb443beb4a922c9a4fd431fdc9cd6de67a1935d00` | Exact prebuilt consumed by the Linux shared-library probe; the source archive above is provenance input, not a source-build claim |
 | CPAL source archive | `v0.17.3`, commit `fd3b945bffcaa493fa7cb5ceddf9db1f9330fd30` | `1997859032580ec8a45235d8aeee093f12c69780c27051411de83d415028d14f` | Pinned |
 | Emscripten SDK archive | `4.0.23` | `a91a4c1f42dbb0345faac093161e27d43e9b6964840d8c8d80976ab8d3eaf2d3` | Pinned |
 | ONNX Runtime Android package | `1.27.0` | `a78f303a26b5e75c84c8b2a97fa2ddb400b2d1b5e069bec19aa229ccd3597fdb` | Pinned; staged prebuilt for Android source builds |
@@ -43,6 +44,13 @@ later implementation phases:
 | ONNX Runtime iOS static XCFramework | `1.27.0` | `2c4b6eda7fcf03ca51814bbc88e3709cc080e623581fce085286182cc30d60c1` | Pinned; slice inspection complete |
 | sherpa-onnx Android package | `v1.13.4` | `7983fc3de23f6e64148f2fb05fa94a2efaa8c0516cc1573383dc5c7d4d2a43b0` | Pinned |
 | sherpa-onnx iOS XCFramework | `v1.13.4` | `c5a62904bba73edc4bac89bbf51b4c3db1dd6c1b397a16ee95b2ff94701e9846` | Pinned; slice inspection complete |
+
+The machine manifest also pins every dependency fetched by the exercised
+sherpa builds: kaldi-native-fbank, KissFFT, kaldi-decoder, kaldifst, OpenFST,
+Eigen, simple-sentencepiece, and nlohmann/json. Piper-phonemize and espeak-ng
+are recorded at their exact source revisions but are blocked. Supplying an
+artifact root to `tools/voice-runtime/validate_phase4_manifest.py` verifies all
+24 declared archives and license evidence files by path, size, and SHA-256.
 
 ## Selected model candidates
 
@@ -64,23 +72,25 @@ Moonshine extracted file hashes already recorded for integration:
 | Surface | Decision | Current status |
 | --- | --- | --- |
 | Desktop local | Use Rust host code for model lifecycle and native HTTP/SSE; use CPAL `0.17.3` as the desktop audio capture/playback candidate. | Linux sherpa shared-library build completed. Standalone CPAL capture/playback and Android comparison checks passed; the full integrated local audio path remains pending. |
-| Hosted web and WebView foreground capture | Use browser microphone capture and worker-hosted WASM modules; keep the UI thread nonblocking. | Chromium worker-hosted VAD+ASR parity is proven with COOP/COEP and `SharedArrayBuffer`; KWS browser parity remains withheld after the current reshape failure, TTS is withheld from activation, and non-Chromium browser evidence remains pending. |
-| Android | Use Kotlin `AudioRecord`/`AudioManager` lifecycle and data plane into Rust with bounded PCM transfer. Treat CPAL/AAudio as comparison only for this phase. | sherpa source-built for `arm64-v8a` and `x86_64` against staged prebuilt ONNX Runtime. All four inspected libraries are ELF-correct and every LOAD segment is `0x4000` aligned. Native model execution, WebView parity, durable background voice, and physical-device results remain pending. |
+| Hosted web and WebView foreground capture | Use browser microphone capture and worker-hosted WASM modules; keep the UI thread nonblocking. | Chromium and Firefox worker-hosted VAD+Moonshine ASR parity pass with COOP/COEP and `SharedArrayBuffer`. KWS browser execution is withheld because the current WASM KWS data package is built from the upstream Wenetspeech assets instead of the selected GigaSpeech pack. WebKit remains pending; TTS is withheld from activation. |
+| Android | Use Kotlin `AudioRecord`/`AudioManager` lifecycle and data plane into Rust with bounded PCM transfer. Treat CPAL/AAudio as comparison only for this phase. | sherpa source-built for `arm64-v8a` and `x86_64` against staged prebuilt ONNX Runtime. All four inspected libraries are ELF-correct and every LOAD segment is `0x4000` aligned. Emulator runtime execution is blocked in this host session: x86_64 images require `/dev/kvm`, and ARM64 images are rejected by QEMU2 on this x86_64 host. WebView parity, durable background voice, and physical-device results remain pending. |
 | iOS | Use Swift `AVAudioEngine`/`AVAudioSession` lifecycle and data plane into Rust. Treat CPAL/CoreAudio as comparison only for this phase. | Hash-pinned XCFrameworks contain the expected device `arm64`/iOS slice and simulator `arm64`+`x86_64`/iOSSimulator slices. Runtime linking, signing, simulator execution, device microphone behavior, and packaged runtime validation remain pending. |
 
 ## Proven, rejected, and pending
 
 | Area | Status | Boundary |
 | --- | --- | --- |
-| Linux sherpa source build | Proven locally | sherpa `v1.13.4` configured with ONNX Runtime `1.27.0`, TTS enabled, C API enabled, and installed shared libraries. |
+| Linux sherpa source build | Proven locally | sherpa `v1.13.4` configured with the exact pinned ONNX Runtime Linux x64 prebuilt, TTS enabled for evidence, C API enabled, and installed shared libraries. The source-identity wrapper pins the sherpa archive/commit and suppresses an enclosing Aurora Git identity. |
 | Android source-build package alignment | Proven locally for `arm64-v8a` and `x86_64` | ONNX Runtime remains staged prebuilt. sherpa was source-built for both ABIs, all four inspected libraries were ELF-correct, and every LOAD segment reported `0x4000` alignment. |
+| Android emulator runtime | Blocked by host virtualization | API 35 x86_64 default and Google APIs system images are installed, but emulator startup fails without `/dev/kvm` access. API 35 ARM64 image is installed, but QEMU2 rejects ARM64 images on this x86_64 host. |
 | iOS XCFramework slice inspection | Proven locally for downloaded packages | Hash-pinned ONNX Runtime and sherpa XCFrameworks expose device `arm64`/iOS and simulator `arm64`+`x86_64`/iOSSimulator slices. Runtime link, signing, simulator, and physical-device checks remain pending. |
 | Rust MSRV | Proven locally for current lockfile | `cargo +1.88.0 check --locked` passed; older Rust `1.85.1` failed on locked dependency MSRV requirements. |
 | PocketTTS production use | Rejected | The inspected model pack is non-commercial. Do not ship, auto-download, or advertise it for production. |
 | sherpa-exported Silero VAD | Rejected as default | The byte file is traceable as a k2-fsa-exported Silero v4 derivative, but the exact reproducible export recipe is missing. |
 | Piper/espeak TTS source build | Rejected for activation | The Linux build emitted upstream espeak-ng `-Wstringop-overflow` warnings in `langopts.c`, and the pinned espeak chain carries GPL-3.0-or-later distribution obligations. Do not ship, auto-download, or activate this TTS path until a patched audited chain or replacement is selected. |
-| Native C API parity and TTS cancellation | Proven locally for evidence only | ASR, VAD, KWS, TTS generation, and TTS callback cancellation probes pass against the local selected/evidence packs. The TTS pass does not override the Piper/espeak activation block. |
-| WASM parity and browser nonblocking behavior | Partly proven | Chromium worker-hosted VAD+ASR decoded the Moonshine test WAV to the same JFK phrase and kept the page timer responsive. KWS browser parity remains withheld after the current ONNX Runtime reshape failure; TTS is withheld from activation. |
+| Native C API parity and TTS cancellation | Proven locally for evidence only | ASR, VAD, KWS, TTS generation, and TTS callback cancellation probes pass against the local selected/evidence packs. A Rust `1.88.0` wrapper proves header-backed C ABI ownership, STT, and callback cancellation without mirroring sherpa config structs in Rust. The TTS pass does not override the Piper/espeak activation block. |
+| WASM linking | Proven locally | Separate VAD, combined VAD+Moonshine STT, KWS, and evidence-only TTS modules linked and installed with pinned Emscripten and ONNX Runtime inputs. TTS remains blocked. |
+| WASM parity and browser nonblocking behavior | Partly proven | Chromium and Firefox worker-hosted VAD+ASR decoded the Moonshine test WAV to the same JFK phrase while page timers remained responsive. KWS browser execution is withheld until the GigaSpeech model files are packaged into the WASM KWS data archive; the current archive exposes the upstream Wenetspeech file names and fails before a valid keyword result. WebKit evidence remains pending. |
 | iOS runtime evidence | Pending external platform work | Linux-only inspection does not prove simulator, device, microphone, Swift runtime, signing, or App Store readiness. |
 
 ## Comparison candidates

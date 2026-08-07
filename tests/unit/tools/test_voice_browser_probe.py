@@ -27,6 +27,7 @@ def test_validate_artifact_root_lists_missing_required_files(tmp_path: Path) -> 
 
     assert missing
     assert "builds/wasm-vad-asr/bin/sherpa-onnx-wasm-main-vad-asr.js" in missing
+    assert "builds/wasm-kws/bin/sherpa-onnx-wasm-kws-main.js" in missing
 
 
 def test_validate_artifact_root_accepts_required_files(tmp_path: Path) -> None:
@@ -43,9 +44,13 @@ def test_worker_uses_dedicated_worker_and_real_vad_asr_assets() -> None:
     runner = load_runner()
 
     assert "new Worker('/probe-worker.js')" in runner.INDEX_HTML
+    assert "new Worker('/kws-worker.js')" in runner.INDEX_HTML
     assert "sherpa-onnx-wasm-main-vad-asr.js" in runner.WORKER_JS
     assert "new OfflineRecognizer" in runner.WORKER_JS
     assert "createVad" in runner.WORKER_JS
+    assert "sherpa-onnx-wasm-kws-main.js" in runner.KWS_WORKER_JS
+    assert "createKws" in runner.KWS_WORKER_JS
+    assert "FOREVER" in runner.KWS_WORKER_JS
 
 
 def test_server_serves_emscripten_default_wasm_basename(tmp_path: Path) -> None:
@@ -59,6 +64,23 @@ def test_server_serves_emscripten_default_wasm_basename(tmp_path: Path) -> None:
 
         response = urllib.request.urlopen(
             f"{url}sherpa-onnx-wasm-main-vad-asr.wasm", timeout=5
+        )
+
+    assert response.headers["Content-Type"] == "application/wasm"
+    assert response.read() == b"\x00asm"
+
+
+def test_server_serves_kws_emscripten_default_wasm_basename(tmp_path: Path) -> None:
+    runner = load_runner()
+    wasm = tmp_path / runner.KWS_BUILD / "sherpa-onnx-wasm-kws-main.wasm"
+    wasm.parent.mkdir(parents=True, exist_ok=True)
+    wasm.write_bytes(b"\x00asm")
+
+    with runner.serve_probe(tmp_path) as url:
+        import urllib.request
+
+        response = urllib.request.urlopen(
+            f"{url}sherpa-onnx-wasm-kws-main.wasm", timeout=5
         )
 
     assert response.headers["Content-Type"] == "application/wasm"
