@@ -17,10 +17,16 @@ import {
 const DEFAULT_MAX_FRAME_SAMPLES = 4_800
 const DEFAULT_MAX_QUEUED_BYTES = 16_000 * 2 * 10
 
-let activeOwnerId: string | null = null
+interface ActiveVoiceLock {
+  readonly ownerId: string
+  readonly token: symbol
+}
+
+let activeVoiceLock: ActiveVoiceLock | null = null
 
 export class AuroraVoiceWebRuntime {
   readonly ownerId: string
+  private readonly lockToken = Symbol('AuroraVoiceWebRuntime')
   private readonly worker
   private readonly pcmSource
   private readonly lifecycle
@@ -75,7 +81,7 @@ export class AuroraVoiceWebRuntime {
     if (this.session !== null) {
       throw new AuroraVoiceWebRuntimeError('session_active', 'This voice session is already active')
     }
-    if (activeOwnerId !== null) {
+    if (activeVoiceLock !== null) {
       throw new AuroraVoiceWebRuntimeError('active_owner_exists', 'A voice session is already active')
     }
 
@@ -88,7 +94,7 @@ export class AuroraVoiceWebRuntime {
       foregroundOnly: true
     })
 
-    activeOwnerId = this.ownerId
+    activeVoiceLock = { ownerId: this.ownerId, token: this.lockToken }
     this.state = 'active'
     this.generation = nextGeneration
     this.nextSequence = 0
@@ -134,6 +140,7 @@ export class AuroraVoiceWebRuntime {
 
   async cancel(reason = 'cancelled'): Promise<void> {
     const session = this.session
+    if (session === null) return
     const generation = this.generation
     let failed = false
     try {
@@ -207,6 +214,14 @@ export class AuroraVoiceWebRuntime {
     })
     try {
       await this.worker.post({ type: 'audio_frame', frame: envelope, pcm: copiedPcm })
+      if (
+        this.session !== session ||
+        this.state !== 'active' ||
+        this.session.sessionId !== session.sessionId ||
+        this.session.generation !== session.generation
+      ) {
+        return false
+      }
       this.nextSequence = frame.sequence + 1
       this.emit('frame_accepted', frame.sequence, frame.generation, sampleCount, byteLength, this.queuedBytes - byteLength, null)
       return true
@@ -261,7 +276,7 @@ export class AuroraVoiceWebRuntime {
   }
 
   private clearSession(nextState: Exclude<AuroraVoiceWebState, 'active'>): void {
-    if (activeOwnerId === this.ownerId) activeOwnerId = null
+    if (activeVoiceLock?.token === this.lockToken) activeVoiceLock = null
     this.state = nextState
     this.session = null
     this.nextSequence = 0
@@ -329,7 +344,7 @@ function safeIdentifier(value: string, label: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new AuroraVoiceWebRuntimeError('invalid_option', `${label} is required`)
   }
-  if (!/^[a-z0-9][a-z0-9_.:-]{0,95}$/iu.test(value)) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$/.test(value)) {
     throw new AuroraVoiceWebRuntimeError('invalid_option', `${label} must be a safe identifier`)
   }
   return value
@@ -340,7 +355,7 @@ function defaultSessionId(ownerId: string, generation: number): string {
 }
 
 function normalizeReason(reason: string): string {
-  if (/^[a-z0-9_.-]{1,48}$/iu.test(reason)) return reason
+  if (/^[A-Za-z0-9_.-]{1,48}$/.test(reason)) return reason
   return 'cancelled'
 }
 

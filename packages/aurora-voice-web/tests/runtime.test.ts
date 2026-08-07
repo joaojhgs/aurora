@@ -41,9 +41,12 @@ describe('AuroraVoiceWebRuntime', () => {
     const first = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker: new RecordingVoiceWorkerHost() })
     const sameOwner = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker: new RecordingVoiceWorkerHost() })
     const second = new AuroraVoiceWebRuntime({ ownerId: 'owner-b', worker: new RecordingVoiceWorkerHost() })
+    const third = new AuroraVoiceWebRuntime({ ownerId: 'owner-c', worker: new RecordingVoiceWorkerHost() })
     await first.start()
     await expect(sameOwner.start()).rejects.toMatchObject({ code: 'active_owner_exists' })
     await expect(second.start()).rejects.toMatchObject({ code: 'active_owner_exists' })
+    await expect(sameOwner.cancel()).resolves.toBeUndefined()
+    await expect(third.start()).rejects.toMatchObject({ code: 'active_owner_exists' })
     await first.cancel()
     await expect(second.start()).resolves.toMatchObject({ ownerId: 'owner-b' })
     await second.cancel()
@@ -51,6 +54,10 @@ describe('AuroraVoiceWebRuntime', () => {
 
   it('validates safe owner, session, lifecycle, and bound inputs', async () => {
     expect(() => new AuroraVoiceWebRuntime({ ownerId: '/secret/path', worker: new RecordingVoiceWorkerHost() }))
+      .toThrow(AuroraVoiceWebRuntimeError)
+    expect(() => new AuroraVoiceWebRuntime({ ownerId: 'owner-K', worker: new RecordingVoiceWorkerHost() }))
+      .toThrow(AuroraVoiceWebRuntimeError)
+    expect(() => new AuroraVoiceWebRuntime({ ownerId: 'owner-ſ', worker: new RecordingVoiceWorkerHost() }))
       .toThrow(AuroraVoiceWebRuntimeError)
     expect(() => new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker: new RecordingVoiceWorkerHost(), maxFrameSamples: 4_801 }))
       .toThrow(AuroraVoiceWebRuntimeError)
@@ -63,6 +70,13 @@ describe('AuroraVoiceWebRuntime', () => {
       sessionIdFactory: () => '/secret/session'
     })
     await expect(badSession.start()).rejects.toMatchObject({ code: 'invalid_option' })
+
+    const unicodeSession = new AuroraVoiceWebRuntime({
+      ownerId: 'owner-a',
+      worker: new RecordingVoiceWorkerHost(),
+      sessionIdFactory: () => 'session-K'
+    })
+    await expect(unicodeSession.start()).rejects.toMatchObject({ code: 'invalid_option' })
 
     const afterBadSession = new AuroraVoiceWebRuntime({ ownerId: 'owner-b', worker: new RecordingVoiceWorkerHost() })
     await expect(afterBadSession.start()).resolves.toMatchObject({ ownerId: 'owner-b' })
@@ -161,6 +175,23 @@ describe('AuroraVoiceWebRuntime', () => {
     await expect(Promise.all([first, second])).resolves.toEqual([true, false])
     expect(worker.commandsOf('audio_frame')).toHaveLength(1)
     await runtime.cancel()
+  })
+
+  it('does not accept an audio frame after concurrent cancellation during worker delivery', async () => {
+    const worker = new DeferredAudioWorkerHost()
+    const events: AuroraVoiceWebEvent[] = []
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker })
+    runtime.onEvent((event) => events.push(event))
+    const session = await runtime.start()
+
+    const pushed = runtime.pushFrame(frame(session.sessionId, session.generation, 0, [1]))
+    await worker.waitForAudioPost()
+    await runtime.cancel()
+    worker.releaseAudioPosts()
+
+    await expect(pushed).resolves.toBe(false)
+    expect(events.some((event) => event.kind === 'frame_accepted')).toBe(false)
+    expect(runtime.snapshot()).toMatchObject({ state: 'cancelled', sessionId: null, queuedBytes: 0, nextSequence: 0 })
   })
 
   it('releases queued bytes and fails closed when worker audio delivery fails', async () => {
