@@ -955,6 +955,191 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn runtime_generation_preview_matches_next_accepted_turn() -> Result<(), VoiceCoreError> {
+        let audio = FakeAudioInput::new(Vec::new());
+        let audio_feed = audio.clone();
+        let engine = FakeEngine::new("preview transcript");
+        let transport = FakeTransport::new("preview answer");
+        let output = FakeAudioOutput::new();
+        let sink = FakeEventSink::default();
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine.clone(),
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
+
+        let preview = runtime.next_capture_generation()?;
+        audio_feed.push_frame(fake_frame_with_samples(1, preview, vec![0.3], false)?);
+        let response = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(24),
+                CancellationToken::new(),
+            )
+            .await?;
+        assert_eq!(response, "preview answer");
+
+        let (_audio, engine, _tts, transport, output, _sink) = runtime.into_parts();
+        assert_eq!(engine.transcribed_audio(), &[vec![0.3]]);
+        assert_eq!(transport.invoked()[0].generation, preview);
+        assert_eq!(output.played()[0].generation, preview);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn runtime_generation_preview_remains_monotonic_after_pre_start_cancellation(
+    ) -> Result<(), VoiceCoreError> {
+        let audio = FakeAudioInput::new(Vec::new());
+        let audio_feed = audio.clone();
+        let engine = FakeEngine::new("after cancel");
+        let transport = FakeTransport::new("after cancel answer");
+        let output = FakeAudioOutput::new();
+        let sink = FakeEventSink::default();
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine.clone(),
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
+
+        let cancelled_generation = runtime.next_capture_generation()?;
+        let cancellation = CancellationToken::new();
+        cancellation.cancel();
+        let cancelled = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(25),
+                cancellation,
+            )
+            .await;
+        assert!(matches!(cancelled, Err(VoiceCoreError::Cancelled)));
+
+        let next_generation = runtime.next_capture_generation()?;
+        assert!(next_generation > cancelled_generation);
+        audio_feed.push_frame(fake_frame_with_samples(
+            2,
+            next_generation,
+            vec![0.4],
+            false,
+        )?);
+        let response = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(35),
+                CancellationToken::new(),
+            )
+            .await?;
+        assert_eq!(response, "after cancel answer");
+
+        let (_audio, engine, _tts, transport, output, _sink) = runtime.into_parts();
+        assert_eq!(engine.transcribed_audio(), &[vec![0.4]]);
+        assert_eq!(transport.invoked()[0].generation, next_generation);
+        assert_eq!(output.played()[0].generation, next_generation);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn runtime_generation_preview_advances_after_audio_start_failure(
+    ) -> Result<(), VoiceCoreError> {
+        let audio = FakeAudioInput::new(Vec::new()).with_start_failure();
+        let engine = FakeEngine::new("unused");
+        let transport = FakeTransport::new("unused answer");
+        let output = FakeAudioOutput::new();
+        let sink = FakeEventSink::default();
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine.clone(),
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
+
+        let failed_generation = runtime.next_capture_generation()?;
+        let result = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(26),
+                CancellationToken::new(),
+            )
+            .await;
+        assert!(matches!(result, Err(VoiceCoreError::InvalidTransition)));
+        assert_eq!(
+            runtime.next_capture_generation()?,
+            Generation(failed_generation.0 + 1)
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn runtime_generation_preview_remains_monotonic_after_turn_failure(
+    ) -> Result<(), VoiceCoreError> {
+        let audio = FakeAudioInput::new(vec![
+            fake_frame_with_samples(1, Generation(1), vec![0.1], false)?,
+            fake_frame_with_samples(2, Generation(1), vec![0.2], true)?,
+        ]);
+        let audio_feed = audio.clone();
+        let engine = FakeEngine::new("after failure");
+        let transport = FakeTransport::new("after failure answer");
+        let output = FakeAudioOutput::new();
+        let sink = FakeEventSink::default();
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine.clone(),
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
+
+        let failed_generation = runtime.next_capture_generation()?;
+        let failed = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(27),
+                CancellationToken::new(),
+            )
+            .await;
+        assert!(matches!(failed, Err(VoiceCoreError::InvalidTransition)));
+
+        let next_generation = runtime.next_capture_generation()?;
+        assert!(next_generation > failed_generation);
+        audio_feed.push_frame(fake_frame_with_samples(
+            3,
+            next_generation,
+            vec![0.5],
+            false,
+        )?);
+        let response = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(37),
+                CancellationToken::new(),
+            )
+            .await?;
+        assert_eq!(response, "after failure answer");
+
+        let (_audio, engine, _tts, transport, output, _sink) = runtime.into_parts();
+        assert_eq!(engine.transcribed_audio(), &[vec![0.5]]);
+        assert_eq!(transport.invoked()[0].generation, next_generation);
+        assert_eq!(output.played()[0].generation, next_generation);
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn finite_stt_receives_only_current_generation_pcm() -> Result<(), VoiceCoreError> {
         let frames = vec![
             fake_frame_with_samples(1, Generation(0), vec![0.9], false)?,

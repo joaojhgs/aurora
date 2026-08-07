@@ -53,6 +53,8 @@ pub enum VoiceCoreError {
     NoOwnerActive,
     #[error("capture owner mismatch")]
     OwnerMismatch,
+    #[error("capture generation exhausted")]
+    GenerationExhausted,
     #[error("invalid state transition")]
     InvalidTransition,
     #[error("cancelled")]
@@ -494,14 +496,28 @@ impl CaptureLeaseManager {
         Self::default()
     }
 
+    /// Returns the generation that the next accepted capture start will receive.
+    ///
+    /// This is a preview contract for single-owner actors that need to prepare
+    /// capture-scoped work before calling [`Self::request_start`]. It does not
+    /// reserve or mutate the counter; callers must treat any intervening
+    /// accepted start as invalidating the preview.
+    pub fn next_generation(&self) -> Result<Generation, VoiceCoreError> {
+        if self.active.is_some() {
+            return Err(VoiceCoreError::OwnerAlreadyActive);
+        }
+        self.generation
+            .checked_add(1)
+            .map(Generation)
+            .ok_or(VoiceCoreError::GenerationExhausted)
+    }
+
     pub fn request_start(
         &mut self,
         mut lease: VoiceCaptureLease,
     ) -> Result<VoiceCaptureLease, VoiceCoreError> {
-        if self.active.is_some() {
-            return Err(VoiceCoreError::OwnerAlreadyActive);
-        }
-        self.generation = self.generation.saturating_add(1);
+        let generation = self.next_generation()?;
+        self.generation = generation.0;
         lease.generation = Generation(self.generation);
         lease.heartbeat_at = lease.created_at;
         self.active = Some(lease.clone());
@@ -936,6 +952,16 @@ where
 
     pub fn has_active_capture(&self) -> bool {
         self.leases.has_active()
+    }
+
+    /// Returns the generation that the next accepted runtime capture will use.
+    ///
+    /// The value is exact for callers that serialize access to this runtime:
+    /// the next successful push-to-talk or wake capture start assigns this same
+    /// generation. The method fails while a capture is active and at counter
+    /// exhaustion instead of exposing or reusing the private counter.
+    pub fn next_capture_generation(&self) -> Result<Generation, VoiceCoreError> {
+        self.leases.next_generation()
     }
 
     pub fn into_parts(self) -> (A, E, P, T, O, S) {
@@ -1509,6 +1535,10 @@ mod tests {
             TimestampMicros(1),
         ))?;
         assert_eq!(first.generation, Generation(1));
+        assert!(matches!(
+            manager.next_generation(),
+            Err(VoiceCoreError::OwnerAlreadyActive)
+        ));
         assert!(manager.accepts_generation(Generation(1)));
         assert!(matches!(
             manager.request_start(default_test_lease(
@@ -1525,6 +1555,51 @@ mod tests {
         ))?;
         assert_eq!(second.generation, Generation(2));
         Ok(())
+    }
+
+    #[test]
+    fn capture_generation_preview_matches_next_start_and_stays_monotonic(
+    ) -> Result<(), VoiceCoreError> {
+        let mut manager = CaptureLeaseManager::new();
+        let first_preview = manager.next_generation()?;
+        assert_eq!(first_preview, Generation(1));
+        let first = manager.request_start(default_test_lease(
+            CaptureOwnerKind::Native,
+            TimestampMicros(1),
+        ))?;
+        assert_eq!(first.generation, first_preview);
+
+        manager.release(&CaptureOwnerKind::Native, first.generation)?;
+        let second_preview = manager.next_generation()?;
+        assert_eq!(second_preview, Generation(2));
+        let second = manager.request_start(default_test_lease(
+            CaptureOwnerKind::Web,
+            TimestampMicros(2),
+        ))?;
+        assert_eq!(second.generation, second_preview);
+        assert!(second.generation > first.generation);
+        Ok(())
+    }
+
+    #[test]
+    fn capture_generation_exhaustion_fails_closed() {
+        let mut manager = CaptureLeaseManager {
+            active: None,
+            generation: u64::MAX,
+        };
+        assert!(matches!(
+            manager.next_generation(),
+            Err(VoiceCoreError::GenerationExhausted)
+        ));
+        assert!(matches!(
+            manager.request_start(default_test_lease(
+                CaptureOwnerKind::Native,
+                TimestampMicros(1)
+            )),
+            Err(VoiceCoreError::GenerationExhausted)
+        ));
+        assert!(!manager.has_active());
+        assert!(!manager.accepts_generation(Generation(u64::MAX)));
     }
 
     #[test]
