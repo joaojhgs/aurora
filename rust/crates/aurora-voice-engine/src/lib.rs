@@ -1719,6 +1719,18 @@ impl TtsSynthesisConfig {
         Ok(())
     }
 
+    pub fn validate_route(&self, route: &RouteTtsBinding) -> Result<(), EngineError> {
+        self.validate()?;
+        route.validate()?;
+        if route.sample_rate_hz() != self.sample_rate_hz
+            || route.channels() != self.channels
+            || route.voice_state_compatibility_group_id() != self.voice_state_compatibility_group_id
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
+    }
+
     pub fn logical_voice_id(&self) -> &str {
         &self.logical_voice_id
     }
@@ -1776,7 +1788,7 @@ impl Default for TtsSynthesisConfig {
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct BoundTtsSynthesisRequest {
-    request: BoundTaskRequest,
+    binding: TtsSynthesisBinding,
     text: String,
     config: TtsSynthesisConfig,
     identity: TtsRequestIdentity,
@@ -1793,17 +1805,60 @@ impl BoundTtsSynthesisRequest {
         if !valid_tts_text(&text) {
             return Err(EngineError::InvalidRequest);
         }
-        let identity = TtsRequestIdentity::for_request(&request, &text, &config);
+        let binding = TtsSynthesisBinding::LocalTask(Box::new(request));
+        let identity = TtsRequestIdentity::for_request(&binding, &text, &config);
         Ok(Self {
-            request,
+            binding,
             text,
             config,
             identity,
         })
     }
 
-    pub fn request(&self) -> &BoundTaskRequest {
-        &self.request
+    pub fn new_route(
+        request: RouteTtsSynthesisRequest,
+        text: impl Into<String>,
+        config: TtsSynthesisConfig,
+    ) -> Result<Self, EngineError> {
+        config.validate_route(request.route())?;
+        let text = text.into();
+        if !valid_tts_text(&text) {
+            return Err(EngineError::InvalidRequest);
+        }
+        let binding = TtsSynthesisBinding::Route(request);
+        let identity = TtsRequestIdentity::for_request(&binding, &text, &config);
+        Ok(Self {
+            binding,
+            text,
+            config,
+            identity,
+        })
+    }
+
+    pub fn binding(&self) -> &TtsSynthesisBinding {
+        &self.binding
+    }
+
+    pub fn request(&self) -> Option<&BoundTaskRequest> {
+        match &self.binding {
+            TtsSynthesisBinding::LocalTask(request) => Some(request.as_ref()),
+            TtsSynthesisBinding::Route(_) => None,
+        }
+    }
+
+    pub fn local_request(&self) -> Option<&BoundTaskRequest> {
+        self.request()
+    }
+
+    pub fn route_request(&self) -> Option<&RouteTtsSynthesisRequest> {
+        match &self.binding {
+            TtsSynthesisBinding::LocalTask(_) => None,
+            TtsSynthesisBinding::Route(request) => Some(request),
+        }
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.binding.generation()
     }
 
     pub fn text(&self) -> &str {
@@ -1823,12 +1878,9 @@ impl fmt::Debug for BoundTtsSynthesisRequest {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("BoundTtsSynthesisRequest")
-            .field("task", &self.request.request().task)
-            .field("generation", &self.request.request().generation)
-            .field(
-                "language_present",
-                &self.request.request().language.as_ref().is_some(),
-            )
+            .field("binding", &self.binding)
+            .field("generation", &self.binding.generation())
+            .field("language_present", &self.binding.language().is_some())
             .field("text_bytes", &self.text.len())
             .field("sample_rate_hz", &self.config.sample_rate_hz())
             .field("channels", &self.config.channels())
@@ -1839,15 +1891,262 @@ impl fmt::Debug for BoundTtsSynthesisRequest {
     }
 }
 
+#[derive(Clone, PartialEq, Eq)]
+pub enum TtsSynthesisBinding {
+    LocalTask(Box<BoundTaskRequest>),
+    Route(RouteTtsSynthesisRequest),
+}
+
+impl TtsSynthesisBinding {
+    pub fn generation(&self) -> u64 {
+        match self {
+            Self::LocalTask(request) => request.request().generation,
+            Self::Route(request) => request.generation(),
+        }
+    }
+
+    pub fn language(&self) -> Option<&str> {
+        match self {
+            Self::LocalTask(request) => request.request().language.as_deref(),
+            Self::Route(request) => request.language(),
+        }
+    }
+}
+
+impl fmt::Debug for TtsSynthesisBinding {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::LocalTask(request) => formatter
+                .debug_struct("TtsSynthesisBinding::LocalTask")
+                .field("task", &request.request().task)
+                .field("generation", &request.request().generation)
+                .field("language_present", &request.request().language.is_some())
+                .field("binding", request.binding())
+                .finish(),
+            Self::Route(request) => formatter
+                .debug_struct("TtsSynthesisBinding::Route")
+                .field("generation", &request.generation())
+                .field("language_present", &request.language().is_some())
+                .field("route", request.route())
+                .finish(),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct RouteTtsBinding {
+    route_id: String,
+    voice_state_compatibility_group_id: String,
+    sample_rate_hz: u32,
+    channels: u16,
+    route_revision: u64,
+}
+
+impl RouteTtsBinding {
+    pub fn new(
+        route_id: impl Into<String>,
+        voice_state_compatibility_group_id: impl Into<String>,
+        sample_rate_hz: u32,
+        route_revision: u64,
+    ) -> Result<Self, EngineError> {
+        let binding = Self {
+            route_id: route_id.into(),
+            voice_state_compatibility_group_id: voice_state_compatibility_group_id.into(),
+            sample_rate_hz,
+            channels: MONO_CHANNELS,
+            route_revision,
+        };
+        binding.validate()?;
+        Ok(binding)
+    }
+
+    pub fn validate(&self) -> Result<(), EngineError> {
+        if !valid_logical_id(&self.route_id)
+            || !valid_logical_id(&self.voice_state_compatibility_group_id)
+            || !(TTS_MIN_SAMPLE_RATE_HZ..=TTS_MAX_SAMPLE_RATE_HZ).contains(&self.sample_rate_hz)
+            || self.channels != MONO_CHANNELS
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
+    }
+
+    pub fn route_id(&self) -> &str {
+        &self.route_id
+    }
+
+    pub fn voice_state_compatibility_group_id(&self) -> &str {
+        &self.voice_state_compatibility_group_id
+    }
+
+    pub fn sample_rate_hz(&self) -> u32 {
+        self.sample_rate_hz
+    }
+
+    pub fn channels(&self) -> u16 {
+        self.channels
+    }
+
+    pub fn route_revision(&self) -> u64 {
+        self.route_revision
+    }
+}
+
+impl fmt::Debug for RouteTtsBinding {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RouteTtsBinding")
+            .field("route_id_bytes", &self.route_id.len())
+            .field(
+                "voice_state_compatibility_group_id_bytes",
+                &self.voice_state_compatibility_group_id.len(),
+            )
+            .field("sample_rate_hz", &self.sample_rate_hz)
+            .field("channels", &self.channels)
+            .field("route_revision", &self.route_revision)
+            .finish()
+    }
+}
+
+impl Serialize for RouteTtsBinding {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        let mut state = serializer.serialize_struct("RouteTtsBinding", 5)?;
+        state.serialize_field("route_id_bytes", &self.route_id.len())?;
+        state.serialize_field(
+            "voice_state_compatibility_group_id_bytes",
+            &self.voice_state_compatibility_group_id.len(),
+        )?;
+        state.serialize_field("sample_rate_hz", &self.sample_rate_hz)?;
+        state.serialize_field("channels", &self.channels)?;
+        state.serialize_field("route_revision", &self.route_revision)?;
+        state.end()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct RouteTtsSynthesisRequest {
+    route: RouteTtsBinding,
+    language: Option<String>,
+    generation: u64,
+}
+
+impl RouteTtsSynthesisRequest {
+    pub fn new(
+        route: RouteTtsBinding,
+        language: Option<String>,
+        generation: u64,
+    ) -> Result<Self, EngineError> {
+        route.validate()?;
+        if language
+            .as_deref()
+            .is_some_and(|language| !valid_logical_id(language))
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(Self {
+            route,
+            language,
+            generation,
+        })
+    }
+
+    pub fn route(&self) -> &RouteTtsBinding {
+        &self.route
+    }
+
+    pub fn language(&self) -> Option<&str> {
+        self.language.as_deref()
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+}
+
+impl fmt::Debug for RouteTtsSynthesisRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RouteTtsSynthesisRequest")
+            .field("route", &self.route)
+            .field("language_present", &self.language.is_some())
+            .field("generation", &self.generation)
+            .finish()
+    }
+}
+
+impl Serialize for RouteTtsSynthesisRequest {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        let mut state = serializer.serialize_struct("RouteTtsSynthesisRequest", 3)?;
+        state.serialize_field("route", &self.route)?;
+        state.serialize_field("language_present", &self.language.is_some())?;
+        state.serialize_field("generation", &self.generation)?;
+        state.end()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub enum TtsSynthesisProviderBinding {
+    LocalTask(Box<TaskPackBinding>),
+    Route(RouteTtsBinding),
+}
+
+impl TtsSynthesisProviderBinding {
+    pub fn voice_state_compatibility_group_id(&self) -> &str {
+        match self {
+            Self::LocalTask(binding) => binding.voice_state_compatibility_group_id(),
+            Self::Route(binding) => binding.voice_state_compatibility_group_id(),
+        }
+    }
+
+    pub fn sample_rate_hz(&self) -> u32 {
+        match self {
+            Self::LocalTask(binding) => binding.sample_rate_hz(),
+            Self::Route(binding) => binding.sample_rate_hz(),
+        }
+    }
+
+    pub fn channels(&self) -> u16 {
+        match self {
+            Self::LocalTask(binding) => binding.channels(),
+            Self::Route(binding) => binding.channels(),
+        }
+    }
+}
+
+impl fmt::Debug for TtsSynthesisProviderBinding {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::LocalTask(binding) => formatter
+                .debug_struct("TtsSynthesisProviderBinding::LocalTask")
+                .field("binding", binding)
+                .finish(),
+            Self::Route(binding) => formatter
+                .debug_struct("TtsSynthesisProviderBinding::Route")
+                .field("route", binding)
+                .finish(),
+        }
+    }
+}
+
 /// Opaque bounded identity for one bound TTS request.
 #[derive(Clone, PartialEq, Eq)]
 pub struct TtsRequestIdentity([u8; 32]);
 
 impl TtsRequestIdentity {
-    fn for_request(request: &BoundTaskRequest, text: &str, config: &TtsSynthesisConfig) -> Self {
+    fn for_request(binding: &TtsSynthesisBinding, text: &str, config: &TtsSynthesisConfig) -> Self {
         let mut hasher = Sha256::new();
-        hash_part(&mut hasher, b"aurora.tts.request.v1");
-        hash_bound_task_request(&mut hasher, request);
+        hash_part(&mut hasher, b"aurora.tts.request.v2");
+        hash_tts_binding(&mut hasher, binding);
         hash_part(&mut hasher, config.logical_voice_id().as_bytes());
         hash_part(
             &mut hasher,
@@ -2028,11 +2327,6 @@ impl fmt::Debug for TtsSynthesisResult {
     }
 }
 
-#[async_trait(?Send)]
-pub trait TtsChunkSink {
-    async fn push_chunk(&mut self, chunk: TtsAudioChunk) -> Result<(), EngineError>;
-}
-
 /// VAD-only streaming provider boundary.
 #[async_trait(?Send)]
 pub trait VadStreamProvider: TaskProvider {
@@ -2111,15 +2405,23 @@ pub trait StreamingSttProvider: TaskProvider {
     ) -> Result<(), EngineError>;
 }
 
-/// Streaming TTS provider boundary.
+/// TTS synthesis boundary that exposes the provider's real binding shape.
 #[async_trait(?Send)]
-pub trait StreamingTtsProvider: TaskProvider {
-    async fn synthesize_streaming(
+pub trait TtsSynthesisPort {
+    fn synthesis_binding(&self) -> Result<TtsSynthesisProviderBinding, EngineError>;
+
+    async fn warm_synthesis(
+        &mut self,
+        binding: TtsSynthesisProviderBinding,
+    ) -> Result<(), EngineError>;
+
+    async fn synthesize_text(
         &mut self,
         request: BoundTtsSynthesisRequest,
-        sink: &mut dyn TtsChunkSink,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<TtsSynthesisResult, EngineError>;
+
+    async fn cancel_synthesis_generation(&mut self, generation: u64) -> Result<(), EngineError>;
 }
 
 fn duration_ms_to_samples(duration_ms: u32, sample_rate_hz: u32) -> Result<u64, EngineError> {
@@ -2207,6 +2509,31 @@ fn hash_bound_task_request(hasher: &mut Sha256, request: &BoundTaskRequest) {
     hash_part(hasher, &binding.frame_size().to_le_bytes());
 }
 
+fn hash_tts_binding(hasher: &mut Sha256, binding: &TtsSynthesisBinding) {
+    match binding {
+        TtsSynthesisBinding::LocalTask(request) => {
+            hash_part(hasher, b"local_task");
+            hash_bound_task_request(hasher, request);
+        }
+        TtsSynthesisBinding::Route(request) => {
+            hash_part(hasher, b"route");
+            hash_part(hasher, request.route().route_id().as_bytes());
+            hash_part(
+                hasher,
+                request
+                    .route()
+                    .voice_state_compatibility_group_id()
+                    .as_bytes(),
+            );
+            hash_part(hasher, &request.route().sample_rate_hz().to_le_bytes());
+            hash_part(hasher, &request.route().channels().to_le_bytes());
+            hash_part(hasher, &request.route().route_revision().to_le_bytes());
+            hash_part(hasher, request.language().unwrap_or("").as_bytes());
+            hash_part(hasher, &request.generation().to_le_bytes());
+        }
+    }
+}
+
 fn manifest_supports_task(manifest: &ModelPackManifest, task: VoiceTask) -> bool {
     manifest
         .tasks
@@ -2279,12 +2606,6 @@ pub trait SpeechEngine: TaskProvider {
         audio: FiniteSttAudio,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<FiniteSttResult, EngineError>;
-
-    async fn synthesize_text(
-        &mut self,
-        request: BoundTtsSynthesisRequest,
-        cancellation: &dyn Fn() -> bool,
-    ) -> Result<TtsSynthesisResult, EngineError>;
 }
 
 #[cfg(test)]
@@ -2531,6 +2852,36 @@ mod tests {
             None,
             chunk_samples,
         )
+    }
+
+    fn route_tts_request_with(
+        generation: u64,
+        text: &str,
+        route_id: &str,
+        route_revision: u64,
+    ) -> BoundTtsSynthesisRequest {
+        let route = RouteTtsBinding::new(
+            route_id,
+            "voice-state-a",
+            VAD_SAMPLE_RATE_HZ,
+            route_revision,
+        )
+        .expect("valid route binding");
+        let config = TtsSynthesisConfig::new(
+            "voice.default",
+            route.voice_state_compatibility_group_id().to_owned(),
+            route.sample_rate_hz(),
+            1024,
+            None,
+        )
+        .expect("valid tts config");
+        BoundTtsSynthesisRequest::new_route(
+            RouteTtsSynthesisRequest::new(route, Some("en".to_owned()), generation)
+                .expect("valid route request"),
+            text,
+            config,
+        )
+        .expect("bound route tts request")
     }
 
     fn bound_finite_stt_request(generation: u64, frames: usize) -> BoundFiniteSttRequest {
@@ -3453,6 +3804,46 @@ mod tests {
         assert!(!debug.contains("voice.secret"));
         assert!(!debug.contains("voice-state-secret"));
         assert!(!debug.contains("SECRET_TTS_TEXT"));
+    }
+
+    #[test]
+    fn route_tts_requests_keep_identity_strict_and_serialization_redacted() {
+        let secret_route = "route.SECRET_TTS_ROUTE_DO_NOT_LEAK_7c6b5a";
+        let base = route_tts_request_with(51, "hello", secret_route, 3);
+        assert!(base.request().is_none());
+        assert!(base.local_request().is_none());
+        assert_eq!(
+            base.route_request().expect("route request").generation(),
+            51
+        );
+        let chunk =
+            TtsAudioChunk::new(&base, 1, 16_000, MONO_CHANNELS, vec![7; 12], true).expect("chunk");
+        TtsSynthesisResult::new(&base, vec![chunk.clone()], false).expect("exact route accepts");
+
+        let different_generation = route_tts_request_with(52, "hello", secret_route, 3);
+        assert_eq!(
+            TtsSynthesisResult::new(&different_generation, vec![chunk.clone()], false),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let different_revision = route_tts_request_with(51, "hello", secret_route, 4);
+        assert_eq!(
+            TtsSynthesisResult::new(&different_revision, vec![chunk], false),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let debug = format!("{base:?}");
+        assert!(debug.contains("TtsSynthesisBinding::Route"));
+        assert!(!debug.contains(secret_route));
+        assert!(!debug.contains("SECRET_TTS_ROUTE"));
+        assert!(!debug.contains("hello"));
+        let encoded = serde_json::to_string(base.route_request().expect("route request"))
+            .expect("redacted route request serializes");
+        assert!(encoded.contains("route_id_bytes"));
+        assert!(encoded.contains("\"generation\":51"));
+        assert!(!encoded.contains(secret_route));
+        assert!(!encoded.contains("SECRET_TTS_ROUTE"));
+        assert!(!encoded.contains("\"en\""));
     }
 
     #[test]

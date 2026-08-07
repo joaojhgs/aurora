@@ -8,12 +8,11 @@
 use async_trait::async_trait;
 use aurora_voice_engine::{
     check_engine_cancellation, BoundFiniteSttRequest, BoundKwsRequest, BoundStreamSession,
-    BoundTaskRequest, BoundTtsSynthesisRequest, BoundVadRequest, EngineError, EngineFaultCode,
-    FiniteSttAudio, FiniteSttResult, KeywordMatch, KwsConfig, KwsCooldownState, KwsFrameResult,
-    ResourceReport, SpeechEngine, SpeechSegment, StreamResetReason, StreamSessionId,
-    StreamingAudioFrame, TaskCapability, TaskPackBinding, TaskProvider, TaskReadiness,
-    TtsSynthesisResult, VadAcceptResult, VadConfig, VadStreamProvider, VoiceTask, MONO_CHANNELS,
-    VAD_SAMPLE_RATE_HZ, VAD_WINDOW_SIZE_SAMPLES,
+    BoundTaskRequest, BoundVadRequest, EngineError, EngineFaultCode, FiniteSttAudio,
+    FiniteSttResult, KeywordMatch, KwsConfig, KwsCooldownState, KwsFrameResult, ResourceReport,
+    SpeechEngine, SpeechSegment, StreamResetReason, StreamSessionId, StreamingAudioFrame,
+    TaskCapability, TaskPackBinding, TaskProvider, TaskReadiness, VadAcceptResult, VadConfig,
+    VadStreamProvider, VoiceTask, MONO_CHANNELS, VAD_SAMPLE_RATE_HZ, VAD_WINDOW_SIZE_SAMPLES,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -952,14 +951,6 @@ where
             return Err(EngineError::Cancelled);
         }
         FiniteSttResult::new(&request, &audio, transcript)
-    }
-
-    async fn synthesize_text(
-        &mut self,
-        _request: BoundTtsSynthesisRequest,
-        _cancellation: &dyn Fn() -> bool,
-    ) -> Result<TtsSynthesisResult, EngineError> {
-        Err(EngineError::TaskUnavailable)
     }
 }
 
@@ -2537,7 +2528,7 @@ mod tests {
     }
 
     #[test]
-    fn finite_stt_tts_is_unavailable_and_faults_are_redacted() {
+    fn finite_stt_exposes_only_stt_and_faults_are_redacted() {
         let mut engine = stt_engine(FakeSttBackend {
             fail: true,
             ..FakeSttBackend::default()
@@ -2549,30 +2540,10 @@ mod tests {
         assert!(rendered.contains("provider"));
         assert!(!rendered.contains("/secret"));
         assert!(!rendered.contains("private"));
-
-        let tts_binding = {
-            let (manifest, selection) = selected_for("tts-pack", PackTask::Tts);
-            TaskPackBinding::from_selection(VoiceTask::TextToSpeech, &manifest, &selection)
-                .expect("tts binding")
-        };
-        let tts_request = aurora_voice_engine::BoundTtsSynthesisRequest::new(
-            task_request(tts_binding, VoiceTask::TextToSpeech, 1),
-            "hello",
-            aurora_voice_engine::TtsSynthesisConfig::new(
-                "default",
-                "voice-state-a",
-                VAD_SAMPLE_RATE_HZ,
-                1024,
-                None,
-            )
-            .expect("tts config"),
-        )
-        .expect("tts request");
-        assert_eq!(
-            futures_lite(tts_request, |request| engine
-                .synthesize_text(request, &|| false)),
-            Err(EngineError::TaskUnavailable)
-        );
+        assert!(!engine
+            .capabilities()
+            .iter()
+            .any(|capability| capability.task() == VoiceTask::TextToSpeech));
     }
 
     #[cfg(all(feature = "native-kws", not(target_arch = "wasm32")))]
