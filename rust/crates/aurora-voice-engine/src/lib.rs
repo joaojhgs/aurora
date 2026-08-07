@@ -2,9 +2,13 @@
 
 #![forbid(unsafe_code)]
 
+pub mod model_pack;
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+pub use model_pack::*;
 
 /// Engine task families the shared runtime can request without choosing a
 /// concrete inference backend.

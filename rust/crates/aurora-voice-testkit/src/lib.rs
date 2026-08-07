@@ -2,6 +2,8 @@
 
 #![forbid(unsafe_code)]
 
+pub mod model_store;
+
 use async_trait::async_trait;
 use aurora_voice_core::{
     AudioInput, CancellationToken, CaptureStartReason, EngineError, Generation, PcmFrame,
@@ -11,6 +13,8 @@ use aurora_voice_core::{
 };
 use serde_json::json;
 use std::collections::VecDeque;
+
+pub use model_store::*;
 
 #[derive(Debug, Clone, Default)]
 pub struct FakeClock {
