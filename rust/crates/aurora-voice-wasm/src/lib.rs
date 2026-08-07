@@ -23,6 +23,7 @@ const PROMOTION_PREFIX: &str = "aurora.voice.web-store.v1:promotion:";
 const LIFECYCLE_PREFIX: &str = "aurora.voice.web-store.v1:lifecycle:";
 const LIFECYCLE_BACKING_PREFIX: &str = "aurora.voice.web-store.v1:lifecycle-backing:";
 const MUTATION_PREFIX: &str = "aurora.voice.web-store.v1:mutation:";
+const EXPECTED_SELECTION_PREFIX: &str = "aurora.voice.web-store.v1:expected-selection:";
 const FILE_PREFIX: &str = "aurora.voice.web-store.v1:file:";
 const WITHDRAWAL_KEY: &str = "aurora.voice.web-store.v1:withdrawn";
 const HASH_CHUNK_BYTES: u64 = 64 * 1024;
@@ -68,6 +69,10 @@ struct ActivePackRecord {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct ActiveFileRecord {
     storage_key: String,
+    pack_id: String,
+    pack_version: String,
+    variant_id: String,
+    file_id: String,
     sha256: String,
     byte_size: u64,
 }
@@ -82,6 +87,11 @@ struct ScopeMutationJournal {
     #[serde(default)]
     affected_lifecycles: BTreeSet<String>,
     restore: BTreeMap<String, Option<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct ExpectedSelectionRecord {
+    files: Vec<ActiveFileRecord>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -522,7 +532,10 @@ impl<H: WebModelStoreHost> WebModelStore<H> {
             return Ok(None);
         }
         self.ensure_not_withdrawn(&record.identity.pack_id).await?;
-        if !self.validate_file_records(&record.files).await? {
+        if !self
+            .validate_identity_file_records(&record.identity, &record.files)
+            .await?
+        {
             return Ok(None);
         }
         Ok(Some(record))
@@ -566,7 +579,15 @@ impl<H: WebModelStoreHost> WebModelStore<H> {
             else {
                 return Ok(false);
             };
-            if stored.sha256 != file.sha256 || stored.byte_size != file.byte_size {
+            if stored.storage_key != file.storage_key
+                || stored.pack_id != file.pack_id
+                || stored.pack_version != file.pack_version
+                || stored.variant_id != file.variant_id
+                || stored.file_id != file.file_id
+                || stored.sha256 != file.sha256
+                || stored.byte_size != file.byte_size
+                || stored.state != InstallState::Ready
+            {
                 return Ok(false);
             }
             let Ok((byte_size, sha256)) =
@@ -579,6 +600,41 @@ impl<H: WebModelStoreHost> WebModelStore<H> {
             }
         }
         Ok(true)
+    }
+
+    async fn validate_expected_file_records(
+        &self,
+        pack_id: &str,
+        pack_version: &str,
+        variant_id: &str,
+        files: &[ActiveFileRecord],
+    ) -> Result<bool, ModelPackError> {
+        let Some(expected): Option<ExpectedSelectionRecord> = read_json(
+            &self.host,
+            &expected_selection_key(pack_id, pack_version, variant_id),
+        )
+        .await?
+        else {
+            return Ok(false);
+        };
+        if !same_file_record_set(files, &expected.files) {
+            return Ok(false);
+        }
+        self.validate_file_records(files).await
+    }
+
+    async fn validate_identity_file_records(
+        &self,
+        identity: &ActivePackIdentity,
+        files: &[ActiveFileRecord],
+    ) -> Result<bool, ModelPackError> {
+        self.validate_expected_file_records(
+            &identity.pack_id,
+            &identity.pack_version,
+            &identity.variant_id,
+            files,
+        )
+        .await
     }
 
     async fn selected_file_records(
@@ -616,6 +672,10 @@ impl<H: WebModelStoreHost> WebModelStore<H> {
             }
             records.push(ActiveFileRecord {
                 storage_key: key,
+                pack_id: manifest.manifest().pack_id.clone(),
+                pack_version: manifest.manifest().pack_version.clone(),
+                variant_id: selection.variant_id().to_owned(),
+                file_id: file.file_id.clone(),
                 sha256,
                 byte_size,
             });
@@ -623,27 +683,108 @@ impl<H: WebModelStoreHost> WebModelStore<H> {
         Ok(records)
     }
 
+    fn expected_file_records(
+        manifest: &VerifiedManifest,
+        selection: &SelectedVariant,
+    ) -> Result<Vec<ActiveFileRecord>, ModelPackError> {
+        let mut records = Vec::new();
+        for file_id in selection.file_ids() {
+            let file = manifest
+                .manifest()
+                .files
+                .iter()
+                .find(|file| file.file_id == *file_id)
+                .ok_or(ModelPackError::Store { code: "selection" })?;
+            records.push(ActiveFileRecord {
+                storage_key: file_storage_key(
+                    &manifest.manifest().pack_id,
+                    &manifest.manifest().pack_version,
+                    selection.variant_id(),
+                    &file.file_id,
+                ),
+                pack_id: manifest.manifest().pack_id.clone(),
+                pack_version: manifest.manifest().pack_version.clone(),
+                variant_id: selection.variant_id().to_owned(),
+                file_id: file.file_id.clone(),
+                sha256: file.sha256.clone(),
+                byte_size: file.byte_size,
+            });
+        }
+        Ok(records)
+    }
+
+    async fn exact_ready_backing_record(
+        &self,
+        snapshot: &LifecycleSnapshot,
+    ) -> Result<LifecycleBackingRecord, ModelPackError> {
+        let Some(expected): Option<ExpectedSelectionRecord> = read_json(
+            &self.host,
+            &expected_selection_key(
+                &snapshot.pack_id,
+                &snapshot.pack_version,
+                &snapshot.variant_id,
+            ),
+        )
+        .await?
+        else {
+            return Err(ModelPackError::Store { code: "selection" });
+        };
+        if expected.files.is_empty() || !self.validate_file_records(&expected.files).await? {
+            return Err(ModelPackError::Store {
+                code: "missing_file",
+            });
+        }
+        Ok(LifecycleBackingRecord {
+            files: expected.files,
+        })
+    }
+
     async fn ready_backing_record(
         &self,
         snapshot: &LifecycleSnapshot,
     ) -> Result<LifecycleBackingRecord, ModelPackError> {
-        let mut files = Vec::new();
-        for key in self.host.list_json_keys(FILE_PREFIX).await? {
-            let Some(file): Option<StoredFile> = read_json(&self.host, &key).await? else {
-                continue;
-            };
-            if file.pack_id == snapshot.pack_id
-                && file.pack_version == snapshot.pack_version
-                && file.variant_id == snapshot.variant_id
-            {
-                files.push(ActiveFileRecord {
-                    storage_key: file.storage_key,
-                    sha256: file.sha256,
-                    byte_size: file.byte_size,
-                });
-            }
+        let Some(backing): Option<LifecycleBackingRecord> = read_json(
+            &self.host,
+            &lifecycle_backing_key(
+                &snapshot.pack_id,
+                &snapshot.pack_version,
+                &snapshot.variant_id,
+            ),
+        )
+        .await?
+        else {
+            return Err(ModelPackError::Store {
+                code: "missing_file",
+            });
+        };
+        if backing.files.is_empty() || !self.validate_file_records(&backing.files).await? {
+            return Err(ModelPackError::Store {
+                code: "missing_file",
+            });
         }
-        Ok(LifecycleBackingRecord { files })
+        Ok(backing)
+    }
+
+    async fn register_expected_selection(
+        &mut self,
+        manifest: &VerifiedManifest,
+        selection: &SelectedVariant,
+    ) -> Result<(), ModelPackError> {
+        let files = Self::expected_file_records(manifest, selection)?;
+        if files.len() != selection.file_ids().len() {
+            return Err(ModelPackError::Store { code: "selection" });
+        }
+        write_json(
+            &mut self.host,
+            &expected_selection_key(
+                &manifest.manifest().pack_id,
+                &manifest.manifest().pack_version,
+                selection.variant_id(),
+            ),
+            &ExpectedSelectionRecord { files },
+        )
+        .await?;
+        Ok(())
     }
 
     async fn write_lifecycle_with_backing(
@@ -746,7 +887,13 @@ impl<H: WebModelStoreHost> WebModelStore<H> {
                 else {
                     return Ok(false);
                 };
-                self.validate_file_records(&backing.files).await
+                self.validate_expected_file_records(
+                    &snapshot.pack_id,
+                    &snapshot.pack_version,
+                    &snapshot.variant_id,
+                    &backing.files,
+                )
+                .await
             }
             InstallState::Active => {
                 for key in self.host.list_json_keys(ACTIVE_PREFIX).await? {
@@ -809,7 +956,7 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
 
     async fn set_lifecycle(&mut self, snapshot: LifecycleSnapshot) -> Result<(), ModelPackError> {
         let backing = if matches!(snapshot.state, InstallState::Ready | InstallState::Active) {
-            self.ready_backing_record(&snapshot).await?.files
+            self.exact_ready_backing_record(&snapshot).await?.files
         } else {
             Vec::new()
         };
@@ -825,6 +972,8 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
         if !selection.belongs_to(manifest) || !selection.file_ids().contains(&file.file_id) {
             return Err(ModelPackError::Store { code: "selection" });
         }
+        self.register_expected_selection(manifest, selection)
+            .await?;
         self.ensure_not_withdrawn(&manifest.manifest().pack_id)
             .await?;
         let status = self.status().await?;
@@ -852,11 +1001,13 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
                 code: "reservation",
             });
         }
-        if read_json::<StoredFile, _>(&self.host, &file_key(&storage_key))
-            .await?
-            .is_some()
+        if let Some(stored) =
+            read_json::<StoredFile, _>(&self.host, &file_key(&storage_key)).await?
         {
-            return Ok(task);
+            if stored_matches(&stored, manifest, selection, file) {
+                return Ok(task);
+            }
+            return Err(ModelPackError::Store { code: "corrupt" });
         }
         if let Some(available) = status.bytes_available {
             let additional = self.additional_reserved_bytes(&task).await?;
@@ -948,6 +1099,8 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
         self.ensure_not_withdrawn(&manifest.manifest().pack_id)
             .await?;
         let active_files = self.selected_file_records(manifest, selection).await?;
+        self.register_expected_selection(manifest, selection)
+            .await?;
 
         let current_key = lifecycle_key(
             &manifest.manifest().pack_id,
@@ -1107,6 +1260,13 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
         };
         let rollback = rollback_record.identity.clone();
         self.ensure_not_withdrawn(&rollback.pack_id).await?;
+        if rollback.scope != scope
+            || !self
+                .validate_identity_file_records(&rollback, &rollback_record.files)
+                .await?
+        {
+            return Err(ModelPackError::Store { code: "rollback" });
+        }
         let active_key = active_key(&scope);
         let rollback_key = rollback_key(&scope);
         let mut restore = BTreeMap::new();
@@ -1661,11 +1821,23 @@ impl WebModelStoreHost for InMemoryWebHost {
                         .filter(|snapshot| snapshot.pack_id == pack_id)
                         .map(|_| key.clone());
                 }
-                if key.starts_with(LIFECYCLE_BACKING_PREFIX) {
-                    let needle = format!("{pack_id}@");
-                    if key.contains(&needle) {
-                        return Some(key.clone());
-                    }
+                if key.starts_with(LIFECYCLE_BACKING_PREFIX)
+                    && serde_json::from_str::<LifecycleBackingRecord>(value)
+                        .ok()
+                        .is_some_and(|record| {
+                            record.files.iter().any(|file| file.pack_id == pack_id)
+                        })
+                {
+                    return Some(key.clone());
+                }
+                if key.starts_with(EXPECTED_SELECTION_PREFIX)
+                    && serde_json::from_str::<ExpectedSelectionRecord>(value)
+                        .ok()
+                        .is_some_and(|record| {
+                            record.files.iter().any(|file| file.pack_id == pack_id)
+                        })
+                {
+                    return Some(key.clone());
                 }
                 None
             })
@@ -1673,11 +1845,8 @@ impl WebModelStoreHost for InMemoryWebHost {
         for key in metadata_keys {
             self.json.remove(&key);
         }
-        let prefix = pack_file_storage_prefix(pack_id);
-        self.staging
-            .retain(|key, _| !storage_keys.contains(key) && !key.starts_with(&prefix));
-        self.files
-            .retain(|key, _| !storage_keys.contains(key) && !key.starts_with(&prefix));
+        self.staging.retain(|key, _| !storage_keys.contains(key));
+        self.files.retain(|key, _| !storage_keys.contains(key));
         Ok(())
     }
 }
@@ -1942,6 +2111,10 @@ fn lifecycle_backing_key(pack_id: &str, pack_version: &str, variant_id: &str) ->
     format!("{LIFECYCLE_BACKING_PREFIX}{pack_id}@{pack_version}:{variant_id}")
 }
 
+fn expected_selection_key(pack_id: &str, pack_version: &str, variant_id: &str) -> String {
+    format!("{EXPECTED_SELECTION_PREFIX}{pack_id}@{pack_version}:{variant_id}")
+}
+
 fn active_key(scope: &ModelStoreScope) -> String {
     format!(
         "{ACTIVE_PREFIX}{}:{}",
@@ -1978,10 +2151,6 @@ fn file_key(storage_key: &str) -> String {
     format!("{FILE_PREFIX}{storage_key}")
 }
 
-fn pack_file_storage_prefix(pack_id: &str) -> String {
-    format!("aurora.voice.model-file.v1:{pack_id}@")
-}
-
 fn same_task(left: &DownloadTask, right: &DownloadTask) -> bool {
     left.storage_key == right.storage_key
         && left.pack_id == right.pack_id
@@ -1990,6 +2159,21 @@ fn same_task(left: &DownloadTask, right: &DownloadTask) -> bool {
         && left.expected_sha256 == right.expected_sha256
         && left.expected_bytes == right.expected_bytes
         && left.variant_id == right.variant_id
+}
+
+fn same_file_record_set(left: &[ActiveFileRecord], right: &[ActiveFileRecord]) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    let left: BTreeMap<&str, &ActiveFileRecord> = left
+        .iter()
+        .map(|file| (file.storage_key.as_str(), file))
+        .collect();
+    let right: BTreeMap<&str, &ActiveFileRecord> = right
+        .iter()
+        .map(|file| (file.storage_key.as_str(), file))
+        .collect();
+    left == right
 }
 
 fn validate_scope_task(

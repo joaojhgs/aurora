@@ -226,6 +226,37 @@ async fn reservation_quota_deduplicates_proposed_content_identity() {
 }
 
 #[wasm_bindgen_test(async)]
+async fn reserve_rejects_corrupt_existing_stored_file_identity() {
+    let body = b"stored-identity".to_vec();
+    let manifest = verified("pack", "1", &sha256(&body), body.len() as u64);
+    let selection = selection_for(&manifest);
+    let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
+    install_ready(&mut store, &manifest, body.clone()).await;
+    let storage_key = file_storage_key("pack", "1", selection.variant_id(), "model");
+    store.host_mut().forge_stored_file(
+        &storage_key,
+        &StoredFile {
+            storage_key: storage_key.clone(),
+            pack_id: "different-pack".to_owned(),
+            pack_version: "1".to_owned(),
+            file_id: "model".to_owned(),
+            variant_id: selection.variant_id().to_owned(),
+            sha256: sha256(&body),
+            byte_size: body.len() as u64,
+            state: InstallState::Ready,
+            stored_at: 0,
+        },
+    );
+
+    assert_eq!(
+        store
+            .reserve_file(&manifest, &selection, &manifest.manifest().files[0])
+            .await,
+        Err(ModelPackError::Store { code: "corrupt" })
+    );
+}
+
+#[wasm_bindgen_test(async)]
 async fn reserved_download_can_fill_exact_quota() {
     let body = b"exact-quota".to_vec();
     let manifest = verified("pack", "1", &sha256(&body), body.len() as u64);
@@ -396,6 +427,98 @@ async fn activation_records_rollback_and_failed_activation_restores_active() {
             .expect("rollback")
             .map(|snapshot| snapshot.pack_id),
         Some("pack-a".to_owned())
+    );
+}
+
+#[wasm_bindgen_test(async)]
+async fn rollback_record_files_are_validated_before_mutation() {
+    let primary = b"rollback-primary".to_vec();
+    let tokenizer = b"rollback-tokenizer".to_vec();
+    let mut raw = manifest(
+        "rollback-pack",
+        "1",
+        &sha256(&primary),
+        primary.len() as u64,
+    );
+    raw.tasks = vec![PackTask::Stt, PackTask::Tokenizer];
+    raw.files = vec![
+        {
+            let mut file = model_file("model", &sha256(&primary), primary.len() as u64);
+            file.dependencies = vec!["tokenizer".to_owned()];
+            file
+        },
+        {
+            let mut file = model_file("tokenizer", &sha256(&tokenizer), tokenizer.len() as u64);
+            file.task = PackTask::Tokenizer;
+            file
+        },
+    ];
+    raw.variants[0].file_ids = vec!["model".to_owned()];
+    raw.variants[0].resource_budget.max_download_bytes = (primary.len() + tokenizer.len()) as u64;
+    raw.variants[0].resource_budget.max_installed_bytes = (primary.len() + tokenizer.len()) as u64;
+    let verified = verify_manifest(raw, &TrustPolicy::default(), Some(&AcceptingVerifier))
+        .expect("verify rollback dependency pack");
+    let selection = selection_for(&verified);
+    let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
+    install_file(&mut store, &verified, &selection, 0, primary).await;
+    install_file(&mut store, &verified, &selection, 1, tokenizer).await;
+    store
+        .set_lifecycle(create_lifecycle_snapshot(
+            "rollback-pack",
+            "1",
+            selection.variant_id().to_owned(),
+            0,
+            InstallState::Ready,
+        ))
+        .await
+        .expect("ready lifecycle");
+    store
+        .activate_pack(scope(), &verified, &selection)
+        .await
+        .expect("activate");
+    let active_key = "aurora.voice.web-store.v1:active:stt:default";
+    let rollback_key = "aurora.voice.web-store.v1:rollback:stt:default";
+    let active_json = store
+        .host()
+        .read_json(active_key)
+        .await
+        .expect("read active")
+        .expect("active record");
+    let mut missing_dep: serde_json::Value =
+        serde_json::from_str(&active_json).expect("active json");
+    missing_dep["files"].as_array_mut().expect("files").pop();
+    store
+        .host_mut()
+        .insert_json(rollback_key, missing_dep.to_string());
+    assert_eq!(
+        store.rollback_active(scope()).await,
+        Err(ModelPackError::Store { code: "rollback" })
+    );
+
+    let missing_bytes: serde_json::Value = serde_json::from_str(&active_json).expect("active json");
+    let tokenizer_key = file_storage_key("rollback-pack", "1", selection.variant_id(), "tokenizer");
+    store
+        .host_mut()
+        .delete_promoted(&tokenizer_key)
+        .await
+        .expect("delete rollback bytes");
+    store
+        .host_mut()
+        .insert_json(rollback_key, missing_bytes.to_string());
+    assert_eq!(
+        store.rollback_active(scope()).await,
+        Err(ModelPackError::Store { code: "rollback" })
+    );
+
+    let mut empty_files: serde_json::Value =
+        serde_json::from_str(&active_json).expect("active json");
+    empty_files["files"] = serde_json::Value::Array(Vec::new());
+    store
+        .host_mut()
+        .insert_json(rollback_key, empty_files.to_string());
+    assert_eq!(
+        store.rollback_active(scope()).await,
+        Err(ModelPackError::Store { code: "rollback" })
     );
 }
 
@@ -602,16 +725,6 @@ async fn forged_metadata_and_activation_rehash_fail_closed() {
         },
     );
     let mut store = WebModelStore::new(host);
-    store
-        .set_lifecycle(create_lifecycle_snapshot(
-            "pack",
-            "1",
-            selection.variant_id().to_owned(),
-            0,
-            InstallState::Ready,
-        ))
-        .await
-        .expect("ready lifecycle");
     assert_eq!(
         store.activate_pack(scope(), &manifest, &selection).await,
         Err(ModelPackError::Store { code: "corrupt" })
@@ -620,6 +733,73 @@ async fn forged_metadata_and_activation_rehash_fail_closed() {
         store.open_immutable_file(&selection, "model").await,
         Err(ModelPackError::Store { code: "corrupt" })
     );
+}
+
+#[wasm_bindgen_test(async)]
+async fn ready_lifecycle_requires_registered_expected_selection() {
+    let body = b"manual-ready".to_vec();
+    let manifest = verified("manual-pack", "1", &sha256(&body), body.len() as u64);
+    let selection = selection_for(&manifest);
+    let storage_key = file_storage_key("manual-pack", "1", selection.variant_id(), "model");
+    let mut host = InMemoryWebHost::new(Some(1000));
+    host.insert_promoted(storage_key.clone(), body.clone());
+    host.forge_stored_file(
+        &storage_key,
+        &StoredFile {
+            storage_key: storage_key.clone(),
+            pack_id: "manual-pack".to_owned(),
+            pack_version: "1".to_owned(),
+            file_id: "model".to_owned(),
+            variant_id: selection.variant_id().to_owned(),
+            sha256: sha256(&body),
+            byte_size: body.len() as u64,
+            state: InstallState::Ready,
+            stored_at: 0,
+        },
+    );
+    let mut store = WebModelStore::new(host);
+
+    assert_eq!(
+        store
+            .set_lifecycle(create_lifecycle_snapshot(
+                "manual-pack",
+                "1",
+                selection.variant_id().to_owned(),
+                0,
+                InstallState::Ready,
+            ))
+            .await,
+        Err(ModelPackError::Store { code: "selection" })
+    );
+}
+
+#[wasm_bindgen_test(async)]
+async fn lifecycle_backing_file_identity_mismatch_fails_closed() {
+    let body = b"backing-identity".to_vec();
+    let manifest = verified("identity-pack", "1", &sha256(&body), body.len() as u64);
+    let selection = selection_for(&manifest);
+    let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
+    install_ready(&mut store, &manifest, body).await;
+    let backing_key = "aurora.voice.web-store.v1:lifecycle-backing:identity-pack@1:wasm-simd";
+    let mut backing: serde_json::Value = serde_json::from_str(
+        &store
+            .host()
+            .read_json(backing_key)
+            .await
+            .expect("read backing")
+            .expect("backing"),
+    )
+    .expect("backing json");
+    backing["files"][0]["pack_id"] = serde_json::Value::String("wrong-pack".to_owned());
+    store
+        .host_mut()
+        .insert_json(backing_key, backing.to_string());
+
+    assert!(store
+        .lifecycle("identity-pack", "1", selection.variant_id())
+        .await
+        .expect("identity mismatch lifecycle")
+        .is_none());
 }
 
 #[wasm_bindgen_test(async)]
@@ -958,16 +1138,20 @@ async fn dependency_files_do_not_have_to_match_scope_task_but_wrong_scope_reject
     let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
     install_file(&mut store, &verified, &selection, 0, primary).await;
     install_file(&mut store, &verified, &selection, 1, direct).await;
-    store
-        .set_lifecycle(create_lifecycle_snapshot(
-            "transitive-pack",
-            "1",
-            selection.variant_id().to_owned(),
-            0,
-            InstallState::Ready,
-        ))
-        .await
-        .expect("ready lifecycle");
+    assert_eq!(
+        store
+            .set_lifecycle(create_lifecycle_snapshot(
+                "transitive-pack",
+                "1",
+                selection.variant_id().to_owned(),
+                0,
+                InstallState::Ready,
+            ))
+            .await,
+        Err(ModelPackError::Store {
+            code: "missing_file"
+        })
+    );
     assert_eq!(
         store.activate_pack(scope(), &verified, &selection).await,
         Err(ModelPackError::Store {
@@ -991,6 +1175,10 @@ async fn duplicate_blobs_orphans_and_stale_active_bytes_fail_closed() {
     let manifest = verified("pack", "1", &hash, body.len() as u64);
     let selection = selection_for(&manifest);
     let mut store = WebModelStore::new(store.host().clone());
+    let _ = store
+        .reserve_file(&manifest, &selection, &manifest.manifest().files[0])
+        .await
+        .expect("register expected selection");
     store.host_mut().forge_stored_file(
         &key_a,
         &StoredFile {
@@ -1056,6 +1244,23 @@ async fn ready_lifecycle_requires_complete_persisted_file_closure() {
     let verified = verify_manifest(raw, &TrustPolicy::default(), Some(&AcceptingVerifier))
         .expect("verify dependency-backed pack");
     let selection = selection_for(&verified);
+    let mut partial = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
+    install_file(&mut partial, &verified, &selection, 0, primary.clone()).await;
+    assert_eq!(
+        partial
+            .set_lifecycle(create_lifecycle_snapshot(
+                "ready-pack",
+                "1",
+                selection.variant_id().to_owned(),
+                0,
+                InstallState::Ready,
+            ))
+            .await,
+        Err(ModelPackError::Store {
+            code: "missing_file"
+        })
+    );
+
     let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
     install_file(&mut store, &verified, &selection, 0, primary.clone()).await;
     install_file(&mut store, &verified, &selection, 1, tokenizer.clone()).await;
@@ -1074,6 +1279,66 @@ async fn ready_lifecycle_requires_complete_persisted_file_closure() {
         .await
         .expect("complete ready lifecycle")
         .is_some());
+    let backing_key = "aurora.voice.web-store.v1:lifecycle-backing:ready-pack@1:wasm-simd";
+    let mut backing: serde_json::Value = serde_json::from_str(
+        &store
+            .host()
+            .read_json(backing_key)
+            .await
+            .expect("read backing")
+            .expect("backing record"),
+    )
+    .expect("backing json");
+    backing["files"][1]["file_id"] = serde_json::Value::String("wrong".to_owned());
+    store
+        .host_mut()
+        .insert_json(backing_key, backing.to_string());
+    assert!(store
+        .lifecycle("ready-pack", "1", selection.variant_id())
+        .await
+        .expect("forged backing hides lifecycle")
+        .is_none());
+    store
+        .set_lifecycle(create_lifecycle_snapshot(
+            "ready-pack",
+            "1",
+            selection.variant_id().to_owned(),
+            0,
+            InstallState::Ready,
+        ))
+        .await
+        .expect("restore ready lifecycle");
+    let mut partial_backing: serde_json::Value = serde_json::from_str(
+        &store
+            .host()
+            .read_json(backing_key)
+            .await
+            .expect("read restored backing")
+            .expect("restored backing record"),
+    )
+    .expect("restored backing json");
+    partial_backing["files"]
+        .as_array_mut()
+        .expect("backing files")
+        .pop();
+    store
+        .host_mut()
+        .insert_json(backing_key, partial_backing.to_string());
+    assert!(store
+        .lifecycle("ready-pack", "1", selection.variant_id())
+        .await
+        .expect("partial backing hides lifecycle")
+        .is_none());
+    store
+        .set_lifecycle(create_lifecycle_snapshot(
+            "ready-pack",
+            "1",
+            selection.variant_id().to_owned(),
+            0,
+            InstallState::Ready,
+        ))
+        .await
+        .expect("restore ready lifecycle after partial backing");
 
     let tokenizer_key = file_storage_key("ready-pack", "1", selection.variant_id(), "tokenizer");
     store
@@ -1150,6 +1415,41 @@ async fn ready_lifecycle_requires_complete_persisted_file_closure() {
         .await
         .expect("active lifecycle after metadata loss")
         .is_none());
+}
+
+#[wasm_bindgen_test(async)]
+async fn remove_pack_uses_parsed_identity_not_raw_delimiters() {
+    let body_a = b"delimiter-a".to_vec();
+    let body_b = b"delimiter-b".to_vec();
+    let first = verified(
+        "pack@shared",
+        "1:alpha",
+        &sha256(&body_a),
+        body_a.len() as u64,
+    );
+    let second = verified(
+        "pack",
+        "shared@1:alpha",
+        &sha256(&body_b),
+        body_b.len() as u64,
+    );
+    let first_selection = selection_for(&first);
+    let second_selection = selection_for(&second);
+    let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
+    install_ready(&mut store, &first, body_a).await;
+    install_ready(&mut store, &second, body_b).await;
+
+    store.remove_pack("pack").await.expect("remove exact pack");
+    assert!(store
+        .open_immutable_file(&first_selection, "model")
+        .await
+        .is_ok());
+    assert_eq!(
+        store.open_immutable_file(&second_selection, "model").await,
+        Err(ModelPackError::Store {
+            code: "missing_file"
+        })
+    );
 }
 
 #[wasm_bindgen_test(async)]
