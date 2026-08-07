@@ -2,7 +2,8 @@ use async_trait::async_trait;
 use aurora_voice_engine::{
     apply_lifecycle_event, create_lifecycle_snapshot, file_storage_key, ActivePackIdentity,
     DownloadTask, ImmutableModelFile, InstallEvent, InstallState, LifecycleSnapshot,
-    ModelPackError, ModelPackFile, ModelStore, StoreStatus, StoredFile, VerifiedManifest,
+    ModelPackError, ModelPackFile, ModelStore, SelectedVariant, StoreStatus, StoredFile,
+    VerifiedManifest,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -162,14 +163,19 @@ impl ModelStore for InMemoryModelStore {
     async fn reserve_file(
         &mut self,
         manifest: &VerifiedManifest,
+        selection: &SelectedVariant,
         file: &ModelPackFile,
     ) -> Result<DownloadTask, ModelPackError> {
+        if !selection.belongs_to(manifest) || !selection.file_ids().contains(&file.file_id) {
+            return Err(ModelPackError::Store { code: "selection" });
+        }
         self.require_not_withdrawn(&manifest.manifest().pack_id)?;
         self.ensure_quota(file.byte_size)?;
         self.maybe_fail_persist()?;
         let storage_key = file_storage_key(
             &manifest.manifest().pack_id,
             &manifest.manifest().pack_version,
+            selection.variant_id(),
             &file.file_id,
         );
         let task = DownloadTask {
@@ -180,6 +186,7 @@ impl ModelStore for InMemoryModelStore {
             url: file.url.clone(),
             expected_sha256: file.sha256.clone(),
             expected_bytes: file.byte_size,
+            variant_id: selection.variant_id().to_owned(),
         };
         self.reservations
             .insert(storage_key, Reservation { task: task.clone() });
@@ -222,6 +229,7 @@ impl ModelStore for InMemoryModelStore {
             pack_id: reservation.task.pack_id,
             pack_version: reservation.task.pack_version,
             file_id: reservation.task.file_id,
+            variant_id: reservation.task.variant_id,
             sha256: sha256.to_owned(),
             byte_size,
             state: InstallState::Ready,
@@ -235,17 +243,23 @@ impl ModelStore for InMemoryModelStore {
     async fn activate_pack(
         &mut self,
         manifest: &VerifiedManifest,
+        selection: &SelectedVariant,
     ) -> Result<LifecycleSnapshot, ModelPackError> {
+        if !selection.belongs_to(manifest) {
+            return Err(ModelPackError::Store { code: "selection" });
+        }
         self.require_not_withdrawn(&manifest.manifest().pack_id)?;
         for file in manifest
             .manifest()
             .files
             .iter()
+            .filter(|file| selection.file_ids().contains(&file.file_id))
             .filter(|file| !file.revocation.as_ref().is_some_and(|rev| rev.revoked))
         {
             let key = file_storage_key(
                 &manifest.manifest().pack_id,
                 &manifest.manifest().pack_version,
+                selection.variant_id(),
                 &file.file_id,
             );
             let stored = self.files.get(&key).ok_or(ModelPackError::Store {
@@ -309,6 +323,7 @@ impl ModelStore for InMemoryModelStore {
         let identity = ActivePackIdentity {
             pack_id: active.pack_id.clone(),
             pack_version: active.pack_version.clone(),
+            variant_id: selection.variant_id().to_owned(),
         };
         self.lifecycles.insert(current_key, active.clone());
         self.active = Some(identity);
@@ -360,6 +375,7 @@ impl ModelStore for InMemoryModelStore {
         self.active = Some(ActivePackIdentity {
             pack_id: active.pack_id.clone(),
             pack_version: active.pack_version.clone(),
+            variant_id: rollback.variant_id,
         });
         self.rollback = None;
         Ok(Some(active))
@@ -395,12 +411,19 @@ impl ModelStore for InMemoryModelStore {
 
     async fn open_immutable_file(
         &self,
-        pack_id: &str,
-        pack_version: &str,
+        selection: &SelectedVariant,
         file_id: &str,
     ) -> Result<ImmutableModelFile, ModelPackError> {
-        self.require_not_withdrawn(pack_id)?;
-        let key = file_storage_key(pack_id, pack_version, file_id);
+        if !selection.file_ids().contains(file_id) {
+            return Err(ModelPackError::Store { code: "selection" });
+        }
+        self.require_not_withdrawn(selection.pack_id())?;
+        let key = file_storage_key(
+            selection.pack_id(),
+            selection.pack_version(),
+            selection.variant_id(),
+            file_id,
+        );
         let file = self.files.get(&key).ok_or(ModelPackError::Store {
             code: "missing_file",
         })?;
@@ -408,6 +431,7 @@ impl ModelStore for InMemoryModelStore {
             storage_key: file.storage_key.clone(),
             sha256: file.sha256.clone(),
             byte_size: file.byte_size,
+            variant_id: file.variant_id.clone(),
         })
     }
 }
@@ -416,8 +440,10 @@ impl ModelStore for InMemoryModelStore {
 mod tests {
     use super::*;
     use aurora_voice_engine::{
-        verify_manifest, AbiRequirements, Compatibility, CompressionKind, EngineKind, LicenseGrant,
-        ManifestSignature, ModelPackManifest, PackTask, Provenance, ResourceBudget, RuntimeTarget,
+        select_verified_variant, verify_manifest, AbiRequirements, CapabilityFlags, Compatibility,
+        CompressionKind, DeviceClass, EngineKind, LanguageSupport, LicenseGrant, LicenseInfo,
+        ManifestSignature, ModelPackManifest, PackTask, ProcessingMetadata, Provenance,
+        ResourceBudget, RuntimeGates, RuntimeSelection, RuntimeTarget, ShapeMetadata,
         SignatureVerifier, TargetArch, TargetOs, TrustPolicy,
     };
 
@@ -441,8 +467,145 @@ mod tests {
             upstream_source: "https://example.test/source".to_owned(),
             upstream_revision: "rev1".to_owned(),
             build_recipe_sha256: HASH.to_owned(),
-            license: "Apache-2.0".to_owned(),
+        }
+    }
+
+    fn license() -> LicenseInfo {
+        LicenseInfo {
+            identifier: "Apache-2.0".to_owned(),
+            text_url: "https://example.test/license".to_owned(),
+            text_sha256: HASH.to_owned(),
+            commercial_use: true,
+            redistribution: LicenseGrant::RedistributionAllowed,
             attribution: "Aurora".to_owned(),
+        }
+    }
+
+    fn processing() -> ProcessingMetadata {
+        ProcessingMetadata {
+            tokenizer_sha256: None,
+            operator_inventory_sha256: HASH.to_owned(),
+            preprocessing_abi: "pre".to_owned(),
+            postprocessing_abi: "post".to_owned(),
+            shapes: ShapeMetadata {
+                sample_rate_hz: 16_000,
+                channels: 1,
+                frame_size: 512,
+                window_size: 1024,
+                cache_state: vec!["hidden".to_owned()],
+            },
+        }
+    }
+
+    fn runtime_selection(
+        target: RuntimeTarget,
+        os: TargetOs,
+        arch: TargetArch,
+    ) -> RuntimeSelection {
+        RuntimeSelection {
+            target,
+            os,
+            arch,
+            browser_features: BTreeSet::new(),
+            device_memory_mb: Some(4096),
+            max_download_bytes: u64::MAX,
+            max_installed_bytes: u64::MAX,
+            max_memory_bytes: u64::MAX,
+            cpu_threads: 4,
+            max_rtf_millis_per_second: 1_000,
+            device_class: DeviceClass::Balanced,
+            require_interoperable: false,
+        }
+    }
+
+    fn selection_for(manifest: &VerifiedManifest) -> SelectedVariant {
+        let result = select_verified_variant(
+            manifest,
+            &runtime_selection(RuntimeTarget::Desktop, TargetOs::Linux, TargetArch::X86_64),
+        );
+        match result {
+            Ok(selection) => selection,
+            Err(error) => panic!("fixture selection should resolve: {error}"),
+        }
+    }
+
+    fn select_for(
+        manifest: &VerifiedManifest,
+        target: RuntimeTarget,
+        os: TargetOs,
+        arch: TargetArch,
+    ) -> SelectedVariant {
+        match select_verified_variant(manifest, &runtime_selection(target, os, arch)) {
+            Ok(selection) => selection,
+            Err(error) => panic!("fixture selection should resolve: {error}"),
+        }
+    }
+
+    fn model_file(file_id: &str, hash: &str, size: u64) -> ModelPackFile {
+        ModelPackFile {
+            file_id: file_id.to_owned(),
+            asset_id: file_id.to_owned(),
+            task: PackTask::Stt,
+            byte_size: size,
+            sha256: hash.to_owned(),
+            url: format!("/models/{file_id}"),
+            compression: CompressionKind::None,
+            installed_size: size,
+            install_order: 0,
+            dependencies: Vec::new(),
+            license: license(),
+            provenance: provenance(),
+            processing: processing(),
+            raven: None,
+            revocation: None,
+        }
+    }
+
+    fn variant(
+        variant_id: &str,
+        target: RuntimeTarget,
+        os: TargetOs,
+        arch: TargetArch,
+        file_id: &str,
+        size: u64,
+    ) -> aurora_voice_engine::ModelPackVariant {
+        aurora_voice_engine::ModelPackVariant {
+            variant_id: variant_id.to_owned(),
+            target,
+            os,
+            arch,
+            engine: EngineKind::SherpaOnnx,
+            required_browser_features: Vec::new(),
+            min_device_memory_mb: None,
+            runtime_gates: RuntimeGates {
+                min_cpu_threads: 1,
+                max_rtf_millis_per_second: 1_000,
+                min_device_class: DeviceClass::Low,
+            },
+            resource_budget: ResourceBudget {
+                max_download_bytes: size,
+                max_installed_bytes: size,
+                max_memory_bytes: 1024,
+            },
+            compatibility: Compatibility {
+                group_id: "group".to_owned(),
+                voice_state_group_id: "voice-state".to_owned(),
+                preprocessing_abi: "pre".to_owned(),
+                postprocessing_abi: "post".to_owned(),
+                sample_rate_hz: 16_000,
+                channels: 1,
+                frame_size: 512,
+                interoperable: false,
+            },
+            file_ids: vec![file_id.to_owned()],
+            abi: AbiRequirements {
+                min_aurora_version: "1".to_owned(),
+                min_runtime_version: "1".to_owned(),
+                min_engine_version: "1".to_owned(),
+                engine_source_revision: "rev".to_owned(),
+                build_flags: Vec::new(),
+            },
+            revocation: None,
         }
     }
 
@@ -453,54 +616,27 @@ mod tests {
             pack_version: version.to_owned(),
             display_name: "Pack".to_owned(),
             tasks: vec![PackTask::Stt],
-            license: "Apache-2.0".to_owned(),
+            license: license(),
+            languages: vec![LanguageSupport {
+                language: "en".to_owned(),
+                locale: Some("en-US".to_owned()),
+                fixed_language: true,
+                auto_detect: false,
+            }],
+            capabilities: CapabilityFlags {
+                streaming: true,
+                cancellation: true,
+            },
             provenance: provenance(),
-            files: vec![ModelPackFile {
-                file_id: "model".to_owned(),
-                asset_id: "model".to_owned(),
-                task: PackTask::Stt,
-                byte_size: size,
-                sha256: hash.to_owned(),
-                url: "/models/model".to_owned(),
-                compression: CompressionKind::None,
-                dependencies: Vec::new(),
-                license: "Apache-2.0".to_owned(),
-                provenance: provenance(),
-                raven: None,
-                revocation: None,
-            }],
-            variants: vec![aurora_voice_engine::ModelPackVariant {
-                variant_id: "linux".to_owned(),
-                target: RuntimeTarget::Desktop,
-                os: TargetOs::Linux,
-                arch: TargetArch::X86_64,
-                engine: EngineKind::SherpaOnnx,
-                required_browser_features: Vec::new(),
-                min_device_memory_mb: None,
-                resource_budget: ResourceBudget {
-                    max_download_bytes: size,
-                    max_installed_bytes: size,
-                    max_memory_bytes: 1024,
-                },
-                compatibility: Compatibility {
-                    group_id: "group".to_owned(),
-                    preprocessing_abi: "pre".to_owned(),
-                    postprocessing_abi: "post".to_owned(),
-                    sample_rate_hz: 16_000,
-                    channels: 1,
-                    frame_size: 512,
-                    interoperable: false,
-                },
-                file_ids: vec!["model".to_owned()],
-                abi: AbiRequirements {
-                    min_aurora_version: "1".to_owned(),
-                    min_runtime_version: "1".to_owned(),
-                    min_engine_version: "1".to_owned(),
-                    engine_source_revision: "rev".to_owned(),
-                    build_flags: Vec::new(),
-                },
-                revocation: None,
-            }],
+            files: vec![model_file("model", hash, size)],
+            variants: vec![variant(
+                "linux",
+                RuntimeTarget::Desktop,
+                TargetOs::Linux,
+                TargetArch::X86_64,
+                "model",
+                size,
+            )],
             rollback_from: None,
             supersedes_pack_id: None,
             revocation: None,
@@ -528,8 +664,9 @@ mod tests {
         store: &mut InMemoryModelStore,
         manifest: &VerifiedManifest,
     ) -> Result<(), ModelPackError> {
+        let selection = selection_for(manifest);
         let file = &manifest.manifest().files[0];
-        let task = store.reserve_file(manifest, file).await?;
+        let task = store.reserve_file(manifest, &selection, file).await?;
         assert!(store.resume_metadata(&task.storage_key).await?.is_some());
         store
             .promote_file(&task.storage_key, &file.sha256, file.byte_size)
@@ -547,14 +684,15 @@ mod tests {
     #[tokio::test]
     async fn quota_counts_reservations_and_promoted_files() -> Result<(), ModelPackError> {
         let manifest = verified("pack", "1", HASH, 60);
+        let selection = selection_for(&manifest);
         let mut store = InMemoryModelStore::new(Some(100));
         let task = store
-            .reserve_file(&manifest, &manifest.manifest().files[0])
+            .reserve_file(&manifest, &selection, &manifest.manifest().files[0])
             .await?;
         assert_eq!(store.status().await?.bytes_reserved, 60);
         assert_eq!(
             store
-                .reserve_file(&manifest, &manifest.manifest().files[0])
+                .reserve_file(&manifest, &selection, &manifest.manifest().files[0])
                 .await,
             Err(ModelPackError::QuotaExceeded)
         );
@@ -567,9 +705,10 @@ mod tests {
     async fn promote_checks_hash_size_and_keeps_reservation_on_failure(
     ) -> Result<(), ModelPackError> {
         let manifest = verified("pack", "1", HASH, 60);
+        let selection = selection_for(&manifest);
         let mut store = InMemoryModelStore::new(Some(100));
         let task = store
-            .reserve_file(&manifest, &manifest.manifest().files[0])
+            .reserve_file(&manifest, &selection, &manifest.manifest().files[0])
             .await?;
         assert_eq!(
             store.promote_file(&task.storage_key, HASH_B, 60).await,
@@ -583,15 +722,17 @@ mod tests {
     async fn activation_is_atomic_and_retains_single_rollback() -> Result<(), ModelPackError> {
         let first = verified("pack-a", "1", HASH, 10);
         let second = verified("pack-b", "1", HASH_B, 10);
+        let first_selection = selection_for(&first);
+        let second_selection = selection_for(&second);
         let mut store = InMemoryModelStore::new(Some(100));
         install_ready(&mut store, &first).await?;
         install_ready(&mut store, &second).await?;
-        store.activate_pack(&first).await?;
+        store.activate_pack(&first, &first_selection).await?;
         assert_eq!(
             store.active_pack().await?.map(|active| active.pack_id),
             Some("pack-a".to_owned())
         );
-        store.activate_pack(&second).await?;
+        store.activate_pack(&second, &second_selection).await?;
         assert_eq!(
             store.active_pack().await?.map(|active| active.pack_id),
             Some("pack-b".to_owned())
@@ -619,13 +760,15 @@ mod tests {
     {
         let first = verified("pack-a", "1", HASH, 10);
         let second = verified("pack-b", "1", HASH_B, 10);
+        let first_selection = selection_for(&first);
+        let second_selection = selection_for(&second);
         let mut store = InMemoryModelStore::new(Some(100));
         install_ready(&mut store, &first).await?;
         install_ready(&mut store, &second).await?;
-        store.activate_pack(&first).await?;
+        store.activate_pack(&first, &first_selection).await?;
         store.inject_persistence_failure();
         assert_eq!(
-            store.activate_pack(&second).await,
+            store.activate_pack(&second, &second_selection).await,
             Err(ModelPackError::Store {
                 code: "persistence"
             })
@@ -641,21 +784,110 @@ mod tests {
     async fn corruption_and_revocation_withdraw_readiness_and_fail_closed(
     ) -> Result<(), ModelPackError> {
         let manifest = verified("pack", "1", HASH, 10);
+        let selection = selection_for(&manifest);
         let mut store = InMemoryModelStore::new(Some(100));
         install_ready(&mut store, &manifest).await?;
-        store.activate_pack(&manifest).await?;
+        store.activate_pack(&manifest, &selection).await?;
         store.mark_corrupt("pack");
         assert!(store.active_pack().await?.is_none());
         assert_eq!(
-            store.open_immutable_file("pack", "1", "model").await,
+            store.open_immutable_file(&selection, "model").await,
             Err(ModelPackError::Store { code: "corrupt" })
         );
         let other = verified("other", "1", HASH_B, 10);
+        let other_selection = selection_for(&other);
         install_ready(&mut store, &other).await?;
         store.revoke_pack("other");
         assert_eq!(
-            store.activate_pack(&other).await,
+            store.activate_pack(&other, &other_selection).await,
             Err(ModelPackError::Store { code: "revoked" })
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn selected_variant_installs_without_requiring_other_target_files(
+    ) -> Result<(), ModelPackError> {
+        let mut raw = manifest("pack", "1", HASH, 10);
+        raw.files = vec![
+            model_file("desktop-model", HASH, 10),
+            model_file("android-model", HASH_B, 20),
+        ];
+        raw.variants = vec![
+            variant(
+                "linux",
+                RuntimeTarget::Desktop,
+                TargetOs::Linux,
+                TargetArch::X86_64,
+                "desktop-model",
+                10,
+            ),
+            variant(
+                "android",
+                RuntimeTarget::Android,
+                TargetOs::Android,
+                TargetArch::Aarch64,
+                "android-model",
+                20,
+            ),
+        ];
+        let verified = verify_manifest(raw, &TrustPolicy::default(), Some(&AcceptingVerifier))?;
+        let desktop_selection = select_for(
+            &verified,
+            RuntimeTarget::Desktop,
+            TargetOs::Linux,
+            TargetArch::X86_64,
+        );
+        let android_selection = select_for(
+            &verified,
+            RuntimeTarget::Android,
+            TargetOs::Android,
+            TargetArch::Aarch64,
+        );
+        let mut store = InMemoryModelStore::new(Some(100));
+        let desktop_file = &verified.manifest().files[0];
+        let android_file = &verified.manifest().files[1];
+
+        assert_eq!(
+            store
+                .reserve_file(&verified, &desktop_selection, android_file)
+                .await,
+            Err(ModelPackError::Store { code: "selection" })
+        );
+        let task = store
+            .reserve_file(&verified, &desktop_selection, desktop_file)
+            .await?;
+        store
+            .promote_file(
+                &task.storage_key,
+                &desktop_file.sha256,
+                desktop_file.byte_size,
+            )
+            .await?;
+        store
+            .set_lifecycle(create_lifecycle_snapshot(
+                verified.manifest().pack_id.clone(),
+                verified.manifest().pack_version.clone(),
+                0,
+                InstallState::Ready,
+            ))
+            .await?;
+        store.activate_pack(&verified, &desktop_selection).await?;
+
+        assert_eq!(
+            store
+                .open_immutable_file(&desktop_selection, "desktop-model")
+                .await?
+                .variant_id,
+            "linux"
+        );
+        assert_eq!(
+            store
+                .open_immutable_file(&android_selection, "android-model")
+                .await,
+            Err(ModelPackError::Store {
+                code: "missing_file"
+            })
         );
         Ok(())
     }

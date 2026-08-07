@@ -1,5 +1,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::fmt;
 use thiserror::Error;
@@ -126,6 +128,16 @@ pub struct ManifestSignature {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LicenseInfo {
+    pub identifier: String,
+    pub text_url: String,
+    pub text_sha256: String,
+    pub commercial_use: bool,
+    pub redistribution: LicenseGrant,
+    pub attribution: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Revocation {
     pub revoked: bool,
     pub reason: RevocationReason,
@@ -138,8 +150,14 @@ pub struct Provenance {
     pub upstream_source: String,
     pub upstream_revision: String,
     pub build_recipe_sha256: String,
-    pub license: String,
-    pub attribution: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LanguageSupport {
+    pub language: String,
+    pub locale: Option<String>,
+    pub fixed_language: bool,
+    pub auto_detect: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -152,12 +170,52 @@ pub struct ResourceBudget {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Compatibility {
     pub group_id: String,
+    pub voice_state_group_id: String,
     pub preprocessing_abi: String,
     pub postprocessing_abi: String,
     pub sample_rate_hz: u32,
     pub channels: u16,
     pub frame_size: u32,
     pub interoperable: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShapeMetadata {
+    pub sample_rate_hz: u32,
+    pub channels: u16,
+    pub frame_size: u32,
+    pub window_size: u32,
+    pub cache_state: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProcessingMetadata {
+    pub tokenizer_sha256: Option<String>,
+    pub operator_inventory_sha256: String,
+    pub preprocessing_abi: String,
+    pub postprocessing_abi: String,
+    pub shapes: ShapeMetadata,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CapabilityFlags {
+    pub streaming: bool,
+    pub cancellation: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeviceClass {
+    Low,
+    Balanced,
+    High,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeGates {
+    pub min_cpu_threads: u16,
+    pub max_rtf_millis_per_second: u32,
+    pub min_device_class: DeviceClass,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -183,9 +241,12 @@ pub struct ModelPackFile {
     pub sha256: String,
     pub url: String,
     pub compression: CompressionKind,
+    pub installed_size: u64,
+    pub install_order: u32,
     pub dependencies: Vec<String>,
-    pub license: String,
+    pub license: LicenseInfo,
     pub provenance: Provenance,
+    pub processing: ProcessingMetadata,
     pub raven: Option<RavenRefs>,
     pub revocation: Option<Revocation>,
 }
@@ -208,6 +269,7 @@ pub struct ModelPackVariant {
     pub engine: EngineKind,
     pub required_browser_features: Vec<BrowserFeature>,
     pub min_device_memory_mb: Option<u64>,
+    pub runtime_gates: RuntimeGates,
     pub resource_budget: ResourceBudget,
     pub compatibility: Compatibility,
     pub file_ids: Vec<String>,
@@ -222,7 +284,9 @@ pub struct ModelPackManifest {
     pub pack_version: String,
     pub display_name: String,
     pub tasks: Vec<PackTask>,
-    pub license: String,
+    pub license: LicenseInfo,
+    pub languages: Vec<LanguageSupport>,
+    pub capabilities: CapabilityFlags,
     pub provenance: Provenance,
     pub files: Vec<ModelPackFile>,
     pub variants: Vec<ModelPackVariant>,
@@ -242,7 +306,16 @@ pub struct RuntimeSelection {
     pub max_download_bytes: u64,
     pub max_installed_bytes: u64,
     pub max_memory_bytes: u64,
+    pub cpu_threads: u16,
+    pub max_rtf_millis_per_second: u32,
+    pub device_class: DeviceClass,
     pub require_interoperable: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VariantRequirements {
+    pub download_bytes: u64,
+    pub installed_bytes: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -272,6 +345,7 @@ pub struct DownloadTask {
     pub url: String,
     pub expected_sha256: String,
     pub expected_bytes: u64,
+    pub variant_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -280,6 +354,7 @@ pub struct StoredFile {
     pub pack_id: String,
     pub pack_version: String,
     pub file_id: String,
+    pub variant_id: String,
     pub sha256: String,
     pub byte_size: u64,
     pub state: InstallState,
@@ -290,6 +365,7 @@ pub struct StoredFile {
 pub struct ActivePackIdentity {
     pub pack_id: String,
     pub pack_version: String,
+    pub variant_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -297,6 +373,7 @@ pub struct ImmutableModelFile {
     pub storage_key: String,
     pub sha256: String,
     pub byte_size: u64,
+    pub variant_id: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -312,6 +389,8 @@ pub struct VerifiedManifest {
     mode: VerificationMode,
     key_id: Option<String>,
     manifest_sha256: String,
+    release_index_source: Option<String>,
+    release_index_revision: Option<String>,
 }
 
 impl VerifiedManifest {
@@ -334,6 +413,57 @@ impl VerifiedManifest {
     pub fn manifest_sha256(&self) -> &str {
         &self.manifest_sha256
     }
+
+    pub fn release_index_source(&self) -> Option<&str> {
+        self.release_index_source.as_deref()
+    }
+
+    pub fn release_index_revision(&self) -> Option<&str> {
+        self.release_index_revision.as_deref()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SelectedVariant {
+    manifest_sha256: String,
+    pack_id: String,
+    pack_version: String,
+    variant_id: String,
+    file_ids: BTreeSet<String>,
+    requirements: VariantRequirements,
+}
+
+impl SelectedVariant {
+    pub fn pack_id(&self) -> &str {
+        &self.pack_id
+    }
+
+    pub fn pack_version(&self) -> &str {
+        &self.pack_version
+    }
+
+    pub fn variant_id(&self) -> &str {
+        &self.variant_id
+    }
+
+    pub fn file_ids(&self) -> &BTreeSet<String> {
+        &self.file_ids
+    }
+
+    pub fn requirements(&self) -> &VariantRequirements {
+        &self.requirements
+    }
+
+    pub fn belongs_to(&self, manifest: &VerifiedManifest) -> bool {
+        self.manifest_sha256 == manifest.manifest_sha256
+            && self.pack_id == manifest.manifest().pack_id
+            && self.pack_version == manifest.manifest().pack_version
+            && manifest
+                .manifest()
+                .variants
+                .iter()
+                .any(|variant| variant.variant_id == self.variant_id)
+    }
 }
 
 pub trait SignatureVerifier {
@@ -349,6 +479,8 @@ pub struct TrustPolicy {
     pub revoked_pack_ids: BTreeSet<String>,
     pub revoked_key_ids: BTreeSet<String>,
     pub expected_release_hash: Option<String>,
+    pub release_index_source: Option<String>,
+    pub release_index_revision: Option<String>,
 }
 
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
@@ -374,10 +506,18 @@ pub fn validate_manifest(manifest: &ModelPackManifest) -> Result<(), ModelPackEr
     require_nonblank(&manifest.pack_id)?;
     require_nonblank(&manifest.pack_version)?;
     require_nonblank(&manifest.display_name)?;
-    require_nonblank(&manifest.license)?;
+    validate_license(&manifest.license)?;
+    validate_capabilities(&manifest.capabilities)?;
     validate_provenance(&manifest.provenance)?;
-    if manifest.tasks.is_empty() || manifest.files.is_empty() || manifest.variants.is_empty() {
+    if manifest.tasks.is_empty()
+        || manifest.files.is_empty()
+        || manifest.variants.is_empty()
+        || manifest.languages.is_empty()
+    {
         return invalid("empty");
+    }
+    for language in &manifest.languages {
+        validate_language(language)?;
     }
 
     let mut file_ids = BTreeSet::new();
@@ -386,11 +526,12 @@ pub fn validate_manifest(manifest: &ModelPackManifest) -> Result<(), ModelPackEr
     for file in &manifest.files {
         require_nonblank(&file.file_id)?;
         require_nonblank(&file.asset_id)?;
-        require_nonblank(&file.license)?;
+        validate_license(&file.license)?;
         validate_url(&file.url)?;
         validate_sha256(&file.sha256)?;
         validate_provenance(&file.provenance)?;
-        if file.byte_size == 0 {
+        validate_processing(&file.processing)?;
+        if file.byte_size == 0 || file.installed_size == 0 {
             return invalid("size");
         }
         if !file_ids.insert(file.file_id.clone()) || !asset_ids.insert(file.asset_id.clone()) {
@@ -434,12 +575,28 @@ pub fn validate_manifest(manifest: &ModelPackManifest) -> Result<(), ModelPackEr
         require_nonblank(&variant.variant_id)?;
         validate_abi(&variant.abi)?;
         validate_compatibility(&variant.compatibility)?;
+        validate_runtime_gates(&variant.runtime_gates)?;
         if !variant_ids.insert(variant.variant_id.clone()) {
             return invalid("duplicate_variant");
         }
+        if variant.file_ids.is_empty() {
+            return invalid("variant_file");
+        }
+        let mut variant_files = BTreeSet::new();
+        for file_id in &variant.file_ids {
+            if !variant_files.insert(file_id.clone()) {
+                return invalid("duplicate_variant_file");
+            }
+        }
+        let requirements = variant_requirements(manifest, variant)?;
         if variant.resource_budget.max_download_bytes == 0
             || variant.resource_budget.max_installed_bytes == 0
             || variant.resource_budget.max_memory_bytes == 0
+        {
+            return invalid("budget");
+        }
+        if variant.resource_budget.max_download_bytes < requirements.download_bytes
+            || variant.resource_budget.max_installed_bytes < requirements.installed_bytes
         {
             return invalid("budget");
         }
@@ -453,34 +610,58 @@ pub fn validate_manifest(manifest: &ModelPackManifest) -> Result<(), ModelPackEr
 }
 
 pub fn canonical_manifest_json(manifest: &ModelPackManifest) -> Result<String, ModelPackError> {
-    let mut out = ObjectWriter::new();
-    out.field("display_name", |out| {
-        write_json_string(out, &manifest.display_name)
-    });
-    out.field("files", |out| write_files(out, &manifest.files));
-    out.field("license", |out| write_json_string(out, &manifest.license));
-    out.field("pack_id", |out| write_json_string(out, &manifest.pack_id));
-    out.field("pack_version", |out| {
-        write_json_string(out, &manifest.pack_version)
-    });
-    out.field("provenance", |out| {
-        write_provenance(out, &manifest.provenance)
-    });
-    out.field("revocation", |out| {
-        write_revocation_option(out, &manifest.revocation)
-    });
-    out.field("rollback_from", |out| {
-        write_string_option(out, &manifest.rollback_from)
-    });
-    out.field("schema_version", |out| {
-        out.push_str(&manifest.schema_version.to_string());
-    });
-    out.field("supersedes_pack_id", |out| {
-        write_string_option(out, &manifest.supersedes_pack_id);
-    });
-    out.field("tasks", |out| write_pack_tasks(out, &manifest.tasks));
-    out.field("variants", |out| write_variants(out, &manifest.variants));
-    Ok(out.finish())
+    let mut value = serde_json::to_value(manifest)
+        .map_err(|_| ModelPackError::InvalidManifest { code: "canonical" })?;
+    if let Value::Object(object) = &mut value {
+        object.remove("signature");
+    }
+    canonical_json(&value)
+}
+
+pub fn canonical_json(value: &Value) -> Result<String, ModelPackError> {
+    match value {
+        Value::Null => Ok("null".to_owned()),
+        Value::Bool(value) => Ok(if *value { "true" } else { "false" }.to_owned()),
+        Value::Number(number) => {
+            if !number.is_i64() && !number.is_u64() {
+                return invalid("nonfinite");
+            }
+            Ok(number.to_string())
+        }
+        Value::String(value) => serde_json::to_string(value)
+            .map_err(|_| ModelPackError::InvalidManifest { code: "canonical" }),
+        Value::Array(values) => {
+            let mut output = String::from("[");
+            for (index, item) in values.iter().enumerate() {
+                if index > 0 {
+                    output.push(',');
+                }
+                output.push_str(&canonical_json(item)?);
+            }
+            output.push(']');
+            Ok(output)
+        }
+        Value::Object(object) => {
+            let sorted: Map<String, Value> = object
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect();
+            let mut output = String::from("{");
+            for (index, (key, value)) in sorted.iter().enumerate() {
+                if index > 0 {
+                    output.push(',');
+                }
+                output.push_str(
+                    &serde_json::to_string(key)
+                        .map_err(|_| ModelPackError::InvalidManifest { code: "canonical" })?,
+                );
+                output.push(':');
+                output.push_str(&canonical_json(value)?);
+            }
+            output.push('}');
+            Ok(output)
+        }
+    }
 }
 
 pub fn canonical_f64(value: f64) -> Result<String, ModelPackError> {
@@ -494,7 +675,7 @@ pub fn canonical_f64(value: f64) -> Result<String, ModelPackError> {
 }
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
-    let digest = sha256(bytes);
+    let digest = Sha256::digest(bytes);
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
@@ -517,12 +698,29 @@ pub fn verify_manifest(
             return trust("release_hash");
         }
         if manifest.signature.is_none() {
+            let source = policy
+                .release_index_source
+                .as_deref()
+                .ok_or(ModelPackError::Trust {
+                    code: "release_index",
+                })?;
+            let revision =
+                policy
+                    .release_index_revision
+                    .as_deref()
+                    .ok_or(ModelPackError::Trust {
+                        code: "release_index",
+                    })?;
+            require_nonblank(source)?;
+            require_nonblank(revision)?;
             return Ok(VerifiedManifest {
                 manifest,
                 canonical_json,
                 mode: VerificationMode::ReleaseHash,
                 key_id: None,
                 manifest_sha256,
+                release_index_source: Some(source.to_owned()),
+                release_index_revision: Some(revision.to_owned()),
             });
         }
     }
@@ -549,6 +747,8 @@ pub fn verify_manifest(
         canonical_json,
         mode: VerificationMode::Signature,
         manifest_sha256,
+        release_index_source: None,
+        release_index_revision: None,
     })
 }
 
@@ -578,13 +778,68 @@ pub fn select_variant<'a>(
             },
         )
         .filter(|variant| {
-            variant.resource_budget.max_download_bytes <= selection.max_download_bytes
+            let Ok(requirements) = variant_requirements(manifest, variant) else {
+                return false;
+            };
+            requirements.download_bytes <= selection.max_download_bytes
+                && requirements.installed_bytes <= selection.max_installed_bytes
+                && variant.resource_budget.max_download_bytes <= selection.max_download_bytes
                 && variant.resource_budget.max_installed_bytes <= selection.max_installed_bytes
                 && variant.resource_budget.max_memory_bytes <= selection.max_memory_bytes
+                && variant.runtime_gates.min_cpu_threads <= selection.cpu_threads
+                && variant.runtime_gates.max_rtf_millis_per_second
+                    <= selection.max_rtf_millis_per_second
+                && variant.runtime_gates.min_device_class <= selection.device_class
         })
         .filter(|variant| !selection.require_interoperable || variant.compatibility.interoperable)
         .max_by_key(|variant| variant_score(variant, selection))
         .ok_or(ModelPackError::NoCompatibleVariant)
+}
+
+pub fn select_verified_variant(
+    manifest: &VerifiedManifest,
+    selection: &RuntimeSelection,
+) -> Result<SelectedVariant, ModelPackError> {
+    let variant = select_variant(manifest.manifest(), selection)?;
+    let requirements = variant_requirements(manifest.manifest(), variant)?;
+    Ok(SelectedVariant {
+        manifest_sha256: manifest.manifest_sha256.clone(),
+        pack_id: manifest.manifest().pack_id.clone(),
+        pack_version: manifest.manifest().pack_version.clone(),
+        variant_id: variant.variant_id.clone(),
+        file_ids: variant.file_ids.iter().cloned().collect(),
+        requirements,
+    })
+}
+
+pub fn variant_requirements(
+    manifest: &ModelPackManifest,
+    variant: &ModelPackVariant,
+) -> Result<VariantRequirements, ModelPackError> {
+    let mut download_bytes = 0_u64;
+    let mut installed_bytes = 0_u64;
+    for file_id in &variant.file_ids {
+        let file = manifest
+            .files
+            .iter()
+            .find(|candidate| candidate.file_id == *file_id)
+            .ok_or(ModelPackError::InvalidManifest {
+                code: "variant_file",
+            })?;
+        if file.revocation.as_ref().is_some_and(|rev| rev.revoked) {
+            return invalid("variant_file");
+        }
+        download_bytes = download_bytes
+            .checked_add(file.byte_size)
+            .ok_or(ModelPackError::InvalidManifest { code: "overflow" })?;
+        installed_bytes = installed_bytes
+            .checked_add(file.installed_size)
+            .ok_or(ModelPackError::InvalidManifest { code: "overflow" })?;
+    }
+    Ok(VariantRequirements {
+        download_bytes,
+        installed_bytes,
+    })
 }
 
 fn variant_score(variant: &ModelPackVariant, selection: &RuntimeSelection) -> (u8, u8, u8, u64) {
@@ -608,11 +863,17 @@ pub fn lifecycle_storage_key(pack_id: &str, pack_version: &str) -> String {
     )
 }
 
-pub fn file_storage_key(pack_id: &str, pack_version: &str, file_id: &str) -> String {
+pub fn file_storage_key(
+    pack_id: &str,
+    pack_version: &str,
+    variant_id: &str,
+    file_id: &str,
+) -> String {
     format!(
-        "aurora.voice.model-file.v1:{}@{}#{}",
+        "aurora.voice.model-file.v1:{}@{}:{}#{}",
         encode_key(pack_id),
         encode_key(pack_version),
+        encode_key(variant_id),
         encode_key(file_id)
     )
 }
@@ -711,6 +972,7 @@ pub trait ModelStore {
     async fn reserve_file(
         &mut self,
         manifest: &VerifiedManifest,
+        selection: &SelectedVariant,
         file: &ModelPackFile,
     ) -> Result<DownloadTask, ModelPackError>;
     async fn resume_metadata(
@@ -726,14 +988,14 @@ pub trait ModelStore {
     async fn activate_pack(
         &mut self,
         manifest: &VerifiedManifest,
+        selection: &SelectedVariant,
     ) -> Result<LifecycleSnapshot, ModelPackError>;
     async fn rollback_active(&mut self) -> Result<Option<LifecycleSnapshot>, ModelPackError>;
     async fn remove_pack(&mut self, pack_id: &str) -> Result<(), ModelPackError>;
     async fn active_pack(&self) -> Result<Option<ActivePackIdentity>, ModelPackError>;
     async fn open_immutable_file(
         &self,
-        pack_id: &str,
-        pack_version: &str,
+        selection: &SelectedVariant,
         file_id: &str,
     ) -> Result<ImmutableModelFile, ModelPackError>;
 }
@@ -771,6 +1033,7 @@ fn validate_abi(abi: &AbiRequirements) -> Result<(), ModelPackError> {
 
 fn validate_compatibility(compatibility: &Compatibility) -> Result<(), ModelPackError> {
     require_nonblank(&compatibility.group_id)?;
+    require_nonblank(&compatibility.voice_state_group_id)?;
     require_nonblank(&compatibility.preprocessing_abi)?;
     require_nonblank(&compatibility.postprocessing_abi)?;
     if compatibility.sample_rate_hz == 0
@@ -782,11 +1045,63 @@ fn validate_compatibility(compatibility: &Compatibility) -> Result<(), ModelPack
     Ok(())
 }
 
+fn validate_license(license: &LicenseInfo) -> Result<(), ModelPackError> {
+    require_nonblank(&license.identifier)?;
+    validate_url(&license.text_url)?;
+    validate_sha256(&license.text_sha256)?;
+    require_nonblank(&license.attribution)
+}
+
+fn validate_language(language: &LanguageSupport) -> Result<(), ModelPackError> {
+    require_nonblank(&language.language)?;
+    if let Some(locale) = &language.locale {
+        require_nonblank(locale)?;
+    }
+    if !language.fixed_language && !language.auto_detect {
+        return invalid("language");
+    }
+    Ok(())
+}
+
+fn validate_capabilities(_capabilities: &CapabilityFlags) -> Result<(), ModelPackError> {
+    Ok(())
+}
+
+fn validate_processing(processing: &ProcessingMetadata) -> Result<(), ModelPackError> {
+    if let Some(tokenizer) = &processing.tokenizer_sha256 {
+        validate_sha256(tokenizer)?;
+    }
+    validate_sha256(&processing.operator_inventory_sha256)?;
+    require_nonblank(&processing.preprocessing_abi)?;
+    require_nonblank(&processing.postprocessing_abi)?;
+    if processing.shapes.sample_rate_hz == 0
+        || processing.shapes.channels == 0
+        || processing.shapes.frame_size == 0
+        || processing.shapes.window_size == 0
+    {
+        return invalid("shape");
+    }
+    let mut cache = BTreeSet::new();
+    for state in &processing.shapes.cache_state {
+        require_nonblank(state)?;
+        if !cache.insert(state) {
+            return invalid("duplicate_cache");
+        }
+    }
+    Ok(())
+}
+
+fn validate_runtime_gates(gates: &RuntimeGates) -> Result<(), ModelPackError> {
+    if gates.min_cpu_threads == 0 || gates.max_rtf_millis_per_second == 0 {
+        invalid("runtime_gate")
+    } else {
+        Ok(())
+    }
+}
+
 fn validate_provenance(provenance: &Provenance) -> Result<(), ModelPackError> {
     require_nonblank(&provenance.upstream_source)?;
     require_nonblank(&provenance.upstream_revision)?;
-    require_nonblank(&provenance.license)?;
-    require_nonblank(&provenance.attribution)?;
     validate_sha256(&provenance.build_recipe_sha256)
 }
 
@@ -841,471 +1156,6 @@ fn encode_key(value: &str) -> String {
     }
     output
 }
-
-struct ObjectWriter {
-    output: String,
-    first: bool,
-}
-
-impl ObjectWriter {
-    fn new() -> Self {
-        Self {
-            output: String::from("{"),
-            first: true,
-        }
-    }
-
-    fn field(&mut self, key: &str, write_value: impl FnOnce(&mut String)) {
-        if !self.first {
-            self.output.push(',');
-        }
-        self.first = false;
-        write_json_string(&mut self.output, key);
-        self.output.push(':');
-        write_value(&mut self.output);
-    }
-
-    fn finish(mut self) -> String {
-        self.output.push('}');
-        self.output
-    }
-}
-
-fn write_json_string(output: &mut String, value: &str) {
-    output.push('"');
-    for character in value.chars() {
-        match character {
-            '"' => output.push_str("\\\""),
-            '\\' => output.push_str("\\\\"),
-            '\n' => output.push_str("\\n"),
-            '\r' => output.push_str("\\r"),
-            '\t' => output.push_str("\\t"),
-            '\u{08}' => output.push_str("\\b"),
-            '\u{0c}' => output.push_str("\\f"),
-            character if character <= '\u{1f}' => {
-                output.push_str(&format!("\\u{:04x}", character as u32));
-            }
-            character => output.push(character),
-        }
-    }
-    output.push('"');
-}
-
-fn write_string_option(output: &mut String, value: &Option<String>) {
-    if let Some(value) = value {
-        write_json_string(output, value);
-    } else {
-        output.push_str("null");
-    }
-}
-
-fn write_revocation_option(output: &mut String, value: &Option<Revocation>) {
-    if let Some(value) = value {
-        write_revocation(output, value);
-    } else {
-        output.push_str("null");
-    }
-}
-
-fn write_array<T>(output: &mut String, values: &[T], mut writer: impl FnMut(&mut String, &T)) {
-    output.push('[');
-    for (index, value) in values.iter().enumerate() {
-        if index > 0 {
-            output.push(',');
-        }
-        writer(output, value);
-    }
-    output.push(']');
-}
-
-fn write_pack_tasks(output: &mut String, values: &[PackTask]) {
-    write_array(output, values, |output, value| {
-        write_json_string(output, pack_task_str(*value))
-    });
-}
-
-fn write_browser_features(output: &mut String, values: &[BrowserFeature]) {
-    write_array(output, values, |output, value| {
-        write_json_string(output, browser_feature_str(*value));
-    });
-}
-
-fn write_strings(output: &mut String, values: &[String]) {
-    write_array(output, values, |output, value| {
-        write_json_string(output, value)
-    });
-}
-
-fn write_files(output: &mut String, files: &[ModelPackFile]) {
-    write_array(output, files, |output, file| {
-        let mut object = ObjectWriter::new();
-        object.field("asset_id", |out| write_json_string(out, &file.asset_id));
-        object.field("byte_size", |out| out.push_str(&file.byte_size.to_string()));
-        object.field("compression", |out| {
-            write_json_string(out, compression_str(file.compression));
-        });
-        object.field("dependencies", |out| write_strings(out, &file.dependencies));
-        object.field("file_id", |out| write_json_string(out, &file.file_id));
-        object.field("license", |out| write_json_string(out, &file.license));
-        object.field("provenance", |out| write_provenance(out, &file.provenance));
-        object.field("raven", |out| write_raven_option(out, &file.raven));
-        object.field("revocation", |out| {
-            write_revocation_option(out, &file.revocation)
-        });
-        object.field("sha256", |out| write_json_string(out, &file.sha256));
-        object.field("task", |out| {
-            write_json_string(out, pack_task_str(file.task))
-        });
-        object.field("url", |out| write_json_string(out, &file.url));
-        output.push_str(&object.finish());
-    });
-}
-
-fn write_variants(output: &mut String, variants: &[ModelPackVariant]) {
-    write_array(output, variants, |output, variant| {
-        let mut object = ObjectWriter::new();
-        object.field("abi", |out| write_abi(out, &variant.abi));
-        object.field("arch", |out| {
-            write_json_string(out, target_arch_str(variant.arch))
-        });
-        object.field("compatibility", |out| {
-            write_compatibility(out, &variant.compatibility);
-        });
-        object.field("engine", |out| {
-            write_json_string(out, engine_str(variant.engine))
-        });
-        object.field("file_ids", |out| write_strings(out, &variant.file_ids));
-        object.field("min_device_memory_mb", |out| {
-            write_u64_option(out, variant.min_device_memory_mb);
-        });
-        object.field("os", |out| {
-            write_json_string(out, target_os_str(variant.os))
-        });
-        object.field("required_browser_features", |out| {
-            write_browser_features(out, &variant.required_browser_features);
-        });
-        object.field("resource_budget", |out| {
-            write_resource_budget(out, &variant.resource_budget);
-        });
-        object.field("revocation", |out| {
-            write_revocation_option(out, &variant.revocation)
-        });
-        object.field("target", |out| {
-            write_json_string(out, runtime_target_str(variant.target))
-        });
-        object.field("variant_id", |out| {
-            write_json_string(out, &variant.variant_id)
-        });
-        output.push_str(&object.finish());
-    });
-}
-
-fn write_u64_option(output: &mut String, value: Option<u64>) {
-    if let Some(value) = value {
-        output.push_str(&value.to_string());
-    } else {
-        output.push_str("null");
-    }
-}
-
-fn write_provenance(output: &mut String, provenance: &Provenance) {
-    let mut object = ObjectWriter::new();
-    object.field("attribution", |out| {
-        write_json_string(out, &provenance.attribution)
-    });
-    object.field("build_recipe_sha256", |out| {
-        write_json_string(out, &provenance.build_recipe_sha256);
-    });
-    object.field("license", |out| write_json_string(out, &provenance.license));
-    object.field("upstream_revision", |out| {
-        write_json_string(out, &provenance.upstream_revision);
-    });
-    object.field("upstream_source", |out| {
-        write_json_string(out, &provenance.upstream_source);
-    });
-    output.push_str(&object.finish());
-}
-
-fn write_resource_budget(output: &mut String, budget: &ResourceBudget) {
-    let mut object = ObjectWriter::new();
-    object.field("max_download_bytes", |out| {
-        out.push_str(&budget.max_download_bytes.to_string());
-    });
-    object.field("max_installed_bytes", |out| {
-        out.push_str(&budget.max_installed_bytes.to_string());
-    });
-    object.field("max_memory_bytes", |out| {
-        out.push_str(&budget.max_memory_bytes.to_string());
-    });
-    output.push_str(&object.finish());
-}
-
-fn write_compatibility(output: &mut String, compatibility: &Compatibility) {
-    let mut object = ObjectWriter::new();
-    object.field("channels", |out| {
-        out.push_str(&compatibility.channels.to_string())
-    });
-    object.field("frame_size", |out| {
-        out.push_str(&compatibility.frame_size.to_string())
-    });
-    object.field("group_id", |out| {
-        write_json_string(out, &compatibility.group_id)
-    });
-    object.field("interoperable", |out| {
-        out.push_str(if compatibility.interoperable {
-            "true"
-        } else {
-            "false"
-        })
-    });
-    object.field("postprocessing_abi", |out| {
-        write_json_string(out, &compatibility.postprocessing_abi);
-    });
-    object.field("preprocessing_abi", |out| {
-        write_json_string(out, &compatibility.preprocessing_abi);
-    });
-    object.field("sample_rate_hz", |out| {
-        out.push_str(&compatibility.sample_rate_hz.to_string());
-    });
-    output.push_str(&object.finish());
-}
-
-fn write_abi(output: &mut String, abi: &AbiRequirements) {
-    let mut object = ObjectWriter::new();
-    object.field("build_flags", |out| write_strings(out, &abi.build_flags));
-    object.field("engine_source_revision", |out| {
-        write_json_string(out, &abi.engine_source_revision);
-    });
-    object.field("min_aurora_version", |out| {
-        write_json_string(out, &abi.min_aurora_version);
-    });
-    object.field("min_engine_version", |out| {
-        write_json_string(out, &abi.min_engine_version);
-    });
-    object.field("min_runtime_version", |out| {
-        write_json_string(out, &abi.min_runtime_version);
-    });
-    output.push_str(&object.finish());
-}
-
-fn write_raven_option(output: &mut String, value: &Option<RavenRefs>) {
-    if let Some(raven) = value {
-        let mut object = ObjectWriter::new();
-        object.field("architecture_abi", |out| {
-            write_json_string(out, &raven.architecture_abi);
-        });
-        object.field("bos_asset_id", |out| {
-            write_json_string(out, &raven.bos_asset_id)
-        });
-        object.field("canonical_config_id", |out| {
-            write_json_string(out, &raven.canonical_config_id);
-        });
-        object.field("conversion_revision", |out| {
-            write_json_string(out, &raven.conversion_revision);
-        });
-        object.field("layer_count", |out| {
-            out.push_str(&raven.layer_count.to_string())
-        });
-        object.field("model_asset_id", |out| {
-            write_json_string(out, &raven.model_asset_id);
-        });
-        object.field("source_checkpoint_revision", |out| {
-            write_json_string(out, &raven.source_checkpoint_revision);
-        });
-        object.field("text_conditioner_asset_id", |out| {
-            write_json_string(out, &raven.text_conditioner_asset_id);
-        });
-        object.field("tokenizer_asset_id", |out| {
-            write_json_string(out, &raven.tokenizer_asset_id);
-        });
-        object.field("voice_state_compatibility_group_id", |out| {
-            write_json_string(out, &raven.voice_state_compatibility_group_id);
-        });
-        output.push_str(&object.finish());
-    } else {
-        output.push_str("null");
-    }
-}
-
-fn write_revocation(output: &mut String, revocation: &Revocation) {
-    let mut object = ObjectWriter::new();
-    object.field("reason", |out| {
-        write_json_string(out, revocation_reason_str(revocation.reason));
-    });
-    object.field("replacement_pack_id", |out| {
-        write_string_option(out, &revocation.replacement_pack_id);
-    });
-    object.field("revoked", |out| {
-        out.push_str(if revocation.revoked { "true" } else { "false" })
-    });
-    object.field("since", |out| write_json_string(out, &revocation.since));
-    output.push_str(&object.finish());
-}
-
-fn pack_task_str(value: PackTask) -> &'static str {
-    match value {
-        PackTask::Tts => "tts",
-        PackTask::Stt => "stt",
-        PackTask::Vad => "vad",
-        PackTask::Wakeword => "wakeword",
-        PackTask::VoiceState => "voice_state",
-    }
-}
-
-fn runtime_target_str(value: RuntimeTarget) -> &'static str {
-    match value {
-        RuntimeTarget::Web => "web",
-        RuntimeTarget::Desktop => "desktop",
-        RuntimeTarget::Android => "android",
-        RuntimeTarget::Ios => "ios",
-    }
-}
-
-fn target_os_str(value: TargetOs) -> &'static str {
-    match value {
-        TargetOs::Linux => "linux",
-        TargetOs::Windows => "windows",
-        TargetOs::Macos => "macos",
-        TargetOs::Android => "android",
-        TargetOs::Ios => "ios",
-        TargetOs::Web => "web",
-    }
-}
-
-fn target_arch_str(value: TargetArch) -> &'static str {
-    match value {
-        TargetArch::X86_64 => "x86_64",
-        TargetArch::Aarch64 => "aarch64",
-        TargetArch::Wasm32 => "wasm32",
-    }
-}
-
-fn engine_str(value: EngineKind) -> &'static str {
-    match value {
-        EngineKind::SherpaOnnx => "sherpa_onnx",
-        EngineKind::Raven => "raven",
-        EngineKind::Piper => "piper",
-        EngineKind::Custom => "custom",
-    }
-}
-
-fn browser_feature_str(value: BrowserFeature) -> &'static str {
-    match value {
-        BrowserFeature::Simd => "simd",
-        BrowserFeature::Threads => "threads",
-        BrowserFeature::SharedArrayBuffer => "shared_array_buffer",
-        BrowserFeature::WebGpu => "web_gpu",
-    }
-}
-
-fn compression_str(value: CompressionKind) -> &'static str {
-    match value {
-        CompressionKind::None => "none",
-        CompressionKind::Gzip => "gzip",
-        CompressionKind::Brotli => "brotli",
-        CompressionKind::Zip => "zip",
-    }
-}
-
-fn revocation_reason_str(value: RevocationReason) -> &'static str {
-    match value {
-        RevocationReason::Corrupt => "corrupt",
-        RevocationReason::Legal => "legal",
-        RevocationReason::Superseded => "superseded",
-        RevocationReason::Security => "security",
-    }
-}
-
-fn sha256(bytes: &[u8]) -> [u8; 32] {
-    const INITIAL: [u32; 8] = [
-        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
-        0x5be0cd19,
-    ];
-    const K: [u32; 64] = [
-        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
-        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
-        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
-        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
-        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
-        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
-        0xc67178f2,
-    ];
-
-    let bit_len = (bytes.len() as u64).saturating_mul(8);
-    let mut padded = bytes.to_vec();
-    padded.push(0x80);
-    while padded.len() % 64 != 56 {
-        padded.push(0);
-    }
-    padded.extend_from_slice(&bit_len.to_be_bytes());
-
-    let mut state = INITIAL;
-    for chunk in padded.chunks(64) {
-        let mut words = [0_u32; 64];
-        for (index, bytes) in chunk.chunks(4).enumerate().take(16) {
-            words[index] = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-        }
-        for index in 16..64 {
-            let s0 = words[index - 15].rotate_right(7)
-                ^ words[index - 15].rotate_right(18)
-                ^ (words[index - 15] >> 3);
-            let s1 = words[index - 2].rotate_right(17)
-                ^ words[index - 2].rotate_right(19)
-                ^ (words[index - 2] >> 10);
-            words[index] = words[index - 16]
-                .wrapping_add(s0)
-                .wrapping_add(words[index - 7])
-                .wrapping_add(s1);
-        }
-
-        let mut a = state[0];
-        let mut b = state[1];
-        let mut c = state[2];
-        let mut d = state[3];
-        let mut e = state[4];
-        let mut f = state[5];
-        let mut g = state[6];
-        let mut h = state[7];
-        for index in 0..64 {
-            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
-            let ch = (e & f) ^ ((!e) & g);
-            let temp1 = h
-                .wrapping_add(s1)
-                .wrapping_add(ch)
-                .wrapping_add(K[index])
-                .wrapping_add(words[index]);
-            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
-            let maj = (a & b) ^ (a & c) ^ (b & c);
-            let temp2 = s0.wrapping_add(maj);
-            h = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(temp1);
-            d = c;
-            c = b;
-            b = a;
-            a = temp1.wrapping_add(temp2);
-        }
-        state[0] = state[0].wrapping_add(a);
-        state[1] = state[1].wrapping_add(b);
-        state[2] = state[2].wrapping_add(c);
-        state[3] = state[3].wrapping_add(d);
-        state[4] = state[4].wrapping_add(e);
-        state[5] = state[5].wrapping_add(f);
-        state[6] = state[6].wrapping_add(g);
-        state[7] = state[7].wrapping_add(h);
-    }
-
-    let mut digest = [0_u8; 32];
-    for (index, value) in state.iter().enumerate() {
-        digest[index * 4..index * 4 + 4].copy_from_slice(&value.to_be_bytes());
-    }
-    digest
-}
-
 impl fmt::Display for VerificationMode {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -1339,8 +1189,33 @@ mod tests {
             upstream_source: "https://example.test/source".to_owned(),
             upstream_revision: "rev1".to_owned(),
             build_recipe_sha256: HASH.to_owned(),
-            license: "Apache-2.0".to_owned(),
+        }
+    }
+
+    fn license() -> LicenseInfo {
+        LicenseInfo {
+            identifier: "Apache-2.0".to_owned(),
+            text_url: "https://example.test/license".to_owned(),
+            text_sha256: HASH.to_owned(),
+            commercial_use: true,
+            redistribution: LicenseGrant::RedistributionAllowed,
             attribution: "Aurora".to_owned(),
+        }
+    }
+
+    fn processing() -> ProcessingMetadata {
+        ProcessingMetadata {
+            tokenizer_sha256: None,
+            operator_inventory_sha256: HASH.to_owned(),
+            preprocessing_abi: "pre-v1".to_owned(),
+            postprocessing_abi: "post-v1".to_owned(),
+            shapes: ShapeMetadata {
+                sample_rate_hz: 16_000,
+                channels: 1,
+                frame_size: 512,
+                window_size: 1024,
+                cache_state: vec!["hidden".to_owned()],
+            },
         }
     }
 
@@ -1353,9 +1228,12 @@ mod tests {
             sha256: HASH.to_owned(),
             url: format!("/models/{file_id}"),
             compression: CompressionKind::None,
+            installed_size: byte_size,
+            install_order: 0,
             dependencies: Vec::new(),
-            license: "Apache-2.0".to_owned(),
+            license: license(),
             provenance: provenance(),
+            processing: processing(),
             raven: None,
             revocation: None,
         }
@@ -1374,6 +1252,7 @@ mod tests {
     fn compatibility(interoperable: bool) -> Compatibility {
         Compatibility {
             group_id: "group-a".to_owned(),
+            voice_state_group_id: "voice-state-a".to_owned(),
             preprocessing_abi: "pre-v1".to_owned(),
             postprocessing_abi: "post-v1".to_owned(),
             sample_rate_hz: 16_000,
@@ -1397,6 +1276,11 @@ mod tests {
             engine: EngineKind::SherpaOnnx,
             required_browser_features: Vec::new(),
             min_device_memory_mb: None,
+            runtime_gates: RuntimeGates {
+                min_cpu_threads: 1,
+                max_rtf_millis_per_second: 1_000,
+                min_device_class: DeviceClass::Low,
+            },
             resource_budget: ResourceBudget {
                 max_download_bytes: 1024,
                 max_installed_bytes: 1024,
@@ -1416,7 +1300,17 @@ mod tests {
             pack_version: "1.0.0".to_owned(),
             display_name: "Pack".to_owned(),
             tasks: vec![PackTask::Stt],
-            license: "Apache-2.0".to_owned(),
+            license: license(),
+            languages: vec![LanguageSupport {
+                language: "en".to_owned(),
+                locale: Some("en-US".to_owned()),
+                fixed_language: true,
+                auto_detect: false,
+            }],
+            capabilities: CapabilityFlags {
+                streaming: true,
+                cancellation: true,
+            },
             provenance: provenance(),
             files: vec![file("model", PackTask::Stt, 100)],
             variants: vec![variant(
@@ -1525,6 +1419,24 @@ mod tests {
     }
 
     #[test]
+    fn canonical_json_has_golden_sorted_output_and_hash() -> Result<(), ModelPackError> {
+        let value = serde_json::json!({
+            "b": [true, "x"],
+            "a": {
+                "d": 4,
+                "c": 3
+            }
+        });
+        let canonical = canonical_json(&value)?;
+        assert_eq!(canonical, "{\"a\":{\"c\":3,\"d\":4},\"b\":[true,\"x\"]}");
+        assert_eq!(
+            sha256_hex(canonical.as_bytes()),
+            "71374a030170d7aa3d5d63cba6d96ce51ab388e2fb2286da0624e64617fdc148"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn trust_boundary_supports_signature_release_hash_and_revocation() -> Result<(), ModelPackError>
     {
         let manifest = manifest();
@@ -1541,14 +1453,31 @@ mod tests {
         let mut unsigned = manifest.clone();
         unsigned.signature = None;
         let verified = verify_manifest(
-            unsigned,
+            unsigned.clone(),
             &TrustPolicy {
-                expected_release_hash: Some(hash),
+                expected_release_hash: Some(hash.clone()),
+                release_index_source: Some("release-index.json".to_owned()),
+                release_index_revision: Some("rev1".to_owned()),
                 ..TrustPolicy::default()
             },
             None,
         )?;
         assert_eq!(verified.mode(), VerificationMode::ReleaseHash);
+        assert_eq!(verified.release_index_source(), Some("release-index.json"));
+        assert_eq!(verified.release_index_revision(), Some("rev1"));
+        assert!(matches!(
+            verify_manifest(
+                unsigned,
+                &TrustPolicy {
+                    expected_release_hash: Some(hash),
+                    ..TrustPolicy::default()
+                },
+                None
+            ),
+            Err(ModelPackError::Trust {
+                code: "release_index"
+            })
+        ));
 
         let mut policy = TrustPolicy::default();
         policy.revoked_key_ids.insert("key1".to_owned());
@@ -1591,6 +1520,9 @@ mod tests {
             max_download_bytes: 2048,
             max_installed_bytes: 2048,
             max_memory_bytes: 2048,
+            cpu_threads: 2,
+            max_rtf_millis_per_second: 1_000,
+            device_class: DeviceClass::Balanced,
             require_interoperable: true,
         };
         assert_eq!(
@@ -1605,10 +1537,32 @@ mod tests {
     }
 
     #[test]
+    fn variant_budgets_must_cover_selected_files_without_overflow() {
+        let mut manifest = manifest();
+        manifest.files.push(file("extra", PackTask::Stt, 100));
+        manifest.files[1].installed_size = 150;
+        manifest.variants[0].file_ids = vec!["model".to_owned(), "extra".to_owned()];
+        manifest.variants[0].resource_budget.max_download_bytes = 199;
+        manifest.variants[0].resource_budget.max_installed_bytes = 250;
+        assert!(matches!(
+            validate_manifest(&manifest),
+            Err(ModelPackError::InvalidManifest { code: "budget" })
+        ));
+
+        manifest.variants[0].resource_budget.max_download_bytes = u64::MAX;
+        manifest.variants[0].resource_budget.max_installed_bytes = u64::MAX;
+        manifest.files[0].byte_size = u64::MAX;
+        assert!(matches!(
+            validate_manifest(&manifest),
+            Err(ModelPackError::InvalidManifest { code: "overflow" })
+        ));
+    }
+
+    #[test]
     fn lifecycle_table_and_keys_are_versioned() -> Result<(), ModelPackError> {
         let snapshot = create_lifecycle_snapshot("pack id", "1/2", 1, InstallState::NotInstalled);
         assert!(lifecycle_storage_key("pack id", "1/2").starts_with("aurora.voice.model-pack.v1:"));
-        assert!(file_storage_key("pack id", "1/2", "model").contains("#model"));
+        assert!(file_storage_key("pack id", "1/2", "linux", "model").contains(":linux#model"));
         let queued = apply_lifecycle_event(&snapshot, InstallEvent::Enqueue, 2, None)?;
         let downloading = apply_lifecycle_event(&queued, InstallEvent::StartDownload, 3, None)?;
         let verifying =
