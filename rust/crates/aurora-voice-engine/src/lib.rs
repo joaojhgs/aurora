@@ -28,6 +28,7 @@ pub const MAX_KWS_PHRASES: usize = 64;
 pub const MAX_KWS_COOLDOWN_FRAMES: u32 = 16_000;
 pub const MAX_KWS_RESULTS: u8 = 16;
 pub const MAX_FINITE_STT_FRAMES: usize = 60_000;
+pub const MAX_FINITE_STT_SAMPLES: usize = VAD_SAMPLE_RATE_HZ as usize * 120;
 pub const MAX_FINITE_STT_TRANSCRIPT_BYTES: usize = 16_384;
 pub const TTS_MAX_TEXT_BYTES: usize = 4096;
 pub const TTS_MIN_SAMPLE_RATE_HZ: u32 = 8_000;
@@ -394,6 +395,7 @@ impl fmt::Debug for BoundTaskRequest {
 pub struct BoundFiniteSttRequest {
     request: BoundTaskRequest,
     frames: usize,
+    identity: FiniteSttRequestIdentity,
 }
 
 impl BoundFiniteSttRequest {
@@ -404,7 +406,12 @@ impl BoundFiniteSttRequest {
         {
             return Err(EngineError::InvalidRequest);
         }
-        Ok(Self { request, frames })
+        let identity = FiniteSttRequestIdentity::for_request(&request, frames);
+        Ok(Self {
+            request,
+            frames,
+            identity,
+        })
     }
 
     pub fn request(&self) -> &BoundTaskRequest {
@@ -413,6 +420,126 @@ impl BoundFiniteSttRequest {
 
     pub fn frames(&self) -> usize {
         self.frames
+    }
+
+    pub fn identity(&self) -> &FiniteSttRequestIdentity {
+        &self.identity
+    }
+}
+
+/// Opaque bounded identity for one finite STT request.
+#[derive(Clone, PartialEq, Eq)]
+pub struct FiniteSttRequestIdentity([u8; 32]);
+
+impl FiniteSttRequestIdentity {
+    fn for_request(request: &BoundTaskRequest, frames: usize) -> Self {
+        let mut hasher = Sha256::new();
+        hash_part(&mut hasher, b"aurora.finite-stt.request.v1");
+        hash_bound_task_request(&mut hasher, request);
+        hash_part(&mut hasher, &(frames as u64).to_le_bytes());
+        Self(hasher.finalize().into())
+    }
+}
+
+impl fmt::Debug for FiniteSttRequestIdentity {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("FiniteSttRequestIdentity(<redacted>)")
+    }
+}
+
+/// Bounded canonical 16 kHz mono PCM for finite STT. Debug output redacts samples.
+#[derive(Clone, PartialEq)]
+pub struct FiniteSttAudio {
+    request_identity: FiniteSttRequestIdentity,
+    generation: u64,
+    frames: usize,
+    samples: Vec<f32>,
+}
+
+impl FiniteSttAudio {
+    pub fn from_frames(
+        request: &BoundFiniteSttRequest,
+        frames: Vec<Vec<f32>>,
+    ) -> Result<Self, EngineError> {
+        if request.request().request().task != VoiceTask::SpeechToText
+            || frames.is_empty()
+            || frames.len() != request.frames()
+            || frames.len() > MAX_FINITE_STT_FRAMES
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        let mut total_samples = 0_usize;
+        for frame in &frames {
+            total_samples = total_samples
+                .checked_add(frame.len())
+                .ok_or(EngineError::ResourceLimit)?;
+            if frame.is_empty()
+                || frame.len() > MAX_STREAMING_FRAME_SAMPLES
+                || total_samples > MAX_FINITE_STT_SAMPLES
+                || !normalized_mono_samples(frame)
+            {
+                return Err(EngineError::InvalidRequest);
+            }
+        }
+        let mut samples = Vec::new();
+        samples
+            .try_reserve(total_samples)
+            .map_err(|_| EngineError::ResourceLimit)?;
+        for frame in frames {
+            samples.extend(frame);
+        }
+        Ok(Self {
+            request_identity: request.identity().clone(),
+            generation: request.request().request().generation,
+            frames: request.frames(),
+            samples,
+        })
+    }
+
+    fn matches_request(&self, request: &BoundFiniteSttRequest) -> bool {
+        self.request_identity == *request.identity()
+            && self.generation == request.request().request().generation
+            && self.frames == request.frames()
+            && !self.samples.is_empty()
+            && self.samples.len() <= MAX_FINITE_STT_SAMPLES
+    }
+
+    pub fn request_identity(&self) -> &FiniteSttRequestIdentity {
+        &self.request_identity
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub fn frames(&self) -> usize {
+        self.frames
+    }
+
+    pub fn sample_rate_hz(&self) -> u32 {
+        VAD_SAMPLE_RATE_HZ
+    }
+
+    pub fn channels(&self) -> u16 {
+        MONO_CHANNELS
+    }
+
+    pub fn samples(&self) -> &[f32] {
+        &self.samples
+    }
+}
+
+impl fmt::Debug for FiniteSttAudio {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("FiniteSttAudio")
+            .field("request_identity", &self.request_identity)
+            .field("generation", &self.generation)
+            .field("frames", &self.frames)
+            .field("sample_rate_hz", &VAD_SAMPLE_RATE_HZ)
+            .field("channels", &MONO_CHANNELS)
+            .field("sample_count", &self.samples.len())
+            .finish()
     }
 }
 
@@ -428,12 +555,14 @@ pub struct FiniteSttResult {
 impl FiniteSttResult {
     pub fn new(
         request: &BoundFiniteSttRequest,
+        audio: &FiniteSttAudio,
         transcript: impl Into<String>,
     ) -> Result<Self, EngineError> {
         let transcript = transcript.into();
         if request.request().request().task != VoiceTask::SpeechToText
             || request.frames() == 0
             || request.frames() > MAX_FINITE_STT_FRAMES
+            || !audio.matches_request(request)
             || !valid_transcript_text(&transcript)
         {
             return Err(EngineError::InvalidRequest);
@@ -1644,40 +1773,7 @@ impl TtsRequestIdentity {
     fn for_request(request: &BoundTaskRequest, text: &str, config: &TtsSynthesisConfig) -> Self {
         let mut hasher = Sha256::new();
         hash_part(&mut hasher, b"aurora.tts.request.v1");
-        hash_part(
-            &mut hasher,
-            format!("{:?}", request.request().task).as_bytes(),
-        );
-        hash_part(
-            &mut hasher,
-            request
-                .request()
-                .language
-                .as_deref()
-                .unwrap_or("")
-                .as_bytes(),
-        );
-        hash_part(&mut hasher, &request.request().generation.to_le_bytes());
-        let binding = request.binding();
-        hash_part(&mut hasher, binding.manifest_sha256().as_bytes());
-        hash_part(&mut hasher, binding.pack_id().as_bytes());
-        hash_part(&mut hasher, binding.pack_version().as_bytes());
-        hash_part(&mut hasher, binding.variant_id().as_bytes());
-        for file_id in binding.selected_file_ids() {
-            hash_part(&mut hasher, file_id.as_bytes());
-        }
-        hash_part(&mut hasher, binding.compatibility_group_id().as_bytes());
-        hash_part(
-            &mut hasher,
-            binding.voice_state_compatibility_group_id().as_bytes(),
-        );
-        hash_part(&mut hasher, format!("{:?}", binding.target()).as_bytes());
-        hash_part(&mut hasher, format!("{:?}", binding.os()).as_bytes());
-        hash_part(&mut hasher, format!("{:?}", binding.arch()).as_bytes());
-        hash_part(&mut hasher, format!("{:?}", binding.engine()).as_bytes());
-        hash_part(&mut hasher, &binding.sample_rate_hz().to_le_bytes());
-        hash_part(&mut hasher, &binding.channels().to_le_bytes());
-        hash_part(&mut hasher, &binding.frame_size().to_le_bytes());
+        hash_bound_task_request(&mut hasher, request);
         hash_part(&mut hasher, config.logical_voice_id().as_bytes());
         hash_part(
             &mut hasher,
@@ -2003,6 +2099,40 @@ fn hash_part(hasher: &mut Sha256, part: &[u8]) {
     hasher.update(part);
 }
 
+fn hash_bound_task_request(hasher: &mut Sha256, request: &BoundTaskRequest) {
+    hash_part(hasher, format!("{:?}", request.request().task).as_bytes());
+    hash_part(
+        hasher,
+        request
+            .request()
+            .language
+            .as_deref()
+            .unwrap_or("")
+            .as_bytes(),
+    );
+    hash_part(hasher, &request.request().generation.to_le_bytes());
+    let binding = request.binding();
+    hash_part(hasher, binding.manifest_sha256().as_bytes());
+    hash_part(hasher, binding.pack_id().as_bytes());
+    hash_part(hasher, binding.pack_version().as_bytes());
+    hash_part(hasher, binding.variant_id().as_bytes());
+    for file_id in binding.selected_file_ids() {
+        hash_part(hasher, file_id.as_bytes());
+    }
+    hash_part(hasher, binding.compatibility_group_id().as_bytes());
+    hash_part(
+        hasher,
+        binding.voice_state_compatibility_group_id().as_bytes(),
+    );
+    hash_part(hasher, format!("{:?}", binding.target()).as_bytes());
+    hash_part(hasher, format!("{:?}", binding.os()).as_bytes());
+    hash_part(hasher, format!("{:?}", binding.arch()).as_bytes());
+    hash_part(hasher, format!("{:?}", binding.engine()).as_bytes());
+    hash_part(hasher, &binding.sample_rate_hz().to_le_bytes());
+    hash_part(hasher, &binding.channels().to_le_bytes());
+    hash_part(hasher, &binding.frame_size().to_le_bytes());
+}
+
 fn manifest_supports_task(manifest: &ModelPackManifest, task: VoiceTask) -> bool {
     manifest
         .tasks
@@ -2072,6 +2202,7 @@ pub trait SpeechEngine: TaskProvider {
     async fn transcribe_finite(
         &mut self,
         request: BoundFiniteSttRequest,
+        audio: FiniteSttAudio,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<FiniteSttResult, EngineError>;
 
@@ -2326,6 +2457,26 @@ mod tests {
             None,
             chunk_samples,
         )
+    }
+
+    fn bound_finite_stt_request(generation: u64, frames: usize) -> BoundFiniteSttRequest {
+        let (manifest, selection) = selected(PackTask::Stt);
+        let binding =
+            TaskPackBinding::from_selection(VoiceTask::SpeechToText, &manifest, &selection)
+                .expect("stt binding");
+        BoundFiniteSttRequest::new(
+            BoundTaskRequest::new(
+                TaskRequest {
+                    task: VoiceTask::SpeechToText,
+                    language: Some("en".to_owned()),
+                    generation,
+                },
+                binding,
+            )
+            .expect("bound stt task"),
+            frames,
+        )
+        .expect("finite stt request")
     }
 
     struct SurfaceVadProvider;
@@ -2848,35 +2999,82 @@ mod tests {
 
     #[test]
     fn finite_stt_result_is_typed_and_bounded_to_request() {
-        let (stt_manifest, stt_selection) = selected(PackTask::Stt);
-        let stt_binding =
-            TaskPackBinding::from_selection(VoiceTask::SpeechToText, &stt_manifest, &stt_selection)
-                .expect("stt binding");
-        let task_request = BoundTaskRequest::new(
-            TaskRequest {
-                task: VoiceTask::SpeechToText,
-                language: Some("en".to_owned()),
-                generation: 21,
-            },
-            stt_binding,
-        )
-        .expect("bound stt task");
-        let finite_request = BoundFiniteSttRequest::new(task_request, 2).expect("finite request");
-        let result = FiniteSttResult::new(&finite_request, "hello").expect("finite result");
+        let finite_request = bound_finite_stt_request(21, 2);
+        let audio = FiniteSttAudio::from_frames(&finite_request, vec![vec![0.0, 0.1], vec![-0.1]])
+            .expect("finite audio");
+        let result = FiniteSttResult::new(&finite_request, &audio, "hello").expect("finite result");
         assert_eq!(result.transcript(), "hello");
         assert_eq!(result.frames(), 2);
         assert_eq!(result.generation(), 21);
         assert_eq!(
             FiniteSttResult::new(
                 &finite_request,
+                &audio,
                 "x".repeat(MAX_FINITE_STT_TRANSCRIPT_BYTES + 1)
             ),
             Err(EngineError::InvalidRequest)
         );
         assert_eq!(
-            FiniteSttResult::new(&finite_request, "bad\u{0000}text"),
+            FiniteSttResult::new(&finite_request, &audio, "bad\u{0000}text"),
             Err(EngineError::InvalidRequest)
         );
+    }
+
+    #[test]
+    fn finite_stt_audio_is_bounded_and_tied_to_exact_request() {
+        let request = bound_finite_stt_request(22, 2);
+        assert_eq!(
+            FiniteSttAudio::from_frames(&request, Vec::new()),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            FiniteSttAudio::from_frames(&request, vec![vec![0.0]]),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            FiniteSttAudio::from_frames(&request, vec![vec![1.1], vec![0.0]]),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            FiniteSttAudio::from_frames(
+                &request,
+                vec![vec![0.0; MAX_STREAMING_FRAME_SAMPLES + 1], vec![0.0]]
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+        let oversized_request = bound_finite_stt_request(24, 5);
+        let oversized_frame_samples = MAX_FINITE_STT_SAMPLES / 5 + 1;
+        assert_eq!(
+            FiniteSttAudio::from_frames(
+                &oversized_request,
+                vec![
+                    vec![0.0; oversized_frame_samples],
+                    vec![0.0; oversized_frame_samples],
+                    vec![0.0; oversized_frame_samples],
+                    vec![0.0; oversized_frame_samples],
+                    vec![0.0; oversized_frame_samples],
+                ]
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+        let audio = FiniteSttAudio::from_frames(&request, vec![vec![0.25], vec![-0.25]])
+            .expect("valid audio");
+        assert_eq!(audio.frames(), 2);
+        assert_eq!(audio.samples(), &[0.25, -0.25]);
+        assert_eq!(audio.generation(), 22);
+        assert_eq!(audio.sample_rate_hz(), VAD_SAMPLE_RATE_HZ);
+        assert_eq!(audio.channels(), MONO_CHANNELS);
+
+        let other_request = bound_finite_stt_request(23, 2);
+        assert_eq!(
+            FiniteSttResult::new(&other_request, &audio, "hello"),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let debug = format!("{audio:?}");
+        assert!(debug.contains("sample_count: 2"));
+        assert!(!debug.contains("0.25"));
+        assert!(!debug.contains("-0.25"));
     }
 
     #[test]
@@ -2896,7 +3094,10 @@ mod tests {
         )
         .expect("bound stt task");
         let finite_request = BoundFiniteSttRequest::new(task_request, 3).expect("finite request");
-        let finite = FiniteSttResult::new(&finite_request, secret).expect("finite result");
+        let audio =
+            FiniteSttAudio::from_frames(&finite_request, vec![vec![0.0], vec![0.1], vec![-0.1]])
+                .expect("finite audio");
+        let finite = FiniteSttResult::new(&finite_request, &audio, secret).expect("finite result");
         let finite_debug = format!("{finite:?}");
         assert!(finite_debug.contains("transcript_bytes"));
         assert!(!finite_debug.contains(secret));

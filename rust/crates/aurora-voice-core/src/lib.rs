@@ -14,7 +14,7 @@ use std::sync::{
 use thiserror::Error;
 
 pub use aurora_voice_engine::{
-    BoundFiniteSttRequest, BoundTaskRequest, BoundTtsSynthesisRequest, EngineError,
+    BoundFiniteSttRequest, BoundTaskRequest, BoundTtsSynthesisRequest, EngineError, FiniteSttAudio,
     FiniteSttResult, ResourceReport, SpeechEngine, TaskCapability, TaskPackBinding, TaskProvider,
     TaskReadiness, TaskRequest, TtsSynthesisConfig, VoiceTask,
 };
@@ -1028,7 +1028,8 @@ where
         at: TimestampMicros,
         cancellation: CancellationToken,
     ) -> Result<String, VoiceCoreError> {
-        let mut frames = 0_usize;
+        let mut frames = Vec::<Vec<f32>>::new();
+        let mut discontinuity = false;
         cancellation.check()?;
         while let Some(frame) = self.audio.next_frame().await? {
             cancellation.check()?;
@@ -1036,12 +1037,17 @@ where
                 continue;
             }
             if frame.route_revision() != lease.route_revision || frame.discontinuity() {
+                frames.clear();
+                discontinuity = true;
                 self.route_revision = RouteRevision(self.route_revision.0.saturating_add(1));
                 break;
             }
-            frames = frames.saturating_add(1);
+            frames.push(frame.samples().to_vec());
         }
         cancellation.check()?;
+        if discontinuity {
+            return Err(VoiceCoreError::InvalidTransition);
+        }
         self.transition_emit(
             VoiceState::Transcribing,
             TransitionReason::SpeechEnded,
@@ -1054,10 +1060,11 @@ where
         let stt_request =
             self.bound_engine_request(VoiceTask::SpeechToText, None, lease.generation)?;
         self.engine.warm_task(stt_request.clone()).await?;
-        let stt_request = BoundFiniteSttRequest::new(stt_request, frames)?;
+        let stt_request = BoundFiniteSttRequest::new(stt_request, frames.len())?;
+        let stt_audio = FiniteSttAudio::from_frames(&stt_request, frames)?;
         let transcript = self
             .engine
-            .transcribe_finite(stt_request, &|| cancellation.is_cancelled())
+            .transcribe_finite(stt_request, stt_audio, &|| cancellation.is_cancelled())
             .await?;
         cancellation.check()?;
         self.transition_emit(
