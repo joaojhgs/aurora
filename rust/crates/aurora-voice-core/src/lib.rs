@@ -880,51 +880,6 @@ pub trait AudioOutput {
     ) -> Result<(), VoiceCoreError>;
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct NoopAudioOutput {
-    stopped: Vec<(Generation, TransitionReason)>,
-}
-
-impl NoopAudioOutput {
-    pub fn stopped(&self) -> &[(Generation, TransitionReason)] {
-        &self.stopped
-    }
-}
-
-#[async_trait(?Send)]
-impl AudioOutput for NoopAudioOutput {
-    async fn play(
-        &mut self,
-        context: AudioPlaybackContext,
-        audio: TtsSynthesisResult,
-        cancellation: &dyn Fn() -> bool,
-    ) -> Result<AudioPlaybackReceipt, VoiceCoreError> {
-        if cancellation() || audio.cancelled() {
-            return Err(VoiceCoreError::Cancelled);
-        }
-        let sample_count = audio
-            .chunks()
-            .iter()
-            .map(|chunk| chunk.samples().len() as u64)
-            .sum();
-        Ok(AudioPlaybackReceipt::new(
-            context,
-            audio.chunk_count(),
-            sample_count,
-            context.started_at,
-        ))
-    }
-
-    async fn stop(
-        &mut self,
-        generation: Generation,
-        reason: TransitionReason,
-    ) -> Result<(), VoiceCoreError> {
-        self.stopped.push((generation, reason));
-        Ok(())
-    }
-}
-
 pub struct VoiceRuntime<A, E, T, O, S> {
     audio: A,
     engine: E,
@@ -1296,11 +1251,14 @@ where
         if result.is_err() || cancellation.is_cancelled() {
             let _ = self.engine.cancel_generation(lease.generation.0).await;
             let _ = self.transport.cancel_session(lease.generation).await;
-            let _ = self
-                .output
-                .stop(lease.generation, TransitionReason::Cancel)
-                .await;
         }
+        let output_stop_result = if result.is_err() || cancellation.is_cancelled() {
+            self.output
+                .stop(lease.generation, TransitionReason::Cancel)
+                .await
+        } else {
+            Ok(())
+        };
 
         let stop_reason = if result.is_ok() {
             TransitionReason::Stop
@@ -1320,6 +1278,7 @@ where
 
         match result {
             Ok(value) => {
+                output_stop_result?;
                 stop_result?;
                 release_result?;
                 Ok(value)
@@ -1327,9 +1286,26 @@ where
             Err(error) => {
                 let _ = stop_result;
                 let _ = release_result;
-                Err(error)
+                match output_stop_result {
+                    Ok(()) => Err(error),
+                    Err(stop_error) => Err(Self::playback_cleanup_failed(stop_error)),
+                }
             }
         }
+    }
+
+    fn playback_cleanup_failed(error: VoiceCoreError) -> VoiceCoreError {
+        let code = match error {
+            VoiceCoreError::TransportFault { code } if code.starts_with("playback_cleanup_") => {
+                code
+            }
+            VoiceCoreError::Cancelled => "playback_cleanup_cancelled".to_owned(),
+            VoiceCoreError::TransportFault { .. } => "playback_cleanup_transport_fault".to_owned(),
+            VoiceCoreError::Engine(_) => "playback_cleanup_engine_fault".to_owned(),
+            VoiceCoreError::LockPoisoned => "playback_cleanup_lock_poisoned".to_owned(),
+            _ => "playback_cleanup_failed".to_owned(),
+        };
+        VoiceCoreError::TransportFault { code }
     }
 
     fn reset_state_after_cleanup(&mut self, generation: Generation, route_revision: RouteRevision) {

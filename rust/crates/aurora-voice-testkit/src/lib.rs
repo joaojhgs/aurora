@@ -585,6 +585,7 @@ pub struct FakeAudioOutput {
     played_samples: Vec<Vec<i16>>,
     stopped: Vec<(Generation, TransitionReason)>,
     fail_play: bool,
+    fail_stop: bool,
     cancel_during_play: Option<CancellationToken>,
 }
 
@@ -599,6 +600,7 @@ impl fmt::Debug for FakeAudioOutput {
             )
             .field("stopped", &self.stopped)
             .field("fail_play", &self.fail_play)
+            .field("fail_stop", &self.fail_stop)
             .field("cancel_during_play", &self.cancel_during_play.is_some())
             .finish()
     }
@@ -611,6 +613,11 @@ impl FakeAudioOutput {
 
     pub fn with_play_failure(mut self) -> Self {
         self.fail_play = true;
+        self
+    }
+
+    pub fn with_stop_failure(mut self) -> Self {
+        self.fail_stop = true;
         self
     }
 
@@ -674,6 +681,9 @@ impl AudioOutput for FakeAudioOutput {
         reason: TransitionReason,
     ) -> Result<(), VoiceCoreError> {
         self.stopped.push((generation, reason));
+        if self.fail_stop {
+            return Err(VoiceCoreError::InvalidTransition);
+        }
         Ok(())
     }
 }
@@ -1545,6 +1555,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn output_stop_failure_after_play_failure_reports_cleanup_and_still_releases(
+    ) -> Result<(), VoiceCoreError> {
+        let frames = vec![fake_frame(1, Generation(1))?];
+        let audio = FakeAudioInput::new(frames);
+        let engine = FakeEngine::new("first");
+        let transport = FakeTransport::new("first answer");
+        let output = FakeAudioOutput::new()
+            .with_play_failure()
+            .with_stop_failure();
+        let sink = FakeEventSink::default();
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
+
+        let result = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(77),
+                CancellationToken::new(),
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(VoiceCoreError::TransportFault { code }) if code == "playback_cleanup_failed"
+        ));
+        assert_eq!(runtime.state(), VoiceState::Idle);
+        assert!(!runtime.has_active_capture());
+
+        let (audio, engine, transport, output, sink) = runtime.into_parts();
+        assert_eq!(audio.stopped(), &[TransitionReason::Cancel]);
+        assert_eq!(engine.spoken(), &["first answer".to_owned()]);
+        assert_eq!(engine.cancelled(), &[1]);
+        assert_eq!(transport.cancelled(), &[Generation(1)]);
+        assert!(output.played().is_empty());
+        assert_eq!(
+            output.stopped(),
+            &[(Generation(1), TransitionReason::Cancel)]
+        );
+        let error_text = VoiceCoreError::TransportFault {
+            code: "playback_cleanup_failed".to_owned(),
+        }
+        .to_string();
+        assert!(!error_text.contains("first answer"));
+        assert!(!error_text.contains("sample"));
+        assert!(!sink.events().iter().any(|event| matches!(
+            event,
+            RuntimeEvent::State { transition }
+                if transition.reason == TransitionReason::PlaybackEnded
+        )));
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn output_cancellation_stops_without_playback_completion() -> Result<(), VoiceCoreError> {
         let frames = vec![fake_frame(1, Generation(1))?];
         let audio = FakeAudioInput::new(frames);
@@ -1571,6 +1640,59 @@ mod tests {
             )
             .await;
         assert!(matches!(result, Err(VoiceCoreError::Cancelled)));
+        assert_eq!(runtime.state(), VoiceState::Idle);
+        assert!(!runtime.has_active_capture());
+
+        let (audio, engine, transport, output, sink) = runtime.into_parts();
+        assert_eq!(audio.stopped(), &[TransitionReason::Cancel]);
+        assert_eq!(engine.cancelled(), &[1]);
+        assert_eq!(transport.cancelled(), &[Generation(1)]);
+        assert!(output.played().is_empty());
+        assert_eq!(
+            output.stopped(),
+            &[(Generation(1), TransitionReason::Cancel)]
+        );
+        assert!(!sink.events().iter().any(|event| matches!(
+            event,
+            RuntimeEvent::State { transition }
+                if transition.reason == TransitionReason::PlaybackEnded
+        )));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn output_stop_failure_after_playback_cancel_reports_cleanup_and_still_releases(
+    ) -> Result<(), VoiceCoreError> {
+        let frames = vec![fake_frame(1, Generation(1))?];
+        let audio = FakeAudioInput::new(frames);
+        let cancellation = CancellationToken::new();
+        let engine = FakeEngine::new("first");
+        let transport = FakeTransport::new("first answer");
+        let output = FakeAudioOutput::new()
+            .with_play_cancellation(cancellation.clone())
+            .with_stop_failure();
+        let sink = FakeEventSink::default();
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
+
+        let result = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(78),
+                cancellation,
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(VoiceCoreError::TransportFault { code }) if code == "playback_cleanup_failed"
+        ));
         assert_eq!(runtime.state(), VoiceState::Idle);
         assert!(!runtime.has_active_capture());
 
