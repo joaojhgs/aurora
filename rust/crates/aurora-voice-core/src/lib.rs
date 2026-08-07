@@ -15,8 +15,8 @@ use thiserror::Error;
 
 pub use aurora_voice_engine::{
     BoundFiniteSttRequest, BoundTaskRequest, BoundTtsSynthesisRequest, EngineError, FiniteSttAudio,
-    FiniteSttResult, ResourceReport, SpeechEngine, TaskCapability, TaskPackBinding, TaskProvider,
-    TaskReadiness, TaskRequest, TtsSynthesisConfig, VoiceTask,
+    FiniteSttAudioBuilder, FiniteSttResult, ResourceReport, SpeechEngine, TaskCapability,
+    TaskPackBinding, TaskProvider, TaskReadiness, TaskRequest, TtsSynthesisConfig, VoiceTask,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -1028,25 +1028,28 @@ where
         at: TimestampMicros,
         cancellation: CancellationToken,
     ) -> Result<String, VoiceCoreError> {
-        let mut frames = Vec::<Vec<f32>>::new();
-        let mut discontinuity = false;
+        let stt_task_request =
+            self.bound_engine_request(VoiceTask::SpeechToText, None, lease.generation)?;
+        let mut stt_audio = FiniteSttAudioBuilder::new(stt_task_request)?;
         cancellation.check()?;
         while let Some(frame) = self.audio.next_frame().await? {
-            cancellation.check()?;
+            if cancellation.is_cancelled() {
+                stt_audio.clear();
+                return Err(VoiceCoreError::Cancelled);
+            }
             if frame.generation() != lease.generation {
                 continue;
             }
             if frame.route_revision() != lease.route_revision || frame.discontinuity() {
-                frames.clear();
-                discontinuity = true;
+                stt_audio.clear();
                 self.route_revision = RouteRevision(self.route_revision.0.saturating_add(1));
-                break;
+                return Err(VoiceCoreError::InvalidTransition);
             }
-            frames.push(frame.samples().to_vec());
+            stt_audio.push_frame(frame.samples())?;
         }
-        cancellation.check()?;
-        if discontinuity {
-            return Err(VoiceCoreError::InvalidTransition);
+        if cancellation.is_cancelled() {
+            stt_audio.clear();
+            return Err(VoiceCoreError::Cancelled);
         }
         self.transition_emit(
             VoiceState::Transcribing,
@@ -1057,11 +1060,8 @@ where
         )
         .await?;
         cancellation.check()?;
-        let stt_request =
-            self.bound_engine_request(VoiceTask::SpeechToText, None, lease.generation)?;
-        self.engine.warm_task(stt_request.clone()).await?;
-        let stt_request = BoundFiniteSttRequest::new(stt_request, frames.len())?;
-        let stt_audio = FiniteSttAudio::from_frames(&stt_request, frames)?;
+        self.engine.warm_task(stt_audio.request().clone()).await?;
+        let (stt_request, stt_audio) = stt_audio.finish()?;
         let transcript = self
             .engine
             .transcribe_finite(stt_request, stt_audio, &|| cancellation.is_cancelled())

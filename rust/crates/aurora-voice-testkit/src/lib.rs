@@ -22,6 +22,7 @@ use aurora_voice_engine::{
     TtsAudioChunk, TtsSynthesisResult, MONO_CHANNELS, VAD_SAMPLE_RATE_HZ,
 };
 use std::collections::{BTreeSet, VecDeque};
+use std::fmt;
 
 pub use model_store::*;
 
@@ -280,7 +281,7 @@ impl AudioInput for FakeAudioInput {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct FakeEngine {
     transcript: String,
     spoken: Vec<String>,
@@ -290,6 +291,33 @@ pub struct FakeEngine {
     fail_transcribe: bool,
     fail_synthesize: bool,
     cancel_during_transcribe: Option<CancellationToken>,
+}
+
+impl fmt::Debug for FakeEngine {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("FakeEngine")
+            .field("transcript_bytes", &self.transcript.len())
+            .field("spoken_count", &self.spoken.len())
+            .field("cancelled_count", &self.cancelled.len())
+            .field("transcribed_audio_count", &self.transcribed_audio.len())
+            .field(
+                "transcribed_sample_counts",
+                &self
+                    .transcribed_audio
+                    .iter()
+                    .map(Vec::len)
+                    .collect::<Vec<_>>(),
+            )
+            .field("report", &self.report)
+            .field("fail_transcribe", &self.fail_transcribe)
+            .field("fail_synthesize", &self.fail_synthesize)
+            .field(
+                "cancel_during_transcribe",
+                &self.cancel_during_transcribe.is_some(),
+            )
+            .finish()
+    }
 }
 
 impl FakeEngine {
@@ -600,6 +628,7 @@ pub fn fake_lease(start_reason: CaptureStartReason) -> VoiceCaptureLease {
 mod tests {
     use super::*;
     use aurora_voice_core::{AssistantTurnNamespace, VoiceRuntime, VoiceState};
+    use aurora_voice_engine::MAX_FINITE_STT_SAMPLES;
 
     #[tokio::test]
     async fn fake_ptt_turn_completes_without_ui_attachment() -> Result<(), VoiceCoreError> {
@@ -700,6 +729,53 @@ mod tests {
         assert!(engine.transcribed_audio().is_empty());
         assert!(transport.invoked().is_empty());
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn finite_stt_overflow_fails_before_eof_without_provider_call(
+    ) -> Result<(), VoiceCoreError> {
+        let frame_samples = MAX_FINITE_STT_SAMPLES / 5 + 1;
+        let frames = (1..=5)
+            .map(|sequence| {
+                fake_frame_with_samples(sequence, Generation(1), vec![0.0; frame_samples], false)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let audio = FakeAudioInput::new(frames);
+        let engine = FakeEngine::new("unused");
+        let transport = FakeTransport::new("unused answer");
+        let sink = FakeEventSink::default();
+        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
+
+        let result = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(26),
+                CancellationToken::new(),
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(VoiceCoreError::Engine(EngineError::InvalidRequest))
+        ));
+
+        let (_audio, engine, transport, _sink) = runtime.into_parts();
+        assert!(engine.transcribed_audio().is_empty());
+        assert!(transport.invoked().is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn fake_engine_debug_redacts_recorded_pcm() {
+        let mut engine = FakeEngine::new("SECRET_FAKE_ENGINE_TRANSCRIPT");
+        engine.spoken.push("SECRET_FAKE_ENGINE_SPOKEN".to_owned());
+        engine.transcribed_audio.push(vec![0.123, -0.456]);
+        let debug = format!("{engine:?}");
+        assert!(debug.contains("transcript_bytes"));
+        assert!(debug.contains("transcribed_sample_counts"));
+        assert!(!debug.contains("SECRET_FAKE_ENGINE_TRANSCRIPT"));
+        assert!(!debug.contains("SECRET_FAKE_ENGINE_SPOKEN"));
+        assert!(!debug.contains("0.123"));
+        assert!(!debug.contains("-0.456"));
     }
 
     #[tokio::test]

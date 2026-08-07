@@ -447,6 +447,108 @@ impl fmt::Debug for FiniteSttRequestIdentity {
     }
 }
 
+#[derive(Clone, PartialEq)]
+pub struct FiniteSttAudioBuilder {
+    request: BoundTaskRequest,
+    samples: Vec<f32>,
+    frames: usize,
+    total_samples: usize,
+    failed: bool,
+}
+
+impl FiniteSttAudioBuilder {
+    pub fn new(request: BoundTaskRequest) -> Result<Self, EngineError> {
+        if request.request().task != VoiceTask::SpeechToText {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(Self {
+            request,
+            samples: Vec::new(),
+            frames: 0,
+            total_samples: 0,
+            failed: false,
+        })
+    }
+
+    pub fn push_frame(&mut self, samples: &[f32]) -> Result<(), EngineError> {
+        if self.failed {
+            return Err(EngineError::InvalidRequest);
+        }
+        let next_frames = self
+            .frames
+            .checked_add(1)
+            .ok_or(EngineError::ResourceLimit)?;
+        let next_total_samples = self
+            .total_samples
+            .checked_add(samples.len())
+            .ok_or(EngineError::ResourceLimit)?;
+        if samples.is_empty()
+            || samples.len() > MAX_STREAMING_FRAME_SAMPLES
+            || next_frames > MAX_FINITE_STT_FRAMES
+            || next_total_samples > MAX_FINITE_STT_SAMPLES
+            || !normalized_mono_samples(samples)
+        {
+            self.clear();
+            self.failed = true;
+            return Err(EngineError::InvalidRequest);
+        }
+        self.samples
+            .try_reserve(samples.len())
+            .map_err(|_| EngineError::ResourceLimit)?;
+        self.samples.extend_from_slice(samples);
+        self.frames = next_frames;
+        self.total_samples = next_total_samples;
+        Ok(())
+    }
+
+    pub fn clear(&mut self) {
+        self.samples.clear();
+        self.frames = 0;
+        self.total_samples = 0;
+    }
+
+    pub fn finish(self) -> Result<(BoundFiniteSttRequest, FiniteSttAudio), EngineError> {
+        if self.failed || self.frames == 0 || self.samples.is_empty() {
+            return Err(EngineError::InvalidRequest);
+        }
+        let request = BoundFiniteSttRequest::new(self.request, self.frames)?;
+        let audio = FiniteSttAudio {
+            request_identity: request.identity().clone(),
+            generation: request.request().request().generation,
+            frames: self.frames,
+            samples: self.samples,
+        };
+        if !audio.matches_request(&request) {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok((request, audio))
+    }
+
+    pub fn frames(&self) -> usize {
+        self.frames
+    }
+
+    pub fn sample_count(&self) -> usize {
+        self.total_samples
+    }
+
+    pub fn request(&self) -> &BoundTaskRequest {
+        &self.request
+    }
+}
+
+impl fmt::Debug for FiniteSttAudioBuilder {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("FiniteSttAudioBuilder")
+            .field("request", &self.request)
+            .field("frames", &self.frames)
+            .field("sample_count", &self.total_samples)
+            .field("failed", &self.failed)
+            .finish()
+    }
+}
+
 /// Bounded canonical 16 kHz mono PCM for finite STT. Debug output redacts samples.
 #[derive(Clone, PartialEq)]
 pub struct FiniteSttAudio {
@@ -458,42 +560,14 @@ pub struct FiniteSttAudio {
 
 impl FiniteSttAudio {
     pub fn from_frames(
-        request: &BoundFiniteSttRequest,
-        frames: Vec<Vec<f32>>,
-    ) -> Result<Self, EngineError> {
-        if request.request().request().task != VoiceTask::SpeechToText
-            || frames.is_empty()
-            || frames.len() != request.frames()
-            || frames.len() > MAX_FINITE_STT_FRAMES
-        {
-            return Err(EngineError::InvalidRequest);
-        }
-        let mut total_samples = 0_usize;
-        for frame in &frames {
-            total_samples = total_samples
-                .checked_add(frame.len())
-                .ok_or(EngineError::ResourceLimit)?;
-            if frame.is_empty()
-                || frame.len() > MAX_STREAMING_FRAME_SAMPLES
-                || total_samples > MAX_FINITE_STT_SAMPLES
-                || !normalized_mono_samples(frame)
-            {
-                return Err(EngineError::InvalidRequest);
-            }
-        }
-        let mut samples = Vec::new();
-        samples
-            .try_reserve(total_samples)
-            .map_err(|_| EngineError::ResourceLimit)?;
+        request: BoundTaskRequest,
+        frames: impl IntoIterator<Item = impl AsRef<[f32]>>,
+    ) -> Result<(BoundFiniteSttRequest, Self), EngineError> {
+        let mut builder = FiniteSttAudioBuilder::new(request)?;
         for frame in frames {
-            samples.extend(frame);
+            builder.push_frame(frame.as_ref())?;
         }
-        Ok(Self {
-            request_identity: request.identity().clone(),
-            generation: request.request().request().generation,
-            frames: request.frames(),
-            samples,
-        })
+        builder.finish()
     }
 
     fn matches_request(&self, request: &BoundFiniteSttRequest) -> bool {
@@ -3000,8 +3074,11 @@ mod tests {
     #[test]
     fn finite_stt_result_is_typed_and_bounded_to_request() {
         let finite_request = bound_finite_stt_request(21, 2);
-        let audio = FiniteSttAudio::from_frames(&finite_request, vec![vec![0.0, 0.1], vec![-0.1]])
-            .expect("finite audio");
+        let (_built_request, audio) = FiniteSttAudio::from_frames(
+            finite_request.request().clone(),
+            vec![vec![0.0, 0.1], vec![-0.1]],
+        )
+        .expect("finite audio");
         let result = FiniteSttResult::new(&finite_request, &audio, "hello").expect("finite result");
         assert_eq!(result.transcript(), "hello");
         assert_eq!(result.frames(), 2);
@@ -3024,29 +3101,24 @@ mod tests {
     fn finite_stt_audio_is_bounded_and_tied_to_exact_request() {
         let request = bound_finite_stt_request(22, 2);
         assert_eq!(
-            FiniteSttAudio::from_frames(&request, Vec::new()),
+            FiniteSttAudio::from_frames(request.request().clone(), Vec::<Vec<f32>>::new()),
             Err(EngineError::InvalidRequest)
         );
         assert_eq!(
-            FiniteSttAudio::from_frames(&request, vec![vec![0.0]]),
-            Err(EngineError::InvalidRequest)
-        );
-        assert_eq!(
-            FiniteSttAudio::from_frames(&request, vec![vec![1.1], vec![0.0]]),
+            FiniteSttAudio::from_frames(request.request().clone(), vec![vec![1.1], vec![0.0]]),
             Err(EngineError::InvalidRequest)
         );
         assert_eq!(
             FiniteSttAudio::from_frames(
-                &request,
+                request.request().clone(),
                 vec![vec![0.0; MAX_STREAMING_FRAME_SAMPLES + 1], vec![0.0]]
             ),
             Err(EngineError::InvalidRequest)
         );
-        let oversized_request = bound_finite_stt_request(24, 5);
         let oversized_frame_samples = MAX_FINITE_STT_SAMPLES / 5 + 1;
         assert_eq!(
             FiniteSttAudio::from_frames(
-                &oversized_request,
+                request.request().clone(),
                 vec![
                     vec![0.0; oversized_frame_samples],
                     vec![0.0; oversized_frame_samples],
@@ -3057,8 +3129,10 @@ mod tests {
             ),
             Err(EngineError::InvalidRequest)
         );
-        let audio = FiniteSttAudio::from_frames(&request, vec![vec![0.25], vec![-0.25]])
-            .expect("valid audio");
+        let (built_request, audio) =
+            FiniteSttAudio::from_frames(request.request().clone(), vec![vec![0.25], vec![-0.25]])
+                .expect("valid audio");
+        assert_eq!(built_request, request);
         assert_eq!(audio.frames(), 2);
         assert_eq!(audio.samples(), &[0.25, -0.25]);
         assert_eq!(audio.generation(), 22);
@@ -3075,6 +3149,13 @@ mod tests {
         assert!(debug.contains("sample_count: 2"));
         assert!(!debug.contains("0.25"));
         assert!(!debug.contains("-0.25"));
+
+        let mut builder = FiniteSttAudioBuilder::new(request.request().clone()).expect("builder");
+        builder.push_frame(&[0.123, -0.456]).expect("push");
+        let builder_debug = format!("{builder:?}");
+        assert!(builder_debug.contains("sample_count: 2"));
+        assert!(!builder_debug.contains("0.123"));
+        assert!(!builder_debug.contains("-0.456"));
     }
 
     #[test]
@@ -3094,9 +3175,11 @@ mod tests {
         )
         .expect("bound stt task");
         let finite_request = BoundFiniteSttRequest::new(task_request, 3).expect("finite request");
-        let audio =
-            FiniteSttAudio::from_frames(&finite_request, vec![vec![0.0], vec![0.1], vec![-0.1]])
-                .expect("finite audio");
+        let (_built_request, audio) = FiniteSttAudio::from_frames(
+            finite_request.request().clone(),
+            vec![vec![0.0], vec![0.1], vec![-0.1]],
+        )
+        .expect("finite audio");
         let finite = FiniteSttResult::new(&finite_request, &audio, secret).expect("finite result");
         let finite_debug = format!("{finite:?}");
         assert!(finite_debug.contains("transcript_bytes"));
