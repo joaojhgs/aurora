@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import subprocess
+import tarfile
 from pathlib import Path
 from types import ModuleType
 
@@ -26,8 +27,12 @@ def write_fixture(tmp_path: Path, expected_commit: str = "1" * 40) -> tuple[Path
     artifact_root = tmp_path / "artifacts"
     source_root = artifact_root / "sources/extracted/sherpa"
     source_root.mkdir(parents=True)
+    (source_root / "CMakeLists.txt").write_text("project(sherpa)\n", encoding="utf-8")
+    (source_root / "link").symlink_to("CMakeLists.txt")
     archive = artifact_root / "sources/sherpa.tar.gz"
-    archive.write_bytes(b"pinned sherpa archive")
+    archive.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(archive, "w:gz") as tar:
+        tar.add(source_root, arcname="sherpa", recursive=True)
     manifest = tmp_path / "manifest.json"
     manifest.write_text(
         json.dumps(
@@ -36,6 +41,7 @@ def write_fixture(tmp_path: Path, expected_commit: str = "1" * 40) -> tuple[Path
                     {
                         "id": "sherpa-onnx-source-v1.13.4",
                         "archive_path": "sources/sherpa.tar.gz",
+                        "extraction_path": "sources/extracted/sherpa",
                         "size_bytes": archive.stat().st_size,
                         "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
                         "commit": expected_commit,
@@ -79,3 +85,40 @@ def test_wrapper_rejects_wrong_source_archive_hash(tmp_path: Path) -> None:
 
     with pytest.raises(wrapper.SourceIdentityError, match="archive hash"):
         wrapper.verify_source_identity(manifest, artifact_root, source_root)
+
+
+def test_wrapper_rejects_source_root_outside_pinned_extraction_path(tmp_path: Path) -> None:
+    wrapper = load_wrapper()
+    manifest, artifact_root, _ = write_fixture(tmp_path)
+    other_source = tmp_path / "other-sherpa"
+    other_source.mkdir()
+
+    with pytest.raises(wrapper.SourceIdentityError, match="pinned extraction path"):
+        wrapper.verify_source_identity(manifest, artifact_root, other_source)
+
+
+def test_wrapper_rejects_mutated_extracted_tree(tmp_path: Path) -> None:
+    wrapper = load_wrapper()
+    manifest, artifact_root, source_root = write_fixture(tmp_path)
+    (source_root / "CMakeLists.txt").write_text("project(tampered)\n", encoding="utf-8")
+
+    with pytest.raises(wrapper.SourceIdentityError, match="does not match the pinned archive"):
+        wrapper.verify_source_identity(manifest, artifact_root, source_root)
+
+
+def test_wrapper_rejects_cmake_source_mismatch(tmp_path: Path) -> None:
+    wrapper = load_wrapper()
+    _, _, source_root = write_fixture(tmp_path)
+
+    with pytest.raises(wrapper.SourceIdentityError, match="expected verified source"):
+        wrapper.validate_cmake_command(["cmake", "-S", str(tmp_path)], source_root.resolve())
+
+
+def test_wrapper_requires_direct_cmake_with_separate_source_flag(tmp_path: Path) -> None:
+    wrapper = load_wrapper()
+    _, _, source_root = write_fixture(tmp_path)
+
+    with pytest.raises(wrapper.SourceIdentityError, match="invoke cmake directly"):
+        wrapper.validate_cmake_command(["sh", "-c", "cmake -S elsewhere"], source_root.resolve())
+    with pytest.raises(wrapper.SourceIdentityError, match="separate -S"):
+        wrapper.validate_cmake_command(["cmake", f"-S{source_root}"], source_root.resolve())

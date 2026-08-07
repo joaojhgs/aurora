@@ -9,7 +9,8 @@ import json
 import os
 import subprocess
 import sys
-from pathlib import Path
+import tarfile
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 SHERPA_SOURCE_ID = "sherpa-onnx-source-v1.13.4"
@@ -35,6 +36,136 @@ def load_sherpa_pin(manifest_path: Path) -> dict[str, Any]:
     raise SourceIdentityError(f"manifest is missing {SHERPA_SOURCE_ID}")
 
 
+def _safe_relative_path(value: object, field: str) -> Path:
+    if not isinstance(value, str) or not value.strip():
+        raise SourceIdentityError(f"sherpa {field} must be a non-empty relative path")
+    relative = Path(value)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise SourceIdentityError(f"sherpa {field} must stay beneath the artifact root")
+    return relative
+
+
+def _hash_stream(source: Any) -> tuple[int, str]:
+    size = 0
+    digest = hashlib.sha256()
+    for chunk in iter(lambda: source.read(1024 * 1024), b""):
+        size += len(chunk)
+        digest.update(chunk)
+    return size, digest.hexdigest()
+
+
+def _canonical_digest(records: dict[str, tuple[str, ...]]) -> str:
+    digest = hashlib.sha256()
+    for path, record in sorted(records.items()):
+        digest.update(
+            json.dumps([path, *record], ensure_ascii=False, separators=(",", ":")).encode()
+        )
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def _archive_records(archive: Path, source_name: str) -> dict[str, tuple[str, ...]]:
+    records: dict[str, tuple[str, ...]] = {}
+    with tarfile.open(archive, "r:*") as tar:
+        for member in tar:
+            member_path = PurePosixPath(member.name)
+            if member_path.is_absolute() or ".." in member_path.parts:
+                raise SourceIdentityError(f"unsafe path in sherpa archive: {member.name}")
+            parts = member_path.parts
+            if not parts or parts[0] != source_name:
+                raise SourceIdentityError(
+                    f"sherpa archive member is outside {source_name}: {member.name}"
+                )
+            if len(parts) == 1 or member.isdir():
+                continue
+            relative = PurePosixPath(*parts[1:]).as_posix()
+            if relative in records:
+                raise SourceIdentityError(f"duplicate sherpa archive member: {relative}")
+            if member.isfile():
+                source = tar.extractfile(member)
+                if source is None:
+                    raise SourceIdentityError(f"cannot read sherpa archive member: {relative}")
+                with source:
+                    size, member_sha = _hash_stream(source)
+                if size != member.size:
+                    raise SourceIdentityError(f"truncated sherpa archive member: {relative}")
+                records[relative] = ("file", str(size), member_sha)
+            elif member.issym():
+                records[relative] = ("symlink", member.linkname)
+            else:
+                raise SourceIdentityError(f"unsupported sherpa archive member type: {relative}")
+    return records
+
+
+def _source_records(source_root: Path) -> dict[str, tuple[str, ...]]:
+    records: dict[str, tuple[str, ...]] = {}
+
+    def visit(directory: Path, prefix: PurePosixPath) -> None:
+        with os.scandir(directory) as entries:
+            for entry in sorted(entries, key=lambda item: item.name):
+                relative_path = prefix / entry.name
+                relative = relative_path.as_posix()
+                if entry.is_symlink():
+                    records[relative] = ("symlink", os.readlink(entry.path))
+                elif entry.is_dir(follow_symlinks=False):
+                    visit(Path(entry.path), relative_path)
+                elif entry.is_file(follow_symlinks=False):
+                    with open(entry.path, "rb") as source:
+                        size, member_sha = _hash_stream(source)
+                    records[relative] = ("file", str(size), member_sha)
+                else:
+                    raise SourceIdentityError(
+                        f"unsupported entry in sherpa source tree: {relative}"
+                    )
+
+    visit(source_root, PurePosixPath())
+    return records
+
+
+def _verify_extracted_tree(archive: Path, source_root: Path) -> tuple[str, int]:
+    archive_records = _archive_records(archive, source_root.name)
+    source_records = _source_records(source_root)
+    archive_digest = _canonical_digest(archive_records)
+    source_digest = _canonical_digest(source_records)
+    if archive_records != source_records:
+        missing = sorted(archive_records.keys() - source_records.keys())
+        extra = sorted(source_records.keys() - archive_records.keys())
+        changed = sorted(
+            path
+            for path in archive_records.keys() & source_records.keys()
+            if archive_records[path] != source_records[path]
+        )
+        details = []
+        if missing:
+            details.append(f"missing={missing[0]}")
+        if extra:
+            details.append(f"extra={extra[0]}")
+        if changed:
+            details.append(f"changed={changed[0]}")
+        raise SourceIdentityError(
+            "sherpa extracted source tree does not match the pinned archive"
+            + (f" ({', '.join(details)})" if details else "")
+        )
+    if archive_digest != source_digest:
+        raise SourceIdentityError("sherpa source tree digest does not match the archive")
+    return archive_digest, len(archive_records)
+
+
+def validate_cmake_command(command: list[str], source_root: Path) -> None:
+    if Path(command[0]).name not in {"cmake", "cmake.exe"}:
+        raise SourceIdentityError("the wrapped command must invoke cmake directly")
+    if any(token.startswith("-S") and token != "-S" for token in command[1:]):
+        raise SourceIdentityError("cmake source must use one separate -S argument")
+    source_flags = [index for index, token in enumerate(command) if token == "-S"]
+    if len(source_flags) != 1 or source_flags[0] + 1 >= len(command):
+        raise SourceIdentityError("cmake command must contain exactly one separate -S argument")
+    command_source = Path(command[source_flags[0] + 1]).resolve()
+    if command_source != source_root:
+        raise SourceIdentityError(
+            f"cmake -S resolves to {command_source}, expected verified source {source_root}"
+        )
+
+
 def _git_output(source_root: Path, *args: str, env: dict[str, str] | None = None) -> str | None:
     result = subprocess.run(
         ["git", "-C", str(source_root), *args],
@@ -54,12 +185,20 @@ def verify_source_identity(
     pin = load_sherpa_pin(manifest_path)
     resolved_artifact_root = artifact_root.resolve()
     resolved_source_root = source_root.resolve()
+    extraction_relative = _safe_relative_path(pin.get("extraction_path"), "extraction_path")
+    expected_source_root = (resolved_artifact_root / extraction_relative).resolve()
+    try:
+        expected_source_root.relative_to(resolved_artifact_root)
+    except ValueError as exc:
+        raise SourceIdentityError("sherpa extraction_path escapes the artifact root") from exc
+    if resolved_source_root != expected_source_root:
+        raise SourceIdentityError(
+            f"sherpa source_root must be the pinned extraction path: {expected_source_root}"
+        )
     if not resolved_source_root.is_dir():
         raise SourceIdentityError(f"sherpa source directory is missing: {source_root}")
 
-    archive_relative = Path(str(pin["archive_path"]))
-    if archive_relative.is_absolute():
-        raise SourceIdentityError("sherpa archive_path must be relative")
+    archive_relative = _safe_relative_path(pin.get("archive_path"), "archive_path")
     archive = (resolved_artifact_root / archive_relative).resolve()
     try:
         archive.relative_to(resolved_artifact_root)
@@ -72,6 +211,7 @@ def verify_source_identity(
     actual_archive_sha = sha256_file(archive)
     if actual_archive_sha != pin["sha256"]:
         raise SourceIdentityError("sherpa source archive hash does not match the manifest")
+    source_tree_sha, source_entry_count = _verify_extracted_tree(archive, resolved_source_root)
 
     expected_commit = str(pin["commit"])
     inherited_git_root = _git_output(resolved_source_root, "rev-parse", "--show-toplevel")
@@ -108,6 +248,8 @@ def verify_source_identity(
         "archive_sha256": actual_archive_sha,
         "expected_commit": expected_commit,
         "source_root": str(resolved_source_root),
+        "source_tree_sha256": source_tree_sha,
+        "source_entry_count": source_entry_count,
         "source_has_own_git": source_has_own_git,
         "inherited_git_root_suppressed": (
             inherited_git_root if inherited_git_root and not source_has_own_git else None
@@ -145,6 +287,11 @@ def main(argv: list[str] | None = None) -> int:
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     if not command:
         return 0
+    try:
+        validate_cmake_command(command, Path(evidence["source_root"]))
+    except SourceIdentityError as exc:
+        print(json.dumps({"status": "invalid", "error": str(exc)}), file=sys.stderr)
+        return 2
     return subprocess.run(command, env=build_env, check=False).returncode
 
 

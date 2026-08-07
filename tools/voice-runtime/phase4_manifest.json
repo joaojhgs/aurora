@@ -35,6 +35,7 @@
       "sha256": "3243cb386d3a4ac87596adf7d2c89fddf23e2948b154942b987b4d91c1fee295",
       "size_bytes": 9840376,
       "archive_path": "sources/sherpa-onnx-v1.13.4.tar.gz",
+      "extraction_path": "sources/extracted/sherpa-onnx-1.13.4",
       "license": {
         "spdx": "Apache-2.0",
         "evidence": "sources/extracted/sherpa-onnx-1.13.4/LICENSE",

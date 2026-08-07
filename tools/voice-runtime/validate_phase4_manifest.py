@@ -6,9 +6,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import stat
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -129,8 +131,7 @@ def _validate_artifact(artifact: dict[str, Any], path: str) -> list[str]:
         errors.append(f"{path}.size_bytes must be a positive integer")
 
     archive_path = artifact.get("archive_path")
-    if not isinstance(archive_path, str) or not archive_path.strip():
-        errors.append(f"{path}.archive_path must be a non-empty relative path")
+    errors.extend(_validate_relative_path(archive_path, f"{path}.archive_path"))
 
     url = artifact.get("url")
     if not isinstance(url, str) or not url.startswith(("https://", "git+https://")):
@@ -180,6 +181,8 @@ def _validate_license(
         errors.append(f"{path}.disposition must be blocked for blocked artifacts")
     if not license_info.get("evidence"):
         errors.append(f"{path}.evidence is required")
+    else:
+        errors.extend(_validate_relative_path(license_info["evidence"], f"{path}.evidence"))
     if artifact_status == "selected" and not license_info.get("spdx"):
         errors.append(f"{path}.spdx is required for selected artifacts")
     evidence_sha = license_info.get("evidence_sha256")
@@ -227,17 +230,33 @@ def _resolve_local_path(root: Path, value: object, path: str, errors: list[str])
     if not isinstance(value, str) or not value:
         return None
     relative = Path(value)
-    if relative.is_absolute():
+    if relative.is_absolute() or PureWindowsPath(value).is_absolute():
         errors.append(f"{path} must be relative to the artifact root")
         return None
+    if ".." in relative.parts or ".." in PureWindowsPath(value).parts:
+        errors.append(f"{path} escapes the artifact root")
+        return None
     resolved_root = root.resolve()
-    resolved = (resolved_root / relative).resolve()
+    unresolved = resolved_root / relative
+    resolved = unresolved.parent.resolve() / unresolved.name
     try:
-        resolved.relative_to(resolved_root)
+        resolved.parent.relative_to(resolved_root)
     except ValueError:
         errors.append(f"{path} escapes the artifact root")
         return None
     return resolved
+
+
+def _validate_relative_path(value: object, path: str) -> list[str]:
+    if not isinstance(value, str) or not value.strip():
+        return [f"{path} must be a non-empty relative path"]
+
+    candidate = Path(value)
+    if candidate.is_absolute() or PureWindowsPath(value).is_absolute():
+        return [f"{path} must be a relative path"]
+    if ".." in candidate.parts or ".." in PureWindowsPath(value).parts:
+        return [f"{path} must not contain parent traversal"]
+    return []
 
 
 def _verify_local_file(
@@ -246,28 +265,38 @@ def _verify_local_file(
     expected_sha256: object,
     path: str,
 ) -> list[str]:
-    if not file_path.is_file():
-        return [f"{path} does not exist as a file: {file_path}"]
-
     errors: list[str] = []
-    if isinstance(expected_size, int) and file_path.stat().st_size != expected_size:
-        errors.append(
-            f"{path} size mismatch: expected {expected_size}, got {file_path.stat().st_size}"
-        )
-    if isinstance(expected_sha256, str):
-        actual_sha256 = _sha256_file(file_path)
-        if actual_sha256 != expected_sha256:
+    flags = os.O_RDONLY
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(file_path, flags)
+    except OSError as exc:
+        return [f"{path} cannot be opened as a regular file: {file_path}: {exc}"]
+
+    try:
+        file_stat = os.fstat(descriptor)
+        if not stat.S_ISREG(file_stat.st_mode):
+            return [f"{path} is not a regular file: {file_path}"]
+        if isinstance(expected_size, int) and file_stat.st_size != expected_size:
             errors.append(
-                f"{path} SHA-256 mismatch: expected {expected_sha256}, got {actual_sha256}"
+                f"{path} size mismatch: expected {expected_size}, got {file_stat.st_size}"
             )
+        if isinstance(expected_sha256, str):
+            actual_sha256 = _sha256_descriptor(descriptor)
+            if actual_sha256 != expected_sha256:
+                errors.append(
+                    f"{path} SHA-256 mismatch: expected {expected_sha256}, got {actual_sha256}"
+                )
+    finally:
+        os.close(descriptor)
     return errors
 
 
-def _sha256_file(path: Path) -> str:
+def _sha256_descriptor(descriptor: int) -> str:
     digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
+    while chunk := os.read(descriptor, 1024 * 1024):
+        digest.update(chunk)
     return digest.hexdigest()
 
 

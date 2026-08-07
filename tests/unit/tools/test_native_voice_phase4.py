@@ -258,3 +258,38 @@ def test_local_artifact_verifier_checks_hash_size_and_root_containment(
     artifact["archive_path"] = "../outside.bin"
     errors = validator._validate_local_artifact(artifact, "artifact", tmp_path)
     assert any("escapes the artifact root" in error for error in errors)
+
+
+def test_structural_validator_rejects_absolute_and_parent_paths() -> None:
+    validator = load_validator()
+    manifest = read_manifest()
+    manifest["artifacts"][0]["archive_path"] = "/tmp/source.tar.gz"
+    manifest["artifacts"][1]["license"]["evidence"] = "licenses/../LICENSE"
+
+    errors = validator.validate_manifest(manifest)
+
+    assert any("archive_path must be a relative path" in error for error in errors)
+    assert any("license.evidence must not contain parent traversal" in error for error in errors)
+
+
+def test_local_artifact_verifier_rejects_symlink_files(tmp_path: Path) -> None:
+    validator = load_validator()
+    real_archive = tmp_path / "real.bin"
+    archive = tmp_path / "asset.bin"
+    license_file = tmp_path / "LICENSE"
+    real_archive.write_bytes(b"voice-runtime")
+    archive.symlink_to(real_archive.name)
+    license_file.write_bytes(b"license")
+    artifact = {
+        "archive_path": archive.name,
+        "size_bytes": real_archive.stat().st_size,
+        "sha256": hashlib.sha256(real_archive.read_bytes()).hexdigest(),
+        "license": {
+            "evidence": license_file.name,
+            "evidence_sha256": hashlib.sha256(license_file.read_bytes()).hexdigest(),
+        },
+    }
+
+    errors = validator._validate_local_artifact(artifact, "artifact", tmp_path)
+
+    assert any("cannot be opened as a regular file" in error for error in errors)
