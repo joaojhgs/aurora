@@ -23,6 +23,10 @@ _SECRET_KEY_PARTS = (
     "token",
 )
 
+_SECRET_KEYS = {
+    "lease_id",
+}
+
 _AUDIO_KEY_PARTS = (
     "audio",
     "pcm",
@@ -149,7 +153,7 @@ def _redact_value(key: str, value: Any, *, method_id: str | None) -> Any:
 
 def _is_secret_key(key: str) -> bool:
     normalized = key.lower().replace("-", "_")
-    return any(part in normalized for part in _SECRET_KEY_PARTS)
+    return normalized in _SECRET_KEYS or any(part in normalized for part in _SECRET_KEY_PARTS)
 
 
 def _is_audio_key(key: str) -> bool:

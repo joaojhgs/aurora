@@ -11,6 +11,11 @@ from app.messaging.bus import QueryResult
 from app.services.gateway.route_generator import RouteGenerator
 from app.shared.contracts.models.gateway import MethodInfo
 from app.shared.contracts.models.stt import (
+    STTCapturePrepareRequest,
+    STTCapturePrepareResponse,
+    STTCaptureReleaseRequest,
+    STTCaptureReleaseResponse,
+    STTMethods,
     TranscribeAudioRequest,
     TranscribeAudioResponse,
     TranscriptionMethods,
@@ -60,6 +65,109 @@ def test_redacted_copy_summarizes_top_level_speech_content():
         "kind": "speech",
         "element_count": 2,
     }
+
+
+@pytest.mark.asyncio
+async def test_capture_prepare_route_never_logs_the_lease_token():
+    lease_id = "capture-lease-secret"
+    bus = AsyncMock()
+    bus.request = AsyncMock(
+        return_value=QueryResult(
+            ok=True,
+            data={
+                "granted": True,
+                "status": "already_owned",
+                "lease_id": lease_id,
+                "generation": 4,
+                "owner": "native",
+                "python_capture_active": False,
+                "stopped_python_capture": False,
+                "message": "renewed",
+                "redacted": True,
+            },
+        )
+    )
+    method_info = MethodInfo(
+        name="CapturePrepare",
+        summary="Prepare native microphone capture",
+        bus_topic=STTMethods.CAPTURE_PREPARE,
+        exposure="external",
+        method_type="manage",
+        input_schema=STTCapturePrepareRequest.model_json_schema(),
+        output_schema=STTCapturePrepareResponse.model_json_schema(),
+        required_perms=["STTCoordinator.manage"],
+    )
+    handler = RouteGenerator(
+        bus=bus,
+        registry=_SingleMethodRegistry("STTCoordinator", method_info),
+    )._create_handler("STTCoordinator", method_info)
+
+    with patch("app.services.gateway.route_generator.log_debug") as mock_log_debug:
+        response = await handler(
+            {
+                "owner_id": "tauri-local",
+                "lease_id": lease_id,
+                "requested_ttl_s": 300,
+            },
+            principal_id="principal-1",
+            effective_perms=["STTCoordinator.manage"],
+            identity_source="gateway_http",
+        )
+
+    assert bus.request.await_args.args[1]["lease_id"] == lease_id
+    assert response["lease_id"] == lease_id
+    assert lease_id not in _debug_output(mock_log_debug)
+
+
+@pytest.mark.asyncio
+async def test_capture_release_route_never_logs_the_lease_token():
+    lease_id = "capture-release-secret"
+    bus = AsyncMock()
+    bus.request = AsyncMock(
+        return_value=QueryResult(
+            ok=True,
+            data={
+                "released": True,
+                "status": "released",
+                "generation": 5,
+                "owner": "none",
+                "python_capture_active": True,
+                "restarted_python_capture": True,
+                "message": None,
+                "redacted": True,
+            },
+        )
+    )
+    method_info = MethodInfo(
+        name="CaptureRelease",
+        summary="Release native microphone capture",
+        bus_topic=STTMethods.CAPTURE_RELEASE,
+        exposure="external",
+        method_type="manage",
+        input_schema=STTCaptureReleaseRequest.model_json_schema(),
+        output_schema=STTCaptureReleaseResponse.model_json_schema(),
+        required_perms=["STTCoordinator.manage"],
+    )
+    handler = RouteGenerator(
+        bus=bus,
+        registry=_SingleMethodRegistry("STTCoordinator", method_info),
+    )._create_handler("STTCoordinator", method_info)
+
+    with patch("app.services.gateway.route_generator.log_debug") as mock_log_debug:
+        response = await handler(
+            {
+                "owner_id": "tauri-local",
+                "lease_id": lease_id,
+                "generation": 5,
+            },
+            principal_id="principal-1",
+            effective_perms=["STTCoordinator.manage"],
+            identity_source="gateway_http",
+        )
+
+    assert bus.request.await_args.args[1]["lease_id"] == lease_id
+    assert response["released"] is True
+    assert lease_id not in _debug_output(mock_log_debug)
 
 
 @pytest.mark.asyncio
