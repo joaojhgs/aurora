@@ -391,9 +391,9 @@ impl fmt::Debug for BoundTaskRequest {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct BoundFiniteSttRequest {
-    request: BoundTaskRequest,
+    binding: FiniteSttBinding,
     frames: usize,
     identity: FiniteSttRequestIdentity,
 }
@@ -406,16 +406,56 @@ impl BoundFiniteSttRequest {
         {
             return Err(EngineError::InvalidRequest);
         }
-        let identity = FiniteSttRequestIdentity::for_request(&request, frames);
+        let binding = FiniteSttBinding::LocalTask(Box::new(request));
+        let identity = FiniteSttRequestIdentity::for_request(&binding, frames);
         Ok(Self {
-            request,
+            binding,
             frames,
             identity,
         })
     }
 
-    pub fn request(&self) -> &BoundTaskRequest {
-        &self.request
+    pub fn new_route(request: RouteFiniteSttRequest, frames: usize) -> Result<Self, EngineError> {
+        if frames == 0 || frames > MAX_FINITE_STT_FRAMES {
+            return Err(EngineError::InvalidRequest);
+        }
+        let binding = FiniteSttBinding::Route(request);
+        let identity = FiniteSttRequestIdentity::for_request(&binding, frames);
+        Ok(Self {
+            binding,
+            frames,
+            identity,
+        })
+    }
+
+    pub fn binding(&self) -> &FiniteSttBinding {
+        &self.binding
+    }
+
+    pub fn request(&self) -> Option<&BoundTaskRequest> {
+        self.local_request()
+    }
+
+    pub fn local_request(&self) -> Option<&BoundTaskRequest> {
+        match &self.binding {
+            FiniteSttBinding::LocalTask(request) => Some(request.as_ref()),
+            FiniteSttBinding::Route(_) => None,
+        }
+    }
+
+    pub fn route_request(&self) -> Option<&RouteFiniteSttRequest> {
+        match &self.binding {
+            FiniteSttBinding::LocalTask(_) => None,
+            FiniteSttBinding::Route(request) => Some(request),
+        }
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.binding.generation()
+    }
+
+    pub fn max_audio_samples(&self) -> usize {
+        self.binding.max_audio_samples()
     }
 
     pub fn frames(&self) -> usize {
@@ -427,15 +467,247 @@ impl BoundFiniteSttRequest {
     }
 }
 
+impl fmt::Debug for BoundFiniteSttRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("BoundFiniteSttRequest")
+            .field("binding", &self.binding)
+            .field("frames", &self.frames)
+            .field("identity", &self.identity)
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub enum FiniteSttBinding {
+    LocalTask(Box<BoundTaskRequest>),
+    Route(RouteFiniteSttRequest),
+}
+
+impl FiniteSttBinding {
+    pub fn generation(&self) -> u64 {
+        match self {
+            Self::LocalTask(request) => request.request().generation,
+            Self::Route(request) => request.generation(),
+        }
+    }
+
+    pub fn language(&self) -> Option<&str> {
+        match self {
+            Self::LocalTask(request) => request.request().language.as_deref(),
+            Self::Route(request) => request.language(),
+        }
+    }
+
+    pub fn max_audio_samples(&self) -> usize {
+        match self {
+            Self::LocalTask(_) => MAX_FINITE_STT_SAMPLES,
+            Self::Route(request) => request.route().max_audio_samples(),
+        }
+    }
+}
+
+impl fmt::Debug for FiniteSttBinding {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::LocalTask(request) => formatter
+                .debug_struct("FiniteSttBinding::LocalTask")
+                .field("task", &request.request().task)
+                .field("generation", &request.request().generation)
+                .field("language_present", &request.request().language.is_some())
+                .field("binding", request.binding())
+                .finish(),
+            Self::Route(request) => formatter
+                .debug_struct("FiniteSttBinding::Route")
+                .field("generation", &request.generation())
+                .field("language_present", &request.language().is_some())
+                .field("route", request.route())
+                .finish(),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct RouteFiniteSttBinding {
+    route_id: String,
+    route_scope: FiniteSttRouteScope,
+    sample_rate_hz: u32,
+    channels: u16,
+    max_audio_samples: usize,
+    route_revision: u64,
+}
+
+impl RouteFiniteSttBinding {
+    pub fn new(
+        route_id: impl Into<String>,
+        route_scope: FiniteSttRouteScope,
+        sample_rate_hz: u32,
+        max_audio_samples: usize,
+        route_revision: u64,
+    ) -> Result<Self, EngineError> {
+        let binding = Self {
+            route_id: route_id.into(),
+            route_scope,
+            sample_rate_hz,
+            channels: MONO_CHANNELS,
+            max_audio_samples,
+            route_revision,
+        };
+        binding.validate()?;
+        Ok(binding)
+    }
+
+    pub fn validate(&self) -> Result<(), EngineError> {
+        if !valid_logical_id(&self.route_id)
+            || self.sample_rate_hz != VAD_SAMPLE_RATE_HZ
+            || self.channels != MONO_CHANNELS
+            || self.max_audio_samples == 0
+            || self.max_audio_samples > MAX_FINITE_STT_SAMPLES
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
+    }
+
+    pub fn route_id(&self) -> &str {
+        &self.route_id
+    }
+
+    pub fn route_scope(&self) -> FiniteSttRouteScope {
+        self.route_scope
+    }
+
+    pub fn sample_rate_hz(&self) -> u32 {
+        self.sample_rate_hz
+    }
+
+    pub fn channels(&self) -> u16 {
+        self.channels
+    }
+
+    pub fn max_audio_samples(&self) -> usize {
+        self.max_audio_samples
+    }
+
+    pub fn route_revision(&self) -> u64 {
+        self.route_revision
+    }
+}
+
+impl fmt::Debug for RouteFiniteSttBinding {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RouteFiniteSttBinding")
+            .field("route_id_bytes", &self.route_id.len())
+            .field("route_scope", &self.route_scope)
+            .field("sample_rate_hz", &self.sample_rate_hz)
+            .field("channels", &self.channels)
+            .field("max_audio_samples", &self.max_audio_samples)
+            .field("route_revision", &self.route_revision)
+            .finish()
+    }
+}
+
+impl Serialize for RouteFiniteSttBinding {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        let mut state = serializer.serialize_struct("RouteFiniteSttBinding", 6)?;
+        state.serialize_field("route_id_bytes", &self.route_id.len())?;
+        state.serialize_field("route_scope", &self.route_scope)?;
+        state.serialize_field("sample_rate_hz", &self.sample_rate_hz)?;
+        state.serialize_field("channels", &self.channels)?;
+        state.serialize_field("max_audio_samples", &self.max_audio_samples)?;
+        state.serialize_field("route_revision", &self.route_revision)?;
+        state.end()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FiniteSttRouteScope {
+    LoopbackSidecar,
+    RemoteGateway,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct RouteFiniteSttRequest {
+    route: RouteFiniteSttBinding,
+    language: Option<String>,
+    generation: u64,
+}
+
+impl RouteFiniteSttRequest {
+    pub fn new(
+        route: RouteFiniteSttBinding,
+        language: Option<String>,
+        generation: u64,
+    ) -> Result<Self, EngineError> {
+        route.validate()?;
+        if language
+            .as_deref()
+            .is_some_and(|language| !valid_logical_id(language))
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(Self {
+            route,
+            language,
+            generation,
+        })
+    }
+
+    pub fn route(&self) -> &RouteFiniteSttBinding {
+        &self.route
+    }
+
+    pub fn language(&self) -> Option<&str> {
+        self.language.as_deref()
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+}
+
+impl fmt::Debug for RouteFiniteSttRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RouteFiniteSttRequest")
+            .field("route", &self.route)
+            .field("language_present", &self.language.is_some())
+            .field("generation", &self.generation)
+            .finish()
+    }
+}
+
+impl Serialize for RouteFiniteSttRequest {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        let mut state = serializer.serialize_struct("RouteFiniteSttRequest", 3)?;
+        state.serialize_field("route", &self.route)?;
+        state.serialize_field("language_present", &self.language.is_some())?;
+        state.serialize_field("generation", &self.generation)?;
+        state.end()
+    }
+}
+
 /// Opaque bounded identity for one finite STT request.
 #[derive(Clone, PartialEq, Eq)]
 pub struct FiniteSttRequestIdentity([u8; 32]);
 
 impl FiniteSttRequestIdentity {
-    fn for_request(request: &BoundTaskRequest, frames: usize) -> Self {
+    fn for_request(binding: &FiniteSttBinding, frames: usize) -> Self {
         let mut hasher = Sha256::new();
         hash_part(&mut hasher, b"aurora.finite-stt.request.v1");
-        hash_bound_task_request(&mut hasher, request);
+        hash_finite_stt_binding(&mut hasher, binding);
         hash_part(&mut hasher, &(frames as u64).to_le_bytes());
         Self(hasher.finalize().into())
     }
@@ -449,10 +721,11 @@ impl fmt::Debug for FiniteSttRequestIdentity {
 
 #[derive(Clone, PartialEq)]
 pub struct FiniteSttAudioBuilder {
-    request: BoundTaskRequest,
+    binding: FiniteSttBinding,
     samples: Vec<f32>,
     frames: usize,
     total_samples: usize,
+    max_audio_samples: usize,
     failed: bool,
 }
 
@@ -461,11 +734,24 @@ impl FiniteSttAudioBuilder {
         if request.request().task != VoiceTask::SpeechToText {
             return Err(EngineError::InvalidRequest);
         }
+        Self::from_binding(FiniteSttBinding::LocalTask(Box::new(request)))
+    }
+
+    pub fn new_route(request: RouteFiniteSttRequest) -> Result<Self, EngineError> {
+        Self::from_binding(FiniteSttBinding::Route(request))
+    }
+
+    fn from_binding(binding: FiniteSttBinding) -> Result<Self, EngineError> {
+        let max_audio_samples = binding.max_audio_samples();
+        if max_audio_samples == 0 || max_audio_samples > MAX_FINITE_STT_SAMPLES {
+            return Err(EngineError::InvalidRequest);
+        }
         Ok(Self {
-            request,
+            binding,
             samples: Vec::new(),
             frames: 0,
             total_samples: 0,
+            max_audio_samples,
             failed: false,
         })
     }
@@ -485,7 +771,7 @@ impl FiniteSttAudioBuilder {
         if samples.is_empty()
             || samples.len() > MAX_STREAMING_FRAME_SAMPLES
             || next_frames > MAX_FINITE_STT_FRAMES
-            || next_total_samples > MAX_FINITE_STT_SAMPLES
+            || next_total_samples > self.max_audio_samples
             || !normalized_mono_samples(samples)
         {
             self.clear();
@@ -511,10 +797,17 @@ impl FiniteSttAudioBuilder {
         if self.failed || self.frames == 0 || self.samples.is_empty() {
             return Err(EngineError::InvalidRequest);
         }
-        let request = BoundFiniteSttRequest::new(self.request, self.frames)?;
+        let request = match self.binding {
+            FiniteSttBinding::LocalTask(request) => {
+                BoundFiniteSttRequest::new(*request, self.frames)
+            }
+            FiniteSttBinding::Route(request) => {
+                BoundFiniteSttRequest::new_route(request, self.frames)
+            }
+        }?;
         let audio = FiniteSttAudio {
             request_identity: request.identity().clone(),
-            generation: request.request().request().generation,
+            generation: request.generation(),
             frames: self.frames,
             samples: self.samples,
         };
@@ -532,8 +825,22 @@ impl FiniteSttAudioBuilder {
         self.total_samples
     }
 
-    pub fn request(&self) -> &BoundTaskRequest {
-        &self.request
+    pub fn request(&self) -> Option<&BoundTaskRequest> {
+        self.local_request()
+    }
+
+    pub fn local_request(&self) -> Option<&BoundTaskRequest> {
+        match &self.binding {
+            FiniteSttBinding::LocalTask(request) => Some(request.as_ref()),
+            FiniteSttBinding::Route(_) => None,
+        }
+    }
+
+    pub fn route_request(&self) -> Option<&RouteFiniteSttRequest> {
+        match &self.binding {
+            FiniteSttBinding::LocalTask(_) => None,
+            FiniteSttBinding::Route(request) => Some(request),
+        }
     }
 }
 
@@ -541,9 +848,10 @@ impl fmt::Debug for FiniteSttAudioBuilder {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("FiniteSttAudioBuilder")
-            .field("request", &self.request)
+            .field("binding", &self.binding)
             .field("frames", &self.frames)
             .field("sample_count", &self.total_samples)
+            .field("max_audio_samples", &self.max_audio_samples)
             .field("failed", &self.failed)
             .finish()
     }
@@ -572,10 +880,10 @@ impl FiniteSttAudio {
 
     fn matches_request(&self, request: &BoundFiniteSttRequest) -> bool {
         self.request_identity == *request.identity()
-            && self.generation == request.request().request().generation
+            && self.generation == request.generation()
             && self.frames == request.frames()
             && !self.samples.is_empty()
-            && self.samples.len() <= MAX_FINITE_STT_SAMPLES
+            && self.samples.len() <= request.max_audio_samples()
     }
 
     pub fn request_identity(&self) -> &FiniteSttRequestIdentity {
@@ -633,8 +941,7 @@ impl FiniteSttResult {
         transcript: impl Into<String>,
     ) -> Result<Self, EngineError> {
         let transcript = transcript.into();
-        if request.request().request().task != VoiceTask::SpeechToText
-            || request.frames() == 0
+        if request.frames() == 0
             || request.frames() > MAX_FINITE_STT_FRAMES
             || !audio.matches_request(request)
             || !valid_transcript_text(&transcript)
@@ -644,7 +951,7 @@ impl FiniteSttResult {
         Ok(Self {
             transcript,
             frames: request.frames(),
-            generation: request.request().request().generation,
+            generation: request.generation(),
         })
     }
 
@@ -2509,6 +2816,32 @@ fn hash_bound_task_request(hasher: &mut Sha256, request: &BoundTaskRequest) {
     hash_part(hasher, &binding.frame_size().to_le_bytes());
 }
 
+fn hash_finite_stt_binding(hasher: &mut Sha256, binding: &FiniteSttBinding) {
+    match binding {
+        FiniteSttBinding::LocalTask(request) => {
+            hash_part(hasher, b"local_task");
+            hash_bound_task_request(hasher, request);
+        }
+        FiniteSttBinding::Route(request) => {
+            hash_part(hasher, b"route");
+            hash_part(hasher, request.route().route_id().as_bytes());
+            hash_part(
+                hasher,
+                format!("{:?}", request.route().route_scope()).as_bytes(),
+            );
+            hash_part(hasher, &request.route().sample_rate_hz().to_le_bytes());
+            hash_part(hasher, &request.route().channels().to_le_bytes());
+            hash_part(
+                hasher,
+                &(request.route().max_audio_samples() as u64).to_le_bytes(),
+            );
+            hash_part(hasher, &request.route().route_revision().to_le_bytes());
+            hash_part(hasher, request.language().unwrap_or("").as_bytes());
+            hash_part(hasher, &request.generation().to_le_bytes());
+        }
+    }
+}
+
 fn hash_tts_binding(hasher: &mut Sha256, binding: &TtsSynthesisBinding) {
     match binding {
         TtsSynthesisBinding::LocalTask(request) => {
@@ -2596,16 +2929,68 @@ pub trait TaskProvider {
     async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError>;
 }
 
-/// A minimal finite turn engine boundary. Real sherpa/native/web adapters are
-/// intentionally later phases.
+/// Finite STT boundary that exposes the provider's real binding shape.
 #[async_trait(?Send)]
-pub trait SpeechEngine: TaskProvider {
+pub trait FiniteSttPort {
+    fn finite_stt_binding(&self) -> Result<FiniteSttProviderBinding, EngineError>;
+
+    async fn warm_finite_stt(
+        &mut self,
+        binding: FiniteSttProviderBinding,
+    ) -> Result<(), EngineError>;
+
     async fn transcribe_finite(
         &mut self,
         request: BoundFiniteSttRequest,
         audio: FiniteSttAudio,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<FiniteSttResult, EngineError>;
+
+    async fn cancel_finite_stt_generation(&mut self, generation: u64) -> Result<(), EngineError>;
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub enum FiniteSttProviderBinding {
+    LocalTask(Box<TaskPackBinding>),
+    Route(RouteFiniteSttBinding),
+}
+
+impl FiniteSttProviderBinding {
+    pub fn sample_rate_hz(&self) -> u32 {
+        match self {
+            Self::LocalTask(binding) => binding.sample_rate_hz(),
+            Self::Route(binding) => binding.sample_rate_hz(),
+        }
+    }
+
+    pub fn channels(&self) -> u16 {
+        match self {
+            Self::LocalTask(binding) => binding.channels(),
+            Self::Route(binding) => binding.channels(),
+        }
+    }
+
+    pub fn max_audio_samples(&self) -> usize {
+        match self {
+            Self::LocalTask(_) => MAX_FINITE_STT_SAMPLES,
+            Self::Route(binding) => binding.max_audio_samples(),
+        }
+    }
+}
+
+impl fmt::Debug for FiniteSttProviderBinding {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::LocalTask(binding) => formatter
+                .debug_struct("FiniteSttProviderBinding::LocalTask")
+                .field("binding", binding)
+                .finish(),
+            Self::Route(binding) => formatter
+                .debug_struct("FiniteSttProviderBinding::Route")
+                .field("route", binding)
+                .finish(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -2902,6 +3287,29 @@ mod tests {
             frames,
         )
         .expect("finite stt request")
+    }
+
+    fn route_finite_stt_request(
+        generation: u64,
+        frames: usize,
+        route_id: &str,
+        route_revision: u64,
+        max_audio_samples: usize,
+    ) -> BoundFiniteSttRequest {
+        let route = RouteFiniteSttBinding::new(
+            route_id,
+            FiniteSttRouteScope::LoopbackSidecar,
+            VAD_SAMPLE_RATE_HZ,
+            max_audio_samples,
+            route_revision,
+        )
+        .expect("valid route binding");
+        BoundFiniteSttRequest::new_route(
+            RouteFiniteSttRequest::new(route, Some("en".to_owned()), generation)
+                .expect("valid route request"),
+            frames,
+        )
+        .expect("route finite stt request")
     }
 
     struct SurfaceVadProvider;
@@ -3426,7 +3834,10 @@ mod tests {
     fn finite_stt_result_is_typed_and_bounded_to_request() {
         let finite_request = bound_finite_stt_request(21, 2);
         let (_built_request, audio) = FiniteSttAudio::from_frames(
-            finite_request.request().clone(),
+            finite_request
+                .local_request()
+                .expect("local request")
+                .clone(),
             vec![vec![0.0, 0.1], vec![-0.1]],
         )
         .expect("finite audio");
@@ -3451,17 +3862,18 @@ mod tests {
     #[test]
     fn finite_stt_audio_is_bounded_and_tied_to_exact_request() {
         let request = bound_finite_stt_request(22, 2);
+        let local_request = request.local_request().expect("local request").clone();
         assert_eq!(
-            FiniteSttAudio::from_frames(request.request().clone(), Vec::<Vec<f32>>::new()),
+            FiniteSttAudio::from_frames(local_request.clone(), Vec::<Vec<f32>>::new()),
             Err(EngineError::InvalidRequest)
         );
         assert_eq!(
-            FiniteSttAudio::from_frames(request.request().clone(), vec![vec![1.1], vec![0.0]]),
+            FiniteSttAudio::from_frames(local_request.clone(), vec![vec![1.1], vec![0.0]]),
             Err(EngineError::InvalidRequest)
         );
         assert_eq!(
             FiniteSttAudio::from_frames(
-                request.request().clone(),
+                local_request.clone(),
                 vec![vec![0.0; MAX_STREAMING_FRAME_SAMPLES + 1], vec![0.0]]
             ),
             Err(EngineError::InvalidRequest)
@@ -3469,7 +3881,7 @@ mod tests {
         let oversized_frame_samples = MAX_FINITE_STT_SAMPLES / 5 + 1;
         assert_eq!(
             FiniteSttAudio::from_frames(
-                request.request().clone(),
+                local_request.clone(),
                 vec![
                     vec![0.0; oversized_frame_samples],
                     vec![0.0; oversized_frame_samples],
@@ -3481,7 +3893,7 @@ mod tests {
             Err(EngineError::InvalidRequest)
         );
         let (built_request, audio) =
-            FiniteSttAudio::from_frames(request.request().clone(), vec![vec![0.25], vec![-0.25]])
+            FiniteSttAudio::from_frames(local_request.clone(), vec![vec![0.25], vec![-0.25]])
                 .expect("valid audio");
         assert_eq!(built_request, request);
         assert_eq!(audio.frames(), 2);
@@ -3501,12 +3913,75 @@ mod tests {
         assert!(!debug.contains("0.25"));
         assert!(!debug.contains("-0.25"));
 
-        let mut builder = FiniteSttAudioBuilder::new(request.request().clone()).expect("builder");
+        let mut builder = FiniteSttAudioBuilder::new(local_request).expect("builder");
         builder.push_frame(&[0.123, -0.456]).expect("push");
         let builder_debug = format!("{builder:?}");
         assert!(builder_debug.contains("sample_count: 2"));
         assert!(!builder_debug.contains("0.123"));
         assert!(!builder_debug.contains("-0.456"));
+    }
+
+    #[test]
+    fn route_finite_stt_requests_keep_identity_strict_bounds_and_redaction() {
+        let secret_route = "route.SECRET_STT_ROUTE_DO_NOT_LEAK_4d3c2b";
+        let base = route_finite_stt_request(61, 2, secret_route, 9, 4);
+        let local = bound_finite_stt_request(61, 2);
+        assert_ne!(base.identity(), local.identity());
+        assert!(base.request().is_none());
+        assert!(base.local_request().is_none());
+        assert_eq!(
+            base.route_request().expect("route request").generation(),
+            61
+        );
+        let mut builder =
+            FiniteSttAudioBuilder::new_route(base.route_request().expect("route request").clone())
+                .expect("route builder");
+        builder.push_frame(&[0.1, -0.1]).expect("first frame");
+        builder.push_frame(&[0.2, -0.2]).expect("second frame");
+        let (built_request, audio) = builder.finish().expect("route audio");
+        assert_eq!(built_request, base);
+        assert_eq!(audio.samples(), &[0.1, -0.1, 0.2, -0.2]);
+        FiniteSttResult::new(&base, &audio, "route transcript").expect("route result");
+
+        let different_generation = route_finite_stt_request(62, 2, secret_route, 9, 4);
+        assert_eq!(
+            FiniteSttResult::new(&different_generation, &audio, "route transcript"),
+            Err(EngineError::InvalidRequest)
+        );
+        let different_revision = route_finite_stt_request(61, 2, secret_route, 10, 4);
+        assert_eq!(
+            FiniteSttResult::new(&different_revision, &audio, "route transcript"),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let mut too_large =
+            FiniteSttAudioBuilder::new_route(base.route_request().expect("route request").clone())
+                .expect("route builder");
+        assert_eq!(
+            too_large.push_frame(&[0.0; 5]),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let debug = format!("{base:?} {audio:?}");
+        assert!(debug.contains("FiniteSttBinding::Route"));
+        assert!(!debug.contains(secret_route));
+        assert!(!debug.contains("SECRET_STT_ROUTE"));
+        assert!(!debug.contains("route transcript"));
+        assert!(!debug.contains("0.1"));
+        let encoded_binding =
+            serde_json::to_string(base.route_request().expect("route request").route())
+                .expect("redacted route binding serializes");
+        assert!(encoded_binding.contains("route_id_bytes"));
+        assert!(encoded_binding.contains("loopback_sidecar"));
+        assert!(!encoded_binding.contains(secret_route));
+        assert!(!encoded_binding.contains("SECRET_STT_ROUTE"));
+        let encoded_request = serde_json::to_string(base.route_request().expect("route request"))
+            .expect("redacted route request serializes");
+        assert!(encoded_request.contains("\"generation\":61"));
+        assert!(encoded_request.contains("language_present"));
+        assert!(!encoded_request.contains(secret_route));
+        assert!(!encoded_request.contains("SECRET_STT_ROUTE"));
+        assert!(!encoded_request.contains("\"en\""));
     }
 
     #[test]
@@ -3527,7 +4002,10 @@ mod tests {
         .expect("bound stt task");
         let finite_request = BoundFiniteSttRequest::new(task_request, 3).expect("finite request");
         let (_built_request, audio) = FiniteSttAudio::from_frames(
-            finite_request.request().clone(),
+            finite_request
+                .local_request()
+                .expect("local request")
+                .clone(),
             vec![vec![0.0], vec![0.1], vec![-0.1]],
         )
         .expect("finite audio");

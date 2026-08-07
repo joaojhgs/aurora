@@ -15,8 +15,9 @@ use thiserror::Error;
 
 pub use aurora_voice_engine::{
     BoundFiniteSttRequest, BoundTaskRequest, BoundTtsSynthesisRequest, EngineError, FiniteSttAudio,
-    FiniteSttAudioBuilder, FiniteSttResult, ResourceReport, RouteTtsBinding,
-    RouteTtsSynthesisRequest, SpeechEngine, TaskCapability, TaskPackBinding, TaskProvider,
+    FiniteSttAudioBuilder, FiniteSttPort, FiniteSttProviderBinding, FiniteSttResult,
+    FiniteSttRouteScope, ResourceReport, RouteFiniteSttBinding, RouteFiniteSttRequest,
+    RouteTtsBinding, RouteTtsSynthesisRequest, TaskCapability, TaskPackBinding, TaskProvider,
     TaskReadiness, TaskRequest, TtsSynthesisConfig, TtsSynthesisPort, TtsSynthesisProviderBinding,
     TtsSynthesisResult, VoiceTask,
 };
@@ -883,7 +884,7 @@ pub trait AudioOutput {
 
 pub struct VoiceRuntime<A, E, P, T, O, S> {
     audio: A,
-    engine: E,
+    stt: E,
     tts: P,
     transport: T,
     output: O,
@@ -897,7 +898,7 @@ pub struct VoiceRuntime<A, E, P, T, O, S> {
 impl<A, E, P, T, O, S> VoiceRuntime<A, E, P, T, O, S>
 where
     A: AudioInput,
-    E: SpeechEngine,
+    E: FiniteSttPort,
     P: TtsSynthesisPort,
     T: SpeechTransport,
     O: AudioOutput,
@@ -906,7 +907,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         audio: A,
-        engine: E,
+        stt: E,
         tts: P,
         transport: T,
         output: O,
@@ -917,7 +918,7 @@ where
         let assistant_namespace = AssistantTurnNamespace::new(runtime_instance_id)?;
         Ok(Self {
             audio,
-            engine,
+            stt,
             tts,
             transport,
             output,
@@ -940,7 +941,7 @@ where
     pub fn into_parts(self) -> (A, E, P, T, O, S) {
         (
             self.audio,
-            self.engine,
+            self.stt,
             self.tts,
             self.transport,
             self.output,
@@ -1095,9 +1096,28 @@ where
         at: TimestampMicros,
         cancellation: CancellationToken,
     ) -> Result<String, VoiceCoreError> {
-        let stt_task_request =
-            self.bound_engine_request(VoiceTask::SpeechToText, None, lease.generation)?;
-        let mut stt_audio = FiniteSttAudioBuilder::new(stt_task_request)?;
+        let stt_binding = self.stt.finite_stt_binding()?;
+        if stt_binding.sample_rate_hz() != aurora_voice_engine::VAD_SAMPLE_RATE_HZ
+            || stt_binding.channels() != aurora_voice_engine::MONO_CHANNELS
+        {
+            return Err(VoiceCoreError::Engine(EngineError::InvalidRequest));
+        }
+        let mut stt_audio = match stt_binding.clone() {
+            FiniteSttProviderBinding::LocalTask(binding) => {
+                let task_request = BoundTaskRequest::new(
+                    TaskRequest {
+                        task: VoiceTask::SpeechToText,
+                        language: None,
+                        generation: lease.generation.0,
+                    },
+                    *binding,
+                )?;
+                FiniteSttAudioBuilder::new(task_request)?
+            }
+            FiniteSttProviderBinding::Route(route) => FiniteSttAudioBuilder::new_route(
+                RouteFiniteSttRequest::new(route, None, lease.generation.0)?,
+            )?,
+        };
         cancellation.check()?;
         while let Some(frame) = self.audio.next_frame().await? {
             if cancellation.is_cancelled() {
@@ -1127,10 +1147,10 @@ where
         )
         .await?;
         cancellation.check()?;
-        self.engine.warm_task(stt_audio.request().clone()).await?;
+        self.stt.warm_finite_stt(stt_binding).await?;
         let (stt_request, stt_audio) = stt_audio.finish()?;
         let transcript = self
-            .engine
+            .stt
             .transcribe_finite(stt_request, stt_audio, &|| cancellation.is_cancelled())
             .await?;
         cancellation.check()?;
@@ -1227,35 +1247,6 @@ where
         Ok(response.text)
     }
 
-    fn bound_engine_request(
-        &self,
-        task: VoiceTask,
-        language: Option<String>,
-        generation: Generation,
-    ) -> Result<BoundTaskRequest, VoiceCoreError> {
-        let request = TaskRequest {
-            task,
-            language,
-            generation: generation.0,
-        };
-        let mut saw_task = false;
-        for capability in self.engine.capabilities() {
-            if capability.task() != task {
-                continue;
-            }
-            saw_task = true;
-            if let Ok(bound) = BoundTaskRequest::new(request.clone(), capability.binding().clone())
-            {
-                return Ok(bound);
-            }
-        }
-        if saw_task {
-            Err(VoiceCoreError::Engine(EngineError::InvalidRequest))
-        } else {
-            Err(VoiceCoreError::Engine(EngineError::TaskUnavailable))
-        }
-    }
-
     async fn finish_with_cleanup(
         &mut self,
         result: Result<String, VoiceCoreError>,
@@ -1267,17 +1258,21 @@ where
             Ok(_) if cancellation.is_cancelled() => Err(VoiceCoreError::Cancelled),
             other => other,
         };
-        let tts_cancel_result = if result.is_err() || cancellation.is_cancelled() {
-            let _ = self.engine.cancel_generation(lease.generation.0).await;
-            let tts_result = self
-                .tts
-                .cancel_synthesis_generation(lease.generation.0)
-                .await;
-            let _ = self.transport.cancel_session(lease.generation).await;
-            tts_result
-        } else {
-            Ok(())
-        };
+        let (stt_cancel_result, tts_cancel_result) =
+            if result.is_err() || cancellation.is_cancelled() {
+                let stt_result = self
+                    .stt
+                    .cancel_finite_stt_generation(lease.generation.0)
+                    .await;
+                let tts_result = self
+                    .tts
+                    .cancel_synthesis_generation(lease.generation.0)
+                    .await;
+                let _ = self.transport.cancel_session(lease.generation).await;
+                (stt_result, tts_result)
+            } else {
+                (Ok(()), Ok(()))
+            };
         let output_stop_result = if result.is_err() || cancellation.is_cancelled() {
             self.output
                 .stop(lease.generation, TransitionReason::Cancel)
@@ -1307,16 +1302,18 @@ where
                 output_stop_result?;
                 stop_result?;
                 release_result?;
+                stt_cancel_result?;
                 tts_cancel_result?;
                 Ok(value)
             }
             Err(error) => {
                 let _ = stop_result;
                 let _ = release_result;
-                match (output_stop_result, tts_cancel_result) {
-                    (Err(stop_error), _) => Err(Self::playback_cleanup_failed(stop_error)),
-                    (_, Err(tts_error)) => Err(Self::tts_cleanup_failed(tts_error)),
-                    (Ok(()), Ok(())) => Err(error),
+                match (output_stop_result, stt_cancel_result, tts_cancel_result) {
+                    (Err(stop_error), _, _) => Err(Self::playback_cleanup_failed(stop_error)),
+                    (_, Err(stt_error), _) => Err(Self::stt_cleanup_failed(stt_error)),
+                    (_, _, Err(tts_error)) => Err(Self::tts_cleanup_failed(tts_error)),
+                    (Ok(()), Ok(()), Ok(())) => Err(error),
                 }
             }
         }
@@ -1343,6 +1340,17 @@ where
             EngineError::TaskUnavailable => "tts_cleanup_task_unavailable".to_owned(),
             EngineError::ResourceLimit => "tts_cleanup_resource_limit".to_owned(),
             EngineError::InvalidRequest => "tts_cleanup_invalid_request".to_owned(),
+        };
+        VoiceCoreError::TransportFault { code }
+    }
+
+    fn stt_cleanup_failed(error: EngineError) -> VoiceCoreError {
+        let code = match error {
+            EngineError::Cancelled => "stt_cleanup_cancelled".to_owned(),
+            EngineError::ProviderFault { .. } => "stt_cleanup_provider_fault".to_owned(),
+            EngineError::TaskUnavailable => "stt_cleanup_task_unavailable".to_owned(),
+            EngineError::ResourceLimit => "stt_cleanup_resource_limit".to_owned(),
+            EngineError::InvalidRequest => "stt_cleanup_invalid_request".to_owned(),
         };
         VoiceCoreError::TransportFault { code }
     }

@@ -8,192 +8,22 @@ use async_trait::async_trait;
 use aurora_voice_core::{
     AssistantTurnRequest, AssistantTurnResponse, AudioInput, AudioOutput, AudioPlaybackContext,
     AudioPlaybackReceipt, BoundFiniteSttRequest, BoundTaskRequest, BoundTtsSynthesisRequest,
-    CancellationToken, CaptureStartReason, EngineError, FiniteSttAudio, FiniteSttResult,
-    Generation, PcmFrame, RedactedSnapshot, ResourceReport, RouteRevision, RouteTtsBinding,
-    RuntimeEvent, RuntimeEventSink, SpeechEngine, SpeechTransport, TaskCapability, TaskPackBinding,
-    TaskProvider, TaskReadiness, TimestampMicros, TransitionReason, TtsSynthesisPort,
+    CancellationToken, CaptureStartReason, EngineError, FiniteSttAudio, FiniteSttPort,
+    FiniteSttProviderBinding, FiniteSttResult, Generation, PcmFrame, RedactedSnapshot,
+    ResourceReport, RouteFiniteSttBinding, RouteRevision, RouteTtsBinding, RuntimeEvent,
+    RuntimeEventSink, SpeechTransport, TaskCapability, TaskPackBinding, TaskProvider,
+    TaskReadiness, TimestampMicros, TransitionReason, TtsSynthesisPort,
     TtsSynthesisProviderBinding, TtsSynthesisResult, VoiceCaptureLease, VoiceCoreError, VoiceTask,
 };
 use aurora_voice_engine::{
-    select_verified_variant, verify_manifest, AbiRequirements, BrowserFeature, CapabilityFlags,
-    Compatibility, CompressionKind, DeviceClass, EngineFaultCode, EngineKind, LanguageSupport,
-    LicenseGrant, LicenseInfo, ManifestSignature, ModelPackError, ModelPackFile, ModelPackManifest,
-    PackTask, ProcessingMetadata, Provenance, ResourceBudget, RuntimeGates, RuntimeSelection,
-    RuntimeTarget, ShapeMetadata, SignatureVerifier, TargetArch, TargetOs, TrustPolicy,
-    TtsAudioChunk, MONO_CHANNELS, VAD_SAMPLE_RATE_HZ,
+    EngineFaultCode, FiniteSttRouteScope, TtsAudioChunk, MONO_CHANNELS, VAD_SAMPLE_RATE_HZ,
 };
 use std::cell::RefCell;
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::VecDeque;
 use std::fmt;
 use std::rc::Rc;
 
 pub use model_store::*;
-
-const FAKE_HASH: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-
-struct FakeBindingVerifier;
-
-impl SignatureVerifier for FakeBindingVerifier {
-    fn verify(
-        &self,
-        _canonical_json: &str,
-        signature: &ManifestSignature,
-    ) -> Result<bool, ModelPackError> {
-        Ok(signature.value == "signed")
-    }
-}
-
-fn fake_bound_capability(task: VoiceTask, pack_task: PackTask, streaming: bool) -> TaskCapability {
-    TaskCapability::new(fake_task_binding(task, pack_task)).streaming(streaming)
-}
-
-fn fake_task_binding(task: VoiceTask, pack_task: PackTask) -> TaskPackBinding {
-    let manifest = fake_manifest(pack_task);
-    let verified = verify_manifest(
-        manifest,
-        &TrustPolicy::default(),
-        Some(&FakeBindingVerifier),
-    )
-    .expect("fake manifest verifies");
-    let selection = select_verified_variant(
-        &verified,
-        &RuntimeSelection {
-            target: RuntimeTarget::Desktop,
-            os: TargetOs::Linux,
-            arch: TargetArch::X86_64,
-            browser_features: BTreeSet::<BrowserFeature>::new(),
-            device_memory_mb: None,
-            max_download_bytes: 1024,
-            max_installed_bytes: 1024,
-            max_memory_bytes: 1024,
-            cpu_threads: 1,
-            max_rtf_millis_per_second: 1_000,
-            device_class: DeviceClass::Low,
-            require_interoperable: true,
-        },
-    )
-    .expect("fake variant selects");
-    TaskPackBinding::from_selection(task, &verified, &selection).expect("fake binding")
-}
-
-fn fake_manifest(task: PackTask) -> ModelPackManifest {
-    ModelPackManifest {
-        schema_version: 1,
-        pack_id: format!("fake-{}", task.as_str()),
-        pack_version: "1.0.0".to_owned(),
-        display_name: "Fake Pack".to_owned(),
-        tasks: vec![task],
-        license: LicenseInfo {
-            identifier: "Apache-2.0".to_owned(),
-            text_url: "https://example.test/license".to_owned(),
-            text_sha256: FAKE_HASH.to_owned(),
-            commercial_use: true,
-            redistribution: LicenseGrant::RedistributionAllowed,
-            attribution: "Aurora".to_owned(),
-        },
-        languages: vec![LanguageSupport {
-            language: "en".to_owned(),
-            locale: Some("en-US".to_owned()),
-            fixed_language: true,
-            auto_detect: false,
-        }],
-        capabilities: CapabilityFlags {
-            streaming: true,
-            cancellation: true,
-        },
-        provenance: fake_provenance(),
-        files: vec![ModelPackFile {
-            file_id: "model".to_owned(),
-            asset_id: "model".to_owned(),
-            task,
-            byte_size: 100,
-            sha256: FAKE_HASH.to_owned(),
-            url: "/models/model".to_owned(),
-            compression: CompressionKind::None,
-            installed_size: 100,
-            install_order: 0,
-            dependencies: Vec::new(),
-            license: LicenseInfo {
-                identifier: "Apache-2.0".to_owned(),
-                text_url: "https://example.test/license".to_owned(),
-                text_sha256: FAKE_HASH.to_owned(),
-                commercial_use: true,
-                redistribution: LicenseGrant::RedistributionAllowed,
-                attribution: "Aurora".to_owned(),
-            },
-            provenance: fake_provenance(),
-            processing: ProcessingMetadata {
-                tokenizer_sha256: None,
-                operator_inventory_sha256: FAKE_HASH.to_owned(),
-                preprocessing_abi: "pre-v1".to_owned(),
-                postprocessing_abi: "post-v1".to_owned(),
-                shapes: ShapeMetadata {
-                    sample_rate_hz: VAD_SAMPLE_RATE_HZ,
-                    channels: 1,
-                    frame_size: 512,
-                    window_size: 1024,
-                    cache_state: vec!["hidden".to_owned()],
-                },
-            },
-            raven: None,
-            revocation: None,
-        }],
-        variants: vec![aurora_voice_engine::ModelPackVariant {
-            variant_id: "linux".to_owned(),
-            target: RuntimeTarget::Desktop,
-            os: TargetOs::Linux,
-            arch: TargetArch::X86_64,
-            engine: EngineKind::SherpaOnnx,
-            required_browser_features: Vec::new(),
-            min_device_memory_mb: None,
-            runtime_gates: RuntimeGates {
-                min_cpu_threads: 1,
-                max_rtf_millis_per_second: 1_000,
-                min_device_class: DeviceClass::Low,
-            },
-            resource_budget: ResourceBudget {
-                max_download_bytes: 1024,
-                max_installed_bytes: 1024,
-                max_memory_bytes: 1024,
-            },
-            compatibility: Compatibility {
-                group_id: "fake-group".to_owned(),
-                voice_state_group_id: "default".to_owned(),
-                preprocessing_abi: "pre-v1".to_owned(),
-                postprocessing_abi: "post-v1".to_owned(),
-                sample_rate_hz: VAD_SAMPLE_RATE_HZ,
-                channels: 1,
-                frame_size: 512,
-                interoperable: true,
-            },
-            file_ids: vec!["model".to_owned()],
-            abi: AbiRequirements {
-                min_aurora_version: "1.0.0".to_owned(),
-                min_runtime_version: "1.0.0".to_owned(),
-                min_engine_version: "1.0.0".to_owned(),
-                engine_source_revision: "fake".to_owned(),
-                build_flags: vec!["cpu".to_owned()],
-            },
-            revocation: None,
-        }],
-        rollback_from: None,
-        supersedes_pack_id: None,
-        revocation: None,
-        signature: Some(ManifestSignature {
-            key_id: "fake-key".to_owned(),
-            algorithm: "ed25519".to_owned(),
-            value: "signed".to_owned(),
-        }),
-    }
-}
-
-fn fake_provenance() -> Provenance {
-    Provenance {
-        upstream_source: "https://example.test/source".to_owned(),
-        upstream_revision: "rev1".to_owned(),
-        build_recipe_sha256: FAKE_HASH.to_owned(),
-    }
-}
 
 #[derive(Debug, Clone, Default)]
 pub struct FakeClock {
@@ -297,6 +127,7 @@ pub struct FakeEngine {
     transcribed_audio: Vec<Vec<f32>>,
     report: ResourceReport,
     fail_transcribe: bool,
+    fail_stt_cancel: bool,
     fail_synthesize: bool,
     fail_tts_cancel: bool,
     cancel_during_transcribe: Option<CancellationToken>,
@@ -322,6 +153,7 @@ impl fmt::Debug for FakeEngine {
             )
             .field("report", &self.report)
             .field("fail_transcribe", &self.fail_transcribe)
+            .field("fail_stt_cancel", &self.fail_stt_cancel)
             .field("fail_synthesize", &self.fail_synthesize)
             .field("fail_tts_cancel", &self.fail_tts_cancel)
             .field(
@@ -354,6 +186,7 @@ impl FakeEngine {
                 readiness: TaskReadiness::Ready,
             },
             fail_transcribe: false,
+            fail_stt_cancel: false,
             fail_synthesize: false,
             fail_tts_cancel: false,
             cancel_during_transcribe: None,
@@ -363,6 +196,11 @@ impl FakeEngine {
 
     pub fn with_transcribe_failure(mut self) -> Self {
         self.fail_transcribe = true;
+        self
+    }
+
+    pub fn with_stt_cancel_failure(mut self) -> Self {
+        self.fail_stt_cancel = true;
         self
     }
 
@@ -406,11 +244,7 @@ impl FakeEngine {
 #[async_trait(?Send)]
 impl TaskProvider for FakeEngine {
     fn capabilities(&self) -> Vec<TaskCapability> {
-        vec![fake_bound_capability(
-            VoiceTask::SpeechToText,
-            PackTask::Stt,
-            false,
-        )]
+        Vec::new()
     }
 
     fn resource_report(&self) -> ResourceReport {
@@ -472,7 +306,29 @@ fn synthesize_fake_audio(
 }
 
 #[async_trait(?Send)]
-impl SpeechEngine for FakeEngine {
+impl FiniteSttPort for FakeEngine {
+    fn finite_stt_binding(&self) -> Result<FiniteSttProviderBinding, EngineError> {
+        Ok(FiniteSttProviderBinding::Route(RouteFiniteSttBinding::new(
+            "route.stt.fake",
+            FiniteSttRouteScope::LoopbackSidecar,
+            VAD_SAMPLE_RATE_HZ,
+            VAD_SAMPLE_RATE_HZ as usize * 10,
+            1,
+        )?))
+    }
+
+    async fn warm_finite_stt(
+        &mut self,
+        binding: FiniteSttProviderBinding,
+    ) -> Result<(), EngineError> {
+        match binding {
+            FiniteSttProviderBinding::Route(route) if route.route_id() == "route.stt.fake" => {
+                Ok(())
+            }
+            _ => Err(EngineError::TaskUnavailable),
+        }
+    }
+
     async fn transcribe_finite(
         &mut self,
         request: BoundFiniteSttRequest,
@@ -493,11 +349,21 @@ impl SpeechEngine for FakeEngine {
                 code: EngineFaultCode::Provider,
             });
         }
-        if request.request().request().task != VoiceTask::SpeechToText || request.frames() == 0 {
+        if request.route_request().is_none() || request.frames() == 0 {
             return Err(EngineError::InvalidRequest);
         }
         self.transcribed_audio.push(audio.samples().to_vec());
         FiniteSttResult::new(&request, &audio, self.transcript.clone())
+    }
+
+    async fn cancel_finite_stt_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        self.cancelled.push(generation);
+        if self.fail_stt_cancel {
+            return Err(EngineError::ProviderFault {
+                code: EngineFaultCode::Provider,
+            });
+        }
+        Ok(())
     }
 }
 
@@ -913,6 +779,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn route_backed_runtime_turn_succeeds_without_local_stt_capability(
+    ) -> Result<(), VoiceCoreError> {
+        let frames = vec![fake_frame(1, Generation(1))?, fake_frame(2, Generation(1))?];
+        let audio = FakeAudioInput::new(frames);
+        let engine = FakeEngine::new("route transcript");
+        let transport = FakeTransport::new("route answer");
+        let output = FakeAudioOutput::new();
+        let sink = FakeEventSink::default();
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine.clone(),
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
+
+        let response = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(21),
+                CancellationToken::new(),
+            )
+            .await?;
+        assert_eq!(response, "route answer");
+
+        let (_audio, engine, tts, transport, output, _sink) = runtime.into_parts();
+        assert!(engine.capabilities().is_empty());
+        assert_eq!(
+            engine.transcribed_audio(),
+            &[vec![0.0, 0.25, -0.25, 0.0, 0.25, -0.25]]
+        );
+        assert_eq!(transport.invoked()[0].transcript, "route transcript");
+        assert_eq!(tts.spoken(), vec!["route answer".to_owned()]);
+        assert_eq!(output.played().len(), 1);
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn synthesized_chunks_reach_output_in_order_before_completion(
     ) -> Result<(), VoiceCoreError> {
         let frames = vec![fake_frame(1, Generation(1))?];
@@ -1152,6 +1059,49 @@ mod tests {
             .run_push_to_talk_turn(
                 fake_lease(CaptureStartReason::PushToTalk),
                 TimestampMicros(26),
+                CancellationToken::new(),
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(VoiceCoreError::Engine(EngineError::InvalidRequest))
+        ));
+
+        let (_audio, engine, _tts, transport, output, _sink) = runtime.into_parts();
+        assert!(engine.transcribed_audio().is_empty());
+        assert!(transport.invoked().is_empty());
+        assert!(output.played().is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn route_stt_sample_policy_fails_before_provider_call() -> Result<(), VoiceCoreError> {
+        let frames = vec![fake_frame_with_samples(
+            1,
+            Generation(1),
+            vec![0.0; VAD_SAMPLE_RATE_HZ as usize * 10 + 1],
+            false,
+        )?];
+        let audio = FakeAudioInput::new(frames);
+        let engine = FakeEngine::new("unused");
+        let transport = FakeTransport::new("unused answer");
+        let output = FakeAudioOutput::new();
+        let sink = FakeEventSink::default();
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine.clone(),
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
+
+        let result = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(27),
                 CancellationToken::new(),
             )
             .await;
@@ -1517,6 +1467,63 @@ mod tests {
         .to_string();
         assert!(!error_text.contains("first answer"));
         assert!(!error_text.contains("sample"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn stt_cancel_failure_reports_sanitized_cleanup_and_still_releases(
+    ) -> Result<(), VoiceCoreError> {
+        let frames = vec![fake_frame(1, Generation(1))?];
+        let audio = FakeAudioInput::new(frames);
+        let engine = FakeEngine::new("first")
+            .with_transcribe_failure()
+            .with_stt_cancel_failure();
+        let transport = FakeTransport::new("first answer");
+        let output = FakeAudioOutput::new();
+        let sink = FakeEventSink::default();
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine.clone(),
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
+
+        let result = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(63),
+                CancellationToken::new(),
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(VoiceCoreError::TransportFault { code }) if code == "stt_cleanup_provider_fault"
+        ));
+        assert_eq!(runtime.state(), VoiceState::Idle);
+        assert!(!runtime.has_active_capture());
+
+        let (audio, engine, tts, transport, output, _sink) = runtime.into_parts();
+        assert_eq!(audio.stopped(), &[TransitionReason::Cancel]);
+        assert_eq!(engine.cancelled(), &[1]);
+        assert_eq!(tts.tts_cancelled(), vec![1]);
+        assert!(engine.transcribed_audio().is_empty());
+        assert_eq!(transport.cancelled(), &[Generation(1)]);
+        assert!(output.played().is_empty());
+        assert_eq!(
+            output.stopped(),
+            &[(Generation(1), TransitionReason::Cancel)]
+        );
+        let error_text = VoiceCoreError::TransportFault {
+            code: "stt_cleanup_provider_fault".to_owned(),
+        }
+        .to_string();
+        assert!(!error_text.contains("first answer"));
+        assert!(!error_text.contains("sample"));
+        assert!(!error_text.contains("transcript"));
         Ok(())
     }
 

@@ -8,11 +8,12 @@
 use async_trait::async_trait;
 use aurora_voice_engine::{
     check_engine_cancellation, BoundFiniteSttRequest, BoundKwsRequest, BoundStreamSession,
-    BoundTaskRequest, BoundVadRequest, EngineError, EngineFaultCode, FiniteSttAudio,
-    FiniteSttResult, KeywordMatch, KwsConfig, KwsCooldownState, KwsFrameResult, ResourceReport,
-    SpeechEngine, SpeechSegment, StreamResetReason, StreamSessionId, StreamingAudioFrame,
-    TaskCapability, TaskPackBinding, TaskProvider, TaskReadiness, VadAcceptResult, VadConfig,
-    VadStreamProvider, VoiceTask, MONO_CHANNELS, VAD_SAMPLE_RATE_HZ, VAD_WINDOW_SIZE_SAMPLES,
+    BoundTaskRequest, BoundVadRequest, EngineError, EngineFaultCode, FiniteSttAudio, FiniteSttPort,
+    FiniteSttProviderBinding, FiniteSttResult, KeywordMatch, KwsConfig, KwsCooldownState,
+    KwsFrameResult, ResourceReport, SpeechSegment, StreamResetReason, StreamSessionId,
+    StreamingAudioFrame, TaskCapability, TaskPackBinding, TaskProvider, TaskReadiness,
+    VadAcceptResult, VadConfig, VadStreamProvider, VoiceTask, MONO_CHANNELS, VAD_SAMPLE_RATE_HZ,
+    VAD_WINDOW_SIZE_SAMPLES,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -919,18 +920,37 @@ where
 }
 
 #[async_trait(?Send)]
-impl<B> SpeechEngine for SherpaFiniteSttEngine<B>
+impl<B> FiniteSttPort for SherpaFiniteSttEngine<B>
 where
     B: SherpaSttBackend,
 {
+    fn finite_stt_binding(&self) -> Result<FiniteSttProviderBinding, EngineError> {
+        Ok(FiniteSttProviderBinding::LocalTask(Box::new(
+            self.installed_binding.clone(),
+        )))
+    }
+
+    async fn warm_finite_stt(
+        &mut self,
+        binding: FiniteSttProviderBinding,
+    ) -> Result<(), EngineError> {
+        match binding {
+            FiniteSttProviderBinding::LocalTask(binding) => self.ensure_binding(&binding),
+            FiniteSttProviderBinding::Route(_) => Err(EngineError::InvalidRequest),
+        }
+    }
+
     async fn transcribe_finite(
         &mut self,
         request: BoundFiniteSttRequest,
         audio: FiniteSttAudio,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<FiniteSttResult, EngineError> {
-        self.ensure_request(request.request())?;
-        if audio.generation() != request.request().request().generation
+        let Some(local_request) = request.local_request() else {
+            return Err(EngineError::InvalidRequest);
+        };
+        self.ensure_request(local_request)?;
+        if audio.generation() != request.generation()
             || audio.frames() != request.frames()
             || audio.sample_rate_hz() != VAD_SAMPLE_RATE_HZ
             || audio.channels() != MONO_CHANNELS
@@ -951,6 +971,10 @@ where
             return Err(EngineError::Cancelled);
         }
         FiniteSttResult::new(&request, &audio, transcript)
+    }
+
+    async fn cancel_finite_stt_generation(&mut self, _generation: u64) -> Result<(), EngineError> {
+        Ok(())
     }
 }
 
