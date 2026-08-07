@@ -2,7 +2,7 @@
   "algorithm": "ed25519",
   "key_id": "aurora-phase6-signed-candidate-20260807",
   "private_key_disposition": "Generated transiently for this candidate slice; private key was not committed and must not be reused as production trust.",
-  "public_key_base64": "ojlHj9MBSBRVPKbK2Og5hMUr/Al1AMsh1SUz92+XoNA=",
+  "public_key_base64": "sdYM4cGBnaTcRDukArbQ/122wekr0kme81qwFY5zQqQ=",
   "schema_version": 1,
   "trust_label": "non-production signed-candidate trust only",
   "valid_for": [

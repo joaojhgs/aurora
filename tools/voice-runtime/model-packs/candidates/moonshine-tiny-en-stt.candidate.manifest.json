@@ -24,7 +24,7 @@
         "text_url": "/aurora/model-packs/candidates/sha256/6148d7574a6554b7379b633cfd4c4fe5840c3f548d13bc83e00b52dc6fa00abd/LICENSE-MIT"
       },
       "processing": {
-        "operator_inventory_sha256": "0718260dd8ab5448fe52f658ee097b62e49318c9c99e5f90cfb344737a5978ff",
+        "operator_inventory_sha256": "73338f5ec4dd8d669dee4ef0b2dcd19dee712e5b3de66d42cbf94be001e1a947",
         "postprocessing_abi": "aurora-stt-candidate-v1",
         "preprocessing_abi": "sherpa-onnx-1.13.4-stt-pcm16k-mono",
         "shapes": {
@@ -66,7 +66,7 @@
         "text_url": "/aurora/model-packs/candidates/sha256/6148d7574a6554b7379b633cfd4c4fe5840c3f548d13bc83e00b52dc6fa00abd/LICENSE-MIT"
       },
       "processing": {
-        "operator_inventory_sha256": "0718260dd8ab5448fe52f658ee097b62e49318c9c99e5f90cfb344737a5978ff",
+        "operator_inventory_sha256": "73338f5ec4dd8d669dee4ef0b2dcd19dee712e5b3de66d42cbf94be001e1a947",
         "postprocessing_abi": "aurora-stt-candidate-v1",
         "preprocessing_abi": "sherpa-onnx-1.13.4-stt-pcm16k-mono",
         "shapes": {
@@ -155,7 +155,7 @@
         "text_url": "/aurora/model-packs/candidates/sha256/6148d7574a6554b7379b633cfd4c4fe5840c3f548d13bc83e00b52dc6fa00abd/LICENSE-MIT"
       },
       "processing": {
-        "operator_inventory_sha256": "0718260dd8ab5448fe52f658ee097b62e49318c9c99e5f90cfb344737a5978ff",
+        "operator_inventory_sha256": "73338f5ec4dd8d669dee4ef0b2dcd19dee712e5b3de66d42cbf94be001e1a947",
         "postprocessing_abi": "aurora-stt-candidate-v1",
         "preprocessing_abi": "sherpa-onnx-1.13.4-stt-pcm16k-mono",
         "shapes": {
@@ -208,7 +208,7 @@
   "signature": {
     "algorithm": "ed25519",
     "key_id": "aurora-phase6-signed-candidate-20260807",
-    "value": "yJ1zPPH6NL4jjJ0dRWbL4TbUKJlwdhk23AVjcGHMoge/KaYIXM63yHM4Wh103P+Mfr4y6PLYunY6vuHK5fXvAw=="
+    "value": "f3tOjfP1Cg6mfNsmT2P5cee3Ui1bZZfkFmNE4VMm+wnYFUx37hrrXD6EKgt9cMlR4RaiogZyq/9x0A3vD5l4DA=="
   },
   "supersedes_pack_id": null,
   "tasks": [

@@ -1,7 +1,21 @@
 {
-  "inventory_method": "recursive bounded protobuf scan of ONNX graph.node.op_type and AttributeProto subgraphs",
+  "inventory_method": "recursive ONNX scan with subgraph traversal and model IR/opset metadata",
   "models": [
     {
+      "format": "onnx",
+      "metadata": {
+        "ir_version": 7,
+        "model_domain": "",
+        "model_version": 0,
+        "opset_imports": [
+          {
+            "domain": "ai.onnx",
+            "version": 13
+          }
+        ],
+        "producer_name": "onnx.quantize",
+        "producer_version": "0.1.0"
+      },
       "operator_inventory": {
         "node_count": 4591,
         "operator_counts": {
@@ -131,6 +145,20 @@
       "size_bytes": 4807159
     },
     {
+      "format": "onnx",
+      "metadata": {
+        "ir_version": 7,
+        "model_domain": "",
+        "model_version": 0,
+        "opset_imports": [
+          {
+            "domain": "ai.onnx",
+            "version": 13
+          }
+        ],
+        "producer_name": "pytorch",
+        "producer_version": "1.13.0"
+      },
       "operator_inventory": {
         "node_count": 17,
         "operator_counts": {
@@ -160,6 +188,20 @@
       "size_bytes": 1063189
     },
     {
+      "format": "onnx",
+      "metadata": {
+        "ir_version": 7,
+        "model_domain": "",
+        "model_version": 0,
+        "opset_imports": [
+          {
+            "domain": "ai.onnx",
+            "version": 13
+          }
+        ],
+        "producer_name": "onnx.quantize",
+        "producer_version": "0.1.0"
+      },
       "operator_inventory": {
         "node_count": 8,
         "operator_counts": {

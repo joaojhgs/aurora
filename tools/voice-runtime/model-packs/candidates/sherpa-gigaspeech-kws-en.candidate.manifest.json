@@ -13,8 +13,7 @@
         "tokens",
         "bpe",
         "keywords",
-        "keywords-raw",
-        "test-keywords"
+        "keywords-raw"
       ],
       "file_id": "encoder-int8",
       "install_order": 0,
@@ -28,17 +27,94 @@
         "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
       },
       "processing": {
-        "operator_inventory_sha256": "c784aa0c662d232db0ec7f8e7e3e57908d7a4faa3dc32d77a4e75ac45239d33e",
+        "operator_inventory_sha256": "70d797e4c50269b592081d64c222906677f1836a38662c1cfba2a1fcda45b521",
         "postprocessing_abi": "aurora-kws-candidate-v1",
         "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
         "shapes": {
-          "cache_state": [],
+          "cache_state": [
+            "cached_key_0",
+            "cached_nonlin_attn_0",
+            "cached_val1_0",
+            "cached_val2_0",
+            "cached_conv1_0",
+            "cached_conv2_0",
+            "cached_key_1",
+            "cached_nonlin_attn_1",
+            "cached_val1_1",
+            "cached_val2_1",
+            "cached_conv1_1",
+            "cached_conv2_1",
+            "cached_key_2",
+            "cached_nonlin_attn_2",
+            "cached_val1_2",
+            "cached_val2_2",
+            "cached_conv1_2",
+            "cached_conv2_2",
+            "cached_key_3",
+            "cached_nonlin_attn_3",
+            "cached_val1_3",
+            "cached_val2_3",
+            "cached_conv1_3",
+            "cached_conv2_3",
+            "cached_key_4",
+            "cached_nonlin_attn_4",
+            "cached_val1_4",
+            "cached_val2_4",
+            "cached_conv1_4",
+            "cached_conv2_4",
+            "cached_key_5",
+            "cached_nonlin_attn_5",
+            "cached_val1_5",
+            "cached_val2_5",
+            "cached_conv1_5",
+            "cached_conv2_5",
+            "embed_states",
+            "processed_lens",
+            "new_cached_key_0",
+            "new_cached_nonlin_attn_0",
+            "new_cached_val1_0",
+            "new_cached_val2_0",
+            "new_cached_conv1_0",
+            "new_cached_conv2_0",
+            "new_cached_key_1",
+            "new_cached_nonlin_attn_1",
+            "new_cached_val1_1",
+            "new_cached_val2_1",
+            "new_cached_conv1_1",
+            "new_cached_conv2_1",
+            "new_cached_key_2",
+            "new_cached_nonlin_attn_2",
+            "new_cached_val1_2",
+            "new_cached_val2_2",
+            "new_cached_conv1_2",
+            "new_cached_conv2_2",
+            "new_cached_key_3",
+            "new_cached_nonlin_attn_3",
+            "new_cached_val1_3",
+            "new_cached_val2_3",
+            "new_cached_conv1_3",
+            "new_cached_conv2_3",
+            "new_cached_key_4",
+            "new_cached_nonlin_attn_4",
+            "new_cached_val1_4",
+            "new_cached_val2_4",
+            "new_cached_conv1_4",
+            "new_cached_conv2_4",
+            "new_cached_key_5",
+            "new_cached_nonlin_attn_5",
+            "new_cached_val1_5",
+            "new_cached_val2_5",
+            "new_cached_conv1_5",
+            "new_cached_conv2_5",
+            "new_embed_states",
+            "new_processed_lens"
+          ],
           "channels": 1,
           "frame_size": 512,
           "sample_rate_hz": 16000,
           "window_size": 512
         },
-        "tokenizer_sha256": "d45e8e848289466065545a536181af6e61ab8a40fa2875c9c3abe8a152f1c61d"
+        "tokenizer_sha256": "43ed773c70b196515a0880ac8c770cd2717b41fb48adc9e47f36af4ae0ad2809"
       },
       "provenance": {
         "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
@@ -59,8 +135,7 @@
         "tokens",
         "bpe",
         "keywords",
-        "keywords-raw",
-        "test-keywords"
+        "keywords-raw"
       ],
       "file_id": "decoder",
       "install_order": 1,
@@ -74,7 +149,7 @@
         "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
       },
       "processing": {
-        "operator_inventory_sha256": "c784aa0c662d232db0ec7f8e7e3e57908d7a4faa3dc32d77a4e75ac45239d33e",
+        "operator_inventory_sha256": "70d797e4c50269b592081d64c222906677f1836a38662c1cfba2a1fcda45b521",
         "postprocessing_abi": "aurora-kws-candidate-v1",
         "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
         "shapes": {
@@ -84,7 +159,7 @@
           "sample_rate_hz": 16000,
           "window_size": 512
         },
-        "tokenizer_sha256": "d45e8e848289466065545a536181af6e61ab8a40fa2875c9c3abe8a152f1c61d"
+        "tokenizer_sha256": "43ed773c70b196515a0880ac8c770cd2717b41fb48adc9e47f36af4ae0ad2809"
       },
       "provenance": {
         "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
@@ -105,8 +180,7 @@
         "tokens",
         "bpe",
         "keywords",
-        "keywords-raw",
-        "test-keywords"
+        "keywords-raw"
       ],
       "file_id": "joiner-int8",
       "install_order": 2,
@@ -120,7 +194,7 @@
         "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
       },
       "processing": {
-        "operator_inventory_sha256": "c784aa0c662d232db0ec7f8e7e3e57908d7a4faa3dc32d77a4e75ac45239d33e",
+        "operator_inventory_sha256": "70d797e4c50269b592081d64c222906677f1836a38662c1cfba2a1fcda45b521",
         "postprocessing_abi": "aurora-kws-candidate-v1",
         "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
         "shapes": {
@@ -130,7 +204,7 @@
           "sample_rate_hz": 16000,
           "window_size": 512
         },
-        "tokenizer_sha256": "d45e8e848289466065545a536181af6e61ab8a40fa2875c9c3abe8a152f1c61d"
+        "tokenizer_sha256": "43ed773c70b196515a0880ac8c770cd2717b41fb48adc9e47f36af4ae0ad2809"
       },
       "provenance": {
         "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
@@ -160,7 +234,7 @@
         "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
       },
       "processing": {
-        "operator_inventory_sha256": "c784aa0c662d232db0ec7f8e7e3e57908d7a4faa3dc32d77a4e75ac45239d33e",
+        "operator_inventory_sha256": "70d797e4c50269b592081d64c222906677f1836a38662c1cfba2a1fcda45b521",
         "postprocessing_abi": "aurora-kws-candidate-v1",
         "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
         "shapes": {
@@ -170,7 +244,7 @@
           "sample_rate_hz": 16000,
           "window_size": 512
         },
-        "tokenizer_sha256": "d45e8e848289466065545a536181af6e61ab8a40fa2875c9c3abe8a152f1c61d"
+        "tokenizer_sha256": "43ed773c70b196515a0880ac8c770cd2717b41fb48adc9e47f36af4ae0ad2809"
       },
       "provenance": {
         "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
@@ -200,7 +274,7 @@
         "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
       },
       "processing": {
-        "operator_inventory_sha256": "c784aa0c662d232db0ec7f8e7e3e57908d7a4faa3dc32d77a4e75ac45239d33e",
+        "operator_inventory_sha256": "70d797e4c50269b592081d64c222906677f1836a38662c1cfba2a1fcda45b521",
         "postprocessing_abi": "aurora-kws-candidate-v1",
         "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
         "shapes": {
@@ -210,7 +284,7 @@
           "sample_rate_hz": 16000,
           "window_size": 512
         },
-        "tokenizer_sha256": "d45e8e848289466065545a536181af6e61ab8a40fa2875c9c3abe8a152f1c61d"
+        "tokenizer_sha256": "43ed773c70b196515a0880ac8c770cd2717b41fb48adc9e47f36af4ae0ad2809"
       },
       "provenance": {
         "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
@@ -240,7 +314,7 @@
         "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
       },
       "processing": {
-        "operator_inventory_sha256": "c784aa0c662d232db0ec7f8e7e3e57908d7a4faa3dc32d77a4e75ac45239d33e",
+        "operator_inventory_sha256": "70d797e4c50269b592081d64c222906677f1836a38662c1cfba2a1fcda45b521",
         "postprocessing_abi": "aurora-kws-candidate-v1",
         "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
         "shapes": {
@@ -250,7 +324,7 @@
           "sample_rate_hz": 16000,
           "window_size": 512
         },
-        "tokenizer_sha256": "d45e8e848289466065545a536181af6e61ab8a40fa2875c9c3abe8a152f1c61d"
+        "tokenizer_sha256": "43ed773c70b196515a0880ac8c770cd2717b41fb48adc9e47f36af4ae0ad2809"
       },
       "provenance": {
         "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
@@ -280,7 +354,7 @@
         "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
       },
       "processing": {
-        "operator_inventory_sha256": "c784aa0c662d232db0ec7f8e7e3e57908d7a4faa3dc32d77a4e75ac45239d33e",
+        "operator_inventory_sha256": "70d797e4c50269b592081d64c222906677f1836a38662c1cfba2a1fcda45b521",
         "postprocessing_abi": "aurora-kws-candidate-v1",
         "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
         "shapes": {
@@ -290,7 +364,7 @@
           "sample_rate_hz": 16000,
           "window_size": 512
         },
-        "tokenizer_sha256": "d45e8e848289466065545a536181af6e61ab8a40fa2875c9c3abe8a152f1c61d"
+        "tokenizer_sha256": "43ed773c70b196515a0880ac8c770cd2717b41fb48adc9e47f36af4ae0ad2809"
       },
       "provenance": {
         "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
@@ -302,46 +376,6 @@
       "sha256": "f8d067c3c84bcf9240988b17bd28ce7a21e86f5ad9c01a4f1d6e052f9c38053d",
       "task": "kws",
       "url": "/aurora/model-packs/candidates/sha256/f8d067c3c84bcf9240988b17bd28ce7a21e86f5ad9c01a4f1d6e052f9c38053d/keywords_raw.txt"
-    },
-    {
-      "asset_id": "test_wavs/test_keywords.txt",
-      "byte_size": 52,
-      "compression": "none",
-      "dependencies": [],
-      "file_id": "test-keywords",
-      "install_order": 7,
-      "installed_size": 52,
-      "license": {
-        "attribution": "sherpa-onnx GigaSpeech KWS demo assets; see pinned Phase 4 README/license evidence",
-        "commercial_use": true,
-        "identifier": "Apache-2.0",
-        "redistribution": "redistribution_allowed",
-        "text_sha256": "74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2",
-        "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
-      },
-      "processing": {
-        "operator_inventory_sha256": "c784aa0c662d232db0ec7f8e7e3e57908d7a4faa3dc32d77a4e75ac45239d33e",
-        "postprocessing_abi": "aurora-kws-candidate-v1",
-        "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
-        "shapes": {
-          "cache_state": [],
-          "channels": 1,
-          "frame_size": 512,
-          "sample_rate_hz": 16000,
-          "window_size": 512
-        },
-        "tokenizer_sha256": "d45e8e848289466065545a536181af6e61ab8a40fa2875c9c3abe8a152f1c61d"
-      },
-      "provenance": {
-        "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
-        "upstream_revision": "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a",
-        "upstream_source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2"
-      },
-      "raven": null,
-      "revocation": null,
-      "sha256": "fd9c3b504ab922bc96ce8613eff02193f8a5526fcf74a14df436c7af74ad649d",
-      "task": "kws",
-      "url": "/aurora/model-packs/candidates/sha256/fd9c3b504ab922bc96ce8613eff02193f8a5526fcf74a14df436c7af74ad649d/test_wavs-test_keywords.txt"
     }
   ],
   "languages": [
@@ -373,7 +407,7 @@
   "signature": {
     "algorithm": "ed25519",
     "key_id": "aurora-phase6-signed-candidate-20260807",
-    "value": "gwBF4MFdo2cwpfHkMFDSlpeXr5e4XJGReBiIjNPev+7h52Oc3FLWE+rknUTmbpVnrkXTkczW0nUewhVZ9ctmDg=="
+    "value": "yiA+UCNWwReGPzLidkQBC0Qtn2nJAJHIcMiQITIIiMcpApDnqlwj+rsCEGUwJMOXVRDH/laW3gacILd4fj2eBQ=="
   },
   "supersedes_pack_id": null,
   "tasks": [
@@ -414,8 +448,8 @@
       "os": "linux",
       "required_browser_features": [],
       "resource_budget": {
-        "max_download_bytes": 6283909,
-        "max_installed_bytes": 6283909,
+        "max_download_bytes": 6283857,
+        "max_installed_bytes": 6283857,
         "max_memory_bytes": 201326592
       },
       "revocation": null,

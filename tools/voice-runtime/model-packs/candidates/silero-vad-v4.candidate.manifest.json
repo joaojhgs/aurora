@@ -22,11 +22,16 @@
         "text_url": "/aurora/model-packs/candidates/sha256/2e63e9a38b6e8fc0c7bc37ce174caca1862870856c6daf5697cfb785e925520b/LICENSE-MIT"
       },
       "processing": {
-        "operator_inventory_sha256": "3882b0f78bc1737700e0aac02f44bca53f2de59e0b57f31b958427054bc7d37c",
+        "operator_inventory_sha256": "f1164cbf81540212dd0814b31000f215cabe8332c81d51687fb08898f89238b6",
         "postprocessing_abi": "aurora-vad-candidate-v1",
         "preprocessing_abi": "sherpa-onnx-1.13.4-vad-pcm16k-mono",
         "shapes": {
-          "cache_state": [],
+          "cache_state": [
+            "h",
+            "c",
+            "hn",
+            "cn"
+          ],
           "channels": 1,
           "frame_size": 512,
           "sample_rate_hz": 16000,
@@ -75,7 +80,7 @@
   "signature": {
     "algorithm": "ed25519",
     "key_id": "aurora-phase6-signed-candidate-20260807",
-    "value": "ANEJXdQuqRZPjzqrmFypI9oUcZ+1hRhPVke8HzAEjBUIMV+egFxELjLO+Co3sNohE2m8WKrvWieatpbbKncUCQ=="
+    "value": "sspn+16N9MnauXXpHFaem986pHzgKbpZOHg6VnfKpMHJePUVO3CRberLQoyYTUmqe9pgHD70Vo7eQyk5MiBcAA=="
   },
   "supersedes_pack_id": null,
   "tasks": [

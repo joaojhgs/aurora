@@ -261,11 +261,14 @@
       "size_bytes": 30412256
     }
   ],
-  "parser_version": "onnxruntime 1.20.1",
-  "pinned_runtime_source": {
-    "onnxruntime_version": "v1.27.0",
-    "revision": "8f0278c77bf44b0cc83c098c6c722b92a36ac4b5"
-  },
+  "parser_runtime_revision": "8f0278c77bf44b0cc83c098c6c722b92a36ac4b5",
+  "parser_version": "onnxruntime 1.27.0",
   "schema_version": 1,
-  "source_archive_sha256": "9ec31b342d8fa3240c3b81b8f82e1cf7e3ac467c93ca5a999b741d5887164f8d"
+  "source_archive_sha256": "9ec31b342d8fa3240c3b81b8f82e1cf7e3ac467c93ca5a999b741d5887164f8d",
+  "source_runtime": {
+    "onnxruntime_revision": "8f0278c77bf44b0cc83c098c6c722b92a36ac4b5",
+    "onnxruntime_version": "v1.27.0",
+    "sherpa_onnx_revision": "142807252687d81b40d6315f23470a1512a00de3",
+    "sherpa_onnx_version": "v1.13.4"
+  }
 }

@@ -2,7 +2,52 @@
   "asset_sha256": "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28",
   "asset_size_bytes": 1807522,
   "format": "onnx",
-  "inventory_method": "recursive bounded protobuf scan of ONNX graph.node.op_type and AttributeProto subgraphs",
+  "inventory_method": "recursive ONNX scan with subgraph traversal and model IR/opset metadata",
+  "metadata": {
+    "ir_version": 8,
+    "model_domain": "",
+    "model_version": 0,
+    "opset_imports": [
+      {
+        "domain": "ai.onnx",
+        "version": 16
+      },
+      {
+        "domain": "ai.onnx.ml",
+        "version": 3
+      },
+      {
+        "domain": "ai.onnx.training",
+        "version": 1
+      },
+      {
+        "domain": "com.ms.internal.nhwc",
+        "version": 1
+      },
+      {
+        "domain": "ai.onnx.preview.training",
+        "version": 1
+      },
+      {
+        "domain": "com.microsoft",
+        "version": 1
+      },
+      {
+        "domain": "com.microsoft.experimental",
+        "version": 1
+      },
+      {
+        "domain": "com.microsoft.nchwc",
+        "version": 1
+      },
+      {
+        "domain": "org.pytorch.aten",
+        "version": 1
+      }
+    ],
+    "producer_name": "pytorch",
+    "producer_version": "1.12.0"
+  },
   "operator_inventory": {
     "node_count": 250,
     "operator_counts": {
