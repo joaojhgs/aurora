@@ -141,8 +141,8 @@ fn parsed_input_shape(parsed: &Value, input: &Value) -> Value {
 
 #[test]
 fn descriptors_match_the_backend_inventory() {
-    assert_eq!(SCHEMA_DESCRIPTORS.len(), 68);
-    assert_eq!(METHOD_DESCRIPTORS.len(), 32);
+    assert_eq!(SCHEMA_DESCRIPTORS.len(), 74);
+    assert_eq!(METHOD_DESCRIPTORS.len(), 35);
     assert_eq!(EVENT_DESCRIPTORS.len(), 3);
     assert_eq!(ENVELOPE_DESCRIPTORS.len(), 1);
 
@@ -151,6 +151,16 @@ fn descriptors_match_the_backend_inventory() {
     assert_eq!(synthesize.route_path, "/api/TTS/Synthesize");
     assert_eq!(synthesize.required_permissions, &["TTS.Synthesize"]);
     assert_eq!(synthesize.callable_feature_ids, &["speech_synthesis"]);
+
+    for method_id in [
+        ids::STT_COORDINATOR_CAPTURE_PREPARE,
+        ids::STT_COORDINATOR_CAPTURE_RELEASE,
+        ids::STT_COORDINATOR_CAPTURE_STATUS,
+    ] {
+        let capture = method_by_id(method_id).expect("native capture handoff descriptor");
+        assert_eq!(capture.required_permissions, &["STTCoordinator.manage"]);
+        assert_eq!(capture.callable_feature_ids, &["listening_session_control"]);
+    }
 
     let audio = event_by_topic("TTS.AudioChunk").expect("TTS.AudioChunk descriptor");
     assert!(audio.bounded);
