@@ -69,6 +69,10 @@ def test_manifest_selects_upstream_silero_and_piper_ljspeech() -> None:
         "espeak-ng-data",
         "tokens.txt",
     }
+    piper_files = {item["path"]: item for item in piper["contained_files"]}
+    assert piper_files["espeak-ng-data"]["sha256"] == (
+        "eb8b19ec00b564ee1725efe626775ae20deef533a43be16d8f9310077daf5cb3"
+    )
 
     assert denials["pockettts-standard-voice-packs"]["status"] == "blocked"
     assert "non-commercial" in denials["pockettts-standard-voice-packs"]["reason"]

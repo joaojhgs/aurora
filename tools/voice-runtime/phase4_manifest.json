@@ -312,7 +312,7 @@
         {
           "path": "espeak-ng-data",
           "size_bytes": 17991651,
-          "sha256": "7c94af99634b3862e25fe5a6eb65a51eb2dd4aa1496fc5e674d3f6fb0f4c6fd1",
+          "sha256": "eb8b19ec00b564ee1725efe626775ae20deef533a43be16d8f9310077daf5cb3",
           "aggregate": "sha256 of sorted relative-path, size, and file-hash records for 355 files"
         }
       ]
