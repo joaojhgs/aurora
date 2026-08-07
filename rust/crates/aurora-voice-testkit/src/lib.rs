@@ -12,6 +12,7 @@ use aurora_voice_core::{
     TaskReadiness, TaskRequest, TimestampMicros, TransitionReason, VoiceCaptureLease,
     VoiceCoreError, VoiceTask,
 };
+use aurora_voice_engine::EngineFaultCode;
 use std::collections::VecDeque;
 
 pub use model_store::*;
@@ -179,7 +180,7 @@ impl TaskProvider for FakeEngine {
         if self
             .capabilities()
             .iter()
-            .any(|capability| capability.task == request.task)
+            .any(|capability| capability.task() == request.task)
         {
             Ok(())
         } else {
@@ -217,7 +218,7 @@ impl SpeechEngine for FakeEngine {
         }
         if self.fail_transcribe {
             return Err(EngineError::ProviderFault {
-                code: "fake_transcribe".to_owned(),
+                code: EngineFaultCode::Provider,
             });
         }
         if request.task != VoiceTask::SpeechToText || frames == 0 {
@@ -237,7 +238,7 @@ impl SpeechEngine for FakeEngine {
         }
         if self.fail_synthesize {
             return Err(EngineError::ProviderFault {
-                code: "fake_synthesize".to_owned(),
+                code: EngineFaultCode::Provider,
             });
         }
         if request.task != VoiceTask::TextToSpeech {
