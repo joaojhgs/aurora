@@ -463,6 +463,7 @@ impl NativeGatewayTransport {
                 .invoke_assistant_request(request.clone(), cancellation.clone())
                 .await?;
             let mut text = String::new();
+            let mut assembler = AssistantStreamAssembler::new();
             loop {
                 cancellation_check(&cancellation)?;
                 let Some(event) = stream.next_event().await? else {
@@ -470,10 +471,19 @@ impl NativeGatewayTransport {
                 };
                 match event.assistant_stream_event(&request)? {
                     AssistantStreamRead::Ignore => continue,
-                    AssistantStreamRead::Delta(delta) => {
+                    AssistantStreamRead::Delta { sequence, delta } => {
+                        if !assembler.accept(sequence)? {
+                            continue;
+                        }
                         append_bounded(&mut text, &delta, self.limits.max_response_bytes)?;
                     }
-                    AssistantStreamRead::Completed(final_text) => {
+                    AssistantStreamRead::Completed {
+                        sequence,
+                        final_text,
+                    } => {
+                        if !assembler.accept(sequence)? {
+                            continue;
+                        }
                         if !final_text.is_empty() {
                             replace_bounded(&mut text, final_text, self.limits.max_response_bytes)?;
                         }
@@ -549,6 +559,9 @@ impl NativeGatewayTransport {
             serde_json::from_value(response).map_err(|_| TransportError::InvalidResponse)?;
         let response =
             serde_json::to_value(typed_response).map_err(|_| TransportError::InvalidResponse)?;
+        validate_optional_response_id(&response, "session_id", &request.session_id)?;
+        validate_optional_response_id(&response, "request_id", &request.request_id)?;
+        validate_optional_response_id(&response, "correlation_id", &request.correlation_id)?;
         if !request.stream {
             self.active_assistant = None;
         }
@@ -1047,9 +1060,34 @@ fn replace_bounded(
 
 enum AssistantStreamRead {
     Ignore,
-    Delta(String),
-    Completed(String),
+    Delta { sequence: u64, delta: String },
+    Completed { sequence: u64, final_text: String },
     Failed,
+}
+
+#[derive(Debug)]
+struct AssistantStreamAssembler {
+    next_sequence: u64,
+}
+
+impl AssistantStreamAssembler {
+    fn new() -> Self {
+        Self { next_sequence: 1 }
+    }
+
+    fn accept(&mut self, sequence: u64) -> Result<bool, TransportError> {
+        if sequence == self.next_sequence {
+            self.next_sequence = self
+                .next_sequence
+                .checked_add(1)
+                .ok_or(TransportError::InvalidStream)?;
+            return Ok(true);
+        }
+        if sequence < self.next_sequence {
+            return Ok(false);
+        }
+        Err(TransportError::InvalidStream)
+    }
 }
 
 impl GatewayEvent {
@@ -1069,6 +1107,10 @@ impl GatewayEvent {
         let typed: models::AssistantStreamEvent =
             serde_json::from_value(payload.clone()).map_err(|_| TransportError::InvalidPayload)?;
         let typed = serde_json::to_value(typed).map_err(|_| TransportError::InvalidPayload)?;
+        let payload_kind = required_string(&typed, "kind").ok_or(TransportError::InvalidPayload)?;
+        if self.kind != payload_kind {
+            return Err(TransportError::InvalidStream);
+        }
         if optional_string(&typed, "session_id").as_deref() != Some(request.session_id.as_str())
             || optional_string(&typed, "request_id").as_deref() != Some(request.request_id.as_str())
             || optional_string(&typed, "correlation_id").as_deref()
@@ -1076,18 +1118,33 @@ impl GatewayEvent {
         {
             return Ok(AssistantStreamRead::Ignore);
         }
-        match required_string(&typed, "kind").as_deref() {
-            Some("assistant.delta") => Ok(AssistantStreamRead::Delta(
-                optional_string(&typed, "delta").unwrap_or_default(),
-            )),
-            Some("assistant.completed") if bool_field(&typed, "is_final") => Ok(
-                AssistantStreamRead::Completed(optional_string(&typed, "text").unwrap_or_default()),
-            ),
-            Some("assistant.failed") if bool_field(&typed, "is_final") => {
-                Ok(AssistantStreamRead::Failed)
+        let sequence = required_u64(&typed, "sequence").ok_or(TransportError::InvalidPayload)?;
+        match payload_kind.as_str() {
+            "assistant.delta" => Ok(AssistantStreamRead::Delta {
+                sequence,
+                delta: optional_string(&typed, "delta").unwrap_or_default(),
+            }),
+            "assistant.completed" if bool_field(&typed, "is_final") => {
+                Ok(AssistantStreamRead::Completed {
+                    sequence,
+                    final_text: optional_string(&typed, "text").unwrap_or_default(),
+                })
             }
+            "assistant.failed" if bool_field(&typed, "is_final") => Ok(AssistantStreamRead::Failed),
             _ => Ok(AssistantStreamRead::Ignore),
         }
+    }
+}
+
+fn validate_optional_response_id(
+    value: &Value,
+    field: &str,
+    expected: &str,
+) -> Result<(), TransportError> {
+    match value.get(field) {
+        None | Some(Value::Null) => Ok(()),
+        Some(Value::String(actual)) if actual == expected => Ok(()),
+        Some(_) => Err(TransportError::InvalidResponse),
     }
 }
 
@@ -1105,6 +1162,10 @@ fn optional_string(value: &Value, field: &str) -> Option<String> {
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
         .map(str::to_owned)
+}
+
+fn required_u64(value: &Value, field: &str) -> Option<u64> {
+    value.get(field).and_then(Value::as_u64)
 }
 
 fn bool_field(value: &Value, field: &str) -> bool {
@@ -1404,6 +1465,52 @@ mod tests {
             )
             .await;
         assert_eq!(result, Err(TransportError::ResponseTooLarge));
+    }
+
+    #[tokio::test]
+    async fn assistant_turn_rejects_mismatched_optional_response_ids_and_cleans_up() {
+        for (generation, field) in [
+            (13, "session_id"),
+            (14, "request_id"),
+            (15, "correlation_id"),
+        ] {
+            let turn_request = assistant_request(generation, "hello aurora");
+            let mut response_body = serde_json::json!({
+                "text": "answer ready",
+                "metadata": {},
+                "session_id": turn_request.session_id,
+                "request_id": turn_request.request_id,
+                "correlation_id": turn_request.correlation_id,
+            });
+            response_body[field] = serde_json::json!("wrong-id");
+            let response_body = response_body.to_string();
+            let server = FixtureServer::responses([
+                json_response(response_body.as_bytes()),
+                interrupt_response(generation),
+            ]);
+            let mut transport = NativeGatewayTransport::new(
+                server.base_url.clone(),
+                GatewayAuth::None,
+                loopback_limits(),
+            )
+            .expect("transport");
+
+            let result = transport
+                .invoke_assistant_turn(turn_request, CancellationToken::new())
+                .await;
+
+            assert_eq!(result, Err(TransportError::InvalidResponse), "{field}");
+            assert_eq!(
+                transport.cancel_session(Generation(generation)).await,
+                Err(VoiceCoreError::TransportFault {
+                    code: "no_active_session".to_owned()
+                }),
+                "{field}"
+            );
+            let _assistant_request = server.request.recv().expect("assistant request");
+            let interrupt_request = server.request.recv().expect("interrupt request");
+            assert!(interrupt_request.starts_with("POST /api/Orchestrator/Interrupt HTTP/1.1"));
+        }
     }
 
     #[tokio::test]
@@ -1709,6 +1816,127 @@ mod tests {
         assert!(interrupt_request.contains("idempotency-key: voice-interrupt-idem-"));
     }
 
+    #[tokio::test]
+    async fn streaming_duplicate_replay_is_ignored_without_corrupting_text() {
+        let mut stream_body = Vec::new();
+        stream_body.extend(assistant_frame_for(
+            16,
+            assistant_payload_with_sequence_for(16, 1, "assistant.delta", "he", "", false),
+            serde_json::json!({}),
+        ));
+        stream_body.extend(assistant_frame_for(
+            16,
+            assistant_payload_with_sequence_for(16, 2, "assistant.delta", "ll", "", false),
+            serde_json::json!({}),
+        ));
+        stream_body.extend(assistant_frame_for(
+            16,
+            assistant_payload_with_sequence_for(16, 1, "assistant.delta", "MALICIOUS", "", false),
+            serde_json::json!({}),
+        ));
+        stream_body.extend(assistant_frame_for(
+            16,
+            assistant_payload_with_sequence_for(16, 3, "assistant.completed", "", "hello", true),
+            serde_json::json!({"kind": "assistant.completed"}),
+        ));
+        let server =
+            FixtureServer::responses([sse_response(&stream_body), assistant_ack_response(16)]);
+        let mut transport = NativeGatewayTransport::new(
+            server.base_url.clone(),
+            GatewayAuth::None,
+            loopback_limits(),
+        )
+        .expect("transport");
+
+        let response = transport
+            .invoke_assistant_streaming(
+                assistant_request(16, "dedupe stream"),
+                CancellationToken::new(),
+            )
+            .await
+            .expect("assistant stream");
+
+        assert_eq!(response.text, "hello");
+        let _stream_request = server.request.recv().expect("stream subscription");
+        let _assistant_request = server.request.recv().expect("assistant request");
+    }
+
+    #[tokio::test]
+    async fn streaming_rejects_gap_reorder_and_bad_completion_sequence() {
+        for (generation, frames) in [
+            (
+                17,
+                vec![assistant_frame_for(
+                    17,
+                    assistant_payload_with_sequence_for(
+                        17,
+                        2,
+                        "assistant.delta",
+                        "out-of-order",
+                        "",
+                        false,
+                    ),
+                    serde_json::json!({}),
+                )],
+            ),
+            (
+                18,
+                vec![
+                    assistant_frame_for(
+                        18,
+                        assistant_payload_with_sequence_for(
+                            18,
+                            1,
+                            "assistant.delta",
+                            "hel",
+                            "",
+                            false,
+                        ),
+                        serde_json::json!({}),
+                    ),
+                    assistant_frame_for(
+                        18,
+                        assistant_payload_with_sequence_for(
+                            18,
+                            3,
+                            "assistant.completed",
+                            "",
+                            "hello",
+                            true,
+                        ),
+                        serde_json::json!({"kind": "assistant.completed"}),
+                    ),
+                ],
+            ),
+        ] {
+            let stream_body = frames.into_iter().flatten().collect::<Vec<_>>();
+            let server = FixtureServer::responses([
+                sse_response(&stream_body),
+                assistant_ack_response(generation),
+                interrupt_response(generation),
+            ]);
+            let mut transport = NativeGatewayTransport::new(
+                server.base_url.clone(),
+                GatewayAuth::None,
+                loopback_limits(),
+            )
+            .expect("transport");
+
+            let result = transport
+                .invoke_assistant_streaming(
+                    assistant_request(generation, "bad sequence"),
+                    CancellationToken::new(),
+                )
+                .await;
+
+            assert_eq!(result, Err(TransportError::InvalidStream));
+            let _stream_request = server.request.recv().expect("stream subscription");
+            let _assistant_request = server.request.recv().expect("assistant request");
+            let interrupt_request = server.request.recv().expect("interrupt request");
+            assert!(interrupt_request.starts_with("POST /api/Orchestrator/Interrupt HTTP/1.1"));
+        }
+    }
+
     fn assistant_frame(payload: Value, overrides: Value) -> Vec<u8> {
         assistant_frame_for(9, payload, overrides)
     }
@@ -1744,13 +1972,24 @@ mod tests {
         text: &str,
         is_final: bool,
     ) -> Value {
+        assistant_payload_with_sequence_for(generation, 1, kind, delta, text, is_final)
+    }
+
+    fn assistant_payload_with_sequence_for(
+        generation: u64,
+        sequence: u64,
+        kind: &str,
+        delta: &str,
+        text: &str,
+        is_final: bool,
+    ) -> Value {
         let request = assistant_request(generation, "payload");
         serde_json::json!({
             "kind": kind,
             "delta": delta,
             "text": text,
             "is_final": is_final,
-            "sequence": 0,
+            "sequence": sequence,
             "session_id": request.session_id,
             "request_id": request.request_id,
             "correlation_id": request.correlation_id,
@@ -1801,6 +2040,29 @@ mod tests {
     }
 
     #[test]
+    fn assistant_sse_rejects_envelope_payload_kind_mismatch() {
+        let request = assistant_request(9, "hello");
+        let allowed = BTreeSet::from([ids::ORCHESTRATOR_RESPONSE.to_owned()]);
+        let kinds = BTreeSet::from(["assistant.completed".to_owned()]);
+        let event = parse_event_frame(
+            &assistant_frame(
+                assistant_payload("assistant.delta", "hidden", "", false),
+                serde_json::json!({"kind": "assistant.completed"}),
+            ),
+            &allowed,
+            &kinds,
+            Some(request.correlation_id.as_str()),
+        )
+        .expect("mismatched kind frame")
+        .expect("mismatched kind event");
+
+        assert!(matches!(
+            event.assistant_stream_event(&request),
+            Err(TransportError::InvalidStream)
+        ));
+    }
+
+    #[test]
     fn assistant_sse_accepts_correlated_delta_completed_and_failed() {
         let request = assistant_request(9, "hello");
         let allowed = BTreeSet::from([ids::ORCHESTRATOR_RESPONSE.to_owned()]);
@@ -1819,7 +2081,7 @@ mod tests {
         .expect("delta event");
         assert!(matches!(
             delta.assistant_stream_event(&request),
-            Ok(AssistantStreamRead::Delta(value)) if value == "hel"
+            Ok(AssistantStreamRead::Delta { sequence: 1, delta }) if delta == "hel"
         ));
 
         let completed = parse_event_frame(
@@ -1835,7 +2097,7 @@ mod tests {
         .expect("completed event");
         assert!(matches!(
             completed.assistant_stream_event(&request),
-            Ok(AssistantStreamRead::Completed(value)) if value == "hello there"
+            Ok(AssistantStreamRead::Completed { sequence: 1, final_text }) if final_text == "hello there"
         ));
 
         let failed = parse_event_frame(
