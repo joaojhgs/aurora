@@ -6,8 +6,9 @@ DOCKER_COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker
 # Match Tiltfile `project_name` so `make docker-process-up` and `tilt up` use the same project/images
 AURORA_COMPOSE_PROJECT ?= aurora-process
 DEP_ANALYSIS_DIR ?= .artifacts/dependency-analysis
+RUST_TOOLCHAIN ?= 1.88.0
 
-.PHONY: help setup lint test format check check-docs check-config-generated check-sdk-backend-contracts coverage clean docker-process-mode docker-process-up docker-process-down docker-process-logs docker-process-ps docker-process-restart compose-validate-tilt tilt-up tilt-compose-rebuild docker-process-rebuild-tilt docker-db-build-openai docker-db-build-local docker-db-build docker-build-db-openai docker-build-db-local docker-orchestrator-build-openai docker-orchestrator-build-hf-endpoint docker-orchestrator-build-hf-local docker-orchestrator-build-llama-cpp docker-orchestrator-build-llama-cpp-cuda docker-orchestrator-build
+.PHONY: help setup lint test format check check-docs check-config-generated check-sdk-backend-contracts check-rust-voice coverage clean docker-process-mode docker-process-up docker-process-down docker-process-logs docker-process-ps docker-process-restart compose-validate-tilt tilt-up tilt-compose-rebuild docker-process-rebuild-tilt docker-db-build-openai docker-db-build-local docker-db-build docker-build-db-openai docker-build-db-local docker-orchestrator-build-openai docker-orchestrator-build-hf-endpoint docker-orchestrator-build-hf-local docker-orchestrator-build-llama-cpp docker-orchestrator-build-llama-cpp-cuda docker-orchestrator-build
 
 # Default target when just running 'make'
 help:
@@ -16,9 +17,10 @@ help:
 	@echo "make setup       - Set up development environment"
 	@echo "make lint        - Run linting on all files (ruff)"
 	@echo "make format      - Run auto-formatting (ruff)"
-	@echo "make check       - Run all checks (lint + format + docs hygiene)"
+	@echo "make check       - Run all checks (lint + format + docs + contracts + Rust voice)"
 	@echo "make check-config-generated - Verify generated config artifacts are current"
 	@echo "make check-sdk-backend-contracts - Regenerate and verify SDK backend contracts"
+	@echo "make check-rust-voice - Run Rust voice fmt, clippy, native, and browser WASM tests"
 	@echo "make check-docs   - Validate documentation links and hygiene"
 	@echo "make test        - Run all tests"
 	@echo "make unit        - Run unit tests only"
@@ -82,6 +84,7 @@ check:
 	ruff format --check app tests scripts
 	$(MAKE) check-docs
 	$(MAKE) check-sdk-backend-contracts
+	$(MAKE) check-rust-voice
 	# mypy --explicit-package-bases app tests scripts
 
 check-docs:
@@ -156,6 +159,15 @@ check-sdk-backend-contracts:
 		tests/fixtures/local_speech/runtime/contracts/backend_contract_parse_vectors.json
 	@cargo +1.88.0 check --manifest-path rust/Cargo.toml -p aurora-contracts
 	@echo "SDK and Rust backend contract artifacts are current."
+
+check-rust-voice:
+	@echo "Checking the Rust voice runtime and browser WASM core..."
+	@command -v wasm-bindgen-test-runner >/dev/null 2>&1 || \
+		(echo "wasm-bindgen-test-runner 0.2.126 is required"; exit 1)
+	@cargo +$(RUST_TOOLCHAIN) fmt --manifest-path rust/Cargo.toml --all --check
+	@cargo +$(RUST_TOOLCHAIN) clippy --manifest-path rust/Cargo.toml --locked --workspace --all-targets -- -D warnings
+	@cargo +$(RUST_TOOLCHAIN) test --manifest-path rust/Cargo.toml --locked --workspace
+	@cd rust && cargo +$(RUST_TOOLCHAIN) test --locked -p aurora-voice-wasm --target wasm32-unknown-unknown
 
 
 # Docker Process Mode Commands
