@@ -73,7 +73,16 @@ pub struct TransportLimits {
     pub request_timeout: Duration,
     pub stream_idle_timeout: Duration,
     pub allow_loopback_http: bool,
-    pub allow_remote_microphone_audio: bool,
+    pub microphone_audio_policy: MicrophoneAudioPolicy,
+}
+
+/// Policy for generated Gateway methods whose input schema carries audio data.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MicrophoneAudioPolicy {
+    #[default]
+    Blocked,
+    LoopbackOnly,
+    ExplicitRemoteConsent,
 }
 
 impl Default for TransportLimits {
@@ -85,7 +94,7 @@ impl Default for TransportLimits {
             request_timeout: Duration::from_secs(30),
             stream_idle_timeout: Duration::from_secs(45),
             allow_loopback_http: false,
-            allow_remote_microphone_audio: false,
+            microphone_audio_policy: MicrophoneAudioPolicy::Blocked,
         }
     }
 }
@@ -319,10 +328,8 @@ impl NativeGatewayTransport {
         let descriptor = method_by_id(method_id).ok_or(TransportError::UnknownMethod)?;
         let input_schema =
             schema_by_id(descriptor.input_schema_id).ok_or(TransportError::InvalidConfiguration)?;
-        if schema_contains_binary(input_schema.schema_json)?
-            && !self.limits.allow_remote_microphone_audio
-        {
-            return Err(TransportError::RemoteAudioBlocked);
+        if schema_contains_binary(input_schema.schema_json)? {
+            self.validate_microphone_audio_policy()?;
         }
         let payload = normalize_generated_contract(descriptor.input_schema_id, payload)
             .map_err(|_| TransportError::InvalidPayload)?;
@@ -366,6 +373,15 @@ impl NativeGatewayTransport {
             .map_err(|_| TransportError::InvalidResponse)?;
         normalize_generated_contract(descriptor.output_schema_id, value)
             .map_err(|_| TransportError::InvalidResponse)
+    }
+
+    fn validate_microphone_audio_policy(&self) -> Result<(), TransportError> {
+        match self.limits.microphone_audio_policy {
+            MicrophoneAudioPolicy::Blocked => Err(TransportError::RemoteAudioBlocked),
+            MicrophoneAudioPolicy::LoopbackOnly if is_loopback_endpoint(&self.base_url) => Ok(()),
+            MicrophoneAudioPolicy::LoopbackOnly => Err(TransportError::RemoteAudioBlocked),
+            MicrophoneAudioPolicy::ExplicitRemoteConsent => Ok(()),
+        }
     }
 
     /// Open an authenticated, bounded SSE connection for generated event topics.
@@ -847,14 +863,16 @@ fn cancellation_check(cancellation: &CancellationToken) -> Result<(), TransportE
 
 fn validate_endpoint(url: &Url, allow_loopback_http: bool) -> Result<(), TransportError> {
     let allowed = url.scheme() == "https"
-        || (allow_loopback_http
-            && url.scheme() == "http"
-            && matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1")));
+        || (allow_loopback_http && url.scheme() == "http" && is_loopback_endpoint(url));
     if allowed && url.username().is_empty() && url.password().is_none() {
         Ok(())
     } else {
         Err(TransportError::UnsafeEndpoint)
     }
+}
+
+fn is_loopback_endpoint(url: &Url) -> bool {
+    matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1"))
 }
 
 fn validate_identifier(value: &str) -> Result<(), TransportError> {
@@ -1319,6 +1337,22 @@ mod tests {
         }
     }
 
+    fn loopback_microphone_limits() -> TransportLimits {
+        TransportLimits {
+            allow_loopback_http: true,
+            microphone_audio_policy: MicrophoneAudioPolicy::LoopbackOnly,
+            ..TransportLimits::default()
+        }
+    }
+
+    fn explicit_microphone_limits() -> TransportLimits {
+        TransportLimits {
+            allow_loopback_http: true,
+            microphone_audio_policy: MicrophoneAudioPolicy::ExplicitRemoteConsent,
+            ..TransportLimits::default()
+        }
+    }
+
     fn assistant_namespace() -> AssistantTurnNamespace {
         AssistantTurnNamespace::new("native-test").expect("assistant namespace")
     }
@@ -1640,7 +1674,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn microphone_binary_routes_are_blocked_before_network() {
+    async fn microphone_audio_routes_are_blocked_by_default_before_network() {
         let base_url = Url::parse("http://127.0.0.1:9/").expect("URL");
         let transport = NativeGatewayTransport::new(base_url, GatewayAuth::None, loopback_limits())
             .expect("transport");
@@ -1668,6 +1702,121 @@ mod tests {
             )
             .await;
         assert_eq!(finite_audio, Err(TransportError::RemoteAudioBlocked));
+    }
+
+    #[tokio::test]
+    async fn loopback_microphone_policy_allows_only_loopback_audio_routes() {
+        let response_body = br#"{"text":"hello","duration_ms":10.0,"model_used":"realtime","confidence":null,"language":null}"#;
+        let server = FixtureServer::one_response(json_response(response_body));
+        let transport = NativeGatewayTransport::new(
+            server.base_url.clone(),
+            GatewayAuth::None,
+            loopback_microphone_limits(),
+        )
+        .expect("transport");
+
+        let result = transport
+            .invoke_generated(
+                "Transcription.Transcribe",
+                serde_json::json!({
+                    "audio_data": "cGNt",
+                    "format": "raw",
+                    "sample_rate": 16000,
+                    "channels": 1,
+                    "model": "realtime"
+                }),
+                &NativeRequestOptions::new("voice-request-loopback").expect("options"),
+                &CancellationToken::new(),
+            )
+            .await
+            .expect("loopback audio route");
+
+        assert_eq!(result["text"], "hello");
+        let request = server.request.recv().expect("captured request");
+        assert!(request.starts_with("POST /api/Transcription/Transcribe HTTP/1.1"));
+        assert_eq!(request_body(&request)["audio_data"], "cGNt");
+
+        let remote_transport = NativeGatewayTransport::new(
+            Url::parse("https://remote.example.invalid/").expect("URL"),
+            GatewayAuth::None,
+            TransportLimits {
+                microphone_audio_policy: MicrophoneAudioPolicy::LoopbackOnly,
+                ..TransportLimits::default()
+            },
+        )
+        .expect("transport");
+        assert_eq!(
+            remote_transport.validate_microphone_audio_policy(),
+            Err(TransportError::RemoteAudioBlocked)
+        );
+    }
+
+    #[test]
+    fn explicit_microphone_consent_allows_configured_remote_audio_routes() {
+        let remote_transport = NativeGatewayTransport::new(
+            Url::parse("https://remote.example.invalid/").expect("URL"),
+            GatewayAuth::Bearer("do-not-render".to_owned()),
+            TransportLimits {
+                microphone_audio_policy: MicrophoneAudioPolicy::ExplicitRemoteConsent,
+                ..TransportLimits::default()
+            },
+        )
+        .expect("transport");
+
+        assert_eq!(remote_transport.validate_microphone_audio_policy(), Ok(()));
+
+        let blocked_transport = NativeGatewayTransport::new(
+            Url::parse("https://remote.example.invalid/").expect("URL"),
+            GatewayAuth::None,
+            TransportLimits::default(),
+        )
+        .expect("transport");
+        assert_eq!(
+            blocked_transport.validate_microphone_audio_policy(),
+            Err(TransportError::RemoteAudioBlocked)
+        );
+    }
+
+    #[tokio::test]
+    async fn non_audio_generated_methods_are_unaffected_by_microphone_policy() {
+        let response_body = br#"{"voices":[],"capability_revision":0,"correlation_id":null}"#;
+        let server = FixtureServer::one_response(json_response(response_body));
+        let transport = NativeGatewayTransport::new(
+            server.base_url.clone(),
+            GatewayAuth::None,
+            loopback_limits(),
+        )
+        .expect("transport");
+
+        let result = transport
+            .invoke_generated(
+                "TTS.ListVoices",
+                serde_json::json!({}),
+                &NativeRequestOptions::new("voice-request-non-audio").expect("options"),
+                &CancellationToken::new(),
+            )
+            .await
+            .expect("non-audio route");
+
+        assert!(result.is_object());
+        let request = server.request.recv().expect("captured request");
+        assert!(request.starts_with("POST /api/TTS/ListVoices HTTP/1.1"));
+    }
+
+    #[test]
+    fn microphone_audio_policy_debug_is_redacted() {
+        let transport = NativeGatewayTransport::new(
+            Url::parse("https://remote.example.invalid/secret/audio_data").expect("URL"),
+            GatewayAuth::Bearer("do-not-render".to_owned()),
+            explicit_microphone_limits(),
+        )
+        .expect("transport");
+        let rendered = format!("{transport:?}");
+
+        assert!(rendered.contains("ExplicitRemoteConsent"));
+        assert!(!rendered.contains("do-not-render"));
+        assert!(!rendered.contains("audio_data"));
+        assert!(!rendered.contains("/secret"));
     }
 
     #[tokio::test]
