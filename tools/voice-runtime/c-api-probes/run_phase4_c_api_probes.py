@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+ARTIFACT_ROOT_ENV = "AURORA_VOICE_P4_ARTIFACT_ROOT"
 MOONSHINE_NAME = "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27"
 KWS_NAME = "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01"
 TTS_NAME = "vits-piper-en_US-ljspeech-medium"
@@ -27,12 +28,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--artifact-root",
         type=Path,
-        default=_artifact_root_default(),
-        required=_artifact_root_default() is None,
-        help=(
-            "Phase 4 artifact root containing builds/ and models/. "
-            "May also be supplied with AURORA_VOICE_P4_ARTIFACT_ROOT."
-        ),
+        default=None,
+        help=f"Phase 4 artifact root containing builds/ and models/. May also be set by {ARTIFACT_ROOT_ENV}.",
     )
     parser.add_argument("--install-dir", type=Path, help="sherpa install directory.")
     parser.add_argument("--models-dir", type=Path, help="directory containing extracted models.")
@@ -69,7 +66,11 @@ def require_path(path: Path, label: str) -> Path:
 
 
 def resolve_paths(args: argparse.Namespace) -> dict[str, Path]:
-    artifact_root = args.artifact_root.resolve()
+    artifact_root_arg = args.artifact_root or os.environ.get(ARTIFACT_ROOT_ENV)
+    if artifact_root_arg is None:
+        raise ProbeError(f"missing --artifact-root or {ARTIFACT_ROOT_ENV}")
+
+    artifact_root = Path(artifact_root_arg).resolve()
     install_dir = (args.install_dir or artifact_root / "builds/linux-x86_64/install").resolve()
     models_dir = (args.models_dir or artifact_root / "models/extracted").resolve()
     build_dir = (args.build_dir or artifact_root / "reports/c-api-probes/build").resolve()

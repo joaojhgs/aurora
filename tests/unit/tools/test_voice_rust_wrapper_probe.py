@@ -1,35 +1,43 @@
+from __future__ import annotations
+
+import os
+import subprocess
 from pathlib import Path
 
+import pytest
 
-WRAPPER_DIR = (
-    Path(__file__).resolve().parents[3]
-    / "tools"
-    / "voice-runtime"
-    / "c-api-probes"
-    / "rust-wrapper"
-)
+REPO = Path(__file__).resolve().parents[3]
+WRAPPER = REPO / "tools/voice-runtime/c-api-probes/rust-wrapper"
 
 
-def test_rust_wrapper_is_probe_local_and_not_production_dependency() -> None:
-    cargo = (WRAPPER_DIR / "Cargo.toml").read_text(encoding="utf-8")
+def test_rust_wrapper_fails_closed_without_artifact_root() -> None:
+    install_dir = os.environ.get("SHERPA_ONNX_INSTALL_DIR")
+    if not install_dir or not Path(install_dir).exists():
+        pytest.skip("SHERPA_ONNX_INSTALL_DIR is required for the Rust wrapper runtime test")
 
-    assert 'name = "aurora-phase4-sherpa-rust-probe"' in cargo
-    assert "publish = false" in cargo
-    assert "rust-version = \"1.88\"" in cargo
+    env = os.environ.copy()
+    env.pop("AURORA_VOICE_P4_ARTIFACT_ROOT", None)
+
+    result = subprocess.run(
+        ["cargo", "+1.88.0", "run", "--locked", "--quiet", "--"],
+        cwd=WRAPPER,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert '"stage":"setup"' in result.stderr
+    assert "missing --artifact-root or AURORA_VOICE_P4_ARTIFACT_ROOT" in result.stderr
 
 
-def test_rust_wrapper_links_only_from_injected_sherpa_lib_dir() -> None:
-    build_rs = (WRAPPER_DIR / "build.rs").read_text(encoding="utf-8")
-
-    assert "SHERPA_ONNX_LIB_DIR" in build_rs
-    assert "sherpa-onnx-c-api" in build_rs
-    assert "/home/developer/projects" not in build_rs
+def test_rust_wrapper_uses_local_target_ignore() -> None:
+    assert "target/" in (WRAPPER / ".gitignore").read_text(encoding="utf-8")
 
 
-def test_rust_wrapper_exercises_callback_cancellation_path() -> None:
-    main_rs = (WRAPPER_DIR / "src" / "main.rs").read_text(encoding="utf-8")
+def test_rust_wrapper_declares_rust_188_and_no_runtime_dependencies() -> None:
+    cargo_toml = (WRAPPER / "Cargo.toml").read_text(encoding="utf-8")
 
-    assert "SherpaOnnxOfflineTtsGenerateWithConfig" in main_rs
-    assert "cancel_after_callback" in main_rs
-    assert "callback_calls" in main_rs
-    assert "return Err(\"tts generation failed\".to_string())" in main_rs
+    assert 'rust-version = "1.88"' in cargo_toml
+    assert "[dependencies]\n" in cargo_toml

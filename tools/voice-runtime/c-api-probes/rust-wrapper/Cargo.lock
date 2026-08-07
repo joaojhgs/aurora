@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "aurora-phase4-sherpa-rust-probe"
+name = "aurora-sherpa-c-api-probe"
 version = "0.1.0"

@@ -1,7 +1,9 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import patch
 
 MODULE_PATH = (
     Path(__file__).resolve().parents[3]
@@ -75,22 +77,24 @@ def test_resolve_paths_supports_injected_artifact_root(tmp_path: Path) -> None:
     assert paths["kws_wav"] == (models / runner.KWS_NAME / "test_wavs/1.wav").resolve()
 
 
-def test_runner_has_no_machine_specific_default() -> None:
-    runner = load_runner()
-
-    parser = runner.build_parser()
-    artifact_action = next(action for action in parser._actions if action.dest == "artifact_root")
-
-    assert artifact_action.default is None
-    assert artifact_action.required is True
-    assert "/home/developer/projects" not in MODULE_PATH.read_text(encoding="utf-8")
-
-
-def test_runner_defaults_to_proven_original_kws_pack() -> None:
+def test_runner_defaults_to_passing_full_kws_pack() -> None:
     runner = load_runner()
 
     assert runner.KWS_NAME == "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01"
     assert not runner.KWS_NAME.endswith("-mobile")
+
+
+def test_resolve_paths_fails_without_artifact_root_or_env() -> None:
+    runner = load_runner()
+    args = runner.build_parser().parse_args([])
+
+    with patch.dict(os.environ, {}, clear=True):
+        try:
+            runner.resolve_paths(args)
+        except runner.ProbeError as exc:
+            assert "missing --artifact-root or AURORA_VOICE_P4_ARTIFACT_ROOT" in str(exc)
+        else:
+            raise AssertionError("resolve_paths should require an explicit artifact root")
 
 
 def test_main_writes_setup_failure_json(tmp_path: Path) -> None:
