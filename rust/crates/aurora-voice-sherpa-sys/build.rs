@@ -16,7 +16,7 @@ fn main() {
     let lib_dir = env::var_os("AURORA_SHERPA_ONNX_LIB_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
-            panic!("AURORA_SHERPA_ONNX_LIB_DIR is required when enabling the native-vad feature")
+            panic!("AURORA_SHERPA_ONNX_LIB_DIR is required when enabling a native sherpa feature")
         });
 
     if !lib_dir.is_dir() {

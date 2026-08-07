@@ -10,20 +10,12 @@ use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-#[cfg(all(
-    any(feature = "native-vad", feature = "native-stt"),
-    not(target_arch = "wasm32")
-))]
+#[cfg(all(feature = "native-vad", not(target_arch = "wasm32")))]
 mod native;
 
-#[cfg(not(all(
-    any(feature = "native-vad", feature = "native-stt"),
-    not(target_arch = "wasm32")
-)))]
+#[cfg(not(all(feature = "native-vad", not(target_arch = "wasm32"))))]
 mod native {
-    use super::{
-        OfflineSttConfig, OfflineSttResult, SileroVadConfig, SpeechSegment, SttError, VadError,
-    };
+    use super::{SileroVadConfig, SpeechSegment, VadError};
 
     pub(crate) struct Detector;
 
@@ -69,6 +61,14 @@ mod native {
             Err(VadError::NativeUnavailable)
         }
     }
+}
+
+#[cfg(all(feature = "native-stt", not(target_arch = "wasm32")))]
+mod native_stt;
+
+#[cfg(not(all(feature = "native-stt", not(target_arch = "wasm32"))))]
+mod native_stt {
+    use super::{OfflineSttConfig, OfflineSttResult, SttError};
 
     pub(crate) struct OfflineRecognizer;
 
@@ -134,25 +134,13 @@ const DEFAULT_FEATURE_DIM: i32 = 80;
 const DEFAULT_DECODING_METHOD: &str = "greedy_search";
 const MAX_OFFLINE_STT_SECONDS: f32 = 60.0;
 const MAX_OFFLINE_STT_SAMPLES: usize = 2_880_000;
-#[cfg(all(
-    any(feature = "native-vad", feature = "native-stt"),
-    not(target_arch = "wasm32")
-))]
+#[cfg(all(feature = "native-stt", not(target_arch = "wasm32")))]
 const MAX_OFFLINE_STT_TEXT_BYTES: usize = 16_384;
-#[cfg(all(
-    any(feature = "native-vad", feature = "native-stt"),
-    not(target_arch = "wasm32")
-))]
+#[cfg(all(feature = "native-stt", not(target_arch = "wasm32")))]
 const MAX_OFFLINE_STT_TOKENS: usize = 4096;
-#[cfg(all(
-    any(feature = "native-vad", feature = "native-stt"),
-    not(target_arch = "wasm32")
-))]
+#[cfg(all(feature = "native-stt", not(target_arch = "wasm32")))]
 const MAX_OFFLINE_STT_TOKEN_BYTES: usize = 256;
-#[cfg(all(
-    any(feature = "native-vad", feature = "native-stt"),
-    not(target_arch = "wasm32")
-))]
+#[cfg(all(feature = "native-stt", not(target_arch = "wasm32")))]
 const MAX_OFFLINE_STT_SEGMENTS: usize = 1024;
 
 #[derive(Clone)]
@@ -510,7 +498,7 @@ impl OfflineSttConfig {
         validate_model_file(&self.encoder_path, ErrorCode::ConfigEncoderPathEmpty)?;
         validate_model_file(&self.decoder_path, ErrorCode::ConfigDecoderPathEmpty)?;
         validate_model_file(&self.tokens_path, ErrorCode::ConfigTokensPathEmpty)?;
-        if !(MIN_SAMPLE_RATE..=MAX_SAMPLE_RATE).contains(&self.sample_rate) {
+        if self.sample_rate != DEFAULT_SAMPLE_RATE {
             return Err(SttError::InvalidConfig {
                 code: ErrorCode::ConfigSampleRateRange,
             });
@@ -575,9 +563,9 @@ impl fmt::Debug for OfflineSttConfig {
 pub struct OfflineSttResult {
     text: String,
     tokens: Vec<String>,
-    timestamps_millis: Vec<u32>,
+    timestamps_millis: Option<Vec<u32>>,
     segment_texts: Vec<String>,
-    segment_timestamps_millis: Vec<u32>,
+    segment_timestamps_millis: Option<Vec<u32>>,
 }
 
 impl OfflineSttResult {
@@ -589,16 +577,16 @@ impl OfflineSttResult {
         &self.tokens
     }
 
-    pub fn timestamps_millis(&self) -> &[u32] {
-        &self.timestamps_millis
+    pub fn timestamps_millis(&self) -> Option<&[u32]> {
+        self.timestamps_millis.as_deref()
     }
 
     pub fn segment_texts(&self) -> &[String] {
         &self.segment_texts
     }
 
-    pub fn segment_timestamps_millis(&self) -> &[u32] {
-        &self.segment_timestamps_millis
+    pub fn segment_timestamps_millis(&self) -> Option<&[u32]> {
+        self.segment_timestamps_millis.as_deref()
     }
 }
 
@@ -609,14 +597,21 @@ impl fmt::Debug for OfflineSttResult {
             .field("text", &"<redacted>")
             .field("text_bytes", &self.text.len())
             .field("token_count", &self.tokens.len())
-            .field("timestamp_count", &self.timestamps_millis.len())
+            .field(
+                "timestamp_count",
+                &self.timestamps_millis.as_ref().map(Vec::len),
+            )
             .field("segment_count", &self.segment_texts.len())
+            .field(
+                "segment_timestamp_count",
+                &self.segment_timestamps_millis.as_ref().map(Vec::len),
+            )
             .finish()
     }
 }
 
 pub struct OfflineSttRecognizer {
-    inner: native::OfflineRecognizer,
+    inner: native_stt::OfflineRecognizer,
     sample_rate: i32,
     max_audio_seconds: f32,
     _not_send_sync: PhantomData<Rc<()>>,
@@ -636,7 +631,7 @@ impl fmt::Debug for OfflineSttRecognizer {
 impl OfflineSttRecognizer {
     pub fn new(config: &OfflineSttConfig) -> Result<Self, SttError> {
         config.validate()?;
-        let inner = native::OfflineRecognizer::new(config)?;
+        let inner = native_stt::OfflineRecognizer::new(config)?;
         Ok(Self {
             inner,
             sample_rate: config.sample_rate(),
@@ -651,6 +646,11 @@ impl OfflineSttRecognizer {
         pcm: &[f32],
     ) -> Result<OfflineSttResult, SttError> {
         let max_accept_samples = max_offline_samples_for_rate(sample_rate, self.max_audio_seconds)?;
+        if sample_rate != self.sample_rate {
+            return Err(SttError::InvalidConfig {
+                code: ErrorCode::ConfigSampleRateRange,
+            });
+        }
         validate_offline_pcm(pcm, max_accept_samples)?;
         let mut stream = self.inner.create_stream()?;
         stream.accept_waveform(sample_rate, pcm)?;
@@ -733,6 +733,7 @@ pub enum ErrorCode {
     ConfigModelPathEmpty,
     ConfigModelPathNul,
     ConfigModelPathEncoding,
+    ConfigModelPathUnavailable,
     ConfigThresholdRange,
     ConfigMinSilenceDurationRange,
     ConfigMinSpeechDurationRange,
@@ -797,6 +798,7 @@ impl ErrorCode {
             Self::ConfigModelPathEmpty => "config.model_path_empty",
             Self::ConfigModelPathNul => "config.model_path_nul",
             Self::ConfigModelPathEncoding => "config.model_path_encoding",
+            Self::ConfigModelPathUnavailable => "config.model_path_unavailable",
             Self::ConfigThresholdRange => "config.threshold_range",
             Self::ConfigMinSilenceDurationRange => "config.min_silence_duration_range",
             Self::ConfigMinSpeechDurationRange => "config.min_speech_duration_range",
@@ -1074,13 +1076,7 @@ fn checked_ceil_to_usize(value: f32, max: usize, code: ErrorCode) -> Result<usiz
     Ok(value.ceil() as usize)
 }
 
-#[cfg(any(
-    test,
-    all(
-        any(feature = "native-vad", feature = "native-stt"),
-        not(target_arch = "wasm32")
-    )
-))]
+#[cfg(any(test, all(feature = "native-vad", not(target_arch = "wasm32"))))]
 pub(crate) fn validate_native_segment_parts(
     start: i32,
     samples: &[f32],
@@ -1189,6 +1185,22 @@ fn model_path_unreadable_code(empty_code: ErrorCode) -> ErrorCode {
         ErrorCode::ConfigTokensPathEmpty => ErrorCode::ConfigTokensPathUnreadable,
         _ => empty_code,
     }
+}
+
+#[cfg(all(feature = "native-vad", not(target_arch = "wasm32")))]
+pub(crate) fn preflight_existing_readable_file(path: &Path) -> Result<(), VadError> {
+    let metadata = path.metadata().map_err(|_| VadError::InvalidConfig {
+        code: ErrorCode::ConfigModelPathUnavailable,
+    })?;
+    if !metadata.is_file() {
+        return Err(VadError::InvalidConfig {
+            code: ErrorCode::ConfigModelPathUnavailable,
+        });
+    }
+    File::open(path).map_err(|_| VadError::InvalidConfig {
+        code: ErrorCode::ConfigModelPathUnavailable,
+    })?;
+    Ok(())
 }
 
 #[cfg(unix)]
@@ -1434,6 +1446,7 @@ mod tests {
         assert_eq!(bounds.max_segments(), 2);
     }
 
+    #[cfg(not(feature = "native-vad"))]
     #[test]
     fn default_build_does_not_link_native_vad() {
         let config = SileroVadConfig::new("silero-vad.onnx");

@@ -2,6 +2,9 @@
 
 use std::env;
 use std::fs;
+use std::io::Read;
+use std::os::fd::FromRawFd;
+use std::os::raw::c_int;
 use std::path::{Path, PathBuf};
 
 use aurora_voice_sherpa_sys::{
@@ -16,13 +19,20 @@ const EXPECTED_TEXT: &str =
 #[test]
 fn moonshine_stt_matches_phase4_wav_exactly_and_reuses_new_streams() {
     let config = phase4_config().expect("phase4 config should validate");
-    let wave = read_pcm16_mono_wav(&phase4_wav_path());
+    let source_wave = read_pcm16_mono_wav(&phase4_wav_path());
+    assert_eq!(source_wave.sample_rate, 24_000);
+    let wave = source_wave.resample_to_16khz();
     let mut recognizer = OfflineSttRecognizer::new(&config).expect("recognizer should be created");
     let recognizer_debug = format!("{recognizer:?}");
     assert!(recognizer_debug.contains("inner: \"<redacted>\""));
     assert!(!recognizer_debug.contains(MOONSHINE_MODEL));
 
-    let first = decode_once(&mut recognizer, &wave);
+    let (first, stderr) = capture_stderr(|| decode_once(&mut recognizer, &wave));
+    assert!(
+        stderr.is_empty(),
+        "16 kHz input should avoid native resampler logs"
+    );
+    assert!(!stderr.contains(MOONSHINE_MODEL));
     assert_exact_transcript(&first);
 
     let second = decode_once(&mut recognizer, &wave);
@@ -33,7 +43,7 @@ fn moonshine_stt_matches_phase4_wav_exactly_and_reuses_new_streams() {
 #[test]
 fn stt_transcribe_owns_stream_lifecycle_and_reuses_recognizer() {
     let config = phase4_config().expect("phase4 config should validate");
-    let wave = read_pcm16_mono_wav(&phase4_wav_path());
+    let wave = read_pcm16_mono_wav(&phase4_wav_path()).resample_to_16khz();
     let mut recognizer = OfflineSttRecognizer::new(&config).expect("recognizer should be created");
 
     let result = recognizer
@@ -76,6 +86,13 @@ fn stt_rejects_malformed_adversarial_and_oversized_inputs_before_native_calls() 
         .transcribe(16_000, &too_long)
         .expect_err("oversized utterance should be rejected before native accept");
     assert_eq!(error.code(), ErrorCode::WaveformTooLong);
+
+    let source_wave = read_pcm16_mono_wav(&phase4_wav_path());
+    assert_eq!(source_wave.sample_rate, 24_000);
+    let error = recognizer
+        .transcribe(source_wave.sample_rate, &source_wave.pcm)
+        .expect_err("non-canonical sample rate must be rejected before native accept");
+    assert_eq!(error.code(), ErrorCode::ConfigSampleRateRange);
 }
 
 #[test]
@@ -110,7 +127,7 @@ fn stt_config_preflight_is_readable_and_errors_redacted() {
 #[test]
 fn drop_before_decode_is_safe_and_decode_non_preemptibility_is_documented() {
     let config = phase4_config().expect("phase4 config should validate");
-    let wave = read_pcm16_mono_wav(&phase4_wav_path());
+    let wave = read_pcm16_mono_wav(&phase4_wav_path()).resample_to_16khz();
     {
         let _recognizer =
             OfflineSttRecognizer::new(&config).expect("unused recognizer should be droppable");
@@ -131,10 +148,12 @@ fn assert_exact_transcript(result: &OfflineSttResult) {
     assert_eq!(result.text(), EXPECTED_TEXT);
     assert!(result.text().len() <= 16_384);
     assert!(result.tokens().len() <= 4096);
-    assert!(
-        result.timestamps_millis().is_empty()
-            || result.tokens().len() == result.timestamps_millis().len()
-    );
+    assert!(result
+        .timestamps_millis()
+        .is_none_or(|timestamps| result.tokens().len() == timestamps.len()));
+    assert!(result
+        .segment_timestamps_millis()
+        .is_none_or(|timestamps| result.segment_texts().len() == timestamps.len()));
     for token in result.tokens() {
         assert!(!token.is_empty());
         assert!(token.len() <= 256);
@@ -252,4 +271,72 @@ struct WavFormat {
 struct WavPcm {
     sample_rate: i32,
     pcm: Vec<f32>,
+}
+
+impl WavPcm {
+    fn resample_to_16khz(&self) -> Self {
+        if self.sample_rate == 16_000 {
+            return Self {
+                sample_rate: self.sample_rate,
+                pcm: self.pcm.clone(),
+            };
+        }
+        assert_eq!(
+            self.sample_rate, 24_000,
+            "fixture resampler is intentionally pinned to the official 24 kHz WAV"
+        );
+        let output_len = self.pcm.len() * 2 / 3;
+        let mut pcm = Vec::with_capacity(output_len);
+        for index in 0..output_len {
+            let source = index as f64 * self.sample_rate as f64 / 16_000.0;
+            let left = source.floor() as usize;
+            let right = left.saturating_add(1).min(self.pcm.len().saturating_sub(1));
+            let fraction = (source - left as f64) as f32;
+            let sample = self.pcm[left] + (self.pcm[right] - self.pcm[left]) * fraction;
+            pcm.push(sample.clamp(-1.0, 1.0));
+        }
+        Self {
+            sample_rate: 16_000,
+            pcm,
+        }
+    }
+}
+
+fn capture_stderr<T>(action: impl FnOnce() -> T) -> (T, String) {
+    unsafe extern "C" {
+        fn pipe(fds: *mut c_int) -> c_int;
+        fn dup(fd: c_int) -> c_int;
+        fn dup2(oldfd: c_int, newfd: c_int) -> c_int;
+        fn close(fd: c_int) -> c_int;
+    }
+
+    const STDERR_FILENO: c_int = 2;
+    let mut fds = [0; 2];
+    assert_eq!(unsafe { pipe(fds.as_mut_ptr()) }, 0, "pipe should open");
+    let saved = unsafe { dup(STDERR_FILENO) };
+    assert!(saved >= 0, "stderr dup should succeed");
+    assert_eq!(
+        unsafe { dup2(fds[1], STDERR_FILENO) },
+        STDERR_FILENO,
+        "stderr redirect should succeed"
+    );
+
+    let result = action();
+
+    assert_eq!(
+        unsafe { dup2(saved, STDERR_FILENO) },
+        STDERR_FILENO,
+        "stderr restore should succeed"
+    );
+    unsafe {
+        close(saved);
+        close(fds[1]);
+    }
+
+    let mut stderr = String::new();
+    let mut reader = unsafe { fs::File::from_raw_fd(fds[0]) };
+    reader
+        .read_to_string(&mut stderr)
+        .expect("captured stderr should be readable");
+    (result, stderr)
 }
