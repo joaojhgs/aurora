@@ -35,6 +35,9 @@ import {
   type LocalDataScope,
   type LocalDataSession,
 } from '@aurora/client/local-data'
+import {
+  createAuroraBrowserVoiceRuntime,
+} from '@aurora/voice-web/browser'
 import type { AssistantVoiceRoutes, RouteAvailability } from './shell-data'
 import { RouteSheet } from './route-sheet'
 import { AudioRecorderVisualizer } from './audio-recorder-visualizer'
@@ -340,6 +343,8 @@ type BrowserOpenFilePicker = (options?: {
   excludeAcceptAllOption?: boolean
   types?: Array<{ description: string; accept: Record<string, string[]> }>
 }) => Promise<BrowserFileSystemFileHandle[]>
+type AuroraBrowserVoiceRuntimeInstance = ReturnType<typeof createAuroraBrowserVoiceRuntime>
+type AuroraBrowserCapturedAudio = Awaited<ReturnType<AuroraBrowserVoiceRuntimeInstance['stop']>>
 
 export function AssistantView({
   client,
@@ -418,6 +423,8 @@ export function AssistantView({
   const voiceCaptureStatusRef = useRef<VoiceCaptureStatus>('idle')
   const voicePendingAssistantIdRef = useRef<string | null>(null)
   const voiceTranscriptPreviewRef = useRef('')
+  const browserVoiceRuntimeRef = useRef<AuroraBrowserVoiceRuntimeInstance | null>(null)
+  const browserVoiceOperationTokenRef = useRef(0)
   const sessionLoadGenerationRef = useRef(0)
   function setVoiceCaptureStatus(next: VoiceCaptureStatus) {
     voiceCaptureStatusRef.current = next
@@ -794,6 +801,8 @@ export function AssistantView({
     clearVoiceResponseTimeout()
     stopStreamedTtsPlayback()
     stopLocalCapture()
+    browserVoiceOperationTokenRef.current += 1
+    void disposeBrowserVoiceRuntime()
   }, [])
 
   useEffect(() => {
@@ -913,20 +922,9 @@ export function AssistantView({
       const blurred = typeof document.hasFocus === 'function' && !document.hasFocus()
       const nativeRelease = event?.type === AURORA_RELEASE_FOCUSED_MEDIA_EVENT
       if (!hidden && !blurred && !nativeRelease) return
-      if (!voiceStreamRef.current) return
+      if (!voiceStreamRef.current && !browserVoiceRuntimeRef.current) return
       stopLocalCapture({ finalizeTranscription: false })
-      if (voiceCaptureStatusRef.current === 'listening') {
-        setVoiceCaptureStatus('idle')
-        activeVoiceSessionRef.current = null
-        ownedVoiceSessionIdsRef.current.clear()
-        voicePendingAssistantIdRef.current = null
-        setVoiceResponsePendingId(null)
-        setStreamState((current) => ({
-          ...current,
-          status: 'lost',
-          message: 'Microphone listening stopped because Aurora was no longer the active window.'
-        }))
-      }
+      releaseBrowserVoiceCaptureForLifecycle()
     }
     document.addEventListener('visibilitychange', releaseFocusedCapture)
     window.addEventListener('blur', releaseFocusedCapture)
@@ -1016,6 +1014,9 @@ export function AssistantView({
   function resetConversationUi(nextSession: AssistantSessionSnapshot) {
     abortRef.current?.abort()
     stopLocalCapture()
+    browserVoiceOperationTokenRef.current += 1
+    void cancelBrowserVoiceRuntime('conversation_reset')
+    activeVoiceSessionRef.current = null
     ownedVoiceSessionIdsRef.current.clear()
     coordinatorVoiceSessionIdsRef.current.clear()
     cancelledPendingIdsRef.current.clear()
@@ -1028,6 +1029,7 @@ export function AssistantView({
     setLastPrompt(null)
     setStreamState(idleAssistantStreamState())
     voiceTranscriptPreviewRef.current = ''
+    setVoiceCaptureStatus('idle')
     setText('')
   }
 
@@ -1144,7 +1146,7 @@ export function AssistantView({
     }, 0)
   }
 
-  async function startAssistantTurn(prompt: string, replayFrom: string | null = null) {
+  async function startAssistantTurn(prompt: string, replayFrom: string | null = null): Promise<boolean> {
     const now = new Date().toISOString()
     const requestId = `assistant-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     let turnSessionId = usesLocalConversationHistory || supportsPersistedSessions
@@ -1152,7 +1154,7 @@ export function AssistantView({
       : null
     if (!turnSessionId && supportsPersistedSessions) {
       const created = await createPersistedChatSession()
-      if (!created) return
+      if (!created) return false
       turnSessionId = created.id
     }
     turnSessionId ??= requestId
@@ -1191,6 +1193,7 @@ export function AssistantView({
     setActiveAssistantPendingId(pendingMessage.id)
     cancelledPendingIdsRef.current.delete(pendingMessage.id)
     let terminalSeen = false
+    let turnSucceeded = false
     let completedRemoteUpdate: AssistantStreamUpdate | null = null
     let remoteToolEventSequence = 0
     try {
@@ -1204,6 +1207,7 @@ export function AssistantView({
           signal: abort.signal
         })
         terminalSeen = true
+        turnSucceeded = result.status !== 'cancelled'
         await applyLightweightAssistantResult(result, pendingMessage.id, localOrchestrator)
       } else {
         for await (const update of client.assistant.streamMessage({
@@ -1240,6 +1244,7 @@ export function AssistantView({
           }
           if (update.kind === 'completed' || update.kind === 'fallback') {
             completedRemoteUpdate = update
+            turnSucceeded = true
           }
           if (update.kind === 'completed') {
             terminalSeen = true
@@ -1292,6 +1297,7 @@ export function AssistantView({
         void refreshPersistedSessionIndex()
       }
     }
+    return turnSucceeded && !abort.signal.aborted && !cancelledPendingIdsRef.current.has(pendingMessage.id)
   }
 
   async function applyLightweightAssistantResult(
@@ -2312,6 +2318,36 @@ export function AssistantView({
       await toggleLocalCapture()
       return
     }
+    if (surfaceProfile.voiceCapture.usesBrowserVoiceRuntime && voiceCaptureStatus === 'processing') {
+      browserVoiceOperationTokenRef.current += 1
+      const pendingId = activePendingIdRef.current
+      if (pendingId) cancelledPendingIdsRef.current.add(pendingId)
+      abortRef.current?.abort()
+      if (selectedExecution.runner === 'lightweight-local') {
+        localOrchestrator?.cancel()
+      } else if (pendingId) {
+        void client.assistant.cancel({
+          sessionId: session.sessionId,
+          reason: 'user_interrupt'
+        }).catch(() => undefined)
+      }
+      await abandonStoppedBrowserVoiceTurn()
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.clear()
+      activePendingIdRef.current = null
+      setActiveAssistantPendingId(null)
+      setSession((current) => ({
+        ...current,
+        messages: current.messages.map((message) =>
+          message.status === 'streaming' || message.status === 'sending'
+            ? { ...message, status: 'cancelled', text: message.text.trim() ? message.text : 'Stopped by user.' }
+            : message
+        )
+      }))
+      setVoiceCaptureStatus('idle')
+      setStreamState((current) => ({ ...current, status: 'cancelled', message: 'Aurora stopped listening.' }))
+      return
+    }
     await onCancel()
   }
 
@@ -2445,10 +2481,254 @@ export function AssistantView({
     if (!result.ok) setLastError(productAssistantErrorCopy(result.error))
   }
 
+  function browserVoiceLifecycleEligibility() {
+    const visible = typeof document === 'undefined' ? true : document.visibilityState !== 'hidden'
+    const focused = typeof document === 'undefined' || typeof document.hasFocus !== 'function' || document.hasFocus()
+    const eligible = visible && focused
+    return {
+      foregroundOnly: true as const,
+      visible,
+      frozen: false,
+      eligible,
+      reason: eligible ? 'visible' as const : 'hidden' as const
+    }
+  }
+
+  function releaseBrowserVoiceCaptureForLifecycle() {
+    browserVoiceOperationTokenRef.current += 1
+    void cancelBrowserVoiceRuntime('lifecycle_lost')
+    if (voiceCaptureStatusRef.current !== 'listening' && voiceCaptureStatusRef.current !== 'processing') return
+    setVoiceCaptureStatus('idle')
+    activeVoiceSessionRef.current = null
+    ownedVoiceSessionIdsRef.current.clear()
+    coordinatorVoiceSessionIdsRef.current.clear()
+    voicePendingAssistantIdRef.current = null
+    setVoiceResponsePendingId(null)
+    setStreamState((current) => ({
+      ...current,
+      status: 'lost',
+      message: 'Microphone listening stopped because Aurora was no longer the active window.'
+    }))
+  }
+
+  function browserVoiceRuntime(): AuroraBrowserVoiceRuntimeInstance {
+    if (!browserVoiceRuntimeRef.current) {
+      browserVoiceRuntimeRef.current = createAuroraBrowserVoiceRuntime({
+        ownerId: 'aurora-assistant-view',
+        lifecycle: browserVoiceLifecycleEligibility,
+        onAudioLifecycleLost: releaseBrowserVoiceCaptureForLifecycle
+      })
+    }
+    return browserVoiceRuntimeRef.current
+  }
+
+  async function cancelBrowserVoiceRuntime(reason: string) {
+    const runtime = browserVoiceRuntimeRef.current
+    if (!runtime) return
+    try {
+      await runtime.cancel(reason)
+    } catch {
+      // Best-effort cleanup; product state is reset by the caller.
+    }
+  }
+
+  async function disposeBrowserVoiceRuntime() {
+    const runtime = browserVoiceRuntimeRef.current
+    browserVoiceRuntimeRef.current = null
+    if (!runtime) return
+    try {
+      await runtime.dispose()
+    } catch {
+      // Best-effort teardown during unmount.
+    }
+  }
+
+  async function abandonStoppedBrowserVoiceTurn(): Promise<boolean> {
+    const runtime = browserVoiceRuntimeRef.current
+    if (!runtime) return true
+    try {
+      await runtime.abandonTurn()
+      return true
+    } catch {
+      try {
+        await runtime.cancel('turn_abandoned')
+        return true
+      } catch {
+        // Best-effort cleanup; the visible assistant state already carries the failure.
+        return false
+      }
+    }
+  }
+
+  async function completeStoppedBrowserVoiceTurn(): Promise<boolean> {
+    const runtime = browserVoiceRuntimeRef.current
+    if (!runtime) return true
+    try {
+      await runtime.completeTurn()
+      return true
+    } catch {
+      try {
+        await runtime.cancel('turn_completed')
+        return false
+      } catch {
+        // Best-effort cleanup after a successful assistant response.
+        return false
+      }
+    }
+  }
+
+  async function startBrowserVoiceCapture(sessionId: string): Promise<boolean> {
+    const token = browserVoiceOperationTokenRef.current + 1
+    browserVoiceOperationTokenRef.current = token
+    activeVoiceSessionRef.current = sessionId
+    ownedVoiceSessionIdsRef.current.add(sessionId)
+    setVoiceConsentGranted(true)
+    setVoiceCaptureStatus('listening')
+    setStreamState((current) => ({
+      ...current,
+      status: 'streaming',
+      message: 'Requesting focused microphone access for push-to-talk…'
+    }))
+    try {
+      const started = await browserVoiceRuntime().start()
+      if (browserVoiceOperationTokenRef.current !== token) {
+        await cancelBrowserVoiceRuntime('capture_replaced')
+        return false
+      }
+      activeVoiceSessionRef.current = started.sessionId
+      ownedVoiceSessionIdsRef.current.add(started.sessionId)
+      setStreamState((current) => ({
+        ...current,
+        status: 'streaming',
+        message: 'Focused microphone capture is active.'
+      }))
+      return true
+    } catch (error) {
+      await cancelBrowserVoiceRuntime('start_failed')
+      if (browserVoiceOperationTokenRef.current !== token) return false
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.clear()
+      const name = error instanceof DOMException ? error.name : ''
+      setLastError(productAudioCaptureErrorCopy(error))
+      setVoiceCaptureStatus(name === 'NotAllowedError' || name === 'SecurityError' ? 'permission-denied' : 'no-device')
+      return false
+    }
+  }
+
+  async function stopBrowserVoiceCapture() {
+    const runtime = browserVoiceRuntimeRef.current
+    if (!runtime) return
+    const token = browserVoiceOperationTokenRef.current
+    setVoiceCaptureStatus('processing')
+    setStreamState((current) => ({ ...current, status: 'streaming', message: 'Voice captured. Aurora is processing the request.' }))
+    let captured: AuroraBrowserCapturedAudio = null
+    try {
+      captured = await runtime.stop()
+    } catch (error) {
+      await cancelBrowserVoiceRuntime('stop_failed')
+      if (browserVoiceOperationTokenRef.current !== token) return
+      setLastError(productAudioCaptureErrorCopy(error))
+      setVoiceCaptureStatus('error')
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.clear()
+      return
+    }
+    if (browserVoiceOperationTokenRef.current !== token) {
+      await abandonStoppedBrowserVoiceTurn()
+      return
+    }
+    if (!captured || captured.sampleCount === 0 || captured.pcm.length === 0) {
+      await abandonStoppedBrowserVoiceTurn()
+      setLastError('No microphone audio was captured. Check microphone permission and try push-to-talk again.')
+      setVoiceCaptureStatus('idle')
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.clear()
+      return
+    }
+    let result: Awaited<ReturnType<typeof client.assistant.transcribeVoiceAudio>>
+    try {
+      result = await client.assistant.transcribeVoiceAudio({
+        audio_data: int16PcmToLittleEndianBase64(captured.pcm),
+        format: 'raw',
+        sample_rate: 16000,
+        channels: 1,
+        model: 'accurate',
+        routePolicy: routePolicyFromRoute(voiceModel.transcriptionRoute)
+      })
+    } catch (error) {
+      await abandonStoppedBrowserVoiceTurn()
+      if (browserVoiceOperationTokenRef.current !== token) return
+      setLastError(productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error))))
+      setVoiceCaptureStatus('error')
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.clear()
+      return
+    }
+    if (browserVoiceOperationTokenRef.current !== token) {
+      await abandonStoppedBrowserVoiceTurn()
+      return
+    }
+    if (!result.ok) {
+      await abandonStoppedBrowserVoiceTurn()
+      setLastError(productAssistantErrorCopy(result.error))
+      setVoiceCaptureStatus('error')
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.clear()
+      return
+    }
+    const transcript = result.data.text.trim()
+    if (!transcript) {
+      await abandonStoppedBrowserVoiceTurn()
+      setLastError('No speech was transcribed from the recorded audio.')
+      setVoiceCaptureStatus('idle')
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.clear()
+      return
+    }
+    voiceTranscriptPreviewRef.current = ''
+    setText('')
+    let succeeded = false
+    try {
+      succeeded = await startAssistantTurn(transcript)
+    } catch (error) {
+      if (browserVoiceOperationTokenRef.current !== token) {
+        await abandonStoppedBrowserVoiceTurn()
+        return
+      }
+      setLastError(productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error))))
+      succeeded = false
+    }
+    if (browserVoiceOperationTokenRef.current !== token) {
+      await abandonStoppedBrowserVoiceTurn()
+      return
+    }
+    if (succeeded) {
+      const completed = await completeStoppedBrowserVoiceTurn()
+      if (completed) {
+        setVoiceCaptureStatus('idle')
+      } else {
+        setLastError('Voice request finished, but Aurora could not close listening cleanly.')
+        setVoiceCaptureStatus('error')
+      }
+    } else {
+      await abandonStoppedBrowserVoiceTurn()
+      setVoiceCaptureStatus('error')
+    }
+    activeVoiceSessionRef.current = null
+    ownedVoiceSessionIdsRef.current.clear()
+  }
+
   async function toggleLocalCapture() {
     const currentCaptureStatus = voiceCaptureStatusRef.current
     if (currentCaptureStatus === 'listening') {
       const sessionId = activeVoiceSessionRef.current
+      if (surfaceProfile.voiceCapture.usesBrowserVoiceRuntime) {
+        await stopBrowserVoiceCapture()
+        coordinatorVoiceSessionIdsRef.current.clear()
+        voicePendingAssistantIdRef.current = null
+        setVoiceResponsePendingId(null)
+        return
+      }
       const coordinatorOwnsCapture = Boolean(
         sessionId && coordinatorVoiceSessionIdsRef.current.has(sessionId)
       )
@@ -2475,6 +2755,11 @@ export function AssistantView({
     void interruptTtsForVoiceCapture()
     if (!surfaceProfile.voiceCapture.avoidCoordinatorPushToTalk) {
       await startCoordinatorPushToTalk(sessionId)
+      return
+    }
+
+    if (surfaceProfile.voiceCapture.usesBrowserVoiceRuntime) {
+      await startBrowserVoiceCapture(sessionId)
       return
     }
 
@@ -5384,6 +5669,15 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize))
   }
   return btoa(binary)
+}
+
+function int16PcmToLittleEndianBase64(samples: Int16Array): string {
+  const buffer = new ArrayBuffer(samples.length * 2)
+  const view = new DataView(buffer)
+  for (let index = 0; index < samples.length; index += 1) {
+    view.setInt16(index * 2, samples[index] ?? 0, true)
+  }
+  return arrayBufferToBase64(buffer)
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, timeoutError: Error): Promise<T> {
