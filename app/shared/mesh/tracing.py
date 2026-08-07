@@ -89,17 +89,37 @@ def ensure_correlation_id(payload: Any, provided: str | None = None) -> str:
 def redacted_copy(value: Any, *, method_id: str | None = None) -> Any:
     """Return a JSON-friendly copy with sensitive values replaced."""
 
+    return _redacted_copy(value, method_id=method_id, redact_speech_content=True)
+
+
+def _redacted_copy(
+    value: Any,
+    *,
+    method_id: str | None,
+    redact_speech_content: bool,
+) -> Any:
     if isinstance(value, BaseModel):
         value = value.model_dump(mode="json")
     if isinstance(value, bytes | bytearray | memoryview):
         return _binary_summary(value)
+    if redact_speech_content and _is_speech_method(method_id) and isinstance(value, str):
+        return _content_summary(value, kind="speech")
     if isinstance(value, dict):
         return {
             str(key): _redact_value(str(key), nested, method_id=method_id)
             for key, nested in value.items()
         }
     if isinstance(value, list | tuple):
-        return [redacted_copy(item, method_id=method_id) for item in value]
+        if redact_speech_content and _is_speech_method(method_id):
+            return _content_summary(value, kind="speech")
+        return [
+            _redacted_copy(
+                item,
+                method_id=method_id,
+                redact_speech_content=False,
+            )
+            for item in value
+        ]
     return value
 
 
@@ -120,7 +140,11 @@ def _redact_value(key: str, value: Any, *, method_id: str | None) -> Any:
         return _binary_summary(value)
     if _is_speech_method(method_id) and _is_speech_content_key(key):
         return _content_summary(value, kind="speech")
-    return redacted_copy(value, method_id=method_id)
+    return _redacted_copy(
+        value,
+        method_id=method_id,
+        redact_speech_content=False,
+    )
 
 
 def _is_secret_key(key: str) -> bool:

@@ -48,6 +48,20 @@ def test_redacted_copy_preserves_normal_text_without_speech_context():
     }
 
 
+def test_redacted_copy_summarizes_top_level_speech_content():
+    scalar_summary = redacted_copy("private words", method_id=TTSMethods.SYNTHESIZE)
+    assert scalar_summary["redacted"] is True
+    assert scalar_summary["kind"] == "speech"
+    assert scalar_summary["char_length"] == 13
+    assert redacted_copy(
+        ["private", "segments"], method_id=TranscriptionMethods.TRANSCRIBE
+    ) == {
+        "redacted": True,
+        "kind": "speech",
+        "element_count": 2,
+    }
+
+
 @pytest.mark.asyncio
 async def test_transcribe_generated_route_logs_only_audio_metadata():
     raw_audio = b"pcm-secret-audio"
