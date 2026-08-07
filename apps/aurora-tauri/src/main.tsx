@@ -23,6 +23,12 @@ if (import.meta.env.VITE_AURORA_DESKTOP_LIVE_E2E === '1') {
   })
 }
 
+if (import.meta.env.VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E === '1') {
+  void import('./desktop-native-voice-e2e').then(({ installDesktopNativeVoiceE2eHook }) => {
+    installDesktopNativeVoiceE2eHook()
+  })
+}
+
 if (isOverlaySurface) {
   document.documentElement.classList.add('aurora-overlay-surface')
   document.documentElement.dataset.auroraSurface = 'overlay'
