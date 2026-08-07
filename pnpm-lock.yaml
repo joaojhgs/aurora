@@ -247,6 +247,9 @@ importers:
       '@aurora/client':
         specifier: workspace:*
         version: link:../aurora-sdk
+      '@aurora/voice-web':
+        specifier: workspace:*
+        version: link:../aurora-voice-web
       '@base-ui-components/react':
         specifier: 1.0.0-rc.0
         version: 1.0.0-rc.0(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
