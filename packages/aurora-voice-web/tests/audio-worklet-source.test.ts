@@ -161,6 +161,28 @@ describe('BrowserAudioWorkletPcmSource', () => {
     expect(ports.contextClosed).toBe(true)
   })
 
+  it('stops a late getUserMedia stream after start timeout', async () => {
+    const lateStream = new FakeMediaStream()
+    let resolveStream!: (stream: MediaStream) => void
+    const source = new BrowserAudioWorkletPcmSource({
+      mediaDevices: {
+        getUserMedia: async () => await new Promise<MediaStream>((resolve) => {
+          resolveStream = resolve
+        })
+      },
+      audioContextFactory: () => new FakeBrowserPorts().context,
+      workletNodeFactory: () => new FakeBrowserPorts().workletNode,
+      processorUrl: 'processor.js',
+      startTimeoutMs: 100
+    })
+
+    await expect(source.start(session(), new RecordingSink())).rejects.toMatchObject({ code: 'audio_source_start_failed' })
+    resolveStream(lateStream as unknown as MediaStream)
+    await nextTurn()
+
+    expect(lateStream.track.stopped).toBe(true)
+  })
+
   it('cancels idempotently and erases queued tail without flushing', async () => {
     const ports = new FakeBrowserPorts()
     const sink = new RecordingSink()
@@ -193,6 +215,25 @@ describe('BrowserAudioWorkletPcmSource', () => {
     expect(ports.trackStopped).toBe(true)
     expect(ports.portClosed).toBe(true)
     expect(ports.contextClosed).toBe(true)
+  })
+
+  it('releases capture within the default stop gate even when the processor never acks', async () => {
+    const ports = new FakeBrowserPorts({ autoAckControl: false })
+    const sink = new RecordingSink()
+    const source = new BrowserAudioWorkletPcmSource(ports.options({ frameMs: 20 }))
+
+    await source.start(session(), sink)
+    ports.postFromWorklet({ type: 'audio', sessionId: 'session-a', sampleRateHz: 48_000, samples: constant(480, 0.5) })
+    await expect(Promise.race([
+      source.stop('session-a').then(() => 'stopped'),
+      delay(250).then(() => 'timeout')
+    ])).resolves.toBe('stopped')
+
+    expect(sink.frames).toHaveLength(1)
+    expect(ports.trackStopped).toBe(true)
+    expect(ports.portClosed).toBe(true)
+    expect(ports.contextClosed).toBe(true)
+    expect(() => new BrowserAudioWorkletPcmSource(ports.options({ resourceReleaseTimeoutMs: 251 }))).toThrow()
   })
 
   it('fails closed when the browser track ends and reports a redacted lifecycle reason', async () => {
@@ -229,6 +270,43 @@ describe('BrowserAudioWorkletPcmSource', () => {
     expect(reasons).toEqual(['context_suspended'])
     expect(ports.trackStopped).toBe(true)
     expect(ports.portClosed).toBe(true)
+  })
+
+  it('cleans up when lifecycle notification throws', async () => {
+    const ports = new FakeBrowserPorts()
+    const source = new BrowserAudioWorkletPcmSource(ports.options({
+      onLifecycleLost: () => {
+        throw new Error('/device/path')
+      }
+    }))
+
+    await source.start(session(), new RecordingSink())
+    ports.stream.track.end()
+    await nextTurn()
+
+    expect(ports.trackStopped).toBe(true)
+    expect(ports.contextClosed).toBe(true)
+    expect(ports.portClosed).toBe(true)
+  })
+})
+
+describe('AuroraAudioWorkletFrameAssembler sink outcomes', () => {
+  it('marks the next accepted frame discontinuous after sink false or rejection', async () => {
+    const falseSink = new OutcomeSink([false, true])
+    const falseAssembler = new AuroraAudioWorkletFrameAssembler(session(), falseSink, { frameMs: 20 })
+    await falseAssembler.pushFloat32('session-a', 48_000, constant(960, 0.25))
+    await nextTurn()
+    expect(falseAssembler.snapshot()).toMatchObject({ droppedFrames: 1 })
+    await falseAssembler.pushFloat32('session-a', 48_000, constant(960, 0.25))
+    expect(falseSink.frames[1]?.discontinuity).toBe(true)
+
+    const rejectSink = new OutcomeSink(['reject', true])
+    const rejectAssembler = new AuroraAudioWorkletFrameAssembler(session(), rejectSink, { frameMs: 20 })
+    await rejectAssembler.pushFloat32('session-a', 48_000, constant(960, 0.25))
+    await nextTurn()
+    expect(rejectAssembler.snapshot()).toMatchObject({ droppedFrames: 1 })
+    await rejectAssembler.pushFloat32('session-a', 48_000, constant(960, 0.25))
+    expect(rejectSink.frames[1]?.discontinuity).toBe(true)
   })
 })
 
@@ -287,6 +365,19 @@ class DeferredSink extends RecordingSink {
 
   resolveAll(): void {
     for (const resolve of this.resolvers.splice(0)) resolve()
+  }
+}
+
+class OutcomeSink extends RecordingSink {
+  constructor(private readonly outcomes: Array<boolean | 'reject'>) {
+    super()
+  }
+
+  override async pushFrame(frame: AuroraPcmFrame): Promise<boolean> {
+    this.frames.push({ ...frame, pcm: new Int16Array(frame.pcm) })
+    const outcome = this.outcomes.shift() ?? true
+    if (outcome === 'reject') throw new Error('/device/path')
+    return outcome
   }
 }
 

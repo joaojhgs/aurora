@@ -14,6 +14,7 @@ const MIN_FRAME_MS = 20
 const MAX_FRAME_MS = 100
 const DEFAULT_START_TIMEOUT_MS = 5_000
 const DEFAULT_STOP_TIMEOUT_MS = 1_000
+const DEFAULT_RESOURCE_RELEASE_TIMEOUT_MS = 200
 const DEFAULT_MAX_PENDING_FRAMES = 4
 const DEFAULT_MAX_TAIL_MS = 200
 
@@ -28,6 +29,7 @@ export interface AuroraBrowserAudioWorkletSourceOptions {
   readonly processorUrl?: string
   readonly startTimeoutMs?: number
   readonly stopTimeoutMs?: number
+  readonly resourceReleaseTimeoutMs?: number
   readonly frameMs?: number
   readonly maxPendingFrames?: number
   readonly maxTailMs?: number
@@ -82,6 +84,7 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
   private readonly processorUrl: string
   private readonly startTimeoutMs: number
   private readonly stopTimeoutMs: number
+  private readonly resourceReleaseTimeoutMs: number
   private readonly frameMs: number
   private readonly maxPendingFrames: number
   private readonly maxTailMs: number
@@ -96,6 +99,12 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
     this.processorUrl = options.processorUrl ?? new URL('./audio-worklet-processor.js', import.meta.url).toString()
     this.startTimeoutMs = boundedInteger(options.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS, 'startTimeoutMs', 100, 30_000)
     this.stopTimeoutMs = boundedInteger(options.stopTimeoutMs ?? DEFAULT_STOP_TIMEOUT_MS, 'stopTimeoutMs', 100, 10_000)
+    this.resourceReleaseTimeoutMs = boundedInteger(
+      options.resourceReleaseTimeoutMs ?? DEFAULT_RESOURCE_RELEASE_TIMEOUT_MS,
+      'resourceReleaseTimeoutMs',
+      1,
+      250
+    )
     this.frameMs = boundedInteger(options.frameMs ?? AURORA_AUDIO_WORKLET_DEFAULT_FRAME_MS, 'frameMs', MIN_FRAME_MS, MAX_FRAME_MS)
     this.maxPendingFrames = boundedInteger(options.maxPendingFrames ?? DEFAULT_MAX_PENDING_FRAMES, 'maxPendingFrames', 1, 32)
     this.maxTailMs = boundedInteger(options.maxTailMs ?? DEFAULT_MAX_TAIL_MS, 'maxTailMs', this.frameMs, 1_000)
@@ -116,7 +125,7 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
     let workletNode: AuroraAudioWorkletNodeLike | null = null
 
     try {
-      mediaStream = await withTimeout(
+      mediaStream = await getUserMediaWithLateStop(
         this.mediaDevices.getUserMedia({ audio: foregroundVoiceConstraints(), video: false }),
         this.startTimeoutMs,
         'audio_source_start_timeout'
@@ -174,8 +183,12 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
     try {
       await active.messageChain
       active.stopping = true
-      await this.requestProcessorAck(active, 'stop')
+      await Promise.race([
+        this.requestProcessorAck(active, 'stop').catch(() => undefined),
+        delay(this.resourceReleaseTimeoutMs)
+      ])
       await active.messageChain
+      await this.cleanup(active)
       await active.assembler.flush()
     } finally {
       await this.cleanup(active)
@@ -242,7 +255,11 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
     if (this.active !== active || active.closed) return
     active.stopping = true
     active.assembler.cancel()
-    this.onLifecycleLost?.(reason)
+    try {
+      this.onLifecycleLost?.(reason)
+    } catch {
+      // Product callbacks must not keep the microphone open.
+    }
     this.bestEffortPostProcessorCancel(active, reason)
     await this.cleanup(active)
   }
@@ -392,8 +409,10 @@ export class AuroraAudioWorkletFrameAssembler {
     while (!this.cancelled && this.tail.length >= this.frameSamples) {
       const frame = this.tail.slice(0, this.frameSamples)
       this.tail = this.tail.slice(this.frameSamples)
-      if (await this.pushFrame(frame, this.discontinuityNext)) {
-        this.discontinuityNext = false
+      const discontinuity = this.discontinuityNext
+      this.discontinuityNext = false
+      if (!await this.pushFrame(frame, discontinuity)) {
+        this.discontinuityNext = true
       }
     }
   }
@@ -415,7 +434,18 @@ export class AuroraAudioWorkletFrameAssembler {
     })
     this.sequence += 1
     this.pendingFrames += 1
-    void this.sink.pushFrame(frame).catch(() => false).finally(() => {
+    void this.sink.pushFrame(frame).then(
+      (accepted) => {
+        if (!accepted) {
+          this.droppedFrames += 1
+          this.discontinuityNext = true
+        }
+      },
+      () => {
+        this.droppedFrames += 1
+        this.discontinuityNext = true
+      }
+    ).finally(() => {
       this.pendingFrames = Math.max(0, this.pendingFrames - 1)
     })
     return true
@@ -545,6 +575,28 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, code: stri
   } finally {
     if (timer !== null) clearTimeout(timer)
   }
+}
+
+async function getUserMediaWithLateStop(promise: Promise<MediaStream>, timeoutMs: number, code: string): Promise<MediaStream> {
+  let timedOut = false
+  promise.then(
+    (stream) => {
+      if (timedOut) stopTracks(stream)
+    },
+    () => {
+      // The visible start path reports a stable sanitized error.
+    }
+  )
+  try {
+    return await withTimeout(promise, timeoutMs, code)
+  } catch (error) {
+    timedOut = true
+    throw error
+  }
+}
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function stopTracks(stream: MediaStream | null): void {
