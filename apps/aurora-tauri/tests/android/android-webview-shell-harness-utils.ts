@@ -251,7 +251,7 @@ export async function sha256DeviceFile(adb: string, serial: string, path: string
   return hash.digest('hex')
 }
 
-function captureAndroidBrowserState(adb: string, serial: string, target: AndroidBrowserTarget): AndroidBrowserRestoreState {
+export function captureAndroidBrowserState(adb: string, serial: string, target: AndroidBrowserTarget): AndroidBrowserRestoreState {
   return {
     packageEnabledState: packageEnabledState(adb, serial, target.packageName),
     stayOnWhilePluggedIn: adbOutputOrEmpty(adb, serial, ['shell', 'settings', 'get', 'global', 'stay_on_while_plugged_in']).trim(),

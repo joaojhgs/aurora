@@ -8,6 +8,7 @@ import {
   adbOutputOrEmpty,
   adbReverseMappings,
   assertExpectedAndroidEmulator,
+  captureAndroidBrowserState,
   cleanupWebViewShell,
   createAndroidWebViewShellHarness,
   launchAndroidBrowser,
@@ -260,14 +261,14 @@ async function createResources(options: Parameters<typeof createAndroidWebViewSh
   try {
     const port = Number(new URL(harness.baseUrl).port)
     const priorReverseMappings = adbReverseMappings(adb, serial)
-    runAdb(adb, serial, ['reverse', '--remove', `tcp:${port}`])
-    runAdb(adb, serial, ['reverse', `tcp:${port}`, `tcp:${port}`])
-    reversedPorts.push(port)
-    const browserRestoreState = launchAndroidBrowser(adb, serial, webViewShellTarget, `${harness.baseUrl}/`)
     restoreState = {
-      ...browserRestoreState,
+      ...captureAndroidBrowserState(adb, serial, webViewShellTarget),
       reverseMappings: priorReverseMappings
     }
+    reversedPorts.push(port)
+    runAdb(adb, serial, ['reverse', '--remove', `tcp:${port}`])
+    runAdb(adb, serial, ['reverse', `tcp:${port}`, `tcp:${port}`])
+    launchAndroidBrowser(adb, serial, webViewShellTarget, `${harness.baseUrl}/`)
     return {
       adb,
       serial,

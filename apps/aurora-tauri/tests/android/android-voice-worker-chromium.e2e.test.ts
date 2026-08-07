@@ -8,6 +8,7 @@ import {
   adbOutputOrEmpty,
   adbReverseMappings,
   assertExpectedAndroidEmulator,
+  captureAndroidBrowserState,
   chromiumChromePackage,
   chromiumChromeTarget,
   cleanupAndroidBrowser,
@@ -95,12 +96,12 @@ describe('Android Chromium production voice Worker/WASM bridge', () => {
       const serial = resolveDeviceSerial()
       const emulator = assertExpectedAndroidEmulator(adb, serial)
       const originalReverseMappings = adbReverseMappings(adb, serial)
-      removeAdbReverseMapping(adb, serial, reverseSentinel.local)
-      runAdb(adb, serial, ['reverse', reverseSentinel.local, reverseSentinel.remote])
-      const sentinelReverseMapping = requiredReverseMapping(adbReverseMappings(adb, serial), reverseSentinel.local)
       cleanup = async () => {
         restoreAdbReverseLocals(adb, serial, originalReverseMappings, [reverseSentinel.local])
       }
+      removeAdbReverseMapping(adb, serial, reverseSentinel.local)
+      runAdb(adb, serial, ['reverse', reverseSentinel.local, reverseSentinel.remote])
+      const sentinelReverseMapping = requiredReverseMapping(adbReverseMappings(adb, serial), reverseSentinel.local)
       const resources = await createResources(adb, serial, emulator)
       cleanup = async () => {
         try {
@@ -202,14 +203,14 @@ async function createResources(adb = resolveAdb(), serial = resolveDeviceSerial(
   try {
     const port = Number(new URL(harness.baseUrl).port)
     const priorReverseMappings = adbReverseMappings(adb, serial)
-    removeAdbReverseMapping(adb, serial, `tcp:${port}`)
-    runAdb(adb, serial, ['reverse', `tcp:${port}`, `tcp:${port}`])
-    reversedPorts.push(port)
-    const browserRestoreState = launchAndroidBrowser(adb, serial, chromiumChromeTarget, `${harness.baseUrl}/`)
     restoreState = {
-      ...browserRestoreState,
+      ...captureAndroidBrowserState(adb, serial, chromiumChromeTarget),
       reverseMappings: priorReverseMappings
     }
+    reversedPorts.push(port)
+    removeAdbReverseMapping(adb, serial, `tcp:${port}`)
+    runAdb(adb, serial, ['reverse', `tcp:${port}`, `tcp:${port}`])
+    launchAndroidBrowser(adb, serial, chromiumChromeTarget, `${harness.baseUrl}/`)
     return {
       adb,
       serial,
