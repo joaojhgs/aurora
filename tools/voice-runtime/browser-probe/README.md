@@ -1,8 +1,8 @@
 # Phase 4 Browser Voice Probe
 
-This harness serves the pinned sherpa-onnx VAD+ASR Emscripten artifacts with
-COOP/COEP headers and runs them inside a dedicated browser Worker. It does not
-vendor WASM, `.data`, model, or generated run artifacts.
+This harness serves the pinned sherpa-onnx VAD+ASR and KWS Emscripten artifacts
+with COOP/COEP headers and runs them inside dedicated browser Workers. It does
+not vendor WASM, `.data`, model, or generated run artifacts.
 
 Example:
 
@@ -16,4 +16,6 @@ AURORA_VOICE_P4_ARTIFACT_ROOT=/path/to/p4-native-voice \
 The probe loads the combined `wasm-vad-asr` module, creates a Silero VAD and an
 offline Moonshine recognizer from the embedded package files, runs the pinned
 Moonshine test WAV inside the Worker, and records main-thread timer lag from the
-page.
+page. It also runs KWS in a separate Worker when `builds/wasm-kws/bin` contains
+the selected GigaSpeech data archive; failed KWS results are reported as
+withheld evidence without invalidating a passing VAD+ASR browser result.
