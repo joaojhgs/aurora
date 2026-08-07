@@ -681,9 +681,6 @@ pub fn validate_manifest(manifest: &ModelPackManifest) -> Result<(), ModelPackEr
         validate_sha256(&file.sha256)?;
         validate_provenance(&file.provenance)?;
         validate_processing(&file.processing)?;
-        if !tasks.contains(&file.task) {
-            return invalid("file_task");
-        }
         if file.byte_size == 0 || file.installed_size == 0 {
             return invalid("size");
         }
@@ -699,6 +696,9 @@ pub fn validate_manifest(manifest: &ModelPackManifest) -> Result<(), ModelPackEr
         let mut dependencies = BTreeSet::new();
         for dependency in &file.dependencies {
             require_nonblank(dependency)?;
+            if dependency == &file.file_id {
+                return invalid("self_dependency");
+            }
             if !dependencies.insert(dependency.clone()) {
                 return invalid("duplicate_dependency");
             }
@@ -723,6 +723,16 @@ pub fn validate_manifest(manifest: &ModelPackManifest) -> Result<(), ModelPackEr
         }
     }
 
+    for file in manifest
+        .files
+        .iter()
+        .filter(|file| !file.revocation.as_ref().is_some_and(|rev| rev.revoked))
+    {
+        let mut selected = BTreeSet::new();
+        let mut visiting = BTreeSet::new();
+        collect_file_closure(manifest, &file.file_id, &mut visiting, &mut selected)?;
+    }
+
     let mut variant_ids = BTreeSet::new();
     for variant in &manifest.variants {
         require_nonblank(&variant.variant_id)?;
@@ -740,6 +750,10 @@ pub fn validate_manifest(manifest: &ModelPackManifest) -> Result<(), ModelPackEr
             if !variant_files.insert(file_id.clone()) {
                 return invalid("duplicate_variant_file");
             }
+            let file = manifest_file(manifest, file_id)?;
+            if revoked_file_ids.contains(file_id) || !tasks.contains(&file.task) {
+                return invalid("variant_file");
+            }
         }
         let requirements = variant_requirements(manifest, variant)?;
         if variant.resource_budget.max_download_bytes == 0
@@ -752,11 +766,6 @@ pub fn validate_manifest(manifest: &ModelPackManifest) -> Result<(), ModelPackEr
             || variant.resource_budget.max_installed_bytes < requirements.installed_bytes
         {
             return invalid("budget");
-        }
-        for file_id in &variant.file_ids {
-            if !file_ids.contains(file_id) || revoked_file_ids.contains(file_id) {
-                return invalid("variant_file");
-            }
         }
     }
     Ok(())
@@ -1005,13 +1014,14 @@ pub fn select_verified_variant(
     selection: &RuntimeSelection,
 ) -> Result<SelectedVariant, ModelPackError> {
     let variant = select_variant(manifest.manifest(), selection)?;
+    let file_ids = variant_file_closure(manifest.manifest(), variant)?;
     let requirements = variant_requirements(manifest.manifest(), variant)?;
     Ok(SelectedVariant {
         manifest_sha256: manifest.manifest_sha256.clone(),
         pack_id: manifest.manifest().pack_id.clone(),
         pack_version: manifest.manifest().pack_version.clone(),
         variant_id: variant.variant_id.clone(),
-        file_ids: variant.file_ids.iter().cloned().collect(),
+        file_ids,
         requirements,
     })
 }
@@ -1022,14 +1032,8 @@ pub fn variant_requirements(
 ) -> Result<VariantRequirements, ModelPackError> {
     let mut download_bytes = 0_u64;
     let mut installed_bytes = 0_u64;
-    for file_id in &variant.file_ids {
-        let file = manifest
-            .files
-            .iter()
-            .find(|candidate| candidate.file_id == *file_id)
-            .ok_or(ModelPackError::InvalidManifest {
-                code: "variant_file",
-            })?;
+    for file_id in variant_file_closure(manifest, variant)? {
+        let file = manifest_file(manifest, &file_id)?;
         if file.revocation.as_ref().is_some_and(|rev| rev.revoked) {
             return invalid("variant_file");
         }
@@ -1044,6 +1048,69 @@ pub fn variant_requirements(
         download_bytes,
         installed_bytes,
     })
+}
+
+fn manifest_file<'a>(
+    manifest: &'a ModelPackManifest,
+    file_id: &str,
+) -> Result<&'a ModelPackFile, ModelPackError> {
+    manifest
+        .files
+        .iter()
+        .find(|candidate| candidate.file_id == file_id)
+        .ok_or(ModelPackError::InvalidManifest {
+            code: "variant_file",
+        })
+}
+
+fn variant_file_closure(
+    manifest: &ModelPackManifest,
+    variant: &ModelPackVariant,
+) -> Result<BTreeSet<String>, ModelPackError> {
+    let mut selected = BTreeSet::new();
+    let mut visiting = BTreeSet::new();
+    for file_id in &variant.file_ids {
+        collect_file_closure(manifest, file_id, &mut visiting, &mut selected)?;
+    }
+    Ok(selected)
+}
+
+fn collect_file_closure(
+    manifest: &ModelPackManifest,
+    file_id: &str,
+    visiting: &mut BTreeSet<String>,
+    selected: &mut BTreeSet<String>,
+) -> Result<(), ModelPackError> {
+    if selected.contains(file_id) {
+        return Ok(());
+    }
+    if !visiting.insert(file_id.to_owned()) {
+        return invalid("dependency_cycle");
+    }
+    let file = manifest_file(manifest, file_id)?;
+    if file.revocation.as_ref().is_some_and(|rev| rev.revoked) {
+        return invalid("variant_file");
+    }
+    for dependency in &file.dependencies {
+        if dependency == file_id {
+            return invalid("self_dependency");
+        }
+        let dependency_file =
+            manifest_file(manifest, dependency).map_err(|_| ModelPackError::InvalidManifest {
+                code: "unknown_dependency",
+            })?;
+        if dependency_file
+            .revocation
+            .as_ref()
+            .is_some_and(|rev| rev.revoked)
+        {
+            return invalid("revoked_dependency");
+        }
+        collect_file_closure(manifest, dependency, visiting, selected)?;
+    }
+    visiting.remove(file_id);
+    selected.insert(file_id.to_owned());
+    Ok(())
 }
 
 fn variant_score(variant: &ModelPackVariant, selection: &RuntimeSelection) -> (u8, u8, u8, u64) {
@@ -1969,6 +2036,130 @@ mod tests {
         assert!(matches!(
             validate_manifest(&manifest),
             Err(ModelPackError::InvalidManifest { code: "overflow" })
+        ));
+    }
+
+    #[test]
+    fn selected_variant_and_requirements_include_dependency_closure() -> Result<(), ModelPackError>
+    {
+        let mut manifest = manifest();
+        manifest.files = vec![
+            file("model", PackTask::Stt, 100),
+            file("frontend", PackTask::Frontend, 30),
+            file("tokenizer", PackTask::Tokenizer, 20),
+            file("shared", PackTask::VoiceEmbedding, 10),
+        ];
+        manifest.files[0].dependencies = vec!["frontend".to_owned(), "tokenizer".to_owned()];
+        manifest.files[1].dependencies = vec!["shared".to_owned()];
+        manifest.files[2].dependencies = vec!["shared".to_owned()];
+        manifest.variants[0].file_ids = vec!["model".to_owned()];
+        manifest.variants[0].resource_budget.max_download_bytes = 160;
+        manifest.variants[0].resource_budget.max_installed_bytes = 160;
+
+        let requirements = variant_requirements(&manifest, &manifest.variants[0])?;
+        assert_eq!(requirements.download_bytes, 160);
+        assert_eq!(requirements.installed_bytes, 160);
+        let verified =
+            verify_manifest(manifest, &TrustPolicy::default(), Some(&AcceptingVerifier))?;
+        let selection = select_verified_variant(
+            &verified,
+            &RuntimeSelection {
+                target: RuntimeTarget::Desktop,
+                os: TargetOs::Linux,
+                arch: TargetArch::X86_64,
+                browser_features: BTreeSet::new(),
+                device_memory_mb: Some(4096),
+                max_download_bytes: 160,
+                max_installed_bytes: 160,
+                max_memory_bytes: 1024,
+                cpu_threads: 1,
+                max_rtf_millis_per_second: 1_000,
+                device_class: DeviceClass::Low,
+                require_interoperable: false,
+            },
+        )?;
+        assert_eq!(selection.requirements().download_bytes, 160);
+        assert_eq!(
+            selection
+                .file_ids()
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["frontend", "model", "shared", "tokenizer"]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dependency_closure_rejects_self_cycles_unknown_and_revoked_transitives() {
+        let mut self_dep = manifest();
+        self_dep.files[0].dependencies = vec!["model".to_owned()];
+        assert!(matches!(
+            validate_manifest(&self_dep),
+            Err(ModelPackError::InvalidManifest {
+                code: "self_dependency"
+            })
+        ));
+
+        let mut cycle = manifest();
+        cycle.files.push(file("dep", PackTask::Tokenizer, 10));
+        cycle.files[0].dependencies = vec!["dep".to_owned()];
+        cycle.files[1].dependencies = vec!["model".to_owned()];
+        assert!(matches!(
+            validate_manifest(&cycle),
+            Err(ModelPackError::InvalidManifest {
+                code: "dependency_cycle"
+            })
+        ));
+
+        let mut dormant_cycle = manifest();
+        dormant_cycle
+            .files
+            .push(file("dep-a", PackTask::Frontend, 10));
+        dormant_cycle
+            .files
+            .push(file("dep-b", PackTask::Tokenizer, 10));
+        dormant_cycle.files[1].dependencies = vec!["dep-b".to_owned()];
+        dormant_cycle.files[2].dependencies = vec!["dep-a".to_owned()];
+        assert!(matches!(
+            validate_manifest(&dormant_cycle),
+            Err(ModelPackError::InvalidManifest {
+                code: "dependency_cycle"
+            })
+        ));
+
+        let mut transitive_unknown = manifest();
+        transitive_unknown
+            .files
+            .push(file("dep", PackTask::Frontend, 10));
+        transitive_unknown.files[0].dependencies = vec!["dep".to_owned()];
+        transitive_unknown.files[1].dependencies = vec!["missing".to_owned()];
+        assert!(matches!(
+            validate_manifest(&transitive_unknown),
+            Err(ModelPackError::InvalidManifest {
+                code: "unknown_dependency"
+            })
+        ));
+
+        let mut transitive_revoked = manifest();
+        transitive_revoked
+            .files
+            .push(file("dep", PackTask::Frontend, 10));
+        let mut revoked = file("revoked", PackTask::Tokenizer, 10);
+        revoked.revocation = Some(Revocation {
+            revoked: true,
+            reason: RevocationReason::Security,
+            since: "2026-08-07".to_owned(),
+            replacement_pack_id: None,
+        });
+        transitive_revoked.files.push(revoked);
+        transitive_revoked.files[0].dependencies = vec!["dep".to_owned()];
+        transitive_revoked.files[1].dependencies = vec!["revoked".to_owned()];
+        assert!(matches!(
+            validate_manifest(&transitive_revoked),
+            Err(ModelPackError::InvalidManifest {
+                code: "revoked_dependency"
+            })
         ));
     }
 

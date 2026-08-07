@@ -54,6 +54,8 @@ impl InMemoryModelStore {
 
     pub fn mark_corrupt(&mut self, pack_id: &str) {
         self.corrupted.insert(pack_id.to_owned());
+        self.lifecycles
+            .retain(|(id, _, _), _snapshot| id.as_str() != pack_id);
         self.active.retain(|_, active| active.pack_id != pack_id);
         self.rollback
             .retain(|_, rollback| rollback.pack_id != pack_id);
@@ -61,6 +63,7 @@ impl InMemoryModelStore {
 
     pub fn revoke_pack(&mut self, pack_id: &str) {
         self.revoked.insert(pack_id.to_owned());
+        self.withdraw_lifecycles_for_revocation(pack_id);
         self.active.retain(|_, active| active.pack_id != pack_id);
         self.rollback
             .retain(|_, rollback| rollback.pack_id != pack_id);
@@ -116,6 +119,28 @@ impl InMemoryModelStore {
             pack_version.to_owned(),
             variant_id.to_owned(),
         )
+    }
+
+    fn withdraw_lifecycles_for_revocation(&mut self, pack_id: &str) {
+        let keys: Vec<_> = self
+            .lifecycles
+            .keys()
+            .filter(|(id, _, _)| id == pack_id)
+            .cloned()
+            .collect();
+        for key in keys {
+            let Some(snapshot) = self.lifecycles.get(&key).cloned() else {
+                continue;
+            };
+            match apply_lifecycle_event(&snapshot, InstallEvent::Revoke, self.now, None) {
+                Ok(revoked) => {
+                    self.lifecycles.insert(key, revoked);
+                }
+                Err(_) => {
+                    self.lifecycles.remove(&key);
+                }
+            }
+        }
     }
 
     fn require_not_withdrawn(&self, pack_id: &str) -> Result<(), ModelPackError> {
@@ -929,6 +954,7 @@ mod tests {
             .await?;
         store.mark_corrupt("pack");
         assert!(store.active_pack(scope(PackTask::Stt)).await?.is_none());
+        assert!(store.lifecycle("pack", "1", "linux").await?.is_none());
         assert_eq!(
             store.open_immutable_file(&selection, "model").await,
             Err(ModelPackError::Store { code: "corrupt" })
@@ -937,6 +963,13 @@ mod tests {
         let other_selection = selection_for(&other);
         install_ready(&mut store, &other).await?;
         store.revoke_pack("other");
+        assert_eq!(
+            store
+                .lifecycle("other", "1", "linux")
+                .await?
+                .map(|snapshot| snapshot.state),
+            Some(InstallState::Revoked)
+        );
         assert_eq!(
             store
                 .activate_pack(scope(PackTask::Stt), &other, &other_selection)
@@ -1033,6 +1066,74 @@ mod tests {
                 code: "missing_file"
             })
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn selected_variant_requires_transitive_dependency_files() -> Result<(), ModelPackError> {
+        let mut raw = manifest("pack", "1", HASH, 10);
+        raw.files = vec![
+            model_file_for("model", PackTask::Stt, HASH, 10),
+            model_file_for("frontend", PackTask::Frontend, HASH_B, 20),
+            model_file_for("tokenizer", PackTask::Tokenizer, HASH, 30),
+        ];
+        raw.files[0].dependencies = vec!["frontend".to_owned()];
+        raw.files[1].dependencies = vec!["tokenizer".to_owned()];
+        raw.variants[0].resource_budget.max_download_bytes = 60;
+        raw.variants[0].resource_budget.max_installed_bytes = 60;
+        let verified = verify_manifest(raw, &TrustPolicy::default(), Some(&AcceptingVerifier))?;
+        let selection = selection_for(&verified);
+        assert_eq!(
+            selection
+                .file_ids()
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["frontend", "model", "tokenizer"]
+        );
+
+        let mut store = InMemoryModelStore::new(Some(60));
+        let root_file = verified
+            .manifest()
+            .files
+            .iter()
+            .find(|file| file.file_id == "model")
+            .expect("root file");
+        let task = store.reserve_file(&verified, &selection, root_file).await?;
+        store
+            .promote_file(&task.storage_key, &root_file.sha256, root_file.byte_size)
+            .await?;
+        store
+            .set_lifecycle(create_lifecycle_snapshot(
+                verified.manifest().pack_id.clone(),
+                verified.manifest().pack_version.clone(),
+                selection.variant_id().to_owned(),
+                0,
+                InstallState::Ready,
+            ))
+            .await?;
+        assert_eq!(
+            store
+                .activate_pack(scope(PackTask::Stt), &verified, &selection)
+                .await,
+            Err(ModelPackError::Store {
+                code: "missing_file"
+            })
+        );
+
+        let mut store = InMemoryModelStore::new(Some(60));
+        install_selection_ready(&mut store, &verified, &selection).await?;
+        store
+            .activate_pack(scope(PackTask::Stt), &verified, &selection)
+            .await?;
+        assert_eq!(
+            store
+                .open_immutable_file(&selection, "tokenizer")
+                .await?
+                .variant_id,
+            "linux"
+        );
+        assert_eq!(store.status().await?.bytes_used, 60);
         Ok(())
     }
 

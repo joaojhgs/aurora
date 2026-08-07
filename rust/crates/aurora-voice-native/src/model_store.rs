@@ -115,6 +115,7 @@ impl NativeModelStore {
     pub fn revoke_pack(&mut self, pack_id: &str) -> Result<(), ModelPackError> {
         let mut next = self.state.clone();
         next.revoked_pack_ids.insert(pack_id.to_owned());
+        withdraw_lifecycles_for_revocation(&mut next, pack_id)?;
         next.active.retain(|_, active| active.pack_id != pack_id);
         next.rollback
             .retain(|_, rollback| rollback.pack_id != pack_id);
@@ -849,6 +850,33 @@ fn reconcile_lifecycle_activity(state: &mut StoreState) -> Result<(), ModelPackE
     Ok(())
 }
 
+fn withdraw_lifecycles_for_revocation(
+    state: &mut StoreState,
+    pack_id: &str,
+) -> Result<(), ModelPackError> {
+    let keys: Vec<String> = state
+        .lifecycles
+        .iter()
+        .filter(|(_, snapshot)| snapshot.pack_id == pack_id)
+        .map(|(key, _)| key.clone())
+        .collect();
+    for key in keys {
+        let Some(snapshot) = state.lifecycles.get(&key).cloned() else {
+            continue;
+        };
+        match apply_lifecycle_event(&snapshot, InstallEvent::Revoke, now_epoch_seconds(), None) {
+            Ok(revoked) => {
+                state.lifecycles.insert(key, revoked);
+            }
+            Err(ModelPackError::InvalidLifecycleTransition) => {
+                state.lifecycles.remove(&key);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(())
+}
+
 fn read_state(root: &Path) -> Result<StoreState, ModelPackError> {
     let path = state_path(root);
     if !path.exists() {
@@ -919,26 +947,37 @@ fn recover_staging(root: &Path, state: &StoreState) -> Result<(), ModelPackError
 }
 
 fn recover_blobs(root: &Path, state: &mut StoreState) -> Result<(), ModelPackError> {
-    let mut corrupt_pack_ids = BTreeSet::new();
+    let mut corrupt_lifecycle_keys = BTreeSet::new();
     for file in state.files.values() {
         let path = blob_path(root, &file.sha256);
         match inspect_file(&path) {
             Ok(actual) if actual.sha256 == file.sha256 && actual.byte_size == file.byte_size => {}
             Ok(_) | Err(_) => {
-                corrupt_pack_ids.insert(file.pack_id.clone());
+                corrupt_lifecycle_keys.insert(lifecycle_map_key(
+                    &file.pack_id,
+                    &file.pack_version,
+                    &file.variant_id,
+                ));
             }
         }
     }
-    if !corrupt_pack_ids.is_empty() {
+    if !corrupt_lifecycle_keys.is_empty() {
+        state.files.retain(|_, file| {
+            !corrupt_lifecycle_keys.contains(&lifecycle_map_key(
+                &file.pack_id,
+                &file.pack_version,
+                &file.variant_id,
+            ))
+        });
         state
-            .files
-            .retain(|_, file| !corrupt_pack_ids.contains(&file.pack_id));
+            .lifecycles
+            .retain(|key, _| !corrupt_lifecycle_keys.contains(key));
         state
             .active
-            .retain(|_, active| !corrupt_pack_ids.contains(&active.pack_id));
-        state
-            .rollback
-            .retain(|_, rollback| !corrupt_pack_ids.contains(&rollback.pack_id));
+            .retain(|_, active| !corrupt_lifecycle_keys.contains(&identity_lifecycle_key(active)));
+        state.rollback.retain(|_, rollback| {
+            !corrupt_lifecycle_keys.contains(&identity_lifecycle_key(rollback))
+        });
     }
     reconcile_scoped_pointers(root, state)?;
 
@@ -1567,6 +1606,142 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn activation_requires_transitive_dependency_files() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let model_bytes = b"model";
+        let frontend_bytes = b"frontend";
+        let tokenizer_bytes = b"tokenizer";
+        let mut model = model_file_for("model", PackTask::Stt, model_bytes);
+        model.dependencies = vec!["frontend".to_owned()];
+        let mut frontend = model_file_for("frontend", PackTask::Frontend, frontend_bytes);
+        frontend.dependencies = vec!["tokenizer".to_owned()];
+        let tokenizer = model_file_for("tokenizer", PackTask::Tokenizer, tokenizer_bytes);
+        let raw = ModelPackManifest {
+            schema_version: 1,
+            pack_id: "pack".to_owned(),
+            pack_version: "1".to_owned(),
+            display_name: "Pack".to_owned(),
+            tasks: vec![PackTask::Stt],
+            license: license(),
+            languages: vec![LanguageSupport {
+                language: "en".to_owned(),
+                locale: Some("en-US".to_owned()),
+                fixed_language: true,
+                auto_detect: false,
+            }],
+            capabilities: CapabilityFlags {
+                streaming: true,
+                cancellation: true,
+            },
+            provenance: provenance(),
+            files: vec![model, frontend, tokenizer],
+            variants: vec![variant(
+                "linux",
+                RuntimeTarget::Desktop,
+                TargetOs::Linux,
+                TargetArch::X86_64,
+                "model",
+                22,
+            )],
+            rollback_from: None,
+            supersedes_pack_id: None,
+            revocation: None,
+            signature: Some(ManifestSignature {
+                key_id: "key".to_owned(),
+                algorithm: "ed25519".to_owned(),
+                value: "signed".to_owned(),
+            }),
+        };
+        let verified = verify_manifest(raw, &TrustPolicy::default(), Some(&AcceptingVerifier))
+            .expect("manifest verifies");
+        let selection = selection_for(&verified);
+        assert_eq!(
+            selection
+                .file_ids()
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec!["frontend", "model", "tokenizer"]
+        );
+
+        let success_temp = tempfile::tempdir().expect("tempdir");
+        let mut store = open_store(success_temp.path(), 22);
+        let model = verified
+            .manifest()
+            .files
+            .iter()
+            .find(|file| file.file_id == "model")
+            .expect("model file");
+        let task = store
+            .reserve_file(&verified, &selection, model)
+            .await
+            .expect("root reservation succeeds");
+        std::fs::write(store.staging_path(&task.storage_key), model_bytes).expect("stage model");
+        store
+            .promote_file(&task.storage_key, &model.sha256, model.byte_size)
+            .await
+            .expect("root promotion succeeds");
+        store
+            .set_lifecycle(create_lifecycle_snapshot(
+                verified.manifest().pack_id.clone(),
+                verified.manifest().pack_version.clone(),
+                selection.variant_id().to_owned(),
+                now_epoch_seconds(),
+                InstallState::Ready,
+            ))
+            .await
+            .expect("lifecycle persists");
+        assert_eq!(
+            store
+                .activate_pack(scope(PackTask::Stt), &verified, &selection)
+                .await,
+            Err(super::store("missing_file"))
+        );
+
+        let mut store = open_store(temp.path(), 22);
+        for (file_id, bytes) in [
+            ("model", model_bytes.as_slice()),
+            ("frontend", frontend_bytes.as_slice()),
+            ("tokenizer", tokenizer_bytes.as_slice()),
+        ] {
+            let file = verified
+                .manifest()
+                .files
+                .iter()
+                .find(|file| file.file_id == file_id)
+                .expect("selected file");
+            let task = store
+                .reserve_file(&verified, &selection, file)
+                .await
+                .expect("reservation succeeds");
+            std::fs::write(store.staging_path(&task.storage_key), bytes).expect("stage bytes");
+            store
+                .promote_file(&task.storage_key, &file.sha256, file.byte_size)
+                .await
+                .expect("promotion succeeds");
+        }
+        store
+            .set_lifecycle(create_lifecycle_snapshot(
+                verified.manifest().pack_id.clone(),
+                verified.manifest().pack_version.clone(),
+                selection.variant_id().to_owned(),
+                now_epoch_seconds(),
+                InstallState::Ready,
+            ))
+            .await
+            .expect("lifecycle persists");
+        store
+            .activate_pack(scope(PackTask::Stt), &verified, &selection)
+            .await
+            .expect("activation succeeds with dependency closure");
+        assert_eq!(store.status().await.expect("status").bytes_used, 22);
+        store
+            .open_immutable_file(&selection, "tokenizer")
+            .await
+            .expect("dependency opens");
+    }
+
+    #[tokio::test]
     async fn activation_failure_leaves_old_active_and_rollback_untouched() {
         let temp = tempfile::tempdir().expect("tempdir");
         let mut store = open_store(temp.path(), 100);
@@ -2085,6 +2260,14 @@ mod tests {
             .expect("stt active");
 
         store.revoke_pack("stt-pack").expect("revoke persists");
+        assert_eq!(
+            store
+                .lifecycle("stt-pack", "1", "linux")
+                .await
+                .expect("stt lifecycle readable")
+                .map(|snapshot| snapshot.state),
+            Some(InstallState::Revoked)
+        );
         assert!(store
             .active_pack(scope(PackTask::Stt))
             .await
@@ -2115,10 +2298,23 @@ mod tests {
             .expect("kws active readable")
             .is_none());
         assert!(recovered
+            .lifecycle("kws-pack", "1", "linux")
+            .await
+            .expect("kws lifecycle readable")
+            .is_none());
+        assert!(recovered
             .active_pack(scope(PackTask::Stt))
             .await
             .expect("stt active readable")
             .is_none());
+        assert_eq!(
+            recovered
+                .lifecycle("stt-pack", "1", "linux")
+                .await
+                .expect("stt lifecycle readable")
+                .map(|snapshot| snapshot.state),
+            Some(InstallState::Revoked)
+        );
     }
 
     #[tokio::test]
@@ -2183,8 +2379,18 @@ mod tests {
             Err(super::store("corrupt"))
         );
 
-        let mut store = open_store(temp.path(), 100);
+        let revoke_temp = tempfile::tempdir().expect("tempdir");
+        let mut store = open_store(revoke_temp.path(), 100);
+        install_ready(&mut store, &manifest, b"model").await;
         store.revoke_pack("pack").expect("revoke persists");
+        assert_eq!(
+            store
+                .lifecycle("pack", "1", "linux")
+                .await
+                .expect("lifecycle readable")
+                .map(|snapshot| snapshot.state),
+            Some(InstallState::Revoked)
+        );
         assert_eq!(
             store
                 .active_pack(scope(PackTask::Stt))
@@ -2225,6 +2431,11 @@ mod tests {
             recovered.open_immutable_file(&selection, "model").await,
             Err(super::store("missing_file"))
         );
+        assert!(recovered
+            .lifecycle("pack", "1", "linux")
+            .await
+            .expect("lifecycle readable")
+            .is_none());
     }
 
     #[tokio::test]
