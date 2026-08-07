@@ -1,6 +1,6 @@
 """STT (Speech-to-Text) and audio session contract models."""
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 
@@ -51,6 +51,9 @@ class STTMethods:
     USER_SPEECH_CAPTURED = f"{STTModule.NAME}.UserSpeechCaptured"
     LISTEN = f"{STTModule.NAME}.Listen"
     STOP_LISTENING = f"{STTModule.NAME}.StopListening"
+    CAPTURE_PREPARE = f"{STTModule.NAME}.CapturePrepare"
+    CAPTURE_RELEASE = f"{STTModule.NAME}.CaptureRelease"
+    CAPTURE_STATUS = f"{STTModule.NAME}.CaptureStatus"
     AUDIO_LEVEL = f"{STTModule.NAME}.AudioLevel"
     AUDIO = f"{STTModule.NAME}.Audio"
     CONTROL = f"{STTModule.NAME}.Control"
@@ -181,6 +184,76 @@ class STTStopListeningRequest(IOModel):
     """Request to stop listening."""
 
     reason: str | None = None
+
+
+class STTCapturePrepareRequest(IOModel):
+    """Request exclusive native ownership of the local microphone."""
+
+    owner: Literal["native"] = "native"
+    owner_id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_.:-]+$")
+    lease_id: str | None = Field(default=None, min_length=1, max_length=128)
+    reason: str = Field(default="native_voice_runtime", max_length=80)
+    requested_ttl_s: int = Field(default=300, gt=0, le=3600)
+    correlation_id: str | None = Field(default=None, max_length=128)
+
+
+class STTCapturePrepareResponse(IOModel):
+    """Redacted capture-owner grant response."""
+
+    granted: bool
+    status: Literal["granted", "already_owned", "unavailable"]
+    lease_id: str | None = None
+    generation: int
+    owner: Literal["none", "python", "native"]
+    python_capture_active: bool
+    stopped_python_capture: bool = False
+    message: str | None = None
+    redacted: bool = True
+
+
+class STTCaptureReleaseRequest(IOModel):
+    """Release a native microphone ownership lease."""
+
+    owner: Literal["native"] = "native"
+    owner_id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_.:-]+$")
+    lease_id: str = Field(min_length=1, max_length=128)
+    generation: int = Field(ge=0)
+    reason: str = Field(default="native_release", max_length=80)
+    restart_python_capture: bool = True
+    correlation_id: str | None = Field(default=None, max_length=128)
+
+
+class STTCaptureReleaseResponse(IOModel):
+    """Redacted native capture release response."""
+
+    released: bool
+    status: Literal["released", "already_released", "rejected", "python_unavailable"]
+    generation: int
+    owner: Literal["none", "python", "native"]
+    python_capture_active: bool
+    restarted_python_capture: bool = False
+    message: str | None = None
+    redacted: bool = True
+
+
+class STTCaptureStatusRequest(IOModel):
+    """Request redacted capture-owner status."""
+
+    include_inactive: bool = True
+
+
+class STTCaptureStatusResponse(IOModel):
+    """Redacted microphone ownership status."""
+
+    owner: Literal["none", "python", "native"]
+    generation: int
+    native_lease_active: bool = False
+    lease_expires_at: str | None = None
+    python_capture_active: bool
+    service_running: bool
+    audio_input_available: bool
+    can_restart_python_capture: bool
+    redacted: bool = True
 
 
 class STTAudioChunk(IOModel):
