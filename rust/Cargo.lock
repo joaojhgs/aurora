@@ -114,10 +114,16 @@ dependencies = [
 name = "aurora-voice-sherpa"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "aurora-voice-core",
  "aurora-voice-engine",
+ "aurora-voice-sherpa-sys",
  "thiserror",
 ]
+
+[[package]]
+name = "aurora-voice-sherpa-sys"
+version = "0.1.0"
 
 [[package]]
 name = "aurora-voice-testkit"
