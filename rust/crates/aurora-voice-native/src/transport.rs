@@ -85,6 +85,30 @@ pub enum MicrophoneAudioPolicy {
     ExplicitRemoteConsent,
 }
 
+/// Redacted endpoint class used to bind microphone-audio policy decisions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NativeGatewayEndpointClass {
+    Loopback,
+    Remote,
+}
+
+/// Redacted microphone-audio routing profile. It exposes no URL or auth data.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NativeGatewayMicrophoneAudioProfile {
+    endpoint_class: NativeGatewayEndpointClass,
+    microphone_audio_policy: MicrophoneAudioPolicy,
+}
+
+impl NativeGatewayMicrophoneAudioProfile {
+    pub fn endpoint_class(self) -> NativeGatewayEndpointClass {
+        self.endpoint_class
+    }
+
+    pub fn microphone_audio_policy(self) -> MicrophoneAudioPolicy {
+        self.microphone_audio_policy
+    }
+}
+
 impl Default for TransportLimits {
     fn default() -> Self {
         Self {
@@ -314,6 +338,17 @@ impl NativeGatewayTransport {
             limits,
             active_assistant: None,
         })
+    }
+
+    pub fn microphone_audio_profile(&self) -> NativeGatewayMicrophoneAudioProfile {
+        NativeGatewayMicrophoneAudioProfile {
+            endpoint_class: if is_loopback_endpoint(&self.base_url) {
+                NativeGatewayEndpointClass::Loopback
+            } else {
+                NativeGatewayEndpointClass::Remote
+            },
+            microphone_audio_policy: self.limits.microphone_audio_policy,
+        }
     }
 
     /// Invoke one generated finite Gateway method with schema validation on
@@ -1714,6 +1749,15 @@ mod tests {
             loopback_microphone_limits(),
         )
         .expect("transport");
+        let profile = transport.microphone_audio_profile();
+        assert_eq!(
+            profile.endpoint_class(),
+            NativeGatewayEndpointClass::Loopback
+        );
+        assert_eq!(
+            profile.microphone_audio_policy(),
+            MicrophoneAudioPolicy::LoopbackOnly
+        );
 
         let result = transport
             .invoke_generated(
@@ -1764,6 +1808,18 @@ mod tests {
         .expect("transport");
 
         assert_eq!(remote_transport.validate_microphone_audio_policy(), Ok(()));
+        let remote_profile = remote_transport.microphone_audio_profile();
+        assert_eq!(
+            remote_profile.endpoint_class(),
+            NativeGatewayEndpointClass::Remote
+        );
+        assert_eq!(
+            remote_profile.microphone_audio_policy(),
+            MicrophoneAudioPolicy::ExplicitRemoteConsent
+        );
+        let debug = format!("{remote_profile:?}");
+        assert!(!debug.contains("remote.example.invalid"));
+        assert!(!debug.contains("do-not-render"));
 
         let blocked_transport = NativeGatewayTransport::new(
             Url::parse("https://remote.example.invalid/").expect("URL"),

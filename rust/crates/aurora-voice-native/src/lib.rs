@@ -7,6 +7,7 @@ mod audio;
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
 mod desktop_capture;
 mod downloader;
+mod gateway_stt;
 mod gateway_tts;
 mod model_store;
 mod transport;
@@ -23,10 +24,12 @@ pub use downloader::{
     AssetIntegrity, DownloadError, DownloadPolicy, DownloadProgress, DownloadReceipt,
     NativeDownloader,
 };
+pub use gateway_stt::{NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig};
 pub use gateway_tts::{NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer};
 pub use model_store::{NativeImmutableModelFile, NativeModelStore, NativeModelStoreConfig};
 pub use transport::{
-    GatewayAuth, GatewayEvent, MicrophoneAudioPolicy, NativeEventStream, NativeGatewayTransport,
+    GatewayAuth, GatewayEvent, MicrophoneAudioPolicy, NativeEventStream,
+    NativeGatewayEndpointClass, NativeGatewayMicrophoneAudioProfile, NativeGatewayTransport,
     NativeRequestOptions, SseSubscription, TransportError, TransportLimits,
 };
 pub use trust::Ed25519TrustStore;
