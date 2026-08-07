@@ -1,4 +1,4 @@
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::fmt;
 use std::os::raw::{c_char, c_float, c_int};
 use std::ptr::NonNull;
@@ -309,6 +309,9 @@ impl KeywordResultHandle {
 
     fn snapshot(&self) -> Result<KeywordResult, VadError> {
         let raw = unsafe { self.ptr.as_ref() };
+        if !raw.start_time.is_finite() || raw.start_time < 0.0 {
+            return Err(VadError::NativeResultTimestampCount);
+        }
         if raw.count < 0 {
             return Err(VadError::NativeResultTokenCountExceeded);
         }
@@ -355,13 +358,21 @@ fn read_c_string(ptr: *const c_char, max_bytes: usize) -> Result<String, VadErro
     if ptr.is_null() {
         return Ok(String::new());
     }
-    let bytes = unsafe { CStr::from_ptr(ptr) }.to_bytes();
-    if bytes.len() > max_bytes {
-        return Err(VadError::NativeResultStringTooLong);
-    }
+    let len = bounded_c_strlen(ptr, max_bytes)?;
+    let bytes = unsafe { std::slice::from_raw_parts(ptr.cast::<u8>(), len) };
     std::str::from_utf8(bytes)
         .map(str::to_owned)
         .map_err(|_| VadError::NativeResultInvalidUtf8)
+}
+
+fn bounded_c_strlen(ptr: *const c_char, max_bytes: usize) -> Result<usize, VadError> {
+    for len in 0..=max_bytes {
+        let byte = unsafe { *ptr.cast::<u8>().add(len) };
+        if byte == 0 {
+            return Ok(len);
+        }
+    }
+    Err(VadError::NativeResultStringTooLong)
 }
 
 fn read_token_array(ptr: *const *const c_char, count: usize) -> Result<Vec<String>, VadError> {
@@ -383,12 +394,44 @@ fn read_timestamps(ptr: *const c_float, count: usize) -> Result<Vec<f32>, VadErr
         return Ok(Vec::new());
     }
     if ptr.is_null() {
-        return Ok(Vec::new());
+        return Err(VadError::NativeResultTimestampCount);
     }
     let values = unsafe { std::slice::from_raw_parts(ptr, count) }.to_vec();
-    if values.iter().all(|value| value.is_finite()) {
+    if values
+        .iter()
+        .all(|value| value.is_finite() && *value >= 0.0)
+    {
         Ok(values)
     } else {
         Err(VadError::NativeResultTimestampCount)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bounded_c_string_rejects_missing_nul_before_copy() {
+        let bytes = [b'A'; 4];
+        let error = read_c_string(bytes.as_ptr().cast(), 3)
+            .expect_err("missing nul inside bound should fail");
+        assert_eq!(error.code(), ErrorCode::NativeResultStringTooLong);
+    }
+
+    #[test]
+    fn nonzero_token_count_requires_timestamps() {
+        let error = read_timestamps(std::ptr::null(), 1)
+            .expect_err("counted tokens require timestamp array");
+        assert_eq!(error.code(), ErrorCode::NativeResultTimestampCount);
+    }
+
+    #[test]
+    fn timestamps_must_be_finite_and_nonnegative() {
+        for timestamps in [[-0.1], [f32::NAN], [f32::INFINITY]] {
+            let error = read_timestamps(timestamps.as_ptr(), timestamps.len())
+                .expect_err("invalid timestamp should fail");
+            assert_eq!(error.code(), ErrorCode::NativeResultTimestampCount);
+        }
     }
 }

@@ -4,7 +4,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use aurora_voice_sherpa_sys::{ErrorCode, KeywordResult, KeywordSpotter, KeywordSpotterConfig};
+use aurora_voice_sherpa_sys::{ErrorCode, KeywordResult, KeywordSession, KeywordSpotterConfig};
 
 const LIGHT_UP_KEYWORD: &str = "▁ L IGHT ▁UP";
 
@@ -23,52 +23,49 @@ fn light_up_detection_matches_phase4_wav_with_inline_keywords() {
 #[test]
 fn malformed_and_finished_inputs_are_rejected_without_native_growth() {
     let config = kws_config();
-    let spotter = KeywordSpotter::new(&config).expect("spotter should be created");
-    let mut stream = spotter.create_stream().expect("stream should be created");
+    let mut session = KeywordSession::new(&config).expect("session should be created");
+    let session_debug = format!("{session:?}");
+    assert!(session_debug.contains("spotter: \"<redacted>\""));
+    assert!(session_debug.contains("stream: \"<redacted>\""));
 
-    let malformed = spotter
-        .accept_waveform(&mut stream, 16_000, &[f32::NAN])
+    let malformed = session
+        .accept_waveform(16_000, &[f32::NAN])
         .expect_err("nan input should be rejected before native accept");
     assert_eq!(malformed.code(), ErrorCode::WaveformNonFinite);
 
-    spotter
-        .input_finished(&mut stream)
+    session
+        .input_finished()
         .expect("input_finished should be idempotent");
-    spotter
-        .input_finished(&mut stream)
+    session
+        .input_finished()
         .expect("second input_finished should be idempotent");
-    let after_finished = spotter
-        .accept_waveform(&mut stream, 16_000, &[0.0; 512])
+    let after_finished = session
+        .accept_waveform(16_000, &[0.0; 512])
         .expect_err("accept after input_finished should fail closed");
     assert_eq!(after_finished.code(), ErrorCode::WaveformInputFinished);
 
-    spotter
-        .reset(&mut stream)
-        .expect("reset should allow reuse");
-    spotter
-        .accept_waveform(&mut stream, 16_000, &[0.0; 512])
+    session.reset().expect("reset should allow reuse");
+    session
+        .accept_waveform(16_000, &[0.0; 512])
         .expect("reset stream should accept silence");
-    spotter
-        .cancel(&mut stream)
-        .expect("cancel should reset stream");
+    session.cancel().expect("cancel should reset stream");
 }
 
 #[test]
 fn long_silence_runs_without_detection_or_reset() {
     let config = kws_config();
-    let spotter = KeywordSpotter::new(&config).expect("spotter should be created");
-    let mut stream = spotter.create_stream().expect("stream should be created");
+    let mut session = KeywordSession::new(&config).expect("session should be created");
     let silence = vec![0.0; 16_000 * 35];
 
     for chunk in silence.chunks(1600) {
-        let detections = spotter
-            .accept_waveform(&mut stream, 16_000, chunk)
+        let detections = session
+            .accept_waveform(16_000, chunk)
             .expect("long silence should stream");
         assert!(detections.is_empty(), "silence should not trigger");
     }
 
-    let final_detections = spotter
-        .input_finished(&mut stream)
+    let final_detections = session
+        .input_finished()
         .expect("silence finish should decode bounded frames");
     assert!(final_detections.is_empty(), "silence should remain quiet");
 }
@@ -84,30 +81,58 @@ fn config_preflights_missing_paths_before_native_create() {
         LIGHT_UP_KEYWORD,
     );
 
-    let error = KeywordSpotter::new(&config).expect_err("missing path should be preflighted");
+    let error = KeywordSession::new(&config).expect_err("missing path should be preflighted");
     assert_eq!(error.code(), ErrorCode::ConfigModelPathUnavailable);
     assert!(!error.to_string().contains("private-user-token"));
 }
 
+#[test]
+fn session_owns_stream_until_after_spotter_use() {
+    let config = kws_config();
+    for _ in 0..3 {
+        let mut session = KeywordSession::new(&config).expect("session should be created");
+        session
+            .accept_waveform(16_000, &[0.0; 1600])
+            .expect("session should accept silence");
+    }
+}
+
+#[test]
+fn keyword_result_debug_redacts_user_derived_content() {
+    let result = KeywordResult {
+        keyword: "LIGHT UP".to_owned(),
+        tokens: vec!["▁".to_owned(), "L".to_owned()],
+        timestamps: vec![0.1, 0.2],
+        start_time: 0.0,
+        json: "{\"keyword\":\"LIGHT UP\"}".to_owned(),
+    };
+
+    let debug = format!("{result:?}");
+    assert!(debug.contains("keyword: \"<redacted>\""));
+    assert!(debug.contains("tokens: \"<redacted>\""));
+    assert!(debug.contains("json: \"<redacted>\""));
+    assert!(!debug.contains("LIGHT UP"));
+    assert!(!debug.contains("▁"));
+}
+
 fn run_kws(config: &KeywordSpotterConfig, pcm: &[f32], chunk_size: usize) -> Vec<KeywordResult> {
-    let spotter = KeywordSpotter::new(config).expect("spotter should be created");
-    let mut stream = spotter.create_stream().expect("stream should be created");
+    let mut session = KeywordSession::new(config).expect("session should be created");
     let mut detections = Vec::new();
     for chunk in pcm.chunks(chunk_size) {
         detections.extend(
-            spotter
-                .accept_waveform(&mut stream, 16_000, chunk)
+            session
+                .accept_waveform(16_000, chunk)
                 .expect("kws chunk should decode"),
         );
     }
     detections.extend(
-        spotter
-            .accept_waveform(&mut stream, 16_000, &[0.0; 8000])
+        session
+            .accept_waveform(16_000, &[0.0; 8000])
             .expect("tail padding should decode"),
     );
     detections.extend(
-        spotter
-            .input_finished(&mut stream)
+        session
+            .input_finished()
             .expect("finish should decode remaining frames"),
     );
     detections

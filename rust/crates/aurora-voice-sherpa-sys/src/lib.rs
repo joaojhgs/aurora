@@ -612,8 +612,9 @@ impl fmt::Debug for KeywordResult {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("KeywordResult")
-            .field("keyword", &self.keyword)
+            .field("keyword", &"<redacted>")
             .field("token_count", &self.tokens.len())
+            .field("tokens", &"<redacted>")
             .field("timestamps", &"<redacted>")
             .field("start_time", &self.start_time)
             .field("json", &"<redacted>")
@@ -621,15 +622,23 @@ impl fmt::Debug for KeywordResult {
     }
 }
 
-pub struct KeywordSpotter {
+struct KeywordSpotter {
     inner: native_kws::Spotter,
     max_decode_steps: usize,
     _not_send_sync: PhantomData<Rc<()>>,
 }
 
-pub struct KeywordStream {
+struct KeywordStream {
     inner: native_kws::Stream,
     input_finished: bool,
+    _not_send_sync: PhantomData<Rc<()>>,
+}
+
+pub struct KeywordSession {
+    // Drop order is declaration order. The native stream must be destroyed
+    // before the spotter that created it.
+    stream: KeywordStream,
+    spotter: KeywordSpotter,
     _not_send_sync: PhantomData<Rc<()>>,
 }
 
@@ -654,8 +663,19 @@ impl fmt::Debug for KeywordStream {
     }
 }
 
+impl fmt::Debug for KeywordSession {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("KeywordSession")
+            .field("spotter", &"<redacted>")
+            .field("stream", &"<redacted>")
+            .field("send_sync", &"!Send + !Sync")
+            .finish()
+    }
+}
+
 impl KeywordSpotter {
-    pub fn new(config: &KeywordSpotterConfig) -> Result<Self, VadError> {
+    fn new(config: &KeywordSpotterConfig) -> Result<Self, VadError> {
         config.validate()?;
         Ok(Self {
             inner: native_kws::Spotter::new(config)?,
@@ -664,52 +684,63 @@ impl KeywordSpotter {
         })
     }
 
-    pub fn create_stream(&self) -> Result<KeywordStream, VadError> {
+    fn create_stream(&self) -> Result<KeywordStream, VadError> {
         Ok(KeywordStream {
             inner: self.inner.create_stream()?,
             input_finished: false,
             _not_send_sync: PhantomData,
         })
     }
+}
+
+impl KeywordSession {
+    pub fn new(config: &KeywordSpotterConfig) -> Result<Self, VadError> {
+        let spotter = KeywordSpotter::new(config)?;
+        let stream = spotter.create_stream()?;
+        Ok(Self {
+            stream,
+            spotter,
+            _not_send_sync: PhantomData,
+        })
+    }
 
     pub fn accept_waveform(
-        &self,
-        stream: &mut KeywordStream,
+        &mut self,
         sample_rate: i32,
         pcm: &[f32],
     ) -> Result<Vec<KeywordResult>, VadError> {
-        if stream.input_finished {
+        if self.stream.input_finished {
             return Err(VadError::InvalidWaveform {
                 code: ErrorCode::WaveformInputFinished,
             });
         }
         validate_kws_pcm(sample_rate, pcm)?;
-        self.inner
-            .accept_waveform(&mut stream.inner, sample_rate, pcm)?;
-        self.inner
-            .decode_ready(&mut stream.inner, self.max_decode_steps)
+        self.spotter
+            .inner
+            .accept_waveform(&mut self.stream.inner, sample_rate, pcm)?;
+        self.spotter
+            .inner
+            .decode_ready(&mut self.stream.inner, self.spotter.max_decode_steps)
     }
 
-    pub fn input_finished(
-        &self,
-        stream: &mut KeywordStream,
-    ) -> Result<Vec<KeywordResult>, VadError> {
-        if !stream.input_finished {
-            self.inner.input_finished(&mut stream.inner)?;
-            stream.input_finished = true;
+    pub fn input_finished(&mut self) -> Result<Vec<KeywordResult>, VadError> {
+        if !self.stream.input_finished {
+            self.spotter.inner.input_finished(&mut self.stream.inner)?;
+            self.stream.input_finished = true;
         }
-        self.inner
-            .decode_ready(&mut stream.inner, self.max_decode_steps)
+        self.spotter
+            .inner
+            .decode_ready(&mut self.stream.inner, self.spotter.max_decode_steps)
     }
 
-    pub fn reset(&self, stream: &mut KeywordStream) -> Result<(), VadError> {
-        self.inner.reset(&mut stream.inner)?;
-        stream.input_finished = false;
+    pub fn reset(&mut self) -> Result<(), VadError> {
+        self.spotter.inner.reset(&mut self.stream.inner)?;
+        self.stream.input_finished = false;
         Ok(())
     }
 
-    pub fn cancel(&self, stream: &mut KeywordStream) -> Result<(), VadError> {
-        self.reset(stream)
+    pub fn cancel(&mut self) -> Result<(), VadError> {
+        self.reset()
     }
 }
 
