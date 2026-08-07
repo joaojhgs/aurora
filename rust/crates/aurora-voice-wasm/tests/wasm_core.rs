@@ -194,6 +194,48 @@ fn wasm_bindgen_runtime_rejects_stale_generation_and_redacts_error() {
 }
 
 #[wasm_bindgen_test]
+fn wasm_bindgen_runtime_rejects_unsafe_timestamp_numbers() {
+    let config = serde_wasm_bindgen::to_value(&WasmRuntimeConfig {
+        surface: "hosted-web".to_owned(),
+        max_frames: 4,
+        max_samples: 16_000,
+    })
+    .expect("config");
+    let mut runtime = AuroraVoiceWasmRuntime::new(config).expect("runtime");
+    for (timestamp, code) in [
+        (-1.0, "timestamp"),
+        (1.5, "timestamp"),
+        (9_007_199_254_740_992.0, "timestamp_bounds"),
+    ] {
+        let err = runtime
+            .start_session(
+                serde_wasm_bindgen::to_value(&WasmSessionStart {
+                    session_id: "session-1".to_owned(),
+                    route_revision: 3,
+                    at_micros: timestamp,
+                })
+                .expect("start request"),
+            )
+            .expect_err("unsafe timestamp");
+        assert_eq!(err.as_string().as_deref(), Some(code));
+    }
+    let started: WasmStartedSession = serde_wasm_bindgen::from_value(
+        runtime
+            .start_session(
+                serde_wasm_bindgen::to_value(&WasmSessionStart {
+                    session_id: "session-1".to_owned(),
+                    route_revision: 3,
+                    at_micros: 1_786_102_400_123_000.0,
+                })
+                .expect("safe start request"),
+            )
+            .expect("safe timestamp"),
+    )
+    .expect("started");
+    assert_eq!(started.generation, 1);
+}
+
+#[wasm_bindgen_test]
 fn wasm_bindgen_runtime_abandons_failed_turn_without_completion() {
     let config = serde_wasm_bindgen::to_value(&WasmRuntimeConfig {
         surface: "hosted-web".to_owned(),
