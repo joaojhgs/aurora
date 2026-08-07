@@ -27,7 +27,7 @@ def test_parse_probe_stdout_uses_last_json_line() -> None:
     runner = load_runner()
 
     result = runner.parse_probe_stdout(
-        "ignored loader output\n{\"ok\":true,\"mode\":\"stt\",\"text\":\"hello\"}\n",
+        'ignored loader output\n{"ok":true,"mode":"stt","text":"hello"}\n',
         "stt",
     )
 
