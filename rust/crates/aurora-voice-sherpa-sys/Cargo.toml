@@ -4,12 +4,13 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Safe containment for pinned sherpa-onnx Silero VAD C ABI"
+description = "Safe containment for pinned sherpa-onnx speech C ABI"
 
 [features]
 default = []
 native-kws = []
 native-vad = []
+native-stt = []
 
 [dependencies]
 

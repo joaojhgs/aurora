@@ -6,7 +6,8 @@ fn main() {
     println!("cargo:rerun-if-env-changed=AURORA_SHERPA_ONNX_LINK_KIND");
 
     let native_enabled = env::var_os("CARGO_FEATURE_NATIVE_VAD").is_some()
-        || env::var_os("CARGO_FEATURE_NATIVE_KWS").is_some();
+        || env::var_os("CARGO_FEATURE_NATIVE_KWS").is_some()
+        || env::var_os("CARGO_FEATURE_NATIVE_STT").is_some();
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
     if !native_enabled || target_arch == "wasm32" {
         return;
