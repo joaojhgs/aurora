@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AuroraBrowserModelStoreError,
   AuroraBrowserModelStoreHost,
+  IndexedDbBrowserModelStorePort,
   createBrowserModelStorePort,
   type AuroraBrowserModelStorePort,
   type AuroraBrowserModelStoreSnapshot,
@@ -351,6 +352,49 @@ describe('AuroraBrowserModelStoreHost', () => {
     await expect(host.promotedStat('pack@file')).rejects.toMatchObject({ code: 'evicted' })
   })
 
+  it('stores IndexedDB binary data as Uint8Array and chunk records, not Blob values', async () => {
+    const indexedDB = new FakeIndexedDb()
+    const port = new IndexedDbBrowserModelStorePort({
+      indexedDB: indexedDB.factory(),
+      navigator: { storage: { estimate: async () => ({ quota: 10_000, usage: 0 }) } }
+    })
+    const key = 'aurora-promoted-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    await port.writeBlob(key, new Uint8Array([1, 2]))
+    expect(indexedDB.store('blobs').get(key)).toBeInstanceOf(Uint8Array)
+    await port.deleteBlob(key)
+    await port.appendBlob(key, 0, new Uint8Array([3, 4]))
+    await port.appendBlob(key, 2, new Uint8Array([5]))
+    const record = indexedDB.store('blobs').get(key)
+    expect(record).toMatchObject({ kind: 'aurora-chunked-v1', byteLength: 3 })
+    expect(record).not.toBeInstanceOf(Blob)
+    expect(indexedDB.store('blobs').get(`${key}.chunk.0`)).toBeInstanceOf(Uint8Array)
+    expect(indexedDB.store('blobs').get(`${key}.chunk.1`)).toBeInstanceOf(Uint8Array)
+    await expect(port.readBlobChunk(key, 1, 2)).resolves.toEqual(new Uint8Array([4, 5]))
+    await expect(port.statBlob(key)).resolves.toBe(3)
+    const copyKey = 'aurora-promoted-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'
+    await port.copyBlob(key, copyKey, 3)
+    await port.deleteBlob(copyKey)
+    await expect(port.readBlob(key)).resolves.toEqual(new Uint8Array([3, 4, 5]))
+  })
+
+  it('reads legacy IndexedDB Blob records and rejects corrupt chunk records', async () => {
+    const indexedDB = new FakeIndexedDb()
+    const key = 'aurora-promoted-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+    indexedDB.store('blobs').set(key, new Blob([new Uint8Array([7, 8, 9])]))
+    const port = new IndexedDbBrowserModelStorePort({ indexedDB: indexedDB.factory() })
+    await expect(port.readBlob(key)).resolves.toEqual(new Uint8Array([7, 8, 9]))
+    await expect(port.readBlobChunk(key, 1, 4)).resolves.toEqual(new Uint8Array([8, 9]))
+    await expect(port.statBlob(key)).resolves.toBe(3)
+
+    const corruptKey = 'aurora-promoted-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+    indexedDB.store('blobs').set(corruptKey, {
+      kind: 'aurora-chunked-v1',
+      byteLength: 1,
+      chunks: [`${corruptKey}.chunk.0`]
+    })
+    await expect(port.readBlob(corruptKey)).rejects.toMatchObject({ code: 'corrupt' })
+  })
+
   it('returns exact chunk EOF semantics for staging and promoted data', async () => {
     const host = new AuroraBrowserModelStoreHost(new FakeBrowserPort())
     await host.appendStaging('pack@file', 0, new Uint8Array([1, 2, 3, 4]))
@@ -425,6 +469,97 @@ function fakeIndexedDb(): IDBFactory {
       throw new Error('not used by selection tests')
     }
   } as unknown as IDBFactory
+}
+
+class FakeIndexedDb {
+  readonly stores = new Map<string, Map<string, unknown>>()
+
+  factory(): IDBFactory {
+    return {
+      open: (_name: string, _version?: number) => this.open()
+    } as unknown as IDBFactory
+  }
+
+  store(name: string): Map<string, unknown> {
+    let store = this.stores.get(name)
+    if (!store) {
+      store = new Map<string, unknown>()
+      this.stores.set(name, store)
+    }
+    return store
+  }
+
+  private open(): IDBOpenDBRequest {
+    const request: Partial<IDBOpenDBRequest> = {}
+    const db = new FakeIdbDatabase(this)
+    Object.defineProperty(request, 'result', { value: db })
+    queueMicrotask(() => {
+      request.onupgradeneeded?.call(request as IDBOpenDBRequest, {} as IDBVersionChangeEvent)
+      request.onsuccess?.call(request as IDBOpenDBRequest, {} as Event)
+    })
+    return request as IDBOpenDBRequest
+  }
+}
+
+class FakeIdbDatabase {
+  readonly objectStoreNames = {
+    contains: (name: string) => this.owner.stores.has(name)
+  } as DOMStringList
+
+  constructor(private readonly owner: FakeIndexedDb) {}
+
+  createObjectStore(name: string): void {
+    this.owner.store(name)
+  }
+
+  transaction(storeName: string): IDBTransaction {
+    return new FakeIdbTransaction(this.owner.store(storeName)) as unknown as IDBTransaction
+  }
+}
+
+class FakeIdbTransaction {
+  oncomplete: ((event: Event) => void) | null = null
+  onerror: ((event: Event) => void) | null = null
+
+  constructor(private readonly values: Map<string, unknown>) {}
+
+  objectStore(): IDBObjectStore {
+    return new FakeIdbObjectStore(this.values, this) as unknown as IDBObjectStore
+  }
+}
+
+class FakeIdbObjectStore {
+  constructor(
+    private readonly values: Map<string, unknown>,
+    private readonly transaction: FakeIdbTransaction
+  ) {}
+
+  get(key: IDBValidKey): IDBRequest {
+    const request: Partial<IDBRequest> = {}
+    Object.defineProperty(request, 'result', { get: () => this.values.get(String(key)) })
+    queueMicrotask(() => request.onsuccess?.call(request as IDBRequest, {} as Event))
+    return request as IDBRequest
+  }
+
+  put(value: unknown, key?: IDBValidKey): IDBRequest {
+    if (key === undefined) throw new Error('key required')
+    this.values.set(String(key), value)
+    queueMicrotask(() => this.transaction.oncomplete?.({} as Event))
+    return {} as IDBRequest
+  }
+
+  delete(key: IDBValidKey): IDBRequest {
+    this.values.delete(String(key))
+    queueMicrotask(() => this.transaction.oncomplete?.({} as Event))
+    return {} as IDBRequest
+  }
+
+  getAllKeys(): IDBRequest {
+    const request: Partial<IDBRequest> = {}
+    Object.defineProperty(request, 'result', { value: [...this.values.keys()] })
+    queueMicrotask(() => request.onsuccess?.call(request as IDBRequest, {} as Event))
+    return request as IDBRequest
+  }
 }
 
 class FlakyRecoveryPort extends FakeBrowserPort {

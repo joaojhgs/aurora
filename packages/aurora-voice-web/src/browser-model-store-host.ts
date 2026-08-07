@@ -96,6 +96,12 @@ interface OpfsWritableFileStream {
   close(): Promise<void>
 }
 
+interface IndexedDbChunkedBlobRecord {
+  readonly kind: 'aurora-chunked-v1'
+  readonly byteLength: number
+  readonly chunks: readonly string[]
+}
+
 const DEFAULT_LIMITS: Required<AuroraBrowserModelStoreLimits> = Object.freeze({
   maxKeyBytes: 256,
   maxJsonBytes: 1024 * 1024,
@@ -646,6 +652,7 @@ export class IndexedDbBrowserModelStorePort implements AuroraBrowserModelStorePo
   async readBlob(physicalKey: string): Promise<Uint8Array | null> {
     const value = await this.get(BLOB_STORE, physicalKey)
     if (value === undefined || value === null) return null
+    if (isIndexedDbChunkedBlobRecord(value)) return this.readChunkedBlob(value)
     if (value instanceof Uint8Array) return value
     if (value instanceof ArrayBuffer) return new Uint8Array(value)
     if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength))
@@ -657,21 +664,29 @@ export class IndexedDbBrowserModelStorePort implements AuroraBrowserModelStorePo
     validatePhysicalKey(physicalKey)
     const value = await this.get(BLOB_STORE, physicalKey)
     if (value === undefined || value === null) return null
-    return toBlob(value).size
+    if (isIndexedDbChunkedBlobRecord(value)) return value.byteLength
+    return byteLengthOfLegacyIndexedDbBlob(value)
   }
 
   async writeBlob(physicalKey: string, bytes: Uint8Array): Promise<void> {
     validatePhysicalKey(physicalKey)
-    await this.put(BLOB_STORE, physicalKey, new Blob([new Uint8Array(bytes)]))
+    await this.deleteBlob(physicalKey)
+    await this.put(BLOB_STORE, physicalKey, new Uint8Array(bytes))
   }
 
   async appendBlob(physicalKey: string, offset: number, bytes: Uint8Array): Promise<void> {
     validatePhysicalKey(physicalKey)
     validateOffset(offset)
     const existing = await this.get(BLOB_STORE, physicalKey)
-    const blob = existing === undefined ? new Blob() : toBlob(existing)
-    if (blob.size !== offset) throw redactedError('append_offset')
-    await this.put(BLOB_STORE, physicalKey, new Blob([blob, new Uint8Array(bytes)]))
+    const record = await this.normalizedChunkedRecord(physicalKey, existing)
+    if (record.byteLength !== offset) throw redactedError('append_offset')
+    const chunkKey = indexedDbChunkKey(physicalKey, record.chunks.length)
+    await this.put(BLOB_STORE, chunkKey, new Uint8Array(bytes))
+    await this.put(BLOB_STORE, physicalKey, {
+      kind: 'aurora-chunked-v1',
+      byteLength: checkedAdd(record.byteLength, bytes.byteLength),
+      chunks: [...record.chunks, chunkKey]
+    } satisfies IndexedDbChunkedBlobRecord)
   }
 
   async readBlobChunk(physicalKey: string, offset: number, maxBytes: number): Promise<Uint8Array | null> {
@@ -679,8 +694,11 @@ export class IndexedDbBrowserModelStorePort implements AuroraBrowserModelStorePo
     validateOffset(offset)
     const existing = await this.get(BLOB_STORE, physicalKey)
     if (existing === undefined || existing === null) return null
-    const blob = toBlob(existing)
-    return new Uint8Array(await blob.slice(offset, Math.min(blob.size, checkedAdd(offset, maxBytes))).arrayBuffer())
+    if (!isIndexedDbChunkedBlobRecord(existing)) {
+      const bytes = await bytesFromLegacyIndexedDbBlob(existing)
+      return bytes.slice(offset, Math.min(bytes.byteLength, checkedAdd(offset, maxBytes)))
+    }
+    return this.readChunkedRange(existing, offset, maxBytes)
   }
 
   async copyBlob(fromPhysicalKey: string, toPhysicalKey: string, expectedBytes: number): Promise<void> {
@@ -689,12 +707,32 @@ export class IndexedDbBrowserModelStorePort implements AuroraBrowserModelStorePo
     validateByteLength(expectedBytes)
     const existing = await this.get(BLOB_STORE, fromPhysicalKey)
     if (existing === undefined || existing === null) throw redactedError('corrupt')
-    const blob = toBlob(existing)
-    if (blob.size !== expectedBytes) throw redactedError('corrupt')
-    await this.put(BLOB_STORE, toPhysicalKey, blob)
+    if (isIndexedDbChunkedBlobRecord(existing)) {
+      if (existing.byteLength !== expectedBytes) throw redactedError('corrupt')
+      await this.deleteBlob(toPhysicalKey)
+      const chunks: string[] = []
+      for (let index = 0; index < existing.chunks.length; index += 1) {
+        const sourceChunkKey = existing.chunks[index]
+        if (!sourceChunkKey) throw redactedError('corrupt')
+        const chunk = await this.get(BLOB_STORE, sourceChunkKey)
+        if (!(chunk instanceof Uint8Array)) throw redactedError('corrupt')
+        const chunkKey = indexedDbChunkKey(toPhysicalKey, index)
+        await this.put(BLOB_STORE, chunkKey, new Uint8Array(chunk))
+        chunks.push(chunkKey)
+      }
+      await this.put(BLOB_STORE, toPhysicalKey, { ...existing, chunks })
+      return
+    }
+    const bytes = await bytesFromLegacyIndexedDbBlob(existing)
+    if (bytes.byteLength !== expectedBytes) throw redactedError('corrupt')
+    await this.writeBlob(toPhysicalKey, bytes)
   }
 
   async deleteBlob(physicalKey: string): Promise<void> {
+    const existing = await this.get(BLOB_STORE, physicalKey)
+    if (isIndexedDbChunkedBlobRecord(existing)) {
+      for (const chunkKey of existing.chunks) await this.delete(BLOB_STORE, chunkKey)
+    }
     await this.delete(BLOB_STORE, physicalKey)
   }
 
@@ -716,6 +754,60 @@ export class IndexedDbBrowserModelStorePort implements AuroraBrowserModelStorePo
       request.onerror = () => reject(redactedError('storage'))
       request.onsuccess = () => resolve(request.result)
     })
+  }
+
+  private async normalizedChunkedRecord(
+    physicalKey: string,
+    existing: unknown
+  ): Promise<IndexedDbChunkedBlobRecord> {
+    if (existing === undefined || existing === null) {
+      return { kind: 'aurora-chunked-v1', byteLength: 0, chunks: [] }
+    }
+    if (isIndexedDbChunkedBlobRecord(existing)) return existing
+    const bytes = await bytesFromLegacyIndexedDbBlob(existing)
+    const chunkKey = indexedDbChunkKey(physicalKey, 0)
+    await this.put(BLOB_STORE, chunkKey, bytes)
+    return { kind: 'aurora-chunked-v1', byteLength: bytes.byteLength, chunks: [chunkKey] }
+  }
+
+  private async readChunkedBlob(record: IndexedDbChunkedBlobRecord): Promise<Uint8Array> {
+    const output = new Uint8Array(record.byteLength)
+    let offset = 0
+    for (const chunkKey of record.chunks) {
+      const value = await this.get(BLOB_STORE, chunkKey)
+      if (!(value instanceof Uint8Array)) throw redactedError('corrupt')
+      output.set(value, offset)
+      offset = checkedAdd(offset, value.byteLength)
+    }
+    if (offset !== record.byteLength) throw redactedError('corrupt')
+    return output
+  }
+
+  private async readChunkedRange(
+    record: IndexedDbChunkedBlobRecord,
+    offset: number,
+    maxBytes: number
+  ): Promise<Uint8Array> {
+    const end = Math.min(record.byteLength, checkedAdd(offset, maxBytes))
+    const output = new Uint8Array(Math.max(0, end - offset))
+    let sourceOffset = 0
+    let targetOffset = 0
+    for (const chunkKey of record.chunks) {
+      const value = await this.get(BLOB_STORE, chunkKey)
+      if (!(value instanceof Uint8Array)) throw redactedError('corrupt')
+      const chunkStart = sourceOffset
+      const chunkEnd = checkedAdd(sourceOffset, value.byteLength)
+      if (chunkEnd > offset && chunkStart < end) {
+        const from = Math.max(0, offset - chunkStart)
+        const to = Math.min(value.byteLength, end - chunkStart)
+        output.set(value.slice(from, to), targetOffset)
+        targetOffset = checkedAdd(targetOffset, to - from)
+      }
+      sourceOffset = chunkEnd
+      if (sourceOffset >= end) break
+    }
+    if (targetOffset !== output.byteLength) throw redactedError('corrupt')
+    return output
   }
 
   private async put(storeName: string, key: string, value: unknown): Promise<void> {
@@ -877,11 +969,35 @@ function hex(bytes: Uint8Array): string {
   return output
 }
 
-function toBlob(value: unknown): Blob {
-  if (value instanceof Blob) return value
-  if (value instanceof Uint8Array) return new Blob([value])
-  if (value instanceof ArrayBuffer) return new Blob([value])
-  if (ArrayBuffer.isView(value)) return new Blob([value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength)])
+function isIndexedDbChunkedBlobRecord(value: unknown): value is IndexedDbChunkedBlobRecord {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Partial<IndexedDbChunkedBlobRecord>
+  return candidate.kind === 'aurora-chunked-v1' &&
+    Number.isSafeInteger(candidate.byteLength) &&
+    (candidate.byteLength ?? -1) >= 0 &&
+    Array.isArray(candidate.chunks) &&
+    candidate.chunks.every((chunk) => typeof chunk === 'string' && chunk.length > 0)
+}
+
+function indexedDbChunkKey(physicalKey: string, index: number): string {
+  validatePhysicalKey(physicalKey)
+  if (!Number.isSafeInteger(index) || index < 0) throw redactedError('corrupt')
+  return `${physicalKey}.chunk.${index}`
+}
+
+function byteLengthOfLegacyIndexedDbBlob(value: unknown): number {
+  if (value instanceof Blob) return value.size
+  if (value instanceof Uint8Array) return value.byteLength
+  if (value instanceof ArrayBuffer) return value.byteLength
+  if (ArrayBuffer.isView(value)) return value.byteLength
+  throw redactedError('corrupt')
+}
+
+async function bytesFromLegacyIndexedDbBlob(value: unknown): Promise<Uint8Array> {
+  if (value instanceof Blob) return new Uint8Array(await value.arrayBuffer())
+  if (value instanceof Uint8Array) return value
+  if (value instanceof ArrayBuffer) return new Uint8Array(value)
+  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength))
   throw redactedError('corrupt')
 }
 
