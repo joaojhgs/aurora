@@ -1,0 +1,5 @@
+android/.gradle/
+android/**/.cxx/
+android/**/build/
+native/target/
+out/
