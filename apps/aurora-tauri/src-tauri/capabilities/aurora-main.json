@@ -34,6 +34,7 @@
     "aurora-local-file",
     "aurora-secure-file-handle",
     "aurora-audio-bridge",
+    "aurora-native-voice",
     "aurora-shutdown"
   ]
 }

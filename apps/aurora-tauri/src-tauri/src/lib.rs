@@ -33,6 +33,7 @@ use tokio::sync::watch;
 use url::Url;
 
 mod local_data_native;
+mod native_voice;
 mod native_webrtc;
 mod generated {
     pub mod local_data_migrations;
@@ -42,6 +43,10 @@ use local_data_native::{
     aurora_local_data_open, aurora_local_data_repository_operation, aurora_local_data_status,
     aurora_local_data_transaction_begin, aurora_local_data_transaction_commit,
     aurora_local_data_transaction_rollback, LocalDataCommandState,
+};
+use native_voice::{
+    aurora_native_voice_cancel, aurora_native_voice_finish, aurora_native_voice_start,
+    aurora_native_voice_status, NativeVoiceState,
 };
 
 const DEFAULT_GATEWAY_URL: &str = "http://127.0.0.1:8000";
@@ -3691,8 +3696,14 @@ async fn aurora_shutdown(
     app: AppHandle,
     state: State<'_, SharedSidecarState>,
     subscription_state: State<'_, SharedSubscriptionState>,
+    native_voice_state: State<'_, NativeVoiceState>,
 ) -> Result<(), AuroraCommandError> {
-    shutdown_aurora(&app, state.inner(), subscription_state.inner())
+    shutdown_aurora(
+        &app,
+        state.inner(),
+        subscription_state.inner(),
+        native_voice_state.inner(),
+    )
 }
 
 impl AuroraCommandError {
@@ -3818,6 +3829,7 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     permissions.insert("aurora.audioBridgeStatus".to_string(), true);
     permissions.insert("aurora.audioCapture".to_string(), false);
     permissions.insert("aurora.audioPlayback".to_string(), false);
+    permissions.insert("aurora.nativeVoice".to_string(), desktop_platform);
     permissions.insert("aurora.iosVoiceStatus".to_string(), true);
     permissions.insert("aurora.iosBackgroundStatus".to_string(), true);
     permissions.insert("aurora.iosMicrophoneCapture".to_string(), false);
@@ -3868,6 +3880,7 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     capabilities.insert("native.audio".to_string(), false);
     capabilities.insert("native.audioCapture".to_string(), false);
     capabilities.insert("native.audioPlayback".to_string(), false);
+    capabilities.insert("desktop.nativeVoice".to_string(), desktop_platform);
     capabilities.insert("ios.voiceForegroundCapture".to_string(), false);
     capabilities.insert("ios.notifications".to_string(), false);
     capabilities.insert("ios.backgroundVoice".to_string(), false);
@@ -6765,7 +6778,9 @@ fn shutdown_aurora(
     app: &AppHandle,
     sidecar_state: &SharedSidecarState,
     subscription_state: &SharedSubscriptionState,
+    native_voice_state: &NativeVoiceState,
 ) -> Result<(), AuroraCommandError> {
+    native_voice_state.stop();
     {
         let mut subscriptions = subscription_state
             .lock()
@@ -7143,9 +7158,10 @@ pub fn run() {
         .manage(sidecar_state.clone())
         .manage(subscription_state.clone())
         .manage(overlay_state.clone())
+        .manage(NativeVoiceState::default())
         .manage(LocalDataCommandState::default())
         .manage(native_webrtc::NativeWebRtcState::default())
-        .setup(|app| {
+        .setup(move |app| {
             #[cfg(desktop)]
             {
                 match app
@@ -7172,6 +7188,9 @@ pub fn run() {
                     let _ = window.set_icon(icon);
                 }
                 install_tray(app.handle())?;
+                if let Some(native_voice) = app.try_state::<NativeVoiceState>() {
+                    native_voice.initialize(app.handle().clone(), sidecar_state.clone());
+                }
                 let overlay_window = ensure_overlay_window(app.handle())?;
                 configure_overlay_for_mode(&overlay_window, OverlayMode::Voice, None);
                 let _ = overlay_window.hide();
@@ -7227,6 +7246,10 @@ pub fn run() {
             aurora_ios_background_status,
             aurora_dialog_status,
             aurora_audio_bridge_status,
+            aurora_native_voice_status,
+            aurora_native_voice_start,
+            aurora_native_voice_finish,
+            aurora_native_voice_cancel,
             aurora_android_baseline_status,
             aurora_android_native_plugin_payload,
             aurora_android_lifecycle_status,
@@ -7371,8 +7394,9 @@ fn aurora_desktop_icon(app: &AppHandle) -> Option<Image<'static>> {
 #[cfg(desktop)]
 fn install_tray(app: &AppHandle) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "show", "Show Aurora", true, None::<&str>)?;
+    let voice = MenuItem::with_id(app, "voice", "Voice", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &quit])?;
+    let menu = Menu::with_items(app, &[&show, &voice, &quit])?;
     let mut builder = TrayIconBuilder::with_id("aurora-main")
         .tooltip("Aurora")
         .menu(&menu)
@@ -7386,15 +7410,22 @@ fn install_tray(app: &AppHandle) -> tauri::Result<()> {
                 }
             }
             "quit" => {
-                if let (Some(sidecar), Some(subscriptions)) = (
+                if let (Some(sidecar), Some(subscriptions), Some(native_voice)) = (
                     app.try_state::<SharedSidecarState>(),
                     app.try_state::<SharedSubscriptionState>(),
+                    app.try_state::<NativeVoiceState>(),
                 ) {
-                    let _ = shutdown_aurora(app, sidecar.inner(), subscriptions.inner());
+                    let _ = shutdown_aurora(
+                        app,
+                        sidecar.inner(),
+                        subscriptions.inner(),
+                        native_voice.inner(),
+                    );
                 } else {
                     app.exit(0);
                 }
             }
+            "voice" => native_voice::tray_toggle(app),
             _ => {}
         });
     if let Some(icon) = aurora_desktop_icon(app) {

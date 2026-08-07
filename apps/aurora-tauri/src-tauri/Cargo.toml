@@ -35,10 +35,14 @@ tauri-plugin-sql = { version = "=2.4.0", default-features = false, features = ["
 tauri-plugin-updater = "2.9.0"
 tauri-plugin-wdio-webdriver = { version = "=1.2.0", optional = true }
 thiserror = "2.0"
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["net", "rt", "sync", "time"] }
 url = "2.5"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+async-trait = "0.1"
+aurora-voice-core = { path = "../../../rust/crates/aurora-voice-core" }
+aurora-voice-engine = { path = "../../../rust/crates/aurora-voice-engine" }
+aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native" }
 keyring = { version = "3.6", default-features = false, features = ["apple-native", "windows-native", "linux-native"] }
 tauri-plugin-global-shortcut = "2.3.2"
 tauri-plugin-single-instance = { version = "2.3.6", features = ["deep-link"] }

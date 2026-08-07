@@ -257,6 +257,43 @@ impl NativeGatewayCaptureHandoff {
         }
     }
 
+    /// Recover from an ambiguous prepare where the client stopped waiting before
+    /// it observed whether the Gateway granted the host-supplied lease.
+    ///
+    /// The retry uses the same idempotency key and host token. If the backend
+    /// reports the lease as granted or already owned by this native host, the
+    /// adapter immediately releases it and asks Python capture to restart.
+    pub async fn recover_ambiguous_prepare(
+        &mut self,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<(), VoiceCoreError> {
+        self.cancel_active_prepare_or_release();
+        self.active_cancellation = None;
+        if let Some(active) = self.active.clone() {
+            return self.release_active(active, true, cancellation).await;
+        }
+        if self.consumed {
+            return Err(consumed_handoff());
+        }
+        validate_loopback_transport(&self.transport)?;
+        if cancellation() {
+            return Err(VoiceCoreError::Cancelled);
+        }
+
+        let gateway_cancellation = CancellationToken::new();
+        self.active_cancellation = Some(gateway_cancellation.clone());
+        let result = self
+            .invoke_prepare(&gateway_cancellation, cancellation)
+            .await;
+        self.active_cancellation = None;
+
+        let grant = result?;
+        self.last_released = None;
+        let active = ActiveCaptureLease::from_grant(&grant);
+        self.active = Some(active.clone());
+        self.release_active(active, true, cancellation).await
+    }
+
     async fn release_active(
         &mut self,
         active: ActiveCaptureLease,
@@ -1101,6 +1138,57 @@ mod tests {
             "host-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         );
         assert_eq!(release["generation"], 11);
+    }
+
+    #[tokio::test]
+    async fn ambiguous_prepare_recovery_retries_same_lease_and_releases_native_grant() {
+        let token = "host-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let first_request_received = Arc::new(AtomicBool::new(false));
+        let server = FixtureServer::responses_with_first_request_flag(
+            vec![
+                slow_json_response(prepare_body("granted", true, Some(token), 11)),
+                json_response(prepare_body("already_owned", true, Some(token), 11)),
+                json_response(release_body("released", 12)),
+            ],
+            Some(first_request_received.clone()),
+            Duration::from_millis(50),
+        );
+        let mut adapter = NativeGatewayCaptureHandoff::new(
+            transport(server.base_url.clone(), MicrophoneAudioPolicy::LoopbackOnly),
+            config_with_token("tauri-local", token),
+        )
+        .expect("adapter");
+
+        let error = adapter
+            .prepare(&|| first_request_received.load(Ordering::SeqCst))
+            .await
+            .expect_err("ambiguous cancelled prepare");
+        assert_eq!(error, VoiceCoreError::Cancelled);
+        let first_request = server.requests.recv().expect("first prepare request");
+        let first_prepare = request_body(&first_request);
+        assert!(first_request.contains("POST /api/STTCoordinator/CapturePrepare"));
+        assert_eq!(first_prepare["lease_id"], token);
+
+        adapter
+            .recover_ambiguous_prepare(&|| false)
+            .await
+            .expect("recover and release observed native grant");
+        let retry_request = server.requests.recv().expect("retry prepare request");
+        let retry_prepare = request_body(&retry_request);
+        assert!(retry_request.contains("POST /api/STTCoordinator/CapturePrepare"));
+        assert_eq!(retry_prepare["lease_id"], token);
+        assert_eq!(retry_prepare["lease_id"], first_prepare["lease_id"]);
+
+        let release_request = server.requests.recv().expect("recovery release request");
+        let release = request_body(&release_request);
+        assert!(release_request.contains("POST /api/STTCoordinator/CaptureRelease"));
+        assert_eq!(release["lease_id"], token);
+        assert_eq!(release["generation"], 11);
+        assert_eq!(release["restart_python_capture"], true);
+        assert!(matches!(
+            adapter.prepare(&|| false).await,
+            Err(VoiceCoreError::TransportFault { code }) if code == "capture_handoff_consumed"
+        ));
     }
 
     #[tokio::test]
