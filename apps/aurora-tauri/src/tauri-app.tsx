@@ -49,7 +49,6 @@ import {
   type AuroraNavItem,
   type AuroraOwlLoaderStageId,
   type AuroraShellSnapshot,
-  type NativeDesktopVoicePort,
   type RouteAvailability,
   type WebThinRoomSecret,
 } from "@aurora/ui";
@@ -128,11 +127,6 @@ const navItems = auroraNavSections.flatMap((section) => section.items);
 const routePathItems = [...navItems, ...auroraEmbeddedNavItems];
 export type AuroraTauriRuntime = AuroraTauriRuntimeModel;
 type AuroraTauriClient = AuroraTauriRuntime["client"];
-const AssistantViewWithNativeVoice = AssistantView as (
-  props: Parameters<typeof AssistantView>[0] & {
-    nativeVoice?: NativeDesktopVoicePort | undefined;
-  },
-) => ReactElement;
 type TauriRouteRenderer = (input: {
   route: RouteAvailability;
   snapshot: AuroraShellSnapshot;
@@ -190,7 +184,7 @@ export const tauriRouteRegistry = {
     assistantNativePermissions,
     assistantNativeCapabilities,
   }) => (
-    <AssistantViewWithNativeVoice
+    <AssistantView
       client={client}
       route={route}
       cancellationRoute={snapshot.assistantCancellationRoute ?? undefined}
