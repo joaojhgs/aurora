@@ -556,32 +556,32 @@ fn required_str<'a>(value: &'a Value, field: &str) -> Result<&'a str, EngineErro
     value
         .get(field)
         .and_then(Value::as_str)
-        .ok_or(EngineError::InvalidRequest)
+        .ok_or_else(provider_fault)
 }
 
 fn required_u64(value: &Value, field: &str) -> Result<u64, EngineError> {
     value
         .get(field)
         .and_then(Value::as_u64)
-        .ok_or(EngineError::InvalidRequest)
+        .ok_or_else(provider_fault)
 }
 
 fn required_f64(value: &Value, field: &str) -> Result<f64, EngineError> {
     value
         .get(field)
         .and_then(Value::as_f64)
-        .ok_or(EngineError::InvalidRequest)
+        .ok_or_else(provider_fault)
 }
 
 fn read_u16_le(bytes: &[u8], offset: usize) -> Result<u16, EngineError> {
     let end = offset.checked_add(2).ok_or(EngineError::ResourceLimit)?;
-    let value = bytes.get(offset..end).ok_or(EngineError::InvalidRequest)?;
+    let value = bytes.get(offset..end).ok_or_else(provider_fault)?;
     Ok(u16::from_le_bytes([value[0], value[1]]))
 }
 
 fn read_u32_le(bytes: &[u8], offset: usize) -> Result<u32, EngineError> {
     let end = offset.checked_add(4).ok_or(EngineError::ResourceLimit)?;
-    let value = bytes.get(offset..end).ok_or(EngineError::InvalidRequest)?;
+    let value = bytes.get(offset..end).ok_or_else(provider_fault)?;
     Ok(u32::from_le_bytes([value[0], value[1], value[2], value[3]]))
 }
 
@@ -594,17 +594,16 @@ fn map_transport_error(error: TransportError) -> EngineError {
         TransportError::Timeout => EngineError::ProviderFault {
             code: EngineFaultCode::Timeout,
         },
-        TransportError::RequestFailed | TransportError::HttpStatus { .. } => {
-            EngineError::ProviderFault {
-                code: EngineFaultCode::HostUnavailable,
-            }
-        }
+        TransportError::RequestFailed => EngineError::ProviderFault {
+            code: EngineFaultCode::HostUnavailable,
+        },
         TransportError::InvalidConfiguration
         | TransportError::UnsafeEndpoint
         | TransportError::UnknownMethod
         | TransportError::UnknownEvent
         | TransportError::InvalidPayload
         | TransportError::RemoteAudioBlocked
+        | TransportError::HttpStatus { .. }
         | TransportError::InvalidResponse
         | TransportError::InvalidStream => EngineError::ProviderFault {
             code: EngineFaultCode::Provider,
@@ -627,7 +626,8 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::SocketAddr;
     use std::net::{TcpListener, TcpStream};
-    use std::sync::mpsc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{mpsc, Arc};
     use std::thread;
     use url::Url;
 
@@ -635,24 +635,39 @@ mod tests {
         base_url: Url,
         address: SocketAddr,
         request: mpsc::Receiver<String>,
+        request_seen: Arc<AtomicBool>,
         thread: Option<thread::JoinHandle<()>>,
     }
 
     impl FixtureServer {
         fn one_response(response: Vec<u8>) -> Self {
+            Self::response_after(response, Duration::ZERO)
+        }
+
+        fn response_after(response: Vec<u8>, delay: Duration) -> Self {
             let listener = TcpListener::bind("127.0.0.1:0").expect("bind fixture server");
             let address = listener.local_addr().expect("fixture address");
             let (sender, request) = mpsc::channel();
+            let request_seen = Arc::new(AtomicBool::new(false));
+            let thread_request_seen = Arc::clone(&request_seen);
             let thread = thread::spawn(move || {
-                let (mut stream, _) = listener.accept().expect("accept fixture request");
+                let Ok((mut stream, _)) = listener.accept() else {
+                    return;
+                };
                 let captured = read_http_request(&mut stream);
-                sender.send(captured).expect("capture request");
-                stream.write_all(&response).expect("write fixture response");
+                if captured.is_empty() {
+                    return;
+                }
+                thread_request_seen.store(true, Ordering::SeqCst);
+                let _ = sender.send(captured);
+                thread::sleep(delay);
+                let _ = stream.write_all(&response);
             });
             Self {
                 base_url: Url::parse(&format!("http://{address}/")).expect("fixture URL"),
                 address,
                 request,
+                request_seen,
                 thread: Some(thread),
             }
         }
@@ -732,12 +747,27 @@ mod tests {
     }
 
     fn request(generation: u64, chunk_samples: usize) -> BoundTtsSynthesisRequest {
+        request_with(generation, chunk_samples, "default", None, Some("en"))
+    }
+
+    fn request_with(
+        generation: u64,
+        chunk_samples: usize,
+        logical_voice_id: &str,
+        seed: Option<u64>,
+        language: Option<&str>,
+    ) -> BoundTtsSynthesisRequest {
         let route_request =
-            RouteTtsSynthesisRequest::new(route(), Some("en".to_owned()), generation)
+            RouteTtsSynthesisRequest::new(route(), language.map(str::to_owned), generation)
                 .expect("route request");
-        let config =
-            TtsSynthesisConfig::new("default", "voice.default", 16_000, chunk_samples, None)
-                .expect("tts config");
+        let config = TtsSynthesisConfig::new(
+            logical_voice_id,
+            "voice.default",
+            16_000,
+            chunk_samples,
+            seed,
+        )
+        .expect("tts config");
         BoundTtsSynthesisRequest::new_route(route_request, "hello aurora", config)
             .expect("bound request")
     }
@@ -827,12 +857,29 @@ mod tests {
             parse_tts_response(&request, &body, 16_000),
             Err(provider_fault())
         );
+        body["audio_data"] = Value::String("ZE==".to_owned());
+        assert_eq!(
+            parse_tts_response(&request, &body, 16_000),
+            Err(provider_fault())
+        );
 
         let encoded = base64::engine::general_purpose::STANDARD.encode(wav(&[0, 1, 2, 3], 16_000));
         body["audio_data"] = Value::String(encoded);
         assert_eq!(
             parse_tts_response(&request, &body, 3),
             Err(EngineError::ResourceLimit)
+        );
+
+        let mut duplicate_data = wav(&[0, 1, 2], 16_000);
+        let second_data = duplicate_data[36..].to_vec();
+        duplicate_data.extend_from_slice(&second_data);
+        let declared = u32::try_from(duplicate_data.len() - 8).expect("RIFF length");
+        duplicate_data[4..8].copy_from_slice(&declared.to_le_bytes());
+        body["audio_data"] =
+            Value::String(base64::engine::general_purpose::STANDARD.encode(duplicate_data));
+        assert_eq!(
+            parse_tts_response(&request, &body, 16_000),
+            Err(provider_fault())
         );
     }
 
@@ -852,26 +899,49 @@ mod tests {
             parse_tts_response(&request, &body, 16_000),
             Err(provider_fault())
         );
+
+        let mut body = success_body(&[0, 1, 2]);
+        body["format"] = Value::from("WAV");
+        assert_eq!(
+            parse_tts_response(&request, &body, 16_000),
+            Err(provider_fault())
+        );
+
+        let mut body = success_body(&[0, 1, 2]);
+        body["text"] = Value::from("different private text");
+        let error = parse_tts_response(&request, &body, 16_000).expect_err("response identity");
+        assert_eq!(error, provider_fault());
+        assert!(!error.to_string().contains("different private text"));
     }
 
     #[tokio::test]
-    async fn cancellation_stops_request_without_payload_leaks() {
-        let mut adapter = NativeGatewayTtsSynthesizer::new(unused_loopback_transport(), config());
+    async fn cancellation_stops_in_flight_request_without_payload_leaks() {
+        let server = FixtureServer::response_after(
+            json_response(success_body(&[1, 2, 3])),
+            Duration::from_millis(80),
+        );
+        let mut adapter =
+            NativeGatewayTtsSynthesizer::new(loopback_transport(server.base_url.clone()), config());
         let request = request(9, 1024);
+        let request_seen = Arc::clone(&server.request_seen);
+        let cancellation = || request_seen.load(Ordering::SeqCst);
 
         let cancelled = adapter
-            .synthesize_text(request, &|| true)
+            .synthesize_text(request, &cancellation)
             .await
             .expect_err("cancelled");
 
         assert_eq!(cancelled, EngineError::Cancelled);
+        assert!(server.request.recv_timeout(Duration::from_secs(1)).is_ok());
+        assert!(adapter.active_generation.is_none());
+        assert!(adapter.active_cancellation.is_none());
         let debug = format!("{adapter:?}");
         assert!(!debug.contains("native-secret"));
         assert!(!debug.contains("hello aurora"));
     }
 
     #[tokio::test]
-    async fn stale_binding_generation_and_cleanup_are_idempotent() {
+    async fn stale_binding_and_generation_cleanup_fail_closed() {
         let mut adapter = NativeGatewayTtsSynthesizer::new(unused_loopback_transport(), config());
         let bad_route =
             RouteTtsBinding::new("gateway.other", "voice.default", 16_000, 3).expect("route");
@@ -882,8 +952,17 @@ mod tests {
                 .await,
             Err(EngineError::TaskUnavailable)
         );
+        adapter.active_generation = Some(77);
+        adapter.active_cancellation = Some(CancellationToken::new());
+        assert_eq!(
+            adapter.synthesize_text(request(78, 1024), &|| false).await,
+            Err(EngineError::ResourceLimit)
+        );
         assert_eq!(adapter.cancel_synthesis_generation(123).await, Ok(()));
-        assert_eq!(adapter.cancel_synthesis_generation(123).await, Ok(()));
+        assert_eq!(adapter.active_generation, Some(77));
+        assert_eq!(adapter.cancel_synthesis_generation(77).await, Ok(()));
+        assert_eq!(adapter.cancel_synthesis_generation(77).await, Ok(()));
+        assert!(adapter.active_generation.is_none());
     }
 
     #[tokio::test]
@@ -897,5 +976,64 @@ mod tests {
             .expect("cancel");
         assert_eq!(adapter.active_generation, None);
         assert!(adapter.active_cancellation.is_none());
+    }
+
+    #[tokio::test]
+    async fn unsupported_request_semantics_are_rejected_before_network() {
+        let mut adapter = NativeGatewayTtsSynthesizer::new(unused_loopback_transport(), config());
+
+        assert_eq!(
+            adapter
+                .synthesize_text(
+                    request_with(8, 1024, "default", Some(7), Some("en")),
+                    &|| false,
+                )
+                .await,
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            adapter
+                .synthesize_text(request_with(9, 1024, "default", None, Some("xx")), &|| {
+                    false
+                },)
+                .await,
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            adapter
+                .synthesize_text(
+                    request_with(10, 1024, "standard:en:other", None, Some("en")),
+                    &|| false,
+                )
+                .await,
+            Err(EngineError::InvalidRequest)
+        );
+    }
+
+    #[test]
+    fn voice_ids_and_debug_output_are_strict_and_redacted() {
+        let voice = "standard:en:private_voice";
+        let configured = NativeGatewayTtsConfig::new(route(), Some(voice.to_owned()), 1.0, 16_000)
+            .expect("voice config");
+        assert_eq!(configured.voice(), Some(voice));
+        assert_eq!(configured.speed(), 1.0);
+        assert!(NativeGatewayTtsConfig::new(
+            route(),
+            Some("private invalid voice".to_owned()),
+            1.0,
+            16_000,
+        )
+        .is_err());
+        let adapter = NativeGatewayTtsSynthesizer::new(
+            loopback_transport(
+                Url::parse("http://127.0.0.1:9/private-endpoint").expect("loopback URL"),
+            ),
+            configured,
+        );
+        let debug = format!("{adapter:?}");
+        assert!(!debug.contains("private_voice"));
+        assert!(!debug.contains("private-endpoint"));
+        assert!(!debug.contains("gateway.default"));
+        assert!(!debug.contains("native-secret"));
     }
 }
