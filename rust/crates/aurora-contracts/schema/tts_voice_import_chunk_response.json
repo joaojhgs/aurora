@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Acknowledgement for a bounded clone prompt chunk.",
+  "properties": {
+    "correlation_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "idempotent": {
+      "default": false,
+      "title": "Idempotent",
+      "type": "boolean"
+    },
+    "next_sequence": {
+      "maximum": 43,
+      "minimum": 0,
+      "title": "Next Sequence",
+      "type": "integer"
+    },
+    "received_bytes": {
+      "maximum": 2097152,
+      "minimum": 1,
+      "title": "Received Bytes",
+      "type": "integer"
+    },
+    "sequence": {
+      "maximum": 42,
+      "minimum": 0,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "status": {
+      "default": "accepted",
+      "enum": [
+        "accepted",
+        "duplicate"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "upload_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Upload Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "next_sequence",
+    "received_bytes",
+    "sequence",
+    "upload_id"
+  ],
+  "title": "TTSVoiceImportChunkResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid",
+  "x-aurora-tts-import-chunk-response-invariant": true
+}

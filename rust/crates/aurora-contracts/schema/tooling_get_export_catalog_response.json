@@ -1,0 +1,734 @@
+{
+  "$defs": {
+    "ToolingProjectionAuthorityRevision": {
+      "description": "Every authority dimension that makes one recipient projection current.",
+      "properties": {
+        "auth_grant_revision": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Auth Grant Revision",
+          "type": "integer"
+        },
+        "catalog_revision": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Catalog Revision",
+          "type": "integer"
+        },
+        "export_policy_revision": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Export Policy Revision",
+          "type": "integer"
+        },
+        "manifest_revision": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Manifest Revision",
+          "type": "integer"
+        },
+        "protocol_revision": {
+          "default": 1,
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Protocol Revision",
+          "type": "integer"
+        },
+        "switch_revision": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Switch Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "auth_grant_revision",
+        "catalog_revision",
+        "export_policy_revision",
+        "manifest_revision",
+        "switch_revision"
+      ],
+      "title": "ToolingProjectionAuthorityRevision",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    },
+    "ToolingProjectionBlockedTool": {
+      "description": "Management-only definition excluded from the recipient's bindable catalog.",
+      "properties": {
+        "missing_permissions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Missing Permissions",
+          "type": "array"
+        },
+        "reason_code": {
+          "const": "recipient_missing_tool_permissions",
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "tool": {
+          "$ref": "#/$defs/ToolingToolInfo"
+        }
+      },
+      "required": [
+        "reason_code",
+        "tool"
+      ],
+      "title": "ToolingProjectionBlockedTool",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    },
+    "ToolingProjectionRetirement": {
+      "description": "Bounded state for a tool previously exposed to this exact recipient.",
+      "properties": {
+        "availability": {
+          "enum": [
+            "permission_blocked",
+            "removed",
+            "stale",
+            "unshared"
+          ],
+          "title": "Availability",
+          "type": "string"
+        },
+        "global_tool_id": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Global Tool Id",
+          "type": "string"
+        },
+        "last_schema_hash": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Schema Hash"
+        },
+        "reason_code": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Reason Code",
+          "type": "string"
+        }
+      },
+      "required": [
+        "availability",
+        "global_tool_id",
+        "reason_code"
+      ],
+      "title": "ToolingProjectionRetirement",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    },
+    "ToolingRateLimitHints": {
+      "description": "Optional rate-limit hints for a discovered tool provider.",
+      "properties": {
+        "max_calls": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Calls"
+        },
+        "policy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy"
+        },
+        "window_seconds": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Window Seconds"
+        }
+      },
+      "title": "ToolingRateLimitHints",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    },
+    "ToolingToolInfo": {
+      "description": "Typed metadata for a discovered tool.\n\n``name`` remains the bindable tool name expected by existing\norchestrator code. For local-only discovery it is the provider-local\nname; for provider-selected mesh discovery it is namespaced to avoid\ncollisions.",
+      "properties": {
+        "admin": {
+          "default": false,
+          "title": "Admin",
+          "type": "boolean"
+        },
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "args_schema": {
+          "additionalProperties": {
+            "x-aurora-json-value": true
+          },
+          "title": "Args Schema",
+          "type": "object",
+          "x-aurora-extra-behavior": "preserve"
+        },
+        "argument_visibility": {
+          "additionalProperties": {
+            "enum": [
+              "display",
+              "hash_only",
+              "raw_never",
+              "secret",
+              "support_bundle_redacted"
+            ],
+            "type": "string"
+          },
+          "title": "Argument Visibility",
+          "type": "object",
+          "x-aurora-extra-behavior": "preserve"
+        },
+        "capability_class": {
+          "default": "read",
+          "enum": [
+            "admin",
+            "device",
+            "execute",
+            "network",
+            "read",
+            "secrets",
+            "write"
+          ],
+          "title": "Capability Class",
+          "type": "string"
+        },
+        "confirmation_required": {
+          "default": false,
+          "title": "Confirmation Required",
+          "type": "boolean"
+        },
+        "data_egress": {
+          "default": false,
+          "title": "Data Egress",
+          "type": "boolean"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "execution_location": {
+          "default": "local",
+          "enum": [
+            "local",
+            "remote"
+          ],
+          "title": "Execution Location",
+          "type": "string"
+        },
+        "exportable": {
+          "default": false,
+          "title": "Exportable",
+          "type": "boolean"
+        },
+        "external": {
+          "default": false,
+          "title": "External",
+          "type": "boolean"
+        },
+        "global_tool_id": {
+          "title": "Global Tool Id",
+          "type": "string"
+        },
+        "legacy_global_tool_ids": {
+          "items": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Legacy Global Tool Ids",
+          "type": "array",
+          "x-aurora-unique-string-array-normalize": true
+        },
+        "local_name": {
+          "title": "Local Name",
+          "type": "string"
+        },
+        "mutating": {
+          "default": false,
+          "title": "Mutating",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "namespace": {
+          "title": "Namespace",
+          "type": "string"
+        },
+        "privacy_hints": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Privacy Hints",
+          "type": "array"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ToolingToolProvenance"
+        },
+        "provider_available": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Available"
+        },
+        "provider_granted_permissions": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Granted Permissions"
+        },
+        "provider_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Label"
+        },
+        "provider_peer_id": {
+          "title": "Provider Peer Id",
+          "type": "string"
+        },
+        "provider_service_instance_id": {
+          "title": "Provider Service Instance Id",
+          "type": "string"
+        },
+        "rate_limit_hints": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolingRateLimitHints"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "required_permissions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Permissions",
+          "type": "array"
+        },
+        "resource_scope": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Resource Scope",
+          "type": "array"
+        },
+        "risk_class": {
+          "default": "standard",
+          "enum": [
+            "dangerous",
+            "sensitive",
+            "standard"
+          ],
+          "title": "Risk Class",
+          "type": "string"
+        },
+        "safety_class": {
+          "default": "standard",
+          "enum": [
+            "dangerous",
+            "sensitive",
+            "standard"
+          ],
+          "title": "Safety Class",
+          "type": "string"
+        },
+        "schema": {
+          "additionalProperties": {
+            "x-aurora-json-value": true
+          },
+          "title": "Schema",
+          "type": "object",
+          "x-aurora-extra-behavior": "preserve"
+        },
+        "share_group_id": {
+          "default": "",
+          "title": "Share Group Id",
+          "type": "string"
+        },
+        "share_group_label": {
+          "default": "",
+          "title": "Share Group Label",
+          "type": "string"
+        },
+        "source": {
+          "default": "unknown",
+          "enum": [
+            "core",
+            "mcp",
+            "mesh_peer",
+            "plugin",
+            "unknown"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "source_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Id"
+        },
+        "source_type": {
+          "default": "local",
+          "enum": [
+            "local",
+            "mesh_peer"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
+        "tool_contract_id": {
+          "default": "",
+          "title": "Tool Contract Id",
+          "type": "string"
+        },
+        "tool_id_scheme": {
+          "default": "legacy",
+          "enum": [
+            "aurora-tool",
+            "legacy"
+          ],
+          "title": "Tool Id Scheme",
+          "type": "string"
+        },
+        "tool_id_version": {
+          "default": 0,
+          "enum": [
+            0,
+            1
+          ],
+          "title": "Tool Id Version",
+          "type": "integer"
+        },
+        "trust_tier": {
+          "default": "untrusted",
+          "enum": [
+            "blocked",
+            "trusted",
+            "untrusted"
+          ],
+          "title": "Trust Tier",
+          "type": "string"
+        }
+      },
+      "required": [
+        "display_name",
+        "global_tool_id",
+        "local_name",
+        "name",
+        "namespace",
+        "provenance",
+        "provider_peer_id",
+        "provider_service_instance_id"
+      ],
+      "title": "ToolingToolInfo",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    },
+    "ToolingToolProvenance": {
+      "description": "Provenance carried with a discovered tool.",
+      "properties": {
+        "advertised_name": {
+          "title": "Advertised Name",
+          "type": "string"
+        },
+        "provider_kind": {
+          "default": "local",
+          "enum": [
+            "local",
+            "mesh_peer"
+          ],
+          "title": "Provider Kind",
+          "type": "string"
+        },
+        "provider_peer_id": {
+          "title": "Provider Peer Id",
+          "type": "string"
+        },
+        "provider_service_instance_id": {
+          "title": "Provider Service Instance Id",
+          "type": "string"
+        },
+        "provider_tool_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Tool Id"
+        },
+        "source": {
+          "default": "unknown",
+          "enum": [
+            "core",
+            "mcp",
+            "plugin",
+            "unknown"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "stable_source_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stable Source Id"
+        }
+      },
+      "required": [
+        "advertised_name",
+        "provider_peer_id",
+        "provider_service_instance_id"
+      ],
+      "title": "ToolingToolProvenance",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "One non-bindable page of a recipient-specific full projection.",
+  "properties": {
+    "authority_revision": {
+      "$ref": "#/$defs/ToolingProjectionAuthorityRevision"
+    },
+    "blocked_tools": {
+      "items": {
+        "$ref": "#/$defs/ToolingProjectionBlockedTool"
+      },
+      "maxItems": 256,
+      "title": "Blocked Tools",
+      "type": "array"
+    },
+    "complete": {
+      "default": false,
+      "title": "Complete",
+      "type": "boolean"
+    },
+    "final_checksum": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Final Checksum"
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string",
+          "x-aurora-string-trimmed": true
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Next Cursor"
+    },
+    "ok": {
+      "default": true,
+      "title": "Ok",
+      "type": "boolean"
+    },
+    "page_hash": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Page Hash",
+      "type": "string"
+    },
+    "page_index": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Page Index",
+      "type": "integer"
+    },
+    "page_size": {
+      "maximum": 256,
+      "minimum": 1,
+      "title": "Page Size",
+      "type": "integer"
+    },
+    "projection_digest": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Projection Digest",
+      "type": "string"
+    },
+    "projection_revision": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Projection Revision",
+      "type": "string"
+    },
+    "provider_peer_id": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Provider Peer Id",
+      "type": "string"
+    },
+    "reason_code": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason Code"
+    },
+    "retirements": {
+      "items": {
+        "$ref": "#/$defs/ToolingProjectionRetirement"
+      },
+      "maxItems": 256,
+      "title": "Retirements",
+      "type": "array"
+    },
+    "selected_protocol_tier": {
+      "const": "projection_v1",
+      "default": "projection_v1",
+      "title": "Selected Protocol Tier",
+      "type": "string"
+    },
+    "service_instance_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Service Instance Id",
+      "type": "string"
+    },
+    "tools": {
+      "items": {
+        "$ref": "#/$defs/ToolingToolInfo"
+      },
+      "maxItems": 256,
+      "title": "Tools",
+      "type": "array"
+    },
+    "total_count": {
+      "anyOf": [
+        {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Total Count"
+    }
+  },
+  "required": [
+    "authority_revision",
+    "page_hash",
+    "page_index",
+    "page_size",
+    "projection_digest",
+    "projection_revision",
+    "provider_peer_id",
+    "service_instance_id"
+  ],
+  "title": "ToolingGetExportCatalogResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip",
+  "x-aurora-projection-identity": true,
+  "x-aurora-projection-page-termination": true
+}

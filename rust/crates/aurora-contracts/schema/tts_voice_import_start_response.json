@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Server-issued bounded clone prompt upload session.",
+  "properties": {
+    "accepted_total_bytes": {
+      "exclusiveMinimum": 0,
+      "maximum": 2097152,
+      "title": "Accepted Total Bytes",
+      "type": "integer"
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "expires_at": {
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Expires At",
+      "type": "string",
+      "x-aurora-string-non-blank": true
+    },
+    "max_chunk_bytes": {
+      "default": 49152,
+      "maximum": 49152,
+      "minimum": 1,
+      "title": "Max Chunk Bytes",
+      "type": "integer"
+    },
+    "max_chunks": {
+      "default": 43,
+      "maximum": 43,
+      "minimum": 1,
+      "title": "Max Chunks",
+      "type": "integer"
+    },
+    "upload_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Upload Id",
+      "type": "string",
+      "x-aurora-string-non-blank": true
+    }
+  },
+  "required": [
+    "accepted_total_bytes",
+    "expires_at",
+    "upload_id"
+  ],
+  "title": "TTSVoiceImportStartResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid",
+  "x-aurora-tts-import-start-response-invariant": true
+}

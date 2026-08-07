@@ -139,6 +139,8 @@ check-sdk-backend-contracts:
 		--sdk-manifest-output packages/aurora-sdk/src/generated/backend-contracts.manifest.json \
 		--sdk-tooling-provider-output packages/aurora-sdk/src/generated/tooling-local-provider-v1.json \
 		--output .artifacts/sdk-backend-conformance/backend-inventory.json
+	@uv run python scripts/generate_rust_contracts.py
+	@uv run python scripts/generate_rust_contracts.py --check
 	@uv run python scripts/check_sdk_backend_conformance.py \
 		--inventory .artifacts/sdk-backend-conformance/backend-inventory.json \
 		--sdk-types packages/aurora-sdk/src/types.ts \
@@ -148,8 +150,12 @@ check-sdk-backend-contracts:
 		packages/aurora-sdk/src/generated/backend-contracts.schema.json \
 		packages/aurora-sdk/src/generated/backend-contracts.zod.ts \
 		packages/aurora-sdk/src/generated/backend-contracts.manifest.json \
-		packages/aurora-sdk/src/generated/tooling-local-provider-v1.json
-	@echo "SDK backend contract artifacts are current."
+		packages/aurora-sdk/src/generated/tooling-local-provider-v1.json \
+		rust/crates/aurora-contracts/src/generated.rs \
+		rust/crates/aurora-contracts/schema \
+		tests/fixtures/local_speech/runtime/contracts/backend_contract_parse_vectors.json
+	@cargo +1.88.0 check --manifest-path rust/Cargo.toml -p aurora-contracts
+	@echo "SDK and Rust backend contract artifacts are current."
 
 
 # Docker Process Mode Commands

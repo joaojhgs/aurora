@@ -1,0 +1,159 @@
+{
+  "$defs": {
+    "MeshAddressSelector": {
+      "description": "Explicit mesh target selector for safety-sensitive remote calls.\n\nThe selector is optional on bus payloads so transparent module routing\nremains backward compatible. When present, routing treats peer/provider\nfields as binding hints and validates them before falling back to module\nselection.",
+      "properties": {
+        "data_scope": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Scope"
+        },
+        "hardware_target": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hardware Target"
+        },
+        "peer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Peer Id"
+        },
+        "provider_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Id"
+        },
+        "resource_namespace": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Namespace"
+        },
+        "service_instance_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Service Instance Id"
+        },
+        "tool_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Id"
+        }
+      },
+      "title": "MeshAddressSelector",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "List use-safe voices for an eligible recipient.",
+  "properties": {
+    "correlation_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "language": {
+      "anyOf": [
+        {
+          "enum": [
+            "de",
+            "en",
+            "es",
+            "fr",
+            "it",
+            "ja",
+            "ko",
+            "pt",
+            "zh"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Language",
+      "x-aurora-speech-language-string-normalize": true
+    },
+    "mesh_selector": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MeshAddressSelector"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "title": "TTSListVoicesRequest",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid"
+}
