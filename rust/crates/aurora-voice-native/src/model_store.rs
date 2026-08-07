@@ -96,7 +96,7 @@ impl NativeModelStore {
         let mut state = read_state(&config.root)?;
         state.bytes_available = config.bytes_available;
         recover_staging(&config.root, &state)?;
-        prune_missing_blobs(&config.root, &mut state)?;
+        recover_blobs(&config.root, &mut state)?;
         let mut store = Self {
             config,
             state,
@@ -256,18 +256,23 @@ impl ModelStore for NativeModelStore {
         &self,
         pack_id: &str,
         pack_version: &str,
+        variant_id: &str,
     ) -> Result<Option<LifecycleSnapshot>, ModelPackError> {
         Ok(self
             .state
             .lifecycles
-            .get(&lifecycle_map_key(pack_id, pack_version))
+            .get(&lifecycle_map_key(pack_id, pack_version, variant_id))
             .cloned())
     }
 
     async fn set_lifecycle(&mut self, snapshot: LifecycleSnapshot) -> Result<(), ModelPackError> {
         let mut next = self.state.clone();
         next.lifecycles.insert(
-            lifecycle_map_key(&snapshot.pack_id, &snapshot.pack_version),
+            lifecycle_map_key(
+                &snapshot.pack_id,
+                &snapshot.pack_version,
+                &snapshot.variant_id,
+            ),
             snapshot,
         );
         self.commit_state(next)
@@ -356,7 +361,20 @@ impl ModelStore for NativeModelStore {
             return Err(store("size"));
         }
         let staged = staging_path(&self.config.root, storage_key);
-        let actual = inspect_file(&staged)?;
+        let blob = blob_path(&self.config.root, &task.expected_sha256);
+        let actual = if blob.exists() {
+            let existing = inspect_file(&blob)?;
+            if existing.sha256 != task.expected_sha256 || existing.byte_size != task.expected_bytes
+            {
+                return Err(store("corrupt"));
+            }
+            if staged.exists() {
+                let _ = std::fs::remove_file(&staged);
+            }
+            existing
+        } else {
+            inspect_file(&staged)?
+        };
         if actual.sha256 != task.expected_sha256 {
             return Err(store("hash"));
         }
@@ -364,13 +382,16 @@ impl ModelStore for NativeModelStore {
             return Err(store("size"));
         }
         self.ensure_quota(0)?;
-        let blob = blob_path(&self.config.root, &actual.sha256);
         if blob.exists() {
             let existing = inspect_file(&blob)?;
             if existing.sha256 != actual.sha256 || existing.byte_size != actual.byte_size {
                 return Err(store("corrupt"));
             }
-            std::fs::remove_file(&staged).map_err(|_| store("promote"))?;
+            match std::fs::remove_file(&staged) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(_) => return Err(store("promote")),
+            }
         } else {
             std::fs::rename(&staged, &blob).map_err(|_| store("promote"))?;
             fsync_parent(&blob)?;
@@ -436,6 +457,7 @@ impl ModelStore for NativeModelStore {
         let lifecycle_key = lifecycle_map_key(
             &manifest.manifest().pack_id,
             &manifest.manifest().pack_version,
+            selection.variant_id(),
         );
         let current = self
             .state
@@ -446,6 +468,7 @@ impl ModelStore for NativeModelStore {
                 create_lifecycle_snapshot(
                     manifest.manifest().pack_id.clone(),
                     manifest.manifest().pack_version.clone(),
+                    selection.variant_id().to_owned(),
                     now_epoch_seconds(),
                     InstallState::Ready,
                 )
@@ -458,11 +481,16 @@ impl ModelStore for NativeModelStore {
         if let Some(active) = &self.state.active {
             if active.pack_id != manifest.manifest().pack_id
                 || active.pack_version != manifest.manifest().pack_version
+                || active.variant_id != selection.variant_id()
             {
                 next.rollback = Some(active.clone());
                 if let Some(previous) = next
                     .lifecycles
-                    .get(&lifecycle_map_key(&active.pack_id, &active.pack_version))
+                    .get(&lifecycle_map_key(
+                        &active.pack_id,
+                        &active.pack_version,
+                        &active.variant_id,
+                    ))
                     .cloned()
                 {
                     let deactivated = apply_lifecycle_event(
@@ -472,7 +500,11 @@ impl ModelStore for NativeModelStore {
                         None,
                     )?;
                     next.lifecycles.insert(
-                        lifecycle_map_key(&deactivated.pack_id, &deactivated.pack_version),
+                        lifecycle_map_key(
+                            &deactivated.pack_id,
+                            &deactivated.pack_version,
+                            &deactivated.variant_id,
+                        ),
                         deactivated,
                     );
                 }
@@ -501,7 +533,11 @@ impl ModelStore for NativeModelStore {
         if !pack_has_files(&self.config.root, &self.state, &rollback)? {
             return Err(store("rollback"));
         }
-        let rollback_key = lifecycle_map_key(&rollback.pack_id, &rollback.pack_version);
+        let rollback_key = lifecycle_map_key(
+            &rollback.pack_id,
+            &rollback.pack_version,
+            &rollback.variant_id,
+        );
         let snapshot = self
             .state
             .lifecycles
@@ -512,7 +548,11 @@ impl ModelStore for NativeModelStore {
         if let Some(active) = &self.state.active {
             if let Some(snapshot) = next
                 .lifecycles
-                .get(&lifecycle_map_key(&active.pack_id, &active.pack_version))
+                .get(&lifecycle_map_key(
+                    &active.pack_id,
+                    &active.pack_version,
+                    &active.variant_id,
+                ))
                 .cloned()
             {
                 let ready = apply_lifecycle_event(
@@ -522,7 +562,7 @@ impl ModelStore for NativeModelStore {
                     None,
                 )?;
                 next.lifecycles.insert(
-                    lifecycle_map_key(&ready.pack_id, &ready.pack_version),
+                    lifecycle_map_key(&ready.pack_id, &ready.pack_version, &ready.variant_id),
                     ready,
                 );
             }
@@ -530,7 +570,7 @@ impl ModelStore for NativeModelStore {
         let active =
             apply_lifecycle_event(&snapshot, InstallEvent::Activate, now_epoch_seconds(), None)?;
         next.lifecycles.insert(
-            lifecycle_map_key(&active.pack_id, &active.pack_version),
+            lifecycle_map_key(&active.pack_id, &active.pack_version, &active.variant_id),
             active.clone(),
         );
         next.active = Some(ActivePackIdentity {
@@ -699,8 +739,13 @@ fn safe_name(value: &str) -> String {
     sha256_hex(value.as_bytes())
 }
 
-fn lifecycle_map_key(pack_id: &str, pack_version: &str) -> String {
-    format!("{}:{}", safe_name(pack_id), safe_name(pack_version))
+fn lifecycle_map_key(pack_id: &str, pack_version: &str, variant_id: &str) -> String {
+    format!(
+        "{}:{}:{}",
+        safe_name(pack_id),
+        safe_name(pack_version),
+        safe_name(variant_id)
+    )
 }
 
 fn read_state(root: &Path) -> Result<StoreState, ModelPackError> {
@@ -772,33 +817,57 @@ fn recover_staging(root: &Path, state: &StoreState) -> Result<(), ModelPackError
     Ok(())
 }
 
-fn prune_missing_blobs(root: &Path, state: &mut StoreState) -> Result<(), ModelPackError> {
+fn recover_blobs(root: &Path, state: &mut StoreState) -> Result<(), ModelPackError> {
     let mut corrupt_pack_ids = BTreeSet::new();
     for file in state.files.values() {
         let path = blob_path(root, &file.sha256);
-        if !path.exists() {
-            corrupt_pack_ids.insert(file.pack_id.clone());
+        match inspect_file(&path) {
+            Ok(actual) if actual.sha256 == file.sha256 && actual.byte_size == file.byte_size => {}
+            Ok(_) | Err(_) => {
+                corrupt_pack_ids.insert(file.pack_id.clone());
+            }
         }
     }
-    if corrupt_pack_ids.is_empty() {
-        return Ok(());
+    if !corrupt_pack_ids.is_empty() {
+        state
+            .files
+            .retain(|_, file| !corrupt_pack_ids.contains(&file.pack_id));
+        if state
+            .active
+            .as_ref()
+            .is_some_and(|active| corrupt_pack_ids.contains(&active.pack_id))
+        {
+            state.active = None;
+        }
+        if state
+            .rollback
+            .as_ref()
+            .is_some_and(|rollback| corrupt_pack_ids.contains(&rollback.pack_id))
+        {
+            state.rollback = None;
+        }
     }
-    state
+
+    let referenced_hashes: BTreeSet<String> = state
         .files
-        .retain(|_, file| !corrupt_pack_ids.contains(&file.pack_id));
-    if state
-        .active
-        .as_ref()
-        .is_some_and(|active| corrupt_pack_ids.contains(&active.pack_id))
-    {
-        state.active = None;
-    }
-    if state
-        .rollback
-        .as_ref()
-        .is_some_and(|rollback| corrupt_pack_ids.contains(&rollback.pack_id))
-    {
-        state.rollback = None;
+        .values()
+        .map(|file| file.sha256.clone())
+        .chain(
+            state
+                .reservations
+                .values()
+                .map(|task| task.expected_sha256.clone()),
+        )
+        .collect();
+    let directory = blob_dir(root);
+    if directory.exists() {
+        for entry in std::fs::read_dir(directory).map_err(|_| store("recovery"))? {
+            let entry = entry.map_err(|_| store("recovery"))?;
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !referenced_hashes.contains(&name) {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
     }
     Ok(())
 }
@@ -863,7 +932,7 @@ fn fsync_parent(path: &Path) -> Result<(), ModelPackError> {
         Err(error) if cfg!(windows) && error.kind() == std::io::ErrorKind::PermissionDenied => {
             Ok(())
         }
-        Err(_) => Ok(()),
+        Err(_) => Err(store("sync")),
     }
 }
 
@@ -1074,12 +1143,26 @@ mod tests {
     }
 
     fn selection_for(manifest: &VerifiedManifest) -> SelectedVariant {
+        select_for(
+            manifest,
+            RuntimeTarget::Desktop,
+            TargetOs::Linux,
+            TargetArch::X86_64,
+        )
+    }
+
+    fn select_for(
+        manifest: &VerifiedManifest,
+        target: RuntimeTarget,
+        os: TargetOs,
+        arch: TargetArch,
+    ) -> SelectedVariant {
         select_verified_variant(
             manifest,
             &RuntimeSelection {
-                target: RuntimeTarget::Desktop,
-                os: TargetOs::Linux,
-                arch: TargetArch::X86_64,
+                target,
+                os,
+                arch,
                 browser_features: BTreeSet::new(),
                 device_memory_mb: Some(4096),
                 max_download_bytes: u64::MAX,
@@ -1125,6 +1208,7 @@ mod tests {
             .set_lifecycle(create_lifecycle_snapshot(
                 manifest.manifest().pack_id.clone(),
                 manifest.manifest().pack_version.clone(),
+                selection.variant_id().to_owned(),
                 now_epoch_seconds(),
                 InstallState::Ready,
             ))
@@ -1177,6 +1261,45 @@ mod tests {
                 .await,
             Err(super::store("size"))
         );
+    }
+
+    #[tokio::test]
+    async fn promotion_persistence_failure_recovers_from_reserved_blob_after_reopen() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let bytes = b"recoverable";
+        let manifest = manifest("pack", "1", model_file("model", bytes));
+        let mut store = open_store(temp.path(), 100);
+        let task = reserve_and_stage(&mut store, &manifest, bytes).await;
+        let file = &manifest.manifest().files[0];
+        store.inject_persistence_failure();
+
+        assert_eq!(
+            store
+                .promote_file(&task.storage_key, &file.sha256, file.byte_size)
+                .await,
+            Err(super::store("persistence"))
+        );
+        assert!(!store.staging_path(&task.storage_key).exists());
+        assert!(blob_path(temp.path(), &file.sha256).exists());
+        std::fs::write(blob_path(temp.path(), &hash(b"orphan")), b"orphan").expect("orphan blob");
+
+        let mut reopened = open_store(temp.path(), 100);
+        assert!(!blob_path(temp.path(), &hash(b"orphan")).exists());
+        assert!(reopened
+            .resume_metadata(&task.storage_key)
+            .await
+            .expect("resume metadata readable")
+            .is_some());
+        let stored = reopened
+            .promote_file(&task.storage_key, &file.sha256, file.byte_size)
+            .await
+            .expect("retry finalizes from reserved blob");
+        assert_eq!(stored.sha256, file.sha256);
+        assert!(reopened
+            .resume_metadata(&task.storage_key)
+            .await
+            .expect("resume metadata readable")
+            .is_none());
     }
 
     #[tokio::test]
@@ -1267,12 +1390,12 @@ mod tests {
         install_ready(&mut store, &first, b"first").await;
         install_ready(&mut store, &second, b"second").await;
         assert!(store
-            .lifecycle("pack", "1")
+            .lifecycle("pack", "1", "linux")
             .await
             .expect("lifecycle")
             .is_some());
         assert!(store
-            .lifecycle("pack", "2")
+            .lifecycle("pack", "2", "linux")
             .await
             .expect("lifecycle")
             .is_some());
@@ -1285,6 +1408,167 @@ mod tests {
                 .expect("open metadata")
                 .variant_id,
             "linux"
+        );
+    }
+
+    #[tokio::test]
+    async fn same_pack_version_variants_keep_lifecycle_and_rollback_isolated() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let desktop_bytes = b"desktop";
+        let android_bytes = b"android";
+        let desktop_file = model_file("desktop-model", desktop_bytes);
+        let android_file = model_file("android-model", android_bytes);
+        let raw = ModelPackManifest {
+            schema_version: 1,
+            pack_id: "pack".to_owned(),
+            pack_version: "1".to_owned(),
+            display_name: "Pack".to_owned(),
+            tasks: vec![PackTask::Stt],
+            license: license(),
+            languages: vec![LanguageSupport {
+                language: "en".to_owned(),
+                locale: Some("en-US".to_owned()),
+                fixed_language: true,
+                auto_detect: false,
+            }],
+            capabilities: CapabilityFlags {
+                streaming: true,
+                cancellation: true,
+            },
+            provenance: provenance(),
+            files: vec![desktop_file, android_file],
+            variants: vec![
+                variant(
+                    "linux",
+                    RuntimeTarget::Desktop,
+                    TargetOs::Linux,
+                    TargetArch::X86_64,
+                    "desktop-model",
+                    u64::try_from(desktop_bytes.len()).expect("test bytes fit"),
+                ),
+                variant(
+                    "android",
+                    RuntimeTarget::Android,
+                    TargetOs::Android,
+                    TargetArch::Aarch64,
+                    "android-model",
+                    u64::try_from(android_bytes.len()).expect("test bytes fit"),
+                ),
+            ],
+            rollback_from: None,
+            supersedes_pack_id: None,
+            revocation: None,
+            signature: Some(ManifestSignature {
+                key_id: "key".to_owned(),
+                algorithm: "ed25519".to_owned(),
+                value: "signed".to_owned(),
+            }),
+        };
+        let verified = verify_manifest(raw, &TrustPolicy::default(), Some(&AcceptingVerifier))
+            .expect("manifest verifies");
+        let desktop_selection = select_for(
+            &verified,
+            RuntimeTarget::Desktop,
+            TargetOs::Linux,
+            TargetArch::X86_64,
+        );
+        let android_selection = select_for(
+            &verified,
+            RuntimeTarget::Android,
+            TargetOs::Android,
+            TargetArch::Aarch64,
+        );
+        let mut store = open_store(temp.path(), 100);
+
+        for (selection, file, bytes) in [
+            (
+                &desktop_selection,
+                &verified.manifest().files[0],
+                desktop_bytes.as_slice(),
+            ),
+            (
+                &android_selection,
+                &verified.manifest().files[1],
+                android_bytes.as_slice(),
+            ),
+        ] {
+            let task = store
+                .reserve_file(&verified, selection, file)
+                .await
+                .expect("reservation succeeds");
+            std::fs::write(store.staging_path(&task.storage_key), bytes).expect("stage bytes");
+            store
+                .promote_file(&task.storage_key, &file.sha256, file.byte_size)
+                .await
+                .expect("promotion succeeds");
+            store
+                .set_lifecycle(create_lifecycle_snapshot(
+                    verified.manifest().pack_id.clone(),
+                    verified.manifest().pack_version.clone(),
+                    selection.variant_id().to_owned(),
+                    now_epoch_seconds(),
+                    InstallState::Ready,
+                ))
+                .await
+                .expect("lifecycle persists");
+        }
+
+        store
+            .activate_pack(&verified, &desktop_selection)
+            .await
+            .expect("desktop activation succeeds");
+        store
+            .activate_pack(&verified, &android_selection)
+            .await
+            .expect("android activation succeeds");
+        assert_eq!(
+            store
+                .active_pack()
+                .await
+                .expect("active readable")
+                .expect("active exists")
+                .variant_id,
+            "android"
+        );
+        assert_eq!(
+            store
+                .lifecycle("pack", "1", "linux")
+                .await
+                .expect("lifecycle")
+                .map(|snapshot| snapshot.state),
+            Some(InstallState::Ready)
+        );
+        assert_eq!(
+            store
+                .lifecycle("pack", "1", "android")
+                .await
+                .expect("lifecycle")
+                .map(|snapshot| snapshot.state),
+            Some(InstallState::Active)
+        );
+
+        let rolled_back = store
+            .rollback_active()
+            .await
+            .expect("rollback succeeds")
+            .expect("rollback exists");
+        assert_eq!(rolled_back.variant_id, "linux");
+        assert_eq!(
+            store
+                .active_pack()
+                .await
+                .expect("active readable")
+                .expect("active exists")
+                .variant_id,
+            "linux"
+        );
+        assert_eq!(
+            store
+                .lifecycle("pack", "1", "android")
+                .await
+                .expect("lifecycle")
+                .map(|snapshot| snapshot.state),
+            Some(InstallState::Ready)
         );
     }
 
@@ -1312,6 +1596,30 @@ mod tests {
         assert_eq!(
             store.activate_pack(&manifest, &selection).await,
             Err(super::store("revoked"))
+        );
+    }
+
+    #[tokio::test]
+    async fn startup_recovery_withdraws_active_when_blob_content_is_corrupt() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let mut store = open_store(temp.path(), 100);
+        let manifest = manifest("pack", "1", model_file("model", b"model"));
+        install_ready(&mut store, &manifest, b"model").await;
+        let selection = selection_for(&manifest);
+        let metadata = store
+            .open_immutable_file(&selection, "model")
+            .await
+            .expect("open metadata");
+        std::fs::write(blob_path(temp.path(), &metadata.sha256), b"changed").expect("corrupt blob");
+
+        let recovered = open_store(temp.path(), 100);
+        assert_eq!(
+            recovered.active_pack().await.expect("active readable"),
+            None
+        );
+        assert_eq!(
+            recovered.open_immutable_file(&selection, "model").await,
+            Err(super::store("missing_file"))
         );
     }
 
