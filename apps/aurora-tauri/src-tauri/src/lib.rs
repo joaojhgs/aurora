@@ -74,6 +74,7 @@ const VOICE_OVERLAY_WIDTH: f64 = 220.0;
 const VOICE_OVERLAY_HEIGHT: f64 = 230.0;
 const TEXT_OVERLAY_WIDTH: f64 = 520.0;
 const TEXT_OVERLAY_HEIGHT: f64 = 360.0;
+const GATEWAY_EVENT_STREAM_ERROR_BODY_MAX_BYTES: usize = 4096;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -6425,11 +6426,8 @@ async fn run_gateway_event_stream_with_emitter<F>(
             .map_err(|error| redacted_gateway_error(&error))?;
         let status = response.status();
         if !status.is_success() {
-            let body = response
-                .text()
-                .await
-                .map_err(|error| redacted_gateway_error(&error))?;
-            return Err(redacted_gateway_status_error(status.as_u16(), &body));
+            let body = read_gateway_error_body(response).await?;
+            return Err(redacted_gateway_status_error(status.as_u16(), body));
         }
 
         let mut buffer = String::new();
@@ -6590,11 +6588,53 @@ fn redacted_gateway_error(error: &reqwest::Error) -> String {
     }
 }
 
-fn redacted_gateway_status_error(status: u16, body: &str) -> String {
-    let mut body = redact_sensitive_text(body);
-    if body.len() > 4096 {
-        body.truncate(4096);
-        body.push_str("...");
+struct GatewayErrorBody {
+    bytes: Vec<u8>,
+    truncated: bool,
+}
+
+async fn read_gateway_error_body(
+    mut response: reqwest::Response,
+) -> Result<GatewayErrorBody, String> {
+    let max_read = GATEWAY_EVENT_STREAM_ERROR_BODY_MAX_BYTES.saturating_add(1);
+    let mut bytes = Vec::with_capacity(max_read);
+    let mut truncated = false;
+
+    while bytes.len() < max_read {
+        let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|error| redacted_gateway_error(&error))?
+        else {
+            break;
+        };
+        let remaining = max_read - bytes.len();
+        if chunk.len() > remaining {
+            bytes.extend_from_slice(&chunk[..remaining]);
+            truncated = true;
+            break;
+        }
+        bytes.extend_from_slice(&chunk);
+        if bytes.len() == max_read {
+            truncated = true;
+            break;
+        }
+    }
+
+    if bytes.len() > GATEWAY_EVENT_STREAM_ERROR_BODY_MAX_BYTES {
+        bytes.truncate(GATEWAY_EVENT_STREAM_ERROR_BODY_MAX_BYTES);
+        truncated = true;
+    }
+
+    Ok(GatewayErrorBody { bytes, truncated })
+}
+
+fn redacted_gateway_status_error(status: u16, body: GatewayErrorBody) -> String {
+    let truncated = body.truncated;
+    let body_text = String::from_utf8_lossy(&body.bytes);
+    let mut body = redact_sensitive_text(&body_text);
+    if truncated {
+        body.push_str("... [truncated]");
     }
     if body.trim().is_empty() {
         format!("Gateway event stream returned HTTP {status}")
@@ -7709,6 +7749,62 @@ mod tests {
         assert!(!reason.contains("gateway-token"));
         assert!(!reason.contains("body-secret"));
         assert!(!reason.contains("sk-secret"));
+        assert_eq!(emitted[0].1["secretsRedacted"], json!(true));
+    }
+
+    #[test]
+    fn live_gateway_event_stream_caps_oversized_utf8_error_body_before_redaction() {
+        let mut body = b"token=early-secret ".to_vec();
+        body.resize(GATEWAY_EVENT_STREAM_ERROR_BODY_MAX_BYTES - 1, b'a');
+        body.extend_from_slice("🙂".as_bytes());
+        body.extend_from_slice(b" token=too-late-secret");
+        let fixture = spawn_loopback_fixture(
+            vec![
+                format!(
+                    "HTTP/1.1 502 Bad Gateway\r\ncontent-type: text/plain; charset=utf-8\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                    body.len()
+                )
+                .into_bytes(),
+                body,
+            ],
+            false,
+        );
+        let emitted = Arc::new(Mutex::new(Vec::<(String, Value)>::new()));
+        let captured = Arc::clone(&emitted);
+
+        tauri::async_runtime::block_on(run_gateway_event_stream_with_emitter(
+            reqwest::Client::new(),
+            fixture.base_url.join("api/events/stream").unwrap(),
+            HeaderMap::new(),
+            "aurora-sub-large-error".to_string(),
+            "aurora://events/aurora-sub-large-error".to_string(),
+            "aurora://events/aurora-sub-large-error/closed".to_string(),
+            move |event_name, payload| {
+                captured
+                    .lock()
+                    .unwrap()
+                    .push((event_name.to_string(), payload));
+            },
+        ));
+
+        let _ = fixture
+            .request_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("fixture captured request");
+        fixture.join();
+        let emitted = emitted.lock().unwrap();
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(
+            emitted[0].0,
+            "aurora://events/aurora-sub-large-error/closed"
+        );
+        assert_eq!(emitted[0].1["code"], json!("transport_loss"));
+        let reason = emitted[0].1["reason"].as_str().unwrap();
+        assert!(reason.contains("HTTP 502"));
+        assert!(reason.contains("[redacted]"));
+        assert!(reason.contains("[truncated]"));
+        assert!(!reason.contains("early-secret"));
+        assert!(!reason.contains("too-late-secret"));
         assert_eq!(emitted[0].1["secretsRedacted"], json!(true));
     }
 
