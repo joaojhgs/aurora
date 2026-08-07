@@ -4,6 +4,7 @@
 
 mod downloader;
 mod transport;
+mod trust;
 
 pub use downloader::{
     AssetIntegrity, DownloadError, DownloadPolicy, DownloadProgress, DownloadReceipt,
@@ -13,3 +14,4 @@ pub use transport::{
     GatewayAuth, GatewayEvent, NativeEventStream, NativeGatewayTransport, NativeRequestOptions,
     SseSubscription, TransportError, TransportLimits,
 };
+pub use trust::Ed25519TrustStore;
