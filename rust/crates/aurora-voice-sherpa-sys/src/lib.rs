@@ -1,20 +1,29 @@
-//! Safe containment for the pinned sherpa-onnx v1.13.4 Silero VAD C ABI.
+//! Safe containment for the pinned sherpa-onnx v1.13.4 speech C ABI.
 //!
 //! The crate intentionally exposes only a small RAII API. Raw C layouts and all
 //! unsafe calls remain private to the native implementation module.
 
 use std::error::Error;
 use std::fmt;
+use std::fs::File;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-#[cfg(all(feature = "native-vad", not(target_arch = "wasm32")))]
+#[cfg(all(
+    any(feature = "native-vad", feature = "native-stt"),
+    not(target_arch = "wasm32")
+))]
 mod native;
 
-#[cfg(not(all(feature = "native-vad", not(target_arch = "wasm32"))))]
+#[cfg(not(all(
+    any(feature = "native-vad", feature = "native-stt"),
+    not(target_arch = "wasm32")
+)))]
 mod native {
-    use super::{SileroVadConfig, SpeechSegment, VadError};
+    use super::{
+        OfflineSttConfig, OfflineSttResult, SileroVadConfig, SpeechSegment, SttError, VadError,
+    };
 
     pub(crate) struct Detector;
 
@@ -60,6 +69,46 @@ mod native {
             Err(VadError::NativeUnavailable)
         }
     }
+
+    pub(crate) struct OfflineRecognizer;
+
+    impl std::fmt::Debug for OfflineRecognizer {
+        fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter
+                .debug_struct("OfflineRecognizer")
+                .field("native", &"unavailable")
+                .finish()
+        }
+    }
+
+    impl OfflineRecognizer {
+        pub(crate) fn new(_config: &OfflineSttConfig) -> Result<Self, SttError> {
+            Err(SttError::NativeUnavailable)
+        }
+
+        pub(crate) fn create_stream(&self) -> Result<OfflineStream, SttError> {
+            Err(SttError::NativeUnavailable)
+        }
+
+        pub(crate) fn decode_stream(
+            &self,
+            _stream: OfflineStream,
+        ) -> Result<OfflineSttResult, SttError> {
+            Err(SttError::NativeUnavailable)
+        }
+    }
+
+    pub(crate) struct OfflineStream;
+
+    impl OfflineStream {
+        pub(crate) fn accept_waveform(
+            &mut self,
+            _sample_rate: i32,
+            _pcm: &[f32],
+        ) -> Result<(), SttError> {
+            Err(SttError::NativeUnavailable)
+        }
+    }
 }
 
 pub const SHERPA_ONNX_VERSION: &str = "1.13.4";
@@ -81,6 +130,30 @@ const MAX_NUM_THREADS: i32 = 16;
 const MAX_WINDOW_SIZE: i32 = 8_192;
 const MAX_NATIVE_SEGMENTS: usize = 4096;
 const MAX_NATIVE_SEGMENT_SAMPLES: usize = 14_400_000;
+const DEFAULT_FEATURE_DIM: i32 = 80;
+const DEFAULT_DECODING_METHOD: &str = "greedy_search";
+const MAX_OFFLINE_STT_SECONDS: f32 = 60.0;
+const MAX_OFFLINE_STT_SAMPLES: usize = 2_880_000;
+#[cfg(all(
+    any(feature = "native-vad", feature = "native-stt"),
+    not(target_arch = "wasm32")
+))]
+const MAX_OFFLINE_STT_TEXT_BYTES: usize = 16_384;
+#[cfg(all(
+    any(feature = "native-vad", feature = "native-stt"),
+    not(target_arch = "wasm32")
+))]
+const MAX_OFFLINE_STT_TOKENS: usize = 4096;
+#[cfg(all(
+    any(feature = "native-vad", feature = "native-stt"),
+    not(target_arch = "wasm32")
+))]
+const MAX_OFFLINE_STT_TOKEN_BYTES: usize = 256;
+#[cfg(all(
+    any(feature = "native-vad", feature = "native-stt"),
+    not(target_arch = "wasm32")
+))]
+const MAX_OFFLINE_STT_SEGMENTS: usize = 1024;
 
 #[derive(Clone)]
 pub struct SileroVadConfig {
@@ -324,6 +397,271 @@ pub struct VoiceActivityDetector {
     _not_send_sync: PhantomData<Rc<()>>,
 }
 
+#[derive(Clone)]
+pub struct OfflineSttConfig {
+    encoder_path: PathBuf,
+    decoder_path: PathBuf,
+    tokens_path: PathBuf,
+    sample_rate: i32,
+    feature_dim: i32,
+    num_threads: i32,
+    provider: String,
+    decoding_method: String,
+    max_active_paths: i32,
+    max_audio_seconds: f32,
+}
+
+impl OfflineSttConfig {
+    pub fn moonshine_v2(
+        encoder_path: impl Into<PathBuf>,
+        decoder_path: impl Into<PathBuf>,
+        tokens_path: impl Into<PathBuf>,
+    ) -> Self {
+        Self {
+            encoder_path: encoder_path.into(),
+            decoder_path: decoder_path.into(),
+            tokens_path: tokens_path.into(),
+            sample_rate: DEFAULT_SAMPLE_RATE,
+            feature_dim: DEFAULT_FEATURE_DIM,
+            num_threads: DEFAULT_NUM_THREADS,
+            provider: DEFAULT_PROVIDER.to_owned(),
+            decoding_method: DEFAULT_DECODING_METHOD.to_owned(),
+            max_active_paths: 4,
+            max_audio_seconds: MAX_OFFLINE_STT_SECONDS,
+        }
+    }
+
+    pub fn encoder_path(&self) -> &Path {
+        &self.encoder_path
+    }
+
+    pub fn decoder_path(&self) -> &Path {
+        &self.decoder_path
+    }
+
+    pub fn tokens_path(&self) -> &Path {
+        &self.tokens_path
+    }
+
+    pub fn sample_rate(&self) -> i32 {
+        self.sample_rate
+    }
+
+    pub fn feature_dim(&self) -> i32 {
+        self.feature_dim
+    }
+
+    pub fn num_threads(&self) -> i32 {
+        self.num_threads
+    }
+
+    pub fn provider(&self) -> &str {
+        &self.provider
+    }
+
+    pub fn decoding_method(&self) -> &str {
+        &self.decoding_method
+    }
+
+    pub fn max_active_paths(&self) -> i32 {
+        self.max_active_paths
+    }
+
+    pub fn max_audio_seconds(&self) -> f32 {
+        self.max_audio_seconds
+    }
+
+    pub fn with_sample_rate(mut self, sample_rate: i32) -> Self {
+        self.sample_rate = sample_rate;
+        self
+    }
+
+    pub fn with_feature_dim(mut self, feature_dim: i32) -> Self {
+        self.feature_dim = feature_dim;
+        self
+    }
+
+    pub fn with_num_threads(mut self, num_threads: i32) -> Self {
+        self.num_threads = num_threads;
+        self
+    }
+
+    pub fn with_provider(mut self, provider: impl Into<String>) -> Self {
+        self.provider = provider.into();
+        self
+    }
+
+    pub fn with_decoding_method(mut self, decoding_method: impl Into<String>) -> Self {
+        self.decoding_method = decoding_method.into();
+        self
+    }
+
+    pub fn with_max_active_paths(mut self, max_active_paths: i32) -> Self {
+        self.max_active_paths = max_active_paths;
+        self
+    }
+
+    pub fn with_max_audio_seconds(mut self, seconds: f32) -> Self {
+        self.max_audio_seconds = seconds;
+        self
+    }
+
+    pub fn validate(&self) -> Result<(), SttError> {
+        validate_model_file(&self.encoder_path, ErrorCode::ConfigEncoderPathEmpty)?;
+        validate_model_file(&self.decoder_path, ErrorCode::ConfigDecoderPathEmpty)?;
+        validate_model_file(&self.tokens_path, ErrorCode::ConfigTokensPathEmpty)?;
+        if !(MIN_SAMPLE_RATE..=MAX_SAMPLE_RATE).contains(&self.sample_rate) {
+            return Err(SttError::InvalidConfig {
+                code: ErrorCode::ConfigSampleRateRange,
+            });
+        }
+        if self.feature_dim != DEFAULT_FEATURE_DIM {
+            return Err(SttError::InvalidConfig {
+                code: ErrorCode::ConfigFeatureDimRange,
+            });
+        }
+        if !(1..=MAX_NUM_THREADS).contains(&self.num_threads) {
+            return Err(SttError::InvalidConfig {
+                code: ErrorCode::ConfigNumThreadsRange,
+            });
+        }
+        validate_c_string_value(
+            &self.provider,
+            ErrorCode::ConfigProviderEmpty,
+            ErrorCode::ConfigProviderNul,
+        )?;
+        validate_c_string_value(
+            &self.decoding_method,
+            ErrorCode::ConfigDecodingMethodEmpty,
+            ErrorCode::ConfigDecodingMethodNul,
+        )?;
+        if self.max_active_paths <= 0 || self.max_active_paths > 128 {
+            return Err(SttError::InvalidConfig {
+                code: ErrorCode::ConfigMaxActivePathsRange,
+            });
+        }
+        if !self.max_audio_seconds.is_finite()
+            || self.max_audio_seconds < MIN_DURATION_SECONDS
+            || self.max_audio_seconds > MAX_OFFLINE_STT_SECONDS
+        {
+            return Err(SttError::InvalidConfig {
+                code: ErrorCode::ConfigMaxAudioSecondsRange,
+            });
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Debug for OfflineSttConfig {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("OfflineSttConfig")
+            .field("encoder_path", &"<redacted>")
+            .field("decoder_path", &"<redacted>")
+            .field("tokens_path", &"<redacted>")
+            .field("sample_rate", &self.sample_rate)
+            .field("feature_dim", &self.feature_dim)
+            .field("num_threads", &self.num_threads)
+            .field("provider", &"<redacted>")
+            .field("decoding_method", &self.decoding_method)
+            .field("debug", &false)
+            .field("max_active_paths", &self.max_active_paths)
+            .field("max_audio_seconds", &self.max_audio_seconds)
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct OfflineSttResult {
+    text: String,
+    tokens: Vec<String>,
+    timestamps_millis: Vec<u32>,
+    segment_texts: Vec<String>,
+    segment_timestamps_millis: Vec<u32>,
+}
+
+impl OfflineSttResult {
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    pub fn tokens(&self) -> &[String] {
+        &self.tokens
+    }
+
+    pub fn timestamps_millis(&self) -> &[u32] {
+        &self.timestamps_millis
+    }
+
+    pub fn segment_texts(&self) -> &[String] {
+        &self.segment_texts
+    }
+
+    pub fn segment_timestamps_millis(&self) -> &[u32] {
+        &self.segment_timestamps_millis
+    }
+}
+
+impl fmt::Debug for OfflineSttResult {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("OfflineSttResult")
+            .field("text", &"<redacted>")
+            .field("text_bytes", &self.text.len())
+            .field("token_count", &self.tokens.len())
+            .field("timestamp_count", &self.timestamps_millis.len())
+            .field("segment_count", &self.segment_texts.len())
+            .finish()
+    }
+}
+
+pub struct OfflineSttRecognizer {
+    inner: native::OfflineRecognizer,
+    sample_rate: i32,
+    max_audio_seconds: f32,
+    _not_send_sync: PhantomData<Rc<()>>,
+}
+
+impl fmt::Debug for OfflineSttRecognizer {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("OfflineSttRecognizer")
+            .field("inner", &"<redacted>")
+            .field("sample_rate", &self.sample_rate)
+            .field("send_sync", &"!Send + !Sync")
+            .finish()
+    }
+}
+
+impl OfflineSttRecognizer {
+    pub fn new(config: &OfflineSttConfig) -> Result<Self, SttError> {
+        config.validate()?;
+        let inner = native::OfflineRecognizer::new(config)?;
+        Ok(Self {
+            inner,
+            sample_rate: config.sample_rate(),
+            max_audio_seconds: config.max_audio_seconds(),
+            _not_send_sync: PhantomData,
+        })
+    }
+
+    pub fn transcribe(
+        &mut self,
+        sample_rate: i32,
+        pcm: &[f32],
+    ) -> Result<OfflineSttResult, SttError> {
+        let max_accept_samples = max_offline_samples_for_rate(sample_rate, self.max_audio_seconds)?;
+        validate_offline_pcm(pcm, max_accept_samples)?;
+        let mut stream = self.inner.create_stream()?;
+        stream.accept_waveform(sample_rate, pcm)?;
+        // sherpa-onnx 1.13.4 offline decoding is synchronous and exposes no
+        // preemptive cancellation hook. Dropping this recognizer before or
+        // after this call safely releases native resources; an in-flight decode
+        // cannot be interrupted until the C call returns.
+        self.inner.decode_stream(stream)
+    }
+}
+
 impl fmt::Debug for VoiceActivityDetector {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -406,6 +744,23 @@ pub enum ErrorCode {
     ConfigProviderNul,
     ConfigBufferSizeSecondsRange,
     ConfigBufferSizeLessThanMaxSpeech,
+    ConfigEncoderPathEmpty,
+    ConfigEncoderPathNul,
+    ConfigEncoderPathEncoding,
+    ConfigEncoderPathUnreadable,
+    ConfigDecoderPathEmpty,
+    ConfigDecoderPathNul,
+    ConfigDecoderPathEncoding,
+    ConfigDecoderPathUnreadable,
+    ConfigTokensPathEmpty,
+    ConfigTokensPathNul,
+    ConfigTokensPathEncoding,
+    ConfigTokensPathUnreadable,
+    ConfigFeatureDimRange,
+    ConfigDecodingMethodEmpty,
+    ConfigDecodingMethodNul,
+    ConfigMaxActivePathsRange,
+    ConfigMaxAudioSecondsRange,
     WaveformEmpty,
     WaveformTooLong,
     WaveformChunkTooLong,
@@ -421,6 +776,19 @@ pub enum ErrorCode {
     NativeSegmentLengthExceeded,
     NativeInvalidSegmentSamples,
     NativeInvalidSegmentSample,
+    NativeNullRecognizer,
+    NativeNullStream,
+    NativeNullResult,
+    NativeInvalidResultText,
+    NativeInvalidResultToken,
+    NativeInvalidResultTimestamp,
+    NativeResultTextTooLong,
+    NativeResultTokenCountExceeded,
+    NativeResultTokenTooLong,
+    NativeResultSegmentCountExceeded,
+    StreamWaveformMissing,
+    StreamWaveformAlreadyAccepted,
+    StreamAlreadyDecoded,
 }
 
 impl ErrorCode {
@@ -440,6 +808,23 @@ impl ErrorCode {
             Self::ConfigProviderNul => "config.provider_nul",
             Self::ConfigBufferSizeSecondsRange => "config.buffer_size_seconds_range",
             Self::ConfigBufferSizeLessThanMaxSpeech => "config.buffer_size_less_than_max_speech",
+            Self::ConfigEncoderPathEmpty => "config.encoder_path_empty",
+            Self::ConfigEncoderPathNul => "config.encoder_path_nul",
+            Self::ConfigEncoderPathEncoding => "config.encoder_path_encoding",
+            Self::ConfigEncoderPathUnreadable => "config.encoder_path_unreadable",
+            Self::ConfigDecoderPathEmpty => "config.decoder_path_empty",
+            Self::ConfigDecoderPathNul => "config.decoder_path_nul",
+            Self::ConfigDecoderPathEncoding => "config.decoder_path_encoding",
+            Self::ConfigDecoderPathUnreadable => "config.decoder_path_unreadable",
+            Self::ConfigTokensPathEmpty => "config.tokens_path_empty",
+            Self::ConfigTokensPathNul => "config.tokens_path_nul",
+            Self::ConfigTokensPathEncoding => "config.tokens_path_encoding",
+            Self::ConfigTokensPathUnreadable => "config.tokens_path_unreadable",
+            Self::ConfigFeatureDimRange => "config.feature_dim_range",
+            Self::ConfigDecodingMethodEmpty => "config.decoding_method_empty",
+            Self::ConfigDecodingMethodNul => "config.decoding_method_nul",
+            Self::ConfigMaxActivePathsRange => "config.max_active_paths_range",
+            Self::ConfigMaxAudioSecondsRange => "config.max_audio_seconds_range",
             Self::WaveformEmpty => "waveform.empty",
             Self::WaveformTooLong => "waveform.too_long",
             Self::WaveformChunkTooLong => "waveform.chunk_too_long",
@@ -455,6 +840,19 @@ impl ErrorCode {
             Self::NativeSegmentLengthExceeded => "native.segment_length_exceeded",
             Self::NativeInvalidSegmentSamples => "native.invalid_segment_samples",
             Self::NativeInvalidSegmentSample => "native.invalid_segment_sample",
+            Self::NativeNullRecognizer => "native.null_recognizer",
+            Self::NativeNullStream => "native.null_stream",
+            Self::NativeNullResult => "native.null_result",
+            Self::NativeInvalidResultText => "native.invalid_result_text",
+            Self::NativeInvalidResultToken => "native.invalid_result_token",
+            Self::NativeInvalidResultTimestamp => "native.invalid_result_timestamp",
+            Self::NativeResultTextTooLong => "native.result_text_too_long",
+            Self::NativeResultTokenCountExceeded => "native.result_token_count_exceeded",
+            Self::NativeResultTokenTooLong => "native.result_token_too_long",
+            Self::NativeResultSegmentCountExceeded => "native.result_segment_count_exceeded",
+            Self::StreamWaveformMissing => "stream.waveform_missing",
+            Self::StreamWaveformAlreadyAccepted => "stream.waveform_already_accepted",
+            Self::StreamAlreadyDecoded => "stream.already_decoded",
         }
     }
 }
@@ -505,6 +903,53 @@ impl fmt::Display for VadError {
 
 impl Error for VadError {}
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SttError {
+    InvalidConfig { code: ErrorCode },
+    InvalidWaveform { code: ErrorCode },
+    InvalidLifecycle { code: ErrorCode },
+    NativeUnavailable,
+    NativeCreateFailed,
+    NativeNullStream,
+    NativeNullResult,
+    NativeInvalidResultText,
+    NativeInvalidResultToken,
+    NativeInvalidResultTimestamp,
+    NativeResultTextTooLong,
+    NativeResultTokenCountExceeded,
+    NativeResultTokenTooLong,
+    NativeResultSegmentCountExceeded,
+}
+
+impl SttError {
+    pub const fn code(&self) -> ErrorCode {
+        match self {
+            Self::InvalidConfig { code }
+            | Self::InvalidWaveform { code }
+            | Self::InvalidLifecycle { code } => *code,
+            Self::NativeUnavailable => ErrorCode::NativeUnavailable,
+            Self::NativeCreateFailed => ErrorCode::NativeNullRecognizer,
+            Self::NativeNullStream => ErrorCode::NativeNullStream,
+            Self::NativeNullResult => ErrorCode::NativeNullResult,
+            Self::NativeInvalidResultText => ErrorCode::NativeInvalidResultText,
+            Self::NativeInvalidResultToken => ErrorCode::NativeInvalidResultToken,
+            Self::NativeInvalidResultTimestamp => ErrorCode::NativeInvalidResultTimestamp,
+            Self::NativeResultTextTooLong => ErrorCode::NativeResultTextTooLong,
+            Self::NativeResultTokenCountExceeded => ErrorCode::NativeResultTokenCountExceeded,
+            Self::NativeResultTokenTooLong => ErrorCode::NativeResultTokenTooLong,
+            Self::NativeResultSegmentCountExceeded => ErrorCode::NativeResultSegmentCountExceeded,
+        }
+    }
+}
+
+impl fmt::Display for SttError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "sherpa stt error: {}", self.code())
+    }
+}
+
+impl Error for SttError {}
+
 fn validate_threshold(value: f32) -> Result<(), VadError> {
     if value.is_finite() && (0.01..1.0).contains(&value) {
         Ok(())
@@ -543,6 +988,45 @@ pub fn validate_pcm(pcm: &[f32], max_accept_samples: i32) -> Result<(), VadError
         }
     }
     Ok(())
+}
+
+pub fn validate_offline_pcm(pcm: &[f32], max_accept_samples: i32) -> Result<(), SttError> {
+    let len = pcm_len_i32_for_stt(pcm)?;
+    if len > max_accept_samples {
+        return Err(SttError::InvalidWaveform {
+            code: ErrorCode::WaveformTooLong,
+        });
+    }
+    for sample in pcm {
+        if !sample.is_finite() {
+            return Err(SttError::InvalidWaveform {
+                code: ErrorCode::WaveformNonFinite,
+            });
+        }
+        if !(-1.0..=1.0).contains(sample) {
+            return Err(SttError::InvalidWaveform {
+                code: ErrorCode::WaveformOutOfRange,
+            });
+        }
+    }
+    Ok(())
+}
+
+fn max_offline_samples_for_rate(sample_rate: i32, max_audio_seconds: f32) -> Result<i32, SttError> {
+    if !(MIN_SAMPLE_RATE..=MAX_SAMPLE_RATE).contains(&sample_rate) {
+        return Err(SttError::InvalidConfig {
+            code: ErrorCode::ConfigSampleRateRange,
+        });
+    }
+    let max = (sample_rate as f32 * max_audio_seconds).ceil();
+    if !max.is_finite() || max < 1.0 || max > MAX_OFFLINE_STT_SAMPLES as f32 {
+        return Err(SttError::InvalidConfig {
+            code: ErrorCode::ConfigMaxAudioSecondsRange,
+        });
+    }
+    i32::try_from(max as usize).map_err(|_| SttError::InvalidConfig {
+        code: ErrorCode::ConfigMaxAudioSecondsRange,
+    })
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -590,7 +1074,13 @@ fn checked_ceil_to_usize(value: f32, max: usize, code: ErrorCode) -> Result<usiz
     Ok(value.ceil() as usize)
 }
 
-#[cfg(any(test, all(feature = "native-vad", not(target_arch = "wasm32"))))]
+#[cfg(any(
+    test,
+    all(
+        any(feature = "native-vad", feature = "native-stt"),
+        not(target_arch = "wasm32")
+    )
+))]
 pub(crate) fn validate_native_segment_parts(
     start: i32,
     samples: &[f32],
@@ -624,8 +1114,92 @@ pub(crate) fn pcm_len_i32(pcm: &[f32]) -> Result<i32, VadError> {
     })
 }
 
+pub(crate) fn pcm_len_i32_for_stt(pcm: &[f32]) -> Result<i32, SttError> {
+    if pcm.is_empty() {
+        return Err(SttError::InvalidWaveform {
+            code: ErrorCode::WaveformEmpty,
+        });
+    }
+    i32::try_from(pcm.len()).map_err(|_| SttError::InvalidWaveform {
+        code: ErrorCode::WaveformTooLong,
+    })
+}
+
+fn validate_c_string_value(
+    value: &str,
+    empty_code: ErrorCode,
+    nul_code: ErrorCode,
+) -> Result<(), SttError> {
+    if value.is_empty() {
+        return Err(SttError::InvalidConfig { code: empty_code });
+    }
+    if value.as_bytes().contains(&0) {
+        return Err(SttError::InvalidConfig { code: nul_code });
+    }
+    Ok(())
+}
+
+fn validate_model_file(path: &Path, empty_code: ErrorCode) -> Result<(), SttError> {
+    if path.as_os_str().is_empty() {
+        return Err(SttError::InvalidConfig { code: empty_code });
+    }
+    let bytes = path_bytes_for_stt(path, empty_code)?;
+    if bytes.contains(&0) {
+        return Err(SttError::InvalidConfig {
+            code: model_path_nul_code(empty_code),
+        });
+    }
+    let metadata = path.metadata().map_err(|_| SttError::InvalidConfig {
+        code: model_path_unreadable_code(empty_code),
+    })?;
+    if !metadata.is_file() {
+        return Err(SttError::InvalidConfig {
+            code: model_path_unreadable_code(empty_code),
+        });
+    }
+    File::open(path).map_err(|_| SttError::InvalidConfig {
+        code: model_path_unreadable_code(empty_code),
+    })?;
+    Ok(())
+}
+
+fn model_path_nul_code(empty_code: ErrorCode) -> ErrorCode {
+    match empty_code {
+        ErrorCode::ConfigEncoderPathEmpty => ErrorCode::ConfigEncoderPathNul,
+        ErrorCode::ConfigDecoderPathEmpty => ErrorCode::ConfigDecoderPathNul,
+        ErrorCode::ConfigTokensPathEmpty => ErrorCode::ConfigTokensPathNul,
+        _ => empty_code,
+    }
+}
+
+#[cfg(not(unix))]
+fn model_path_encoding_code(empty_code: ErrorCode) -> ErrorCode {
+    match empty_code {
+        ErrorCode::ConfigEncoderPathEmpty => ErrorCode::ConfigEncoderPathEncoding,
+        ErrorCode::ConfigDecoderPathEmpty => ErrorCode::ConfigDecoderPathEncoding,
+        ErrorCode::ConfigTokensPathEmpty => ErrorCode::ConfigTokensPathEncoding,
+        _ => empty_code,
+    }
+}
+
+fn model_path_unreadable_code(empty_code: ErrorCode) -> ErrorCode {
+    match empty_code {
+        ErrorCode::ConfigEncoderPathEmpty => ErrorCode::ConfigEncoderPathUnreadable,
+        ErrorCode::ConfigDecoderPathEmpty => ErrorCode::ConfigDecoderPathUnreadable,
+        ErrorCode::ConfigTokensPathEmpty => ErrorCode::ConfigTokensPathUnreadable,
+        _ => empty_code,
+    }
+}
+
 #[cfg(unix)]
 pub(crate) fn path_bytes(path: &Path) -> Result<Vec<u8>, VadError> {
+    use std::os::unix::ffi::OsStrExt;
+
+    Ok(path.as_os_str().as_bytes().to_vec())
+}
+
+#[cfg(unix)]
+pub(crate) fn path_bytes_for_stt(path: &Path, _empty_code: ErrorCode) -> Result<Vec<u8>, SttError> {
     use std::os::unix::ffi::OsStrExt;
 
     Ok(path.as_os_str().as_bytes().to_vec())
@@ -635,6 +1209,14 @@ pub(crate) fn path_bytes(path: &Path) -> Result<Vec<u8>, VadError> {
 pub(crate) fn path_bytes(path: &Path) -> Result<Vec<u8>, VadError> {
     let value = path.as_os_str().to_str().ok_or(VadError::InvalidConfig {
         code: ErrorCode::ConfigModelPathEncoding,
+    })?;
+    Ok(value.as_bytes().to_vec())
+}
+
+#[cfg(not(unix))]
+pub(crate) fn path_bytes_for_stt(path: &Path, empty_code: ErrorCode) -> Result<Vec<u8>, SttError> {
+    let value = path.as_os_str().to_str().ok_or(SttError::InvalidConfig {
+        code: model_path_encoding_code(empty_code),
     })?;
     Ok(value.as_bytes().to_vec())
 }
