@@ -113,7 +113,7 @@ def test_scripts_fail_closed_without_android_environment() -> None:
 def test_spike_sources_do_not_commit_machine_absolute_paths() -> None:
     offenders: list[Path] = []
     for path in SPIKE.rglob("*"):
-        generated_parts = {".cxx", ".gradle", "build", "target", "out"}
+        generated_parts = {".cxx", ".gradle", ".kotlin", "build", "target", "out"}
         if not path.is_file() or generated_parts.intersection(path.parts):
             continue
         text = path.read_text(encoding="utf-8", errors="ignore")

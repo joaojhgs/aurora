@@ -1,4 +1,5 @@
 android/.gradle/
+android/.kotlin/
 android/**/.cxx/
 android/**/build/
 native/target/
