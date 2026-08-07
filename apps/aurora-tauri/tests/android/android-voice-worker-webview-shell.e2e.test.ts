@@ -7,12 +7,16 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   adbOutput,
   adbOutputOrEmpty,
+  clearAdbReverseMappings,
   cleanupWebViewShell,
   createAndroidWebViewShellHarness,
-  launchWebViewShell,
+  launchAndroidBrowser,
+  packageVersion,
   resolveAdb,
   resolveDeviceSerial,
   runAdb,
+  webViewShellTarget,
+  type AndroidBrowserRestoreState,
   type AndroidWebViewShellMetadata
 } from './android-webview-shell-harness-utils.js'
 
@@ -248,13 +252,15 @@ async function createResources(options: Parameters<typeof createAndroidWebViewSh
   const serial = resolveDeviceSerial()
   const harness = await createAndroidWebViewShellHarness(voiceWebRoot, options)
   const reversedPorts: number[] = []
+  let restoreState: AndroidBrowserRestoreState | undefined
   let closed = false
 
   try {
     const port = Number(new URL(harness.baseUrl).port)
+    clearAdbReverseMappings(adb, serial)
     runAdb(adb, serial, ['reverse', `tcp:${port}`, `tcp:${port}`])
     reversedPorts.push(port)
-    await launchWebViewShell(adb, serial, `${harness.baseUrl}/`)
+    restoreState = launchAndroidBrowser(adb, serial, webViewShellTarget, `${harness.baseUrl}/`)
     return {
       adb,
       serial,
@@ -262,12 +268,12 @@ async function createResources(options: Parameters<typeof createAndroidWebViewSh
       async close() {
         if (closed) return
         closed = true
-        cleanupWebViewShell(adb, serial, reversedPorts)
+        cleanupWebViewShell(adb, serial, reversedPorts, restoreState)
         await harness.close()
       }
     }
   } catch (error) {
-    cleanupWebViewShell(adb, serial, reversedPorts)
+    cleanupWebViewShell(adb, serial, reversedPorts, restoreState)
     await harness.close()
     throw error
   }
@@ -312,11 +318,6 @@ function readHostMetadata(adb: string, serial: string, selfReported: SelfReporte
     userAgent: selfReported.userAgent,
     targetUrl: selfReported.href
   }
-}
-
-function packageVersion(adb: string, serial: string, packageName: string): string {
-  const output = adbOutputOrEmpty(adb, serial, ['shell', 'dumpsys', 'package', packageName])
-  return /versionName=([^\s]+)/u.exec(output)?.[1] ?? 'unknown'
 }
 
 function isFailedSelfReport(result: AndroidVoiceWebViewProof | FailedSelfReport): result is FailedSelfReport {

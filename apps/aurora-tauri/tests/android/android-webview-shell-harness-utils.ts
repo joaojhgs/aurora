@@ -20,6 +20,36 @@ export interface AndroidWebViewShellMetadata {
   readonly targetUrl: string
 }
 
+export interface AndroidBrowserTarget {
+  readonly packageName: string
+  readonly activityName: string
+  readonly label: string
+  readonly commandLineFile?: string
+  readonly commandLineText?: string
+}
+
+export interface AndroidBrowserRestoreState {
+  readonly packageEnabledState: string
+  readonly stayOnWhilePluggedIn: string
+  readonly commandLine?: {
+    readonly file: string
+    readonly existed: boolean
+    readonly content: string
+  }
+}
+
+export interface AndroidBrowserClaims {
+  readonly browserSurface: string
+  readonly package: string
+  readonly physicalDevice: boolean
+  readonly chromePackage: boolean
+  readonly mockedWorker: boolean
+  readonly mockedWasm: boolean
+  readonly pcmSource: string
+  readonly microphonePermission: boolean
+  readonly acousticCapture: boolean
+}
+
 export interface AndroidWebViewShellHarness {
   readonly baseUrl: string
   readonly requests: readonly string[]
@@ -28,8 +58,22 @@ export interface AndroidWebViewShellHarness {
 }
 
 export const webViewShellPackage = 'org.chromium.webview_shell'
+export const chromiumChromePackage = 'org.chromium.chrome'
 
-const webViewShellActivity = `${webViewShellPackage}/.WebViewBrowserActivity`
+export const webViewShellTarget: AndroidBrowserTarget = {
+  packageName: webViewShellPackage,
+  activityName: '.WebViewBrowserActivity',
+  label: 'Android WebView Shell'
+}
+
+export const chromiumChromeTarget: AndroidBrowserTarget = {
+  packageName: chromiumChromePackage,
+  activityName: 'com.google.android.apps.chrome.IntentDispatcher',
+  label: 'Android Chromium snapshot',
+  commandLineFile: '/data/local/tmp/chrome-command-line',
+  commandLineText: 'chrome --no-first-run --disable-fre --disable-sync --disable-features=FirstRunExperience\n'
+}
+
 const defaultAdb = '/home/developer/Android/Sdk/platform-tools/adb'
 const defaultDeviceSerial = 'emulator-5554'
 const androidTestDir = import.meta.dirname
@@ -42,10 +86,23 @@ const expectedWasmFiles = [
   'aurora_voice_wasm_bg.wasm',
   'aurora_voice_wasm_bg.wasm.d.ts'
 ]
+const defaultWebViewClaims: AndroidBrowserClaims = {
+  browserSurface: 'Android emulator WebView Shell',
+  package: webViewShellPackage,
+  physicalDevice: false,
+  chromePackage: false,
+  mockedWorker: false,
+  mockedWasm: false,
+  pcmSource: 'deterministic injected Int16Array source',
+  microphonePermission: false,
+  acousticCapture: false
+}
 
 interface AndroidWebViewShellHarnessOptions {
   readonly indexHtml?: string
   readonly files?: Readonly<Record<string, string>>
+  readonly claims?: AndroidBrowserClaims
+  readonly harnessPrefix?: string
 }
 
 export function resolveAdb(): string {
@@ -129,34 +186,142 @@ export function runAdb(adb: string, serial: string, args: readonly string[]): vo
   }
 }
 
-export async function launchWebViewShell(adb: string, serial: string, url: string): Promise<void> {
-  runAdb(adb, serial, ['wait-for-device'])
-  runAdb(adb, serial, ['shell', 'pm', 'enable', webViewShellPackage])
-  spawnSync(adb, ['-s', serial, 'logcat', '-c'], { stdio: 'ignore' })
-  spawnSync(adb, ['-s', serial, 'shell', 'am', 'force-stop', webViewShellPackage], { stdio: 'ignore' })
-  runAdb(adb, serial, ['shell', 'svc', 'power', 'stayon', 'true'])
-  runAdb(adb, serial, ['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'])
-  spawnSync(adb, ['-s', serial, 'shell', 'wm', 'dismiss-keyguard'], { stdio: 'ignore' })
-  runAdb(adb, serial, [
-    'shell',
-    'am',
-    'start',
-    '-a',
-    'android.intent.action.VIEW',
-    '-c',
-    'android.intent.category.BROWSABLE',
-    '-d',
-    url,
-    '-n',
-    webViewShellActivity,
-    '--activity-clear-top'
-  ])
+export function packageVersion(adb: string, serial: string, packageName: string): string {
+  const output = adbOutputOrEmpty(adb, serial, ['shell', 'dumpsys', 'package', packageName])
+  return /versionName=([^\s]+)/u.exec(output)?.[1] ?? 'unknown'
 }
 
-export function cleanupWebViewShell(adb: string, serial: string, reversedPorts: readonly number[]): void {
-  spawnSync(adb, ['-s', serial, 'shell', 'am', 'force-stop', webViewShellPackage], { stdio: 'ignore' })
+function captureAndroidBrowserState(adb: string, serial: string, target: AndroidBrowserTarget): AndroidBrowserRestoreState {
+  return {
+    packageEnabledState: packageEnabledState(adb, serial, target.packageName),
+    stayOnWhilePluggedIn: adbOutputOrEmpty(adb, serial, ['shell', 'settings', 'get', 'global', 'stay_on_while_plugged_in']).trim(),
+    commandLine: target.commandLineFile === undefined ? undefined : captureCommandLine(adb, serial, target.commandLineFile)
+  }
+}
+
+function packageEnabledState(adb: string, serial: string, packageName: string): string {
+  const output = adbOutputOrEmpty(adb, serial, ['shell', 'dumpsys', 'package', packageName])
+  return /User 0:.*\senabled=([0-9]+)/u.exec(output)?.[1] ?? '0'
+}
+
+function captureCommandLine(adb: string, serial: string, file: string): AndroidBrowserRestoreState['commandLine'] {
+  const exists = deviceFileExists(adb, serial, file)
+  return {
+    file,
+    existed: exists,
+    content: exists ? adbOutputOrEmpty(adb, serial, ['shell', 'cat', file]) : ''
+  }
+}
+
+export async function launchWebViewShell(adb: string, serial: string, url: string): Promise<void> {
+  launchAndroidBrowser(adb, serial, webViewShellTarget, url)
+}
+
+export function launchAndroidBrowser(adb: string, serial: string, target: AndroidBrowserTarget, url: string): AndroidBrowserRestoreState {
+  runAdb(adb, serial, ['wait-for-device'])
+  const restoreState = captureAndroidBrowserState(adb, serial, target)
+  try {
+    runAdb(adb, serial, ['shell', 'pm', 'enable', target.packageName])
+    spawnSync(adb, ['-s', serial, 'logcat', '-c'], { stdio: 'ignore' })
+    spawnSync(adb, ['-s', serial, 'shell', 'am', 'force-stop', target.packageName], { stdio: 'ignore' })
+    runAdb(adb, serial, ['shell', 'settings', 'put', 'global', 'stay_on_while_plugged_in', '7'])
+    if (target.commandLineFile !== undefined && target.commandLineText !== undefined) {
+      writeDeviceFile(adb, serial, target.commandLineFile, target.commandLineText)
+    }
+    runAdb(adb, serial, ['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'])
+    spawnSync(adb, ['-s', serial, 'shell', 'wm', 'dismiss-keyguard'], { stdio: 'ignore' })
+    runAdb(adb, serial, [
+      'shell',
+      'am',
+      'start',
+      '-a',
+      'android.intent.action.VIEW',
+      '-c',
+      'android.intent.category.BROWSABLE',
+      '-d',
+      url,
+      '-n',
+      `${target.packageName}/${target.activityName}`,
+      '--activity-clear-top'
+    ])
+    return restoreState
+  } catch (error) {
+    cleanupAndroidBrowser(adb, serial, target, [], restoreState)
+    throw error
+  }
+}
+
+export function cleanupWebViewShell(adb: string, serial: string, reversedPorts: readonly number[], restoreState?: AndroidBrowserRestoreState): void {
+  cleanupAndroidBrowser(adb, serial, webViewShellTarget, reversedPorts, restoreState)
+}
+
+export function cleanupAndroidBrowser(adb: string, serial: string, target: AndroidBrowserTarget, reversedPorts: readonly number[], restoreState?: AndroidBrowserRestoreState): void {
+  spawnSync(adb, ['-s', serial, 'shell', 'am', 'force-stop', target.packageName], { stdio: 'ignore' })
   for (const port of reversedPorts) {
     spawnSync(adb, ['-s', serial, 'reverse', '--remove', `tcp:${port}`], { stdio: 'ignore' })
+  }
+  if (restoreState?.commandLine !== undefined) {
+    restoreCommandLine(adb, serial, restoreState.commandLine)
+  }
+  if (restoreState !== undefined) {
+    restoreStayOnWhilePluggedIn(adb, serial, restoreState.stayOnWhilePluggedIn)
+    restorePackageEnabledState(adb, serial, target.packageName, restoreState.packageEnabledState)
+  }
+}
+
+export function clearAdbReverseMappings(adb: string, serial: string): void {
+  spawnSync(adb, ['-s', serial, 'reverse', '--remove-all'], { stdio: 'ignore' })
+}
+
+export function adbReverseList(adb: string, serial: string): string {
+  return adbOutputOrEmpty(adb, serial, ['reverse', '--list']).trim()
+}
+
+function restoreCommandLine(adb: string, serial: string, commandLine: NonNullable<AndroidBrowserRestoreState['commandLine']>): void {
+  if (commandLine.existed) {
+    writeDeviceFile(adb, serial, commandLine.file, commandLine.content)
+  } else {
+    spawnSync(adb, ['-s', serial, 'shell', 'rm', '-f', commandLine.file], { stdio: 'ignore' })
+  }
+}
+
+function restoreStayOnWhilePluggedIn(adb: string, serial: string, value: string): void {
+  if (value.length === 0 || value === 'null') {
+    spawnSync(adb, ['-s', serial, 'shell', 'settings', 'delete', 'global', 'stay_on_while_plugged_in'], { stdio: 'ignore' })
+  } else {
+    spawnSync(adb, ['-s', serial, 'shell', 'settings', 'put', 'global', 'stay_on_while_plugged_in', value], { stdio: 'ignore' })
+  }
+}
+
+function restorePackageEnabledState(adb: string, serial: string, packageName: string, state: string): void {
+  if (state === '1') {
+    spawnSync(adb, ['-s', serial, 'shell', 'pm', 'enable', packageName], { stdio: 'ignore' })
+    return
+  }
+  if (state === '2') {
+    spawnSync(adb, ['-s', serial, 'shell', 'pm', 'disable', packageName], { stdio: 'ignore' })
+    return
+  }
+  if (state === '3') {
+    spawnSync(adb, ['-s', serial, 'shell', 'pm', 'disable-user', packageName], { stdio: 'ignore' })
+    return
+  }
+  spawnSync(adb, ['-s', serial, 'shell', 'pm', 'default-state', packageName], { stdio: 'ignore' })
+}
+
+function deviceFileExists(adb: string, serial: string, file: string): boolean {
+  return spawnSync(adb, ['-s', serial, 'shell', 'ls', file], { stdio: 'ignore' }).status === 0
+}
+
+function writeDeviceFile(adb: string, serial: string, file: string, content: string): void {
+  const result = spawnSync(adb, ['-s', serial, 'shell', 'tee', file], {
+    input: content,
+    encoding: 'utf8',
+    stdio: ['pipe', 'ignore', 'pipe']
+  })
+  if (result.error !== undefined) throw result.error
+  if (result.status !== 0) {
+    throw new Error(`adb shell tee ${file} failed: ${result.stderr}`)
   }
 }
 
@@ -225,6 +390,8 @@ async function handleStaticRequest(
     })
     response.end(options.indexHtml ?? `<!doctype html><meta charset="utf-8"><title>Aurora voice Android WebView Shell proof</title><body>running<script type="module">
       try {
+        globalThis.__auroraAndroidBrowserClaims = ${JSON.stringify(options.claims ?? defaultWebViewClaims)};
+        globalThis.__auroraAndroidHarnessPrefix = ${JSON.stringify(options.harnessPrefix ?? 'android-webview')};
         await import('/__aurora_voice_harness__.js');
         const result = await globalThis.__auroraWorkerAudioBridge.runProof();
         result.selfReported = {

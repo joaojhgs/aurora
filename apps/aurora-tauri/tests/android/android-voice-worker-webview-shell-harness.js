@@ -38,6 +38,17 @@ class ControlledPcmSource {
 globalThis.__auroraWorkerAudioBridge = {
   async runProof() {
     const metadata = globalThis.__auroraAndroidWebViewMetadata ?? null
+    const claims = globalThis.__auroraAndroidBrowserClaims ?? {
+      browserSurface: 'Android emulator WebView Shell',
+      package: 'org.chromium.webview_shell',
+      physicalDevice: false,
+      chromePackage: false,
+      mockedWorker: false,
+      mockedWasm: false,
+      pcmSource: 'deterministic injected Int16Array source',
+      microphonePermission: false,
+      acousticCapture: false
+    }
     const completeRepeat = await completeRepeatProbe()
     const abandonRepeat = await abandonRepeatProbe()
     const redaction = await redactionProbe()
@@ -58,17 +69,7 @@ globalThis.__auroraWorkerAudioBridge = {
       requests,
       artifacts,
       consoleErrors,
-      claims: {
-        browserSurface: 'Android emulator WebView Shell',
-        package: 'org.chromium.webview_shell',
-        physicalDevice: false,
-        chromePackage: false,
-        mockedWorker: false,
-        mockedWasm: false,
-        pcmSource: 'deterministic injected Int16Array source',
-        microphonePermission: false,
-        acousticCapture: false
-      },
+      claims,
       workerSideErrors: [
         ...completeRepeat.events,
         ...abandonRepeat.events,
@@ -108,7 +109,7 @@ async function createRuntime(ownerId) {
 }
 
 async function completeRepeatProbe() {
-  const harness = await createRuntime('android-webview-complete')
+  const harness = await createRuntime(`${harnessPrefix()}-complete`)
   try {
     const first = await harness.start()
     await harness.push([100, -100, 200, -200])
@@ -137,7 +138,7 @@ async function completeRepeatProbe() {
 }
 
 async function abandonRepeatProbe() {
-  const harness = await createRuntime('android-webview-abandon')
+  const harness = await createRuntime(`${harnessPrefix()}-abandon`)
   try {
     const first = await harness.start()
     await harness.push([1, 2, 3, 4])
@@ -163,7 +164,7 @@ async function abandonRepeatProbe() {
 }
 
 async function redactionProbe() {
-  const harness = await createRuntime('android-webview-redacted')
+  const harness = await createRuntime(`${harnessPrefix()}-redacted`)
   try {
     const before = harness.snapshot()
     await harness.start()
@@ -196,4 +197,8 @@ function audioReport(audio) {
     pcm: Array.from(audio?.pcm ?? []),
     redacted: audio?.redacted ?? null
   }
+}
+
+function harnessPrefix() {
+  return globalThis.__auroraAndroidHarnessPrefix ?? 'android-webview'
 }
