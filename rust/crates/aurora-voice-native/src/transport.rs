@@ -1836,7 +1836,7 @@ mod tests {
         ));
         stream_body.extend(assistant_frame_for(
             16,
-            assistant_payload_with_sequence_for(16, 3, "assistant.completed", "", "hello", true),
+            assistant_payload_with_sequence_for(16, 3, "assistant.completed", "", "", true),
             serde_json::json!({"kind": "assistant.completed"}),
         ));
         let server =
@@ -1856,7 +1856,7 @@ mod tests {
             .await
             .expect("assistant stream");
 
-        assert_eq!(response.text, "hello");
+        assert_eq!(response.text, "hell");
         let _stream_request = server.request.recv().expect("stream subscription");
         let _assistant_request = server.request.recv().expect("assistant request");
     }
