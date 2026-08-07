@@ -5,10 +5,10 @@
 use async_trait::async_trait;
 use aurora_voice_core::CancellationToken;
 use aurora_voice_engine::{
-    apply_lifecycle_event, create_lifecycle_snapshot, file_storage_key, ActivePackIdentity,
-    DownloadTask, ImmutableModelFile, InstallEvent, InstallState, LifecycleSnapshot,
-    ModelPackError, ModelPackFile, ModelStore, ModelStoreScope, SelectedVariant, StoreStatus,
-    StoredFile, VerifiedManifest,
+    apply_lifecycle_event, create_lifecycle_snapshot, file_storage_key, lifecycle_storage_key,
+    ActivePackIdentity, DownloadTask, ImmutableModelFile, InstallEvent, InstallState,
+    LifecycleSnapshot, ModelPackError, ModelPackFile, ModelStore, ModelStoreScope, SelectedVariant,
+    StoreStatus, StoredFile, VerifiedManifest,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -2104,15 +2104,22 @@ where
 }
 
 fn lifecycle_key(pack_id: &str, pack_version: &str, variant_id: &str) -> String {
-    format!("{LIFECYCLE_PREFIX}{pack_id}@{pack_version}:{variant_id}")
+    tuple_key(LIFECYCLE_PREFIX, pack_id, pack_version, variant_id)
 }
 
 fn lifecycle_backing_key(pack_id: &str, pack_version: &str, variant_id: &str) -> String {
-    format!("{LIFECYCLE_BACKING_PREFIX}{pack_id}@{pack_version}:{variant_id}")
+    tuple_key(LIFECYCLE_BACKING_PREFIX, pack_id, pack_version, variant_id)
 }
 
 fn expected_selection_key(pack_id: &str, pack_version: &str, variant_id: &str) -> String {
-    format!("{EXPECTED_SELECTION_PREFIX}{pack_id}@{pack_version}:{variant_id}")
+    tuple_key(EXPECTED_SELECTION_PREFIX, pack_id, pack_version, variant_id)
+}
+
+fn tuple_key(prefix: &str, pack_id: &str, pack_version: &str, variant_id: &str) -> String {
+    format!(
+        "{prefix}{}",
+        lifecycle_storage_key(pack_id, pack_version, variant_id)
+    )
 }
 
 fn active_key(scope: &ModelStoreScope) -> String {

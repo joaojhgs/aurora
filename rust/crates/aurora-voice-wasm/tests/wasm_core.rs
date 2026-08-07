@@ -5,13 +5,13 @@ use aurora_voice_core::{
     TimestampMicros,
 };
 use aurora_voice_engine::{
-    create_lifecycle_snapshot, file_storage_key, select_verified_variant, verify_manifest,
-    AbiRequirements, BrowserFeature, CapabilityFlags, Compatibility, CompressionKind, DeviceClass,
-    DownloadTask, EngineKind, InstallState, LanguageSupport, LicenseGrant, LicenseInfo,
-    ManifestSignature, ModelPackError, ModelPackFile, ModelPackManifest, ModelStore,
-    ModelStoreScope, PackTask, ProcessingMetadata, Provenance, ResourceBudget, RuntimeGates,
-    RuntimeSelection, RuntimeTarget, ShapeMetadata, SignatureVerifier, StoredFile, TargetArch,
-    TargetOs, TrustPolicy, VerifiedManifest,
+    create_lifecycle_snapshot, file_storage_key, lifecycle_storage_key, select_verified_variant,
+    verify_manifest, AbiRequirements, BrowserFeature, CapabilityFlags, Compatibility,
+    CompressionKind, DeviceClass, DownloadTask, EngineKind, InstallState, LanguageSupport,
+    LicenseGrant, LicenseInfo, ManifestSignature, ModelPackError, ModelPackFile, ModelPackManifest,
+    ModelStore, ModelStoreScope, PackTask, ProcessingMetadata, Provenance, ResourceBudget,
+    RuntimeGates, RuntimeSelection, RuntimeTarget, ShapeMetadata, SignatureVerifier, StoredFile,
+    TargetArch, TargetOs, TrustPolicy, VerifiedManifest,
 };
 use aurora_voice_wasm::{
     BrowserPersistenceKind, InMemoryNetworkHost, InMemoryWebHost, WebDownloadPolicy, WebHostError,
@@ -780,11 +780,11 @@ async fn lifecycle_backing_file_identity_mismatch_fails_closed() {
     let selection = selection_for(&manifest);
     let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
     install_ready(&mut store, &manifest, body).await;
-    let backing_key = "aurora.voice.web-store.v1:lifecycle-backing:identity-pack@1:wasm-simd";
+    let backing_key = lifecycle_backing_key("identity-pack", "1", selection.variant_id());
     let mut backing: serde_json::Value = serde_json::from_str(
         &store
             .host()
-            .read_json(backing_key)
+            .read_json(&backing_key)
             .await
             .expect("read backing")
             .expect("backing"),
@@ -793,7 +793,7 @@ async fn lifecycle_backing_file_identity_mismatch_fails_closed() {
     backing["files"][0]["pack_id"] = serde_json::Value::String("wrong-pack".to_owned());
     store
         .host_mut()
-        .insert_json(backing_key, backing.to_string());
+        .insert_json(&backing_key, backing.to_string());
 
     assert!(store
         .lifecycle("identity-pack", "1", selection.variant_id())
@@ -1279,11 +1279,11 @@ async fn ready_lifecycle_requires_complete_persisted_file_closure() {
         .await
         .expect("complete ready lifecycle")
         .is_some());
-    let backing_key = "aurora.voice.web-store.v1:lifecycle-backing:ready-pack@1:wasm-simd";
+    let backing_key = lifecycle_backing_key("ready-pack", "1", selection.variant_id());
     let mut backing: serde_json::Value = serde_json::from_str(
         &store
             .host()
-            .read_json(backing_key)
+            .read_json(&backing_key)
             .await
             .expect("read backing")
             .expect("backing record"),
@@ -1292,7 +1292,7 @@ async fn ready_lifecycle_requires_complete_persisted_file_closure() {
     backing["files"][1]["file_id"] = serde_json::Value::String("wrong".to_owned());
     store
         .host_mut()
-        .insert_json(backing_key, backing.to_string());
+        .insert_json(&backing_key, backing.to_string());
     assert!(store
         .lifecycle("ready-pack", "1", selection.variant_id())
         .await
@@ -1311,7 +1311,7 @@ async fn ready_lifecycle_requires_complete_persisted_file_closure() {
     let mut partial_backing: serde_json::Value = serde_json::from_str(
         &store
             .host()
-            .read_json(backing_key)
+            .read_json(&backing_key)
             .await
             .expect("read restored backing")
             .expect("restored backing record"),
@@ -1323,7 +1323,7 @@ async fn ready_lifecycle_requires_complete_persisted_file_closure() {
         .pop();
     store
         .host_mut()
-        .insert_json(backing_key, partial_backing.to_string());
+        .insert_json(&backing_key, partial_backing.to_string());
     assert!(store
         .lifecycle("ready-pack", "1", selection.variant_id())
         .await
@@ -1438,12 +1438,61 @@ async fn remove_pack_uses_parsed_identity_not_raw_delimiters() {
     let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
     install_ready(&mut store, &first, body_a).await;
     install_ready(&mut store, &second, body_b).await;
+    let first_backing_key =
+        lifecycle_backing_key("pack@shared", "1:alpha", first_selection.variant_id());
+    let second_backing_key =
+        lifecycle_backing_key("pack", "shared@1:alpha", second_selection.variant_id());
+    assert_ne!(first_backing_key, second_backing_key);
+    assert!(store
+        .host()
+        .read_json(&first_backing_key)
+        .await
+        .expect("first backing read")
+        .is_some());
+    assert!(store
+        .host()
+        .read_json(&second_backing_key)
+        .await
+        .expect("second backing read")
+        .is_some());
+    assert!(store
+        .lifecycle("pack@shared", "1:alpha", first_selection.variant_id())
+        .await
+        .expect("first lifecycle")
+        .is_some());
+    assert!(store
+        .lifecycle("pack", "shared@1:alpha", second_selection.variant_id())
+        .await
+        .expect("second lifecycle")
+        .is_some());
 
     store.remove_pack("pack").await.expect("remove exact pack");
     assert!(store
         .open_immutable_file(&first_selection, "model")
         .await
         .is_ok());
+    assert!(store
+        .host()
+        .read_json(&first_backing_key)
+        .await
+        .expect("first backing after remove")
+        .is_some());
+    assert!(store
+        .lifecycle("pack@shared", "1:alpha", first_selection.variant_id())
+        .await
+        .expect("first lifecycle after remove")
+        .is_some());
+    assert!(store
+        .host()
+        .read_json(&second_backing_key)
+        .await
+        .expect("second backing after remove")
+        .is_none());
+    assert!(store
+        .lifecycle("pack", "shared@1:alpha", second_selection.variant_id())
+        .await
+        .expect("second lifecycle after remove")
+        .is_none());
     assert_eq!(
         store.open_immutable_file(&second_selection, "model").await,
         Err(ModelPackError::Store {
@@ -1614,6 +1663,13 @@ impl SignatureVerifier for AcceptingVerifier {
 
 fn scope() -> ModelStoreScope {
     ModelStoreScope::default_for_task(PackTask::Stt)
+}
+
+fn lifecycle_backing_key(pack_id: &str, pack_version: &str, variant_id: &str) -> String {
+    format!(
+        "aurora.voice.web-store.v1:lifecycle-backing:{}",
+        lifecycle_storage_key(pack_id, pack_version, variant_id)
+    )
 }
 
 fn verified(id: &str, version: &str, hash: &str, size: u64) -> VerifiedManifest {
