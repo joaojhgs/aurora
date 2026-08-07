@@ -14,8 +14,9 @@ use std::sync::{
 use thiserror::Error;
 
 pub use aurora_voice_engine::{
-    BoundTaskRequest, EngineError, ResourceReport, SpeechEngine, TaskCapability, TaskPackBinding,
-    TaskProvider, TaskReadiness, TaskRequest, VoiceTask,
+    BoundFiniteSttRequest, BoundTaskRequest, BoundTtsSynthesisRequest, EngineError, ResourceReport,
+    SpeechEngine, TaskCapability, TaskPackBinding, TaskProvider, TaskReadiness, TaskRequest,
+    TtsSynthesisConfig, VoiceTask,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -1053,9 +1054,10 @@ where
         let stt_request =
             self.bound_engine_request(VoiceTask::SpeechToText, None, lease.generation)?;
         self.engine.warm_task(stt_request.clone()).await?;
+        let stt_request = BoundFiniteSttRequest::new(stt_request, frames)?;
         let transcript = self
             .engine
-            .transcribe_finite(stt_request, frames, &|| cancellation.is_cancelled())
+            .transcribe_finite(stt_request, &|| cancellation.is_cancelled())
             .await?;
         cancellation.check()?;
         self.transition_emit(
@@ -1097,9 +1099,21 @@ where
         let tts_request =
             self.bound_engine_request(VoiceTask::TextToSpeech, None, lease.generation)?;
         self.engine.warm_task(tts_request.clone()).await?;
+        let tts_config = TtsSynthesisConfig::new(
+            "default",
+            tts_request
+                .binding()
+                .voice_state_compatibility_group_id()
+                .to_owned(),
+            tts_request.binding().sample_rate_hz(),
+            1024,
+            None,
+        )?;
+        let tts_request =
+            BoundTtsSynthesisRequest::new(tts_request, response.text.clone(), tts_config)?;
         let _audio = self
             .engine
-            .synthesize_text(tts_request, &response.text, &|| cancellation.is_cancelled())
+            .synthesize_text(tts_request, &|| cancellation.is_cancelled())
             .await?;
         cancellation.check()?;
         self.transition_emit(

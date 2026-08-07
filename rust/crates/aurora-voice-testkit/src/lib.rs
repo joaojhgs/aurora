@@ -6,11 +6,11 @@ pub mod model_store;
 
 use async_trait::async_trait;
 use aurora_voice_core::{
-    AssistantTurnRequest, AssistantTurnResponse, AudioInput, BoundTaskRequest, CancellationToken,
-    CaptureStartReason, EngineError, Generation, PcmFrame, RedactedSnapshot, ResourceReport,
-    RouteRevision, RuntimeEvent, RuntimeEventSink, SpeechEngine, SpeechTransport, TaskCapability,
-    TaskPackBinding, TaskProvider, TaskReadiness, TimestampMicros, TransitionReason,
-    VoiceCaptureLease, VoiceCoreError, VoiceTask,
+    AssistantTurnRequest, AssistantTurnResponse, AudioInput, BoundFiniteSttRequest,
+    BoundTaskRequest, BoundTtsSynthesisRequest, CancellationToken, CaptureStartReason, EngineError,
+    Generation, PcmFrame, RedactedSnapshot, ResourceReport, RouteRevision, RuntimeEvent,
+    RuntimeEventSink, SpeechEngine, SpeechTransport, TaskCapability, TaskPackBinding, TaskProvider,
+    TaskReadiness, TimestampMicros, TransitionReason, VoiceCaptureLease, VoiceCoreError, VoiceTask,
 };
 use aurora_voice_engine::{
     select_verified_variant, verify_manifest, AbiRequirements, BrowserFeature, CapabilityFlags,
@@ -18,7 +18,7 @@ use aurora_voice_engine::{
     LicenseGrant, LicenseInfo, ManifestSignature, ModelPackError, ModelPackFile, ModelPackManifest,
     PackTask, ProcessingMetadata, Provenance, ResourceBudget, RuntimeGates, RuntimeSelection,
     RuntimeTarget, ShapeMetadata, SignatureVerifier, TargetArch, TargetOs, TrustPolicy,
-    VAD_SAMPLE_RATE_HZ,
+    TtsAudioChunk, TtsSynthesisResult, MONO_CHANNELS, VAD_SAMPLE_RATE_HZ,
 };
 use std::collections::{BTreeSet, VecDeque};
 
@@ -374,8 +374,7 @@ impl TaskProvider for FakeEngine {
 impl SpeechEngine for FakeEngine {
     async fn transcribe_finite(
         &mut self,
-        request: BoundTaskRequest,
-        frames: usize,
+        request: BoundFiniteSttRequest,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<String, EngineError> {
         if cancellation() {
@@ -392,7 +391,7 @@ impl SpeechEngine for FakeEngine {
                 code: EngineFaultCode::Provider,
             });
         }
-        if request.request().task != VoiceTask::SpeechToText || frames == 0 {
+        if request.request().request().task != VoiceTask::SpeechToText || request.frames() == 0 {
             return Err(EngineError::InvalidRequest);
         }
         Ok(self.transcript.clone())
@@ -400,10 +399,9 @@ impl SpeechEngine for FakeEngine {
 
     async fn synthesize_text(
         &mut self,
-        request: BoundTaskRequest,
-        text: &str,
+        request: BoundTtsSynthesisRequest,
         cancellation: &dyn Fn() -> bool,
-    ) -> Result<Vec<i16>, EngineError> {
+    ) -> Result<TtsSynthesisResult, EngineError> {
         if cancellation() {
             return Err(EngineError::Cancelled);
         }
@@ -412,11 +410,26 @@ impl SpeechEngine for FakeEngine {
                 code: EngineFaultCode::Provider,
             });
         }
-        if request.request().task != VoiceTask::TextToSpeech {
+        if request.request().request().task != VoiceTask::TextToSpeech {
             return Err(EngineError::InvalidRequest);
         }
-        self.spoken.push(text.to_owned());
-        Ok(vec![0; text.len().max(1)])
+        self.spoken.push(request.text().to_owned());
+        let samples = vec![
+            0;
+            request
+                .text()
+                .len()
+                .clamp(1, request.config().chunk_samples())
+        ];
+        let chunk = TtsAudioChunk::new(
+            request.config(),
+            1,
+            request.config().sample_rate_hz(),
+            MONO_CHANNELS,
+            samples,
+            true,
+        )?;
+        TtsSynthesisResult::new(vec![chunk], false)
     }
 }
 

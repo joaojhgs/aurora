@@ -24,6 +24,10 @@ pub const VAD_MAX_DURATION_MS: u32 = 120_000;
 /// Maximum canonical 16 kHz mono frame length accepted by generic streaming ports.
 pub const MAX_STREAMING_FRAME_SAMPLES: usize = VAD_SAMPLE_RATE_HZ as usize * 30;
 pub const MAX_KWS_PHRASES: usize = 64;
+pub const MAX_KWS_COOLDOWN_FRAMES: u32 = 16_000;
+pub const MAX_KWS_RESULTS: u8 = 16;
+pub const MAX_FINITE_STT_FRAMES: usize = 60_000;
+pub const TTS_MAX_TEXT_BYTES: usize = 4096;
 pub const TTS_MIN_SAMPLE_RATE_HZ: u32 = 8_000;
 pub const TTS_MAX_SAMPLE_RATE_HZ: u32 = 48_000;
 pub const TTS_MIN_CHUNK_SAMPLES: usize = 64;
@@ -333,6 +337,32 @@ impl BoundTaskRequest {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoundFiniteSttRequest {
+    request: BoundTaskRequest,
+    frames: usize,
+}
+
+impl BoundFiniteSttRequest {
+    pub fn new(request: BoundTaskRequest, frames: usize) -> Result<Self, EngineError> {
+        if request.request().task != VoiceTask::SpeechToText
+            || frames == 0
+            || frames > MAX_FINITE_STT_FRAMES
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(Self { request, frames })
+    }
+
+    pub fn request(&self) -> &BoundTaskRequest {
+        &self.request
+    }
+
+    pub fn frames(&self) -> usize {
+        self.frames
+    }
+}
+
 /// Bounded provider fault identifiers safe for UI/log surfaces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -391,6 +421,53 @@ pub fn check_engine_cancellation(cancellation: &dyn Fn() -> bool) -> Result<(), 
 /// A backend-neutral stream/session handle owned by the engine provider.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StreamSessionId(pub u64);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BoundStreamSession {
+    session_id: StreamSessionId,
+    task: VoiceTask,
+    generation: u64,
+    binding: TaskPackBinding,
+}
+
+impl BoundStreamSession {
+    pub fn new(
+        session_id: StreamSessionId,
+        request: &BoundTaskRequest,
+    ) -> Result<Self, EngineError> {
+        if session_id.0 == 0 {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(Self {
+            session_id,
+            task: request.request().task,
+            generation: request.request().generation,
+            binding: request.binding().clone(),
+        })
+    }
+
+    pub fn session_id(&self) -> StreamSessionId {
+        self.session_id
+    }
+
+    pub fn task(&self) -> VoiceTask {
+        self.task
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub fn binding(&self) -> &TaskPackBinding {
+        &self.binding
+    }
+
+    pub fn matches_request(&self, request: &BoundTaskRequest) -> bool {
+        self.task == request.request().task
+            && self.generation == request.request().generation
+            && self.binding == *request.binding()
+    }
+}
 
 /// Reason a streaming task must discard recurrent/cache state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -551,6 +628,27 @@ impl Default for VadConfig {
             max_speech_duration_ms: VAD_DEFAULT_MAX_SPEECH_DURATION_MS,
             buffer_duration_ms: VAD_DEFAULT_BUFFER_DURATION_MS,
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BoundVadRequest {
+    request: BoundTaskRequest,
+    config: VadConfig,
+}
+
+impl BoundVadRequest {
+    pub fn new(request: BoundTaskRequest, config: VadConfig) -> Result<Self, EngineError> {
+        config.validate_binding(request.binding())?;
+        Ok(Self { request, config })
+    }
+
+    pub fn request(&self) -> &BoundTaskRequest {
+        &self.request
+    }
+
+    pub fn config(&self) -> &VadConfig {
+        &self.config
     }
 }
 
@@ -812,7 +910,10 @@ impl KwsConfig {
             || self.phrase_ids.iter().collect::<BTreeSet<_>>().len() != self.phrase_ids.len()
             || !valid_logical_id(&self.phrase_set_revision)
             || !valid_sherpa_threshold(self.threshold)
+            || self.cooldown_frames > MAX_KWS_COOLDOWN_FRAMES
             || self.max_results == 0
+            || self.max_results > MAX_KWS_RESULTS
+            || usize::from(self.max_results) > self.phrase_ids.len()
         {
             return Err(EngineError::InvalidRequest);
         }
@@ -845,6 +946,27 @@ impl KwsConfig {
 
     pub fn max_results(&self) -> u8 {
         self.max_results
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BoundKwsRequest {
+    request: BoundTaskRequest,
+    config: KwsConfig,
+}
+
+impl BoundKwsRequest {
+    pub fn new(request: BoundTaskRequest, config: KwsConfig) -> Result<Self, EngineError> {
+        config.validate_binding(request.binding())?;
+        Ok(Self { request, config })
+    }
+
+    pub fn request(&self) -> &BoundTaskRequest {
+        &self.request
+    }
+
+    pub fn config(&self) -> &KwsConfig {
+        &self.config
     }
 }
 
@@ -893,8 +1015,28 @@ pub struct KwsFrameResult {
 }
 
 impl KwsFrameResult {
-    pub fn new(matches: Vec<KeywordMatch>, reset: Option<StreamResetReason>) -> Self {
-        Self { matches, reset }
+    pub fn new(
+        config: &KwsConfig,
+        matches: Vec<KeywordMatch>,
+        reset: Option<StreamResetReason>,
+    ) -> Result<Self, EngineError> {
+        config.validate()?;
+        if matches.len() > usize::from(config.max_results()) {
+            return Err(EngineError::InvalidRequest);
+        }
+        let mut keyword_ids = BTreeSet::new();
+        for keyword_match in &matches {
+            if !config
+                .phrase_ids()
+                .iter()
+                .any(|phrase_id| phrase_id == keyword_match.keyword_id())
+                || !keyword_ids.insert(keyword_match.keyword_id())
+                || !valid_probability(keyword_match.score())
+            {
+                return Err(EngineError::InvalidRequest);
+            }
+        }
+        Ok(Self { matches, reset })
     }
 
     pub fn matches(&self) -> &[KeywordMatch] {
@@ -971,6 +1113,27 @@ impl Default for StreamingSttConfig {
             emit_partials: true,
             timestamps: true,
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoundStreamingSttRequest {
+    request: BoundTaskRequest,
+    config: StreamingSttConfig,
+}
+
+impl BoundStreamingSttRequest {
+    pub fn new(request: BoundTaskRequest, config: StreamingSttConfig) -> Result<Self, EngineError> {
+        config.validate_binding(request.binding())?;
+        Ok(Self { request, config })
+    }
+
+    pub fn request(&self) -> &BoundTaskRequest {
+        &self.request
+    }
+
+    pub fn config(&self) -> &StreamingSttConfig {
+        &self.config
     }
 }
 
@@ -1145,6 +1308,44 @@ impl Default for TtsSynthesisConfig {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoundTtsSynthesisRequest {
+    request: BoundTaskRequest,
+    text: String,
+    config: TtsSynthesisConfig,
+}
+
+impl BoundTtsSynthesisRequest {
+    pub fn new(
+        request: BoundTaskRequest,
+        text: impl Into<String>,
+        config: TtsSynthesisConfig,
+    ) -> Result<Self, EngineError> {
+        config.validate_binding(request.binding())?;
+        let text = text.into();
+        if !valid_tts_text(&text) {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(Self {
+            request,
+            text,
+            config,
+        })
+    }
+
+    pub fn request(&self) -> &BoundTaskRequest {
+        &self.request
+    }
+
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    pub fn config(&self) -> &TtsSynthesisConfig {
+        &self.config
+    }
+}
+
 /// One synthesized audio chunk. Debug output redacts sample values.
 #[derive(Clone, PartialEq, Eq)]
 pub struct TtsAudioChunk {
@@ -1157,13 +1358,23 @@ pub struct TtsAudioChunk {
 
 impl TtsAudioChunk {
     pub fn new(
+        config: &TtsSynthesisConfig,
         sequence: u64,
         sample_rate_hz: u32,
         channels: u16,
         samples: Vec<i16>,
         final_chunk: bool,
     ) -> Result<Self, EngineError> {
-        if sample_rate_hz == 0 || channels != MONO_CHANNELS || samples.is_empty() {
+        config.validate()?;
+        if sample_rate_hz != config.sample_rate_hz()
+            || !(TTS_MIN_SAMPLE_RATE_HZ..=TTS_MAX_SAMPLE_RATE_HZ).contains(&sample_rate_hz)
+            || channels != config.channels()
+            || samples.is_empty()
+            || samples.len() > config.chunk_samples()
+            || samples.len() > TTS_MAX_CHUNK_SAMPLES
+            || (!final_chunk && samples.len() < TTS_MIN_CHUNK_SAMPLES)
+            || (final_chunk && samples.len() > config.chunk_samples())
+        {
             return Err(EngineError::InvalidRequest);
         }
         Ok(Self {
@@ -1209,19 +1420,26 @@ impl fmt::Debug for TtsAudioChunk {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TtsSynthesisResult {
-    chunks: u64,
+    chunks: Vec<TtsAudioChunk>,
     cancelled: bool,
 }
 
 impl TtsSynthesisResult {
-    pub fn new(chunks: u64, cancelled: bool) -> Self {
-        Self { chunks, cancelled }
+    pub fn new(chunks: Vec<TtsAudioChunk>, cancelled: bool) -> Result<Self, EngineError> {
+        if chunks.is_empty() && !cancelled {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(Self { chunks, cancelled })
     }
 
-    pub fn chunks(&self) -> u64 {
-        self.chunks
+    pub fn chunks(&self) -> &[TtsAudioChunk] {
+        &self.chunks
+    }
+
+    pub fn chunk_count(&self) -> u64 {
+        self.chunks.len() as u64
     }
 
     pub fn cancelled(&self) -> bool {
@@ -1239,26 +1457,25 @@ pub trait TtsChunkSink {
 pub trait VadStreamProvider: TaskProvider {
     async fn start_vad_session(
         &mut self,
-        request: BoundTaskRequest,
-        config: VadConfig,
-    ) -> Result<StreamSessionId, EngineError>;
+        request: BoundVadRequest,
+    ) -> Result<BoundStreamSession, EngineError>;
 
     async fn push_vad_frame(
         &mut self,
-        session: StreamSessionId,
+        session: &BoundStreamSession,
         frame: StreamingAudioFrame<'_>,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<VadAcceptResult, EngineError>;
 
     async fn flush_vad_session(
         &mut self,
-        session: StreamSessionId,
+        session: &BoundStreamSession,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<Vec<SpeechSegment>, EngineError>;
 
     async fn reset_vad_session(
         &mut self,
-        session: StreamSessionId,
+        session: &BoundStreamSession,
         reason: StreamResetReason,
     ) -> Result<(), EngineError>;
 }
@@ -1268,20 +1485,19 @@ pub trait VadStreamProvider: TaskProvider {
 pub trait KwsStreamProvider: TaskProvider {
     async fn start_kws_session(
         &mut self,
-        request: BoundTaskRequest,
-        config: KwsConfig,
-    ) -> Result<StreamSessionId, EngineError>;
+        request: BoundKwsRequest,
+    ) -> Result<BoundStreamSession, EngineError>;
 
     async fn push_kws_frame(
         &mut self,
-        session: StreamSessionId,
+        session: &BoundStreamSession,
         frame: StreamingAudioFrame<'_>,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<KwsFrameResult, EngineError>;
 
     async fn reset_kws_session(
         &mut self,
-        session: StreamSessionId,
+        session: &BoundStreamSession,
         reason: StreamResetReason,
     ) -> Result<(), EngineError>;
 }
@@ -1291,26 +1507,25 @@ pub trait KwsStreamProvider: TaskProvider {
 pub trait StreamingSttProvider: TaskProvider {
     async fn start_stt_session(
         &mut self,
-        request: BoundTaskRequest,
-        config: StreamingSttConfig,
-    ) -> Result<StreamSessionId, EngineError>;
+        request: BoundStreamingSttRequest,
+    ) -> Result<BoundStreamSession, EngineError>;
 
     async fn push_stt_frame(
         &mut self,
-        session: StreamSessionId,
+        session: &BoundStreamSession,
         frame: StreamingAudioFrame<'_>,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<StreamingSttResult, EngineError>;
 
     async fn finish_stt_session(
         &mut self,
-        session: StreamSessionId,
+        session: &BoundStreamSession,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<StreamingSttResult, EngineError>;
 
     async fn reset_stt_session(
         &mut self,
-        session: StreamSessionId,
+        session: &BoundStreamSession,
         reason: StreamResetReason,
     ) -> Result<(), EngineError>;
 }
@@ -1320,9 +1535,7 @@ pub trait StreamingSttProvider: TaskProvider {
 pub trait StreamingTtsProvider: TaskProvider {
     async fn synthesize_streaming(
         &mut self,
-        request: BoundTaskRequest,
-        text: &str,
-        config: TtsSynthesisConfig,
+        request: BoundTtsSynthesisRequest,
         sink: &mut dyn TtsChunkSink,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<TtsSynthesisResult, EngineError>;
@@ -1357,6 +1570,14 @@ fn normalized_mono_samples(samples: &[f32]) -> bool {
         && samples
             .iter()
             .all(|sample| sample.is_finite() && (-1.0..=1.0).contains(sample))
+}
+
+fn valid_tts_text(value: &str) -> bool {
+    !value.trim().is_empty()
+        && value.len() <= TTS_MAX_TEXT_BYTES
+        && !value
+            .chars()
+            .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
 }
 
 fn manifest_supports_task(manifest: &ModelPackManifest, task: VoiceTask) -> bool {
@@ -1427,17 +1648,15 @@ pub trait TaskProvider {
 pub trait SpeechEngine: TaskProvider {
     async fn transcribe_finite(
         &mut self,
-        request: BoundTaskRequest,
-        frames: usize,
+        request: BoundFiniteSttRequest,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<String, EngineError>;
 
     async fn synthesize_text(
         &mut self,
-        request: BoundTaskRequest,
-        text: &str,
+        request: BoundTtsSynthesisRequest,
         cancellation: &dyn Fn() -> bool,
-    ) -> Result<Vec<i16>, EngineError>;
+    ) -> Result<TtsSynthesisResult, EngineError>;
 }
 
 #[cfg(test)]
@@ -1645,15 +1864,14 @@ mod tests {
     impl VadStreamProvider for SurfaceVadProvider {
         async fn start_vad_session(
             &mut self,
-            _request: BoundTaskRequest,
-            _config: VadConfig,
-        ) -> Result<StreamSessionId, EngineError> {
-            Ok(StreamSessionId(1))
+            request: BoundVadRequest,
+        ) -> Result<BoundStreamSession, EngineError> {
+            BoundStreamSession::new(StreamSessionId(1), request.request())
         }
 
         async fn push_vad_frame(
             &mut self,
-            _session: StreamSessionId,
+            _session: &BoundStreamSession,
             _frame: StreamingAudioFrame<'_>,
             _cancellation: &dyn Fn() -> bool,
         ) -> Result<VadAcceptResult, EngineError> {
@@ -1662,7 +1880,7 @@ mod tests {
 
         async fn flush_vad_session(
             &mut self,
-            _session: StreamSessionId,
+            _session: &BoundStreamSession,
             _cancellation: &dyn Fn() -> bool,
         ) -> Result<Vec<SpeechSegment>, EngineError> {
             Ok(Vec::new())
@@ -1670,7 +1888,7 @@ mod tests {
 
         async fn reset_vad_session(
             &mut self,
-            _session: StreamSessionId,
+            _session: &BoundStreamSession,
             _reason: StreamResetReason,
         ) -> Result<(), EngineError> {
             Ok(())
@@ -1811,6 +2029,38 @@ mod tests {
     fn flush_and_reset_surfaces_are_distinct_for_vad_streams() {
         fn assert_vad_surface<T: VadStreamProvider>() {}
         assert_vad_surface::<SurfaceVadProvider>();
+    }
+
+    #[test]
+    fn bound_stream_session_carries_immutable_request_identity() {
+        let (manifest, selection) = selected(PackTask::Vad);
+        let binding = TaskPackBinding::from_selection(
+            VoiceTask::VoiceActivityDetection,
+            &manifest,
+            &selection,
+        )
+        .expect("binding");
+        let request = BoundTaskRequest::new(
+            TaskRequest {
+                task: VoiceTask::VoiceActivityDetection,
+                language: None,
+                generation: 42,
+            },
+            binding.clone(),
+        )
+        .expect("bound request");
+        let vad = BoundVadRequest::new(request.clone(), VadConfig::default()).expect("bound vad");
+        let session = BoundStreamSession::new(StreamSessionId(7), vad.request()).expect("session");
+
+        assert_eq!(session.session_id(), StreamSessionId(7));
+        assert_eq!(session.task(), VoiceTask::VoiceActivityDetection);
+        assert_eq!(session.generation(), 42);
+        assert_eq!(session.binding(), &binding);
+        assert!(session.matches_request(&request));
+        assert_eq!(
+            BoundStreamSession::new(StreamSessionId(0), &request),
+            Err(EngineError::InvalidRequest)
+        );
     }
 
     #[test]
@@ -1966,8 +2216,21 @@ mod tests {
         )
         .expect("kws binding");
         let kws_config =
-            KwsConfig::new(["wake.main"], "phrases:v1", 0.5, 0, 4).expect("valid config");
+            KwsConfig::new(["wake.main"], "phrases:v1", 0.5, 0, 1).expect("valid config");
         assert!(kws_config.validate_binding(&kws_binding).is_ok());
+        assert!(BoundKwsRequest::new(
+            BoundTaskRequest::new(
+                TaskRequest {
+                    task: VoiceTask::KeywordSpotting,
+                    language: Some("en".to_owned()),
+                    generation: 9,
+                },
+                kws_binding.clone(),
+            )
+            .expect("bound task"),
+            kws_config.clone(),
+        )
+        .is_ok());
         assert_eq!(
             KwsConfig::new(["wake.main"], "phrases:v1", 0.5, 0, 0),
             Err(EngineError::InvalidRequest)
@@ -1978,6 +2241,20 @@ mod tests {
         );
         assert_eq!(
             KwsConfig::new(["wake.main", "wake.main"], "phrases:v1", 0.5, 0, 4),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            KwsConfig::new(
+                ["wake.main"],
+                "phrases:v1",
+                0.5,
+                MAX_KWS_COOLDOWN_FRAMES + 1,
+                1
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            KwsConfig::new(["wake.main"], "phrases:v1", 0.5, 0, MAX_KWS_RESULTS + 1),
             Err(EngineError::InvalidRequest)
         );
         let too_many_phrases = (0..=MAX_KWS_PHRASES).map(|index| format!("wake.{index}"));
@@ -1994,6 +2271,19 @@ mod tests {
             .expect("valid stt")
             .validate_binding(&stt_binding)
             .is_ok());
+        assert!(BoundStreamingSttRequest::new(
+            BoundTaskRequest::new(
+                TaskRequest {
+                    task: VoiceTask::SpeechToText,
+                    language: Some("en-US".to_owned()),
+                    generation: 10,
+                },
+                stt_binding.clone(),
+            )
+            .expect("bound task"),
+            StreamingSttConfig::new(Some("en-US"), true, true).expect("valid stt"),
+        )
+        .is_ok());
         assert_eq!(
             StreamingSttConfig::new(Some("/tmp/model"), true, true),
             Err(EngineError::InvalidRequest)
@@ -2012,6 +2302,20 @@ mod tests {
         )
         .expect("valid tts");
         assert!(tts_config.validate_binding(&tts_binding).is_ok());
+        assert!(BoundTtsSynthesisRequest::new(
+            BoundTaskRequest::new(
+                TaskRequest {
+                    task: VoiceTask::TextToSpeech,
+                    language: Some("en".to_owned()),
+                    generation: 11,
+                },
+                tts_binding.clone(),
+            )
+            .expect("bound task"),
+            "hello",
+            tts_config.clone(),
+        )
+        .is_ok());
         assert!(TtsSynthesisConfig::default().validate().is_ok());
         assert_eq!(
             TtsSynthesisConfig::new("/tmp/voice", "state:v1", VAD_SAMPLE_RATE_HZ, 1024, None),
@@ -2031,6 +2335,78 @@ mod tests {
             ),
             Err(EngineError::InvalidRequest)
         );
+        assert_eq!(
+            BoundTtsSynthesisRequest::new(
+                BoundTaskRequest::new(
+                    TaskRequest {
+                        task: VoiceTask::TextToSpeech,
+                        language: Some("en".to_owned()),
+                        generation: 12,
+                    },
+                    tts_binding,
+                )
+                .expect("bound task"),
+                " ",
+                tts_config,
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+    }
+
+    #[test]
+    fn kws_results_are_limited_to_configured_phrase_set() {
+        let config =
+            KwsConfig::new(["wake.a", "wake.b"], "phrases:v1", 0.5, 0, 2).expect("valid config");
+        let first = KeywordMatch::new("wake.a", 0.9, 10).expect("match");
+        let second = KeywordMatch::new("wake.b", 0.8, 11).expect("match");
+        assert!(KwsFrameResult::new(&config, vec![first.clone(), second], None).is_ok());
+        assert_eq!(
+            KwsFrameResult::new(&config, vec![first.clone(), first], None),
+            Err(EngineError::InvalidRequest)
+        );
+        let unknown = KeywordMatch::new("wake.c", 0.7, 12).expect("match");
+        assert_eq!(
+            KwsFrameResult::new(&config, vec![unknown], None),
+            Err(EngineError::InvalidRequest)
+        );
+        let capped =
+            KwsConfig::new(["wake.a", "wake.b"], "phrases:v1", 0.5, 0, 1).expect("valid config");
+        let first = KeywordMatch::new("wake.a", 0.9, 10).expect("match");
+        let second = KeywordMatch::new("wake.b", 0.8, 11).expect("match");
+        assert_eq!(
+            KwsFrameResult::new(&capped, vec![first, second], None),
+            Err(EngineError::InvalidRequest)
+        );
+    }
+
+    #[test]
+    fn tts_chunks_are_bounded_by_active_config() {
+        let config = TtsSynthesisConfig::new("voice.default", "voice-state-a", 16_000, 1024, None)
+            .expect("valid config");
+        let full = TtsAudioChunk::new(&config, 1, 16_000, MONO_CHANNELS, vec![0; 1024], false)
+            .expect("full chunk");
+        let tail = TtsAudioChunk::new(&config, 2, 16_000, MONO_CHANNELS, vec![0; 12], true)
+            .expect("short final tail");
+        assert_eq!(tail.samples().len(), 12);
+        assert_eq!(
+            TtsAudioChunk::new(&config, 3, 16_000, MONO_CHANNELS, vec![0; 12], false),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            TtsAudioChunk::new(&config, 4, 48_001, MONO_CHANNELS, vec![0; 1024], false),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            TtsAudioChunk::new(&config, 5, 16_000, MONO_CHANNELS, vec![0; 1025], true),
+            Err(EngineError::InvalidRequest)
+        );
+        let result = TtsSynthesisResult::new(vec![full, tail], false).expect("tts result");
+        assert_eq!(result.chunk_count(), 2);
+        assert_eq!(
+            TtsSynthesisResult::new(Vec::new(), false),
+            Err(EngineError::InvalidRequest)
+        );
+        assert!(TtsSynthesisResult::new(Vec::new(), true).is_ok());
     }
 
     #[test]
@@ -2061,8 +2437,10 @@ mod tests {
         assert!(!result_debug.contains("0.123"));
         assert!(!result_debug.contains("-0.456"));
 
-        let chunk = TtsAudioChunk::new(1, 16_000, MONO_CHANNELS, vec![123, -456], true)
-            .expect("valid chunk");
+        let tts_config = TtsSynthesisConfig::default();
+        let chunk =
+            TtsAudioChunk::new(&tts_config, 1, 16_000, MONO_CHANNELS, vec![123, -456], true)
+                .expect("valid chunk");
         let chunk_debug = format!("{chunk:?}");
         assert!(chunk_debug.contains("sample_count: 2"));
         assert!(!chunk_debug.contains("123"));
@@ -2080,10 +2458,14 @@ mod tests {
         assert!(encoded.contains("\"completed\":true"));
         assert!(!encoded.contains("provider"));
 
+        let kws_config =
+            KwsConfig::new(["wake-main"], "phrases:v1", 0.5, 0, 1).expect("valid kws config");
         let kws = KwsFrameResult::new(
+            &kws_config,
             vec![KeywordMatch::new("wake-main", 0.9, 10).expect("match")],
             None,
-        );
+        )
+        .expect("kws result");
         let encoded = serde_json::to_string(&kws).expect("serializes");
         assert!(encoded.contains("wake-main"));
         assert!(!encoded.contains("provider"));
