@@ -237,22 +237,22 @@ export function getAuroraVoiceCapturePolicy(kind: LegacyAuroraSurfaceKind): Auro
     case 'desktop-local':
       return {
         focusedPushToTalkOwner: 'native-desktop',
-        wakewordOwner: 'native-desktop',
-        wakewordRequiresFocus: false,
+        wakewordOwner: 'unavailable',
+        wakewordRequiresFocus: true,
         canUseWebViewVisualizer: false,
         avoidCoordinatorPushToTalk: true,
         usesBrowserVoiceRuntime: false,
-        detail: 'Voice is handled by the desktop app.'
+        detail: 'Desktop push-to-talk is available. Background voice is not available yet.'
       }
     case 'desktop-thin':
       return {
         focusedPushToTalkOwner: 'native-desktop',
-        wakewordOwner: 'native-desktop',
-        wakewordRequiresFocus: false,
+        wakewordOwner: 'unavailable',
+        wakewordRequiresFocus: true,
         canUseWebViewVisualizer: false,
         avoidCoordinatorPushToTalk: true,
         usesBrowserVoiceRuntime: false,
-        detail: 'Voice is handled by the desktop app.'
+        detail: 'Desktop push-to-talk is available. Background voice is not available yet.'
       }
     case 'web':
       return {

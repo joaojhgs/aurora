@@ -795,7 +795,7 @@ impl NativeVoiceActor {
             available: !matches!(phase, NativeVoicePhase::Unavailable),
             phase,
             generation,
-            background_eligible: matches!(connection, NativeVoiceConnection::ThisDevice),
+            background_eligible: background_voice_eligible(connection),
             connection,
             reason_code: reason_code.map(str::to_owned),
             redacted: true,
@@ -895,7 +895,7 @@ fn idle_status(connection: NativeVoiceConnection) -> NativeVoiceStatus {
         available: true,
         phase: NativeVoicePhase::Idle,
         generation: None,
-        background_eligible: matches!(connection, NativeVoiceConnection::ThisDevice),
+        background_eligible: background_voice_eligible(connection),
         connection,
         reason_code: None,
         redacted: true,
@@ -905,7 +905,12 @@ fn idle_status(connection: NativeVoiceConnection) -> NativeVoiceStatus {
 #[cfg(desktop)]
 fn install_profile_connection(status: &mut NativeVoiceStatus, connection: NativeVoiceConnection) {
     status.connection = connection;
-    status.background_eligible = matches!(connection, NativeVoiceConnection::ThisDevice);
+    status.background_eligible = background_voice_eligible(connection);
+}
+
+#[cfg(any(desktop, test))]
+fn background_voice_eligible(_connection: NativeVoiceConnection) -> bool {
+    false
 }
 
 #[cfg(desktop)]
@@ -1002,7 +1007,7 @@ fn build_handoff(
         .map_err(|_| NativeVoiceCommandError::unavailable("handoff_unavailable"))?
         .with_start_reason(start_reason)
         .with_route_revision(RouteRevision(ROUTE_REVISION))
-        .with_background_eligible(true)
+        .with_background_eligible(background_voice_eligible(profile.connection()))
         .with_consent_revision(1);
     NativeGatewayCaptureHandoff::new(transport_for_handoff(profile)?, config)
         .map_err(|_| NativeVoiceCommandError::unavailable("handoff_unavailable"))
@@ -1512,7 +1517,7 @@ mod tests {
             available: true,
             phase: NativeVoicePhase::Listening,
             generation: Some(7),
-            background_eligible: true,
+            background_eligible: false,
             connection: NativeVoiceConnection::ThisDevice,
             reason_code: None,
             redacted: true,
@@ -1524,7 +1529,7 @@ mod tests {
                 "available": true,
                 "phase": "listening",
                 "generation": 7,
-                "backgroundEligible": true,
+                "backgroundEligible": false,
                 "connection": "this_device",
                 "reasonCode": null,
                 "redacted": true
@@ -1789,7 +1794,7 @@ mod tests {
         let mut local = NativeVoiceStatus::unavailable(PROFILE_REASON);
         install_profile_connection(&mut local, NativeVoiceConnection::ThisDevice);
         assert_eq!(local.connection, NativeVoiceConnection::ThisDevice);
-        assert!(local.background_eligible);
+        assert!(!local.background_eligible);
 
         let mut remote = NativeVoiceStatus::unavailable(PROFILE_REASON);
         install_profile_connection(&mut remote, NativeVoiceConnection::ConnectedDevice);
@@ -1806,7 +1811,7 @@ mod tests {
         assert_eq!(accepted.phase, NativeVoicePhase::Starting);
         assert_eq!(accepted.generation, Some(9));
         assert!(accepted.available);
-        assert!(accepted.background_eligible);
+        assert!(!accepted.background_eligible);
     }
 
     #[test]
@@ -2011,7 +2016,7 @@ fn accepted_start_status(
         available: true,
         phase: NativeVoicePhase::Starting,
         generation: Some(ui_generation),
-        background_eligible: matches!(connection, NativeVoiceConnection::ThisDevice),
+        background_eligible: background_voice_eligible(connection),
         connection,
         reason_code: None,
         redacted: true,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getAuroraSurfaceProfile } from '../src/platform-surface'
+import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 
 describe('Aurora surface profile regression coverage', () => {
   it('keeps hosted remote-console surfaces free of local service ownership', () => {
@@ -105,10 +106,13 @@ describe('Aurora surface profile regression coverage', () => {
       nativePlatform: 'android',
     })
 
-    expect(desktopLocal.voiceCapture.wakewordOwner).toBe('native-desktop')
     expect(desktopLocal.voiceCapture.focusedPushToTalkOwner).toBe('native-desktop')
+    expect(desktopLocal.voiceCapture.wakewordOwner).toBe('unavailable')
+    expect(desktopLocal.voiceCapture.wakewordRequiresFocus).toBe(true)
     expect(desktopLocal.voiceCapture.canUseWebViewVisualizer).toBe(false)
     expect(desktopLocal.voiceCapture.avoidCoordinatorPushToTalk).toBe(true)
+    expect(desktopLocal.voiceCapture.detail).toBe('Desktop push-to-talk is available. Background voice is not available yet.')
+    expect(findForbiddenProductionCopyTerms(desktopLocal.voiceCapture.detail)).toEqual([])
     expect(hosted.voiceCapture.wakewordOwner).toBe('webview-focused')
     expect(hosted.voiceCapture.wakewordRequiresFocus).toBe(true)
     expect(android.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
@@ -221,7 +225,8 @@ describe('Aurora surface profile regression coverage', () => {
     expect(desktopThin.trustsNativeWebViewOrigin).toBe(true)
     expect(desktopThin.usesBrowserVoiceRuntime).toBe(false)
     expect(desktopThin.voiceCapture.focusedPushToTalkOwner).toBe('native-desktop')
-    expect(desktopThin.voiceCapture.wakewordOwner).toBe('native-desktop')
+    expect(desktopThin.voiceCapture.wakewordOwner).toBe('unavailable')
+    expect(desktopThin.voiceCapture.wakewordRequiresFocus).toBe(true)
     expect(desktopThin.voiceCapture.canUseWebViewVisualizer).toBe(false)
 
     expect(mock.physicalKind).toBe('test')
