@@ -562,10 +562,7 @@ impl ModelStore for InMemoryModelStore {
 }
 
 fn physical_file_bytes(files: &BTreeMap<String, StoredFile>) -> Result<u64, ModelPackError> {
-    let mut blobs = BTreeMap::<String, u64>::new();
-    for file in files.values() {
-        insert_blob_charge(&mut blobs, &file.sha256, file.byte_size)?;
-    }
+    let blobs = promoted_blob_charges(files)?;
     checked_sum(blobs.values().copied())
 }
 
@@ -573,18 +570,30 @@ fn physical_reserved_bytes(
     files: &BTreeMap<String, StoredFile>,
     reservations: &BTreeMap<String, Reservation>,
 ) -> Result<u64, ModelPackError> {
-    let promoted: BTreeSet<&str> = files.values().map(|file| file.sha256.as_str()).collect();
+    let promoted = promoted_blob_charges(files)?;
     let mut blobs = BTreeMap::<String, u64>::new();
     for reservation in reservations.values() {
-        if !promoted.contains(reservation.task.expected_sha256.as_str()) {
-            insert_blob_charge(
+        match promoted.get(&reservation.task.expected_sha256) {
+            Some(existing) if *existing == reservation.task.expected_bytes => {}
+            Some(_) => return Err(ModelPackError::Store { code: "corrupt" }),
+            None => insert_blob_charge(
                 &mut blobs,
                 &reservation.task.expected_sha256,
                 reservation.task.expected_bytes,
-            )?;
+            )?,
         }
     }
     checked_sum(blobs.values().copied())
+}
+
+fn promoted_blob_charges(
+    files: &BTreeMap<String, StoredFile>,
+) -> Result<BTreeMap<String, u64>, ModelPackError> {
+    let mut blobs = BTreeMap::<String, u64>::new();
+    for file in files.values() {
+        insert_blob_charge(&mut blobs, &file.sha256, file.byte_size)?;
+    }
+    Ok(blobs)
 }
 
 fn physical_total_after_reservation(
@@ -1004,6 +1013,43 @@ mod tests {
             .promote_file(&duplicate_task.storage_key, HASH, 60)
             .await?;
         assert_eq!(store.status().await?.bytes_used, 60);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn promoted_hash_reservation_size_conflict_fails_closed() -> Result<(), ModelPackError> {
+        let first = verified("first", "1", HASH, 60);
+        let conflict = verified("conflict", "1", HASH, 61);
+        let conflict_selection = selection_for(&conflict);
+        let conflict_file = &conflict.manifest().files[0];
+        let conflict_task = DownloadTask {
+            storage_key: file_storage_key(
+                &conflict.manifest().pack_id,
+                &conflict.manifest().pack_version,
+                conflict_selection.variant_id(),
+                &conflict_file.file_id,
+            ),
+            pack_id: conflict.manifest().pack_id.clone(),
+            pack_version: conflict.manifest().pack_version.clone(),
+            file_id: conflict_file.file_id.clone(),
+            url: conflict_file.url.clone(),
+            expected_sha256: conflict_file.sha256.clone(),
+            expected_bytes: conflict_file.byte_size,
+            variant_id: conflict_selection.variant_id().to_owned(),
+        };
+        let mut store = InMemoryModelStore::new(Some(200));
+        install_ready(&mut store, &first).await?;
+        store.reservations.insert(
+            conflict_task.storage_key.clone(),
+            Reservation {
+                task: conflict_task,
+            },
+        );
+
+        assert_eq!(
+            store.status().await,
+            Err(ModelPackError::Store { code: "corrupt" })
+        );
         Ok(())
     }
 

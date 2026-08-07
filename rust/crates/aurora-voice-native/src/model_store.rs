@@ -770,30 +770,33 @@ fn record_lifecycle_key(record: &ActivePackRecord) -> String {
 }
 
 fn physical_file_bytes(state: &StoreState) -> Result<u64, ModelPackError> {
-    let mut blobs = BTreeMap::<String, u64>::new();
-    for file in state.files.values() {
-        insert_blob_charge(&mut blobs, &file.sha256, file.byte_size)?;
-    }
+    let blobs = promoted_blob_charges(state)?;
     checked_sum(blobs.values().copied())
 }
 
 fn physical_reserved_bytes(state: &StoreState) -> Result<u64, ModelPackError> {
-    let promoted: BTreeSet<&str> = state
-        .files
-        .values()
-        .map(|file| file.sha256.as_str())
-        .collect();
+    let promoted = promoted_blob_charges(state)?;
     let mut reservations = BTreeMap::<String, u64>::new();
     for task in state.reservations.values() {
-        if !promoted.contains(task.expected_sha256.as_str()) {
-            insert_blob_charge(
+        match promoted.get(&task.expected_sha256) {
+            Some(existing) if *existing == task.expected_bytes => {}
+            Some(_) => return Err(store("corrupt")),
+            None => insert_blob_charge(
                 &mut reservations,
                 &task.expected_sha256,
                 task.expected_bytes,
-            )?;
+            )?,
         }
     }
     checked_sum(reservations.values().copied())
+}
+
+fn promoted_blob_charges(state: &StoreState) -> Result<BTreeMap<String, u64>, ModelPackError> {
+    let mut blobs = BTreeMap::<String, u64>::new();
+    for file in state.files.values() {
+        insert_blob_charge(&mut blobs, &file.sha256, file.byte_size)?;
+    }
+    Ok(blobs)
 }
 
 fn physical_total_after_reservation(
@@ -1023,6 +1026,7 @@ fn recover_blobs(root: &Path, state: &mut StoreState) -> Result<(), ModelPackErr
         });
     }
     reconcile_scoped_pointers(root, state)?;
+    physical_reserved_bytes(state)?;
 
     let referenced_hashes: BTreeSet<String> = state
         .files
@@ -2555,6 +2559,50 @@ mod tests {
         assert!(blob_path(temp.path(), &hash).exists());
         store.remove_pack("second").await.expect("remove second");
         assert!(!blob_path(temp.path(), &hash).exists());
+    }
+
+    #[tokio::test]
+    async fn promoted_hash_reservation_size_conflict_fails_closed() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let bytes = vec![b'x'; 60];
+        let first = manifest("first", "1", model_file("model", &bytes));
+        let conflict_file = ModelPackFile {
+            byte_size: 61,
+            installed_size: 61,
+            ..model_file("model", &bytes)
+        };
+        let conflict = manifest("conflict", "1", conflict_file);
+        let conflict_selection = selection_for(&conflict);
+        let conflict_task = DownloadTask {
+            storage_key: file_storage_key(
+                &conflict.manifest().pack_id,
+                &conflict.manifest().pack_version,
+                conflict_selection.variant_id(),
+                "model",
+            ),
+            pack_id: conflict.manifest().pack_id.clone(),
+            pack_version: conflict.manifest().pack_version.clone(),
+            file_id: "model".to_owned(),
+            url: conflict.manifest().files[0].url.clone(),
+            expected_sha256: conflict.manifest().files[0].sha256.clone(),
+            expected_bytes: conflict.manifest().files[0].byte_size,
+            variant_id: conflict_selection.variant_id().to_owned(),
+        };
+        let mut store = open_store(temp.path(), 200);
+        install_ready(&mut store, &first, &bytes).await;
+
+        store
+            .state
+            .reservations
+            .insert(conflict_task.storage_key.clone(), conflict_task);
+        write_state_atomic(temp.path(), &store.state).expect("corrupt reservation state persists");
+
+        assert_eq!(store.status().await, Err(super::store("corrupt")));
+        let reopened = NativeModelStore::open(NativeModelStoreConfig::new(temp.path(), Some(200)));
+        let Err(error) = reopened else {
+            panic!("corrupt reservation should fail recovery");
+        };
+        assert_eq!(error, super::store("corrupt"));
     }
 
     #[tokio::test]
