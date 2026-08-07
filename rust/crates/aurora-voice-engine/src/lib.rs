@@ -138,7 +138,7 @@ pub struct TaskRequest {
     pub generation: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct TaskPackBinding {
     task: VoiceTask,
     manifest_sha256: String,
@@ -315,7 +315,43 @@ impl TaskPackBinding {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+impl fmt::Debug for TaskPackBinding {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TaskPackBinding")
+            .field("task", &self.task)
+            .field("manifest_sha256_bytes", &self.manifest_sha256.len())
+            .field("pack_id_bytes", &self.pack_id.len())
+            .field("pack_version_bytes", &self.pack_version.len())
+            .field("variant_id_bytes", &self.variant_id.len())
+            .field("selected_file_count", &self.selected_file_ids.len())
+            .field(
+                "compatibility_group_id_bytes",
+                &self.compatibility_group_id.len(),
+            )
+            .field(
+                "voice_state_compatibility_group_id_bytes",
+                &self.voice_state_compatibility_group_id.len(),
+            )
+            .field("target", &self.target)
+            .field("os", &self.os)
+            .field("arch", &self.arch)
+            .field("engine", &self.engine)
+            .field(
+                "required_browser_feature_count",
+                &self.required_browser_features.len(),
+            )
+            .field("min_device_memory_mb", &self.min_device_memory_mb)
+            .field("interoperable", &self.interoperable)
+            .field("sample_rate_hz", &self.sample_rate_hz)
+            .field("channels", &self.channels)
+            .field("frame_size", &self.frame_size)
+            .field("language_count", &self.languages.len())
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
 pub struct BoundTaskRequest {
     request: TaskRequest,
     binding: TaskPackBinding,
@@ -336,6 +372,21 @@ impl BoundTaskRequest {
 
     pub fn binding(&self) -> &TaskPackBinding {
         &self.binding
+    }
+}
+
+impl fmt::Debug for BoundTaskRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("BoundTaskRequest")
+            .field("task", &self.request.task)
+            .field(
+                "language_present",
+                &self.request.language.as_ref().is_some(),
+            )
+            .field("generation", &self.request.generation)
+            .field("binding", &self.binding)
+            .finish()
     }
 }
 
@@ -367,7 +418,7 @@ impl BoundFiniteSttRequest {
 
 /// Bounded finite STT result. Providers return this typed result instead of
 /// an unvalidated string so turn orchestration can trust transcript shape.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct FiniteSttResult {
     transcript: String,
     frames: usize,
@@ -404,6 +455,17 @@ impl FiniteSttResult {
 
     pub fn generation(&self) -> u64 {
         self.generation
+    }
+}
+
+impl fmt::Debug for FiniteSttResult {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("FiniteSttResult")
+            .field("transcript_bytes", &self.transcript.len())
+            .field("frames", &self.frames)
+            .field("generation", &self.generation)
+            .finish()
     }
 }
 
@@ -466,7 +528,7 @@ pub fn check_engine_cancellation(cancellation: &dyn Fn() -> bool) -> Result<(), 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StreamSessionId(pub u64);
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct BoundStreamSession {
     session_id: StreamSessionId,
     task: VoiceTask,
@@ -510,6 +572,18 @@ impl BoundStreamSession {
         self.task == request.request().task
             && self.generation == request.request().generation
             && self.binding == *request.binding()
+    }
+}
+
+impl fmt::Debug for BoundStreamSession {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("BoundStreamSession")
+            .field("session_id", &self.session_id)
+            .field("task", &self.task)
+            .field("generation", &self.generation)
+            .field("binding", &self.binding)
+            .finish()
     }
 }
 
@@ -916,7 +990,7 @@ impl fmt::Debug for VadAcceptResult {
 }
 
 /// Backend-neutral keyword spotting configuration.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct KwsConfig {
     phrase_ids: Vec<String>,
     phrase_set_revision: String,
@@ -993,7 +1067,20 @@ impl KwsConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl fmt::Debug for KwsConfig {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("KwsConfig")
+            .field("phrase_count", &self.phrase_ids.len())
+            .field("phrase_set_revision_bytes", &self.phrase_set_revision.len())
+            .field("threshold", &self.threshold)
+            .field("cooldown_frames", &self.cooldown_frames)
+            .field("max_results", &self.max_results)
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq)]
 pub struct BoundKwsRequest {
     request: BoundTaskRequest,
     config: KwsConfig,
@@ -1014,8 +1101,23 @@ impl BoundKwsRequest {
     }
 }
 
+impl fmt::Debug for BoundKwsRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("BoundKwsRequest")
+            .field("task", &self.request.request().task)
+            .field("generation", &self.request.request().generation)
+            .field(
+                "language_present",
+                &self.request.request().language.as_ref().is_some(),
+            )
+            .field("config", &self.config)
+            .finish()
+    }
+}
+
 /// One keyword match using manifest/application keyword identifiers only.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Clone, PartialEq, Serialize)]
 pub struct KeywordMatch {
     keyword_id: String,
     score: f32,
@@ -1052,7 +1154,18 @@ impl KeywordMatch {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+impl fmt::Debug for KeywordMatch {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("KeywordMatch")
+            .field("keyword_id_bytes", &self.keyword_id.len())
+            .field("score", &self.score)
+            .field("frame_index", &self.frame_index)
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Serialize)]
 pub struct KwsFrameResult {
     matches: Vec<KeywordMatch>,
     reset: Option<StreamResetReason>,
@@ -1091,6 +1204,16 @@ impl KwsFrameResult {
 
     pub fn reset(&self) -> Option<StreamResetReason> {
         self.reset
+    }
+}
+
+impl fmt::Debug for KwsFrameResult {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("KwsFrameResult")
+            .field("match_count", &self.matches.len())
+            .field("reset", &self.reset)
+            .finish()
     }
 }
 
@@ -1231,7 +1354,7 @@ impl BoundStreamingSttRequest {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct TranscriptSegment {
     text: String,
     start_ms: Option<u64>,
@@ -1275,7 +1398,19 @@ impl TranscriptSegment {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+impl fmt::Debug for TranscriptSegment {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TranscriptSegment")
+            .field("text_bytes", &self.text.len())
+            .field("start_ms", &self.start_ms)
+            .field("end_ms", &self.end_ms)
+            .field("is_final", &self.is_final)
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct StreamingSttResult {
     segments: Vec<TranscriptSegment>,
     reset: Option<StreamResetReason>,
@@ -1308,8 +1443,25 @@ impl StreamingSttResult {
     }
 }
 
+impl fmt::Debug for StreamingSttResult {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let final_segment_count = self
+            .segments
+            .iter()
+            .filter(|segment| segment.is_final())
+            .count();
+        formatter
+            .debug_struct("StreamingSttResult")
+            .field("segment_count", &self.segments.len())
+            .field("final_segment_count", &final_segment_count)
+            .field("reset", &self.reset)
+            .field("completed", &self.completed)
+            .finish()
+    }
+}
+
 /// TTS synthesis request without provider paths or raw handles.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct TtsSynthesisConfig {
     logical_voice_id: String,
     voice_state_compatibility_group_id: String,
@@ -1386,6 +1538,23 @@ impl TtsSynthesisConfig {
 
     pub fn seed(&self) -> Option<u64> {
         self.seed
+    }
+}
+
+impl fmt::Debug for TtsSynthesisConfig {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TtsSynthesisConfig")
+            .field("logical_voice_id_bytes", &self.logical_voice_id.len())
+            .field(
+                "voice_state_compatibility_group_id_bytes",
+                &self.voice_state_compatibility_group_id.len(),
+            )
+            .field("sample_rate_hz", &self.sample_rate_hz)
+            .field("channels", &self.channels)
+            .field("chunk_samples", &self.chunk_samples)
+            .field("seed_present", &self.seed.is_some())
+            .finish()
     }
 }
 
@@ -1628,7 +1797,7 @@ impl fmt::Debug for TtsAudioChunk {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct TtsSynthesisResult {
     chunks: Vec<TtsAudioChunk>,
     cancelled: bool,
@@ -1676,6 +1845,16 @@ impl TtsSynthesisResult {
 
     pub fn cancelled(&self) -> bool {
         self.cancelled
+    }
+}
+
+impl fmt::Debug for TtsSynthesisResult {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TtsSynthesisResult")
+            .field("chunk_count", &self.chunks.len())
+            .field("cancelled", &self.cancelled)
+            .finish()
     }
 }
 
@@ -2701,6 +2880,48 @@ mod tests {
     }
 
     #[test]
+    fn stt_debug_output_redacts_transcript_text() {
+        let secret = "SECRET_STT_TRANSCRIPT_DO_NOT_LEAK_6c5b4a";
+        let (stt_manifest, stt_selection) = selected(PackTask::Stt);
+        let stt_binding =
+            TaskPackBinding::from_selection(VoiceTask::SpeechToText, &stt_manifest, &stt_selection)
+                .expect("stt binding");
+        let task_request = BoundTaskRequest::new(
+            TaskRequest {
+                task: VoiceTask::SpeechToText,
+                language: Some("en".to_owned()),
+                generation: 31,
+            },
+            stt_binding,
+        )
+        .expect("bound stt task");
+        let finite_request = BoundFiniteSttRequest::new(task_request, 3).expect("finite request");
+        let finite = FiniteSttResult::new(&finite_request, secret).expect("finite result");
+        let finite_debug = format!("{finite:?}");
+        assert!(finite_debug.contains("transcript_bytes"));
+        assert!(!finite_debug.contains(secret));
+        assert!(!finite_debug.contains("SECRET_STT_TRANSCRIPT"));
+
+        let partial =
+            TranscriptSegment::new(secret, Some(10), Some(20), false).expect("partial segment");
+        let final_segment =
+            TranscriptSegment::new("final text", Some(20), Some(40), true).expect("final segment");
+        let segment_debug = format!("{partial:?}");
+        assert!(segment_debug.contains("text_bytes"));
+        assert!(!segment_debug.contains(secret));
+        let streaming = StreamingSttResult::new(
+            vec![partial, final_segment],
+            Some(StreamResetReason::Manual),
+            true,
+        );
+        let streaming_debug = format!("{streaming:?}");
+        assert!(streaming_debug.contains("segment_count: 2"));
+        assert!(streaming_debug.contains("final_segment_count: 1"));
+        assert!(!streaming_debug.contains(secret));
+        assert!(!streaming_debug.contains("final text"));
+    }
+
+    #[test]
     fn kws_results_are_limited_to_configured_phrase_set() {
         let config =
             KwsConfig::new(["wake.a", "wake.b"], "phrases:v1", 0.5, 0, 2).expect("valid config");
@@ -2753,6 +2974,32 @@ mod tests {
             Some(StreamResetReason::Manual),
         )
         .expect("reset clears cooldown");
+    }
+
+    #[test]
+    fn kws_debug_output_redacts_keyword_identifiers() {
+        let keyword_secret = "wake.SECRET_KEYWORD_DO_NOT_LEAK_5d4c3b";
+        let revision_secret = "phrases.SECRET_REVISION_DO_NOT_LEAK_5d4c3b";
+        let config =
+            KwsConfig::new([keyword_secret], revision_secret, 0.5, 0, 1).expect("valid config");
+        let config_debug = format!("{config:?}");
+        assert!(config_debug.contains("phrase_count: 1"));
+        assert!(config_debug.contains("phrase_set_revision_bytes"));
+        assert!(!config_debug.contains(keyword_secret));
+        assert!(!config_debug.contains(revision_secret));
+
+        let keyword_match = KeywordMatch::new(keyword_secret, 0.9, 17).expect("match");
+        let match_debug = format!("{keyword_match:?}");
+        assert!(match_debug.contains("keyword_id_bytes"));
+        assert!(!match_debug.contains(keyword_secret));
+
+        let mut cooldown = KwsCooldownState::new();
+        let result =
+            KwsFrameResult::new(&config, &mut cooldown, vec![keyword_match], None).expect("result");
+        let result_debug = format!("{result:?}");
+        assert!(result_debug.contains("match_count: 1"));
+        assert!(!result_debug.contains(keyword_secret));
+        assert!(!result_debug.contains(revision_secret));
     }
 
     #[test]
@@ -2922,6 +3169,28 @@ mod tests {
         assert!(!debug.contains("voice.secret"));
         assert!(!debug.contains("voice-state-secret"));
         assert!(!debug.contains("SECRET_TTS_TEXT"));
+    }
+
+    #[test]
+    fn tts_config_debug_redacts_voice_and_group_identifiers() {
+        let voice_secret = "voice.SECRET_CONFIG_VOICE_DO_NOT_LEAK_4b3a2f";
+        let group_secret = "voice-state.SECRET_CONFIG_GROUP_DO_NOT_LEAK_4b3a2f";
+        let config = TtsSynthesisConfig::new(
+            voice_secret,
+            group_secret,
+            VAD_SAMPLE_RATE_HZ,
+            1024,
+            Some(11),
+        )
+        .expect("valid config");
+        let debug = format!("{config:?}");
+        assert!(debug.contains("logical_voice_id_bytes"));
+        assert!(debug.contains("voice_state_compatibility_group_id_bytes"));
+        assert!(debug.contains("seed_present: true"));
+        assert!(!debug.contains(voice_secret));
+        assert!(!debug.contains(group_secret));
+        assert!(!debug.contains("SECRET_CONFIG_VOICE"));
+        assert!(!debug.contains("SECRET_CONFIG_GROUP"));
     }
 
     #[test]
