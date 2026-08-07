@@ -16,7 +16,8 @@ use thiserror::Error;
 pub use aurora_voice_engine::{
     BoundFiniteSttRequest, BoundTaskRequest, BoundTtsSynthesisRequest, EngineError, FiniteSttAudio,
     FiniteSttAudioBuilder, FiniteSttResult, ResourceReport, SpeechEngine, TaskCapability,
-    TaskPackBinding, TaskProvider, TaskReadiness, TaskRequest, TtsSynthesisConfig, VoiceTask,
+    TaskPackBinding, TaskProvider, TaskReadiness, TaskRequest, TtsSynthesisConfig,
+    TtsSynthesisResult, VoiceTask,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -830,10 +831,105 @@ pub trait AudioInput {
     fn current_route_revision(&self) -> RouteRevision;
 }
 
-pub struct VoiceRuntime<A, E, T, S> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AudioPlaybackContext {
+    pub generation: Generation,
+    pub route_revision: RouteRevision,
+    pub started_at: TimestampMicros,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AudioPlaybackReceipt {
+    pub generation: Generation,
+    pub route_revision: RouteRevision,
+    pub chunk_count: u64,
+    pub sample_count: u64,
+    pub completed_at: TimestampMicros,
+}
+
+impl AudioPlaybackReceipt {
+    pub fn new(
+        context: AudioPlaybackContext,
+        chunk_count: u64,
+        sample_count: u64,
+        completed_at: TimestampMicros,
+    ) -> Self {
+        Self {
+            generation: context.generation,
+            route_revision: context.route_revision,
+            chunk_count,
+            sample_count,
+            completed_at,
+        }
+    }
+}
+
+#[async_trait(?Send)]
+pub trait AudioOutput {
+    async fn play(
+        &mut self,
+        context: AudioPlaybackContext,
+        audio: TtsSynthesisResult,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<AudioPlaybackReceipt, VoiceCoreError>;
+
+    async fn stop(
+        &mut self,
+        generation: Generation,
+        reason: TransitionReason,
+    ) -> Result<(), VoiceCoreError>;
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct NoopAudioOutput {
+    stopped: Vec<(Generation, TransitionReason)>,
+}
+
+impl NoopAudioOutput {
+    pub fn stopped(&self) -> &[(Generation, TransitionReason)] {
+        &self.stopped
+    }
+}
+
+#[async_trait(?Send)]
+impl AudioOutput for NoopAudioOutput {
+    async fn play(
+        &mut self,
+        context: AudioPlaybackContext,
+        audio: TtsSynthesisResult,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<AudioPlaybackReceipt, VoiceCoreError> {
+        if cancellation() || audio.cancelled() {
+            return Err(VoiceCoreError::Cancelled);
+        }
+        let sample_count = audio
+            .chunks()
+            .iter()
+            .map(|chunk| chunk.samples().len() as u64)
+            .sum();
+        Ok(AudioPlaybackReceipt::new(
+            context,
+            audio.chunk_count(),
+            sample_count,
+            context.started_at,
+        ))
+    }
+
+    async fn stop(
+        &mut self,
+        generation: Generation,
+        reason: TransitionReason,
+    ) -> Result<(), VoiceCoreError> {
+        self.stopped.push((generation, reason));
+        Ok(())
+    }
+}
+
+pub struct VoiceRuntime<A, E, T, O, S> {
     audio: A,
     engine: E,
     transport: T,
+    output: O,
     sink: S,
     leases: CaptureLeaseManager,
     state: VoiceStateMachine,
@@ -841,17 +937,19 @@ pub struct VoiceRuntime<A, E, T, S> {
     assistant_namespace: AssistantTurnNamespace,
 }
 
-impl<A, E, T, S> VoiceRuntime<A, E, T, S>
+impl<A, E, T, O, S> VoiceRuntime<A, E, T, O, S>
 where
     A: AudioInput,
     E: SpeechEngine,
     T: SpeechTransport,
+    O: AudioOutput,
     S: RuntimeEventSink,
 {
     pub fn new(
         audio: A,
         engine: E,
         transport: T,
+        output: O,
         sink: S,
         surface: impl Into<String>,
         runtime_instance_id: impl Into<String>,
@@ -861,6 +959,7 @@ where
             audio,
             engine,
             transport,
+            output,
             sink,
             leases: CaptureLeaseManager::new(),
             state: VoiceStateMachine::new(surface),
@@ -877,8 +976,14 @@ where
         self.leases.has_active()
     }
 
-    pub fn into_parts(self) -> (A, E, T, S) {
-        (self.audio, self.engine, self.transport, self.sink)
+    pub fn into_parts(self) -> (A, E, T, O, S) {
+        (
+            self.audio,
+            self.engine,
+            self.transport,
+            self.output,
+            self.sink,
+        )
     }
 
     pub async fn run_push_to_talk_turn(
@@ -1118,17 +1223,31 @@ where
         )?;
         let tts_request =
             BoundTtsSynthesisRequest::new(tts_request, response.text.clone(), tts_config)?;
-        let _audio = self
+        let audio = self
             .engine
             .synthesize_text(tts_request, &|| cancellation.is_cancelled())
             .await?;
         cancellation.check()?;
+        let playback_context = AudioPlaybackContext {
+            generation: lease.generation,
+            route_revision: lease.route_revision,
+            started_at: TimestampMicros(at.0.saturating_add(4)),
+        };
+        let receipt = self
+            .output
+            .play(playback_context, audio, &|| cancellation.is_cancelled())
+            .await?;
+        cancellation.check()?;
+        if receipt.generation != lease.generation || receipt.route_revision != lease.route_revision
+        {
+            return Err(VoiceCoreError::StaleGeneration);
+        }
         self.transition_emit(
             VoiceState::Idle,
             TransitionReason::PlaybackEnded,
             lease.generation,
             lease.route_revision,
-            TimestampMicros(at.0.saturating_add(4)),
+            receipt.completed_at,
         )
         .await?;
         Ok(response.text)
@@ -1177,6 +1296,10 @@ where
         if result.is_err() || cancellation.is_cancelled() {
             let _ = self.engine.cancel_generation(lease.generation.0).await;
             let _ = self.transport.cancel_session(lease.generation).await;
+            let _ = self
+                .output
+                .stop(lease.generation, TransitionReason::Cancel)
+                .await;
         }
 
         let stop_reason = if result.is_ok() {

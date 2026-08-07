@@ -6,12 +6,13 @@ pub mod model_store;
 
 use async_trait::async_trait;
 use aurora_voice_core::{
-    AssistantTurnRequest, AssistantTurnResponse, AudioInput, BoundFiniteSttRequest,
-    BoundTaskRequest, BoundTtsSynthesisRequest, CancellationToken, CaptureStartReason, EngineError,
-    FiniteSttAudio, FiniteSttResult, Generation, PcmFrame, RedactedSnapshot, ResourceReport,
-    RouteRevision, RuntimeEvent, RuntimeEventSink, SpeechEngine, SpeechTransport, TaskCapability,
-    TaskPackBinding, TaskProvider, TaskReadiness, TimestampMicros, TransitionReason,
-    VoiceCaptureLease, VoiceCoreError, VoiceTask,
+    AssistantTurnRequest, AssistantTurnResponse, AudioInput, AudioOutput, AudioPlaybackContext,
+    AudioPlaybackReceipt, BoundFiniteSttRequest, BoundTaskRequest, BoundTtsSynthesisRequest,
+    CancellationToken, CaptureStartReason, EngineError, FiniteSttAudio, FiniteSttResult,
+    Generation, PcmFrame, RedactedSnapshot, ResourceReport, RouteRevision, RuntimeEvent,
+    RuntimeEventSink, SpeechEngine, SpeechTransport, TaskCapability, TaskPackBinding, TaskProvider,
+    TaskReadiness, TimestampMicros, TransitionReason, TtsSynthesisResult, VoiceCaptureLease,
+    VoiceCoreError, VoiceTask,
 };
 use aurora_voice_engine::{
     select_verified_variant, verify_manifest, AbiRequirements, BrowserFeature, CapabilityFlags,
@@ -19,10 +20,12 @@ use aurora_voice_engine::{
     LicenseGrant, LicenseInfo, ManifestSignature, ModelPackError, ModelPackFile, ModelPackManifest,
     PackTask, ProcessingMetadata, Provenance, ResourceBudget, RuntimeGates, RuntimeSelection,
     RuntimeTarget, ShapeMetadata, SignatureVerifier, TargetArch, TargetOs, TrustPolicy,
-    TtsAudioChunk, TtsSynthesisResult, MONO_CHANNELS, VAD_SAMPLE_RATE_HZ,
+    TtsAudioChunk, MONO_CHANNELS, VAD_SAMPLE_RATE_HZ,
 };
+use std::cell::RefCell;
 use std::collections::{BTreeSet, VecDeque};
 use std::fmt;
+use std::rc::Rc;
 
 pub use model_store::*;
 
@@ -214,7 +217,7 @@ impl FakeClock {
 
 #[derive(Debug, Clone)]
 pub struct FakeAudioInput {
-    frames: VecDeque<PcmFrame>,
+    frames: Rc<RefCell<VecDeque<PcmFrame>>>,
     started: Vec<VoiceCaptureLease>,
     stopped: Vec<TransitionReason>,
     route_revision: RouteRevision,
@@ -225,7 +228,7 @@ pub struct FakeAudioInput {
 impl FakeAudioInput {
     pub fn new(frames: impl IntoIterator<Item = PcmFrame>) -> Self {
         Self {
-            frames: frames.into_iter().collect(),
+            frames: Rc::new(RefCell::new(frames.into_iter().collect())),
             started: Vec::new(),
             stopped: Vec::new(),
             route_revision: RouteRevision(1),
@@ -251,6 +254,10 @@ impl FakeAudioInput {
     pub fn stopped(&self) -> &[TransitionReason] {
         &self.stopped
     }
+
+    pub fn push_frame(&self, frame: PcmFrame) {
+        self.frames.borrow_mut().push_back(frame);
+    }
 }
 
 #[async_trait(?Send)]
@@ -273,7 +280,7 @@ impl AudioInput for FakeAudioInput {
         if self.fail_next_frame {
             return Err(VoiceCoreError::Backpressure);
         }
-        Ok(self.frames.pop_front())
+        Ok(self.frames.borrow_mut().pop_front())
     }
 
     fn current_route_revision(&self) -> RouteRevision {
@@ -291,6 +298,7 @@ pub struct FakeEngine {
     fail_transcribe: bool,
     fail_synthesize: bool,
     cancel_during_transcribe: Option<CancellationToken>,
+    synthesized_chunks: Option<Vec<Vec<i16>>>,
 }
 
 impl fmt::Debug for FakeEngine {
@@ -316,6 +324,13 @@ impl fmt::Debug for FakeEngine {
                 "cancel_during_transcribe",
                 &self.cancel_during_transcribe.is_some(),
             )
+            .field(
+                "synthesized_chunk_sample_counts",
+                &self
+                    .synthesized_chunks
+                    .as_ref()
+                    .map(|chunks| chunks.iter().map(Vec::len).collect::<Vec<_>>()),
+            )
             .finish()
     }
 }
@@ -336,6 +351,7 @@ impl FakeEngine {
             fail_transcribe: false,
             fail_synthesize: false,
             cancel_during_transcribe: None,
+            synthesized_chunks: None,
         }
     }
 
@@ -351,6 +367,11 @@ impl FakeEngine {
 
     pub fn with_transcribe_cancellation(mut self, cancellation: CancellationToken) -> Self {
         self.cancel_during_transcribe = Some(cancellation);
+        self
+    }
+
+    pub fn with_synthesized_chunks(mut self, chunks: Vec<Vec<i16>>) -> Self {
+        self.synthesized_chunks = Some(chunks);
         self
     }
 
@@ -451,28 +472,37 @@ impl SpeechEngine for FakeEngine {
             return Err(EngineError::InvalidRequest);
         }
         self.spoken.push(request.text().to_owned());
-        let samples = vec![
-            0;
-            request
-                .text()
-                .len()
-                .clamp(1, request.config().chunk_samples())
-        ];
-        let chunk = TtsAudioChunk::new(
-            &request,
-            1,
-            request.config().sample_rate_hz(),
-            MONO_CHANNELS,
-            samples,
-            true,
-        )?;
-        TtsSynthesisResult::new(&request, vec![chunk], false)
+        let chunk_samples = request.config().chunk_samples();
+        let mut samples = request.text().bytes().map(i16::from).collect::<Vec<_>>();
+        if samples.is_empty() {
+            samples.push(0);
+        }
+        let chunks = self
+            .synthesized_chunks
+            .clone()
+            .unwrap_or_else(|| vec![samples.into_iter().take(chunk_samples).collect()]);
+        let final_index = chunks.len().saturating_sub(1);
+        let chunks = chunks
+            .into_iter()
+            .enumerate()
+            .map(|(index, samples)| {
+                TtsAudioChunk::new(
+                    &request,
+                    index.saturating_add(1) as u64,
+                    request.config().sample_rate_hz(),
+                    MONO_CHANNELS,
+                    samples,
+                    index == final_index,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        TtsSynthesisResult::new(&request, chunks, false)
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct FakeTransport {
-    response_text: String,
+    response_texts: VecDeque<String>,
     invoked: Vec<AssistantTurnRequest>,
     cancelled: Vec<Generation>,
     fail_invoke: bool,
@@ -482,7 +512,7 @@ pub struct FakeTransport {
 impl FakeTransport {
     pub fn new(response_text: impl Into<String>) -> Self {
         Self {
-            response_text: response_text.into(),
+            response_texts: VecDeque::from([response_text.into()]),
             invoked: Vec::new(),
             cancelled: Vec::new(),
             fail_invoke: false,
@@ -497,6 +527,11 @@ impl FakeTransport {
 
     pub fn with_invoke_cancellation(mut self, cancellation: CancellationToken) -> Self {
         self.cancel_during_invoke = Some(cancellation);
+        self
+    }
+
+    pub fn with_response_sequence(mut self, responses: Vec<String>) -> Self {
+        self.response_texts = responses.into();
         self
     }
 
@@ -525,8 +560,13 @@ impl SpeechTransport for FakeTransport {
             return Err(VoiceCoreError::InvalidTransition);
         }
         self.invoked.push(request.clone());
+        let text = if self.response_texts.len() > 1 {
+            self.response_texts.pop_front().unwrap_or_default()
+        } else {
+            self.response_texts.front().cloned().unwrap_or_default()
+        };
         Ok(AssistantTurnResponse {
-            text: self.response_text.clone(),
+            text,
             session_id: Some(request.session_id),
             request_id: Some(request.request_id),
             correlation_id: Some(request.correlation_id),
@@ -535,6 +575,105 @@ impl SpeechTransport for FakeTransport {
 
     async fn cancel_session(&mut self, generation: Generation) -> Result<(), VoiceCoreError> {
         self.cancelled.push(generation);
+        Ok(())
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct FakeAudioOutput {
+    played: Vec<AudioPlaybackReceipt>,
+    played_samples: Vec<Vec<i16>>,
+    stopped: Vec<(Generation, TransitionReason)>,
+    fail_play: bool,
+    cancel_during_play: Option<CancellationToken>,
+}
+
+impl fmt::Debug for FakeAudioOutput {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("FakeAudioOutput")
+            .field("played", &self.played)
+            .field(
+                "played_sample_counts",
+                &self.played_samples.iter().map(Vec::len).collect::<Vec<_>>(),
+            )
+            .field("stopped", &self.stopped)
+            .field("fail_play", &self.fail_play)
+            .field("cancel_during_play", &self.cancel_during_play.is_some())
+            .finish()
+    }
+}
+
+impl FakeAudioOutput {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_play_failure(mut self) -> Self {
+        self.fail_play = true;
+        self
+    }
+
+    pub fn with_play_cancellation(mut self, cancellation: CancellationToken) -> Self {
+        self.cancel_during_play = Some(cancellation);
+        self
+    }
+
+    pub fn played(&self) -> &[AudioPlaybackReceipt] {
+        &self.played
+    }
+
+    pub fn played_samples(&self) -> &[Vec<i16>] {
+        &self.played_samples
+    }
+
+    pub fn stopped(&self) -> &[(Generation, TransitionReason)] {
+        &self.stopped
+    }
+}
+
+#[async_trait(?Send)]
+impl AudioOutput for FakeAudioOutput {
+    async fn play(
+        &mut self,
+        context: AudioPlaybackContext,
+        audio: TtsSynthesisResult,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<AudioPlaybackReceipt, VoiceCoreError> {
+        if cancellation() || audio.cancelled() {
+            return Err(VoiceCoreError::Cancelled);
+        }
+        if let Some(token) = &self.cancel_during_play {
+            token.cancel();
+        }
+        if cancellation() {
+            return Err(VoiceCoreError::Cancelled);
+        }
+        if self.fail_play {
+            return Err(VoiceCoreError::InvalidTransition);
+        }
+
+        let mut samples = Vec::new();
+        for chunk in audio.chunks() {
+            samples.extend_from_slice(chunk.samples());
+        }
+        let receipt = AudioPlaybackReceipt::new(
+            context,
+            audio.chunk_count(),
+            samples.len() as u64,
+            TimestampMicros(context.started_at.0.saturating_add(samples.len() as u64)),
+        );
+        self.played_samples.push(samples);
+        self.played.push(receipt);
+        Ok(receipt)
+    }
+
+    async fn stop(
+        &mut self,
+        generation: Generation,
+        reason: TransitionReason,
+    ) -> Result<(), VoiceCoreError> {
+        self.stopped.push((generation, reason));
         Ok(())
     }
 }
@@ -636,8 +775,17 @@ mod tests {
         let audio = FakeAudioInput::new(frames);
         let engine = FakeEngine::new("hello aurora");
         let transport = FakeTransport::new("answer ready");
+        let output = FakeAudioOutput::new();
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
 
         let response = runtime
             .run_push_to_talk_turn(
@@ -649,7 +797,7 @@ mod tests {
         assert_eq!(response, "answer ready");
         assert_eq!(runtime.state(), VoiceState::Idle);
 
-        let (audio, engine, transport, sink) = runtime.into_parts();
+        let (audio, engine, transport, output, sink) = runtime.into_parts();
         assert_eq!(audio.started().len(), 1);
         assert_eq!(audio.stopped(), &[TransitionReason::Stop]);
         assert_eq!(engine.spoken(), &["answer ready".to_owned()]);
@@ -673,7 +821,153 @@ mod tests {
             format!("voice-correlation-{}-1", namespace.as_str())
         );
         assert!(!transport.invoked()[0].stream);
+        assert_eq!(output.played().len(), 1);
+        assert_eq!(
+            output.played_samples(),
+            &[b"answer ready"
+                .iter()
+                .map(|sample| i16::from(*sample))
+                .collect::<Vec<_>>()]
+        );
+        assert!(output.stopped().is_empty());
+        let playback_index = sink.events().iter().position(|event| {
+            matches!(
+                event,
+                RuntimeEvent::State { transition }
+                    if transition.reason == TransitionReason::PlaybackEnded
+            )
+        });
+        assert_eq!(playback_index, Some(sink.events().len().saturating_sub(1)));
         assert!(sink.events().len() >= 7);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn synthesized_chunks_reach_output_in_order_before_completion(
+    ) -> Result<(), VoiceCoreError> {
+        let frames = vec![fake_frame(1, Generation(1))?];
+        let audio = FakeAudioInput::new(frames);
+        let engine = FakeEngine::new("ordered")
+            .with_synthesized_chunks(vec![vec![11; 1024], vec![22, 33, 44]]);
+        let transport = FakeTransport::new("ordered answer");
+        let output = FakeAudioOutput::new();
+        let sink = FakeEventSink::default();
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
+
+        let response = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(21),
+                CancellationToken::new(),
+            )
+            .await?;
+
+        assert_eq!(response, "ordered answer");
+        let (_audio, _engine, _transport, output, sink) = runtime.into_parts();
+        assert_eq!(output.played().len(), 1);
+        assert_eq!(output.played()[0].chunk_count, 2);
+        assert_eq!(output.played()[0].sample_count, 1027);
+        assert_eq!(output.played_samples()[0][0], 11);
+        assert_eq!(output.played_samples()[0][1023], 11);
+        assert_eq!(&output.played_samples()[0][1024..], &[22, 33, 44]);
+        assert!(sink.events().iter().any(|event| matches!(
+            event,
+            RuntimeEvent::State { transition }
+                if transition.reason == TransitionReason::PlaybackEnded
+                    && transition.to == VoiceState::Idle
+                    && transition.at == output.played()[0].completed_at
+        )));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn repeat_turn_synthesizes_new_audio_without_replaying_previous_output(
+    ) -> Result<(), VoiceCoreError> {
+        let audio = FakeAudioInput::new(vec![fake_frame_with_samples(
+            1,
+            Generation(1),
+            vec![0.1],
+            false,
+        )?]);
+        let audio_feed = audio.clone();
+        let engine = FakeEngine::new("repeat transcript");
+        let transport = FakeTransport::new("unused")
+            .with_response_sequence(vec!["first answer".to_owned(), "second answer".to_owned()]);
+        let output = FakeAudioOutput::new();
+        let sink = FakeEventSink::default();
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
+
+        let first = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(23),
+                CancellationToken::new(),
+            )
+            .await?;
+        audio_feed.push_frame(fake_frame_with_samples(2, Generation(2), vec![0.2], false)?);
+        let second = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(33),
+                CancellationToken::new(),
+            )
+            .await?;
+
+        assert_eq!(first, "first answer");
+        assert_eq!(second, "second answer");
+        let (_audio, engine, transport, output, sink) = runtime.into_parts();
+        assert_eq!(
+            engine.spoken(),
+            &["first answer".to_owned(), "second answer".to_owned()]
+        );
+        assert_eq!(transport.invoked().len(), 2);
+        assert_eq!(transport.invoked()[0].generation, Generation(1));
+        assert_eq!(transport.invoked()[1].generation, Generation(2));
+        assert_eq!(output.played().len(), 2);
+        assert_eq!(output.played()[0].generation, Generation(1));
+        assert_eq!(output.played()[1].generation, Generation(2));
+        assert_eq!(
+            output.played_samples()[0],
+            b"first answer"
+                .iter()
+                .map(|sample| i16::from(*sample))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            output.played_samples()[1],
+            b"second answer"
+                .iter()
+                .map(|sample| i16::from(*sample))
+                .collect::<Vec<_>>()
+        );
+        assert_ne!(output.played_samples()[0], output.played_samples()[1]);
+        assert_eq!(
+            sink.events()
+                .iter()
+                .filter(|event| matches!(
+                    event,
+                    RuntimeEvent::State { transition }
+                        if transition.reason == TransitionReason::PlaybackEnded
+                ))
+                .count(),
+            2
+        );
         Ok(())
     }
 
@@ -687,8 +981,17 @@ mod tests {
         let audio = FakeAudioInput::new(frames);
         let engine = FakeEngine::new("current only");
         let transport = FakeTransport::new("answer");
+        let output = FakeAudioOutput::new();
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
 
         let response = runtime
             .run_push_to_talk_turn(
@@ -699,8 +1002,9 @@ mod tests {
             .await?;
         assert_eq!(response, "answer");
 
-        let (_audio, engine, _transport, _sink) = runtime.into_parts();
+        let (_audio, engine, _transport, output, _sink) = runtime.into_parts();
         assert_eq!(engine.transcribed_audio(), &[vec![0.1, 0.2, -0.3]]);
+        assert_eq!(output.played().len(), 1);
         Ok(())
     }
 
@@ -713,8 +1017,17 @@ mod tests {
         let audio = FakeAudioInput::new(frames);
         let engine = FakeEngine::new("unused");
         let transport = FakeTransport::new("unused answer");
+        let output = FakeAudioOutput::new();
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
 
         let result = runtime
             .run_push_to_talk_turn(
@@ -725,9 +1038,10 @@ mod tests {
             .await;
         assert!(matches!(result, Err(VoiceCoreError::InvalidTransition)));
 
-        let (_audio, engine, transport, _sink) = runtime.into_parts();
+        let (_audio, engine, transport, output, _sink) = runtime.into_parts();
         assert!(engine.transcribed_audio().is_empty());
         assert!(transport.invoked().is_empty());
+        assert!(output.played().is_empty());
         Ok(())
     }
 
@@ -743,8 +1057,17 @@ mod tests {
         let audio = FakeAudioInput::new(frames);
         let engine = FakeEngine::new("unused");
         let transport = FakeTransport::new("unused answer");
+        let output = FakeAudioOutput::new();
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
 
         let result = runtime
             .run_push_to_talk_turn(
@@ -758,9 +1081,10 @@ mod tests {
             Err(VoiceCoreError::Engine(EngineError::InvalidRequest))
         ));
 
-        let (_audio, engine, transport, _sink) = runtime.into_parts();
+        let (_audio, engine, transport, output, _sink) = runtime.into_parts();
         assert!(engine.transcribed_audio().is_empty());
         assert!(transport.invoked().is_empty());
+        assert!(output.played().is_empty());
         Ok(())
     }
 
@@ -793,6 +1117,7 @@ mod tests {
                 audio,
                 engine,
                 transport,
+                FakeAudioOutput::new(),
                 sink,
                 "desktop",
                 runtime_instance_id,
@@ -805,7 +1130,7 @@ mod tests {
                     CancellationToken::new(),
                 )
                 .await?;
-            let (_audio, _engine, transport, sink) = runtime.into_parts();
+            let (_audio, _engine, transport, _output, sink) = runtime.into_parts();
             let request = transport.invoked()[0].clone();
             let surfaces = sink
                 .events()
@@ -837,8 +1162,10 @@ mod tests {
         let audio = FakeAudioInput::new(frames);
         let engine = FakeEngine::new("wake phrase");
         let transport = FakeTransport::new("wake answer");
+        let output = FakeAudioOutput::new();
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "web-test")?;
+        let mut runtime =
+            VoiceRuntime::new(audio, engine, transport, output, sink, "test", "web-test")?;
 
         let response = runtime
             .run_wake_turn(
@@ -849,7 +1176,7 @@ mod tests {
             .await?;
         assert_eq!(response, "wake answer");
         assert_eq!(runtime.state(), VoiceState::Idle);
-        let (_audio, _engine, _transport, sink) = runtime.into_parts();
+        let (_audio, _engine, _transport, _output, sink) = runtime.into_parts();
         assert!(sink.events().iter().any(|event| matches!(
             event,
             RuntimeEvent::State { transition }
@@ -873,8 +1200,17 @@ mod tests {
         let audio = FakeAudioInput::new(frames);
         let engine = FakeEngine::new("cancel me");
         let transport = FakeTransport::new("unused");
+        let output = FakeAudioOutput::new();
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
         let cancellation = CancellationToken::new();
         cancellation.cancel();
 
@@ -889,11 +1225,16 @@ mod tests {
         assert_eq!(runtime.state(), VoiceState::Disabled);
         assert!(!runtime.has_active_capture());
 
-        let (audio, engine, transport, _sink) = runtime.into_parts();
+        let (audio, engine, transport, output, _sink) = runtime.into_parts();
         assert_eq!(audio.stopped(), &[]);
         assert_eq!(engine.cancelled(), &[1]);
         assert!(engine.transcribed_audio().is_empty());
         assert_eq!(transport.cancelled(), &[Generation(1)]);
+        assert!(output.played().is_empty());
+        assert_eq!(
+            output.stopped(),
+            &[(Generation(1), TransitionReason::Cancel)]
+        );
         Ok(())
     }
 
@@ -903,8 +1244,17 @@ mod tests {
         let audio = FakeAudioInput::new(frames).with_start_failure();
         let engine = FakeEngine::new("first");
         let transport = FakeTransport::new("first answer");
+        let output = FakeAudioOutput::new();
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
 
         let result = runtime
             .run_push_to_talk_turn(
@@ -917,10 +1267,15 @@ mod tests {
         assert_eq!(runtime.state(), VoiceState::Disabled);
         assert!(!runtime.has_active_capture());
 
-        let (audio, engine, transport, _sink) = runtime.into_parts();
+        let (audio, engine, transport, output, _sink) = runtime.into_parts();
         assert_eq!(audio.stopped(), &[]);
         assert_eq!(engine.cancelled(), &[1]);
         assert_eq!(transport.cancelled(), &[Generation(1)]);
+        assert!(output.played().is_empty());
+        assert_eq!(
+            output.stopped(),
+            &[(Generation(1), TransitionReason::Cancel)]
+        );
         Ok(())
     }
 
@@ -931,8 +1286,17 @@ mod tests {
         let audio = FakeAudioInput::new(frames).with_next_frame_failure();
         let engine = FakeEngine::new("first");
         let transport = FakeTransport::new("first answer");
+        let output = FakeAudioOutput::new();
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
 
         let result = runtime
             .run_push_to_talk_turn(
@@ -945,9 +1309,14 @@ mod tests {
         assert_eq!(runtime.state(), VoiceState::Idle);
         assert!(!runtime.has_active_capture());
 
-        let (_audio, engine, transport, _sink) = runtime.into_parts();
+        let (_audio, engine, transport, output, _sink) = runtime.into_parts();
         assert_eq!(engine.cancelled(), &[1]);
         assert_eq!(transport.cancelled(), &[Generation(1)]);
+        assert!(output.played().is_empty());
+        assert_eq!(
+            output.stopped(),
+            &[(Generation(1), TransitionReason::Cancel)]
+        );
         Ok(())
     }
 
@@ -957,8 +1326,17 @@ mod tests {
         let audio = FakeAudioInput::new(frames);
         let engine = FakeEngine::new("first").with_transcribe_failure();
         let transport = FakeTransport::new("first answer");
+        let output = FakeAudioOutput::new();
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
 
         let result = runtime
             .run_push_to_talk_turn(
@@ -974,11 +1352,16 @@ mod tests {
         assert_eq!(runtime.state(), VoiceState::Idle);
         assert!(!runtime.has_active_capture());
 
-        let (audio, engine, transport, _sink) = runtime.into_parts();
+        let (audio, engine, transport, output, _sink) = runtime.into_parts();
         assert_eq!(audio.stopped(), &[TransitionReason::Cancel]);
         assert_eq!(engine.cancelled(), &[1]);
         assert!(engine.transcribed_audio().is_empty());
         assert_eq!(transport.cancelled(), &[Generation(1)]);
+        assert!(output.played().is_empty());
+        assert_eq!(
+            output.stopped(),
+            &[(Generation(1), TransitionReason::Cancel)]
+        );
         Ok(())
     }
 
@@ -989,8 +1372,17 @@ mod tests {
         let cancellation = CancellationToken::new();
         let engine = FakeEngine::new("first").with_transcribe_cancellation(cancellation.clone());
         let transport = FakeTransport::new("first answer");
+        let output = FakeAudioOutput::new();
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
 
         let result = runtime
             .run_push_to_talk_turn(
@@ -1006,11 +1398,16 @@ mod tests {
         assert_eq!(runtime.state(), VoiceState::Idle);
         assert!(!runtime.has_active_capture());
 
-        let (audio, engine, transport, _sink) = runtime.into_parts();
+        let (audio, engine, transport, output, _sink) = runtime.into_parts();
         assert_eq!(audio.stopped(), &[TransitionReason::Cancel]);
         assert_eq!(engine.cancelled(), &[1]);
         assert!(engine.transcribed_audio().is_empty());
         assert_eq!(transport.cancelled(), &[Generation(1)]);
+        assert!(output.played().is_empty());
+        assert_eq!(
+            output.stopped(),
+            &[(Generation(1), TransitionReason::Cancel)]
+        );
         Ok(())
     }
 
@@ -1021,8 +1418,17 @@ mod tests {
         let audio = FakeAudioInput::new(frames);
         let engine = FakeEngine::new("first");
         let transport = FakeTransport::new("first answer").with_invoke_failure();
+        let output = FakeAudioOutput::new();
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
 
         let result = runtime
             .run_push_to_talk_turn(
@@ -1035,10 +1441,15 @@ mod tests {
         assert_eq!(runtime.state(), VoiceState::Idle);
         assert!(!runtime.has_active_capture());
 
-        let (audio, engine, transport, _sink) = runtime.into_parts();
+        let (audio, engine, transport, output, _sink) = runtime.into_parts();
         assert_eq!(audio.stopped(), &[TransitionReason::Cancel]);
         assert_eq!(engine.cancelled(), &[1]);
         assert_eq!(transport.cancelled(), &[Generation(1)]);
+        assert!(output.played().is_empty());
+        assert_eq!(
+            output.stopped(),
+            &[(Generation(1), TransitionReason::Cancel)]
+        );
         Ok(())
     }
 
@@ -1050,8 +1461,17 @@ mod tests {
         let engine = FakeEngine::new("first");
         let transport =
             FakeTransport::new("first answer").with_invoke_cancellation(cancellation.clone());
+        let output = FakeAudioOutput::new();
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
 
         let result = runtime
             .run_push_to_talk_turn(
@@ -1064,10 +1484,110 @@ mod tests {
         assert_eq!(runtime.state(), VoiceState::Idle);
         assert!(!runtime.has_active_capture());
 
-        let (audio, engine, transport, _sink) = runtime.into_parts();
+        let (audio, engine, transport, output, _sink) = runtime.into_parts();
         assert_eq!(audio.stopped(), &[TransitionReason::Cancel]);
         assert_eq!(engine.cancelled(), &[1]);
         assert_eq!(transport.cancelled(), &[Generation(1)]);
+        assert!(output.played().is_empty());
+        assert_eq!(
+            output.stopped(),
+            &[(Generation(1), TransitionReason::Cancel)]
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn output_failure_does_not_emit_playback_completion_or_replay_stale_audio(
+    ) -> Result<(), VoiceCoreError> {
+        let frames = vec![fake_frame(1, Generation(1))?];
+        let audio = FakeAudioInput::new(frames);
+        let engine = FakeEngine::new("first");
+        let transport = FakeTransport::new("first answer");
+        let output = FakeAudioOutput::new().with_play_failure();
+        let sink = FakeEventSink::default();
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
+
+        let result = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(77),
+                CancellationToken::new(),
+            )
+            .await;
+        assert!(matches!(result, Err(VoiceCoreError::InvalidTransition)));
+        assert_eq!(runtime.state(), VoiceState::Idle);
+        assert!(!runtime.has_active_capture());
+
+        let (audio, engine, transport, output, sink) = runtime.into_parts();
+        assert_eq!(audio.stopped(), &[TransitionReason::Cancel]);
+        assert_eq!(engine.spoken(), &["first answer".to_owned()]);
+        assert_eq!(engine.cancelled(), &[1]);
+        assert_eq!(transport.cancelled(), &[Generation(1)]);
+        assert!(output.played().is_empty());
+        assert_eq!(
+            output.stopped(),
+            &[(Generation(1), TransitionReason::Cancel)]
+        );
+        assert!(!sink.events().iter().any(|event| matches!(
+            event,
+            RuntimeEvent::State { transition }
+                if transition.reason == TransitionReason::PlaybackEnded
+        )));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn output_cancellation_stops_without_playback_completion() -> Result<(), VoiceCoreError> {
+        let frames = vec![fake_frame(1, Generation(1))?];
+        let audio = FakeAudioInput::new(frames);
+        let cancellation = CancellationToken::new();
+        let engine = FakeEngine::new("first");
+        let transport = FakeTransport::new("first answer");
+        let output = FakeAudioOutput::new().with_play_cancellation(cancellation.clone());
+        let sink = FakeEventSink::default();
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
+
+        let result = runtime
+            .run_push_to_talk_turn(
+                fake_lease(CaptureStartReason::PushToTalk),
+                TimestampMicros(78),
+                cancellation,
+            )
+            .await;
+        assert!(matches!(result, Err(VoiceCoreError::Cancelled)));
+        assert_eq!(runtime.state(), VoiceState::Idle);
+        assert!(!runtime.has_active_capture());
+
+        let (audio, engine, transport, output, sink) = runtime.into_parts();
+        assert_eq!(audio.stopped(), &[TransitionReason::Cancel]);
+        assert_eq!(engine.cancelled(), &[1]);
+        assert_eq!(transport.cancelled(), &[Generation(1)]);
+        assert!(output.played().is_empty());
+        assert_eq!(
+            output.stopped(),
+            &[(Generation(1), TransitionReason::Cancel)]
+        );
+        assert!(!sink.events().iter().any(|event| matches!(
+            event,
+            RuntimeEvent::State { transition }
+                if transition.reason == TransitionReason::PlaybackEnded
+        )));
         Ok(())
     }
 
@@ -1077,8 +1597,17 @@ mod tests {
         let audio = FakeAudioInput::new(frames);
         let engine = FakeEngine::new("first");
         let transport = FakeTransport::new("first answer");
+        let output = FakeAudioOutput::new();
         let sink = FakeEventSink::with_event_failure_after(1);
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "native-test",
+        )?;
 
         let result = runtime
             .run_wake_turn(
@@ -1091,10 +1620,15 @@ mod tests {
         assert_eq!(runtime.state(), VoiceState::Idle);
         assert!(!runtime.has_active_capture());
 
-        let (audio, engine, transport, sink) = runtime.into_parts();
+        let (audio, engine, transport, output, sink) = runtime.into_parts();
         assert_eq!(audio.stopped(), &[TransitionReason::Cancel]);
         assert_eq!(engine.cancelled(), &[1]);
         assert_eq!(transport.cancelled(), &[Generation(1)]);
+        assert!(output.played().is_empty());
+        assert_eq!(
+            output.stopped(),
+            &[(Generation(1), TransitionReason::Cancel)]
+        );
         assert_eq!(sink.events().len(), 1);
         Ok(())
     }
