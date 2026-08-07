@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 use aurora_voice_engine::{
-    apply_lifecycle_event, create_lifecycle_snapshot, file_storage_key, ActivePackIdentity,
-    DownloadTask, ImmutableModelFile, InstallEvent, InstallState, LifecycleSnapshot,
-    ModelPackError, ModelPackFile, ModelStore, SelectedVariant, StoreStatus, StoredFile,
-    VerifiedManifest,
+    apply_lifecycle_event, create_lifecycle_snapshot, file_storage_key, scope_matches_manifest,
+    ActivePackIdentity, DownloadTask, ImmutableModelFile, InstallEvent, InstallState,
+    LifecycleSnapshot, ModelPackError, ModelPackFile, ModelStore, ModelStoreScope, SelectedVariant,
+    StoreStatus, StoredFile, VerifiedManifest,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -20,8 +20,8 @@ pub struct InMemoryModelStore {
     files: BTreeMap<String, StoredFile>,
     reservations: BTreeMap<String, Reservation>,
     lifecycles: BTreeMap<(String, String, String), LifecycleSnapshot>,
-    active: Option<ActivePackIdentity>,
-    rollback: Option<ActivePackIdentity>,
+    active: BTreeMap<ModelStoreScope, ActivePackIdentity>,
+    rollback: BTreeMap<ModelStoreScope, ActivePackIdentity>,
     corrupted: BTreeSet<String>,
     revoked: BTreeSet<String>,
     fail_next_persist: bool,
@@ -36,8 +36,8 @@ impl InMemoryModelStore {
             files: BTreeMap::new(),
             reservations: BTreeMap::new(),
             lifecycles: BTreeMap::new(),
-            active: None,
-            rollback: None,
+            active: BTreeMap::new(),
+            rollback: BTreeMap::new(),
             corrupted: BTreeSet::new(),
             revoked: BTreeSet::new(),
             fail_next_persist: false,
@@ -54,28 +54,20 @@ impl InMemoryModelStore {
 
     pub fn mark_corrupt(&mut self, pack_id: &str) {
         self.corrupted.insert(pack_id.to_owned());
-        if self
-            .active
-            .as_ref()
-            .is_some_and(|active| active.pack_id == pack_id)
-        {
-            self.active = None;
-        }
+        self.active.retain(|_, active| active.pack_id != pack_id);
+        self.rollback
+            .retain(|_, rollback| rollback.pack_id != pack_id);
     }
 
     pub fn revoke_pack(&mut self, pack_id: &str) {
         self.revoked.insert(pack_id.to_owned());
-        if self
-            .active
-            .as_ref()
-            .is_some_and(|active| active.pack_id == pack_id)
-        {
-            self.active = None;
-        }
+        self.active.retain(|_, active| active.pack_id != pack_id);
+        self.rollback
+            .retain(|_, rollback| rollback.pack_id != pack_id);
     }
 
-    pub fn rollback_identity(&self) -> Option<&ActivePackIdentity> {
-        self.rollback.as_ref()
+    pub fn rollback_identity(&self, scope: &ModelStoreScope) -> Option<&ActivePackIdentity> {
+        self.rollback.get(scope)
     }
 
     fn used_bytes(&self) -> u64 {
@@ -134,6 +126,46 @@ impl InMemoryModelStore {
             return Err(ModelPackError::Store { code: "revoked" });
         }
         Ok(())
+    }
+
+    fn identity(
+        scope: ModelStoreScope,
+        pack_id: impl Into<String>,
+        pack_version: impl Into<String>,
+        variant_id: impl Into<String>,
+    ) -> ActivePackIdentity {
+        ActivePackIdentity {
+            scope,
+            pack_id: pack_id.into(),
+            pack_version: pack_version.into(),
+            variant_id: variant_id.into(),
+        }
+    }
+
+    fn same_selection(left: &ActivePackIdentity, right: &ActivePackIdentity) -> bool {
+        left.pack_id == right.pack_id
+            && left.pack_version == right.pack_version
+            && left.variant_id == right.variant_id
+    }
+
+    fn active_ref_count_after(
+        active: &BTreeMap<ModelStoreScope, ActivePackIdentity>,
+        identity: &ActivePackIdentity,
+    ) -> usize {
+        active
+            .values()
+            .filter(|candidate| Self::same_selection(candidate, identity))
+            .count()
+    }
+
+    fn lifecycle_for_identity(&self, identity: &ActivePackIdentity) -> Option<LifecycleSnapshot> {
+        self.lifecycles
+            .get(&Self::lifecycle_key(
+                &identity.pack_id,
+                &identity.pack_version,
+                &identity.variant_id,
+            ))
+            .cloned()
     }
 }
 
@@ -255,12 +287,14 @@ impl ModelStore for InMemoryModelStore {
 
     async fn activate_pack(
         &mut self,
+        scope: ModelStoreScope,
         manifest: &VerifiedManifest,
         selection: &SelectedVariant,
     ) -> Result<LifecycleSnapshot, ModelPackError> {
         if !selection.belongs_to(manifest) {
             return Err(ModelPackError::Store { code: "selection" });
         }
+        scope_matches_manifest(&scope, manifest)?;
         self.require_not_withdrawn(&manifest.manifest().pack_id)?;
         for file in manifest
             .manifest()
@@ -305,28 +339,33 @@ impl ModelStore for InMemoryModelStore {
             return Err(ModelPackError::Store { code: "not_ready" });
         }
 
+        let requested_identity = Self::identity(
+            scope.clone(),
+            manifest.manifest().pack_id.clone(),
+            manifest.manifest().pack_version.clone(),
+            selection.variant_id().to_owned(),
+        );
+        let previous_active_for_scope = self.active.get(&scope).cloned();
         let previous_active = self.active.clone();
         let previous_lifecycles = self.lifecycles.clone();
         let previous_rollback = self.rollback.clone();
         self.maybe_fail_persist()?;
 
-        if let Some(active) = &previous_active {
-            if active.pack_id != manifest.manifest().pack_id
-                || active.pack_version != manifest.manifest().pack_version
-                || active.variant_id != selection.variant_id()
+        if let Some(active) = &previous_active_for_scope {
+            if !Self::same_selection(active, &requested_identity) {
+                self.rollback.insert(scope.clone(), active.clone());
+            }
+        }
+        self.active
+            .insert(scope.clone(), requested_identity.clone());
+
+        if let Some(previous) = previous_active_for_scope.as_ref() {
+            if !Self::same_selection(previous, &requested_identity)
+                && Self::active_ref_count_after(&self.active, previous) == 0
             {
-                self.rollback = Some(active.clone());
-                if let Some(previous) = self
-                    .lifecycles
-                    .get(&Self::lifecycle_key(
-                        &active.pack_id,
-                        &active.pack_version,
-                        &active.variant_id,
-                    ))
-                    .cloned()
-                {
+                if let Some(snapshot) = self.lifecycle_for_identity(previous) {
                     let deactivated =
-                        apply_lifecycle_event(&previous, InstallEvent::Deactivate, self.now, None)?;
+                        apply_lifecycle_event(&snapshot, InstallEvent::Deactivate, self.now, None)?;
                     self.lifecycles.insert(
                         Self::lifecycle_key(
                             &deactivated.pack_id,
@@ -344,13 +383,7 @@ impl ModelStore for InMemoryModelStore {
         } else {
             apply_lifecycle_event(&current, InstallEvent::Activate, self.now, None)?
         };
-        let identity = ActivePackIdentity {
-            pack_id: active.pack_id.clone(),
-            pack_version: active.pack_version.clone(),
-            variant_id: selection.variant_id().to_owned(),
-        };
         self.lifecycles.insert(current_key, active.clone());
-        self.active = Some(identity);
         if self.fail_next_persist {
             self.lifecycles = previous_lifecycles;
             self.active = previous_active;
@@ -363,29 +396,16 @@ impl ModelStore for InMemoryModelStore {
         Ok(active)
     }
 
-    async fn rollback_active(&mut self) -> Result<Option<LifecycleSnapshot>, ModelPackError> {
-        let Some(rollback) = self.rollback.clone() else {
+    async fn rollback_active(
+        &mut self,
+        scope: ModelStoreScope,
+    ) -> Result<Option<LifecycleSnapshot>, ModelPackError> {
+        let Some(rollback) = self.rollback.get(&scope).cloned() else {
             return Ok(None);
         };
         self.require_not_withdrawn(&rollback.pack_id)?;
-        self.maybe_fail_persist()?;
-        if let Some(active) = self.active.clone() {
-            if let Some(snapshot) = self
-                .lifecycles
-                .get(&Self::lifecycle_key(
-                    &active.pack_id,
-                    &active.pack_version,
-                    &active.variant_id,
-                ))
-                .cloned()
-            {
-                let ready =
-                    apply_lifecycle_event(&snapshot, InstallEvent::Deactivate, self.now, None)?;
-                self.lifecycles.insert(
-                    Self::lifecycle_key(&ready.pack_id, &ready.pack_version, &ready.variant_id),
-                    ready,
-                );
-            }
+        if rollback.scope != scope {
+            return Err(ModelPackError::Store { code: "scope" });
         }
         let snapshot = self
             .lifecycles
@@ -396,17 +416,50 @@ impl ModelStore for InMemoryModelStore {
             ))
             .cloned()
             .ok_or(ModelPackError::Store { code: "rollback" })?;
-        let active = apply_lifecycle_event(&snapshot, InstallEvent::Activate, self.now, None)?;
+        if snapshot.state != InstallState::Ready && snapshot.state != InstallState::Active {
+            return Err(ModelPackError::Store { code: "rollback" });
+        }
+        let previous_active = self.active.clone();
+        let previous_lifecycles = self.lifecycles.clone();
+        let previous_rollback = self.rollback.clone();
+        self.maybe_fail_persist()?;
+
+        let current_active = self.active.get(&scope).cloned();
+        self.active.insert(scope.clone(), rollback.clone());
+        self.rollback.remove(&scope);
+
+        if let Some(active) = current_active {
+            if !Self::same_selection(&active, &rollback)
+                && Self::active_ref_count_after(&self.active, &active) == 0
+            {
+                if let Some(snapshot) = self.lifecycle_for_identity(&active) {
+                    let ready =
+                        apply_lifecycle_event(&snapshot, InstallEvent::Deactivate, self.now, None)?;
+                    self.lifecycles.insert(
+                        Self::lifecycle_key(&ready.pack_id, &ready.pack_version, &ready.variant_id),
+                        ready,
+                    );
+                }
+            }
+        }
+        let active = if snapshot.state == InstallState::Active {
+            snapshot
+        } else {
+            apply_lifecycle_event(&snapshot, InstallEvent::Activate, self.now, None)?
+        };
         self.lifecycles.insert(
             Self::lifecycle_key(&active.pack_id, &active.pack_version, &active.variant_id),
             active.clone(),
         );
-        self.active = Some(ActivePackIdentity {
-            pack_id: active.pack_id.clone(),
-            pack_version: active.pack_version.clone(),
-            variant_id: rollback.variant_id,
-        });
-        self.rollback = None;
+        if self.fail_next_persist {
+            self.lifecycles = previous_lifecycles;
+            self.active = previous_active;
+            self.rollback = previous_rollback;
+            self.fail_next_persist = false;
+            return Err(ModelPackError::Store {
+                code: "persistence",
+            });
+        }
         Ok(Some(active))
     }
 
@@ -417,25 +470,17 @@ impl ModelStore for InMemoryModelStore {
             .retain(|_, reservation| reservation.task.pack_id != pack_id);
         self.lifecycles
             .retain(|(id, _, _), _snapshot| id.as_str() != pack_id);
-        if self
-            .active
-            .as_ref()
-            .is_some_and(|active| active.pack_id == pack_id)
-        {
-            self.active = None;
-        }
-        if self
-            .rollback
-            .as_ref()
-            .is_some_and(|rollback| rollback.pack_id == pack_id)
-        {
-            self.rollback = None;
-        }
+        self.active.retain(|_, active| active.pack_id != pack_id);
+        self.rollback
+            .retain(|_, rollback| rollback.pack_id != pack_id);
         Ok(())
     }
 
-    async fn active_pack(&self) -> Result<Option<ActivePackIdentity>, ModelPackError> {
-        Ok(self.active.clone())
+    async fn active_pack(
+        &self,
+        scope: ModelStoreScope,
+    ) -> Result<Option<ActivePackIdentity>, ModelPackError> {
+        Ok(self.active.get(&scope).cloned())
     }
 
     async fn open_immutable_file(
@@ -570,11 +615,15 @@ mod tests {
         }
     }
 
-    fn model_file(file_id: &str, hash: &str, size: u64) -> ModelPackFile {
+    fn scope(task: PackTask) -> ModelStoreScope {
+        ModelStoreScope::default_for_task(task)
+    }
+
+    fn model_file_for(file_id: &str, task: PackTask, hash: &str, size: u64) -> ModelPackFile {
         ModelPackFile {
             file_id: file_id.to_owned(),
             asset_id: file_id.to_owned(),
-            task: PackTask::Stt,
+            task,
             byte_size: size,
             sha256: hash.to_owned(),
             url: format!("/models/{file_id}"),
@@ -588,6 +637,10 @@ mod tests {
             raven: None,
             revocation: None,
         }
+    }
+
+    fn model_file(file_id: &str, hash: &str, size: u64) -> ModelPackFile {
+        model_file_for(file_id, PackTask::Stt, hash, size)
     }
 
     fn variant(
@@ -639,12 +692,22 @@ mod tests {
     }
 
     fn manifest(id: &str, version: &str, hash: &str, size: u64) -> ModelPackManifest {
+        manifest_for_task(id, version, PackTask::Stt, hash, size)
+    }
+
+    fn manifest_for_task(
+        id: &str,
+        version: &str,
+        task: PackTask,
+        hash: &str,
+        size: u64,
+    ) -> ModelPackManifest {
         ModelPackManifest {
             schema_version: 1,
             pack_id: id.to_owned(),
             pack_version: version.to_owned(),
             display_name: "Pack".to_owned(),
-            tasks: vec![PackTask::Stt],
+            tasks: vec![task],
             license: license(),
             languages: vec![LanguageSupport {
                 language: "en".to_owned(),
@@ -657,7 +720,7 @@ mod tests {
                 cancellation: true,
             },
             provenance: provenance(),
-            files: vec![model_file("model", hash, size)],
+            files: vec![model_file_for("model", task, hash, size)],
             variants: vec![variant(
                 "linux",
                 RuntimeTarget::Desktop,
@@ -678,8 +741,18 @@ mod tests {
     }
 
     fn verified(id: &str, version: &str, hash: &str, size: u64) -> VerifiedManifest {
+        verified_for_task(id, version, PackTask::Stt, hash, size)
+    }
+
+    fn verified_for_task(
+        id: &str,
+        version: &str,
+        task: PackTask,
+        hash: &str,
+        size: u64,
+    ) -> VerifiedManifest {
         let result = verify_manifest(
-            manifest(id, version, hash, size),
+            manifest_for_task(id, version, task, hash, size),
             &TrustPolicy::default(),
             Some(&AcceptingVerifier),
         );
@@ -689,17 +762,23 @@ mod tests {
         }
     }
 
-    async fn install_ready(
+    async fn install_selection_ready(
         store: &mut InMemoryModelStore,
         manifest: &VerifiedManifest,
+        selection: &SelectedVariant,
     ) -> Result<(), ModelPackError> {
-        let selection = selection_for(manifest);
-        let file = &manifest.manifest().files[0];
-        let task = store.reserve_file(manifest, &selection, file).await?;
-        assert!(store.resume_metadata(&task.storage_key).await?.is_some());
-        store
-            .promote_file(&task.storage_key, &file.sha256, file.byte_size)
-            .await?;
+        for file in manifest
+            .manifest()
+            .files
+            .iter()
+            .filter(|file| selection.file_ids().contains(&file.file_id))
+        {
+            let task = store.reserve_file(manifest, selection, file).await?;
+            assert!(store.resume_metadata(&task.storage_key).await?.is_some());
+            store
+                .promote_file(&task.storage_key, &file.sha256, file.byte_size)
+                .await?;
+        }
         store
             .set_lifecycle(create_lifecycle_snapshot(
                 manifest.manifest().pack_id.clone(),
@@ -709,6 +788,14 @@ mod tests {
                 InstallState::Ready,
             ))
             .await
+    }
+
+    async fn install_ready(
+        store: &mut InMemoryModelStore,
+        manifest: &VerifiedManifest,
+    ) -> Result<(), ModelPackError> {
+        let selection = selection_for(manifest);
+        install_selection_ready(store, manifest, &selection).await
     }
 
     #[tokio::test]
@@ -757,29 +844,42 @@ mod tests {
         let mut store = InMemoryModelStore::new(Some(100));
         install_ready(&mut store, &first).await?;
         install_ready(&mut store, &second).await?;
-        store.activate_pack(&first, &first_selection).await?;
+        store
+            .activate_pack(scope(PackTask::Stt), &first, &first_selection)
+            .await?;
         assert_eq!(
-            store.active_pack().await?.map(|active| active.pack_id),
+            store
+                .active_pack(scope(PackTask::Stt))
+                .await?
+                .map(|active| active.pack_id),
             Some("pack-a".to_owned())
         );
-        store.activate_pack(&second, &second_selection).await?;
+        store
+            .activate_pack(scope(PackTask::Stt), &second, &second_selection)
+            .await?;
         assert_eq!(
-            store.active_pack().await?.map(|active| active.pack_id),
+            store
+                .active_pack(scope(PackTask::Stt))
+                .await?
+                .map(|active| active.pack_id),
             Some("pack-b".to_owned())
         );
         assert_eq!(
             store
-                .rollback_identity()
+                .rollback_identity(&scope(PackTask::Stt))
                 .map(|identity| identity.pack_id.as_str()),
             Some("pack-a")
         );
-        let rolled_back = store.rollback_active().await?;
+        let rolled_back = store.rollback_active(scope(PackTask::Stt)).await?;
         assert_eq!(
             rolled_back.map(|snapshot| snapshot.pack_id),
             Some("pack-a".to_owned())
         );
         assert_eq!(
-            store.active_pack().await?.map(|active| active.pack_id),
+            store
+                .active_pack(scope(PackTask::Stt))
+                .await?
+                .map(|active| active.pack_id),
             Some("pack-a".to_owned())
         );
         Ok(())
@@ -795,16 +895,23 @@ mod tests {
         let mut store = InMemoryModelStore::new(Some(100));
         install_ready(&mut store, &first).await?;
         install_ready(&mut store, &second).await?;
-        store.activate_pack(&first, &first_selection).await?;
+        store
+            .activate_pack(scope(PackTask::Stt), &first, &first_selection)
+            .await?;
         store.inject_persistence_failure();
         assert_eq!(
-            store.activate_pack(&second, &second_selection).await,
+            store
+                .activate_pack(scope(PackTask::Stt), &second, &second_selection)
+                .await,
             Err(ModelPackError::Store {
                 code: "persistence"
             })
         );
         assert_eq!(
-            store.active_pack().await?.map(|active| active.pack_id),
+            store
+                .active_pack(scope(PackTask::Stt))
+                .await?
+                .map(|active| active.pack_id),
             Some("pack-a".to_owned())
         );
         Ok(())
@@ -817,9 +924,11 @@ mod tests {
         let selection = selection_for(&manifest);
         let mut store = InMemoryModelStore::new(Some(100));
         install_ready(&mut store, &manifest).await?;
-        store.activate_pack(&manifest, &selection).await?;
+        store
+            .activate_pack(scope(PackTask::Stt), &manifest, &selection)
+            .await?;
         store.mark_corrupt("pack");
-        assert!(store.active_pack().await?.is_none());
+        assert!(store.active_pack(scope(PackTask::Stt)).await?.is_none());
         assert_eq!(
             store.open_immutable_file(&selection, "model").await,
             Err(ModelPackError::Store { code: "corrupt" })
@@ -829,7 +938,9 @@ mod tests {
         install_ready(&mut store, &other).await?;
         store.revoke_pack("other");
         assert_eq!(
-            store.activate_pack(&other, &other_selection).await,
+            store
+                .activate_pack(scope(PackTask::Stt), &other, &other_selection)
+                .await,
             Err(ModelPackError::Store { code: "revoked" })
         );
         Ok(())
@@ -903,7 +1014,9 @@ mod tests {
                 InstallState::Ready,
             ))
             .await?;
-        store.activate_pack(&verified, &desktop_selection).await?;
+        store
+            .activate_pack(scope(PackTask::Stt), &verified, &desktop_selection)
+            .await?;
 
         assert_eq!(
             store
@@ -982,15 +1095,22 @@ mod tests {
                 .await?;
         }
 
-        store.activate_pack(&verified, &desktop_selection).await?;
-        store.activate_pack(&verified, &android_selection).await?;
+        store
+            .activate_pack(scope(PackTask::Stt), &verified, &desktop_selection)
+            .await?;
+        store
+            .activate_pack(scope(PackTask::Stt), &verified, &android_selection)
+            .await?;
         assert_eq!(
-            store.active_pack().await?.map(|active| active.variant_id),
+            store
+                .active_pack(scope(PackTask::Stt))
+                .await?
+                .map(|active| active.variant_id),
             Some("android".to_owned())
         );
         assert_eq!(
             store
-                .rollback_identity()
+                .rollback_identity(&scope(PackTask::Stt))
                 .map(|identity| identity.variant_id.as_str()),
             Some("linux")
         );
@@ -1006,13 +1126,16 @@ mod tests {
                 .await,
             Err(ModelPackError::Store { code: "selection" })
         );
-        let rolled_back = store.rollback_active().await?;
+        let rolled_back = store.rollback_active(scope(PackTask::Stt)).await?;
         assert_eq!(
             rolled_back.map(|snapshot| snapshot.variant_id),
             Some("linux".to_owned())
         );
         assert_eq!(
-            store.active_pack().await?.map(|active| active.variant_id),
+            store
+                .active_pack(scope(PackTask::Stt))
+                .await?
+                .map(|active| active.variant_id),
             Some("linux".to_owned())
         );
         assert_eq!(
@@ -1028,6 +1151,212 @@ mod tests {
                 .await?
                 .map(|s| s.state),
             Some(InstallState::Active)
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn logical_task_scopes_are_active_concurrently_and_rollback_independently(
+    ) -> Result<(), ModelPackError> {
+        let kws = verified_for_task("kws-pack", "1", PackTask::Kws, HASH, 10);
+        let vad = verified_for_task("vad-pack", "1", PackTask::Vad, HASH, 10);
+        let stt_v1 = verified_for_task("stt-pack", "1", PackTask::Stt, HASH, 10);
+        let stt_v2 = verified_for_task("stt-pack", "2", PackTask::Stt, HASH_B, 10);
+        let tts_v1 = verified_for_task("tts-pack", "1", PackTask::Tts, HASH, 10);
+        let tts_v2 = verified_for_task("tts-pack", "2", PackTask::Tts, HASH_B, 10);
+        let mut store = InMemoryModelStore::new(Some(200));
+        for manifest in [&kws, &vad, &stt_v1, &stt_v2, &tts_v1, &tts_v2] {
+            install_ready(&mut store, manifest).await?;
+        }
+
+        store
+            .activate_pack(scope(PackTask::Kws), &kws, &selection_for(&kws))
+            .await?;
+        store
+            .activate_pack(scope(PackTask::Vad), &vad, &selection_for(&vad))
+            .await?;
+        store
+            .activate_pack(scope(PackTask::Stt), &stt_v1, &selection_for(&stt_v1))
+            .await?;
+        store
+            .activate_pack(scope(PackTask::Tts), &tts_v1, &selection_for(&tts_v1))
+            .await?;
+
+        store
+            .activate_pack(scope(PackTask::Stt), &stt_v2, &selection_for(&stt_v2))
+            .await?;
+        store
+            .activate_pack(scope(PackTask::Tts), &tts_v2, &selection_for(&tts_v2))
+            .await?;
+        assert_eq!(
+            store
+                .active_pack(scope(PackTask::Kws))
+                .await?
+                .map(|active| active.pack_id),
+            Some("kws-pack".to_owned())
+        );
+        assert_eq!(
+            store
+                .active_pack(scope(PackTask::Vad))
+                .await?
+                .map(|active| active.pack_id),
+            Some("vad-pack".to_owned())
+        );
+        assert_eq!(
+            store
+                .active_pack(scope(PackTask::Stt))
+                .await?
+                .map(|active| active.pack_version),
+            Some("2".to_owned())
+        );
+        assert_eq!(
+            store
+                .active_pack(scope(PackTask::Tts))
+                .await?
+                .map(|active| active.pack_version),
+            Some("2".to_owned())
+        );
+
+        let rolled_back = store.rollback_active(scope(PackTask::Stt)).await?;
+        assert_eq!(
+            rolled_back.map(|snapshot| snapshot.pack_version),
+            Some("1".to_owned())
+        );
+        assert_eq!(
+            store
+                .active_pack(scope(PackTask::Stt))
+                .await?
+                .map(|active| active.pack_version),
+            Some("1".to_owned())
+        );
+        assert_eq!(
+            store
+                .active_pack(scope(PackTask::Tts))
+                .await?
+                .map(|active| active.pack_version),
+            Some("2".to_owned())
+        );
+        assert_eq!(
+            store
+                .rollback_identity(&scope(PackTask::Tts))
+                .map(|identity| identity.pack_version.as_str()),
+            Some("1")
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn reused_selection_remains_active_until_last_scope_leaves() -> Result<(), ModelPackError>
+    {
+        let mut raw = manifest("shared-pack", "1", HASH, 10);
+        raw.tasks = vec![PackTask::Stt, PackTask::Tts];
+        raw.files = vec![
+            model_file_for("stt-model", PackTask::Stt, HASH, 10),
+            model_file_for("tts-model", PackTask::Tts, HASH_B, 10),
+        ];
+        raw.variants = vec![variant(
+            "linux",
+            RuntimeTarget::Desktop,
+            TargetOs::Linux,
+            TargetArch::X86_64,
+            "stt-model",
+            20,
+        )];
+        raw.variants[0].file_ids = vec!["stt-model".to_owned(), "tts-model".to_owned()];
+        let shared = verify_manifest(raw, &TrustPolicy::default(), Some(&AcceptingVerifier))?;
+        let shared_selection = selection_for(&shared);
+        let other_stt = verified_for_task("other-stt", "1", PackTask::Stt, HASH, 10);
+        let other_tts = verified_for_task("other-tts", "1", PackTask::Tts, HASH_B, 10);
+        let mut store = InMemoryModelStore::new(Some(200));
+        install_selection_ready(&mut store, &shared, &shared_selection).await?;
+        install_ready(&mut store, &other_stt).await?;
+        install_ready(&mut store, &other_tts).await?;
+
+        store
+            .activate_pack(scope(PackTask::Stt), &shared, &shared_selection)
+            .await?;
+        store
+            .activate_pack(scope(PackTask::Tts), &shared, &shared_selection)
+            .await?;
+        store
+            .activate_pack(scope(PackTask::Stt), &other_stt, &selection_for(&other_stt))
+            .await?;
+        assert_eq!(
+            store
+                .lifecycle("shared-pack", "1", "linux")
+                .await?
+                .map(|snapshot| snapshot.state),
+            Some(InstallState::Active)
+        );
+        store
+            .activate_pack(scope(PackTask::Tts), &other_tts, &selection_for(&other_tts))
+            .await?;
+        assert_eq!(
+            store
+                .lifecycle("shared-pack", "1", "linux")
+                .await?
+                .map(|snapshot| snapshot.state),
+            Some(InstallState::Ready)
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn task_mismatch_fails_without_mutation() -> Result<(), ModelPackError> {
+        let stt = verified_for_task("stt-pack", "1", PackTask::Stt, HASH, 10);
+        let replacement = verified_for_task("replacement", "1", PackTask::Stt, HASH_B, 10);
+        let mut store = InMemoryModelStore::new(Some(100));
+        install_ready(&mut store, &stt).await?;
+        install_ready(&mut store, &replacement).await?;
+        store
+            .activate_pack(scope(PackTask::Stt), &stt, &selection_for(&stt))
+            .await?;
+
+        assert_eq!(
+            store
+                .activate_pack(
+                    scope(PackTask::Tts),
+                    &replacement,
+                    &selection_for(&replacement)
+                )
+                .await,
+            Err(ModelPackError::Store { code: "scope_task" })
+        );
+        assert_eq!(
+            store
+                .active_pack(scope(PackTask::Stt))
+                .await?
+                .map(|active| active.pack_id),
+            Some("stt-pack".to_owned())
+        );
+        assert!(store.active_pack(scope(PackTask::Tts)).await?.is_none());
+        assert!(store.rollback_identity(&scope(PackTask::Tts)).is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn revoking_one_pack_withdraws_only_affected_scoped_pointers(
+    ) -> Result<(), ModelPackError> {
+        let kws = verified_for_task("kws-pack", "1", PackTask::Kws, HASH, 10);
+        let stt = verified_for_task("stt-pack", "1", PackTask::Stt, HASH_B, 10);
+        let mut store = InMemoryModelStore::new(Some(100));
+        install_ready(&mut store, &kws).await?;
+        install_ready(&mut store, &stt).await?;
+        store
+            .activate_pack(scope(PackTask::Kws), &kws, &selection_for(&kws))
+            .await?;
+        store
+            .activate_pack(scope(PackTask::Stt), &stt, &selection_for(&stt))
+            .await?;
+
+        store.revoke_pack("stt-pack");
+        assert!(store.active_pack(scope(PackTask::Stt)).await?.is_none());
+        assert_eq!(
+            store
+                .active_pack(scope(PackTask::Kws))
+                .await?
+                .map(|active| active.pack_id),
+            Some("kws-pack".to_owned())
         );
         Ok(())
     }

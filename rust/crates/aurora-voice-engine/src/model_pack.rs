@@ -9,11 +9,79 @@ use thiserror::Error;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PackTask {
-    Tts,
-    Stt,
-    Vad,
+    Kws,
     Wakeword,
+    Vad,
+    Stt,
+    Tts,
+    VoiceEmbedding,
+    Tokenizer,
+    Frontend,
     VoiceState,
+}
+
+impl PackTask {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Kws => "kws",
+            Self::Wakeword => "wakeword",
+            Self::Vad => "vad",
+            Self::Stt => "stt",
+            Self::Tts => "tts",
+            Self::VoiceEmbedding => "voice_embedding",
+            Self::Tokenizer => "tokenizer",
+            Self::Frontend => "frontend",
+            Self::VoiceState => "voice_state",
+        }
+    }
+}
+
+const DEFAULT_MODEL_STORE_SLOT_ID: &str = "default";
+const MAX_MODEL_STORE_SLOT_ID_LEN: usize = 64;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
+pub struct ModelStoreScope {
+    task: PackTask,
+    slot_id: String,
+}
+
+impl ModelStoreScope {
+    pub fn new(task: PackTask, slot_id: impl Into<String>) -> Result<Self, ModelPackError> {
+        let slot_id = slot_id.into();
+        validate_scope_slot_id(&slot_id)?;
+        Ok(Self { task, slot_id })
+    }
+
+    pub fn default_for_task(task: PackTask) -> Self {
+        Self {
+            task,
+            slot_id: DEFAULT_MODEL_STORE_SLOT_ID.to_owned(),
+        }
+    }
+
+    pub fn task(&self) -> PackTask {
+        self.task
+    }
+
+    pub fn slot_id(&self) -> &str {
+        &self.slot_id
+    }
+}
+
+impl<'de> Deserialize<'de> for ModelStoreScope {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct RawModelStoreScope {
+            task: PackTask,
+            slot_id: String,
+        }
+
+        let raw = RawModelStoreScope::deserialize(deserializer)?;
+        Self::new(raw.task, raw.slot_id).map_err(serde::de::Error::custom)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -376,7 +444,7 @@ pub struct StoreStatus {
     pub persistent: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DownloadTask {
     pub storage_key: String,
     pub pack_id: String,
@@ -386,6 +454,22 @@ pub struct DownloadTask {
     pub expected_sha256: String,
     pub expected_bytes: u64,
     pub variant_id: String,
+}
+
+impl fmt::Debug for DownloadTask {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DownloadTask")
+            .field("storage_key", &self.storage_key)
+            .field("pack_id", &self.pack_id)
+            .field("pack_version", &self.pack_version)
+            .field("file_id", &self.file_id)
+            .field("url", &"<redacted>")
+            .field("expected_sha256", &self.expected_sha256)
+            .field("expected_bytes", &self.expected_bytes)
+            .field("variant_id", &self.variant_id)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -403,6 +487,7 @@ pub struct StoredFile {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActivePackIdentity {
+    pub scope: ModelStoreScope,
     pub pack_id: String,
     pub pack_version: String,
     pub variant_id: String,
@@ -575,6 +660,12 @@ pub fn validate_manifest(manifest: &ModelPackManifest) -> Result<(), ModelPackEr
     {
         return invalid("empty");
     }
+    let mut tasks = BTreeSet::new();
+    for task in &manifest.tasks {
+        if !tasks.insert(*task) {
+            return invalid("duplicate_task");
+        }
+    }
     for language in &manifest.languages {
         validate_language(language)?;
     }
@@ -590,6 +681,9 @@ pub fn validate_manifest(manifest: &ModelPackManifest) -> Result<(), ModelPackEr
         validate_sha256(&file.sha256)?;
         validate_provenance(&file.provenance)?;
         validate_processing(&file.processing)?;
+        if !tasks.contains(&file.task) {
+            return invalid("file_task");
+        }
         if file.byte_size == 0 || file.installed_size == 0 {
             return invalid("size");
         }
@@ -974,6 +1068,14 @@ pub fn lifecycle_storage_key(pack_id: &str, pack_version: &str, variant_id: &str
     )
 }
 
+pub fn scope_storage_key(scope: &ModelStoreScope) -> String {
+    format!(
+        "aurora.voice.model-scope.v1:{}:{}",
+        scope.task().as_str(),
+        encode_key(scope.slot_id())
+    )
+}
+
 pub fn file_storage_key(
     pack_id: &str,
     pack_version: &str,
@@ -1074,6 +1176,17 @@ pub fn can_activate(snapshot: &LifecycleSnapshot) -> bool {
     matches!(snapshot.state, InstallState::Ready | InstallState::Active)
 }
 
+pub fn scope_matches_manifest(
+    scope: &ModelStoreScope,
+    manifest: &VerifiedManifest,
+) -> Result<(), ModelPackError> {
+    if manifest.manifest().tasks.contains(&scope.task()) {
+        Ok(())
+    } else {
+        Err(ModelPackError::Store { code: "scope_task" })
+    }
+}
+
 #[async_trait(?Send)]
 pub trait ModelStore {
     async fn status(&self) -> Result<StoreStatus, ModelPackError>;
@@ -1102,12 +1215,19 @@ pub trait ModelStore {
     ) -> Result<StoredFile, ModelPackError>;
     async fn activate_pack(
         &mut self,
+        scope: ModelStoreScope,
         manifest: &VerifiedManifest,
         selection: &SelectedVariant,
     ) -> Result<LifecycleSnapshot, ModelPackError>;
-    async fn rollback_active(&mut self) -> Result<Option<LifecycleSnapshot>, ModelPackError>;
+    async fn rollback_active(
+        &mut self,
+        scope: ModelStoreScope,
+    ) -> Result<Option<LifecycleSnapshot>, ModelPackError>;
     async fn remove_pack(&mut self, pack_id: &str) -> Result<(), ModelPackError>;
-    async fn active_pack(&self) -> Result<Option<ActivePackIdentity>, ModelPackError>;
+    async fn active_pack(
+        &self,
+        scope: ModelStoreScope,
+    ) -> Result<Option<ActivePackIdentity>, ModelPackError>;
     async fn open_immutable_file(
         &self,
         selection: &SelectedVariant,
@@ -1248,6 +1368,20 @@ fn require_nonblank(value: &str) -> Result<(), ModelPackError> {
         invalid("blank")
     } else {
         Ok(())
+    }
+}
+
+fn validate_scope_slot_id(value: &str) -> Result<(), ModelPackError> {
+    if value.is_empty() || value.len() > MAX_MODEL_STORE_SLOT_ID_LEN {
+        return invalid("scope");
+    }
+    if value
+        .bytes()
+        .all(|byte| matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.'))
+    {
+        Ok(())
+    } else {
+        invalid("scope")
     }
 }
 
@@ -1495,6 +1629,7 @@ mod tests {
     #[test]
     fn validates_raven_exact_references() {
         let mut manifest = manifest();
+        manifest.tasks = vec![PackTask::Tts];
         manifest.files = vec![
             file("tokenizer", PackTask::Tts, 10),
             file("conditioner", PackTask::Tts, 10),
@@ -1841,6 +1976,7 @@ mod tests {
     fn lifecycle_table_and_keys_are_versioned() -> Result<(), ModelPackError> {
         let snapshot =
             create_lifecycle_snapshot("pack id", "1/2", "linux", 1, InstallState::NotInstalled);
+        let scope = ModelStoreScope::new(PackTask::Stt, "primary.slot")?;
         let linux_key = lifecycle_storage_key("pack id", "1/2", "linux");
         let android_key = lifecycle_storage_key("pack id", "1/2", "android/arm64");
         assert_eq!(
@@ -1853,6 +1989,10 @@ mod tests {
         );
         assert_ne!(linux_key, android_key);
         assert!(file_storage_key("pack id", "1/2", "linux", "model").contains(":linux#model"));
+        assert_eq!(
+            scope_storage_key(&scope),
+            "aurora.voice.model-scope.v1:stt:primary.slot"
+        );
         let queued = apply_lifecycle_event(&snapshot, InstallEvent::Enqueue, 2, None)?;
         let downloading = apply_lifecycle_event(&queued, InstallEvent::StartDownload, 3, None)?;
         let verifying =
@@ -1864,6 +2004,74 @@ mod tests {
             Err(ModelPackError::InvalidLifecycleTransition)
         );
         Ok(())
+    }
+
+    #[test]
+    fn pack_task_and_scope_serde_names_are_stable_and_validated() -> Result<(), ModelPackError> {
+        let tasks = [
+            (PackTask::Kws, "\"kws\""),
+            (PackTask::Wakeword, "\"wakeword\""),
+            (PackTask::Vad, "\"vad\""),
+            (PackTask::Stt, "\"stt\""),
+            (PackTask::Tts, "\"tts\""),
+            (PackTask::VoiceEmbedding, "\"voice_embedding\""),
+            (PackTask::Tokenizer, "\"tokenizer\""),
+            (PackTask::Frontend, "\"frontend\""),
+            (PackTask::VoiceState, "\"voice_state\""),
+        ];
+        for (task, expected) in tasks {
+            assert_eq!(
+                serde_json::to_string(&task).expect("task serializes"),
+                expected
+            );
+            assert_eq!(
+                serde_json::from_str::<PackTask>(expected).expect("task deserializes"),
+                task
+            );
+        }
+        assert_eq!(
+            serde_json::from_str::<PackTask>("\"kws\"").expect("kws alias"),
+            PackTask::Kws
+        );
+        assert_eq!(
+            serde_json::from_str::<PackTask>("\"wakeword\"").expect("wakeword compat"),
+            PackTask::Wakeword
+        );
+
+        let scope = ModelStoreScope::new(PackTask::Tts, "read-aloud")?;
+        let encoded = serde_json::to_string(&scope).expect("scope serializes");
+        assert_eq!(encoded, "{\"task\":\"tts\",\"slot_id\":\"read-aloud\"}");
+        let decoded: ModelStoreScope = serde_json::from_str(&encoded).expect("scope deserializes");
+        assert_eq!(decoded.task(), PackTask::Tts);
+        assert_eq!(decoded.slot_id(), "read-aloud");
+        assert!(serde_json::from_str::<ModelStoreScope>(
+            "{\"task\":\"tts\",\"slot_id\":\"bad/token\"}"
+        )
+        .is_err());
+        assert!(ModelStoreScope::new(PackTask::Tts, "").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn download_task_debug_redacts_manifest_url_and_tokens() {
+        let task = DownloadTask {
+            storage_key: "storage".to_owned(),
+            pack_id: "pack".to_owned(),
+            pack_version: "1".to_owned(),
+            file_id: "model".to_owned(),
+            url: "https://models.example.test/model.onnx?token=secret-token".to_owned(),
+            expected_sha256: HASH.to_owned(),
+            expected_bytes: 42,
+            variant_id: "linux".to_owned(),
+        };
+        let rendered = format!("{task:?}");
+        assert!(rendered.contains("DownloadTask"));
+        assert!(rendered.contains("pack"));
+        assert!(rendered.contains(HASH));
+        assert!(!rendered.contains("https://"));
+        assert!(!rendered.contains("models.example"));
+        assert!(!rendered.contains("secret-token"));
+        assert!(!rendered.contains("token="));
     }
 
     #[test]
