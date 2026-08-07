@@ -14,9 +14,9 @@ use std::sync::{
 use thiserror::Error;
 
 pub use aurora_voice_engine::{
-    BoundFiniteSttRequest, BoundTaskRequest, BoundTtsSynthesisRequest, EngineError, ResourceReport,
-    SpeechEngine, TaskCapability, TaskPackBinding, TaskProvider, TaskReadiness, TaskRequest,
-    TtsSynthesisConfig, VoiceTask,
+    BoundFiniteSttRequest, BoundTaskRequest, BoundTtsSynthesisRequest, EngineError,
+    FiniteSttResult, ResourceReport, SpeechEngine, TaskCapability, TaskPackBinding, TaskProvider,
+    TaskReadiness, TaskRequest, TtsSynthesisConfig, VoiceTask,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -1072,7 +1072,7 @@ where
         let request = AssistantTurnRequest::from_generation(
             &self.assistant_namespace,
             lease.generation,
-            transcript,
+            transcript.transcript().to_owned(),
         );
         let response = self
             .transport

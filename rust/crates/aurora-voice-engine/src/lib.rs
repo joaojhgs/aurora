@@ -27,6 +27,7 @@ pub const MAX_KWS_PHRASES: usize = 64;
 pub const MAX_KWS_COOLDOWN_FRAMES: u32 = 16_000;
 pub const MAX_KWS_RESULTS: u8 = 16;
 pub const MAX_FINITE_STT_FRAMES: usize = 60_000;
+pub const MAX_FINITE_STT_TRANSCRIPT_BYTES: usize = 16_384;
 pub const TTS_MAX_TEXT_BYTES: usize = 4096;
 pub const TTS_MIN_SAMPLE_RATE_HZ: u32 = 8_000;
 pub const TTS_MAX_SAMPLE_RATE_HZ: u32 = 48_000;
@@ -360,6 +361,48 @@ impl BoundFiniteSttRequest {
 
     pub fn frames(&self) -> usize {
         self.frames
+    }
+}
+
+/// Bounded finite STT result. Providers return this typed result instead of
+/// an unvalidated string so turn orchestration can trust transcript shape.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FiniteSttResult {
+    transcript: String,
+    frames: usize,
+    generation: u64,
+}
+
+impl FiniteSttResult {
+    pub fn new(
+        request: &BoundFiniteSttRequest,
+        transcript: impl Into<String>,
+    ) -> Result<Self, EngineError> {
+        let transcript = transcript.into();
+        if request.request().request().task != VoiceTask::SpeechToText
+            || request.frames() == 0
+            || request.frames() > MAX_FINITE_STT_FRAMES
+            || !valid_transcript_text(&transcript)
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(Self {
+            transcript,
+            frames: request.frames(),
+            generation: request.request().request().generation,
+        })
+    }
+
+    pub fn transcript(&self) -> &str {
+        &self.transcript
+    }
+
+    pub fn frames(&self) -> usize {
+        self.frames
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
     }
 }
 
@@ -1017,6 +1060,7 @@ pub struct KwsFrameResult {
 impl KwsFrameResult {
     pub fn new(
         config: &KwsConfig,
+        cooldown: &mut KwsCooldownState,
         matches: Vec<KeywordMatch>,
         reset: Option<StreamResetReason>,
     ) -> Result<Self, EngineError> {
@@ -1036,6 +1080,7 @@ impl KwsFrameResult {
                 return Err(EngineError::InvalidRequest);
             }
         }
+        cooldown.accept_frame(config, &matches, reset)?;
         Ok(Self { matches, reset })
     }
 
@@ -1045,6 +1090,54 @@ impl KwsFrameResult {
 
     pub fn reset(&self) -> Option<StreamResetReason> {
         self.reset
+    }
+}
+
+/// Stateful KWS cooldown gate shared by streaming adapters.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct KwsCooldownState {
+    last_emitted_frame: Option<u64>,
+}
+
+impl KwsCooldownState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn reset(&mut self) {
+        self.last_emitted_frame = None;
+    }
+
+    pub fn last_emitted_frame(&self) -> Option<u64> {
+        self.last_emitted_frame
+    }
+
+    fn accept_frame(
+        &mut self,
+        config: &KwsConfig,
+        matches: &[KeywordMatch],
+        reset: Option<StreamResetReason>,
+    ) -> Result<(), EngineError> {
+        if reset.is_some() {
+            self.reset();
+        }
+        if matches.is_empty() {
+            return Ok(());
+        }
+        let earliest_match_frame = matches
+            .iter()
+            .map(KeywordMatch::frame_index)
+            .min()
+            .ok_or(EngineError::InvalidRequest)?;
+        if let Some(last_emitted_frame) = self.last_emitted_frame {
+            let next_allowed_frame =
+                last_emitted_frame.saturating_add(u64::from(config.cooldown_frames()));
+            if earliest_match_frame <= next_allowed_frame {
+                return Err(EngineError::InvalidRequest);
+            }
+        }
+        self.last_emitted_frame = matches.iter().map(KeywordMatch::frame_index).max();
+        Ok(())
     }
 }
 
@@ -1349,6 +1442,10 @@ impl BoundTtsSynthesisRequest {
 /// One synthesized audio chunk. Debug output redacts sample values.
 #[derive(Clone, PartialEq, Eq)]
 pub struct TtsAudioChunk {
+    request_generation: u64,
+    request_manifest_sha256: String,
+    request_pack_id: String,
+    request_variant_id: String,
     sequence: u64,
     sample_rate_hz: u32,
     channels: u16,
@@ -1358,13 +1455,14 @@ pub struct TtsAudioChunk {
 
 impl TtsAudioChunk {
     pub fn new(
-        config: &TtsSynthesisConfig,
+        request: &BoundTtsSynthesisRequest,
         sequence: u64,
         sample_rate_hz: u32,
         channels: u16,
         samples: Vec<i16>,
         final_chunk: bool,
     ) -> Result<Self, EngineError> {
+        let config = request.config();
         config.validate()?;
         if sample_rate_hz != config.sample_rate_hz()
             || !(TTS_MIN_SAMPLE_RATE_HZ..=TTS_MAX_SAMPLE_RATE_HZ).contains(&sample_rate_hz)
@@ -1378,12 +1476,31 @@ impl TtsAudioChunk {
             return Err(EngineError::InvalidRequest);
         }
         Ok(Self {
+            request_generation: request.request().request().generation,
+            request_manifest_sha256: request.request().binding().manifest_sha256().to_owned(),
+            request_pack_id: request.request().binding().pack_id().to_owned(),
+            request_variant_id: request.request().binding().variant_id().to_owned(),
             sequence,
             sample_rate_hz,
             channels,
             samples,
             final_chunk,
         })
+    }
+
+    fn matches_request(&self, request: &BoundTtsSynthesisRequest) -> bool {
+        self.request_generation == request.request().request().generation
+            && self.request_manifest_sha256 == request.request().binding().manifest_sha256()
+            && self.request_pack_id == request.request().binding().pack_id()
+            && self.request_variant_id == request.request().binding().variant_id()
+            && self.sample_rate_hz == request.config().sample_rate_hz()
+            && self.channels == request.config().channels()
+            && !self.samples.is_empty()
+            && self.samples.len() <= request.config().chunk_samples()
+    }
+
+    pub fn request_generation(&self) -> u64 {
+        self.request_generation
     }
 
     pub fn sequence(&self) -> u64 {
@@ -1427,8 +1544,32 @@ pub struct TtsSynthesisResult {
 }
 
 impl TtsSynthesisResult {
-    pub fn new(chunks: Vec<TtsAudioChunk>, cancelled: bool) -> Result<Self, EngineError> {
-        if chunks.is_empty() && !cancelled {
+    pub fn new(
+        request: &BoundTtsSynthesisRequest,
+        chunks: Vec<TtsAudioChunk>,
+        cancelled: bool,
+    ) -> Result<Self, EngineError> {
+        if chunks.is_empty() {
+            if cancelled {
+                return Ok(Self { chunks, cancelled });
+            }
+            return Err(EngineError::InvalidRequest);
+        }
+        let mut final_chunks = 0_usize;
+        for (index, chunk) in chunks.iter().enumerate() {
+            if !chunk.matches_request(request)
+                || chunk.sequence() != (index as u64).saturating_add(1)
+            {
+                return Err(EngineError::InvalidRequest);
+            }
+            if chunk.final_chunk() {
+                final_chunks = final_chunks.saturating_add(1);
+                if index != chunks.len() - 1 {
+                    return Err(EngineError::InvalidRequest);
+                }
+            }
+        }
+        if (!cancelled && final_chunks != 1) || (cancelled && final_chunks > 0) {
             return Err(EngineError::InvalidRequest);
         }
         Ok(Self { chunks, cancelled })
@@ -1580,6 +1721,13 @@ fn valid_tts_text(value: &str) -> bool {
             .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
 }
 
+fn valid_transcript_text(value: &str) -> bool {
+    value.len() <= MAX_FINITE_STT_TRANSCRIPT_BYTES
+        && !value
+            .chars()
+            .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
+}
+
 fn manifest_supports_task(manifest: &ModelPackManifest, task: VoiceTask) -> bool {
     manifest
         .tasks
@@ -1650,7 +1798,7 @@ pub trait SpeechEngine: TaskProvider {
         &mut self,
         request: BoundFiniteSttRequest,
         cancellation: &dyn Fn() -> bool,
-    ) -> Result<String, EngineError>;
+    ) -> Result<FiniteSttResult, EngineError>;
 
     async fn synthesize_text(
         &mut self,
@@ -1833,6 +1981,35 @@ mod tests {
         )
         .expect("selected variant");
         (verified, selection)
+    }
+
+    fn bound_tts_request(generation: u64, chunk_samples: usize) -> BoundTtsSynthesisRequest {
+        let (manifest, selection) = selected(PackTask::Tts);
+        let binding =
+            TaskPackBinding::from_selection(VoiceTask::TextToSpeech, &manifest, &selection)
+                .expect("tts binding");
+        let config = TtsSynthesisConfig::new(
+            "voice.default",
+            "voice-state-a",
+            binding.sample_rate_hz(),
+            chunk_samples,
+            None,
+        )
+        .expect("valid tts config");
+        BoundTtsSynthesisRequest::new(
+            BoundTaskRequest::new(
+                TaskRequest {
+                    task: VoiceTask::TextToSpeech,
+                    language: Some("en".to_owned()),
+                    generation,
+                },
+                binding,
+            )
+            .expect("bound tts task"),
+            "hello",
+            config,
+        )
+        .expect("bound tts request")
     }
 
     struct SurfaceVadProvider;
@@ -2354,59 +2531,150 @@ mod tests {
     }
 
     #[test]
+    fn finite_stt_result_is_typed_and_bounded_to_request() {
+        let (stt_manifest, stt_selection) = selected(PackTask::Stt);
+        let stt_binding =
+            TaskPackBinding::from_selection(VoiceTask::SpeechToText, &stt_manifest, &stt_selection)
+                .expect("stt binding");
+        let task_request = BoundTaskRequest::new(
+            TaskRequest {
+                task: VoiceTask::SpeechToText,
+                language: Some("en".to_owned()),
+                generation: 21,
+            },
+            stt_binding,
+        )
+        .expect("bound stt task");
+        let finite_request = BoundFiniteSttRequest::new(task_request, 2).expect("finite request");
+        let result = FiniteSttResult::new(&finite_request, "hello").expect("finite result");
+        assert_eq!(result.transcript(), "hello");
+        assert_eq!(result.frames(), 2);
+        assert_eq!(result.generation(), 21);
+        assert_eq!(
+            FiniteSttResult::new(
+                &finite_request,
+                "x".repeat(MAX_FINITE_STT_TRANSCRIPT_BYTES + 1)
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            FiniteSttResult::new(&finite_request, "bad\u{0000}text"),
+            Err(EngineError::InvalidRequest)
+        );
+    }
+
+    #[test]
     fn kws_results_are_limited_to_configured_phrase_set() {
         let config =
             KwsConfig::new(["wake.a", "wake.b"], "phrases:v1", 0.5, 0, 2).expect("valid config");
         let first = KeywordMatch::new("wake.a", 0.9, 10).expect("match");
         let second = KeywordMatch::new("wake.b", 0.8, 11).expect("match");
-        assert!(KwsFrameResult::new(&config, vec![first.clone(), second], None).is_ok());
+        let mut cooldown = KwsCooldownState::new();
+        assert!(
+            KwsFrameResult::new(&config, &mut cooldown, vec![first.clone(), second], None).is_ok()
+        );
+        let mut cooldown = KwsCooldownState::new();
         assert_eq!(
-            KwsFrameResult::new(&config, vec![first.clone(), first], None),
+            KwsFrameResult::new(&config, &mut cooldown, vec![first.clone(), first], None),
             Err(EngineError::InvalidRequest)
         );
         let unknown = KeywordMatch::new("wake.c", 0.7, 12).expect("match");
+        let mut cooldown = KwsCooldownState::new();
         assert_eq!(
-            KwsFrameResult::new(&config, vec![unknown], None),
+            KwsFrameResult::new(&config, &mut cooldown, vec![unknown], None),
             Err(EngineError::InvalidRequest)
         );
         let capped =
             KwsConfig::new(["wake.a", "wake.b"], "phrases:v1", 0.5, 0, 1).expect("valid config");
         let first = KeywordMatch::new("wake.a", 0.9, 10).expect("match");
         let second = KeywordMatch::new("wake.b", 0.8, 11).expect("match");
+        let mut cooldown = KwsCooldownState::new();
         assert_eq!(
-            KwsFrameResult::new(&capped, vec![first, second], None),
+            KwsFrameResult::new(&capped, &mut cooldown, vec![first, second], None),
             Err(EngineError::InvalidRequest)
         );
     }
 
     #[test]
+    fn kws_cooldown_is_enforced_across_frames_until_reset() {
+        let config = KwsConfig::new(["wake.a"], "phrases:v1", 0.5, 2, 1).expect("valid config");
+        let mut cooldown = KwsCooldownState::new();
+        let first = KeywordMatch::new("wake.a", 0.9, 10).expect("match");
+        KwsFrameResult::new(&config, &mut cooldown, vec![first], None).expect("first match");
+        let suppressed = KeywordMatch::new("wake.a", 0.9, 12).expect("match");
+        assert_eq!(
+            KwsFrameResult::new(&config, &mut cooldown, vec![suppressed], None),
+            Err(EngineError::InvalidRequest)
+        );
+        let allowed = KeywordMatch::new("wake.a", 0.9, 13).expect("match");
+        KwsFrameResult::new(&config, &mut cooldown, vec![allowed], None).expect("after cooldown");
+        let reset_allowed = KeywordMatch::new("wake.a", 0.9, 14).expect("match");
+        KwsFrameResult::new(
+            &config,
+            &mut cooldown,
+            vec![reset_allowed],
+            Some(StreamResetReason::Manual),
+        )
+        .expect("reset clears cooldown");
+    }
+
+    #[test]
     fn tts_chunks_are_bounded_by_active_config() {
-        let config = TtsSynthesisConfig::new("voice.default", "voice-state-a", 16_000, 1024, None)
-            .expect("valid config");
-        let full = TtsAudioChunk::new(&config, 1, 16_000, MONO_CHANNELS, vec![0; 1024], false)
+        let request = bound_tts_request(11, 1024);
+        let full = TtsAudioChunk::new(&request, 1, 16_000, MONO_CHANNELS, vec![0; 1024], false)
             .expect("full chunk");
-        let tail = TtsAudioChunk::new(&config, 2, 16_000, MONO_CHANNELS, vec![0; 12], true)
+        let tail = TtsAudioChunk::new(&request, 2, 16_000, MONO_CHANNELS, vec![0; 12], true)
             .expect("short final tail");
         assert_eq!(tail.samples().len(), 12);
         assert_eq!(
-            TtsAudioChunk::new(&config, 3, 16_000, MONO_CHANNELS, vec![0; 12], false),
+            TtsAudioChunk::new(&request, 3, 16_000, MONO_CHANNELS, vec![0; 12], false),
             Err(EngineError::InvalidRequest)
         );
         assert_eq!(
-            TtsAudioChunk::new(&config, 4, 48_001, MONO_CHANNELS, vec![0; 1024], false),
+            TtsAudioChunk::new(&request, 4, 48_001, MONO_CHANNELS, vec![0; 1024], false),
             Err(EngineError::InvalidRequest)
         );
         assert_eq!(
-            TtsAudioChunk::new(&config, 5, 16_000, MONO_CHANNELS, vec![0; 1025], true),
+            TtsAudioChunk::new(&request, 5, 16_000, MONO_CHANNELS, vec![0; 1025], true),
             Err(EngineError::InvalidRequest)
         );
-        let result = TtsSynthesisResult::new(vec![full, tail], false).expect("tts result");
+        let result =
+            TtsSynthesisResult::new(&request, vec![full, tail], false).expect("tts result");
         assert_eq!(result.chunk_count(), 2);
         assert_eq!(
-            TtsSynthesisResult::new(Vec::new(), false),
+            TtsSynthesisResult::new(&request, Vec::new(), false),
             Err(EngineError::InvalidRequest)
         );
-        assert!(TtsSynthesisResult::new(Vec::new(), true).is_ok());
+        assert!(TtsSynthesisResult::new(&request, Vec::new(), true).is_ok());
+    }
+
+    #[test]
+    fn tts_results_reject_missing_duplicate_or_nonterminal_final_chunks() {
+        let request = bound_tts_request(12, 1024);
+        let first = TtsAudioChunk::new(&request, 1, 16_000, MONO_CHANNELS, vec![0; 1024], false)
+            .expect("first chunk");
+        let middle_final =
+            TtsAudioChunk::new(&request, 2, 16_000, MONO_CHANNELS, vec![0; 12], true)
+                .expect("middle final");
+        let after_final = TtsAudioChunk::new(&request, 3, 16_000, MONO_CHANNELS, vec![0; 12], true)
+            .expect("second final tail");
+        assert_eq!(
+            TtsSynthesisResult::new(
+                &request,
+                vec![first.clone(), middle_final.clone(), after_final],
+                false,
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            TtsSynthesisResult::new(&request, vec![first.clone()], false),
+            Err(EngineError::InvalidRequest)
+        );
+        let mismatched_request = bound_tts_request(13, 1024);
+        assert_eq!(
+            TtsSynthesisResult::new(&mismatched_request, vec![first, middle_final], false),
+            Err(EngineError::InvalidRequest)
+        );
     }
 
     #[test]
@@ -2437,10 +2705,16 @@ mod tests {
         assert!(!result_debug.contains("0.123"));
         assert!(!result_debug.contains("-0.456"));
 
-        let tts_config = TtsSynthesisConfig::default();
-        let chunk =
-            TtsAudioChunk::new(&tts_config, 1, 16_000, MONO_CHANNELS, vec![123, -456], true)
-                .expect("valid chunk");
+        let tts_request = bound_tts_request(14, 1024);
+        let chunk = TtsAudioChunk::new(
+            &tts_request,
+            1,
+            16_000,
+            MONO_CHANNELS,
+            vec![123, -456],
+            true,
+        )
+        .expect("valid chunk");
         let chunk_debug = format!("{chunk:?}");
         assert!(chunk_debug.contains("sample_count: 2"));
         assert!(!chunk_debug.contains("123"));
@@ -2462,6 +2736,7 @@ mod tests {
             KwsConfig::new(["wake-main"], "phrases:v1", 0.5, 0, 1).expect("valid kws config");
         let kws = KwsFrameResult::new(
             &kws_config,
+            &mut KwsCooldownState::new(),
             vec![KeywordMatch::new("wake-main", 0.9, 10).expect("match")],
             None,
         )

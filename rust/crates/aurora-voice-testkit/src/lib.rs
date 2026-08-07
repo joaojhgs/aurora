@@ -8,9 +8,10 @@ use async_trait::async_trait;
 use aurora_voice_core::{
     AssistantTurnRequest, AssistantTurnResponse, AudioInput, BoundFiniteSttRequest,
     BoundTaskRequest, BoundTtsSynthesisRequest, CancellationToken, CaptureStartReason, EngineError,
-    Generation, PcmFrame, RedactedSnapshot, ResourceReport, RouteRevision, RuntimeEvent,
-    RuntimeEventSink, SpeechEngine, SpeechTransport, TaskCapability, TaskPackBinding, TaskProvider,
-    TaskReadiness, TimestampMicros, TransitionReason, VoiceCaptureLease, VoiceCoreError, VoiceTask,
+    FiniteSttResult, Generation, PcmFrame, RedactedSnapshot, ResourceReport, RouteRevision,
+    RuntimeEvent, RuntimeEventSink, SpeechEngine, SpeechTransport, TaskCapability, TaskPackBinding,
+    TaskProvider, TaskReadiness, TimestampMicros, TransitionReason, VoiceCaptureLease,
+    VoiceCoreError, VoiceTask,
 };
 use aurora_voice_engine::{
     select_verified_variant, verify_manifest, AbiRequirements, BrowserFeature, CapabilityFlags,
@@ -376,7 +377,7 @@ impl SpeechEngine for FakeEngine {
         &mut self,
         request: BoundFiniteSttRequest,
         cancellation: &dyn Fn() -> bool,
-    ) -> Result<String, EngineError> {
+    ) -> Result<FiniteSttResult, EngineError> {
         if cancellation() {
             return Err(EngineError::Cancelled);
         }
@@ -394,7 +395,7 @@ impl SpeechEngine for FakeEngine {
         if request.request().request().task != VoiceTask::SpeechToText || request.frames() == 0 {
             return Err(EngineError::InvalidRequest);
         }
-        Ok(self.transcript.clone())
+        FiniteSttResult::new(&request, self.transcript.clone())
     }
 
     async fn synthesize_text(
@@ -422,14 +423,14 @@ impl SpeechEngine for FakeEngine {
                 .clamp(1, request.config().chunk_samples())
         ];
         let chunk = TtsAudioChunk::new(
-            request.config(),
+            &request,
             1,
             request.config().sample_rate_hz(),
             MONO_CHANNELS,
             samples,
             true,
         )?;
-        TtsSynthesisResult::new(vec![chunk], false)
+        TtsSynthesisResult::new(&request, vec![chunk], false)
     }
 }
 
