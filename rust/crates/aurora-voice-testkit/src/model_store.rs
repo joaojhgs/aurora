@@ -19,7 +19,7 @@ pub struct InMemoryModelStore {
     now: u64,
     files: BTreeMap<String, StoredFile>,
     reservations: BTreeMap<String, Reservation>,
-    lifecycles: BTreeMap<(String, String), LifecycleSnapshot>,
+    lifecycles: BTreeMap<(String, String, String), LifecycleSnapshot>,
     active: Option<ActivePackIdentity>,
     rollback: Option<ActivePackIdentity>,
     corrupted: BTreeSet<String>,
@@ -114,8 +114,16 @@ impl InMemoryModelStore {
         }
     }
 
-    fn lifecycle_key(pack_id: &str, pack_version: &str) -> (String, String) {
-        (pack_id.to_owned(), pack_version.to_owned())
+    fn lifecycle_key(
+        pack_id: &str,
+        pack_version: &str,
+        variant_id: &str,
+    ) -> (String, String, String) {
+        (
+            pack_id.to_owned(),
+            pack_version.to_owned(),
+            variant_id.to_owned(),
+        )
     }
 
     fn require_not_withdrawn(&self, pack_id: &str) -> Result<(), ModelPackError> {
@@ -144,17 +152,22 @@ impl ModelStore for InMemoryModelStore {
         &self,
         pack_id: &str,
         pack_version: &str,
+        variant_id: &str,
     ) -> Result<Option<LifecycleSnapshot>, ModelPackError> {
         Ok(self
             .lifecycles
-            .get(&Self::lifecycle_key(pack_id, pack_version))
+            .get(&Self::lifecycle_key(pack_id, pack_version, variant_id))
             .cloned())
     }
 
     async fn set_lifecycle(&mut self, snapshot: LifecycleSnapshot) -> Result<(), ModelPackError> {
         self.maybe_fail_persist()?;
         self.lifecycles.insert(
-            Self::lifecycle_key(&snapshot.pack_id, &snapshot.pack_version),
+            Self::lifecycle_key(
+                &snapshot.pack_id,
+                &snapshot.pack_version,
+                &snapshot.variant_id,
+            ),
             snapshot,
         );
         Ok(())
@@ -273,6 +286,7 @@ impl ModelStore for InMemoryModelStore {
         let current_key = Self::lifecycle_key(
             &manifest.manifest().pack_id,
             &manifest.manifest().pack_version,
+            selection.variant_id(),
         );
         let current = self
             .lifecycles
@@ -282,6 +296,7 @@ impl ModelStore for InMemoryModelStore {
                 create_lifecycle_snapshot(
                     manifest.manifest().pack_id.clone(),
                     manifest.manifest().pack_version.clone(),
+                    selection.variant_id().to_owned(),
                     self.now,
                     InstallState::Ready,
                 )
@@ -298,17 +313,26 @@ impl ModelStore for InMemoryModelStore {
         if let Some(active) = &previous_active {
             if active.pack_id != manifest.manifest().pack_id
                 || active.pack_version != manifest.manifest().pack_version
+                || active.variant_id != selection.variant_id()
             {
                 self.rollback = Some(active.clone());
                 if let Some(previous) = self
                     .lifecycles
-                    .get(&Self::lifecycle_key(&active.pack_id, &active.pack_version))
+                    .get(&Self::lifecycle_key(
+                        &active.pack_id,
+                        &active.pack_version,
+                        &active.variant_id,
+                    ))
                     .cloned()
                 {
                     let deactivated =
                         apply_lifecycle_event(&previous, InstallEvent::Deactivate, self.now, None)?;
                     self.lifecycles.insert(
-                        Self::lifecycle_key(&deactivated.pack_id, &deactivated.pack_version),
+                        Self::lifecycle_key(
+                            &deactivated.pack_id,
+                            &deactivated.pack_version,
+                            &deactivated.variant_id,
+                        ),
                         deactivated,
                     );
                 }
@@ -348,13 +372,17 @@ impl ModelStore for InMemoryModelStore {
         if let Some(active) = self.active.clone() {
             if let Some(snapshot) = self
                 .lifecycles
-                .get(&Self::lifecycle_key(&active.pack_id, &active.pack_version))
+                .get(&Self::lifecycle_key(
+                    &active.pack_id,
+                    &active.pack_version,
+                    &active.variant_id,
+                ))
                 .cloned()
             {
                 let ready =
                     apply_lifecycle_event(&snapshot, InstallEvent::Deactivate, self.now, None)?;
                 self.lifecycles.insert(
-                    Self::lifecycle_key(&ready.pack_id, &ready.pack_version),
+                    Self::lifecycle_key(&ready.pack_id, &ready.pack_version, &ready.variant_id),
                     ready,
                 );
             }
@@ -364,12 +392,13 @@ impl ModelStore for InMemoryModelStore {
             .get(&Self::lifecycle_key(
                 &rollback.pack_id,
                 &rollback.pack_version,
+                &rollback.variant_id,
             ))
             .cloned()
             .ok_or(ModelPackError::Store { code: "rollback" })?;
         let active = apply_lifecycle_event(&snapshot, InstallEvent::Activate, self.now, None)?;
         self.lifecycles.insert(
-            Self::lifecycle_key(&active.pack_id, &active.pack_version),
+            Self::lifecycle_key(&active.pack_id, &active.pack_version, &active.variant_id),
             active.clone(),
         );
         self.active = Some(ActivePackIdentity {
@@ -387,7 +416,7 @@ impl ModelStore for InMemoryModelStore {
         self.reservations
             .retain(|_, reservation| reservation.task.pack_id != pack_id);
         self.lifecycles
-            .retain(|(id, _), _snapshot| id.as_str() != pack_id);
+            .retain(|(id, _, _), _snapshot| id.as_str() != pack_id);
         if self
             .active
             .as_ref()
@@ -675,6 +704,7 @@ mod tests {
             .set_lifecycle(create_lifecycle_snapshot(
                 manifest.manifest().pack_id.clone(),
                 manifest.manifest().pack_version.clone(),
+                selection.variant_id().to_owned(),
                 0,
                 InstallState::Ready,
             ))
@@ -868,6 +898,7 @@ mod tests {
             .set_lifecycle(create_lifecycle_snapshot(
                 verified.manifest().pack_id.clone(),
                 verified.manifest().pack_version.clone(),
+                desktop_selection.variant_id().to_owned(),
                 0,
                 InstallState::Ready,
             ))
@@ -893,17 +924,126 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn lifecycle_and_rollback_are_scoped_to_variant() -> Result<(), ModelPackError> {
+        let mut raw = manifest("pack", "1", HASH, 10);
+        raw.files = vec![
+            model_file("desktop-model", HASH, 10),
+            model_file("android-model", HASH_B, 20),
+        ];
+        raw.variants = vec![
+            variant(
+                "linux",
+                RuntimeTarget::Desktop,
+                TargetOs::Linux,
+                TargetArch::X86_64,
+                "desktop-model",
+                10,
+            ),
+            variant(
+                "android",
+                RuntimeTarget::Android,
+                TargetOs::Android,
+                TargetArch::Aarch64,
+                "android-model",
+                20,
+            ),
+        ];
+        let verified = verify_manifest(raw, &TrustPolicy::default(), Some(&AcceptingVerifier))?;
+        let desktop_selection = select_for(
+            &verified,
+            RuntimeTarget::Desktop,
+            TargetOs::Linux,
+            TargetArch::X86_64,
+        );
+        let android_selection = select_for(
+            &verified,
+            RuntimeTarget::Android,
+            TargetOs::Android,
+            TargetArch::Aarch64,
+        );
+        let mut store = InMemoryModelStore::new(Some(100));
+
+        for (selection, file) in [
+            (&desktop_selection, &verified.manifest().files[0]),
+            (&android_selection, &verified.manifest().files[1]),
+        ] {
+            let task = store.reserve_file(&verified, selection, file).await?;
+            store
+                .promote_file(&task.storage_key, &file.sha256, file.byte_size)
+                .await?;
+            store
+                .set_lifecycle(create_lifecycle_snapshot(
+                    verified.manifest().pack_id.clone(),
+                    verified.manifest().pack_version.clone(),
+                    selection.variant_id().to_owned(),
+                    0,
+                    InstallState::Ready,
+                ))
+                .await?;
+        }
+
+        store.activate_pack(&verified, &desktop_selection).await?;
+        store.activate_pack(&verified, &android_selection).await?;
+        assert_eq!(
+            store.active_pack().await?.map(|active| active.variant_id),
+            Some("android".to_owned())
+        );
+        assert_eq!(
+            store
+                .rollback_identity()
+                .map(|identity| identity.variant_id.as_str()),
+            Some("linux")
+        );
+        assert_eq!(
+            store
+                .open_immutable_file(&desktop_selection, "android-model")
+                .await,
+            Err(ModelPackError::Store { code: "selection" })
+        );
+        assert_eq!(
+            store
+                .open_immutable_file(&android_selection, "desktop-model")
+                .await,
+            Err(ModelPackError::Store { code: "selection" })
+        );
+        let rolled_back = store.rollback_active().await?;
+        assert_eq!(
+            rolled_back.map(|snapshot| snapshot.variant_id),
+            Some("linux".to_owned())
+        );
+        assert_eq!(
+            store.active_pack().await?.map(|active| active.variant_id),
+            Some("linux".to_owned())
+        );
+        assert_eq!(
+            store
+                .lifecycle("pack", "1", "android")
+                .await?
+                .map(|s| s.state),
+            Some(InstallState::Ready)
+        );
+        assert_eq!(
+            store
+                .lifecycle("pack", "1", "linux")
+                .await?
+                .map(|s| s.state),
+            Some(InstallState::Active)
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn version_isolation_and_remove_are_deterministic() -> Result<(), ModelPackError> {
         let first = verified("pack", "1", HASH, 10);
         let second = verified("pack", "2", HASH_B, 10);
         let mut store = InMemoryModelStore::new(Some(100));
         install_ready(&mut store, &first).await?;
         install_ready(&mut store, &second).await?;
-        assert!(store.lifecycle("pack", "1").await?.is_some());
-        assert!(store.lifecycle("pack", "2").await?.is_some());
+        assert!(store.lifecycle("pack", "1", "linux").await?.is_some());
+        assert!(store.lifecycle("pack", "2", "linux").await?.is_some());
         store.remove_pack("pack").await?;
-        assert!(store.lifecycle("pack", "1").await?.is_none());
-        assert!(store.lifecycle("pack", "2").await?.is_none());
+        assert!(store.lifecycle("pack", "1", "linux").await?.is_none());
+        assert!(store.lifecycle("pack", "2", "linux").await?.is_none());
         Ok(())
     }
 

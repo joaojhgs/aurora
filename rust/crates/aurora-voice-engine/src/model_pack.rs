@@ -128,6 +128,45 @@ pub struct ManifestSignature {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReleaseIndexEntry {
+    pub pack_id: String,
+    pub pack_version: String,
+    pub manifest_sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReleaseIndex {
+    pub source: String,
+    pub revision: String,
+    pub manifests: Vec<ReleaseIndexEntry>,
+    pub signature: Option<ManifestSignature>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VerifiedReleaseIndexEntry {
+    source: String,
+    revision: String,
+    key_id: String,
+    pack_id: String,
+    pack_version: String,
+    manifest_sha256: String,
+}
+
+impl VerifiedReleaseIndexEntry {
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+
+    pub fn revision(&self) -> &str {
+        &self.revision
+    }
+
+    pub fn key_id(&self) -> &str {
+        &self.key_id
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LicenseInfo {
     pub identifier: String,
     pub text_url: String,
@@ -322,6 +361,7 @@ pub struct VariantRequirements {
 pub struct LifecycleSnapshot {
     pub pack_id: String,
     pub pack_version: String,
+    pub variant_id: String,
     pub state: InstallState,
     pub revision: u64,
     pub updated_at: u64,
@@ -474,13 +514,32 @@ pub trait SignatureVerifier {
     ) -> Result<bool, ModelPackError>;
 }
 
+pub trait TrustStore {
+    fn verify_signed_payload(
+        &self,
+        canonical_json: &str,
+        signature: &ManifestSignature,
+    ) -> Result<bool, ModelPackError>;
+}
+
+impl<T> TrustStore for T
+where
+    T: SignatureVerifier + ?Sized,
+{
+    fn verify_signed_payload(
+        &self,
+        canonical_json: &str,
+        signature: &ManifestSignature,
+    ) -> Result<bool, ModelPackError> {
+        self.verify(canonical_json, signature)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct TrustPolicy {
     pub revoked_pack_ids: BTreeSet<String>,
     pub revoked_key_ids: BTreeSet<String>,
-    pub expected_release_hash: Option<String>,
-    pub release_index_source: Option<String>,
-    pub release_index_revision: Option<String>,
+    pub verified_release_index_entry: Option<VerifiedReleaseIndexEntry>,
 }
 
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
@@ -618,6 +677,15 @@ pub fn canonical_manifest_json(manifest: &ModelPackManifest) -> Result<String, M
     canonical_json(&value)
 }
 
+pub fn canonical_release_index_json(index: &ReleaseIndex) -> Result<String, ModelPackError> {
+    let mut value = serde_json::to_value(index)
+        .map_err(|_| ModelPackError::InvalidManifest { code: "canonical" })?;
+    if let Value::Object(object) = &mut value {
+        object.remove("signature");
+    }
+    canonical_json(&value)
+}
+
 pub fn canonical_json(value: &Value) -> Result<String, ModelPackError> {
     match value {
         Value::Null => Ok("null".to_owned()),
@@ -692,37 +760,29 @@ pub fn verify_manifest(
     }
     let canonical_json = canonical_manifest_json(&manifest)?;
     let manifest_sha256 = sha256_hex(canonical_json.as_bytes());
-    if let Some(expected) = &policy.expected_release_hash {
-        validate_sha256(expected)?;
-        if expected != &manifest_sha256 {
-            return trust("release_hash");
-        }
-        if manifest.signature.is_none() {
-            let source = policy
-                .release_index_source
-                .as_deref()
+    if manifest.signature.is_none() {
+        let release =
+            policy
+                .verified_release_index_entry
+                .as_ref()
                 .ok_or(ModelPackError::Trust {
                     code: "release_index",
                 })?;
-            let revision =
-                policy
-                    .release_index_revision
-                    .as_deref()
-                    .ok_or(ModelPackError::Trust {
-                        code: "release_index",
-                    })?;
-            require_nonblank(source)?;
-            require_nonblank(revision)?;
-            return Ok(VerifiedManifest {
-                manifest,
-                canonical_json,
-                mode: VerificationMode::ReleaseHash,
-                key_id: None,
-                manifest_sha256,
-                release_index_source: Some(source.to_owned()),
-                release_index_revision: Some(revision.to_owned()),
-            });
+        if release.pack_id != manifest.pack_id
+            || release.pack_version != manifest.pack_version
+            || release.manifest_sha256 != manifest_sha256
+        {
+            return trust("release_hash");
         }
+        return Ok(VerifiedManifest {
+            manifest,
+            canonical_json,
+            mode: VerificationMode::ReleaseHash,
+            key_id: None,
+            manifest_sha256,
+            release_index_source: Some(release.source.clone()),
+            release_index_revision: Some(release.revision.clone()),
+        });
     }
 
     let signature = manifest
@@ -749,6 +809,56 @@ pub fn verify_manifest(
         manifest_sha256,
         release_index_source: None,
         release_index_revision: None,
+    })
+}
+
+pub fn verify_release_index_entry(
+    index: &ReleaseIndex,
+    pack_id: &str,
+    pack_version: &str,
+    manifest_sha256: &str,
+    trust_store: &dyn TrustStore,
+) -> Result<VerifiedReleaseIndexEntry, ModelPackError> {
+    require_nonblank(&index.source)?;
+    require_nonblank(&index.revision)?;
+    validate_sha256(manifest_sha256)?;
+    let signature = index.signature.as_ref().ok_or(ModelPackError::Trust {
+        code: "release_index_unsigned",
+    })?;
+    require_nonblank(&signature.key_id)?;
+    require_nonblank(&signature.algorithm)?;
+    require_nonblank(&signature.value)?;
+    let canonical_json = canonical_release_index_json(index)?;
+    if !trust_store.verify_signed_payload(&canonical_json, signature)? {
+        return trust("release_index_signature");
+    }
+    let mut seen = BTreeSet::new();
+    for entry in &index.manifests {
+        require_nonblank(&entry.pack_id)?;
+        require_nonblank(&entry.pack_version)?;
+        validate_sha256(&entry.manifest_sha256)?;
+        if !seen.insert((entry.pack_id.clone(), entry.pack_version.clone())) {
+            return invalid("duplicate_release");
+        }
+    }
+    let entry = index
+        .manifests
+        .iter()
+        .find(|entry| {
+            entry.pack_id == pack_id
+                && entry.pack_version == pack_version
+                && entry.manifest_sha256 == manifest_sha256
+        })
+        .ok_or(ModelPackError::Trust {
+            code: "release_hash",
+        })?;
+    Ok(VerifiedReleaseIndexEntry {
+        source: index.source.clone(),
+        revision: index.revision.clone(),
+        key_id: signature.key_id.clone(),
+        pack_id: entry.pack_id.clone(),
+        pack_version: entry.pack_version.clone(),
+        manifest_sha256: entry.manifest_sha256.clone(),
     })
 }
 
@@ -881,12 +991,14 @@ pub fn file_storage_key(
 pub fn create_lifecycle_snapshot(
     pack_id: impl Into<String>,
     pack_version: impl Into<String>,
+    variant_id: impl Into<String>,
     now: u64,
     state: InstallState,
 ) -> LifecycleSnapshot {
     LifecycleSnapshot {
         pack_id: pack_id.into(),
         pack_version: pack_version.into(),
+        variant_id: variant_id.into(),
         state,
         revision: 0,
         updated_at: now,
@@ -904,6 +1016,7 @@ pub fn apply_lifecycle_event(
     Ok(LifecycleSnapshot {
         pack_id: snapshot.pack_id.clone(),
         pack_version: snapshot.pack_version.clone(),
+        variant_id: snapshot.variant_id.clone(),
         state: next_state,
         revision: snapshot.revision.saturating_add(1),
         updated_at: now,
@@ -967,6 +1080,7 @@ pub trait ModelStore {
         &self,
         pack_id: &str,
         pack_version: &str,
+        variant_id: &str,
     ) -> Result<Option<LifecycleSnapshot>, ModelPackError>;
     async fn set_lifecycle(&mut self, snapshot: LifecycleSnapshot) -> Result<(), ModelPackError>;
     async fn reserve_file(
@@ -1180,7 +1294,19 @@ mod tests {
             _canonical_json: &str,
             signature: &ManifestSignature,
         ) -> Result<bool, ModelPackError> {
-            Ok(signature.value == "signed")
+            Ok(signature.value == "signed" || signature.value == "index-signed")
+        }
+    }
+
+    struct ReleaseVerifier;
+
+    impl SignatureVerifier for ReleaseVerifier {
+        fn verify(
+            &self,
+            _canonical_json: &str,
+            signature: &ManifestSignature,
+        ) -> Result<bool, ModelPackError> {
+            Ok(signature.key_id == "release-key" && signature.value == "index-signed")
         }
     }
 
@@ -1452,12 +1578,24 @@ mod tests {
         let hash = sha256_hex(canonical.as_bytes());
         let mut unsigned = manifest.clone();
         unsigned.signature = None;
+        let release_entry = verify_release_index_entry(
+            &release_index(
+                "release-index.json",
+                "rev1",
+                "pack",
+                "1.0.0",
+                &hash,
+                "index-signed",
+            ),
+            "pack",
+            "1.0.0",
+            &hash,
+            &AcceptingVerifier,
+        )?;
         let verified = verify_manifest(
             unsigned.clone(),
             &TrustPolicy {
-                expected_release_hash: Some(hash.clone()),
-                release_index_source: Some("release-index.json".to_owned()),
-                release_index_revision: Some("rev1".to_owned()),
+                verified_release_index_entry: Some(release_entry),
                 ..TrustPolicy::default()
             },
             None,
@@ -1466,14 +1604,7 @@ mod tests {
         assert_eq!(verified.release_index_source(), Some("release-index.json"));
         assert_eq!(verified.release_index_revision(), Some("rev1"));
         assert!(matches!(
-            verify_manifest(
-                unsigned,
-                &TrustPolicy {
-                    expected_release_hash: Some(hash),
-                    ..TrustPolicy::default()
-                },
-                None
-            ),
+            verify_manifest(unsigned, &TrustPolicy::default(), None),
             Err(ModelPackError::Trust {
                 code: "release_index"
             })
@@ -1485,6 +1616,153 @@ mod tests {
             verify_manifest(manifest, &policy, Some(&AcceptingVerifier)),
             Err(ModelPackError::Trust {
                 code: "revoked_key"
+            })
+        ));
+        Ok(())
+    }
+
+    fn release_index(
+        source: &str,
+        revision: &str,
+        pack_id: &str,
+        pack_version: &str,
+        manifest_sha256: &str,
+        signature: &str,
+    ) -> ReleaseIndex {
+        ReleaseIndex {
+            source: source.to_owned(),
+            revision: revision.to_owned(),
+            manifests: vec![ReleaseIndexEntry {
+                pack_id: pack_id.to_owned(),
+                pack_version: pack_version.to_owned(),
+                manifest_sha256: manifest_sha256.to_owned(),
+            }],
+            signature: Some(ManifestSignature {
+                key_id: "release-key".to_owned(),
+                algorithm: "ed25519".to_owned(),
+                value: signature.to_owned(),
+            }),
+        }
+    }
+
+    #[test]
+    fn release_hash_requires_signed_release_index_entry() -> Result<(), ModelPackError> {
+        let mut manifest = manifest();
+        let hash = sha256_hex(canonical_manifest_json(&manifest)?.as_bytes());
+        manifest.signature = None;
+        let index = release_index(
+            "release-index.json",
+            "rev1",
+            "pack",
+            "1.0.0",
+            &hash,
+            "index-signed",
+        );
+        let entry = verify_release_index_entry(&index, "pack", "1.0.0", &hash, &ReleaseVerifier)?;
+        let verified = verify_manifest(
+            manifest.clone(),
+            &TrustPolicy {
+                verified_release_index_entry: Some(entry.clone()),
+                ..TrustPolicy::default()
+            },
+            None,
+        )?;
+        assert_eq!(verified.mode(), VerificationMode::ReleaseHash);
+        assert_eq!(verified.release_index_source(), Some("release-index.json"));
+        assert_eq!(verified.release_index_revision(), Some("rev1"));
+        assert_eq!(entry.key_id(), "release-key");
+        assert!(matches!(
+            verify_manifest(manifest.clone(), &TrustPolicy::default(), None),
+            Err(ModelPackError::Trust {
+                code: "release_index"
+            })
+        ));
+        assert!(matches!(
+            verify_release_index_entry(
+                &release_index("", "rev1", "pack", "1.0.0", &hash, "index-signed"),
+                "pack",
+                "1.0.0",
+                &hash,
+                &ReleaseVerifier
+            ),
+            Err(ModelPackError::InvalidManifest { code: "blank" })
+        ));
+        assert!(matches!(
+            verify_release_index_entry(
+                &release_index(
+                    "release-index.json",
+                    "",
+                    "pack",
+                    "1.0.0",
+                    &hash,
+                    "index-signed"
+                ),
+                "pack",
+                "1.0.0",
+                &hash,
+                &ReleaseVerifier
+            ),
+            Err(ModelPackError::InvalidManifest { code: "blank" })
+        ));
+        let mut wrong_key = release_index(
+            "release-index.json",
+            "rev1",
+            "pack",
+            "1.0.0",
+            &hash,
+            "index-signed",
+        );
+        wrong_key.signature.as_mut().expect("signature").key_id = "wrong-key".to_owned();
+        assert!(matches!(
+            verify_release_index_entry(&wrong_key, "pack", "1.0.0", &hash, &ReleaseVerifier),
+            Err(ModelPackError::Trust {
+                code: "release_index_signature"
+            })
+        ));
+        assert!(matches!(
+            verify_release_index_entry(
+                &release_index("release-index.json", "rev1", "pack", "1.0.0", &hash, "bad"),
+                "pack",
+                "1.0.0",
+                &hash,
+                &ReleaseVerifier
+            ),
+            Err(ModelPackError::Trust {
+                code: "release_index_signature"
+            })
+        ));
+        assert!(matches!(
+            verify_release_index_entry(
+                &release_index(
+                    "release-index.json",
+                    "rev1",
+                    "pack",
+                    "1.0.0",
+                    HASH_B,
+                    "index-signed"
+                ),
+                "pack",
+                "1.0.0",
+                &hash,
+                &ReleaseVerifier
+            ),
+            Err(ModelPackError::Trust {
+                code: "release_hash"
+            })
+        ));
+        let mut unsigned_index = release_index(
+            "release-index.json",
+            "rev1",
+            "pack",
+            "1.0.0",
+            &hash,
+            "index-signed",
+        );
+        unsigned_index.signature = None;
+        assert!(matches!(
+            verify_release_index_entry(&unsigned_index, "pack", "1.0.0", &hash, &ReleaseVerifier),
+            Err(ModelPackError::Trust {
+                code: "release_index_unsigned"
             })
         ));
         Ok(())
@@ -1560,7 +1838,8 @@ mod tests {
 
     #[test]
     fn lifecycle_table_and_keys_are_versioned() -> Result<(), ModelPackError> {
-        let snapshot = create_lifecycle_snapshot("pack id", "1/2", 1, InstallState::NotInstalled);
+        let snapshot =
+            create_lifecycle_snapshot("pack id", "1/2", "linux", 1, InstallState::NotInstalled);
         assert!(lifecycle_storage_key("pack id", "1/2").starts_with("aurora.voice.model-pack.v1:"));
         assert!(file_storage_key("pack id", "1/2", "linux", "model").contains(":linux#model"));
         let queued = apply_lifecycle_event(&snapshot, InstallEvent::Enqueue, 2, None)?;
