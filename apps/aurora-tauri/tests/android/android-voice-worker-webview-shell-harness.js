@@ -55,9 +55,10 @@ globalThis.__auroraWorkerAudioBridge = {
     const artifacts = await fetch('/__aurora_artifacts__').then((response) => response.json()).catch(() => ({}))
     const requests = await fetch('/__aurora_requests__').then((response) => response.json()).catch(() => [])
     const consoleErrors = globalThis.__auroraConsoleErrors ?? []
+    const redactedEvents = [...completeRepeat.events, ...abandonRepeat.events].map(({ occurredAtMs: _occurredAtMs, ...event }) => event)
     const leakPayload = JSON.stringify({
-      completeEvents: completeRepeat.events,
-      abandonEvents: abandonRepeat.events,
+      completeEvents: completeRepeat.events.map(({ occurredAtMs: _occurredAtMs, ...event }) => event),
+      abandonEvents: abandonRepeat.events.map(({ occurredAtMs: _occurredAtMs, ...event }) => event),
       snapshots: redaction.snapshots,
       consoleErrors
     })
@@ -76,7 +77,7 @@ globalThis.__auroraWorkerAudioBridge = {
         ...redaction.events
       ].filter((event) => event.kind === 'error'),
       leakScan: {
-        eventLeak: /12345|-12345|321|-321|pcm|transcript|secret|pointer/i.test(JSON.stringify([...completeRepeat.events, ...abandonRepeat.events])),
+        eventLeak: /12345|-12345|321|-321|pcm|transcript|secret|pointer/i.test(JSON.stringify(redactedEvents)),
         snapshotLeak: /12345|-12345|321|-321|pcm|transcript|secret|pointer/i.test(JSON.stringify(redaction.snapshots)),
         consoleLeak: /12345|-12345|321|-321|pcm|transcript|secret|pointer/i.test(JSON.stringify(consoleErrors)),
         rawPcmLeak: /12345|-12345|should-not-leak/i.test(leakPayload),

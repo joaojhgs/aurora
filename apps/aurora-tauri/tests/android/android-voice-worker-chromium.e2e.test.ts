@@ -93,6 +93,7 @@ describe('Android Chromium production voice Worker/WASM bridge', () => {
       assertBuiltProductionVoiceArtifacts()
       const adb = resolveAdb()
       const serial = resolveDeviceSerial()
+      const emulator = assertExpectedAndroidEmulator(adb, serial)
       const originalReverseMappings = adbReverseMappings(adb, serial)
       removeAdbReverseMapping(adb, serial, reverseSentinel.local)
       runAdb(adb, serial, ['reverse', reverseSentinel.local, reverseSentinel.remote])
@@ -100,10 +101,13 @@ describe('Android Chromium production voice Worker/WASM bridge', () => {
       cleanup = async () => {
         restoreAdbReverseLocals(adb, serial, originalReverseMappings, [reverseSentinel.local])
       }
-      const resources = await createResources(adb, serial)
+      const resources = await createResources(adb, serial, emulator)
       cleanup = async () => {
-        await resources.close()
-        restoreAdbReverseLocals(adb, serial, originalReverseMappings, [reverseSentinel.local])
+        try {
+          await resources.close()
+        } finally {
+          restoreAdbReverseLocals(adb, serial, originalReverseMappings, [reverseSentinel.local])
+        }
       }
 
       const result = await waitForSelfReportedProof(resources)
@@ -166,11 +170,14 @@ describe('Android Chromium production voice Worker/WASM bridge', () => {
       expect(result.consoleErrors).toEqual([])
       expect(result.workerSideErrors).toEqual([])
 
-      await resources.close()
-      expect(adbReverseMappings(resources.adb, resources.serial)).toEqual(resources.restoreState.reverseMappings)
-      expect(resources.restoreState.reverseMappings.filter((mapping) => mapping.local === reverseSentinel.local)).toEqual([sentinelReverseMapping])
-      restoreAdbReverseLocals(adb, serial, originalReverseMappings, [reverseSentinel.local])
-      cleanup = undefined
+      try {
+        await resources.close()
+        expect(adbReverseMappings(resources.adb, resources.serial)).toEqual(resources.restoreState.reverseMappings)
+        expect(resources.restoreState.reverseMappings.filter((mapping) => mapping.local === reverseSentinel.local)).toEqual([sentinelReverseMapping])
+      } finally {
+        restoreAdbReverseLocals(adb, serial, originalReverseMappings, [reverseSentinel.local])
+        cleanup = undefined
+      }
       expect(adbReverseMappings(resources.adb, resources.serial)).toEqual(originalReverseMappings)
       expect(packageEnabledState(resources.adb, resources.serial, chromiumChromePackage)).toBe(resources.restoreState.packageEnabledState)
       expect(stayOnWhilePluggedIn(resources.adb, resources.serial)).toBe(resources.restoreState.stayOnWhilePluggedIn)
@@ -183,8 +190,7 @@ describe('Android Chromium production voice Worker/WASM bridge', () => {
   )
 })
 
-async function createResources(adb = resolveAdb(), serial = resolveDeviceSerial()) {
-  const emulator = assertExpectedAndroidEmulator(adb, serial)
+async function createResources(adb = resolveAdb(), serial = resolveDeviceSerial(), emulator = assertExpectedAndroidEmulator(adb, serial)) {
   const harness = await createAndroidWebViewShellHarness(voiceWebRoot, {
     claims: chromiumClaims,
     harnessPrefix: 'android-chromium'

@@ -5,9 +5,9 @@ import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
-  adbOutput,
   adbOutputOrEmpty,
   adbReverseMappings,
+  assertExpectedAndroidEmulator,
   cleanupWebViewShell,
   createAndroidWebViewShellHarness,
   launchAndroidBrowser,
@@ -17,6 +17,7 @@ import {
   runAdb,
   webViewShellTarget,
   type AndroidBrowserRestoreState,
+  type AndroidEmulatorMetadata,
   type AndroidWebViewShellMetadata
 } from './android-webview-shell-harness-utils.js'
 
@@ -46,7 +47,7 @@ describe('Android WebView Shell production voice Worker/WASM bridge', () => {
       if (isFailedSelfReport(result)) {
         throw new Error(`Android WebView Shell harness failed: ${result.error.message}\n${result.error.stack ?? ''}`)
       }
-      const metadata = readHostMetadata(resources.adb, resources.serial, result.selfReported)
+      const metadata = readHostMetadata(resources.adb, resources.serial, resources.emulator, result.selfReported)
 
       expect(metadata).toMatchObject({
         deviceSerial: resources.serial,
@@ -250,6 +251,7 @@ async function assertWebViewShellModuleScriptCanSelfReport(): Promise<void> {
 async function createResources(options: Parameters<typeof createAndroidWebViewShellHarness>[1] = {}) {
   const adb = resolveAdb()
   const serial = resolveDeviceSerial()
+  const emulator = assertExpectedAndroidEmulator(adb, serial)
   const harness = await createAndroidWebViewShellHarness(voiceWebRoot, options)
   const reversedPorts: number[] = []
   let restoreState: AndroidBrowserRestoreState | undefined
@@ -269,6 +271,7 @@ async function createResources(options: Parameters<typeof createAndroidWebViewSh
     return {
       adb,
       serial,
+      emulator,
       harness,
       async close() {
         if (closed) return
@@ -307,14 +310,14 @@ function filteredWebViewLogcat(adb: string, serial: string): string {
     .slice(-16_000)
 }
 
-function readHostMetadata(adb: string, serial: string, selfReported: SelfReportedPage): AndroidWebViewShellMetadata {
+function readHostMetadata(adb: string, serial: string, emulator: AndroidEmulatorMetadata, selfReported: SelfReportedPage): AndroidWebViewShellMetadata {
   const webViewVersion = packageVersion(adb, serial, 'com.android.webview')
   return {
     deviceSerial: serial,
-    sdk: adbOutput(adb, serial, ['shell', 'getprop', 'ro.build.version.sdk']).trim(),
-    release: adbOutput(adb, serial, ['shell', 'getprop', 'ro.build.version.release']).trim(),
-    cpuAbi: adbOutput(adb, serial, ['shell', 'getprop', 'ro.product.cpu.abi']).trim(),
-    fingerprint: adbOutput(adb, serial, ['shell', 'getprop', 'ro.build.fingerprint']).trim(),
+    sdk: emulator.sdk,
+    release: emulator.release,
+    cpuAbi: emulator.cpuAbi,
+    fingerprint: emulator.fingerprint,
     webViewPackage: 'com.android.webview',
     webViewVersion,
     shellPackage: 'org.chromium.webview_shell',
