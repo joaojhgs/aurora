@@ -1,0 +1,23 @@
+[package]
+name = "aurora-voice-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Shared native and WebAssembly voice orchestration core"
+
+[dependencies]
+async-trait.workspace = true
+aurora-contracts = { path = "../aurora-contracts" }
+aurora-voice-engine = { path = "../aurora-voice-engine" }
+crossbeam-queue.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

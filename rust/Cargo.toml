@@ -1,0 +1,37 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88.0"
+license = "MIT"
+
+[workspace.dependencies]
+async-trait = "0.1.91"
+base64 = "0.22.1"
+crossbeam-queue = "0.3.13"
+ed25519-dalek = "3.0.0"
+futures-util = "0.3.31"
+proptest = "1.11.0"
+reqwest = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls", "stream"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+serde-wasm-bindgen = "0.6.5"
+sha2 = "0.10.9"
+tempfile = "3.23.0"
+thiserror = "2.0.17"
+tokio = { version = "1.53.1", features = ["io-util", "macros", "rt", "sync", "time"] }
+url = { version = "2.5.7", features = ["serde"] }
+wasm-bindgen = "0.2.126"
+wasm-bindgen-futures = "0.4.76"
+
+[workspace.lints.rust]
+rust_2018_idioms = { level = "deny", priority = -1 }
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unwrap_used = "deny"
