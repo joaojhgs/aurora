@@ -86,7 +86,7 @@ class VadParityRunnerTests(unittest.TestCase):
     def test_full_matrix_gate_rejects_skip_modes_and_partial_browsers(self) -> None:
         passing_case = {
             "ok": True,
-            "cases": {"full_flush": {"accept_timing": {"p95_ms": 31.999}}},
+            "cases": {"full_flush": {"feed_timing": {"accept": {"p95_ms": 31.999}}}},
         }
 
         self.assertFalse(
@@ -113,11 +113,13 @@ class VadParityRunnerTests(unittest.TestCase):
     def test_timing_gate_is_strictly_less_than_32ms(self) -> None:
         self.assertTrue(
             runner.timing_ok(
-                {"cases": {"full_flush": {"accept_timing": {"p95_ms": 31.999}}}}
+                {"cases": {"full_flush": {"feed_timing": {"accept": {"p95_ms": 31.999}}}}}
             )
         )
         self.assertFalse(
-            runner.timing_ok({"cases": {"full_flush": {"accept_timing": {"p95_ms": 32.0}}}})
+            runner.timing_ok(
+                {"cases": {"full_flush": {"feed_timing": {"accept": {"p95_ms": 32.0}}}}}
+            )
         )
 
 

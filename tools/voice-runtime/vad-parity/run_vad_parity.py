@@ -144,6 +144,7 @@ const CONFIG = {
 };
 const ACCEPT_P95_LIMIT_MS = 32;
 const EXPECTED_SEGMENT = { start: 5728, length: 93696 };
+const SILENCE_SECONDS = 31;
 
 function postProgress(label) {
   self.postMessage({ type: 'progress', label });
@@ -249,8 +250,23 @@ function percentile(values, ratio) {
   return sorted[index];
 }
 
-function acceptFixture(vad, samples) {
-  const timings = [];
+function combineTiming(left, right) {
+  return {
+    p95_ms: Math.max(left.p95_ms, right.p95_ms),
+    max_ms: Math.max(left.max_ms, right.max_ms),
+    elapsed_ms: left.elapsed_ms + right.elapsed_ms,
+    operations: left.operations + right.operations,
+  };
+}
+
+function combineSegments(left, right) {
+  return left.concat(right);
+}
+
+function feedAndDrain(vad, samples) {
+  const acceptTimings = [];
+  const drainTimings = [];
+  const segments = [];
   let fullWindows = 0;
   let terminalTailSamples = 0;
   for (let offset = 0; offset < samples.length; offset += CONFIG.windowSize) {
@@ -262,25 +278,50 @@ function acceptFixture(vad, samples) {
     }
     const started = performance.now();
     vad.acceptWaveform(chunk);
-    timings.push(performance.now() - started);
+    acceptTimings.push(performance.now() - started);
+    const drained = drainSegmentsTimed(vad);
+    drainTimings.push(drained.timing.elapsed_ms);
+    segments.push(...drained.segments);
   }
   return {
-    p95_ms: percentile(timings, 0.95),
-    max_ms: timings.reduce((max, value) => Math.max(max, value), 0),
-    full_windows: fullWindows,
-    terminal_tail_samples: terminalTailSamples,
-    short_terminal_tail_supported: terminalTailSamples > 0,
+    segments,
+    feed_timing: {
+      accept: {
+        p95_ms: percentile(acceptTimings, 0.95),
+        max_ms: acceptTimings.reduce((max, value) => Math.max(max, value), 0),
+        elapsed_ms: acceptTimings.reduce((total, value) => total + value, 0),
+        operations: acceptTimings.length,
+      },
+      per_chunk_drain: {
+        p95_ms: percentile(drainTimings, 0.95),
+        max_ms: drainTimings.reduce((max, value) => Math.max(max, value), 0),
+        elapsed_ms: drainTimings.reduce((total, value) => total + value, 0),
+        operations: drainTimings.length,
+      },
+      full_windows: fullWindows,
+      terminal_tail_samples: terminalTailSamples,
+      short_terminal_tail_supported: terminalTailSamples > 0,
+    },
   };
 }
 
-function drainSegments(vad) {
+function drainSegmentsTimed(vad) {
+  const started = performance.now();
   const segments = [];
   while (!vad.isEmpty()) {
     const segment = vad.front();
     segments.push({ start: segment.start, length: segment.samples.length });
     vad.pop();
   }
-  return segments;
+  return {
+    segments,
+    timing: {
+      p95_ms: 0,
+      max_ms: 0,
+      elapsed_ms: performance.now() - started,
+      operations: 1,
+    },
+  };
 }
 
 function sameSegments(left, right) {
@@ -294,10 +335,12 @@ function isCanonicalFixtureOutput(segments) {
 function runFullFlush(samples) {
   const vad = createParityVad();
   try {
-    const timing = acceptFixture(vad, samples);
+    const feed = feedAndDrain(vad, samples);
     vad.flush();
-    const segments = drainSegments(vad);
-    return { ok: isCanonicalFixtureOutput(segments) && timing.p95_ms < ACCEPT_P95_LIMIT_MS, segments, accept_timing: timing, idempotent_empty: null };
+    const finalDrain = drainSegmentsTimed(vad);
+    const segments = combineSegments(feed.segments, finalDrain.segments);
+    const drainTiming = combineTiming(feed.feed_timing.per_chunk_drain, finalDrain.timing);
+    return { ok: isCanonicalFixtureOutput(segments) && feed.feed_timing.accept.p95_ms < ACCEPT_P95_LIMIT_MS, segments, feed_timing: feed.feed_timing, drain_timing: drainTiming, idempotent_empty: null };
   } finally {
     vad.free();
   }
@@ -306,14 +349,16 @@ function runFullFlush(samples) {
 function runResetReplay(samples, expected) {
   const vad = createParityVad();
   try {
-    acceptFixture(vad, samples);
+    feedAndDrain(vad, samples);
     vad.flush();
-    drainSegments(vad);
+    drainSegmentsTimed(vad);
     vad.reset();
-    const timing = acceptFixture(vad, samples);
+    const feed = feedAndDrain(vad, samples);
     vad.flush();
-    const segments = drainSegments(vad);
-    return { ok: sameSegments(segments, expected) && timing.p95_ms < ACCEPT_P95_LIMIT_MS, segments, accept_timing: timing, idempotent_empty: null };
+    const finalDrain = drainSegmentsTimed(vad);
+    const segments = combineSegments(feed.segments, finalDrain.segments);
+    const drainTiming = combineTiming(feed.feed_timing.per_chunk_drain, finalDrain.timing);
+    return { ok: sameSegments(segments, expected) && feed.feed_timing.accept.p95_ms < ACCEPT_P95_LIMIT_MS, segments, feed_timing: feed.feed_timing, drain_timing: drainTiming, idempotent_empty: null };
   } finally {
     vad.free();
   }
@@ -322,12 +367,14 @@ function runResetReplay(samples, expected) {
 function runDiscontinuityReset(samples, expected) {
   const vad = createParityVad();
   try {
-    acceptFixture(vad, samples.slice(0, Math.min(samples.length, CONFIG.windowSize * 3)));
+    feedAndDrain(vad, samples.slice(0, Math.min(samples.length, CONFIG.windowSize * 3)));
     vad.reset();
-    const timing = acceptFixture(vad, samples);
+    const feed = feedAndDrain(vad, samples);
     vad.flush();
-    const segments = drainSegments(vad);
-    return { ok: sameSegments(segments, expected) && timing.p95_ms < ACCEPT_P95_LIMIT_MS, segments, accept_timing: timing, idempotent_empty: null };
+    const finalDrain = drainSegmentsTimed(vad);
+    const segments = combineSegments(feed.segments, finalDrain.segments);
+    const drainTiming = combineTiming(feed.feed_timing.per_chunk_drain, finalDrain.timing);
+    return { ok: sameSegments(segments, expected) && feed.feed_timing.accept.p95_ms < ACCEPT_P95_LIMIT_MS, segments, feed_timing: feed.feed_timing, drain_timing: drainTiming, idempotent_empty: null };
   } finally {
     vad.free();
   }
@@ -336,13 +383,16 @@ function runDiscontinuityReset(samples, expected) {
 function runSecondFlush(samples, expected) {
   const vad = createParityVad();
   try {
-    const timing = acceptFixture(vad, samples);
+    const feed = feedAndDrain(vad, samples);
     vad.flush();
-    const segments = drainSegments(vad);
+    const finalDrain = drainSegmentsTimed(vad);
+    const segments = combineSegments(feed.segments, finalDrain.segments);
     vad.flush();
-    const afterSecondFlush = drainSegments(vad);
+    const secondDrain = drainSegmentsTimed(vad);
+    const drainTiming = combineTiming(combineTiming(feed.feed_timing.per_chunk_drain, finalDrain.timing), secondDrain.timing);
+    const afterSecondFlush = secondDrain.segments;
     const idempotentEmpty = afterSecondFlush.length === 0;
-    return { ok: sameSegments(segments, expected) && idempotentEmpty && timing.p95_ms < ACCEPT_P95_LIMIT_MS, segments, accept_timing: timing, idempotent_empty: idempotentEmpty };
+    return { ok: sameSegments(segments, expected) && idempotentEmpty && feed.feed_timing.accept.p95_ms < ACCEPT_P95_LIMIT_MS, segments, feed_timing: feed.feed_timing, drain_timing: drainTiming, idempotent_empty: idempotentEmpty };
   } finally {
     vad.free();
   }
@@ -351,11 +401,28 @@ function runSecondFlush(samples, expected) {
 function runCancellationResetBeforeFlush(samples) {
   const vad = createParityVad();
   try {
-    const timing = acceptFixture(vad, samples.slice(0, Math.min(samples.length, CONFIG.windowSize * 3)));
+    const feed = feedAndDrain(vad, samples.slice(0, Math.min(samples.length, CONFIG.windowSize * 3)));
     vad.reset();
     vad.flush();
-    const segments = drainSegments(vad);
-    return { ok: segments.length === 0 && timing.p95_ms < ACCEPT_P95_LIMIT_MS, segments, accept_timing: timing, idempotent_empty: null };
+    const finalDrain = drainSegmentsTimed(vad);
+    const segments = combineSegments(feed.segments, finalDrain.segments);
+    const drainTiming = combineTiming(feed.feed_timing.per_chunk_drain, finalDrain.timing);
+    return { ok: segments.length === 0 && feed.feed_timing.accept.p95_ms < ACCEPT_P95_LIMIT_MS, segments, feed_timing: feed.feed_timing, drain_timing: drainTiming, idempotent_empty: null };
+  } finally {
+    vad.free();
+  }
+}
+
+function runLongSilence() {
+  const vad = createParityVad();
+  try {
+    const silence = new Float32Array(CONFIG.sampleRate * SILENCE_SECONDS);
+    const feed = feedAndDrain(vad, silence);
+    vad.flush();
+    const finalDrain = drainSegmentsTimed(vad);
+    const segments = combineSegments(feed.segments, finalDrain.segments);
+    const drainTiming = combineTiming(feed.feed_timing.per_chunk_drain, finalDrain.timing);
+    return { ok: segments.length === 0 && feed.feed_timing.accept.p95_ms < ACCEPT_P95_LIMIT_MS, segments, feed_timing: feed.feed_timing, drain_timing: drainTiming, idempotent_empty: null };
   } finally {
     vad.free();
   }
@@ -378,12 +445,14 @@ async function runProbe() {
   const discontinuity = runDiscontinuityReset(samples, fullFlush.segments);
   const secondFlush = runSecondFlush(samples, fullFlush.segments);
   const cancellation = runCancellationResetBeforeFlush(samples);
+  const longSilence = runLongSilence();
   const cases = {
     full_flush: fullFlush,
     reset_replay: resetReplay,
     discontinuity_reset: discontinuity,
     second_flush_idempotent: secondFlush,
     cancellation_reset_before_flush: cancellation,
+    long_silence_rolling_buffer: longSilence,
   };
   const ok = Object.values(cases).every((item) => item.ok === true);
   return {
@@ -802,7 +871,7 @@ def compare_segments(native: dict[str, Any], browser: dict[str, Any]) -> dict[st
 
 def timing_ok(result: dict[str, Any]) -> bool:
     for case in result.get("cases", {}).values():
-        timing = case.get("accept_timing", {})
+        timing = case.get("feed_timing", {}).get("accept", {})
         if float(timing.get("p95_ms", ACCEPT_P95_LIMIT_MS + 1)) >= ACCEPT_P95_LIMIT_MS:
             return False
     return True

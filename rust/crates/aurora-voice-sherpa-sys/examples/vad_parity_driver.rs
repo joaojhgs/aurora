@@ -17,6 +17,7 @@ const BUFFER_SECS: f32 = 30.0;
 const ACCEPT_P95_LIMIT_MS: f64 = 32.0;
 const EXPECTED_START: i32 = 5_728;
 const EXPECTED_LENGTH: usize = 93_696;
+const SILENCE_SECONDS: usize = 31;
 
 fn main() {
     match run() {
@@ -49,22 +50,25 @@ fn run() -> Result<NativeReport, String> {
     let discontinuity = run_discontinuity_reset(&config, &pcm, &full_flush.segments)?;
     let second_flush = run_second_flush(&config, &pcm, &full_flush.segments)?;
     let cancellation = run_reset_before_flush(&config, &pcm)?;
+    let long_silence = run_long_silence(&config)?;
 
     let timings = [
-        &full_flush.timing,
-        &reset_replay.timing,
-        &discontinuity.timing,
-        &second_flush.timing,
-        &cancellation.timing,
+        &full_flush.feed_timing,
+        &reset_replay.feed_timing,
+        &discontinuity.feed_timing,
+        &second_flush.feed_timing,
+        &cancellation.feed_timing,
+        &long_silence.feed_timing,
     ];
     let p95_ok = timings
         .iter()
-        .all(|timing| timing.p95_ms < ACCEPT_P95_LIMIT_MS);
+        .all(|timing| timing.accept.p95_ms < ACCEPT_P95_LIMIT_MS);
     let ok = full_flush.ok
         && reset_replay.ok
         && discontinuity.ok
         && second_flush.ok
         && cancellation.ok
+        && long_silence.ok
         && p95_ok;
 
     Ok(NativeReport {
@@ -76,18 +80,24 @@ fn run() -> Result<NativeReport, String> {
         discontinuity,
         second_flush,
         cancellation,
+        long_silence,
     })
 }
 
 fn run_full_flush(config: &SileroVadConfig, pcm: &[f32]) -> Result<CaseReport, String> {
     let mut detector = VoiceActivityDetector::new(config).map_err(|error| error.to_string())?;
-    let timing = accept_fixture(&mut detector, pcm)?;
+    let feed = feed_and_drain(&mut detector, pcm)?;
     detector.flush().map_err(|error| error.to_string())?;
-    let segments = drain_segments(&mut detector)?;
+    let final_drain = drain_segments_timed(&mut detector)?;
+    let feed_timing = feed.to_timing();
+    let drain_timing = feed.drain_timing.combine(final_drain.timing);
+    let segments = combine_segments(feed.segments, final_drain.segments);
     Ok(CaseReport {
-        ok: is_canonical_fixture_output(&segments) && timing.p95_ms < ACCEPT_P95_LIMIT_MS,
+        ok: is_canonical_fixture_output(&segments)
+            && feed.accept_timing.p95_ms < ACCEPT_P95_LIMIT_MS,
         segments,
-        timing,
+        feed_timing,
+        drain_timing,
         idempotent_empty: None,
     })
 }
@@ -98,18 +108,22 @@ fn run_reset_replay(
     expected: &[SegmentReport],
 ) -> Result<CaseReport, String> {
     let mut detector = VoiceActivityDetector::new(config).map_err(|error| error.to_string())?;
-    let _ = accept_fixture(&mut detector, pcm)?;
+    let _ = feed_and_drain(&mut detector, pcm)?;
     detector.flush().map_err(|error| error.to_string())?;
-    let _ = drain_segments(&mut detector)?;
+    let _ = drain_segments_timed(&mut detector)?;
 
     detector.reset().map_err(|error| error.to_string())?;
-    let timing = accept_fixture(&mut detector, pcm)?;
+    let feed = feed_and_drain(&mut detector, pcm)?;
     detector.flush().map_err(|error| error.to_string())?;
-    let segments = drain_segments(&mut detector)?;
+    let final_drain = drain_segments_timed(&mut detector)?;
+    let feed_timing = feed.to_timing();
+    let drain_timing = feed.drain_timing.combine(final_drain.timing);
+    let segments = combine_segments(feed.segments, final_drain.segments);
     Ok(CaseReport {
-        ok: segments == expected && timing.p95_ms < ACCEPT_P95_LIMIT_MS,
+        ok: segments == expected && feed.accept_timing.p95_ms < ACCEPT_P95_LIMIT_MS,
         segments,
-        timing,
+        feed_timing,
+        drain_timing,
         idempotent_empty: None,
     })
 }
@@ -121,16 +135,20 @@ fn run_discontinuity_reset(
 ) -> Result<CaseReport, String> {
     let mut detector = VoiceActivityDetector::new(config).map_err(|error| error.to_string())?;
     let prefix = pcm.len().min(WINDOW_SIZE * 3);
-    let _ = accept_fixture(&mut detector, &pcm[..prefix])?;
+    let _ = feed_and_drain(&mut detector, &pcm[..prefix])?;
     detector.reset().map_err(|error| error.to_string())?;
 
-    let timing = accept_fixture(&mut detector, pcm)?;
+    let feed = feed_and_drain(&mut detector, pcm)?;
     detector.flush().map_err(|error| error.to_string())?;
-    let segments = drain_segments(&mut detector)?;
+    let final_drain = drain_segments_timed(&mut detector)?;
+    let feed_timing = feed.to_timing();
+    let drain_timing = feed.drain_timing.combine(final_drain.timing);
+    let segments = combine_segments(feed.segments, final_drain.segments);
     Ok(CaseReport {
-        ok: segments == expected && timing.p95_ms < ACCEPT_P95_LIMIT_MS,
+        ok: segments == expected && feed.accept_timing.p95_ms < ACCEPT_P95_LIMIT_MS,
         segments,
-        timing,
+        feed_timing,
+        drain_timing,
         idempotent_empty: None,
     })
 }
@@ -141,16 +159,26 @@ fn run_second_flush(
     expected: &[SegmentReport],
 ) -> Result<CaseReport, String> {
     let mut detector = VoiceActivityDetector::new(config).map_err(|error| error.to_string())?;
-    let timing = accept_fixture(&mut detector, pcm)?;
+    let feed = feed_and_drain(&mut detector, pcm)?;
     detector.flush().map_err(|error| error.to_string())?;
-    let segments = drain_segments(&mut detector)?;
+    let final_drain = drain_segments_timed(&mut detector)?;
     detector.flush().map_err(|error| error.to_string())?;
-    let after_second_flush = drain_segments(&mut detector)?;
+    let second_drain = drain_segments_timed(&mut detector)?;
+    let feed_timing = feed.to_timing();
+    let drain_timing = feed
+        .drain_timing
+        .combine(final_drain.timing)
+        .combine(second_drain.timing);
+    let segments = combine_segments(feed.segments, final_drain.segments);
+    let after_second_flush = second_drain.segments;
     let idempotent_empty = after_second_flush.is_empty();
     Ok(CaseReport {
-        ok: segments == expected && idempotent_empty && timing.p95_ms < ACCEPT_P95_LIMIT_MS,
+        ok: segments == expected
+            && idempotent_empty
+            && feed.accept_timing.p95_ms < ACCEPT_P95_LIMIT_MS,
         segments,
-        timing,
+        feed_timing,
+        drain_timing,
         idempotent_empty: Some(idempotent_empty),
     })
 }
@@ -158,23 +186,44 @@ fn run_second_flush(
 fn run_reset_before_flush(config: &SileroVadConfig, pcm: &[f32]) -> Result<CaseReport, String> {
     let mut detector = VoiceActivityDetector::new(config).map_err(|error| error.to_string())?;
     let prefix = pcm.len().min(WINDOW_SIZE * 3);
-    let timing = accept_fixture(&mut detector, &pcm[..prefix])?;
+    let feed = feed_and_drain(&mut detector, &pcm[..prefix])?;
     detector.reset().map_err(|error| error.to_string())?;
     detector.flush().map_err(|error| error.to_string())?;
-    let segments = drain_segments(&mut detector)?;
+    let final_drain = drain_segments_timed(&mut detector)?;
+    let feed_timing = feed.to_timing();
+    let drain_timing = feed.drain_timing.combine(final_drain.timing);
+    let segments = combine_segments(feed.segments, final_drain.segments);
     Ok(CaseReport {
-        ok: segments.is_empty() && timing.p95_ms < ACCEPT_P95_LIMIT_MS,
+        ok: segments.is_empty() && feed.accept_timing.p95_ms < ACCEPT_P95_LIMIT_MS,
         segments,
-        timing,
+        feed_timing,
+        drain_timing,
         idempotent_empty: None,
     })
 }
 
-fn accept_fixture(
-    detector: &mut VoiceActivityDetector,
-    pcm: &[f32],
-) -> Result<AcceptTimingReport, String> {
-    let mut timings = Vec::new();
+fn run_long_silence(config: &SileroVadConfig) -> Result<CaseReport, String> {
+    let mut detector = VoiceActivityDetector::new(config).map_err(|error| error.to_string())?;
+    let silence = vec![0.0; SAMPLE_RATE as usize * SILENCE_SECONDS];
+    let feed = feed_and_drain(&mut detector, &silence)?;
+    detector.flush().map_err(|error| error.to_string())?;
+    let final_drain = drain_segments_timed(&mut detector)?;
+    let feed_timing = feed.to_timing();
+    let drain_timing = feed.drain_timing.combine(final_drain.timing);
+    let segments = combine_segments(feed.segments, final_drain.segments);
+    Ok(CaseReport {
+        ok: segments.is_empty() && feed.accept_timing.p95_ms < ACCEPT_P95_LIMIT_MS,
+        segments,
+        feed_timing,
+        drain_timing,
+        idempotent_empty: None,
+    })
+}
+
+fn feed_and_drain(detector: &mut VoiceActivityDetector, pcm: &[f32]) -> Result<FeedReport, String> {
+    let mut accept_timings = Vec::new();
+    let mut drain_timings = Vec::new();
+    let mut segments = Vec::new();
     let mut full_windows = 0usize;
     let mut terminal_tail_samples = 0usize;
     for chunk in pcm.chunks(WINDOW_SIZE) {
@@ -187,23 +236,52 @@ fn accept_fixture(
         detector
             .accept_waveform(chunk)
             .map_err(|error| error.to_string())?;
-        timings.push(started.elapsed().as_secs_f64() * 1000.0);
+        accept_timings.push(started.elapsed().as_secs_f64() * 1000.0);
+
+        let drained = drain_segments_timed(detector)?;
+        drain_timings.push(drained.timing.elapsed_ms);
+        segments.extend(drained.segments);
     }
 
-    Ok(AcceptTimingReport {
-        p95_ms: percentile(&timings, 0.95),
-        max_ms: timings.iter().copied().fold(0.0, f64::max),
+    Ok(FeedReport {
+        segments,
+        accept_timing: WindowTimingReport {
+            p95_ms: percentile(&accept_timings, 0.95),
+            max_ms: accept_timings.iter().copied().fold(0.0, f64::max),
+            elapsed_ms: accept_timings.iter().sum(),
+            operations: accept_timings.len(),
+        },
+        drain_timing: WindowTimingReport {
+            p95_ms: percentile(&drain_timings, 0.95),
+            max_ms: drain_timings.iter().copied().fold(0.0, f64::max),
+            elapsed_ms: drain_timings.iter().sum(),
+            operations: drain_timings.len(),
+        },
         full_windows,
         terminal_tail_samples,
         short_terminal_tail_supported: terminal_tail_samples > 0,
     })
 }
 
-fn drain_segments(detector: &mut VoiceActivityDetector) -> Result<Vec<SegmentReport>, String> {
+fn drain_segments_timed(detector: &mut VoiceActivityDetector) -> Result<DrainReport, String> {
+    let started = Instant::now();
     let segments = detector
         .drain_speech_segments()
         .map_err(|error| error.to_string())?;
-    Ok(segments.iter().map(SegmentReport::from).collect())
+    Ok(DrainReport {
+        segments: segments.iter().map(SegmentReport::from).collect(),
+        timing: WindowTimingReport {
+            p95_ms: 0.0,
+            max_ms: 0.0,
+            elapsed_ms: started.elapsed().as_secs_f64() * 1000.0,
+            operations: 1,
+        },
+    })
+}
+
+fn combine_segments(mut left: Vec<SegmentReport>, right: Vec<SegmentReport>) -> Vec<SegmentReport> {
+    left.extend(right);
+    left
 }
 
 fn is_canonical_fixture_output(segments: &[SegmentReport]) -> bool {
@@ -348,6 +426,7 @@ struct NativeReport {
     discontinuity: CaseReport,
     second_flush: CaseReport,
     cancellation: CaseReport,
+    long_silence: CaseReport,
 }
 
 impl NativeReport {
@@ -358,7 +437,7 @@ impl NativeReport {
                 "\"ok\":{},\"physical_device_claim\":{},\"config\":{},",
                 "\"cases\":{{\"full_flush\":{},\"reset_replay\":{},",
                 "\"discontinuity_reset\":{},\"second_flush_idempotent\":{},",
-                "\"cancellation_reset_before_flush\":{}}}",
+                "\"cancellation_reset_before_flush\":{},\"long_silence_rolling_buffer\":{}}}",
                 "}}"
             ),
             self.ok,
@@ -368,7 +447,8 @@ impl NativeReport {
             self.reset_replay.to_json(),
             self.discontinuity.to_json(),
             self.second_flush.to_json(),
-            self.cancellation.to_json()
+            self.cancellation.to_json(),
+            self.long_silence.to_json()
         )
     }
 }
@@ -401,7 +481,8 @@ impl ParityConfig {
 struct CaseReport {
     ok: bool,
     segments: Vec<SegmentReport>,
-    timing: AcceptTimingReport,
+    feed_timing: FeedTimingReport,
+    drain_timing: WindowTimingReport,
     idempotent_empty: Option<bool>,
 }
 
@@ -424,10 +505,14 @@ impl CaseReport {
             },
         );
         format!(
-            "{{\"ok\":{},\"segments\":[{}],\"accept_timing\":{},\"idempotent_empty\":{}}}",
+            concat!(
+                "{{\"ok\":{},\"segments\":[{}],\"feed_timing\":{},",
+                "\"drain_timing\":{},\"idempotent_empty\":{}}}"
+            ),
             self.ok,
             segments,
-            self.timing.to_json(),
+            self.feed_timing.to_json(),
+            self.drain_timing.to_json(),
             idempotent
         )
     }
@@ -455,27 +540,83 @@ impl SegmentReport {
 }
 
 #[derive(Debug)]
-struct AcceptTimingReport {
-    p95_ms: f64,
-    max_ms: f64,
+struct FeedReport {
+    segments: Vec<SegmentReport>,
+    accept_timing: WindowTimingReport,
+    drain_timing: WindowTimingReport,
     full_windows: usize,
     terminal_tail_samples: usize,
     short_terminal_tail_supported: bool,
 }
 
-impl AcceptTimingReport {
+impl FeedReport {
+    fn to_timing(&self) -> FeedTimingReport {
+        FeedTimingReport {
+            accept: self.accept_timing.clone(),
+            per_chunk_drain: self.drain_timing.clone(),
+            full_windows: self.full_windows,
+            terminal_tail_samples: self.terminal_tail_samples,
+            short_terminal_tail_supported: self.short_terminal_tail_supported,
+        }
+    }
+}
+
+struct DrainReport {
+    segments: Vec<SegmentReport>,
+    timing: WindowTimingReport,
+}
+
+#[derive(Debug)]
+struct FeedTimingReport {
+    accept: WindowTimingReport,
+    per_chunk_drain: WindowTimingReport,
+    full_windows: usize,
+    terminal_tail_samples: usize,
+    short_terminal_tail_supported: bool,
+}
+
+impl FeedTimingReport {
+    fn to_json(&self) -> String {
+        format!(
+            concat!(
+                "{{\"accept\":{},\"per_chunk_drain\":{},",
+                "\"full_windows\":{},\"terminal_tail_samples\":{},",
+                "\"short_terminal_tail_supported\":{}}}"
+            ),
+            self.accept.to_json(),
+            self.per_chunk_drain.to_json(),
+            self.full_windows,
+            self.terminal_tail_samples,
+            self.short_terminal_tail_supported
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
+struct WindowTimingReport {
+    p95_ms: f64,
+    max_ms: f64,
+    elapsed_ms: f64,
+    operations: usize,
+}
+
+impl WindowTimingReport {
+    fn combine(self, other: Self) -> Self {
+        Self {
+            p95_ms: self.p95_ms.max(other.p95_ms),
+            max_ms: self.max_ms.max(other.max_ms),
+            elapsed_ms: self.elapsed_ms + other.elapsed_ms,
+            operations: self.operations + other.operations,
+        }
+    }
+
     fn to_json(&self) -> String {
         format!(
             concat!(
                 "{{\"p95_ms\":{:.6},\"max_ms\":{:.6},",
-                "\"full_windows\":{},\"terminal_tail_samples\":{},",
-                "\"short_terminal_tail_supported\":{}}}"
+                "\"elapsed_ms\":{:.6},\"operations\":{}}}"
             ),
-            self.p95_ms,
-            self.max_ms,
-            self.full_windows,
-            self.terminal_tail_samples,
-            self.short_terminal_tail_supported
+            self.p95_ms, self.max_ms, self.elapsed_ms, self.operations
         )
     }
 }

@@ -64,11 +64,12 @@ Reports are written to `.artifacts/voice-runtime/vad-parity/<timestamp>/report.j
 - WAV input must be RIFF PCM16 mono 16 kHz.
 - PCM16 conversion divides by `32768.0`.
 - VAD config is exactly threshold `0.25`, min silence `0.25s`, min speech `0.25s`, max speech `10s`, window `512`, sample rate `16000`, one channel, provider `cpu`, buffer `30s`.
-- Cases: full flush, reset replay, discontinuity reset with no stale state, second flush idempotence, reset-before-flush cancellation equivalent.
+- Cases: full flush, reset replay, discontinuity reset with no stale state, second flush idempotence, reset-before-flush cancellation equivalent, and `31s` continuous silence rolling-buffer operation.
+- Native and browser feeds drain completed segments after every accepted 512-sample window or terminal tail, then flush and drain the final tail.
 - Canonical fixture output is exactly `{start: 5728, length: 93696}` for full flush before browser/native tolerance comparison.
 - Browser workers must run with `SharedArrayBuffer` and `crossOriginIsolated`.
 - Segment count/order must match native. Segment start and length may differ by at most `512` samples.
-- Per-window accept p95 must be `<32ms`.
+- Per-window accept p95 must be `<32ms`; reports label accept timing separately from per-chunk/final drain timing.
 - `--skip-native`, `--skip-browsers`, or a browser subset produces partial diagnostics and cannot return top-level `ok: true`.
 - `physical_device_claim` is always `false`.
 
