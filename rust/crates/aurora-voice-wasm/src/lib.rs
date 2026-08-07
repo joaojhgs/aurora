@@ -249,6 +249,7 @@ impl From<VoiceCoreError> for WasmFacadeError {
             VoiceCoreError::EmptyFrame | VoiceCoreError::SampleCountMismatch => {
                 Self::new("empty_frame")
             }
+            VoiceCoreError::GenerationExhausted => Self::new("generation_exhausted"),
             VoiceCoreError::InvalidIdentifier => Self::new("invalid_id"),
             VoiceCoreError::InvalidTransition => Self::new("invalid_state"),
             VoiceCoreError::LockPoisoned => Self::new("internal"),
@@ -3132,6 +3133,14 @@ mod wasm_facade_tests {
             channels: WASM_CHANNELS,
             samples,
         }
+    }
+
+    #[test]
+    fn maps_generation_exhaustion_to_stable_redacted_code() {
+        assert_eq!(
+            WasmFacadeError::from(VoiceCoreError::GenerationExhausted).code(),
+            "generation_exhausted"
+        );
     }
 
     #[test]
