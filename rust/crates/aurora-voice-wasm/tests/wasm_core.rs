@@ -195,6 +195,52 @@ async fn quota_rejection_reports_persistence_kind() {
 }
 
 #[wasm_bindgen_test(async)]
+async fn reservation_quota_deduplicates_proposed_content_identity() {
+    let body = b"same-bytes".to_vec();
+    let hash = sha256(&body);
+    let first = verified("first-pack", "1", &hash, body.len() as u64);
+    let second = verified("second-pack", "1", &hash, body.len() as u64);
+    let first_selection = selection_for(&first);
+    let second_selection = selection_for(&second);
+    let mut store = WebModelStore::new(InMemoryWebHost::new(Some(body.len() as u64)));
+
+    install_ready(&mut store, &first, body.clone()).await;
+    store
+        .reserve_file(&second, &second_selection, &second.manifest().files[0])
+        .await
+        .expect("promoted content identity fits tight quota");
+
+    let mut reserved = WebModelStore::new(InMemoryWebHost::new(Some(body.len() as u64)));
+    reserved
+        .reserve_file(&first, &first_selection, &first.manifest().files[0])
+        .await
+        .expect("first reserve fits tight quota");
+    reserved
+        .reserve_file(&second, &second_selection, &second.manifest().files[0])
+        .await
+        .expect("duplicate reservation fits tight quota");
+    assert_eq!(
+        reserved.status().await.unwrap().bytes_reserved,
+        body.len() as u64
+    );
+}
+
+#[wasm_bindgen_test(async)]
+async fn reserved_download_can_fill_exact_quota() {
+    let body = b"exact-quota".to_vec();
+    let manifest = verified("pack", "1", &sha256(&body), body.len() as u64);
+    let selection = selection_for(&manifest);
+    let mut store = WebModelStore::new(InMemoryWebHost::new(Some(body.len() as u64)));
+    let task = store
+        .reserve_file(&manifest, &selection, &manifest.manifest().files[0])
+        .await
+        .expect("reserve exact quota");
+
+    let receipt = download_body_with_chunk(&mut store, &task, body, 2).await;
+    assert_eq!(receipt.byte_size, task.expected_bytes);
+}
+
+#[wasm_bindgen_test(async)]
 async fn variants_and_versions_are_isolated() {
     let web_body = b"web-model".to_vec();
     let other_body = b"desktop-model".to_vec();
@@ -381,10 +427,34 @@ async fn eviction_recovery_and_cancellation_are_explicit() {
     );
 
     install_ready(&mut store, &manifest, body).await;
+    assert!(store
+        .lifecycle("pack", "1", selection.variant_id())
+        .await
+        .expect("ready lifecycle before eviction")
+        .is_some());
+    store.host_mut().set_evicted(true);
+    assert!(store
+        .lifecycle("pack", "1", selection.variant_id())
+        .await
+        .expect("ready lifecycle after host eviction")
+        .is_none());
+    store.host_mut().set_evicted(false);
     store
         .activate_pack(scope(), &manifest, &selection)
         .await
         .expect("activate pack");
+    assert!(store
+        .lifecycle("pack", "1", selection.variant_id())
+        .await
+        .expect("active lifecycle before eviction")
+        .is_some());
+    store.host_mut().set_evicted(true);
+    assert!(store
+        .lifecycle("pack", "1", selection.variant_id())
+        .await
+        .expect("active lifecycle after host eviction")
+        .is_none());
+    store.host_mut().set_evicted(false);
     store
         .signal_recovery("pack", WebRecoverySignal::Evicted)
         .await
@@ -445,6 +515,68 @@ async fn promotion_crash_recovers_from_journal() {
         .open_immutable_file(&selection, "model")
         .await
         .is_ok());
+}
+
+#[wasm_bindgen_test(async)]
+async fn scope_mutation_journal_hides_and_recovers_incomplete_activation() {
+    let first_body = b"journal-first".to_vec();
+    let second_body = b"journal-second".to_vec();
+    let first = verified("pack-a", "1", &sha256(&first_body), first_body.len() as u64);
+    let second = verified(
+        "pack-b",
+        "1",
+        &sha256(&second_body),
+        second_body.len() as u64,
+    );
+    let first_selection = selection_for(&first);
+    let second_selection = selection_for(&second);
+    let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
+    install_ready(&mut store, &first, first_body).await;
+    install_ready(&mut store, &second, second_body).await;
+    store
+        .activate_pack(scope(), &first, &first_selection)
+        .await
+        .expect("activate first");
+    let active_key = "aurora.voice.web-store.v1:active:stt:default";
+    let old_active = store
+        .host()
+        .read_json(active_key)
+        .await
+        .expect("read active key")
+        .expect("active record exists");
+
+    store
+        .activate_pack(scope(), &second, &second_selection)
+        .await
+        .expect("activate second");
+    store.host_mut().insert_json(
+        "aurora.voice.web-store.v1:mutation:stt:default",
+        serde_json::json!({
+            "restore": {
+                active_key: old_active,
+            }
+        })
+        .to_string(),
+    );
+    assert!(store
+        .active_pack(scope())
+        .await
+        .expect("active hidden by pending journal")
+        .is_none());
+
+    let mut recreated = WebModelStore::new(store.host().clone());
+    recreated
+        .recover_scope_transactions()
+        .await
+        .expect("recover journal");
+    assert_eq!(
+        recreated
+            .active_pack(scope())
+            .await
+            .expect("active after recovery")
+            .map(|active| active.pack_id),
+        Some("pack-a".to_owned())
+    );
 }
 
 #[wasm_bindgen_test(async)]
@@ -784,6 +916,64 @@ async fn dependency_files_do_not_have_to_match_scope_task_but_wrong_scope_reject
             .await,
         Err(ModelPackError::Store { code: "task" })
     );
+
+    let primary = b"transitive-primary".to_vec();
+    let direct = b"transitive-direct".to_vec();
+    let shared = b"transitive-shared".to_vec();
+    let mut raw = manifest(
+        "transitive-pack",
+        "1",
+        &sha256(&primary),
+        primary.len() as u64,
+    );
+    raw.tasks = vec![PackTask::Stt, PackTask::Frontend, PackTask::Tokenizer];
+    raw.files = vec![
+        {
+            let mut file = model_file("model", &sha256(&primary), primary.len() as u64);
+            file.dependencies = vec!["frontend".to_owned()];
+            file
+        },
+        {
+            let mut file = model_file("frontend", &sha256(&direct), direct.len() as u64);
+            file.task = PackTask::Frontend;
+            file.dependencies = vec!["shared".to_owned()];
+            file
+        },
+        {
+            let mut file = model_file("shared", &sha256(&shared), shared.len() as u64);
+            file.task = PackTask::Tokenizer;
+            file
+        },
+    ];
+    raw.variants[0].file_ids = vec!["model".to_owned()];
+    raw.variants[0].resource_budget.max_download_bytes =
+        (primary.len() + direct.len() + shared.len()) as u64;
+    raw.variants[0].resource_budget.max_installed_bytes =
+        (primary.len() + direct.len() + shared.len()) as u64;
+    let verified = verify_manifest(raw, &TrustPolicy::default(), Some(&AcceptingVerifier))
+        .expect("verify transitive dependency pack");
+    let selection = selection_for(&verified);
+    assert!(selection.file_ids().contains("shared"));
+    assert_eq!(selection.file_ids().len(), 3);
+    let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
+    install_file(&mut store, &verified, &selection, 0, primary).await;
+    install_file(&mut store, &verified, &selection, 1, direct).await;
+    store
+        .set_lifecycle(create_lifecycle_snapshot(
+            "transitive-pack",
+            "1",
+            selection.variant_id().to_owned(),
+            0,
+            InstallState::Ready,
+        ))
+        .await
+        .expect("ready lifecycle");
+    assert_eq!(
+        store.activate_pack(scope(), &verified, &selection).await,
+        Err(ModelPackError::Store {
+            code: "missing_file"
+        })
+    );
 }
 
 #[wasm_bindgen_test(async)]
@@ -840,6 +1030,157 @@ async fn duplicate_blobs_orphans_and_stale_active_bytes_fail_closed() {
     let mut cleanup = WebModelStore::new(store.host().clone());
     cleanup.recover_promotions().await.unwrap();
     assert!(!cleanup.host().promoted_contains(&key_b));
+}
+
+#[wasm_bindgen_test(async)]
+async fn ready_lifecycle_requires_complete_persisted_file_closure() {
+    let primary = b"ready-primary".to_vec();
+    let tokenizer = b"ready-tokenizer".to_vec();
+    let mut raw = manifest("ready-pack", "1", &sha256(&primary), primary.len() as u64);
+    raw.tasks = vec![PackTask::Stt, PackTask::Tokenizer];
+    raw.files = vec![
+        {
+            let mut file = model_file("model", &sha256(&primary), primary.len() as u64);
+            file.dependencies = vec!["tokenizer".to_owned()];
+            file
+        },
+        {
+            let mut file = model_file("tokenizer", &sha256(&tokenizer), tokenizer.len() as u64);
+            file.task = PackTask::Tokenizer;
+            file
+        },
+    ];
+    raw.variants[0].file_ids = vec!["model".to_owned()];
+    raw.variants[0].resource_budget.max_download_bytes = (primary.len() + tokenizer.len()) as u64;
+    raw.variants[0].resource_budget.max_installed_bytes = (primary.len() + tokenizer.len()) as u64;
+    let verified = verify_manifest(raw, &TrustPolicy::default(), Some(&AcceptingVerifier))
+        .expect("verify dependency-backed pack");
+    let selection = selection_for(&verified);
+    let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
+    install_file(&mut store, &verified, &selection, 0, primary.clone()).await;
+    install_file(&mut store, &verified, &selection, 1, tokenizer.clone()).await;
+    store
+        .set_lifecycle(create_lifecycle_snapshot(
+            "ready-pack",
+            "1",
+            selection.variant_id().to_owned(),
+            0,
+            InstallState::Ready,
+        ))
+        .await
+        .expect("ready lifecycle");
+    assert!(store
+        .lifecycle("ready-pack", "1", selection.variant_id())
+        .await
+        .expect("complete ready lifecycle")
+        .is_some());
+
+    let tokenizer_key = file_storage_key("ready-pack", "1", selection.variant_id(), "tokenizer");
+    store
+        .host_mut()
+        .delete_json(&format!("aurora.voice.web-store.v1:file:{tokenizer_key}"))
+        .await
+        .expect("delete tokenizer metadata");
+    assert!(store
+        .lifecycle("ready-pack", "1", selection.variant_id())
+        .await
+        .expect("metadata loss hides ready lifecycle")
+        .is_none());
+
+    let mut file_loss = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
+    install_file(&mut file_loss, &verified, &selection, 0, primary.clone()).await;
+    install_file(&mut file_loss, &verified, &selection, 1, tokenizer.clone()).await;
+    file_loss
+        .set_lifecycle(create_lifecycle_snapshot(
+            "ready-pack",
+            "1",
+            selection.variant_id().to_owned(),
+            0,
+            InstallState::Ready,
+        ))
+        .await
+        .expect("ready lifecycle");
+    file_loss
+        .host_mut()
+        .delete_promoted(&tokenizer_key)
+        .await
+        .expect("delete tokenizer bytes");
+    assert!(file_loss
+        .lifecycle("ready-pack", "1", selection.variant_id())
+        .await
+        .expect("file loss hides ready lifecycle")
+        .is_none());
+
+    let mut active_loss = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
+    install_file(&mut active_loss, &verified, &selection, 0, primary.clone()).await;
+    install_file(
+        &mut active_loss,
+        &verified,
+        &selection,
+        1,
+        tokenizer.clone(),
+    )
+    .await;
+    active_loss
+        .set_lifecycle(create_lifecycle_snapshot(
+            "ready-pack",
+            "1",
+            selection.variant_id().to_owned(),
+            0,
+            InstallState::Ready,
+        ))
+        .await
+        .expect("ready lifecycle");
+    active_loss
+        .activate_pack(scope(), &verified, &selection)
+        .await
+        .expect("activate complete closure");
+    active_loss
+        .host_mut()
+        .delete_json(&format!("aurora.voice.web-store.v1:file:{tokenizer_key}"))
+        .await
+        .expect("delete active tokenizer metadata");
+    assert!(active_loss
+        .active_pack(scope())
+        .await
+        .expect("active lookup after metadata loss")
+        .is_none());
+    assert!(active_loss
+        .lifecycle("ready-pack", "1", selection.variant_id())
+        .await
+        .expect("active lifecycle after metadata loss")
+        .is_none());
+}
+
+#[wasm_bindgen_test(async)]
+async fn active_record_scope_mismatch_fails_closed() {
+    let body = b"scope-mismatch".to_vec();
+    let manifest = verified("pack", "1", &sha256(&body), body.len() as u64);
+    let selection = selection_for(&manifest);
+    let mut store = WebModelStore::new(InMemoryWebHost::new(Some(1000)));
+    install_ready(&mut store, &manifest, body).await;
+    store
+        .activate_pack(scope(), &manifest, &selection)
+        .await
+        .expect("activate");
+    let active_key = "aurora.voice.web-store.v1:active:stt:default";
+    let mut active: serde_json::Value = serde_json::from_str(
+        &store
+            .host()
+            .read_json(active_key)
+            .await
+            .expect("read active key")
+            .expect("active record"),
+    )
+    .expect("active json");
+    active["identity"]["scope"]["slot_id"] = serde_json::Value::String("other".to_owned());
+    store.host_mut().insert_json(active_key, active.to_string());
+
+    assert!(store
+        .active_pack(scope())
+        .await
+        .expect("scope mismatch active lookup")
+        .is_none());
 }
 
 #[wasm_bindgen_test]

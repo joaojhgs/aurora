@@ -21,6 +21,8 @@ const ROLLBACK_PREFIX: &str = "aurora.voice.web-store.v1:rollback:";
 const RESERVED_PREFIX: &str = "aurora.voice.web-store.v1:reserved:";
 const PROMOTION_PREFIX: &str = "aurora.voice.web-store.v1:promotion:";
 const LIFECYCLE_PREFIX: &str = "aurora.voice.web-store.v1:lifecycle:";
+const LIFECYCLE_BACKING_PREFIX: &str = "aurora.voice.web-store.v1:lifecycle-backing:";
+const MUTATION_PREFIX: &str = "aurora.voice.web-store.v1:mutation:";
 const FILE_PREFIX: &str = "aurora.voice.web-store.v1:file:";
 const WITHDRAWAL_KEY: &str = "aurora.voice.web-store.v1:withdrawn";
 const HASH_CHUNK_BYTES: u64 = 64 * 1024;
@@ -68,6 +70,18 @@ struct ActiveFileRecord {
     storage_key: String,
     sha256: String,
     byte_size: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct LifecycleBackingRecord {
+    files: Vec<ActiveFileRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct ScopeMutationJournal {
+    #[serde(default)]
+    affected_lifecycles: BTreeSet<String>,
+    restore: BTreeMap<String, Option<String>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -427,6 +441,19 @@ impl<H: WebModelStoreHost> WebModelStore<H> {
         Ok(())
     }
 
+    pub async fn recover_scope_transactions(&mut self) -> Result<(), ModelPackError> {
+        for key in self.host.list_json_keys(MUTATION_PREFIX).await? {
+            let Some(journal): Option<ScopeMutationJournal> = read_json(&self.host, &key).await?
+            else {
+                self.host.delete_json(&key).await?;
+                continue;
+            };
+            restore_json(&mut self.host, journal.restore).await?;
+            self.host.delete_json(&key).await?;
+        }
+        Ok(())
+    }
+
     pub async fn recover_promotions(&mut self) -> Result<(), ModelPackError> {
         for key in self.host.list_json_keys(PROMOTION_PREFIX).await? {
             let Some(journal): Option<PromotionJournal> = read_json(&self.host, &key).await? else {
@@ -491,16 +518,12 @@ impl<H: WebModelStoreHost> WebModelStore<H> {
         else {
             return Ok(None);
         };
+        if record.identity.scope != *scope {
+            return Ok(None);
+        }
         self.ensure_not_withdrawn(&record.identity.pack_id).await?;
-        for file in &record.files {
-            let Ok((byte_size, sha256)) =
-                hash_promoted_chunks(&self.host, &file.storage_key, HASH_CHUNK_BYTES).await
-            else {
-                return Ok(None);
-            };
-            if byte_size != file.byte_size || sha256 != file.sha256 {
-                return Ok(None);
-            }
+        if !self.validate_file_records(&record.files).await? {
+            return Ok(None);
         }
         Ok(Some(record))
     }
@@ -530,34 +553,200 @@ impl<H: WebModelStoreHost> WebModelStore<H> {
         Ok(false)
     }
 
+    async fn validate_file_records(
+        &self,
+        files: &[ActiveFileRecord],
+    ) -> Result<bool, ModelPackError> {
+        if files.is_empty() {
+            return Ok(false);
+        }
+        for file in files {
+            let Some(stored): Option<StoredFile> =
+                read_json(&self.host, &file_key(&file.storage_key)).await?
+            else {
+                return Ok(false);
+            };
+            if stored.sha256 != file.sha256 || stored.byte_size != file.byte_size {
+                return Ok(false);
+            }
+            let Ok((byte_size, sha256)) =
+                hash_promoted_chunks(&self.host, &file.storage_key, HASH_CHUNK_BYTES).await
+            else {
+                return Ok(false);
+            };
+            if byte_size != file.byte_size || sha256 != file.sha256 {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    async fn selected_file_records(
+        &self,
+        manifest: &VerifiedManifest,
+        selection: &SelectedVariant,
+    ) -> Result<Vec<ActiveFileRecord>, ModelPackError> {
+        let mut records = Vec::new();
+        for file_id in selection.file_ids() {
+            let file = manifest
+                .manifest()
+                .files
+                .iter()
+                .find(|file| file.file_id == *file_id)
+                .ok_or(ModelPackError::Store { code: "selection" })?;
+            let key = file_storage_key(
+                &manifest.manifest().pack_id,
+                &manifest.manifest().pack_version,
+                selection.variant_id(),
+                &file.file_id,
+            );
+            let stored: StoredFile =
+                read_json(&self.host, &file_key(&key))
+                    .await?
+                    .ok_or(ModelPackError::Store {
+                        code: "missing_file",
+                    })?;
+            if !stored_matches(&stored, manifest, selection, file) {
+                return Err(ModelPackError::Store { code: "corrupt" });
+            }
+            let (byte_size, sha256) =
+                hash_promoted_chunks(&self.host, &key, HASH_CHUNK_BYTES).await?;
+            if sha256 != file.sha256 || byte_size != file.byte_size {
+                return Err(ModelPackError::Store { code: "corrupt" });
+            }
+            records.push(ActiveFileRecord {
+                storage_key: key,
+                sha256,
+                byte_size,
+            });
+        }
+        Ok(records)
+    }
+
+    async fn ready_backing_record(
+        &self,
+        snapshot: &LifecycleSnapshot,
+    ) -> Result<LifecycleBackingRecord, ModelPackError> {
+        let mut files = Vec::new();
+        for key in self.host.list_json_keys(FILE_PREFIX).await? {
+            let Some(file): Option<StoredFile> = read_json(&self.host, &key).await? else {
+                continue;
+            };
+            if file.pack_id == snapshot.pack_id
+                && file.pack_version == snapshot.pack_version
+                && file.variant_id == snapshot.variant_id
+            {
+                files.push(ActiveFileRecord {
+                    storage_key: file.storage_key,
+                    sha256: file.sha256,
+                    byte_size: file.byte_size,
+                });
+            }
+        }
+        Ok(LifecycleBackingRecord { files })
+    }
+
+    async fn write_lifecycle_with_backing(
+        &mut self,
+        snapshot: &LifecycleSnapshot,
+        files: &[ActiveFileRecord],
+    ) -> Result<(), ModelPackError> {
+        write_json(
+            &mut self.host,
+            &lifecycle_key(
+                &snapshot.pack_id,
+                &snapshot.pack_version,
+                &snapshot.variant_id,
+            ),
+            snapshot,
+        )
+        .await?;
+        if matches!(snapshot.state, InstallState::Ready | InstallState::Active) {
+            write_json(
+                &mut self.host,
+                &lifecycle_backing_key(
+                    &snapshot.pack_id,
+                    &snapshot.pack_version,
+                    &snapshot.variant_id,
+                ),
+                &LifecycleBackingRecord {
+                    files: files.to_vec(),
+                },
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    async fn pending_mutation_affects_lifecycle(
+        &self,
+        lifecycle_key: &str,
+    ) -> Result<bool, ModelPackError> {
+        for key in self.host.list_json_keys(MUTATION_PREFIX).await? {
+            let Some(journal): Option<ScopeMutationJournal> = read_json(&self.host, &key).await?
+            else {
+                return Ok(true);
+            };
+            if journal.affected_lifecycles.is_empty()
+                || journal.affected_lifecycles.contains(lifecycle_key)
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    async fn additional_reserved_bytes(&self, task: &DownloadTask) -> Result<u64, ModelPackError> {
+        for key in self.host.list_json_keys(FILE_PREFIX).await? {
+            let Some(file): Option<StoredFile> = read_json(&self.host, &key).await? else {
+                continue;
+            };
+            if file.sha256 == task.expected_sha256 {
+                if file.byte_size != task.expected_bytes {
+                    return Err(ModelPackError::Store { code: "quota" });
+                }
+                if let Ok((byte_size, sha256)) =
+                    hash_promoted_chunks(&self.host, &file.storage_key, HASH_CHUNK_BYTES).await
+                {
+                    if byte_size == task.expected_bytes && sha256 == task.expected_sha256 {
+                        return Ok(0);
+                    }
+                }
+            }
+        }
+        for key in self.host.list_json_keys(RESERVED_PREFIX).await? {
+            let Some(existing): Option<DownloadTask> = read_json(&self.host, &key).await? else {
+                continue;
+            };
+            if existing.expected_sha256 == task.expected_sha256 {
+                if existing.expected_bytes != task.expected_bytes {
+                    return Err(ModelPackError::Store { code: "quota" });
+                }
+                return Ok(0);
+            }
+        }
+        Ok(task.expected_bytes)
+    }
+
     async fn lifecycle_has_valid_backing(
         &self,
         snapshot: &LifecycleSnapshot,
     ) -> Result<bool, ModelPackError> {
         match snapshot.state {
             InstallState::Ready => {
-                let mut found_file = false;
-                for key in self.host.list_json_keys(FILE_PREFIX).await? {
-                    let Some(file): Option<StoredFile> = read_json(&self.host, &key).await? else {
-                        continue;
-                    };
-                    if file.pack_id == snapshot.pack_id
-                        && file.pack_version == snapshot.pack_version
-                        && file.variant_id == snapshot.variant_id
-                    {
-                        found_file = true;
-                        let Ok((byte_size, sha256)) =
-                            hash_promoted_chunks(&self.host, &file.storage_key, HASH_CHUNK_BYTES)
-                                .await
-                        else {
-                            return Ok(false);
-                        };
-                        if byte_size != file.byte_size || sha256 != file.sha256 {
-                            return Ok(false);
-                        }
-                    }
-                }
-                Ok(found_file)
+                let Some(backing): Option<LifecycleBackingRecord> = read_json(
+                    &self.host,
+                    &lifecycle_backing_key(
+                        &snapshot.pack_id,
+                        &snapshot.pack_version,
+                        &snapshot.variant_id,
+                    ),
+                )
+                .await?
+                else {
+                    return Ok(false);
+                };
+                self.validate_file_records(&backing.files).await
             }
             InstallState::Active => {
                 for key in self.host.list_json_keys(ACTIVE_PREFIX).await? {
@@ -599,12 +788,12 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
         pack_version: &str,
         variant_id: &str,
     ) -> Result<Option<LifecycleSnapshot>, ModelPackError> {
-        let Some(snapshot): Option<LifecycleSnapshot> = read_json(
-            &self.host,
-            &lifecycle_key(pack_id, pack_version, variant_id),
-        )
-        .await?
-        else {
+        let key = lifecycle_key(pack_id, pack_version, variant_id);
+        let report = self.host.persistence_report().await?;
+        if report.evicted || self.pending_mutation_affects_lifecycle(&key).await? {
+            return Ok(None);
+        }
+        let Some(snapshot): Option<LifecycleSnapshot> = read_json(&self.host, &key).await? else {
             return Ok(None);
         };
         let withdrawal = self.withdrawal_state().await?;
@@ -619,16 +808,12 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
     }
 
     async fn set_lifecycle(&mut self, snapshot: LifecycleSnapshot) -> Result<(), ModelPackError> {
-        write_json(
-            &mut self.host,
-            &lifecycle_key(
-                &snapshot.pack_id,
-                &snapshot.pack_version,
-                &snapshot.variant_id,
-            ),
-            &snapshot,
-        )
-        .await
+        let backing = if matches!(snapshot.state, InstallState::Ready | InstallState::Active) {
+            self.ready_backing_record(&snapshot).await?.files
+        } else {
+            Vec::new()
+        };
+        self.write_lifecycle_with_backing(&snapshot, &backing).await
     }
 
     async fn reserve_file(
@@ -674,10 +859,11 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
             return Ok(task);
         }
         if let Some(available) = status.bytes_available {
+            let additional = self.additional_reserved_bytes(&task).await?;
             let required = status
                 .bytes_used
                 .checked_add(status.bytes_reserved)
-                .and_then(|used| used.checked_add(file.byte_size))
+                .and_then(|used| used.checked_add(additional))
                 .ok_or(ModelPackError::QuotaExceeded)?;
             if required > available {
                 return Err(ModelPackError::QuotaExceeded);
@@ -757,42 +943,11 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
             return Err(ModelPackError::Store { code: "selection" });
         }
         validate_scope_task(&scope, manifest, selection)?;
+        self.recover_scope_transactions().await?;
         self.recover_promotions().await?;
         self.ensure_not_withdrawn(&manifest.manifest().pack_id)
             .await?;
-        let mut active_files = Vec::new();
-        for file in manifest
-            .manifest()
-            .files
-            .iter()
-            .filter(|file| selection.file_ids().contains(&file.file_id))
-        {
-            let key = file_storage_key(
-                &manifest.manifest().pack_id,
-                &manifest.manifest().pack_version,
-                selection.variant_id(),
-                &file.file_id,
-            );
-            let stored: StoredFile =
-                read_json(&self.host, &file_key(&key))
-                    .await?
-                    .ok_or(ModelPackError::Store {
-                        code: "missing_file",
-                    })?;
-            if !stored_matches(&stored, manifest, selection, file) {
-                return Err(ModelPackError::Store { code: "corrupt" });
-            }
-            let (byte_size, sha256) =
-                hash_promoted_chunks(&self.host, &key, HASH_CHUNK_BYTES).await?;
-            if sha256 != file.sha256 || byte_size != file.byte_size {
-                return Err(ModelPackError::Store { code: "corrupt" });
-            }
-            active_files.push(ActiveFileRecord {
-                storage_key: key,
-                sha256,
-                byte_size,
-            });
-        }
+        let active_files = self.selected_file_records(manifest, selection).await?;
 
         let current_key = lifecycle_key(
             &manifest.manifest().pack_id,
@@ -837,12 +992,49 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
             current_key.clone(),
             self.host.read_json(&current_key).await?,
         );
+        let mut affected_lifecycles = BTreeSet::from([current_key.clone()]);
+        restore.insert(
+            lifecycle_backing_key(
+                &manifest.manifest().pack_id,
+                &manifest.manifest().pack_version,
+                selection.variant_id(),
+            ),
+            self.host
+                .read_json(&lifecycle_backing_key(
+                    &manifest.manifest().pack_id,
+                    &manifest.manifest().pack_version,
+                    selection.variant_id(),
+                ))
+                .await?,
+        );
         if let Some(active) = previous_active.as_ref() {
             let key = lifecycle_key(&active.pack_id, &active.pack_version, &active.variant_id);
             restore.insert(key.clone(), self.host.read_json(&key).await?);
+            affected_lifecycles.insert(key);
+            let backing_key =
+                lifecycle_backing_key(&active.pack_id, &active.pack_version, &active.variant_id);
+            restore.insert(
+                backing_key.clone(),
+                self.host.read_json(&backing_key).await?,
+            );
         }
+        let previous_snapshot = if let Some(active) = previous_active {
+            self.lifecycle(&active.pack_id, &active.pack_version, &active.variant_id)
+                .await?
+        } else {
+            None
+        };
 
         let result: Result<(), ModelPackError> = async {
+            write_json(
+                &mut self.host,
+                &mutation_key(&scope),
+                &ScopeMutationJournal {
+                    affected_lifecycles: affected_lifecycles.clone(),
+                    restore: restore.clone(),
+                },
+            )
+            .await?;
             if let Some(active) = previous_active {
                 if active.pack_id != manifest.manifest().pack_id
                     || active.pack_version != manifest.manifest().pack_version
@@ -851,10 +1043,7 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
                     if let Some(record) = previous_record.as_ref() {
                         write_json(&mut self.host, &rollback_key, record).await?;
                     }
-                    if let Some(snapshot) = self
-                        .lifecycle(&active.pack_id, &active.pack_version, &active.variant_id)
-                        .await?
-                    {
+                    if let Some(snapshot) = previous_snapshot.clone() {
                         if !self
                             .active_elsewhere(
                                 &scope,
@@ -870,21 +1059,15 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
                                 self.now,
                                 None,
                             )?;
-                            write_json(
-                                &mut self.host,
-                                &lifecycle_key(
-                                    &deactivated.pack_id,
-                                    &deactivated.pack_version,
-                                    &deactivated.variant_id,
-                                ),
-                                &deactivated,
-                            )
-                            .await?;
+                            let backing = self.ready_backing_record(&deactivated).await?.files;
+                            self.write_lifecycle_with_backing(&deactivated, &backing)
+                                .await?;
                         }
                     }
                 }
             }
-            write_json(&mut self.host, &current_key, &next).await?;
+            self.write_lifecycle_with_backing(&next, &active_files)
+                .await?;
             write_json(
                 &mut self.host,
                 &active_key,
@@ -899,11 +1082,14 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
                 },
             )
             .await?;
+            self.host.delete_json(&mutation_key(&scope)).await?;
             Ok(())
         }
         .await;
         if let Err(error) = result {
-            restore_json(&mut self.host, restore).await;
+            if restore_json(&mut self.host, restore).await.is_ok() {
+                let _ = self.host.delete_json(&mutation_key(&scope)).await;
+            }
             return Err(error);
         }
         Ok(next)
@@ -913,6 +1099,7 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
         &mut self,
         scope: ModelStoreScope,
     ) -> Result<Option<LifecycleSnapshot>, ModelPackError> {
+        self.recover_scope_transactions().await?;
         let Some(rollback_record): Option<ActivePackRecord> =
             read_json(&self.host, &rollback_key(&scope)).await?
         else {
@@ -942,6 +1129,25 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
                 ))
                 .await?,
         );
+        let mut affected_lifecycles = BTreeSet::from([lifecycle_key(
+            &rollback.pack_id,
+            &rollback.pack_version,
+            &rollback.variant_id,
+        )]);
+        restore.insert(
+            lifecycle_backing_key(
+                &rollback.pack_id,
+                &rollback.pack_version,
+                &rollback.variant_id,
+            ),
+            self.host
+                .read_json(&lifecycle_backing_key(
+                    &rollback.pack_id,
+                    &rollback.pack_version,
+                    &rollback.variant_id,
+                ))
+                .await?,
+        );
         if let Some(active) = self
             .active_record(&scope)
             .await?
@@ -953,18 +1159,45 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
                 active_lifecycle_key.clone(),
                 self.host.read_json(&active_lifecycle_key).await?,
             );
+            affected_lifecycles.insert(active_lifecycle_key);
+            let active_backing_key =
+                lifecycle_backing_key(&active.pack_id, &active.pack_version, &active.variant_id);
+            restore.insert(
+                active_backing_key.clone(),
+                self.host.read_json(&active_backing_key).await?,
+            );
         }
+        let current_identity = self
+            .active_record(&scope)
+            .await?
+            .map(|record| record.identity);
+        let current_snapshot = if let Some(active) = current_identity.as_ref() {
+            self.lifecycle(&active.pack_id, &active.pack_version, &active.variant_id)
+                .await?
+        } else {
+            None
+        };
+        let rollback_snapshot = self
+            .lifecycle(
+                &rollback.pack_id,
+                &rollback.pack_version,
+                &rollback.variant_id,
+            )
+            .await?
+            .ok_or(ModelPackError::Store { code: "rollback" })?;
 
         let result: Result<LifecycleSnapshot, ModelPackError> = async {
-            if let Some(active) = self
-                .active_record(&scope)
-                .await?
-                .map(|record| record.identity)
-            {
-                if let Some(snapshot) = self
-                    .lifecycle(&active.pack_id, &active.pack_version, &active.variant_id)
-                    .await?
-                {
+            write_json(
+                &mut self.host,
+                &mutation_key(&scope),
+                &ScopeMutationJournal {
+                    affected_lifecycles: affected_lifecycles.clone(),
+                    restore: restore.clone(),
+                },
+            )
+            .await?;
+            if let Some(active) = current_identity {
+                if let Some(snapshot) = current_snapshot {
                     if !self
                         .active_elsewhere(
                             &scope,
@@ -980,49 +1213,37 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
                             self.now,
                             None,
                         )?;
-                        write_json(
-                            &mut self.host,
-                            &lifecycle_key(&ready.pack_id, &ready.pack_version, &ready.variant_id),
-                            &ready,
-                        )
-                        .await?;
+                        let backing = self.ready_backing_record(&ready).await?.files;
+                        self.write_lifecycle_with_backing(&ready, &backing).await?;
                     }
                 }
             }
-            let snapshot = self
-                .lifecycle(
-                    &rollback.pack_id,
-                    &rollback.pack_version,
-                    &rollback.variant_id,
-                )
-                .await?
-                .ok_or(ModelPackError::Store { code: "rollback" })?;
-            let active = if snapshot.state == InstallState::Active {
-                snapshot
+            let active = if rollback_snapshot.state == InstallState::Active {
+                rollback_snapshot
             } else {
-                apply_lifecycle_event(&snapshot, InstallEvent::Activate, self.now, None)?
+                apply_lifecycle_event(&rollback_snapshot, InstallEvent::Activate, self.now, None)?
             };
-            write_json(
-                &mut self.host,
-                &lifecycle_key(&active.pack_id, &active.pack_version, &active.variant_id),
-                &active,
-            )
-            .await?;
+            self.write_lifecycle_with_backing(&active, &rollback_record.files)
+                .await?;
             write_json(&mut self.host, &active_key, &rollback_record).await?;
             self.host.delete_json(&rollback_key).await?;
+            self.host.delete_json(&mutation_key(&scope)).await?;
             Ok(active)
         }
         .await;
         match result {
             Ok(active) => Ok(Some(active)),
             Err(error) => {
-                restore_json(&mut self.host, restore).await;
+                if restore_json(&mut self.host, restore).await.is_ok() {
+                    let _ = self.host.delete_json(&mutation_key(&scope)).await;
+                }
                 Err(error)
             }
         }
     }
 
     async fn remove_pack(&mut self, pack_id: &str) -> Result<(), ModelPackError> {
+        self.recover_scope_transactions().await?;
         self.host.remove_pack_data(pack_id).await?;
         self.clear_active_if_pack(pack_id).await?;
         for key in self.host.list_json_keys(ROLLBACK_PREFIX).await? {
@@ -1045,7 +1266,9 @@ impl<H: WebModelStoreHost> ModelStore for WebModelStore<H> {
         &self,
         scope: ModelStoreScope,
     ) -> Result<Option<ActivePackIdentity>, ModelPackError> {
-        if self.host.persistence_report().await?.evicted {
+        if self.host.persistence_report().await?.evicted
+            || self.host.read_json(&mutation_key(&scope)).await?.is_some()
+        {
             return Ok(None);
         }
         Ok(self
@@ -1327,10 +1550,25 @@ impl WebModelStoreHost for InMemoryWebHost {
         let additional =
             u64::try_from(bytes.len()).map_err(|_| WebHostError::Integrity { code: "size" })?;
         if let Some(available) = self.bytes_available {
+            let reservation: Option<DownloadTask> = self
+                .json
+                .get(&reservation_key(storage_key))
+                .and_then(|value| serde_json::from_str(value).ok());
+            let unreserved_additional = if let Some(task) = reservation {
+                let staged_after = offset
+                    .checked_add(additional)
+                    .ok_or(WebHostError::QuotaExceeded)?;
+                if staged_after > task.expected_bytes {
+                    return Err(WebHostError::Store { code: "size" });
+                }
+                0
+            } else {
+                additional
+            };
             let required = self
                 .used_bytes()?
                 .checked_add(self.reserved_bytes()?)
-                .and_then(|used| used.checked_add(additional))
+                .and_then(|used| used.checked_add(unreserved_additional))
                 .ok_or(WebHostError::QuotaExceeded)?;
             if required > available {
                 return Err(WebHostError::QuotaExceeded);
@@ -1422,6 +1660,12 @@ impl WebModelStoreHost for InMemoryWebHost {
                         .ok()
                         .filter(|snapshot| snapshot.pack_id == pack_id)
                         .map(|_| key.clone());
+                }
+                if key.starts_with(LIFECYCLE_BACKING_PREFIX) {
+                    let needle = format!("{pack_id}@");
+                    if key.contains(&needle) {
+                        return Some(key.clone());
+                    }
                 }
                 None
             })
@@ -1608,14 +1852,15 @@ async fn write_json<T: Serialize, H: WebModelStoreHost>(
 async fn restore_json<H: WebModelStoreHost>(
     host: &mut H,
     restore: BTreeMap<String, Option<String>>,
-) {
+) -> Result<(), WebHostError> {
     for (key, value) in restore {
-        let _ = if let Some(value) = value {
-            host.write_json(&key, &value).await
+        if let Some(value) = value {
+            host.write_json(&key, &value).await?;
         } else {
-            host.delete_json(&key).await
-        };
+            host.delete_json(&key).await?;
+        }
     }
+    Ok(())
 }
 
 async fn hash_staging_chunks<H: WebModelStoreHost>(
@@ -1693,6 +1938,10 @@ fn lifecycle_key(pack_id: &str, pack_version: &str, variant_id: &str) -> String 
     format!("{LIFECYCLE_PREFIX}{pack_id}@{pack_version}:{variant_id}")
 }
 
+fn lifecycle_backing_key(pack_id: &str, pack_version: &str, variant_id: &str) -> String {
+    format!("{LIFECYCLE_BACKING_PREFIX}{pack_id}@{pack_version}:{variant_id}")
+}
+
 fn active_key(scope: &ModelStoreScope) -> String {
     format!(
         "{ACTIVE_PREFIX}{}:{}",
@@ -1704,6 +1953,14 @@ fn active_key(scope: &ModelStoreScope) -> String {
 fn rollback_key(scope: &ModelStoreScope) -> String {
     format!(
         "{ROLLBACK_PREFIX}{}:{}",
+        scope.task().as_str(),
+        scope.slot_id()
+    )
+}
+
+fn mutation_key(scope: &ModelStoreScope) -> String {
+    format!(
+        "{MUTATION_PREFIX}{}:{}",
         scope.task().as_str(),
         scope.slot_id()
     )
