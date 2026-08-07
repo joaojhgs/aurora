@@ -38,6 +38,7 @@ describe('AuroraVoiceWebRuntime', () => {
     })
 
     await expect(runtime.stop()).resolves.toMatchObject({ sampleRateHz: 16_000, channels: 1, sampleCount: 0 })
+    await runtime.completeTurn()
   })
 
   it('enforces one active owner', async () => {
@@ -133,7 +134,8 @@ describe('AuroraVoiceWebRuntime', () => {
     await expect(stopRuntime.stop()).rejects.toMatchObject({ code: 'stop_failed' })
     expect(stopSource.calls).toContain('stop')
     expect(stopWorker.commandsOf('stop')).toHaveLength(1)
-    expect(stopRuntime.snapshot()).toMatchObject({ state: 'stopped', sessionId: null, queuedBytes: 0 })
+    expect(stopWorker.commandsOf('cancel')).toHaveLength(1)
+    expect(stopRuntime.snapshot()).toMatchObject({ state: 'cancelled', sessionId: null, queuedBytes: 0 })
 
     const cancelSource = new FailingSource('cancel')
     const cancelWorker = new FailingWorkerHost(['cancel'])
@@ -243,6 +245,7 @@ describe('AuroraVoiceWebRuntime', () => {
     const session = await runtime.start()
     await runtime.pushFrame(frame(session.sessionId, session.generation, 0, [42]))
     await expect(runtime.stop()).resolves.toMatchObject({ sessionId: session.sessionId, generation: session.generation, sampleCount: 3 })
+    await runtime.completeTurn()
 
     const cancelRuntime = new AuroraVoiceWebRuntime({ ownerId: 'owner-b', worker: new RecordingVoiceWorkerHost() })
     await cancelRuntime.start()
@@ -254,12 +257,97 @@ describe('AuroraVoiceWebRuntime', () => {
     const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker })
     await expect(runtime.start()).resolves.toMatchObject({ generation: 1 })
     await expect(runtime.stop()).resolves.toMatchObject({ generation: 1 })
+    await expect(runtime.start()).rejects.toMatchObject({ code: 'turn_pending' })
+    await runtime.completeTurn()
     await expect(runtime.start()).resolves.toMatchObject({ generation: 2 })
     await runtime.dispose()
 
     expect(worker.commandsOf('start')).toHaveLength(2)
     expect(worker.commandsOf('stop')).toHaveLength(1)
+    expect(worker.commandsOf('finish_turn')).toHaveLength(1)
     expect(worker.commandsOf('cancel')).toHaveLength(1)
+  })
+
+  it('requires explicit stopped-turn settlement before the same runtime can capture again', async () => {
+    const worker = new RecordingVoiceWorkerHost()
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker })
+    const session = await runtime.start()
+    await runtime.stop()
+
+    expect(runtime.snapshot()).toMatchObject({ state: 'stopped', sessionId: session.sessionId, generation: session.generation, queuedBytes: 0 })
+    await expect(runtime.start()).rejects.toMatchObject({ code: 'turn_pending' })
+    await runtime.completeTurn()
+    expect(runtime.snapshot()).toMatchObject({ state: 'idle', sessionId: null, generation: session.generation })
+    await expect(runtime.start()).resolves.toMatchObject({ generation: session.generation + 1 })
+    await runtime.cancel()
+    expect(worker.commandsOf('finish_turn')[0]).toMatchObject({ outcome: 'completed', sessionId: session.sessionId, generation: session.generation })
+  })
+
+  it('abandons stopped turns and releases the global capture lock after stop', async () => {
+    const worker = new RecordingVoiceWorkerHost()
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker })
+    const other = new AuroraVoiceWebRuntime({ ownerId: 'owner-b', worker: new RecordingVoiceWorkerHost() })
+    const session = await runtime.start()
+    await runtime.stop()
+
+    await expect(other.start()).resolves.toMatchObject({ ownerId: 'owner-b' })
+    await other.cancel()
+    await runtime.abandonTurn()
+    await expect(runtime.start()).resolves.toMatchObject({ generation: session.generation + 1 })
+    await runtime.cancel()
+    expect(worker.commandsOf('finish_turn')[0]).toMatchObject({ outcome: 'abandoned', sessionId: session.sessionId })
+  })
+
+  it('keeps pending stopped turns on forged settlement acknowledgements', async () => {
+    const worker = new RecordingVoiceWorkerHost()
+    worker.responseOverride = (command) => {
+      if (command.type === 'finish_turn') {
+        return { type: 'ack', sessionId: command.sessionId, generation: command.generation + 1, sequence: null }
+      }
+      return defaultResponseFor(command)
+    }
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker })
+    const session = await runtime.start()
+    await runtime.stop()
+
+    await expect(runtime.completeTurn()).rejects.toMatchObject({ code: 'finish_failed' })
+    expect(runtime.snapshot()).toMatchObject({ state: 'stopped', sessionId: session.sessionId })
+    await expect(runtime.start()).rejects.toMatchObject({ code: 'turn_pending' })
+  })
+
+  it('keeps pending stopped turns when abandon through cancel fails', async () => {
+    const worker = new FailingWorkerHost(['cancel'])
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker })
+    const session = await runtime.start()
+    await runtime.stop()
+
+    await expect(runtime.cancel()).rejects.toMatchObject({ code: 'cancel_failed' })
+    expect(runtime.snapshot()).toMatchObject({ state: 'stopped', sessionId: session.sessionId })
+    await expect(runtime.start()).rejects.toMatchObject({ code: 'turn_pending' })
+  })
+
+  it('abandons pending turns on lifecycle loss and dispose', async () => {
+    let eligible = true
+    const lifecycleWorker = new RecordingVoiceWorkerHost()
+    const lifecycleRuntime = new AuroraVoiceWebRuntime({
+      ownerId: 'owner-a',
+      worker: lifecycleWorker,
+      lifecycle: () => eligible ? visibleLifecycle() : hiddenLifecycle('hidden')
+    })
+    await lifecycleRuntime.start()
+    await lifecycleRuntime.stop()
+    eligible = false
+    await lifecycleRuntime.refreshLifecycle()
+    expect(lifecycleRuntime.snapshot()).toMatchObject({ state: 'cancelled', sessionId: null })
+    expect(lifecycleWorker.commandsOf('cancel')).toHaveLength(1)
+
+    const disposeWorker = new RecordingVoiceWorkerHost()
+    const disposeRuntime = new AuroraVoiceWebRuntime({ ownerId: 'owner-b', worker: disposeWorker })
+    await disposeRuntime.start()
+    await disposeRuntime.stop()
+    await disposeRuntime.dispose()
+    expect(disposeRuntime.snapshot()).toMatchObject({ state: 'cancelled', sessionId: null })
+    expect(disposeWorker.commandsOf('cancel')).toHaveLength(1)
   })
 
   it('fails closed on forged worker acknowledgements', async () => {
@@ -309,7 +397,7 @@ describe('AuroraVoiceWebRuntime', () => {
   it('serializes events and worker metadata without sensitive payload fields', async () => {
     const worker = new RecordingVoiceWorkerHost()
     const events: AuroraVoiceWebEvent[] = []
-    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker })
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker, nowMs: () => 10 })
     runtime.onEvent((event) => events.push(event))
     const session = await runtime.start()
     await runtime.pushFrame(frame(session.sessionId, session.generation, 0, [42]))
@@ -376,6 +464,8 @@ function defaultResponseFor(command: AuroraVoiceWorkerCommand): AuroraVoiceWorke
       return { type: 'ack', sessionId: command.frame.sessionId, generation: command.frame.generation, sequence: command.frame.sequence }
     case 'stop':
       return { type: 'stop_result', sessionId: command.sessionId, generation: command.generation, capturedAudio: capturedAudio(command.sessionId, command.generation, []) }
+    case 'finish_turn':
+      return { type: 'ack', sessionId: command.sessionId, generation: command.generation, sequence: null }
     case 'cancel':
       return { type: 'ack', sessionId: command.sessionId ?? '', generation: command.generation, sequence: null }
     case 'shutdown':

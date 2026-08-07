@@ -43,6 +43,7 @@ export class AuroraVoiceWebRuntime {
   private readonly capabilities: AuroraVoiceWebCapabilities
   private state: AuroraVoiceWebState = 'idle'
   private session: AuroraVoiceWebSession | null = null
+  private pendingStoppedSession: AuroraVoiceWebSession | null = null
   private generation = 0
   private nextSequence = 0
   private queuedBytes = 0
@@ -70,7 +71,7 @@ export class AuroraVoiceWebRuntime {
     return {
       ownerId: this.ownerId,
       state: this.state,
-      sessionId: this.session?.sessionId ?? null,
+      sessionId: this.session?.sessionId ?? this.pendingStoppedSession?.sessionId ?? null,
       generation: this.generation,
       nextSequence: this.nextSequence,
       queuedBytes: this.queuedBytes,
@@ -86,6 +87,9 @@ export class AuroraVoiceWebRuntime {
     }
     if (this.session !== null) {
       throw new AuroraVoiceWebRuntimeError('session_active', 'This voice session is already active')
+    }
+    if (this.pendingStoppedSession !== null) {
+      throw new AuroraVoiceWebRuntimeError('turn_pending', 'The previous voice turn is still pending')
     }
     if (activeVoiceLock !== null) {
       throw new AuroraVoiceWebRuntimeError('active_owner_exists', 'A voice session is already active')
@@ -157,39 +161,65 @@ export class AuroraVoiceWebRuntime {
       }
       this.emit(failed ? 'error' : 'session_stopped', null, null, 0, 0, 0, failed ? 'stop_failed' : 'stopped')
     } finally {
-      this.clearSession('stopped')
+      if (failed || capturedAudio === null) {
+        await this.bestEffortCancelHosts(session, true, 'stop_failed')
+        this.clearSession('cancelled')
+      } else {
+        this.clearActiveSession('stopped')
+        this.pendingStoppedSession = session
+      }
     }
     if (failed) throw new AuroraVoiceWebRuntimeError('stop_failed', 'Voice session could not stop cleanly')
     return capturedAudio
   }
 
+  async completeTurn(): Promise<void> {
+    await this.finishTurn('completed')
+  }
+
+  async abandonTurn(): Promise<void> {
+    await this.finishTurn('abandoned')
+  }
+
   async cancel(reason = 'cancelled'): Promise<void> {
     const session = this.session
-    if (session === null) return
+    const pending = this.pendingStoppedSession
+    if (session === null && pending === null) return
     const generation = this.generation
     let failed = false
     try {
       try {
-        await this.pcmSource?.cancel(session?.sessionId ?? '')
+        if (session !== null) await this.pcmSource?.cancel(session.sessionId)
       } catch {
         failed = true
       }
       try {
-        const cancelled = await this.worker.request({ type: 'cancel', sessionId: session?.sessionId ?? null, generation, reason: 'cancelled' }, { timeoutMs: this.workerTimeoutMs })
-        validateAck(cancelled, session.sessionId, session.generation, null)
+        const cancelled = await this.worker.request({
+          type: 'cancel',
+          sessionId: session?.sessionId ?? pending?.sessionId ?? null,
+          generation: session?.generation ?? pending?.generation ?? generation,
+          reason: 'cancelled'
+        }, { timeoutMs: this.workerTimeoutMs })
+        const owner = session ?? pending
+        if (owner !== null) validateAck(cancelled, owner.sessionId, owner.generation, null)
       } catch {
         failed = true
       }
       this.emit(failed ? 'error' : 'session_cancelled', null, null, 0, 0, 0, failed ? 'cancel_failed' : normalizeReason(reason))
     } finally {
-      this.clearSession('cancelled')
+      if (failed && session === null && pending !== null) {
+        this.clearActiveSession('stopped')
+        this.pendingStoppedSession = pending
+      } else {
+        this.clearSession('cancelled')
+      }
     }
     if (failed) throw new AuroraVoiceWebRuntimeError('cancel_failed', 'Voice session could not cancel cleanly')
   }
 
   async refreshLifecycle(): Promise<void> {
     const eligibility = this.currentLifecycle()
-    if (this.session === null || eligibility.eligible && eligibility.visible && !eligibility.frozen) return
+    if ((this.session === null && this.pendingStoppedSession === null) || eligibility.eligible && eligibility.visible && !eligibility.frozen) return
     await this.cancel('lifecycle_lost')
     this.emit('lifecycle_lost', null, null, 0, 0, 0, eligibility.reason)
   }
@@ -292,6 +322,28 @@ export class AuroraVoiceWebRuntime {
     this.clearSession('cancelled')
   }
 
+  private async finishTurn(outcome: 'completed' | 'abandoned'): Promise<void> {
+    const pending = this.pendingStoppedSession
+    if (pending === null) return
+    try {
+      const finished = await this.worker.request({
+        type: 'finish_turn',
+        sessionId: pending.sessionId,
+        generation: pending.generation,
+        outcome
+      }, { timeoutMs: this.workerTimeoutMs })
+      validateAck(finished, pending.sessionId, pending.generation, null)
+      this.pendingStoppedSession = null
+      this.state = outcome === 'completed' ? 'idle' : 'cancelled'
+      this.generation = pending.generation
+      this.nextSequence = 0
+      this.queuedBytes = 0
+    } catch {
+      this.emit('error', null, pending.generation, 0, 0, this.queuedBytes, 'finish_failed')
+      throw new AuroraVoiceWebRuntimeError('finish_failed', 'Voice turn could not be finished cleanly')
+    }
+  }
+
   private async bestEffortCancelHosts(session: AuroraVoiceWebSession | null, notifyWorker: boolean, reason: string): Promise<void> {
     try {
       await this.pcmSource?.cancel(session?.sessionId ?? '')
@@ -313,6 +365,11 @@ export class AuroraVoiceWebRuntime {
   }
 
   private clearSession(nextState: Exclude<AuroraVoiceWebState, 'active'>): void {
+    this.clearActiveSession(nextState)
+    this.pendingStoppedSession = null
+  }
+
+  private clearActiveSession(nextState: Exclude<AuroraVoiceWebState, 'active'>): void {
     if (activeVoiceLock?.token === this.lockToken) activeVoiceLock = null
     this.state = nextState
     this.session = null
@@ -332,7 +389,7 @@ export class AuroraVoiceWebRuntime {
     const event: AuroraVoiceWebEvent = Object.freeze({
       kind,
       ownerId: this.ownerId,
-      sessionId: this.session?.sessionId ?? null,
+      sessionId: this.session?.sessionId ?? this.pendingStoppedSession?.sessionId ?? null,
       generation: generation ?? this.generation,
       sequence,
       sampleCount,

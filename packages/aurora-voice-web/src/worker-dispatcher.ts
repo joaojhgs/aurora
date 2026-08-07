@@ -3,6 +3,7 @@ import {
   AURORA_VOICE_WORKER_PROTOCOL_VERSION,
   type AuroraCapturedAudio,
   type AuroraPcmFrameEnvelope,
+  type AuroraVoiceTurnFinishOutcome,
   type AuroraVoiceWebCapabilities,
   type AuroraVoiceWebSession,
   type AuroraVoiceWorkerCommand,
@@ -17,6 +18,7 @@ export interface AuroraVoiceWasmBridge {
   startSession(session: AuroraVoiceWebSession): Promise<void>
   pushPcmI16(frame: AuroraPcmFrameEnvelope, pcm: Int16Array): Promise<void>
   stopSession(sessionId: string, generation: number): Promise<AuroraCapturedAudio>
+  finishTurn(sessionId: string, generation: number, outcome: AuroraVoiceTurnFinishOutcome): Promise<void>
   cancelGeneration(sessionId: string | null, generation: number, reason: string): Promise<void>
   snapshot(): Promise<{ readonly capabilities?: AuroraVoiceWebCapabilities }>
 }
@@ -28,6 +30,7 @@ export interface AuroraVoiceWorkerDispatcherPort {
 export class AuroraVoiceWorkerDispatcher {
   private initialized = false
   private activeSession: AuroraVoiceWebSession | null = null
+  private pendingStoppedSession: AuroraVoiceWebSession | null = null
   private nextSequence = 0
   private commandChain: Promise<void> = Promise.resolve()
 
@@ -78,7 +81,7 @@ export class AuroraVoiceWorkerDispatcher {
         }
       case 'start':
         this.requireInitialized()
-        if (this.activeSession !== null) throw new Error('overlap')
+        if (this.activeSession !== null || this.pendingStoppedSession !== null) throw new Error('overlap')
         await this.bridge.startSession(command.session)
         this.activeSession = command.session
         this.nextSequence = 0
@@ -99,25 +102,50 @@ export class AuroraVoiceWorkerDispatcher {
       case 'stop': {
         this.requireActive(command.sessionId, command.generation)
         const audio = boundedCapturedAudio(await this.bridge.stopSession(command.sessionId, command.generation), command.sessionId, command.generation)
+        this.pendingStoppedSession = this.activeSession
         this.activeSession = null
         this.nextSequence = 0
         return { type: 'stop_result', sessionId: command.sessionId, generation: command.generation, capturedAudio: audio }
       }
-      case 'cancel':
+      case 'finish_turn': {
+        const pending = this.pendingStoppedSession
         if (
-          this.activeSession === null ||
-          command.sessionId !== this.activeSession.sessionId ||
-          command.generation !== this.activeSession.generation
+          pending === null ||
+          command.sessionId !== pending.sessionId ||
+          command.generation !== pending.generation
         ) {
+          return { type: 'reject', sessionId: command.sessionId, generation: command.generation, sequence: null, reason: 'stale_finish' }
+        }
+        await this.bridge.finishTurn(command.sessionId, command.generation, command.outcome)
+        this.pendingStoppedSession = null
+        return { type: 'ack', sessionId: command.sessionId, generation: command.generation, sequence: null }
+      }
+      case 'cancel':
+        if (this.activeSession !== null && command.sessionId === this.activeSession.sessionId && command.generation === this.activeSession.generation) {
+          await this.bridge.cancelGeneration(command.sessionId, command.generation, 'cancelled')
+          this.activeSession = null
+          this.nextSequence = 0
+          return { type: 'ack', sessionId: command.sessionId ?? '', generation: command.generation, sequence: null }
+        }
+        if (this.pendingStoppedSession !== null && command.sessionId === this.pendingStoppedSession.sessionId && command.generation === this.pendingStoppedSession.generation) {
+          await this.bridge.finishTurn(command.sessionId, command.generation, 'abandoned')
+          this.pendingStoppedSession = null
+          this.nextSequence = 0
+          return { type: 'ack', sessionId: command.sessionId ?? '', generation: command.generation, sequence: null }
+        }
+        {
           return { type: 'reject', sessionId: command.sessionId, generation: command.generation, sequence: null, reason: 'stale_cancel' }
         }
-        await this.bridge.cancelGeneration(command.sessionId, command.generation, 'cancelled')
-        this.activeSession = null
-        this.nextSequence = 0
-        return { type: 'ack', sessionId: command.sessionId ?? '', generation: command.generation, sequence: null }
       case 'shutdown':
-        await this.bridge.cancelGeneration(null, command.generation, 'shutdown')
+        if (this.activeSession !== null && this.activeSession.generation === command.generation) {
+          await this.bridge.cancelGeneration(this.activeSession.sessionId, command.generation, 'shutdown')
+        } else if (this.pendingStoppedSession !== null && this.pendingStoppedSession.generation === command.generation) {
+          await this.bridge.finishTurn(this.pendingStoppedSession.sessionId, command.generation, 'abandoned')
+        } else {
+          await this.bridge.cancelGeneration(null, command.generation, 'shutdown')
+        }
         this.activeSession = null
+        this.pendingStoppedSession = null
         this.nextSequence = 0
         return { type: 'ack', sessionId: '', generation: command.generation, sequence: null }
     }
@@ -205,6 +233,13 @@ function assertValidCommand(command: unknown): asserts command is AuroraVoiceWor
       if (!safeString(stop.sessionId) || !safePositiveInteger(stop.generation)) throw new Error('command')
       return
     }
+    case 'finish_turn': {
+      const finish = command as Partial<Extract<AuroraVoiceWorkerCommand, { type: 'finish_turn' }>>
+      if (!safeString(finish.sessionId) || !safePositiveInteger(finish.generation) || !validFinishOutcome(finish.outcome)) {
+        throw new Error('command')
+      }
+      return
+    }
     case 'cancel': {
       const cancel = command as Partial<Extract<AuroraVoiceWorkerCommand, { type: 'cancel' }>>
       if (!(cancel.sessionId === null || safeString(cancel.sessionId)) || !safePositiveInteger(cancel.generation) || !safeString(cancel.reason)) {
@@ -263,7 +298,7 @@ function safeSessionIdFor(command: unknown): string | null {
     const frame = (command as { frame?: Partial<AuroraPcmFrameEnvelope> }).frame
     return safeString(frame?.sessionId) ? frame.sessionId : null
   }
-  if (type === 'stop' || type === 'cancel') {
+  if (type === 'stop' || type === 'finish_turn' || type === 'cancel') {
     const sessionId = (command as { sessionId?: unknown }).sessionId
     return safeString(sessionId) ? sessionId : null
   }
@@ -281,7 +316,7 @@ function safeGenerationFor(command: unknown): number {
     const generation = (command as { frame?: Partial<AuroraPcmFrameEnvelope> }).frame?.generation
     return safePositiveInteger(generation) ? generation : 0
   }
-  if (type === 'stop' || type === 'cancel' || type === 'shutdown') {
+  if (type === 'stop' || type === 'finish_turn' || type === 'cancel' || type === 'shutdown') {
     const generation = (command as { generation?: unknown }).generation
     return safePositiveInteger(generation) ? generation : 0
   }
@@ -296,6 +331,10 @@ function safeSequenceFor(command: unknown): number | null {
 
 function safeString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= 128
+}
+
+function validFinishOutcome(value: unknown): value is AuroraVoiceTurnFinishOutcome {
+  return value === 'completed' || value === 'abandoned'
 }
 
 function safePositiveInteger(value: unknown): value is number {

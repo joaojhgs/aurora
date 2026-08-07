@@ -50,6 +50,8 @@ function defaultResponse(command: AuroraVoiceWorkerCommand): AuroraVoiceWorkerRe
       return { type: 'ack', sessionId: command.frame.sessionId, generation: command.frame.generation, sequence: command.frame.sequence }
     case 'stop':
       return { type: 'stop_result', sessionId: command.sessionId, generation: command.generation, capturedAudio: capturedAudio(command.sessionId, command.generation, []) }
+    case 'finish_turn':
+      return { type: 'ack', sessionId: command.sessionId, generation: command.generation, sequence: null }
     case 'cancel':
       return { type: 'ack', sessionId: command.sessionId ?? '', generation: command.generation, sequence: null }
     case 'shutdown':

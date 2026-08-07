@@ -12,7 +12,7 @@ import {
 import { AuroraVoiceWorkerDispatcher, type AuroraVoiceWasmBridge } from '../src/worker-dispatcher.js'
 
 describe('AuroraVoiceWorkerDispatcher', () => {
-  it('acks init start frame and stop through an injected bridge without promoting capabilities', async () => {
+  it('acks init start frame stop and finish through an injected bridge without promoting capabilities', async () => {
     const bridge = new FakeBridge()
     const port = new RecordingPort()
     const dispatcher = new AuroraVoiceWorkerDispatcher(bridge, port)
@@ -24,16 +24,19 @@ describe('AuroraVoiceWorkerDispatcher', () => {
     await dispatcher.handleMessage(request(2, { type: 'start', session, capabilities: { vad: false, kws: false, stt: false, tts: false } }))
     await dispatcher.handleMessage(request(3, { type: 'audio_frame', frame, pcm }))
     await dispatcher.handleMessage(request(4, { type: 'stop', sessionId: session.sessionId, generation: session.generation }))
+    await dispatcher.handleMessage(request(5, { type: 'finish_turn', sessionId: session.sessionId, generation: session.generation, outcome: 'completed' }))
 
     expect(port.messages.map((message) => [message.requestId, message.response.type])).toEqual([
       [1, 'ready'],
       [2, 'ack'],
       [3, 'ack'],
-      [4, 'stop_result']
+      [4, 'stop_result'],
+      [5, 'ack']
     ])
     expect(port.messages[0]?.response).toMatchObject({ capabilities: { vad: false, kws: false, stt: false, tts: false } })
     expect(bridge.frames[0]?.pcm).toEqual(pcm)
-    expect(port.transfers.at(-1)).toHaveLength(1)
+    expect(bridge.finishCalls).toEqual([{ sessionId: session.sessionId, generation: session.generation, outcome: 'completed' }])
+    expect(port.transfers[3]).toHaveLength(1)
   })
 
   it('rejects stale and duplicate frames without leaking payloads', async () => {
@@ -108,12 +111,64 @@ describe('AuroraVoiceWorkerDispatcher', () => {
 
     const secondSession = { ...session, sessionId: 'owner-a:2', generation: 2 }
     await dispatcher.handleMessage(request(8, { type: 'start', session: secondSession, capabilities: { vad: false, kws: false, stt: false, tts: false } }))
+    expect(port.messages[7]?.response).toMatchObject({ type: 'reject' })
+    await dispatcher.handleMessage(request(11, { type: 'finish_turn', sessionId: session.sessionId, generation: session.generation, outcome: 'completed' }))
+    await dispatcher.handleMessage(request(12, { type: 'start', session: secondSession, capabilities: { vad: false, kws: false, stt: false, tts: false } }))
     await Promise.all([
-      dispatcher.handleMessage(request(9, { type: 'cancel', sessionId: secondSession.sessionId, generation: secondSession.generation, reason: 'cancelled' })),
-      dispatcher.handleMessage(request(10, { type: 'stop', sessionId: secondSession.sessionId, generation: secondSession.generation }))
+      dispatcher.handleMessage(request(13, { type: 'cancel', sessionId: secondSession.sessionId, generation: secondSession.generation, reason: 'cancelled' })),
+      dispatcher.handleMessage(request(14, { type: 'stop', sessionId: secondSession.sessionId, generation: secondSession.generation }))
     ])
-    expect(port.messages[8]?.response).toMatchObject({ type: 'ack', sessionId: secondSession.sessionId })
-    expect(port.messages[9]?.response).toMatchObject({ type: 'reject', sessionId: secondSession.sessionId })
+    expect(port.messages[8]?.response).toMatchObject({ type: 'ack', sessionId: session.sessionId })
+    expect(port.messages[9]?.response).toMatchObject({ type: 'ack', sessionId: secondSession.sessionId })
+    expect(port.messages[10]?.response).toMatchObject({ type: 'ack', sessionId: secondSession.sessionId })
+    expect(port.messages[11]?.response).toMatchObject({ type: 'reject', sessionId: secondSession.sessionId })
+  })
+
+  it('settles stopped turns explicitly and rejects stale settlement without bridge calls', async () => {
+    const bridge = new FakeBridge()
+    const port = new RecordingPort()
+    const dispatcher = new AuroraVoiceWorkerDispatcher(bridge, port)
+    const session = voiceSession()
+    const secondSession = { ...session, sessionId: 'owner-a:2', generation: 2 }
+
+    await dispatcher.handleMessage(request(1, { type: 'init', protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION, maxFrameSamples: 4_800, maxQueuedBytes: 320_000 }))
+    await dispatcher.handleMessage(request(2, { type: 'start', session, capabilities: { vad: false, kws: false, stt: false, tts: false } }))
+    await dispatcher.handleMessage(request(3, { type: 'stop', sessionId: session.sessionId, generation: session.generation }))
+    await dispatcher.handleMessage(request(4, { type: 'start', session: secondSession, capabilities: { vad: false, kws: false, stt: false, tts: false } }))
+    await dispatcher.handleMessage(request(5, { type: 'finish_turn', sessionId: 'foreign-session', generation: session.generation, outcome: 'completed' }))
+    await dispatcher.handleMessage(request(6, { type: 'finish_turn', sessionId: session.sessionId, generation: session.generation + 1, outcome: 'abandoned' }))
+    await dispatcher.handleMessage(request(7, { type: 'finish_turn', sessionId: session.sessionId, generation: session.generation, outcome: 'completed' }))
+    await dispatcher.handleMessage(request(8, { type: 'start', session: secondSession, capabilities: { vad: false, kws: false, stt: false, tts: false } }))
+
+    expect(port.messages[3]?.response).toMatchObject({ type: 'reject' })
+    expect(port.messages[4]?.response).toEqual({ type: 'reject', sessionId: 'foreign-session', generation: session.generation, sequence: null, reason: 'stale_finish' })
+    expect(port.messages[5]?.response).toEqual({ type: 'reject', sessionId: session.sessionId, generation: session.generation + 1, sequence: null, reason: 'stale_finish' })
+    expect(port.messages[6]?.response).toEqual({ type: 'ack', sessionId: session.sessionId, generation: session.generation, sequence: null })
+    expect(port.messages[7]?.response).toEqual({ type: 'ack', sessionId: secondSession.sessionId, generation: secondSession.generation, sequence: null })
+    expect(bridge.finishCalls).toEqual([{ sessionId: session.sessionId, generation: session.generation, outcome: 'completed' }])
+  })
+
+  it('abandons pending stopped ownership via cancel and shutdown', async () => {
+    const bridge = new FakeBridge()
+    const port = new RecordingPort()
+    const dispatcher = new AuroraVoiceWorkerDispatcher(bridge, port)
+    const session = voiceSession()
+    const secondSession = { ...session, sessionId: 'owner-a:2', generation: 2 }
+
+    await dispatcher.handleMessage(request(1, { type: 'init', protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION, maxFrameSamples: 4_800, maxQueuedBytes: 320_000 }))
+    await dispatcher.handleMessage(request(2, { type: 'start', session, capabilities: { vad: false, kws: false, stt: false, tts: false } }))
+    await dispatcher.handleMessage(request(3, { type: 'stop', sessionId: session.sessionId, generation: session.generation }))
+    await dispatcher.handleMessage(request(4, { type: 'cancel', sessionId: session.sessionId, generation: session.generation, reason: 'cancelled' }))
+    await dispatcher.handleMessage(request(5, { type: 'start', session: secondSession, capabilities: { vad: false, kws: false, stt: false, tts: false } }))
+    await dispatcher.handleMessage(request(6, { type: 'stop', sessionId: secondSession.sessionId, generation: secondSession.generation }))
+    await dispatcher.handleMessage(request(7, { type: 'shutdown', generation: secondSession.generation, reason: 'shutdown' }))
+
+    expect(port.messages[3]?.response).toEqual({ type: 'ack', sessionId: session.sessionId, generation: session.generation, sequence: null })
+    expect(port.messages[6]?.response).toEqual({ type: 'ack', sessionId: '', generation: secondSession.generation, sequence: null })
+    expect(bridge.finishCalls).toEqual([
+      { sessionId: session.sessionId, generation: session.generation, outcome: 'abandoned' },
+      { sessionId: secondSession.sessionId, generation: secondSession.generation, outcome: 'abandoned' }
+    ])
   })
 
   it('sanitizes malformed commands into rejects instead of timing out', async () => {
@@ -152,6 +207,7 @@ class RecordingPort {
 class FakeBridge implements AuroraVoiceWasmBridge {
   readonly frames: { readonly frame: AuroraPcmFrameEnvelope; readonly pcm: Int16Array }[] = []
   readonly cancelCalls: { readonly sessionId: string | null; readonly generation: number; readonly reason: string }[] = []
+  readonly finishCalls: { readonly sessionId: string; readonly generation: number; readonly outcome: 'completed' | 'abandoned' }[] = []
   startCalls = 0
 
   async startSession(_session: AuroraVoiceWebSession): Promise<void> {
@@ -173,6 +229,10 @@ class FakeBridge implements AuroraVoiceWasmBridge {
       pcm: new Int16Array([5, 6]),
       redacted: true
     }
+  }
+
+  async finishTurn(sessionId: string, generation: number, outcome: 'completed' | 'abandoned'): Promise<void> {
+    this.finishCalls.push({ sessionId, generation, outcome })
   }
 
   async cancelGeneration(sessionId: string | null, generation: number, reason: string): Promise<void> {

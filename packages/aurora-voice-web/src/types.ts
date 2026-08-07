@@ -32,6 +32,8 @@ export interface AuroraVoiceLifecycleEligibility {
 
 export type AuroraVoiceWebState = 'idle' | 'active' | 'cancelled' | 'stopped'
 
+export type AuroraVoiceTurnFinishOutcome = 'completed' | 'abandoned'
+
 export interface AuroraVoiceWebSession {
   readonly ownerId: string
   readonly sessionId: string
@@ -132,6 +134,12 @@ export type AuroraVoiceWorkerCommand =
       readonly type: 'stop'
       readonly sessionId: string
       readonly generation: number
+    }
+  | {
+      readonly type: 'finish_turn'
+      readonly sessionId: string
+      readonly generation: number
+      readonly outcome: AuroraVoiceTurnFinishOutcome
     }
   | {
       readonly type: 'cancel'
