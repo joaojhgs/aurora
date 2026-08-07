@@ -2637,6 +2637,9 @@ export function AssistantView({
         let cancelled = status.generation === null
         if (status.generation !== null) {
           cancelled = await cancelNativeDesktopVoiceGeneration(status.generation, reason)
+          if (!cancelled && assistantViewDisposedRef.current && reason === 'shutdown') {
+            void retryDetachedNativeDesktopVoiceCancel(nativeVoice, status.generation, reason)
+          }
         }
         if (nativeVoiceOperationTokenRef.current === token) {
           if (cancelled) {
@@ -2727,14 +2730,33 @@ export function AssistantView({
     }
   }
 
+  async function retryDetachedNativeDesktopVoiceCancel(
+    port: NativeDesktopVoicePort,
+    generation: number,
+    reason: NativeDesktopVoiceStopReason
+  ): Promise<boolean> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await Promise.resolve()
+      try {
+        await port.cancel({ generation, reason })
+        nativeVoiceCancelledGenerationsRef.current.add(generation)
+        return true
+      } catch {
+        // App shutdown remains the final native-owner safeguard if bounded retries fail.
+      }
+    }
+    return false
+  }
+
   async function cancelNativeDesktopVoice(reason: NativeDesktopVoiceStopReason): Promise<boolean> {
     nativeVoicePendingCancelReasonRef.current = reason
     const generation = nativeVoiceGenerationRef.current
     if (!nativeVoice || generation === null) return false
     nativeVoiceOperationTokenRef.current += 1
     try {
+      const status = await nativeVoice.cancel({ generation, reason })
       nativeVoiceCancelledGenerationsRef.current.add(generation)
-      applyNativeDesktopVoiceStatus(await nativeVoice.cancel({ generation, reason }))
+      applyNativeDesktopVoiceStatus(status)
       nativeVoicePendingCancelReasonRef.current = null
       return true
     } catch {

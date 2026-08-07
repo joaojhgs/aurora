@@ -671,6 +671,45 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(nativeVoice.cancel).toHaveBeenCalledWith({ generation: 126, reason: 'shutdown' })
   })
 
+  it('retries detached shutdown cleanup when pending-start cancel rejects after unmount', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeVoice = createDeferredNativeDesktopVoicePort()
+    nativeVoice.cancel.mockRejectedValueOnce(new Error('native shutdown stop failed'))
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    await act(async () => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          surfaceProfile={getAuroraSurfaceProfile({
+            runtimeMode: 'desktop-local',
+            transportKind: 'tauri-local',
+            nativePlatform: 'linux'
+          })}
+          nativeVoice={nativeVoice}
+        />
+      )
+      await Promise.resolve()
+    })
+
+    await clickButton(container, 'Push to talk')
+    await act(async () => {
+      root.unmount()
+      await Promise.resolve()
+    })
+    roots.splice(roots.indexOf(root), 1)
+    nativeVoice.resolveStart(nativeStatus('listening', 2048, true))
+    await vi.waitFor(() => expect(nativeVoice.cancel).toHaveBeenCalledTimes(2))
+
+    expect(nativeVoice.cancel).toHaveBeenNthCalledWith(1, { generation: 2048, reason: 'shutdown' })
+    expect(nativeVoice.cancel).toHaveBeenNthCalledWith(2, { generation: 2048, reason: 'shutdown' })
+    expect(nativeVoice.start).toHaveBeenCalledTimes(1)
+    expect(container.textContent).not.toContain('Voice could not stop cleanly. Try again.')
+  })
+
   it('keeps a returned native generation retryable when pending-start cancel fails', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const nativeVoice = createDeferredNativeDesktopVoicePort()

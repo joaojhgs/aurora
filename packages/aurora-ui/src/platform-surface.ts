@@ -82,7 +82,7 @@ export type AuroraVoiceCaptureOwner = 'coordinator-daemon' | 'webview-focused' |
 export interface AuroraVoiceCapturePolicy {
   /** Foreground push-to-talk can capture from the WebView with getUserMedia. */
   focusedPushToTalkOwner: AuroraVoiceCaptureOwner
-  /** Wakeword owner for this surface. Desktop-local stays daemon-owned to avoid duplicate events. */
+  /** Capability owner for wake/background voice controls; availability still comes from that owner status. */
   wakewordOwner: AuroraVoiceCaptureOwner
   /** Whether wakeword is honest only while the WebView/browser is focused. */
   wakewordRequiresFocus: boolean
