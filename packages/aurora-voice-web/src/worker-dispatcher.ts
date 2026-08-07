@@ -140,7 +140,7 @@ export class AuroraVoiceWorkerDispatcher {
         if (this.activeSession !== null && this.activeSession.generation === command.generation) {
           await this.bridge.cancelGeneration(this.activeSession.sessionId, command.generation, 'shutdown')
         } else if (this.pendingStoppedSession !== null && this.pendingStoppedSession.generation === command.generation) {
-          await this.bridge.finishTurn(this.pendingStoppedSession.sessionId, command.generation, 'abandoned')
+          await this.bridge.cancelGeneration(this.pendingStoppedSession.sessionId, command.generation, 'shutdown')
         } else {
           await this.bridge.cancelGeneration(null, command.generation, 'shutdown')
         }

@@ -148,7 +148,7 @@ describe('AuroraVoiceWorkerDispatcher', () => {
     expect(bridge.finishCalls).toEqual([{ sessionId: session.sessionId, generation: session.generation, outcome: 'completed' }])
   })
 
-  it('abandons pending stopped ownership via cancel and shutdown', async () => {
+  it('abandons pending stopped ownership via cancel and frees pending stopped ownership via shutdown', async () => {
     const bridge = new FakeBridge()
     const port = new RecordingPort()
     const dispatcher = new AuroraVoiceWorkerDispatcher(bridge, port)
@@ -166,9 +166,27 @@ describe('AuroraVoiceWorkerDispatcher', () => {
     expect(port.messages[3]?.response).toEqual({ type: 'ack', sessionId: session.sessionId, generation: session.generation, sequence: null })
     expect(port.messages[6]?.response).toEqual({ type: 'ack', sessionId: '', generation: secondSession.generation, sequence: null })
     expect(bridge.finishCalls).toEqual([
-      { sessionId: session.sessionId, generation: session.generation, outcome: 'abandoned' },
-      { sessionId: secondSession.sessionId, generation: secondSession.generation, outcome: 'abandoned' }
+      { sessionId: session.sessionId, generation: session.generation, outcome: 'abandoned' }
     ])
+    expect(bridge.cancelCalls).toEqual([
+      { sessionId: secondSession.sessionId, generation: secondSession.generation, reason: 'shutdown' }
+    ])
+  })
+
+  it('keeps active ownership when stale null shutdown is rejected by the bridge', async () => {
+    const bridge = new FakeBridge({ rejectNullShutdown: true })
+    const port = new RecordingPort()
+    const dispatcher = new AuroraVoiceWorkerDispatcher(bridge, port)
+    const session = voiceSession()
+
+    await dispatcher.handleMessage(request(1, { type: 'init', protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION, maxFrameSamples: 4_800, maxQueuedBytes: 320_000 }))
+    await dispatcher.handleMessage(request(2, { type: 'start', session, capabilities: { vad: false, kws: false, stt: false, tts: false } }))
+    await dispatcher.handleMessage(request(3, { type: 'shutdown', generation: session.generation + 1, reason: 'shutdown' }))
+    await dispatcher.handleMessage(request(4, { type: 'audio_frame', frame: frameEnvelope(session, 0, 1), pcm: new Int16Array([1]) }))
+
+    expect(port.messages[2]?.response).toEqual({ type: 'reject', sessionId: null, generation: session.generation + 1, sequence: null, reason: 'worker_rejected' })
+    expect(port.messages[3]?.response).toEqual({ type: 'ack', sessionId: session.sessionId, generation: session.generation, sequence: 0 })
+    expect(bridge.cancelCalls).toEqual([{ sessionId: null, generation: session.generation + 1, reason: 'shutdown' }])
   })
 
   it('sanitizes malformed commands into rejects instead of timing out', async () => {
@@ -208,7 +226,12 @@ class FakeBridge implements AuroraVoiceWasmBridge {
   readonly frames: { readonly frame: AuroraPcmFrameEnvelope; readonly pcm: Int16Array }[] = []
   readonly cancelCalls: { readonly sessionId: string | null; readonly generation: number; readonly reason: string }[] = []
   readonly finishCalls: { readonly sessionId: string; readonly generation: number; readonly outcome: 'completed' | 'abandoned' }[] = []
+  private readonly rejectNullShutdown: boolean
   startCalls = 0
+
+  constructor(options: { readonly rejectNullShutdown?: boolean } = {}) {
+    this.rejectNullShutdown = options.rejectNullShutdown === true
+  }
 
   async startSession(_session: AuroraVoiceWebSession): Promise<void> {
     this.startCalls += 1
@@ -237,6 +260,9 @@ class FakeBridge implements AuroraVoiceWasmBridge {
 
   async cancelGeneration(sessionId: string | null, generation: number, reason: string): Promise<void> {
     this.cancelCalls.push({ sessionId, generation, reason })
+    if (this.rejectNullShutdown && sessionId === null && reason === 'shutdown') {
+      throw new Error('stale shutdown')
+    }
   }
 
   async snapshot(): Promise<{ readonly capabilities?: { readonly vad: boolean; readonly kws: boolean; readonly stt: boolean; readonly tts: boolean } }> {
