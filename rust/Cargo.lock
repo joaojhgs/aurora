@@ -121,6 +121,7 @@ dependencies = [
  "aurora-voice-engine",
  "base64",
  "cpal",
+ "crossbeam-queue",
  "ed25519-dalek",
  "futures-util",
  "reqwest",

@@ -12,6 +12,7 @@ aurora-contracts = { path = "../aurora-contracts" }
 aurora-voice-core = { path = "../aurora-voice-core" }
 aurora-voice-engine = { path = "../aurora-voice-engine" }
 base64.workspace = true
+crossbeam-queue.workspace = true
 ed25519-dalek.workspace = true
 futures-util.workspace = true
 reqwest.workspace = true
