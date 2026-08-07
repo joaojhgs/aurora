@@ -22,6 +22,7 @@ extern int32_t aurora_audio_state_push_pcm_i16(
     uint64_t sequence);
 extern size_t aurora_audio_state_drain_one(AuroraAudioState *state);
 extern void aurora_audio_state_close(AuroraAudioState *state);
+extern void aurora_audio_state_reset_stats(AuroraAudioState *state);
 extern int32_t aurora_audio_state_stats(AuroraAudioState *state, AuroraAudioStats *out_stats);
 
 JNIEXPORT jlong JNICALL Java_dev_aurora_voice_audiospike_NativeAudioBridge_nativeCreate(
@@ -44,6 +45,16 @@ JNIEXPORT void JNICALL Java_dev_aurora_voice_audiospike_NativeAudioBridge_native
   (void)self;
   AuroraAudioState *state = (AuroraAudioState *)(uintptr_t)handle;
   aurora_audio_state_close(state);
+}
+
+JNIEXPORT void JNICALL Java_dev_aurora_voice_audiospike_NativeAudioBridge_nativeResetStats(
+    JNIEnv *env,
+    jobject self,
+    jlong handle) {
+  (void)env;
+  (void)self;
+  AuroraAudioState *state = (AuroraAudioState *)(uintptr_t)handle;
+  aurora_audio_state_reset_stats(state);
 }
 
 JNIEXPORT void JNICALL Java_dev_aurora_voice_audiospike_NativeAudioBridge_nativeFree(

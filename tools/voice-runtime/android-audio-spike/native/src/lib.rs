@@ -127,6 +127,19 @@ impl AuroraAudioState {
         inner.queue.clear();
     }
 
+    fn reset_stats(&self) {
+        let mut inner = self.inner.lock().expect("audio state mutex poisoned");
+        if inner.closed {
+            return;
+        }
+        inner.queue.clear();
+        inner.accepted_chunks = 0;
+        inner.accepted_samples = 0;
+        inner.dropped_chunks = 0;
+        inner.discontinuities = 0;
+        inner.last_sequence = None;
+    }
+
     fn stats(&self) -> AuroraAudioStats {
         let inner = self.inner.lock().expect("audio state mutex poisoned");
         AuroraAudioStats {
@@ -207,6 +220,18 @@ pub unsafe extern "C" fn aurora_audio_state_drain_one(state: *mut AuroraAudioSta
 pub unsafe extern "C" fn aurora_audio_state_close(state: *mut AuroraAudioState) {
     if !state.is_null() {
         (*state).close();
+    }
+}
+
+/// Clears queued PCM and counters while leaving the state open.
+///
+/// # Safety
+///
+/// `state` must be null or a valid pointer returned by `aurora_audio_state_new`.
+#[no_mangle]
+pub unsafe extern "C" fn aurora_audio_state_reset_stats(state: *mut AuroraAudioState) {
+    if !state.is_null() {
+        (*state).reset_stats();
     }
 }
 
@@ -292,6 +317,23 @@ mod tests {
     }
 
     #[test]
+    fn reset_stats_separates_synthetic_from_capture_window() {
+        let state = AuroraAudioState::new(4, 8);
+        assert_eq!(state.push_pcm(&[1, 2], 0), AURORA_AUDIO_OK);
+        assert_eq!(state.push_pcm(&[3, 4], 1), AURORA_AUDIO_OK);
+        assert_eq!(state.stats().accepted_chunks, 2);
+
+        state.reset_stats();
+
+        let stats = state.stats();
+        assert_eq!(stats.accepted_chunks, 0);
+        assert_eq!(stats.accepted_samples, 0);
+        assert_eq!(stats.queued_chunks, 0);
+        assert_eq!(stats.closed, 0);
+        assert_eq!(state.push_pcm(&[5, 6], 0), AURORA_AUDIO_OK);
+    }
+
+    #[test]
     fn c_abi_roundtrip_is_null_safe() {
         unsafe {
             assert_eq!(
@@ -310,6 +352,9 @@ mod tests {
             assert_eq!(aurora_audio_state_stats(state, &mut stats), AURORA_AUDIO_OK);
             assert_eq!(stats.accepted_samples, 3);
             assert_eq!(aurora_audio_state_drain_one(state), 3);
+            aurora_audio_state_reset_stats(state);
+            assert_eq!(aurora_audio_state_stats(state, &mut stats), AURORA_AUDIO_OK);
+            assert_eq!(stats.accepted_chunks, 0);
 
             aurora_audio_state_close(state);
             assert_eq!(

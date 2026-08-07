@@ -44,7 +44,8 @@ pinned NDK under `ANDROID_HOME` / `ANDROID_SDK_ROOT`. `build-android.sh`
 requires either `GRADLE_BIN` or `gradle` on `PATH` and fails closed otherwise.
 Both scripts avoid committed machine-specific paths.
 
-The emulator smoke installs the debug APK, grants microphone permission when a
-device is available, launches a bounded no-permission synthetic ingestion path,
-and verifies Rust stats through logcat summary counters. It does not claim
-physical microphone proof; emulator audio input availability varies by host.
+The emulator smoke installs the debug APK, grants microphone permission,
+verifies the bounded synthetic JNI path, then separately requires live
+`AudioRecord` frames to increment Rust-owned counters. This proves the Android
+capture-to-Rust boundary on the selected emulator; it does not claim physical
+microphone hardware proof.

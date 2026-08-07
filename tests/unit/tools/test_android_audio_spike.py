@@ -43,6 +43,8 @@ def test_android_audio_spike_uses_kotlin_audiorecord_into_native_bridge() -> Non
     assert "bridge.pushPcm(chunk, read, sequence++)" in source
     assert "running.set(false)" in source
     assert "worker.quitSafely()" in source
+    assert "CountDownLatch" in source
+    assert "completed.await(2, TimeUnit.SECONDS)" in source
 
 
 def test_android_audio_spike_does_not_log_raw_audio() -> None:
@@ -70,6 +72,37 @@ def test_rust_state_owns_bounded_backpressure_and_shutdown() -> None:
     assert "inner.queue.clear()" in source
     assert "#[no_mangle]" in source
     assert "aurora_audio_state_push_pcm_i16" in source
+    assert "aurora_audio_state_reset_stats" in source
+
+
+def test_capture_smoke_is_separate_from_synthetic_jni_smoke() -> None:
+    source = read(KOTLIN)
+    script = read(SPIKE / "scripts" / "run-emulator-smoke.sh")
+
+    assert "nativeBridge.resetStats()" in source
+    assert "val captureBaseline = nativeBridge.stats()" in source
+    assert "pollCaptureResult(nativeBridge, captureBaseline" in source
+    assert "acceptedDelta > 0 && sampleDelta > 0" in source
+    assert "capture result ok=true" in source
+    assert "synthetic result ok=true" in script
+    assert "capture result ok=true" in script
+    assert "capture result ok=" in script
+
+
+def test_native_free_happens_after_capture_thread_completion() -> None:
+    source = read(KOTLIN)
+    capture_start = source.index("class AndroidAudioCapture")
+    close_start = source.index("override fun close()", capture_start)
+    close_body = source[close_start : source.index("class MainActivity")]
+
+    assert close_body.index("bridge.shutdown()") < close_body.index(
+        "completed.await(2, TimeUnit.SECONDS)"
+    )
+    assert close_body.index("completed.await(2, TimeUnit.SECONDS)") < close_body.index(
+        "bridge.close()"
+    )
+    assert "capture close incomplete; native state retained" in close_body
+    assert "InterruptedException" in close_body
 
 
 def test_android_build_imports_rust_static_library_per_abi() -> None:
