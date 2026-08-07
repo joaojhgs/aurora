@@ -670,6 +670,101 @@ describe('Assistant hosted browser voice runtime', () => {
 
     expect(nativeVoice.cancel).toHaveBeenCalledWith({ generation: 126, reason: 'shutdown' })
   })
+
+  it('keeps a returned native generation retryable when pending-start cancel fails', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeVoice = createDeferredNativeDesktopVoicePort()
+    nativeVoice.cancel.mockRejectedValueOnce(new Error('native stop failed'))
+    const container = renderAssistant(client, getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-local',
+      transportKind: 'tauri-local',
+      nativePlatform: 'linux'
+    }), nativeVoice)
+
+    await clickButton(container, 'Push to talk')
+    await act(async () => {
+      window.dispatchEvent(new Event(AURORA_RELEASE_FOCUSED_MEDIA_EVENT))
+      await Promise.resolve()
+    })
+    nativeVoice.resolveStart(nativeStatus('listening', 512, true))
+    await vi.waitFor(() => expect(container.textContent).toContain('Voice could not stop cleanly. Try again.'))
+
+    expect(nativeVoice.cancel).toHaveBeenCalledTimes(1)
+    expect(nativeVoice.cancel).toHaveBeenCalledWith({ generation: 512, reason: 'window_hidden' })
+    expect(findButtonOrNull(container, 'Stop listening')).toBeNull()
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(nativeVoice.cancel).toHaveBeenCalledTimes(2))
+
+    expect(nativeVoice.cancel).toHaveBeenLastCalledWith({ generation: 512, reason: 'user_request' })
+    expect(nativeVoice.start).toHaveBeenCalledTimes(1)
+    expect(findButton(container, 'Push to talk')).toBeTruthy()
+  })
+
+  it('does not apply delayed native status or leak delayed subscribe cleanup after unmount', async () => {
+    const statusDelayed = createDeferredStatusNativeDesktopVoicePort()
+    const firstContainer = document.createElement('div')
+    document.body.appendChild(firstContainer)
+    const firstRoot = createRoot(firstContainer)
+    roots.push(firstRoot)
+    await act(async () => {
+      firstRoot.render(
+        <AssistantView
+          client={new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })}
+          route={assistantRoute()}
+          surfaceProfile={getAuroraSurfaceProfile({
+            runtimeMode: 'desktop-local',
+            transportKind: 'tauri-local',
+            nativePlatform: 'linux'
+          })}
+          nativeVoice={statusDelayed}
+        />
+      )
+      await Promise.resolve()
+    })
+    await act(async () => {
+      firstRoot.unmount()
+      await Promise.resolve()
+    })
+    roots.splice(roots.indexOf(firstRoot), 1)
+    statusDelayed.resolveStatus(nativeStatus('listening', 64, true))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(statusDelayed.subscribe).not.toHaveBeenCalled()
+    expect(firstContainer.textContent).not.toContain('Aurora is listening.')
+
+    const subscribeDelayed = createDeferredSubscribeNativeDesktopVoicePort()
+    const secondContainer = document.createElement('div')
+    document.body.appendChild(secondContainer)
+    const secondRoot = createRoot(secondContainer)
+    roots.push(secondRoot)
+    await act(async () => {
+      secondRoot.render(
+        <AssistantView
+          client={new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })}
+          route={assistantRoute()}
+          surfaceProfile={getAuroraSurfaceProfile({
+            runtimeMode: 'desktop-thin',
+            transportKind: 'tauri-thin',
+            nativePlatform: 'linux'
+          })}
+          nativeVoice={subscribeDelayed}
+        />
+      )
+      await Promise.resolve()
+    })
+    await vi.waitFor(() => expect(subscribeDelayed.subscribe).toHaveBeenCalledTimes(1))
+    await act(async () => {
+      secondRoot.unmount()
+      await Promise.resolve()
+    })
+    roots.splice(roots.indexOf(secondRoot), 1)
+    subscribeDelayed.resolveSubscribe()
+    await vi.waitFor(() => expect(subscribeDelayed.unsubscribe).toHaveBeenCalledTimes(1))
+  })
 })
 
 function createRuntimeMock({ capturedPcm }: { capturedPcm: Int16Array }) {
@@ -773,6 +868,41 @@ function createDeferredNativeDesktopVoicePort(): NativeDesktopVoicePort & {
     cancel: vi.fn(async () => nativeStatus('idle', null, true)),
     subscribe: vi.fn(async () => () => undefined),
     resolveStart: start.resolve
+  }
+  return port
+}
+
+function createDeferredStatusNativeDesktopVoicePort(): NativeDesktopVoicePort & {
+  subscribe: ReturnType<typeof vi.fn>
+  resolveStatus: (status: NativeDesktopVoiceStatus) => void
+} {
+  const status = deferred<NativeDesktopVoiceStatus>()
+  const port = {
+    status: vi.fn(() => status.promise),
+    start: vi.fn(async () => nativeStatus('listening', 1, true)),
+    finish: vi.fn(async () => nativeStatus('processing', 1, true)),
+    cancel: vi.fn(async () => nativeStatus('idle', null, true)),
+    subscribe: vi.fn(async () => () => undefined),
+    resolveStatus: status.resolve
+  }
+  return port
+}
+
+function createDeferredSubscribeNativeDesktopVoicePort(): NativeDesktopVoicePort & {
+  subscribe: ReturnType<typeof vi.fn>
+  unsubscribe: ReturnType<typeof vi.fn>
+  resolveSubscribe: () => void
+} {
+  const subscription = deferred<() => void>()
+  const unsubscribe = vi.fn()
+  const port = {
+    status: vi.fn(async () => nativeStatus('idle', null, true)),
+    start: vi.fn(async () => nativeStatus('listening', 1, true)),
+    finish: vi.fn(async () => nativeStatus('processing', 1, true)),
+    cancel: vi.fn(async () => nativeStatus('idle', null, true)),
+    subscribe: vi.fn(() => subscription.promise),
+    unsubscribe,
+    resolveSubscribe: () => subscription.resolve(unsubscribe)
   }
   return port
 }

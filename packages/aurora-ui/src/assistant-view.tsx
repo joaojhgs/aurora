@@ -955,14 +955,20 @@ export function AssistantView({
     void (async () => {
       try {
         const status = await nativeVoice.status()
+        if (!active) return
         if (!maybeCancelDeferredNativeDesktopVoiceStatus(status)) {
           applyNativeDesktopVoiceStatus(status)
         }
-        unsubscribe = await nativeVoice.subscribe((event) => {
+        const nextUnsubscribe = await nativeVoice.subscribe((event) => {
           if (!active) return
           if (maybeCancelDeferredNativeDesktopVoiceStatus(event.status)) return
           applyNativeDesktopVoiceStatus(event.status)
         })
+        if (!active) {
+          nextUnsubscribe()
+          return
+        }
+        unsubscribe = nextUnsubscribe
       } catch {
         if (!active) return
         nativeVoiceStatusRef.current = null
@@ -2628,18 +2634,34 @@ export function AssistantView({
         || pendingReason !== null
       ) {
         const reason = pendingReason ?? (assistantViewDisposedRef.current ? 'shutdown' : 'user_request')
+        let cancelled = status.generation === null
         if (status.generation !== null) {
-          await cancelNativeDesktopVoiceGeneration(status.generation, reason)
+          cancelled = await cancelNativeDesktopVoiceGeneration(status.generation, reason)
         }
         if (nativeVoiceOperationTokenRef.current === token) {
-          nativeVoiceGenerationRef.current = null
-          nativeVoiceStatusRef.current = null
-          nativeVoicePendingCancelReasonRef.current = null
-          if (!assistantViewDisposedRef.current) {
-            setVoiceCaptureStatus('idle')
-            activeVoiceSessionRef.current = null
-            ownedVoiceSessionIdsRef.current.clear()
-            coordinatorVoiceSessionIdsRef.current.clear()
+          if (cancelled) {
+            nativeVoiceGenerationRef.current = null
+            nativeVoiceStatusRef.current = null
+            nativeVoicePendingCancelReasonRef.current = null
+            if (!assistantViewDisposedRef.current) {
+              setVoiceCaptureStatus('idle')
+              activeVoiceSessionRef.current = null
+              ownedVoiceSessionIdsRef.current.clear()
+              coordinatorVoiceSessionIdsRef.current.clear()
+            }
+          } else {
+            nativeVoiceGenerationRef.current = status.generation
+            nativeVoiceStatusRef.current = status
+            if (status.generation !== null) {
+              const sessionId = `native-desktop-${status.generation}`
+              activeVoiceSessionRef.current = sessionId
+              ownedVoiceSessionIdsRef.current.add(sessionId)
+            }
+            if (!assistantViewDisposedRef.current) {
+              setVoiceCaptureStatus('error')
+              setLastError('Voice could not stop cleanly. Try again.')
+              setStreamState((current) => ({ ...current, status: 'lost', message: 'Voice could not stop cleanly. Try again.' }))
+            }
           }
         }
         return false
@@ -2696,9 +2718,9 @@ export function AssistantView({
     reason: NativeDesktopVoiceStopReason
   ): Promise<boolean> {
     if (!nativeVoice || nativeVoiceCancelledGenerationsRef.current.has(generation)) return false
-    nativeVoiceCancelledGenerationsRef.current.add(generation)
     try {
       await nativeVoice.cancel({ generation, reason })
+      nativeVoiceCancelledGenerationsRef.current.add(generation)
       return true
     } catch {
       return false
@@ -3023,6 +3045,10 @@ export function AssistantView({
 
   async function toggleLocalCapture() {
     const currentCaptureStatus = voiceCaptureStatusRef.current
+    if (usesNativeDesktopVoice && currentCaptureStatus === 'error' && nativeVoiceGenerationRef.current !== null) {
+      await cancelNativeDesktopVoice('user_request')
+      return
+    }
     if (currentCaptureStatus === 'listening') {
       if (usesNativeDesktopVoice) {
         await finishNativeDesktopVoice()
