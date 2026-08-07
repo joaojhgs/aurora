@@ -830,16 +830,36 @@ fn insert_blob_charge(
 fn reconcile_scoped_pointers(root: &Path, state: &mut StoreState) -> Result<(), ModelPackError> {
     let revoked = state.revoked_pack_ids.clone();
     let files = state.files.clone();
+    let mut withdrawn_lifecycle_keys = BTreeSet::new();
     state.active.retain(|key, active| {
-        *key == scope_map_key(&active.identity.scope)
+        let valid = *key == scope_map_key(&active.identity.scope)
             && !revoked.contains(&active.identity.pack_id)
-            && pack_has_files_in(&files, root, active).unwrap_or(false)
+            && pack_has_files_in(&files, root, active).unwrap_or(false);
+        if !valid {
+            withdrawn_lifecycle_keys.insert(record_lifecycle_key(active));
+        }
+        valid
     });
     state.rollback.retain(|key, rollback| {
-        *key == scope_map_key(&rollback.identity.scope)
+        let valid = *key == scope_map_key(&rollback.identity.scope)
             && !revoked.contains(&rollback.identity.pack_id)
-            && pack_has_files_in(&files, root, rollback).unwrap_or(false)
+            && pack_has_files_in(&files, root, rollback).unwrap_or(false);
+        if !valid {
+            withdrawn_lifecycle_keys.insert(record_lifecycle_key(rollback));
+        }
+        valid
     });
+    let surviving_lifecycle_keys: BTreeSet<String> = state
+        .active
+        .values()
+        .chain(state.rollback.values())
+        .map(record_lifecycle_key)
+        .collect();
+    for key in withdrawn_lifecycle_keys {
+        if !surviving_lifecycle_keys.contains(&key) {
+            state.lifecycles.remove(&key);
+        }
+    }
     reconcile_lifecycle_activity(state)
 }
 
@@ -2646,14 +2666,11 @@ mod tests {
                 .expect("active readable"),
             None
         );
-        assert_ne!(
-            recovered
-                .lifecycle("pack", "1", "linux")
-                .await
-                .expect("lifecycle readable")
-                .map(|snapshot| snapshot.state),
-            Some(InstallState::Active)
-        );
+        assert!(recovered
+            .lifecycle("pack", "1", "linux")
+            .await
+            .expect("lifecycle readable")
+            .is_none());
     }
 
     #[tokio::test]
@@ -2694,6 +2711,11 @@ mod tests {
         remove_file_metadata(temp.path(), &first_selection, "frontend");
         let mut recovered = open_store(temp.path(), 100);
         assert!(recovered.rollback_identity(&scope(PackTask::Stt)).is_none());
+        assert!(recovered
+            .lifecycle("pack", "1", "linux")
+            .await
+            .expect("rollback lifecycle readable")
+            .is_none());
         assert_eq!(
             recovered
                 .rollback_active(scope(PackTask::Stt))
