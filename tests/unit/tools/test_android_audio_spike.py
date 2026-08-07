@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[3]
 SPIKE = ROOT / "tools" / "voice-runtime" / "android-audio-spike"
 RUST_LIB = SPIKE / "native" / "src" / "lib.rs"
