@@ -6,12 +6,12 @@ pub mod model_store;
 
 use async_trait::async_trait;
 use aurora_voice_core::{
-    AudioInput, CancellationToken, CaptureStartReason, EngineError, Generation, PcmFrame,
-    RedactedSnapshot, ResourceReport, RouteRevision, RuntimeEvent, RuntimeEventSink, SpeechEngine,
-    SpeechTransport, TaskCapability, TaskProvider, TaskReadiness, TaskRequest, TimestampMicros,
-    TransitionReason, VoiceCaptureLease, VoiceCoreError, VoiceTask,
+    AssistantTurnRequest, AssistantTurnResponse, AudioInput, CancellationToken, CaptureStartReason,
+    EngineError, Generation, PcmFrame, RedactedSnapshot, ResourceReport, RouteRevision,
+    RuntimeEvent, RuntimeEventSink, SpeechEngine, SpeechTransport, TaskCapability, TaskProvider,
+    TaskReadiness, TaskRequest, TimestampMicros, TransitionReason, VoiceCaptureLease,
+    VoiceCoreError, VoiceTask,
 };
-use serde_json::json;
 use std::collections::VecDeque;
 
 pub use model_store::*;
@@ -251,7 +251,7 @@ impl SpeechEngine for FakeEngine {
 #[derive(Debug, Clone)]
 pub struct FakeTransport {
     response_text: String,
-    invoked: Vec<String>,
+    invoked: Vec<AssistantTurnRequest>,
     cancelled: Vec<Generation>,
     fail_invoke: bool,
     cancel_during_invoke: Option<CancellationToken>,
@@ -278,7 +278,7 @@ impl FakeTransport {
         self
     }
 
-    pub fn invoked(&self) -> &[String] {
+    pub fn invoked(&self) -> &[AssistantTurnRequest] {
         &self.invoked
     }
 
@@ -289,12 +289,11 @@ impl FakeTransport {
 
 #[async_trait(?Send)]
 impl SpeechTransport for FakeTransport {
-    async fn invoke_finite(
+    async fn assistant_turn(
         &mut self,
-        method: &str,
-        payload: serde_json::Value,
+        request: AssistantTurnRequest,
         cancellation: CancellationToken,
-    ) -> Result<serde_json::Value, VoiceCoreError> {
+    ) -> Result<AssistantTurnResponse, VoiceCoreError> {
         cancellation.check()?;
         if let Some(token) = &self.cancel_during_invoke {
             token.cancel();
@@ -303,8 +302,13 @@ impl SpeechTransport for FakeTransport {
         if self.fail_invoke {
             return Err(VoiceCoreError::InvalidTransition);
         }
-        self.invoked.push(format!("{method}:{payload}"));
-        Ok(json!({ "text": self.response_text }))
+        self.invoked.push(request.clone());
+        Ok(AssistantTurnResponse {
+            text: self.response_text.clone(),
+            session_id: Some(request.session_id),
+            request_id: Some(request.request_id),
+            correlation_id: Some(request.correlation_id),
+        })
     }
 
     async fn cancel_session(&mut self, generation: Generation) -> Result<(), VoiceCoreError> {
@@ -418,6 +422,11 @@ mod tests {
         assert_eq!(audio.stopped(), &[TransitionReason::Stop]);
         assert_eq!(engine.spoken(), &["answer ready".to_owned()]);
         assert_eq!(transport.invoked().len(), 1);
+        assert_eq!(transport.invoked()[0].transcript, "hello aurora");
+        assert_eq!(transport.invoked()[0].session_id, "voice-session-1");
+        assert_eq!(transport.invoked()[0].request_id, "voice-request-1");
+        assert_eq!(transport.invoked()[0].correlation_id, "voice-correlation-1");
+        assert!(!transport.invoked()[0].stream);
         assert!(sink.events().len() >= 7);
         Ok(())
     }

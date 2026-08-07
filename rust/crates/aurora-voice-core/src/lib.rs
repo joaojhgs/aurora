@@ -370,6 +370,38 @@ impl CancellationToken {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssistantTurnRequest {
+    pub generation: Generation,
+    pub transcript: String,
+    pub session_id: String,
+    pub request_id: String,
+    pub correlation_id: String,
+    pub stream: bool,
+}
+
+impl AssistantTurnRequest {
+    pub fn from_generation(generation: Generation, transcript: impl Into<String>) -> Self {
+        let suffix = generation.0;
+        Self {
+            generation,
+            transcript: transcript.into(),
+            session_id: format!("voice-session-{suffix}"),
+            request_id: format!("voice-request-{suffix}"),
+            correlation_id: format!("voice-correlation-{suffix}"),
+            stream: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssistantTurnResponse {
+    pub text: String,
+    pub session_id: Option<String>,
+    pub request_id: Option<String>,
+    pub correlation_id: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CaptureOwnerKind {
@@ -725,12 +757,11 @@ impl RuntimeEvent {
 
 #[async_trait(?Send)]
 pub trait SpeechTransport {
-    async fn invoke_finite(
+    async fn assistant_turn(
         &mut self,
-        method: &str,
-        payload: serde_json::Value,
+        request: AssistantTurnRequest,
         cancellation: CancellationToken,
-    ) -> Result<serde_json::Value, VoiceCoreError>;
+    ) -> Result<AssistantTurnResponse, VoiceCoreError>;
 
     async fn cancel_session(&mut self, generation: Generation) -> Result<(), VoiceCoreError>;
 }
@@ -986,13 +1017,10 @@ where
         )
         .await?;
         cancellation.check()?;
+        let request = AssistantTurnRequest::from_generation(lease.generation, transcript);
         let response = self
             .transport
-            .invoke_finite(
-                "assistant.turn",
-                serde_json::json!({ "transcript": transcript }),
-                cancellation.clone(),
-            )
+            .assistant_turn(request, cancellation.clone())
             .await?;
         cancellation.check()?;
         self.transition_emit(
@@ -1012,11 +1040,6 @@ where
             TimestampMicros(at.0.saturating_add(3)),
         )
         .await?;
-        let text = response
-            .get("text")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or_default()
-            .to_owned();
         let _audio = self
             .engine
             .synthesize_text(
@@ -1025,7 +1048,7 @@ where
                     language: None,
                     generation: lease.generation.0,
                 },
-                &text,
+                &response.text,
                 &|| cancellation.is_cancelled(),
             )
             .await?;
@@ -1038,7 +1061,7 @@ where
             TimestampMicros(at.0.saturating_add(4)),
         )
         .await?;
-        Ok(text)
+        Ok(response.text)
     }
 
     async fn finish_with_cleanup(
