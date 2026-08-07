@@ -44,6 +44,10 @@ class Any:
 ANY = Any()
 
 
+def _logged_messages(mock_log) -> str:
+    return "\n".join(str(call.args[0]) for call in mock_log.call_args_list)
+
+
 _MOCK_COORDINATOR = Coordinator(
     session_timeout_s=5.0,
     multi_turn_enabled=False,
@@ -329,6 +333,42 @@ async def test_transcription_result_ends_session(service, mock_bus):
     mock_bus.publish.assert_any_call(
         TranscriptionTopics.CONTROL, TranscriptionControl(action="pause"), event=False
     )
+
+
+@pytest.mark.asyncio
+async def test_final_transcription_log_uses_metadata_without_private_speech(service, mock_bus):
+    """Final transcripts stay in bus events but never in coordinator logs."""
+    private_transcript = "the vault passphrase is violet river"
+    service._current_session_id = "session-private"
+    service._state = STTState.LISTENING
+
+    transcription_result = TranscriptionResult(
+        text=private_transcript,
+        transcription_type=TranscriptionType.ACCURATE,
+        confidence=0.875,
+        source="test_source",
+        stream_id="test_stream",
+        model="test_model",
+        duration_ms=1000,
+    )
+
+    with patch("app.services.stt_coordinator.service.log_info") as mock_log_info:
+        await service._on_transcription_result(
+            Envelope(payload=transcription_result, type=TranscriptionTopics.RESULT)
+        )
+
+    logged = _logged_messages(mock_log_info)
+    assert private_transcript not in logged
+    assert "text_chars=36" in logged
+    assert "confidence=0.875" in logged
+
+    speech_events = [
+        call.args[1]
+        for call in mock_bus.publish.await_args_list
+        if call.args[0] == STTCoordinatorTopics.USER_SPEECH_CAPTURED
+    ]
+    assert speech_events
+    assert speech_events[-1].text == private_transcript
 
 
 @pytest.mark.asyncio

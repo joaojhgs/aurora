@@ -94,6 +94,12 @@ def _transcript_words(text: str) -> list[str]:
     return _TRANSCRIPT_WORD_RE.findall(" ".join(text.split()))
 
 
+def _transcript_log_metadata(text: str, confidence: float | None) -> str:
+    """Return bounded non-content metadata for private transcript text."""
+    confidence_part = "unknown" if confidence is None else f"{confidence:.3f}"
+    return f"text_chars={len(text)} confidence={confidence_part}"
+
+
 def merge_transcript_text(previous: str, incoming: str, *, append_on_miss: bool) -> str:
     """Merge rolling STT updates without losing earlier utterance text.
 
@@ -1081,7 +1087,10 @@ class STTCoordinatorService(BaseService):
                 append_on_miss=bool(self._accumulated_transcription),
             )
 
-            log_info(f"Transcription captured: '{final_text}'")
+            log_info(
+                f"Transcription captured: "
+                f"{_transcript_log_metadata(final_text, result.confidence)}"
+            )
 
             # Cancel timeout
             if self._timeout_task and not self._timeout_task.done():

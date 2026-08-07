@@ -114,6 +114,11 @@ _MAX_VOICE_IMPORT_SESSIONS = 64
 _MAX_VOICE_IMPORT_SESSIONS_PER_OWNER = 8
 
 
+def _text_log_metadata(text: str) -> str:
+    """Return bounded non-content metadata for private speech text."""
+    return f"text_chars={len(text)}"
+
+
 @dataclass
 class _TTSStreamState:
     """Internal ordered state for a text-to-audio stream."""
@@ -1771,7 +1776,10 @@ class TTSService(BaseService):
             EmptyOutput on success
         """
         try:
-            log_info(f"TTS request: '{request.text}' (interrupt={request.interrupt})")
+            log_info(
+                f"TTS request: {_text_log_metadata(request.text)} "
+                f"interrupt={request.interrupt}"
+            )
 
             # Handle interruption
             if request.interrupt and self._playing:
@@ -2183,7 +2191,7 @@ class TTSService(BaseService):
             )
 
             # Feed text to stream and play asynchronously
-            log_info(f"Playing TTS: {text[:50]}...")
+            log_info(f"Playing TTS: {_text_log_metadata(text)}")
             self.stream.feed(text)
             self.stream.play_async()
 
@@ -2239,7 +2247,7 @@ class TTSService(BaseService):
                 self._current_request_id = previous_request_id
                 await self._publish_playback_failure(request_id, playback_id)
                 return
-            log_info(f"Playing TTS: {text[:50]}...")
+            log_info(f"Playing TTS: {_text_log_metadata(text)}")
             return
 
         self._current_text = f"{self._current_text or ''}{text}"
@@ -2367,7 +2375,10 @@ class TTSService(BaseService):
             TTSSynthesizeResponse with base64-encoded audio data
         """
         try:
-            log_info(f"TTS synthesize request: '{request.text[:50]}...' format={request.format}")
+            log_info(
+                f"TTS synthesize request: {_text_log_metadata(request.text)} "
+                f"format={request.format}"
+            )
 
             # Synthesize audio
             audio_bytes, sample_rate = await self._synthesize_to_bytes(
