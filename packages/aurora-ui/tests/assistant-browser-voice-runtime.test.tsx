@@ -5,7 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { AuroraClient, MockAuroraTransport, ORCHESTRATOR_METHODS, type AssistantStreamUpdate } from '@aurora/client'
 import { AssistantView } from '../src/assistant-view'
 import { auroraNavSections, navItemSnapshot } from '../src/nav'
-import { getAuroraSurfaceProfile } from '../src/platform-surface'
+import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from '../src/platform-surface'
 import type { NativeDesktopVoicePort, NativeDesktopVoiceStatus } from '../src/native-desktop-voice'
 import type { RouteAvailability } from '../src/shell-data'
 
@@ -585,6 +585,91 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(transcribe).not.toHaveBeenCalled()
     expect(cancel).not.toHaveBeenCalled()
   })
+
+  it('cancels the returned native generation when release happens during pending desktop start', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeVoice = createDeferredNativeDesktopVoicePort()
+    const container = renderAssistant(client, getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-local',
+      transportKind: 'tauri-local',
+      nativePlatform: 'linux'
+    }), nativeVoice)
+
+    await clickButton(container, 'Push to talk')
+    expect(nativeVoice.cancel).not.toHaveBeenCalled()
+
+    await act(async () => {
+      window.dispatchEvent(new Event(AURORA_RELEASE_FOCUSED_MEDIA_EVENT))
+      await Promise.resolve()
+    })
+    expect(nativeVoice.cancel).not.toHaveBeenCalled()
+
+    nativeVoice.resolveStart(nativeStatus('listening', 42, true))
+    await vi.waitFor(() => expect(nativeVoice.cancel).toHaveBeenCalledTimes(1))
+
+    expect(nativeVoice.cancel).toHaveBeenCalledWith({ generation: 42, reason: 'window_hidden' })
+    expect(findButton(container, 'Push to talk')).toBeTruthy()
+    expect(findButtonOrNull(container, 'Stop listening')).toBeNull()
+  })
+
+  it('cancels the returned native generation when the window hides during pending desktop start', async () => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeVoice = createDeferredNativeDesktopVoicePort()
+    const container = renderAssistant(client, getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-thin',
+      transportKind: 'tauri-thin',
+      nativePlatform: 'linux'
+    }), nativeVoice)
+
+    await clickButton(container, 'Push to talk')
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+      await Promise.resolve()
+    })
+    nativeVoice.resolveStart(nativeStatus('listening', 84, true))
+    await vi.waitFor(() => expect(nativeVoice.cancel).toHaveBeenCalledTimes(1))
+
+    expect(nativeVoice.cancel).toHaveBeenCalledWith({ generation: 84, reason: 'window_hidden' })
+    expect(findButton(container, 'Push to talk')).toBeTruthy()
+    expect(findButtonOrNull(container, 'Stop listening')).toBeNull()
+  })
+
+  it('cancels the returned native generation when unmounted during pending desktop start', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeVoice = createDeferredNativeDesktopVoicePort()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    await act(async () => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          surfaceProfile={getAuroraSurfaceProfile({
+            runtimeMode: 'desktop-local',
+            transportKind: 'tauri-local',
+            nativePlatform: 'linux'
+          })}
+          nativeVoice={nativeVoice}
+        />
+      )
+      await Promise.resolve()
+    })
+
+    await clickButton(container, 'Push to talk')
+    await act(async () => {
+      root.unmount()
+      await Promise.resolve()
+    })
+    roots.splice(roots.indexOf(root), 1)
+    nativeVoice.resolveStart(nativeStatus('listening', 126, true))
+    await vi.waitFor(() => expect(nativeVoice.cancel).toHaveBeenCalledTimes(1))
+
+    expect(nativeVoice.cancel).toHaveBeenCalledWith({ generation: 126, reason: 'shutdown' })
+  })
 })
 
 function createRuntimeMock({ capturedPcm }: { capturedPcm: Int16Array }) {
@@ -670,6 +755,24 @@ function createNativeDesktopVoicePort(): NativeDesktopVoicePort & {
         listener = null
       }
     })
+  }
+  return port
+}
+
+function createDeferredNativeDesktopVoicePort(): NativeDesktopVoicePort & {
+  start: ReturnType<typeof vi.fn>
+  finish: ReturnType<typeof vi.fn>
+  cancel: ReturnType<typeof vi.fn>
+  resolveStart: (status: NativeDesktopVoiceStatus) => void
+} {
+  const start = deferred<NativeDesktopVoiceStatus>()
+  const port = {
+    status: vi.fn(async () => nativeStatus('idle', null, true)),
+    start: vi.fn(() => start.promise),
+    finish: vi.fn(async () => nativeStatus('processing', 1, true)),
+    cancel: vi.fn(async () => nativeStatus('idle', null, true)),
+    subscribe: vi.fn(async () => () => undefined),
+    resolveStart: start.resolve
   }
   return port
 }
@@ -802,6 +905,10 @@ function findButton(container: HTMLElement, label: string): HTMLButtonElement {
   const button = Array.from(container.querySelectorAll('button')).find((candidate) => candidate.getAttribute('aria-label') === label)
   if (!button) throw new Error(`button ${label} not found`)
   return button
+}
+
+function findButtonOrNull(container: HTMLElement, label: string): HTMLButtonElement | null {
+  return Array.from(container.querySelectorAll('button')).find((candidate) => candidate.getAttribute('aria-label') === label) ?? null
 }
 
 function findComposerAction(container: HTMLElement, action: string): HTMLButtonElement {

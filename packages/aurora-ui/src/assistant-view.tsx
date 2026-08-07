@@ -77,7 +77,7 @@ import {
 import { EvidenceBadge, StatusBadge } from './status-badges'
 import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from './platform-surface'
 import type { AuroraSurfaceProfile } from './platform-surface'
-import type { NativeDesktopVoicePhase, NativeDesktopVoicePort, NativeDesktopVoiceStatus } from './native-desktop-voice'
+import type { NativeDesktopVoicePhase, NativeDesktopVoicePort, NativeDesktopVoiceStatus, NativeDesktopVoiceStopReason } from './native-desktop-voice'
 import {
   createLightweightAssistantOrchestrator,
   isLightweightLocalAssistantAvailable,
@@ -438,6 +438,10 @@ export function AssistantView({
   const browserVoiceTurnSettlementRef = useRef<BrowserVoiceTurnSettlement | null>(null)
   const nativeVoiceStatusRef = useRef<NativeDesktopVoiceStatus | null>(null)
   const nativeVoiceGenerationRef = useRef<number | null>(null)
+  const nativeVoiceOperationTokenRef = useRef(0)
+  const nativeVoicePendingCancelReasonRef = useRef<NativeDesktopVoiceStopReason | null>(null)
+  const nativeVoiceCancelledGenerationsRef = useRef<Set<number>>(new Set())
+  const assistantViewDisposedRef = useRef(false)
   const sessionLoadGenerationRef = useRef(0)
   function setVoiceCaptureStatus(next: VoiceCaptureStatus) {
     voiceCaptureStatusRef.current = next
@@ -809,6 +813,7 @@ export function AssistantView({
   }, [])
 
   useEffect(() => () => {
+    assistantViewDisposedRef.current = true
     abortRef.current?.abort()
     for (const orchestrator of localConfirmationOrchestratorsRef.current.values()) orchestrator.cancel()
     localConfirmationOrchestratorsRef.current.clear()
@@ -949,9 +954,13 @@ export function AssistantView({
     }
     void (async () => {
       try {
-        applyNativeDesktopVoiceStatus(await nativeVoice.status())
+        const status = await nativeVoice.status()
+        if (!maybeCancelDeferredNativeDesktopVoiceStatus(status)) {
+          applyNativeDesktopVoiceStatus(status)
+        }
         unsubscribe = await nativeVoice.subscribe((event) => {
           if (!active) return
+          if (maybeCancelDeferredNativeDesktopVoiceStatus(event.status)) return
           applyNativeDesktopVoiceStatus(event.status)
         })
       } catch {
@@ -977,7 +986,7 @@ export function AssistantView({
       const nativeRelease = event?.type === AURORA_RELEASE_FOCUSED_MEDIA_EVENT
       if (!hidden && !blurred && !nativeRelease) return
       if (usesNativeDesktopVoice) {
-        void cancelNativeDesktopVoice('window_hidden')
+        requestNativeDesktopVoiceCancel('window_hidden')
         return
       }
       if (!voiceStreamRef.current && !browserVoiceRuntimeRef.current) return
@@ -2043,6 +2052,16 @@ export function AssistantView({
     }
   }
 
+  function maybeCancelDeferredNativeDesktopVoiceStatus(status: NativeDesktopVoiceStatus): boolean {
+    const reason = nativeVoicePendingCancelReasonRef.current
+      ?? (assistantViewDisposedRef.current ? 'shutdown' : null)
+    if (reason === null) return false
+    if (status.generation !== null && nativeVoice) {
+      void cancelNativeDesktopVoiceGeneration(status.generation, reason)
+    }
+    return true
+  }
+
 
   function armVoiceResponseTimeout(pendingId: string) {
     clearVoiceResponseTimeout()
@@ -2591,14 +2610,40 @@ export function AssistantView({
       setStreamState((current) => ({ ...current, status: 'lost', message: 'Voice is unavailable in this desktop app.' }))
       return false
     }
+    const token = nativeVoiceOperationTokenRef.current + 1
+    nativeVoiceOperationTokenRef.current = token
+    nativeVoicePendingCancelReasonRef.current = null
+    nativeVoiceCancelledGenerationsRef.current.clear()
     setVoiceConsentGranted(true)
-    setVoiceCaptureStatus('listening')
-    setStreamState((current) => ({ ...current, status: 'streaming', message: 'Aurora is listening.' }))
+    setStreamState((current) => ({ ...current, status: 'streaming', message: 'Starting voice...' }))
     try {
       const status = await nativeVoice.start({
         trigger: 'focused_push_to_talk',
         remoteAudioConsent: voiceConsentGranted
       })
+      const pendingReason = nativeVoicePendingCancelReasonRef.current
+      if (
+        assistantViewDisposedRef.current
+        || nativeVoiceOperationTokenRef.current !== token
+        || pendingReason !== null
+      ) {
+        const reason = pendingReason ?? (assistantViewDisposedRef.current ? 'shutdown' : 'user_request')
+        if (status.generation !== null) {
+          await cancelNativeDesktopVoiceGeneration(status.generation, reason)
+        }
+        if (nativeVoiceOperationTokenRef.current === token) {
+          nativeVoiceGenerationRef.current = null
+          nativeVoiceStatusRef.current = null
+          nativeVoicePendingCancelReasonRef.current = null
+          if (!assistantViewDisposedRef.current) {
+            setVoiceCaptureStatus('idle')
+            activeVoiceSessionRef.current = null
+            ownedVoiceSessionIdsRef.current.clear()
+            coordinatorVoiceSessionIdsRef.current.clear()
+          }
+        }
+        return false
+      }
       applyNativeDesktopVoiceStatus(status)
       if (!status.available || status.phase === 'unavailable') {
         setLastError('Voice is unavailable in this desktop app.')
@@ -2613,9 +2658,11 @@ export function AssistantView({
       activeVoiceSessionRef.current = null
       ownedVoiceSessionIdsRef.current.clear()
       coordinatorVoiceSessionIdsRef.current.clear()
-      setVoiceCaptureStatus('error')
-      setLastError('Voice could not start. Check this device and try again.')
-      setStreamState((current) => ({ ...current, status: 'lost', message: 'Voice could not start. Check this device and try again.' }))
+      if (!assistantViewDisposedRef.current && nativeVoiceOperationTokenRef.current === token) {
+        setVoiceCaptureStatus('error')
+        setLastError('Voice could not start. Check this device and try again.')
+        setStreamState((current) => ({ ...current, status: 'lost', message: 'Voice could not start. Check this device and try again.' }))
+      }
       return false
     }
   }
@@ -2640,11 +2687,33 @@ export function AssistantView({
     }
   }
 
-  async function cancelNativeDesktopVoice(reason: 'user_request' | 'window_hidden' | 'permission_revoked' | 'shutdown'): Promise<boolean> {
+  function requestNativeDesktopVoiceCancel(reason: NativeDesktopVoiceStopReason) {
+    void cancelNativeDesktopVoice(reason)
+  }
+
+  async function cancelNativeDesktopVoiceGeneration(
+    generation: number,
+    reason: NativeDesktopVoiceStopReason
+  ): Promise<boolean> {
+    if (!nativeVoice || nativeVoiceCancelledGenerationsRef.current.has(generation)) return false
+    nativeVoiceCancelledGenerationsRef.current.add(generation)
+    try {
+      await nativeVoice.cancel({ generation, reason })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async function cancelNativeDesktopVoice(reason: NativeDesktopVoiceStopReason): Promise<boolean> {
+    nativeVoicePendingCancelReasonRef.current = reason
     const generation = nativeVoiceGenerationRef.current
     if (!nativeVoice || generation === null) return false
+    nativeVoiceOperationTokenRef.current += 1
     try {
+      nativeVoiceCancelledGenerationsRef.current.add(generation)
       applyNativeDesktopVoiceStatus(await nativeVoice.cancel({ generation, reason }))
+      nativeVoicePendingCancelReasonRef.current = null
       return true
     } catch {
       setVoiceCaptureStatus('error')
