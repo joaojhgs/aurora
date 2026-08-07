@@ -76,6 +76,25 @@ const forbiddenIosUserFacingReadinessTerms = [
 ] as const
 
 describe('Tauri CI native evidence contract', () => {
+  it('pins the selected Rust 1.88 toolchain across native builds', () => {
+    const cargoManifest = repoText('apps/aurora-tauri/src-tauri/Cargo.toml')
+    const toolchain = repoText('apps/aurora-tauri/src-tauri/rust-toolchain.toml')
+    const workflows = [
+      '.github/workflows/tauri-desktop.yml',
+      '.github/workflows/tauri-android.yml',
+      '.github/workflows/tauri-ios.yml',
+      '.github/workflows/tauri-ios-release.yml',
+    ]
+
+    expect(cargoManifest).toContain('rust-version = "1.88.0"')
+    expect(toolchain).toContain('channel = "1.88.0"')
+    for (const workflow of workflows) {
+      const source = repoText(workflow)
+      expect(source, workflow).toContain('dtolnay/rust-toolchain@1.88.0')
+      expect(source, workflow).not.toContain('dtolnay/rust-toolchain@stable')
+    }
+  })
+
   it('keeps the Linux Tauri smoke script from being only jsdom/web route tests', () => {
     const packageJson = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
 
