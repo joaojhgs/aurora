@@ -1516,7 +1516,7 @@ class STTCoordinatorService(BaseService):
                 self._capture_generation += 1
                 self._capture_owner = "native"
                 self._capture_owner_id = request.owner_id
-                self._capture_lease_id = str(uuid.uuid4())
+                self._capture_lease_id = request.lease_id or str(uuid.uuid4())
                 self._last_released_capture_lease = None
                 lease_task_to_drain = self._schedule_native_capture_lease_expiry_locked(
                     lease_id=self._capture_lease_id,

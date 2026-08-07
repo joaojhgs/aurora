@@ -633,6 +633,35 @@ async def test_capture_prepare_renews_same_owner_lease_without_rotating_identity
 
 
 @pytest.mark.asyncio
+async def test_capture_prepare_honors_supplied_native_lease_for_recoverable_retry(service):
+    """A native caller can retry a cancelled prepare with its own opaque lease."""
+    response = await service._on_capture_prepare(
+        STTCapturePrepareRequest(
+            owner_id="tauri-local",
+            lease_id="native-retry-token",
+            requested_ttl_s=30,
+        )
+    )
+    retry = await service._on_capture_prepare(
+        STTCapturePrepareRequest(
+            owner_id="tauri-local",
+            lease_id="native-retry-token",
+            requested_ttl_s=30,
+        )
+    )
+
+    assert response.granted
+    assert response.status == "granted"
+    assert response.lease_id == "native-retry-token"
+    assert retry.granted
+    assert retry.status == "already_owned"
+    assert retry.lease_id == "native-retry-token"
+    assert retry.generation == response.generation
+    if service._capture_lease_expiry_task:
+        service._capture_lease_expiry_task.cancel()
+
+
+@pytest.mark.asyncio
 async def test_capture_prepare_same_owner_requires_current_lease_to_renew(service):
     """A repeated owner ID cannot renew or learn the lease without the active token."""
     first = await service._on_capture_prepare(

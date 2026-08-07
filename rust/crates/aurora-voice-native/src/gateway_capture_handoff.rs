@@ -9,6 +9,7 @@ use aurora_voice_core::{
     TimestampMicros, VoiceCaptureLease, VoiceCoreError,
 };
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 use crate::{
     MicrophoneAudioPolicy, NativeGatewayEndpointClass, NativeGatewayTransport,
@@ -25,6 +26,7 @@ const MAX_REQUESTED_TTL: u64 = 3600;
 #[derive(Clone, PartialEq, Eq)]
 pub struct NativeGatewayCaptureHandoffConfig {
     owner_id: String,
+    prepare_lease_id: String,
     requested_ttl_s: u64,
     surface: String,
     device_route: String,
@@ -46,8 +48,10 @@ impl NativeGatewayCaptureHandoffConfig {
         validate_owner_id(&owner_id)?;
         validate_route_token(&surface)?;
         validate_route_token(&device_route)?;
+        let prepare_lease_id = default_prepare_lease_id(&owner_id, &surface, &device_route);
         Ok(Self {
             owner_id,
+            prepare_lease_id,
             requested_ttl_s: DEFAULT_REQUESTED_TTL,
             surface,
             device_route,
@@ -61,6 +65,16 @@ impl NativeGatewayCaptureHandoffConfig {
     pub fn with_requested_ttl(mut self, requested_ttl_s: u64) -> Result<Self, VoiceCoreError> {
         validate_requested_ttl(requested_ttl_s)?;
         self.requested_ttl_s = requested_ttl_s;
+        Ok(self)
+    }
+
+    pub fn with_prepare_lease_token(
+        mut self,
+        prepare_lease_id: impl Into<String>,
+    ) -> Result<Self, VoiceCoreError> {
+        let prepare_lease_id = prepare_lease_id.into();
+        validate_opaque_token(&prepare_lease_id)?;
+        self.prepare_lease_id = prepare_lease_id;
         Ok(self)
     }
 
@@ -90,6 +104,7 @@ impl fmt::Debug for NativeGatewayCaptureHandoffConfig {
         formatter
             .debug_struct("NativeGatewayCaptureHandoffConfig")
             .field("owner_id", &"[redacted]")
+            .field("prepare_lease_id", &"[redacted]")
             .field("requested_ttl_s", &self.requested_ttl_s)
             .field("surface", &self.surface)
             .field("device_route", &"[redacted]")
@@ -274,7 +289,7 @@ impl NativeGatewayCaptureHandoff {
         gateway_cancellation: &CancellationToken,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<NativeGatewayCaptureGrant, VoiceCoreError> {
-        let options = prepare_options(&self.config.owner_id)?;
+        let options = prepare_options(&self.config.prepare_lease_id)?;
         let payload = prepare_payload(&self.config)?;
         let response = invoke_generated_with_cancellation(
             &self.transport,
@@ -314,7 +329,7 @@ impl fmt::Debug for NativeGatewayCaptureHandoff {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("NativeGatewayCaptureHandoff")
-            .field("transport", &self.transport)
+            .field("transport", &"[redacted]")
             .field("config", &self.config)
             .field("active", &self.active.as_ref().map(|_| "[redacted]"))
             .field(
@@ -383,7 +398,7 @@ fn prepare_payload(config: &NativeGatewayCaptureHandoffConfig) -> Result<Value, 
         "owner_id": config.owner_id,
         "reason": "native_voice_runtime",
         "requested_ttl_s": config.requested_ttl_s,
-        "lease_id": Value::Null,
+        "lease_id": config.prepare_lease_id,
         "correlation_id": Value::Null,
     });
     let typed: models::SttCapturePrepareRequest =
@@ -468,7 +483,8 @@ fn parse_prepare_response(
     let lease_id = required_str(&value, "lease_id")?;
     let generation = required_u64(&value, "generation")?;
     validate_opaque_token(lease_id)?;
-    if generation == 0 || generation > 9_007_199_254_740_991 {
+    if lease_id != config.prepare_lease_id || generation == 0 || generation > 9_007_199_254_740_991
+    {
         return Err(invalid_response());
     }
     Ok(NativeGatewayCaptureGrant {
@@ -512,10 +528,11 @@ fn parse_release_response(
     Ok(())
 }
 
-fn prepare_options(owner_id: &str) -> Result<NativeRequestOptions, VoiceCoreError> {
+fn prepare_options(prepare_lease_id: &str) -> Result<NativeRequestOptions, VoiceCoreError> {
+    let key = stable_token_hash(prepare_lease_id);
     NativeRequestOptions::new(format!("{CAPTURE_REQUEST_ID_PREFIX}-prepare"))
         .and_then(|options| {
-            options.with_idempotency_key(format!("{CAPTURE_REQUEST_ID_PREFIX}-prepare-{owner_id}"))
+            options.with_idempotency_key(format!("{CAPTURE_REQUEST_ID_PREFIX}-prepare-{key}"))
         })
         .map_err(map_transport_error)
 }
@@ -541,6 +558,39 @@ fn validate_owner_id(value: &str) -> Result<(), VoiceCoreError> {
     } else {
         Err(VoiceCoreError::InvalidIdentifier)
     }
+}
+
+fn default_prepare_lease_id(owner_id: &str, surface: &str, device_route: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(b"aurora-native-capture-prepare-v1");
+    hasher.update([0]);
+    hasher.update(owner_id.as_bytes());
+    hasher.update([0]);
+    hasher.update(surface.as_bytes());
+    hasher.update([0]);
+    hasher.update(device_route.as_bytes());
+    let digest = hasher.finalize();
+    format!("native-capture-{}", hex_prefix(&digest, 32))
+}
+
+fn stable_token_hash(value: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(b"aurora-native-capture-idempotency-v1");
+    hasher.update([0]);
+    hasher.update(value.as_bytes());
+    hex_prefix(&hasher.finalize(), 24)
+}
+
+fn hex_prefix(bytes: &[u8], chars: usize) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let byte_count = chars.div_ceil(2).min(bytes.len());
+    let mut out = String::with_capacity(byte_count * 2);
+    for byte in &bytes[..byte_count] {
+        out.push(char::from(HEX[(byte >> 4) as usize]));
+        out.push(char::from(HEX[(byte & 0x0f) as usize]));
+    }
+    out.truncate(chars);
+    out
 }
 
 fn validate_requested_ttl(value: u64) -> Result<(), VoiceCoreError> {
@@ -624,7 +674,10 @@ fn invalid_response() -> VoiceCoreError {
 mod tests {
     use std::io::{Read, Write};
     use std::net::{SocketAddr, TcpListener, TcpStream};
-    use std::sync::mpsc;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc,
+    };
     use std::thread;
 
     use super::*;
@@ -639,14 +692,30 @@ mod tests {
 
     impl FixtureServer {
         fn responses(responses: Vec<Vec<u8>>) -> Self {
+            Self::responses_with_first_request_flag(responses, None, Duration::ZERO)
+        }
+
+        fn responses_with_first_request_flag(
+            responses: Vec<Vec<u8>>,
+            first_request_received: Option<Arc<AtomicBool>>,
+            first_response_delay: Duration,
+        ) -> Self {
             let listener = TcpListener::bind("127.0.0.1:0").expect("bind fixture server");
             let address = listener.local_addr().expect("fixture address");
             let (sender, requests) = mpsc::channel();
             let thread = thread::spawn(move || {
-                for response in responses {
+                for (index, response) in responses.into_iter().enumerate() {
                     let (mut stream, _) = listener.accept().expect("accept fixture request");
                     let captured = read_http_request(&mut stream);
                     sender.send(captured).expect("capture request");
+                    if index == 0 {
+                        if let Some(flag) = &first_request_received {
+                            flag.store(true, Ordering::SeqCst);
+                        }
+                        if !first_response_delay.is_zero() {
+                            thread::sleep(first_response_delay);
+                        }
+                    }
                     stream.write_all(&response).expect("write fixture response");
                 }
             });
@@ -761,6 +830,8 @@ mod tests {
     fn config(owner_id: &str) -> NativeGatewayCaptureHandoffConfig {
         NativeGatewayCaptureHandoffConfig::new(owner_id, "desktop-local", "default-input")
             .expect("config")
+            .with_prepare_lease_token("client-owned-prepare-lease")
+            .expect("prepare lease token")
             .with_requested_ttl(30)
             .expect("ttl")
             .with_start_reason(CaptureStartReason::PushToTalk)
@@ -777,7 +848,12 @@ mod tests {
     #[tokio::test]
     async fn prepare_and_release_use_typed_generated_contracts() {
         let server = FixtureServer::responses(vec![
-            json_response(prepare_body("granted", true, Some("lease-secret"), 11)),
+            json_response(prepare_body(
+                "granted",
+                true,
+                Some("client-owned-prepare-lease"),
+                11,
+            )),
             json_response(release_body("released", 12)),
         ]);
         let mut adapter = NativeGatewayCaptureHandoff::new(
@@ -798,7 +874,7 @@ mod tests {
         assert_eq!(prepare["owner"], "native");
         assert_eq!(prepare["owner_id"], "tauri-local");
         assert_eq!(prepare["requested_ttl_s"], 30);
-        assert_eq!(prepare["lease_id"], Value::Null);
+        assert_eq!(prepare["lease_id"], "client-owned-prepare-lease");
 
         adapter
             .release(&grant, false, &|| false)
@@ -809,7 +885,7 @@ mod tests {
         assert!(release_request.contains("POST /api/STTCoordinator/CaptureRelease"));
         assert_eq!(release["owner"], "native");
         assert_eq!(release["owner_id"], "tauri-local");
-        assert_eq!(release["lease_id"], "lease-secret");
+        assert_eq!(release["lease_id"], "client-owned-prepare-lease");
         assert_eq!(release["generation"], 11);
         assert_eq!(release["restart_python_capture"], false);
     }
@@ -837,7 +913,12 @@ mod tests {
     async fn unavailable_prepare_does_not_store_active_lease() {
         let server = FixtureServer::responses(vec![
             json_response(prepare_body("unavailable", false, None, 4)),
-            json_response(prepare_body("granted", true, Some("lease-2"), 5)),
+            json_response(prepare_body(
+                "granted",
+                true,
+                Some("client-owned-prepare-lease"),
+                5,
+            )),
         ]);
         let mut adapter = NativeGatewayCaptureHandoff::new(
             transport(server.base_url.clone(), MicrophoneAudioPolicy::LoopbackOnly),
@@ -896,41 +977,76 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_does_not_record_active_lease() {
-        use std::cell::Cell;
-
-        let server = FixtureServer::responses(vec![
-            slow_json_response(prepare_body("granted", true, Some("lease-secret"), 11)),
-            json_response(prepare_body("granted", true, Some("lease-2"), 12)),
-        ]);
+        let first_request_received = Arc::new(AtomicBool::new(false));
+        let server = FixtureServer::responses_with_first_request_flag(
+            vec![
+                slow_json_response(prepare_body(
+                    "granted",
+                    true,
+                    Some("client-owned-prepare-lease"),
+                    11,
+                )),
+                json_response(prepare_body(
+                    "already_owned",
+                    true,
+                    Some("client-owned-prepare-lease"),
+                    11,
+                )),
+                json_response(release_body("released", 12)),
+            ],
+            Some(first_request_received.clone()),
+            Duration::from_millis(50),
+        );
         let mut adapter = NativeGatewayCaptureHandoff::new(
             transport(server.base_url.clone(), MicrophoneAudioPolicy::LoopbackOnly),
             config("tauri-local"),
         )
         .expect("adapter");
-        let calls = Cell::new(0_u8);
 
         let error = adapter
-            .prepare(&|| {
-                calls.set(calls.get().saturating_add(1));
-                calls.get() > 0
-            })
+            .prepare(&|| first_request_received.load(Ordering::SeqCst))
             .await
             .expect_err("cancelled");
         assert_eq!(error, VoiceCoreError::Cancelled);
+        let first_request = server.requests.recv().expect("cancelled prepare request");
+        assert_eq!(
+            request_body(&first_request)["lease_id"],
+            "client-owned-prepare-lease"
+        );
 
         let grant = adapter.prepare(&|| false).await.expect("retry prepare");
+        let retry_request = server.requests.recv().expect("retry prepare request");
+        assert_eq!(
+            request_body(&retry_request)["lease_id"],
+            "client-owned-prepare-lease"
+        );
         assert_eq!(
             grant.voice_capture_lease(TimestampMicros(0)).generation,
             Generation(11)
         );
+        adapter.cleanup(false).await.expect("cleanup release");
+        let release_request = server.requests.recv().expect("cleanup release request");
+        let release = request_body(&release_request);
+        assert_eq!(release["lease_id"], "client-owned-prepare-lease");
+        assert_eq!(release["generation"], 11);
     }
 
     #[tokio::test]
     async fn repeat_prepare_is_excluded_until_release() {
         let server = FixtureServer::responses(vec![
-            json_response(prepare_body("granted", true, Some("lease-secret"), 11)),
+            json_response(prepare_body(
+                "granted",
+                true,
+                Some("client-owned-prepare-lease"),
+                11,
+            )),
             json_response(release_body("released", 12)),
-            json_response(prepare_body("granted", true, Some("lease-2"), 13)),
+            json_response(prepare_body(
+                "granted",
+                true,
+                Some("client-owned-prepare-lease"),
+                13,
+            )),
         ]);
         let mut adapter = NativeGatewayCaptureHandoff::new(
             transport(server.base_url.clone(), MicrophoneAudioPolicy::LoopbackOnly),
@@ -956,7 +1072,12 @@ mod tests {
     #[tokio::test]
     async fn release_is_idempotent_and_cleanup_supports_setup_failure() {
         let server = FixtureServer::responses(vec![
-            json_response(prepare_body("granted", true, Some("lease-secret"), 11)),
+            json_response(prepare_body(
+                "granted",
+                true,
+                Some("client-owned-prepare-lease"),
+                11,
+            )),
             json_response(release_body("python_unavailable", 12)),
         ]);
         let mut adapter = NativeGatewayCaptureHandoff::new(
@@ -977,7 +1098,12 @@ mod tests {
     #[tokio::test]
     async fn mismatched_release_response_is_rejected_without_forgetting_active_lease() {
         let server = FixtureServer::responses(vec![
-            json_response(prepare_body("granted", true, Some("lease-secret"), 11)),
+            json_response(prepare_body(
+                "granted",
+                true,
+                Some("client-owned-prepare-lease"),
+                11,
+            )),
             json_response(release_body("released", 99)),
             json_response(release_body("released", 12)),
         ]);
@@ -1024,5 +1150,25 @@ mod tests {
         assert!(!debug.contains("lease-secret"));
         assert!(!debug.contains("44"));
         assert!(!debug.contains("private-device"));
+
+        let server = FixtureServer::responses(Vec::new());
+        let adapter = NativeGatewayCaptureHandoff::new(
+            transport(server.base_url.clone(), MicrophoneAudioPolicy::LoopbackOnly),
+            config("owner-secret"),
+        )
+        .expect("adapter");
+        let debug = format!("{adapter:?}");
+        for secret in [
+            "127.0.0.1",
+            &server.address.port().to_string(),
+            "secret-token",
+            "owner-secret",
+            "client-owned-prepare-lease",
+            "lease-secret",
+            "44",
+            "default-input",
+        ] {
+            assert!(!debug.contains(secret), "debug leaked {secret}");
+        }
     }
 }
