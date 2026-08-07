@@ -2,7 +2,6 @@
 
 use std::collections::BTreeSet;
 use std::fmt;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -272,7 +271,6 @@ pub struct NativeGatewayTransport {
     base_url: Url,
     auth: GatewayAuth,
     limits: TransportLimits,
-    request_sequence: AtomicU64,
     active_assistant: Option<ActiveAssistantTurn>,
 }
 
@@ -305,7 +303,6 @@ impl NativeGatewayTransport {
             base_url,
             auth,
             limits,
-            request_sequence: AtomicU64::new(0),
             active_assistant: None,
         })
     }
@@ -419,6 +416,8 @@ impl NativeGatewayTransport {
             response,
             buffer: Vec::new(),
             allowed_topics: subscription.topics.iter().cloned().collect(),
+            allowed_kinds: subscription.kinds.iter().cloned().collect(),
+            required_correlation_id: subscription.correlation_id.clone(),
             max_event_bytes: self.limits.max_event_bytes,
             idle_timeout: self.limits.stream_idle_timeout,
             cancellation,
@@ -430,11 +429,22 @@ impl NativeGatewayTransport {
         request: AssistantTurnRequest,
         cancellation: CancellationToken,
     ) -> Result<AssistantTurnResponse, TransportError> {
-        let response = self.invoke_assistant_request(request, cancellation).await?;
-        if response.text.is_empty() {
-            return Err(TransportError::InvalidResponse);
+        if request.stream {
+            return Err(TransportError::InvalidConfiguration);
         }
-        Ok(response)
+        let generation = request.generation;
+        let result = async {
+            let response = self.invoke_assistant_request(request, cancellation).await?;
+            if response.text.is_empty() {
+                return Err(TransportError::InvalidResponse);
+            }
+            Ok(response)
+        }
+        .await;
+        if result.is_err() {
+            let _ = self.cancel_session(generation).await;
+        }
+        result
     }
 
     pub async fn invoke_assistant_streaming(
@@ -443,40 +453,50 @@ impl NativeGatewayTransport {
         cancellation: CancellationToken,
     ) -> Result<AssistantTurnResponse, TransportError> {
         request.stream = true;
+        let generation = request.generation;
         let subscription = SseSubscription::assistant_response(&request)?;
         let mut stream = self
             .open_event_stream(&subscription, cancellation.clone())
             .await?;
-        let _ack = self
-            .invoke_assistant_request(request.clone(), cancellation.clone())
-            .await?;
-        let mut text = String::new();
-        loop {
-            cancellation_check(&cancellation)?;
-            let Some(event) = stream.next_event().await? else {
-                return Err(TransportError::InvalidStream);
-            };
-            match event.assistant_stream_event(&request)? {
-                AssistantStreamRead::Ignore => continue,
-                AssistantStreamRead::Delta(delta) => text.push_str(&delta),
-                AssistantStreamRead::Completed(final_text) => {
-                    if !final_text.is_empty() {
-                        text = final_text;
+        let result = async {
+            let _ack = self
+                .invoke_assistant_request(request.clone(), cancellation.clone())
+                .await?;
+            let mut text = String::new();
+            loop {
+                cancellation_check(&cancellation)?;
+                let Some(event) = stream.next_event().await? else {
+                    return Err(TransportError::InvalidStream);
+                };
+                match event.assistant_stream_event(&request)? {
+                    AssistantStreamRead::Ignore => continue,
+                    AssistantStreamRead::Delta(delta) => {
+                        append_bounded(&mut text, &delta, self.limits.max_response_bytes)?;
                     }
-                    if text.is_empty() {
-                        return Err(TransportError::InvalidResponse);
+                    AssistantStreamRead::Completed(final_text) => {
+                        if !final_text.is_empty() {
+                            replace_bounded(&mut text, final_text, self.limits.max_response_bytes)?;
+                        }
+                        if text.is_empty() {
+                            return Err(TransportError::InvalidResponse);
+                        }
+                        self.active_assistant = None;
+                        return Ok(AssistantTurnResponse {
+                            text,
+                            session_id: Some(request.session_id),
+                            request_id: Some(request.request_id),
+                            correlation_id: Some(request.correlation_id),
+                        });
                     }
-                    self.active_assistant = None;
-                    return Ok(AssistantTurnResponse {
-                        text,
-                        session_id: Some(request.session_id),
-                        request_id: Some(request.request_id),
-                        correlation_id: Some(request.correlation_id),
-                    });
+                    AssistantStreamRead::Failed => return Err(TransportError::InvalidResponse),
                 }
-                AssistantStreamRead::Failed => return Err(TransportError::InvalidResponse),
             }
         }
+        .await;
+        if result.is_err() {
+            let _ = self.cancel_session(generation).await;
+        }
+        result
     }
 
     async fn invoke_assistant_request(
@@ -509,10 +529,13 @@ impl NativeGatewayTransport {
             serde_json::to_value(typed_request).map_err(|_| TransportError::InvalidPayload)?;
         let options = NativeRequestOptions::new(request.request_id.clone())?
             .with_idempotency_key(request.correlation_id.clone())?;
+        let interrupt_ids = assistant_interrupt_ids(&request)?;
         self.active_assistant = Some(ActiveAssistantTurn {
             generation: request.generation,
             session_id: request.session_id.clone(),
             request_id: request.request_id.clone(),
+            interrupt_request_id: interrupt_ids.request_id,
+            interrupt_idempotency_key: interrupt_ids.idempotency_key,
         });
         let response = self
             .invoke_generated(
@@ -551,13 +574,21 @@ impl SpeechTransport for NativeGatewayTransport {
     }
 
     async fn cancel_session(&mut self, generation: Generation) -> Result<(), VoiceCoreError> {
-        let active = self
+        if self
             .active_assistant
-            .clone()
-            .filter(|active| active.generation == generation)
-            .ok_or_else(|| VoiceCoreError::TransportFault {
+            .as_ref()
+            .is_none_or(|active| active.generation != generation)
+        {
+            return Err(VoiceCoreError::TransportFault {
                 code: "no_active_session".to_owned(),
-            })?;
+            });
+        }
+        let active =
+            self.active_assistant
+                .take()
+                .ok_or_else(|| VoiceCoreError::TransportFault {
+                    code: "no_active_session".to_owned(),
+                })?;
         let descriptor = method_by_id(ids::ORCHESTRATOR_INTERRUPT).ok_or_else(|| {
             VoiceCoreError::TransportFault {
                 code: "unknown_method".to_owned(),
@@ -585,8 +616,8 @@ impl SpeechTransport for NativeGatewayTransport {
             serde_json::to_value(typed_request).map_err(|_| VoiceCoreError::TransportFault {
                 code: "invalid_payload".to_owned(),
             })?;
-        let cleanup_sequence = self.request_sequence.fetch_add(1, Ordering::Relaxed);
-        let options = NativeRequestOptions::new(format!("voice-cleanup-{cleanup_sequence}"))
+        let options = NativeRequestOptions::new(active.interrupt_request_id)
+            .and_then(|options| options.with_idempotency_key(active.interrupt_idempotency_key))
             .map_err(map_transport_error)?;
         let cleanup_token = CancellationToken::new();
         let response = self
@@ -611,7 +642,6 @@ impl SpeechTransport for NativeGatewayTransport {
                 code: "invalid_response".to_owned(),
             });
         }
-        self.active_assistant = None;
         Ok(())
     }
 }
@@ -621,6 +651,8 @@ struct ActiveAssistantTurn {
     generation: Generation,
     session_id: String,
     request_id: String,
+    interrupt_request_id: String,
+    interrupt_idempotency_key: String,
 }
 
 fn map_transport_error(error: TransportError) -> VoiceCoreError {
@@ -677,6 +709,8 @@ pub struct NativeEventStream {
     response: reqwest::Response,
     buffer: Vec<u8>,
     allowed_topics: BTreeSet<String>,
+    allowed_kinds: BTreeSet<String>,
+    required_correlation_id: Option<String>,
     max_event_bytes: usize,
     idle_timeout: Duration,
     cancellation: CancellationToken,
@@ -688,6 +722,11 @@ impl fmt::Debug for NativeEventStream {
             .debug_struct("NativeEventStream")
             .field("buffered_bytes", &self.buffer.len())
             .field("allowed_topic_count", &self.allowed_topics.len())
+            .field("allowed_kind_count", &self.allowed_kinds.len())
+            .field(
+                "has_required_correlation_id",
+                &self.required_correlation_id.is_some(),
+            )
             .field("max_event_bytes", &self.max_event_bytes)
             .finish_non_exhaustive()
     }
@@ -698,7 +737,12 @@ impl NativeEventStream {
     pub async fn next_event(&mut self) -> Result<Option<GatewayEvent>, TransportError> {
         loop {
             if let Some(frame) = take_sse_frame(&mut self.buffer) {
-                if let Some(event) = parse_event_frame(&frame, &self.allowed_topics)? {
+                if let Some(event) = parse_event_frame(
+                    &frame,
+                    &self.allowed_topics,
+                    &self.allowed_kinds,
+                    self.required_correlation_id.as_deref(),
+                )? {
                     return Ok(Some(event));
                 }
                 continue;
@@ -871,6 +915,8 @@ fn take_sse_frame(buffer: &mut Vec<u8>) -> Option<Vec<u8>> {
 fn parse_event_frame(
     frame: &[u8],
     allowed_topics: &BTreeSet<String>,
+    allowed_kinds: &BTreeSet<String>,
+    required_correlation_id: Option<&str>,
 ) -> Result<Option<GatewayEvent>, TransportError> {
     let frame = std::str::from_utf8(frame).map_err(|_| TransportError::InvalidStream)?;
     let mut data_lines = Vec::new();
@@ -905,6 +951,14 @@ fn parse_event_frame(
     if !allowed_topics.contains(&topic) {
         return Err(TransportError::UnknownEvent);
     }
+    let kind = optional_string(&wire, "kind").unwrap_or_default();
+    if !allowed_kinds.is_empty() && !allowed_kinds.contains(&kind) {
+        return Ok(None);
+    }
+    let correlation_id = optional_string(&wire, "correlation_id");
+    if required_correlation_id.is_some() && correlation_id.as_deref() != required_correlation_id {
+        return Ok(None);
+    }
     let descriptor = event_by_topic(&topic).ok_or(TransportError::UnknownEvent)?;
     let payload = normalize_generated_contract(
         descriptor.schema_id,
@@ -917,9 +971,9 @@ fn parse_event_frame(
     Ok(Some(GatewayEvent {
         event_id,
         topic,
-        kind: optional_string(&wire, "kind").unwrap_or_default(),
+        kind,
         category: optional_string(&wire, "category").unwrap_or_else(|| "unknown".to_owned()),
-        correlation_id: optional_string(&wire, "correlation_id"),
+        correlation_id,
         payload: Some(payload),
         redacted_payload: wire
             .get("redacted_payload")
@@ -927,6 +981,68 @@ fn parse_event_frame(
             .unwrap_or_else(|| serde_json::json!({})),
         payload_sha256: optional_string(&wire, "payload_sha256").unwrap_or_default(),
     }))
+}
+
+struct AssistantInterruptIds {
+    request_id: String,
+    idempotency_key: String,
+}
+
+fn assistant_interrupt_ids(
+    request: &AssistantTurnRequest,
+) -> Result<AssistantInterruptIds, TransportError> {
+    let generation = request.generation.0.to_string();
+    let hash = stable_hash_64(&[
+        request.session_id.as_str(),
+        request.request_id.as_str(),
+        request.correlation_id.as_str(),
+        generation.as_str(),
+    ]);
+    let request_id = format!("voice-interrupt-{}-{hash:016x}", request.generation.0);
+    let idempotency_key = format!("voice-interrupt-idem-{hash:016x}");
+    validate_identifier(&request_id)?;
+    validate_identifier(&idempotency_key)?;
+    Ok(AssistantInterruptIds {
+        request_id,
+        idempotency_key,
+    })
+}
+
+fn stable_hash_64(parts: &[&str]) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    for part in parts {
+        for byte in part.as_bytes() {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        hash ^= 0xff;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
+fn append_bounded(text: &mut String, delta: &str, limit: usize) -> Result<(), TransportError> {
+    let new_len = text
+        .len()
+        .checked_add(delta.len())
+        .ok_or(TransportError::ResponseTooLarge)?;
+    if new_len > limit {
+        return Err(TransportError::ResponseTooLarge);
+    }
+    text.push_str(delta);
+    Ok(())
+}
+
+fn replace_bounded(
+    text: &mut String,
+    final_text: String,
+    limit: usize,
+) -> Result<(), TransportError> {
+    if final_text.len() > limit {
+        return Err(TransportError::ResponseTooLarge);
+    }
+    *text = final_text;
+    Ok(())
 }
 
 enum AssistantStreamRead {
@@ -1003,6 +1119,7 @@ mod tests {
     use std::thread;
 
     use super::*;
+    use aurora_voice_core::AssistantTurnNamespace;
 
     struct FixtureServer {
         base_url: Url,
@@ -1049,6 +1166,48 @@ mod tests {
 
     fn status_response(status: &str) -> Vec<u8> {
         format!("HTTP/1.1 {status}\r\ncontent-length: 0\r\nconnection: close\r\n\r\n").into_bytes()
+    }
+
+    fn sse_response(body: &[u8]) -> Vec<u8> {
+        format!(
+            "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+            body.len()
+        )
+        .into_bytes()
+        .into_iter()
+        .chain(body.iter().copied())
+        .collect()
+    }
+
+    fn assistant_ack_response(generation: u64) -> Vec<u8> {
+        let request = assistant_request(generation, "ack");
+        let body = serde_json::json!({
+            "text": "accepted",
+            "metadata": {},
+            "session_id": request.session_id,
+            "request_id": request.request_id,
+            "correlation_id": request.correlation_id,
+        })
+        .to_string();
+        json_response(body.as_bytes())
+    }
+
+    fn interrupt_response(generation: u64) -> Vec<u8> {
+        let request = assistant_request(generation, "interrupt");
+        let body = serde_json::json!({
+            "audit_event": "orchestrator.interrupt.requested",
+            "event_topic": "Orchestrator.Interrupted",
+            "idempotent": true,
+            "interrupt_id": "interrupt-1",
+            "status": "cancelled",
+            "request_id": request.request_id,
+            "session_id": request.session_id,
+            "requested_scopes": ["generation", "session", "tool_call", "tts_playback"],
+            "results": [],
+            "secrets_redacted": true,
+        })
+        .to_string();
+        json_response(body.as_bytes())
     }
 
     fn request_body(request: &str) -> Value {
@@ -1099,6 +1258,18 @@ mod tests {
         }
     }
 
+    fn assistant_namespace() -> AssistantTurnNamespace {
+        AssistantTurnNamespace::new("native-test").expect("assistant namespace")
+    }
+
+    fn assistant_request(generation: u64, transcript: &str) -> AssistantTurnRequest {
+        AssistantTurnRequest::from_generation(
+            &assistant_namespace(),
+            Generation(generation),
+            transcript,
+        )
+    }
+
     #[tokio::test]
     async fn finite_requests_use_generated_paths_and_validate_both_payloads() {
         let response_body = br#"{"voices":[],"capability_revision":0,"correlation_id":null}"#;
@@ -1135,8 +1306,16 @@ mod tests {
 
     #[tokio::test]
     async fn assistant_turn_posts_generated_typed_request_and_reads_finite_text() {
-        let response_body = br#"{"text":"answer ready","metadata":{},"session_id":"voice-session-7","request_id":"voice-request-7","correlation_id":"voice-correlation-7"}"#;
-        let server = FixtureServer::one_response(json_response(response_body));
+        let turn_request = assistant_request(7, "hello aurora");
+        let response_body = serde_json::json!({
+            "text": "answer ready",
+            "metadata": {},
+            "session_id": turn_request.session_id,
+            "request_id": turn_request.request_id,
+            "correlation_id": turn_request.correlation_id,
+        })
+        .to_string();
+        let server = FixtureServer::one_response(json_response(response_body.as_bytes()));
         let mut transport = NativeGatewayTransport::new(
             server.base_url.clone(),
             GatewayAuth::None,
@@ -1145,31 +1324,51 @@ mod tests {
         .expect("transport");
 
         let response = transport
-            .invoke_assistant_turn(
-                AssistantTurnRequest::from_generation(Generation(7), "hello aurora"),
-                CancellationToken::new(),
-            )
+            .invoke_assistant_turn(turn_request.clone(), CancellationToken::new())
             .await
             .expect("assistant response");
 
         assert_eq!(response.text, "answer ready");
-        assert_eq!(response.session_id.as_deref(), Some("voice-session-7"));
+        assert_eq!(
+            response.session_id.as_deref(),
+            Some(turn_request.session_id.as_str())
+        );
         let request = server.request.recv().expect("captured request");
         assert!(request.starts_with("POST /api/Orchestrator/ExternalUserInput HTTP/1.1"));
-        assert!(request.contains("x-request-id: voice-request-7"));
-        assert!(request.contains("idempotency-key: voice-correlation-7"));
+        assert!(request.contains(&format!("x-request-id: {}", turn_request.request_id)));
+        assert!(request.contains(&format!("idempotency-key: {}", turn_request.correlation_id)));
         let body = request_body(&request);
         assert_eq!(body["text"], "hello aurora");
         assert_eq!(body["source"], ASSISTANT_SOURCE);
-        assert_eq!(body["session_id"], "voice-session-7");
-        assert_eq!(body["request_id"], "voice-request-7");
-        assert_eq!(body["correlation_id"], "voice-correlation-7");
+        assert_eq!(body["session_id"], turn_request.session_id);
+        assert_eq!(body["request_id"], turn_request.request_id);
+        assert_eq!(body["correlation_id"], turn_request.correlation_id);
         assert_eq!(body["stream"], false);
+        assert!(!request.contains("native-test"));
+    }
+
+    #[tokio::test]
+    async fn assistant_turn_rejects_stream_flag_before_network() {
+        let mut transport = NativeGatewayTransport::new(
+            Url::parse("http://127.0.0.1:9/").expect("URL"),
+            GatewayAuth::None,
+            loopback_limits(),
+        )
+        .expect("transport");
+        let mut request = assistant_request(10, "hello aurora");
+        request.stream = true;
+
+        let result = transport
+            .invoke_assistant_turn(request, CancellationToken::new())
+            .await;
+
+        assert_eq!(result, Err(TransportError::InvalidConfiguration));
     }
 
     #[tokio::test]
     async fn assistant_turn_rejects_malformed_and_oversize_finite_response() {
-        let malformed = FixtureServer::one_response(json_response(br#"{"metadata":{}}"#));
+        let malformed =
+            FixtureServer::responses([json_response(br#"{"metadata":{}}"#), interrupt_response(8)]);
         let mut transport = NativeGatewayTransport::new(
             malformed.base_url.clone(),
             GatewayAuth::None,
@@ -1178,14 +1377,16 @@ mod tests {
         .expect("transport");
         let result = transport
             .invoke_assistant_turn(
-                AssistantTurnRequest::from_generation(Generation(8), "hello aurora"),
+                assistant_request(8, "hello aurora"),
                 CancellationToken::new(),
             )
             .await;
         assert_eq!(result, Err(TransportError::InvalidResponse));
 
-        let oversized =
-            FixtureServer::one_response(json_response(br#"{"text":"answer ready","metadata":{}}"#));
+        let oversized = FixtureServer::responses([
+            json_response(br#"{"text":"answer ready","metadata":{}}"#),
+            interrupt_response(9),
+        ]);
         let mut transport = NativeGatewayTransport::new(
             oversized.base_url.clone(),
             GatewayAuth::None,
@@ -1198,7 +1399,7 @@ mod tests {
         .expect("transport");
         let result = transport
             .invoke_assistant_turn(
-                AssistantTurnRequest::from_generation(Generation(9), "hello aurora"),
+                assistant_request(9, "hello aurora"),
                 CancellationToken::new(),
             )
             .await;
@@ -1207,10 +1408,50 @@ mod tests {
 
     #[tokio::test]
     async fn cancel_session_posts_generated_interrupt_for_active_request() {
-        let interrupt_body = br#"{"audit_event":"orchestrator.interrupt.requested","event_topic":"Orchestrator.Interrupted","idempotent":true,"interrupt_id":"interrupt-1","status":"cancelled","request_id":"voice-request-3","session_id":"voice-session-3","requested_scopes":["generation","session","tool_call","tts_playback"],"results":[{"scope":"session","status":"cancelled","cancelled_count":1,"message":""}],"secrets_redacted":true}"#;
+        let turn_request = assistant_request(3, "cancel this");
         let server = FixtureServer::responses([
             status_response("500 Internal Server Error"),
-            json_response(interrupt_body),
+            interrupt_response(3),
+        ]);
+        let mut transport = NativeGatewayTransport::new(
+            server.base_url.clone(),
+            GatewayAuth::None,
+            loopback_limits(),
+        )
+        .expect("transport");
+
+        let failed = transport
+            .invoke_assistant_turn(turn_request.clone(), CancellationToken::new())
+            .await;
+        assert_eq!(failed, Err(TransportError::HttpStatus { status: 500 }));
+        assert_eq!(
+            transport.cancel_session(Generation(3)).await,
+            Err(VoiceCoreError::TransportFault {
+                code: "no_active_session".to_owned()
+            })
+        );
+
+        let first = server.request.recv().expect("assistant request");
+        assert!(first.starts_with("POST /api/Orchestrator/ExternalUserInput HTTP/1.1"));
+        let second = server.request.recv().expect("interrupt request");
+        assert!(second.starts_with("POST /api/Orchestrator/Interrupt HTTP/1.1"));
+        assert!(second.contains("x-request-id: voice-interrupt-3-"));
+        assert!(second.contains("idempotency-key: voice-interrupt-idem-"));
+        let body = request_body(&second);
+        assert_eq!(body["session_id"], turn_request.session_id);
+        assert_eq!(body["request_id"], turn_request.request_id);
+        assert_eq!(body["reason"], "user_interrupt");
+        assert_eq!(
+            body["scopes"],
+            serde_json::json!(["generation", "session", "tool_call", "tts_playback"])
+        );
+    }
+
+    #[tokio::test]
+    async fn failed_cleanup_interrupt_does_not_leave_stale_active_session() {
+        let server = FixtureServer::responses([
+            status_response("500 Internal Server Error"),
+            status_response("500 Internal Server Error"),
         ]);
         let mut transport = NativeGatewayTransport::new(
             server.base_url.clone(),
@@ -1221,29 +1462,57 @@ mod tests {
 
         let failed = transport
             .invoke_assistant_turn(
-                AssistantTurnRequest::from_generation(Generation(3), "cancel this"),
+                assistant_request(4, "cancel this"),
                 CancellationToken::new(),
             )
             .await;
-        assert_eq!(failed, Err(TransportError::HttpStatus { status: 500 }));
-        transport
-            .cancel_session(Generation(3))
-            .await
-            .expect("interrupt posted");
 
-        let first = server.request.recv().expect("assistant request");
-        assert!(first.starts_with("POST /api/Orchestrator/ExternalUserInput HTTP/1.1"));
-        let second = server.request.recv().expect("interrupt request");
-        assert!(second.starts_with("POST /api/Orchestrator/Interrupt HTTP/1.1"));
-        assert!(second.contains("x-request-id: voice-cleanup-0"));
-        let body = request_body(&second);
-        assert_eq!(body["session_id"], "voice-session-3");
-        assert_eq!(body["request_id"], "voice-request-3");
-        assert_eq!(body["reason"], "user_interrupt");
+        assert_eq!(failed, Err(TransportError::HttpStatus { status: 500 }));
         assert_eq!(
-            body["scopes"],
-            serde_json::json!(["generation", "session", "tool_call", "tts_playback"])
+            transport.cancel_session(Generation(4)).await,
+            Err(VoiceCoreError::TransportFault {
+                code: "no_active_session".to_owned()
+            })
         );
+        let _assistant_request = server.request.recv().expect("assistant request");
+        let interrupt_request = server.request.recv().expect("interrupt request");
+        assert!(interrupt_request.contains("x-request-id: voice-interrupt-4-"));
+    }
+
+    #[tokio::test]
+    async fn wrong_generation_cancel_preserves_active_session() {
+        let turn_request = assistant_request(5, "preserve this");
+        let interrupt_ids = assistant_interrupt_ids(&turn_request).expect("interrupt ids");
+        let server = FixtureServer::one_response(interrupt_response(5));
+        let mut transport = NativeGatewayTransport::new(
+            server.base_url.clone(),
+            GatewayAuth::None,
+            loopback_limits(),
+        )
+        .expect("transport");
+        transport.active_assistant = Some(ActiveAssistantTurn {
+            generation: turn_request.generation,
+            session_id: turn_request.session_id.clone(),
+            request_id: turn_request.request_id.clone(),
+            interrupt_request_id: interrupt_ids.request_id,
+            interrupt_idempotency_key: interrupt_ids.idempotency_key,
+        });
+
+        assert_eq!(
+            transport.cancel_session(Generation(6)).await,
+            Err(VoiceCoreError::TransportFault {
+                code: "no_active_session".to_owned()
+            })
+        );
+        transport
+            .cancel_session(Generation(5))
+            .await
+            .expect("correct generation interrupt");
+
+        let interrupt_request = server.request.recv().expect("interrupt request");
+        assert!(interrupt_request.starts_with("POST /api/Orchestrator/Interrupt HTTP/1.1"));
+        let body = request_body(&interrupt_request);
+        assert_eq!(body["session_id"], turn_request.session_id);
     }
 
     #[tokio::test]
@@ -1355,13 +1624,103 @@ mod tests {
         assert!(request.contains("x-api-key: gateway-secret"));
     }
 
+    #[tokio::test]
+    async fn streaming_failure_clears_active_session_and_posts_interrupt() {
+        let stream_body = assistant_frame_for(
+            11,
+            assistant_payload_for(11, "assistant.failed", "", "", true),
+            serde_json::json!({"kind": "assistant.failed"}),
+        );
+        let server = FixtureServer::responses([
+            sse_response(&stream_body),
+            assistant_ack_response(11),
+            interrupt_response(11),
+        ]);
+        let mut transport = NativeGatewayTransport::new(
+            server.base_url.clone(),
+            GatewayAuth::None,
+            loopback_limits(),
+        )
+        .expect("transport");
+
+        let result = transport
+            .invoke_assistant_streaming(
+                assistant_request(11, "fail stream"),
+                CancellationToken::new(),
+            )
+            .await;
+
+        assert_eq!(result, Err(TransportError::InvalidResponse));
+        assert_eq!(
+            transport.cancel_session(Generation(11)).await,
+            Err(VoiceCoreError::TransportFault {
+                code: "no_active_session".to_owned()
+            })
+        );
+        let turn_request = assistant_request(11, "fail stream");
+        let stream_request = server.request.recv().expect("stream subscription");
+        assert!(stream_request.starts_with(&format!(
+            "GET /api/events/stream?topic=Orchestrator.Response&kind=assistant.delta&kind=assistant.completed&kind=assistant.failed&correlation_id={}",
+            turn_request.correlation_id
+        )));
+        let assistant_request = server.request.recv().expect("assistant request");
+        assert!(assistant_request.contains("\"stream\":true"));
+        let interrupt_request = server.request.recv().expect("interrupt request");
+        assert!(interrupt_request.starts_with("POST /api/Orchestrator/Interrupt HTTP/1.1"));
+        assert!(interrupt_request.contains("x-request-id: voice-interrupt-11-"));
+    }
+
+    #[tokio::test]
+    async fn streaming_final_text_is_bounded_and_cleanup_is_retry_safe() {
+        let oversized_text = "x".repeat(300);
+        let stream_body = assistant_frame_for(
+            12,
+            assistant_payload_for(12, "assistant.completed", "", &oversized_text, true),
+            serde_json::json!({"kind": "assistant.completed"}),
+        );
+        let server = FixtureServer::responses([
+            sse_response(&stream_body),
+            assistant_ack_response(12),
+            interrupt_response(12),
+        ]);
+        let mut transport = NativeGatewayTransport::new(
+            server.base_url.clone(),
+            GatewayAuth::None,
+            TransportLimits {
+                max_response_bytes: 256,
+                allow_loopback_http: true,
+                ..TransportLimits::default()
+            },
+        )
+        .expect("transport");
+
+        let result = transport
+            .invoke_assistant_streaming(
+                assistant_request(12, "bound stream"),
+                CancellationToken::new(),
+            )
+            .await;
+
+        assert_eq!(result, Err(TransportError::ResponseTooLarge));
+        let _stream_request = server.request.recv().expect("stream subscription");
+        let _assistant_request = server.request.recv().expect("assistant request");
+        let interrupt_request = server.request.recv().expect("interrupt request");
+        assert!(interrupt_request.contains("x-request-id: voice-interrupt-12-"));
+        assert!(interrupt_request.contains("idempotency-key: voice-interrupt-idem-"));
+    }
+
     fn assistant_frame(payload: Value, overrides: Value) -> Vec<u8> {
+        assistant_frame_for(9, payload, overrides)
+    }
+
+    fn assistant_frame_for(generation: u64, payload: Value, overrides: Value) -> Vec<u8> {
+        let request = assistant_request(generation, "frame");
         let mut envelope = serde_json::json!({
             "event_id": "event-1",
             "topic": ids::ORCHESTRATOR_RESPONSE,
             "kind": "assistant.delta",
             "category": "assistant",
-            "correlation_id": "voice-correlation-9",
+            "correlation_id": request.correlation_id,
             "payload": payload,
             "redacted_payload": {},
             "payload_sha256": "",
@@ -1375,23 +1734,77 @@ mod tests {
     }
 
     fn assistant_payload(kind: &str, delta: &str, text: &str, is_final: bool) -> Value {
+        assistant_payload_for(9, kind, delta, text, is_final)
+    }
+
+    fn assistant_payload_for(
+        generation: u64,
+        kind: &str,
+        delta: &str,
+        text: &str,
+        is_final: bool,
+    ) -> Value {
+        let request = assistant_request(generation, "payload");
         serde_json::json!({
             "kind": kind,
             "delta": delta,
             "text": text,
             "is_final": is_final,
             "sequence": 0,
-            "session_id": "voice-session-9",
-            "request_id": "voice-request-9",
-            "correlation_id": "voice-correlation-9",
+            "session_id": request.session_id,
+            "request_id": request.request_id,
+            "correlation_id": request.correlation_id,
             "metadata": {},
         })
     }
 
     #[test]
-    fn assistant_sse_accepts_correlated_delta_completed_and_failed() {
-        let request = AssistantTurnRequest::from_generation(Generation(9), "hello");
+    fn sse_parser_filters_kind_and_correlation_before_payload_delivery() {
         let allowed = BTreeSet::from([ids::ORCHESTRATOR_RESPONSE.to_owned()]);
+        let kinds = BTreeSet::from(["assistant.delta".to_owned()]);
+        let request = assistant_request(9, "hello");
+        let wrong_kind = parse_event_frame(
+            &assistant_frame(
+                assistant_payload("assistant.completed", "", "hidden", true),
+                serde_json::json!({"kind": "assistant.completed"}),
+            ),
+            &allowed,
+            &kinds,
+            Some(request.correlation_id.as_str()),
+        )
+        .expect("wrong kind frame");
+        assert_eq!(wrong_kind, None);
+
+        let wrong_correlation = parse_event_frame(
+            &assistant_frame(
+                assistant_payload("assistant.delta", "hidden", "", false),
+                serde_json::json!({"correlation_id": "voice-correlation-other"}),
+            ),
+            &allowed,
+            &kinds,
+            Some(request.correlation_id.as_str()),
+        )
+        .expect("wrong correlation frame");
+        assert_eq!(wrong_correlation, None);
+
+        let accepted = parse_event_frame(
+            &assistant_frame(
+                assistant_payload("assistant.delta", "hel", "", false),
+                serde_json::json!({}),
+            ),
+            &allowed,
+            &kinds,
+            Some(request.correlation_id.as_str()),
+        )
+        .expect("accepted frame");
+        assert!(accepted.is_some());
+    }
+
+    #[test]
+    fn assistant_sse_accepts_correlated_delta_completed_and_failed() {
+        let request = assistant_request(9, "hello");
+        let allowed = BTreeSet::from([ids::ORCHESTRATOR_RESPONSE.to_owned()]);
+        let kinds = BTreeSet::new();
 
         let delta = parse_event_frame(
             &assistant_frame(
@@ -1399,6 +1812,8 @@ mod tests {
                 serde_json::json!({}),
             ),
             &allowed,
+            &kinds,
+            None,
         )
         .expect("delta frame")
         .expect("delta event");
@@ -1413,6 +1828,8 @@ mod tests {
                 serde_json::json!({"kind": "assistant.completed"}),
             ),
             &allowed,
+            &kinds,
+            None,
         )
         .expect("completed frame")
         .expect("completed event");
@@ -1427,6 +1844,8 @@ mod tests {
                 serde_json::json!({"kind": "assistant.failed"}),
             ),
             &allowed,
+            &kinds,
+            None,
         )
         .expect("failed frame")
         .expect("failed event");
@@ -1438,8 +1857,9 @@ mod tests {
 
     #[test]
     fn assistant_sse_ignores_wrong_category_or_correlation_and_rejects_wrong_topic() {
-        let request = AssistantTurnRequest::from_generation(Generation(9), "hello");
+        let request = assistant_request(9, "hello");
         let allowed = BTreeSet::from([ids::ORCHESTRATOR_RESPONSE.to_owned()]);
+        let kinds = BTreeSet::new();
 
         let wrong_category = parse_event_frame(
             &assistant_frame(
@@ -1447,6 +1867,8 @@ mod tests {
                 serde_json::json!({"category": "audio"}),
             ),
             &allowed,
+            &kinds,
+            None,
         )
         .expect("wrong category frame")
         .expect("wrong category event");
@@ -1461,6 +1883,8 @@ mod tests {
                 serde_json::json!({"correlation_id": "voice-correlation-other"}),
             ),
             &allowed,
+            &kinds,
+            None,
         )
         .expect("wrong correlation frame")
         .expect("wrong correlation event");
@@ -1471,18 +1895,23 @@ mod tests {
 
         let wrong_session = parse_event_frame(
             &assistant_frame(
-                serde_json::json!({
-                    "kind": "assistant.delta",
-                    "delta": "hidden",
-                    "is_final": false,
-                    "session_id": "voice-session-other",
-                    "request_id": "voice-request-9",
-                    "correlation_id": "voice-correlation-9",
-                    "metadata": {},
-                }),
+                {
+                    let request = assistant_request(9, "hello");
+                    serde_json::json!({
+                        "kind": "assistant.delta",
+                        "delta": "hidden",
+                        "is_final": false,
+                        "session_id": "voice-session-other",
+                        "request_id": request.request_id,
+                        "correlation_id": request.correlation_id,
+                        "metadata": {},
+                    })
+                },
                 serde_json::json!({}),
             ),
             &allowed,
+            &kinds,
+            None,
         )
         .expect("wrong session frame")
         .expect("wrong session event");
@@ -1497,6 +1926,8 @@ mod tests {
                 serde_json::json!({"topic": ids::TTS_AUDIO_CHUNK}),
             ),
             &allowed,
+            &kinds,
+            None,
         );
         assert_eq!(wrong_topic, Err(TransportError::UnknownEvent));
     }

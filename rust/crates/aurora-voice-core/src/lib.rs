@@ -4,7 +4,9 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
+use std::fmt;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
@@ -53,6 +55,8 @@ pub enum VoiceCoreError {
     Cancelled,
     #[error("transport fault: {code}")]
     TransportFault { code: String },
+    #[error("invalid identifier")]
+    InvalidIdentifier,
     #[error("internal state lock poisoned")]
     LockPoisoned,
     #[error("engine error: {0}")]
@@ -370,6 +374,43 @@ impl CancellationToken {
     }
 }
 
+const MAX_ASSISTANT_NAMESPACE_LEN: usize = 64;
+
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct AssistantTurnNamespace(String);
+
+impl AssistantTurnNamespace {
+    pub fn new(value: impl Into<String>) -> Result<Self, VoiceCoreError> {
+        let value = value.into();
+        if value.is_empty()
+            || value.len() > MAX_ASSISTANT_NAMESPACE_LEN
+            || !value.bytes().all(
+                |byte| matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.'),
+            )
+        {
+            return Err(VoiceCoreError::InvalidIdentifier);
+        }
+        let digest = Sha256::digest(value.as_bytes());
+        Ok(Self(format!(
+            "{:016x}",
+            u64::from_be_bytes([
+                digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6],
+                digest[7],
+            ])
+        )))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Debug for AssistantTurnNamespace {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("AssistantTurnNamespace([redacted])")
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssistantTurnRequest {
     pub generation: Generation,
@@ -381,14 +422,18 @@ pub struct AssistantTurnRequest {
 }
 
 impl AssistantTurnRequest {
-    pub fn from_generation(generation: Generation, transcript: impl Into<String>) -> Self {
+    pub fn from_generation(
+        namespace: &AssistantTurnNamespace,
+        generation: Generation,
+        transcript: impl Into<String>,
+    ) -> Self {
         let suffix = generation.0;
         Self {
             generation,
             transcript: transcript.into(),
-            session_id: format!("voice-session-{suffix}"),
-            request_id: format!("voice-request-{suffix}"),
-            correlation_id: format!("voice-correlation-{suffix}"),
+            session_id: format!("voice-session-{}-{suffix}", namespace.as_str()),
+            request_id: format!("voice-request-{}-{suffix}", namespace.as_str()),
+            correlation_id: format!("voice-correlation-{}-{suffix}", namespace.as_str()),
             stream: false,
         }
     }
@@ -792,6 +837,7 @@ pub struct VoiceRuntime<A, E, T, S> {
     leases: CaptureLeaseManager,
     state: VoiceStateMachine,
     route_revision: RouteRevision,
+    assistant_namespace: AssistantTurnNamespace,
 }
 
 impl<A, E, T, S> VoiceRuntime<A, E, T, S>
@@ -801,8 +847,16 @@ where
     T: SpeechTransport,
     S: RuntimeEventSink,
 {
-    pub fn new(audio: A, engine: E, transport: T, sink: S, surface: impl Into<String>) -> Self {
-        Self {
+    pub fn new(
+        audio: A,
+        engine: E,
+        transport: T,
+        sink: S,
+        surface: impl Into<String>,
+        runtime_instance_id: impl Into<String>,
+    ) -> Result<Self, VoiceCoreError> {
+        let assistant_namespace = AssistantTurnNamespace::new(runtime_instance_id)?;
+        Ok(Self {
             audio,
             engine,
             transport,
@@ -810,7 +864,8 @@ where
             leases: CaptureLeaseManager::new(),
             state: VoiceStateMachine::new(surface),
             route_revision: RouteRevision(0),
-        }
+            assistant_namespace,
+        })
     }
 
     pub fn state(&self) -> VoiceState {
@@ -1017,7 +1072,11 @@ where
         )
         .await?;
         cancellation.check()?;
-        let request = AssistantTurnRequest::from_generation(lease.generation, transcript);
+        let request = AssistantTurnRequest::from_generation(
+            &self.assistant_namespace,
+            lease.generation,
+            transcript,
+        );
         let response = self
             .transport
             .assistant_turn(request, cancellation.clone())
@@ -1320,6 +1379,36 @@ mod tests {
             TimestampMicros(4),
         )?;
         assert_eq!(machine.state(), VoiceState::Arming);
+        Ok(())
+    }
+
+    #[test]
+    fn assistant_turn_ids_include_validated_runtime_namespace() -> Result<(), VoiceCoreError> {
+        let native = AssistantTurnNamespace::new("native-runtime")?;
+        let web = AssistantTurnNamespace::new("web.runtime")?;
+        let native_request = AssistantTurnRequest::from_generation(&native, Generation(1), "hello");
+        let web_request = AssistantTurnRequest::from_generation(&web, Generation(1), "hello");
+
+        assert_eq!(
+            native_request.session_id,
+            format!("voice-session-{}-1", native.as_str())
+        );
+        assert_eq!(
+            native_request.request_id,
+            format!("voice-request-{}-1", native.as_str())
+        );
+        assert_eq!(
+            native_request.correlation_id,
+            format!("voice-correlation-{}-1", native.as_str())
+        );
+        assert!(!native_request.session_id.contains("native-runtime"));
+        assert_eq!(format!("{native:?}"), "AssistantTurnNamespace([redacted])");
+        assert_ne!(native_request.session_id, web_request.session_id);
+        assert_ne!(native_request.request_id, web_request.request_id);
+        assert_ne!(native_request.correlation_id, web_request.correlation_id);
+        assert!(AssistantTurnNamespace::new("").is_err());
+        assert!(AssistantTurnNamespace::new("native/runtime").is_err());
+        assert!(AssistantTurnNamespace::new("native runtime").is_err());
         Ok(())
     }
 

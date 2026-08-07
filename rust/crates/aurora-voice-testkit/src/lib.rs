@@ -396,7 +396,7 @@ pub fn fake_lease(start_reason: CaptureStartReason) -> VoiceCaptureLease {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aurora_voice_core::{VoiceRuntime, VoiceState};
+    use aurora_voice_core::{AssistantTurnNamespace, VoiceRuntime, VoiceState};
 
     #[tokio::test]
     async fn fake_ptt_turn_completes_without_ui_attachment() -> Result<(), VoiceCoreError> {
@@ -405,7 +405,7 @@ mod tests {
         let engine = FakeEngine::new("hello aurora");
         let transport = FakeTransport::new("answer ready");
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "native-test");
+        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
 
         let response = runtime
             .run_push_to_talk_turn(
@@ -423,11 +423,74 @@ mod tests {
         assert_eq!(engine.spoken(), &["answer ready".to_owned()]);
         assert_eq!(transport.invoked().len(), 1);
         assert_eq!(transport.invoked()[0].transcript, "hello aurora");
-        assert_eq!(transport.invoked()[0].session_id, "voice-session-1");
-        assert_eq!(transport.invoked()[0].request_id, "voice-request-1");
-        assert_eq!(transport.invoked()[0].correlation_id, "voice-correlation-1");
+        let namespace = AssistantTurnNamespace::new("native-test")?;
+        assert_eq!(
+            transport.invoked()[0].session_id,
+            format!("voice-session-{}-1", namespace.as_str())
+        );
+        assert_eq!(
+            transport.invoked()[0].request_id,
+            format!("voice-request-{}-1", namespace.as_str())
+        );
+        assert_eq!(
+            transport.invoked()[0].correlation_id,
+            format!("voice-correlation-{}-1", namespace.as_str())
+        );
         assert!(!transport.invoked()[0].stream);
         assert!(sink.events().len() >= 7);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn runtime_instance_id_not_surface_namespaces_assistant_requests(
+    ) -> Result<(), VoiceCoreError> {
+        async fn run_instance(
+            runtime_instance_id: &str,
+        ) -> Result<(AssistantTurnRequest, Vec<String>), VoiceCoreError> {
+            let frames = vec![fake_frame(1, Generation(1))?, fake_frame(2, Generation(1))?];
+            let audio = FakeAudioInput::new(frames);
+            let engine = FakeEngine::new("hello aurora");
+            let transport = FakeTransport::new("answer ready");
+            let sink = FakeEventSink::default();
+            let mut runtime = VoiceRuntime::new(
+                audio,
+                engine,
+                transport,
+                sink,
+                "desktop",
+                runtime_instance_id,
+            )?;
+
+            let _response = runtime
+                .run_push_to_talk_turn(
+                    fake_lease(CaptureStartReason::PushToTalk),
+                    TimestampMicros(20),
+                    CancellationToken::new(),
+                )
+                .await?;
+            let (_audio, _engine, transport, sink) = runtime.into_parts();
+            let request = transport.invoked()[0].clone();
+            let surfaces = sink
+                .events()
+                .iter()
+                .filter_map(|event| match event {
+                    RuntimeEvent::State { transition } => Some(transition.surface.clone()),
+                    _ => None,
+                })
+                .collect();
+            Ok((request, surfaces))
+        }
+
+        let (first, first_surfaces) = run_instance("instance-one").await?;
+        let (second, second_surfaces) = run_instance("instance-two").await?;
+
+        assert_eq!(first.generation, second.generation);
+        assert_ne!(first.session_id, second.session_id);
+        assert_ne!(first.request_id, second.request_id);
+        assert_ne!(first.correlation_id, second.correlation_id);
+        assert!(first_surfaces.iter().all(|surface| surface == "desktop"));
+        assert!(second_surfaces.iter().all(|surface| surface == "desktop"));
+        assert!(!first.session_id.contains("desktop"));
         Ok(())
     }
 
@@ -438,7 +501,7 @@ mod tests {
         let engine = FakeEngine::new("wake phrase");
         let transport = FakeTransport::new("wake answer");
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "web-test");
+        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "web-test")?;
 
         let response = runtime
             .run_wake_turn(
@@ -474,7 +537,7 @@ mod tests {
         let engine = FakeEngine::new("cancel me");
         let transport = FakeTransport::new("unused");
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "native-test");
+        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
         let cancellation = CancellationToken::new();
         cancellation.cancel();
 
@@ -503,7 +566,7 @@ mod tests {
         let engine = FakeEngine::new("first");
         let transport = FakeTransport::new("first answer");
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "native-test");
+        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
 
         let result = runtime
             .run_push_to_talk_turn(
@@ -531,7 +594,7 @@ mod tests {
         let engine = FakeEngine::new("first");
         let transport = FakeTransport::new("first answer");
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "native-test");
+        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
 
         let result = runtime
             .run_push_to_talk_turn(
@@ -557,7 +620,7 @@ mod tests {
         let engine = FakeEngine::new("first").with_transcribe_failure();
         let transport = FakeTransport::new("first answer");
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "native-test");
+        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
 
         let result = runtime
             .run_push_to_talk_turn(
@@ -588,7 +651,7 @@ mod tests {
         let engine = FakeEngine::new("first").with_transcribe_cancellation(cancellation.clone());
         let transport = FakeTransport::new("first answer");
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "native-test");
+        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
 
         let result = runtime
             .run_push_to_talk_turn(
@@ -619,7 +682,7 @@ mod tests {
         let engine = FakeEngine::new("first");
         let transport = FakeTransport::new("first answer").with_invoke_failure();
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "native-test");
+        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
 
         let result = runtime
             .run_push_to_talk_turn(
@@ -648,7 +711,7 @@ mod tests {
         let transport =
             FakeTransport::new("first answer").with_invoke_cancellation(cancellation.clone());
         let sink = FakeEventSink::default();
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "native-test");
+        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
 
         let result = runtime
             .run_push_to_talk_turn(
@@ -675,7 +738,7 @@ mod tests {
         let engine = FakeEngine::new("first");
         let transport = FakeTransport::new("first answer");
         let sink = FakeEventSink::with_event_failure_after(1);
-        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "native-test");
+        let mut runtime = VoiceRuntime::new(audio, engine, transport, sink, "test", "native-test")?;
 
         let result = runtime
             .run_wake_turn(
