@@ -16,6 +16,7 @@
     "dev:python": "pnpm dev:python-service",
     "dev:python-service": "AURORA_ARCHITECTURE_MODE=threads AURORA_UI_ACTIVATE=false PYTHONUNBUFFERED=1 uv run python main.py",
     "test:web-persistence": "node scripts/run_browser_storage_gate.mjs",
+    "test:web-voice": "pnpm --filter @aurora/voice-web test:browser:voice",
     "test:hosted-peer:live": "scripts/hosted_peer_e2e.sh",
     "test:web-thin:live": "pnpm test:hosted-peer:live",
     "test:desktop-client:live": "scripts/desktop_live_e2e.sh",

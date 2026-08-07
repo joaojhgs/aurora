@@ -34,7 +34,8 @@
     "build:typescript": "tsc -p tsconfig.build.json",
     "build:wasm": "node scripts/build-wasm.mjs",
     "typecheck": "tsc --noEmit --incremental false",
-    "test": "vitest run --environment node"
+    "test": "vitest run --environment node",
+    "test:browser:voice": "pnpm run build && playwright test --config tests/playwright/worker-audio-bridge.playwright.config.ts"
   },
   "devDependencies": {
     "typescript": "5.7.3",
