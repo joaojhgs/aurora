@@ -71,6 +71,8 @@ export interface AuroraSurfaceProfile {
   ownsLocalNodeState: boolean
   /** This surface is managing a connected Aurora authority instead of exposing itself. */
   isRemoteConsole: boolean
+  /** Hosted web uses the browser Rust/WASM voice runtime for focused foreground capture. */
+  usesBrowserVoiceRuntime: boolean
   voiceCapture: AuroraVoiceCapturePolicy
 }
 
@@ -87,6 +89,8 @@ export interface AuroraVoiceCapturePolicy {
   canUseWebViewVisualizer: boolean
   /** Whether the UI should avoid STTCoordinator.Listen for push-to-talk to prevent duplicate daemon events. */
   avoidCoordinatorPushToTalk: boolean
+  /** Hosted web uses the browser Rust/WASM voice runtime for focused foreground capture. */
+  usesBrowserVoiceRuntime: boolean
   /** Short operator-facing note for settings/voice copy. */
   detail: string
 }
@@ -99,33 +103,32 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
 
   const runtimeSaysAndroid = runtimeMode.startsWith('android')
   const runtimeSaysIos = runtimeMode.startsWith('ios')
+  const runtimeSaysNativeMobile = runtimeMode === 'mobile-native' || transportKind === 'native-mobile'
   const nativeSaysAndroid = nativePlatform.includes('android')
   const nativeSaysIos = /\b(ios|iphone|ipad|ipod)\b/.test(nativePlatform)
   const userAgentSaysAndroid = userAgent.includes('android')
   const userAgentSaysIos = /(iphone|ipad|ipod)/.test(userAgent)
   const nativeSaysLinux = /\blinux\b/.test(nativePlatform)
   const userAgentSaysLinux = userAgent.includes('linux') && !userAgentSaysAndroid
-  const isAndroid = runtimeSaysAndroid || (
-    !runtimeSaysIos && (nativeSaysAndroid || (!nativeSaysIos && userAgentSaysAndroid))
-  )
-  const isIos = runtimeSaysIos || (
-    !runtimeSaysAndroid && (nativeSaysIos || (!nativeSaysAndroid && userAgentSaysIos))
-  )
-  const runtimeSaysMobile = runtimeMode.includes('mobile') || transportKind === 'native-mobile'
+  const isAndroid = runtimeSaysAndroid || nativeSaysAndroid || (!runtimeSaysIos && !nativeSaysIos && userAgentSaysAndroid)
+  const isIos = runtimeSaysIos || nativeSaysIos || (!runtimeSaysAndroid && !nativeSaysAndroid && userAgentSaysIos)
+  const nativeAndroid = runtimeSaysAndroid || nativeSaysAndroid || (runtimeSaysNativeMobile && !runtimeSaysIos && !nativeSaysIos && userAgentSaysAndroid)
+  const nativeIos = runtimeSaysIos || nativeSaysIos || (runtimeSaysNativeMobile && !runtimeSaysAndroid && !nativeSaysAndroid && userAgentSaysIos)
+  const runtimeSaysMobile = runtimeMode.includes('mobile') || runtimeSaysNativeMobile
   const isMobile = isAndroid || isIos || runtimeSaysMobile
   const usesLocalSidecar = runtimeMode === 'desktop-local' || transportKind === 'tauri-local'
   const isDesktopThin = runtimeMode === 'desktop-thin' || transportKind === 'tauri-thin'
   const explicitWebThin = runtimeMode === 'web' || runtimeMode === 'web-thin' || runtimeMode === 'thin-shell'
   const usesWebRtcTransport = transportKind === 'mesh' || transportKind === 'webrtc' || transportKind === 'webrtc-preferred' || transportKind === 'webrtc-only'
-  const usesNativeShell = usesLocalSidecar || isDesktopThin || transportKind.startsWith('tauri') || isMobile
+  const usesNativeShell = usesLocalSidecar || isDesktopThin || transportKind.startsWith('tauri') || runtimeSaysNativeMobile || nativeAndroid || nativeIos
   const nodeMode: AuroraNodeMode = input.nodeMode
     ?? (usesLocalSidecar ? 'mesh-node' : 'remote-console')
   const runtimeTier: AuroraRuntimeTier = input.runtimeTier
     ?? (usesLocalSidecar ? 'python-full' : 'none')
 
-  const legacyKind: LegacyAuroraSurfaceKind = isAndroid
+  const legacyKind: LegacyAuroraSurfaceKind = nativeAndroid
     ? 'android'
-    : isIos
+    : nativeIos
       ? 'ios'
       : usesLocalSidecar
         ? 'desktop-local'
@@ -152,6 +155,7 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
   const ownsLocalNodeState = nodeMode === 'mesh-node' || usesLocalSidecar
   const isRemoteConsole = !ownsLocalNodeState
   const voiceCapture = getAuroraVoiceCapturePolicy(legacyKind)
+  const usesBrowserVoiceRuntime = physicalKind === 'hosted-web' && !usesNativeShell
   return {
     physicalKind,
     kind: legacyKind,
@@ -165,9 +169,9 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
     usesLocalSidecar,
     usesNativeShell,
     supportsDesktopCommands: usesLocalSidecar,
-    supportsMobileNative: isMobile,
-    supportsIosOnly: isIos,
-    supportsAndroidOnly: isAndroid,
+    supportsMobileNative: nativeAndroid || nativeIos || runtimeSaysNativeMobile,
+    supportsIosOnly: nativeIos,
+    supportsAndroidOnly: nativeAndroid,
     supportsNativeWebRtcBridge,
     isWebThin,
     supportsWebRtcThin,
@@ -178,7 +182,11 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
     runtimeTier,
     ownsLocalNodeState,
     isRemoteConsole,
-    voiceCapture,
+    usesBrowserVoiceRuntime,
+    voiceCapture: {
+      ...voiceCapture,
+      usesBrowserVoiceRuntime,
+    },
   }
 }
 
@@ -232,6 +240,7 @@ export function getAuroraVoiceCapturePolicy(kind: LegacyAuroraSurfaceKind): Auro
         wakewordRequiresFocus: false,
         canUseWebViewVisualizer: true,
         avoidCoordinatorPushToTalk: true,
+        usesBrowserVoiceRuntime: false,
         detail: 'Background listening can stay on this computer while the visible microphone button uses foreground capture.'
       }
     case 'desktop-thin':
@@ -242,6 +251,7 @@ export function getAuroraVoiceCapturePolicy(kind: LegacyAuroraSurfaceKind): Auro
         wakewordRequiresFocus: true,
         canUseWebViewVisualizer: true,
         avoidCoordinatorPushToTalk: true,
+        usesBrowserVoiceRuntime: kind === 'web',
         detail: 'Browser capture is available only while the page is focused.'
       }
     case 'android':
@@ -251,6 +261,7 @@ export function getAuroraVoiceCapturePolicy(kind: LegacyAuroraSurfaceKind): Auro
         wakewordRequiresFocus: true,
         canUseWebViewVisualizer: true,
         avoidCoordinatorPushToTalk: true,
+        usesBrowserVoiceRuntime: false,
         detail: 'Android capture is available while Aurora is open in the foreground.'
       }
     case 'ios':
@@ -261,6 +272,7 @@ export function getAuroraVoiceCapturePolicy(kind: LegacyAuroraSurfaceKind): Auro
         wakewordRequiresFocus: true,
         canUseWebViewVisualizer: true,
         avoidCoordinatorPushToTalk: true,
+        usesBrowserVoiceRuntime: false,
         detail: 'Mobile push-to-talk is available while Aurora is open. Background voice depends on device support.'
       }
     case 'mock':
@@ -271,6 +283,7 @@ export function getAuroraVoiceCapturePolicy(kind: LegacyAuroraSurfaceKind): Auro
         wakewordRequiresFocus: true,
         canUseWebViewVisualizer: false,
         avoidCoordinatorPushToTalk: true,
+        usesBrowserVoiceRuntime: false,
         detail: 'Voice capture is unavailable until microphone access is ready.'
       }
   }
