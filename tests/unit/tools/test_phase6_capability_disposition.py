@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -125,12 +126,15 @@ def test_disposition_does_not_promote_emulator_browser_or_ios_evidence():
         "release_claim": False,
     }
     assert boundaries["android"] == {
-        "emulator_compile_and_integration": True,
+        "checked_in_emulator_evidence": False,
         "physical_device_quality_or_resource_evidence": False,
         "release_claim": False,
     }
-    assert boundaries["browser"]["physical_device_claim"] is False
-    assert boundaries["browser"]["release_claim"] is False
+    assert boundaries["browser"] == {
+        "checked_in_parity_evidence": False,
+        "physical_device_claim": False,
+        "release_claim": False,
+    }
     assert boundaries["ios"] == {
         "evidence_present": False,
         "release_claim": False,
@@ -140,7 +144,6 @@ def test_disposition_does_not_promote_emulator_browser_or_ios_evidence():
 def test_disposition_references_are_repo_relative_and_checked_in():
     data = disposition()
     referenced_paths = set(data["source_references"])
-    referenced_paths.add(data["evidence_boundaries"]["browser"]["vad_parity_reference"])
     for entry in data["candidate_validations"].values():
         for key in ("candidate_manifest", "blocked_disposition"):
             value = entry.get(key)
@@ -150,9 +153,15 @@ def test_disposition_references_are_repo_relative_and_checked_in():
     for reference in referenced_paths:
         assert not reference.startswith("/")
         assert ".." not in Path(reference).parts
-        if reference.startswith(".artifacts/"):
-            continue
         assert (ROOT / reference).is_file(), reference
+        tracked = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "--", reference],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert tracked.returncode == 0, reference
 
 
 def test_disposition_does_not_leak_host_paths_secrets_transcripts_or_audio_names():

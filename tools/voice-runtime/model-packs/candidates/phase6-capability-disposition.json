@@ -56,7 +56,7 @@
       "advertised_languages": [],
       "candidate_manifest": "tools/voice-runtime/model-packs/candidates/silero-vad-v4.candidate.manifest.json",
       "candidate_pack_id": "aurora-candidate-silero-vad-v4",
-      "candidate_scope": "selected candidate family with native and browser parity evidence",
+      "candidate_scope": "selected candidate family for validation; release parity remains unproven",
       "release_capability": false,
       "release_index_eligible": false,
       "unsatisfied_gates": [
@@ -69,12 +69,12 @@
   },
   "evidence_boundaries": {
     "android": {
-      "emulator_compile_and_integration": true,
+      "checked_in_emulator_evidence": false,
       "physical_device_quality_or_resource_evidence": false,
       "release_claim": false
     },
     "browser": {
-      "vad_parity_reference": ".artifacts/voice-runtime/vad-parity/20260807-095321/report.json",
+      "checked_in_parity_evidence": false,
       "physical_device_claim": false,
       "release_claim": false
     },
