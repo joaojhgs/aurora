@@ -37,7 +37,10 @@ public final class AuroraIOSAudioCapture {
 
     deinit {
         stop()
-        aurora_ios_audio_state_free(state)
+        if let state {
+            aurora_ios_audio_state_close(state)
+            aurora_ios_audio_state_free(state)
+        }
     }
 
     public func start() throws {
@@ -47,6 +50,7 @@ public final class AuroraIOSAudioCapture {
         if running {
             return
         }
+        _ = aurora_ios_audio_state_reset(state)
 
         try session.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers])
         try session.setPreferredSampleRate(16_000)
@@ -55,6 +59,7 @@ public final class AuroraIOSAudioCapture {
         let input = engine.inputNode
         let format = input.inputFormat(forBus: 0)
         guard format.channelCount > 0, format.sampleRate > 0 else {
+            try? session.setActive(false, options: .notifyOthersOnDeactivation)
             throw AuroraIOSAudioCaptureError.inputFormatUnavailable
         }
 
@@ -92,7 +97,8 @@ public final class AuroraIOSAudioCapture {
             running = true
         } catch {
             input.removeTap(onBus: 0)
-            aurora_ios_audio_state_close(state)
+            _ = aurora_ios_audio_state_reset(state)
+            try? session.setActive(false, options: .notifyOthersOnDeactivation)
             throw AuroraIOSAudioCaptureError.captureStartFailed
         }
     }
@@ -105,7 +111,7 @@ public final class AuroraIOSAudioCapture {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         if let state {
-            aurora_ios_audio_state_close(state)
+            _ = aurora_ios_audio_state_reset(state)
         }
         try? session.setActive(false, options: .notifyOthersOnDeactivation)
     }

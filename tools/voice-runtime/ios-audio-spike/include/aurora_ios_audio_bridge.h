@@ -37,6 +37,7 @@ int32_t aurora_ios_audio_state_push_pcm_f32(
     uint64_t sequence,
     uint32_t sample_rate_hz);
 uintptr_t aurora_ios_audio_state_drain_one(AuroraIosAudioState *state);
+int32_t aurora_ios_audio_state_reset(AuroraIosAudioState *state);
 void aurora_ios_audio_state_close(AuroraIosAudioState *state);
 int32_t aurora_ios_audio_state_stats(
     AuroraIosAudioState *state,

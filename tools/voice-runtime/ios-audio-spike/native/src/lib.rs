@@ -127,6 +127,16 @@ impl AuroraIosAudioState {
         inner.queue.clear();
     }
 
+    fn reset(&self) -> i32 {
+        let mut inner = self.inner.lock().expect("iOS audio state mutex poisoned");
+        if inner.closed {
+            return AURORA_IOS_AUDIO_CLOSED;
+        }
+        inner.queue.clear();
+        inner.last_sequence = None;
+        AURORA_IOS_AUDIO_OK
+    }
+
     fn stats(&self) -> AuroraIosAudioStats {
         let inner = self.inner.lock().expect("iOS audio state mutex poisoned");
         AuroraIosAudioStats {
@@ -179,7 +189,10 @@ pub unsafe extern "C" fn aurora_ios_audio_state_push_pcm_f32(
     sequence: u64,
     sample_rate_hz: u32,
 ) -> i32 {
-    if state.is_null() || samples.is_null() {
+    if state.is_null() || samples.is_null() || sample_count == 0 || sample_rate_hz == 0 {
+        return AURORA_IOS_AUDIO_INVALID_ARGUMENT;
+    }
+    if sample_count > (*state).max_chunk_samples || sample_count > MAX_CHUNK_SAMPLES {
         return AURORA_IOS_AUDIO_INVALID_ARGUMENT;
     }
     let samples = std::slice::from_raw_parts(samples, sample_count);
@@ -211,6 +224,19 @@ pub unsafe extern "C" fn aurora_ios_audio_state_close(state: *mut AuroraIosAudio
     if !state.is_null() {
         (*state).close();
     }
+}
+
+/// Clears queued PCM and sequence state so a stopped capture can restart.
+///
+/// # Safety
+///
+/// `state` must be null or a valid pointer returned by `aurora_ios_audio_state_new`.
+#[no_mangle]
+pub unsafe extern "C" fn aurora_ios_audio_state_reset(state: *mut AuroraIosAudioState) -> i32 {
+    if state.is_null() {
+        return AURORA_IOS_AUDIO_INVALID_ARGUMENT;
+    }
+    (*state).reset()
 }
 
 /// Writes a snapshot of current counters.
@@ -281,6 +307,20 @@ mod tests {
     }
 
     #[test]
+    fn reset_allows_restart_without_sequence_discontinuity() {
+        let state = AuroraIosAudioState::new(2, 8);
+        assert_eq!(state.push_pcm(&[0.0], 7, 16_000), AURORA_IOS_AUDIO_OK);
+
+        assert_eq!(state.reset(), AURORA_IOS_AUDIO_OK);
+        assert_eq!(state.push_pcm(&[0.1], 0, 16_000), AURORA_IOS_AUDIO_OK);
+
+        let stats = state.stats();
+        assert_eq!(stats.discontinuities, 0);
+        assert_eq!(stats.accepted_chunks, 2);
+        assert_eq!(stats.queued_chunks, 1);
+    }
+
+    #[test]
     fn rejects_invalid_samples() {
         let state = AuroraIosAudioState::new(2, 2);
 
@@ -325,6 +365,18 @@ mod tests {
                 ),
                 AURORA_IOS_AUDIO_OK
             );
+            let oversized_state = aurora_ios_audio_state_new(2, 2);
+            assert_eq!(
+                aurora_ios_audio_state_push_pcm_f32(
+                    oversized_state,
+                    samples.as_ptr(),
+                    samples.len(),
+                    0,
+                    16_000,
+                ),
+                AURORA_IOS_AUDIO_INVALID_ARGUMENT
+            );
+            aurora_ios_audio_state_free(oversized_state);
             let mut stats = AuroraIosAudioStats::default();
             assert_eq!(
                 aurora_ios_audio_state_stats(state, &mut stats),

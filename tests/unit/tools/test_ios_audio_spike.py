@@ -31,6 +31,7 @@ def test_ios_swift_uses_avfoundation_foreground_capture_to_c_abi() -> None:
     assert "let state = self.state" in source
     assert "aurora_ios_audio_state_push_pcm_f32" in source
     assert "aurora_ios_audio_state_drain_one" in source
+    assert "aurora_ios_audio_state_reset(state)" in source
     assert "removeTap(onBus: 0)" in source
     assert "setActive(false" in source
 
@@ -72,6 +73,7 @@ def test_ios_c_header_exposes_narrow_null_safe_runtime_boundary() -> None:
     assert "uint64_t sequence" in source
     assert "uint32_t sample_rate_hz" in source
     assert "aurora_ios_audio_state_close" in source
+    assert "aurora_ios_audio_state_reset" in source
     assert "AuroraIosAudioStats" in source
 
 
@@ -89,6 +91,7 @@ def test_ios_rust_state_owns_bounded_queue_shutdown_and_backpressure() -> None:
     assert "discontinuities += 1" in source
     assert "#[no_mangle]" in source
     assert "aurora_ios_audio_state_push_pcm_f32" in source
+    assert "sample_count > (*state).max_chunk_samples" in source
     assert 'rust-version = "1.88.0"' in cargo_toml
     assert 'channel = "1.88.0"' in toolchain
 
