@@ -6390,6 +6390,32 @@ async fn run_gateway_event_stream(
     event_name: String,
     closed_event_name: String,
 ) {
+    let app = app.clone();
+    run_gateway_event_stream_with_emitter(
+        client,
+        url,
+        headers,
+        subscription_id,
+        event_name,
+        closed_event_name,
+        move |event_name, payload| {
+            let _ = app.emit(event_name, payload);
+        },
+    )
+    .await;
+}
+
+async fn run_gateway_event_stream_with_emitter<F>(
+    client: reqwest::Client,
+    url: Url,
+    headers: HeaderMap,
+    subscription_id: String,
+    event_name: String,
+    closed_event_name: String,
+    mut emit: F,
+) where
+    F: FnMut(&str, Value),
+{
     let result = async {
         let response = client
             .get(url)
@@ -6399,7 +6425,11 @@ async fn run_gateway_event_stream(
             .map_err(|error| redacted_gateway_error(&error))?;
         let status = response.status();
         if !status.is_success() {
-            return Err(format!("Gateway event stream returned HTTP {status}"));
+            let body = response
+                .text()
+                .await
+                .map_err(|error| redacted_gateway_error(&error))?;
+            return Err(redacted_gateway_status_error(status.as_u16(), &body));
         }
 
         let mut buffer = String::new();
@@ -6409,7 +6439,7 @@ async fn run_gateway_event_stream(
                 Ok(Some(chunk)) => {
                     let text = String::from_utf8_lossy(&chunk);
                     buffer.push_str(&text);
-                    drain_sse_frames(&app, &event_name, &subscription_id, &mut buffer);
+                    drain_sse_frames(&event_name, &subscription_id, &mut buffer, &mut emit);
                 }
                 Ok(None) => return Ok(()),
                 Err(error) => return Err(redacted_gateway_error(&error)),
@@ -6425,18 +6455,22 @@ async fn run_gateway_event_stream(
         ),
         Err(reason) => ("transport_loss".to_string(), reason),
     };
-    let _ = app.emit(
+    emit(
         &closed_event_name,
-        AuroraSubscriptionClosed {
+        serde_json::to_value(AuroraSubscriptionClosed {
             subscription_id,
             reason,
             code,
             secrets_redacted: true,
-        },
+        })
+        .expect("gateway stream closed payload serializes"),
     );
 }
 
-fn drain_sse_frames(app: &AppHandle, event_name: &str, subscription_id: &str, buffer: &mut String) {
+fn drain_sse_frames<F>(event_name: &str, subscription_id: &str, buffer: &mut String, emit: &mut F)
+where
+    F: FnMut(&str, Value),
+{
     while let Some(index) = find_sse_frame_boundary(buffer) {
         let frame = buffer[..index].to_string();
         let drain_to = if buffer[index..].starts_with("\r\n\r\n") {
@@ -6446,12 +6480,13 @@ fn drain_sse_frames(app: &AppHandle, event_name: &str, subscription_id: &str, bu
         };
         buffer.drain(..drain_to);
         if let Some(event) = parse_sse_frame(&frame) {
-            let _ = app.emit(
+            emit(
                 event_name,
-                AuroraSubscriptionEvent {
+                serde_json::to_value(AuroraSubscriptionEvent {
                     subscription_id: subscription_id.to_string(),
                     event,
-                },
+                })
+                .expect("gateway stream event payload serializes"),
             );
         }
     }
@@ -6552,6 +6587,19 @@ fn redacted_gateway_error(error: &reqwest::Error) -> String {
         "Gateway event stream payload decode failed".to_string()
     } else {
         "Gateway event stream failed".to_string()
+    }
+}
+
+fn redacted_gateway_status_error(status: u16, body: &str) -> String {
+    let mut body = redact_sensitive_text(body);
+    if body.len() > 4096 {
+        body.truncate(4096);
+        body.push_str("...");
+    }
+    if body.trim().is_empty() {
+        format!("Gateway event stream returned HTTP {status}")
+    } else {
+        format!("Gateway event stream returned HTTP {status}: {body}")
     }
 }
 
@@ -7319,8 +7367,69 @@ fn install_tray(app: &AppHandle) -> tauri::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+    use std::net::TcpListener;
+    use std::sync::mpsc;
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    struct LoopbackFixture {
+        base_url: Url,
+        request_rx: mpsc::Receiver<String>,
+        release_tx: Option<mpsc::Sender<()>>,
+        handle: thread::JoinHandle<()>,
+    }
+
+    impl LoopbackFixture {
+        fn join(self) {
+            if let Some(release_tx) = self.release_tx {
+                let _ = release_tx.send(());
+            }
+            self.handle.join().expect("loopback fixture joins");
+        }
+    }
+
+    fn spawn_loopback_fixture(chunks: Vec<Vec<u8>>, hold_open: bool) -> LoopbackFixture {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback fixture");
+        let address = listener
+            .local_addr()
+            .expect("read loopback fixture address");
+        let (request_tx, request_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept loopback SSE request");
+            let mut request = Vec::new();
+            let mut buffer = [0_u8; 1024];
+            loop {
+                let read = stream.read(&mut buffer).expect("read loopback SSE request");
+                if read == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..read]);
+                if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            request_tx
+                .send(String::from_utf8_lossy(&request).to_string())
+                .expect("send captured loopback request");
+            for chunk in chunks {
+                stream.write_all(&chunk).expect("write loopback SSE chunk");
+                stream.flush().expect("flush loopback SSE chunk");
+                thread::sleep(Duration::from_millis(10));
+            }
+            if hold_open {
+                let _ = release_rx.recv_timeout(Duration::from_secs(5));
+            }
+        });
+
+        LoopbackFixture {
+            base_url: Url::parse(&format!("http://{address}")).expect("parse loopback fixture URL"),
+            request_rx,
+            release_tx: hold_open.then_some(release_tx),
+            handle,
+        }
+    }
 
     fn clear_remote_env() {
         env::remove_var("AURORA_TAURI_ALLOW_REMOTE_GATEWAY");
@@ -7462,6 +7571,192 @@ mod tests {
         assert!(pairs.contains(&("last_event_id".to_string(), "evt/42?cursor=1".to_string())));
         assert!(pairs.contains(&("correlation_id".to_string(), "corr id+plus".to_string())));
         assert!(pairs.contains(&("backfill".to_string(), "true".to_string())));
+    }
+
+    #[test]
+    fn live_gateway_event_stream_uses_reqwest_without_webview_and_redacts_headers() {
+        let fixture = spawn_loopback_fixture(
+            vec![
+                b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\nconnection: close\r\n\r\n"
+                    .to_vec(),
+                b"data: {\"kind\":\"first\",\"id\":\"stream-event\"}\r".to_vec(),
+                b"\n\r\n".to_vec(),
+                b"event: message\ndata: {\"kind\":\"multi\",\n".to_vec(),
+                b"data: \"message\":\"hello\"}\n\n".to_vec(),
+                b"data: [DONE]\n\n".to_vec(),
+            ],
+            false,
+        );
+        let request = AuroraSubscribeRequest {
+            topics: vec!["voice local/partial".to_string()],
+            stream: Some("main stream".to_string()),
+            kinds: Some(vec!["transcript.delta".to_string()]),
+            headers: Some(BTreeMap::from([
+                (
+                    "Authorization".to_string(),
+                    "Bearer should-not-forward".to_string(),
+                ),
+                (
+                    "X-Aurora-Sidecar-Token".to_string(),
+                    "sidecar-secret".to_string(),
+                ),
+                (
+                    "X-Aurora-AdminAction-Token".to_string(),
+                    "admin-confirm-token".to_string(),
+                ),
+            ])),
+            last_event_id: Some("evt/42?cursor=1".to_string()),
+            replay_from: None,
+            correlation_id: Some("corr id+plus".to_string()),
+            backfill: Some(false),
+        };
+        let url = event_stream_url(&fixture.base_url, &request).unwrap();
+        let headers = filtered_headers(request.headers.clone());
+        let emitted = Arc::new(Mutex::new(Vec::<(String, Value)>::new()));
+        let captured = Arc::clone(&emitted);
+
+        tauri::async_runtime::block_on(run_gateway_event_stream_with_emitter(
+            reqwest::Client::new(),
+            url,
+            headers,
+            "aurora-sub-live".to_string(),
+            "aurora://events/aurora-sub-live".to_string(),
+            "aurora://events/aurora-sub-live/closed".to_string(),
+            move |event_name, payload| {
+                captured
+                    .lock()
+                    .unwrap()
+                    .push((event_name.to_string(), payload));
+            },
+        ));
+
+        let request = fixture
+            .request_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("fixture captured request");
+        fixture.join();
+        assert!(request.starts_with("GET /api/events/stream?"));
+        assert!(request.contains("stream=main+stream"));
+        assert!(request.contains("topic=voice+local%2Fpartial"));
+        assert!(request.contains("last_event_id=evt%2F42%3Fcursor%3D1"));
+        assert!(request.contains("correlation_id=corr+id%2Bplus"));
+        assert!(request.contains("x-aurora-adminaction-token: admin-confirm-token"));
+        assert!(!request.to_ascii_lowercase().contains("authorization:"));
+        assert!(!request.contains("should-not-forward"));
+        assert!(!request.contains("sidecar-secret"));
+
+        let emitted = emitted.lock().unwrap();
+        assert_eq!(emitted.len(), 3);
+        assert_eq!(emitted[0].0, "aurora://events/aurora-sub-live");
+        assert_eq!(emitted[0].1["subscriptionId"], json!("aurora-sub-live"));
+        assert_eq!(
+            emitted[0].1["event"],
+            json!({"kind": "first", "id": "stream-event"})
+        );
+        assert_eq!(
+            emitted[1].1["event"],
+            json!({"kind": "multi", "message": "hello"})
+        );
+        assert_eq!(emitted[2].0, "aurora://events/aurora-sub-live/closed");
+        assert_eq!(emitted[2].1["code"], json!("closed"));
+        assert_eq!(emitted[2].1["secretsRedacted"], json!(true));
+        let serialized = serde_json::to_string(&*emitted).unwrap();
+        assert!(!serialized.contains("admin-confirm-token"));
+        assert!(!serialized.contains("should-not-forward"));
+        assert!(!serialized.contains("sidecar-secret"));
+    }
+
+    #[test]
+    fn live_gateway_event_stream_redacts_error_status_body() {
+        let fixture = spawn_loopback_fixture(
+            vec![
+                b"HTTP/1.1 503 Service Unavailable\r\ncontent-type: text/plain\r\nconnection: close\r\n\r\n"
+                    .to_vec(),
+                b"Authorization: Bearer gateway-token token=body-secret api_key=sk-secret".to_vec(),
+            ],
+            false,
+        );
+        let emitted = Arc::new(Mutex::new(Vec::<(String, Value)>::new()));
+        let captured = Arc::clone(&emitted);
+
+        tauri::async_runtime::block_on(run_gateway_event_stream_with_emitter(
+            reqwest::Client::new(),
+            fixture.base_url.join("api/events/stream").unwrap(),
+            HeaderMap::new(),
+            "aurora-sub-error".to_string(),
+            "aurora://events/aurora-sub-error".to_string(),
+            "aurora://events/aurora-sub-error/closed".to_string(),
+            move |event_name, payload| {
+                captured
+                    .lock()
+                    .unwrap()
+                    .push((event_name.to_string(), payload));
+            },
+        ));
+
+        let _ = fixture
+            .request_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("fixture captured request");
+        fixture.join();
+        let emitted = emitted.lock().unwrap();
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].0, "aurora://events/aurora-sub-error/closed");
+        assert_eq!(emitted[0].1["code"], json!("transport_loss"));
+        let reason = emitted[0].1["reason"].as_str().unwrap();
+        assert!(reason.contains("HTTP 503"));
+        assert!(reason.contains("[redacted]"));
+        assert!(!reason.contains("gateway-token"));
+        assert!(!reason.contains("body-secret"));
+        assert!(!reason.contains("sk-secret"));
+        assert_eq!(emitted[0].1["secretsRedacted"], json!(true));
+    }
+
+    #[test]
+    fn live_gateway_event_stream_abort_stops_stale_delivery() {
+        let fixture = spawn_loopback_fixture(
+            vec![
+                b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\nconnection: keep-alive\r\n\r\n"
+                    .to_vec(),
+                b"data: {\"kind\":\"first\"}\n\n".to_vec(),
+            ],
+            true,
+        );
+        let emitted = Arc::new(Mutex::new(Vec::<(String, Value)>::new()));
+        let captured = Arc::clone(&emitted);
+        let handle = tauri::async_runtime::spawn(run_gateway_event_stream_with_emitter(
+            reqwest::Client::new(),
+            fixture.base_url.join("api/events/stream").unwrap(),
+            HeaderMap::new(),
+            "aurora-sub-abort".to_string(),
+            "aurora://events/aurora-sub-abort".to_string(),
+            "aurora://events/aurora-sub-abort/closed".to_string(),
+            move |event_name, payload| {
+                captured
+                    .lock()
+                    .unwrap()
+                    .push((event_name.to_string(), payload));
+            },
+        ));
+
+        let _ = fixture
+            .request_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("fixture captured request");
+        for _ in 0..100 {
+            if emitted.lock().unwrap().len() == 1 {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        handle.abort();
+        thread::sleep(Duration::from_millis(50));
+        fixture.join();
+
+        let emitted = emitted.lock().unwrap();
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].0, "aurora://events/aurora-sub-abort");
+        assert_eq!(emitted[0].1["event"], json!({"kind": "first"}));
     }
 
     #[test]
