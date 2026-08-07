@@ -6,16 +6,189 @@ pub mod model_store;
 
 use async_trait::async_trait;
 use aurora_voice_core::{
-    AssistantTurnRequest, AssistantTurnResponse, AudioInput, CancellationToken, CaptureStartReason,
-    EngineError, Generation, PcmFrame, RedactedSnapshot, ResourceReport, RouteRevision,
-    RuntimeEvent, RuntimeEventSink, SpeechEngine, SpeechTransport, TaskCapability, TaskProvider,
-    TaskReadiness, TaskRequest, TimestampMicros, TransitionReason, VoiceCaptureLease,
-    VoiceCoreError, VoiceTask,
+    AssistantTurnRequest, AssistantTurnResponse, AudioInput, BoundTaskRequest, CancellationToken,
+    CaptureStartReason, EngineError, Generation, PcmFrame, RedactedSnapshot, ResourceReport,
+    RouteRevision, RuntimeEvent, RuntimeEventSink, SpeechEngine, SpeechTransport, TaskCapability,
+    TaskPackBinding, TaskProvider, TaskReadiness, TimestampMicros, TransitionReason,
+    VoiceCaptureLease, VoiceCoreError, VoiceTask,
 };
-use aurora_voice_engine::EngineFaultCode;
-use std::collections::VecDeque;
+use aurora_voice_engine::{
+    select_verified_variant, verify_manifest, AbiRequirements, BrowserFeature, CapabilityFlags,
+    Compatibility, CompressionKind, DeviceClass, EngineFaultCode, EngineKind, LanguageSupport,
+    LicenseGrant, LicenseInfo, ManifestSignature, ModelPackError, ModelPackFile, ModelPackManifest,
+    PackTask, ProcessingMetadata, Provenance, ResourceBudget, RuntimeGates, RuntimeSelection,
+    RuntimeTarget, ShapeMetadata, SignatureVerifier, TargetArch, TargetOs, TrustPolicy,
+    VAD_SAMPLE_RATE_HZ,
+};
+use std::collections::{BTreeSet, VecDeque};
 
 pub use model_store::*;
+
+const FAKE_HASH: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+struct FakeBindingVerifier;
+
+impl SignatureVerifier for FakeBindingVerifier {
+    fn verify(
+        &self,
+        _canonical_json: &str,
+        signature: &ManifestSignature,
+    ) -> Result<bool, ModelPackError> {
+        Ok(signature.value == "signed")
+    }
+}
+
+fn fake_bound_capability(task: VoiceTask, pack_task: PackTask, streaming: bool) -> TaskCapability {
+    TaskCapability::new(fake_task_binding(task, pack_task)).streaming(streaming)
+}
+
+fn fake_task_binding(task: VoiceTask, pack_task: PackTask) -> TaskPackBinding {
+    let manifest = fake_manifest(pack_task);
+    let verified = verify_manifest(
+        manifest,
+        &TrustPolicy::default(),
+        Some(&FakeBindingVerifier),
+    )
+    .expect("fake manifest verifies");
+    let selection = select_verified_variant(
+        &verified,
+        &RuntimeSelection {
+            target: RuntimeTarget::Desktop,
+            os: TargetOs::Linux,
+            arch: TargetArch::X86_64,
+            browser_features: BTreeSet::<BrowserFeature>::new(),
+            device_memory_mb: None,
+            max_download_bytes: 1024,
+            max_installed_bytes: 1024,
+            max_memory_bytes: 1024,
+            cpu_threads: 1,
+            max_rtf_millis_per_second: 1_000,
+            device_class: DeviceClass::Low,
+            require_interoperable: true,
+        },
+    )
+    .expect("fake variant selects");
+    TaskPackBinding::from_selection(task, &verified, &selection).expect("fake binding")
+}
+
+fn fake_manifest(task: PackTask) -> ModelPackManifest {
+    ModelPackManifest {
+        schema_version: 1,
+        pack_id: format!("fake-{}", task.as_str()),
+        pack_version: "1.0.0".to_owned(),
+        display_name: "Fake Pack".to_owned(),
+        tasks: vec![task],
+        license: LicenseInfo {
+            identifier: "Apache-2.0".to_owned(),
+            text_url: "https://example.test/license".to_owned(),
+            text_sha256: FAKE_HASH.to_owned(),
+            commercial_use: true,
+            redistribution: LicenseGrant::RedistributionAllowed,
+            attribution: "Aurora".to_owned(),
+        },
+        languages: vec![LanguageSupport {
+            language: "en".to_owned(),
+            locale: Some("en-US".to_owned()),
+            fixed_language: true,
+            auto_detect: false,
+        }],
+        capabilities: CapabilityFlags {
+            streaming: true,
+            cancellation: true,
+        },
+        provenance: fake_provenance(),
+        files: vec![ModelPackFile {
+            file_id: "model".to_owned(),
+            asset_id: "model".to_owned(),
+            task,
+            byte_size: 100,
+            sha256: FAKE_HASH.to_owned(),
+            url: "/models/model".to_owned(),
+            compression: CompressionKind::None,
+            installed_size: 100,
+            install_order: 0,
+            dependencies: Vec::new(),
+            license: LicenseInfo {
+                identifier: "Apache-2.0".to_owned(),
+                text_url: "https://example.test/license".to_owned(),
+                text_sha256: FAKE_HASH.to_owned(),
+                commercial_use: true,
+                redistribution: LicenseGrant::RedistributionAllowed,
+                attribution: "Aurora".to_owned(),
+            },
+            provenance: fake_provenance(),
+            processing: ProcessingMetadata {
+                tokenizer_sha256: None,
+                operator_inventory_sha256: FAKE_HASH.to_owned(),
+                preprocessing_abi: "pre-v1".to_owned(),
+                postprocessing_abi: "post-v1".to_owned(),
+                shapes: ShapeMetadata {
+                    sample_rate_hz: VAD_SAMPLE_RATE_HZ,
+                    channels: 1,
+                    frame_size: 512,
+                    window_size: 1024,
+                    cache_state: vec!["hidden".to_owned()],
+                },
+            },
+            raven: None,
+            revocation: None,
+        }],
+        variants: vec![aurora_voice_engine::ModelPackVariant {
+            variant_id: "linux".to_owned(),
+            target: RuntimeTarget::Desktop,
+            os: TargetOs::Linux,
+            arch: TargetArch::X86_64,
+            engine: EngineKind::SherpaOnnx,
+            required_browser_features: Vec::new(),
+            min_device_memory_mb: None,
+            runtime_gates: RuntimeGates {
+                min_cpu_threads: 1,
+                max_rtf_millis_per_second: 1_000,
+                min_device_class: DeviceClass::Low,
+            },
+            resource_budget: ResourceBudget {
+                max_download_bytes: 1024,
+                max_installed_bytes: 1024,
+                max_memory_bytes: 1024,
+            },
+            compatibility: Compatibility {
+                group_id: "fake-group".to_owned(),
+                voice_state_group_id: "default".to_owned(),
+                preprocessing_abi: "pre-v1".to_owned(),
+                postprocessing_abi: "post-v1".to_owned(),
+                sample_rate_hz: VAD_SAMPLE_RATE_HZ,
+                channels: 1,
+                frame_size: 512,
+                interoperable: true,
+            },
+            file_ids: vec!["model".to_owned()],
+            abi: AbiRequirements {
+                min_aurora_version: "1.0.0".to_owned(),
+                min_runtime_version: "1.0.0".to_owned(),
+                min_engine_version: "1.0.0".to_owned(),
+                engine_source_revision: "fake".to_owned(),
+                build_flags: vec!["cpu".to_owned()],
+            },
+            revocation: None,
+        }],
+        rollback_from: None,
+        supersedes_pack_id: None,
+        revocation: None,
+        signature: Some(ManifestSignature {
+            key_id: "fake-key".to_owned(),
+            algorithm: "ed25519".to_owned(),
+            value: "signed".to_owned(),
+        }),
+    }
+}
+
+fn fake_provenance() -> Provenance {
+    Provenance {
+        upstream_source: "https://example.test/source".to_owned(),
+        upstream_revision: "rev1".to_owned(),
+        build_recipe_sha256: FAKE_HASH.to_owned(),
+    }
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct FakeClock {
@@ -163,12 +336,8 @@ impl FakeEngine {
 impl TaskProvider for FakeEngine {
     fn capabilities(&self) -> Vec<TaskCapability> {
         vec![
-            TaskCapability::new(VoiceTask::SpeechToText, 16_000)
-                .with_languages(["en"])
-                .streaming(false),
-            TaskCapability::new(VoiceTask::TextToSpeech, 16_000)
-                .with_languages(["en"])
-                .streaming(true),
+            fake_bound_capability(VoiceTask::SpeechToText, PackTask::Stt, false),
+            fake_bound_capability(VoiceTask::TextToSpeech, PackTask::Tts, true),
         ]
     }
 
@@ -176,11 +345,11 @@ impl TaskProvider for FakeEngine {
         self.report.clone()
     }
 
-    async fn warm_task(&mut self, request: TaskRequest) -> Result<(), EngineError> {
+    async fn warm_task(&mut self, request: BoundTaskRequest) -> Result<(), EngineError> {
         if self
             .capabilities()
             .iter()
-            .any(|capability| capability.task() == request.task)
+            .any(|capability| capability.binding() == request.binding())
         {
             Ok(())
         } else {
@@ -188,8 +357,10 @@ impl TaskProvider for FakeEngine {
         }
     }
 
-    async fn unload_task(&mut self, task: VoiceTask) -> Result<(), EngineError> {
-        self.report.loaded_tasks.retain(|loaded| *loaded != task);
+    async fn unload_task(&mut self, binding: TaskPackBinding) -> Result<(), EngineError> {
+        self.report
+            .loaded_tasks
+            .retain(|loaded| *loaded != binding.task());
         Ok(())
     }
 
@@ -203,7 +374,7 @@ impl TaskProvider for FakeEngine {
 impl SpeechEngine for FakeEngine {
     async fn transcribe_finite(
         &mut self,
-        request: TaskRequest,
+        request: BoundTaskRequest,
         frames: usize,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<String, EngineError> {
@@ -221,7 +392,7 @@ impl SpeechEngine for FakeEngine {
                 code: EngineFaultCode::Provider,
             });
         }
-        if request.task != VoiceTask::SpeechToText || frames == 0 {
+        if request.request().task != VoiceTask::SpeechToText || frames == 0 {
             return Err(EngineError::InvalidRequest);
         }
         Ok(self.transcript.clone())
@@ -229,7 +400,7 @@ impl SpeechEngine for FakeEngine {
 
     async fn synthesize_text(
         &mut self,
-        request: TaskRequest,
+        request: BoundTaskRequest,
         text: &str,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<Vec<i16>, EngineError> {
@@ -241,7 +412,7 @@ impl SpeechEngine for FakeEngine {
                 code: EngineFaultCode::Provider,
             });
         }
-        if request.task != VoiceTask::TextToSpeech {
+        if request.request().task != VoiceTask::TextToSpeech {
             return Err(EngineError::InvalidRequest);
         }
         self.spoken.push(text.to_owned());

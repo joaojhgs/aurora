@@ -14,8 +14,8 @@ use std::sync::{
 use thiserror::Error;
 
 pub use aurora_voice_engine::{
-    EngineError, ResourceReport, SpeechEngine, TaskCapability, TaskProvider, TaskReadiness,
-    TaskRequest, VoiceTask,
+    BoundTaskRequest, EngineError, ResourceReport, SpeechEngine, TaskCapability, TaskPackBinding,
+    TaskProvider, TaskReadiness, TaskRequest, VoiceTask,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -1050,17 +1050,12 @@ where
         )
         .await?;
         cancellation.check()?;
+        let stt_request =
+            self.bound_engine_request(VoiceTask::SpeechToText, None, lease.generation)?;
+        self.engine.warm_task(stt_request.clone()).await?;
         let transcript = self
             .engine
-            .transcribe_finite(
-                TaskRequest {
-                    task: VoiceTask::SpeechToText,
-                    language: None,
-                    generation: lease.generation.0,
-                },
-                frames,
-                &|| cancellation.is_cancelled(),
-            )
+            .transcribe_finite(stt_request, frames, &|| cancellation.is_cancelled())
             .await?;
         cancellation.check()?;
         self.transition_emit(
@@ -1099,17 +1094,12 @@ where
             TimestampMicros(at.0.saturating_add(3)),
         )
         .await?;
+        let tts_request =
+            self.bound_engine_request(VoiceTask::TextToSpeech, None, lease.generation)?;
+        self.engine.warm_task(tts_request.clone()).await?;
         let _audio = self
             .engine
-            .synthesize_text(
-                TaskRequest {
-                    task: VoiceTask::TextToSpeech,
-                    language: None,
-                    generation: lease.generation.0,
-                },
-                &response.text,
-                &|| cancellation.is_cancelled(),
-            )
+            .synthesize_text(tts_request, &response.text, &|| cancellation.is_cancelled())
             .await?;
         cancellation.check()?;
         self.transition_emit(
@@ -1121,6 +1111,35 @@ where
         )
         .await?;
         Ok(response.text)
+    }
+
+    fn bound_engine_request(
+        &self,
+        task: VoiceTask,
+        language: Option<String>,
+        generation: Generation,
+    ) -> Result<BoundTaskRequest, VoiceCoreError> {
+        let request = TaskRequest {
+            task,
+            language,
+            generation: generation.0,
+        };
+        let mut saw_task = false;
+        for capability in self.engine.capabilities() {
+            if capability.task() != task {
+                continue;
+            }
+            saw_task = true;
+            if let Ok(bound) = BoundTaskRequest::new(request.clone(), capability.binding().clone())
+            {
+                return Ok(bound);
+            }
+        }
+        if saw_task {
+            Err(VoiceCoreError::Engine(EngineError::InvalidRequest))
+        } else {
+            Err(VoiceCoreError::Engine(EngineError::TaskUnavailable))
+        }
     }
 
     async fn finish_with_cleanup(

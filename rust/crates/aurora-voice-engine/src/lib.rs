@@ -6,6 +6,7 @@ pub mod model_pack;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::fmt;
 use thiserror::Error;
 
@@ -13,6 +14,20 @@ pub use model_pack::*;
 
 pub const VAD_SAMPLE_RATE_HZ: u32 = 16_000;
 pub const MONO_CHANNELS: u16 = 1;
+pub const VAD_WINDOW_SIZE_SAMPLES: usize = 512;
+pub const VAD_DEFAULT_THRESHOLD: f32 = 0.25;
+pub const VAD_DEFAULT_MIN_SILENCE_DURATION_MS: u32 = 250;
+pub const VAD_DEFAULT_MIN_SPEECH_DURATION_MS: u32 = 250;
+pub const VAD_DEFAULT_MAX_SPEECH_DURATION_MS: u32 = 10_000;
+pub const VAD_DEFAULT_BUFFER_DURATION_MS: u32 = 30_000;
+pub const VAD_MAX_DURATION_MS: u32 = 120_000;
+/// Maximum canonical 16 kHz mono frame length accepted by generic streaming ports.
+pub const MAX_STREAMING_FRAME_SAMPLES: usize = VAD_SAMPLE_RATE_HZ as usize * 30;
+pub const MAX_KWS_PHRASES: usize = 64;
+pub const TTS_MIN_SAMPLE_RATE_HZ: u32 = 8_000;
+pub const TTS_MAX_SAMPLE_RATE_HZ: u32 = 48_000;
+pub const TTS_MIN_CHUNK_SAMPLES: usize = 64;
+pub const TTS_MAX_CHUNK_SAMPLES: usize = 48_000;
 
 /// Engine task families the shared runtime can request without choosing a
 /// concrete inference backend.
@@ -38,33 +53,25 @@ pub enum TaskReadiness {
 /// Capability metadata that is safe to expose in product state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TaskCapability {
-    task: VoiceTask,
     languages: Vec<String>,
-    sample_rate_hz: u32,
     streaming: bool,
     local_only: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    binding: Option<TaskPackBinding>,
+    binding: TaskPackBinding,
 }
 
 impl TaskCapability {
-    pub fn new(task: VoiceTask, sample_rate_hz: u32) -> Self {
+    pub fn new(binding: TaskPackBinding) -> Self {
+        let languages = binding
+            .languages
+            .iter()
+            .map(|language| language.language.clone())
+            .collect();
         Self {
-            task,
-            languages: Vec::new(),
-            sample_rate_hz,
+            languages,
             streaming: false,
             local_only: true,
-            binding: None,
+            binding,
         }
-    }
-
-    pub fn with_languages(
-        mut self,
-        languages: impl IntoIterator<Item = impl Into<String>>,
-    ) -> Self {
-        self.languages = languages.into_iter().map(Into::into).collect();
-        self
     }
 
     pub fn streaming(mut self, streaming: bool) -> Self {
@@ -72,21 +79,8 @@ impl TaskCapability {
         self
     }
 
-    pub fn with_binding(mut self, binding: TaskPackBinding) -> Result<Self, EngineError> {
-        if self.task != binding.task || self.sample_rate_hz != binding.sample_rate_hz {
-            return Err(EngineError::InvalidRequest);
-        }
-        self.languages = binding
-            .languages
-            .iter()
-            .map(|language| language.language.clone())
-            .collect();
-        self.binding = Some(binding);
-        Ok(self)
-    }
-
     pub fn task(&self) -> VoiceTask {
-        self.task
+        self.binding.task
     }
 
     pub fn languages(&self) -> &[String] {
@@ -94,7 +88,7 @@ impl TaskCapability {
     }
 
     pub fn sample_rate_hz(&self) -> u32 {
-        self.sample_rate_hz
+        self.binding.sample_rate_hz
     }
 
     pub fn streaming_enabled(&self) -> bool {
@@ -105,12 +99,8 @@ impl TaskCapability {
         self.local_only
     }
 
-    pub fn binding(&self) -> Option<&TaskPackBinding> {
-        self.binding.as_ref()
-    }
-
-    pub fn is_bound(&self) -> bool {
-        self.binding.is_some()
+    pub fn binding(&self) -> &TaskPackBinding {
+        &self.binding
     }
 }
 
@@ -149,15 +139,22 @@ pub struct TaskPackBinding {
     pack_id: String,
     pack_version: String,
     variant_id: String,
+    selected_file_ids: Vec<String>,
     compatibility_group_id: String,
+    voice_state_compatibility_group_id: String,
     target: RuntimeTarget,
     os: TargetOs,
     arch: TargetArch,
     engine: EngineKind,
-    min_device_class: DeviceClass,
+    required_browser_features: Vec<BrowserFeature>,
+    min_device_memory_mb: Option<u64>,
+    runtime_gates: RuntimeGates,
+    resource_budget: ResourceBudget,
+    variant_abi: AbiRequirements,
     interoperable: bool,
     sample_rate_hz: u32,
     channels: u16,
+    frame_size: u32,
     languages: Vec<LanguageSupport>,
 }
 
@@ -176,9 +173,20 @@ impl TaskPackBinding {
             .iter()
             .find(|candidate| candidate.variant_id == selection.variant_id())
             .ok_or(EngineError::InvalidRequest)?;
+        let has_selected_task_file = selection.file_ids().iter().any(|file_id| {
+            manifest.manifest().files.iter().any(|file| {
+                file.file_id == *file_id
+                    && voice_task_matches_pack_task(task, file.task)
+                    && !file
+                        .revocation
+                        .as_ref()
+                        .is_some_and(|revocation| revocation.revoked)
+            })
+        });
         if variant.compatibility.channels != MONO_CHANNELS
             || variant.compatibility.sample_rate_hz == 0
             || manifest.manifest().languages.is_empty()
+            || !has_selected_task_file
         {
             return Err(EngineError::InvalidRequest);
         }
@@ -188,15 +196,22 @@ impl TaskPackBinding {
             pack_id: manifest.manifest().pack_id.clone(),
             pack_version: manifest.manifest().pack_version.clone(),
             variant_id: variant.variant_id.clone(),
+            selected_file_ids: selection.file_ids().iter().cloned().collect(),
             compatibility_group_id: variant.compatibility.group_id.clone(),
+            voice_state_compatibility_group_id: variant.compatibility.voice_state_group_id.clone(),
             target: variant.target,
             os: variant.os,
             arch: variant.arch,
             engine: variant.engine,
-            min_device_class: variant.runtime_gates.min_device_class,
+            required_browser_features: variant.required_browser_features.clone(),
+            min_device_memory_mb: variant.min_device_memory_mb,
+            runtime_gates: variant.runtime_gates.clone(),
+            resource_budget: variant.resource_budget.clone(),
+            variant_abi: variant.abi.clone(),
             interoperable: variant.compatibility.interoperable,
             sample_rate_hz: variant.compatibility.sample_rate_hz,
             channels: variant.compatibility.channels,
+            frame_size: variant.compatibility.frame_size,
             languages: manifest.manifest().languages.clone(),
         })
     }
@@ -221,8 +236,16 @@ impl TaskPackBinding {
         &self.variant_id
     }
 
+    pub fn selected_file_ids(&self) -> &[String] {
+        &self.selected_file_ids
+    }
+
     pub fn compatibility_group_id(&self) -> &str {
         &self.compatibility_group_id
+    }
+
+    pub fn voice_state_compatibility_group_id(&self) -> &str {
+        &self.voice_state_compatibility_group_id
     }
 
     pub fn target(&self) -> RuntimeTarget {
@@ -241,8 +264,24 @@ impl TaskPackBinding {
         self.engine
     }
 
-    pub fn min_device_class(&self) -> DeviceClass {
-        self.min_device_class
+    pub fn required_browser_features(&self) -> &[BrowserFeature] {
+        &self.required_browser_features
+    }
+
+    pub fn min_device_memory_mb(&self) -> Option<u64> {
+        self.min_device_memory_mb
+    }
+
+    pub fn runtime_gates(&self) -> &RuntimeGates {
+        &self.runtime_gates
+    }
+
+    pub fn resource_budget(&self) -> &ResourceBudget {
+        &self.resource_budget
+    }
+
+    pub fn variant_abi(&self) -> &AbiRequirements {
+        &self.variant_abi
     }
 
     pub fn interoperable(&self) -> bool {
@@ -257,8 +296,16 @@ impl TaskPackBinding {
         self.channels
     }
 
+    pub fn frame_size(&self) -> u32 {
+        self.frame_size
+    }
+
     pub fn languages(&self) -> &[LanguageSupport] {
         &self.languages
+    }
+
+    pub fn validate_language(&self, language: Option<&str>) -> Result<(), EngineError> {
+        validate_binding_language(self, language)
     }
 }
 
@@ -270,11 +317,10 @@ pub struct BoundTaskRequest {
 
 impl BoundTaskRequest {
     pub fn new(request: TaskRequest, binding: TaskPackBinding) -> Result<Self, EngineError> {
-        if request.task != binding.task
-            || !binding_allows_language(&binding, request.language.as_deref())
-        {
+        if request.task != binding.task {
             return Err(EngineError::InvalidRequest);
         }
+        binding.validate_language(request.language.as_deref())?;
         Ok(Self { request, binding })
     }
 
@@ -395,12 +441,16 @@ impl VadConfig {
     pub fn validate(&self) -> Result<(), EngineError> {
         if self.sample_rate_hz != VAD_SAMPLE_RATE_HZ
             || self.channels != MONO_CHANNELS
-            || self.window_size_samples == 0
+            || self.window_size_samples != VAD_WINDOW_SIZE_SAMPLES
             || !valid_sherpa_threshold(self.threshold)
             || self.min_silence_duration_ms == 0
             || self.min_speech_duration_ms == 0
             || self.max_speech_duration_ms == 0
             || self.buffer_duration_ms == 0
+            || self.min_silence_duration_ms > VAD_MAX_DURATION_MS
+            || self.min_speech_duration_ms > VAD_MAX_DURATION_MS
+            || self.max_speech_duration_ms > VAD_MAX_DURATION_MS
+            || self.buffer_duration_ms > VAD_MAX_DURATION_MS
             || self.max_speech_duration_ms < self.min_speech_duration_ms
             || self.buffer_duration_ms < self.max_speech_duration_ms
         {
@@ -444,6 +494,18 @@ impl VadConfig {
         duration_ms_to_samples(self.buffer_duration_ms, self.sample_rate_hz)
     }
 
+    pub fn validate_binding(&self, binding: &TaskPackBinding) -> Result<(), EngineError> {
+        self.validate()?;
+        if binding.task() != VoiceTask::VoiceActivityDetection
+            || binding.sample_rate_hz() != self.sample_rate_hz
+            || binding.channels() != self.channels
+            || binding.frame_size() != self.window_size_samples as u32
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
+    }
+
     pub fn sample_rate_hz(&self) -> u32 {
         self.sample_rate_hz
     }
@@ -482,12 +544,12 @@ impl Default for VadConfig {
         Self {
             sample_rate_hz: VAD_SAMPLE_RATE_HZ,
             channels: MONO_CHANNELS,
-            window_size_samples: 512,
-            threshold: 0.5,
-            min_silence_duration_ms: 500,
-            min_speech_duration_ms: 250,
-            max_speech_duration_ms: 30_000,
-            buffer_duration_ms: 60_000,
+            window_size_samples: VAD_WINDOW_SIZE_SAMPLES,
+            threshold: VAD_DEFAULT_THRESHOLD,
+            min_silence_duration_ms: VAD_DEFAULT_MIN_SILENCE_DURATION_MS,
+            min_speech_duration_ms: VAD_DEFAULT_MIN_SPEECH_DURATION_MS,
+            max_speech_duration_ms: VAD_DEFAULT_MAX_SPEECH_DURATION_MS,
+            buffer_duration_ms: VAD_DEFAULT_BUFFER_DURATION_MS,
         }
     }
 }
@@ -513,6 +575,7 @@ impl<'a> StreamingAudioFrame<'a> {
     ) -> Result<Self, EngineError> {
         if sample_rate_hz != VAD_SAMPLE_RATE_HZ
             || channels != MONO_CHANNELS
+            || samples.len() > MAX_STREAMING_FRAME_SAMPLES
             || !normalized_mono_samples(samples)
         {
             return Err(EngineError::InvalidRequest);
@@ -536,6 +599,7 @@ impl<'a> StreamingAudioFrame<'a> {
     ) -> Result<Self, EngineError> {
         if sample_rate_hz != VAD_SAMPLE_RATE_HZ
             || channels != MONO_CHANNELS
+            || samples.len() > MAX_STREAMING_FRAME_SAMPLES
             || !normalized_mono_samples(samples)
         {
             return Err(EngineError::InvalidRequest);
@@ -740,14 +804,24 @@ impl KwsConfig {
 
     pub fn validate(&self) -> Result<(), EngineError> {
         if self.phrase_ids.is_empty()
+            || self.phrase_ids.len() > MAX_KWS_PHRASES
             || self
                 .phrase_ids
                 .iter()
                 .any(|phrase_id| !valid_logical_id(phrase_id))
+            || self.phrase_ids.iter().collect::<BTreeSet<_>>().len() != self.phrase_ids.len()
             || !valid_logical_id(&self.phrase_set_revision)
             || !valid_sherpa_threshold(self.threshold)
             || self.max_results == 0
         {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
+    }
+
+    pub fn validate_binding(&self, binding: &TaskPackBinding) -> Result<(), EngineError> {
+        self.validate()?;
+        if binding.task() != VoiceTask::KeywordSpotting {
             return Err(EngineError::InvalidRequest);
         }
         Ok(())
@@ -865,6 +939,15 @@ impl StreamingSttConfig {
         }) {
             return Err(EngineError::InvalidRequest);
         }
+        Ok(())
+    }
+
+    pub fn validate_binding(&self, binding: &TaskPackBinding) -> Result<(), EngineError> {
+        self.validate()?;
+        if binding.task() != VoiceTask::SpeechToText {
+            return Err(EngineError::InvalidRequest);
+        }
+        binding.validate_language(self.language())?;
         Ok(())
     }
 
@@ -1002,9 +1085,22 @@ impl TtsSynthesisConfig {
     pub fn validate(&self) -> Result<(), EngineError> {
         if !valid_logical_id(&self.logical_voice_id)
             || !valid_logical_id(&self.voice_state_compatibility_group_id)
-            || self.sample_rate_hz == 0
+            || !(TTS_MIN_SAMPLE_RATE_HZ..=TTS_MAX_SAMPLE_RATE_HZ).contains(&self.sample_rate_hz)
             || self.channels != MONO_CHANNELS
-            || self.chunk_samples == 0
+            || !(TTS_MIN_CHUNK_SAMPLES..=TTS_MAX_CHUNK_SAMPLES).contains(&self.chunk_samples)
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
+    }
+
+    pub fn validate_binding(&self, binding: &TaskPackBinding) -> Result<(), EngineError> {
+        self.validate()?;
+        if binding.task() != VoiceTask::TextToSpeech
+            || binding.sample_rate_hz() != self.sample_rate_hz
+            || binding.channels() != self.channels
+            || binding.voice_state_compatibility_group_id()
+                != self.voice_state_compatibility_group_id
         {
             return Err(EngineError::InvalidRequest);
         }
@@ -1280,16 +1376,34 @@ fn voice_task_matches_pack_task(task: VoiceTask, pack_task: PackTask) -> bool {
     }
 }
 
-fn binding_allows_language(binding: &TaskPackBinding, language: Option<&str>) -> bool {
+fn validate_binding_language(
+    binding: &TaskPackBinding,
+    language: Option<&str>,
+) -> Result<(), EngineError> {
     match language {
-        None => true,
-        Some(requested) => binding.languages.iter().any(|supported| {
-            supported.language == requested
-                || supported
-                    .locale
-                    .as_deref()
-                    .is_some_and(|locale| locale == requested)
-        }),
+        Some(requested) => {
+            if binding.languages.iter().any(|supported| {
+                supported.language == requested
+                    || supported
+                        .locale
+                        .as_deref()
+                        .is_some_and(|locale| locale == requested)
+            }) {
+                Ok(())
+            } else {
+                Err(EngineError::InvalidRequest)
+            }
+        }
+        None if binding.task == VoiceTask::VoiceActivityDetection => Ok(()),
+        None if binding
+            .languages
+            .iter()
+            .any(|supported| supported.auto_detect) =>
+        {
+            Ok(())
+        }
+        None if binding.languages.len() == 1 => Ok(()),
+        None => Err(EngineError::InvalidRequest),
     }
 }
 
@@ -1300,9 +1414,9 @@ pub trait TaskProvider {
 
     fn resource_report(&self) -> ResourceReport;
 
-    async fn warm_task(&mut self, request: TaskRequest) -> Result<(), EngineError>;
+    async fn warm_task(&mut self, request: BoundTaskRequest) -> Result<(), EngineError>;
 
-    async fn unload_task(&mut self, task: VoiceTask) -> Result<(), EngineError>;
+    async fn unload_task(&mut self, binding: TaskPackBinding) -> Result<(), EngineError>;
 
     async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError>;
 }
@@ -1313,14 +1427,14 @@ pub trait TaskProvider {
 pub trait SpeechEngine: TaskProvider {
     async fn transcribe_finite(
         &mut self,
-        request: TaskRequest,
+        request: BoundTaskRequest,
         frames: usize,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<String, EngineError>;
 
     async fn synthesize_text(
         &mut self,
-        request: TaskRequest,
+        request: BoundTaskRequest,
         text: &str,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<Vec<i16>, EngineError>;
@@ -1514,11 +1628,11 @@ mod tests {
             ResourceReport::default()
         }
 
-        async fn warm_task(&mut self, _request: TaskRequest) -> Result<(), EngineError> {
+        async fn warm_task(&mut self, _request: BoundTaskRequest) -> Result<(), EngineError> {
             Ok(())
         }
 
-        async fn unload_task(&mut self, _task: VoiceTask) -> Result<(), EngineError> {
+        async fn unload_task(&mut self, _binding: TaskPackBinding) -> Result<(), EngineError> {
             Ok(())
         }
 
@@ -1576,10 +1690,18 @@ mod tests {
         assert_eq!(binding.os(), TargetOs::Linux);
         assert_eq!(binding.arch(), TargetArch::X86_64);
         assert_eq!(binding.engine(), EngineKind::SherpaOnnx);
-        assert_eq!(binding.min_device_class(), DeviceClass::Low);
+        assert_eq!(binding.runtime_gates().min_device_class, DeviceClass::Low);
+        assert_eq!(binding.resource_budget().max_memory_bytes, 1024);
+        assert_eq!(binding.variant_abi().engine_source_revision, "rev1");
+        assert_eq!(
+            binding.voice_state_compatibility_group_id(),
+            "voice-state-a"
+        );
+        assert_eq!(binding.selected_file_ids(), &["model".to_owned()]);
         assert!(binding.interoperable());
         assert_eq!(binding.sample_rate_hz(), VAD_SAMPLE_RATE_HZ);
         assert_eq!(binding.channels(), MONO_CHANNELS);
+        assert_eq!(binding.frame_size(), 512);
         assert_eq!(binding.languages()[0].language, "en");
 
         assert_eq!(
@@ -1605,28 +1727,84 @@ mod tests {
     }
 
     #[test]
-    fn unbound_capability_does_not_imply_installed_selection() {
-        let capability = TaskCapability::new(VoiceTask::SpeechToText, VAD_SAMPLE_RATE_HZ);
-        assert!(!capability.is_bound());
-        assert!(capability.binding().is_none());
-
+    fn capabilities_are_inherently_bound_to_verified_selection() {
         let (manifest, selection) = selected(PackTask::Stt);
         let binding =
             TaskPackBinding::from_selection(VoiceTask::SpeechToText, &manifest, &selection)
                 .expect("binding");
-        let bound = capability.with_binding(binding).expect("bound capability");
-        assert!(bound.is_bound());
-        assert_eq!(bound.languages(), &["en".to_owned()]);
+        let capability = TaskCapability::new(binding.clone()).streaming(true);
+        assert_eq!(capability.task(), VoiceTask::SpeechToText);
+        assert_eq!(capability.sample_rate_hz(), VAD_SAMPLE_RATE_HZ);
+        assert_eq!(capability.languages(), &["en".to_owned()]);
+        assert_eq!(capability.binding(), &binding);
+        assert!(capability.streaming_enabled());
+    }
 
-        let (manifest, selection) = selected(PackTask::Tts);
-        let tts_binding =
-            TaskPackBinding::from_selection(VoiceTask::TextToSpeech, &manifest, &selection)
-                .expect("binding");
+    #[test]
+    fn binding_requires_selected_non_revoked_file_for_requested_task() {
+        let mut raw = test_manifest(PackTask::Stt);
+        raw.files[0].task = PackTask::Tokenizer;
+        raw.tasks.push(PackTask::Tokenizer);
+        let verified =
+            verify_manifest(raw, &TrustPolicy::default(), Some(&AcceptingVerifier)).expect("valid");
+        let selection = select_verified_variant(
+            &verified,
+            &RuntimeSelection {
+                target: RuntimeTarget::Desktop,
+                os: TargetOs::Linux,
+                arch: TargetArch::X86_64,
+                browser_features: BTreeSet::new(),
+                device_memory_mb: None,
+                max_download_bytes: 1024,
+                max_installed_bytes: 1024,
+                max_memory_bytes: 1024,
+                cpu_threads: 1,
+                max_rtf_millis_per_second: 1_000,
+                device_class: DeviceClass::Low,
+                require_interoperable: true,
+            },
+        )
+        .expect("selected");
         assert_eq!(
-            TaskCapability::new(VoiceTask::SpeechToText, VAD_SAMPLE_RATE_HZ)
-                .with_binding(tts_binding),
+            TaskPackBinding::from_selection(VoiceTask::SpeechToText, &verified, &selection),
             Err(EngineError::InvalidRequest)
         );
+    }
+
+    #[test]
+    fn binding_language_none_requires_unambiguous_or_auto_detect_language() {
+        let (manifest, selection) = selected(PackTask::Stt);
+        let mut binding =
+            TaskPackBinding::from_selection(VoiceTask::SpeechToText, &manifest, &selection)
+                .expect("binding");
+        assert!(binding.validate_language(None).is_ok());
+
+        binding.languages.push(LanguageSupport {
+            language: "fr".to_owned(),
+            locale: None,
+            fixed_language: true,
+            auto_detect: false,
+        });
+        assert_eq!(
+            binding.validate_language(None),
+            Err(EngineError::InvalidRequest)
+        );
+        assert!(binding.validate_language(Some("fr")).is_ok());
+        assert_eq!(
+            binding.validate_language(Some("de")),
+            Err(EngineError::InvalidRequest)
+        );
+        binding.languages[1].auto_detect = true;
+        assert!(binding.validate_language(None).is_ok());
+
+        let (manifest, selection) = selected(PackTask::Vad);
+        let vad_binding = TaskPackBinding::from_selection(
+            VoiceTask::VoiceActivityDetection,
+            &manifest,
+            &selection,
+        )
+        .expect("vad binding");
+        assert!(vad_binding.validate_language(None).is_ok());
     }
 
     #[test]
@@ -1637,15 +1815,15 @@ mod tests {
 
     #[test]
     fn vad_config_enforces_sherpa_shape_and_canonical_audio() {
-        let config = VadConfig::new(512, 0.5, 500, 250, 30_000, 60_000).expect("valid config");
-        assert_eq!(config.min_silence_samples(), Ok(8_000));
+        let config = VadConfig::default();
+        assert_eq!(config.min_silence_samples(), Ok(4_000));
         assert_eq!(config.min_speech_samples(), Ok(4_000));
-        assert_eq!(config.max_speech_samples(), Ok(480_000));
-        assert_eq!(config.buffer_samples(), Ok(960_000));
+        assert_eq!(config.max_speech_samples(), Ok(160_000));
+        assert_eq!(config.buffer_samples(), Ok(480_000));
         assert_eq!(config.sample_rate_hz(), VAD_SAMPLE_RATE_HZ);
         assert_eq!(config.channels(), MONO_CHANNELS);
-        assert_eq!(config.window_size_samples(), 512);
-        assert_eq!(config.threshold(), 0.5);
+        assert_eq!(config.window_size_samples(), VAD_WINDOW_SIZE_SAMPLES);
+        assert_eq!(config.threshold(), VAD_DEFAULT_THRESHOLD);
 
         assert_eq!(
             VadConfig::new(0, 0.5, 500, 250, 30_000, 60_000),
@@ -1676,40 +1854,52 @@ mod tests {
             VadConfig::new(512, 0.5, 500, 250, 30_000, 20_000),
             Err(EngineError::InvalidRequest)
         );
+        assert!(VadConfig::new(512, 0.5, 500, 250, 30_000, 30_000).is_ok());
+        assert_eq!(
+            VadConfig::new(
+                512,
+                0.5,
+                500,
+                250,
+                VAD_MAX_DURATION_MS + 1,
+                VAD_MAX_DURATION_MS + 1
+            ),
+            Err(EngineError::InvalidRequest)
+        );
     }
 
     #[test]
     fn vad_samples_validate_exact_windows_and_end_tails() {
-        let config = VadConfig::new(4, 0.5, 500, 250, 30_000, 60_000).expect("valid config");
-        assert!(config
-            .validate_frame_samples(&[-1.0, -0.25, 0.25, 1.0])
-            .is_ok());
+        let config = VadConfig::default();
+        let exact = vec![0.0; VAD_WINDOW_SIZE_SAMPLES];
+        assert!(config.validate_frame_samples(&exact).is_ok());
         assert_eq!(
             config.validate_frame_samples(&[-1.0, 0.0]),
             Err(EngineError::InvalidRequest)
         );
         assert_eq!(
-            config.validate_frame_samples(&[-1.1, 0.0, 0.0, 0.0]),
+            config.validate_frame_samples(&vec![1.1; VAD_WINDOW_SIZE_SAMPLES]),
             Err(EngineError::InvalidRequest)
         );
         assert_eq!(
-            config.validate_frame_samples(&[f32::INFINITY, 0.0, 0.0, 0.0]),
+            config.validate_frame_samples(&vec![f32::INFINITY; VAD_WINDOW_SIZE_SAMPLES]),
             Err(EngineError::InvalidRequest)
         );
-        assert!(StreamingAudioFrame::new(
-            1,
-            VAD_SAMPLE_RATE_HZ,
-            MONO_CHANNELS,
-            &[0.0, 0.0, 0.0, 0.0],
-            false
-        )
-        .is_ok());
+        assert!(
+            StreamingAudioFrame::new(1, VAD_SAMPLE_RATE_HZ, MONO_CHANNELS, &exact, false).is_ok()
+        );
         assert_eq!(
             StreamingAudioFrame::new(1, 8_000, MONO_CHANNELS, &[0.0, 0.0], false).map(|_| ()),
             Err(EngineError::InvalidRequest)
         );
         assert_eq!(
             StreamingAudioFrame::new(1, VAD_SAMPLE_RATE_HZ, 2, &[0.0, 0.0], false).map(|_| ()),
+            Err(EngineError::InvalidRequest)
+        );
+        let too_long = vec![0.0; MAX_STREAMING_FRAME_SAMPLES + 1];
+        assert_eq!(
+            StreamingAudioFrame::new(1, VAD_SAMPLE_RATE_HZ, MONO_CHANNELS, &too_long, false)
+                .map(|_| ()),
             Err(EngineError::InvalidRequest)
         );
         assert_eq!(
@@ -1720,8 +1910,9 @@ mod tests {
             StreamingAudioFrame::end_tail(2, VAD_SAMPLE_RATE_HZ, MONO_CHANNELS, &[0.0, 0.0], false)
                 .expect("valid tail");
         assert!(tail.is_end_tail());
+        assert!(config.validate_end_tail_samples(&[0.0, 0.0]).is_ok());
         assert_eq!(
-            config.validate_end_tail_samples(&[0.0, 0.0, 0.0, 0.0, 0.0]),
+            config.validate_end_tail_samples(&vec![0.0; VAD_WINDOW_SIZE_SAMPLES + 1]),
             Err(EngineError::InvalidRequest)
         );
     }
@@ -1767,10 +1958,16 @@ mod tests {
 
     #[test]
     fn backend_neutral_configs_validate_without_provider_identifiers() {
-        assert!(KwsConfig::new(["wake.main"], "phrases:v1", 0.5, 0, 4)
-            .expect("valid config")
-            .validate()
-            .is_ok());
+        let (kws_manifest, kws_selection) = selected(PackTask::Kws);
+        let kws_binding = TaskPackBinding::from_selection(
+            VoiceTask::KeywordSpotting,
+            &kws_manifest,
+            &kws_selection,
+        )
+        .expect("kws binding");
+        let kws_config =
+            KwsConfig::new(["wake.main"], "phrases:v1", 0.5, 0, 4).expect("valid config");
+        assert!(kws_config.validate_binding(&kws_binding).is_ok());
         assert_eq!(
             KwsConfig::new(["wake.main"], "phrases:v1", 0.5, 0, 0),
             Err(EngineError::InvalidRequest)
@@ -1779,16 +1976,59 @@ mod tests {
             KwsConfig::new(["/tmp/model"], "phrases:v1", 0.5, 0, 4),
             Err(EngineError::InvalidRequest)
         );
+        assert_eq!(
+            KwsConfig::new(["wake.main", "wake.main"], "phrases:v1", 0.5, 0, 4),
+            Err(EngineError::InvalidRequest)
+        );
+        let too_many_phrases = (0..=MAX_KWS_PHRASES).map(|index| format!("wake.{index}"));
+        assert_eq!(
+            KwsConfig::new(too_many_phrases, "phrases:v1", 0.5, 0, 4),
+            Err(EngineError::InvalidRequest)
+        );
 
-        assert!(StreamingSttConfig::new(Some("en-US"), true, true).is_ok());
+        let (stt_manifest, stt_selection) = selected(PackTask::Stt);
+        let stt_binding =
+            TaskPackBinding::from_selection(VoiceTask::SpeechToText, &stt_manifest, &stt_selection)
+                .expect("stt binding");
+        assert!(StreamingSttConfig::new(Some("en-US"), true, true)
+            .expect("valid stt")
+            .validate_binding(&stt_binding)
+            .is_ok());
         assert_eq!(
             StreamingSttConfig::new(Some("/tmp/model"), true, true),
             Err(EngineError::InvalidRequest)
         );
 
+        let (tts_manifest, tts_selection) = selected(PackTask::Tts);
+        let tts_binding =
+            TaskPackBinding::from_selection(VoiceTask::TextToSpeech, &tts_manifest, &tts_selection)
+                .expect("tts binding");
+        let tts_config = TtsSynthesisConfig::new(
+            "voice.default",
+            "voice-state-a",
+            VAD_SAMPLE_RATE_HZ,
+            1024,
+            None,
+        )
+        .expect("valid tts");
+        assert!(tts_config.validate_binding(&tts_binding).is_ok());
         assert!(TtsSynthesisConfig::default().validate().is_ok());
         assert_eq!(
             TtsSynthesisConfig::new("/tmp/voice", "state:v1", VAD_SAMPLE_RATE_HZ, 1024, None),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            TtsSynthesisConfig::new("voice.default", "voice-state-a", 7_999, 1024, None),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            TtsSynthesisConfig::new(
+                "voice.default",
+                "voice-state-a",
+                VAD_SAMPLE_RATE_HZ,
+                TTS_MAX_CHUNK_SAMPLES + 1,
+                None,
+            ),
             Err(EngineError::InvalidRequest)
         );
     }
