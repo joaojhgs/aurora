@@ -4,8 +4,8 @@ use std::os::raw::{c_char, c_float, c_int};
 use std::ptr::NonNull;
 
 use super::{
-    path_bytes, pcm_len_i32, validate_native_segment_parts, SegmentBounds, SileroVadConfig,
-    SpeechSegment, VadError,
+    path_bytes, pcm_len_i32, preflight_existing_readable_file, validate_native_segment_parts,
+    SegmentBounds, SileroVadConfig, SpeechSegment, VadError,
 };
 
 #[repr(C)]
@@ -77,6 +77,7 @@ pub(crate) struct Detector {
 
 impl Detector {
     pub(crate) fn new(config: &SileroVadConfig) -> Result<Self, VadError> {
+        preflight_existing_readable_file(config.model_path())?;
         let model = CString::new(path_bytes(config.model_path())?).map_err(|_| {
             VadError::InvalidConfig {
                 code: super::ErrorCode::ConfigModelPathNul,

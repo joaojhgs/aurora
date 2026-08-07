@@ -1,10 +1,15 @@
-//! Safe containment for the pinned sherpa-onnx v1.13.4 Silero VAD C ABI.
+//! Safe containment for pinned sherpa-onnx v1.13.4 native speech C ABIs.
 //!
 //! The crate intentionally exposes only a small RAII API. Raw C layouts and all
 //! unsafe calls remain private to the native implementation module.
 
 use std::error::Error;
 use std::fmt;
+#[cfg(any(
+    all(feature = "native-vad", not(target_arch = "wasm32")),
+    all(feature = "native-kws", not(target_arch = "wasm32"))
+))]
+use std::fs;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -62,6 +67,61 @@ mod native {
     }
 }
 
+#[cfg(all(feature = "native-kws", not(target_arch = "wasm32")))]
+mod native_kws;
+
+#[cfg(not(all(feature = "native-kws", not(target_arch = "wasm32"))))]
+mod native_kws {
+    use super::{KeywordResult, KeywordSpotterConfig, VadError};
+
+    pub(crate) struct Spotter;
+    pub(crate) struct Stream;
+
+    impl std::fmt::Debug for Spotter {
+        fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter
+                .debug_struct("KeywordSpotter")
+                .field("native", &"unavailable")
+                .finish()
+        }
+    }
+
+    impl Spotter {
+        pub(crate) fn new(_config: &KeywordSpotterConfig) -> Result<Self, VadError> {
+            Err(VadError::NativeUnavailable)
+        }
+
+        pub(crate) fn create_stream(&self) -> Result<Stream, VadError> {
+            Err(VadError::NativeUnavailable)
+        }
+
+        pub(crate) fn accept_waveform(
+            &self,
+            _stream: &mut Stream,
+            _sample_rate: i32,
+            _pcm: &[f32],
+        ) -> Result<(), VadError> {
+            Err(VadError::NativeUnavailable)
+        }
+
+        pub(crate) fn input_finished(&self, _stream: &mut Stream) -> Result<(), VadError> {
+            Err(VadError::NativeUnavailable)
+        }
+
+        pub(crate) fn reset(&self, _stream: &mut Stream) -> Result<(), VadError> {
+            Err(VadError::NativeUnavailable)
+        }
+
+        pub(crate) fn decode_ready(
+            &self,
+            _stream: &mut Stream,
+            _max_decode_steps: usize,
+        ) -> Result<Vec<KeywordResult>, VadError> {
+            Err(VadError::NativeUnavailable)
+        }
+    }
+}
+
 pub const SHERPA_ONNX_VERSION: &str = "1.13.4";
 
 const DEFAULT_THRESHOLD: f32 = 0.5;
@@ -81,6 +141,20 @@ const MAX_NUM_THREADS: i32 = 16;
 const MAX_WINDOW_SIZE: i32 = 8_192;
 const MAX_NATIVE_SEGMENTS: usize = 4096;
 const MAX_NATIVE_SEGMENT_SAMPLES: usize = 14_400_000;
+const DEFAULT_KWS_FEATURE_DIM: i32 = 80;
+const DEFAULT_KWS_MAX_ACTIVE_PATHS: i32 = 4;
+const DEFAULT_KWS_NUM_TRAILING_BLANKS: i32 = 1;
+const DEFAULT_KWS_SCORE: f32 = 3.0;
+const DEFAULT_KWS_THRESHOLD: f32 = 0.1;
+const DEFAULT_KWS_MAX_DECODE_STEPS: usize = 4096;
+const MAX_KWS_CHUNK_SAMPLES: i32 = 16_000;
+const MAX_KWS_KEYWORDS_BYTES: usize = 4096;
+#[cfg(all(feature = "native-kws", not(target_arch = "wasm32")))]
+const MAX_KWS_RESULT_STRING_BYTES: usize = 4096;
+#[cfg(all(feature = "native-kws", not(target_arch = "wasm32")))]
+const MAX_KWS_RESULT_JSON_BYTES: usize = 8192;
+#[cfg(all(feature = "native-kws", not(target_arch = "wasm32")))]
+const MAX_KWS_RESULT_TOKENS: usize = 128;
 
 #[derive(Clone)]
 pub struct SileroVadConfig {
@@ -307,6 +381,338 @@ pub struct SpeechSegment {
     pub samples: Vec<f32>,
 }
 
+#[derive(Clone)]
+pub struct KeywordSpotterConfig {
+    encoder_path: PathBuf,
+    decoder_path: PathBuf,
+    joiner_path: PathBuf,
+    tokens_path: PathBuf,
+    keywords: String,
+    sample_rate: i32,
+    feature_dim: i32,
+    num_threads: i32,
+    provider: String,
+    max_active_paths: i32,
+    num_trailing_blanks: i32,
+    keywords_score: f32,
+    keywords_threshold: f32,
+    max_decode_steps: usize,
+}
+
+impl KeywordSpotterConfig {
+    pub fn new(
+        encoder_path: impl Into<PathBuf>,
+        decoder_path: impl Into<PathBuf>,
+        joiner_path: impl Into<PathBuf>,
+        tokens_path: impl Into<PathBuf>,
+        keywords: impl Into<String>,
+    ) -> Self {
+        Self {
+            encoder_path: encoder_path.into(),
+            decoder_path: decoder_path.into(),
+            joiner_path: joiner_path.into(),
+            tokens_path: tokens_path.into(),
+            keywords: keywords.into(),
+            sample_rate: DEFAULT_SAMPLE_RATE,
+            feature_dim: DEFAULT_KWS_FEATURE_DIM,
+            num_threads: DEFAULT_NUM_THREADS,
+            provider: DEFAULT_PROVIDER.to_owned(),
+            max_active_paths: DEFAULT_KWS_MAX_ACTIVE_PATHS,
+            num_trailing_blanks: DEFAULT_KWS_NUM_TRAILING_BLANKS,
+            keywords_score: DEFAULT_KWS_SCORE,
+            keywords_threshold: DEFAULT_KWS_THRESHOLD,
+            max_decode_steps: DEFAULT_KWS_MAX_DECODE_STEPS,
+        }
+    }
+
+    pub fn encoder_path(&self) -> &Path {
+        &self.encoder_path
+    }
+
+    pub fn decoder_path(&self) -> &Path {
+        &self.decoder_path
+    }
+
+    pub fn joiner_path(&self) -> &Path {
+        &self.joiner_path
+    }
+
+    pub fn tokens_path(&self) -> &Path {
+        &self.tokens_path
+    }
+
+    pub fn keywords(&self) -> &str {
+        &self.keywords
+    }
+
+    pub fn sample_rate(&self) -> i32 {
+        self.sample_rate
+    }
+
+    pub fn feature_dim(&self) -> i32 {
+        self.feature_dim
+    }
+
+    pub fn num_threads(&self) -> i32 {
+        self.num_threads
+    }
+
+    pub fn provider(&self) -> &str {
+        &self.provider
+    }
+
+    pub fn max_active_paths(&self) -> i32 {
+        self.max_active_paths
+    }
+
+    pub fn num_trailing_blanks(&self) -> i32 {
+        self.num_trailing_blanks
+    }
+
+    pub fn keywords_score(&self) -> f32 {
+        self.keywords_score
+    }
+
+    pub fn keywords_threshold(&self) -> f32 {
+        self.keywords_threshold
+    }
+
+    pub fn max_decode_steps(&self) -> usize {
+        self.max_decode_steps
+    }
+
+    pub fn with_sample_rate(mut self, sample_rate: i32) -> Self {
+        self.sample_rate = sample_rate;
+        self
+    }
+
+    pub fn with_feature_dim(mut self, feature_dim: i32) -> Self {
+        self.feature_dim = feature_dim;
+        self
+    }
+
+    pub fn with_num_threads(mut self, num_threads: i32) -> Self {
+        self.num_threads = num_threads;
+        self
+    }
+
+    pub fn with_provider(mut self, provider: impl Into<String>) -> Self {
+        self.provider = provider.into();
+        self
+    }
+
+    pub fn with_keywords_score(mut self, score: f32) -> Self {
+        self.keywords_score = score;
+        self
+    }
+
+    pub fn with_keywords_threshold(mut self, threshold: f32) -> Self {
+        self.keywords_threshold = threshold;
+        self
+    }
+
+    pub fn with_max_decode_steps(mut self, steps: usize) -> Self {
+        self.max_decode_steps = steps;
+        self
+    }
+
+    pub fn validate(&self) -> Result<(), VadError> {
+        for path in [
+            &self.encoder_path,
+            &self.decoder_path,
+            &self.joiner_path,
+            &self.tokens_path,
+        ] {
+            validate_path_syntax(path)?;
+        }
+        if self.keywords.is_empty() {
+            return Err(VadError::InvalidConfig {
+                code: ErrorCode::ConfigKeywordsEmpty,
+            });
+        }
+        if self.keywords.as_bytes().contains(&0) {
+            return Err(VadError::InvalidConfig {
+                code: ErrorCode::ConfigKeywordsNul,
+            });
+        }
+        if self.keywords.len() > MAX_KWS_KEYWORDS_BYTES {
+            return Err(VadError::InvalidConfig {
+                code: ErrorCode::ConfigKeywordsTooLong,
+            });
+        }
+        if !(MIN_SAMPLE_RATE..=MAX_SAMPLE_RATE).contains(&self.sample_rate) {
+            return Err(VadError::InvalidConfig {
+                code: ErrorCode::ConfigSampleRateRange,
+            });
+        }
+        if !(1..=256).contains(&self.feature_dim) {
+            return Err(VadError::InvalidConfig {
+                code: ErrorCode::ConfigFeatureDimRange,
+            });
+        }
+        if !(1..=MAX_NUM_THREADS).contains(&self.num_threads) {
+            return Err(VadError::InvalidConfig {
+                code: ErrorCode::ConfigNumThreadsRange,
+            });
+        }
+        validate_provider(&self.provider)?;
+        if !(1..=128).contains(&self.max_active_paths) {
+            return Err(VadError::InvalidConfig {
+                code: ErrorCode::ConfigMaxActivePathsRange,
+            });
+        }
+        if !(0..=16).contains(&self.num_trailing_blanks) {
+            return Err(VadError::InvalidConfig {
+                code: ErrorCode::ConfigNumTrailingBlanksRange,
+            });
+        }
+        validate_positive_score(self.keywords_score, ErrorCode::ConfigKeywordsScoreRange)?;
+        validate_threshold(self.keywords_threshold)?;
+        if self.max_decode_steps == 0 || self.max_decode_steps > DEFAULT_KWS_MAX_DECODE_STEPS {
+            return Err(VadError::InvalidConfig {
+                code: ErrorCode::ConfigMaxDecodeStepsRange,
+            });
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Debug for KeywordSpotterConfig {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("KeywordSpotterConfig")
+            .field("encoder_path", &"<redacted>")
+            .field("decoder_path", &"<redacted>")
+            .field("joiner_path", &"<redacted>")
+            .field("tokens_path", &"<redacted>")
+            .field("keywords", &"<redacted>")
+            .field("sample_rate", &self.sample_rate)
+            .field("feature_dim", &self.feature_dim)
+            .field("num_threads", &self.num_threads)
+            .field("provider", &"<redacted>")
+            .field("max_active_paths", &self.max_active_paths)
+            .field("num_trailing_blanks", &self.num_trailing_blanks)
+            .field("keywords_score", &self.keywords_score)
+            .field("keywords_threshold", &self.keywords_threshold)
+            .field("max_decode_steps", &self.max_decode_steps)
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub struct KeywordResult {
+    pub keyword: String,
+    pub tokens: Vec<String>,
+    pub timestamps: Vec<f32>,
+    pub start_time: f32,
+    pub json: String,
+}
+
+impl fmt::Debug for KeywordResult {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("KeywordResult")
+            .field("keyword", &self.keyword)
+            .field("token_count", &self.tokens.len())
+            .field("timestamps", &"<redacted>")
+            .field("start_time", &self.start_time)
+            .field("json", &"<redacted>")
+            .finish()
+    }
+}
+
+pub struct KeywordSpotter {
+    inner: native_kws::Spotter,
+    max_decode_steps: usize,
+    _not_send_sync: PhantomData<Rc<()>>,
+}
+
+pub struct KeywordStream {
+    inner: native_kws::Stream,
+    input_finished: bool,
+    _not_send_sync: PhantomData<Rc<()>>,
+}
+
+impl fmt::Debug for KeywordSpotter {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("KeywordSpotter")
+            .field("inner", &"<redacted>")
+            .field("send_sync", &"!Send + !Sync")
+            .finish()
+    }
+}
+
+impl fmt::Debug for KeywordStream {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("KeywordStream")
+            .field("inner", &"<redacted>")
+            .field("input_finished", &self.input_finished)
+            .field("send_sync", &"!Send + !Sync")
+            .finish()
+    }
+}
+
+impl KeywordSpotter {
+    pub fn new(config: &KeywordSpotterConfig) -> Result<Self, VadError> {
+        config.validate()?;
+        Ok(Self {
+            inner: native_kws::Spotter::new(config)?,
+            max_decode_steps: config.max_decode_steps(),
+            _not_send_sync: PhantomData,
+        })
+    }
+
+    pub fn create_stream(&self) -> Result<KeywordStream, VadError> {
+        Ok(KeywordStream {
+            inner: self.inner.create_stream()?,
+            input_finished: false,
+            _not_send_sync: PhantomData,
+        })
+    }
+
+    pub fn accept_waveform(
+        &self,
+        stream: &mut KeywordStream,
+        sample_rate: i32,
+        pcm: &[f32],
+    ) -> Result<Vec<KeywordResult>, VadError> {
+        if stream.input_finished {
+            return Err(VadError::InvalidWaveform {
+                code: ErrorCode::WaveformInputFinished,
+            });
+        }
+        validate_kws_pcm(sample_rate, pcm)?;
+        self.inner
+            .accept_waveform(&mut stream.inner, sample_rate, pcm)?;
+        self.inner
+            .decode_ready(&mut stream.inner, self.max_decode_steps)
+    }
+
+    pub fn input_finished(
+        &self,
+        stream: &mut KeywordStream,
+    ) -> Result<Vec<KeywordResult>, VadError> {
+        if !stream.input_finished {
+            self.inner.input_finished(&mut stream.inner)?;
+            stream.input_finished = true;
+        }
+        self.inner
+            .decode_ready(&mut stream.inner, self.max_decode_steps)
+    }
+
+    pub fn reset(&self, stream: &mut KeywordStream) -> Result<(), VadError> {
+        self.inner.reset(&mut stream.inner)?;
+        stream.input_finished = false;
+        Ok(())
+    }
+
+    pub fn cancel(&self, stream: &mut KeywordStream) -> Result<(), VadError> {
+        self.reset(stream)
+    }
+}
+
 impl fmt::Debug for SpeechSegment {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -395,7 +801,9 @@ pub enum ErrorCode {
     ConfigModelPathEmpty,
     ConfigModelPathNul,
     ConfigModelPathEncoding,
+    ConfigModelPathUnavailable,
     ConfigThresholdRange,
+    ConfigFeatureDimRange,
     ConfigMinSilenceDurationRange,
     ConfigMinSpeechDurationRange,
     ConfigMaxSpeechDurationRange,
@@ -406,14 +814,29 @@ pub enum ErrorCode {
     ConfigProviderNul,
     ConfigBufferSizeSecondsRange,
     ConfigBufferSizeLessThanMaxSpeech,
+    ConfigKeywordsEmpty,
+    ConfigKeywordsNul,
+    ConfigKeywordsTooLong,
+    ConfigKeywordsScoreRange,
+    ConfigMaxActivePathsRange,
+    ConfigNumTrailingBlanksRange,
+    ConfigMaxDecodeStepsRange,
     WaveformEmpty,
     WaveformTooLong,
     WaveformChunkTooLong,
     WaveformQueuedSegmentUndrained,
+    WaveformInputFinished,
     WaveformNonFinite,
     WaveformOutOfRange,
     NativeUnavailable,
     NativeCreateFailed,
+    NativeStreamCreateFailed,
+    NativeKeywordResultNull,
+    NativeDecodeStepLimitExceeded,
+    NativeResultStringTooLong,
+    NativeResultTokenCountExceeded,
+    NativeResultTimestampCount,
+    NativeResultInvalidUtf8,
     NativeNullSegment,
     NativeSegmentCountExceeded,
     NativeInvalidSegmentStart,
@@ -429,7 +852,9 @@ impl ErrorCode {
             Self::ConfigModelPathEmpty => "config.model_path_empty",
             Self::ConfigModelPathNul => "config.model_path_nul",
             Self::ConfigModelPathEncoding => "config.model_path_encoding",
+            Self::ConfigModelPathUnavailable => "config.model_path_unavailable",
             Self::ConfigThresholdRange => "config.threshold_range",
+            Self::ConfigFeatureDimRange => "config.feature_dim_range",
             Self::ConfigMinSilenceDurationRange => "config.min_silence_duration_range",
             Self::ConfigMinSpeechDurationRange => "config.min_speech_duration_range",
             Self::ConfigMaxSpeechDurationRange => "config.max_speech_duration_range",
@@ -440,14 +865,29 @@ impl ErrorCode {
             Self::ConfigProviderNul => "config.provider_nul",
             Self::ConfigBufferSizeSecondsRange => "config.buffer_size_seconds_range",
             Self::ConfigBufferSizeLessThanMaxSpeech => "config.buffer_size_less_than_max_speech",
+            Self::ConfigKeywordsEmpty => "config.keywords_empty",
+            Self::ConfigKeywordsNul => "config.keywords_nul",
+            Self::ConfigKeywordsTooLong => "config.keywords_too_long",
+            Self::ConfigKeywordsScoreRange => "config.keywords_score_range",
+            Self::ConfigMaxActivePathsRange => "config.max_active_paths_range",
+            Self::ConfigNumTrailingBlanksRange => "config.num_trailing_blanks_range",
+            Self::ConfigMaxDecodeStepsRange => "config.max_decode_steps_range",
             Self::WaveformEmpty => "waveform.empty",
             Self::WaveformTooLong => "waveform.too_long",
             Self::WaveformChunkTooLong => "waveform.chunk_too_long",
             Self::WaveformQueuedSegmentUndrained => "waveform.queued_segment_undrained",
+            Self::WaveformInputFinished => "waveform.input_finished",
             Self::WaveformNonFinite => "waveform.nonfinite",
             Self::WaveformOutOfRange => "waveform.out_of_range",
             Self::NativeUnavailable => "native.unavailable",
             Self::NativeCreateFailed => "native.create_failed",
+            Self::NativeStreamCreateFailed => "native.stream_create_failed",
+            Self::NativeKeywordResultNull => "native.keyword_result_null",
+            Self::NativeDecodeStepLimitExceeded => "native.decode_step_limit_exceeded",
+            Self::NativeResultStringTooLong => "native.result_string_too_long",
+            Self::NativeResultTokenCountExceeded => "native.result_token_count_exceeded",
+            Self::NativeResultTimestampCount => "native.result_timestamp_count",
+            Self::NativeResultInvalidUtf8 => "native.result_invalid_utf8",
             Self::NativeNullSegment => "native.null_segment",
             Self::NativeSegmentCountExceeded => "native.segment_count_exceeded",
             Self::NativeInvalidSegmentStart => "native.invalid_segment_start",
@@ -471,6 +911,13 @@ pub enum VadError {
     InvalidWaveform { code: ErrorCode },
     NativeUnavailable,
     NativeCreateFailed,
+    NativeStreamCreateFailed,
+    NativeKeywordResultNull,
+    NativeDecodeStepLimitExceeded,
+    NativeResultStringTooLong,
+    NativeResultTokenCountExceeded,
+    NativeResultTimestampCount,
+    NativeResultInvalidUtf8,
     NativeNullSegment,
     NativeSegmentCountExceeded,
     NativeInvalidSegmentStart,
@@ -486,6 +933,13 @@ impl VadError {
             Self::InvalidConfig { code } | Self::InvalidWaveform { code } => *code,
             Self::NativeUnavailable => ErrorCode::NativeUnavailable,
             Self::NativeCreateFailed => ErrorCode::NativeCreateFailed,
+            Self::NativeStreamCreateFailed => ErrorCode::NativeStreamCreateFailed,
+            Self::NativeKeywordResultNull => ErrorCode::NativeKeywordResultNull,
+            Self::NativeDecodeStepLimitExceeded => ErrorCode::NativeDecodeStepLimitExceeded,
+            Self::NativeResultStringTooLong => ErrorCode::NativeResultStringTooLong,
+            Self::NativeResultTokenCountExceeded => ErrorCode::NativeResultTokenCountExceeded,
+            Self::NativeResultTimestampCount => ErrorCode::NativeResultTimestampCount,
+            Self::NativeResultInvalidUtf8 => ErrorCode::NativeResultInvalidUtf8,
             Self::NativeNullSegment => ErrorCode::NativeNullSegment,
             Self::NativeSegmentCountExceeded => ErrorCode::NativeSegmentCountExceeded,
             Self::NativeInvalidSegmentStart => ErrorCode::NativeInvalidSegmentStart,
@@ -515,12 +969,69 @@ fn validate_threshold(value: f32) -> Result<(), VadError> {
     }
 }
 
+fn validate_positive_score(value: f32, code: ErrorCode) -> Result<(), VadError> {
+    if value.is_finite() && (0.0..=10.0).contains(&value) {
+        Ok(())
+    } else {
+        Err(VadError::InvalidConfig { code })
+    }
+}
+
 fn validate_positive_finite(value: f32, code: ErrorCode) -> Result<(), VadError> {
     if value.is_finite() && (MIN_DURATION_SECONDS..=MAX_DURATION_SECONDS).contains(&value) {
         Ok(())
     } else {
         Err(VadError::InvalidConfig { code })
     }
+}
+
+fn validate_provider(provider: &str) -> Result<(), VadError> {
+    if provider.is_empty() {
+        return Err(VadError::InvalidConfig {
+            code: ErrorCode::ConfigProviderEmpty,
+        });
+    }
+    if provider.as_bytes().contains(&0) {
+        return Err(VadError::InvalidConfig {
+            code: ErrorCode::ConfigProviderNul,
+        });
+    }
+    Ok(())
+}
+
+fn validate_path_syntax(path: &Path) -> Result<(), VadError> {
+    if path.as_os_str().is_empty() {
+        return Err(VadError::InvalidConfig {
+            code: ErrorCode::ConfigModelPathEmpty,
+        });
+    }
+    let value = path_bytes(path)?;
+    if value.contains(&0) {
+        return Err(VadError::InvalidConfig {
+            code: ErrorCode::ConfigModelPathNul,
+        });
+    }
+    Ok(())
+}
+
+#[cfg(any(
+    all(feature = "native-vad", not(target_arch = "wasm32")),
+    all(feature = "native-kws", not(target_arch = "wasm32"))
+))]
+pub(crate) fn preflight_existing_readable_file(path: &Path) -> Result<(), VadError> {
+    validate_path_syntax(path)?;
+    let metadata = fs::metadata(path).map_err(|_| VadError::InvalidConfig {
+        code: ErrorCode::ConfigModelPathUnavailable,
+    })?;
+    if !metadata.is_file() {
+        return Err(VadError::InvalidConfig {
+            code: ErrorCode::ConfigModelPathUnavailable,
+        });
+    }
+    fs::File::open(path).map_err(|_| VadError::InvalidConfig {
+        code: ErrorCode::ConfigModelPathUnavailable,
+    })?;
+    Ok(())
 }
 
 pub fn validate_pcm(pcm: &[f32], max_accept_samples: i32) -> Result<(), VadError> {
@@ -543,6 +1054,15 @@ pub fn validate_pcm(pcm: &[f32], max_accept_samples: i32) -> Result<(), VadError
         }
     }
     Ok(())
+}
+
+pub fn validate_kws_pcm(sample_rate: i32, pcm: &[f32]) -> Result<(), VadError> {
+    if !(MIN_SAMPLE_RATE..=MAX_SAMPLE_RATE).contains(&sample_rate) {
+        return Err(VadError::InvalidConfig {
+            code: ErrorCode::ConfigSampleRateRange,
+        });
+    }
+    validate_pcm(pcm, MAX_KWS_CHUNK_SAMPLES)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -673,6 +1193,14 @@ mod tests {
     fn debug_output_redacts_sensitive_config_and_pcm() {
         let config =
             SileroVadConfig::new("/tmp/private-user-token/silero-vad.onnx").with_provider("cuda");
+        let kws_config = KeywordSpotterConfig::new(
+            "/tmp/private-user-token/encoder.onnx",
+            "/tmp/private-user-token/decoder.onnx",
+            "/tmp/private-user-token/joiner.onnx",
+            "/tmp/private-user-token/tokens.txt",
+            "secret keyword",
+        )
+        .with_provider("cuda");
         let segment = SpeechSegment {
             start: 5728,
             samples: vec![0.1, -0.2, 0.3],
@@ -681,6 +1209,7 @@ mod tests {
             .expect_err("default build should not create native detector");
 
         let config_debug = format!("{config:?}");
+        let kws_config_debug = format!("{kws_config:?}");
         let segment_debug = format!("{segment:?}");
         let detector_error_debug = format!("{detector_error:?}");
 
@@ -688,6 +1217,11 @@ mod tests {
         assert!(config_debug.contains("provider: \"<redacted>\""));
         assert!(!config_debug.contains("private-user-token"));
         assert!(!config_debug.contains("cuda"));
+        assert!(kws_config_debug.contains("encoder_path: \"<redacted>\""));
+        assert!(kws_config_debug.contains("keywords: \"<redacted>\""));
+        assert!(!kws_config_debug.contains("private-user-token"));
+        assert!(!kws_config_debug.contains("secret keyword"));
+        assert!(!kws_config_debug.contains("cuda"));
         assert!(segment_debug.contains("sample_count: 3"));
         assert!(segment_debug.contains("samples: \"<redacted>\""));
         assert!(!segment_debug.contains("0.1"));
@@ -804,6 +1338,42 @@ mod tests {
     }
 
     #[test]
+    fn kws_config_validation_uses_stable_redacted_codes() {
+        let valid = KeywordSpotterConfig::new(
+            "encoder.onnx",
+            "decoder.onnx",
+            "joiner.onnx",
+            "tokens.txt",
+            "keyword",
+        );
+        assert!(valid.validate().is_ok());
+
+        let empty_keywords = KeywordSpotterConfig::new(
+            "encoder.onnx",
+            "decoder.onnx",
+            "joiner.onnx",
+            "tokens.txt",
+            "",
+        )
+        .validate()
+        .expect_err("empty keyword buffer should fail");
+        assert_eq!(empty_keywords.code(), ErrorCode::ConfigKeywordsEmpty);
+
+        let invalid_score = KeywordSpotterConfig::new(
+            "encoder.onnx",
+            "decoder.onnx",
+            "joiner.onnx",
+            "tokens.txt",
+            "keyword",
+        )
+        .with_keywords_score(f32::NAN)
+        .validate()
+        .expect_err("nan keyword score should fail");
+        assert_eq!(invalid_score.code(), ErrorCode::ConfigKeywordsScoreRange);
+        assert!(!invalid_score.to_string().contains("encoder.onnx"));
+    }
+
+    #[test]
     fn native_segment_validation_rejects_invalid_bounds_and_samples() {
         let derived_bounds = SegmentBounds::from_config(
             &SileroVadConfig::new("silero-vad.onnx")
@@ -852,6 +1422,7 @@ mod tests {
         assert_eq!(bounds.max_segments(), 2);
     }
 
+    #[cfg(not(any(feature = "native-vad", feature = "native-kws")))]
     #[test]
     fn default_build_does_not_link_native_vad() {
         let config = SileroVadConfig::new("silero-vad.onnx");

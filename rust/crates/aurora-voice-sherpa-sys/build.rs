@@ -5,7 +5,8 @@ fn main() {
     println!("cargo:rerun-if-env-changed=AURORA_SHERPA_ONNX_LIB_DIR");
     println!("cargo:rerun-if-env-changed=AURORA_SHERPA_ONNX_LINK_KIND");
 
-    let native_enabled = env::var_os("CARGO_FEATURE_NATIVE_VAD").is_some();
+    let native_enabled = env::var_os("CARGO_FEATURE_NATIVE_VAD").is_some()
+        || env::var_os("CARGO_FEATURE_NATIVE_KWS").is_some();
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
     if !native_enabled || target_arch == "wasm32" {
         return;
@@ -15,7 +16,7 @@ fn main() {
     let lib_dir = env::var_os("AURORA_SHERPA_ONNX_LIB_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
-            panic!("AURORA_SHERPA_ONNX_LIB_DIR is required when enabling the native-vad feature")
+            panic!("AURORA_SHERPA_ONNX_LIB_DIR is required when enabling a native sherpa feature")
         });
 
     if !lib_dir.is_dir() {

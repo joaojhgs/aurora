@@ -8,6 +8,7 @@ description = "Safe containment for pinned sherpa-onnx Silero VAD C ABI"
 
 [features]
 default = []
+native-kws = []
 native-vad = []
 
 [dependencies]

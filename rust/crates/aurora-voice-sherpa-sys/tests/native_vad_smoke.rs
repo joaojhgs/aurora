@@ -2,6 +2,9 @@
 
 use std::env;
 use std::fs;
+use std::io::Read;
+use std::os::fd::FromRawFd;
+use std::os::raw::c_int;
 use std::path::{Path, PathBuf};
 
 use aurora_voice_sherpa_sys::{ErrorCode, SileroVadConfig, SpeechSegment, VoiceActivityDetector};
@@ -174,6 +177,23 @@ fn malformed_accept_does_not_silently_clear_queued_segment() {
     );
 }
 
+#[test]
+fn missing_model_path_is_rejected_before_sherpa_logs_path() {
+    let missing = PathBuf::from("/tmp/private-user-token/missing-silero-vad.onnx");
+    let config = phase4_config(missing).with_debug(true);
+
+    let (error, stderr) = capture_stderr(|| {
+        VoiceActivityDetector::new(&config).expect_err("missing model should be preflighted")
+    });
+
+    assert_eq!(error.code(), ErrorCode::ConfigModelPathUnavailable);
+    assert!(
+        stderr.is_empty(),
+        "preflight should return before native sherpa logs"
+    );
+    assert!(!stderr.contains("private-user-token"));
+}
+
 fn phase4_config(model_path: PathBuf) -> SileroVadConfig {
     SileroVadConfig::new(model_path)
         .with_threshold(0.25)
@@ -312,4 +332,44 @@ struct WavFormat {
     channels: u16,
     sample_rate: u32,
     bits_per_sample: u16,
+}
+
+#[cfg(unix)]
+fn capture_stderr<T>(action: impl FnOnce() -> T) -> (T, String) {
+    unsafe extern "C" {
+        fn pipe(fds: *mut c_int) -> c_int;
+        fn dup(fd: c_int) -> c_int;
+        fn dup2(oldfd: c_int, newfd: c_int) -> c_int;
+        fn close(fd: c_int) -> c_int;
+    }
+
+    const STDERR_FILENO: c_int = 2;
+    let mut fds = [0; 2];
+    assert_eq!(unsafe { pipe(fds.as_mut_ptr()) }, 0, "pipe should open");
+    let saved = unsafe { dup(STDERR_FILENO) };
+    assert!(saved >= 0, "stderr dup should succeed");
+    assert_eq!(
+        unsafe { dup2(fds[1], STDERR_FILENO) },
+        STDERR_FILENO,
+        "stderr redirect should succeed"
+    );
+
+    let result = action();
+
+    assert_eq!(
+        unsafe { dup2(saved, STDERR_FILENO) },
+        STDERR_FILENO,
+        "stderr restore should succeed"
+    );
+    unsafe {
+        close(saved);
+        close(fds[1]);
+    }
+
+    let mut stderr = String::new();
+    let mut reader = unsafe { fs::File::from_raw_fd(fds[0]) };
+    reader
+        .read_to_string(&mut stderr)
+        .expect("captured stderr should be readable");
+    (result, stderr)
 }
