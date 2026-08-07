@@ -395,6 +395,30 @@ describe('AuroraBrowserModelStoreHost', () => {
     await expect(port.readBlob(corruptKey)).rejects.toMatchObject({ code: 'corrupt' })
   })
 
+  it('rejects IndexedDB promoted stats when internal chunks are missing or corrupt', async () => {
+    const missingIndexedDB = new FakeIndexedDb()
+    const missingHost = new AuroraBrowserModelStoreHost(
+      new IndexedDbBrowserModelStorePort({ indexedDB: missingIndexedDB.factory() })
+    )
+    await missingHost.appendStaging('pack@file', 0, new Uint8Array([1, 2]))
+    await missingHost.appendStaging('pack@file', 2, new Uint8Array([3]))
+    await missingHost.promoteStagingAtomic('pack@file')
+    const missingRecord = chunkedRecordForPromoted(missingIndexedDB)
+    missingIndexedDB.store('blobs').delete(missingRecord.chunks[0])
+    await expect(missingHost.promotedStat('pack@file')).rejects.toMatchObject({ code: 'evicted' })
+
+    const corruptIndexedDB = new FakeIndexedDb()
+    const corruptHost = new AuroraBrowserModelStoreHost(
+      new IndexedDbBrowserModelStorePort({ indexedDB: corruptIndexedDB.factory() })
+    )
+    await corruptHost.appendStaging('pack@file', 0, new Uint8Array([1, 2]))
+    await corruptHost.appendStaging('pack@file', 2, new Uint8Array([3]))
+    await corruptHost.promoteStagingAtomic('pack@file')
+    const corruptRecord = chunkedRecordForPromoted(corruptIndexedDB)
+    corruptIndexedDB.store('blobs').set(corruptRecord.chunks[0], new Blob([new Uint8Array([1])]))
+    await expect(corruptHost.promotedStat('pack@file')).rejects.toMatchObject({ code: 'corrupt' })
+  })
+
   it('returns exact chunk EOF semantics for staging and promoted data', async () => {
     const host = new AuroraBrowserModelStoreHost(new FakeBrowserPort())
     await host.appendStaging('pack@file', 0, new Uint8Array([1, 2, 3, 4]))
@@ -469,6 +493,18 @@ function fakeIndexedDb(): IDBFactory {
       throw new Error('not used by selection tests')
     }
   } as unknown as IDBFactory
+}
+
+function chunkedRecordForPromoted(indexedDB: FakeIndexedDb): { chunks: [string, ...string[]] } {
+  const record = [...indexedDB.store('blobs').entries()].find(
+    ([key, value]) =>
+      key.startsWith('aurora-staging-') &&
+      typeof value === 'object' &&
+      value !== null &&
+      (value as { kind?: unknown }).kind === 'aurora-chunked-v1'
+  )?.[1] as { chunks?: readonly string[] } | undefined
+  if (!record || !record.chunks?.[0]) throw new Error('missing chunked record')
+  return { chunks: [record.chunks[0], ...record.chunks.slice(1)] }
 }
 
 class FakeIndexedDb {

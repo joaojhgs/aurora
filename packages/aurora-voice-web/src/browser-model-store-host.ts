@@ -664,7 +664,7 @@ export class IndexedDbBrowserModelStorePort implements AuroraBrowserModelStorePo
     validatePhysicalKey(physicalKey)
     const value = await this.get(BLOB_STORE, physicalKey)
     if (value === undefined || value === null) return null
-    if (isIndexedDbChunkedBlobRecord(value)) return value.byteLength
+    if (isIndexedDbChunkedBlobRecord(value)) return this.statChunkedBlob(value)
     return byteLengthOfLegacyIndexedDbBlob(value)
   }
 
@@ -781,6 +781,18 @@ export class IndexedDbBrowserModelStorePort implements AuroraBrowserModelStorePo
     }
     if (offset !== record.byteLength) throw redactedError('corrupt')
     return output
+  }
+
+  private async statChunkedBlob(record: IndexedDbChunkedBlobRecord): Promise<number> {
+    let byteLength = 0
+    for (const chunkKey of record.chunks) {
+      const value = await this.get(BLOB_STORE, chunkKey)
+      if (value === undefined || value === null) throw redactedError('evicted')
+      if (!(value instanceof Uint8Array)) throw redactedError('corrupt')
+      byteLength = checkedAdd(byteLength, value.byteLength)
+    }
+    if (byteLength !== record.byteLength) throw redactedError('corrupt')
+    return byteLength
   }
 
   private async readChunkedRange(
