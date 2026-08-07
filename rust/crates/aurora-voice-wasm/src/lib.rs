@@ -588,6 +588,34 @@ impl AuroraVoiceWasmSessionCore {
         Ok(self.state.state())
     }
 
+    pub fn abandon_turn(
+        &mut self,
+        generation: u64,
+        at_micros: u64,
+    ) -> Result<VoiceState, WasmFacadeError> {
+        let generation = Generation(generation);
+        if generation != self.state.generation() {
+            return Err(WasmFacadeError::new("stale_generation"));
+        }
+        let at = TimestampMicros(at_micros);
+        match self.state.state() {
+            VoiceState::Dispatching | VoiceState::AwaitingResponse | VoiceState::Speaking => {
+                self.state
+                    .cancel(generation, self.last_route_revision, at)?;
+                self.state.transition(
+                    VoiceState::Idle,
+                    TransitionReason::Stop,
+                    generation,
+                    self.last_route_revision,
+                    at,
+                )?;
+            }
+            VoiceState::Idle => {}
+            _ => return Err(WasmFacadeError::new("invalid_state")),
+        }
+        Ok(self.state.state())
+    }
+
     pub fn snapshot(&self) -> Result<WasmRuntimeSnapshot, WasmFacadeError> {
         let (
             generation,
@@ -743,6 +771,18 @@ impl AuroraVoiceWasmRuntime {
             serde_wasm_bindgen::from_value(request).map_err(|_| js_error("request_shape"))?;
         self.core
             .complete_turn(
+                u64::from(request.generation),
+                js_safe_micros(request.at_micros).map_err(js_facade_error)?,
+            )
+            .map(|state| format!("{state:?}"))
+            .map_err(js_facade_error)
+    }
+
+    pub fn abandon_turn(&mut self, request: JsValue) -> Result<String, JsValue> {
+        let request: WasmGenerationRequest =
+            serde_wasm_bindgen::from_value(request).map_err(|_| js_error("request_shape"))?;
+        self.core
+            .abandon_turn(
                 u64::from(request.generation),
                 js_safe_micros(request.at_micros).map_err(js_facade_error)?,
             )
@@ -3335,6 +3375,132 @@ mod wasm_facade_tests {
             .expect("second start");
         assert!(second.generation > first.generation);
         assert_eq!(second.state, VoiceState::CapturingUtterance);
+    }
+
+    #[test]
+    fn abandon_turn_cancels_pending_turn_to_idle_and_allows_repeat_start() {
+        let mut runtime = runtime();
+        let first = start(&mut runtime);
+        runtime
+            .push_pcm_i16(frame(first.generation, 0, vec![1, 2]))
+            .expect("first frame");
+        runtime
+            .stop_session("session-1", u64::from(first.generation), 30)
+            .expect("first stop");
+        assert_eq!(
+            runtime
+                .abandon_turn(u64::from(first.generation), 31)
+                .expect("abandon"),
+            VoiceState::Idle
+        );
+        let transitions = runtime.state.transitions();
+        assert_eq!(
+            transitions[transitions.len() - 2].reason,
+            TransitionReason::Cancel
+        );
+        assert_eq!(transitions[transitions.len() - 2].to, VoiceState::Stopping);
+        assert_eq!(
+            transitions[transitions.len() - 1].reason,
+            TransitionReason::Stop
+        );
+        assert_eq!(transitions[transitions.len() - 1].to, VoiceState::Idle);
+        let second = runtime
+            .start_session(WasmSessionStart {
+                session_id: "session-2".to_owned(),
+                route_revision: 8,
+                at_micros: 32.0,
+            })
+            .expect("second start");
+        assert!(second.generation > first.generation);
+    }
+
+    #[test]
+    fn abandon_turn_rejects_stale_generation_and_redacts_error() {
+        let mut runtime = runtime();
+        let first = start(&mut runtime);
+        runtime
+            .push_pcm_i16(frame(first.generation, 0, vec![123, 456]))
+            .expect("frame");
+        runtime
+            .stop_session("session-1", u64::from(first.generation), 30)
+            .expect("stop");
+        let err = runtime
+            .abandon_turn(u64::from(first.generation + 1), 31)
+            .expect_err("stale abandon");
+        assert_eq!(err.code(), "stale_generation");
+        let rendered = format!("{err:?}");
+        assert!(!rendered.contains("123"));
+        assert!(!rendered.contains("456"));
+        assert_eq!(
+            runtime.snapshot().expect("snapshot").state,
+            VoiceState::Dispatching
+        );
+    }
+
+    #[test]
+    fn abandon_turn_is_idempotent_only_for_current_idle_generation() {
+        let mut runtime = runtime();
+        let first = start(&mut runtime);
+        runtime
+            .push_pcm_i16(frame(first.generation, 0, vec![1, 2]))
+            .expect("frame");
+        runtime
+            .stop_session("session-1", u64::from(first.generation), 30)
+            .expect("stop");
+        runtime
+            .abandon_turn(u64::from(first.generation), 31)
+            .expect("first abandon");
+        assert_eq!(
+            runtime
+                .abandon_turn(u64::from(first.generation), 32)
+                .expect("matching idle abandon"),
+            VoiceState::Idle
+        );
+        assert_eq!(
+            runtime
+                .abandon_turn(u64::from(first.generation + 1), 33)
+                .expect_err("stale idle abandon")
+                .code(),
+            "stale_generation"
+        );
+    }
+
+    #[test]
+    fn abandon_turn_accepts_current_epoch_microsecond_timestamps() {
+        let mut runtime = runtime();
+        let epoch_micros = 1_786_102_400_123_000.0;
+        let first = runtime
+            .start_session(WasmSessionStart {
+                session_id: "session-1".to_owned(),
+                route_revision: 7,
+                at_micros: epoch_micros,
+            })
+            .expect("start");
+        runtime
+            .push_pcm_i16(WasmPushFrame {
+                session_id: "session-1".to_owned(),
+                generation: first.generation,
+                sequence: 0,
+                timestamp_micros: epoch_micros + 1.0,
+                discontinuity: false,
+                sample_rate_hz: WASM_SAMPLE_RATE_HZ,
+                channels: WASM_CHANNELS,
+                samples: vec![1, 2],
+            })
+            .expect("frame");
+        runtime
+            .stop_session(
+                "session-1",
+                u64::from(first.generation),
+                epoch_micros as u64 + 2,
+            )
+            .expect("stop");
+        assert_eq!(
+            runtime
+                .abandon_turn(u64::from(first.generation), epoch_micros as u64 + 3)
+                .expect("abandon"),
+            VoiceState::Idle
+        );
     }
 
     #[test]

@@ -193,6 +193,86 @@ fn wasm_bindgen_runtime_rejects_stale_generation_and_redacts_error() {
     assert!(!snapshot_json.contains("5678"));
 }
 
+#[wasm_bindgen_test]
+fn wasm_bindgen_runtime_abandons_failed_turn_without_completion() {
+    let config = serde_wasm_bindgen::to_value(&WasmRuntimeConfig {
+        surface: "hosted-web".to_owned(),
+        max_frames: 4,
+        max_samples: 16_000,
+    })
+    .expect("config");
+    let mut runtime = AuroraVoiceWasmRuntime::new(config).expect("runtime");
+    let current_epoch_micros = 1_786_102_400_123_000.0;
+    let started: WasmStartedSession = serde_wasm_bindgen::from_value(
+        runtime
+            .start_session(
+                serde_wasm_bindgen::to_value(&WasmSessionStart {
+                    session_id: "session-1".to_owned(),
+                    route_revision: 3,
+                    at_micros: current_epoch_micros,
+                })
+                .expect("start request"),
+            )
+            .expect("start"),
+    )
+    .expect("started");
+    runtime
+        .push_pcm_i16(
+            serde_wasm_bindgen::to_value(&WasmPushFrame {
+                session_id: "session-1".to_owned(),
+                generation: started.generation,
+                sequence: 0,
+                timestamp_micros: current_epoch_micros + 1.0,
+                discontinuity: false,
+                sample_rate_hz: 16_000,
+                channels: 1,
+                samples: vec![1, 2],
+            })
+            .expect("frame"),
+        )
+        .expect("push");
+    let stopped: WasmStoppedSession = serde_wasm_bindgen::from_value(
+        runtime
+            .stop_session(
+                serde_wasm_bindgen::to_value(&WasmStopRequest {
+                    session_id: "session-1".to_owned(),
+                    generation: started.generation,
+                    at_micros: current_epoch_micros + 2.0,
+                })
+                .expect("stop request"),
+            )
+            .expect("stop"),
+    )
+    .expect("stopped");
+    assert_eq!(stopped.state, aurora_voice_core::VoiceState::Dispatching);
+    assert_eq!(
+        runtime
+            .abandon_turn(
+                serde_wasm_bindgen::to_value(&WasmGenerationRequest {
+                    generation: started.generation,
+                    at_micros: current_epoch_micros + 3.0,
+                })
+                .expect("abandon request"),
+            )
+            .expect("abandon"),
+        "Idle"
+    );
+    let second: WasmStartedSession = serde_wasm_bindgen::from_value(
+        runtime
+            .start_session(
+                serde_wasm_bindgen::to_value(&WasmSessionStart {
+                    session_id: "session-2".to_owned(),
+                    route_revision: 4,
+                    at_micros: current_epoch_micros + 4.0,
+                })
+                .expect("second start request"),
+            )
+            .expect("second start"),
+    )
+    .expect("second");
+    assert!(second.generation > started.generation);
+}
+
 #[wasm_bindgen_test(async)]
 async fn interrupted_install_resumes_from_staged_chunks() {
     let body = b"aurora-web-model".to_vec();
