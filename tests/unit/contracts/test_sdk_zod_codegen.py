@@ -139,10 +139,6 @@ def test_zod_codegen_rejects_unsafe_regex_refs_literals_numbers_and_unions() -> 
             "unsupported schema keyword 'uniqueItems'",
         ),
         (
-            {"type": "object", "minProperties": 1, "properties": {}},
-            "unsupported schema keyword 'minProperties'",
-        ),
-        (
             {"type": "object", "patternProperties": {"^x": {"type": "string"}}},
             "unsupported schema keyword 'patternProperties'",
         ),
@@ -395,10 +391,11 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     assert schema["tooling_provider_allowlist"] == (
         list(generate_backend_inventory.SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST)
     )
-    assert len(schema["allowlist"]) == 30
-    assert len(schema["schemas"]) == 61
-    assert len(schema["method_descriptors"]) == 30
-    assert len(schema["event_descriptors"]) == 1
+    assert len(schema["allowlist"]) == 32
+    assert len(schema["schemas"]) == 68
+    assert len(schema["method_descriptors"]) == 32
+    assert len(schema["event_descriptors"]) == 3
+    assert len(schema["envelope_descriptors"]) == 1
     assert len(provider["methods"]) == 4
     descriptors = {item["method_id"]: item for item in schema["method_descriptors"]}
     descriptor_ids = set(descriptors)
@@ -406,27 +403,50 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     assert "Gateway.ExplainRoute" in descriptor_ids
     assert "TTS.Synthesize" in descriptor_ids
     assert "STTCoordinator.Listen" in descriptor_ids
+    assert "Orchestrator.ExternalUserInput" in descriptor_ids
+    assert "Orchestrator.Interrupt" in descriptor_ids
+    assert "Aurora.EventStream" not in descriptor_ids
     assert all(not method_id.startswith("AudioSession.") for method_id in descriptor_ids)
     assert descriptors["TTS.CreateVoiceProfile"]["method_type"] == "manage"
     assert descriptors["TTS.CreateVoiceProfile"]["required_perms"] == ["TTS.manage"]
-    assert schema["event_descriptors"] == [
-        {
-            "event_topic": "TTS.AudioChunk",
-            "module": "TTS",
-            "name": "AudioChunk",
-            "topic": "TTS.AudioChunk",
-            "model": "TTSAudioChunkEvent",
-            "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent",
-            "schema_hash": schema["event_descriptors"][0]["schema_hash"],
-            "required_permission": "TTS.use",
-            "required_perms": ["TTS.use"],
-            "bounded": True,
-            "authorized": True,
-            "ordered_event_group": "tts_text_stream",
-            "remote_raw_audio_route": False,
-        }
-    ]
-    assert schema["event_descriptors"][0]["schema_hash"] == next(
+    event_descriptors = {item["event_topic"]: item for item in schema["event_descriptors"]}
+    assert set(event_descriptors) == {
+        "TTS.AudioChunk",
+        "Orchestrator.Response",
+        "Orchestrator.Interrupted",
+    }
+    assert event_descriptors["TTS.AudioChunk"] == {
+        "event_topic": "TTS.AudioChunk",
+        "module": "TTS",
+        "name": "AudioChunk",
+        "topic": "TTS.AudioChunk",
+        "model": "TTSAudioChunkEvent",
+        "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent",
+        "schema_hash": event_descriptors["TTS.AudioChunk"]["schema_hash"],
+        "required_permission": "TTS.use",
+        "required_perms": ["TTS.use"],
+        "bounded": True,
+        "authorized": True,
+        "ordered_event_group": "tts_text_stream",
+        "remote_raw_audio_route": False,
+    }
+    assert event_descriptors["Orchestrator.Response"]["schema_id"] == (
+        "Orchestrator.Response.event.AssistantStreamEvent"
+    )
+    assert event_descriptors["Orchestrator.Response"]["required_perms"] == ["Orchestrator.use"]
+    assert event_descriptors["Orchestrator.Response"]["ordered_event_group"] == "assistant_stream"
+    assert event_descriptors["Orchestrator.Interrupted"]["schema_id"] == (
+        "Orchestrator.Interrupted.event.OrchestratorInterruptedEvent"
+    )
+    envelope = schema["envelope_descriptors"][0]
+    assert envelope["envelope_topic"] == "Aurora.EventStream"
+    assert envelope["descriptor_kind"] == "sse_envelope"
+    assert envelope["required_permissions_broad"] == ["Gateway.manage"]
+    assert envelope["required_permissions_scoped"] == ["Orchestrator.use"]
+    assert envelope["scoped_topics"] == ["Orchestrator.Response", "TTS.AudioChunk"]
+    assert envelope["scoped_categories"] == ["assistant"]
+    assert envelope["requires_correlation_id"] is True
+    assert event_descriptors["TTS.AudioChunk"]["schema_hash"] == next(
         item["schema_hash"]
         for item in schema["schemas"]
         if item["schema_id"] == "TTS.AudioChunk.event.TTSAudioChunkEvent"
@@ -715,6 +735,29 @@ def test_generated_vectors_capture_strip_and_reject_semantics() -> None:
     get_tools_negative = by_model["ToolingGetToolsResponse"]["vectors"]["negative"]
     assert get_tools_negative["accepted"] is False
     assert get_tools_negative["issue_path"] == "$.tools.0.legacy_global_tool_ids"
+    get_tools_duplicate_case = next(
+        case
+        for case in by_model["ToolingGetToolsResponse"]["vectors"]["positive_cases"]
+        if case["normalized"]["tools"][0]["legacy_global_tool_ids"] == ["legacy-a", "legacy-b"]
+    )
+    assert len(get_tools_duplicate_case["input"]["tools"][0]["legacy_global_tool_ids"]) == 40
+    assert any(
+        case["issue_path"] == "$.tools.0.legacy_global_tool_ids"
+        and len(case["input"]["tools"][0]["legacy_global_tool_ids"]) == 17
+        for case in by_model["ToolingGetToolsResponse"]["vectors"]["negative_cases"]
+    )
+
+    export_duplicate_case = next(
+        case
+        for case in by_model["ToolingGetExportCatalogResponse"]["vectors"]["positive_cases"]
+        if case["normalized"]["tools"][0]["legacy_global_tool_ids"] == ["legacy-a", "legacy-b"]
+    )
+    assert len(export_duplicate_case["input"]["tools"][0]["legacy_global_tool_ids"]) == 40
+    assert any(
+        case["issue_path"] == "$.tools.0.legacy_global_tool_ids"
+        and len(case["input"]["tools"][0]["legacy_global_tool_ids"]) == 17
+        for case in by_model["ToolingGetExportCatalogResponse"]["vectors"]["negative_cases"]
+    )
 
     execute_negative = by_model["ToolingExecuteToolRequest"]["vectors"]["negative"]
     assert execute_negative["accepted"] is False

@@ -2,8 +2,8 @@ use std::fmt::Write as _;
 use std::path::PathBuf;
 
 use aurora_contracts::{
-    event_by_topic, method_by_id, normalize_generated_contract, EVENT_DESCRIPTORS,
-    METHOD_DESCRIPTORS, SCHEMA_DESCRIPTORS,
+    envelope_by_topic, event_by_topic, ids, method_by_id, normalize_generated_contract,
+    ENVELOPE_DESCRIPTORS, EVENT_DESCRIPTORS, METHOD_DESCRIPTORS, SCHEMA_DESCRIPTORS,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -141,9 +141,10 @@ fn parsed_input_shape(parsed: &Value, input: &Value) -> Value {
 
 #[test]
 fn descriptors_match_the_backend_inventory() {
-    assert_eq!(SCHEMA_DESCRIPTORS.len(), 61);
-    assert_eq!(METHOD_DESCRIPTORS.len(), 30);
-    assert_eq!(EVENT_DESCRIPTORS.len(), 1);
+    assert_eq!(SCHEMA_DESCRIPTORS.len(), 68);
+    assert_eq!(METHOD_DESCRIPTORS.len(), 32);
+    assert_eq!(EVENT_DESCRIPTORS.len(), 3);
+    assert_eq!(ENVELOPE_DESCRIPTORS.len(), 1);
 
     let synthesize = method_by_id("TTS.Synthesize").expect("TTS.Synthesize descriptor");
     assert_eq!(synthesize.bus_topic, "TTS.Synthesize");
@@ -155,6 +156,43 @@ fn descriptors_match_the_backend_inventory() {
     assert!(audio.bounded);
     assert!(audio.authorized);
     assert!(!audio.remote_raw_audio_route);
+
+    let assistant =
+        method_by_id(ids::ORCHESTRATOR_EXTERNAL_USER_INPUT).expect("assistant request descriptor");
+    assert_eq!(assistant.route_path, "/api/Orchestrator/ExternalUserInput");
+    assert_eq!(assistant.required_permissions, &["Orchestrator.use"]);
+
+    let response =
+        event_by_topic(ids::ORCHESTRATOR_RESPONSE).expect("assistant stream event descriptor");
+    assert_eq!(
+        response.schema_id,
+        "Orchestrator.Response.event.AssistantStreamEvent"
+    );
+    assert_eq!(response.required_permissions, &["Orchestrator.use"]);
+    assert_eq!(response.ordered_event_group, Some("assistant_stream"));
+    assert!(!response.remote_raw_audio_route);
+
+    let envelope = envelope_by_topic(ids::AURORA_EVENT_STREAM).expect("SSE envelope descriptor");
+    assert_eq!(envelope.descriptor_kind, "sse_envelope");
+    assert_eq!(envelope.route_path, "/api/events/stream");
+    assert_eq!(envelope.required_permissions_broad, &["Gateway.manage"]);
+    assert_eq!(envelope.required_permissions_scoped, &["Orchestrator.use"]);
+    assert_eq!(
+        envelope.scoped_topics,
+        &["Orchestrator.Response", "TTS.AudioChunk"]
+    );
+    assert!(envelope.requires_correlation_id);
+}
+
+#[test]
+fn typed_generated_id_constants_are_available_to_native_callers() {
+    assert_eq!(
+        ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+        "Orchestrator.ExternalUserInput"
+    );
+    assert_eq!(ids::ORCHESTRATOR_INTERRUPT, "Orchestrator.Interrupt");
+    assert_eq!(ids::ORCHESTRATOR_INTERRUPTED, "Orchestrator.Interrupted");
+    assert_eq!(ids::AURORA_EVENT_STREAM, "Aurora.EventStream");
 }
 
 #[test]

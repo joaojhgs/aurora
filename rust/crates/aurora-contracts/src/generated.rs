@@ -2,14 +2,81 @@
 
 use crate::{
     normalize_contract_value, validate_normalized_contract_schema, ContractParseError,
-    EventDescriptor, MethodDescriptor, SchemaDescriptor, StreamingDescriptor,
+    EnvelopeDescriptor, EventDescriptor, MethodDescriptor, SchemaDescriptor, StreamingDescriptor,
 };
 
+pub mod ids {
+    pub const TOOLING_GET_TOOLS: &str = "Tooling.GetTools";
+    pub const TOOLING_GET_EXPORT_CATALOG: &str = "Tooling.GetExportCatalog";
+    pub const TOOLING_PREPARE_EXECUTION: &str = "Tooling.PrepareExecution";
+    pub const TOOLING_EXECUTE_TOOL: &str = "Tooling.ExecuteTool";
+    pub const GATEWAY_EXPLAIN_ROUTE: &str = "Gateway.ExplainRoute";
+    pub const ORCHESTRATOR_EXTERNAL_USER_INPUT: &str = "Orchestrator.ExternalUserInput";
+    pub const ORCHESTRATOR_INTERRUPT: &str = "Orchestrator.Interrupt";
+    pub const TTS_GET_CAPABILITIES: &str = "TTS.GetCapabilities";
+    pub const TTS_LIST_VOICES: &str = "TTS.ListVoices";
+    pub const TTS_LIST_VOICE_PROFILES: &str = "TTS.ListVoiceProfiles";
+    pub const TTS_GET_VOICE_PROFILE: &str = "TTS.GetVoiceProfile";
+    pub const TTS_UPDATE_VOICE_PROFILE: &str = "TTS.UpdateVoiceProfile";
+    pub const TTS_INSTALL_VOICE_PROFILE: &str = "TTS.InstallVoiceProfile";
+    pub const TTS_REMOVE_VOICE_PROFILE: &str = "TTS.RemoveVoiceProfile";
+    pub const TTS_SET_DEFAULT_VOICE: &str = "TTS.SetDefaultVoice";
+    pub const TTS_VOICE_IMPORT_START: &str = "TTS.VoiceImportStart";
+    pub const TTS_VOICE_IMPORT_CHUNK: &str = "TTS.VoiceImportChunk";
+    pub const TTS_VOICE_IMPORT_END: &str = "TTS.VoiceImportEnd";
+    pub const TTS_VOICE_IMPORT_ABORT: &str = "TTS.VoiceImportAbort";
+    pub const TTS_CREATE_VOICE_PROFILE: &str = "TTS.CreateVoiceProfile";
+    pub const TTS_DELETE_VOICE_PROFILE: &str = "TTS.DeleteVoiceProfile";
+    pub const TTS_REQUEST: &str = "TTS.Request";
+    pub const TTS_STREAM_START: &str = "TTS.StreamStart";
+    pub const TTS_STREAM_CHUNK: &str = "TTS.StreamChunk";
+    pub const TTS_STREAM_END: &str = "TTS.StreamEnd";
+    pub const TTS_SYNTHESIZE: &str = "TTS.Synthesize";
+    pub const STT_COORDINATOR_LISTEN: &str = "STTCoordinator.Listen";
+    pub const STT_COORDINATOR_STOP_LISTENING: &str = "STTCoordinator.StopListening";
+    pub const WAKE_WORD_PROCESS_AUDIO: &str = "WakeWord.ProcessAudio";
+    pub const WAKE_WORD_DETECT: &str = "WakeWord.Detect";
+    pub const TRANSCRIPTION_PROCESS_AUDIO: &str = "Transcription.ProcessAudio";
+    pub const TRANSCRIPTION_TRANSCRIBE: &str = "Transcription.Transcribe";
+    pub const ORCHESTRATOR_RESPONSE: &str = "Orchestrator.Response";
+    pub const ORCHESTRATOR_INTERRUPTED: &str = "Orchestrator.Interrupted";
+    pub const TTS_AUDIO_CHUNK: &str = "TTS.AudioChunk";
+    pub const AURORA_EVENT_STREAM: &str = "Aurora.EventStream";
+}
+
 pub mod models {
+    pub mod assistant_stream_event {
+        typify::import_types!(schema = "schema/assistant_stream_event.json");
+    }
+    pub use assistant_stream_event::AssistantStreamEvent;
+    pub mod aurora_event_stream_event {
+        typify::import_types!(schema = "schema/aurora_event_stream_event.json");
+    }
+    pub use aurora_event_stream_event::AuroraEventStreamEvent;
     pub mod empty_output {
         typify::import_types!(schema = "schema/empty_output.json");
     }
     pub use empty_output::EmptyOutput;
+    pub mod orchestrator_interrupt_request {
+        typify::import_types!(schema = "schema/orchestrator_interrupt_request.json");
+    }
+    pub use orchestrator_interrupt_request::OrchestratorInterruptRequest;
+    pub mod orchestrator_interrupt_response {
+        typify::import_types!(schema = "schema/orchestrator_interrupt_response.json");
+    }
+    pub use orchestrator_interrupt_response::OrchestratorInterruptResponse;
+    pub mod orchestrator_interrupted_event {
+        typify::import_types!(schema = "schema/orchestrator_interrupted_event.json");
+    }
+    pub use orchestrator_interrupted_event::OrchestratorInterruptedEvent;
+    pub mod orchestrator_process_request {
+        typify::import_types!(schema = "schema/orchestrator_process_request.json");
+    }
+    pub use orchestrator_process_request::OrchestratorProcessRequest;
+    pub mod orchestrator_response {
+        typify::import_types!(schema = "schema/orchestrator_response.json");
+    }
+    pub use orchestrator_response::OrchestratorResponse;
     pub mod route_explain_request {
         typify::import_types!(schema = "schema/route_explain_request.json");
     }
@@ -226,6 +293,14 @@ pub mod models {
 
 pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
     SchemaDescriptor {
+        schema_id: "Aurora.EventStream.envelope.AuroraEventStreamEvent",
+        method_id: "Aurora.EventStream",
+        direction: "envelope",
+        model_name: "AuroraEventStreamEvent",
+        schema_hash: "bc634dde739ecea9b9fe9f6913763ef556a8c7dcd67cac3fbcee3f25fd5ad9ed",
+        schema_json: include_str!("../schema/aurora_event_stream_event.json"),
+    },
+    SchemaDescriptor {
         schema_id: "Gateway.ExplainRoute.input.RouteExplainRequest",
         method_id: "Gateway.ExplainRoute",
         direction: "input",
@@ -240,6 +315,54 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         model_name: "RouteExplainResponse",
         schema_hash: "b874d83f14fde33979ffa4db819341c4d4a91f81a4ea8e6fcd465cf2555f4a8e",
         schema_json: include_str!("../schema/route_explain_response.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Orchestrator.ExternalUserInput.input.OrchestratorProcessRequest",
+        method_id: "Orchestrator.ExternalUserInput",
+        direction: "input",
+        model_name: "OrchestratorProcessRequest",
+        schema_hash: "c78a7ae0cdc8e9315e87ca96127e2fd2ace7d96c87cfe6a1ab4fda870e9aeeb7",
+        schema_json: include_str!("../schema/orchestrator_process_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Orchestrator.ExternalUserInput.output.OrchestratorResponse",
+        method_id: "Orchestrator.ExternalUserInput",
+        direction: "output",
+        model_name: "OrchestratorResponse",
+        schema_hash: "bedd470ccb5b4f0f74d6ef38e3b8857c48c55f015dc3cc5a1496b9d35d8c76b3",
+        schema_json: include_str!("../schema/orchestrator_response.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Orchestrator.Interrupt.input.OrchestratorInterruptRequest",
+        method_id: "Orchestrator.Interrupt",
+        direction: "input",
+        model_name: "OrchestratorInterruptRequest",
+        schema_hash: "1c273edd72d1fe38a292f2f1abcbf4a68302c3a056358a0853e641ae14a2e095",
+        schema_json: include_str!("../schema/orchestrator_interrupt_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Orchestrator.Interrupt.output.OrchestratorInterruptResponse",
+        method_id: "Orchestrator.Interrupt",
+        direction: "output",
+        model_name: "OrchestratorInterruptResponse",
+        schema_hash: "2abfb95b02edaa0a3da7d0eee783aa3899db0d079e281488c87fe41716f0beda",
+        schema_json: include_str!("../schema/orchestrator_interrupt_response.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Orchestrator.Interrupted.event.OrchestratorInterruptedEvent",
+        method_id: "Orchestrator.Interrupted",
+        direction: "event",
+        model_name: "OrchestratorInterruptedEvent",
+        schema_hash: "dabddcb83584367b6dfad8f9bbba135201f456c60b2091757cc097773f856bc3",
+        schema_json: include_str!("../schema/orchestrator_interrupted_event.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Orchestrator.Response.event.AssistantStreamEvent",
+        method_id: "Orchestrator.Response",
+        direction: "event",
+        model_name: "AssistantStreamEvent",
+        schema_hash: "1469513416f663f9a27944a8d6fa5bf97158248bc87e4f80e3366ecc60657392",
+        schema_json: include_str!("../schema/assistant_stream_event.json"),
     },
     SchemaDescriptor {
         schema_id: "STTCoordinator.Listen.input.STTListenRequest",
@@ -822,6 +945,48 @@ pub static METHOD_DESCRIPTORS: &[MethodDescriptor] = &[
         },
     },
     MethodDescriptor {
+        method_id: "Orchestrator.ExternalUserInput",
+        bus_topic: "Orchestrator.ExternalUserInput",
+        module: "Orchestrator",
+        name: "ExternalUserInput",
+        method_type: "use",
+        exposure: "external",
+        route_path: "/api/Orchestrator/ExternalUserInput",
+        route_kind: "dynamic",
+        required_permissions: &["Orchestrator.use"],
+        callable_feature_ids: &["assistant_conversation"],
+        input_schema_id: "Orchestrator.ExternalUserInput.input.OrchestratorProcessRequest",
+        output_schema_id: "Orchestrator.ExternalUserInput.output.OrchestratorResponse",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "Orchestrator.Interrupt",
+        bus_topic: "Orchestrator.Interrupt",
+        module: "Orchestrator",
+        name: "Interrupt",
+        method_type: "use",
+        exposure: "external",
+        route_path: "/api/Orchestrator/Interrupt",
+        route_kind: "dynamic",
+        required_permissions: &["Orchestrator.use"],
+        callable_feature_ids: &["assistant_control"],
+        input_schema_id: "Orchestrator.Interrupt.input.OrchestratorInterruptRequest",
+        output_schema_id: "Orchestrator.Interrupt.output.OrchestratorInterruptResponse",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
         method_id: "TTS.GetCapabilities",
         bus_topic: "TTS.GetCapabilities",
         module: "TTS",
@@ -1348,17 +1513,61 @@ pub static METHOD_DESCRIPTORS: &[MethodDescriptor] = &[
     },
 ];
 
-pub static EVENT_DESCRIPTORS: &[EventDescriptor] = &[EventDescriptor {
-    event_topic: "TTS.AudioChunk",
-    module: "TTS",
-    name: "AudioChunk",
-    schema_id: "TTS.AudioChunk.event.TTSAudioChunkEvent",
-    schema_hash: "8f2a4c111920f068e5dae7ac8c6ea4dd031f7f50989af157d3c68fa5989760a6",
-    required_permissions: &["TTS.use"],
+pub static EVENT_DESCRIPTORS: &[EventDescriptor] = &[
+    EventDescriptor {
+        event_topic: "Orchestrator.Response",
+        module: "Orchestrator",
+        name: "Response",
+        schema_id: "Orchestrator.Response.event.AssistantStreamEvent",
+        schema_hash: "1469513416f663f9a27944a8d6fa5bf97158248bc87e4f80e3366ecc60657392",
+        required_permissions: &["Orchestrator.use"],
+        bounded: true,
+        authorized: true,
+        ordered_event_group: Some("assistant_stream"),
+        remote_raw_audio_route: false,
+    },
+    EventDescriptor {
+        event_topic: "Orchestrator.Interrupted",
+        module: "Orchestrator",
+        name: "Interrupted",
+        schema_id: "Orchestrator.Interrupted.event.OrchestratorInterruptedEvent",
+        schema_hash: "dabddcb83584367b6dfad8f9bbba135201f456c60b2091757cc097773f856bc3",
+        required_permissions: &["Orchestrator.use"],
+        bounded: true,
+        authorized: true,
+        ordered_event_group: Some("assistant_interrupt"),
+        remote_raw_audio_route: false,
+    },
+    EventDescriptor {
+        event_topic: "TTS.AudioChunk",
+        module: "TTS",
+        name: "AudioChunk",
+        schema_id: "TTS.AudioChunk.event.TTSAudioChunkEvent",
+        schema_hash: "8f2a4c111920f068e5dae7ac8c6ea4dd031f7f50989af157d3c68fa5989760a6",
+        required_permissions: &["TTS.use"],
+        bounded: true,
+        authorized: true,
+        ordered_event_group: Some("tts_text_stream"),
+        remote_raw_audio_route: false,
+    },
+];
+
+pub static ENVELOPE_DESCRIPTORS: &[EnvelopeDescriptor] = &[EnvelopeDescriptor {
+    envelope_topic: "Aurora.EventStream",
+    module: "Aurora",
+    name: "EventStream",
+    schema_id: "Aurora.EventStream.envelope.AuroraEventStreamEvent",
+    schema_hash: "bc634dde739ecea9b9fe9f6913763ef556a8c7dcd67cac3fbcee3f25fd5ad9ed",
+    required_permissions_broad: &["Gateway.manage"],
+    required_permissions_scoped: &["Orchestrator.use"],
+    scoped_topics: &["Orchestrator.Response", "TTS.AudioChunk"],
+    scoped_categories: &["assistant"],
+    requires_correlation_id: true,
     bounded: true,
     authorized: true,
-    ordered_event_group: Some("tts_text_stream"),
-    remote_raw_audio_route: false,
+    route_path: "/api/events/stream",
+    route_kind: "gateway_sse_builtin",
+    descriptor_kind: "sse_envelope",
 }];
 
 pub fn schema_by_id(schema_id: &str) -> Option<&'static SchemaDescriptor> {
@@ -1379,6 +1588,12 @@ pub fn event_by_topic(topic: &str) -> Option<&'static EventDescriptor> {
         .find(|item| item.event_topic == topic)
 }
 
+pub fn envelope_by_topic(topic: &str) -> Option<&'static EnvelopeDescriptor> {
+    ENVELOPE_DESCRIPTORS
+        .iter()
+        .find(|item| item.envelope_topic == topic)
+}
+
 pub fn normalize_generated_contract(
     schema_id: &str,
     value: serde_json::Value,
@@ -1386,443 +1601,74 @@ pub fn normalize_generated_contract(
     let (normalized, compiled) = normalize_contract_value(schema_id, value)?;
     validate_normalized_contract_schema(schema_id, compiled, &normalized)?;
     match schema_id {
-        "Gateway.ExplainRoute.input.RouteExplainRequest" => {
-            serde_json::from_value::<models::route_explain_request::RouteExplainRequest>(normalized)
-                .and_then(serde_json::to_value)
-                .map_err(|_| ContractParseError::Decode {
-                    schema_id: schema_id.to_owned(),
-                })
-        }
-        "Gateway.ExplainRoute.output.RouteExplainResponse" => serde_json::from_value::<
-            models::route_explain_response::RouteExplainResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "STTCoordinator.Listen.input.STTListenRequest" => {
-            serde_json::from_value::<models::stt_listen_request::SttListenRequest>(normalized)
-                .and_then(serde_json::to_value)
-                .map_err(|_| ContractParseError::Decode {
-                    schema_id: schema_id.to_owned(),
-                })
-        }
-        "STTCoordinator.Listen.output.STTListenResponse" => {
-            serde_json::from_value::<models::stt_listen_response::SttListenResponse>(normalized)
-                .and_then(serde_json::to_value)
-                .map_err(|_| ContractParseError::Decode {
-                    schema_id: schema_id.to_owned(),
-                })
-        }
-        "STTCoordinator.StopListening.input.STTStopListeningRequest" => serde_json::from_value::<
-            models::stt_stop_listening_request::SttStopListeningRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "STTCoordinator.StopListening.output.EmptyOutput" => {
-            serde_json::from_value::<models::empty_output::EmptyOutput>(normalized)
-                .and_then(serde_json::to_value)
-                .map_err(|_| ContractParseError::Decode {
-                    schema_id: schema_id.to_owned(),
-                })
-        }
-        "TTS.AudioChunk.event.TTSAudioChunkEvent" => {
-            serde_json::from_value::<models::tts_audio_chunk_event::TtsAudioChunkEvent>(normalized)
-                .and_then(serde_json::to_value)
-                .map_err(|_| ContractParseError::Decode {
-                    schema_id: schema_id.to_owned(),
-                })
-        }
-        "TTS.CreateVoiceProfile.input.TTSCreateVoiceProfileRequest" => serde_json::from_value::<
-            models::tts_create_voice_profile_request::TtsCreateVoiceProfileRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.CreateVoiceProfile.output.TTSCreateVoiceProfileResponse" => serde_json::from_value::<
-            models::tts_create_voice_profile_response::TtsCreateVoiceProfileResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.DeleteVoiceProfile.input.TTSDeleteVoiceProfileRequest" => serde_json::from_value::<
-            models::tts_delete_voice_profile_request::TtsDeleteVoiceProfileRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.DeleteVoiceProfile.output.TTSDeleteVoiceProfileResponse" => serde_json::from_value::<
-            models::tts_delete_voice_profile_response::TtsDeleteVoiceProfileResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.GetCapabilities.input.TTSGetCapabilitiesRequest" => serde_json::from_value::<
-            models::tts_get_capabilities_request::TtsGetCapabilitiesRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.GetCapabilities.output.TTSGetCapabilitiesResponse" => serde_json::from_value::<
-            models::tts_get_capabilities_response::TtsGetCapabilitiesResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.GetVoiceProfile.input.TTSGetVoiceProfileRequest" => serde_json::from_value::<
-            models::tts_get_voice_profile_request::TtsGetVoiceProfileRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.GetVoiceProfile.output.TTSGetVoiceProfileResponse" => serde_json::from_value::<
-            models::tts_get_voice_profile_response::TtsGetVoiceProfileResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.InstallVoiceProfile.input.TTSInstallVoiceProfileRequest" => serde_json::from_value::<
-            models::tts_install_voice_profile_request::TtsInstallVoiceProfileRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.InstallVoiceProfile.output.TTSInstallVoiceProfileResponse" => {
-            serde_json::from_value::<
-                models::tts_install_voice_profile_response::TtsInstallVoiceProfileResponse,
-            >(normalized)
-            .and_then(serde_json::to_value)
-            .map_err(|_| ContractParseError::Decode {
-                schema_id: schema_id.to_owned(),
-            })
-        }
-        "TTS.ListVoiceProfiles.input.TTSListVoiceProfilesRequest" => serde_json::from_value::<
-            models::tts_list_voice_profiles_request::TtsListVoiceProfilesRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.ListVoiceProfiles.output.TTSListVoiceProfilesResponse" => serde_json::from_value::<
-            models::tts_list_voice_profiles_response::TtsListVoiceProfilesResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.ListVoices.input.TTSListVoicesRequest" => serde_json::from_value::<
-            models::tts_list_voices_request::TtsListVoicesRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.ListVoices.output.TTSListVoicesResponse" => serde_json::from_value::<
-            models::tts_list_voices_response::TtsListVoicesResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.RemoveVoiceProfile.input.TTSRemoveVoiceProfileRequest" => serde_json::from_value::<
-            models::tts_remove_voice_profile_request::TtsRemoveVoiceProfileRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.RemoveVoiceProfile.output.TTSRemoveVoiceProfileResponse" => serde_json::from_value::<
-            models::tts_remove_voice_profile_response::TtsRemoveVoiceProfileResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.Request.input.TTSRequest" => {
-            serde_json::from_value::<models::tts_request::TtsRequest>(normalized)
-                .and_then(serde_json::to_value)
-                .map_err(|_| ContractParseError::Decode {
-                    schema_id: schema_id.to_owned(),
-                })
-        }
-        "TTS.Request.output.EmptyOutput" => {
-            serde_json::from_value::<models::empty_output::EmptyOutput>(normalized)
-                .and_then(serde_json::to_value)
-                .map_err(|_| ContractParseError::Decode {
-                    schema_id: schema_id.to_owned(),
-                })
-        }
-        "TTS.SetDefaultVoice.input.TTSSetDefaultVoiceRequest" => serde_json::from_value::<
-            models::tts_set_default_voice_request::TtsSetDefaultVoiceRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.SetDefaultVoice.output.TTSSetDefaultVoiceResponse" => serde_json::from_value::<
-            models::tts_set_default_voice_response::TtsSetDefaultVoiceResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.StreamChunk.input.TTSStreamChunkRequest" => serde_json::from_value::<
-            models::tts_stream_chunk_request::TtsStreamChunkRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.StreamChunk.output.EmptyOutput" => {
-            serde_json::from_value::<models::empty_output::EmptyOutput>(normalized)
-                .and_then(serde_json::to_value)
-                .map_err(|_| ContractParseError::Decode {
-                    schema_id: schema_id.to_owned(),
-                })
-        }
-        "TTS.StreamEnd.input.TTSStreamEndRequest" => serde_json::from_value::<
-            models::tts_stream_end_request::TtsStreamEndRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.StreamEnd.output.EmptyOutput" => {
-            serde_json::from_value::<models::empty_output::EmptyOutput>(normalized)
-                .and_then(serde_json::to_value)
-                .map_err(|_| ContractParseError::Decode {
-                    schema_id: schema_id.to_owned(),
-                })
-        }
-        "TTS.StreamStart.input.TTSStreamStartRequest" => serde_json::from_value::<
-            models::tts_stream_start_request::TtsStreamStartRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.StreamStart.output.EmptyOutput" => {
-            serde_json::from_value::<models::empty_output::EmptyOutput>(normalized)
-                .and_then(serde_json::to_value)
-                .map_err(|_| ContractParseError::Decode {
-                    schema_id: schema_id.to_owned(),
-                })
-        }
-        "TTS.Synthesize.input.TTSSynthesizeRequest" => serde_json::from_value::<
-            models::tts_synthesize_request::TtsSynthesizeRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.Synthesize.output.TTSSynthesizeResponse" => serde_json::from_value::<
-            models::tts_synthesize_response::TtsSynthesizeResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.UpdateVoiceProfile.input.TTSUpdateVoiceProfileRequest" => serde_json::from_value::<
-            models::tts_update_voice_profile_request::TtsUpdateVoiceProfileRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.UpdateVoiceProfile.output.TTSUpdateVoiceProfileResponse" => serde_json::from_value::<
-            models::tts_update_voice_profile_response::TtsUpdateVoiceProfileResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.VoiceImportAbort.input.TTSVoiceImportAbortRequest" => serde_json::from_value::<
-            models::tts_voice_import_abort_request::TtsVoiceImportAbortRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.VoiceImportAbort.output.TTSVoiceImportAbortResponse" => serde_json::from_value::<
-            models::tts_voice_import_abort_response::TtsVoiceImportAbortResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.VoiceImportChunk.input.TTSVoiceImportChunkRequest" => serde_json::from_value::<
-            models::tts_voice_import_chunk_request::TtsVoiceImportChunkRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.VoiceImportChunk.output.TTSVoiceImportChunkResponse" => serde_json::from_value::<
-            models::tts_voice_import_chunk_response::TtsVoiceImportChunkResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.VoiceImportEnd.input.TTSVoiceImportEndRequest" => serde_json::from_value::<
-            models::tts_voice_import_end_request::TtsVoiceImportEndRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.VoiceImportEnd.output.TTSVoiceImportEndResponse" => serde_json::from_value::<
-            models::tts_voice_import_end_response::TtsVoiceImportEndResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.VoiceImportStart.input.TTSVoiceImportStartRequest" => serde_json::from_value::<
-            models::tts_voice_import_start_request::TtsVoiceImportStartRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "TTS.VoiceImportStart.output.TTSVoiceImportStartResponse" => serde_json::from_value::<
-            models::tts_voice_import_start_response::TtsVoiceImportStartResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "Tooling.ExecuteTool.input.ToolingExecuteToolRequest" => serde_json::from_value::<
-            models::tooling_execute_tool_request::ToolingExecuteToolRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "Tooling.ExecuteTool.output.ToolingExecuteToolResponse" => serde_json::from_value::<
-            models::tooling_execute_tool_response::ToolingExecuteToolResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "Tooling.GetExportCatalog.input.ToolingGetExportCatalogRequest" => {
-            serde_json::from_value::<
-                models::tooling_get_export_catalog_request::ToolingGetExportCatalogRequest,
-            >(normalized)
-            .and_then(serde_json::to_value)
-            .map_err(|_| ContractParseError::Decode {
-                schema_id: schema_id.to_owned(),
-            })
-        }
-        "Tooling.GetExportCatalog.output.ToolingGetExportCatalogResponse" => {
-            serde_json::from_value::<
-                models::tooling_get_export_catalog_response::ToolingGetExportCatalogResponse,
-            >(normalized)
-            .and_then(serde_json::to_value)
-            .map_err(|_| ContractParseError::Decode {
-                schema_id: schema_id.to_owned(),
-            })
-        }
-        "Tooling.GetTools.input.ToolingGetToolsRequest" => serde_json::from_value::<
-            models::tooling_get_tools_request::ToolingGetToolsRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "Tooling.GetTools.output.ToolingGetToolsResponse" => serde_json::from_value::<
-            models::tooling_get_tools_response::ToolingGetToolsResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "Tooling.PrepareExecution.input.ToolingPrepareExecutionRequest" => {
-            serde_json::from_value::<
-                models::tooling_prepare_execution_request::ToolingPrepareExecutionRequest,
-            >(normalized)
-            .and_then(serde_json::to_value)
-            .map_err(|_| ContractParseError::Decode {
-                schema_id: schema_id.to_owned(),
-            })
-        }
-        "Tooling.PrepareExecution.output.ToolingPrepareExecutionResponse" => {
-            serde_json::from_value::<
-                models::tooling_prepare_execution_response::ToolingPrepareExecutionResponse,
-            >(normalized)
-            .and_then(serde_json::to_value)
-            .map_err(|_| ContractParseError::Decode {
-                schema_id: schema_id.to_owned(),
-            })
-        }
-        "Transcription.ProcessAudio.input.STTAudioChunk" => {
-            serde_json::from_value::<models::stt_audio_chunk::SttAudioChunk>(normalized)
-                .and_then(serde_json::to_value)
-                .map_err(|_| ContractParseError::Decode {
-                    schema_id: schema_id.to_owned(),
-                })
-        }
-        "Transcription.ProcessAudio.output.EmptyOutput" => {
-            serde_json::from_value::<models::empty_output::EmptyOutput>(normalized)
-                .and_then(serde_json::to_value)
-                .map_err(|_| ContractParseError::Decode {
-                    schema_id: schema_id.to_owned(),
-                })
-        }
-        "Transcription.Transcribe.input.TranscribeAudioRequest" => serde_json::from_value::<
-            models::transcribe_audio_request::TranscribeAudioRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "Transcription.Transcribe.output.TranscribeAudioResponse" => serde_json::from_value::<
-            models::transcribe_audio_response::TranscribeAudioResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "WakeWord.Detect.input.WakeWordDetectRequest" => serde_json::from_value::<
-            models::wake_word_detect_request::WakeWordDetectRequest,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "WakeWord.Detect.output.WakeWordDetectResponse" => serde_json::from_value::<
-            models::wake_word_detect_response::WakeWordDetectResponse,
-        >(normalized)
-        .and_then(serde_json::to_value)
-        .map_err(|_| ContractParseError::Decode {
-            schema_id: schema_id.to_owned(),
-        }),
-        "WakeWord.ProcessAudio.input.STTAudioChunk" => {
-            serde_json::from_value::<models::stt_audio_chunk::SttAudioChunk>(normalized)
-                .and_then(serde_json::to_value)
-                .map_err(|_| ContractParseError::Decode {
-                    schema_id: schema_id.to_owned(),
-                })
-        }
-        "WakeWord.ProcessAudio.output.EmptyOutput" => {
-            serde_json::from_value::<models::empty_output::EmptyOutput>(normalized)
-                .and_then(serde_json::to_value)
-                .map_err(|_| ContractParseError::Decode {
-                    schema_id: schema_id.to_owned(),
-                })
-        }
+        "Aurora.EventStream.envelope.AuroraEventStreamEvent" => serde_json::from_value::<models::aurora_event_stream_event::AuroraEventStreamEvent>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Gateway.ExplainRoute.input.RouteExplainRequest" => serde_json::from_value::<models::route_explain_request::RouteExplainRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Gateway.ExplainRoute.output.RouteExplainResponse" => serde_json::from_value::<models::route_explain_response::RouteExplainResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Orchestrator.ExternalUserInput.input.OrchestratorProcessRequest" => serde_json::from_value::<models::orchestrator_process_request::OrchestratorProcessRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Orchestrator.ExternalUserInput.output.OrchestratorResponse" => serde_json::from_value::<models::orchestrator_response::OrchestratorResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Orchestrator.Interrupt.input.OrchestratorInterruptRequest" => serde_json::from_value::<models::orchestrator_interrupt_request::OrchestratorInterruptRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Orchestrator.Interrupt.output.OrchestratorInterruptResponse" => serde_json::from_value::<models::orchestrator_interrupt_response::OrchestratorInterruptResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Orchestrator.Interrupted.event.OrchestratorInterruptedEvent" => serde_json::from_value::<models::orchestrator_interrupted_event::OrchestratorInterruptedEvent>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Orchestrator.Response.event.AssistantStreamEvent" => serde_json::from_value::<models::assistant_stream_event::AssistantStreamEvent>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "STTCoordinator.Listen.input.STTListenRequest" => serde_json::from_value::<models::stt_listen_request::SttListenRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "STTCoordinator.Listen.output.STTListenResponse" => serde_json::from_value::<models::stt_listen_response::SttListenResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "STTCoordinator.StopListening.input.STTStopListeningRequest" => serde_json::from_value::<models::stt_stop_listening_request::SttStopListeningRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "STTCoordinator.StopListening.output.EmptyOutput" => serde_json::from_value::<models::empty_output::EmptyOutput>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.AudioChunk.event.TTSAudioChunkEvent" => serde_json::from_value::<models::tts_audio_chunk_event::TtsAudioChunkEvent>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.CreateVoiceProfile.input.TTSCreateVoiceProfileRequest" => serde_json::from_value::<models::tts_create_voice_profile_request::TtsCreateVoiceProfileRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.CreateVoiceProfile.output.TTSCreateVoiceProfileResponse" => serde_json::from_value::<models::tts_create_voice_profile_response::TtsCreateVoiceProfileResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.DeleteVoiceProfile.input.TTSDeleteVoiceProfileRequest" => serde_json::from_value::<models::tts_delete_voice_profile_request::TtsDeleteVoiceProfileRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.DeleteVoiceProfile.output.TTSDeleteVoiceProfileResponse" => serde_json::from_value::<models::tts_delete_voice_profile_response::TtsDeleteVoiceProfileResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.GetCapabilities.input.TTSGetCapabilitiesRequest" => serde_json::from_value::<models::tts_get_capabilities_request::TtsGetCapabilitiesRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.GetCapabilities.output.TTSGetCapabilitiesResponse" => serde_json::from_value::<models::tts_get_capabilities_response::TtsGetCapabilitiesResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.GetVoiceProfile.input.TTSGetVoiceProfileRequest" => serde_json::from_value::<models::tts_get_voice_profile_request::TtsGetVoiceProfileRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.GetVoiceProfile.output.TTSGetVoiceProfileResponse" => serde_json::from_value::<models::tts_get_voice_profile_response::TtsGetVoiceProfileResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.InstallVoiceProfile.input.TTSInstallVoiceProfileRequest" => serde_json::from_value::<models::tts_install_voice_profile_request::TtsInstallVoiceProfileRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.InstallVoiceProfile.output.TTSInstallVoiceProfileResponse" => serde_json::from_value::<models::tts_install_voice_profile_response::TtsInstallVoiceProfileResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.ListVoiceProfiles.input.TTSListVoiceProfilesRequest" => serde_json::from_value::<models::tts_list_voice_profiles_request::TtsListVoiceProfilesRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.ListVoiceProfiles.output.TTSListVoiceProfilesResponse" => serde_json::from_value::<models::tts_list_voice_profiles_response::TtsListVoiceProfilesResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.ListVoices.input.TTSListVoicesRequest" => serde_json::from_value::<models::tts_list_voices_request::TtsListVoicesRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.ListVoices.output.TTSListVoicesResponse" => serde_json::from_value::<models::tts_list_voices_response::TtsListVoicesResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.RemoveVoiceProfile.input.TTSRemoveVoiceProfileRequest" => serde_json::from_value::<models::tts_remove_voice_profile_request::TtsRemoveVoiceProfileRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.RemoveVoiceProfile.output.TTSRemoveVoiceProfileResponse" => serde_json::from_value::<models::tts_remove_voice_profile_response::TtsRemoveVoiceProfileResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.Request.input.TTSRequest" => serde_json::from_value::<models::tts_request::TtsRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.Request.output.EmptyOutput" => serde_json::from_value::<models::empty_output::EmptyOutput>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.SetDefaultVoice.input.TTSSetDefaultVoiceRequest" => serde_json::from_value::<models::tts_set_default_voice_request::TtsSetDefaultVoiceRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.SetDefaultVoice.output.TTSSetDefaultVoiceResponse" => serde_json::from_value::<models::tts_set_default_voice_response::TtsSetDefaultVoiceResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.StreamChunk.input.TTSStreamChunkRequest" => serde_json::from_value::<models::tts_stream_chunk_request::TtsStreamChunkRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.StreamChunk.output.EmptyOutput" => serde_json::from_value::<models::empty_output::EmptyOutput>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.StreamEnd.input.TTSStreamEndRequest" => serde_json::from_value::<models::tts_stream_end_request::TtsStreamEndRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.StreamEnd.output.EmptyOutput" => serde_json::from_value::<models::empty_output::EmptyOutput>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.StreamStart.input.TTSStreamStartRequest" => serde_json::from_value::<models::tts_stream_start_request::TtsStreamStartRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.StreamStart.output.EmptyOutput" => serde_json::from_value::<models::empty_output::EmptyOutput>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.Synthesize.input.TTSSynthesizeRequest" => serde_json::from_value::<models::tts_synthesize_request::TtsSynthesizeRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.Synthesize.output.TTSSynthesizeResponse" => serde_json::from_value::<models::tts_synthesize_response::TtsSynthesizeResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.UpdateVoiceProfile.input.TTSUpdateVoiceProfileRequest" => serde_json::from_value::<models::tts_update_voice_profile_request::TtsUpdateVoiceProfileRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.UpdateVoiceProfile.output.TTSUpdateVoiceProfileResponse" => serde_json::from_value::<models::tts_update_voice_profile_response::TtsUpdateVoiceProfileResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.VoiceImportAbort.input.TTSVoiceImportAbortRequest" => serde_json::from_value::<models::tts_voice_import_abort_request::TtsVoiceImportAbortRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.VoiceImportAbort.output.TTSVoiceImportAbortResponse" => serde_json::from_value::<models::tts_voice_import_abort_response::TtsVoiceImportAbortResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.VoiceImportChunk.input.TTSVoiceImportChunkRequest" => serde_json::from_value::<models::tts_voice_import_chunk_request::TtsVoiceImportChunkRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.VoiceImportChunk.output.TTSVoiceImportChunkResponse" => serde_json::from_value::<models::tts_voice_import_chunk_response::TtsVoiceImportChunkResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.VoiceImportEnd.input.TTSVoiceImportEndRequest" => serde_json::from_value::<models::tts_voice_import_end_request::TtsVoiceImportEndRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.VoiceImportEnd.output.TTSVoiceImportEndResponse" => serde_json::from_value::<models::tts_voice_import_end_response::TtsVoiceImportEndResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.VoiceImportStart.input.TTSVoiceImportStartRequest" => serde_json::from_value::<models::tts_voice_import_start_request::TtsVoiceImportStartRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.VoiceImportStart.output.TTSVoiceImportStartResponse" => serde_json::from_value::<models::tts_voice_import_start_response::TtsVoiceImportStartResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Tooling.ExecuteTool.input.ToolingExecuteToolRequest" => serde_json::from_value::<models::tooling_execute_tool_request::ToolingExecuteToolRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Tooling.ExecuteTool.output.ToolingExecuteToolResponse" => serde_json::from_value::<models::tooling_execute_tool_response::ToolingExecuteToolResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Tooling.GetExportCatalog.input.ToolingGetExportCatalogRequest" => serde_json::from_value::<models::tooling_get_export_catalog_request::ToolingGetExportCatalogRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Tooling.GetExportCatalog.output.ToolingGetExportCatalogResponse" => serde_json::from_value::<models::tooling_get_export_catalog_response::ToolingGetExportCatalogResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Tooling.GetTools.input.ToolingGetToolsRequest" => serde_json::from_value::<models::tooling_get_tools_request::ToolingGetToolsRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Tooling.GetTools.output.ToolingGetToolsResponse" => serde_json::from_value::<models::tooling_get_tools_response::ToolingGetToolsResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Tooling.PrepareExecution.input.ToolingPrepareExecutionRequest" => serde_json::from_value::<models::tooling_prepare_execution_request::ToolingPrepareExecutionRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Tooling.PrepareExecution.output.ToolingPrepareExecutionResponse" => serde_json::from_value::<models::tooling_prepare_execution_response::ToolingPrepareExecutionResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Transcription.ProcessAudio.input.STTAudioChunk" => serde_json::from_value::<models::stt_audio_chunk::SttAudioChunk>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Transcription.ProcessAudio.output.EmptyOutput" => serde_json::from_value::<models::empty_output::EmptyOutput>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Transcription.Transcribe.input.TranscribeAudioRequest" => serde_json::from_value::<models::transcribe_audio_request::TranscribeAudioRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Transcription.Transcribe.output.TranscribeAudioResponse" => serde_json::from_value::<models::transcribe_audio_response::TranscribeAudioResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "WakeWord.Detect.input.WakeWordDetectRequest" => serde_json::from_value::<models::wake_word_detect_request::WakeWordDetectRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "WakeWord.Detect.output.WakeWordDetectResponse" => serde_json::from_value::<models::wake_word_detect_response::WakeWordDetectResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "WakeWord.ProcessAudio.input.STTAudioChunk" => serde_json::from_value::<models::stt_audio_chunk::SttAudioChunk>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "WakeWord.ProcessAudio.output.EmptyOutput" => serde_json::from_value::<models::empty_output::EmptyOutput>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         _ => Err(ContractParseError::UnknownSchema(schema_id.to_owned())),
     }
 }

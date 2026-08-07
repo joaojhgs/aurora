@@ -541,7 +541,7 @@ def _authorize_event_stream_request(
         and topic_set <= {OrchestratorMethods.RESPONSE, TTSMethods.AUDIO_CHUNK}
         and (not categories or categories <= {"assistant"})
         and (not kinds or kinds <= _SAFE_ASSISTANT_KINDS)
-        and (correlation_id is not None or topic_set <= {OrchestratorMethods.RESPONSE})
+        and correlation_id is not None
     )
     if assistant_scoped and identity.can("Orchestrator.use", method_type="use"):
         return

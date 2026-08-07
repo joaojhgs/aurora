@@ -1,0 +1,346 @@
+{
+  "$defs": {
+    "AssistantToolStreamState": {
+      "description": "Safe, redacted tool-call state for assistant stream consumers.",
+      "properties": {
+        "approval_expires_at": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approval Expires At"
+        },
+        "approval_request_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approval Request Id"
+        },
+        "data_leaves_device": {
+          "default": false,
+          "title": "Data Leaves Device",
+          "type": "boolean"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "error_details": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "x-aurora-json-value": true
+              },
+              "type": "object",
+              "x-aurora-extra-behavior": "preserve"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Details"
+        },
+        "pending_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pending Id"
+        },
+        "policy_decision_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy Decision Id"
+        },
+        "provider_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Id"
+        },
+        "redacted_args_preview": {
+          "additionalProperties": {
+            "x-aurora-json-value": true
+          },
+          "maxProperties": 32,
+          "title": "Redacted Args Preview",
+          "type": "object",
+          "x-aurora-extra-behavior": "preserve"
+        },
+        "result_preview": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "x-aurora-json-value": true
+              },
+              "type": "object",
+              "x-aurora-extra-behavior": "preserve"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Preview"
+        },
+        "risk_class": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Risk Class"
+        },
+        "status": {
+          "enum": [
+            "completed",
+            "failed",
+            "requested",
+            "requires_action",
+            "running"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "summary": {
+          "default": "",
+          "maxLength": 2000,
+          "title": "Summary",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target"
+        },
+        "tool_call_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Tool Call Id",
+          "type": "string"
+        },
+        "tool_name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Tool Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "tool_call_id",
+        "tool_name"
+      ],
+      "title": "AssistantToolStreamState",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Incremental assistant stream event published on Orchestrator.Response.",
+  "properties": {
+    "correlation_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "delta": {
+      "default": "",
+      "maxLength": 16384,
+      "title": "Delta",
+      "type": "string"
+    },
+    "is_final": {
+      "default": false,
+      "title": "Is Final",
+      "type": "boolean"
+    },
+    "kind": {
+      "enum": [
+        "assistant.completed",
+        "assistant.delta",
+        "assistant.failed",
+        "tool.completed",
+        "tool.failed",
+        "tool.requested",
+        "tool.requires_action",
+        "tool.running"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "message_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Message Id"
+    },
+    "metadata": {
+      "additionalProperties": {
+        "x-aurora-json-value": true
+      },
+      "maxProperties": 64,
+      "title": "Metadata",
+      "type": "object",
+      "x-aurora-extra-behavior": "preserve"
+    },
+    "request_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Request Id"
+    },
+    "sequence": {
+      "default": 0,
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Id"
+    },
+    "text": {
+      "default": "",
+      "maxLength": 120000,
+      "title": "Text",
+      "type": "string"
+    },
+    "tool": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AssistantToolStreamState"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "kind"
+  ],
+  "title": "AssistantStreamEvent",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

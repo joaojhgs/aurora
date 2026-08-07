@@ -2,6 +2,7 @@ import type { z } from 'zod/v4'
 
 import { AuroraError } from './errors.js'
 import {
+  backendContractEnvelopeDescriptorByTopic,
   backendContractEventDescriptorByTopic,
   backendContractMethodDescriptorById,
   backendContractSchemaById
@@ -16,6 +17,7 @@ import {
 
 type GeneratedDescriptorMap = typeof backendContractMethodDescriptorById
 type GeneratedEventDescriptorMap = typeof backendContractEventDescriptorByTopic
+type GeneratedEnvelopeDescriptorMap = typeof backendContractEnvelopeDescriptorByTopic
 type GeneratedSchemaMap = typeof backendContractSchemaById
 
 export type GeneratedBackendMethodId = keyof GeneratedDescriptorMap
@@ -61,6 +63,22 @@ export type GeneratedBackendEventOutput<TTopic extends GeneratedBackendEventTopi
   GeneratedBackendEventSchema<TTopic>
 >
 
+export type GeneratedBackendEnvelopeTopic = keyof GeneratedEnvelopeDescriptorMap
+export type GeneratedBackendEnvelopeDescriptor<TTopic extends GeneratedBackendEnvelopeTopic> =
+  GeneratedEnvelopeDescriptorMap[TTopic]
+type GeneratedEnvelopeSchemaId<TTopic extends GeneratedBackendEnvelopeTopic> = Extract<
+  GeneratedBackendEnvelopeDescriptor<TTopic>['schema_id'],
+  keyof GeneratedSchemaMap
+>
+export type GeneratedBackendEnvelopeSchema<TTopic extends GeneratedBackendEnvelopeTopic> =
+  GeneratedSchemaMap[GeneratedEnvelopeSchemaId<TTopic>]
+export type GeneratedBackendEnvelopeInput<TTopic extends GeneratedBackendEnvelopeTopic> = z.input<
+  GeneratedBackendEnvelopeSchema<TTopic>
+>
+export type GeneratedBackendEnvelopeOutput<TTopic extends GeneratedBackendEnvelopeTopic> = z.output<
+  GeneratedBackendEnvelopeSchema<TTopic>
+>
+
 export interface GeneratedBackendContract<TMethodId extends GeneratedBackendMethodId> {
   readonly descriptor: GeneratedBackendMethodDescriptor<TMethodId>
   readonly inputSchema: GeneratedBackendMethodInputSchema<TMethodId>
@@ -92,6 +110,22 @@ export function generatedBackendEventContract<TTopic extends GeneratedBackendEve
     descriptor,
     outputSchema: backendContractSchemaById[descriptor.schema_id]
   } as GeneratedBackendEventContract<TTopic>
+}
+
+export interface GeneratedBackendEnvelopeContract<TTopic extends GeneratedBackendEnvelopeTopic> {
+  readonly descriptor: GeneratedBackendEnvelopeDescriptor<TTopic>
+  readonly outputSchema: GeneratedBackendEnvelopeSchema<TTopic>
+}
+
+/** Resolve an SSE envelope descriptor and validator from the generated backend inventory. */
+export function generatedBackendEnvelopeContract<TTopic extends GeneratedBackendEnvelopeTopic>(
+  topic: TTopic
+): GeneratedBackendEnvelopeContract<TTopic> {
+  const descriptor = backendContractEnvelopeDescriptorByTopic[topic]
+  return {
+    descriptor,
+    outputSchema: backendContractSchemaById[descriptor.schema_id]
+  } as GeneratedBackendEnvelopeContract<TTopic>
 }
 
 const GENERATED_CLIENT_BLOCKED_METHODS = new Set<GeneratedBackendMethodId>([

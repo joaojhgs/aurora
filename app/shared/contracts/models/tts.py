@@ -287,18 +287,25 @@ class TTSCapabilities(_StrictTTSIOModel):
         return sorted({normalize_exact_speech_language(item) for item in value})
 
     @field_validator(
-        "supported_language_pack_ids", "installed_language_pack_ids", "resident_language_pack_ids"
+        "supported_language_pack_ids",
+        "installed_language_pack_ids",
+        "resident_language_pack_ids",
+        mode="before",
     )
     @classmethod
     def _nonblank_pack_ids(cls, value: list[str]) -> list[str]:
+        if not isinstance(value, list):
+            return value
         normalized = sorted({_non_blank(item, "list value") for item in value})
         if any(len(item) > 256 for item in normalized):
             raise ValueError("language pack id exceeds limit")
         return normalized
 
-    @field_validator("sample_rates")
+    @field_validator("sample_rates", mode="before")
     @classmethod
     def _validate_sample_rates(cls, value: list[int]) -> list[int]:
+        if not isinstance(value, list):
+            return value
         if any(rate < 8_000 or rate > 192_000 for rate in value):
             raise ValueError("sample rates must be between 8000 and 192000 Hz")
         return sorted(set(value))
@@ -384,9 +391,11 @@ class TTSVoiceDescriptor(_StrictTTSIOModel):
     def _validate_nonblank(cls, value: str) -> str:
         return _non_blank(value, "descriptor field")
 
-    @field_validator("compatible_language_pack_ids")
+    @field_validator("compatible_language_pack_ids", mode="before")
     @classmethod
     def _normalize_language_pack_ids(cls, value: list[str]) -> list[str]:
+        if not isinstance(value, list):
+            return value
         normalized = sorted({_non_blank(item, "language pack id") for item in value})
         if any(len(item) > 256 for item in normalized):
             raise ValueError("language pack id exceeds limit")
@@ -465,17 +474,21 @@ class TTSVoiceProfileDescriptor(_StrictTTSIOModel):
     def _validate_nonblank(cls, value: str) -> str:
         return _non_blank(value, "profile field")
 
-    @field_validator("compatible_language_pack_ids")
+    @field_validator("compatible_language_pack_ids", mode="before")
     @classmethod
     def _normalize_language_pack_ids(cls, value: list[str]) -> list[str]:
+        if not isinstance(value, list):
+            return value
         normalized = sorted({_non_blank(item, "language pack id") for item in value})
         if any(len(item) > 256 for item in normalized):
             raise ValueError("language pack id exceeds limit")
         return normalized
 
-    @field_validator("allowed_peer_ids")
+    @field_validator("allowed_peer_ids", mode="before")
     @classmethod
     def _normalize_peer_ids(cls, value: list[str]) -> list[str]:
+        if not isinstance(value, list):
+            return value
         normalized = sorted({_non_blank(item, "peer id") for item in value})
         if any(len(item) > 256 for item in normalized):
             raise ValueError("peer id exceeds limit")
@@ -588,11 +601,11 @@ class TTSUpdateVoiceProfileRequest(_TTSMutationRequest):
     def _validate_label(cls, value: str | None) -> str | None:
         return _non_blank(value, "display_name") if value is not None else None
 
-    @field_validator("allowed_peer_ids")
+    @field_validator("allowed_peer_ids", mode="before")
     @classmethod
     def _normalize_peer_ids(cls, value: list[str] | None) -> list[str] | None:
-        if value is None:
-            return None
+        if value is None or not isinstance(value, list):
+            return value
         normalized = sorted({_non_blank(item, "peer id") for item in value})
         if any(len(peer_id) > 256 for peer_id in normalized):
             raise ValueError("peer id exceeds limit")

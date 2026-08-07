@@ -7,6 +7,8 @@ import { z } from 'zod/v4'
 import {
   backendContractEventDescriptorByTopic,
   backendContractEventDescriptors,
+  backendContractEnvelopeDescriptorByTopic,
+  backendContractEnvelopeDescriptors,
   backendContractMethodDescriptorById,
   backendContractMethodDescriptors,
   backendContractSchemaById,
@@ -31,6 +33,7 @@ type ContractSchemaItem = {
   schema: Record<string, unknown>
   vectors: {
     positive?: { accepted: true; input: unknown; normalized: unknown }
+    positive_cases?: { accepted: true; input: unknown; normalized: unknown }[]
     negative?: { accepted: false; input: unknown; issue_path: string }
     negative_cases?: { accepted: false; input: unknown; issue_path: string }[]
   }
@@ -275,6 +278,9 @@ const normalizeJsonSchema = (schema: unknown, root: unknown = schema, seenRefs =
     ) {
       continue
     }
+    if (key === 'minProperties' || key === 'maxProperties') {
+      continue
+    }
     if (key === '$schema') {
       normalized[key] = value
       continue
@@ -394,6 +400,11 @@ describe('generated backend contracts', () => {
       expect(normalizeJsonValue(schema.parse(vector.input)), item.schema_id).toEqual(
         normalizeJsonValue(vector.normalized)
       )
+      for (const extra of item.vectors.positive_cases ?? []) {
+        expect(normalizeJsonValue(schema.parse(extra.input)), item.schema_id).toEqual(
+          normalizeJsonValue(extra.normalized)
+        )
+      }
     }
   })
 
@@ -787,6 +798,8 @@ describe('generated backend contracts', () => {
       'Tooling.PrepareExecution',
       'Tooling.ExecuteTool',
       'Gateway.ExplainRoute',
+      'Orchestrator.ExternalUserInput',
+      'Orchestrator.Interrupt',
       'TTS.GetCapabilities',
       'TTS.ListVoices',
       'TTS.ListVoiceProfiles',
@@ -813,9 +826,10 @@ describe('generated backend contracts', () => {
       'Transcription.ProcessAudio',
       'Transcription.Transcribe',
     ])
-    expect(contractSchema.schemas).toHaveLength(61)
-    expect(contractSchema.method_descriptors).toHaveLength(30)
-    expect(contractSchema.event_descriptors).toHaveLength(1)
+    expect(contractSchema.schemas).toHaveLength(68)
+    expect(contractSchema.method_descriptors).toHaveLength(32)
+    expect(contractSchema.event_descriptors).toHaveLength(3)
+    expect(contractSchema.envelope_descriptors).toHaveLength(1)
     expect(contractSchema.tooling_provider_allowlist).toHaveLength(4)
     const descriptors = Object.fromEntries(
       contractSchema.method_descriptors.map((descriptor: Record<string, unknown>) => [
@@ -832,7 +846,7 @@ describe('generated backend contracts', () => {
         event_topic: 'TTS.AudioChunk'
       })
     }
-    const eventDescriptor = contractSchema.event_descriptors[0]
+    const eventDescriptor = backendContractEventDescriptorByTopic['TTS.AudioChunk']
     const eventSchema = contractSchema.schemas.find(
       (item: ContractSchemaItem) => item.schema_id === 'TTS.AudioChunk.event.TTSAudioChunkEvent'
     )
@@ -858,6 +872,27 @@ describe('generated backend contracts', () => {
       response_stream: false,
       event_topic: null
     })
+    expect(descriptors['Orchestrator.ExternalUserInput']?.required_perms).toEqual(['Orchestrator.use'])
+    expect(descriptors['Orchestrator.ExternalUserInput']?.route_path).toBe('/api/Orchestrator/ExternalUserInput')
+    expect(descriptors['Orchestrator.Interrupt']?.required_perms).toEqual(['Orchestrator.use'])
+    expect(backendContractEnvelopeDescriptors).toHaveLength(1)
+    expect(backendContractEnvelopeDescriptorByTopic['Aurora.EventStream']).toEqual(
+      contractSchema.envelope_descriptors[0]
+    )
+    expect(backendContractEnvelopeDescriptorByTopic['Aurora.EventStream']).toMatchObject({
+      envelope_topic: 'Aurora.EventStream',
+      descriptor_kind: 'sse_envelope',
+      route_path: '/api/events/stream',
+      required_permissions_broad: ['Gateway.manage'],
+      required_permissions_scoped: ['Orchestrator.use'],
+      scoped_topics: ['Orchestrator.Response', 'TTS.AudioChunk'],
+      scoped_categories: ['assistant'],
+      requires_correlation_id: true
+    })
+    expect(backendContractMethodDescriptorById).not.toHaveProperty('Aurora.EventStream')
+    expect(backendContractMethodDescriptorById).not.toHaveProperty('Orchestrator.InferChat')
+    expect(backendContractMethodDescriptorById).not.toHaveProperty('Orchestrator.StreamInferChat')
+    expect(backendContractMethodDescriptorById).not.toHaveProperty('Gateway.ListEvents')
     for (const methodId of [
       'TTS.ListVoiceProfiles',
       'TTS.GetVoiceProfile',
@@ -926,7 +961,7 @@ describe('generated backend contracts', () => {
   it('keeps generated method descriptors aligned with SDK coverage and streaming metadata', () => {
     const descriptorIds = backendContractMethodDescriptors.map((descriptor) => descriptor.method_id)
     expect(descriptorIds).toEqual(contractSchema.allowlist)
-    expect(new Set(descriptorIds).size).toBe(30)
+    expect(new Set(descriptorIds).size).toBe(32)
     expect(Object.keys(backendContractMethodDescriptorById).sort()).toEqual([...descriptorIds].sort())
 
     for (const methodId of ['TTS.StreamStart', 'TTS.StreamChunk', 'TTS.StreamEnd'] as const) {
@@ -946,12 +981,30 @@ describe('generated backend contracts', () => {
 
   it('keeps generated event descriptors event-only and validates TTS audio chunks', () => {
     const eventDescriptor = backendContractEventDescriptorByTopic['TTS.AudioChunk']
-    expect(backendContractEventDescriptors).toHaveLength(1)
-    expect(eventDescriptor).toEqual(contractSchema.event_descriptors[0])
+    expect(backendContractEventDescriptors).toHaveLength(3)
+    expect(eventDescriptor).toEqual(
+      contractSchema.event_descriptors.find(
+        (descriptor: Record<string, unknown>) => descriptor.event_topic === 'TTS.AudioChunk'
+      )
+    )
     expect(eventDescriptor.schema_id).toBe('TTS.AudioChunk.event.TTSAudioChunkEvent')
     expect(eventDescriptor.required_permission).toBe('TTS.use')
     expect(eventDescriptor.remote_raw_audio_route).toBe(false)
     expect(backendContractMethodDescriptorById).not.toHaveProperty('TTS.AudioChunk')
+    expect(backendContractEventDescriptorByTopic['Orchestrator.Response']).toMatchObject({
+      event_topic: 'Orchestrator.Response',
+      model: 'AssistantStreamEvent',
+      required_permission: 'Orchestrator.use',
+      ordered_event_group: 'assistant_stream',
+      remote_raw_audio_route: false
+    })
+    expect(backendContractEventDescriptorByTopic['Orchestrator.Interrupted']).toMatchObject({
+      event_topic: 'Orchestrator.Interrupted',
+      model: 'OrchestratorInterruptedEvent',
+      required_permission: 'Orchestrator.use',
+      ordered_event_group: 'assistant_interrupt',
+      remote_raw_audio_route: false
+    })
 
     const schema = backendContractSchemaById['TTS.AudioChunk.event.TTSAudioChunkEvent']
     expect(schema.safeParse({

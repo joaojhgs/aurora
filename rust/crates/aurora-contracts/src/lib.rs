@@ -148,6 +148,41 @@ pub struct EventDescriptor {
     pub remote_raw_audio_route: bool,
 }
 
+/// Generated SSE envelope metadata used by native event-stream transports.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+pub struct EnvelopeDescriptor {
+    /// Typed envelope topic.
+    pub envelope_topic: &'static str,
+    /// Owning product module.
+    pub module: &'static str,
+    /// Envelope name within the module.
+    pub name: &'static str,
+    /// Generated envelope schema identity.
+    pub schema_id: &'static str,
+    /// Generated envelope schema hash.
+    pub schema_hash: &'static str,
+    /// Permission required for broad streams.
+    pub required_permissions_broad: &'static [&'static str],
+    /// Permission accepted for scoped streams.
+    pub required_permissions_scoped: &'static [&'static str],
+    /// Topics eligible for scoped stream authorization.
+    pub scoped_topics: &'static [&'static str],
+    /// Categories eligible for scoped stream authorization.
+    pub scoped_categories: &'static [&'static str],
+    /// Whether scoped subscriptions must include a correlation id.
+    pub requires_correlation_id: bool,
+    /// Whether delivery must remain bounded.
+    pub bounded: bool,
+    /// Whether the envelope is externally authorized.
+    pub authorized: bool,
+    /// Generated SSE route.
+    pub route_path: &'static str,
+    /// Route generation kind.
+    pub route_kind: &'static str,
+    /// Descriptor class; never a callable method.
+    pub descriptor_kind: &'static str,
+}
+
 fn normalize_contract_value(
     schema_id: &str,
     mut value: Value,
@@ -197,8 +232,9 @@ fn validate_normalized_contract_schema(
 
 mod generated;
 
-pub use generated::models;
 pub use generated::{
-    event_by_topic, method_by_id, normalize_generated_contract, schema_by_id,
-    validate_generated_contract, EVENT_DESCRIPTORS, METHOD_DESCRIPTORS, SCHEMA_DESCRIPTORS,
+    envelope_by_topic, event_by_topic, method_by_id, normalize_generated_contract, schema_by_id,
+    validate_generated_contract, ENVELOPE_DESCRIPTORS, EVENT_DESCRIPTORS, METHOD_DESCRIPTORS,
+    SCHEMA_DESCRIPTORS,
 };
+pub use generated::{ids, models};

@@ -142,6 +142,8 @@ SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST: tuple[str, ...] = (
 SDK_CONTRACT_ALLOWLIST: tuple[str, ...] = (
     *SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST,
     "Gateway.ExplainRoute",
+    "Orchestrator.ExternalUserInput",
+    "Orchestrator.Interrupt",
     "TTS.GetCapabilities",
     "TTS.ListVoices",
     "TTS.ListVoiceProfiles",
@@ -174,7 +176,12 @@ SDK_PROVIDER_REQUIRED_PERMISSION_OVERRIDES = {
     "Tooling.GetExportCatalog": "Tooling.GetTools",
     "Tooling.PrepareExecution": "Tooling.ExecuteTool",
 }
-SDK_EVENT_ALLOWLIST: tuple[str, ...] = ("TTS.AudioChunk",)
+SDK_EVENT_ALLOWLIST: tuple[str, ...] = (
+    "Orchestrator.Response",
+    "Orchestrator.Interrupted",
+    "TTS.AudioChunk",
+)
+SDK_ENVELOPE_ALLOWLIST: tuple[str, ...] = ("Aurora.EventStream",)
 
 SERVICE_CLASSES: tuple[tuple[str, str, str], ...] = (
     ("Config", "app.services.config.service", "ConfigService"),
@@ -1194,6 +1201,10 @@ def _event_schema_id(event_topic: str, model_name: str) -> str:
     return f"{event_topic}.event.{model_name}"
 
 
+def _envelope_schema_id(envelope_topic: str, model_name: str) -> str:
+    return f"{envelope_topic}.envelope.{model_name}"
+
+
 def _streaming_shape(method_id: str) -> dict[str, Any]:
     if method_id in {"TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd"}:
         return {
@@ -1547,6 +1558,112 @@ def _annotate_tooling_tool_info_schemas(schema: Any) -> None:
 def _positive_fixture(model_name: str) -> Any | None:
     tool_info = _tool_info_fixture()
     fixtures: dict[str, Any] = {
+        "AuroraEventStreamEvent": {
+            "event_id": "evt-assistant-1",
+            "topic": "Orchestrator.Response",
+            "kind": "assistant.delta",
+            "category": "assistant",
+            "action": "Response",
+            "status": "streaming",
+            "severity": "info",
+            "timestamp": "2026-08-07T00:00:00Z",
+            "correlation_id": "corr-assistant-1",
+            "principal_id": "principal-1",
+            "payload": {
+                "kind": "assistant.delta",
+                "delta": "hel",
+                "session_id": "session-1",
+                "request_id": "request-1",
+                "correlation_id": "corr-assistant-1",
+                "sequence": 1,
+            },
+            "redacted_payload": {
+                "kind": "assistant.delta",
+                "delta": {"redacted": True, "sha256": "a" * 64},
+                "session_id": "session-1",
+                "request_id": "request-1",
+                "correlation_id": "corr-assistant-1",
+                "sequence": 1,
+            },
+            "payload_sha256": "b" * 64,
+            "unexpected": "stripped",
+        },
+        "AssistantStreamEvent": {
+            "kind": "assistant.delta",
+            "delta": "hel",
+            "session_id": "session-1",
+            "request_id": "request-1",
+            "correlation_id": "corr-assistant-1",
+            "message_id": "message-1",
+            "sequence": 1,
+            "metadata": {"source": "native", "stream": True},
+            "unexpected": "stripped",
+        },
+        "OrchestratorInterruptedEvent": {
+            "interrupt_id": "interrupt-1",
+            "status": "cancelled",
+            "requested_scopes": ["generation", "tts_playback"],
+            "results": [
+                {
+                    "scope": "generation",
+                    "status": "cancelled",
+                    "message": "Cancelled 1 active generation task",
+                    "cancelled_count": 1,
+                }
+            ],
+            "session_id": "session-1",
+            "request_id": "request-1",
+            "reason": "user_interrupt",
+            "principal_id": "principal-1",
+            "audit_event": "orchestrator.interrupt.requested",
+            "secrets_redacted": True,
+            "unexpected": "stripped",
+        },
+        "OrchestratorInterruptRequest": {
+            "scopes": ["generation", "tts_playback"],
+            "session_id": "session-1",
+            "request_id": "request-1",
+            "reason": "user_interrupt",
+            "unexpected": "stripped",
+        },
+        "OrchestratorInterruptResponse": {
+            "interrupt_id": "interrupt-1",
+            "status": "cancelled",
+            "requested_scopes": ["generation", "tts_playback"],
+            "results": [
+                {
+                    "scope": "generation",
+                    "status": "cancelled",
+                    "message": "Cancelled 1 active generation task",
+                    "cancelled_count": 1,
+                }
+            ],
+            "session_id": "session-1",
+            "request_id": "request-1",
+            "event_topic": "Orchestrator.Interrupted",
+            "audit_event": "orchestrator.interrupt.requested",
+            "idempotent": True,
+            "secrets_redacted": True,
+            "unexpected": "stripped",
+        },
+        "OrchestratorProcessRequest": {
+            "text": "turn on the kitchen lights",
+            "source": "native",
+            "session_id": "session-1",
+            "request_id": "request-1",
+            "correlation_id": "corr-assistant-1",
+            "stream": True,
+            "client_tts_playback": True,
+            "unexpected": "stripped",
+        },
+        "OrchestratorResponse": {
+            "text": "The kitchen lights are on.",
+            "session_id": "session-1",
+            "request_id": "request-1",
+            "correlation_id": "corr-assistant-1",
+            "metadata": {"source": "native", "stream": False},
+            "unexpected": "stripped",
+        },
         "ToolingExecuteToolRequest": {
             "tool_name": "echo",
             "arguments": {"message": "hello", "unicode": "snowman \u2603"},
@@ -1655,6 +1772,54 @@ def _negative_fixture(model_name: str) -> Any | None:
     tool_info = _tool_info_fixture()
     bad_legacy_tool = {**tool_info, "legacy_global_tool_ids": [" not-trimmed "]}
     fixtures: dict[str, Any] = {
+        "AuroraEventStreamEvent": {
+            "event_id": "evt-assistant-1",
+            "topic": "Orchestrator.Response",
+            "kind": "assistant.delta",
+            "category": "assistant",
+            "payload": {f"k{i}": i for i in range(65)},
+            "redacted_payload": {},
+        },
+        "AssistantStreamEvent": {
+            "kind": "assistant.delta",
+            "delta": "hel",
+            "sequence": 2**53,
+        },
+        "OrchestratorInterruptedEvent": {
+            "interrupt_id": "interrupt-1",
+            "status": "cancelled",
+            "requested_scopes": ["generation"],
+            "results": [
+                {
+                    "scope": "generation",
+                    "status": "cancelled",
+                    "cancelled_count": 2**53,
+                }
+            ],
+        },
+        "OrchestratorInterruptRequest": {
+            "scopes": ["generation", "tool_call", "tts_playback", "session", "generation"],
+            "reason": "user_interrupt",
+        },
+        "OrchestratorInterruptResponse": {
+            "interrupt_id": "interrupt-1",
+            "status": "cancelled",
+            "requested_scopes": ["generation"],
+            "results": [
+                {
+                    "scope": "generation",
+                    "status": "cancelled",
+                    "cancelled_count": 2**53,
+                }
+            ],
+        },
+        "OrchestratorProcessRequest": {
+            "text": "",
+            "source": "native",
+        },
+        "OrchestratorResponse": {
+            "text": "x" * 120_001,
+        },
         "ToolingExecuteToolRequest": {
             "tool_name": 12,
             "arguments": {},
@@ -1755,6 +1920,17 @@ def _negative_fixtures(model_name: str) -> list[Any]:
                             }
                         ],
                     },
+                    {
+                        **base,
+                        "tools": [
+                            {
+                                **base["tools"][0],
+                                "legacy_global_tool_ids": [
+                                    f"legacy-{index:02d}" for index in range(17)
+                                ],
+                            }
+                        ],
+                    },
                 ]
             )
     if model_name == "ToolingGetToolsRequest":
@@ -1765,6 +1941,22 @@ def _negative_fixtures(model_name: str) -> list[Any]:
                 {"top_k": -(2**53)},
             ]
         )
+    if model_name == "ToolingGetToolsResponse":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.append(
+                {
+                    **base,
+                    "tools": [
+                        {
+                            **base["tools"][0],
+                            "legacy_global_tool_ids": [
+                                f"legacy-{index:02d}" for index in range(17)
+                            ],
+                        }
+                    ],
+                }
+            )
     if model_name == "TTSAudioChunkEvent":
         base = _positive_fixture(model_name)
         if isinstance(base, dict):
@@ -1776,12 +1968,83 @@ def _negative_fixtures(model_name: str) -> list[Any]:
                     {**base, "channels": 0},
                 ]
             )
+    if model_name == "AssistantStreamEvent":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.extend(
+                [
+                    {**base, "metadata": {f"k{i}": i for i in range(65)}},
+                    {**base, "delta": "x" * 16_385},
+                ]
+            )
+    if model_name == "AuroraEventStreamEvent":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.extend(
+                [
+                    {**base, "event_id": ""},
+                    {**base, "redacted_payload": {f"k{i}": i for i in range(65)}},
+                ]
+            )
+    if model_name == "OrchestratorInterruptRequest":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.append({**base, "reason": ""})
+    if model_name in {"OrchestratorInterruptResponse", "OrchestratorInterruptedEvent"}:
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.append({**base, "requested_scopes": ["generation"] * 5})
+    return cases
+
+
+def _positive_fixtures(model_name: str) -> list[Any]:
+    first = _positive_fixture(model_name)
+    cases = [] if first is None else [first]
+    if model_name == "AssistantStreamEvent":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.extend(
+                [
+                    {
+                        **base,
+                        "kind": "assistant.completed",
+                        "text": "The kitchen lights are on.",
+                        "delta": "",
+                        "sequence": 2,
+                        "is_final": True,
+                    },
+                    {
+                        **base,
+                        "kind": "assistant.failed",
+                        "text": "Aurora could not complete that request.",
+                        "delta": "",
+                        "sequence": 3,
+                        "is_final": True,
+                        "metadata": {"source": "native", "error": True},
+                    },
+                ]
+            )
+    if model_name in {"ToolingGetToolsResponse", "ToolingGetExportCatalogResponse"}:
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.append(
+                {
+                    **base,
+                    "tools": [
+                        {
+                            **base["tools"][0],
+                            "legacy_global_tool_ids": ["legacy-a"] * 20 + ["legacy-b"] * 20,
+                        }
+                    ],
+                }
+            )
     return cases
 
 
 def _validation_vectors(model: Any, *, method_id: str, direction: str) -> dict[str, Any]:
     model_name = _model_name(model) or str(model)
-    positive = _positive_fixture(model_name)
+    positive_cases = _positive_fixtures(model_name)
+    positive = positive_cases[0] if positive_cases else None
     negative_cases = _negative_fixtures(model_name)
     vectors: dict[str, Any] = {}
     if positive is not None:
@@ -1793,6 +2056,17 @@ def _validation_vectors(model: Any, *, method_id: str, direction: str) -> dict[s
             "normalized": normalized,
             "normalized_hash": sha256_json(normalized),
         }
+    for positive_case in positive_cases[1:]:
+        parsed = model.model_validate(positive_case)
+        normalized = parsed.model_dump(mode="json", by_alias=True)
+        vectors.setdefault("positive_cases", []).append(
+            {
+                "accepted": True,
+                "input": positive_case,
+                "normalized": normalized,
+                "normalized_hash": sha256_json(normalized),
+            }
+        )
     for index, negative in enumerate(negative_cases):
         try:
             model.model_validate(negative)
@@ -1821,6 +2095,11 @@ def build_sdk_contract_schema() -> dict[str, Any]:
     schemas: list[dict[str, Any]] = []
     method_descriptors: list[dict[str, Any]] = []
     event_descriptors: list[dict[str, Any]] = []
+    from app.shared.contracts.models.aurora import AuroraEventStreamEvent
+    from app.shared.contracts.models.orchestrator import (
+        AssistantStreamEvent,
+        OrchestratorInterruptedEvent,
+    )
     from app.shared.contracts.models.tooling import (
         ToolingExecuteToolRequest,
         ToolingExecuteToolResponse,
@@ -1846,6 +2125,28 @@ def build_sdk_contract_schema() -> dict[str, Any]:
         ),
     }
     event_models = {
+        "Orchestrator.Response": {
+            "module": "Orchestrator",
+            "name": "Response",
+            "topic": "Orchestrator.Response",
+            "model": AssistantStreamEvent,
+            "required_permission": "Orchestrator.use",
+            "bounded": True,
+            "authorized": True,
+            "ordered_event_group": "assistant_stream",
+            "remote_raw_audio_route": False,
+        },
+        "Orchestrator.Interrupted": {
+            "module": "Orchestrator",
+            "name": "Interrupted",
+            "topic": "Orchestrator.Interrupted",
+            "model": OrchestratorInterruptedEvent,
+            "required_permission": "Orchestrator.use",
+            "bounded": True,
+            "authorized": True,
+            "ordered_event_group": "assistant_interrupt",
+            "remote_raw_audio_route": False,
+        },
         "TTS.AudioChunk": {
             "module": "TTS",
             "name": "AudioChunk",
@@ -1856,6 +2157,24 @@ def build_sdk_contract_schema() -> dict[str, Any]:
             "authorized": True,
             "ordered_event_group": "tts_text_stream",
             "remote_raw_audio_route": False,
+        },
+    }
+    envelope_models = {
+        "Aurora.EventStream": {
+            "module": "Aurora",
+            "name": "EventStream",
+            "topic": "Aurora.EventStream",
+            "model": AuroraEventStreamEvent,
+            "required_permissions_broad": ["Gateway.manage"],
+            "required_permissions_scoped": ["Orchestrator.use"],
+            "scoped_topics": ["Orchestrator.Response", "TTS.AudioChunk"],
+            "scoped_categories": ["assistant"],
+            "requires_correlation_id": True,
+            "bounded": True,
+            "authorized": True,
+            "route_path": "/api/events/stream",
+            "route_kind": "gateway_sse_builtin",
+            "descriptor_kind": "sse_envelope",
         }
     }
     method_metadata: dict[str, dict[str, Any]] = {}
@@ -2007,6 +2326,57 @@ def build_sdk_contract_schema() -> dict[str, Any]:
             }
         )
 
+    envelope_descriptors: list[dict[str, Any]] = []
+    for envelope_topic in SDK_ENVELOPE_ALLOWLIST:
+        metadata = envelope_models.get(envelope_topic)
+        if metadata is None:
+            raise ValueError(
+                f"Allowlisted envelope is not registered for SDK generation: {envelope_topic}"
+            )
+        model = metadata["model"]
+        model_name = _model_name(model) or str(model)
+        schema = _model_wire_schema(model, mode="serialization")
+        schema_id = _envelope_schema_id(envelope_topic, model_name)
+        _assert_validator_extension_coverage(
+            method_id=envelope_topic,
+            direction="envelope",
+            root_model=model,
+            schema=schema,
+        )
+        _assert_no_unbounded_integer_schema(schema, context=schema_id)
+        schema_item = {
+            "schema_id": schema_id,
+            "method_id": envelope_topic,
+            "direction": "envelope",
+            "pydantic_mode": "serialization",
+            "model_name": model_name,
+            "schema": schema,
+            "schema_hash": sha256_json(schema),
+            "vectors": _validation_vectors(model, method_id=envelope_topic, direction="envelope"),
+        }
+        schemas.append(schema_item)
+        envelope_descriptors.append(
+            {
+                "envelope_topic": envelope_topic,
+                "module": metadata["module"],
+                "name": metadata["name"],
+                "topic": metadata["topic"],
+                "model": model_name,
+                "schema_id": schema_item["schema_id"],
+                "schema_hash": schema_item["schema_hash"],
+                "required_permissions_broad": metadata["required_permissions_broad"],
+                "required_permissions_scoped": metadata["required_permissions_scoped"],
+                "scoped_topics": metadata["scoped_topics"],
+                "scoped_categories": metadata["scoped_categories"],
+                "requires_correlation_id": metadata["requires_correlation_id"],
+                "bounded": metadata["bounded"],
+                "authorized": metadata["authorized"],
+                "route_path": metadata["route_path"],
+                "route_kind": metadata["route_kind"],
+                "descriptor_kind": metadata["descriptor_kind"],
+            }
+        )
+
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "artifact": "aurora-sdk-backend-contracts",
@@ -2020,6 +2390,7 @@ def build_sdk_contract_schema() -> dict[str, Any]:
         ),
         "method_descriptors": method_descriptors,
         "event_descriptors": event_descriptors,
+        "envelope_descriptors": envelope_descriptors,
         "schemas": sorted(schemas, key=lambda item: item["schema_id"]),
     }
 

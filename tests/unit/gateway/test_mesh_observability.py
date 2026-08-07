@@ -320,6 +320,47 @@ def test_assistant_delta_event_preserves_correlation_and_safe_live_order_fields(
     assert "must-not-leak" not in json.dumps(live_payload)
 
 
+def test_live_assistant_payload_excludes_audio_credentials_tool_args_and_arbitrary_payload():
+    live_payload = _live_display_payload(
+        OrchestratorMethods.RESPONSE,
+        {
+            "kind": "assistant.delta",
+            "delta": "Safe text",
+            "text": "Safe text",
+            "session_id": "session-safe",
+            "request_id": "request-safe",
+            "correlation_id": "corr-safe",
+            "sequence": 1,
+            "audio_data": "raw-audio-must-not-leak",
+            "credentials": {"api_key": "credential-must-not-leak"},
+            "tool_args": {"password": "tool-arg-must-not-leak"},
+            "payload": {"nested": {"secret": "arbitrary-payload-must-not-leak"}},
+            "metadata": {
+                "source": "native",
+                "stream": True,
+                "provider": "local",
+                "authorization": "bearer token-must-not-leak",
+            },
+        },
+    )
+
+    assert live_payload == {
+        "kind": "assistant.delta",
+        "text": "Safe text",
+        "delta": "Safe text",
+        "session_id": "session-safe",
+        "request_id": "request-safe",
+        "correlation_id": "corr-safe",
+        "sequence": 1,
+        "metadata": {"source": "native", "stream": True, "provider": "local"},
+    }
+    dumped = json.dumps(live_payload)
+    assert "raw-audio-must-not-leak" not in dumped
+    assert "credential-must-not-leak" not in dumped
+    assert "tool-arg-must-not-leak" not in dumped
+    assert "arbitrary-payload-must-not-leak" not in dumped
+
+
 def test_live_assistant_tool_payload_preserves_safe_query_without_diagnostic_hashing():
     live_payload = _live_display_payload(
         OrchestratorMethods.RESPONSE,

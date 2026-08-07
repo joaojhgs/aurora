@@ -252,7 +252,9 @@ def _walk_marker_paths(schema: Any, path: str = "$") -> list[str]:
 
 def _model_class(model_name: str) -> Any:
     for module_name in (
+        "app.shared.contracts.models.aurora",
         "app.shared.contracts.models.gateway",
+        "app.shared.contracts.models.orchestrator",
         "app.shared.contracts.models.stt",
         "app.shared.contracts.models.tts",
         "app.shared.contracts.models.tooling",
@@ -664,6 +666,66 @@ def _render_event_descriptors(contract_schema: Mapping[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _render_envelope_descriptors(contract_schema: Mapping[str, Any]) -> str:
+    lines = ["pub static ENVELOPE_DESCRIPTORS: &[EnvelopeDescriptor] = &["]
+    for item in contract_schema.get("envelope_descriptors", []):
+        lines.extend(
+            [
+                "    EnvelopeDescriptor {",
+                f"        envelope_topic: {rust_string(item['envelope_topic'])},",
+                f"        module: {rust_string(item['module'])},",
+                f"        name: {rust_string(item['name'])},",
+                f"        schema_id: {rust_string(item['schema_id'])},",
+                f"        schema_hash: {rust_string(item['schema_hash'])},",
+                "        required_permissions_broad: "
+                f"{rust_slice(item['required_permissions_broad'])},",
+                "        required_permissions_scoped: "
+                f"{rust_slice(item['required_permissions_scoped'])},",
+                f"        scoped_topics: {rust_slice(item['scoped_topics'])},",
+                f"        scoped_categories: {rust_slice(item['scoped_categories'])},",
+                f"        requires_correlation_id: {str(item['requires_correlation_id']).lower()},",
+                f"        bounded: {str(item['bounded']).lower()},",
+                f"        authorized: {str(item['authorized']).lower()},",
+                f"        route_path: {rust_string(item['route_path'])},",
+                f"        route_kind: {rust_string(item['route_kind'])},",
+                f"        descriptor_kind: {rust_string(item['descriptor_kind'])},",
+                "    },",
+            ]
+        )
+    lines.append("];")
+    return "\n".join(lines)
+
+
+def _rust_const_name(value: str) -> str:
+    parts = [part for part in re.split(r"[^A-Za-z0-9]+", value) if part]
+    candidate = "_".join(snake_case(part).upper() for part in parts)
+    if not candidate or candidate[0].isdigit():
+        raise GenerationError(f"cannot render Rust constant name for {value!r}")
+    return candidate
+
+
+def _render_identity_constants(contract_schema: Mapping[str, Any]) -> str:
+    lines = ["pub mod ids {"]
+    seen: dict[str, str] = {}
+    for collection, key in (
+        (contract_schema.get("method_descriptors", []), "method_id"),
+        (contract_schema.get("event_descriptors", []), "event_topic"),
+        (contract_schema.get("envelope_descriptors", []), "envelope_topic"),
+    ):
+        for item in collection:
+            value = item[key]
+            name = _rust_const_name(value)
+            if existing := seen.get(name):
+                raise GenerationError(
+                    "duplicate generated Rust identity constant "
+                    f"{name} for {existing!r} and {value!r}"
+                )
+            seen[name] = value
+            lines.append(f"    pub const {name}: &str = {rust_string(value)};")
+    lines.append("}")
+    return "\n".join(lines)
+
+
 def _render_validator(contract_schema: Mapping[str, Any], model_modules: Mapping[str, str]) -> str:
     arms: list[str] = []
     for item in contract_schema["schemas"]:
@@ -706,17 +768,21 @@ def render_rust_module(contract_schema: Mapping[str, Any]) -> str:
     models, model_modules = _render_models(contract_schema)
     sections = [
         GENERATED_HEADER,
-        "use crate::{normalize_contract_value, validate_normalized_contract_schema, ContractParseError, EventDescriptor, MethodDescriptor, SchemaDescriptor, StreamingDescriptor};",
+        "use crate::{normalize_contract_value, validate_normalized_contract_schema, ContractParseError, EnvelopeDescriptor, EventDescriptor, MethodDescriptor, SchemaDescriptor, StreamingDescriptor};",
+        _render_identity_constants(contract_schema),
         models,
         _render_schema_descriptors(contract_schema, model_modules),
         _render_method_descriptors(contract_schema),
         _render_event_descriptors(contract_schema),
+        _render_envelope_descriptors(contract_schema),
         "pub fn schema_by_id(schema_id: &str) -> Option<&'static SchemaDescriptor> {\n"
         "    SCHEMA_DESCRIPTORS.iter().find(|item| item.schema_id == schema_id)\n}",
         "pub fn method_by_id(method_id: &str) -> Option<&'static MethodDescriptor> {\n"
         "    METHOD_DESCRIPTORS.iter().find(|item| item.method_id == method_id)\n}",
         "pub fn event_by_topic(topic: &str) -> Option<&'static EventDescriptor> {\n"
         "    EVENT_DESCRIPTORS.iter().find(|item| item.event_topic == topic)\n}",
+        "pub fn envelope_by_topic(topic: &str) -> Option<&'static EnvelopeDescriptor> {\n"
+        "    ENVELOPE_DESCRIPTORS.iter().find(|item| item.envelope_topic == topic)\n}",
         _render_validator(contract_schema, model_modules),
     ]
     return "\n\n".join(sections) + "\n"
@@ -745,6 +811,20 @@ def render_vector_fixture(contract_schema: Mapping[str, Any]) -> str:
                         if positive.get("marker_paths")
                         else {}
                     ),
+                }
+            )
+        for case_index, extra_positive in enumerate(raw_vectors.get("positive_cases") or [], 1):
+            vectors.append(
+                {
+                    "accepted": True,
+                    "case_index": case_index,
+                    "direction": item["direction"],
+                    "input": extra_positive["input"],
+                    "method_id": item["method_id"],
+                    "model_name": item["model_name"],
+                    "normalized": extra_positive["normalized"],
+                    "normalized_hash": extra_positive["normalized_hash"],
+                    "schema_id": item["schema_id"],
                 }
             )
         for index, negative in enumerate(raw_vectors.get("negative_cases") or []):

@@ -14,6 +14,7 @@ from app.services.gateway.fastapi_app import (
 from app.shared.contracts.models.aurora import AuroraEventStreamEvent
 from app.shared.contracts.models.gateway import GatewayListEventsResponse
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
+from app.shared.contracts.models.tts import TTSMethods
 
 
 def _assistant_event(event_id: str, principal_id: str | None) -> AuroraEventStreamEvent:
@@ -86,7 +87,7 @@ async def test_backfill_drops_other_principals_assistant_turns() -> None:
     assert [event.event_id for event in events] == ["user-a"]
 
 
-def test_regular_user_can_stream_principal_scoped_voice_responses_only() -> None:
+def test_regular_user_can_stream_correlated_principal_scoped_voice_responses_only() -> None:
     identity = _Identity({"Orchestrator.use"})
 
     _authorize_event_stream_request(
@@ -94,14 +95,39 @@ def test_regular_user_can_stream_principal_scoped_voice_responses_only() -> None
         topics=[OrchestratorMethods.RESPONSE],
         categories={"assistant"},
         kinds={"assistant.completed"},
-        correlation_id=None,
+        correlation_id="corr-1",
+    )
+    _authorize_event_stream_request(
+        identity,
+        topics=[OrchestratorMethods.RESPONSE, TTSMethods.AUDIO_CHUNK],
+        categories={"assistant"},
+        kinds={"assistant.completed", "tts.audio_chunk"},
+        correlation_id="corr-1",
     )
 
     with pytest.raises(HTTPException, match="Gateway.manage is required"):
         _authorize_event_stream_request(
             identity,
-            topics=[OrchestratorMethods.RESPONSE, "TTS.AudioChunk"],
+            topics=[OrchestratorMethods.RESPONSE],
             categories={"assistant"},
             kinds={"assistant.completed"},
             correlation_id=None,
+        )
+
+    with pytest.raises(HTTPException, match="Gateway.manage is required"):
+        _authorize_event_stream_request(
+            identity,
+            topics=[OrchestratorMethods.RESPONSE, TTSMethods.AUDIO_CHUNK],
+            categories={"assistant"},
+            kinds={"assistant.completed"},
+            correlation_id=None,
+        )
+
+    with pytest.raises(HTTPException, match="Gateway.manage is required"):
+        _authorize_event_stream_request(
+            identity,
+            topics=[OrchestratorMethods.RESPONSE, "Tooling.ExecuteTool"],
+            categories={"assistant"},
+            kinds={"assistant.completed"},
+            correlation_id="corr-1",
         )

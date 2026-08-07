@@ -10,6 +10,8 @@ import pytest
 from scripts.generate_rust_contracts import (
     NORMALIZATION_MARKERS,
     GenerationError,
+    _render_identity_constants,
+    _rust_const_name,
     generate,
     render_outputs,
     render_vector_fixture,
@@ -62,6 +64,35 @@ def test_rust_contract_generator_rejects_conflicting_model_identity() -> None:
 
     with pytest.raises(GenerationError, match="conflicting schema hashes"):
         render_outputs(schema)
+
+
+def test_rust_identity_constants_use_screaming_snake_case() -> None:
+    assert _rust_const_name("Orchestrator.ExternalUserInput") == (
+        "ORCHESTRATOR_EXTERNAL_USER_INPUT"
+    )
+    assert _rust_const_name("Aurora.EventStream") == "AURORA_EVENT_STREAM"
+    assert _rust_const_name("TTS.GetCapabilities") == "TTS_GET_CAPABILITIES"
+    assert _rust_const_name("STTCoordinator.StopListening") == "STT_COORDINATOR_STOP_LISTENING"
+
+
+def test_rust_identity_constant_generation_rejects_name_collisions() -> None:
+    schema = {
+        "method_descriptors": [
+            {"method_id": "Example.ExternalUserInput"},
+            {"method_id": "Example.External.UserInput"},
+        ],
+        "event_descriptors": [],
+        "envelope_descriptors": [],
+    }
+
+    with pytest.raises(
+        GenerationError,
+        match=(
+            r"duplicate generated Rust identity constant EXAMPLE_EXTERNAL_USER_INPUT "
+            r"for 'Example.ExternalUserInput' and 'Example.External.UserInput'"
+        ),
+    ):
+        _render_identity_constants(schema)
 
 
 def test_rust_contract_marker_vectors_cover_every_normalization_marker_schema() -> None:

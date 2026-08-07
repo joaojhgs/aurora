@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import Field
 
 from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.speech import MAX_JS_SAFE_INTEGER
 from app.shared.contracts.models.tooling import (
     ToolingApprovalGrantScope,
     ToolingExecuteToolResponse,
@@ -62,29 +63,29 @@ OrchestratorInterruptStatus = Literal[
 class OrchestratorProcessRequest(IOModel):
     """Request to process user input."""
 
-    text: str
-    source: str = "external"
-    session_id: str | None = None
-    request_id: str | None = None
-    correlation_id: str | None = None
+    text: str = Field(min_length=1, max_length=120_000)
+    source: str = Field(default="external", min_length=1, max_length=64)
+    session_id: str | None = Field(default=None, min_length=1, max_length=256)
+    request_id: str | None = Field(default=None, min_length=1, max_length=256)
+    correlation_id: str | None = Field(default=None, min_length=1, max_length=256)
     stream: bool = False
     client_tts_playback: bool | None = None
     dispatch_selector: MeshAddressSelector | None = None
     mesh_selector: MeshAddressSelector | None = None
     selector: MeshAddressSelector | None = None
     inference_selector: MeshAddressSelector | None = None
-    inference_provider_id: str | None = None
-    inference_model_id: str | None = None
+    inference_provider_id: str | None = Field(default=None, min_length=1, max_length=256)
+    inference_model_id: str | None = Field(default=None, min_length=1, max_length=512)
 
 
 class OrchestratorResponse(IOModel):
     """Response from orchestrator."""
 
-    text: str
-    session_id: str | None = None
-    request_id: str | None = None
-    correlation_id: str | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    text: str = Field(max_length=120_000)
+    session_id: str | None = Field(default=None, min_length=1, max_length=256)
+    request_id: str | None = Field(default=None, min_length=1, max_length=256)
+    correlation_id: str | None = Field(default=None, min_length=1, max_length=256)
+    metadata: dict[str, Any] = Field(default_factory=dict, max_length=64)
 
 
 class OrchestratorChatMessage(IOModel):
@@ -192,22 +193,22 @@ OrchestratorToolApprovalStatus = Literal[
 class AssistantToolStreamState(IOModel):
     """Safe, redacted tool-call state for assistant stream consumers."""
 
-    tool_call_id: str
-    tool_name: str
-    display_name: str | None = None
+    tool_call_id: str = Field(min_length=1, max_length=256)
+    tool_name: str = Field(min_length=1, max_length=256)
+    display_name: str | None = Field(default=None, min_length=1, max_length=256)
     status: AssistantToolStreamStatus
-    summary: str = ""
-    risk_class: str | None = None
-    target: str | None = None
-    provider_id: str | None = None
+    summary: str = Field(default="", max_length=2_000)
+    risk_class: str | None = Field(default=None, min_length=1, max_length=64)
+    target: str | None = Field(default=None, min_length=1, max_length=256)
+    provider_id: str | None = Field(default=None, min_length=1, max_length=256)
     data_leaves_device: bool = False
-    redacted_args_preview: dict[str, Any] = Field(default_factory=dict)
+    redacted_args_preview: dict[str, Any] = Field(default_factory=dict, max_length=32)
     result_preview: dict[str, Any] | str | None = None
-    error: str | None = None
+    error: str | None = Field(default=None, min_length=1, max_length=1_000)
     error_details: dict[str, Any] | str | None = None
-    policy_decision_id: str | None = None
-    pending_id: str | None = None
-    approval_request_id: str | None = None
+    policy_decision_id: str | None = Field(default=None, min_length=1, max_length=256)
+    pending_id: str | None = Field(default=None, min_length=1, max_length=256)
+    approval_request_id: str | None = Field(default=None, min_length=1, max_length=256)
     approval_expires_at: float | None = None
 
 
@@ -215,15 +216,15 @@ class AssistantStreamEvent(IOModel):
     """Incremental assistant stream event published on Orchestrator.Response."""
 
     kind: AssistantStreamEventKind
-    text: str = ""
-    delta: str = ""
-    session_id: str | None = None
-    request_id: str | None = None
-    correlation_id: str | None = None
-    message_id: str | None = None
-    sequence: int = 0
+    text: str = Field(default="", max_length=120_000)
+    delta: str = Field(default="", max_length=16_384)
+    session_id: str | None = Field(default=None, min_length=1, max_length=256)
+    request_id: str | None = Field(default=None, min_length=1, max_length=256)
+    correlation_id: str | None = Field(default=None, min_length=1, max_length=256)
+    message_id: str | None = Field(default=None, min_length=1, max_length=256)
+    sequence: int = Field(default=0, ge=0, le=MAX_JS_SAFE_INTEGER)
     is_final: bool = False
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict, max_length=64)
     tool: AssistantToolStreamState | None = None
 
 
@@ -423,11 +424,12 @@ class OrchestratorInterruptRequest(IOModel):
     """
 
     scopes: list[OrchestratorInterruptScope] = Field(
-        default_factory=lambda: ["generation", "tool_call", "tts_playback", "session"]
+        default_factory=lambda: ["generation", "tool_call", "tts_playback", "session"],
+        max_length=4,
     )
-    session_id: str | None = None
-    request_id: str | None = None
-    reason: str = "user_interrupt"
+    session_id: str | None = Field(default=None, min_length=1, max_length=256)
+    request_id: str | None = Field(default=None, min_length=1, max_length=256)
+    reason: str = Field(default="user_interrupt", min_length=1, max_length=256)
 
 
 class OrchestratorInterruptScopeResult(IOModel):
@@ -435,19 +437,19 @@ class OrchestratorInterruptScopeResult(IOModel):
 
     scope: OrchestratorInterruptScope
     status: OrchestratorInterruptStatus
-    message: str = ""
-    cancelled_count: int = 0
+    message: str = Field(default="", max_length=1_000)
+    cancelled_count: int = Field(default=0, ge=0, le=MAX_JS_SAFE_INTEGER)
 
 
 class OrchestratorInterruptResponse(IOModel):
     """Idempotent response returned by Orchestrator.Interrupt."""
 
-    interrupt_id: str
-    status: str
-    requested_scopes: list[OrchestratorInterruptScope] = Field(default_factory=list)
-    results: list[OrchestratorInterruptScopeResult] = Field(default_factory=list)
-    session_id: str | None = None
-    request_id: str | None = None
+    interrupt_id: str = Field(min_length=1, max_length=256)
+    status: str = Field(min_length=1, max_length=64)
+    requested_scopes: list[OrchestratorInterruptScope] = Field(default_factory=list, max_length=4)
+    results: list[OrchestratorInterruptScopeResult] = Field(default_factory=list, max_length=4)
+    session_id: str | None = Field(default=None, min_length=1, max_length=256)
+    request_id: str | None = Field(default=None, min_length=1, max_length=256)
     event_topic: str = OrchestratorEvents.INTERRUPTED
     audit_event: str = "orchestrator.interrupt.requested"
     idempotent: bool = True
@@ -457,14 +459,14 @@ class OrchestratorInterruptResponse(IOModel):
 class OrchestratorInterruptedEvent(IOModel):
     """Event emitted after an interrupt request is handled."""
 
-    interrupt_id: str
-    status: str
-    requested_scopes: list[OrchestratorInterruptScope] = Field(default_factory=list)
-    results: list[OrchestratorInterruptScopeResult] = Field(default_factory=list)
-    session_id: str | None = None
-    request_id: str | None = None
-    reason: str = "user_interrupt"
-    principal_id: str | None = None
+    interrupt_id: str = Field(min_length=1, max_length=256)
+    status: str = Field(min_length=1, max_length=64)
+    requested_scopes: list[OrchestratorInterruptScope] = Field(default_factory=list, max_length=4)
+    results: list[OrchestratorInterruptScopeResult] = Field(default_factory=list, max_length=4)
+    session_id: str | None = Field(default=None, min_length=1, max_length=256)
+    request_id: str | None = Field(default=None, min_length=1, max_length=256)
+    reason: str = Field(default="user_interrupt", min_length=1, max_length=256)
+    principal_id: str | None = Field(default=None, min_length=1, max_length=256)
     audit_event: str = "orchestrator.interrupt.requested"
     secrets_redacted: bool = True
 

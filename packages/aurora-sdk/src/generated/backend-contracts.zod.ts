@@ -161,6 +161,34 @@ function validateTtsImportChunkResponseInvariant(value: Record<string, unknown>,
 function validateTtsAudioChunkEventInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (value.is_final !== true && value.audio_data === '') addInvariantIssue(ctx, [], 'non-final audio chunk requires audio data'); }
 function validateSttTranscribeLanguageShape(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (value.language !== null && value.language !== undefined && listIds(value, 'auto_language_candidates').length > 0) addInvariantIssue(ctx, ['auto_language_candidates'], 'exact STT language cannot include auto candidates'); }
 
+export const AuroraEventStreamEnvelopeAuroraEventStreamEventSchema = z.object({
+  "action": z.string().refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).prefault("").meta({"default":""}).optional(),
+  "category": z.enum(["admin_action", "assistant", "audio", "audit", "capability", "config", "data", "pairing", "peer", "route", "scheduler", "service", "tool_approval", "tool_execution", "tool_progress", "unknown"]).prefault("unknown").meta({"default":"unknown"}).optional(),
+  "correlation_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "event_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}),
+  "kind": z.string().refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).prefault("").meta({"default":""}).optional(),
+  "payload": z.looseObject({
+
+}).catchall(auroraJsonValueSchema.meta({"x-aurora-json-value":true})).refine((value) => Object.keys(value).length <= 64, { message: 'object must contain at most 64 properties' }).meta({"x-aurora-extra-behavior":"preserve"}).nullable().prefault(null).meta({"default":null}).optional(),
+  "payload_sha256": z.string().refine((value) => codePointLength(value) <= 64, { message: 'string must contain at most 64 Unicode code points' }).meta({"maxLength":64}).prefault("").meta({"default":""}).optional(),
+  "policy_decision_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "principal_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "provider_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "redacted_payload": z.looseObject({
+
+}).catchall(auroraJsonValueSchema.meta({"x-aurora-json-value":true})).refine((value) => Object.keys(value).length <= 64, { message: 'object must contain at most 64 properties' }).meta({"x-aurora-extra-behavior":"preserve"}).optional(),
+  "resource_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "route": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "severity": z.enum(["error", "info", "warning"]).prefault("info").meta({"default":"info"}).optional(),
+  "source_peer_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "status": z.string().refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).prefault("").meta({"default":""}).optional(),
+  "target_peer_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "timestamp": z.string().refine((value) => codePointLength(value) <= 64, { message: 'string must contain at most 64 Unicode code points' }).meta({"maxLength":64}).optional(),
+  "tool_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "topic": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})
+}).meta({"x-aurora-extra-behavior":"strip"})
+export type AuroraEventStreamEnvelopeAuroraEventStreamEvent = z.infer<typeof AuroraEventStreamEnvelopeAuroraEventStreamEventSchema>
+
 const GatewayExplainRouteInputRouteExplainRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
   "hardware_target": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
@@ -273,6 +301,137 @@ export const GatewayExplainRouteOutputRouteExplainResponseSchema = z.object({
   "topic": z.string()
 }).meta({"x-aurora-extra-behavior":"strip"})
 export type GatewayExplainRouteOutputRouteExplainResponse = z.infer<typeof GatewayExplainRouteOutputRouteExplainResponseSchema>
+
+const OrchestratorExternalUserInputInputOrchestratorProcessRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
+  "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "hardware_target": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "peer_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "provider_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "resource_namespace": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "service_instance_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "tool_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional()
+}).meta({"x-aurora-extra-behavior":"strip"}))
+
+export const OrchestratorExternalUserInputInputOrchestratorProcessRequestSchema = z.object({
+  "client_tts_playback": z.boolean().nullable().prefault(null).meta({"default":null}).optional(),
+  "correlation_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "dispatch_selector": OrchestratorExternalUserInputInputOrchestratorProcessRequestSchemaMeshAddressSelectorSchemaDef.nullable().prefault(null).meta({"default":null}).optional(),
+  "inference_model_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 512, { message: 'string must contain at most 512 Unicode code points' }).meta({"maxLength":512}).nullable().prefault(null).meta({"default":null}).optional(),
+  "inference_provider_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "inference_selector": OrchestratorExternalUserInputInputOrchestratorProcessRequestSchemaMeshAddressSelectorSchemaDef.nullable().prefault(null).meta({"default":null}).optional(),
+  "mesh_selector": OrchestratorExternalUserInputInputOrchestratorProcessRequestSchemaMeshAddressSelectorSchemaDef.nullable().prefault(null).meta({"default":null}).optional(),
+  "request_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "selector": OrchestratorExternalUserInputInputOrchestratorProcessRequestSchemaMeshAddressSelectorSchemaDef.nullable().prefault(null).meta({"default":null}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "source": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 64, { message: 'string must contain at most 64 Unicode code points' }).meta({"maxLength":64}).prefault("external").meta({"default":"external"}).optional(),
+  "stream": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "text": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 120000, { message: 'string must contain at most 120000 Unicode code points' }).meta({"maxLength":120000})
+}).meta({"x-aurora-extra-behavior":"strip"})
+export type OrchestratorExternalUserInputInputOrchestratorProcessRequest = z.infer<typeof OrchestratorExternalUserInputInputOrchestratorProcessRequestSchema>
+
+export const OrchestratorExternalUserInputOutputOrchestratorResponseSchema = z.object({
+  "correlation_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "metadata": z.looseObject({
+
+}).catchall(auroraJsonValueSchema.meta({"x-aurora-json-value":true})).refine((value) => Object.keys(value).length <= 64, { message: 'object must contain at most 64 properties' }).meta({"x-aurora-extra-behavior":"preserve"}).optional(),
+  "request_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "text": z.string().refine((value) => codePointLength(value) <= 120000, { message: 'string must contain at most 120000 Unicode code points' }).meta({"maxLength":120000})
+}).meta({"x-aurora-extra-behavior":"strip"})
+export type OrchestratorExternalUserInputOutputOrchestratorResponse = z.infer<typeof OrchestratorExternalUserInputOutputOrchestratorResponseSchema>
+
+export const OrchestratorInterruptInputOrchestratorInterruptRequestSchema = z.object({
+  "reason": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).prefault("user_interrupt").meta({"default":"user_interrupt"}).optional(),
+  "request_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "scopes": z.array(z.enum(["generation", "session", "tool_call", "tts_playback"])).max(4).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional()
+}).meta({"x-aurora-extra-behavior":"strip"})
+export type OrchestratorInterruptInputOrchestratorInterruptRequest = z.infer<typeof OrchestratorInterruptInputOrchestratorInterruptRequestSchema>
+
+const OrchestratorInterruptOutputOrchestratorInterruptResponseSchemaOrchestratorInterruptScopeResultSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
+  "cancelled_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "message": z.string().refine((value) => codePointLength(value) <= 1000, { message: 'string must contain at most 1000 Unicode code points' }).meta({"maxLength":1000}).prefault("").meta({"default":""}).optional(),
+  "scope": z.enum(["generation", "session", "tool_call", "tts_playback"]),
+  "status": z.enum(["cancelled", "failed", "no_active_work", "not_supported"])
+}).meta({"x-aurora-extra-behavior":"strip"}))
+
+export const OrchestratorInterruptOutputOrchestratorInterruptResponseSchema = z.object({
+  "audit_event": z.string().prefault("orchestrator.interrupt.requested").meta({"default":"orchestrator.interrupt.requested"}).optional(),
+  "event_topic": z.string().prefault("Orchestrator.Interrupted").meta({"default":"Orchestrator.Interrupted"}).optional(),
+  "idempotent": z.boolean().prefault(true).meta({"default":true}).optional(),
+  "interrupt_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}),
+  "request_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "requested_scopes": z.array(z.enum(["generation", "session", "tool_call", "tts_playback"])).max(4).optional(),
+  "results": z.array(OrchestratorInterruptOutputOrchestratorInterruptResponseSchemaOrchestratorInterruptScopeResultSchemaDef).max(4).optional(),
+  "secrets_redacted": z.boolean().prefault(true).meta({"default":true}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "status": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 64, { message: 'string must contain at most 64 Unicode code points' }).meta({"maxLength":64})
+}).meta({"x-aurora-extra-behavior":"strip"})
+export type OrchestratorInterruptOutputOrchestratorInterruptResponse = z.infer<typeof OrchestratorInterruptOutputOrchestratorInterruptResponseSchema>
+
+const OrchestratorInterruptedEventOrchestratorInterruptedEventSchemaOrchestratorInterruptScopeResultSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
+  "cancelled_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "message": z.string().refine((value) => codePointLength(value) <= 1000, { message: 'string must contain at most 1000 Unicode code points' }).meta({"maxLength":1000}).prefault("").meta({"default":""}).optional(),
+  "scope": z.enum(["generation", "session", "tool_call", "tts_playback"]),
+  "status": z.enum(["cancelled", "failed", "no_active_work", "not_supported"])
+}).meta({"x-aurora-extra-behavior":"strip"}))
+
+export const OrchestratorInterruptedEventOrchestratorInterruptedEventSchema = z.object({
+  "audit_event": z.string().prefault("orchestrator.interrupt.requested").meta({"default":"orchestrator.interrupt.requested"}).optional(),
+  "interrupt_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}),
+  "principal_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "reason": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).prefault("user_interrupt").meta({"default":"user_interrupt"}).optional(),
+  "request_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "requested_scopes": z.array(z.enum(["generation", "session", "tool_call", "tts_playback"])).max(4).optional(),
+  "results": z.array(OrchestratorInterruptedEventOrchestratorInterruptedEventSchemaOrchestratorInterruptScopeResultSchemaDef).max(4).optional(),
+  "secrets_redacted": z.boolean().prefault(true).meta({"default":true}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "status": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 64, { message: 'string must contain at most 64 Unicode code points' }).meta({"maxLength":64})
+}).meta({"x-aurora-extra-behavior":"strip"})
+export type OrchestratorInterruptedEventOrchestratorInterruptedEvent = z.infer<typeof OrchestratorInterruptedEventOrchestratorInterruptedEventSchema>
+
+const OrchestratorResponseEventAssistantStreamEventSchemaAssistantToolStreamStateSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
+  "approval_expires_at": z.number().finite().nullable().prefault(null).meta({"default":null}).optional(),
+  "approval_request_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "data_leaves_device": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "display_name": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "error": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 1000, { message: 'string must contain at most 1000 Unicode code points' }).meta({"maxLength":1000}).nullable().prefault(null).meta({"default":null}).optional(),
+  "error_details": z.union([z.looseObject({
+
+}).catchall(auroraJsonValueSchema.meta({"x-aurora-json-value":true})).meta({"x-aurora-extra-behavior":"preserve"}), z.string(), z.null()]).prefault(null).meta({"default":null}).optional(),
+  "pending_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "policy_decision_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "provider_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "redacted_args_preview": z.looseObject({
+
+}).catchall(auroraJsonValueSchema.meta({"x-aurora-json-value":true})).refine((value) => Object.keys(value).length <= 32, { message: 'object must contain at most 32 properties' }).meta({"x-aurora-extra-behavior":"preserve"}).optional(),
+  "result_preview": z.union([z.looseObject({
+
+}).catchall(auroraJsonValueSchema.meta({"x-aurora-json-value":true})).meta({"x-aurora-extra-behavior":"preserve"}), z.string(), z.null()]).prefault(null).meta({"default":null}).optional(),
+  "risk_class": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 64, { message: 'string must contain at most 64 Unicode code points' }).meta({"maxLength":64}).nullable().prefault(null).meta({"default":null}).optional(),
+  "status": z.enum(["completed", "failed", "requested", "requires_action", "running"]),
+  "summary": z.string().refine((value) => codePointLength(value) <= 2000, { message: 'string must contain at most 2000 Unicode code points' }).meta({"maxLength":2000}).prefault("").meta({"default":""}).optional(),
+  "target": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "tool_call_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}),
+  "tool_name": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})
+}).meta({"x-aurora-extra-behavior":"strip"}))
+
+export const OrchestratorResponseEventAssistantStreamEventSchema = z.object({
+  "correlation_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "delta": z.string().refine((value) => codePointLength(value) <= 16384, { message: 'string must contain at most 16384 Unicode code points' }).meta({"maxLength":16384}).prefault("").meta({"default":""}).optional(),
+  "is_final": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "kind": z.enum(["assistant.completed", "assistant.delta", "assistant.failed", "tool.completed", "tool.failed", "tool.requested", "tool.requires_action", "tool.running"]),
+  "message_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "metadata": z.looseObject({
+
+}).catchall(auroraJsonValueSchema.meta({"x-aurora-json-value":true})).refine((value) => Object.keys(value).length <= 64, { message: 'object must contain at most 64 properties' }).meta({"x-aurora-extra-behavior":"preserve"}).optional(),
+  "request_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "text": z.string().refine((value) => codePointLength(value) <= 120000, { message: 'string must contain at most 120000 Unicode code points' }).meta({"maxLength":120000}).prefault("").meta({"default":""}).optional(),
+  "tool": OrchestratorResponseEventAssistantStreamEventSchemaAssistantToolStreamStateSchemaDef.nullable().prefault(null).meta({"default":null}).optional()
+}).meta({"x-aurora-extra-behavior":"strip"})
+export type OrchestratorResponseEventAssistantStreamEvent = z.infer<typeof OrchestratorResponseEventAssistantStreamEventSchema>
 
 export const STTCoordinatorListenInputSTTListenRequestSchema = z.object({
   "session_id": z.string().nullable().prefault(null).meta({"default":null}).optional()
@@ -397,7 +556,7 @@ const TTSGetCapabilitiesOutputTTSGetCapabilitiesResponseSchemaTTSCapabilitiesSch
   "capability_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
   "cloning": z.boolean().prefault(false).meta({"default":false}).optional(),
   "contract_revision": z.literal("aurora-tts-capabilities-v1").prefault("aurora-tts-capabilities-v1").meta({"default":"aurora-tts-capabilities-v1"}).optional(),
-  "installed_language_pack_ids": z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(64).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).overwrite((value) => sortUniqueCodePointStrings(value)).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).optional(),
+  "installed_language_pack_ids": z.preprocess((value) => Array.isArray(value) && value.every((item) => typeof item === 'string') ? sortUniqueCodePointStrings(value) : value, z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(64)).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).optional(),
   "max_clone_chunk_bytes": z.number().finite().multipleOf(1).min(0).max(49152).prefault(0).meta({"default":0}).optional(),
   "max_clone_import_bytes": z.number().finite().multipleOf(1).min(0).max(2097152).prefault(0).meta({"default":0}).optional(),
   "max_resident_base_models": z.number().finite().multipleOf(1).min(1).max(8).prefault(1).meta({"default":1}).optional(),
@@ -407,12 +566,12 @@ const TTSGetCapabilitiesOutputTTSGetCapabilitiesResponseSchemaTTSCapabilitiesSch
   "ready_languages": z.preprocess((value) => normalizeSpeechLanguageArrayValue(value), z.array(z.enum(["de", "en", "es", "fr", "it", "ja", "ko", "pt", "zh"])).max(64)).meta({"x-aurora-speech-language-array-normalize":true}).optional(),
   "requires_model_reload_for_voice_change": z.boolean().prefault(true).meta({"default":true}).optional(),
   "resident_base_model_count": z.number().finite().multipleOf(1).min(0).max(8).prefault(0).meta({"default":0}).optional(),
-  "resident_language_pack_ids": z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(8).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).overwrite((value) => sortUniqueCodePointStrings(value)).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).optional(),
+  "resident_language_pack_ids": z.preprocess((value) => Array.isArray(value) && value.every((item) => typeof item === 'string') ? sortUniqueCodePointStrings(value) : value, z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(8)).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).optional(),
   "resident_language_packs": z.array(TTSGetCapabilitiesOutputTTSGetCapabilitiesResponseSchemaTTSResidentLanguagePackSchemaDef).max(8).optional(),
   "sample_rates": z.array(z.number().finite().multipleOf(1).min(8000).max(192000)).max(16).optional(),
   "standard_pack_revision": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
   "streaming": z.boolean().prefault(false).meta({"default":false}).optional(),
-  "supported_language_pack_ids": z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(64).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).overwrite((value) => sortUniqueCodePointStrings(value)).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).optional(),
+  "supported_language_pack_ids": z.preprocess((value) => Array.isArray(value) && value.every((item) => typeof item === 'string') ? sortUniqueCodePointStrings(value) : value, z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(64)).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).optional(),
   "voice_selection_mode": z.enum(["active_only", "in_model_speaker", "shared_model_state"]).prefault("active_only").meta({"default":"active_only"}).optional(),
   "voice_state_memory_class": z.enum(["full_model", "none", "small_state"]).prefault("none").meta({"default":"none"}).optional()
 }).overwrite((value) => ({ ...value, output_formats: Array.isArray(value.output_formats) ? value.output_formats : ['wav', 'raw'], sample_rates: Array.isArray(value.sample_rates) ? sortUniqueNumbers(value.sample_rates) : value.sample_rates })).superRefine((value, ctx) => validateTtsCapabilitiesInvariant(value, ctx)).meta({"x-aurora-extra-behavior":"forbid","x-aurora-tts-capabilities-invariant":true}))
@@ -452,8 +611,8 @@ const TTSGetVoiceProfileOutputTTSGetVoiceProfileResponseSchemaSpeechStorageSumma
 
 const TTSGetVoiceProfileOutputTTSGetVoiceProfileResponseSchemaTTSVoiceProfileDescriptorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.strictObject({
   "active": z.boolean().prefault(false).meta({"default":false}).optional(),
-  "allowed_peer_ids": z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(256).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).overwrite((value) => sortUniqueCodePointStrings(value)).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).optional(),
-  "compatible_language_pack_ids": z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(8).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).overwrite((value) => sortUniqueCodePointStrings(value)).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).optional(),
+  "allowed_peer_ids": z.preprocess((value) => Array.isArray(value) && value.every((item) => typeof item === 'string') ? sortUniqueCodePointStrings(value) : value, z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(256)).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).optional(),
+  "compatible_language_pack_ids": z.preprocess((value) => Array.isArray(value) && value.every((item) => typeof item === 'string') ? sortUniqueCodePointStrings(value) : value, z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(8)).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).optional(),
   "compatible_selection_group": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
   "default": z.boolean().prefault(false).meta({"default":false}).optional(),
   "display_name": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}),
@@ -527,8 +686,8 @@ const TTSListVoiceProfilesOutputTTSListVoiceProfilesResponseSchemaSpeechStorageS
 
 const TTSListVoiceProfilesOutputTTSListVoiceProfilesResponseSchemaTTSVoiceProfileDescriptorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.strictObject({
   "active": z.boolean().prefault(false).meta({"default":false}).optional(),
-  "allowed_peer_ids": z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(256).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).overwrite((value) => sortUniqueCodePointStrings(value)).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).optional(),
-  "compatible_language_pack_ids": z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(8).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).overwrite((value) => sortUniqueCodePointStrings(value)).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).optional(),
+  "allowed_peer_ids": z.preprocess((value) => Array.isArray(value) && value.every((item) => typeof item === 'string') ? sortUniqueCodePointStrings(value) : value, z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(256)).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).optional(),
+  "compatible_language_pack_ids": z.preprocess((value) => Array.isArray(value) && value.every((item) => typeof item === 'string') ? sortUniqueCodePointStrings(value) : value, z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(8)).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).optional(),
   "compatible_selection_group": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
   "default": z.boolean().prefault(false).meta({"default":false}).optional(),
   "display_name": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}),
@@ -569,7 +728,7 @@ export type TTSListVoicesInputTTSListVoicesRequest = z.infer<typeof TTSListVoice
 
 const TTSListVoicesOutputTTSListVoicesResponseSchemaTTSVoiceDescriptorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.strictObject({
   "attribution_label": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
-  "compatible_language_pack_ids": z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(8).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).overwrite((value) => sortUniqueCodePointStrings(value)).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).optional(),
+  "compatible_language_pack_ids": z.preprocess((value) => Array.isArray(value) && value.every((item) => typeof item === 'string') ? sortUniqueCodePointStrings(value) : value, z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(8)).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).optional(),
   "display_name": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}),
   "kind": z.enum(["cloned", "standard"]),
   "preview_available": z.boolean().prefault(false).meta({"default":false}).optional(),
@@ -788,7 +947,7 @@ const TTSUpdateVoiceProfileInputTTSUpdateVoiceProfileRequestSchemaMeshAddressSel
 }).meta({"x-aurora-extra-behavior":"strip"}))
 
 export const TTSUpdateVoiceProfileInputTTSUpdateVoiceProfileRequestSchema = z.strictObject({
-  "allowed_peer_ids": z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(256).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).overwrite((value) => sortUniqueCodePointStrings(value)).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "allowed_peer_ids": z.preprocess((value) => Array.isArray(value) && value.every((item) => typeof item === 'string') ? sortUniqueCodePointStrings(value) : value, z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256})).max(256)).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256)) ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });}).meta({"x-aurora-bounded-nonblank-string-set-normalize":true}).nullable().prefault(null).meta({"default":null}).optional(),
   "correlation_id": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
   "display_name": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
   "enabled": z.boolean().nullable().prefault(null).meta({"default":null}).optional(),
@@ -1048,7 +1207,7 @@ const ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingT
   "exportable": z.boolean().prefault(false).meta({"default":false}).optional(),
   "external": z.boolean().prefault(false).meta({"default":false}).optional(),
   "global_tool_id": z.string(),
-  "legacy_global_tool_ids": z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 512, { message: 'string must contain at most 512 Unicode code points' }).meta({"maxLength":512})).max(16).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item !== item.trim() || codePointLength(item) > 512)) ctx.addIssue({ code: 'custom', message: 'legacy IDs must be non-empty, trimmed, and bounded' });}).overwrite((value) => sortUniqueCodePointStrings(value)).meta({"x-aurora-unique-string-array-normalize":true}).optional(),
+  "legacy_global_tool_ids": z.preprocess((value) => Array.isArray(value) && value.every((item) => typeof item === 'string') ? sortUniqueCodePointStrings(value) : value, z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 512, { message: 'string must contain at most 512 Unicode code points' }).meta({"maxLength":512})).max(16)).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item !== item.trim() || codePointLength(item) > 512)) ctx.addIssue({ code: 'custom', message: 'legacy IDs must be non-empty, trimmed, and bounded' });}).meta({"x-aurora-unique-string-array-normalize":true}).optional(),
   "local_name": z.string(),
   "mutating": z.boolean().prefault(false).meta({"default":false}).optional(),
   "name": z.string(),
@@ -1152,7 +1311,7 @@ const ToolingGetToolsOutputToolingGetToolsResponseSchemaToolingToolInfoSchemaDef
   "exportable": z.boolean().prefault(false).meta({"default":false}).optional(),
   "external": z.boolean().prefault(false).meta({"default":false}).optional(),
   "global_tool_id": z.string(),
-  "legacy_global_tool_ids": z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 512, { message: 'string must contain at most 512 Unicode code points' }).meta({"maxLength":512})).max(16).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item !== item.trim() || codePointLength(item) > 512)) ctx.addIssue({ code: 'custom', message: 'legacy IDs must be non-empty, trimmed, and bounded' });}).overwrite((value) => sortUniqueCodePointStrings(value)).meta({"x-aurora-unique-string-array-normalize":true}).optional(),
+  "legacy_global_tool_ids": z.preprocess((value) => Array.isArray(value) && value.every((item) => typeof item === 'string') ? sortUniqueCodePointStrings(value) : value, z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 512, { message: 'string must contain at most 512 Unicode code points' }).meta({"maxLength":512})).max(16)).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item !== item.trim() || codePointLength(item) > 512)) ctx.addIssue({ code: 'custom', message: 'legacy IDs must be non-empty, trimmed, and bounded' });}).meta({"x-aurora-unique-string-array-normalize":true}).optional(),
   "local_name": z.string(),
   "mutating": z.boolean().prefault(false).meta({"default":false}).optional(),
   "name": z.string(),
@@ -1408,8 +1567,15 @@ export const WakeWordProcessAudioOutputEmptyOutputSchema = z.object({
 export type WakeWordProcessAudioOutputEmptyOutput = z.infer<typeof WakeWordProcessAudioOutputEmptyOutputSchema>
 
 export const backendContractSchemas = {
+  AuroraEventStreamEnvelopeAuroraEventStreamEventSchema,
   GatewayExplainRouteInputRouteExplainRequestSchema,
   GatewayExplainRouteOutputRouteExplainResponseSchema,
+  OrchestratorExternalUserInputInputOrchestratorProcessRequestSchema,
+  OrchestratorExternalUserInputOutputOrchestratorResponseSchema,
+  OrchestratorInterruptInputOrchestratorInterruptRequestSchema,
+  OrchestratorInterruptOutputOrchestratorInterruptResponseSchema,
+  OrchestratorInterruptedEventOrchestratorInterruptedEventSchema,
+  OrchestratorResponseEventAssistantStreamEventSchema,
   STTCoordinatorListenInputSTTListenRequestSchema,
   STTCoordinatorListenOutputSTTListenResponseSchema,
   STTCoordinatorStopListeningInputSTTStopListeningRequestSchema,
@@ -1472,8 +1638,15 @@ export const backendContractSchemas = {
 } as const
 
 export const backendContractSchemaById = {
+  "Aurora.EventStream.envelope.AuroraEventStreamEvent": AuroraEventStreamEnvelopeAuroraEventStreamEventSchema,
   "Gateway.ExplainRoute.input.RouteExplainRequest": GatewayExplainRouteInputRouteExplainRequestSchema,
   "Gateway.ExplainRoute.output.RouteExplainResponse": GatewayExplainRouteOutputRouteExplainResponseSchema,
+  "Orchestrator.ExternalUserInput.input.OrchestratorProcessRequest": OrchestratorExternalUserInputInputOrchestratorProcessRequestSchema,
+  "Orchestrator.ExternalUserInput.output.OrchestratorResponse": OrchestratorExternalUserInputOutputOrchestratorResponseSchema,
+  "Orchestrator.Interrupt.input.OrchestratorInterruptRequest": OrchestratorInterruptInputOrchestratorInterruptRequestSchema,
+  "Orchestrator.Interrupt.output.OrchestratorInterruptResponse": OrchestratorInterruptOutputOrchestratorInterruptResponseSchema,
+  "Orchestrator.Interrupted.event.OrchestratorInterruptedEvent": OrchestratorInterruptedEventOrchestratorInterruptedEventSchema,
+  "Orchestrator.Response.event.AssistantStreamEvent": OrchestratorResponseEventAssistantStreamEventSchema,
   "STTCoordinator.Listen.input.STTListenRequest": STTCoordinatorListenInputSTTListenRequestSchema,
   "STTCoordinator.Listen.output.STTListenResponse": STTCoordinatorListenOutputSTTListenResponseSchema,
   "STTCoordinator.StopListening.input.STTStopListeningRequest": STTCoordinatorStopListeningInputSTTStopListeningRequestSchema,
@@ -1688,6 +1861,68 @@ export const backendContractMethodDescriptors = [
     "output_schema_id": "Gateway.ExplainRoute.output.RouteExplainResponse",
     "input_schema_hash": "d05010e28be60b0dd3ae969cef25872b43158512976806b473fe430dbe756561",
     "output_schema_hash": "b874d83f14fde33979ffa4db819341c4d4a91f81a4ea8e6fcd465cf2555f4a8e"
+  },
+  {
+    "method_id": "Orchestrator.ExternalUserInput",
+    "module": "Orchestrator",
+    "name": "ExternalUserInput",
+    "topic": "Orchestrator.ExternalUserInput",
+    "bus_topic": "Orchestrator.ExternalUserInput",
+    "route_path": "/api/Orchestrator/ExternalUserInput",
+    "route_kind": "dynamic",
+    "exposure": "external",
+    "method_type": "use",
+    "required_perms": [
+      "Orchestrator.use"
+    ],
+    "callable_feature_ids": [
+      "assistant_conversation"
+    ],
+    "input_model": "OrchestratorProcessRequest",
+    "output_model": "OrchestratorResponse",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "Orchestrator.ExternalUserInput.input.OrchestratorProcessRequest",
+    "output_schema_id": "Orchestrator.ExternalUserInput.output.OrchestratorResponse",
+    "input_schema_hash": "c78a7ae0cdc8e9315e87ca96127e2fd2ace7d96c87cfe6a1ab4fda870e9aeeb7",
+    "output_schema_hash": "bedd470ccb5b4f0f74d6ef38e3b8857c48c55f015dc3cc5a1496b9d35d8c76b3"
+  },
+  {
+    "method_id": "Orchestrator.Interrupt",
+    "module": "Orchestrator",
+    "name": "Interrupt",
+    "topic": "Orchestrator.Interrupt",
+    "bus_topic": "Orchestrator.Interrupt",
+    "route_path": "/api/Orchestrator/Interrupt",
+    "route_kind": "dynamic",
+    "exposure": "external",
+    "method_type": "use",
+    "required_perms": [
+      "Orchestrator.use"
+    ],
+    "callable_feature_ids": [
+      "assistant_control"
+    ],
+    "input_model": "OrchestratorInterruptRequest",
+    "output_model": "OrchestratorInterruptResponse",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "Orchestrator.Interrupt.input.OrchestratorInterruptRequest",
+    "output_schema_id": "Orchestrator.Interrupt.output.OrchestratorInterruptResponse",
+    "input_schema_hash": "1c273edd72d1fe38a292f2f1abcbf4a68302c3a056358a0853e641ae14a2e095",
+    "output_schema_hash": "2abfb95b02edaa0a3da7d0eee783aa3899db0d079e281488c87fe41716f0beda"
   },
   {
     "method_id": "TTS.GetCapabilities",
@@ -2472,6 +2707,8 @@ export const backendContractMethodDescriptorById = {
   "Tooling.PrepareExecution": {"method_id": "Tooling.PrepareExecution", "module": "Tooling", "name": "PrepareExecution", "topic": "Tooling.PrepareExecution", "bus_topic": "Tooling.PrepareExecution", "route_path": "/api/Tooling/PrepareExecution", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Tooling.ExecuteTool"], "callable_feature_ids": ["execution"], "input_model": "ToolingPrepareExecutionRequest", "output_model": "ToolingPrepareExecutionResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Tooling.PrepareExecution.input.ToolingPrepareExecutionRequest", "output_schema_id": "Tooling.PrepareExecution.output.ToolingPrepareExecutionResponse", "input_schema_hash": "f9fc82d8593ec382d85754ffd7bd43eb27c3088ab325676185e428493f6b4083", "output_schema_hash": "9985c7c5b15f4e0aa59980459a983c7f3c70fbf8e4bbcd1a065aedbdacd9928e"},
   "Tooling.ExecuteTool": {"method_id": "Tooling.ExecuteTool", "module": "Tooling", "name": "ExecuteTool", "topic": "Tooling.ExecuteTool", "bus_topic": "Tooling.ExecuteTool", "route_path": "/api/Tooling/ExecuteTool", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Tooling.ExecuteTool"], "callable_feature_ids": ["execution"], "input_model": "ToolingExecuteToolRequest", "output_model": "ToolingExecuteToolResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Tooling.ExecuteTool.input.ToolingExecuteToolRequest", "output_schema_id": "Tooling.ExecuteTool.output.ToolingExecuteToolResponse", "input_schema_hash": "9547a17d13c96218f08f90c83258a985fc6d5aad9aef7aff3a643f784b001132", "output_schema_hash": "e248ae6d8dfc0f2e73cd4362d9c4e4f6351fba4373e94f843cf4d7465b5bb9a7"},
   "Gateway.ExplainRoute": {"method_id": "Gateway.ExplainRoute", "module": "Gateway", "name": "ExplainRoute", "topic": "Gateway.ExplainRoute", "bus_topic": "Gateway.ExplainRoute", "route_path": "/api/Gateway/ExplainRoute", "route_kind": "dynamic", "exposure": "external", "method_type": "use", "required_perms": ["Gateway.use"], "callable_feature_ids": [], "input_model": "RouteExplainRequest", "output_model": "RouteExplainResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Gateway.ExplainRoute.input.RouteExplainRequest", "output_schema_id": "Gateway.ExplainRoute.output.RouteExplainResponse", "input_schema_hash": "d05010e28be60b0dd3ae969cef25872b43158512976806b473fe430dbe756561", "output_schema_hash": "b874d83f14fde33979ffa4db819341c4d4a91f81a4ea8e6fcd465cf2555f4a8e"},
+  "Orchestrator.ExternalUserInput": {"method_id": "Orchestrator.ExternalUserInput", "module": "Orchestrator", "name": "ExternalUserInput", "topic": "Orchestrator.ExternalUserInput", "bus_topic": "Orchestrator.ExternalUserInput", "route_path": "/api/Orchestrator/ExternalUserInput", "route_kind": "dynamic", "exposure": "external", "method_type": "use", "required_perms": ["Orchestrator.use"], "callable_feature_ids": ["assistant_conversation"], "input_model": "OrchestratorProcessRequest", "output_model": "OrchestratorResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Orchestrator.ExternalUserInput.input.OrchestratorProcessRequest", "output_schema_id": "Orchestrator.ExternalUserInput.output.OrchestratorResponse", "input_schema_hash": "c78a7ae0cdc8e9315e87ca96127e2fd2ace7d96c87cfe6a1ab4fda870e9aeeb7", "output_schema_hash": "bedd470ccb5b4f0f74d6ef38e3b8857c48c55f015dc3cc5a1496b9d35d8c76b3"},
+  "Orchestrator.Interrupt": {"method_id": "Orchestrator.Interrupt", "module": "Orchestrator", "name": "Interrupt", "topic": "Orchestrator.Interrupt", "bus_topic": "Orchestrator.Interrupt", "route_path": "/api/Orchestrator/Interrupt", "route_kind": "dynamic", "exposure": "external", "method_type": "use", "required_perms": ["Orchestrator.use"], "callable_feature_ids": ["assistant_control"], "input_model": "OrchestratorInterruptRequest", "output_model": "OrchestratorInterruptResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Orchestrator.Interrupt.input.OrchestratorInterruptRequest", "output_schema_id": "Orchestrator.Interrupt.output.OrchestratorInterruptResponse", "input_schema_hash": "1c273edd72d1fe38a292f2f1abcbf4a68302c3a056358a0853e641ae14a2e095", "output_schema_hash": "2abfb95b02edaa0a3da7d0eee783aa3899db0d079e281488c87fe41716f0beda"},
   "TTS.GetCapabilities": {"method_id": "TTS.GetCapabilities", "module": "TTS", "name": "GetCapabilities", "topic": "TTS.GetCapabilities", "bus_topic": "TTS.GetCapabilities", "route_path": "/api/TTS/GetCapabilities", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.use"], "callable_feature_ids": ["speech_voice_discovery"], "input_model": "TTSGetCapabilitiesRequest", "output_model": "TTSGetCapabilitiesResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.GetCapabilities.input.TTSGetCapabilitiesRequest", "output_schema_id": "TTS.GetCapabilities.output.TTSGetCapabilitiesResponse", "input_schema_hash": "0adcf095a1796861de001117544967a9201061ce3ec92c2e9a7a2a5e7b29fa95", "output_schema_hash": "038cb33a1ca8eafea60a326169eb770b91032226281ade8613427e706ed8fb29"},
   "TTS.ListVoices": {"method_id": "TTS.ListVoices", "module": "TTS", "name": "ListVoices", "topic": "TTS.ListVoices", "bus_topic": "TTS.ListVoices", "route_path": "/api/TTS/ListVoices", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.use"], "callable_feature_ids": ["speech_voice_discovery"], "input_model": "TTSListVoicesRequest", "output_model": "TTSListVoicesResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.ListVoices.input.TTSListVoicesRequest", "output_schema_id": "TTS.ListVoices.output.TTSListVoicesResponse", "input_schema_hash": "52a2cd8c57d91f1c49accf6ee916d477970ccef16c06fc381b7926f01300f9aa", "output_schema_hash": "597ea4f7521b0a313ee301a780440a01c6ea3c69ce15835fa9921fa81ebcb437"},
   "TTS.ListVoiceProfiles": {"method_id": "TTS.ListVoiceProfiles", "module": "TTS", "name": "ListVoiceProfiles", "topic": "TTS.ListVoiceProfiles", "bus_topic": "TTS.ListVoiceProfiles", "route_path": "/api/TTS/ListVoiceProfiles", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "input_model": "TTSListVoiceProfilesRequest", "output_model": "TTSListVoiceProfilesResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.ListVoiceProfiles.input.TTSListVoiceProfilesRequest", "output_schema_id": "TTS.ListVoiceProfiles.output.TTSListVoiceProfilesResponse", "input_schema_hash": "31045e05ae45e59efe8ee19bdd3f8980e40fb864d89e7627971c00c1058e2c91", "output_schema_hash": "04b672e2dfabb6fb3cfcf578556d62017374ddce0649d11edd6809592b2a0c2f"},
@@ -2501,6 +2738,40 @@ export const backendContractMethodDescriptorById = {
 
 export const backendContractEventDescriptors = [
   {
+    "event_topic": "Orchestrator.Response",
+    "module": "Orchestrator",
+    "name": "Response",
+    "topic": "Orchestrator.Response",
+    "model": "AssistantStreamEvent",
+    "schema_id": "Orchestrator.Response.event.AssistantStreamEvent",
+    "schema_hash": "1469513416f663f9a27944a8d6fa5bf97158248bc87e4f80e3366ecc60657392",
+    "required_permission": "Orchestrator.use",
+    "required_perms": [
+      "Orchestrator.use"
+    ],
+    "bounded": true,
+    "authorized": true,
+    "ordered_event_group": "assistant_stream",
+    "remote_raw_audio_route": false
+  },
+  {
+    "event_topic": "Orchestrator.Interrupted",
+    "module": "Orchestrator",
+    "name": "Interrupted",
+    "topic": "Orchestrator.Interrupted",
+    "model": "OrchestratorInterruptedEvent",
+    "schema_id": "Orchestrator.Interrupted.event.OrchestratorInterruptedEvent",
+    "schema_hash": "dabddcb83584367b6dfad8f9bbba135201f456c60b2091757cc097773f856bc3",
+    "required_permission": "Orchestrator.use",
+    "required_perms": [
+      "Orchestrator.use"
+    ],
+    "bounded": true,
+    "authorized": true,
+    "ordered_event_group": "assistant_interrupt",
+    "remote_raw_audio_route": false
+  },
+  {
     "event_topic": "TTS.AudioChunk",
     "module": "TTS",
     "name": "AudioChunk",
@@ -2520,5 +2791,42 @@ export const backendContractEventDescriptors = [
 ] as const
 
 export const backendContractEventDescriptorByTopic = {
+  "Orchestrator.Response": {"event_topic": "Orchestrator.Response", "module": "Orchestrator", "name": "Response", "topic": "Orchestrator.Response", "model": "AssistantStreamEvent", "schema_id": "Orchestrator.Response.event.AssistantStreamEvent", "schema_hash": "1469513416f663f9a27944a8d6fa5bf97158248bc87e4f80e3366ecc60657392", "required_permission": "Orchestrator.use", "required_perms": ["Orchestrator.use"], "bounded": true, "authorized": true, "ordered_event_group": "assistant_stream", "remote_raw_audio_route": false},
+  "Orchestrator.Interrupted": {"event_topic": "Orchestrator.Interrupted", "module": "Orchestrator", "name": "Interrupted", "topic": "Orchestrator.Interrupted", "model": "OrchestratorInterruptedEvent", "schema_id": "Orchestrator.Interrupted.event.OrchestratorInterruptedEvent", "schema_hash": "dabddcb83584367b6dfad8f9bbba135201f456c60b2091757cc097773f856bc3", "required_permission": "Orchestrator.use", "required_perms": ["Orchestrator.use"], "bounded": true, "authorized": true, "ordered_event_group": "assistant_interrupt", "remote_raw_audio_route": false},
   "TTS.AudioChunk": {"event_topic": "TTS.AudioChunk", "module": "TTS", "name": "AudioChunk", "topic": "TTS.AudioChunk", "model": "TTSAudioChunkEvent", "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent", "schema_hash": "8f2a4c111920f068e5dae7ac8c6ea4dd031f7f50989af157d3c68fa5989760a6", "required_permission": "TTS.use", "required_perms": ["TTS.use"], "bounded": true, "authorized": true, "ordered_event_group": "tts_text_stream", "remote_raw_audio_route": false},
+} as const
+
+export const backendContractEnvelopeDescriptors = [
+  {
+    "envelope_topic": "Aurora.EventStream",
+    "module": "Aurora",
+    "name": "EventStream",
+    "topic": "Aurora.EventStream",
+    "model": "AuroraEventStreamEvent",
+    "schema_id": "Aurora.EventStream.envelope.AuroraEventStreamEvent",
+    "schema_hash": "bc634dde739ecea9b9fe9f6913763ef556a8c7dcd67cac3fbcee3f25fd5ad9ed",
+    "required_permissions_broad": [
+      "Gateway.manage"
+    ],
+    "required_permissions_scoped": [
+      "Orchestrator.use"
+    ],
+    "scoped_topics": [
+      "Orchestrator.Response",
+      "TTS.AudioChunk"
+    ],
+    "scoped_categories": [
+      "assistant"
+    ],
+    "requires_correlation_id": true,
+    "bounded": true,
+    "authorized": true,
+    "route_path": "/api/events/stream",
+    "route_kind": "gateway_sse_builtin",
+    "descriptor_kind": "sse_envelope"
+  }
+] as const
+
+export const backendContractEnvelopeDescriptorByTopic = {
+  "Aurora.EventStream": {"envelope_topic": "Aurora.EventStream", "module": "Aurora", "name": "EventStream", "topic": "Aurora.EventStream", "model": "AuroraEventStreamEvent", "schema_id": "Aurora.EventStream.envelope.AuroraEventStreamEvent", "schema_hash": "bc634dde739ecea9b9fe9f6913763ef556a8c7dcd67cac3fbcee3f25fd5ad9ed", "required_permissions_broad": ["Gateway.manage"], "required_permissions_scoped": ["Orchestrator.use"], "scoped_topics": ["Orchestrator.Response", "TTS.AudioChunk"], "scoped_categories": ["assistant"], "requires_correlation_id": true, "bounded": true, "authorized": true, "route_path": "/api/events/stream", "route_kind": "gateway_sse_builtin", "descriptor_kind": "sse_envelope"},
 } as const

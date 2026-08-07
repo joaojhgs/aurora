@@ -367,7 +367,14 @@ class ZodCompiler:
             if isinstance(schema_type, list):
                 allowed = {"type"}
             elif schema_type == "object" or "properties" in schema:
-                allowed = {"type", "properties", "required", "additionalProperties"}
+                allowed = {
+                    "type",
+                    "properties",
+                    "required",
+                    "additionalProperties",
+                    "minProperties",
+                    "maxProperties",
+                }
             elif schema_type == "array":
                 allowed = {"type", "items", "minItems", "maxItems"}
             elif schema_type == "string":
@@ -625,7 +632,9 @@ class ZodCompiler:
                 self._compile(item, ctx.at(index)) for index, item in enumerate(options)
             )
             return f"z.discriminatedUnion({_ts_string(discriminator)}, [{compiled}])"
-        raise ctx.unsupported(f"unsupported ambiguous {key}")
+        if len(options) < 2:
+            raise ctx.unsupported(f"{key} must have at least two options")
+        return f"z.union([{', '.join(self._compile(item, ctx.at(index)) for index, item in enumerate(options))}])"
 
     def _validate_discriminated_union_options(
         self, options: list[Any], discriminator: Any, ctx: CompileContext
@@ -688,9 +697,19 @@ class ZodCompiler:
         properties = schema.get("properties") or {}
         if not isinstance(properties, dict):
             raise ctx.unsupported("object properties must be an object")
+        for key in ("minProperties", "maxProperties"):
+            if key in schema and not _is_nonnegative_int(schema[key]):
+                raise ctx.at(key).unsupported(f"{key} must be a nonnegative integer")
+        if (
+            "minProperties" in schema
+            and "maxProperties" in schema
+            and schema["minProperties"] > schema["maxProperties"]
+        ):
+            raise ctx.at("minProperties").unsupported("minProperties cannot exceed maxProperties")
         additional = schema.get("additionalProperties")
         if not properties and (additional is True or additional == {}):
-            return "z.record(z.string(), auroraJsonValueSchema)"
+            expression = "z.record(z.string(), auroraJsonValueSchema)"
+            return self._apply_object_property_bounds(expression, schema)
         required = schema.get("required") or []
         if not isinstance(required, list) or not all(isinstance(item, str) for item in required):
             raise ctx.unsupported("object required must be a string list")
@@ -717,6 +736,7 @@ class ZodCompiler:
         expression = f"{constructor}({body})"
         if isinstance(additional, dict):
             expression = f"{expression}.catchall({self._compile(additional, ctx.at('additionalProperties'))})"
+        expression = self._apply_object_property_bounds(expression, schema)
         if schema.get(PROJECTION_PAGE_TERMINATION_MARKER) is True:
             expression = (
                 f"{expression}.superRefine((value, ctx) => {{"
@@ -872,6 +892,13 @@ class ZodCompiler:
                 expression = f"{expression}.superRefine((value, ctx) => {helper}(value, ctx))"
         return expression
 
+    def _apply_object_property_bounds(self, expression: str, schema: dict[str, Any]) -> str:
+        if "minProperties" in schema:
+            expression = f"{expression}.refine((value) => Object.keys(value).length >= {schema['minProperties']}, {{ message: 'object must contain at least {schema['minProperties']} properties' }})"
+        if "maxProperties" in schema:
+            expression = f"{expression}.refine((value) => Object.keys(value).length <= {schema['maxProperties']}, {{ message: 'object must contain at most {schema['maxProperties']} properties' }})"
+        return expression
+
     def _compile_array(self, schema: dict[str, Any], ctx: CompileContext) -> str:
         if isinstance(schema.get("prefixItems"), list):
             raise ctx.unsupported("tuple arrays are unsupported")
@@ -895,17 +922,21 @@ class ZodCompiler:
             raise ctx.at("minItems").unsupported("minItems cannot exceed maxItems")
         if schema.get(UNIQUE_STRING_ARRAY_NORMALIZE_MARKER) is True:
             expression = (
-                f"{expression}.superRefine((value, ctx) => {{"
+                "z.preprocess((value) => Array.isArray(value) && value.every((item) => typeof item === 'string')"
+                f" ? sortUniqueCodePointStrings(value) : value, {expression})"
+                ".superRefine((value, ctx) => {"
                 " if (value.some((item) => codePointLength(item) === 0 || item !== item.trim() || codePointLength(item) > 512))"
                 " ctx.addIssue({ code: 'custom', message: 'legacy IDs must be non-empty, trimmed, and bounded' });"
-                "}).overwrite((value) => sortUniqueCodePointStrings(value))"
+                "})"
             )
         if schema.get(BOUNDED_NONBLANK_STRING_SET_MARKER) is True:
             expression = (
-                f"{expression}.superRefine((value, ctx) => {{"
+                "z.preprocess((value) => Array.isArray(value) && value.every((item) => typeof item === 'string')"
+                f" ? sortUniqueCodePointStrings(value) : value, {expression})"
+                ".superRefine((value, ctx) => {"
                 " if (value.some((item) => codePointLength(item) === 0 || item.trim().length === 0 || codePointLength(item) > 256))"
                 " ctx.addIssue({ code: 'custom', message: 'string set items must be non-blank and bounded' });"
-                "}).overwrite((value) => sortUniqueCodePointStrings(value))"
+                "})"
             )
         if schema.get(SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER) is True:
             expression = (
@@ -1268,6 +1299,19 @@ def render_zod_module(contract_schema: dict[str, Any]) -> str:
     for item in event_descriptors:
         lines.append(
             f"  {_ts_string(item['event_topic'])}: {json.dumps(item, ensure_ascii=False)},"
+        )
+    lines.append("} as const")
+    lines.append("")
+    envelope_descriptors = contract_schema.get("envelope_descriptors", [])
+    lines.append(
+        "export const backendContractEnvelopeDescriptors = "
+        f"{json.dumps(envelope_descriptors, ensure_ascii=False, indent=2)} as const"
+    )
+    lines.append("")
+    lines.append("export const backendContractEnvelopeDescriptorByTopic = {")
+    for item in envelope_descriptors:
+        lines.append(
+            f"  {_ts_string(item['envelope_topic'])}: {json.dumps(item, ensure_ascii=False)},"
         )
     lines.append("} as const")
     lines.append("")
