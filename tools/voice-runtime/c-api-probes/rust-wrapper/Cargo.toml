@@ -1,0 +1,8 @@
+[package]
+name = "aurora-phase4-sherpa-rust-probe"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+publish = false
+
+[dependencies]
