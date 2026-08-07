@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
+import tempfile as stdlib_tempfile
 import wave
 from pathlib import Path
 from types import SimpleNamespace
@@ -208,6 +210,135 @@ def test_wav_duration_uses_private_path_without_reporting_it(tmp_path):
         sink.setframerate(16_000)
         sink.writeframes(b"\x00\x00" * 16_000)
     assert metrics.wav_duration_ms(wav_path) == 1000.0
+
+
+def test_kws_smoke_dir_maps_expected_encoder_name_to_int8_source_and_cleans_up(tmp_path):
+    source = tmp_path / "kws-pack"
+    (source / "test_wavs").mkdir(parents=True)
+    files = {
+        "encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx": b"int8-encoder",
+        "decoder-epoch-12-avg-2-chunk-16-left-64.onnx": b"decoder",
+        "joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx": b"joiner",
+        "tokens.txt": b"tokens",
+        "test_wavs/0.wav": b"wav",
+    }
+    for relative, body in files.items():
+        path = source / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
+
+    temp_dir = metrics.build_kws_int8_smoke_dir(source)
+    smoke_dir = Path(temp_dir.name)
+    expected_encoder = smoke_dir / "encoder-epoch-12-avg-2-chunk-16-left-64.onnx"
+    assert expected_encoder.is_symlink()
+    assert (
+        expected_encoder.resolve()
+        == (source / "encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx").resolve()
+    )
+    rendered = json.dumps(
+        {
+            "candidate_id": "sherpa-gigaspeech-kws-en",
+            "physical_device_claim": False,
+        },
+        sort_keys=True,
+    )
+    assert str(smoke_dir) not in rendered
+
+    metrics.cleanup_specs(
+        [
+            metrics.TaskSpec(
+                task="kws",
+                candidate_id="sherpa-gigaspeech-kws-en",
+                command=("fake",),
+                env={},
+                input_duration_ms=1.0,
+                temp_dir=temp_dir,
+            )
+        ]
+    )
+    assert not smoke_dir.exists()
+
+
+def test_child_env_forces_dynamic_linking_without_reporting_paths(monkeypatch):
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/existing/private")
+    child_env = metrics.build_child_env(
+        {
+            "AURORA_SHERPA_ONNX_LIB_DIR": "/tmp/private-lib",
+            "AURORA_SHERPA_ONNX_LINK_KIND": "dynamic",
+        }
+    )
+    assert child_env["AURORA_SHERPA_ONNX_LINK_KIND"] == "dynamic"
+    assert child_env["LC_ALL"] == "C"
+    lib_path_key = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
+    assert child_env[lib_path_key].startswith(f"/tmp/private-lib{os.pathsep}")
+    report = {
+        "schema_version": metrics.SCHEMA_VERSION,
+        "generated_at_utc": "2026-08-07T00:00:00Z",
+        "physical_device_claim": False,
+        "thermal_state": "unavailable_in_linux_ci",
+        "host": {"arch": "x86_64", "os": "linux"},
+        "tasks": [
+            {
+                "task": "kws",
+                "candidate_id": "sherpa-gigaspeech-kws-en",
+                "surface": "linux-x86_64",
+                "arch": "x86_64",
+                "status": "failed",
+                "failure_buckets": ["child_failed"],
+                "input_duration_ms": 1.0,
+                "thermal_state": "unavailable_in_linux_ci",
+                "physical_device_claim": False,
+                "repetitions": [],
+                "aggregates": {},
+            }
+        ],
+        "summary": {"ok": False, "task_count": 1, "failed_task_count": 1},
+    }
+    rendered = metrics.stable_json(report)
+    assert "/tmp/private-lib" not in rendered
+    assert "AURORA_SHERPA" not in rendered
+
+
+def test_kws_task_spec_cleans_temp_dir_when_late_validation_fails(tmp_path, monkeypatch):
+    repo_root = tmp_path / "repo"
+    (repo_root / "rust").mkdir(parents=True)
+    (repo_root / "rust" / "Cargo.toml").write_text("[workspace]\n", encoding="utf-8")
+    artifact_root = tmp_path / "artifact"
+    kws_source = (
+        artifact_root
+        / "models"
+        / "extracted"
+        / "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01"
+    )
+    (artifact_root / "builds" / "linux-x86_64" / "install" / "lib").mkdir(parents=True)
+    (kws_source / "test_wavs").mkdir(parents=True)
+    for relative in (
+        "encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+        "decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
+        "joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+        "tokens.txt",
+        "test_wavs/0.wav",
+    ):
+        path = kws_source / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"x")
+
+    original_temporary_directory = stdlib_tempfile.TemporaryDirectory
+    monkeypatch.setattr(
+        metrics.tempfile,
+        "TemporaryDirectory",
+        lambda prefix: original_temporary_directory(prefix=prefix, dir=tmp_path),
+    )
+    monkeypatch.setattr(
+        metrics,
+        "wav_duration_ms",
+        lambda _path: (_ for _ in ()).throw(metrics.ResourceMetricError("bad wav")),
+    )
+
+    with pytest.raises(metrics.ResourceMetricError):
+        metrics.build_task_spec("kws", repo_root=repo_root, artifact_root=artifact_root)
+
+    assert not list(tmp_path.glob("aurora-kws-int8-smoke-*"))
 
 
 def test_failure_report_has_redacted_bucket_only():

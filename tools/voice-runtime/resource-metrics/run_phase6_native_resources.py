@@ -45,6 +45,7 @@ class TaskSpec:
     command: tuple[str, ...]
     env: dict[str, str]
     input_duration_ms: float | None
+    temp_dir: tempfile.TemporaryDirectory[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -127,22 +128,24 @@ def run(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
         validate_output_path(args.output)
     selected_tasks = tuple(args.task or TASKS)
     time_bin = find_time_binary()
-    specs = [
-        build_task_spec(task, repo_root=repo_root, artifact_root=artifact_root)
-        for task in selected_tasks
-    ]
+    specs: list[TaskSpec] = []
+    try:
+        for task in selected_tasks:
+            specs.append(build_task_spec(task, repo_root=repo_root, artifact_root=artifact_root))
 
-    results = [
-        run_task(
-            spec,
-            repo_root=repo_root,
-            time_bin=time_bin,
-            repetitions=repetitions,
-            timeout_seconds=timeout_seconds,
-            surface=surface,
-        )
-        for spec in specs
-    ]
+        results = [
+            run_task(
+                spec,
+                repo_root=repo_root,
+                time_bin=time_bin,
+                repetitions=repetitions,
+                timeout_seconds=timeout_seconds,
+                surface=surface,
+            )
+            for spec in specs
+        ]
+    finally:
+        cleanup_specs(specs)
     ok = all(result["status"] == "ok" for result in results)
     report = {
         "schema_version": SCHEMA_VERSION,
@@ -174,7 +177,10 @@ def build_task_spec(task: str, *, repo_root: Path, artifact_root: Path) -> TaskS
         artifact_root / "builds" / "linux-x86_64" / "install" / "lib",
         "sherpa native library directory",
     )
-    env = {"AURORA_SHERPA_ONNX_LIB_DIR": str(lib_dir)}
+    env = {
+        "AURORA_SHERPA_ONNX_LIB_DIR": str(lib_dir),
+        "AURORA_SHERPA_ONNX_LINK_KIND": "dynamic",
+    }
     if task == "vad":
         model = require_file(artifact_root / "models" / "silero-vad-v4.0.onnx", "VAD model")
         wav = require_file(
@@ -212,34 +218,44 @@ def build_task_spec(task: str, *, repo_root: Path, artifact_root: Path) -> TaskS
             artifact_root / "models" / "extracted" / PHASE4_KWS_NAME,
             "KWS model directory",
         )
-        wav = require_file(kws_dir / "test_wavs" / "0.wav", "KWS input WAV")
-        env |= {
-            "AURORA_SHERPA_ONNX_KWS_DIR": str(kws_dir),
-            "AURORA_SHERPA_ONNX_TEST_WAV": str(wav),
-        }
-        command = (
-            "cargo",
-            "+1.88.0",
-            "test",
-            "--locked",
-            "--manifest-path",
-            str(rust_manifest),
-            "-p",
-            "aurora-voice-sherpa-sys",
-            "--features",
-            "native-kws",
-            "--test",
-            "native_kws_smoke",
-            "--",
-            "--nocapture",
-        )
-        return TaskSpec(
-            task="kws",
-            candidate_id="sherpa-gigaspeech-kws-en",
-            command=command,
-            env=env,
-            input_duration_ms=wav_duration_ms(wav),
-        )
+        temp_dir = None
+        try:
+            temp_dir = build_kws_int8_smoke_dir(kws_dir)
+            smoke_dir = Path(temp_dir.name)
+            wav = require_file(smoke_dir / "test_wavs" / "0.wav", "KWS input WAV")
+            input_duration_ms = wav_duration_ms(wav)
+            env |= {
+                "AURORA_SHERPA_ONNX_KWS_DIR": str(smoke_dir),
+                "AURORA_SHERPA_ONNX_TEST_WAV": str(wav),
+            }
+            command = (
+                "cargo",
+                "+1.88.0",
+                "test",
+                "--locked",
+                "--manifest-path",
+                str(rust_manifest),
+                "-p",
+                "aurora-voice-sherpa-sys",
+                "--features",
+                "native-kws",
+                "--test",
+                "native_kws_smoke",
+                "--",
+                "--nocapture",
+            )
+            return TaskSpec(
+                task="kws",
+                candidate_id="sherpa-gigaspeech-kws-en",
+                command=command,
+                env=env,
+                input_duration_ms=input_duration_ms,
+                temp_dir=temp_dir,
+            )
+        except Exception:
+            if temp_dir is not None:
+                temp_dir.cleanup()
+            raise
     stt_dir = require_dir(
         artifact_root / "models" / "extracted" / PHASE4_STT_NAME,
         "STT model directory",
@@ -272,6 +288,45 @@ def build_task_spec(task: str, *, repo_root: Path, artifact_root: Path) -> TaskS
         env=env,
         input_duration_ms=wav_duration_ms(wav),
     )
+
+
+def build_kws_int8_smoke_dir(
+    source_dir: Path,
+) -> tempfile.TemporaryDirectory[str]:
+    source = source_dir.resolve()
+    temp_dir = tempfile.TemporaryDirectory(prefix="aurora-kws-int8-smoke-")
+    target = Path(temp_dir.name)
+    mappings = {
+        "encoder-epoch-12-avg-2-chunk-16-left-64.onnx": require_file(
+            source / "encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+            "KWS int8 encoder",
+        ),
+        "decoder-epoch-12-avg-2-chunk-16-left-64.onnx": require_file(
+            source / "decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
+            "KWS decoder",
+        ),
+        "joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx": require_file(
+            source / "joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+            "KWS int8 joiner",
+        ),
+        "tokens.txt": require_file(source / "tokens.txt", "KWS tokens"),
+        "test_wavs/0.wav": require_file(source / "test_wavs" / "0.wav", "KWS input WAV"),
+    }
+    try:
+        for relative, real_path in mappings.items():
+            link_path = target / relative
+            link_path.parent.mkdir(parents=True, exist_ok=True)
+            link_path.symlink_to(real_path)
+    except Exception:
+        temp_dir.cleanup()
+        raise
+    return temp_dir
+
+
+def cleanup_specs(specs: list[TaskSpec]) -> None:
+    for spec in specs:
+        if spec.temp_dir is not None:
+            spec.temp_dir.cleanup()
 
 
 def run_task(
