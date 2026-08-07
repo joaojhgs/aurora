@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -44,10 +45,10 @@ def test_phase4_manifest_validates_selected_and_blocked_assets() -> None:
     payload = json.loads(result.stdout)
     assert payload["status"] == "valid"
     assert payload["artifact_count"] >= 10
-    assert payload["denial_count"] == 2
+    assert payload["denial_count"] == 3
 
 
-def test_manifest_selects_upstream_silero_and_piper_ljspeech() -> None:
+def test_manifest_selects_upstream_silero_and_blocks_piper_ljspeech() -> None:
     manifest = read_manifest()
     artifacts = {item["id"]: item for item in manifest["artifacts"]}
     denials = {item["id"]: item for item in manifest["policy_denials"]}
@@ -59,10 +60,19 @@ def test_manifest_selects_upstream_silero_and_piper_ljspeech() -> None:
     assert silero["sha256"] == "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28"
     assert silero["license"]["disposition"] == "allowed"
 
+    assert artifacts["onnxruntime-source-v1.27.0"]["license"]["evidence_sha256"] == (
+        "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
+    )
+
     piper = artifacts["vits-piper-en-us-ljspeech-medium"]
-    assert piper["status"] == "selected"
+    assert piper["status"] == "blocked"
     assert piper["sha256"] == "3dfb4b759d8be032a4903a9538d128b0fda2a06ab1de6cbc2d93a97e2dd83dba"
     assert piper["license"]["spdx"] == "Public-Domain"
+    assert piper["license"]["disposition"] == "blocked"
+    assert "C API evidence only" in piper["notes"]
+    espeak = artifacts["espeak-ng-source-ed530aa1"]
+    assert espeak["status"] == "blocked"
+    assert espeak["license"]["spdx"] == "GPL-3.0-or-later"
     assert {item["path"] for item in piper["contained_files"]} == {
         "en_US-ljspeech-medium.onnx",
         "en_US-ljspeech-medium.onnx.json",
@@ -76,6 +86,8 @@ def test_manifest_selects_upstream_silero_and_piper_ljspeech() -> None:
 
     assert denials["pockettts-standard-voice-packs"]["status"] == "blocked"
     assert "non-commercial" in denials["pockettts-standard-voice-packs"]["reason"]
+    assert denials["piper-espeak-tts-runtime-chain"]["status"] == "blocked"
+    assert "GPL-3.0-or-later" in denials["piper-espeak-tts-runtime-chain"]["reason"]
     assert denials["sherpa-exported-silero-vad-v4-16k-derivative"]["status"] == "blocked"
     assert (
         denials["sherpa-exported-silero-vad-v4-16k-derivative"]["sha256"]
@@ -99,6 +111,10 @@ def test_manifest_pins_correct_native_release_urls_and_contained_sizes() -> None
         "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/"
         "onnxruntime-wasm-static_lib-simd-1.27.0.zip"
     )
+    moonshine = artifacts["moonshine-tiny-en-quantized-2026-02-27"]
+    assert moonshine["license"]["evidence_sha256"] == (
+        "6148d7574a6554b7379b633cfd4c4fe5840c3f548d13bc83e00b52dc6fa00abd"
+    )
     assert artifacts["sherpa-onnx-android-1.13.4"]["url"].endswith(
         "/sherpa-onnx-v1.13.4-android.tar.bz2"
     )
@@ -106,9 +122,7 @@ def test_manifest_pins_correct_native_release_urls_and_contained_sizes() -> None
         "/sherpa-onnx-v1.13.4-ios.xcframework.zip"
     )
     kws = artifacts["sherpa-kws-gigaspeech-2024-01-01"]
-    assert kws["url"].endswith(
-        "/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2"
-    )
+    assert kws["url"].endswith("/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2")
     assert "-mobile" not in kws["id"]
     assert kws["sha256"] == "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a"
     assert kws["contained_files"][0]["sha256"] == (
@@ -122,6 +136,8 @@ def test_manifest_pins_correct_native_release_urls_and_contained_sizes() -> None
     )
 
     for artifact in artifacts.values():
+        assert artifact["archive_path"]
+        assert len(artifact["license"]["evidence_sha256"]) == 64
         for contained in artifact.get("contained_files", []):
             assert contained["path"]
             assert contained["size_bytes"] > 0
@@ -166,7 +182,12 @@ def test_validator_rejects_selected_artifacts_without_explicit_allowed_license(
 
 def test_validator_rejects_contained_files_without_positive_size(tmp_path: Path) -> None:
     manifest = read_manifest()
-    manifest["artifacts"][9]["contained_files"][0].pop("size_bytes")
+    moonshine = next(
+        artifact
+        for artifact in manifest["artifacts"]
+        if artifact["id"] == "moonshine-tiny-en-quantized-2026-02-27"
+    )
+    moonshine["contained_files"][0].pop("size_bytes")
     broken = tmp_path / "missing-contained-size.json"
     broken.write_text(json.dumps(manifest), encoding="utf-8")
 
@@ -194,3 +215,46 @@ def test_validator_rejects_missing_required_denials(tmp_path: Path) -> None:
     result = run_cli(str(broken))
     assert result.returncode == 2
     assert "policy denial pockettts-standard-voice-packs is required" in result.stdout
+
+
+def test_validator_requires_complete_transitive_source_inventory() -> None:
+    validator = load_validator()
+    manifest = read_manifest()
+    manifest["artifacts"] = [
+        artifact
+        for artifact in manifest["artifacts"]
+        if artifact["id"] != "kaldi-native-fbank-source-v1.22.3"
+    ]
+
+    errors = validator.validate_manifest(manifest)
+
+    assert "artifact kaldi-native-fbank-source-v1.22.3 is required" in errors
+
+
+def test_local_artifact_verifier_checks_hash_size_and_root_containment(
+    tmp_path: Path,
+) -> None:
+    validator = load_validator()
+    archive = tmp_path / "asset.bin"
+    license_file = tmp_path / "LICENSE"
+    archive.write_bytes(b"voice-runtime")
+    license_file.write_bytes(b"license")
+    artifact = {
+        "archive_path": "asset.bin",
+        "size_bytes": archive.stat().st_size,
+        "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+        "license": {
+            "evidence": "LICENSE",
+            "evidence_sha256": hashlib.sha256(license_file.read_bytes()).hexdigest(),
+        },
+    }
+
+    assert validator._validate_local_artifact(artifact, "artifact", tmp_path) == []
+
+    artifact["sha256"] = "0" * 64
+    errors = validator._validate_local_artifact(artifact, "artifact", tmp_path)
+    assert any("SHA-256 mismatch" in error for error in errors)
+
+    artifact["archive_path"] = "../outside.bin"
+    errors = validator._validate_local_artifact(artifact, "artifact", tmp_path)
+    assert any("escapes the artifact root" in error for error in errors)

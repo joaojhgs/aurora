@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -24,8 +25,24 @@ REQUIRED_ARTIFACT_FIELDS = (
     "version",
     "sha256",
     "size_bytes",
+    "archive_path",
     "license",
 )
+REQUIRED_ARTIFACT_STATUSES = {
+    "silero-vad-upstream-v4.0": "selected",
+    "vits-piper-en-us-ljspeech-medium": "blocked",
+    "kaldi-native-fbank-source-v1.22.3": "selected",
+    "kissfft-source-febd4cae": "selected",
+    "kaldi-decoder-source-v0.3.0": "selected",
+    "kaldifst-source-v1.8.0": "selected",
+    "openfst-source-v1.8.5-2026-04-11": "selected",
+    "eigen-source-5.0.1": "selected",
+    "simple-sentencepiece-source-v0.7": "selected",
+    "nlohmann-json-source-v3.12.0": "selected",
+    "onnxruntime-linux-x64-release-1.27.0": "selected",
+    "piper-phonemize-source-f3ff95af": "blocked",
+    "espeak-ng-source-ed530aa1": "blocked",
+}
 
 
 class ManifestError(RuntimeError):
@@ -40,10 +57,14 @@ def load_manifest(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def validate_manifest(data: dict[str, Any]) -> list[str]:
+def validate_manifest(data: dict[str, Any], artifact_root: Path | None = None) -> list[str]:
     errors: list[str] = []
     if data.get("schema_version") != 1:
         errors.append("schema_version must be 1")
+
+    declared_required = data.get("policy", {}).get("required_artifact_fields")
+    if declared_required != list(REQUIRED_ARTIFACT_FIELDS):
+        errors.append("policy.required_artifact_fields must match the validator contract")
 
     errors.extend(_placeholder_errors(data))
     artifacts = data.get("artifacts")
@@ -61,6 +82,8 @@ def validate_manifest(data: dict[str, Any]) -> list[str]:
                 errors.append(f"{path}.id {artifact_id!r} is duplicated")
             seen.add(artifact_id)
             errors.extend(_validate_artifact(artifact, path))
+            if artifact_root is not None:
+                errors.extend(_validate_local_artifact(artifact, path, artifact_root))
 
     denials = data.get("policy_denials")
     if not isinstance(denials, list) or not denials:
@@ -73,10 +96,11 @@ def validate_manifest(data: dict[str, Any]) -> list[str]:
                 continue
             errors.extend(_validate_denial(denial, path))
 
-    _require_artifact(data, "silero-vad-upstream-v4.0", "selected", errors)
-    _require_artifact(data, "vits-piper-en-us-ljspeech-medium", "selected", errors)
+    for artifact_id, status in REQUIRED_ARTIFACT_STATUSES.items():
+        _require_artifact(data, artifact_id, status, errors)
     _require_denial(data, "pockettts-standard-voice-packs", errors)
     _require_denial(data, "sherpa-exported-silero-vad-v4-16k-derivative", errors)
+    _require_denial(data, "piper-espeak-tts-runtime-chain", errors)
     return errors
 
 
@@ -103,6 +127,10 @@ def _validate_artifact(artifact: dict[str, Any], path: str) -> list[str]:
     size_bytes = artifact.get("size_bytes")
     if not isinstance(size_bytes, int) or size_bytes <= 0:
         errors.append(f"{path}.size_bytes must be a positive integer")
+
+    archive_path = artifact.get("archive_path")
+    if not isinstance(archive_path, str) or not archive_path.strip():
+        errors.append(f"{path}.archive_path must be a non-empty relative path")
 
     url = artifact.get("url")
     if not isinstance(url, str) or not url.startswith(("https://", "git+https://")):
@@ -155,11 +183,92 @@ def _validate_license(
     if artifact_status == "selected" and not license_info.get("spdx"):
         errors.append(f"{path}.spdx is required for selected artifacts")
     evidence_sha = license_info.get("evidence_sha256")
-    if evidence_sha is not None and (
-        not isinstance(evidence_sha, str) or not SHA256_RE.fullmatch(evidence_sha)
-    ):
+    if not isinstance(evidence_sha, str) or not SHA256_RE.fullmatch(evidence_sha):
         errors.append(f"{path}.evidence_sha256 must be a lowercase SHA-256 digest")
     return errors
+
+
+def _validate_local_artifact(artifact: dict[str, Any], path: str, artifact_root: Path) -> list[str]:
+    errors: list[str] = []
+    archive = _resolve_local_path(
+        artifact_root, artifact.get("archive_path"), f"{path}.archive_path", errors
+    )
+    if archive is not None:
+        errors.extend(
+            _verify_local_file(
+                archive,
+                artifact.get("size_bytes"),
+                artifact.get("sha256"),
+                f"{path}.archive_path",
+            )
+        )
+
+    license_info = artifact.get("license")
+    if isinstance(license_info, dict):
+        evidence = _resolve_local_path(
+            artifact_root,
+            license_info.get("evidence"),
+            f"{path}.license.evidence",
+            errors,
+        )
+        if evidence is not None:
+            errors.extend(
+                _verify_local_file(
+                    evidence,
+                    None,
+                    license_info.get("evidence_sha256"),
+                    f"{path}.license.evidence",
+                )
+            )
+    return errors
+
+
+def _resolve_local_path(root: Path, value: object, path: str, errors: list[str]) -> Path | None:
+    if not isinstance(value, str) or not value:
+        return None
+    relative = Path(value)
+    if relative.is_absolute():
+        errors.append(f"{path} must be relative to the artifact root")
+        return None
+    resolved_root = root.resolve()
+    resolved = (resolved_root / relative).resolve()
+    try:
+        resolved.relative_to(resolved_root)
+    except ValueError:
+        errors.append(f"{path} escapes the artifact root")
+        return None
+    return resolved
+
+
+def _verify_local_file(
+    file_path: Path,
+    expected_size: object,
+    expected_sha256: object,
+    path: str,
+) -> list[str]:
+    if not file_path.is_file():
+        return [f"{path} does not exist as a file: {file_path}"]
+
+    errors: list[str] = []
+    if isinstance(expected_size, int) and file_path.stat().st_size != expected_size:
+        errors.append(
+            f"{path} size mismatch: expected {expected_size}, got {file_path.stat().st_size}"
+        )
+    if isinstance(expected_sha256, str):
+        actual_sha256 = _sha256_file(file_path)
+        if actual_sha256 != expected_sha256:
+            errors.append(
+                f"{path} SHA-256 mismatch: expected {expected_sha256}, got {actual_sha256}"
+            )
+    return errors
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _validate_denial(denial: dict[str, Any], path: str) -> list[str]:
@@ -218,12 +327,14 @@ def _require_denial(data: dict[str, Any], denial_id: str, errors: list[str]) -> 
 def command_validate(args: argparse.Namespace) -> int:
     manifest_path = args.manifest
     data = load_manifest(manifest_path)
-    errors = validate_manifest(data)
+    errors = validate_manifest(data, args.artifact_root)
     payload = {
         "manifest": str(manifest_path),
         "status": "valid" if not errors else "invalid",
         "artifact_count": len(data.get("artifacts", [])) if isinstance(data, dict) else 0,
         "denial_count": len(data.get("policy_denials", [])) if isinstance(data, dict) else 0,
+        "artifact_root": str(args.artifact_root) if args.artifact_root else None,
+        "verified_local": args.artifact_root is not None and not errors,
         "errors": errors,
     }
     print(json.dumps(payload, indent=2, sort_keys=True))
@@ -240,6 +351,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=default_manifest_path(),
         help="Manifest JSON path. Defaults to tools/voice-runtime/phase4_manifest.json.",
+    )
+    parser.add_argument(
+        "--artifact-root",
+        type=Path,
+        help="Verify declared archives and license evidence beneath this directory.",
     )
     parser.set_defaults(func=command_validate)
     return parser

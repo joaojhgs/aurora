@@ -19,8 +19,10 @@ later implementation phases:
   `rust-version = "1.77.2"` declaration.
 - sherpa-onnx `v1.13.4`, ONNX Runtime `v1.27.0`, CPAL `v0.17.3`, and
   Emscripten `4.0.23` are the pinned runtime/build inputs under evaluation.
-- The selected first-pass model set is English-only: offline Moonshine v2 ASR,
-  upstream Silero VAD v4.0, GigaSpeech KWS, and Piper LJSpeech medium TTS.
+- The selected first-pass model set is English-only for ASR, VAD, and KWS:
+  offline Moonshine v2 ASR, upstream Silero VAD v4.0, and GigaSpeech KWS.
+  Piper LJSpeech medium TTS is evidence-only and blocked for activation until
+  the espeak dependency chain is patched and approved or replaced.
 - PocketTTS model packs remain hard-disabled for production use because the
   currently inspected pack is non-commercial. Package code availability does not
   make any PocketTTS model or voice asset redistributable.
@@ -48,8 +50,8 @@ later implementation phases:
 | --- | --- | --- | --- |
 | ASR | `sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27` | `9ec31b342d8fa3240c3b81b8f82e1cf7e3ac467c93ca5a999b741d5887164f8d` | Selected English-only offline Moonshine v2 candidate; multilingual and auto-language claims remain blocked |
 | VAD | upstream `silero-vad-v4.0.onnx` | `a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28` | Selected candidate; sherpa compatibility still pending |
-| KWS | `sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile` | `2e6ac2577310bfa2f4b6b5fab0478b868c9d0b2cb2c51b3e13b50581b588864d` | Selected English BPE candidate |
-| TTS | `vits-piper-en_US-ljspeech-medium` | `3dfb4b759d8be032a4903a9538d128b0fda2a06ab1de6cbc2d93a97e2dd83dba` | Selected English single-speaker candidate; compiler warning remains open |
+| KWS | `sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01` | `f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a` | Selected English BPE candidate; the smaller `-mobile` pack is disqualified until its ONNX Runtime reshape abort is resolved |
+| TTS | `vits-piper-en_US-ljspeech-medium` | `3dfb4b759d8be032a4903a9538d128b0fda2a06ab1de6cbc2d93a97e2dd83dba` | Blocked for activation; kept as C API evidence only until the pinned Piper/espeak chain clears memory-safety and GPL distribution review or is replaced |
 
 Moonshine extracted file hashes already recorded for integration:
 
@@ -62,7 +64,7 @@ Moonshine extracted file hashes already recorded for integration:
 | Surface | Decision | Current status |
 | --- | --- | --- |
 | Desktop local | Use Rust host code for model lifecycle and native HTTP/SSE; use CPAL `0.17.3` as the desktop audio capture/playback candidate. | Linux sherpa shared-library build completed. Standalone CPAL capture/playback and Android comparison checks passed; the full integrated local audio path remains pending. |
-| Hosted web and WebView foreground capture | Use browser microphone capture and worker-hosted WASM modules; keep the UI thread nonblocking. | WASM builds must cover VAD, combined offline VAD+ASR, KWS, and TTS modules. Browser worker parity remains pending. |
+| Hosted web and WebView foreground capture | Use browser microphone capture and worker-hosted WASM modules; keep the UI thread nonblocking. | WASM builds must cover VAD, combined offline VAD+ASR, and KWS modules. Browser worker parity remains pending; TTS is withheld from activation. |
 | Android | Use Kotlin `AudioRecord`/`AudioManager` lifecycle and data plane into Rust with bounded PCM transfer. Treat CPAL/AAudio as comparison only for this phase. | sherpa source-built for `arm64-v8a` and `x86_64` against staged prebuilt ONNX Runtime. All four inspected libraries are ELF-correct and every LOAD segment is `0x4000` aligned. Native model execution, WebView parity, durable background voice, and physical-device results remain pending. |
 | iOS | Use Swift `AVAudioEngine`/`AVAudioSession` lifecycle and data plane into Rust. Treat CPAL/CoreAudio as comparison only for this phase. | Hash-pinned XCFrameworks contain the expected device `arm64`/iOS slice and simulator `arm64`+`x86_64`/iOSSimulator slices. Runtime linking, signing, simulator execution, device microphone behavior, and packaged runtime validation remain pending. |
 
@@ -76,9 +78,9 @@ Moonshine extracted file hashes already recorded for integration:
 | Rust MSRV | Proven locally for current lockfile | `cargo +1.88.0 check --locked` passed; older Rust `1.85.1` failed on locked dependency MSRV requirements. |
 | PocketTTS production use | Rejected | The inspected model pack is non-commercial. Do not ship, auto-download, or advertise it for production. |
 | sherpa-exported Silero VAD | Rejected as default | The byte file is traceable as a k2-fsa-exported Silero v4 derivative, but the exact reproducible export recipe is missing. |
-| Piper/espeak TTS source build | Open risk | The Linux build emitted upstream espeak-ng `-Wstringop-overflow` warnings in `langopts.c`. Treat TTS source-build acceptance as pending until this warning is triaged or a safer pinned path is selected. |
-| Native C API parity and TTS cancellation | Pending | ASR/VAD/KWS/TTS probes must run against the selected packs, including callback cancellation for TTS. |
-| WASM parity and browser nonblocking behavior | Pending | VAD, combined offline VAD+ASR, KWS, and TTS modules must be built and exercised in a worker-hosted browser path. |
+| Piper/espeak TTS source build | Rejected for activation | The Linux build emitted upstream espeak-ng `-Wstringop-overflow` warnings in `langopts.c`, and the pinned espeak chain carries GPL-3.0-or-later distribution obligations. Do not ship, auto-download, or activate this TTS path until a patched audited chain or replacement is selected. |
+| Native C API parity and TTS cancellation | Proven locally for evidence only | ASR, VAD, KWS, TTS generation, and TTS callback cancellation probes pass against the local selected/evidence packs. The TTS pass does not override the Piper/espeak activation block. |
+| WASM parity and browser nonblocking behavior | Pending | VAD, combined offline VAD+ASR, and KWS modules must be built and exercised in a worker-hosted browser path. TTS is withheld from activation. |
 | iOS runtime evidence | Pending external platform work | Linux-only inspection does not prove simulator, device, microphone, Swift runtime, signing, or App Store readiness. |
 
 ## Comparison candidates
