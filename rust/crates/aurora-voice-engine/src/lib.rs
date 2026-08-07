@@ -6,6 +6,7 @@ pub mod model_pack;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::fmt;
 use thiserror::Error;
@@ -1406,6 +1407,7 @@ pub struct BoundTtsSynthesisRequest {
     request: BoundTaskRequest,
     text: String,
     config: TtsSynthesisConfig,
+    identity: TtsRequestIdentity,
 }
 
 impl BoundTtsSynthesisRequest {
@@ -1419,10 +1421,12 @@ impl BoundTtsSynthesisRequest {
         if !valid_tts_text(&text) {
             return Err(EngineError::InvalidRequest);
         }
+        let identity = TtsRequestIdentity::for_request(&request, &text, &config);
         Ok(Self {
             request,
             text,
             config,
+            identity,
         })
     }
 
@@ -1437,15 +1441,86 @@ impl BoundTtsSynthesisRequest {
     pub fn config(&self) -> &TtsSynthesisConfig {
         &self.config
     }
+
+    pub fn identity(&self) -> &TtsRequestIdentity {
+        &self.identity
+    }
+}
+
+/// Opaque bounded identity for one bound TTS request.
+#[derive(Clone, PartialEq, Eq)]
+pub struct TtsRequestIdentity([u8; 32]);
+
+impl TtsRequestIdentity {
+    fn for_request(request: &BoundTaskRequest, text: &str, config: &TtsSynthesisConfig) -> Self {
+        let mut hasher = Sha256::new();
+        hash_part(&mut hasher, b"aurora.tts.request.v1");
+        hash_part(
+            &mut hasher,
+            format!("{:?}", request.request().task).as_bytes(),
+        );
+        hash_part(
+            &mut hasher,
+            request
+                .request()
+                .language
+                .as_deref()
+                .unwrap_or("")
+                .as_bytes(),
+        );
+        hash_part(&mut hasher, &request.request().generation.to_le_bytes());
+        let binding = request.binding();
+        hash_part(&mut hasher, binding.manifest_sha256().as_bytes());
+        hash_part(&mut hasher, binding.pack_id().as_bytes());
+        hash_part(&mut hasher, binding.pack_version().as_bytes());
+        hash_part(&mut hasher, binding.variant_id().as_bytes());
+        for file_id in binding.selected_file_ids() {
+            hash_part(&mut hasher, file_id.as_bytes());
+        }
+        hash_part(&mut hasher, binding.compatibility_group_id().as_bytes());
+        hash_part(
+            &mut hasher,
+            binding.voice_state_compatibility_group_id().as_bytes(),
+        );
+        hash_part(&mut hasher, format!("{:?}", binding.target()).as_bytes());
+        hash_part(&mut hasher, format!("{:?}", binding.os()).as_bytes());
+        hash_part(&mut hasher, format!("{:?}", binding.arch()).as_bytes());
+        hash_part(&mut hasher, format!("{:?}", binding.engine()).as_bytes());
+        hash_part(&mut hasher, &binding.sample_rate_hz().to_le_bytes());
+        hash_part(&mut hasher, &binding.channels().to_le_bytes());
+        hash_part(&mut hasher, &binding.frame_size().to_le_bytes());
+        hash_part(&mut hasher, config.logical_voice_id().as_bytes());
+        hash_part(
+            &mut hasher,
+            config.voice_state_compatibility_group_id().as_bytes(),
+        );
+        hash_part(&mut hasher, &config.sample_rate_hz().to_le_bytes());
+        hash_part(&mut hasher, &config.channels().to_le_bytes());
+        hash_part(&mut hasher, &(config.chunk_samples() as u64).to_le_bytes());
+        match config.seed() {
+            Some(seed) => {
+                hash_part(&mut hasher, b"seed:some");
+                hash_part(&mut hasher, &seed.to_le_bytes());
+            }
+            None => hash_part(&mut hasher, b"seed:none"),
+        }
+        hash_part(&mut hasher, &(text.len() as u64).to_le_bytes());
+        hash_part(&mut hasher, text.as_bytes());
+        Self(hasher.finalize().into())
+    }
+}
+
+impl fmt::Debug for TtsRequestIdentity {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("TtsRequestIdentity(<redacted>)")
+    }
 }
 
 /// One synthesized audio chunk. Debug output redacts sample values.
 #[derive(Clone, PartialEq, Eq)]
 pub struct TtsAudioChunk {
-    request_generation: u64,
-    request_manifest_sha256: String,
-    request_pack_id: String,
-    request_variant_id: String,
+    request_identity: TtsRequestIdentity,
+    chunk_samples_policy: usize,
     sequence: u64,
     sample_rate_hz: u32,
     channels: u16,
@@ -1470,16 +1545,14 @@ impl TtsAudioChunk {
             || samples.is_empty()
             || samples.len() > config.chunk_samples()
             || samples.len() > TTS_MAX_CHUNK_SAMPLES
-            || (!final_chunk && samples.len() < TTS_MIN_CHUNK_SAMPLES)
+            || (!final_chunk && samples.len() != config.chunk_samples())
             || (final_chunk && samples.len() > config.chunk_samples())
         {
             return Err(EngineError::InvalidRequest);
         }
         Ok(Self {
-            request_generation: request.request().request().generation,
-            request_manifest_sha256: request.request().binding().manifest_sha256().to_owned(),
-            request_pack_id: request.request().binding().pack_id().to_owned(),
-            request_variant_id: request.request().binding().variant_id().to_owned(),
+            request_identity: request.identity().clone(),
+            chunk_samples_policy: config.chunk_samples(),
             sequence,
             sample_rate_hz,
             channels,
@@ -1489,18 +1562,16 @@ impl TtsAudioChunk {
     }
 
     fn matches_request(&self, request: &BoundTtsSynthesisRequest) -> bool {
-        self.request_generation == request.request().request().generation
-            && self.request_manifest_sha256 == request.request().binding().manifest_sha256()
-            && self.request_pack_id == request.request().binding().pack_id()
-            && self.request_variant_id == request.request().binding().variant_id()
+        self.request_identity == *request.identity()
+            && self.chunk_samples_policy == request.config().chunk_samples()
             && self.sample_rate_hz == request.config().sample_rate_hz()
             && self.channels == request.config().channels()
             && !self.samples.is_empty()
             && self.samples.len() <= request.config().chunk_samples()
     }
 
-    pub fn request_generation(&self) -> u64 {
-        self.request_generation
+    pub fn request_identity(&self) -> &TtsRequestIdentity {
+        &self.request_identity
     }
 
     pub fn sequence(&self) -> u64 {
@@ -1726,6 +1797,11 @@ fn valid_transcript_text(value: &str) -> bool {
         && !value
             .chars()
             .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
+}
+
+fn hash_part(hasher: &mut Sha256, part: &[u8]) {
+    hasher.update((part.len() as u64).to_le_bytes());
+    hasher.update(part);
 }
 
 fn manifest_supports_task(manifest: &ModelPackManifest, task: VoiceTask) -> bool {
@@ -1983,17 +2059,47 @@ mod tests {
         (verified, selection)
     }
 
-    fn bound_tts_request(generation: u64, chunk_samples: usize) -> BoundTtsSynthesisRequest {
-        let (manifest, selection) = selected(PackTask::Tts);
-        let binding =
-            TaskPackBinding::from_selection(VoiceTask::TextToSpeech, &manifest, &selection)
-                .expect("tts binding");
+    fn tts_binding(voice_state_group_id: &str) -> TaskPackBinding {
+        let mut manifest = test_manifest(PackTask::Tts);
+        manifest.variants[0].compatibility.voice_state_group_id = voice_state_group_id.to_owned();
+        let verified = verify_manifest(manifest, &TrustPolicy::default(), Some(&AcceptingVerifier))
+            .expect("verified tts manifest");
+        let selection = select_verified_variant(
+            &verified,
+            &RuntimeSelection {
+                target: RuntimeTarget::Desktop,
+                os: TargetOs::Linux,
+                arch: TargetArch::X86_64,
+                browser_features: BTreeSet::new(),
+                device_memory_mb: None,
+                max_download_bytes: 1024,
+                max_installed_bytes: 1024,
+                max_memory_bytes: 1024,
+                cpu_threads: 1,
+                max_rtf_millis_per_second: 1_000,
+                device_class: DeviceClass::Low,
+                require_interoperable: true,
+            },
+        )
+        .expect("selected tts variant");
+        TaskPackBinding::from_selection(VoiceTask::TextToSpeech, &verified, &selection)
+            .expect("tts binding")
+    }
+
+    fn bound_tts_request_with(
+        binding: TaskPackBinding,
+        generation: u64,
+        text: &str,
+        logical_voice_id: &str,
+        seed: Option<u64>,
+        chunk_samples: usize,
+    ) -> BoundTtsSynthesisRequest {
         let config = TtsSynthesisConfig::new(
-            "voice.default",
-            "voice-state-a",
+            logical_voice_id,
+            binding.voice_state_compatibility_group_id().to_owned(),
             binding.sample_rate_hz(),
             chunk_samples,
-            None,
+            seed,
         )
         .expect("valid tts config");
         BoundTtsSynthesisRequest::new(
@@ -2006,10 +2112,21 @@ mod tests {
                 binding,
             )
             .expect("bound tts task"),
-            "hello",
+            text,
             config,
         )
         .expect("bound tts request")
+    }
+
+    fn bound_tts_request(generation: u64, chunk_samples: usize) -> BoundTtsSynthesisRequest {
+        bound_tts_request_with(
+            tts_binding("voice-state-a"),
+            generation,
+            "hello",
+            "voice.default",
+            None,
+            chunk_samples,
+        )
     }
 
     struct SurfaceVadProvider;
@@ -2678,6 +2795,95 @@ mod tests {
     }
 
     #[test]
+    fn tts_request_identity_rejects_semantic_request_collisions() {
+        let base_binding = tts_binding("voice-state-a");
+        let base = bound_tts_request_with(
+            base_binding.clone(),
+            30,
+            "hello",
+            "voice.default",
+            None,
+            1024,
+        );
+        let exact =
+            TtsAudioChunk::new(&base, 1, 16_000, MONO_CHANNELS, vec![0; 12], true).expect("chunk");
+        TtsSynthesisResult::new(&base, vec![exact.clone()], false).expect("exact request accepts");
+
+        let different_text = bound_tts_request_with(
+            base_binding.clone(),
+            30,
+            "hello again",
+            "voice.default",
+            None,
+            1024,
+        );
+        assert_eq!(
+            TtsSynthesisResult::new(&different_text, vec![exact.clone()], false),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let different_voice =
+            bound_tts_request_with(base_binding.clone(), 30, "hello", "voice.other", None, 1024);
+        assert_eq!(
+            TtsSynthesisResult::new(&different_voice, vec![exact.clone()], false),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let different_seed = bound_tts_request_with(
+            base_binding.clone(),
+            30,
+            "hello",
+            "voice.default",
+            Some(99),
+            1024,
+        );
+        assert_eq!(
+            TtsSynthesisResult::new(&different_seed, vec![exact.clone()], false),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let different_chunk_config = bound_tts_request_with(
+            base_binding.clone(),
+            30,
+            "hello",
+            "voice.default",
+            None,
+            512,
+        );
+        assert_eq!(
+            TtsSynthesisResult::new(&different_chunk_config, vec![exact.clone()], false),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let different_compatibility = bound_tts_request_with(
+            tts_binding("voice-state-b"),
+            30,
+            "hello",
+            "voice.default",
+            None,
+            1024,
+        );
+        assert_eq!(
+            TtsSynthesisResult::new(&different_compatibility, vec![exact], false),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let mismatched_config_chunk = TtsAudioChunk::new(
+            &different_chunk_config,
+            1,
+            16_000,
+            MONO_CHANNELS,
+            vec![0; 12],
+            true,
+        )
+        .expect("different config chunk");
+        assert_eq!(
+            TtsSynthesisResult::new(&base, vec![mismatched_config_chunk], false),
+            Err(EngineError::InvalidRequest)
+        );
+    }
+
+    #[test]
     fn debug_output_redacts_audio_sample_values() {
         let frame = StreamingAudioFrame::new(
             1,
@@ -2719,6 +2925,9 @@ mod tests {
         assert!(chunk_debug.contains("sample_count: 2"));
         assert!(!chunk_debug.contains("123"));
         assert!(!chunk_debug.contains("-456"));
+        let identity_debug = format!("{:?}", chunk.request_identity());
+        assert!(identity_debug.contains("<redacted>"));
+        assert!(!identity_debug.contains("hello"));
     }
 
     #[test]
