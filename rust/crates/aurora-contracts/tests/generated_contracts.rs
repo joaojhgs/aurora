@@ -44,22 +44,27 @@ fn canonical_hash(value: &Value) -> Result<String, serde_json::Error> {
     Ok(output)
 }
 
-fn without_null_fields(value: Value) -> Value {
+fn without_empty_default_fields(value: Value) -> Option<Value> {
     match value {
-        Value::Array(items) => Value::Array(items.into_iter().map(without_null_fields).collect()),
-        Value::Object(object) => Value::Object(
-            object
+        Value::Null => None,
+        Value::Array(items) if items.is_empty() => None,
+        Value::Array(items) => Some(Value::Array(
+            items
+                .into_iter()
+                .filter_map(without_empty_default_fields)
+                .collect(),
+        )),
+        Value::Object(object) if object.is_empty() => None,
+        Value::Object(object) => {
+            let filtered = object
                 .into_iter()
                 .filter_map(|(key, value)| {
-                    if value.is_null() {
-                        None
-                    } else {
-                        Some((key, without_null_fields(value)))
-                    }
+                    without_empty_default_fields(value).map(|value| (key, value))
                 })
-                .collect(),
-        ),
-        other => other,
+                .collect();
+            Some(Value::Object(filtered))
+        }
+        other => Some(other),
     }
 }
 
@@ -170,7 +175,8 @@ fn rust_parser_matches_shared_positive_and_negative_vectors() {
             if vector.marker_paths.is_some() {
                 assert_eq!(
                     parsed_input_shape(&parsed, &input),
-                    without_null_fields(expected_input_shape(&expected, &input)),
+                    without_empty_default_fields(expected_input_shape(&expected, &input))
+                        .expect("marker vector expected shape"),
                     "{} normalized payload",
                     vector.schema_id
                 );

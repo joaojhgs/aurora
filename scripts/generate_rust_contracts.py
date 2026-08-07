@@ -28,6 +28,7 @@ NORMALIZATION_MARKERS = {
     "x-aurora-speech-language-auto-null",
     "x-aurora-speech-language-array-normalize",
     "x-aurora-bounded-nonblank-string-set-normalize",
+    "x-aurora-unique-string-array-normalize",
     "x-aurora-route-explain-no-raw-payload",
     "x-aurora-route-explain-selector-fields",
     "x-aurora-route-explain-speech-no-raw-payload",
@@ -269,77 +270,249 @@ def _pydantic_normalized(model_name: str, value: Any) -> Any:
     return parsed.model_dump(mode="json", exclude_none=True)
 
 
-def _marker_negative_cases(schema_id: str) -> list[dict[str, Any]]:
-    base = _MARKER_POSITIVE_INPUTS[schema_id]
+def _matching_marker_path(marker_paths: list[str], fragment: str, marker: str) -> str:
+    matches = [path for path in marker_paths if fragment in path and path.endswith(f":{marker}")]
+    if len(matches) != 1:
+        raise GenerationError(
+            f"expected exactly one marker path for {fragment!r} / {marker}, found {matches}"
+        )
+    return matches[0]
+
+
+def _marker_negative_cases(
+    schema_id: str, marker_paths: list[str], base: Mapping[str, Any]
+) -> list[dict[str, Any]]:
     cases: list[dict[str, Any]] = []
 
-    def add(input_value: dict[str, Any], issue_path: str, issue_category: str) -> None:
+    def add(
+        input_value: dict[str, Any],
+        issue_path: str,
+        issue_category: str,
+        marker_path: str,
+    ) -> None:
         cases.append(
             {
                 "accepted": False,
                 "input": input_value,
                 "issue_category": issue_category,
                 "issue_path": issue_path,
+                "marker_paths": [marker_path],
             }
         )
 
     if "operation_id" in base:
+        operation_marker = _matching_marker_path(
+            marker_paths, "operation_id", "x-aurora-tts-operation-id"
+        )
         invalid = dict(base)
         invalid["operation_id"] = " bad id "
-        add(invalid, "$.operation_id", "tts_operation_id")
+        add(invalid, "$.operation_id", "tts_operation_id", operation_marker)
         oversized = dict(base)
         oversized["operation_id"] = f" {'a' * 127} "
-        add(oversized, "$.operation_id", "tts_operation_id")
-    if "language" in base:
+        add(oversized, "$.operation_id", "tts_operation_id", operation_marker)
+    if "language" in base and any(
+        path.endswith(":x-aurora-speech-language-string-normalize") for path in marker_paths
+    ):
+        language_marker = _matching_marker_path(
+            marker_paths, "language", "x-aurora-speech-language-string-normalize"
+        )
         invalid = dict(base)
         invalid["language"] = "pt_BR"
-        add(invalid, "$.language", "speech_language")
+        add(invalid, "$.language", "speech_language", language_marker)
     if schema_id == "TTS.CreateVoiceProfile.input.TTSCreateVoiceProfileRequest":
+        language_marker = _matching_marker_path(
+            marker_paths, "language", "x-aurora-speech-language-string-normalize"
+        )
         invalid = dict(base)
         invalid["language"] = "pt_BR"
-        add(invalid, "$.language", "speech_language")
+        add(invalid, "$.language", "speech_language", language_marker)
     if schema_id == "TTS.UpdateVoiceProfile.input.TTSUpdateVoiceProfileRequest":
+        peer_marker = _matching_marker_path(
+            marker_paths,
+            "allowed_peer_ids",
+            "x-aurora-bounded-nonblank-string-set-normalize",
+        )
         invalid = dict(base)
         invalid["allowed_peer_ids"] = ["peer-a", "   "]
-        add(invalid, "$.allowed_peer_ids", "bounded_nonblank_string_set")
+        add(invalid, "$.allowed_peer_ids", "bounded_nonblank_string_set", peer_marker)
     if schema_id == "TTS.GetCapabilities.output.TTSGetCapabilitiesResponse":
+        ready_marker = _matching_marker_path(
+            marker_paths,
+            "TTSCapabilities.properties.ready_languages",
+            "x-aurora-speech-language-array-normalize",
+        )
         invalid = json.loads(json.dumps(base))
         invalid["capabilities"]["ready_languages"] = ["pt_BR"]
-        add(invalid, "$.capabilities.ready_languages", "speech_language_array")
+        add(invalid, "$.capabilities.ready_languages", "speech_language_array", ready_marker)
+        resident_pack_ready_marker = _matching_marker_path(
+            marker_paths,
+            "TTSResidentLanguagePack.properties.ready_languages",
+            "x-aurora-speech-language-array-normalize",
+        )
         invalid = json.loads(json.dumps(base))
-        invalid["capabilities"]["supported_language_pack_ids"] = ["   "]
-        add(invalid, "$.capabilities.supported_language_pack_ids", "bounded_nonblank_string_set")
-    if schema_id in {
-        "TTS.GetVoiceProfile.output.TTSGetVoiceProfileResponse",
-        "TTS.ListVoiceProfiles.output.TTSListVoiceProfilesResponse",
-    }:
+        invalid["capabilities"]["resident_language_packs"][0]["ready_languages"] = ["pt_BR"]
+        add(
+            invalid,
+            "$.capabilities.resident_language_packs.0.ready_languages",
+            "speech_language_array",
+            resident_pack_ready_marker,
+        )
+        for field in (
+            "supported_language_pack_ids",
+            "installed_language_pack_ids",
+            "resident_language_pack_ids",
+        ):
+            pack_marker = _matching_marker_path(
+                marker_paths, field, "x-aurora-bounded-nonblank-string-set-normalize"
+            )
+            invalid = json.loads(json.dumps(base))
+            invalid["capabilities"][field] = ["   "]
+            add(
+                invalid,
+                f"$.capabilities.{field}",
+                "bounded_nonblank_string_set",
+                pack_marker,
+            )
+    if schema_id == "TTS.GetVoiceProfile.output.TTSGetVoiceProfileResponse":
+        allowed_marker = _matching_marker_path(
+            marker_paths, "allowed_peer_ids", "x-aurora-bounded-nonblank-string-set-normalize"
+        )
         invalid = json.loads(json.dumps(base))
-        profile = invalid["profile"] if "profile" in invalid else invalid["profiles"][0]
-        profile["allowed_peer_ids"] = ["peer-a", "   "]
-        add(invalid, "$.profile.allowed_peer_ids", "bounded_nonblank_string_set")
+        invalid["profile"]["allowed_peer_ids"] = ["peer-a", "   "]
+        add(invalid, "$.profile.allowed_peer_ids", "bounded_nonblank_string_set", allowed_marker)
+        pack_marker = _matching_marker_path(
+            marker_paths,
+            "compatible_language_pack_ids",
+            "x-aurora-bounded-nonblank-string-set-normalize",
+        )
+        invalid = json.loads(json.dumps(base))
+        invalid["profile"]["compatible_language_pack_ids"] = ["   "]
+        add(
+            invalid,
+            "$.profile.compatible_language_pack_ids",
+            "bounded_nonblank_string_set",
+            pack_marker,
+        )
+    if schema_id == "TTS.ListVoiceProfiles.output.TTSListVoiceProfilesResponse":
+        allowed_marker = _matching_marker_path(
+            marker_paths, "allowed_peer_ids", "x-aurora-bounded-nonblank-string-set-normalize"
+        )
+        invalid = json.loads(json.dumps(base))
+        invalid["profiles"][0]["allowed_peer_ids"] = ["peer-a", "   "]
+        add(
+            invalid,
+            "$.profiles.0.allowed_peer_ids",
+            "bounded_nonblank_string_set",
+            allowed_marker,
+        )
+        pack_marker = _matching_marker_path(
+            marker_paths,
+            "compatible_language_pack_ids",
+            "x-aurora-bounded-nonblank-string-set-normalize",
+        )
+        invalid = json.loads(json.dumps(base))
+        invalid["profiles"][0]["compatible_language_pack_ids"] = ["   "]
+        add(
+            invalid,
+            "$.profiles.0.compatible_language_pack_ids",
+            "bounded_nonblank_string_set",
+            pack_marker,
+        )
     if schema_id == "TTS.ListVoices.output.TTSListVoicesResponse":
+        pack_marker = _matching_marker_path(
+            marker_paths,
+            "compatible_language_pack_ids",
+            "x-aurora-bounded-nonblank-string-set-normalize",
+        )
         invalid = json.loads(json.dumps(base))
         invalid["voices"][0]["compatible_language_pack_ids"] = ["   "]
-        add(invalid, "$.voices.0.compatible_language_pack_ids", "bounded_nonblank_string_set")
+        add(
+            invalid,
+            "$.voices.0.compatible_language_pack_ids",
+            "bounded_nonblank_string_set",
+            pack_marker,
+        )
+    if schema_id in {
+        "Tooling.GetExportCatalog.output.ToolingGetExportCatalogResponse",
+        "Tooling.GetTools.output.ToolingGetToolsResponse",
+    }:
+        legacy_marker = _matching_marker_path(
+            marker_paths, "legacy_global_tool_ids", "x-aurora-unique-string-array-normalize"
+        )
+        invalid = json.loads(json.dumps(base))
+        invalid["tools"][0]["legacy_global_tool_ids"] = ["legacy-a", " trimmed "]
+        add(
+            invalid,
+            "$.tools.0.legacy_global_tool_ids",
+            "unique_string_array_normalize",
+            legacy_marker,
+        )
     if schema_id == "Transcription.Transcribe.input.TranscribeAudioRequest":
+        language_marker = _matching_marker_path(
+            marker_paths, "language", "x-aurora-speech-language-auto-null"
+        )
+        invalid = dict(base)
+        invalid["language"] = "pt_BR"
+        add(invalid, "$.language", "speech_language", language_marker)
+        candidates_marker = _matching_marker_path(
+            marker_paths,
+            "auto_language_candidates",
+            "x-aurora-speech-language-array-normalize",
+        )
         invalid = dict(base)
         invalid["auto_language_candidates"] = ["pt_BR"]
-        add(invalid, "$.auto_language_candidates", "speech_language_array")
+        add(invalid, "$.auto_language_candidates", "speech_language_array", candidates_marker)
     if schema_id == "Gateway.ExplainRoute.input.RouteExplainRequest":
+        raw_marker = _matching_marker_path(
+            marker_paths,
+            "$:x-aurora-route-explain-no-raw-payload",
+            "x-aurora-route-explain-no-raw-payload",
+        )
         add(
             {"topic": "TTS.Request", "nested": {"messages": "secret"}},
             "$.nested.messages",
             "route_explain_raw_payload",
+            raw_marker,
+        )
+        selector_marker = _matching_marker_path(
+            marker_paths,
+            "$:x-aurora-route-explain-selector-fields",
+            "x-aurora-route-explain-selector-fields",
         )
         add(
             {"topic": "TTS.Request", "selector": {"peer_id": "peer-1", "raw_peer": "secret"}},
             "$.selector.raw_peer",
             "route_explain_selector_fields",
+            selector_marker,
+        )
+        speech_raw_marker = _matching_marker_path(
+            marker_paths,
+            "$:x-aurora-route-explain-speech-no-raw-payload",
+            "x-aurora-route-explain-speech-no-raw-payload",
         )
         add(
             {"topic": "TTS.Request", "speech": {"input": "secret"}},
             "$.speech.input",
             "route_explain_speech_raw_payload",
+            speech_raw_marker,
+        )
+        language_marker = _matching_marker_path(
+            marker_paths,
+            "SpeechLanguageRequirement.properties.language",
+            "x-aurora-speech-language-string-normalize",
+        )
+        invalid = json.loads(json.dumps(base))
+        invalid["speech"]["language_requirement"] = {"mode": "exact", "language": "pt_BR"}
+        add(
+            invalid,
+            "$.speech.language_requirement.language",
+            "speech_language",
+            language_marker,
+        )
+        candidates_marker = _matching_marker_path(
+            marker_paths,
+            "SpeechLanguageRequirement.properties.auto_language_candidates",
+            "x-aurora-speech-language-array-normalize",
         )
         invalid = json.loads(json.dumps(base))
         invalid["speech"]["language_requirement"]["auto_language_candidates"] = ["pt_BR"]
@@ -347,23 +520,31 @@ def _marker_negative_cases(schema_id: str) -> list[dict[str, Any]]:
             invalid,
             "$.speech.language_requirement.auto_language_candidates",
             "speech_language_array",
+            candidates_marker,
         )
     return cases
 
 
-def _marker_vectors(item: Mapping[str, Any]) -> dict[str, Any]:
+def _marker_vectors(item: Mapping[str, Any], raw_vectors: Mapping[str, Any]) -> dict[str, Any]:
     schema_id = item["schema_id"]
     marker_paths = _walk_marker_paths(item["schema"])
     if not marker_paths:
-        return {}
-    if schema_id not in _MARKER_POSITIVE_INPUTS:
+        return dict(raw_vectors)
+    if schema_id not in _MARKER_POSITIVE_INPUTS and not raw_vectors.get("positive"):
         raise GenerationError(f"missing marker vector fixture for {schema_id}")
 
-    positive_input = _MARKER_POSITIVE_INPUTS[schema_id]
+    positive_input = (
+        raw_vectors.get("positive", {}).get("input")
+        if raw_vectors.get("positive")
+        else _MARKER_POSITIVE_INPUTS[schema_id]
+    )
     positive_normalized = _pydantic_normalized(item["model_name"], positive_input)
-    negative_cases = _marker_negative_cases(schema_id)
+    negative_cases = [dict(case) for case in raw_vectors.get("negative_cases", ())]
+    negative_cases.extend(_marker_negative_cases(schema_id, marker_paths, positive_input))
     model = _model_class(item["model_name"])
     for case in negative_cases:
+        if not case.get("marker_paths"):
+            continue
         try:
             model.model_validate(case["input"])
         except Exception:
@@ -546,7 +727,7 @@ def render_vector_fixture(contract_schema: Mapping[str, Any]) -> str:
 
     vectors: list[dict[str, Any]] = []
     for item in contract_schema["schemas"]:
-        raw_vectors = item.get("vectors") or _marker_vectors(item)
+        raw_vectors = _marker_vectors(item, item.get("vectors") or {})
         positive = raw_vectors.get("positive")
         if positive:
             vectors.append(
@@ -578,6 +759,11 @@ def render_vector_fixture(contract_schema: Mapping[str, Any]) -> str:
                     "method_id": item["method_id"],
                     "model_name": item["model_name"],
                     "schema_id": item["schema_id"],
+                    **(
+                        {"marker_paths": negative["marker_paths"]}
+                        if negative.get("marker_paths")
+                        else {}
+                    ),
                 }
             )
     fixture = {

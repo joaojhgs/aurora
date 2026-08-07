@@ -86,9 +86,19 @@ def test_rust_contract_marker_vectors_cover_every_normalization_marker_schema() 
     for item in schema["schemas"]:
         visit(item["schema"], item["schema_id"])
 
-    covered = {
+    positive_covered = {
         vector["schema_id"]: set(vector["marker_paths"])
         for vector in fixture["vectors"]
         if vector.get("accepted") is True and "marker_paths" in vector
     }
-    assert covered == expected
+    negative_covered: dict[str, set[str]] = {}
+    for vector in fixture["vectors"]:
+        if vector.get("accepted") is not False or "marker_paths" not in vector:
+            continue
+        schema_id = vector["schema_id"]
+        marker_paths = set(vector["marker_paths"])
+        assert marker_paths <= expected[schema_id]
+        negative_covered.setdefault(schema_id, set()).update(marker_paths)
+
+    assert positive_covered == expected
+    assert negative_covered == expected
