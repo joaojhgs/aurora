@@ -808,7 +808,10 @@ class RouteGenerator:
                 request_timeout = _request_timeout_for(topic, payload, timeout)
 
                 # Make the bus request
-                log_debug(f"Gateway forwarding to {topic} with payload: {payload}")
+                log_debug(
+                    f"Gateway forwarding to {topic} with payload: "
+                    f"{redacted_copy(payload, method_id=topic)}"
+                )
                 result = await self._bus.request(
                     topic,
                     payload,
@@ -823,7 +826,8 @@ class RouteGenerator:
                     else None,
                 )
                 log_debug(
-                    f"Gateway received result: ok={result.ok}, data={redacted_copy(result.data)}"
+                    "Gateway received result: "
+                    f"ok={result.ok}, data={redacted_copy(result.data, method_id=topic)}"
                 )
 
                 if result.ok:
@@ -854,7 +858,9 @@ class RouteGenerator:
                         response = result.data if result.data else {"success": True}
                     else:
                         response = {"data": result.data}
-                    log_debug(f"Gateway returning response: {redacted_copy(response)}")
+                    log_debug(
+                        f"Gateway returning response: {redacted_copy(response, method_id=topic)}"
+                    )
                     return response
                 else:
                     # Service returned an error
@@ -989,7 +995,9 @@ class RouteGenerator:
                 else:
                     response_data = {"data": result}
 
-                log_debug(f"typed_handler returning: {redacted_copy(response_data)}")
+                log_debug(
+                    f"typed_handler returning: {redacted_copy(response_data, method_id=method_id)}"
+                )
                 # Return JSONResponse to ensure proper serialization
                 headers = {}
                 if admin_action_receipt:

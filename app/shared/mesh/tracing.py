@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import uuid
 from typing import Any
@@ -21,6 +22,46 @@ _SECRET_KEY_PARTS = (
     "secret",
     "token",
 )
+
+_AUDIO_KEY_PARTS = (
+    "audio",
+    "pcm",
+    "sample",
+    "waveform",
+)
+
+_BINARY_KEY_PARTS = (
+    "blob",
+    "bytes",
+    "data",
+    "file",
+    "payload",
+)
+
+_SPEECH_METHOD_PARTS = (
+    "audio",
+    "speech",
+    "stt",
+    "synthesize",
+    "transcribe",
+    "transcription",
+    "tts",
+    "wakeword",
+)
+
+_SPEECH_TEXT_KEYS = {
+    "content",
+    "delta",
+    "input",
+    "message",
+    "messages",
+    "output",
+    "prompt",
+    "response",
+    "text",
+    "transcript",
+    "transcription",
+}
 
 
 def new_correlation_id() -> str:
@@ -45,15 +86,20 @@ def ensure_correlation_id(payload: Any, provided: str | None = None) -> str:
     return provided or get_payload_correlation_id(payload) or new_correlation_id()
 
 
-def redacted_copy(value: Any) -> Any:
-    """Return a JSON-friendly copy with secret-like values replaced."""
+def redacted_copy(value: Any, *, method_id: str | None = None) -> Any:
+    """Return a JSON-friendly copy with sensitive values replaced."""
 
     if isinstance(value, BaseModel):
         value = value.model_dump(mode="json")
+    if isinstance(value, bytes | bytearray | memoryview):
+        return _binary_summary(value)
     if isinstance(value, dict):
-        return {str(key): _redact_value(str(key), nested) for key, nested in value.items()}
+        return {
+            str(key): _redact_value(str(key), nested, method_id=method_id)
+            for key, nested in value.items()
+        }
     if isinstance(value, list | tuple):
-        return [redacted_copy(item) for item in value]
+        return [redacted_copy(item, method_id=method_id) for item in value]
     return value
 
 
@@ -64,13 +110,80 @@ def audit_details_hash(value: Any) -> str:
     return hashlib.sha256(redacted).hexdigest()
 
 
-def _redact_value(key: str, value: Any) -> Any:
+def _redact_value(key: str, value: Any, *, method_id: str | None) -> Any:
     if _is_secret_key(key):
         digest = hashlib.sha256(repr(value).encode("utf-8", errors="replace")).hexdigest()
         return {"redacted": True, "sha256": digest}
-    return redacted_copy(value)
+    if _is_audio_key(key):
+        return _content_summary(value, kind="audio")
+    if isinstance(value, bytes | bytearray | memoryview):
+        return _binary_summary(value)
+    if _is_speech_method(method_id) and _is_speech_content_key(key):
+        return _content_summary(value, kind="speech")
+    return redacted_copy(value, method_id=method_id)
 
 
 def _is_secret_key(key: str) -> bool:
     normalized = key.lower().replace("-", "_")
     return any(part in normalized for part in _SECRET_KEY_PARTS)
+
+
+def _is_audio_key(key: str) -> bool:
+    normalized = key.lower().replace("-", "_")
+    if normalized in {"sample_rate", "sampling_rate", "sample_count"}:
+        return False
+    return any(part in normalized for part in _AUDIO_KEY_PARTS)
+
+
+def _is_speech_method(method_id: str | None) -> bool:
+    if not method_id:
+        return False
+    normalized = method_id.lower().replace("-", "_").replace(".", "_")
+    return any(part in normalized for part in _SPEECH_METHOD_PARTS)
+
+
+def _is_speech_content_key(key: str) -> bool:
+    normalized = key.lower().replace("-", "_")
+    return (
+        normalized in _SPEECH_TEXT_KEYS
+        or normalized in _BINARY_KEY_PARTS
+        or normalized.endswith("_payload")
+        or (normalized.endswith("_data") and normalized != "metadata")
+        or any(part in normalized for part in ("blob", "bytes", "file"))
+    )
+
+
+def _binary_summary(value: bytes | bytearray | memoryview) -> dict[str, Any]:
+    return {"redacted": True, "kind": "binary", "byte_length": len(value)}
+
+
+def _content_summary(value: Any, *, kind: str) -> dict[str, Any]:
+    if isinstance(value, BaseModel):
+        value = value.model_dump(mode="json")
+    if isinstance(value, bytes | bytearray | memoryview):
+        return {"redacted": True, "kind": "binary", "byte_length": len(value)}
+    if isinstance(value, str):
+        summary: dict[str, Any] = {
+            "redacted": True,
+            "kind": kind,
+            "char_length": len(value),
+        }
+        decoded_length = _base64_decoded_length(value)
+        if decoded_length is not None:
+            summary["byte_length"] = decoded_length
+        return summary
+    if isinstance(value, list | tuple):
+        return {"redacted": True, "kind": kind, "element_count": len(value)}
+    if isinstance(value, dict):
+        return {"redacted": True, "kind": kind, "field_count": len(value)}
+    return {"redacted": True, "kind": kind}
+
+
+def _base64_decoded_length(value: str) -> int | None:
+    compact = "".join(value.split())
+    if not compact or len(compact) % 4:
+        return None
+    try:
+        return len(base64.b64decode(compact, validate=True))
+    except Exception:
+        return None
