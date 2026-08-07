@@ -225,8 +225,24 @@ export class AuroraVoiceWebRuntime {
   }
 
   async dispose(): Promise<void> {
-    await this.cancel('disposed')
-    this.worker.shutdown?.()
+    let cancellationFailed = false
+    let cancellationError: unknown
+    try {
+      await this.cancel('disposed')
+    } catch (error) {
+      cancellationFailed = true
+      cancellationError = error
+    }
+
+    try {
+      this.worker.shutdown?.()
+    } catch {
+      if (!cancellationFailed) {
+        throw new AuroraVoiceWebRuntimeError('dispose_failed', 'Voice session could not close cleanly')
+      }
+    }
+
+    if (cancellationFailed) throw cancellationError
   }
 
   async pushFrame(frame: AuroraPcmFrame): Promise<boolean> {

@@ -350,6 +350,18 @@ describe('AuroraVoiceWebRuntime', () => {
     expect(disposeWorker.commandsOf('cancel')).toHaveLength(1)
   })
 
+  it('terminates the worker even when pending-turn cancellation fails during dispose', async () => {
+    const worker = new FailingCancelShutdownWorkerHost()
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker })
+    const session = await runtime.start()
+    await runtime.stop()
+
+    await expect(runtime.dispose()).rejects.toMatchObject({ code: 'cancel_failed' })
+
+    expect(worker.shutdownCalls).toBe(1)
+    expect(runtime.snapshot()).toMatchObject({ state: 'stopped', sessionId: session.sessionId })
+  })
+
   it('fails closed on forged worker acknowledgements', async () => {
     const worker = new RecordingVoiceWorkerHost()
     worker.responseOverride = (command) => {
@@ -418,6 +430,19 @@ class FailingWorkerHost extends RecordingVoiceWorkerHost {
     this.commands.push(command)
     if (this.failTypes.includes(command.type)) throw new Error(command.type)
     return defaultResponseFor(command)
+  }
+}
+
+class FailingCancelShutdownWorkerHost extends RecordingVoiceWorkerHost {
+  shutdownCalls = 0
+
+  override async request(command: AuroraVoiceWorkerCommand, options?: AuroraVoiceWorkerRequestOptions): Promise<AuroraVoiceWorkerResponse> {
+    if (command.type === 'cancel') throw new Error('cancel')
+    return super.request(command, options)
+  }
+
+  shutdown(): void {
+    this.shutdownCalls += 1
   }
 }
 
