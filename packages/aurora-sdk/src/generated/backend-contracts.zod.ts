@@ -433,6 +433,70 @@ export const OrchestratorResponseEventAssistantStreamEventSchema = z.object({
 }).meta({"x-aurora-extra-behavior":"strip"})
 export type OrchestratorResponseEventAssistantStreamEvent = z.infer<typeof OrchestratorResponseEventAssistantStreamEventSchema>
 
+export const STTCoordinatorCapturePrepareInputSTTCapturePrepareRequestSchema = z.object({
+  "correlation_id": z.string().refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).nullable().prefault(null).meta({"default":null}).optional(),
+  "lease_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).nullable().prefault(null).meta({"default":null}).optional(),
+  "owner": z.literal("native").prefault("native").meta({"default":"native"}).optional(),
+  "owner_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9_.:-]+$")),
+  "reason": z.string().refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).prefault("native_voice_runtime").meta({"default":"native_voice_runtime"}).optional(),
+  "requested_ttl_s": z.number().finite().multipleOf(1).gt(0).max(3600).prefault(300).meta({"default":300}).optional()
+}).meta({"x-aurora-extra-behavior":"strip"})
+export type STTCoordinatorCapturePrepareInputSTTCapturePrepareRequest = z.infer<typeof STTCoordinatorCapturePrepareInputSTTCapturePrepareRequestSchema>
+
+export const STTCoordinatorCapturePrepareOutputSTTCapturePrepareResponseSchema = z.object({
+  "generation": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "granted": z.boolean(),
+  "lease_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).nullable().prefault(null).meta({"default":null}).optional(),
+  "message": z.string().refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).nullable().prefault(null).meta({"default":null}).optional(),
+  "owner": z.enum(["native", "none", "python"]),
+  "python_capture_active": z.boolean(),
+  "redacted": z.boolean().prefault(true).meta({"default":true}).optional(),
+  "status": z.enum(["already_owned", "granted", "unavailable"]),
+  "stopped_python_capture": z.boolean().prefault(false).meta({"default":false}).optional()
+}).meta({"x-aurora-extra-behavior":"strip"})
+export type STTCoordinatorCapturePrepareOutputSTTCapturePrepareResponse = z.infer<typeof STTCoordinatorCapturePrepareOutputSTTCapturePrepareResponseSchema>
+
+export const STTCoordinatorCaptureReleaseInputSTTCaptureReleaseRequestSchema = z.object({
+  "correlation_id": z.string().refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).nullable().prefault(null).meta({"default":null}).optional(),
+  "generation": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "lease_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}),
+  "owner": z.literal("native").prefault("native").meta({"default":"native"}).optional(),
+  "owner_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9_.:-]+$")),
+  "reason": z.string().refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).prefault("native_release").meta({"default":"native_release"}).optional(),
+  "restart_python_capture": z.boolean().prefault(true).meta({"default":true}).optional()
+}).meta({"x-aurora-extra-behavior":"strip"})
+export type STTCoordinatorCaptureReleaseInputSTTCaptureReleaseRequest = z.infer<typeof STTCoordinatorCaptureReleaseInputSTTCaptureReleaseRequestSchema>
+
+export const STTCoordinatorCaptureReleaseOutputSTTCaptureReleaseResponseSchema = z.object({
+  "generation": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "message": z.string().refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).nullable().prefault(null).meta({"default":null}).optional(),
+  "owner": z.enum(["native", "none", "python"]),
+  "python_capture_active": z.boolean(),
+  "redacted": z.boolean().prefault(true).meta({"default":true}).optional(),
+  "released": z.boolean(),
+  "restarted_python_capture": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "status": z.enum(["already_released", "python_unavailable", "rejected", "released"])
+}).meta({"x-aurora-extra-behavior":"strip"})
+export type STTCoordinatorCaptureReleaseOutputSTTCaptureReleaseResponse = z.infer<typeof STTCoordinatorCaptureReleaseOutputSTTCaptureReleaseResponseSchema>
+
+export const STTCoordinatorCaptureStatusInputSTTCaptureStatusRequestSchema = z.object({
+  "include_inactive": z.boolean().prefault(true).meta({"default":true}).optional()
+}).meta({"x-aurora-extra-behavior":"strip"})
+export type STTCoordinatorCaptureStatusInputSTTCaptureStatusRequest = z.infer<typeof STTCoordinatorCaptureStatusInputSTTCaptureStatusRequestSchema>
+
+export const STTCoordinatorCaptureStatusOutputSTTCaptureStatusResponseSchema = z.object({
+  "audio_input_available": z.boolean(),
+  "can_restart_python_capture": z.boolean(),
+  "generation": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "lease_expires_at": z.string().refine((value) => codePointLength(value) <= 64, { message: 'string must contain at most 64 Unicode code points' }).meta({"maxLength":64}).nullable().prefault(null).meta({"default":null}).optional(),
+  "native_lease_active": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "owner": z.enum(["native", "none", "python"]),
+  "python_capture_active": z.boolean(),
+  "redacted": z.boolean().prefault(true).meta({"default":true}).optional(),
+  "service_running": z.boolean()
+}).meta({"x-aurora-extra-behavior":"strip"})
+export type STTCoordinatorCaptureStatusOutputSTTCaptureStatusResponse = z.infer<typeof STTCoordinatorCaptureStatusOutputSTTCaptureStatusResponseSchema>
+
 export const STTCoordinatorListenInputSTTListenRequestSchema = z.object({
   "session_id": z.string().nullable().prefault(null).meta({"default":null}).optional()
 }).meta({"x-aurora-extra-behavior":"strip"})
@@ -1576,6 +1640,12 @@ export const backendContractSchemas = {
   OrchestratorInterruptOutputOrchestratorInterruptResponseSchema,
   OrchestratorInterruptedEventOrchestratorInterruptedEventSchema,
   OrchestratorResponseEventAssistantStreamEventSchema,
+  STTCoordinatorCapturePrepareInputSTTCapturePrepareRequestSchema,
+  STTCoordinatorCapturePrepareOutputSTTCapturePrepareResponseSchema,
+  STTCoordinatorCaptureReleaseInputSTTCaptureReleaseRequestSchema,
+  STTCoordinatorCaptureReleaseOutputSTTCaptureReleaseResponseSchema,
+  STTCoordinatorCaptureStatusInputSTTCaptureStatusRequestSchema,
+  STTCoordinatorCaptureStatusOutputSTTCaptureStatusResponseSchema,
   STTCoordinatorListenInputSTTListenRequestSchema,
   STTCoordinatorListenOutputSTTListenResponseSchema,
   STTCoordinatorStopListeningInputSTTStopListeningRequestSchema,
@@ -1647,6 +1717,12 @@ export const backendContractSchemaById = {
   "Orchestrator.Interrupt.output.OrchestratorInterruptResponse": OrchestratorInterruptOutputOrchestratorInterruptResponseSchema,
   "Orchestrator.Interrupted.event.OrchestratorInterruptedEvent": OrchestratorInterruptedEventOrchestratorInterruptedEventSchema,
   "Orchestrator.Response.event.AssistantStreamEvent": OrchestratorResponseEventAssistantStreamEventSchema,
+  "STTCoordinator.CapturePrepare.input.STTCapturePrepareRequest": STTCoordinatorCapturePrepareInputSTTCapturePrepareRequestSchema,
+  "STTCoordinator.CapturePrepare.output.STTCapturePrepareResponse": STTCoordinatorCapturePrepareOutputSTTCapturePrepareResponseSchema,
+  "STTCoordinator.CaptureRelease.input.STTCaptureReleaseRequest": STTCoordinatorCaptureReleaseInputSTTCaptureReleaseRequestSchema,
+  "STTCoordinator.CaptureRelease.output.STTCaptureReleaseResponse": STTCoordinatorCaptureReleaseOutputSTTCaptureReleaseResponseSchema,
+  "STTCoordinator.CaptureStatus.input.STTCaptureStatusRequest": STTCoordinatorCaptureStatusInputSTTCaptureStatusRequestSchema,
+  "STTCoordinator.CaptureStatus.output.STTCaptureStatusResponse": STTCoordinatorCaptureStatusOutputSTTCaptureStatusResponseSchema,
   "STTCoordinator.Listen.input.STTListenRequest": STTCoordinatorListenInputSTTListenRequestSchema,
   "STTCoordinator.Listen.output.STTListenResponse": STTCoordinatorListenOutputSTTListenResponseSchema,
   "STTCoordinator.StopListening.input.STTStopListeningRequest": STTCoordinatorStopListeningInputSTTStopListeningRequestSchema,
@@ -2576,6 +2652,99 @@ export const backendContractMethodDescriptors = [
     "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"
   },
   {
+    "method_id": "STTCoordinator.CapturePrepare",
+    "module": "STTCoordinator",
+    "name": "CapturePrepare",
+    "topic": "STTCoordinator.CapturePrepare",
+    "bus_topic": "STTCoordinator.CapturePrepare",
+    "route_path": "/api/STTCoordinator/CapturePrepare",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "manage",
+    "required_perms": [
+      "STTCoordinator.manage"
+    ],
+    "callable_feature_ids": [
+      "listening_session_control"
+    ],
+    "input_model": "STTCapturePrepareRequest",
+    "output_model": "STTCapturePrepareResponse",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "STTCoordinator.CapturePrepare.input.STTCapturePrepareRequest",
+    "output_schema_id": "STTCoordinator.CapturePrepare.output.STTCapturePrepareResponse",
+    "input_schema_hash": "69ebc92cfe9fed08689a9ba2c622cddf99158b2c9b9fabfb0030155863269886",
+    "output_schema_hash": "36b41e14c1b1007c202c90e2c3bb9934cbc296a15168278b399b54a96b2d8cbb"
+  },
+  {
+    "method_id": "STTCoordinator.CaptureRelease",
+    "module": "STTCoordinator",
+    "name": "CaptureRelease",
+    "topic": "STTCoordinator.CaptureRelease",
+    "bus_topic": "STTCoordinator.CaptureRelease",
+    "route_path": "/api/STTCoordinator/CaptureRelease",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "manage",
+    "required_perms": [
+      "STTCoordinator.manage"
+    ],
+    "callable_feature_ids": [
+      "listening_session_control"
+    ],
+    "input_model": "STTCaptureReleaseRequest",
+    "output_model": "STTCaptureReleaseResponse",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "STTCoordinator.CaptureRelease.input.STTCaptureReleaseRequest",
+    "output_schema_id": "STTCoordinator.CaptureRelease.output.STTCaptureReleaseResponse",
+    "input_schema_hash": "f36c2517b38b47b7ed5a3b1366227eaa8b2f7972b5c6fd55b593bf7997cd123e",
+    "output_schema_hash": "2134b34784696f59c4d7f179b637c533d7b4e0f33a9164a97c5c33f0713f986a"
+  },
+  {
+    "method_id": "STTCoordinator.CaptureStatus",
+    "module": "STTCoordinator",
+    "name": "CaptureStatus",
+    "topic": "STTCoordinator.CaptureStatus",
+    "bus_topic": "STTCoordinator.CaptureStatus",
+    "route_path": "/api/STTCoordinator/CaptureStatus",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "manage",
+    "required_perms": [
+      "STTCoordinator.manage"
+    ],
+    "callable_feature_ids": [
+      "listening_session_control"
+    ],
+    "input_model": "STTCaptureStatusRequest",
+    "output_model": "STTCaptureStatusResponse",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "STTCoordinator.CaptureStatus.input.STTCaptureStatusRequest",
+    "output_schema_id": "STTCoordinator.CaptureStatus.output.STTCaptureStatusResponse",
+    "input_schema_hash": "0e594cd836f4c80e0da3e223280b2ccfed962813acf3296c4b4a0d02f2e29f7a",
+    "output_schema_hash": "8703ae4586bc390c5bd5aa8a53f3015333d97d4c5049fce4e49a0ce0f33a2339"
+  },
+  {
     "method_id": "WakeWord.ProcessAudio",
     "module": "WakeWord",
     "name": "ProcessAudio",
@@ -2730,6 +2899,9 @@ export const backendContractMethodDescriptorById = {
   "TTS.Synthesize": {"method_id": "TTS.Synthesize", "module": "TTS", "name": "Synthesize", "topic": "TTS.Synthesize", "bus_topic": "TTS.Synthesize", "route_path": "/api/TTS/Synthesize", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.Synthesize"], "callable_feature_ids": ["speech_synthesis"], "input_model": "TTSSynthesizeRequest", "output_model": "TTSSynthesizeResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.Synthesize.input.TTSSynthesizeRequest", "output_schema_id": "TTS.Synthesize.output.TTSSynthesizeResponse", "input_schema_hash": "d5408ff48dccb96b3ee7c1c578ce9c27b10f7a33e37fbb97430e2d8222ab8bb6", "output_schema_hash": "65e6311d9a20d865d39d56b774eedd48af949d792c84f5930a348b6ee223f793"},
   "STTCoordinator.Listen": {"method_id": "STTCoordinator.Listen", "module": "STTCoordinator", "name": "Listen", "topic": "STTCoordinator.Listen", "bus_topic": "STTCoordinator.Listen", "route_path": "/api/STTCoordinator/Listen", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["STTCoordinator.use"], "callable_feature_ids": ["listening_session_control"], "input_model": "STTListenRequest", "output_model": "STTListenResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.Listen.input.STTListenRequest", "output_schema_id": "STTCoordinator.Listen.output.STTListenResponse", "input_schema_hash": "8130cc5cdde9469f9cb249bb59a515c018fe8c33037309f02b74a83f1194a46f", "output_schema_hash": "3b629fc8dc429740afab14c2f35a2b31317e94a8f38631ab115f14944f2aaf30"},
   "STTCoordinator.StopListening": {"method_id": "STTCoordinator.StopListening", "module": "STTCoordinator", "name": "StopListening", "topic": "STTCoordinator.StopListening", "bus_topic": "STTCoordinator.StopListening", "route_path": "/api/STTCoordinator/StopListening", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["STTCoordinator.use"], "callable_feature_ids": ["listening_session_control"], "input_model": "STTStopListeningRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.StopListening.input.STTStopListeningRequest", "output_schema_id": "STTCoordinator.StopListening.output.EmptyOutput", "input_schema_hash": "297d48be1b7ec76f082f8d3999cb5dfa0f53b28107333fc5b887a470ce30cafd", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
+  "STTCoordinator.CapturePrepare": {"method_id": "STTCoordinator.CapturePrepare", "module": "STTCoordinator", "name": "CapturePrepare", "topic": "STTCoordinator.CapturePrepare", "bus_topic": "STTCoordinator.CapturePrepare", "route_path": "/api/STTCoordinator/CapturePrepare", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["STTCoordinator.manage"], "callable_feature_ids": ["listening_session_control"], "input_model": "STTCapturePrepareRequest", "output_model": "STTCapturePrepareResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.CapturePrepare.input.STTCapturePrepareRequest", "output_schema_id": "STTCoordinator.CapturePrepare.output.STTCapturePrepareResponse", "input_schema_hash": "69ebc92cfe9fed08689a9ba2c622cddf99158b2c9b9fabfb0030155863269886", "output_schema_hash": "36b41e14c1b1007c202c90e2c3bb9934cbc296a15168278b399b54a96b2d8cbb"},
+  "STTCoordinator.CaptureRelease": {"method_id": "STTCoordinator.CaptureRelease", "module": "STTCoordinator", "name": "CaptureRelease", "topic": "STTCoordinator.CaptureRelease", "bus_topic": "STTCoordinator.CaptureRelease", "route_path": "/api/STTCoordinator/CaptureRelease", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["STTCoordinator.manage"], "callable_feature_ids": ["listening_session_control"], "input_model": "STTCaptureReleaseRequest", "output_model": "STTCaptureReleaseResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.CaptureRelease.input.STTCaptureReleaseRequest", "output_schema_id": "STTCoordinator.CaptureRelease.output.STTCaptureReleaseResponse", "input_schema_hash": "f36c2517b38b47b7ed5a3b1366227eaa8b2f7972b5c6fd55b593bf7997cd123e", "output_schema_hash": "2134b34784696f59c4d7f179b637c533d7b4e0f33a9164a97c5c33f0713f986a"},
+  "STTCoordinator.CaptureStatus": {"method_id": "STTCoordinator.CaptureStatus", "module": "STTCoordinator", "name": "CaptureStatus", "topic": "STTCoordinator.CaptureStatus", "bus_topic": "STTCoordinator.CaptureStatus", "route_path": "/api/STTCoordinator/CaptureStatus", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["STTCoordinator.manage"], "callable_feature_ids": ["listening_session_control"], "input_model": "STTCaptureStatusRequest", "output_model": "STTCaptureStatusResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.CaptureStatus.input.STTCaptureStatusRequest", "output_schema_id": "STTCoordinator.CaptureStatus.output.STTCaptureStatusResponse", "input_schema_hash": "0e594cd836f4c80e0da3e223280b2ccfed962813acf3296c4b4a0d02f2e29f7a", "output_schema_hash": "8703ae4586bc390c5bd5aa8a53f3015333d97d4c5049fce4e49a0ce0f33a2339"},
   "WakeWord.ProcessAudio": {"method_id": "WakeWord.ProcessAudio", "module": "WakeWord", "name": "ProcessAudio", "topic": "WakeWord.ProcessAudio", "bus_topic": "WakeWord.ProcessAudio", "route_path": "/api/WakeWord/ProcessAudio", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.ProcessAudio"], "callable_feature_ids": ["wake_word_detection"], "input_model": "STTAudioChunk", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.ProcessAudio.input.STTAudioChunk", "output_schema_id": "WakeWord.ProcessAudio.output.EmptyOutput", "input_schema_hash": "3670479489138802e7d52d4b7d5623c52b363cd4166db2ee7916f6449a10233e", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
   "WakeWord.Detect": {"method_id": "WakeWord.Detect", "module": "WakeWord", "name": "Detect", "topic": "WakeWord.Detect", "bus_topic": "WakeWord.Detect", "route_path": "/api/WakeWord/Detect", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.Detect"], "callable_feature_ids": ["wake_word_detection"], "input_model": "WakeWordDetectRequest", "output_model": "WakeWordDetectResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.Detect.input.WakeWordDetectRequest", "output_schema_id": "WakeWord.Detect.output.WakeWordDetectResponse", "input_schema_hash": "6d84e293fe9bf90a30317d78b1e8043cb52d45e13e8fce5ceb84e63185984735", "output_schema_hash": "c9675c0beade1d9158903798837dc11ae51429775bf4368ceb4783bdfdb793cf"},
   "Transcription.ProcessAudio": {"method_id": "Transcription.ProcessAudio", "module": "Transcription", "name": "ProcessAudio", "topic": "Transcription.ProcessAudio", "bus_topic": "Transcription.ProcessAudio", "route_path": "/api/Transcription/ProcessAudio", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.ProcessAudio"], "callable_feature_ids": ["audio_transcription"], "input_model": "STTAudioChunk", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.ProcessAudio.input.STTAudioChunk", "output_schema_id": "Transcription.ProcessAudio.output.EmptyOutput", "input_schema_hash": "3670479489138802e7d52d4b7d5623c52b363cd4166db2ee7916f6449a10233e", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},

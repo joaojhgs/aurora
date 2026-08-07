@@ -34,6 +34,9 @@ pub mod ids {
     pub const TTS_SYNTHESIZE: &str = "TTS.Synthesize";
     pub const STT_COORDINATOR_LISTEN: &str = "STTCoordinator.Listen";
     pub const STT_COORDINATOR_STOP_LISTENING: &str = "STTCoordinator.StopListening";
+    pub const STT_COORDINATOR_CAPTURE_PREPARE: &str = "STTCoordinator.CapturePrepare";
+    pub const STT_COORDINATOR_CAPTURE_RELEASE: &str = "STTCoordinator.CaptureRelease";
+    pub const STT_COORDINATOR_CAPTURE_STATUS: &str = "STTCoordinator.CaptureStatus";
     pub const WAKE_WORD_PROCESS_AUDIO: &str = "WakeWord.ProcessAudio";
     pub const WAKE_WORD_DETECT: &str = "WakeWord.Detect";
     pub const TRANSCRIPTION_PROCESS_AUDIO: &str = "Transcription.ProcessAudio";
@@ -89,6 +92,30 @@ pub mod models {
         typify::import_types!(schema = "schema/stt_audio_chunk.json");
     }
     pub use stt_audio_chunk::SttAudioChunk;
+    pub mod stt_capture_prepare_request {
+        typify::import_types!(schema = "schema/stt_capture_prepare_request.json");
+    }
+    pub use stt_capture_prepare_request::SttCapturePrepareRequest;
+    pub mod stt_capture_prepare_response {
+        typify::import_types!(schema = "schema/stt_capture_prepare_response.json");
+    }
+    pub use stt_capture_prepare_response::SttCapturePrepareResponse;
+    pub mod stt_capture_release_request {
+        typify::import_types!(schema = "schema/stt_capture_release_request.json");
+    }
+    pub use stt_capture_release_request::SttCaptureReleaseRequest;
+    pub mod stt_capture_release_response {
+        typify::import_types!(schema = "schema/stt_capture_release_response.json");
+    }
+    pub use stt_capture_release_response::SttCaptureReleaseResponse;
+    pub mod stt_capture_status_request {
+        typify::import_types!(schema = "schema/stt_capture_status_request.json");
+    }
+    pub use stt_capture_status_request::SttCaptureStatusRequest;
+    pub mod stt_capture_status_response {
+        typify::import_types!(schema = "schema/stt_capture_status_response.json");
+    }
+    pub use stt_capture_status_response::SttCaptureStatusResponse;
     pub mod stt_listen_request {
         typify::import_types!(schema = "schema/stt_listen_request.json");
     }
@@ -363,6 +390,54 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         model_name: "AssistantStreamEvent",
         schema_hash: "1469513416f663f9a27944a8d6fa5bf97158248bc87e4f80e3366ecc60657392",
         schema_json: include_str!("../schema/assistant_stream_event.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "STTCoordinator.CapturePrepare.input.STTCapturePrepareRequest",
+        method_id: "STTCoordinator.CapturePrepare",
+        direction: "input",
+        model_name: "STTCapturePrepareRequest",
+        schema_hash: "69ebc92cfe9fed08689a9ba2c622cddf99158b2c9b9fabfb0030155863269886",
+        schema_json: include_str!("../schema/stt_capture_prepare_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "STTCoordinator.CapturePrepare.output.STTCapturePrepareResponse",
+        method_id: "STTCoordinator.CapturePrepare",
+        direction: "output",
+        model_name: "STTCapturePrepareResponse",
+        schema_hash: "36b41e14c1b1007c202c90e2c3bb9934cbc296a15168278b399b54a96b2d8cbb",
+        schema_json: include_str!("../schema/stt_capture_prepare_response.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "STTCoordinator.CaptureRelease.input.STTCaptureReleaseRequest",
+        method_id: "STTCoordinator.CaptureRelease",
+        direction: "input",
+        model_name: "STTCaptureReleaseRequest",
+        schema_hash: "f36c2517b38b47b7ed5a3b1366227eaa8b2f7972b5c6fd55b593bf7997cd123e",
+        schema_json: include_str!("../schema/stt_capture_release_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "STTCoordinator.CaptureRelease.output.STTCaptureReleaseResponse",
+        method_id: "STTCoordinator.CaptureRelease",
+        direction: "output",
+        model_name: "STTCaptureReleaseResponse",
+        schema_hash: "2134b34784696f59c4d7f179b637c533d7b4e0f33a9164a97c5c33f0713f986a",
+        schema_json: include_str!("../schema/stt_capture_release_response.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "STTCoordinator.CaptureStatus.input.STTCaptureStatusRequest",
+        method_id: "STTCoordinator.CaptureStatus",
+        direction: "input",
+        model_name: "STTCaptureStatusRequest",
+        schema_hash: "0e594cd836f4c80e0da3e223280b2ccfed962813acf3296c4b4a0d02f2e29f7a",
+        schema_json: include_str!("../schema/stt_capture_status_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "STTCoordinator.CaptureStatus.output.STTCaptureStatusResponse",
+        method_id: "STTCoordinator.CaptureStatus",
+        direction: "output",
+        model_name: "STTCaptureStatusResponse",
+        schema_hash: "8703ae4586bc390c5bd5aa8a53f3015333d97d4c5049fce4e49a0ce0f33a2339",
+        schema_json: include_str!("../schema/stt_capture_status_response.json"),
     },
     SchemaDescriptor {
         schema_id: "STTCoordinator.Listen.input.STTListenRequest",
@@ -1428,6 +1503,69 @@ pub static METHOD_DESCRIPTORS: &[MethodDescriptor] = &[
         },
     },
     MethodDescriptor {
+        method_id: "STTCoordinator.CapturePrepare",
+        bus_topic: "STTCoordinator.CapturePrepare",
+        module: "STTCoordinator",
+        name: "CapturePrepare",
+        method_type: "manage",
+        exposure: "both",
+        route_path: "/api/STTCoordinator/CapturePrepare",
+        route_kind: "dynamic",
+        required_permissions: &["STTCoordinator.manage"],
+        callable_feature_ids: &["listening_session_control"],
+        input_schema_id: "STTCoordinator.CapturePrepare.input.STTCapturePrepareRequest",
+        output_schema_id: "STTCoordinator.CapturePrepare.output.STTCapturePrepareResponse",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "STTCoordinator.CaptureRelease",
+        bus_topic: "STTCoordinator.CaptureRelease",
+        module: "STTCoordinator",
+        name: "CaptureRelease",
+        method_type: "manage",
+        exposure: "both",
+        route_path: "/api/STTCoordinator/CaptureRelease",
+        route_kind: "dynamic",
+        required_permissions: &["STTCoordinator.manage"],
+        callable_feature_ids: &["listening_session_control"],
+        input_schema_id: "STTCoordinator.CaptureRelease.input.STTCaptureReleaseRequest",
+        output_schema_id: "STTCoordinator.CaptureRelease.output.STTCaptureReleaseResponse",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "STTCoordinator.CaptureStatus",
+        bus_topic: "STTCoordinator.CaptureStatus",
+        module: "STTCoordinator",
+        name: "CaptureStatus",
+        method_type: "manage",
+        exposure: "both",
+        route_path: "/api/STTCoordinator/CaptureStatus",
+        route_kind: "dynamic",
+        required_permissions: &["STTCoordinator.manage"],
+        callable_feature_ids: &["listening_session_control"],
+        input_schema_id: "STTCoordinator.CaptureStatus.input.STTCaptureStatusRequest",
+        output_schema_id: "STTCoordinator.CaptureStatus.output.STTCaptureStatusResponse",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
         method_id: "WakeWord.ProcessAudio",
         bus_topic: "WakeWord.ProcessAudio",
         module: "WakeWord",
@@ -1610,6 +1748,12 @@ pub fn normalize_generated_contract(
         "Orchestrator.Interrupt.output.OrchestratorInterruptResponse" => serde_json::from_value::<models::orchestrator_interrupt_response::OrchestratorInterruptResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "Orchestrator.Interrupted.event.OrchestratorInterruptedEvent" => serde_json::from_value::<models::orchestrator_interrupted_event::OrchestratorInterruptedEvent>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "Orchestrator.Response.event.AssistantStreamEvent" => serde_json::from_value::<models::assistant_stream_event::AssistantStreamEvent>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "STTCoordinator.CapturePrepare.input.STTCapturePrepareRequest" => serde_json::from_value::<models::stt_capture_prepare_request::SttCapturePrepareRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "STTCoordinator.CapturePrepare.output.STTCapturePrepareResponse" => serde_json::from_value::<models::stt_capture_prepare_response::SttCapturePrepareResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "STTCoordinator.CaptureRelease.input.STTCaptureReleaseRequest" => serde_json::from_value::<models::stt_capture_release_request::SttCaptureReleaseRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "STTCoordinator.CaptureRelease.output.STTCaptureReleaseResponse" => serde_json::from_value::<models::stt_capture_release_response::SttCaptureReleaseResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "STTCoordinator.CaptureStatus.input.STTCaptureStatusRequest" => serde_json::from_value::<models::stt_capture_status_request::SttCaptureStatusRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "STTCoordinator.CaptureStatus.output.STTCaptureStatusResponse" => serde_json::from_value::<models::stt_capture_status_response::SttCaptureStatusResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "STTCoordinator.Listen.input.STTListenRequest" => serde_json::from_value::<models::stt_listen_request::SttListenRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "STTCoordinator.Listen.output.STTListenResponse" => serde_json::from_value::<models::stt_listen_response::SttListenResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "STTCoordinator.StopListening.input.STTStopListeningRequest" => serde_json::from_value::<models::stt_stop_listening_request::SttStopListeningRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),

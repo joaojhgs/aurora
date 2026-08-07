@@ -142,6 +142,12 @@ from .orchestrator import (
     OrchestratorResponse,
 )
 from .stt import (
+    STTCapturePrepareRequest,
+    STTCapturePrepareResponse,
+    STTCaptureReleaseRequest,
+    STTCaptureReleaseResponse,
+    STTCaptureStatusRequest,
+    STTCaptureStatusResponse,
     STTControl,
     STTError,
     STTTranscriptionRequest,
@@ -173,6 +179,12 @@ __all__ = [
     "STTTranscriptionResult",
     "STTControl",
     "STTError",
+    "STTCapturePrepareRequest",
+    "STTCapturePrepareResponse",
+    "STTCaptureReleaseRequest",
+    "STTCaptureReleaseResponse",
+    "STTCaptureStatusRequest",
+    "STTCaptureStatusResponse",
     # Config
     "ConfigGetRequest",
     "ConfigGetResponse",

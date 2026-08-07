@@ -6,6 +6,7 @@ from pydantic import Field, field_validator, model_validator
 
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.speech import (
+    MAX_JS_SAFE_INTEGER,
     SpeechLanguageTag,
     normalize_speech_language,
     normalize_speech_language_candidates,
@@ -202,12 +203,12 @@ class STTCapturePrepareResponse(IOModel):
 
     granted: bool
     status: Literal["granted", "already_owned", "unavailable"]
-    lease_id: str | None = None
-    generation: int
+    lease_id: str | None = Field(default=None, min_length=1, max_length=128)
+    generation: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
     owner: Literal["none", "python", "native"]
     python_capture_active: bool
     stopped_python_capture: bool = False
-    message: str | None = None
+    message: str | None = Field(default=None, max_length=80)
     redacted: bool = True
 
 
@@ -217,7 +218,7 @@ class STTCaptureReleaseRequest(IOModel):
     owner: Literal["native"] = "native"
     owner_id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_.:-]+$")
     lease_id: str = Field(min_length=1, max_length=128)
-    generation: int = Field(ge=0)
+    generation: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
     reason: str = Field(default="native_release", max_length=80)
     restart_python_capture: bool = True
     correlation_id: str | None = Field(default=None, max_length=128)
@@ -228,11 +229,11 @@ class STTCaptureReleaseResponse(IOModel):
 
     released: bool
     status: Literal["released", "already_released", "rejected", "python_unavailable"]
-    generation: int
+    generation: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
     owner: Literal["none", "python", "native"]
     python_capture_active: bool
     restarted_python_capture: bool = False
-    message: str | None = None
+    message: str | None = Field(default=None, max_length=80)
     redacted: bool = True
 
 
@@ -246,9 +247,9 @@ class STTCaptureStatusResponse(IOModel):
     """Redacted microphone ownership status."""
 
     owner: Literal["none", "python", "native"]
-    generation: int
+    generation: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
     native_lease_active: bool = False
-    lease_expires_at: str | None = None
+    lease_expires_at: str | None = Field(default=None, max_length=64)
     python_capture_active: bool
     service_running: bool
     audio_input_available: bool

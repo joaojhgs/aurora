@@ -391,9 +391,9 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     assert schema["tooling_provider_allowlist"] == (
         list(generate_backend_inventory.SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST)
     )
-    assert len(schema["allowlist"]) == 32
-    assert len(schema["schemas"]) == 68
-    assert len(schema["method_descriptors"]) == 32
+    assert len(schema["allowlist"]) == 35
+    assert len(schema["schemas"]) == 74
+    assert len(schema["method_descriptors"]) == 35
     assert len(schema["event_descriptors"]) == 3
     assert len(schema["envelope_descriptors"]) == 1
     assert len(provider["methods"]) == 4
@@ -403,6 +403,9 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     assert "Gateway.ExplainRoute" in descriptor_ids
     assert "TTS.Synthesize" in descriptor_ids
     assert "STTCoordinator.Listen" in descriptor_ids
+    assert "STTCoordinator.CapturePrepare" in descriptor_ids
+    assert "STTCoordinator.CaptureRelease" in descriptor_ids
+    assert "STTCoordinator.CaptureStatus" in descriptor_ids
     assert "Orchestrator.ExternalUserInput" in descriptor_ids
     assert "Orchestrator.Interrupt" in descriptor_ids
     assert "Aurora.EventStream" not in descriptor_ids

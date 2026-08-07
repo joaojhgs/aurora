@@ -30,8 +30,14 @@ CALLABLE_FEATURES: tuple[CallableFeatureContract, ...] = (
         feature_id="listening_session_control",
         module="STTCoordinator",
         label="Listening Session Control",
-        summary="Start and stop server microphone listening sessions.",
-        method_ids=("STTCoordinator.Listen", "STTCoordinator.StopListening"),
+        summary="Control listening sessions and exclusive native microphone ownership.",
+        method_ids=(
+            "STTCoordinator.Listen",
+            "STTCoordinator.StopListening",
+            "STTCoordinator.CapturePrepare",
+            "STTCoordinator.CaptureRelease",
+            "STTCoordinator.CaptureStatus",
+        ),
     ),
     CallableFeatureContract(
         feature_id="wake_word_detection",
@@ -308,7 +314,7 @@ _FEATURES_BY_TOPIC: dict[str, tuple[CallableFeatureContract, ...]] = {
 _FEATURE_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _EXPECTED_MODULE_COUNT = 8
 _EXPECTED_FEATURE_GROUP_COUNT = 28
-_EXPECTED_CALLABLE_METHOD_COUNT = 94
+_EXPECTED_CALLABLE_METHOD_COUNT = 97
 
 
 def feature_contracts_for_module(module: str) -> tuple[CallableFeatureContract, ...]:

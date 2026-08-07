@@ -15,7 +15,12 @@ from app.shared.contracts.models.speech import (
     SpeechMethodConstraints,
     SpeechRouteBinding,
 )
-from app.shared.contracts.models.stt import TranscribeAudioRequest
+from app.shared.contracts.models.stt import (
+    STTCapturePrepareRequest,
+    STTCaptureStatusResponse,
+    STTMethods,
+    TranscribeAudioRequest,
+)
 from app.shared.contracts.models.tts import (
     VOICE_IMPORT_MAX_BASE64_CHARS,
     VOICE_IMPORT_MAX_CHUNK_BYTES,
@@ -211,6 +216,31 @@ def test_tts_method_constants_cover_voice_lifecycle_surface() -> None:
     assert TTSMethods.VOICE_IMPORT_ABORT == "TTS.VoiceImportAbort"
     assert TTSMethods.CREATE_VOICE_PROFILE == "TTS.CreateVoiceProfile"
     assert TTSMethods.DELETE_VOICE_PROFILE == "TTS.DeleteVoiceProfile"
+
+
+def test_stt_capture_handoff_contracts_keep_lease_tokens_off_status() -> None:
+    assert STTMethods.CAPTURE_PREPARE == "STTCoordinator.CapturePrepare"
+    assert STTMethods.CAPTURE_RELEASE == "STTCoordinator.CaptureRelease"
+    assert STTMethods.CAPTURE_STATUS == "STTCoordinator.CaptureStatus"
+
+    request = STTCapturePrepareRequest(owner_id="tauri-local")
+    assert request.owner == "native"
+    assert request.lease_id is None
+
+    status = STTCaptureStatusResponse(
+        owner="native",
+        generation=2,
+        native_lease_active=True,
+        lease_expires_at="2026-08-07T16:00:00",
+        python_capture_active=False,
+        service_running=True,
+        audio_input_available=True,
+        can_restart_python_capture=False,
+    )
+    serialized = status.model_dump_json()
+    assert "lease_id" not in serialized
+    assert "owner_id" not in serialized
+    assert status.redacted is True
 
 
 def test_tts_language_is_backward_compatible_and_exact_only() -> None:

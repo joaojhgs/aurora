@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request redacted capture-owner status.",
+  "properties": {
+    "include_inactive": {
+      "default": true,
+      "title": "Include Inactive",
+      "type": "boolean"
+    }
+  },
+  "title": "STTCaptureStatusRequest",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

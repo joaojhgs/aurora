@@ -2,7 +2,7 @@
   "artifact": "aurora-rust-contract-parse-vectors",
   "generator_format_version": "aurora-rust-contract-codegen-v1",
   "schema_artifact": "aurora-sdk-backend-contracts",
-  "schema_content_hash": "824ad2c7b2909a99824ce9cc218e817e86574fa5325436d8ca256c7f97df36ef",
+  "schema_content_hash": "41d187e8005a0305c676667a6ea3464d5ab189f147db7bd605046d537ffbbfe8",
   "vectors": [
     {
       "accepted": true,

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request exclusive native ownership of the local microphone.",
+  "properties": {
+    "correlation_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "lease_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Lease Id"
+    },
+    "owner": {
+      "const": "native",
+      "default": "native",
+      "title": "Owner",
+      "type": "string"
+    },
+    "owner_id": {
+      "maxLength": 80,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "reason": {
+      "default": "native_voice_runtime",
+      "maxLength": 80,
+      "title": "Reason",
+      "type": "string"
+    },
+    "requested_ttl_s": {
+      "default": 300,
+      "exclusiveMinimum": 0,
+      "maximum": 3600,
+      "title": "Requested Ttl S",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "owner_id"
+  ],
+  "title": "STTCapturePrepareRequest",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

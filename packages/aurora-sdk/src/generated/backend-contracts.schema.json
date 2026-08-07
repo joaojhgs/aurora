@@ -29,12 +29,15 @@
     "TTS.Synthesize",
     "STTCoordinator.Listen",
     "STTCoordinator.StopListening",
+    "STTCoordinator.CapturePrepare",
+    "STTCoordinator.CaptureRelease",
+    "STTCoordinator.CaptureStatus",
     "WakeWord.ProcessAudio",
     "WakeWord.Detect",
     "Transcription.ProcessAudio",
     "Transcription.Transcribe"
   ],
-  "allowlist_hash": "3da1e10d9ce1bad23c89b233d96d136056bdb5a0fdb0c8d7aec3f055d39dfee8",
+  "allowlist_hash": "32e0b893765489c901707e051c97598adab184e81109f4f9e4c5813ed2110d39",
   "artifact": "aurora-sdk-backend-contracts",
   "envelope_descriptors": [
     {
@@ -986,6 +989,99 @@
         "rpc_kind": "unary"
       },
       "topic": "STTCoordinator.StopListening"
+    },
+    {
+      "bus_topic": "STTCoordinator.CapturePrepare",
+      "callable_feature_ids": [
+        "listening_session_control"
+      ],
+      "exposure": "both",
+      "input_model": "STTCapturePrepareRequest",
+      "input_schema_hash": "69ebc92cfe9fed08689a9ba2c622cddf99158b2c9b9fabfb0030155863269886",
+      "input_schema_id": "STTCoordinator.CapturePrepare.input.STTCapturePrepareRequest",
+      "method_id": "STTCoordinator.CapturePrepare",
+      "method_type": "manage",
+      "module": "STTCoordinator",
+      "name": "CapturePrepare",
+      "output_model": "STTCapturePrepareResponse",
+      "output_schema_hash": "36b41e14c1b1007c202c90e2c3bb9934cbc296a15168278b399b54a96b2d8cbb",
+      "output_schema_id": "STTCoordinator.CapturePrepare.output.STTCapturePrepareResponse",
+      "required_perms": [
+        "STTCoordinator.manage"
+      ],
+      "route_kind": "dynamic",
+      "route_path": "/api/STTCoordinator/CapturePrepare",
+      "speech_constraints": null,
+      "streaming": {
+        "event_topic": null,
+        "ordered_command_group": null,
+        "request_stream": false,
+        "response_stream": false,
+        "rpc_kind": "unary"
+      },
+      "topic": "STTCoordinator.CapturePrepare"
+    },
+    {
+      "bus_topic": "STTCoordinator.CaptureRelease",
+      "callable_feature_ids": [
+        "listening_session_control"
+      ],
+      "exposure": "both",
+      "input_model": "STTCaptureReleaseRequest",
+      "input_schema_hash": "f36c2517b38b47b7ed5a3b1366227eaa8b2f7972b5c6fd55b593bf7997cd123e",
+      "input_schema_id": "STTCoordinator.CaptureRelease.input.STTCaptureReleaseRequest",
+      "method_id": "STTCoordinator.CaptureRelease",
+      "method_type": "manage",
+      "module": "STTCoordinator",
+      "name": "CaptureRelease",
+      "output_model": "STTCaptureReleaseResponse",
+      "output_schema_hash": "2134b34784696f59c4d7f179b637c533d7b4e0f33a9164a97c5c33f0713f986a",
+      "output_schema_id": "STTCoordinator.CaptureRelease.output.STTCaptureReleaseResponse",
+      "required_perms": [
+        "STTCoordinator.manage"
+      ],
+      "route_kind": "dynamic",
+      "route_path": "/api/STTCoordinator/CaptureRelease",
+      "speech_constraints": null,
+      "streaming": {
+        "event_topic": null,
+        "ordered_command_group": null,
+        "request_stream": false,
+        "response_stream": false,
+        "rpc_kind": "unary"
+      },
+      "topic": "STTCoordinator.CaptureRelease"
+    },
+    {
+      "bus_topic": "STTCoordinator.CaptureStatus",
+      "callable_feature_ids": [
+        "listening_session_control"
+      ],
+      "exposure": "both",
+      "input_model": "STTCaptureStatusRequest",
+      "input_schema_hash": "0e594cd836f4c80e0da3e223280b2ccfed962813acf3296c4b4a0d02f2e29f7a",
+      "input_schema_id": "STTCoordinator.CaptureStatus.input.STTCaptureStatusRequest",
+      "method_id": "STTCoordinator.CaptureStatus",
+      "method_type": "manage",
+      "module": "STTCoordinator",
+      "name": "CaptureStatus",
+      "output_model": "STTCaptureStatusResponse",
+      "output_schema_hash": "8703ae4586bc390c5bd5aa8a53f3015333d97d4c5049fce4e49a0ce0f33a2339",
+      "output_schema_id": "STTCoordinator.CaptureStatus.output.STTCaptureStatusResponse",
+      "required_perms": [
+        "STTCoordinator.manage"
+      ],
+      "route_kind": "dynamic",
+      "route_path": "/api/STTCoordinator/CaptureStatus",
+      "speech_constraints": null,
+      "streaming": {
+        "event_topic": null,
+        "ordered_command_group": null,
+        "request_stream": false,
+        "response_stream": false,
+        "rpc_kind": "unary"
+      },
+      "topic": "STTCoordinator.CaptureStatus"
     },
     {
       "bus_topic": "WakeWord.ProcessAudio",
@@ -4240,6 +4336,430 @@
           }
         ]
       }
+    },
+    {
+      "direction": "input",
+      "method_id": "STTCoordinator.CapturePrepare",
+      "model_name": "STTCapturePrepareRequest",
+      "pydantic_mode": "validation",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Request exclusive native ownership of the local microphone.",
+        "properties": {
+          "correlation_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Correlation Id"
+          },
+          "lease_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Lease Id"
+          },
+          "owner": {
+            "const": "native",
+            "default": "native",
+            "title": "Owner",
+            "type": "string"
+          },
+          "owner_id": {
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "reason": {
+            "default": "native_voice_runtime",
+            "maxLength": 80,
+            "title": "Reason",
+            "type": "string"
+          },
+          "requested_ttl_s": {
+            "default": 300,
+            "exclusiveMinimum": 0,
+            "maximum": 3600,
+            "title": "Requested Ttl S",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "owner_id"
+        ],
+        "title": "STTCapturePrepareRequest",
+        "type": "object",
+        "x-aurora-extra-behavior": "strip"
+      },
+      "schema_hash": "69ebc92cfe9fed08689a9ba2c622cddf99158b2c9b9fabfb0030155863269886",
+      "schema_id": "STTCoordinator.CapturePrepare.input.STTCapturePrepareRequest",
+      "vectors": {}
+    },
+    {
+      "direction": "output",
+      "method_id": "STTCoordinator.CapturePrepare",
+      "model_name": "STTCapturePrepareResponse",
+      "pydantic_mode": "serialization",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Redacted capture-owner grant response.",
+        "properties": {
+          "generation": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "title": "Generation",
+            "type": "integer"
+          },
+          "granted": {
+            "title": "Granted",
+            "type": "boolean"
+          },
+          "lease_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Lease Id"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Message"
+          },
+          "owner": {
+            "enum": [
+              "native",
+              "none",
+              "python"
+            ],
+            "title": "Owner",
+            "type": "string"
+          },
+          "python_capture_active": {
+            "title": "Python Capture Active",
+            "type": "boolean"
+          },
+          "redacted": {
+            "default": true,
+            "title": "Redacted",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "already_owned",
+              "granted",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stopped_python_capture": {
+            "default": false,
+            "title": "Stopped Python Capture",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "generation",
+          "granted",
+          "owner",
+          "python_capture_active",
+          "status"
+        ],
+        "title": "STTCapturePrepareResponse",
+        "type": "object",
+        "x-aurora-extra-behavior": "strip"
+      },
+      "schema_hash": "36b41e14c1b1007c202c90e2c3bb9934cbc296a15168278b399b54a96b2d8cbb",
+      "schema_id": "STTCoordinator.CapturePrepare.output.STTCapturePrepareResponse",
+      "vectors": {}
+    },
+    {
+      "direction": "input",
+      "method_id": "STTCoordinator.CaptureRelease",
+      "model_name": "STTCaptureReleaseRequest",
+      "pydantic_mode": "validation",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Release a native microphone ownership lease.",
+        "properties": {
+          "correlation_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Correlation Id"
+          },
+          "generation": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "title": "Generation",
+            "type": "integer"
+          },
+          "lease_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Lease Id",
+            "type": "string"
+          },
+          "owner": {
+            "const": "native",
+            "default": "native",
+            "title": "Owner",
+            "type": "string"
+          },
+          "owner_id": {
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "reason": {
+            "default": "native_release",
+            "maxLength": 80,
+            "title": "Reason",
+            "type": "string"
+          },
+          "restart_python_capture": {
+            "default": true,
+            "title": "Restart Python Capture",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "generation",
+          "lease_id",
+          "owner_id"
+        ],
+        "title": "STTCaptureReleaseRequest",
+        "type": "object",
+        "x-aurora-extra-behavior": "strip"
+      },
+      "schema_hash": "f36c2517b38b47b7ed5a3b1366227eaa8b2f7972b5c6fd55b593bf7997cd123e",
+      "schema_id": "STTCoordinator.CaptureRelease.input.STTCaptureReleaseRequest",
+      "vectors": {}
+    },
+    {
+      "direction": "output",
+      "method_id": "STTCoordinator.CaptureRelease",
+      "model_name": "STTCaptureReleaseResponse",
+      "pydantic_mode": "serialization",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Redacted native capture release response.",
+        "properties": {
+          "generation": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "title": "Generation",
+            "type": "integer"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Message"
+          },
+          "owner": {
+            "enum": [
+              "native",
+              "none",
+              "python"
+            ],
+            "title": "Owner",
+            "type": "string"
+          },
+          "python_capture_active": {
+            "title": "Python Capture Active",
+            "type": "boolean"
+          },
+          "redacted": {
+            "default": true,
+            "title": "Redacted",
+            "type": "boolean"
+          },
+          "released": {
+            "title": "Released",
+            "type": "boolean"
+          },
+          "restarted_python_capture": {
+            "default": false,
+            "title": "Restarted Python Capture",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "already_released",
+              "python_unavailable",
+              "rejected",
+              "released"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "generation",
+          "owner",
+          "python_capture_active",
+          "released",
+          "status"
+        ],
+        "title": "STTCaptureReleaseResponse",
+        "type": "object",
+        "x-aurora-extra-behavior": "strip"
+      },
+      "schema_hash": "2134b34784696f59c4d7f179b637c533d7b4e0f33a9164a97c5c33f0713f986a",
+      "schema_id": "STTCoordinator.CaptureRelease.output.STTCaptureReleaseResponse",
+      "vectors": {}
+    },
+    {
+      "direction": "input",
+      "method_id": "STTCoordinator.CaptureStatus",
+      "model_name": "STTCaptureStatusRequest",
+      "pydantic_mode": "validation",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Request redacted capture-owner status.",
+        "properties": {
+          "include_inactive": {
+            "default": true,
+            "title": "Include Inactive",
+            "type": "boolean"
+          }
+        },
+        "title": "STTCaptureStatusRequest",
+        "type": "object",
+        "x-aurora-extra-behavior": "strip"
+      },
+      "schema_hash": "0e594cd836f4c80e0da3e223280b2ccfed962813acf3296c4b4a0d02f2e29f7a",
+      "schema_id": "STTCoordinator.CaptureStatus.input.STTCaptureStatusRequest",
+      "vectors": {}
+    },
+    {
+      "direction": "output",
+      "method_id": "STTCoordinator.CaptureStatus",
+      "model_name": "STTCaptureStatusResponse",
+      "pydantic_mode": "serialization",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Redacted microphone ownership status.",
+        "properties": {
+          "audio_input_available": {
+            "title": "Audio Input Available",
+            "type": "boolean"
+          },
+          "can_restart_python_capture": {
+            "title": "Can Restart Python Capture",
+            "type": "boolean"
+          },
+          "generation": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "title": "Generation",
+            "type": "integer"
+          },
+          "lease_expires_at": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Lease Expires At"
+          },
+          "native_lease_active": {
+            "default": false,
+            "title": "Native Lease Active",
+            "type": "boolean"
+          },
+          "owner": {
+            "enum": [
+              "native",
+              "none",
+              "python"
+            ],
+            "title": "Owner",
+            "type": "string"
+          },
+          "python_capture_active": {
+            "title": "Python Capture Active",
+            "type": "boolean"
+          },
+          "redacted": {
+            "default": true,
+            "title": "Redacted",
+            "type": "boolean"
+          },
+          "service_running": {
+            "title": "Service Running",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "audio_input_available",
+          "can_restart_python_capture",
+          "generation",
+          "owner",
+          "python_capture_active",
+          "service_running"
+        ],
+        "title": "STTCaptureStatusResponse",
+        "type": "object",
+        "x-aurora-extra-behavior": "strip"
+      },
+      "schema_hash": "8703ae4586bc390c5bd5aa8a53f3015333d97d4c5049fce4e49a0ce0f33a2339",
+      "schema_id": "STTCoordinator.CaptureStatus.output.STTCaptureStatusResponse",
+      "vectors": {}
     },
     {
       "direction": "input",

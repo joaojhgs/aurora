@@ -653,7 +653,7 @@
       "handler": "_on_listen",
       "source": {
         "file": "app/services/stt_coordinator/service.py",
-        "line": 1132
+        "line": 1192
       },
       "exposure": "both",
       "method_type": "use",
@@ -674,12 +674,75 @@
       "handler": "_on_stop_listening",
       "source": {
         "file": "app/services/stt_coordinator/service.py",
-        "line": 1174
+        "line": 1245
       },
       "exposure": "both",
       "method_type": "use",
       "required_perms": [
         "STTCoordinator.use"
+      ],
+      "module_capabilities": [
+        "audio_capture",
+        "session_management",
+        "stt_coordination"
+      ],
+      "proposed_feature_id": "listening_session_control",
+      "permission_status": "protected"
+    },
+    {
+      "module": "STTCoordinator",
+      "bus_topic": "STTCoordinator.CapturePrepare",
+      "handler": "_on_capture_prepare",
+      "source": {
+        "file": "app/services/stt_coordinator/service.py",
+        "line": 1427
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "STTCoordinator.manage"
+      ],
+      "module_capabilities": [
+        "audio_capture",
+        "session_management",
+        "stt_coordination"
+      ],
+      "proposed_feature_id": "listening_session_control",
+      "permission_status": "protected"
+    },
+    {
+      "module": "STTCoordinator",
+      "bus_topic": "STTCoordinator.CaptureRelease",
+      "handler": "_on_capture_release",
+      "source": {
+        "file": "app/services/stt_coordinator/service.py",
+        "line": 1531
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "STTCoordinator.manage"
+      ],
+      "module_capabilities": [
+        "audio_capture",
+        "session_management",
+        "stt_coordination"
+      ],
+      "proposed_feature_id": "listening_session_control",
+      "permission_status": "protected"
+    },
+    {
+      "module": "STTCoordinator",
+      "bus_topic": "STTCoordinator.CaptureStatus",
+      "handler": "_on_capture_status",
+      "source": {
+        "file": "app/services/stt_coordinator/service.py",
+        "line": 1603
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "STTCoordinator.manage"
       ],
       "module_capabilities": [
         "audio_capture",
