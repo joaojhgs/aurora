@@ -1402,7 +1402,7 @@ impl Default for TtsSynthesisConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct BoundTtsSynthesisRequest {
     request: BoundTaskRequest,
     text: String,
@@ -1444,6 +1444,26 @@ impl BoundTtsSynthesisRequest {
 
     pub fn identity(&self) -> &TtsRequestIdentity {
         &self.identity
+    }
+}
+
+impl fmt::Debug for BoundTtsSynthesisRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("BoundTtsSynthesisRequest")
+            .field("task", &self.request.request().task)
+            .field("generation", &self.request.request().generation)
+            .field(
+                "language_present",
+                &self.request.request().language.as_ref().is_some(),
+            )
+            .field("text_bytes", &self.text.len())
+            .field("sample_rate_hz", &self.config.sample_rate_hz())
+            .field("channels", &self.config.channels())
+            .field("chunk_samples", &self.config.chunk_samples())
+            .field("seed_present", &self.config.seed().is_some())
+            .field("identity", &self.identity)
+            .finish()
     }
 }
 
@@ -2881,6 +2901,27 @@ mod tests {
             TtsSynthesisResult::new(&base, vec![mismatched_config_chunk], false),
             Err(EngineError::InvalidRequest)
         );
+    }
+
+    #[test]
+    fn tts_bound_request_debug_redacts_text_and_internal_identity_material() {
+        let secret = "SECRET_TTS_TEXT_DO_NOT_LEAK_9f8e7d6c";
+        let request = bound_tts_request_with(
+            tts_binding("voice-state-secret"),
+            41,
+            secret,
+            "voice.secret",
+            Some(7),
+            1024,
+        );
+        let debug = format!("{request:?}");
+        assert!(debug.contains("BoundTtsSynthesisRequest"));
+        assert!(debug.contains("text_bytes"));
+        assert!(debug.contains("identity: TtsRequestIdentity(<redacted>)"));
+        assert!(!debug.contains(secret));
+        assert!(!debug.contains("voice.secret"));
+        assert!(!debug.contains("voice-state-secret"));
+        assert!(!debug.contains("SECRET_TTS_TEXT"));
     }
 
     #[test]
