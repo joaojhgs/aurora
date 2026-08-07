@@ -24,7 +24,7 @@ pub use downloader::{
 };
 pub use model_store::{NativeImmutableModelFile, NativeModelStore, NativeModelStoreConfig};
 pub use transport::{
-    GatewayAuth, GatewayEvent, NativeEventStream, NativeGatewayTransport, NativeRequestOptions,
-    SseSubscription, TransportError, TransportLimits,
+    GatewayAuth, GatewayEvent, MicrophoneAudioPolicy, NativeEventStream, NativeGatewayTransport,
+    NativeRequestOptions, SseSubscription, TransportError, TransportLimits,
 };
 pub use trust::Ed25519TrustStore;
