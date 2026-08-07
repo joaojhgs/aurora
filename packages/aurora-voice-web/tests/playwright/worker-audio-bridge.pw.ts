@@ -1,6 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
 import { createServer, type Server } from 'node:http'
-import { readdir, readFile, stat } from 'node:fs/promises'
 import { extname, join, normalize, relative, sep } from 'node:path'
 
 const repoRoot = normalize(join(import.meta.dirname, '..', '..', '..', '..'))
@@ -8,6 +7,7 @@ const packageRoot = join(repoRoot, 'packages', 'aurora-voice-web')
 const forbiddenArtifactExtensions = new Set(['.onnx', '.gguf', '.bin', '.safetensors', '.pt', '.pth', '.tflite', '.wav', '.flac', '.mp3'])
 const maxWasmCoreBytes = 143 * 1024
 const maxWasmLoaderBytes = 48 * 1024
+const nodeFsPromises = import('node:fs/promises').then((module) => module as unknown as NodeFsPromises)
 
 let server: Server
 let baseUrl: string
@@ -35,7 +35,7 @@ test.beforeAll(async () => {
     }
 
     try {
-      const body = await readFile(filePath)
+      const body = await (await nodeFsPromises).readFile(filePath)
       response.writeHead(200, {
         'content-type': contentType(filePath),
         'cache-control': 'no-store'
@@ -102,7 +102,7 @@ test('production module Worker uses generated Rust/WASM facade for start frame s
       events: harness.events()
     }
 
-    function audioReport(audio) {
+    function audioReport(audio: BrowserCapturedAudio | null) {
       return {
         sessionId: audio?.sessionId ?? null,
         generation: audio?.generation ?? null,
@@ -233,7 +233,7 @@ test('built production artifacts contain no model payloads and stay under browse
   ])
 
   for (const file of files) {
-    const info = await stat(file)
+    const info = await (await nodeFsPromises).stat(file)
     const name = relative(wasmDir, file)
     expect(info.size, `${name} must not be empty`).toBeGreaterThan(0)
     expect(forbiddenArtifactExtensions.has(extname(name)), `${name} must not be a model/audio artifact`).toBe(false)
@@ -304,12 +304,34 @@ async function installVoiceHarness(page: Page): Promise<void> {
 }
 
 async function listFiles(root: string): Promise<string[]> {
-  const entries = await readdir(root, { withFileTypes: true })
-  const nested = await Promise.all(entries.map(async (entry) => {
+  const entries = await (await nodeFsPromises).readdir(root, { withFileTypes: true })
+  const nested = await Promise.all(entries.map(async (entry: DirEntry) => {
     const path = join(root, entry.name)
     return entry.isDirectory() ? listFiles(path) : [path]
   }))
   return nested.flat()
+}
+
+interface NodeFsPromises {
+  readFile(path: string): Promise<Uint8Array>
+  readdir(path: string, options: { readonly withFileTypes: true }): Promise<readonly DirEntry[]>
+  stat(path: string): Promise<{ readonly size: number }>
+}
+
+interface DirEntry {
+  readonly name: string
+  isDirectory(): boolean
+}
+
+interface BrowserCapturedAudio {
+  readonly sessionId: string
+  readonly generation: number
+  readonly sampleRateHz: 16_000
+  readonly channels: 1
+  readonly sampleCount: number
+  readonly durationMs: number
+  readonly pcm: Int16Array
+  readonly redacted: true
 }
 
 function voiceHarnessModule(): string {
