@@ -6477,9 +6477,10 @@ fn parse_sse_frame(frame: &str) -> Option<Value> {
         return None;
     }
     serde_json::from_str::<Value>(&data).ok().or_else(|| {
+        let payload = redact_sensitive_text(&data);
         Some(json!({
             "kind": "event",
-            "payload": data,
+            "payload": payload,
             "redaction": {
                 "secretsRedacted": true,
                 "source": "tauri-gateway-sse-proxy"
@@ -7377,6 +7378,112 @@ mod tests {
             Some("dig_1")
         );
         assert!(filtered.get("x-some-unrelated-header").is_none());
+    }
+
+    #[test]
+    fn sse_parser_returns_json_events_from_fragmented_crlf_and_lf_frames() {
+        let chunks = [
+            "data: {\"kind\":\"one\"}\r",
+            "\n\r\n",
+            "data: {\"kind\":\"two\"}\n",
+            "\n",
+        ];
+        let mut buffer = String::new();
+        let mut events = Vec::new();
+
+        for chunk in chunks {
+            buffer.push_str(chunk);
+            while let Some(index) = find_sse_frame_boundary(&buffer) {
+                let frame = buffer[..index].to_string();
+                let drain_to = if buffer[index..].starts_with("\r\n\r\n") {
+                    index + 4
+                } else {
+                    index + 2
+                };
+                buffer.drain(..drain_to);
+                if let Some(event) = parse_sse_frame(&frame) {
+                    events.push(event);
+                }
+            }
+        }
+
+        assert_eq!(events, vec![json!({"kind": "one"}), json!({"kind": "two"})]);
+        assert!(buffer.is_empty());
+    }
+
+    #[test]
+    fn sse_parser_ignores_done_frames() {
+        assert_eq!(parse_sse_frame("data: [DONE]"), None);
+        assert_eq!(parse_sse_frame("event: close\ndata: [DONE]"), None);
+    }
+
+    #[test]
+    fn sse_parser_redacts_non_json_event_payloads_before_emit() {
+        let event = parse_sse_frame(
+            "event: error\ndata: Authorization: Bearer gateway-token token=stream-token",
+        )
+        .unwrap();
+
+        let serialized = serde_json::to_string(&event).unwrap();
+        assert!(!serialized.contains("gateway-token"));
+        assert!(!serialized.contains("stream-token"));
+        assert_eq!(
+            event["payload"],
+            json!("Authorization: Bearer [redacted] token=[redacted]")
+        );
+        assert_eq!(event["redaction"]["secretsRedacted"], json!(true));
+    }
+
+    #[test]
+    fn event_stream_url_percent_encodes_subscription_query_values() {
+        let request = AuroraSubscribeRequest {
+            topics: vec!["voice local/partial".to_string()],
+            stream: Some("main stream".to_string()),
+            kinds: Some(vec![
+                "transcript.delta".to_string(),
+                "wake word".to_string(),
+            ]),
+            headers: None,
+            last_event_id: Some("evt/42?cursor=1".to_string()),
+            replay_from: Some("2026-08-07T00:00:00Z".to_string()),
+            correlation_id: Some("corr id+plus".to_string()),
+            backfill: Some(true),
+        };
+
+        let url =
+            event_stream_url(&Url::parse("http://127.0.0.1:8000").unwrap(), &request).unwrap();
+        let pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+
+        assert_eq!(url.path(), "/api/events/stream");
+        assert!(url.as_str().contains("topic=voice+local%2Fpartial"));
+        assert!(pairs.contains(&("stream".to_string(), "main stream".to_string())));
+        assert!(pairs.contains(&("topic".to_string(), "voice local/partial".to_string())));
+        assert!(pairs.contains(&("kind".to_string(), "wake word".to_string())));
+        assert!(pairs.contains(&("last_event_id".to_string(), "evt/42?cursor=1".to_string())));
+        assert!(pairs.contains(&("correlation_id".to_string(), "corr id+plus".to_string())));
+        assert!(pairs.contains(&("backfill".to_string(), "true".to_string())));
+    }
+
+    #[test]
+    fn subscription_remove_aborts_and_bounds_cancelled_tasks() {
+        let mut subscriptions = SubscriptionState::new();
+        let handle = tauri::async_runtime::spawn(async {
+            std::future::pending::<()>().await;
+        });
+
+        subscriptions.insert(
+            "aurora-sub-test".to_string(),
+            SubscriptionTask {
+                handle,
+                ready: watch::channel(false).0,
+            },
+        );
+        assert!(subscriptions.activate("aurora-sub-test"));
+
+        subscriptions.remove("aurora-sub-test");
+
+        assert!(!subscriptions.activate("aurora-sub-test"));
+        assert!(subscriptions.tasks.is_empty());
     }
 
     #[test]
