@@ -22,6 +22,9 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["fs"] }
 url.workspace = true
 
+[target.'cfg(any(target_os = "linux", windows, target_os = "macos"))'.dependencies]
+cpal.workspace = true
+
 [dev-dependencies]
 tempfile.workspace = true
 
