@@ -447,6 +447,10 @@ impl CaptureLeaseManager {
     pub fn active(&self) -> Option<&VoiceCaptureLease> {
         self.active.as_ref()
     }
+
+    pub fn has_active(&self) -> bool {
+        self.active.is_some()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -780,6 +784,10 @@ where
         self.state.state()
     }
 
+    pub fn has_active_capture(&self) -> bool {
+        self.leases.has_active()
+    }
+
     pub fn into_parts(self) -> (A, E, T, S) {
         (self.audio, self.engine, self.transport, self.sink)
     }
@@ -788,12 +796,60 @@ where
         &mut self,
         mut lease: VoiceCaptureLease,
         at: TimestampMicros,
+        cancellation: CancellationToken,
     ) -> Result<String, VoiceCoreError> {
         lease.start_reason = CaptureStartReason::PushToTalk;
         let lease = self.leases.request_start(lease)?;
-        self.audio.start(lease.clone()).await?;
+        let mut capture_started = false;
+        let result = match cancellation.check() {
+            Ok(()) => match self.audio.start(lease.clone()).await {
+                Ok(()) => {
+                    capture_started = true;
+                    self.run_push_to_talk_turn_after_start(lease.clone(), at, cancellation.clone())
+                        .await
+                }
+                Err(error) => Err(error),
+            },
+            Err(error) => Err(error),
+        };
+        self.finish_with_cleanup(result, lease, cancellation, capture_started)
+            .await
+    }
+
+    pub async fn run_wake_turn(
+        &mut self,
+        mut lease: VoiceCaptureLease,
+        at: TimestampMicros,
+        cancellation: CancellationToken,
+    ) -> Result<String, VoiceCoreError> {
+        lease.start_reason = CaptureStartReason::ForegroundWake;
+        let lease = self.leases.request_start(lease)?;
+        let mut capture_started = false;
+        let result = match cancellation.check() {
+            Ok(()) => match self.audio.start(lease.clone()).await {
+                Ok(()) => {
+                    capture_started = true;
+                    self.run_wake_turn_after_start(lease.clone(), at, cancellation.clone())
+                        .await
+                }
+                Err(error) => Err(error),
+            },
+            Err(error) => Err(error),
+        };
+        self.finish_with_cleanup(result, lease, cancellation, capture_started)
+            .await
+    }
+
+    async fn run_push_to_talk_turn_after_start(
+        &mut self,
+        lease: VoiceCaptureLease,
+        at: TimestampMicros,
+        cancellation: CancellationToken,
+    ) -> Result<String, VoiceCoreError> {
+        cancellation.check()?;
         self.ensure_idle(lease.generation, lease.route_revision, at)
             .await?;
+        cancellation.check()?;
         self.transition_emit(
             VoiceState::Arming,
             TransitionReason::PushToTalk,
@@ -802,6 +858,7 @@ where
             TimestampMicros(at.0.saturating_add(1)),
         )
         .await?;
+        cancellation.check()?;
         self.transition_emit(
             VoiceState::CapturingUtterance,
             TransitionReason::SpeechStarted,
@@ -810,20 +867,20 @@ where
             TimestampMicros(at.0.saturating_add(2)),
         )
         .await?;
-        self.finish_voice_turn(lease, TimestampMicros(at.0.saturating_add(3)))
+        self.finish_voice_turn(lease, TimestampMicros(at.0.saturating_add(3)), cancellation)
             .await
     }
 
-    pub async fn run_wake_turn(
+    async fn run_wake_turn_after_start(
         &mut self,
-        mut lease: VoiceCaptureLease,
+        lease: VoiceCaptureLease,
         at: TimestampMicros,
+        cancellation: CancellationToken,
     ) -> Result<String, VoiceCoreError> {
-        lease.start_reason = CaptureStartReason::ForegroundWake;
-        let lease = self.leases.request_start(lease)?;
-        self.audio.start(lease.clone()).await?;
+        cancellation.check()?;
         self.ensure_idle(lease.generation, lease.route_revision, at)
             .await?;
+        cancellation.check()?;
         self.transition_emit(
             VoiceState::ListeningForWake,
             TransitionReason::WakeArm,
@@ -832,6 +889,7 @@ where
             TimestampMicros(at.0.saturating_add(1)),
         )
         .await?;
+        cancellation.check()?;
         self.transition_emit(
             VoiceState::WakeDetected,
             TransitionReason::WakeDetected,
@@ -840,6 +898,7 @@ where
             TimestampMicros(at.0.saturating_add(2)),
         )
         .await?;
+        cancellation.check()?;
         self.transition_emit(
             VoiceState::CapturingUtterance,
             TransitionReason::SpeechStarted,
@@ -848,7 +907,7 @@ where
             TimestampMicros(at.0.saturating_add(3)),
         )
         .await?;
-        self.finish_voice_turn(lease, TimestampMicros(at.0.saturating_add(4)))
+        self.finish_voice_turn(lease, TimestampMicros(at.0.saturating_add(4)), cancellation)
             .await
     }
 
@@ -878,9 +937,12 @@ where
         &mut self,
         lease: VoiceCaptureLease,
         at: TimestampMicros,
+        cancellation: CancellationToken,
     ) -> Result<String, VoiceCoreError> {
         let mut frames = 0_usize;
+        cancellation.check()?;
         while let Some(frame) = self.audio.next_frame().await? {
+            cancellation.check()?;
             if frame.generation() != lease.generation {
                 continue;
             }
@@ -890,6 +952,7 @@ where
             }
             frames = frames.saturating_add(1);
         }
+        cancellation.check()?;
         self.transition_emit(
             VoiceState::Transcribing,
             TransitionReason::SpeechEnded,
@@ -898,6 +961,7 @@ where
             at,
         )
         .await?;
+        cancellation.check()?;
         let transcript = self
             .engine
             .transcribe_finite(
@@ -907,8 +971,10 @@ where
                     generation: lease.generation.0,
                 },
                 frames,
+                &|| cancellation.is_cancelled(),
             )
             .await?;
+        cancellation.check()?;
         self.transition_emit(
             VoiceState::Dispatching,
             TransitionReason::Transcribed,
@@ -917,14 +983,16 @@ where
             TimestampMicros(at.0.saturating_add(1)),
         )
         .await?;
+        cancellation.check()?;
         let response = self
             .transport
             .invoke_finite(
                 "assistant.turn",
                 serde_json::json!({ "transcript": transcript }),
-                CancellationToken::new(),
+                cancellation.clone(),
             )
             .await?;
+        cancellation.check()?;
         self.transition_emit(
             VoiceState::AwaitingResponse,
             TransitionReason::Dispatched,
@@ -933,6 +1001,7 @@ where
             TimestampMicros(at.0.saturating_add(2)),
         )
         .await?;
+        cancellation.check()?;
         self.transition_emit(
             VoiceState::Speaking,
             TransitionReason::ResponseReady,
@@ -955,8 +1024,10 @@ where
                     generation: lease.generation.0,
                 },
                 &text,
+                &|| cancellation.is_cancelled(),
             )
             .await?;
+        cancellation.check()?;
         self.transition_emit(
             VoiceState::Idle,
             TransitionReason::PlaybackEnded,
@@ -965,9 +1036,73 @@ where
             TimestampMicros(at.0.saturating_add(4)),
         )
         .await?;
-        self.audio.stop(TransitionReason::Stop).await?;
-        self.leases.release(&lease.owner, lease.generation)?;
         Ok(text)
+    }
+
+    async fn finish_with_cleanup(
+        &mut self,
+        result: Result<String, VoiceCoreError>,
+        lease: VoiceCaptureLease,
+        cancellation: CancellationToken,
+        capture_started: bool,
+    ) -> Result<String, VoiceCoreError> {
+        let result = match result {
+            Ok(_) if cancellation.is_cancelled() => Err(VoiceCoreError::Cancelled),
+            other => other,
+        };
+        if result.is_err() || cancellation.is_cancelled() {
+            let _ = self.engine.cancel_generation(lease.generation.0).await;
+            let _ = self.transport.cancel_session(lease.generation).await;
+        }
+
+        let stop_reason = if result.is_ok() {
+            TransitionReason::Stop
+        } else {
+            TransitionReason::Cancel
+        };
+        let stop_result = if capture_started {
+            self.audio.stop(stop_reason).await
+        } else {
+            Ok(())
+        };
+        let release_result = self.leases.release(&lease.owner, lease.generation);
+
+        if result.is_err() {
+            self.reset_state_after_cleanup(lease.generation, lease.route_revision);
+        }
+
+        match result {
+            Ok(value) => {
+                stop_result?;
+                release_result?;
+                Ok(value)
+            }
+            Err(error) => {
+                let _ = stop_result;
+                let _ = release_result;
+                Err(error)
+            }
+        }
+    }
+
+    fn reset_state_after_cleanup(&mut self, generation: Generation, route_revision: RouteRevision) {
+        if matches!(self.state.state(), VoiceState::Disabled) {
+            return;
+        }
+        let _ = self.state.transition(
+            VoiceState::Stopping,
+            TransitionReason::Cancel,
+            generation,
+            route_revision,
+            TimestampMicros(0),
+        );
+        let _ = self.state.transition(
+            VoiceState::Idle,
+            TransitionReason::Stop,
+            generation,
+            route_revision,
+            TimestampMicros(0),
+        );
     }
 
     async fn transition_emit(

@@ -127,11 +127,13 @@ pub trait SpeechEngine: TaskProvider {
         &mut self,
         request: TaskRequest,
         frames: usize,
+        cancellation: &dyn Fn() -> bool,
     ) -> Result<String, EngineError>;
 
     async fn synthesize_text(
         &mut self,
         request: TaskRequest,
         text: &str,
+        cancellation: &dyn Fn() -> bool,
     ) -> Result<Vec<i16>, EngineError>;
 }
