@@ -263,12 +263,13 @@ function combineSegments(left, right) {
   return left.concat(right);
 }
 
-function feedAndDrain(vad, samples) {
+function feedAndDrain(vad, samples, options = {}) {
   const acceptTimings = [];
   const drainTimings = [];
   const segments = [];
   let fullWindows = 0;
   let terminalTailSamples = 0;
+  let resetDuringFeed = false;
   for (let offset = 0; offset < samples.length; offset += CONFIG.windowSize) {
     const chunk = samples.slice(offset, Math.min(samples.length, offset + CONFIG.windowSize));
     if (chunk.length < CONFIG.windowSize) {
@@ -279,6 +280,13 @@ function feedAndDrain(vad, samples) {
     const started = performance.now();
     vad.acceptWaveform(chunk);
     acceptTimings.push(performance.now() - started);
+
+    if (options.resetAfterFullWindows && fullWindows === options.resetAfterFullWindows) {
+      vad.reset();
+      resetDuringFeed = true;
+      break;
+    }
+
     const drained = drainSegmentsTimed(vad);
     drainTimings.push(drained.timing.elapsed_ms);
     segments.push(...drained.segments);
@@ -301,6 +309,7 @@ function feedAndDrain(vad, samples) {
       full_windows: fullWindows,
       terminal_tail_samples: terminalTailSamples,
       short_terminal_tail_supported: terminalTailSamples > 0,
+      reset_during_feed: resetDuringFeed,
     },
   };
 }
@@ -398,16 +407,15 @@ function runSecondFlush(samples, expected) {
   }
 }
 
-function runCancellationResetBeforeFlush(samples) {
+function runCancellationResetDuringFeed(samples) {
   const vad = createParityVad();
   try {
-    const feed = feedAndDrain(vad, samples.slice(0, Math.min(samples.length, CONFIG.windowSize * 3)));
-    vad.reset();
+    const feed = feedAndDrain(vad, samples, { resetAfterFullWindows: 3 });
     vad.flush();
     const finalDrain = drainSegmentsTimed(vad);
     const segments = combineSegments(feed.segments, finalDrain.segments);
     const drainTiming = combineTiming(feed.feed_timing.per_chunk_drain, finalDrain.timing);
-    return { ok: segments.length === 0 && feed.feed_timing.accept.p95_ms < ACCEPT_P95_LIMIT_MS, segments, feed_timing: feed.feed_timing, drain_timing: drainTiming, idempotent_empty: null };
+    return { ok: segments.length === 0 && feed.feed_timing.reset_during_feed === true && feed.feed_timing.accept.p95_ms < ACCEPT_P95_LIMIT_MS, segments, feed_timing: feed.feed_timing, drain_timing: drainTiming, idempotent_empty: null };
   } finally {
     vad.free();
   }
@@ -444,14 +452,14 @@ async function runProbe() {
   const resetReplay = runResetReplay(samples, fullFlush.segments);
   const discontinuity = runDiscontinuityReset(samples, fullFlush.segments);
   const secondFlush = runSecondFlush(samples, fullFlush.segments);
-  const cancellation = runCancellationResetBeforeFlush(samples);
+  const cancellation = runCancellationResetDuringFeed(samples);
   const longSilence = runLongSilence();
   const cases = {
     full_flush: fullFlush,
     reset_replay: resetReplay,
     discontinuity_reset: discontinuity,
     second_flush_idempotent: secondFlush,
-    cancellation_reset_before_flush: cancellation,
+    cancellation_reset_during_feed: cancellation,
     long_silence_rolling_buffer: longSilence,
   };
   const ok = Object.values(cases).every((item) => item.ok === true);
@@ -533,6 +541,25 @@ def env_path(name: str) -> Path | None:
     return Path(value) if value else None
 
 
+def resolve_artifact_path(
+    artifact_root: Path,
+    path: Path,
+    label: str,
+    *,
+    must_exist: bool = True,
+) -> Path:
+    """Resolve an artifact path and reject traversal or symlink escapes."""
+    root = artifact_root.resolve()
+    candidate = path if path.is_absolute() else root / path
+    try:
+        resolved = candidate.resolve(strict=must_exist)
+    except FileNotFoundError as exc:
+        raise SystemExit(f"{label} missing: {candidate}") from exc
+    if resolved != root and root not in resolved.parents:
+        raise SystemExit(f"{label} escapes artifact root: {resolved}")
+    return resolved
+
+
 def resolve_inputs(args: argparse.Namespace) -> tuple[Path, Path, Path, Path]:
     artifact_root = args.artifact_root.resolve() if args.artifact_root else None
     if artifact_root is None:
@@ -540,13 +567,31 @@ def resolve_inputs(args: argparse.Namespace) -> tuple[Path, Path, Path, Path]:
     if not artifact_root.is_dir():
         raise SystemExit(f"artifact root does not exist: {artifact_root}")
 
-    wav_path = args.wav_path or artifact_root / KWS_TEST_WAV
-    model_path = args.model_path or find_model_path(artifact_root)
-    lib_dir = args.lib_dir or find_lib_dir(artifact_root)
-
-    missing = [str(path) for path in REQUIRED_BROWSER_ARTIFACTS if not (artifact_root / path).is_file()]
+    missing = []
+    for path in REQUIRED_BROWSER_ARTIFACTS:
+        try:
+            resolved = resolve_artifact_path(artifact_root, path, f"browser artifact {path}")
+        except SystemExit as exc:
+            if "escapes artifact root" in str(exc):
+                raise
+            missing.append(str(path))
+            continue
+        if not resolved.is_file():
+            missing.append(str(path))
     if missing:
         raise SystemExit("missing browser artifacts:\n" + "\n".join(missing))
+
+    wav_path = resolve_artifact_path(artifact_root, args.wav_path or KWS_TEST_WAV, "KWS test wav")
+    model_path = resolve_artifact_path(
+        artifact_root,
+        args.model_path or find_model_path(artifact_root),
+        "Silero model",
+    )
+    lib_dir = resolve_artifact_path(
+        artifact_root,
+        args.lib_dir or find_lib_dir(artifact_root),
+        "sherpa native lib dir",
+    )
     if not wav_path.is_file():
         raise SystemExit(f"KWS test wav missing: {wav_path}")
     if not model_path.is_file():
@@ -556,18 +601,18 @@ def resolve_inputs(args: argparse.Namespace) -> tuple[Path, Path, Path, Path]:
     validate_wav_file(wav_path)
     verify_sha256(model_path, EXPECTED_MODEL_SHA256, "Silero model")
     verify_sha256(wav_path, EXPECTED_WAV_SHA256, "KWS test wav")
-    return artifact_root, model_path.resolve(), wav_path.resolve(), lib_dir.resolve()
+    return artifact_root, model_path, wav_path, lib_dir
 
 
 def find_model_path(artifact_root: Path) -> Path:
     for candidate in VAD_MODEL_CANDIDATES:
         path = artifact_root / candidate
         if path.is_file():
-            return path
+            return candidate
     matches = sorted(artifact_root.glob("sources/extracted/sherpa-onnx-1.13.4*/wasm/vad*/assets/silero_vad.onnx"))
     if matches:
-        return matches[0]
-    return artifact_root / VAD_MODEL_CANDIDATES[0]
+        return matches[0].relative_to(artifact_root)
+    return VAD_MODEL_CANDIDATES[0]
 
 
 def find_lib_dir(artifact_root: Path) -> Path:
@@ -577,11 +622,33 @@ def find_lib_dir(artifact_root: Path) -> Path:
         "sherpa-onnx-c-api.lib",
         "libsherpa-onnx-c-api.a",
     )
+    preferred_roots = host_native_lib_roots()
+    for root in preferred_roots:
+        for name in names:
+            path = artifact_root / root / name
+            if path.is_file():
+                return path.parent.relative_to(artifact_root)
     for name in names:
         matches = sorted(artifact_root.glob(f"**/{name}"))
         if matches:
-            return matches[0].parent
-    return artifact_root / "builds" / "native" / "lib"
+            return matches[0].parent.relative_to(artifact_root)
+    return Path("builds/native/lib")
+
+
+def host_native_lib_roots() -> tuple[Path, ...]:
+    machine = os.uname().machine.lower() if hasattr(os, "uname") else ""
+    arch = "x86_64" if machine in {"amd64", "x86_64"} else machine
+    if sys.platform == "darwin":
+        platform_roots = [f"macos-{arch}", f"darwin-{arch}"]
+    elif sys.platform == "win32":
+        platform_roots = [f"windows-{arch}", f"win-{arch}"]
+    else:
+        platform_roots = [f"linux-{arch}"]
+    return tuple(
+        Path("builds") / root / suffix
+        for root in platform_roots
+        for suffix in (Path("install/lib"), Path("lib"))
+    )
 
 
 def validate_report_dir(path: Path) -> Path:
@@ -694,16 +761,31 @@ class ParityRequestHandler(BaseHTTPRequestHandler):
             if rel.is_absolute() or ".." in rel.parts:
                 self.send_error(HTTPStatus.BAD_REQUEST)
                 return
-            self.send_file(self.server.artifact_root / rel)
+            try:
+                artifact = resolve_artifact_path(
+                    self.server.artifact_root,
+                    rel,
+                    f"served artifact {rel}",
+                    must_exist=False,
+                )
+            except SystemExit:
+                self.send_error(HTTPStatus.BAD_REQUEST)
+                return
+            self.send_file(artifact)
             return
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def send_file(self, path: Path) -> None:
-        if not path.is_file():
+        try:
+            resolved = path.resolve(strict=True)
+        except FileNotFoundError:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        self.send_bytes(path.read_bytes(), content_type)
+        if not resolved.is_file():
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        content_type = mimetypes.guess_type(resolved.name)[0] or "application/octet-stream"
+        self.send_bytes(resolved.read_bytes(), content_type)
 
     def send_bytes(self, body: bytes, content_type: str) -> None:
         self.send_response(HTTPStatus.OK)
@@ -784,9 +866,11 @@ def run_native(model_path: Path, wav_path: Path, lib_dir: Path) -> dict[str, Any
 
 def run_browser(url: str, browser_name: str, timeout_ms: int) -> dict[str, Any]:
     try:
-        from playwright.sync_api import Error as PlaywrightError
-        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-        from playwright.sync_api import sync_playwright
+        from playwright.sync_api import (
+            Error as PlaywrightError,
+            TimeoutError as PlaywrightTimeoutError,
+            sync_playwright,
+        )
     except ImportError as exc:
         return {
             "ok": False,
@@ -845,7 +929,7 @@ def compare_segments(native: dict[str, Any], browser: dict[str, Any]) -> dict[st
         browser_segments = browser_case.get("segments", [])
         diffs = []
         count_ok = len(native_segments) == len(browser_segments)
-        for index, (left, right) in enumerate(zip(native_segments, browser_segments)):
+        for index, (left, right) in enumerate(zip(native_segments, browser_segments, strict=False)):
             start_delta = abs(int(left["start"]) - int(right["start"]))
             length_delta = abs(int(left["length"]) - int(right["length"]))
             diffs.append(
@@ -877,6 +961,20 @@ def timing_ok(result: dict[str, Any]) -> bool:
     return True
 
 
+def browser_capabilities_ok(result: dict[str, Any]) -> bool:
+    return (
+        result.get("workerScope") is True
+        and result.get("sharedArrayBuffer") is True
+        and result.get("crossOriginIsolated") is True
+    )
+
+
+def physical_device_claims_ok(native: dict[str, Any], browser_results: list[dict[str, Any]]) -> bool:
+    return native.get("physical_device_claim") is False and all(
+        result.get("physical_device_claim") is False for result in browser_results
+    )
+
+
 def full_matrix_gate_ok(
     *,
     native: dict[str, Any],
@@ -893,10 +991,22 @@ def full_matrix_gate_ok(
         and full_browser_matrix
         and native.get("ok") is True
         and timing_ok(native)
+        and physical_device_claims_ok(native, browser_results)
         and len(browser_results) == 3
-        and all(result.get("ok") is True and timing_ok(result) for result in browser_results)
+        and all(
+            result.get("ok") is True and timing_ok(result) and browser_capabilities_ok(result)
+            for result in browser_results
+        )
         and all(item.get("ok") is True for item in comparisons)
     )
+
+
+def normalize_browsers(requested: list[str] | None) -> list[str]:
+    browsers = requested or ["chromium", "firefox", "webkit"]
+    duplicates = sorted({browser for browser in browsers if browsers.count(browser) > 1})
+    if duplicates:
+        raise SystemExit("duplicate browser request: " + ", ".join(duplicates))
+    return browsers
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -908,7 +1018,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     report_dir = validate_report_dir(args.report_dir)
     artifact_root, model_path, wav_path, lib_dir = resolve_inputs(args)
-    browsers = args.browser or ["chromium", "firefox", "webkit"]
+    browsers = normalize_browsers(args.browser)
 
     native = {"ok": True, "skipped": True, "physical_device_claim": False}
     if not args.skip_native:

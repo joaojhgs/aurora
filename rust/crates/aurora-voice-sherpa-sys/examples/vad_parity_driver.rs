@@ -49,7 +49,7 @@ fn run() -> Result<NativeReport, String> {
     let reset_replay = run_reset_replay(&config, &pcm, &full_flush.segments)?;
     let discontinuity = run_discontinuity_reset(&config, &pcm, &full_flush.segments)?;
     let second_flush = run_second_flush(&config, &pcm, &full_flush.segments)?;
-    let cancellation = run_reset_before_flush(&config, &pcm)?;
+    let cancellation = run_reset_during_feed(&config, &pcm)?;
     let long_silence = run_long_silence(&config)?;
 
     let timings = [
@@ -183,18 +183,18 @@ fn run_second_flush(
     })
 }
 
-fn run_reset_before_flush(config: &SileroVadConfig, pcm: &[f32]) -> Result<CaseReport, String> {
+fn run_reset_during_feed(config: &SileroVadConfig, pcm: &[f32]) -> Result<CaseReport, String> {
     let mut detector = VoiceActivityDetector::new(config).map_err(|error| error.to_string())?;
-    let prefix = pcm.len().min(WINDOW_SIZE * 3);
-    let feed = feed_and_drain(&mut detector, &pcm[..prefix])?;
-    detector.reset().map_err(|error| error.to_string())?;
+    let feed = feed_and_drain_reset_after_windows(&mut detector, pcm, 3)?;
     detector.flush().map_err(|error| error.to_string())?;
     let final_drain = drain_segments_timed(&mut detector)?;
     let feed_timing = feed.to_timing();
     let drain_timing = feed.drain_timing.combine(final_drain.timing);
     let segments = combine_segments(feed.segments, final_drain.segments);
     Ok(CaseReport {
-        ok: segments.is_empty() && feed.accept_timing.p95_ms < ACCEPT_P95_LIMIT_MS,
+        ok: segments.is_empty()
+            && feed.reset_during_feed
+            && feed.accept_timing.p95_ms < ACCEPT_P95_LIMIT_MS,
         segments,
         feed_timing,
         drain_timing,
@@ -221,11 +221,28 @@ fn run_long_silence(config: &SileroVadConfig) -> Result<CaseReport, String> {
 }
 
 fn feed_and_drain(detector: &mut VoiceActivityDetector, pcm: &[f32]) -> Result<FeedReport, String> {
+    feed_and_drain_with_reset(detector, pcm, None)
+}
+
+fn feed_and_drain_reset_after_windows(
+    detector: &mut VoiceActivityDetector,
+    pcm: &[f32],
+    reset_after_full_windows: usize,
+) -> Result<FeedReport, String> {
+    feed_and_drain_with_reset(detector, pcm, Some(reset_after_full_windows))
+}
+
+fn feed_and_drain_with_reset(
+    detector: &mut VoiceActivityDetector,
+    pcm: &[f32],
+    reset_after_full_windows: Option<usize>,
+) -> Result<FeedReport, String> {
     let mut accept_timings = Vec::new();
     let mut drain_timings = Vec::new();
     let mut segments = Vec::new();
     let mut full_windows = 0usize;
     let mut terminal_tail_samples = 0usize;
+    let mut reset_during_feed = false;
     for chunk in pcm.chunks(WINDOW_SIZE) {
         if chunk.len() < WINDOW_SIZE {
             terminal_tail_samples = chunk.len();
@@ -237,6 +254,12 @@ fn feed_and_drain(detector: &mut VoiceActivityDetector, pcm: &[f32]) -> Result<F
             .accept_waveform(chunk)
             .map_err(|error| error.to_string())?;
         accept_timings.push(started.elapsed().as_secs_f64() * 1000.0);
+
+        if reset_after_full_windows == Some(full_windows) {
+            detector.reset().map_err(|error| error.to_string())?;
+            reset_during_feed = true;
+            break;
+        }
 
         let drained = drain_segments_timed(detector)?;
         drain_timings.push(drained.timing.elapsed_ms);
@@ -260,6 +283,7 @@ fn feed_and_drain(detector: &mut VoiceActivityDetector, pcm: &[f32]) -> Result<F
         full_windows,
         terminal_tail_samples,
         short_terminal_tail_supported: terminal_tail_samples > 0,
+        reset_during_feed,
     })
 }
 
@@ -437,7 +461,7 @@ impl NativeReport {
                 "\"ok\":{},\"physical_device_claim\":{},\"config\":{},",
                 "\"cases\":{{\"full_flush\":{},\"reset_replay\":{},",
                 "\"discontinuity_reset\":{},\"second_flush_idempotent\":{},",
-                "\"cancellation_reset_before_flush\":{},\"long_silence_rolling_buffer\":{}}}",
+                "\"cancellation_reset_during_feed\":{},\"long_silence_rolling_buffer\":{}}}",
                 "}}"
             ),
             self.ok,
@@ -547,6 +571,7 @@ struct FeedReport {
     full_windows: usize,
     terminal_tail_samples: usize,
     short_terminal_tail_supported: bool,
+    reset_during_feed: bool,
 }
 
 impl FeedReport {
@@ -557,6 +582,7 @@ impl FeedReport {
             full_windows: self.full_windows,
             terminal_tail_samples: self.terminal_tail_samples,
             short_terminal_tail_supported: self.short_terminal_tail_supported,
+            reset_during_feed: self.reset_during_feed,
         }
     }
 }
@@ -573,6 +599,7 @@ struct FeedTimingReport {
     full_windows: usize,
     terminal_tail_samples: usize,
     short_terminal_tail_supported: bool,
+    reset_during_feed: bool,
 }
 
 impl FeedTimingReport {
@@ -581,13 +608,14 @@ impl FeedTimingReport {
             concat!(
                 "{{\"accept\":{},\"per_chunk_drain\":{},",
                 "\"full_windows\":{},\"terminal_tail_samples\":{},",
-                "\"short_terminal_tail_supported\":{}}}"
+                "\"short_terminal_tail_supported\":{},\"reset_during_feed\":{}}}"
             ),
             self.accept.to_json(),
             self.per_chunk_drain.to_json(),
             self.full_windows,
             self.terminal_tail_samples,
-            self.short_terminal_tail_supported
+            self.short_terminal_tail_supported,
+            self.reset_during_feed
         )
     }
 }
