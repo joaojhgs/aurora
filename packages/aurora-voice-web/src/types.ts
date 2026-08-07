@@ -62,6 +62,17 @@ export interface AuroraPcmFrameEnvelope {
   readonly queuedBytes: number
 }
 
+export interface AuroraCapturedAudio {
+  readonly sessionId: string
+  readonly generation: number
+  readonly sampleRateHz: 16000
+  readonly channels: 1
+  readonly sampleCount: number
+  readonly durationMs: number
+  readonly pcm: Int16Array
+  readonly redacted: true
+}
+
 export type AuroraVoiceWebEventKind =
   | 'session_started'
   | 'session_stopped'
@@ -97,7 +108,16 @@ export interface AuroraAudioWorkletPcmSink {
   pushFrame(frame: AuroraPcmFrame): Promise<boolean>
 }
 
+export const AURORA_VOICE_WORKER_PROTOCOL_VERSION = 1
+export const AURORA_VOICE_WORKER_MAX_REQUEST_ID = 2_147_483_647
+
 export type AuroraVoiceWorkerCommand =
+  | {
+      readonly type: 'init'
+      readonly protocolVersion: typeof AURORA_VOICE_WORKER_PROTOCOL_VERSION
+      readonly maxFrameSamples: number
+      readonly maxQueuedBytes: number
+    }
   | {
       readonly type: 'start'
       readonly session: AuroraVoiceWebSession
@@ -119,9 +139,60 @@ export type AuroraVoiceWorkerCommand =
       readonly generation: number
       readonly reason: string
     }
+  | {
+      readonly type: 'shutdown'
+      readonly generation: number
+      readonly reason: string
+    }
+
+export type AuroraVoiceWorkerResponse =
+  | {
+      readonly type: 'ready'
+      readonly protocolVersion: typeof AURORA_VOICE_WORKER_PROTOCOL_VERSION
+      readonly capabilities: AuroraVoiceWebCapabilities
+      readonly maxFrameSamples: number
+      readonly maxQueuedBytes: number
+    }
+  | {
+      readonly type: 'ack'
+      readonly sessionId: string
+      readonly generation: number
+      readonly sequence: number | null
+    }
+  | {
+      readonly type: 'reject'
+      readonly sessionId: string | null
+      readonly generation: number
+      readonly sequence: number | null
+      readonly reason: string
+    }
+  | {
+      readonly type: 'stop_result'
+      readonly sessionId: string
+      readonly generation: number
+      readonly capturedAudio: AuroraCapturedAudio
+    }
+
+export interface AuroraVoiceWorkerRequestEnvelope {
+  readonly protocolVersion: typeof AURORA_VOICE_WORKER_PROTOCOL_VERSION
+  readonly requestId: number
+  readonly command: AuroraVoiceWorkerCommand
+}
+
+export interface AuroraVoiceWorkerResponseEnvelope {
+  readonly protocolVersion: typeof AURORA_VOICE_WORKER_PROTOCOL_VERSION
+  readonly requestId: number
+  readonly response: AuroraVoiceWorkerResponse
+}
+
+export interface AuroraVoiceWorkerRequestOptions {
+  readonly transfer?: readonly Transferable[]
+  readonly timeoutMs?: number
+}
 
 export interface AuroraVoiceWorkerHost {
-  post(command: AuroraVoiceWorkerCommand): Promise<void>
+  request(command: AuroraVoiceWorkerCommand, options?: AuroraVoiceWorkerRequestOptions): Promise<AuroraVoiceWorkerResponse>
+  shutdown?(): void
 }
 
 export interface AuroraVoiceWebRuntimeOptions {
@@ -131,6 +202,7 @@ export interface AuroraVoiceWebRuntimeOptions {
   readonly lifecycle?: () => AuroraVoiceLifecycleEligibility
   readonly maxFrameSamples?: number
   readonly maxQueuedBytes?: number
+  readonly workerTimeoutMs?: number
   readonly nowMs?: () => number
   readonly sessionIdFactory?: (ownerId: string, generation: number) => string
 }

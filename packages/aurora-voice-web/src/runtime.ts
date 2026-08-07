@@ -1,6 +1,8 @@
 import {
   AURORA_VOICE_WEB_DEFAULT_CAPABILITIES,
+  AURORA_VOICE_WORKER_PROTOCOL_VERSION,
   AuroraVoiceWebRuntimeError,
+  type AuroraCapturedAudio,
   type AuroraPcmFrame,
   type AuroraPcmFrameEnvelope,
   type AuroraVoiceLifecycleEligibility,
@@ -16,6 +18,8 @@ import {
 
 const DEFAULT_MAX_FRAME_SAMPLES = 4_800
 const DEFAULT_MAX_QUEUED_BYTES = 16_000 * 2 * 10
+const DEFAULT_WORKER_TIMEOUT_MS = 5_000
+const MAX_CAPTURED_AUDIO_SAMPLES = 16_000 * 60
 
 interface ActiveVoiceLock {
   readonly ownerId: string
@@ -32,6 +36,7 @@ export class AuroraVoiceWebRuntime {
   private readonly lifecycle
   private readonly maxFrameSamples: number
   private readonly maxQueuedBytes: number
+  private readonly workerTimeoutMs: number
   private readonly nowMs: () => number
   private readonly sessionIdFactory: (ownerId: string, generation: number) => string
   private readonly listeners = new Set<AuroraVoiceWebEventListener>()
@@ -50,6 +55,7 @@ export class AuroraVoiceWebRuntime {
     this.lifecycle = options.lifecycle ?? visibleLifecycle
     this.maxFrameSamples = boundedIntegerInRange(options.maxFrameSamples ?? DEFAULT_MAX_FRAME_SAMPLES, 'maxFrameSamples', 1, DEFAULT_MAX_FRAME_SAMPLES)
     this.maxQueuedBytes = boundedIntegerInRange(options.maxQueuedBytes ?? DEFAULT_MAX_QUEUED_BYTES, 'maxQueuedBytes', 2, DEFAULT_MAX_QUEUED_BYTES)
+    this.workerTimeoutMs = boundedIntegerInRange(options.workerTimeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS, 'workerTimeoutMs', 1, 60_000)
     this.nowMs = options.nowMs ?? Date.now
     this.sessionIdFactory = options.sessionIdFactory ?? defaultSessionId
     this.capabilities = AURORA_VOICE_WEB_DEFAULT_CAPABILITIES
@@ -102,7 +108,23 @@ export class AuroraVoiceWebRuntime {
     this.session = nextSession
     let workerStarted = false
     try {
-      await this.worker.post({ type: 'start', session: this.session, capabilities: this.capabilities })
+      const ready = await this.worker.request({
+        type: 'init',
+        protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+        maxFrameSamples: this.maxFrameSamples,
+        maxQueuedBytes: this.maxQueuedBytes
+      }, { timeoutMs: this.workerTimeoutMs })
+      if (
+        ready.type !== 'ready' ||
+        ready.protocolVersion !== AURORA_VOICE_WORKER_PROTOCOL_VERSION ||
+        !capabilitiesAreUnavailable(ready.capabilities) ||
+        ready.maxFrameSamples > this.maxFrameSamples ||
+        ready.maxQueuedBytes > this.maxQueuedBytes
+      ) {
+        throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker is not available')
+      }
+      const started = await this.worker.request({ type: 'start', session: this.session, capabilities: this.capabilities }, { timeoutMs: this.workerTimeoutMs })
+      validateAck(started, this.session.sessionId, this.session.generation, null)
       workerStarted = true
       await this.pcmSource?.start(this.session, { pushFrame: (frame) => this.pushFrame(frame) })
       this.emit('session_started', null, null, 0, 0, 0, null)
@@ -116,10 +138,11 @@ export class AuroraVoiceWebRuntime {
     }
   }
 
-  async stop(): Promise<void> {
+  async stop(): Promise<AuroraCapturedAudio | null> {
     const session = this.session
-    if (session === null) return
+    if (session === null) return null
     let failed = false
+    let capturedAudio: AuroraCapturedAudio | null = null
     try {
       try {
         await this.pcmSource?.stop(session.sessionId)
@@ -127,7 +150,8 @@ export class AuroraVoiceWebRuntime {
         failed = true
       }
       try {
-        await this.worker.post({ type: 'stop', sessionId: session.sessionId, generation: session.generation })
+        const stopped = await this.worker.request({ type: 'stop', sessionId: session.sessionId, generation: session.generation }, { timeoutMs: this.workerTimeoutMs })
+        capturedAudio = validateStopResult(stopped, session.sessionId, session.generation)
       } catch {
         failed = true
       }
@@ -136,6 +160,7 @@ export class AuroraVoiceWebRuntime {
       this.clearSession('stopped')
     }
     if (failed) throw new AuroraVoiceWebRuntimeError('stop_failed', 'Voice session could not stop cleanly')
+    return capturedAudio
   }
 
   async cancel(reason = 'cancelled'): Promise<void> {
@@ -150,7 +175,8 @@ export class AuroraVoiceWebRuntime {
         failed = true
       }
       try {
-        await this.worker.post({ type: 'cancel', sessionId: session?.sessionId ?? null, generation, reason: 'cancelled' })
+        const cancelled = await this.worker.request({ type: 'cancel', sessionId: session?.sessionId ?? null, generation, reason: 'cancelled' }, { timeoutMs: this.workerTimeoutMs })
+        validateAck(cancelled, session.sessionId, session.generation, null)
       } catch {
         failed = true
       }
@@ -166,6 +192,11 @@ export class AuroraVoiceWebRuntime {
     if (this.session === null || eligibility.eligible && eligibility.visible && !eligibility.frozen) return
     await this.cancel('lifecycle_lost')
     this.emit('lifecycle_lost', null, null, 0, 0, 0, eligibility.reason)
+  }
+
+  async dispose(): Promise<void> {
+    await this.cancel('disposed')
+    this.worker.shutdown?.()
   }
 
   async pushFrame(frame: AuroraPcmFrame): Promise<boolean> {
@@ -200,6 +231,7 @@ export class AuroraVoiceWebRuntime {
 
     if (frame.discontinuity === true) this.nextSequence = frame.sequence
     const copiedPcm = new Int16Array(frame.pcm)
+    const transferBuffer = copiedPcm.buffer
     this.queuedBytes = nextQueuedBytes
     const envelope: AuroraPcmFrameEnvelope = Object.freeze({
       sessionId: session.sessionId,
@@ -213,7 +245,11 @@ export class AuroraVoiceWebRuntime {
       queuedBytes: this.queuedBytes
     })
     try {
-      await this.worker.post({ type: 'audio_frame', frame: envelope, pcm: copiedPcm })
+      const posted = await this.worker.request({ type: 'audio_frame', frame: envelope, pcm: copiedPcm }, {
+        timeoutMs: this.workerTimeoutMs,
+        transfer: [transferBuffer]
+      })
+      validateAck(posted, session.sessionId, session.generation, frame.sequence)
       if (
         this.session !== session ||
         this.state !== 'active' ||
@@ -264,12 +300,13 @@ export class AuroraVoiceWebRuntime {
     }
     if (!notifyWorker) return
     try {
-      await this.worker.post({
+      const cancelled = await this.worker.request({
         type: 'cancel',
         sessionId: session?.sessionId ?? null,
         generation: session?.generation ?? this.generation,
         reason
-      })
+      }, { timeoutMs: this.workerTimeoutMs })
+      if (session !== null) validateAck(cancelled, session.sessionId, session.generation, null)
     } catch {
       // Best-effort cleanup; callers report the sanitized outer failure.
     }
@@ -357,6 +394,73 @@ function defaultSessionId(ownerId: string, generation: number): string {
 function normalizeReason(reason: string): string {
   if (/^[A-Za-z0-9_.-]{1,48}$/.test(reason)) return reason
   return 'cancelled'
+}
+
+function capabilitiesAreUnavailable(capabilities: AuroraVoiceWebCapabilities): boolean {
+  return capabilities.vad === false && capabilities.kws === false && capabilities.stt === false && capabilities.tts === false
+}
+
+function validateAck(response: unknown, sessionId: string, generation: number, sequence: number | null): void {
+  if (
+    typeof response !== 'object' ||
+    response === null ||
+    (response as { type?: unknown }).type !== 'ack' ||
+    (response as { sessionId?: unknown }).sessionId !== sessionId ||
+    (response as { generation?: unknown }).generation !== generation ||
+    (response as { sequence?: unknown }).sequence !== sequence
+  ) {
+    throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker rejected the request')
+  }
+}
+
+function validateStopResult(response: unknown, sessionId: string, generation: number): AuroraCapturedAudio {
+  if (
+    typeof response !== 'object' ||
+    response === null ||
+    (response as { type?: unknown }).type !== 'stop_result' ||
+    (response as { sessionId?: unknown }).sessionId !== sessionId ||
+    (response as { generation?: unknown }).generation !== generation
+  ) {
+    throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker rejected the request')
+  }
+  const audio = (response as { capturedAudio?: unknown }).capturedAudio
+  if (
+    typeof audio !== 'object' ||
+    audio === null ||
+    (audio as { sessionId?: unknown }).sessionId !== sessionId ||
+    (audio as { generation?: unknown }).generation !== generation ||
+    (audio as { sampleRateHz?: unknown }).sampleRateHz !== 16_000 ||
+    (audio as { channels?: unknown }).channels !== 1 ||
+    (audio as { redacted?: unknown }).redacted !== true ||
+    !((audio as { pcm?: unknown }).pcm instanceof Int16Array)
+  ) {
+    throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker returned invalid audio')
+  }
+  const pcm = (audio as AuroraCapturedAudio).pcm
+  const sampleCount = (audio as { sampleCount?: unknown }).sampleCount
+  const durationMs = (audio as { durationMs?: unknown }).durationMs
+  if (
+    !Number.isSafeInteger(sampleCount) ||
+    sampleCount !== pcm.length ||
+    sampleCount < 0 ||
+    sampleCount > MAX_CAPTURED_AUDIO_SAMPLES ||
+    typeof durationMs !== 'number' ||
+    !Number.isSafeInteger(durationMs) ||
+    durationMs < 0 ||
+    durationMs > 60_000
+  ) {
+    throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker returned invalid audio')
+  }
+  return Object.freeze({
+    sessionId,
+    generation,
+    sampleRateHz: 16_000,
+    channels: 1,
+    sampleCount: sampleCount as number,
+    durationMs: durationMs as number,
+    pcm: new Int16Array(pcm),
+    redacted: true
+  })
 }
 
 function validateLifecycle(value: AuroraVoiceLifecycleEligibility): AuroraVoiceLifecycleEligibility {

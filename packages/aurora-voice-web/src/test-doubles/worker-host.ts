@@ -1,14 +1,25 @@
-import type { AuroraVoiceWorkerCommand, AuroraVoiceWorkerHost } from '../types.js'
+import {
+  AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+  type AuroraCapturedAudio,
+  type AuroraVoiceWorkerCommand,
+  type AuroraVoiceWorkerHost,
+  type AuroraVoiceWorkerRequestOptions,
+  type AuroraVoiceWorkerResponse
+} from '../types.js'
 
 export class RecordingVoiceWorkerHost implements AuroraVoiceWorkerHost {
   readonly commands: AuroraVoiceWorkerCommand[] = []
+  readonly transfers: Transferable[][] = []
+  responseOverride: ((command: AuroraVoiceWorkerCommand) => AuroraVoiceWorkerResponse) | null = null
 
-  async post(command: AuroraVoiceWorkerCommand): Promise<void> {
+  async request(command: AuroraVoiceWorkerCommand, options?: AuroraVoiceWorkerRequestOptions): Promise<AuroraVoiceWorkerResponse> {
+    this.transfers.push([...(options?.transfer ?? [])])
     if (command.type === 'audio_frame') {
       this.commands.push({ ...command, pcm: new Int16Array(command.pcm) })
-      return
+    } else {
+      this.commands.push(command)
     }
-    this.commands.push(command)
+    return this.responseOverride?.(command) ?? defaultResponse(command)
   }
 
   commandsOf<T extends AuroraVoiceWorkerCommand['type']>(type: T): Extract<AuroraVoiceWorkerCommand, { type: T }>[] {
@@ -21,4 +32,41 @@ export class RecordingVoiceWorkerHost implements AuroraVoiceWorkerHost {
       return value
     })
   }
+}
+
+function defaultResponse(command: AuroraVoiceWorkerCommand): AuroraVoiceWorkerResponse {
+  switch (command.type) {
+    case 'init':
+      return {
+        type: 'ready',
+        protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+        capabilities: { vad: false, kws: false, stt: false, tts: false },
+        maxFrameSamples: command.maxFrameSamples,
+        maxQueuedBytes: command.maxQueuedBytes
+      }
+    case 'start':
+      return { type: 'ack', sessionId: command.session.sessionId, generation: command.session.generation, sequence: null }
+    case 'audio_frame':
+      return { type: 'ack', sessionId: command.frame.sessionId, generation: command.frame.generation, sequence: command.frame.sequence }
+    case 'stop':
+      return { type: 'stop_result', sessionId: command.sessionId, generation: command.generation, capturedAudio: capturedAudio(command.sessionId, command.generation, []) }
+    case 'cancel':
+      return { type: 'ack', sessionId: command.sessionId ?? '', generation: command.generation, sequence: null }
+    case 'shutdown':
+      return { type: 'ack', sessionId: '', generation: command.generation, sequence: null }
+  }
+}
+
+export function capturedAudio(sessionId: string, generation: number, samples: readonly number[]): AuroraCapturedAudio {
+  const pcm = Int16Array.from(samples)
+  return Object.freeze({
+    sessionId,
+    generation,
+    sampleRateHz: 16_000,
+    channels: 1,
+    sampleCount: pcm.length,
+    durationMs: Math.floor(pcm.length / 16),
+    pcm,
+    redacted: true
+  })
 }

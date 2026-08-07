@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  AURORA_VOICE_WORKER_PROTOCOL_VERSION,
   AURORA_VOICE_WEB_DEFAULT_CAPABILITIES,
   AuroraVoiceWebRuntime,
   AuroraVoiceWebRuntimeError,
@@ -10,9 +11,11 @@ import {
   type AuroraVoiceWebEvent,
   type AuroraVoiceWebSession,
   type AuroraVoiceWorkerCommand,
-  type AuroraVoiceWorkerHost
+  type AuroraVoiceWorkerHost,
+  type AuroraVoiceWorkerRequestOptions,
+  type AuroraVoiceWorkerResponse
 } from '../src/index.js'
-import { RecordingVoiceWorkerHost } from '../src/test-doubles/index.js'
+import { capturedAudio, RecordingVoiceWorkerHost } from '../src/test-doubles/worker-host.js'
 
 describe('AuroraVoiceWebRuntime', () => {
   it('starts foreground-only sessions with unavailable capabilities until promoted by the host', async () => {
@@ -34,7 +37,7 @@ describe('AuroraVoiceWebRuntime', () => {
       tts: false
     })
 
-    await runtime.stop()
+    await expect(runtime.stop()).resolves.toMatchObject({ sampleRateHz: 16_000, channels: 1, sampleCount: 0 })
   })
 
   it('enforces one active owner', async () => {
@@ -164,7 +167,7 @@ describe('AuroraVoiceWebRuntime', () => {
 
   it('serializes concurrent frame pushes so duplicate sequences cannot both pass', async () => {
     const worker = new DeferredAudioWorkerHost()
-    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker })
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker, nowMs: () => 10 })
     const session = await runtime.start()
 
     const first = runtime.pushFrame(frame(session.sessionId, session.generation, 0, [1]))
@@ -224,13 +227,59 @@ describe('AuroraVoiceWebRuntime', () => {
     const copied = worker.commandsOf('audio_frame')[0]?.pcm
     expect(copied).toEqual(new Int16Array([7, 8]))
     expect(copied).not.toBe(original)
+    expect(worker.transfers.at(-1)).toHaveLength(1)
     await runtime.cancel()
+  })
+
+  it('returns bounded captured audio only from stop', async () => {
+    const worker = new RecordingVoiceWorkerHost()
+    worker.responseOverride = (command) => {
+      if (command.type === 'stop') {
+        return { type: 'stop_result', sessionId: command.sessionId, generation: command.generation, capturedAudio: capturedAudio(command.sessionId, command.generation, [1, 2, 3]) }
+      }
+      return defaultResponseFor(command)
+    }
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker })
+    const session = await runtime.start()
+    await runtime.pushFrame(frame(session.sessionId, session.generation, 0, [42]))
+    await expect(runtime.stop()).resolves.toMatchObject({ sessionId: session.sessionId, generation: session.generation, sampleCount: 3 })
+
+    const cancelRuntime = new AuroraVoiceWebRuntime({ ownerId: 'owner-b', worker: new RecordingVoiceWorkerHost() })
+    await cancelRuntime.start()
+    await expect(cancelRuntime.cancel()).resolves.toBeUndefined()
+  })
+
+  it('keeps the worker reusable after a normal stop', async () => {
+    const worker = new RecordingVoiceWorkerHost()
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker })
+    await expect(runtime.start()).resolves.toMatchObject({ generation: 1 })
+    await expect(runtime.stop()).resolves.toMatchObject({ generation: 1 })
+    await expect(runtime.start()).resolves.toMatchObject({ generation: 2 })
+    await runtime.dispose()
+
+    expect(worker.commandsOf('start')).toHaveLength(2)
+    expect(worker.commandsOf('stop')).toHaveLength(1)
+    expect(worker.commandsOf('cancel')).toHaveLength(1)
+  })
+
+  it('fails closed on forged worker acknowledgements', async () => {
+    const worker = new RecordingVoiceWorkerHost()
+    worker.responseOverride = (command) => {
+      if (command.type === 'audio_frame') {
+        return { type: 'ack', sessionId: 'forged-session', generation: command.frame.generation, sequence: command.frame.sequence }
+      }
+      return defaultResponseFor(command)
+    }
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker })
+    const session = await runtime.start()
+    await expect(runtime.pushFrame(frame(session.sessionId, session.generation, 0, [1]))).resolves.toBe(false)
+    expect(runtime.snapshot()).toMatchObject({ state: 'cancelled', sessionId: null, queuedBytes: 0 })
   })
 
   it('clears queued audio on cancel and prevents post-cancel events', async () => {
     const worker = new RecordingVoiceWorkerHost()
     const events: AuroraVoiceWebEvent[] = []
-    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker })
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker, nowMs: () => 10 })
     runtime.onEvent((event) => events.push(event))
     const session = await runtime.start()
     await runtime.cancel('user_cancelled')
@@ -277,9 +326,10 @@ class FailingWorkerHost extends RecordingVoiceWorkerHost {
     super()
   }
 
-  override async post(command: AuroraVoiceWorkerCommand): Promise<void> {
+  override async request(command: AuroraVoiceWorkerCommand, options?: AuroraVoiceWorkerRequestOptions): Promise<AuroraVoiceWorkerResponse> {
     this.commands.push(command)
     if (this.failTypes.includes(command.type)) throw new Error(command.type)
+    return defaultResponseFor(command)
   }
 }
 
@@ -293,12 +343,12 @@ class DeferredAudioWorkerHost extends RecordingVoiceWorkerHost {
     this.release = resolve
   })
 
-  override async post(command: AuroraVoiceWorkerCommand): Promise<void> {
+  override async request(command: AuroraVoiceWorkerCommand, options?: AuroraVoiceWorkerRequestOptions): Promise<AuroraVoiceWorkerResponse> {
     if (command.type === 'audio_frame') {
       this.audioSeen?.()
       await this.releasePromise
     }
-    await super.post(command)
+    return super.request(command, options)
   }
 
   waitForAudioPost(): Promise<void> {
@@ -307,6 +357,29 @@ class DeferredAudioWorkerHost extends RecordingVoiceWorkerHost {
 
   releaseAudioPosts(): void {
     this.release?.()
+  }
+}
+
+function defaultResponseFor(command: AuroraVoiceWorkerCommand): AuroraVoiceWorkerResponse {
+  switch (command.type) {
+    case 'init':
+      return {
+        type: 'ready',
+        protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+        capabilities: { vad: false, kws: false, stt: false, tts: false },
+        maxFrameSamples: command.maxFrameSamples,
+        maxQueuedBytes: command.maxQueuedBytes
+      }
+    case 'start':
+      return { type: 'ack', sessionId: command.session.sessionId, generation: command.session.generation, sequence: null }
+    case 'audio_frame':
+      return { type: 'ack', sessionId: command.frame.sessionId, generation: command.frame.generation, sequence: command.frame.sequence }
+    case 'stop':
+      return { type: 'stop_result', sessionId: command.sessionId, generation: command.generation, capturedAudio: capturedAudio(command.sessionId, command.generation, []) }
+    case 'cancel':
+      return { type: 'ack', sessionId: command.sessionId ?? '', generation: command.generation, sequence: null }
+    case 'shutdown':
+      return { type: 'ack', sessionId: '', generation: command.generation, sequence: null }
   }
 }
 
