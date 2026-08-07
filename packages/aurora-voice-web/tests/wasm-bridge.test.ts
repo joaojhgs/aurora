@@ -14,6 +14,30 @@ const session: AuroraVoiceWebSession = Object.freeze({
 })
 
 describe('AuroraWasmVoiceBridge', () => {
+  it('passes the explicit generated core URL to the WASM bindings loader', async () => {
+    const runtime = new FakeWasmRuntime({ nextGeneration: 1 })
+    const wasmUrl = new URL('https://voice.example/assets/aurora_voice_wasm_bg.wasm')
+    const initializedWith: unknown[] = []
+    const bridge = new AuroraWasmVoiceBridge({
+      bindings: async (input) => {
+        initializedWith.push(input)
+        return {
+          default: async () => undefined,
+          AuroraVoiceWasmRuntime: class {
+            constructor(_config?: unknown) {
+              return runtime
+            }
+          }
+        } as unknown as typeof AuroraVoiceWasmModule
+      },
+      wasmUrl
+    })
+
+    await bridge.snapshot()
+
+    expect(initializedWith).toEqual([wasmUrl])
+  })
+
   it('maps external session generations to Rust ownership and returns redacted captured audio', async () => {
     const runtime = new FakeWasmRuntime({ nextGeneration: 1, pcm: [11, -12, 13] })
     const bridge = new AuroraWasmVoiceBridge({ bindings: bindingsFor(runtime), nowMs: () => 1_700_000_000_000 })

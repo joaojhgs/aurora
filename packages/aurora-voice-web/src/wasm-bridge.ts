@@ -19,10 +19,12 @@ const RUST_ROUTE_REVISION = 1
 
 type AuroraVoiceWasmBindings = typeof AuroraVoiceWasmModule
 type AuroraVoiceWasmRuntime = InstanceType<AuroraVoiceWasmBindings['AuroraVoiceWasmRuntime']>
-type AuroraVoiceWasmBindingsLoader = () => Promise<AuroraVoiceWasmBindings>
+type AuroraVoiceWasmUrl = string | URL
+type AuroraVoiceWasmBindingsLoader = (wasmUrl?: AuroraVoiceWasmUrl) => Promise<AuroraVoiceWasmBindings>
 
 interface AuroraWasmVoiceBridgeOptions {
   readonly bindings?: AuroraVoiceWasmBindingsLoader
+  readonly wasmUrl?: AuroraVoiceWasmUrl
   readonly surface?: string
   readonly maxFrames?: number
   readonly maxSamples?: number
@@ -42,6 +44,7 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
   private readonly maxFrames: number
   private readonly maxSamples: number
   private readonly nowMs: () => number
+  private readonly wasmUrl: AuroraVoiceWasmUrl | undefined
   private bindingsPromise: Promise<AuroraVoiceWasmBindings> | null = null
   private runtime: AuroraVoiceWasmRuntime | null = null
   private active: GenerationOwnership | null = null
@@ -49,6 +52,7 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
 
   constructor(options: AuroraWasmVoiceBridgeOptions = {}) {
     this.bindingsLoader = options.bindings ?? loadAuroraVoiceWasmBindings
+    this.wasmUrl = options.wasmUrl
     this.surface = safeSurface(options.surface ?? 'hosted-web')
     this.maxFrames = boundedInteger(options.maxFrames ?? DEFAULT_WASM_MAX_FRAMES, 'maxFrames', 1, DEFAULT_WASM_MAX_FRAMES)
     this.maxSamples = boundedInteger(options.maxSamples ?? DEFAULT_WASM_MAX_SAMPLES, 'maxSamples', 1, DEFAULT_WASM_MAX_SAMPLES)
@@ -183,7 +187,7 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
 
   private async ensureRuntime(): Promise<AuroraVoiceWasmRuntime> {
     if (this.runtime !== null) return this.runtime
-    if (this.bindingsPromise === null) this.bindingsPromise = this.bindingsLoader()
+    if (this.bindingsPromise === null) this.bindingsPromise = this.bindingsLoader(this.wasmUrl)
     const bindings = await this.bindingsPromise
     this.runtime = new bindings.AuroraVoiceWasmRuntime({
       surface: this.surface,
@@ -229,9 +233,9 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
   }
 }
 
-async function loadAuroraVoiceWasmBindings(): Promise<AuroraVoiceWasmBindings> {
+async function loadAuroraVoiceWasmBindings(wasmUrl?: AuroraVoiceWasmUrl): Promise<AuroraVoiceWasmBindings> {
   const bindings = await import('./wasm/aurora_voice_wasm.js')
-  await bindings.default()
+  await bindings.default(wasmUrl)
   return bindings
 }
 

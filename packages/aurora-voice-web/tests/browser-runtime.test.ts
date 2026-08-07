@@ -36,6 +36,7 @@ describe('createAuroraBrowserVoiceRuntime', () => {
     expect(factoryCalls).toHaveLength(1)
     expect(factoryCalls[0]?.options).toEqual({ type: 'module', name: 'aurora-voice-worker' })
     expect(String(factoryCalls[0]?.url)).toContain('voice-worker.js')
+    expect(factoryCalls[0]?.url.searchParams.get('wasm')).toBe(new URL('../src/wasm/aurora_voice_wasm_bg.wasm', import.meta.url).href)
     expect(session).toMatchObject({ ownerId: 'browser', sessionId: 'browser:1', generation: 1, foregroundOnly: true })
     expect(audio).toMatchObject({ sessionId: 'browser:1', generation: 1, sampleRateHz: 16_000, channels: 1, redacted: true })
     expect([...worker.commands.map((command) => command.type)]).toEqual(['init', 'start', 'stop', 'finish_turn'])
@@ -66,6 +67,28 @@ describe('createAuroraBrowserVoiceRuntime', () => {
 
     expect(worker.commands.map((command) => command.type)).toEqual(['init', 'start', 'cancel'])
     expect(runtime.snapshot().state).toBe('cancelled')
+  })
+
+  it('passes an explicit generated WASM URL through custom worker URLs without changing the Worker contract', () => {
+    const worker = new LoopbackWorker()
+    const factoryCalls: Array<{ readonly url: URL; readonly options: WorkerOptions }> = []
+    const workerUrl = new URL('https://voice.example/assets/voice-worker.js?cache=1')
+    const wasmUrl = new URL('https://voice.example/assets/aurora_voice_wasm_bg.wasm')
+
+    createAuroraBrowserVoiceRuntime({
+      ownerId: 'browser',
+      workerFactory: (url, options) => {
+        factoryCalls.push({ url, options })
+        return worker
+      },
+      workerUrl,
+      wasmUrl,
+      pcmSource: new FakePcmSource()
+    })
+
+    expect(factoryCalls).toHaveLength(1)
+    expect(factoryCalls[0]?.options).toEqual({ type: 'module', name: 'aurora-voice-worker' })
+    expect(factoryCalls[0]?.url.href).toBe('https://voice.example/assets/voice-worker.js?cache=1&wasm=https%3A%2F%2Fvoice.example%2Fassets%2Faurora_voice_wasm_bg.wasm')
   })
 })
 

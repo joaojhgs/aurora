@@ -15,6 +15,11 @@ declare module 'node:fs/promises' {
   export function readFile(path: string): Promise<Uint8Array>
 }
 
+declare module 'node:fs' {
+  export function existsSync(path: string): boolean
+  export function readFileSync(path: string, encoding: 'utf8'): string
+}
+
 declare module 'node:http' {
   export interface IncomingMessage {
     readonly url?: string
