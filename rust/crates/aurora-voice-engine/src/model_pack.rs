@@ -965,11 +965,12 @@ fn variant_score(variant: &ModelPackVariant, selection: &RuntimeSelection) -> (u
     )
 }
 
-pub fn lifecycle_storage_key(pack_id: &str, pack_version: &str) -> String {
+pub fn lifecycle_storage_key(pack_id: &str, pack_version: &str, variant_id: &str) -> String {
     format!(
-        "aurora.voice.model-pack.v1:{}@{}",
+        "aurora.voice.model-pack.v1:{}@{}:{}",
         encode_key(pack_id),
-        encode_key(pack_version)
+        encode_key(pack_version),
+        encode_key(variant_id)
     )
 }
 
@@ -1840,7 +1841,17 @@ mod tests {
     fn lifecycle_table_and_keys_are_versioned() -> Result<(), ModelPackError> {
         let snapshot =
             create_lifecycle_snapshot("pack id", "1/2", "linux", 1, InstallState::NotInstalled);
-        assert!(lifecycle_storage_key("pack id", "1/2").starts_with("aurora.voice.model-pack.v1:"));
+        let linux_key = lifecycle_storage_key("pack id", "1/2", "linux");
+        let android_key = lifecycle_storage_key("pack id", "1/2", "android/arm64");
+        assert_eq!(
+            linux_key,
+            "aurora.voice.model-pack.v1:pack%20id@1%2F2:linux"
+        );
+        assert_eq!(
+            android_key,
+            "aurora.voice.model-pack.v1:pack%20id@1%2F2:android%2Farm64"
+        );
+        assert_ne!(linux_key, android_key);
         assert!(file_storage_key("pack id", "1/2", "linux", "model").contains(":linux#model"));
         let queued = apply_lifecycle_event(&snapshot, InstallEvent::Enqueue, 2, None)?;
         let downloading = apply_lifecycle_event(&queued, InstallEvent::StartDownload, 3, None)?;
