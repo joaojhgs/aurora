@@ -7,6 +7,7 @@ import { AssistantView } from '../src/assistant-view'
 import { auroraNavSections, navItemSnapshot } from '../src/nav'
 import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from '../src/platform-surface'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
+import type { NativeDesktopVoicePort, NativeDesktopVoiceStatus } from '../src/native-desktop-voice'
 import type { RouteAvailability } from '../src/shell-data'
 
 const roots: Root[] = []
@@ -51,10 +52,11 @@ describe('Assistant focused WebView microphone policy', () => {
     expect(voiceResponses).not.toHaveBeenCalled()
   })
 
-  it('keeps coordinator-wide voice subscriptions for desktop background wake listening', async () => {
+  it('keeps desktop native voice off coordinator-wide subscriptions', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const voiceEvents = vi.spyOn(client.assistant, 'streamVoiceEvents').mockImplementation(async function* () {})
     const voiceResponses = vi.spyOn(client.assistant, 'streamVoiceAssistantResponses').mockImplementation(async function* () {})
+    const nativeVoice = createNativeDesktopVoicePort()
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
@@ -70,68 +72,36 @@ describe('Assistant focused WebView microphone policy', () => {
             transportKind: 'tauri-local',
             nativePlatform: 'linux'
           })}
+          nativeVoice={nativeVoice}
         />
       )
       await Promise.resolve()
     })
 
-    expect(voiceEvents).toHaveBeenCalledTimes(1)
-    expect(voiceResponses).toHaveBeenCalledTimes(1)
+    expect(nativeVoice.status).toHaveBeenCalledTimes(1)
+    expect(nativeVoice.subscribe).toHaveBeenCalledTimes(1)
+    expect(voiceEvents).not.toHaveBeenCalled()
+    expect(voiceResponses).not.toHaveBeenCalled()
   })
 
-  it('stops desktop coordinator fallback capture without running the WebView no-audio finalizer', async () => {
-    const stoppedTrack = vi.fn()
-    const stream = { getTracks: () => [{ stop: stoppedTrack }] } as unknown as MediaStream
+  it('cancels desktop native focused voice on release without WebView or coordinator fallback', async () => {
     const getUserMedia = vi.fn()
-      .mockRejectedValueOnce(new DOMException('focused capture unavailable', 'NotReadableError'))
-      .mockResolvedValue(stream)
+    const mediaRecorder = vi.fn()
     vi.stubGlobal('navigator', {
       ...navigator,
       mediaDevices: { getUserMedia }
     })
+    vi.stubGlobal('MediaRecorder', mediaRecorder)
     vi.stubGlobal('AudioContext', FakeAudioContext)
     vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
 
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
-    vi.spyOn(client.assistant, 'streamVoiceEvents').mockImplementation(async function* () {})
-    vi.spyOn(client.assistant, 'streamVoiceAssistantResponses').mockImplementation(async function* () {})
-    const audit = successfulTranscription('').audit
-    vi.spyOn(client.assistant, 'cancel').mockResolvedValue({
-      ok: true,
-      audit,
-      data: {
-        interrupt_id: 'desktop-voice-interrupt',
-        status: 'completed',
-        requested_scopes: ['tts_playback'],
-        results: [],
-        session_id: null,
-        request_id: null,
-        event_topic: 'Orchestrator.Interrupted',
-        audit_event: 'orchestrator.interrupted',
-        idempotent: false,
-        secrets_redacted: true
-      }
-    } as Awaited<ReturnType<typeof client.assistant.cancel>>)
-    const startVoiceListen = vi.spyOn(client.assistant, 'startVoiceListen').mockResolvedValue({
-      ok: true,
-      audit,
-      data: {
-        sessionId: 'desktop-coordinator-session',
-        status: 'listening',
-        source: 'push_to_talk'
-      }
-    } as Awaited<ReturnType<typeof client.assistant.startVoiceListen>>)
-    const stopVoiceListen = vi.spyOn(client.assistant, 'stopVoiceListen').mockResolvedValue({
-      ok: true,
-      audit,
-      data: {
-        sessionId: 'desktop-coordinator-session',
-        status: 'stopped',
-        source: 'push_to_talk'
-      }
-    } as Awaited<ReturnType<typeof client.assistant.stopVoiceListen>>)
+    const startVoiceListen = vi.spyOn(client.assistant, 'startVoiceListen')
+    const stopVoiceListen = vi.spyOn(client.assistant, 'stopVoiceListen')
     const transcribe = vi.spyOn(client.assistant, 'transcribeVoiceAudio')
+    const cancel = vi.spyOn(client.assistant, 'cancel')
+    const nativeVoice = createNativeDesktopVoicePort()
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
@@ -147,22 +117,28 @@ describe('Assistant focused WebView microphone policy', () => {
             transportKind: 'tauri-local',
             nativePlatform: 'linux'
           })}
+          nativeVoice={nativeVoice}
         />
       )
       await Promise.resolve()
     })
     await act(async () => {
       findButton(container, 'Push to talk').click()
-      await vi.waitFor(() => expect(startVoiceListen).toHaveBeenCalledTimes(1))
+      await vi.waitFor(() => expect(nativeVoice.start).toHaveBeenCalledTimes(1))
       await vi.waitFor(() => expect(findButton(container, 'Stop listening')).toBeTruthy())
     })
     await act(async () => {
-      findButton(container, 'Stop listening').click()
-      await vi.waitFor(() => expect(stopVoiceListen).toHaveBeenCalledTimes(1))
+      window.dispatchEvent(new Event(AURORA_RELEASE_FOCUSED_MEDIA_EVENT))
+      await vi.waitFor(() => expect(nativeVoice.cancel).toHaveBeenCalledTimes(1))
     })
 
-    expect(stoppedTrack).toHaveBeenCalledTimes(1)
+    expect(nativeVoice.cancel).toHaveBeenCalledWith({ generation: 1, reason: 'window_hidden' })
+    expect(getUserMedia).not.toHaveBeenCalled()
+    expect(mediaRecorder).not.toHaveBeenCalled()
+    expect(startVoiceListen).not.toHaveBeenCalled()
+    expect(stopVoiceListen).not.toHaveBeenCalled()
     expect(transcribe).not.toHaveBeenCalled()
+    expect(cancel).not.toHaveBeenCalled()
     expect(renderedElementCopy(container)).not.toContain('No microphone audio was captured')
   })
 
@@ -593,6 +569,58 @@ function successfulTranscription(text: string) {
       duration_ms: 1_000,
       model_used: 'test'
     }
+  }
+}
+
+function createNativeDesktopVoicePort(): NativeDesktopVoicePort & {
+  status: ReturnType<typeof vi.fn>
+  start: ReturnType<typeof vi.fn>
+  finish: ReturnType<typeof vi.fn>
+  cancel: ReturnType<typeof vi.fn>
+  subscribe: ReturnType<typeof vi.fn>
+} {
+  let listener: ((event: { sequence: number; status: NativeDesktopVoiceStatus }) => void) | null = null
+  let sequence = 0
+  const port = {
+    status: vi.fn(async () => nativeStatus('idle', null, true)),
+    start: vi.fn(async () => {
+      const status = nativeStatus('listening', 1, true)
+      listener?.({ sequence: ++sequence, status })
+      return status
+    }),
+    finish: vi.fn(async () => {
+      const status = nativeStatus('processing', 1, true)
+      listener?.({ sequence: ++sequence, status })
+      return status
+    }),
+    cancel: vi.fn(async () => {
+      const status = nativeStatus('idle', null, true)
+      listener?.({ sequence: ++sequence, status })
+      return status
+    }),
+    subscribe: vi.fn(async (next: (event: { sequence: number; status: NativeDesktopVoiceStatus }) => void) => {
+      listener = next
+      return () => {
+        listener = null
+      }
+    })
+  }
+  return port
+}
+
+function nativeStatus(
+  phase: NativeDesktopVoiceStatus['phase'],
+  generation: number | null,
+  available: boolean
+): NativeDesktopVoiceStatus {
+  return {
+    available,
+    phase,
+    generation,
+    backgroundEligible: true,
+    connection: available ? 'this_device' : 'unavailable',
+    reasonCode: null,
+    redacted: true
   }
 }
 

@@ -6,6 +6,7 @@ import { AuroraClient, MockAuroraTransport, ORCHESTRATOR_METHODS, type Assistant
 import { AssistantView } from '../src/assistant-view'
 import { auroraNavSections, navItemSnapshot } from '../src/nav'
 import { getAuroraSurfaceProfile } from '../src/platform-surface'
+import type { NativeDesktopVoicePort, NativeDesktopVoiceStatus } from '../src/native-desktop-voice'
 import type { RouteAvailability } from '../src/shell-data'
 
 const voiceRuntimeMock = vi.hoisted(() => ({
@@ -490,17 +491,85 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(runtime.dispose).toHaveBeenCalledTimes(1)
   })
 
-  it('leaves the Tauri local focused capture path on the existing media capture implementation', async () => {
+  it('routes desktop-local focused voice only through the native desktop port', async () => {
     const runtime = createRuntimeMock({ capturedPcm: new Int16Array([1, 2, 3, 4, 5]) })
     voiceRuntimeMock.create.mockReturnValue(runtime)
-    const stream = { getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream
-    const getUserMedia = vi.fn(async () => stream)
+    const getUserMedia = vi.fn()
+    const mediaRecorder = vi.fn()
     vi.stubGlobal('navigator', { ...navigator, mediaDevices: { getUserMedia } })
+    vi.stubGlobal('MediaRecorder', mediaRecorder)
     vi.stubGlobal('AudioContext', FakeAudioContext)
     vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
 
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const startVoiceListen = vi.spyOn(client.assistant, 'startVoiceListen')
+    const stopVoiceListen = vi.spyOn(client.assistant, 'stopVoiceListen')
+    const transcribe = vi.spyOn(client.assistant, 'transcribeVoiceAudio')
+    const cancel = vi.spyOn(client.assistant, 'cancel')
+    const nativeVoice = createNativeDesktopVoicePort()
+    const container = renderAssistant(client, getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-local',
+      transportKind: 'tauri-local',
+      nativePlatform: 'linux'
+    }), nativeVoice)
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(nativeVoice.start).toHaveBeenCalledTimes(1))
+    await clickButton(container, 'Stop listening')
+    await vi.waitFor(() => expect(nativeVoice.finish).toHaveBeenCalledTimes(1))
+
+    expect(nativeVoice.start).toHaveBeenCalledWith({
+      trigger: 'focused_push_to_talk',
+      remoteAudioConsent: false
+    })
+    expect(nativeVoice.finish).toHaveBeenCalledWith({ generation: 1, reason: 'user_request' })
+    expect(voiceRuntimeMock.create).not.toHaveBeenCalled()
+    expect(runtime.start).not.toHaveBeenCalled()
+    expect(getUserMedia).not.toHaveBeenCalled()
+    expect(mediaRecorder).not.toHaveBeenCalled()
+    expect(startVoiceListen).not.toHaveBeenCalled()
+    expect(stopVoiceListen).not.toHaveBeenCalled()
+    expect(transcribe).not.toHaveBeenCalled()
+    expect(cancel).not.toHaveBeenCalled()
+  })
+
+  it('routes desktop-thin focused voice only through the native desktop port', async () => {
+    const getUserMedia = vi.fn()
+    const mediaRecorder = vi.fn()
+    vi.stubGlobal('navigator', { ...navigator, mediaDevices: { getUserMedia } })
+    vi.stubGlobal('MediaRecorder', mediaRecorder)
+    vi.stubGlobal('AudioContext', FakeAudioContext)
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const startVoiceListen = vi.spyOn(client.assistant, 'startVoiceListen')
+    const transcribe = vi.spyOn(client.assistant, 'transcribeVoiceAudio')
+    const cancel = vi.spyOn(client.assistant, 'cancel')
+    const nativeVoice = createNativeDesktopVoicePort()
+    const container = renderAssistant(client, getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-thin',
+      transportKind: 'tauri-thin',
+      nativePlatform: 'linux'
+    }), nativeVoice)
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(nativeVoice.start).toHaveBeenCalledTimes(1))
+
+    expect(voiceRuntimeMock.create).not.toHaveBeenCalled()
+    expect(getUserMedia).not.toHaveBeenCalled()
+    expect(mediaRecorder).not.toHaveBeenCalled()
+    expect(startVoiceListen).not.toHaveBeenCalled()
+    expect(transcribe).not.toHaveBeenCalled()
+    expect(cancel).not.toHaveBeenCalled()
+  })
+
+  it('fails desktop focused voice visibly when the native desktop port is missing', async () => {
+    const getUserMedia = vi.fn()
+    vi.stubGlobal('navigator', { ...navigator, mediaDevices: { getUserMedia } })
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const startVoiceListen = vi.spyOn(client.assistant, 'startVoiceListen')
+    const transcribe = vi.spyOn(client.assistant, 'transcribeVoiceAudio')
+    const cancel = vi.spyOn(client.assistant, 'cancel')
     const container = renderAssistant(client, getAuroraSurfaceProfile({
       runtimeMode: 'desktop-local',
       transportKind: 'tauri-local',
@@ -508,10 +577,13 @@ describe('Assistant hosted browser voice runtime', () => {
     }))
 
     await clickButton(container, 'Push to talk')
-    await vi.waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(1))
 
+    expect(container.textContent).toContain('Voice is unavailable in this desktop app.')
     expect(voiceRuntimeMock.create).not.toHaveBeenCalled()
-    expect(runtime.start).not.toHaveBeenCalled()
+    expect(getUserMedia).not.toHaveBeenCalled()
+    expect(startVoiceListen).not.toHaveBeenCalled()
+    expect(transcribe).not.toHaveBeenCalled()
+    expect(cancel).not.toHaveBeenCalled()
   })
 })
 
@@ -552,15 +624,70 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
-function renderAssistant(client: AuroraClient, surfaceProfile: ReturnType<typeof getAuroraSurfaceProfile>): HTMLElement {
+function renderAssistant(
+  client: AuroraClient,
+  surfaceProfile: ReturnType<typeof getAuroraSurfaceProfile>,
+  nativeVoice?: NativeDesktopVoicePort
+): HTMLElement {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   roots.push(root)
   act(() => {
-    root.render(<AssistantView client={client} route={assistantRoute()} surfaceProfile={surfaceProfile} />)
+    root.render(<AssistantView client={client} route={assistantRoute()} surfaceProfile={surfaceProfile} nativeVoice={nativeVoice} />)
   })
   return container
+}
+
+function createNativeDesktopVoicePort(): NativeDesktopVoicePort & {
+  start: ReturnType<typeof vi.fn>
+  finish: ReturnType<typeof vi.fn>
+  cancel: ReturnType<typeof vi.fn>
+} {
+  let listener: ((event: { sequence: number; status: NativeDesktopVoiceStatus }) => void) | null = null
+  let sequence = 0
+  const idle = nativeStatus('idle', null, true)
+  const port = {
+    status: vi.fn(async () => idle),
+    start: vi.fn(async () => {
+      const status = nativeStatus('listening', 1, true)
+      listener?.({ sequence: ++sequence, status })
+      return status
+    }),
+    finish: vi.fn(async () => {
+      const status = nativeStatus('processing', 1, true)
+      listener?.({ sequence: ++sequence, status })
+      return status
+    }),
+    cancel: vi.fn(async () => {
+      const status = nativeStatus('idle', null, true)
+      listener?.({ sequence: ++sequence, status })
+      return status
+    }),
+    subscribe: vi.fn(async (next: (event: { sequence: number; status: NativeDesktopVoiceStatus }) => void) => {
+      listener = next
+      return () => {
+        listener = null
+      }
+    })
+  }
+  return port
+}
+
+function nativeStatus(
+  phase: NativeDesktopVoiceStatus['phase'],
+  generation: number | null,
+  available: boolean
+): NativeDesktopVoiceStatus {
+  return {
+    available,
+    phase,
+    generation,
+    backgroundEligible: true,
+    connection: available ? 'this_device' : 'unavailable',
+    reasonCode: null,
+    redacted: true
+  }
 }
 
 async function clickButton(container: HTMLElement, label: string) {

@@ -70,9 +70,11 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(desktop.usesLocalSidecar).toBe(false)
     expect(desktop.trustsNativeWebViewOrigin).toBe(true)
     expect(desktop.canManageLocalServiceConfiguration).toBe(false)
+    expect(desktop.voiceCapture.focusedPushToTalkOwner).toBe('native-desktop')
+    expect(desktop.voiceCapture.wakewordOwner).toBe('native-desktop')
 
     const local = getAuroraSurfaceProfile({ runtimeMode: 'desktop-local', transportKind: 'tauri-local' })
-    expect(local.voiceCapture.wakewordOwner).toBe('coordinator-daemon')
+    expect(local.voiceCapture.wakewordOwner).toBe('native-desktop')
     expect(local.canManageLocalServiceConfiguration).toBe(true)
 
     const androidHttp = getAuroraSurfaceProfile({ runtimeMode: 'mobile-native', transportKind: 'http', nativePlatform: 'android' })

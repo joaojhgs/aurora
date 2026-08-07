@@ -105,8 +105,10 @@ describe('Aurora surface profile regression coverage', () => {
       nativePlatform: 'android',
     })
 
-    expect(desktopLocal.voiceCapture.wakewordOwner).toBe('coordinator-daemon')
-    expect(desktopLocal.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
+    expect(desktopLocal.voiceCapture.wakewordOwner).toBe('native-desktop')
+    expect(desktopLocal.voiceCapture.focusedPushToTalkOwner).toBe('native-desktop')
+    expect(desktopLocal.voiceCapture.canUseWebViewVisualizer).toBe(false)
+    expect(desktopLocal.voiceCapture.avoidCoordinatorPushToTalk).toBe(true)
     expect(hosted.voiceCapture.wakewordOwner).toBe('webview-focused')
     expect(hosted.voiceCapture.wakewordRequiresFocus).toBe(true)
     expect(android.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
@@ -218,6 +220,9 @@ describe('Aurora surface profile regression coverage', () => {
     expect(desktopThin.usesNativeShell).toBe(true)
     expect(desktopThin.trustsNativeWebViewOrigin).toBe(true)
     expect(desktopThin.usesBrowserVoiceRuntime).toBe(false)
+    expect(desktopThin.voiceCapture.focusedPushToTalkOwner).toBe('native-desktop')
+    expect(desktopThin.voiceCapture.wakewordOwner).toBe('native-desktop')
+    expect(desktopThin.voiceCapture.canUseWebViewVisualizer).toBe(false)
 
     expect(mock.physicalKind).toBe('test')
     expect(mock.usesBrowserVoiceRuntime).toBe(false)

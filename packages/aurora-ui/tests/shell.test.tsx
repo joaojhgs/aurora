@@ -124,9 +124,10 @@ import {
 it('centralizes voice capture ownership by target surface', () => {
   const desktopLocal = getAuroraSurfaceProfile({ runtimeMode: 'desktop-local', transportKind: 'tauri-local' })
   expect(desktopLocal.kind).toBe('desktop-local')
-  expect(desktopLocal.voiceCapture.wakewordOwner).toBe('coordinator-daemon')
-  expect(desktopLocal.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
+  expect(desktopLocal.voiceCapture.wakewordOwner).toBe('native-desktop')
+  expect(desktopLocal.voiceCapture.focusedPushToTalkOwner).toBe('native-desktop')
   expect(desktopLocal.voiceCapture.avoidCoordinatorPushToTalk).toBe(true)
+  expect(desktopLocal.voiceCapture.canUseWebViewVisualizer).toBe(false)
 
   const webThin = getAuroraSurfaceProfile({ transportKind: 'http' })
   expect(webThin.kind).toBe('web')

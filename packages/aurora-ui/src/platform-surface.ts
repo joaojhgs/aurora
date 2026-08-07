@@ -77,6 +77,7 @@ export interface AuroraSurfaceProfile {
 }
 
 export type AuroraVoiceCaptureOwner = 'coordinator-daemon' | 'webview-focused' | 'mobile-native' | 'unavailable'
+  | 'native-desktop'
 
 export interface AuroraVoiceCapturePolicy {
   /** Foreground push-to-talk can capture from the WebView with getUserMedia. */
@@ -235,15 +236,24 @@ export function getAuroraVoiceCapturePolicy(kind: LegacyAuroraSurfaceKind): Auro
   switch (kind) {
     case 'desktop-local':
       return {
-        focusedPushToTalkOwner: 'webview-focused',
-        wakewordOwner: 'coordinator-daemon',
+        focusedPushToTalkOwner: 'native-desktop',
+        wakewordOwner: 'native-desktop',
         wakewordRequiresFocus: false,
-        canUseWebViewVisualizer: true,
+        canUseWebViewVisualizer: false,
         avoidCoordinatorPushToTalk: true,
         usesBrowserVoiceRuntime: false,
-        detail: 'Background listening can stay on this computer while the visible microphone button uses foreground capture.'
+        detail: 'Voice is handled by the desktop app.'
       }
     case 'desktop-thin':
+      return {
+        focusedPushToTalkOwner: 'native-desktop',
+        wakewordOwner: 'native-desktop',
+        wakewordRequiresFocus: false,
+        canUseWebViewVisualizer: false,
+        avoidCoordinatorPushToTalk: true,
+        usesBrowserVoiceRuntime: false,
+        detail: 'Voice is handled by the desktop app.'
+      }
     case 'web':
       return {
         focusedPushToTalkOwner: 'webview-focused',
