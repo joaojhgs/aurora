@@ -73,27 +73,23 @@ impl InMemoryModelStore {
         self.rollback.get(scope)
     }
 
-    fn used_bytes(&self) -> u64 {
-        self.files.values().map(|file| file.byte_size).sum::<u64>()
+    fn used_bytes(&self) -> Result<u64, ModelPackError> {
+        physical_file_bytes(&self.files)
     }
 
-    fn reserved_bytes(&self) -> u64 {
-        self.reservations
-            .values()
-            .map(|reservation| reservation.task.expected_bytes)
-            .sum::<u64>()
+    fn reserved_bytes(&self) -> Result<u64, ModelPackError> {
+        physical_reserved_bytes(&self.files, &self.reservations)
     }
 
-    fn ensure_quota(&self, additional_bytes: u64) -> Result<(), ModelPackError> {
+    fn ensure_reservation_quota(&self, sha256: &str, byte_size: u64) -> Result<(), ModelPackError> {
         if let Some(limit) = self.bytes_available {
-            if self
-                .used_bytes()
-                .saturating_add(self.reserved_bytes())
-                .saturating_add(additional_bytes)
+            if physical_total_after_reservation(&self.files, &self.reservations, sha256, byte_size)?
                 > limit
             {
                 return Err(ModelPackError::QuotaExceeded);
             }
+        } else {
+            physical_total_after_reservation(&self.files, &self.reservations, sha256, byte_size)?;
         }
         Ok(())
     }
@@ -198,8 +194,8 @@ impl InMemoryModelStore {
 impl ModelStore for InMemoryModelStore {
     async fn status(&self) -> Result<StoreStatus, ModelPackError> {
         Ok(StoreStatus {
-            bytes_used: self.used_bytes(),
-            bytes_reserved: self.reserved_bytes(),
+            bytes_used: self.used_bytes()?,
+            bytes_reserved: self.reserved_bytes()?,
             bytes_available: self.bytes_available,
             persistent: self.persistent,
         })
@@ -240,14 +236,44 @@ impl ModelStore for InMemoryModelStore {
             return Err(ModelPackError::Store { code: "selection" });
         }
         self.require_not_withdrawn(&manifest.manifest().pack_id)?;
-        self.ensure_quota(file.byte_size)?;
-        self.maybe_fail_persist()?;
         let storage_key = file_storage_key(
             &manifest.manifest().pack_id,
             &manifest.manifest().pack_version,
             selection.variant_id(),
             &file.file_id,
         );
+        if let Some(existing) = self.files.get(&storage_key) {
+            if existing.sha256 == file.sha256 && existing.byte_size == file.byte_size {
+                return Ok(DownloadTask {
+                    storage_key,
+                    pack_id: existing.pack_id.clone(),
+                    pack_version: existing.pack_version.clone(),
+                    file_id: existing.file_id.clone(),
+                    url: file.url.clone(),
+                    expected_sha256: file.sha256.clone(),
+                    expected_bytes: file.byte_size,
+                    variant_id: existing.variant_id.clone(),
+                });
+            }
+            return Err(ModelPackError::Store { code: "corrupt" });
+        }
+        if let Some(existing) = self.reservations.get(&storage_key) {
+            if existing.task.pack_id == manifest.manifest().pack_id
+                && existing.task.pack_version == manifest.manifest().pack_version
+                && existing.task.file_id == file.file_id
+                && existing.task.variant_id == selection.variant_id()
+                && existing.task.url == file.url
+                && existing.task.expected_sha256 == file.sha256
+                && existing.task.expected_bytes == file.byte_size
+            {
+                return Ok(existing.task.clone());
+            }
+            return Err(ModelPackError::Store {
+                code: "reservation",
+            });
+        }
+        self.ensure_reservation_quota(&file.sha256, file.byte_size)?;
+        self.maybe_fail_persist()?;
         let task = DownloadTask {
             storage_key: storage_key.clone(),
             pack_id: manifest.manifest().pack_id.clone(),
@@ -292,7 +318,7 @@ impl ModelStore for InMemoryModelStore {
         if reservation.task.expected_bytes != byte_size {
             return Err(ModelPackError::Store { code: "size" });
         }
-        self.ensure_quota(0)?;
+        self.ensure_reservation_quota(sha256, byte_size)?;
         self.maybe_fail_persist()?;
         let stored = StoredFile {
             storage_key: storage_key.to_owned(),
@@ -535,6 +561,78 @@ impl ModelStore for InMemoryModelStore {
     }
 }
 
+fn physical_file_bytes(files: &BTreeMap<String, StoredFile>) -> Result<u64, ModelPackError> {
+    let mut blobs = BTreeMap::<String, u64>::new();
+    for file in files.values() {
+        insert_blob_charge(&mut blobs, &file.sha256, file.byte_size)?;
+    }
+    checked_sum(blobs.values().copied())
+}
+
+fn physical_reserved_bytes(
+    files: &BTreeMap<String, StoredFile>,
+    reservations: &BTreeMap<String, Reservation>,
+) -> Result<u64, ModelPackError> {
+    let promoted: BTreeSet<&str> = files.values().map(|file| file.sha256.as_str()).collect();
+    let mut blobs = BTreeMap::<String, u64>::new();
+    for reservation in reservations.values() {
+        if !promoted.contains(reservation.task.expected_sha256.as_str()) {
+            insert_blob_charge(
+                &mut blobs,
+                &reservation.task.expected_sha256,
+                reservation.task.expected_bytes,
+            )?;
+        }
+    }
+    checked_sum(blobs.values().copied())
+}
+
+fn physical_total_after_reservation(
+    files: &BTreeMap<String, StoredFile>,
+    reservations: &BTreeMap<String, Reservation>,
+    sha256: &str,
+    byte_size: u64,
+) -> Result<u64, ModelPackError> {
+    let mut blobs = BTreeMap::<String, u64>::new();
+    for file in files.values() {
+        insert_blob_charge(&mut blobs, &file.sha256, file.byte_size)?;
+    }
+    for reservation in reservations.values() {
+        insert_blob_charge(
+            &mut blobs,
+            &reservation.task.expected_sha256,
+            reservation.task.expected_bytes,
+        )?;
+    }
+    insert_blob_charge(&mut blobs, sha256, byte_size)?;
+    checked_sum(blobs.values().copied())
+}
+
+fn insert_blob_charge(
+    blobs: &mut BTreeMap<String, u64>,
+    sha256: &str,
+    byte_size: u64,
+) -> Result<(), ModelPackError> {
+    match blobs.get(sha256) {
+        Some(existing) if *existing == byte_size => Ok(()),
+        Some(_) => Err(ModelPackError::Store { code: "corrupt" }),
+        None => {
+            blobs.insert(sha256.to_owned(), byte_size);
+            Ok(())
+        }
+    }
+}
+
+fn checked_sum(values: impl IntoIterator<Item = u64>) -> Result<u64, ModelPackError> {
+    let mut total = 0_u64;
+    for value in values {
+        total = total
+            .checked_add(value)
+            .ok_or(ModelPackError::QuotaExceeded)?;
+    }
+    Ok(total)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -548,6 +646,7 @@ mod tests {
 
     const HASH: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const HASH_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const HASH_C: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 
     struct AcceptingVerifier;
 
@@ -832,14 +931,100 @@ mod tests {
             .reserve_file(&manifest, &selection, &manifest.manifest().files[0])
             .await?;
         assert_eq!(store.status().await?.bytes_reserved, 60);
+        let repeated = store
+            .reserve_file(&manifest, &selection, &manifest.manifest().files[0])
+            .await?;
+        assert_eq!(repeated.storage_key, task.storage_key);
+        assert_eq!(store.status().await?.bytes_reserved, 60);
+        let changed = verified("pack", "1", HASH_B, 60);
+        let changed_selection = selection_for(&changed);
         assert_eq!(
             store
-                .reserve_file(&manifest, &selection, &manifest.manifest().files[0])
+                .reserve_file(&changed, &changed_selection, &changed.manifest().files[0])
                 .await,
-            Err(ModelPackError::QuotaExceeded)
+            Err(ModelPackError::Store {
+                code: "reservation"
+            })
         );
         store.promote_file(&task.storage_key, HASH, 60).await?;
         assert_eq!(store.status().await?.bytes_used, 60);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn quota_deduplicates_physical_hashes_and_rejects_size_conflicts(
+    ) -> Result<(), ModelPackError> {
+        let first = verified("first", "1", HASH, 60);
+        let duplicate = verified("duplicate", "1", HASH, 60);
+        let conflict = verified("conflict", "1", HASH, 61);
+        let first_selection = selection_for(&first);
+        let duplicate_selection = selection_for(&duplicate);
+        let conflict_selection = selection_for(&conflict);
+        let mut store = InMemoryModelStore::new(Some(60));
+
+        let first_task = store
+            .reserve_file(&first, &first_selection, &first.manifest().files[0])
+            .await?;
+        assert_eq!(store.status().await?.bytes_reserved, 60);
+        let duplicate_task = store
+            .reserve_file(
+                &duplicate,
+                &duplicate_selection,
+                &duplicate.manifest().files[0],
+            )
+            .await?;
+        assert_eq!(store.status().await?.bytes_reserved, 60);
+        assert_eq!(
+            store
+                .reserve_file(
+                    &conflict,
+                    &conflict_selection,
+                    &conflict.manifest().files[0]
+                )
+                .await,
+            Err(ModelPackError::Store { code: "corrupt" })
+        );
+
+        store
+            .promote_file(&first_task.storage_key, HASH, 60)
+            .await?;
+        assert_eq!(store.status().await?.bytes_used, 60);
+        assert_eq!(store.status().await?.bytes_reserved, 0);
+        assert_eq!(
+            store
+                .reserve_file(
+                    &conflict,
+                    &conflict_selection,
+                    &conflict.manifest().files[0]
+                )
+                .await,
+            Err(ModelPackError::Store { code: "corrupt" })
+        );
+        store
+            .promote_file(&duplicate_task.storage_key, HASH, 60)
+            .await?;
+        assert_eq!(store.status().await?.bytes_used, 60);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn quota_uses_checked_arithmetic_for_physical_totals() -> Result<(), ModelPackError> {
+        let first = verified("first", "1", HASH, u64::MAX);
+        let second = verified("second", "1", HASH_B, u64::MAX);
+        let first_selection = selection_for(&first);
+        let second_selection = selection_for(&second);
+        let mut store = InMemoryModelStore::new(None);
+
+        store
+            .reserve_file(&first, &first_selection, &first.manifest().files[0])
+            .await?;
+        assert_eq!(store.status().await?.bytes_reserved, u64::MAX);
+        assert_eq!(
+            store
+                .reserve_file(&second, &second_selection, &second.manifest().files[0])
+                .await,
+            Err(ModelPackError::QuotaExceeded)
+        );
         Ok(())
     }
 
@@ -1075,7 +1260,7 @@ mod tests {
         raw.files = vec![
             model_file_for("model", PackTask::Stt, HASH, 10),
             model_file_for("frontend", PackTask::Frontend, HASH_B, 20),
-            model_file_for("tokenizer", PackTask::Tokenizer, HASH, 30),
+            model_file_for("tokenizer", PackTask::Tokenizer, HASH_C, 30),
         ];
         raw.files[0].dependencies = vec!["frontend".to_owned()];
         raw.files[1].dependencies = vec!["tokenizer".to_owned()];

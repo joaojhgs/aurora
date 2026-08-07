@@ -16,7 +16,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const STATE_SCHEMA_VERSION: u32 = 2;
+const STATE_SCHEMA_VERSION: u32 = 3;
 const STATE_FILE: &str = "model-store.json";
 const STATE_TMP_PREFIX: &str = "model-store.json.tmp.";
 
@@ -116,9 +116,10 @@ impl NativeModelStore {
         let mut next = self.state.clone();
         next.revoked_pack_ids.insert(pack_id.to_owned());
         withdraw_lifecycles_for_revocation(&mut next, pack_id)?;
-        next.active.retain(|_, active| active.pack_id != pack_id);
+        next.active
+            .retain(|_, active| active.identity.pack_id != pack_id);
         next.rollback
-            .retain(|_, rollback| rollback.pack_id != pack_id);
+            .retain(|_, rollback| rollback.identity.pack_id != pack_id);
         reconcile_lifecycle_activity(&mut next)?;
         self.commit_state(next)
     }
@@ -220,7 +221,10 @@ impl NativeModelStore {
 
     #[cfg(test)]
     fn rollback_identity(&self, scope: &ModelStoreScope) -> Option<&ActivePackIdentity> {
-        self.state.rollback.get(&scope_map_key(scope))
+        self.state
+            .rollback
+            .get(&scope_map_key(scope))
+            .map(|record| &record.identity)
     }
 }
 
@@ -483,12 +487,16 @@ impl ModelStore for NativeModelStore {
             variant_id: selection.variant_id().to_owned(),
         };
         let scope_key = scope_map_key(&scope);
+        let requested_record = ActivePackRecord {
+            identity: requested.clone(),
+            file_ids: selection.file_ids().clone(),
+        };
         if let Some(previous) = next.active.get(&scope_key).cloned() {
-            if !same_selection(&previous, &requested) {
+            if !same_selection(&previous.identity, &requested) {
                 next.rollback.insert(scope_key.clone(), previous);
             }
         }
-        next.active.insert(scope_key, requested.clone());
+        next.active.insert(scope_key, requested_record);
         next.lifecycles.insert(lifecycle_key.clone(), current);
         reconcile_lifecycle_activity(&mut next)?;
         let active = next
@@ -508,17 +516,17 @@ impl ModelStore for NativeModelStore {
         let Some(rollback) = self.state.rollback.get(&scope_key).cloned() else {
             return Ok(None);
         };
-        if rollback.scope != scope {
+        if rollback.identity.scope != scope {
             return Err(store("scope"));
         }
-        self.require_pack_available(&rollback.pack_id)?;
+        self.require_pack_available(&rollback.identity.pack_id)?;
         if !pack_has_files(&self.config.root, &self.state, &rollback)? {
             return Err(store("rollback"));
         }
         let rollback_key = lifecycle_map_key(
-            &rollback.pack_id,
-            &rollback.pack_version,
-            &rollback.variant_id,
+            &rollback.identity.pack_id,
+            &rollback.identity.pack_version,
+            &rollback.identity.variant_id,
         );
         let snapshot = self
             .state
@@ -555,9 +563,10 @@ impl ModelStore for NativeModelStore {
             .retain(|_, task| task.pack_id.as_str() != pack_id);
         next.lifecycles
             .retain(|key, _| !key.starts_with(&format!("{}:", safe_name(pack_id))));
-        next.active.retain(|_, active| active.pack_id != pack_id);
+        next.active
+            .retain(|_, active| active.identity.pack_id != pack_id);
         next.rollback
-            .retain(|_, rollback| rollback.pack_id != pack_id);
+            .retain(|_, rollback| rollback.identity.pack_id != pack_id);
         next.revoked_pack_ids.remove(pack_id);
         reconcile_lifecycle_activity(&mut next)?;
         self.commit_state(next)?;
@@ -582,15 +591,19 @@ impl ModelStore for NativeModelStore {
     ) -> Result<Option<ActivePackIdentity>, ModelPackError> {
         let scope_key = scope_map_key(&scope);
         if let Some(active) = self.state.active.get(&scope_key) {
-            if active.scope != scope {
+            if active.identity.scope != scope {
                 return Err(store("scope"));
             }
-            self.require_pack_available(&active.pack_id)?;
+            self.require_pack_available(&active.identity.pack_id)?;
             if !pack_has_files(&self.config.root, &self.state, active)? {
                 return Err(store("corrupt"));
             }
         }
-        Ok(self.state.active.get(&scope_key).cloned())
+        Ok(self
+            .state
+            .active
+            .get(&scope_key)
+            .map(|record| record.identity.clone()))
     }
 
     async fn open_immutable_file(
@@ -610,9 +623,15 @@ struct StoreState {
     files: BTreeMap<String, StoredFile>,
     reservations: BTreeMap<String, DownloadTask>,
     lifecycles: BTreeMap<String, LifecycleSnapshot>,
-    active: BTreeMap<String, ActivePackIdentity>,
-    rollback: BTreeMap<String, ActivePackIdentity>,
+    active: BTreeMap<String, ActivePackRecord>,
+    rollback: BTreeMap<String, ActivePackRecord>,
     revoked_pack_ids: BTreeSet<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct ActivePackRecord {
+    identity: ActivePackIdentity,
+    file_ids: BTreeSet<String>,
 }
 
 impl Default for StoreState {
@@ -746,6 +765,10 @@ fn identity_lifecycle_key(identity: &ActivePackIdentity) -> String {
     )
 }
 
+fn record_lifecycle_key(record: &ActivePackRecord) -> String {
+    identity_lifecycle_key(&record.identity)
+}
+
 fn physical_file_bytes(state: &StoreState) -> Result<u64, ModelPackError> {
     let mut blobs = BTreeMap::<String, u64>::new();
     for file in state.files.values() {
@@ -808,20 +831,20 @@ fn reconcile_scoped_pointers(root: &Path, state: &mut StoreState) -> Result<(), 
     let revoked = state.revoked_pack_ids.clone();
     let files = state.files.clone();
     state.active.retain(|key, active| {
-        *key == scope_map_key(&active.scope)
-            && !revoked.contains(&active.pack_id)
+        *key == scope_map_key(&active.identity.scope)
+            && !revoked.contains(&active.identity.pack_id)
             && pack_has_files_in(&files, root, active).unwrap_or(false)
     });
     state.rollback.retain(|key, rollback| {
-        *key == scope_map_key(&rollback.scope)
-            && !revoked.contains(&rollback.pack_id)
+        *key == scope_map_key(&rollback.identity.scope)
+            && !revoked.contains(&rollback.identity.pack_id)
             && pack_has_files_in(&files, root, rollback).unwrap_or(false)
     });
     reconcile_lifecycle_activity(state)
 }
 
 fn reconcile_lifecycle_activity(state: &mut StoreState) -> Result<(), ModelPackError> {
-    let active_keys: BTreeSet<String> = state.active.values().map(identity_lifecycle_key).collect();
+    let active_keys: BTreeSet<String> = state.active.values().map(record_lifecycle_key).collect();
     let lifecycle_keys: Vec<String> = state.lifecycles.keys().cloned().collect();
     for key in lifecycle_keys {
         let Some(snapshot) = state.lifecycles.get(&key).cloned() else {
@@ -974,9 +997,9 @@ fn recover_blobs(root: &Path, state: &mut StoreState) -> Result<(), ModelPackErr
             .retain(|key, _| !corrupt_lifecycle_keys.contains(key));
         state
             .active
-            .retain(|_, active| !corrupt_lifecycle_keys.contains(&identity_lifecycle_key(active)));
+            .retain(|_, active| !corrupt_lifecycle_keys.contains(&record_lifecycle_key(active)));
         state.rollback.retain(|_, rollback| {
-            !corrupt_lifecycle_keys.contains(&identity_lifecycle_key(rollback))
+            !corrupt_lifecycle_keys.contains(&record_lifecycle_key(rollback))
         });
     }
     reconcile_scoped_pointers(root, state)?;
@@ -1029,29 +1052,42 @@ fn inspect_file(path: &Path) -> Result<FileInspection, ModelPackError> {
 fn pack_has_files(
     root: &Path,
     state: &StoreState,
-    identity: &ActivePackIdentity,
+    record: &ActivePackRecord,
 ) -> Result<bool, ModelPackError> {
-    pack_has_files_in(&state.files, root, identity)
+    pack_has_files_in(&state.files, root, record)
 }
 
 fn pack_has_files_in(
     files: &BTreeMap<String, StoredFile>,
     root: &Path,
-    identity: &ActivePackIdentity,
+    record: &ActivePackRecord,
 ) -> Result<bool, ModelPackError> {
-    let mut found = false;
-    for file in files.values().filter(|file| {
-        file.pack_id == identity.pack_id
-            && file.pack_version == identity.pack_version
-            && file.variant_id == identity.variant_id
-    }) {
-        found = true;
+    if record.file_ids.is_empty() {
+        return Ok(false);
+    }
+    for file_id in &record.file_ids {
+        let key = file_storage_key(
+            &record.identity.pack_id,
+            &record.identity.pack_version,
+            &record.identity.variant_id,
+            file_id,
+        );
+        let Some(file) = files.get(&key) else {
+            return Ok(false);
+        };
+        if file.pack_id != record.identity.pack_id
+            || file.pack_version != record.identity.pack_version
+            || file.variant_id != record.identity.variant_id
+            || file.file_id != *file_id
+        {
+            return Ok(false);
+        }
         let actual = inspect_file(&blob_path(root, &file.sha256))?;
         if actual.sha256 != file.sha256 || actual.byte_size != file.byte_size {
             return Ok(false);
         }
     }
-    Ok(found)
+    Ok(true)
 }
 
 fn checked_sum(values: impl IntoIterator<Item = u64>) -> Result<u64, ModelPackError> {
@@ -1445,6 +1481,116 @@ mod tests {
             .expect("lifecycle persists");
     }
 
+    fn dependency_manifest(
+        id: &str,
+        version: &str,
+        model_bytes: &[u8],
+        frontend_bytes: &[u8],
+        tokenizer_bytes: &[u8],
+    ) -> VerifiedManifest {
+        let mut model = model_file_for("model", PackTask::Stt, model_bytes);
+        model.dependencies = vec!["frontend".to_owned()];
+        let mut frontend = model_file_for("frontend", PackTask::Frontend, frontend_bytes);
+        frontend.dependencies = vec!["tokenizer".to_owned()];
+        let tokenizer = model_file_for("tokenizer", PackTask::Tokenizer, tokenizer_bytes);
+        let total_size = model
+            .byte_size
+            .checked_add(frontend.byte_size)
+            .and_then(|size| size.checked_add(tokenizer.byte_size))
+            .expect("test bytes fit");
+        let raw = ModelPackManifest {
+            schema_version: 1,
+            pack_id: id.to_owned(),
+            pack_version: version.to_owned(),
+            display_name: "Pack".to_owned(),
+            tasks: vec![PackTask::Stt],
+            license: license(),
+            languages: vec![LanguageSupport {
+                language: "en".to_owned(),
+                locale: Some("en-US".to_owned()),
+                fixed_language: true,
+                auto_detect: false,
+            }],
+            capabilities: CapabilityFlags {
+                streaming: true,
+                cancellation: true,
+            },
+            provenance: provenance(),
+            files: vec![model, frontend, tokenizer],
+            variants: vec![variant(
+                "linux",
+                RuntimeTarget::Desktop,
+                TargetOs::Linux,
+                TargetArch::X86_64,
+                "model",
+                total_size,
+            )],
+            rollback_from: None,
+            supersedes_pack_id: None,
+            revocation: None,
+            signature: Some(ManifestSignature {
+                key_id: "key".to_owned(),
+                algorithm: "ed25519".to_owned(),
+                value: "signed".to_owned(),
+            }),
+        };
+        verify_manifest(raw, &TrustPolicy::default(), Some(&AcceptingVerifier))
+            .expect("manifest verifies")
+    }
+
+    async fn install_dependency_selection_ready(
+        store: &mut NativeModelStore,
+        manifest: &VerifiedManifest,
+        selection: &SelectedVariant,
+        model_bytes: &[u8],
+        frontend_bytes: &[u8],
+        tokenizer_bytes: &[u8],
+    ) {
+        for file in manifest
+            .manifest()
+            .files
+            .iter()
+            .filter(|file| selection.file_ids().contains(&file.file_id))
+        {
+            let bytes = match file.file_id.as_str() {
+                "model" => model_bytes,
+                "frontend" => frontend_bytes,
+                "tokenizer" => tokenizer_bytes,
+                _ => panic!("unexpected file id"),
+            };
+            let task = store
+                .reserve_file(manifest, selection, file)
+                .await
+                .expect("reservation succeeds");
+            std::fs::write(store.staging_path(&task.storage_key), bytes).expect("stage bytes");
+            store
+                .promote_file(&task.storage_key, &file.sha256, file.byte_size)
+                .await
+                .expect("promotion succeeds");
+        }
+        store
+            .set_lifecycle(create_lifecycle_snapshot(
+                manifest.manifest().pack_id.clone(),
+                manifest.manifest().pack_version.clone(),
+                selection.variant_id().to_owned(),
+                now_epoch_seconds(),
+                InstallState::Ready,
+            ))
+            .await
+            .expect("lifecycle persists");
+    }
+
+    fn remove_file_metadata(root: &Path, selection: &SelectedVariant, file_id: &str) {
+        let mut state = read_state(root).expect("state readable");
+        state.files.remove(&file_storage_key(
+            selection.pack_id(),
+            selection.pack_version(),
+            selection.variant_id(),
+            file_id,
+        ));
+        write_state_atomic(root, &state).expect("state writable");
+    }
+
     #[tokio::test]
     async fn interrupted_write_keeps_reservation_and_resumes_metadata() {
         let temp = tempfile::tempdir().expect("tempdir");
@@ -1489,6 +1635,39 @@ mod tests {
         assert_eq!(
             NativeModelStore::open(NativeModelStoreConfig::new(temp.path(), Some(100))).err(),
             Some(super::store("state_schema"))
+        );
+    }
+
+    #[test]
+    fn old_identity_only_active_state_fails_closed_after_schema_bump() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(state_dir(temp.path())).expect("state dir");
+        std::fs::write(
+            state_path(temp.path()),
+            br#"{
+              "schema_version": 2,
+              "bytes_available": 100,
+              "persistent": true,
+              "files": {},
+              "reservations": {},
+              "lifecycles": {},
+              "active": {
+                "stt:default": {
+                  "scope": {"task": "stt", "slot_id": "default"},
+                  "pack_id": "pack",
+                  "pack_version": "1",
+                  "variant_id": "linux"
+                }
+              },
+              "rollback": {},
+              "revoked_pack_ids": []
+            }"#,
+        )
+        .expect("old active state");
+
+        assert_eq!(
+            NativeModelStore::open(NativeModelStoreConfig::new(temp.path(), Some(100))).err(),
+            Some(super::store("state"))
         );
     }
 
@@ -2436,6 +2615,101 @@ mod tests {
             .await
             .expect("lifecycle readable")
             .is_none());
+    }
+
+    #[tokio::test]
+    async fn startup_recovery_withdraws_active_when_dependency_metadata_is_missing() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let manifest = dependency_manifest("pack", "1", b"model", b"frontend", b"tokenizer");
+        let selection = selection_for(&manifest);
+        let mut store = open_store(temp.path(), 100);
+        install_dependency_selection_ready(
+            &mut store,
+            &manifest,
+            &selection,
+            b"model",
+            b"frontend",
+            b"tokenizer",
+        )
+        .await;
+        store
+            .activate_pack(scope(PackTask::Stt), &manifest, &selection)
+            .await
+            .expect("activation succeeds");
+
+        remove_file_metadata(temp.path(), &selection, "tokenizer");
+        let recovered = open_store(temp.path(), 100);
+        assert_eq!(
+            recovered
+                .active_pack(scope(PackTask::Stt))
+                .await
+                .expect("active readable"),
+            None
+        );
+        assert_ne!(
+            recovered
+                .lifecycle("pack", "1", "linux")
+                .await
+                .expect("lifecycle readable")
+                .map(|snapshot| snapshot.state),
+            Some(InstallState::Active)
+        );
+    }
+
+    #[tokio::test]
+    async fn startup_recovery_withdraws_rollback_when_dependency_metadata_is_missing() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let first = dependency_manifest("pack", "1", b"model-1", b"frontend-1", b"tokenizer-1");
+        let second = dependency_manifest("pack", "2", b"model-2", b"frontend-2", b"tokenizer-2");
+        let first_selection = selection_for(&first);
+        let second_selection = selection_for(&second);
+        let mut store = open_store(temp.path(), 100);
+        install_dependency_selection_ready(
+            &mut store,
+            &first,
+            &first_selection,
+            b"model-1",
+            b"frontend-1",
+            b"tokenizer-1",
+        )
+        .await;
+        install_dependency_selection_ready(
+            &mut store,
+            &second,
+            &second_selection,
+            b"model-2",
+            b"frontend-2",
+            b"tokenizer-2",
+        )
+        .await;
+        store
+            .activate_pack(scope(PackTask::Stt), &first, &first_selection)
+            .await
+            .expect("first active");
+        store
+            .activate_pack(scope(PackTask::Stt), &second, &second_selection)
+            .await
+            .expect("second active");
+
+        remove_file_metadata(temp.path(), &first_selection, "frontend");
+        let mut recovered = open_store(temp.path(), 100);
+        assert!(recovered.rollback_identity(&scope(PackTask::Stt)).is_none());
+        assert_eq!(
+            recovered
+                .rollback_active(scope(PackTask::Stt))
+                .await
+                .expect("rollback readable"),
+            None
+        );
+        assert_eq!(
+            recovered
+                .active_pack(scope(PackTask::Stt))
+                .await
+                .expect("active readable")
+                .expect("active remains")
+                .pack_version,
+            "2"
+        );
     }
 
     #[tokio::test]
