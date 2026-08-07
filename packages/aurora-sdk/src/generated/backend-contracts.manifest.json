@@ -8,7 +8,7 @@
   },
   "final_checksum": "ad1d9f5ceea6ece383310de25f50d3b2b22e237cd1fdf8aab206f0f5139b6436",
   "generator_format_version": "aurora-sdk-zod-codegen-v1",
-  "generator_source_hash": "3fed641193c42f55c1cac316c2b896e33e4bba71750efab28c6409b6cdfb1b58",
+  "generator_source_hash": "5d6a17414fa7665a06598cb04d5976f1378ca53730626dce233ce0c8a77ae12b",
   "pydantic_version": "2",
   "python_version": "3.11",
   "schema_draft": "https://json-schema.org/draft/2020-12/schema",
