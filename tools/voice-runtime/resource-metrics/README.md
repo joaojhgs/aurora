@@ -7,12 +7,12 @@ under ignored artifact paths.
 
 ## Scope
 
-- `vad` runs the existing Rust `vad_parity_driver` example.
-- `kws` runs the targeted native KWS smoke test.
-- `stt` runs the targeted native Moonshine STT smoke test.
+- `vad` runs the exact native VAD evidence test for the Phase 4 KWS fixture.
+- `kws` runs the exact native KWS evidence test against the selected int8 pack.
+- `stt` runs the exact native Moonshine STT evidence test.
 - Reports include only bounded task/candidate IDs, surface/arch labels,
-  aggregate wall/CPU/RSS/RTF metrics, failure buckets, repetition counts, and
-  `thermal_state: unavailable_in_linux_ci`.
+  aggregate wall/CPU/RSS/RTF metrics, workload duration, failure buckets,
+  repetition counts, and `thermal_state: unavailable_in_linux_ci`.
 - Reports never include command lines, model paths, WAV paths, transcripts,
   environment variables, stdout, stderr, user names, or native pointers.
 

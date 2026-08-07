@@ -10,6 +10,7 @@ import os
 import platform
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -23,6 +24,7 @@ from typing import Any
 SCHEMA_VERSION = "aurora.voice.phase6.native_resources.v1"
 TASKS = ("vad", "kws", "stt")
 MAX_REPETITIONS = 20
+SAMPLE_RATE_HZ = 16_000
 TIME_FIELDS = {
     "user_seconds": "User time (seconds)",
     "system_seconds": "System time (seconds)",
@@ -44,7 +46,7 @@ class TaskSpec:
     candidate_id: str
     command: tuple[str, ...]
     env: dict[str, str]
-    input_duration_ms: float | None
+    workload_duration_ms: float | None
     temp_dir: tempfile.TemporaryDirectory[str] | None = None
 
 
@@ -187,31 +189,34 @@ def build_task_spec(task: str, *, repo_root: Path, artifact_root: Path) -> TaskS
             artifact_root / "models" / "extracted" / PHASE4_KWS_NAME / "test_wavs" / "0.wav",
             "VAD input WAV",
         )
+        env |= {
+            "AURORA_SHERPA_ONNX_MODEL": str(model),
+            "AURORA_SHERPA_ONNX_TEST_WAV": str(wav),
+        }
         command = (
             "cargo",
             "+1.88.0",
-            "run",
-            "--quiet",
+            "test",
+            "--locked",
             "--manifest-path",
             str(rust_manifest),
             "-p",
             "aurora-voice-sherpa-sys",
             "--features",
             "native-vad",
-            "--example",
-            "vad_parity_driver",
+            "--test",
+            "native_vad_smoke",
             "--",
-            "--model",
-            str(model),
-            "--wav",
-            str(wav),
+            "silero_vad_matches_phase4_kws_pcm16_fixture",
+            "--exact",
+            "--nocapture",
         )
         return TaskSpec(
             task="vad",
             candidate_id="silero-vad-v4",
             command=command,
             env=env,
-            input_duration_ms=wav_duration_ms(wav),
+            workload_duration_ms=vad_workload_duration_ms(wav),
         )
     if task == "kws":
         kws_dir = require_dir(
@@ -242,6 +247,8 @@ def build_task_spec(task: str, *, repo_root: Path, artifact_root: Path) -> TaskS
                 "--test",
                 "native_kws_smoke",
                 "--",
+                "light_up_detection_matches_phase4_wav_with_inline_keywords",
+                "--exact",
                 "--nocapture",
             )
             return TaskSpec(
@@ -249,7 +256,7 @@ def build_task_spec(task: str, *, repo_root: Path, artifact_root: Path) -> TaskS
                 candidate_id="sherpa-gigaspeech-kws-en",
                 command=command,
                 env=env,
-                input_duration_ms=input_duration_ms,
+                workload_duration_ms=kws_workload_duration_ms(input_duration_ms),
                 temp_dir=temp_dir,
             )
         except Exception:
@@ -279,6 +286,8 @@ def build_task_spec(task: str, *, repo_root: Path, artifact_root: Path) -> TaskS
         "--test",
         "native_stt_smoke",
         "--",
+        "moonshine_stt_matches_phase4_wav_exactly_and_reuses_new_streams",
+        "--exact",
         "--nocapture",
     )
     return TaskSpec(
@@ -286,7 +295,7 @@ def build_task_spec(task: str, *, repo_root: Path, artifact_root: Path) -> TaskS
         candidate_id="moonshine-tiny-en-stt",
         command=command,
         env=env,
-        input_duration_ms=wav_duration_ms(wav),
+        workload_duration_ms=stt_workload_duration_ms(wav),
     )
 
 
@@ -365,7 +374,7 @@ def run_task(
                 if item.get("failure_bucket") is not None
             }
         ),
-        "input_duration_ms": round_float(spec.input_duration_ms),
+        "workload_duration_ms": round_float(spec.workload_duration_ms),
         "thermal_state": "unavailable_in_linux_ci",
         "physical_device_claim": False,
         "repetitions": repetitions_payload,
@@ -383,14 +392,11 @@ def run_one_repetition(
     env = build_child_env(spec.env)
     command = [str(time_bin), "-v", *spec.command]
     try:
-        completed = subprocess.run(
+        completed = run_timed_command(
             command,
             cwd=repo_root,
             env=env,
-            text=True,
-            capture_output=True,
             timeout=timeout_seconds,
-            check=False,
         )
     except subprocess.TimeoutExpired:
         return RepetitionResult(
@@ -422,14 +428,55 @@ def run_one_repetition(
             status="failed",
             failure_bucket=classify_failure(completed.returncode),
             metrics=metrics,
-            rtf_ms_per_second=rtf(metrics.wall_ms, spec.input_duration_ms),
+            rtf_ms_per_second=rtf(metrics.wall_ms, spec.workload_duration_ms),
         )
     return RepetitionResult(
         status="ok",
         failure_bucket=None,
         metrics=metrics,
-        rtf_ms_per_second=rtf(metrics.wall_ms, spec.input_duration_ms),
+        rtf_ms_per_second=rtf(metrics.wall_ms, spec.workload_duration_ms),
     )
+
+
+def run_timed_command(
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    timeout: float,
+) -> subprocess.CompletedProcess[str]:
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        terminate_process_group(process.pid, signal.SIGTERM)
+        try:
+            process.communicate(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            terminate_process_group(process.pid, signal.SIGKILL)
+            process.communicate()
+        raise subprocess.TimeoutExpired(command, timeout) from exc
+    return subprocess.CompletedProcess(
+        args=command,
+        returncode=process.returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
+def terminate_process_group(pid: int, sig: int) -> None:
+    try:
+        os.killpg(pid, sig)
+    except ProcessLookupError:
+        return
 
 
 def build_child_env(extra: dict[str, str]) -> dict[str, str]:
@@ -594,6 +641,24 @@ def rtf(wall_ms: float, input_duration_ms: float | None) -> float | None:
     return wall_ms / (input_duration_ms / 1000.0)
 
 
+def vad_workload_duration_ms(wav: Path) -> float:
+    return (3.0 * wav_duration_ms(wav)) + samples_duration_ms(512)
+
+
+def kws_workload_duration_ms(wav_duration: float) -> float:
+    return (2.0 * wav_duration) + (2.0 * samples_duration_ms(8000))
+
+
+def stt_workload_duration_ms(wav: Path) -> float:
+    return 2.0 * wav_duration_ms(wav)
+
+
+def samples_duration_ms(samples: int) -> float:
+    if samples < 0:
+        raise ResourceMetricError("sample count must be non-negative")
+    return (samples / SAMPLE_RATE_HZ) * 1000.0
+
+
 def wav_duration_ms(path: Path) -> float:
     with wave.open(str(path), "rb") as source:
         frames = source.getnframes()
@@ -707,19 +772,25 @@ def stable_json(value: dict[str, Any]) -> str:
 def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
     validate_output_path(path)
     text = stable_json(payload)
-    with tempfile.NamedTemporaryFile(
-        "w",
-        encoding="utf-8",
-        dir=str(path.parent),
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-        delete=False,
-    ) as handle:
-        tmp_path = Path(handle.name)
-        handle.write(text)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(tmp_path, path)
+    tmp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=str(path.parent),
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            tmp_path = Path(handle.name)
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+        tmp_path = None
+    finally:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
 
 
 def ensure_redacted(value: Any) -> None:

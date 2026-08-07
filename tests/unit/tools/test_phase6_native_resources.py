@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile as stdlib_tempfile
@@ -81,7 +82,7 @@ def test_run_one_repetition_redacts_child_output_and_reports_success(tmp_path):
         candidate_id="silero-vad-v4",
         command=("fake",),
         env={},
-        input_duration_ms=1000.0,
+        workload_duration_ms=1000.0,
     )
     completed = subprocess.CompletedProcess(
         args=["fake"],
@@ -89,7 +90,7 @@ def test_run_one_repetition_redacts_child_output_and_reports_success(tmp_path):
         stdout="Ask not what your country can do for you /home/private",
         stderr=TIME_OUTPUT + "LIGHT UP /tmp/private 0xabc\n",
     )
-    with patch.object(metrics.subprocess, "run", return_value=completed):
+    with patch.object(metrics, "run_timed_command", return_value=completed):
         result = metrics.run_one_repetition(
             spec,
             repo_root=tmp_path,
@@ -110,9 +111,11 @@ def test_run_one_repetition_timeout_and_child_failure_are_redacted(tmp_path):
         candidate_id="sherpa-gigaspeech-kws-en",
         command=("fake",),
         env={},
-        input_duration_ms=1000.0,
+        workload_duration_ms=1000.0,
     )
-    with patch.object(metrics.subprocess, "run", side_effect=subprocess.TimeoutExpired("fake", 1)):
+    with patch.object(
+        metrics, "run_timed_command", side_effect=subprocess.TimeoutExpired("fake", 1)
+    ):
         timeout = metrics.run_one_repetition(
             spec,
             repo_root=tmp_path,
@@ -127,7 +130,7 @@ def test_run_one_repetition_timeout_and_child_failure_are_redacted(tmp_path):
         stdout="/tmp/private transcript",
         stderr=TIME_OUTPUT,
     )
-    with patch.object(metrics.subprocess, "run", return_value=completed):
+    with patch.object(metrics, "run_timed_command", return_value=completed):
         failed = metrics.run_one_repetition(
             spec,
             repo_root=tmp_path,
@@ -182,6 +185,54 @@ def test_atomic_output_is_deterministic_and_rejects_sensitive_json(tmp_path):
         metrics.stable_json(payload | {"leak": "/home/developer/private.wav"})
 
 
+def test_atomic_output_removes_temp_file_when_replace_fails(tmp_path):
+    payload = {
+        "schema_version": metrics.SCHEMA_VERSION,
+        "generated_at_utc": "2026-08-07T00:00:00Z",
+        "physical_device_claim": False,
+        "thermal_state": "unavailable_in_linux_ci",
+        "host": {"arch": "x86_64", "os": "linux"},
+        "tasks": [],
+        "summary": {"ok": True, "task_count": 0, "failed_task_count": 0},
+    }
+    out = tmp_path / "report.json"
+    with (
+        patch.object(metrics.os, "replace", side_effect=OSError("replace failed")),
+        pytest.raises(OSError),
+    ):
+        metrics.atomic_write_json(out, payload)
+
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_run_timed_command_kills_process_group_when_timeout_survives_sigterm(tmp_path):
+    class HangingProcess:
+        pid = 12345
+        returncode = None
+
+        def __init__(self):
+            self.calls = 0
+
+        def communicate(self, timeout=None):
+            self.calls += 1
+            if self.calls <= 2:
+                raise subprocess.TimeoutExpired("fake", timeout)
+            self.returncode = -9
+            return "", ""
+
+    process = HangingProcess()
+    signals: list[tuple[int, int]] = []
+
+    with (
+        patch.object(metrics.subprocess, "Popen", return_value=process),
+        patch.object(metrics.os, "killpg", side_effect=lambda pid, sig: signals.append((pid, sig))),
+        pytest.raises(subprocess.TimeoutExpired),
+    ):
+        metrics.run_timed_command(["fake"], cwd=tmp_path, env={}, timeout=1.0)
+
+    assert signals == [(12345, signal.SIGTERM), (12345, signal.SIGKILL)]
+
+
 def test_aggregate_repetitions_reports_p50_p95_and_max():
     runs = [
         {
@@ -204,12 +255,62 @@ def test_aggregate_repetitions_reports_p50_p95_and_max():
 
 def test_wav_duration_uses_private_path_without_reporting_it(tmp_path):
     wav_path = tmp_path / "private.wav"
-    with wave.open(str(wav_path), "wb") as sink:
-        sink.setnchannels(1)
-        sink.setsampwidth(2)
-        sink.setframerate(16_000)
-        sink.writeframes(b"\x00\x00" * 16_000)
+    write_pcm16_wav(wav_path, sample_rate=16_000, frames=16_000)
     assert metrics.wav_duration_ms(wav_path) == 1000.0
+
+
+def test_vad_task_spec_runs_exact_native_evidence_test_and_counts_replayed_workload(tmp_path):
+    repo_root, artifact_root = create_resource_fixture(tmp_path)
+
+    spec = metrics.build_task_spec("vad", repo_root=repo_root, artifact_root=artifact_root)
+
+    assert spec.command == (
+        "cargo",
+        "+1.88.0",
+        "test",
+        "--locked",
+        "--manifest-path",
+        str(repo_root / "rust" / "Cargo.toml"),
+        "-p",
+        "aurora-voice-sherpa-sys",
+        "--features",
+        "native-vad",
+        "--test",
+        "native_vad_smoke",
+        "--",
+        "silero_vad_matches_phase4_kws_pcm16_fixture",
+        "--exact",
+        "--nocapture",
+    )
+    assert spec.workload_duration_ms == pytest.approx(3032.0)
+
+
+def test_kws_task_spec_runs_exact_native_evidence_test_and_counts_tail_padding(tmp_path):
+    repo_root, artifact_root = create_resource_fixture(tmp_path)
+
+    spec = metrics.build_task_spec("kws", repo_root=repo_root, artifact_root=artifact_root)
+    try:
+        assert spec.command[-3:] == (
+            "light_up_detection_matches_phase4_wav_with_inline_keywords",
+            "--exact",
+            "--nocapture",
+        )
+        assert spec.workload_duration_ms == pytest.approx(3000.0)
+    finally:
+        metrics.cleanup_specs([spec])
+
+
+def test_stt_task_spec_runs_exact_native_evidence_test_and_counts_two_decodes(tmp_path):
+    repo_root, artifact_root = create_resource_fixture(tmp_path)
+
+    spec = metrics.build_task_spec("stt", repo_root=repo_root, artifact_root=artifact_root)
+
+    assert spec.command[-3:] == (
+        "moonshine_stt_matches_phase4_wav_exactly_and_reuses_new_streams",
+        "--exact",
+        "--nocapture",
+    )
+    assert spec.workload_duration_ms == pytest.approx(2000.0)
 
 
 def test_kws_smoke_dir_maps_expected_encoder_name_to_int8_source_and_cleans_up(tmp_path):
@@ -251,7 +352,7 @@ def test_kws_smoke_dir_maps_expected_encoder_name_to_int8_source_and_cleans_up(t
                 candidate_id="sherpa-gigaspeech-kws-en",
                 command=("fake",),
                 env={},
-                input_duration_ms=1.0,
+                workload_duration_ms=1.0,
                 temp_dir=temp_dir,
             )
         ]
@@ -285,7 +386,7 @@ def test_child_env_forces_dynamic_linking_without_reporting_paths(monkeypatch):
                 "arch": "x86_64",
                 "status": "failed",
                 "failure_buckets": ["child_failed"],
-                "input_duration_ms": 1.0,
+                "workload_duration_ms": 1.0,
                 "thermal_state": "unavailable_in_linux_ci",
                 "physical_device_claim": False,
                 "repetitions": [],
@@ -347,3 +448,50 @@ def test_failure_report_has_redacted_bucket_only():
     assert report["physical_device_claim"] is False
     assert report["summary"]["failure_bucket"] == "missing_required_input"
     assert "/tmp/private" not in rendered
+
+
+def create_resource_fixture(tmp_path: Path) -> tuple[Path, Path]:
+    repo_root = tmp_path / "repo"
+    (repo_root / "rust").mkdir(parents=True)
+    (repo_root / "rust" / "Cargo.toml").write_text("[workspace]\n", encoding="utf-8")
+
+    artifact_root = tmp_path / "artifact"
+    (artifact_root / "builds" / "linux-x86_64" / "install" / "lib").mkdir(parents=True)
+    (artifact_root / "models").mkdir(parents=True)
+    (artifact_root / "models" / "silero-vad-v4.0.onnx").write_bytes(b"vad")
+
+    kws_root = (
+        artifact_root
+        / "models"
+        / "extracted"
+        / "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01"
+    )
+    (kws_root / "test_wavs").mkdir(parents=True)
+    for relative in (
+        "encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+        "decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
+        "joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+        "tokens.txt",
+    ):
+        (kws_root / relative).write_bytes(b"x")
+    write_pcm16_wav(kws_root / "test_wavs" / "0.wav", sample_rate=16_000, frames=16_000)
+
+    stt_root = (
+        artifact_root
+        / "models"
+        / "extracted"
+        / "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27"
+    )
+    (stt_root / "test_wavs").mkdir(parents=True)
+    write_pcm16_wav(stt_root / "test_wavs" / "0.wav", sample_rate=24_000, frames=24_000)
+
+    return repo_root, artifact_root
+
+
+def write_pcm16_wav(path: Path, *, sample_rate: int, frames: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as sink:
+        sink.setnchannels(1)
+        sink.setsampwidth(2)
+        sink.setframerate(sample_rate)
+        sink.writeframes(b"\x00\x00" * frames)
