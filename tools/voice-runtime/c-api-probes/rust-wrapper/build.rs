@@ -27,7 +27,7 @@ fn main() {
         .expect("failed to run C compiler");
     assert!(status.success(), "C bridge compilation failed");
 
-    let status = Command::new("ar")
+    let status = Command::new(env::var("AR").unwrap_or_else(|_| "ar".to_string()))
         .arg("crus")
         .arg(&archive)
         .arg(&object)
@@ -36,6 +36,8 @@ fn main() {
     assert!(status.success(), "C bridge archive creation failed");
 
     println!("cargo:rerun-if-env-changed=SHERPA_ONNX_INSTALL_DIR");
+    println!("cargo:rerun-if-env-changed=CC");
+    println!("cargo:rerun-if-env-changed=AR");
     println!("cargo:rerun-if-changed=c/sherpa_probe_bridge.c");
     println!("cargo:rerun-if-changed=c/sherpa_probe_bridge.h");
     println!("cargo:rustc-link-search=native={}", out_dir.display());

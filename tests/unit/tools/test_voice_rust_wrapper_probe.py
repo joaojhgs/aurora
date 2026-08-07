@@ -41,3 +41,11 @@ def test_rust_wrapper_declares_rust_188_and_no_runtime_dependencies() -> None:
 
     assert 'rust-version = "1.88"' in cargo_toml
     assert "[dependencies]\n" in cargo_toml
+
+
+def test_rust_wrapper_checks_stream_allocation_and_honors_target_archiver() -> None:
+    bridge = (WRAPPER / "c/sherpa_probe_bridge.c").read_text(encoding="utf-8")
+    build_rs = (WRAPPER / "build.rs").read_text(encoding="utf-8")
+
+    assert "if (stream == NULL)" in bridge
+    assert 'env::var("AR")' in build_rs

@@ -121,6 +121,15 @@ AuroraSherpaProbeResult *aurora_sherpa_probe_stt(const char *moonshine_dir) {
 
   const SherpaOnnxOfflineStream *stream =
       SherpaOnnxCreateOfflineStream(recognizer);
+  if (stream == NULL) {
+    SherpaOnnxDestroyOfflineRecognizer(recognizer);
+    SherpaOnnxFreeWave(wave);
+    free(wav);
+    free(encoder);
+    free(decoder);
+    free(tokens);
+    return fail_result("rust_stt", "offline stream creation failed");
+  }
   SherpaOnnxAcceptWaveformOffline(stream, wave->sample_rate, wave->samples,
                                   wave->num_samples);
   SherpaOnnxDecodeOfflineStream(recognizer, stream);
