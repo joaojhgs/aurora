@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { expect, test, type Page } from '@playwright/test'
 import { createServer, type Server } from 'node:http'
 import { readFile } from 'node:fs/promises'
@@ -104,8 +103,7 @@ test('selects the durable browser backend truthfully for this engine', async ({ 
 
 test('falls back to IndexedDB when OPFS open is unavailable', async ({ page }, testInfo) => {
   await installNamespacedStore(page, testInfo.project.name)
-  const support = await browserStoreWriteSupport(page)
-  test.skip(!support.supported, support.reason)
+  await requireBrowserStoreWriteSupport(page, testInfo.project.name)
 
   const result = await page.evaluate(async () => {
     if (navigator.storage) {
@@ -132,8 +130,7 @@ test('falls back to IndexedDB when OPFS open is unavailable', async ({ page }, t
 
 test('persists JSON and promoted bytes across reloads', async ({ page }, testInfo) => {
   await installNamespacedStore(page, testInfo.project.name)
-  const support = await browserStoreWriteSupport(page)
-  test.skip(!support.supported, support.reason)
+  await requireBrowserStoreWriteSupport(page, testInfo.project.name)
 
   const first = await page.evaluate(async () => {
     const host = await window.__auroraBrowserStore.create()
@@ -180,8 +177,7 @@ test('persists JSON and promoted bytes across reloads', async ({ page }, testInf
 
 test('replaces JSON snapshots without reviving stale bytes', async ({ page }, testInfo) => {
   await installNamespacedStore(page, testInfo.project.name)
-  const support = await browserStoreWriteSupport(page)
-  test.skip(!support.supported, support.reason)
+  await requireBrowserStoreWriteSupport(page, testInfo.project.name)
 
   await page.evaluate(async () => {
     const host = await window.__auroraBrowserStore.create()
@@ -209,8 +205,7 @@ test('replaces JSON snapshots without reviving stale bytes', async ({ page }, te
 
 test('surfaces missing referenced blobs as redacted failures', async ({ page }, testInfo) => {
   await installNamespacedStore(page, testInfo.project.name)
-  const support = await browserStoreWriteSupport(page)
-  test.skip(!support.supported, support.reason)
+  await requireBrowserStoreWriteSupport(page, testInfo.project.name)
 
   const result = await page.evaluate(async () => {
     const host = await window.__auroraBrowserStore.create()
@@ -219,7 +214,9 @@ test('surfaces missing referenced blobs as redacted failures', async ({ page }, 
     await host.promoteStagingAtomic('sensitive-pack@voice.bin')
 
     const snapshot = await host.port.readSnapshot()
-    await host.port.deleteBlob(snapshot.json[0].physicalKey)
+    const jsonEntry = snapshot.json[0]
+    if (!jsonEntry) throw new Error('missing JSON snapshot entry')
+    await host.port.deleteBlob(jsonEntry.physicalKey)
     const error = await host.readJson('sensitive-pack@meta').then(
       () => null,
       (caught) => caught
@@ -254,18 +251,38 @@ async function installNamespacedStore(page: Page, projectName: string): Promise<
   await page.waitForFunction(() => window.__auroraBrowserStore !== undefined)
 }
 
-async function browserStoreWriteSupport(page: Page): Promise<{ supported: true } | { supported: false; reason: string }> {
+async function requireBrowserStoreWriteSupport(page: Page, projectName: string): Promise<void> {
+  const support = await browserStoreWriteSupport(page)
+  if (support.supported) return
+  if (projectName === 'webkit') {
+    expect(support.backend).toBe('indexeddb')
+    expect(support.hasOpfs).toBe(false)
+    expect(support.message).toBe('aurora_voice_web_store:storage')
+    test.skip(true, `known WebKit IndexedDB Blob write gap: ${support.message}`)
+  }
+  throw new Error(
+    `${projectName} browser model store write probe failed with ${support.backend}: ${support.message}`
+  )
+}
+
+type BrowserStoreWriteSupport =
+  | { readonly supported: true; readonly backend: 'opfs' | 'indexeddb'; readonly hasOpfs: boolean }
+  | { readonly supported: false; readonly backend: 'opfs' | 'indexeddb'; readonly hasOpfs: boolean; readonly message: string }
+
+async function browserStoreWriteSupport(page: Page): Promise<BrowserStoreWriteSupport> {
   return page.evaluate(async () => {
+    const host = await window.__auroraBrowserStore.create()
+    const backend = host.backendKind()
+    const hasOpfs = typeof navigator.storage?.getDirectory === 'function'
     try {
-      const host = await window.__auroraBrowserStore.create()
       await host.writeJson('support@probe', '{"ok":true}')
       const value = await host.readJson('support@probe')
       return value === '{"ok":true}'
-        ? { supported: true }
-        : { supported: false, reason: 'browser model store probe did not round-trip JSON bytes' }
+        ? { supported: true, backend, hasOpfs }
+        : { supported: false, backend, hasOpfs, message: 'browser model store probe did not round-trip JSON bytes' }
     } catch (error) {
-      const message = String(error?.message ?? error)
-      return { supported: false, reason: `browser model store write path unavailable: ${message}` }
+      const message = error instanceof Error ? error.message : String(error)
+      return { supported: false, backend, hasOpfs, message }
     }
   })
 }
@@ -388,6 +405,7 @@ declare global {
         listJsonKeys(prefix: string): Promise<readonly string[]>
         appendStaging(key: string, offset: number, bytes: Uint8Array): Promise<void>
         promoteStagingAtomic(key: string): Promise<void>
+        listPromotedKeys(): Promise<readonly string[]>
         promotedStat(key: string): Promise<{ byteLength: number; sha256: string | null } | null>
         readPromotedChunk(key: string, offset: number, maxBytes: number): Promise<{ bytes: Uint8Array; offset: number; complete: boolean }>
         port: {

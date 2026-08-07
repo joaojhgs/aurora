@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { defineConfig, devices } from '@playwright/test'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
