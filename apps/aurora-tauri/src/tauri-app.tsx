@@ -49,6 +49,7 @@ import {
   type AuroraNavItem,
   type AuroraOwlLoaderStageId,
   type AuroraShellSnapshot,
+  type NativeDesktopVoicePort,
   type RouteAvailability,
   type WebThinRoomSecret,
 } from "@aurora/ui";
@@ -127,6 +128,11 @@ const navItems = auroraNavSections.flatMap((section) => section.items);
 const routePathItems = [...navItems, ...auroraEmbeddedNavItems];
 export type AuroraTauriRuntime = AuroraTauriRuntimeModel;
 type AuroraTauriClient = AuroraTauriRuntime["client"];
+const AssistantViewWithNativeVoice = AssistantView as (
+  props: Parameters<typeof AssistantView>[0] & {
+    nativeVoice?: NativeDesktopVoicePort | undefined;
+  },
+) => ReactElement;
 type TauriRouteRenderer = (input: {
   route: RouteAvailability;
   snapshot: AuroraShellSnapshot;
@@ -184,7 +190,7 @@ export const tauriRouteRegistry = {
     assistantNativePermissions,
     assistantNativeCapabilities,
   }) => (
-    <AssistantView
+    <AssistantViewWithNativeVoice
       client={client}
       route={route}
       cancellationRoute={snapshot.assistantCancellationRoute ?? undefined}
@@ -196,6 +202,7 @@ export const tauriRouteRegistry = {
       surfaceProfile={nativeContext.surfaceProfile}
       executionHost={nativeContext.thinPeer ? "connected-device" : "this-device"}
       localAssistant={tauriLocalAssistant(nativeContext, client)}
+      nativeVoice={nativeContext.nativeVoice}
       runtimeHealth={{
         selectedModel: null,
         routeLabel: nativeContext.thinPeer
@@ -818,6 +825,7 @@ export function AuroraTauriApp({
     remoteTools: assistantRemoteTools,
     runtimeProfile: runtime.runtimeProfile,
     localData: runtime.localData,
+    nativeVoice: runtime.nativeVoice,
     thinProfile: runtime.thinProfile,
     thinProfileController: runtime.thinProfileController,
     saveThinProfile,
@@ -1298,6 +1306,7 @@ interface NativeContext {
   remoteTools?: readonly ToolingProjectionToolInfo[];
   runtimeProfile?: AuroraTauriRuntime["runtimeProfile"];
   localData?: AuroraTauriRuntime["localData"];
+  nativeVoice?: AuroraTauriRuntime["nativeVoice"];
   thinProfile?: AuroraThinConnectionProfile | undefined;
   thinProfileController?: AuroraTauriRuntime["thinProfileController"];
   saveThinProfile: (

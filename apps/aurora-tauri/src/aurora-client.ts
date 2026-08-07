@@ -48,6 +48,7 @@ import {
   type AuroraThinConnectionMode,
   type BrowserPeerPersistenceStatus,
   type BrowserWebThinRuntime,
+  type NativeDesktopVoicePort,
 } from "@aurora/ui";
 import {
   NativePeerCredentialStore,
@@ -77,6 +78,7 @@ import {
   type TauriMeshNodeServices,
   type TauriMeshNodeServicesOptions,
 } from "./tauri-mesh-node-services";
+import { createTauriNativeDesktopVoicePort } from "./native-voice";
 
 export const TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS = 90_000;
 
@@ -99,6 +101,7 @@ export interface AuroraTauriRuntime {
   localToolApprovals?: ProviderLocalApprovalControllerPort | undefined;
   localAssistant?: AuroraTauriLightweightAssistantConfig | undefined;
   localData?: AuroraTauriLocalDataRuntime | undefined;
+  nativeVoice?: NativeDesktopVoicePort | undefined;
   thinProfileConfigured: boolean;
   requiresOnboarding: boolean;
   pendingThinInviteText: string | null;
@@ -497,6 +500,9 @@ export function createAuroraTauriRuntime({
 
   if (isTauriRuntime()) {
     const nativeTransport = new TauriLocalTransport({ invoke, listen });
+    const nativeVoice = isDesktopTauriRuntime()
+      ? createTauriNativeDesktopVoicePort()
+      : undefined;
     const isMobileNative = isMobileTauriRuntime();
 
     if (isMobileNative) {
@@ -702,6 +708,7 @@ export function createAuroraTauriRuntime({
           ? localAssistant ?? connectedAuroraInferenceAssistant(thinRuntime.client)
           : undefined,
         localData: localDataRuntime(meshNodeServices),
+        nativeVoice,
         thinProfileConfigured: runtimeProfileConfigured,
         requiresOnboarding: !runtimeProfileConfigured,
         pendingThinInviteText: thinInviteText,
@@ -753,6 +760,7 @@ export function createAuroraTauriRuntime({
         ?? (surfaceSupportsRuntimeTier(currentAuroraSurfaceProfile(), "python-full", {
           packageIncludesPython: hasPythonFullRuntimeCapability(packageCapabilities),
         }) ? "python-full" : "lightweight-ts"),
+      nativeVoice,
       requiresOnboarding: false,
       pendingThinInviteText: null,
       modePreferenceStore: secureModePreferenceStore(
