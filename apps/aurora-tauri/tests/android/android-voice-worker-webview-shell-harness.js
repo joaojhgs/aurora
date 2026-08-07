@@ -52,8 +52,8 @@ globalThis.__auroraWorkerAudioBridge = {
     const completeRepeat = await completeRepeatProbe()
     const abandonRepeat = await abandonRepeatProbe()
     const redaction = await redactionProbe()
-    const requests = await fetch('/__aurora_requests__').then((response) => response.json()).catch(() => [])
     const artifacts = await fetch('/__aurora_artifacts__').then((response) => response.json()).catch(() => ({}))
+    const requests = await fetch('/__aurora_requests__').then((response) => response.json()).catch(() => [])
     const consoleErrors = globalThis.__auroraConsoleErrors ?? []
     const leakPayload = JSON.stringify({
       completeEvents: completeRepeat.events,

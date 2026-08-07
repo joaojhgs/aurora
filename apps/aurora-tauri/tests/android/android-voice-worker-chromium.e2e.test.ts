@@ -1,25 +1,29 @@
 // @vitest-environment node
 
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
-  adbOutput,
   adbOutputOrEmpty,
-  adbReverseList,
+  adbReverseMappings,
+  assertExpectedAndroidEmulator,
   chromiumChromePackage,
   chromiumChromeTarget,
-  clearAdbReverseMappings,
   cleanupAndroidBrowser,
   createAndroidWebViewShellHarness,
   launchAndroidBrowser,
+  packageBaseApkPath,
   packageVersion,
+  removeAdbReverseMapping,
+  restoreAdbReverseLocals,
   resolveAdb,
   resolveDeviceSerial,
   runAdb,
+  sha256DeviceFile,
   type AndroidBrowserClaims,
-  type AndroidBrowserRestoreState
+  type AndroidBrowserRestoreState,
+  type AndroidEmulatorMetadata
 } from './android-webview-shell-harness-utils.js'
 
 const repoRoot = resolve(import.meta.dirname, '../../../..')
@@ -31,6 +35,38 @@ const expectedChromiumSnapshot = {
   source: 'https://commondatastorage.googleapis.com/chromium-browser-snapshots/AndroidDesktop_x64/1675650/chrome-android-desktop.zip',
   apkSha256: 'fafbac253a23918591ece4d506fe2155b68d68e199a9b372187071a1d8af0b80'
 }
+const reverseSentinel = {
+  local: 'tcp:39999',
+  remote: 'tcp:39999'
+}
+const expectedWasmFiles = [
+  'aurora_voice_wasm.d.ts',
+  'aurora_voice_wasm.js',
+  'aurora_voice_wasm_bg.wasm',
+  'aurora_voice_wasm_bg.wasm.d.ts'
+]
+const successFrontierUrls = new Set([
+  '/index.html',
+  '/__aurora_voice_harness__.js',
+  '/dist/browser.js',
+  '/dist/voice-worker.js',
+  '/dist/wasm/aurora_voice_wasm_bg.wasm',
+  '/__aurora_artifacts__',
+  '/__aurora_requests__'
+])
+const expectedSuccessFrontier = [
+  '/index.html',
+  '/__aurora_voice_harness__.js',
+  '/dist/browser.js',
+  '/dist/voice-worker.js',
+  '/dist/wasm/aurora_voice_wasm_bg.wasm',
+  '/dist/voice-worker.js',
+  '/dist/wasm/aurora_voice_wasm_bg.wasm',
+  '/dist/voice-worker.js',
+  '/dist/wasm/aurora_voice_wasm_bg.wasm',
+  '/__aurora_artifacts__',
+  '/__aurora_requests__'
+]
 const chromiumClaims: AndroidBrowserClaims = {
   browserSurface: 'Android emulator Chromium snapshot',
   package: chromiumChromePackage,
@@ -55,62 +91,72 @@ describe('Android Chromium production voice Worker/WASM bridge', () => {
     'runs the built browser entry through module Worker and generated Rust/WASM start frame stop complete abandon repeat',
     async () => {
       assertBuiltProductionVoiceArtifacts()
-      const resources = await createResources()
-      cleanup = resources.close
+      const adb = resolveAdb()
+      const serial = resolveDeviceSerial()
+      const originalReverseMappings = adbReverseMappings(adb, serial)
+      removeAdbReverseMapping(adb, serial, reverseSentinel.local)
+      runAdb(adb, serial, ['reverse', reverseSentinel.local, reverseSentinel.remote])
+      const sentinelReverseMapping = requiredReverseMapping(adbReverseMappings(adb, serial), reverseSentinel.local)
+      cleanup = async () => {
+        restoreAdbReverseLocals(adb, serial, originalReverseMappings, [reverseSentinel.local])
+      }
+      const resources = await createResources(adb, serial)
+      cleanup = async () => {
+        await resources.close()
+        restoreAdbReverseLocals(adb, serial, originalReverseMappings, [reverseSentinel.local])
+      }
 
       const result = await waitForSelfReportedProof(resources)
       if (isFailedSelfReport(result)) {
         throw new Error(`Android Chromium harness failed: ${result.error.message}\n${result.error.stack ?? ''}`)
       }
-      const metadata = readHostMetadata(resources.adb, resources.serial, result.selfReported)
+      const metadata = await readHostMetadata(resources.adb, resources.serial, resources.emulator, result.selfReported)
 
-      expect(metadata).toMatchObject({
+      expect(metadata).toEqual({
         deviceSerial: resources.serial,
+        emulator: resources.emulator,
         sdk: '35',
         release: '15',
         cpuAbi: 'x86_64',
+        fingerprint: resources.emulator.fingerprint,
         browserPackage: chromiumChromePackage,
         browserVersion: expectedChromiumVersion,
         browserActivity: chromiumChromeTarget.activityName,
+        apkPath: metadata.apkPath,
         snapshotSource: expectedChromiumSnapshot.source,
-        apkSha256: expectedChromiumSnapshot.apkSha256
+        apkSha256: expectedChromiumSnapshot.apkSha256,
+        userAgent: result.selfReported.userAgent,
+        targetUrl: `${resources.harness.baseUrl}/`
       })
       expect(metadata.userAgent).toContain('Android')
       expect(metadata.userAgent).toContain('Chrome/153.0.0.0')
       expect(metadata.targetUrl).toBe(`${resources.harness.baseUrl}/`)
-      expect(result.selfReported).toMatchObject({
+      expect(result.selfReported).toEqual({
+        userAgent: result.selfReported.userAgent,
         href: `${resources.harness.baseUrl}/`,
+        readyState: 'complete',
         runtimePath: 'self-reporting-page'
       })
       expect(result.claims).toEqual(chromiumClaims)
-      expect(result.artifacts).toMatchObject({
+      expect(result.artifacts).toEqual({
         servedDist: true,
         workerRequested: true,
         wasmRequested: true,
         exactWasmInventory: true,
         wasmCoreWithinLimit: true,
         wasmLoaderWithinLimit: true,
-        forbiddenArtifactCount: 0
+        wasmFiles: expectedWasmFiles,
+        wasmSizes: expectedWasmSizes(),
+        forbiddenArtifactCount: 0,
+        fileCount: expectedDistFileCount()
       })
-      expect(result.artifacts.wasmFiles).toEqual([
-        'aurora_voice_wasm.d.ts',
-        'aurora_voice_wasm.js',
-        'aurora_voice_wasm_bg.wasm',
-        'aurora_voice_wasm_bg.wasm.d.ts'
-      ])
-      expect(result.requests).toEqual(expect.arrayContaining([
-        '/index.html',
-        '/__aurora_voice_harness__.js',
-        '/dist/browser.js',
-        '/dist/voice-worker.js',
-        '/dist/wasm/aurora_voice_wasm.js',
-        '/dist/wasm/aurora_voice_wasm_bg.wasm'
-      ]))
+      expect(result.artifacts.wasmFiles).toEqual(expectedWasmFiles)
+      expect(successFrontier(result.requests)).toEqual(expectedSuccessFrontier)
 
       assertCompleteRepeat(result.completeRepeat, 'android-chromium')
       assertAbandonRepeat(result.abandonRepeat, 'android-chromium')
       assertRedaction(result.redaction)
-      expect(result.leakScan).toMatchObject({
+      expect(result.leakScan).toEqual({
         eventLeak: false,
         snapshotLeak: false,
         consoleLeak: false,
@@ -121,8 +167,11 @@ describe('Android Chromium production voice Worker/WASM bridge', () => {
       expect(result.workerSideErrors).toEqual([])
 
       await resources.close()
+      expect(adbReverseMappings(resources.adb, resources.serial)).toEqual(resources.restoreState.reverseMappings)
+      expect(resources.restoreState.reverseMappings.filter((mapping) => mapping.local === reverseSentinel.local)).toEqual([sentinelReverseMapping])
+      restoreAdbReverseLocals(adb, serial, originalReverseMappings, [reverseSentinel.local])
       cleanup = undefined
-      expect(adbReverseList(resources.adb, resources.serial)).toBe('')
+      expect(adbReverseMappings(resources.adb, resources.serial)).toEqual(originalReverseMappings)
       expect(packageEnabledState(resources.adb, resources.serial, chromiumChromePackage)).toBe(resources.restoreState.packageEnabledState)
       expect(stayOnWhilePluggedIn(resources.adb, resources.serial)).toBe(resources.restoreState.stayOnWhilePluggedIn)
       expect(commandLineState(resources.adb, resources.serial, chromiumChromeTarget.commandLineFile ?? '')).toEqual({
@@ -134,9 +183,8 @@ describe('Android Chromium production voice Worker/WASM bridge', () => {
   )
 })
 
-async function createResources() {
-  const adb = resolveAdb()
-  const serial = resolveDeviceSerial()
+async function createResources(adb = resolveAdb(), serial = resolveDeviceSerial()) {
+  const emulator = assertExpectedAndroidEmulator(adb, serial)
   const harness = await createAndroidWebViewShellHarness(voiceWebRoot, {
     claims: chromiumClaims,
     harnessPrefix: 'android-chromium'
@@ -147,13 +195,19 @@ async function createResources() {
 
   try {
     const port = Number(new URL(harness.baseUrl).port)
-    clearAdbReverseMappings(adb, serial)
+    const priorReverseMappings = adbReverseMappings(adb, serial)
+    removeAdbReverseMapping(adb, serial, `tcp:${port}`)
     runAdb(adb, serial, ['reverse', `tcp:${port}`, `tcp:${port}`])
     reversedPorts.push(port)
-    restoreState = launchAndroidBrowser(adb, serial, chromiumChromeTarget, `${harness.baseUrl}/`)
+    const browserRestoreState = launchAndroidBrowser(adb, serial, chromiumChromeTarget, `${harness.baseUrl}/`)
+    restoreState = {
+      ...browserRestoreState,
+      reverseMappings: priorReverseMappings
+    }
     return {
       adb,
       serial,
+      emulator,
       harness,
       restoreState,
       async close() {
@@ -183,123 +237,195 @@ async function waitForSelfReportedProof(resources: Awaited<ReturnType<typeof cre
   }
 }
 
-function readHostMetadata(adb: string, serial: string, selfReported: SelfReportedPage) {
+async function readHostMetadata(adb: string, serial: string, emulator: AndroidEmulatorMetadata, selfReported: SelfReportedPage) {
+  const apkPath = packageBaseApkPath(adb, serial, chromiumChromePackage)
+  const apkSha256 = await sha256DeviceFile(adb, serial, apkPath)
+  if (apkSha256 !== expectedChromiumSnapshot.apkSha256) {
+    throw new Error(`Installed Chromium APK hash mismatch for ${apkPath}: expected ${expectedChromiumSnapshot.apkSha256}, got ${apkSha256}`)
+  }
   return {
     deviceSerial: serial,
-    sdk: adbOutput(adb, serial, ['shell', 'getprop', 'ro.build.version.sdk']).trim(),
-    release: adbOutput(adb, serial, ['shell', 'getprop', 'ro.build.version.release']).trim(),
-    cpuAbi: adbOutput(adb, serial, ['shell', 'getprop', 'ro.product.cpu.abi']).trim(),
-    fingerprint: adbOutput(adb, serial, ['shell', 'getprop', 'ro.build.fingerprint']).trim(),
+    emulator,
+    sdk: emulator.sdk,
+    release: emulator.release,
+    cpuAbi: emulator.cpuAbi,
+    fingerprint: emulator.fingerprint,
     browserPackage: chromiumChromePackage,
     browserVersion: packageVersion(adb, serial, chromiumChromePackage),
     browserActivity: chromiumChromeTarget.activityName,
+    apkPath,
     userAgent: selfReported.userAgent,
     targetUrl: selfReported.href,
     snapshotSource: expectedChromiumSnapshot.source,
-    apkSha256: expectedChromiumSnapshot.apkSha256
+    apkSha256
   }
 }
 
 function assertCompleteRepeat(completeRepeat: any, prefix: string): void {
-  expect(completeRepeat.first).toMatchObject({
+  expect(completeRepeat.first).toEqual({
     ownerId: `${prefix}-complete`,
     sessionId: `${prefix}-complete:1`,
     generation: 1,
+    startedAtMs: expect.any(Number),
     foregroundOnly: true
   })
-  expect(completeRepeat.firstAudio).toMatchObject({
+  expect(completeRepeat.firstAudio).toEqual({
     sessionId: `${prefix}-complete:1`,
     generation: 1,
     sampleRateHz: 16_000,
     channels: 1,
     sampleCount: 6,
+    durationMs: expect.any(Number),
     pcm: [100, -100, 200, -200, 321, -321],
     redacted: true
   })
-  expect(completeRepeat.stoppedSnapshot).toMatchObject({
-    state: 'stopped',
-    sessionId: `${prefix}-complete:1`,
-    generation: 1,
-    capabilities: { vad: false, kws: false, stt: false, tts: false }
-  })
-  expect(completeRepeat.completedSnapshot).toMatchObject({
-    state: 'idle',
-    sessionId: null,
-    generation: 1,
-    capabilities: { vad: false, kws: false, stt: false, tts: false }
-  })
-  expect(completeRepeat.second).toMatchObject({
-    sessionId: `${prefix}-complete:2`,
-    generation: 2
-  })
-  expect(completeRepeat.secondAudio).toMatchObject({
+  expect(completeRepeat.stoppedSnapshot).toEqual(expectedSnapshot(`${prefix}-complete`, 'stopped', `${prefix}-complete:1`, 1, 0, 0))
+  expect(completeRepeat.completedSnapshot).toEqual(expectedSnapshot(`${prefix}-complete`, 'idle', null, 1, 0, 0))
+  expect(completeRepeat.second).toEqual({
+    ownerId: `${prefix}-complete`,
     sessionId: `${prefix}-complete:2`,
     generation: 2,
+    startedAtMs: expect.any(Number),
+    foregroundOnly: true
+  })
+  expect(completeRepeat.secondAudio).toEqual({
+    sessionId: `${prefix}-complete:2`,
+    generation: 2,
+    sampleRateHz: 16_000,
+    channels: 1,
     sampleCount: 3,
+    durationMs: expect.any(Number),
     pcm: [7, 8, 9],
     redacted: true
   })
-  expect(completeRepeat.finalSnapshot).toMatchObject({
-    state: 'idle',
-    sessionId: null,
-    generation: 2,
-    queuedBytes: 0,
-    capabilities: { vad: false, kws: false, stt: false, tts: false }
-  })
-  expect(completeRepeat.events.map((event: any) => event.kind)).toEqual([
-    'session_started',
-    'frame_accepted',
-    'frame_accepted',
-    'session_stopped',
-    'session_started',
-    'frame_accepted',
-    'session_stopped'
+  expect(completeRepeat.finalSnapshot).toEqual(expectedSnapshot(`${prefix}-complete`, 'idle', null, 2, 0, 0))
+  expect(completeRepeat.events).toEqual([
+    expectedEvent('session_started', `${prefix}-complete`, `${prefix}-complete:1`, 1, null, 0, 0, 0, null),
+    expectedEvent('frame_accepted', `${prefix}-complete`, `${prefix}-complete:1`, 1, 0, 4, 8, 0, null),
+    expectedEvent('frame_accepted', `${prefix}-complete`, `${prefix}-complete:1`, 1, 1, 2, 4, 0, null),
+    expectedEvent('session_stopped', `${prefix}-complete`, `${prefix}-complete:1`, 1, null, 0, 0, 0, 'stopped'),
+    expectedEvent('session_started', `${prefix}-complete`, `${prefix}-complete:2`, 2, null, 0, 0, 0, null),
+    expectedEvent('frame_accepted', `${prefix}-complete`, `${prefix}-complete:2`, 2, 0, 3, 6, 0, null),
+    expectedEvent('session_stopped', `${prefix}-complete`, `${prefix}-complete:2`, 2, null, 0, 0, 0, 'stopped')
   ])
-  expect(completeRepeat.events.every((event: any) => event.redacted === true)).toBe(true)
-  expect(completeRepeat.events.some((event: any) => event.kind === 'error')).toBe(false)
 }
 
 function assertAbandonRepeat(abandonRepeat: any, prefix: string): void {
-  expect(abandonRepeat.first).toMatchObject({
+  expect(abandonRepeat.first).toEqual({
+    ownerId: `${prefix}-abandon`,
     sessionId: `${prefix}-abandon:1`,
-    generation: 1
+    generation: 1,
+    startedAtMs: expect.any(Number),
+    foregroundOnly: true
   })
   expect(abandonRepeat.firstAudio).toEqual({ sampleCount: 4, redacted: true })
-  expect(abandonRepeat.abandonedSnapshot).toMatchObject({
-    state: 'cancelled',
-    sessionId: null,
-    generation: 1,
-    capabilities: { vad: false, kws: false, stt: false, tts: false }
-  })
-  expect(abandonRepeat.second).toMatchObject({
+  expect(abandonRepeat.abandonedSnapshot).toEqual(expectedSnapshot(`${prefix}-abandon`, 'cancelled', null, 1, 0, 0))
+  expect(abandonRepeat.second).toEqual({
+    ownerId: `${prefix}-abandon`,
     sessionId: `${prefix}-abandon:2`,
-    generation: 2
+    generation: 2,
+    startedAtMs: expect.any(Number),
+    foregroundOnly: true
   })
   expect(abandonRepeat.secondAudio).toEqual({ sampleCount: 2, redacted: true })
-  expect(abandonRepeat.finalSnapshot).toMatchObject({
-    state: 'idle',
-    sessionId: null,
-    generation: 2,
-    queuedBytes: 0,
-    capabilities: { vad: false, kws: false, stt: false, tts: false }
-  })
-  expect(abandonRepeat.events.every((event: any) => event.redacted === true)).toBe(true)
-  expect(abandonRepeat.events.some((event: any) => event.kind === 'error')).toBe(false)
+  expect(abandonRepeat.finalSnapshot).toEqual(expectedSnapshot(`${prefix}-abandon`, 'idle', null, 2, 0, 0))
+  expect(abandonRepeat.events).toEqual([
+    expectedEvent('session_started', `${prefix}-abandon`, `${prefix}-abandon:1`, 1, null, 0, 0, 0, null),
+    expectedEvent('frame_accepted', `${prefix}-abandon`, `${prefix}-abandon:1`, 1, 0, 4, 8, 0, null),
+    expectedEvent('session_stopped', `${prefix}-abandon`, `${prefix}-abandon:1`, 1, null, 0, 0, 0, 'stopped'),
+    expectedEvent('session_started', `${prefix}-abandon`, `${prefix}-abandon:2`, 2, null, 0, 0, 0, null),
+    expectedEvent('frame_accepted', `${prefix}-abandon`, `${prefix}-abandon:2`, 2, 0, 2, 4, 0, null),
+    expectedEvent('session_stopped', `${prefix}-abandon`, `${prefix}-abandon:2`, 2, null, 0, 0, 0, 'stopped')
+  ])
 }
 
 function assertRedaction(redaction: any): void {
+  expect(redaction.snapshots).toEqual([
+    expectedSnapshot(`${'android-chromium'}-redacted`, 'idle', null, 0, 0, 0),
+    expectedSnapshot(`${'android-chromium'}-redacted`, 'active', 'android-chromium-redacted:1', 1, 1, 0),
+    expectedSnapshot(`${'android-chromium'}-redacted`, 'stopped', 'android-chromium-redacted:1', 1, 0, 0),
+    expectedSnapshot(`${'android-chromium'}-redacted`, 'idle', null, 1, 0, 0)
+  ])
   for (const snapshot of redaction.snapshots) {
-    expect(snapshot.capabilities).toEqual({ vad: false, kws: false, stt: false, tts: false })
-    expect(snapshot.lifecycle).toMatchObject({
-      foregroundOnly: true,
-      visible: true,
-      frozen: false,
-      eligible: true
-    })
     expect(snapshot).not.toHaveProperty('pcm')
     expect(snapshot).not.toHaveProperty('transcript')
   }
   expect(redaction.captured).toEqual({ sampleCount: 2, redacted: true })
+  expect(redaction.events).toEqual([
+    expectedEvent('session_started', 'android-chromium-redacted', 'android-chromium-redacted:1', 1, null, 0, 0, 0, null),
+    expectedEvent('frame_accepted', 'android-chromium-redacted', 'android-chromium-redacted:1', 1, 0, 2, 4, 0, null),
+    expectedEvent('session_stopped', 'android-chromium-redacted', 'android-chromium-redacted:1', 1, null, 0, 0, 0, 'stopped')
+  ])
+}
+
+function expectedSnapshot(ownerId: string, state: string, sessionId: string | null, generation: number, nextSequence: number, queuedBytes: number) {
+  return {
+    ownerId,
+    sessionId,
+    generation,
+    nextSequence,
+    queuedBytes,
+    state,
+    capabilities: { vad: false, kws: false, stt: false, tts: false },
+    lifecycle: {
+      foregroundOnly: true,
+      visible: true,
+      frozen: false,
+      eligible: true,
+      reason: 'visible'
+    }
+  }
+}
+
+function expectedWasmSizes(): Record<string, number> {
+  return Object.fromEntries(expectedWasmFiles.map((file) => [file, statSync(join(voiceWebDist, 'wasm', file)).size]))
+}
+
+function expectedDistFileCount(): number {
+  return countFiles(voiceWebDist)
+}
+
+function countFiles(root: string): number {
+  return readdirSync(root).reduce((count, name) => {
+    const path = join(root, name)
+    return count + (statSync(path).isDirectory() ? countFiles(path) : 1)
+  }, 0)
+}
+
+function successFrontier(requests: readonly string[]): readonly string[] {
+  return requests.filter((request) => successFrontierUrls.has(request))
+}
+
+function requiredReverseMapping(mappings: readonly { readonly local: string }[], local: string) {
+  const mapping = mappings.find((candidate) => candidate.local === local)
+  if (mapping === undefined) throw new Error(`Missing expected adb reverse mapping for ${local}`)
+  return mapping
+}
+
+function expectedEvent(
+  kind: string,
+  ownerId: string,
+  sessionId: string | null,
+  generation: number,
+  sequence: number | null,
+  sampleCount: number,
+  byteLength: number,
+  queuedBytes: number,
+  reason: string | null
+) {
+  return {
+    kind,
+    ownerId,
+    sessionId,
+    generation,
+    sequence,
+    sampleCount,
+    byteLength,
+    queuedBytes,
+    reason,
+    redacted: true,
+    occurredAtMs: expect.any(Number)
+  }
 }
 
 function filteredChromiumLogcat(adb: string, serial: string): string {
@@ -381,6 +507,7 @@ interface AndroidVoiceBrowserProof {
     readonly wasmFiles: readonly string[]
     readonly wasmSizes: Record<string, number>
     readonly forbiddenArtifactCount: number
+    readonly fileCount: number
   }
   readonly consoleErrors: readonly string[]
   readonly claims: AndroidBrowserClaims

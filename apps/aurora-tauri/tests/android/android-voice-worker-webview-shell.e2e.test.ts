@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   adbOutput,
   adbOutputOrEmpty,
-  clearAdbReverseMappings,
+  adbReverseMappings,
   cleanupWebViewShell,
   createAndroidWebViewShellHarness,
   launchAndroidBrowser,
@@ -209,7 +209,7 @@ describe('Android WebView Shell production voice Worker/WASM bridge', () => {
 
 async function assertWebViewShellModuleScriptCanSelfReport(): Promise<void> {
   const resources = await createResources({
-    indexHtml: `<!doctype html><meta charset="utf-8"><title>Aurora Android WebView Shell preflight</title><body>running<script type="module">
+    indexHtml: `<!doctype html><meta charset="utf-8"><link rel="icon" href="data:,"><title>Aurora Android WebView Shell preflight</title><body>running<script type="module">
       await fetch('/__aurora_result__', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -257,10 +257,15 @@ async function createResources(options: Parameters<typeof createAndroidWebViewSh
 
   try {
     const port = Number(new URL(harness.baseUrl).port)
-    clearAdbReverseMappings(adb, serial)
+    const priorReverseMappings = adbReverseMappings(adb, serial)
+    runAdb(adb, serial, ['reverse', '--remove', `tcp:${port}`])
     runAdb(adb, serial, ['reverse', `tcp:${port}`, `tcp:${port}`])
     reversedPorts.push(port)
-    restoreState = launchAndroidBrowser(adb, serial, webViewShellTarget, `${harness.baseUrl}/`)
+    const browserRestoreState = launchAndroidBrowser(adb, serial, webViewShellTarget, `${harness.baseUrl}/`)
+    restoreState = {
+      ...browserRestoreState,
+      reverseMappings: priorReverseMappings
+    }
     return {
       adb,
       serial,

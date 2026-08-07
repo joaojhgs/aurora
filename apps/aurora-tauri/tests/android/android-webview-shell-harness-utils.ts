@@ -1,4 +1,5 @@
-import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
@@ -31,6 +32,7 @@ export interface AndroidBrowserTarget {
 export interface AndroidBrowserRestoreState {
   readonly packageEnabledState: string
   readonly stayOnWhilePluggedIn: string
+  readonly reverseMappings: readonly AndroidAdbReverseMapping[]
   readonly commandLine?: {
     readonly file: string
     readonly existed: boolean
@@ -48,6 +50,20 @@ export interface AndroidBrowserClaims {
   readonly pcmSource: string
   readonly microphonePermission: boolean
   readonly acousticCapture: boolean
+}
+
+export interface AndroidAdbReverseMapping {
+  readonly serial: string
+  readonly local: string
+  readonly remote: string
+}
+
+export interface AndroidEmulatorMetadata {
+  readonly roKernelQemu: '1'
+  readonly sdk: '35'
+  readonly release: '15'
+  readonly cpuAbi: 'x86_64'
+  readonly fingerprint: string
 }
 
 export interface AndroidWebViewShellHarness {
@@ -121,6 +137,24 @@ export function resolveDeviceSerial(): string {
   return process.env.AURORA_ANDROID_DEVICE_SERIAL ?? defaultDeviceSerial
 }
 
+export function assertExpectedAndroidEmulator(adb: string, serial: string): AndroidEmulatorMetadata {
+  const roKernelQemu = adbOutput(adb, serial, ['shell', 'getprop', 'ro.kernel.qemu']).trim()
+  const sdk = adbOutput(adb, serial, ['shell', 'getprop', 'ro.build.version.sdk']).trim()
+  const release = adbOutput(adb, serial, ['shell', 'getprop', 'ro.build.version.release']).trim()
+  const cpuAbi = adbOutput(adb, serial, ['shell', 'getprop', 'ro.product.cpu.abi']).trim()
+  const fingerprint = adbOutput(adb, serial, ['shell', 'getprop', 'ro.build.fingerprint']).trim()
+  if (roKernelQemu !== '1' || sdk !== '35' || release !== '15' || cpuAbi !== 'x86_64') {
+    throw new Error(`Android browser proof requires emulator API35/x86_64; got ro.kernel.qemu=${roKernelQemu}, sdk=${sdk}, release=${release}, cpuAbi=${cpuAbi}`)
+  }
+  return {
+    roKernelQemu,
+    sdk,
+    release,
+    cpuAbi,
+    fingerprint
+  }
+}
+
 export async function createAndroidWebViewShellHarness(root: string, options: AndroidWebViewShellHarnessOptions = {}): Promise<AndroidWebViewShellHarness> {
   const normalizedRoot = normalize(root)
   const requests: string[] = []
@@ -153,7 +187,7 @@ export async function createAndroidWebViewShellHarness(root: string, options: An
       if (settledError !== undefined) throw settledError
       if (settledResult !== undefined) return settledResult as T
       const timeout = new Promise<never>((_resolve, reject) => {
-        setTimeout(() => reject(new Error(`Timed out waiting for Android WebView Shell self-reported result after ${timeoutMs}ms`)), timeoutMs)
+        setTimeout(() => reject(new Error(`Timed out waiting for Android browser self-reported result after ${timeoutMs}ms`)), timeoutMs)
       })
       return await Promise.race([resultPromise, timeout]) as T
     },
@@ -191,10 +225,37 @@ export function packageVersion(adb: string, serial: string, packageName: string)
   return /versionName=([^\s]+)/u.exec(output)?.[1] ?? 'unknown'
 }
 
+export function packageBaseApkPath(adb: string, serial: string, packageName: string): string {
+  const output = adbOutput(adb, serial, ['shell', 'pm', 'path', packageName]).trim()
+  const line = output.split('\n').find((entry) => entry.startsWith('package:') && entry.endsWith('/base.apk'))
+    ?? output.split('\n').find((entry) => entry.startsWith('package:'))
+  if (line === undefined) throw new Error(`Could not resolve base APK path for ${packageName}: ${output}`)
+  return line.slice('package:'.length)
+}
+
+export async function sha256DeviceFile(adb: string, serial: string, path: string): Promise<string> {
+  const hash = createHash('sha256')
+  const child = spawn(adb, ['-s', serial, 'exec-out', 'cat', path], {
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+  let stderr = ''
+  child.stdout.on('data', (chunk: Buffer) => hash.update(chunk))
+  child.stderr.on('data', (chunk: Buffer) => {
+    stderr += chunk.toString('utf8')
+  })
+  const exitCode = await new Promise<number | null>((resolve, reject) => {
+    child.once('error', reject)
+    child.once('close', resolve)
+  })
+  if (exitCode !== 0) throw new Error(`adb exec-out cat ${path} failed: ${stderr}`)
+  return hash.digest('hex')
+}
+
 function captureAndroidBrowserState(adb: string, serial: string, target: AndroidBrowserTarget): AndroidBrowserRestoreState {
   return {
     packageEnabledState: packageEnabledState(adb, serial, target.packageName),
     stayOnWhilePluggedIn: adbOutputOrEmpty(adb, serial, ['shell', 'settings', 'get', 'global', 'stay_on_while_plugged_in']).trim(),
+    reverseMappings: adbReverseMappings(adb, serial),
     commandLine: target.commandLineFile === undefined ? undefined : captureCommandLine(adb, serial, target.commandLineFile)
   }
 }
@@ -219,6 +280,7 @@ export async function launchWebViewShell(adb: string, serial: string, url: strin
 
 export function launchAndroidBrowser(adb: string, serial: string, target: AndroidBrowserTarget, url: string): AndroidBrowserRestoreState {
   runAdb(adb, serial, ['wait-for-device'])
+  assertExpectedAndroidEmulator(adb, serial)
   const restoreState = captureAndroidBrowserState(adb, serial, target)
   try {
     runAdb(adb, serial, ['shell', 'pm', 'enable', target.packageName])
@@ -258,7 +320,12 @@ export function cleanupWebViewShell(adb: string, serial: string, reversedPorts: 
 export function cleanupAndroidBrowser(adb: string, serial: string, target: AndroidBrowserTarget, reversedPorts: readonly number[], restoreState?: AndroidBrowserRestoreState): void {
   spawnSync(adb, ['-s', serial, 'shell', 'am', 'force-stop', target.packageName], { stdio: 'ignore' })
   for (const port of reversedPorts) {
-    spawnSync(adb, ['-s', serial, 'reverse', '--remove', `tcp:${port}`], { stdio: 'ignore' })
+    const local = `tcp:${port}`
+    spawnSync(adb, ['-s', serial, 'reverse', '--remove', local], { stdio: 'ignore' })
+    const priorMapping = restoreState?.reverseMappings.find((mapping) => mapping.local === local)
+    if (priorMapping !== undefined) {
+      spawnSync(adb, ['-s', serial, 'reverse', priorMapping.local, priorMapping.remote], { stdio: 'ignore' })
+    }
   }
   if (restoreState?.commandLine !== undefined) {
     restoreCommandLine(adb, serial, restoreState.commandLine)
@@ -269,12 +336,40 @@ export function cleanupAndroidBrowser(adb: string, serial: string, target: Andro
   }
 }
 
-export function clearAdbReverseMappings(adb: string, serial: string): void {
-  spawnSync(adb, ['-s', serial, 'reverse', '--remove-all'], { stdio: 'ignore' })
+export function removeAdbReverseMapping(adb: string, serial: string, local: string): void {
+  spawnSync(adb, ['-s', serial, 'reverse', '--remove', local], { stdio: 'ignore' })
 }
 
 export function adbReverseList(adb: string, serial: string): string {
   return adbOutputOrEmpty(adb, serial, ['reverse', '--list']).trim()
+}
+
+export function adbReverseMappings(adb: string, serial: string): readonly AndroidAdbReverseMapping[] {
+  return adbReverseList(adb, serial)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [mappingSerial, local, remote] = line.split(/\s+/u)
+      return { serial: mappingSerial, local, remote }
+    })
+}
+
+export function restoreAdbReverseMappings(adb: string, serial: string, expectedMappings: readonly AndroidAdbReverseMapping[]): void {
+  for (const mapping of expectedMappings) {
+    removeAdbReverseMapping(adb, serial, mapping.local)
+    spawnSync(adb, ['-s', serial, 'reverse', mapping.local, mapping.remote], { stdio: 'ignore' })
+  }
+}
+
+export function restoreAdbReverseLocals(adb: string, serial: string, expectedMappings: readonly AndroidAdbReverseMapping[], locals: readonly string[]): void {
+  for (const local of locals) {
+    removeAdbReverseMapping(adb, serial, local)
+    const priorMapping = expectedMappings.find((mapping) => mapping.local === local)
+    if (priorMapping !== undefined) {
+      spawnSync(adb, ['-s', serial, 'reverse', priorMapping.local, priorMapping.remote], { stdio: 'ignore' })
+    }
+  }
 }
 
 function restoreCommandLine(adb: string, serial: string, commandLine: NonNullable<AndroidBrowserRestoreState['commandLine']>): void {
@@ -388,7 +483,7 @@ async function handleStaticRequest(
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store'
     })
-    response.end(options.indexHtml ?? `<!doctype html><meta charset="utf-8"><title>Aurora voice Android WebView Shell proof</title><body>running<script type="module">
+    response.end(options.indexHtml ?? `<!doctype html><meta charset="utf-8"><link rel="icon" href="data:,"><title>Aurora voice Android WebView Shell proof</title><body>running<script type="module">
       try {
         globalThis.__auroraAndroidBrowserClaims = ${JSON.stringify(options.claims ?? defaultWebViewClaims)};
         globalThis.__auroraAndroidHarnessPrefix = ${JSON.stringify(options.harnessPrefix ?? 'android-webview')};
