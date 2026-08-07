@@ -101,6 +101,15 @@ def test_manifest_pins_correct_native_release_urls_and_contained_sizes() -> None
     assert artifacts["sherpa-onnx-ios-static-xcframework-1.13.4"]["url"].endswith(
         "/sherpa-onnx-v1.13.4-ios.xcframework.zip"
     )
+    kws = artifacts["sherpa-kws-gigaspeech-2024-01-01"]
+    assert kws["url"].endswith(
+        "/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2"
+    )
+    assert "-mobile" not in kws["id"]
+    assert kws["sha256"] == "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a"
+    assert kws["contained_files"][0]["sha256"] == (
+        "1e721676515bcd42a186979733981213c66c80db680e1cc582dfedf3be76e678"
+    )
 
     cpal = artifacts["cpal-source-v0.17.3"]
     assert cpal["license"]["spdx"] == "Apache-2.0"

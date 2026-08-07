@@ -13,12 +13,8 @@ from pathlib import Path
 from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_ARTIFACT_ROOT = Path(
-    "/home/developer/projects/aurora-worktrees/"
-    "pockettts-native-p4-evidence-20260806/.artifacts/pockettts/p4-native-voice"
-)
 MOONSHINE_NAME = "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27"
-KWS_NAME = "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile"
+KWS_NAME = "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01"
 TTS_NAME = "vits-piper-en_US-ljspeech-medium"
 
 
@@ -31,8 +27,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--artifact-root",
         type=Path,
-        default=Path(os.environ.get("AURORA_VOICE_P4_ARTIFACT_ROOT", DEFAULT_ARTIFACT_ROOT)),
-        help="Phase 4 artifact root containing builds/ and models/.",
+        default=_artifact_root_default(),
+        required=_artifact_root_default() is None,
+        help=(
+            "Phase 4 artifact root containing builds/ and models/. "
+            "May also be supplied with AURORA_VOICE_P4_ARTIFACT_ROOT."
+        ),
     )
     parser.add_argument("--install-dir", type=Path, help="sherpa install directory.")
     parser.add_argument("--models-dir", type=Path, help="directory containing extracted models.")
@@ -55,6 +55,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cancel-after-callbacks", type=int, default=1)
     parser.add_argument("--print-compile-command", action="store_true")
     return parser
+
+
+def _artifact_root_default() -> Path | None:
+    value = os.environ.get("AURORA_VOICE_P4_ARTIFACT_ROOT")
+    return Path(value) if value else None
 
 
 def require_path(path: Path, label: str) -> Path:

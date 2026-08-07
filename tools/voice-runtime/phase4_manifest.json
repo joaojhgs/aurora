@@ -198,30 +198,30 @@
       ]
     },
     {
-      "id": "sherpa-kws-gigaspeech-mobile-2024-01-01",
+      "id": "sherpa-kws-gigaspeech-2024-01-01",
       "kind": "model",
       "role": "kws-en-candidate",
       "status": "selected",
-      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile.tar.bz2",
-      "version": "2024-01-01-mobile",
-      "sha256": "2e6ac2577310bfa2f4b6b5fab0478b868c9d0b2cb2c51b3e13b50581b588864d",
-      "size_bytes": 15667804,
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2",
+      "version": "2024-01-01",
+      "sha256": "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a",
+      "size_bytes": 17626723,
       "license": {
         "spdx": "Apache-2.0",
-        "evidence": "models/extracted/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile/README.md",
+        "evidence": "models/extracted/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/README.md",
         "evidence_sha256": "74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2",
         "disposition": "allowed"
       },
       "contained_files": [
         {
           "path": "encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
-          "size_bytes": 4000908,
-          "sha256": "7d5a25fbc14b423074fe0c58e1be388ccf3f1a815c649980232a0c47f81875e4"
+          "size_bytes": 4807159,
+          "sha256": "1e721676515bcd42a186979733981213c66c80db680e1cc582dfedf3be76e678"
         },
         {
           "path": "encoder-epoch-12-avg-2-chunk-16-left-64.onnx",
-          "size_bytes": 11525206,
-          "sha256": "c76079c1b9f1fd1badd794bb0b672e2da90d81e205b64792f70913d6fa14b72f"
+          "size_bytes": 12174219,
+          "sha256": "063fbc1aeae8a9b574607a331a00e60371846ef9eaa3c1d9ea48176665dfc693"
         },
         {
           "path": "decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
@@ -252,6 +252,11 @@
           "path": "keywords_raw.txt",
           "size_bytes": 102,
           "sha256": "f8d067c3c84bcf9240988b17bd28ce7a21e86f5ad9c01a4f1d6e052f9c38053d"
+        },
+        {
+          "path": "test_wavs/test_keywords.txt",
+          "size_bytes": 52,
+          "sha256": "fd9c3b504ab922bc96ce8613eff02193f8a5526fcf74a14df436c7af74ad649d"
         }
       ]
     },

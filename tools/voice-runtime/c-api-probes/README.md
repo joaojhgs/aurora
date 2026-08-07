@@ -27,9 +27,13 @@ The artifact root is expected to contain:
 - `builds/linux-x86_64/install/include`
 - `builds/linux-x86_64/install/lib`
 - `models/extracted/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27`
-- `models/extracted/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile`
+- `models/extracted/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01`
 - `models/extracted/vits-piper-en_US-ljspeech-medium`
 - `models/silero-vad-v4.0.onnx`
+
+The original GigaSpeech KWS package is the selected Phase 4 probe input. The
+smaller `-mobile` package currently aborts the native ORT stream with a reshape
+error and must stay unavailable until a separate exact-pack gate passes.
 
 By default the VAD and KWS probes use the KWS package's bundled 16 kHz wavs.
 Override the exact wavs by editing the runner arguments or invoking the
