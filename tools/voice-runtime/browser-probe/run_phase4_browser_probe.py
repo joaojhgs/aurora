@@ -90,24 +90,30 @@ globalThis.runAuroraPhase4VoiceProbe = (timeoutMs = 120000) => new Promise((reso
         if (pending === 0) {
           clearTimeout(timeout);
           clearInterval(ticker);
+          const workerScope = Boolean(
+            results.vadAsr && results.vadAsr.workerScope && results.kws && results.kws.workerScope
+          );
+          const sharedArrayBuffer = Boolean(
+            results.vadAsr && results.vadAsr.sharedArrayBuffer &&
+            results.kws && results.kws.sharedArrayBuffer
+          );
+          const crossOriginIsolated = globalThis.crossOriginIsolated === true;
           resolve({
-            ok: Boolean(results.vadAsr && results.vadAsr.ok && results.kws && results.kws.ok),
+            ok: Boolean(
+              results.vadAsr && results.vadAsr.ok && results.kws && results.kws.ok &&
+              workerScope && sharedArrayBuffer && crossOriginIsolated
+            ),
             vad: results.vadAsr && results.vadAsr.vad,
             asr: results.vadAsr && results.vadAsr.asr,
             kws: results.kws,
-            workerScope: Boolean(
-              results.vadAsr && results.vadAsr.workerScope && results.kws && results.kws.workerScope
-            ),
-            sharedArrayBuffer: Boolean(
-              results.vadAsr && results.vadAsr.sharedArrayBuffer &&
-              results.kws && results.kws.sharedArrayBuffer
-            ),
+            workerScope,
+            sharedArrayBuffer,
             mainThread: {
               elapsedMs: performance.now() - started,
               intervalTicks: ticks,
               maxIntervalLagMs: maxLagMs,
             },
-            crossOriginIsolated: globalThis.crossOriginIsolated === true,
+            crossOriginIsolated,
             progress,
           });
         } else if (item.name === 'vadAsr') {
@@ -295,12 +301,19 @@ function runAsr(Module, probe) {
   const started = performance.now();
   recognizer.decode(stream);
   const result = recognizer.getResult(stream);
+  const normalizedText = String(result.text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  const expectedText =
+    'ask not what your country can do for you ask what you can do for your country';
   const decodeMs = performance.now() - started;
   stream.free();
   recognizer.free();
   return {
-    ok: typeof result.text === 'string',
+    ok: normalizedText === expectedText,
     text: result.text || '',
+    normalizedText,
     decodeMs,
   };
 }
@@ -503,8 +516,12 @@ function runKws(Module, probe, keywords) {
   const decodeMs = performance.now() - started;
   stream.free();
   kws.free();
+  const detectedKeywords = new Set(
+    detections.map((item) => String(item.keyword || '').trim().toUpperCase())
+  );
+  const expectedKeywords = ['LOVELY CHILD', 'FOREVER'];
   return {
-    ok: detections.some((item) => String(item.keyword).toUpperCase().includes('FOREVER')),
+    ok: expectedKeywords.every((keyword) => detectedKeywords.has(keyword)),
     detections,
     sampleRate: probe.sampleRate,
     decodeMs,
@@ -741,10 +758,11 @@ def run_browser_probe(url: str, browser_name: str, timeout_ms: int) -> dict[str,
                 result["browserLogs"] = browser_logs[-40:]
             finally:
                 browser.close()
+        passed = probe_result_passes(result)
         return {
             "browser": browser_name,
-            "ok": bool(result.get("ok")),
-            "withheld": not bool(result.get("ok")),
+            "ok": passed,
+            "withheld": not passed,
             "elapsedMs": round((time.monotonic() - started) * 1000, 2),
             "result": result,
         }
@@ -763,6 +781,21 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def probe_result_passes(result: dict[str, Any]) -> bool:
+    """Return whether one browser satisfied every Phase 4 promotion gate."""
+    return all(
+        (
+            result.get("ok") is True,
+            result.get("workerScope") is True,
+            result.get("sharedArrayBuffer") is True,
+            result.get("crossOriginIsolated") is True,
+            isinstance(result.get("vad"), dict) and result["vad"].get("ok") is True,
+            isinstance(result.get("asr"), dict) and result["asr"].get("ok") is True,
+            isinstance(result.get("kws"), dict) and result["kws"].get("ok") is True,
+        )
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     artifact_root = args.artifact_root.resolve()
@@ -778,9 +811,10 @@ def main(argv: list[str] | None = None) -> int:
     with serve_probe(artifact_root) as url:
         results = [run_browser_probe(url, browser, args.timeout_ms) for browser in browsers]
 
+    all_requested_ok = all(item.get("ok") is True for item in results)
     payload = {
-        "ok": any(item.get("ok") is True for item in results),
-        "all_requested_ok": all(item.get("ok") is True for item in results),
+        "ok": all_requested_ok,
+        "all_requested_ok": all_requested_ok,
         "artifact_root": str(artifact_root),
         "browsers": results,
     }

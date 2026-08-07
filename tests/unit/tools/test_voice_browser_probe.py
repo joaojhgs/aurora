@@ -51,8 +51,60 @@ def test_worker_uses_dedicated_worker_and_real_vad_asr_assets() -> None:
     assert "sherpa-onnx-wasm-kws-main.js" in runner.KWS_WORKER_JS
     assert "createKws" in runner.KWS_WORKER_JS
     assert "FOREVER" in runner.KWS_WORKER_JS
+    assert "LOVELY CHILD" in runner.KWS_WORKER_JS
+    assert "normalizedText === expectedText" in runner.WORKER_JS
+    assert "expectedKeywords.every" in runner.KWS_WORKER_JS
     assert "results.kws && results.kws.ok" in runner.INDEX_HTML
+    assert "workerScope && sharedArrayBuffer && crossOriginIsolated" in runner.INDEX_HTML
     assert "workers[0].worker.postMessage" in runner.INDEX_HTML
+
+
+def test_probe_result_passes_requires_every_runtime_gate() -> None:
+    runner = load_runner()
+    passing = {
+        "ok": True,
+        "workerScope": True,
+        "sharedArrayBuffer": True,
+        "crossOriginIsolated": True,
+        "vad": {"ok": True},
+        "asr": {"ok": True},
+        "kws": {"ok": True},
+    }
+
+    assert runner.probe_result_passes(passing)
+    for key in ("ok", "workerScope", "sharedArrayBuffer", "crossOriginIsolated"):
+        assert not runner.probe_result_passes({**passing, key: False})
+    for key in ("vad", "asr", "kws"):
+        assert not runner.probe_result_passes({**passing, key: {"ok": False}})
+
+
+def test_main_fails_when_any_requested_browser_fails(tmp_path: Path, monkeypatch) -> None:
+    runner = load_runner()
+    for relative in runner.REQUIRED_ARTIFACTS:
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"x")
+
+    results = iter(
+        (
+            {"browser": "chromium", "ok": True},
+            {"browser": "firefox", "ok": False},
+        )
+    )
+    monkeypatch.setattr(runner, "run_browser_probe", lambda *_args: next(results))
+
+    exit_code = runner.main(
+        [
+            "--artifact-root",
+            str(tmp_path),
+            "--browser",
+            "chromium",
+            "--browser",
+            "firefox",
+        ]
+    )
+
+    assert exit_code == 1
 
 
 def test_server_serves_emscripten_default_wasm_basename(tmp_path: Path) -> None:
