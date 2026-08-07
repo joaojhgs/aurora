@@ -541,6 +541,7 @@ def _marker_vectors(item: Mapping[str, Any], raw_vectors: Mapping[str, Any]) -> 
         else _MARKER_POSITIVE_INPUTS[schema_id]
     )
     positive_normalized = _pydantic_normalized(item["model_name"], positive_input)
+    positive_cases = [dict(case) for case in raw_vectors.get("positive_cases", ())]
     negative_cases = [dict(case) for case in raw_vectors.get("negative_cases", ())]
     negative_cases.extend(_marker_negative_cases(schema_id, marker_paths, positive_input))
     model = _model_class(item["model_name"])
@@ -563,6 +564,7 @@ def _marker_vectors(item: Mapping[str, Any], raw_vectors: Mapping[str, Any]) -> 
             "normalized": positive_normalized,
             "normalized_hash": sha256_text(canonical_json(positive_normalized)),
         },
+        "positive_cases": positive_cases,
         "negative_cases": negative_cases,
     }
 

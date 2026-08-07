@@ -48,12 +48,14 @@
     "event_id": {
       "maxLength": 256,
       "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$",
       "title": "Event Id",
       "type": "string"
     },
     "kind": {
       "default": "",
       "maxLength": 128,
+      "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Kind",
       "type": "string"
     },

@@ -54,7 +54,7 @@
       "requires_correlation_id": true,
       "route_kind": "gateway_sse_builtin",
       "route_path": "/api/events/stream",
-      "schema_hash": "bc634dde739ecea9b9fe9f6913763ef556a8c7dcd67cac3fbcee3f25fd5ad9ed",
+      "schema_hash": "bb9da4d3e167055a01ecbe8820980fa275aac81d4995d7e52b66612de2ee6fb4",
       "schema_id": "Aurora.EventStream.envelope.AuroraEventStreamEvent",
       "scoped_categories": [
         "assistant"
@@ -1169,12 +1169,14 @@
           "event_id": {
             "maxLength": 256,
             "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$",
             "title": "Event Id",
             "type": "string"
           },
           "kind": {
             "default": "",
             "maxLength": 128,
+            "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
             "title": "Kind",
             "type": "string"
           },
@@ -1358,7 +1360,7 @@
         "type": "object",
         "x-aurora-extra-behavior": "strip"
       },
-      "schema_hash": "bc634dde739ecea9b9fe9f6913763ef556a8c7dcd67cac3fbcee3f25fd5ad9ed",
+      "schema_hash": "bb9da4d3e167055a01ecbe8820980fa275aac81d4995d7e52b66612de2ee6fb4",
       "schema_id": "Aurora.EventStream.envelope.AuroraEventStreamEvent",
       "vectors": {
         "negative": {

@@ -2,11 +2,11 @@
   "allowlist_hash": "3da1e10d9ce1bad23c89b233d96d136056bdb5a0fdb0c8d7aec3f055d39dfee8",
   "artifact": "aurora-sdk-backend-contracts-manifest",
   "content_hashes": {
-    "backend-contracts.schema.json": "e7c4774a35e9c0a71dca6d2e80b431461277a5e0eb8f965f9f3ec7c0c43cf8bd",
-    "backend-contracts.zod.ts": "74951348e393586047b83ec67ce1b80310a29ae33dd629a3541bd9f4594744b2",
+    "backend-contracts.schema.json": "824ad2c7b2909a99824ce9cc218e817e86574fa5325436d8ca256c7f97df36ef",
+    "backend-contracts.zod.ts": "7d5ede423a0e8c419368b677347501d69a38e79ca29627fcb52249e9976f37af",
     "tooling-local-provider-v1.json": "08e8986359133a5d214b5099aecbfba356046ce290d365d6e0dca254e2ed5531"
   },
-  "final_checksum": "ad1d9f5ceea6ece383310de25f50d3b2b22e237cd1fdf8aab206f0f5139b6436",
+  "final_checksum": "15d8b8f3e17fb50cf08f940174930e24596e1b5cb8dec8bdb15f4910f8c853d5",
   "generator_format_version": "aurora-sdk-zod-codegen-v1",
   "generator_source_hash": "5d6a17414fa7665a06598cb04d5976f1378ca53730626dce233ce0c8a77ae12b",
   "pydantic_version": "2",

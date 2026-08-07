@@ -640,7 +640,6 @@ def _live_display_payload(topic: str, payload: dict[str, Any]) -> dict[str, Any]
     if topic == TTSMethods.AUDIO_CHUNK:
         result = {}
         _copy_string(payload, result, "stream_id")
-        _copy_string(payload, result, "audio_data")
         _copy_string(payload, result, "format")
         _copy_string(payload, result, "reason")
         _copy_string(payload, result, "correlation_id")

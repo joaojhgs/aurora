@@ -133,3 +133,31 @@ def test_rust_contract_marker_vectors_cover_every_normalization_marker_schema() 
 
     assert positive_covered == expected
     assert negative_covered == expected
+
+
+def test_rust_contract_fixture_preserves_duplicate_heavy_tooling_positive_cases() -> None:
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    fixture = json.loads(render_vector_fixture(schema))
+
+    duplicate_cases = [
+        vector
+        for vector in fixture["vectors"]
+        if vector.get("accepted") is True
+        and vector.get("schema_id")
+        in {
+            "Tooling.GetExportCatalog.output.ToolingGetExportCatalogResponse",
+            "Tooling.GetTools.output.ToolingGetToolsResponse",
+        }
+        and len(vector["input"]["tools"][0]["legacy_global_tool_ids"]) == 40
+    ]
+
+    assert {vector["schema_id"] for vector in duplicate_cases} == {
+        "Tooling.GetExportCatalog.output.ToolingGetExportCatalogResponse",
+        "Tooling.GetTools.output.ToolingGetToolsResponse",
+    }
+    for vector in duplicate_cases:
+        assert vector["input"]["tools"][0]["legacy_global_tool_ids"].count("legacy-b") == 20
+        assert vector["normalized"]["tools"][0]["legacy_global_tool_ids"] == [
+            "legacy-a",
+            "legacy-b",
+        ]

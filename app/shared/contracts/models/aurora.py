@@ -9,6 +9,9 @@ from pydantic import Field
 
 from app.shared.contracts.registry import IOModel
 
+EVENT_STREAM_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$"
+EVENT_STREAM_KIND_PATTERN = r"^$|^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+
 
 class AuroraModule:
     """Module identifier for cross-service Aurora contracts."""
@@ -52,9 +55,9 @@ class AuroraEventStreamEvent(IOModel):
     tool arguments.
     """
 
-    event_id: str = Field(min_length=1, max_length=256)
+    event_id: str = Field(min_length=1, max_length=256, pattern=EVENT_STREAM_ID_PATTERN)
     topic: str = Field(min_length=1, max_length=256)
-    kind: str = Field(default="", max_length=128)
+    kind: str = Field(default="", max_length=128, pattern=EVENT_STREAM_KIND_PATTERN)
     category: AuroraEventCategory = "unknown"
     action: str = Field(default="", max_length=128)
     status: str = Field(default="", max_length=128)

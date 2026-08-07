@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import datetime
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -21,10 +22,15 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from app.helpers.aurora_logger import log_error, log_info
+from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.services.gateway.auth import check_auth_enabled, create_scoped_auth_check
 from app.services.gateway.dependencies import get_rtc_client
-from app.shared.contracts.models.aurora import AuroraEventStreamEvent, AuroraMethods
+from app.shared.contracts.models.aurora import (
+    EVENT_STREAM_ID_PATTERN,
+    EVENT_STREAM_KIND_PATTERN,
+    AuroraEventStreamEvent,
+    AuroraMethods,
+)
 from app.shared.contracts.models.gateway import GatewayListEventsRequest, GatewayMethods
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
 from app.shared.contracts.models.tts import TTSMethods
@@ -509,6 +515,10 @@ class _UnscopedPrincipal:
 
 
 _UNSCOPED_PRINCIPAL = _UnscopedPrincipal()
+_BACKFILL_UNAVAILABLE_MESSAGE = "Recent events are temporarily unavailable."
+_BACKFILL_UNAVAILABLE_CODE = "bounded_replay_unavailable"
+_SSE_ID_RE = re.compile(EVENT_STREAM_ID_PATTERN)
+_SSE_KIND_RE = re.compile(EVENT_STREAM_KIND_PATTERN)
 
 
 def _event_stream_filters(kind: list[str]) -> tuple[set[str], set[str]]:
@@ -610,10 +620,12 @@ async def _stream_backfill_events(
             origin="internal",
         )
     except Exception as exc:
-        yield _degraded_event(f"bounded backfill unavailable: {exc}")
+        log_warning(f"Gateway event stream backfill unavailable (error_type={type(exc).__name__})")
+        yield _degraded_event()
         return
     if not getattr(result, "ok", False):
-        yield _degraded_event(str(getattr(result, "error", None) or "bounded backfill unavailable"))
+        log_warning("Gateway event stream backfill request returned an unavailable result")
+        yield _degraded_event()
         return
     events = list(getattr(result.data, "events", []) or [])
     for event in reversed(events):
@@ -623,12 +635,10 @@ async def _stream_backfill_events(
         ):
             yield event
     if (last_event_id or replay_from) and not events:
-        yield _degraded_event(
-            "requested replay cursor is not present in the bounded Gateway event buffer"
-        )
+        yield _degraded_event()
 
 
-def _degraded_event(message: str) -> AuroraEventStreamEvent:
+def _degraded_event() -> AuroraEventStreamEvent:
     return AuroraEventStreamEvent(
         event_id="stream-degraded",
         topic=AuroraMethods.EVENT_STREAM,
@@ -638,15 +648,22 @@ def _degraded_event(message: str) -> AuroraEventStreamEvent:
         status="degraded",
         severity="warning",
         redacted_payload={
-            "code": "bounded_replay_unavailable",
-            "message": message,
+            "code": _BACKFILL_UNAVAILABLE_CODE,
+            "message": _BACKFILL_UNAVAILABLE_MESSAGE,
             "durable_replay": False,
         },
     )
 
 
+def _sse_line_value(value: str, *, field: str, pattern: re.Pattern[str]) -> str:
+    if "\r" in value or "\n" in value or not pattern.fullmatch(value):
+        raise ValueError(f"unsafe SSE {field}")
+    return value
+
+
 def _sse_payload(event: AuroraEventStreamEvent) -> str:
     payload = event.model_dump(mode="json", exclude_none=True)
     data = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-    event_name = event.kind or event.category
-    return f"id: {event.event_id}\nevent: {event_name}\ndata: {data}\n\n"
+    event_id = _sse_line_value(event.event_id, field="id", pattern=_SSE_ID_RE)
+    event_name = _sse_line_value(event.kind or event.category, field="event", pattern=_SSE_KIND_RE)
+    return f"id: {event_id}\nevent: {event_name}\ndata: {data}\n\n"

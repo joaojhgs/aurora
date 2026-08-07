@@ -297,7 +297,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "Aurora.EventStream",
         direction: "envelope",
         model_name: "AuroraEventStreamEvent",
-        schema_hash: "bc634dde739ecea9b9fe9f6913763ef556a8c7dcd67cac3fbcee3f25fd5ad9ed",
+        schema_hash: "bb9da4d3e167055a01ecbe8820980fa275aac81d4995d7e52b66612de2ee6fb4",
         schema_json: include_str!("../schema/aurora_event_stream_event.json"),
     },
     SchemaDescriptor {
@@ -1557,7 +1557,7 @@ pub static ENVELOPE_DESCRIPTORS: &[EnvelopeDescriptor] = &[EnvelopeDescriptor {
     module: "Aurora",
     name: "EventStream",
     schema_id: "Aurora.EventStream.envelope.AuroraEventStreamEvent",
-    schema_hash: "bc634dde739ecea9b9fe9f6913763ef556a8c7dcd67cac3fbcee3f25fd5ad9ed",
+    schema_hash: "bb9da4d3e167055a01ecbe8820980fa275aac81d4995d7e52b66612de2ee6fb4",
     required_permissions_broad: &["Gateway.manage"],
     required_permissions_scoped: &["Orchestrator.use"],
     scoped_topics: &["Orchestrator.Response", "TTS.AudioChunk"],

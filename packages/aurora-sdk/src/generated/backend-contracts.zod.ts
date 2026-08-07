@@ -165,8 +165,8 @@ export const AuroraEventStreamEnvelopeAuroraEventStreamEventSchema = z.object({
   "action": z.string().refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).prefault("").meta({"default":""}).optional(),
   "category": z.enum(["admin_action", "assistant", "audio", "audit", "capability", "config", "data", "pairing", "peer", "route", "scheduler", "service", "tool_approval", "tool_execution", "tool_progress", "unknown"]).prefault("unknown").meta({"default":"unknown"}).optional(),
   "correlation_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
-  "event_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}),
-  "kind": z.string().refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).prefault("").meta({"default":""}).optional(),
+  "event_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")),
+  "kind": z.string().refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^$|^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")).prefault("").meta({"default":""}).optional(),
   "payload": z.looseObject({
 
 }).catchall(auroraJsonValueSchema.meta({"x-aurora-json-value":true})).refine((value) => Object.keys(value).length <= 64, { message: 'object must contain at most 64 properties' }).meta({"x-aurora-extra-behavior":"preserve"}).nullable().prefault(null).meta({"default":null}).optional(),
@@ -2804,7 +2804,7 @@ export const backendContractEnvelopeDescriptors = [
     "topic": "Aurora.EventStream",
     "model": "AuroraEventStreamEvent",
     "schema_id": "Aurora.EventStream.envelope.AuroraEventStreamEvent",
-    "schema_hash": "bc634dde739ecea9b9fe9f6913763ef556a8c7dcd67cac3fbcee3f25fd5ad9ed",
+    "schema_hash": "bb9da4d3e167055a01ecbe8820980fa275aac81d4995d7e52b66612de2ee6fb4",
     "required_permissions_broad": [
       "Gateway.manage"
     ],
@@ -2828,5 +2828,5 @@ export const backendContractEnvelopeDescriptors = [
 ] as const
 
 export const backendContractEnvelopeDescriptorByTopic = {
-  "Aurora.EventStream": {"envelope_topic": "Aurora.EventStream", "module": "Aurora", "name": "EventStream", "topic": "Aurora.EventStream", "model": "AuroraEventStreamEvent", "schema_id": "Aurora.EventStream.envelope.AuroraEventStreamEvent", "schema_hash": "bc634dde739ecea9b9fe9f6913763ef556a8c7dcd67cac3fbcee3f25fd5ad9ed", "required_permissions_broad": ["Gateway.manage"], "required_permissions_scoped": ["Orchestrator.use"], "scoped_topics": ["Orchestrator.Response", "TTS.AudioChunk"], "scoped_categories": ["assistant"], "requires_correlation_id": true, "bounded": true, "authorized": true, "route_path": "/api/events/stream", "route_kind": "gateway_sse_builtin", "descriptor_kind": "sse_envelope"},
+  "Aurora.EventStream": {"envelope_topic": "Aurora.EventStream", "module": "Aurora", "name": "EventStream", "topic": "Aurora.EventStream", "model": "AuroraEventStreamEvent", "schema_id": "Aurora.EventStream.envelope.AuroraEventStreamEvent", "schema_hash": "bb9da4d3e167055a01ecbe8820980fa275aac81d4995d7e52b66612de2ee6fb4", "required_permissions_broad": ["Gateway.manage"], "required_permissions_scoped": ["Orchestrator.use"], "scoped_topics": ["Orchestrator.Response", "TTS.AudioChunk"], "scoped_categories": ["assistant"], "requires_correlation_id": true, "bounded": true, "authorized": true, "route_path": "/api/events/stream", "route_kind": "gateway_sse_builtin", "descriptor_kind": "sse_envelope"},
 } as const
