@@ -1,0 +1,36 @@
+{
+  "name": "@aurora/voice-web",
+  "version": "0.1.0",
+  "description": "Thin browser host contract for Aurora local voice workers.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./test-doubles": {
+      "types": "./dist/test-doubles/index.d.ts",
+      "import": "./dist/test-doubles/index.js",
+      "default": "./dist/test-doubles/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test": "vitest run --environment node"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3",
+    "vitest": "^4.0.16"
+  }
+}
