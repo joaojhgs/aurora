@@ -28,11 +28,17 @@ The initial STT bake-off tracks the approved plan candidates:
 
 | Candidate ID | Role | Upstream source | Current harness status |
 | --- | --- | --- | --- |
-| `transformersjs-whisper-webgpu-wasm` | Compatibility baseline/fallback, measured `.en` variant | <https://huggingface.co/Xenova/whisper-tiny.en> | External adapter required; English fixed-language coverage only until a multilingual artifact is pinned |
-| `transformersjs-moonshine-onnx` | Short-form latency candidate | <https://huggingface.co/onnx-community/moonshine-tiny-ONNX> | External adapter required |
-| `sherpa-onnx-wasm-streaming` | Streaming/mobile candidate | <https://k2-fsa.github.io/sherpa/onnx/wasm/index.html> | External adapter required |
-| `whisper-cpp-wasm` | Portability fallback | <https://github.com/ggml-org/whisper.cpp> | External adapter required |
+| `transformersjs-whisper-webgpu-wasm` | Comparison baseline, measured `.en` variant | <https://huggingface.co/Xenova/whisper-tiny.en> | External adapter required; English fixed-language coverage only until a multilingual artifact is pinned |
+| `transformersjs-moonshine-onnx` | Comparison latency candidate | <https://huggingface.co/onnx-community/moonshine-tiny-ONNX> | External adapter required |
+| `sherpa-onnx-wasm-offline-vad-asr-moonshine-v2` | Phase 4 offline VAD+ASR production candidate, English Moonshine v2 pack | <https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models> | External adapter required; combined offline VAD+ASR WASM parity and mobile/browser measurements remain pending |
+| `whisper-cpp-wasm` | Portability comparison | <https://github.com/ggml-org/whisper.cpp> | External adapter required |
 | `fixture-smoke` | Harness smoke only | local fixture manifest | Deterministic offline smoke |
+
+PocketTTS-Raven and Candle remain comparison inputs outside the STT production
+owner path for this phase. Raven belongs to the separate conversion/runtime
+evidence under `tools/pockettts-raven/` and ignored `.artifacts/` reports.
+Candle has no Phase 4 production ownership until a later decision record pins a
+specific runtime, model set, and validation boundary.
 
 Exact engine revisions, immutable model revisions, package versions, downloaded
 model hashes, browser feature probes, and device details are recorded in

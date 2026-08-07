@@ -68,16 +68,17 @@
         }
       ],
       "notes": [
-        "Measured English-only baseline/fallback variant from the approved plan.",
+        "Measured English-only comparison variant from the approved plan.",
         "Benchmark both WebGPU and WASM execution providers where available.",
-        "The pinned Xenova/whisper-tiny.en artifact is English-only and does not prove Portuguese or multilingual auto-detection coverage."
+        "The pinned Xenova/whisper-tiny.en artifact is English-only and does not prove Portuguese or multilingual auto-detection coverage.",
+        "Comparison candidate only for Phase 4; not the production runtime owner."
       ],
       "required_browser_features": [
         "webgpu-or-wasm",
         "web-worker"
       ],
       "revision": "transformers.js@2.17.2; onnxruntime-node@1.14.0; Xenova/whisper-tiny.en@79fb389fc764e7c395bd330e9531d9d32ada7049 quantized ONNX artifact set",
-      "role": "baseline-fallback",
+      "role": "comparison-baseline",
       "source_url": "https://huggingface.co/Xenova/whisper-tiny.en",
       "supported_languages": [
         "en"
@@ -133,15 +134,16 @@
         }
       ],
       "notes": [
-        "Short-form and mobile latency candidate.",
-        "Language coverage must be proven per selected model before any release claim."
+        "Short-form and mobile latency comparison candidate.",
+        "Language coverage must be proven per selected model before any release claim.",
+        "Comparison candidate only for Phase 4; not the production runtime owner."
       ],
       "required_browser_features": [
         "webgpu-or-wasm",
         "web-worker"
       ],
       "revision": "@huggingface/transformers@4.2.0; onnxruntime-node@1.24.3; onnx-community/moonshine-tiny-ONNX@a6da1241cd305dcd64eab1edbd615f2bb9aabb95 q8 artifact set",
-      "role": "latency-candidate",
+      "role": "comparison-latency",
       "source_url": "https://huggingface.co/onnx-community/moonshine-tiny-ONNX",
       "supported_languages": [
         "en"
@@ -150,31 +152,51 @@
     },
     {
       "adapter": "external-json",
-      "candidate_id": "sherpa-onnx-wasm-streaming",
-      "display_name": "sherpa-onnx WASM streaming ASR",
+      "candidate_id": "sherpa-onnx-wasm-offline-vad-asr-moonshine-v2",
+      "display_name": "sherpa-onnx offline VAD+ASR Moonshine v2 English",
       "model_artifacts": [
         {
-          "artifact_id": "sherpa-onnx-zipformer-or-moonshine",
-          "sha256": "TBD-after-download",
-          "source": "https://k2-fsa.github.io/sherpa/onnx/wasm/index.html"
+          "artifact_id": "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27.tar.bz2",
+          "revision": "2026-02-27",
+          "sha256": "9ec31b342d8fa3240c3b81b8f82e1cf7e3ac467c93ca5a999b741d5887164f8d",
+          "source": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models"
+        },
+        {
+          "artifact_id": "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27:encoder_model.ort",
+          "revision": "2026-02-27",
+          "sha256": "94e90a4654fc45cdfedb77c4c08e1739f48862998e58fada384b25118134f221",
+          "source": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models"
+        },
+        {
+          "artifact_id": "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27:decoder_model_merged.ort",
+          "revision": "2026-02-27",
+          "sha256": "cf524c4862d36e9e5ab032eddc73637efd822d70e868ac575cf1a46e1e4708a0",
+          "source": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models"
+        },
+        {
+          "artifact_id": "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27:tokens.txt",
+          "revision": "2026-02-27",
+          "sha256": "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+          "source": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models"
         }
       ],
       "notes": [
-        "Streaming/mobile candidate and possible shared runtime with KWS.",
-        "Package bytes, partial behavior, single-thread limits, and language coverage are release blockers."
+        "Selected Phase 4 offline VAD+ASR candidate for the Rust/sherpa local voice runtime.",
+        "Browser build target is sherpa's combined offline VAD+ASR module, not the upstream streaming ASR demo.",
+        "English-only Moonshine v2 pack; Portuguese and multilingual auto-detection remain blocked until separate model evidence exists.",
+        "Native and WASM parity, browser worker behavior, and mobile device measurements remain release blockers."
       ],
       "required_browser_features": [
         "wasm",
         "web-worker"
       ],
-      "revision": "TBD-exact-sherpa-onnx-version-and-model-hash",
-      "role": "streaming-candidate",
-      "source_url": "https://k2-fsa.github.io/sherpa/onnx/wasm/index.html",
+      "revision": "sherpa-onnx@v1.13.4; onnxruntime@1.27.0; offline-vad-asr-moonshine-v2-en-quantized@2026-02-27",
+      "role": "phase4-production-candidate-offline-vad-asr",
+      "source_url": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models",
       "supported_languages": [
-        "en",
-        "pt"
+        "en"
       ],
-      "supports_auto_language": true
+      "supports_auto_language": false
     },
     {
       "adapter": "external-json",
@@ -188,15 +210,16 @@
         }
       ],
       "notes": [
-        "Broad portability and diagnostic fallback candidate.",
-        "Memory and model size are material mobile decision inputs."
+        "Broad portability and diagnostic comparison candidate.",
+        "Memory and model size are material mobile decision inputs.",
+        "Comparison candidate only for Phase 4; not the production runtime owner."
       ],
       "required_browser_features": [
         "wasm",
         "web-worker"
       ],
       "revision": "TBD-exact-git-commit-and-model-hash",
-      "role": "portability-fallback",
+      "role": "comparison-portability",
       "source_url": "https://github.com/ggml-org/whisper.cpp",
       "supported_languages": [
         "en",
