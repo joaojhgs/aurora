@@ -1,0 +1,30 @@
+name: Rust Voice Runtime
+
+on:
+  pull_request:
+    paths:
+      - "rust/**"
+      - "Makefile"
+      - ".github/workflows/rust-voice.yml"
+  workflow_dispatch:
+
+jobs:
+  rust-voice:
+    name: Rust 1.88 native and browser WASM checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: clippy,rustfmt
+          targets: wasm32-unknown-unknown
+
+      - name: Install pinned browser test runner
+        run: cargo +1.88.0 install wasm-bindgen-cli --version 0.2.126 --locked
+
+      - name: Check native and browser runtimes
+        run: make check-rust-voice

@@ -5,9 +5,12 @@ on:
     paths:
       - "app/**"
       - "scripts/generate_backend_inventory.py"
+      - "scripts/generate_rust_contracts.py"
       - "scripts/check_sdk_backend_conformance.py"
       - "scripts/sdk_zod_codegen.py"
       - "packages/aurora-sdk/**"
+      - "rust/crates/aurora-contracts/**"
+      - "tests/fixtures/local_speech/runtime/contracts/**"
       - "modules/ui-mock-reference/lib/aurora/**"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -49,11 +52,16 @@ jobs:
 
       - name: Verify generated SDK contract artifacts are current
         run: |
+          python scripts/generate_rust_contracts.py
+          python scripts/generate_rust_contracts.py --check
           git diff --exit-code -- \
             packages/aurora-sdk/src/generated/backend-contracts.schema.json \
             packages/aurora-sdk/src/generated/backend-contracts.zod.ts \
             packages/aurora-sdk/src/generated/backend-contracts.manifest.json \
-            packages/aurora-sdk/src/generated/tooling-local-provider-v1.json
+            packages/aurora-sdk/src/generated/tooling-local-provider-v1.json \
+            rust/crates/aurora-contracts/src/generated.rs \
+            rust/crates/aurora-contracts/schema \
+            tests/fixtures/local_speech/runtime/contracts/backend_contract_parse_vectors.json
 
       - name: Check SDK/backend contract conformance
         run: |
