@@ -64,7 +64,7 @@ Moonshine extracted file hashes already recorded for integration:
 | Surface | Decision | Current status |
 | --- | --- | --- |
 | Desktop local | Use Rust host code for model lifecycle and native HTTP/SSE; use CPAL `0.17.3` as the desktop audio capture/playback candidate. | Linux sherpa shared-library build completed. Standalone CPAL capture/playback and Android comparison checks passed; the full integrated local audio path remains pending. |
-| Hosted web and WebView foreground capture | Use browser microphone capture and worker-hosted WASM modules; keep the UI thread nonblocking. | WASM builds must cover VAD, combined offline VAD+ASR, and KWS modules. Browser worker parity remains pending; TTS is withheld from activation. |
+| Hosted web and WebView foreground capture | Use browser microphone capture and worker-hosted WASM modules; keep the UI thread nonblocking. | Chromium worker-hosted VAD+ASR parity is proven with COOP/COEP and `SharedArrayBuffer`; KWS browser parity remains withheld after the current reshape failure, TTS is withheld from activation, and non-Chromium browser evidence remains pending. |
 | Android | Use Kotlin `AudioRecord`/`AudioManager` lifecycle and data plane into Rust with bounded PCM transfer. Treat CPAL/AAudio as comparison only for this phase. | sherpa source-built for `arm64-v8a` and `x86_64` against staged prebuilt ONNX Runtime. All four inspected libraries are ELF-correct and every LOAD segment is `0x4000` aligned. Native model execution, WebView parity, durable background voice, and physical-device results remain pending. |
 | iOS | Use Swift `AVAudioEngine`/`AVAudioSession` lifecycle and data plane into Rust. Treat CPAL/CoreAudio as comparison only for this phase. | Hash-pinned XCFrameworks contain the expected device `arm64`/iOS slice and simulator `arm64`+`x86_64`/iOSSimulator slices. Runtime linking, signing, simulator execution, device microphone behavior, and packaged runtime validation remain pending. |
 
@@ -80,7 +80,7 @@ Moonshine extracted file hashes already recorded for integration:
 | sherpa-exported Silero VAD | Rejected as default | The byte file is traceable as a k2-fsa-exported Silero v4 derivative, but the exact reproducible export recipe is missing. |
 | Piper/espeak TTS source build | Rejected for activation | The Linux build emitted upstream espeak-ng `-Wstringop-overflow` warnings in `langopts.c`, and the pinned espeak chain carries GPL-3.0-or-later distribution obligations. Do not ship, auto-download, or activate this TTS path until a patched audited chain or replacement is selected. |
 | Native C API parity and TTS cancellation | Proven locally for evidence only | ASR, VAD, KWS, TTS generation, and TTS callback cancellation probes pass against the local selected/evidence packs. The TTS pass does not override the Piper/espeak activation block. |
-| WASM parity and browser nonblocking behavior | Pending | VAD, combined offline VAD+ASR, and KWS modules must be built and exercised in a worker-hosted browser path. TTS is withheld from activation. |
+| WASM parity and browser nonblocking behavior | Partly proven | Chromium worker-hosted VAD+ASR decoded the Moonshine test WAV to the same JFK phrase and kept the page timer responsive. KWS browser parity remains withheld after the current ONNX Runtime reshape failure; TTS is withheld from activation. |
 | iOS runtime evidence | Pending external platform work | Linux-only inspection does not prove simulator, device, microphone, Swift runtime, signing, or App Store readiness. |
 
 ## Comparison candidates
