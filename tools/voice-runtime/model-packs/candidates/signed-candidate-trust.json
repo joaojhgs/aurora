@@ -1,0 +1,13 @@
+{
+  "algorithm": "ed25519",
+  "key_id": "aurora-phase6-signed-candidate-20260807",
+  "private_key_disposition": "Generated transiently for this candidate slice; private key was not committed and must not be reused as production trust.",
+  "public_key_base64": "ojlHj9MBSBRVPKbK2Og5hMUr/Al1AMsh1SUz92+XoNA=",
+  "schema_version": 1,
+  "trust_label": "non-production signed-candidate trust only",
+  "valid_for": [
+    "moonshine-tiny-en-stt.candidate.manifest.json",
+    "sherpa-gigaspeech-kws-en.candidate.manifest.json",
+    "silero-vad-v4.candidate.manifest.json"
+  ]
+}

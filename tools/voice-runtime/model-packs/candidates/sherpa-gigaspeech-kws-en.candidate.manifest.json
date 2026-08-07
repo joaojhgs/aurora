@@ -1,0 +1,431 @@
+{
+  "capabilities": {
+    "cancellation": true,
+    "streaming": true
+  },
+  "display_name": "sherpa GigaSpeech KWS English candidate",
+  "files": [
+    {
+      "asset_id": "encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+      "byte_size": 4807159,
+      "compression": "none",
+      "dependencies": [
+        "tokens",
+        "bpe",
+        "keywords",
+        "keywords-raw",
+        "test-keywords"
+      ],
+      "file_id": "encoder-int8",
+      "install_order": 0,
+      "installed_size": 4807159,
+      "license": {
+        "attribution": "sherpa-onnx GigaSpeech KWS demo assets; see pinned Phase 4 README/license evidence",
+        "commercial_use": true,
+        "identifier": "Apache-2.0",
+        "redistribution": "redistribution_allowed",
+        "text_sha256": "74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2",
+        "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
+      },
+      "processing": {
+        "operator_inventory_sha256": "c784aa0c662d232db0ec7f8e7e3e57908d7a4faa3dc32d77a4e75ac45239d33e",
+        "postprocessing_abi": "aurora-kws-candidate-v1",
+        "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
+        "shapes": {
+          "cache_state": [],
+          "channels": 1,
+          "frame_size": 512,
+          "sample_rate_hz": 16000,
+          "window_size": 512
+        },
+        "tokenizer_sha256": "d45e8e848289466065545a536181af6e61ab8a40fa2875c9c3abe8a152f1c61d"
+      },
+      "provenance": {
+        "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
+        "upstream_revision": "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a",
+        "upstream_source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2"
+      },
+      "raven": null,
+      "revocation": null,
+      "sha256": "1e721676515bcd42a186979733981213c66c80db680e1cc582dfedf3be76e678",
+      "task": "kws",
+      "url": "/aurora/model-packs/candidates/sha256/1e721676515bcd42a186979733981213c66c80db680e1cc582dfedf3be76e678/encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx"
+    },
+    {
+      "asset_id": "decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
+      "byte_size": 1063189,
+      "compression": "none",
+      "dependencies": [
+        "tokens",
+        "bpe",
+        "keywords",
+        "keywords-raw",
+        "test-keywords"
+      ],
+      "file_id": "decoder",
+      "install_order": 1,
+      "installed_size": 1063189,
+      "license": {
+        "attribution": "sherpa-onnx GigaSpeech KWS demo assets; see pinned Phase 4 README/license evidence",
+        "commercial_use": true,
+        "identifier": "Apache-2.0",
+        "redistribution": "redistribution_allowed",
+        "text_sha256": "74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2",
+        "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
+      },
+      "processing": {
+        "operator_inventory_sha256": "c784aa0c662d232db0ec7f8e7e3e57908d7a4faa3dc32d77a4e75ac45239d33e",
+        "postprocessing_abi": "aurora-kws-candidate-v1",
+        "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
+        "shapes": {
+          "cache_state": [],
+          "channels": 1,
+          "frame_size": 512,
+          "sample_rate_hz": 16000,
+          "window_size": 512
+        },
+        "tokenizer_sha256": "d45e8e848289466065545a536181af6e61ab8a40fa2875c9c3abe8a152f1c61d"
+      },
+      "provenance": {
+        "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
+        "upstream_revision": "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a",
+        "upstream_source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2"
+      },
+      "raven": null,
+      "revocation": null,
+      "sha256": "f61ebd3eed3773a44d088d53dfae92dbb6aec4839f4dcaee2d402414741663a3",
+      "task": "kws",
+      "url": "/aurora/model-packs/candidates/sha256/f61ebd3eed3773a44d088d53dfae92dbb6aec4839f4dcaee2d402414741663a3/decoder-epoch-12-avg-2-chunk-16-left-64.onnx"
+    },
+    {
+      "asset_id": "joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+      "byte_size": 163380,
+      "compression": "none",
+      "dependencies": [
+        "tokens",
+        "bpe",
+        "keywords",
+        "keywords-raw",
+        "test-keywords"
+      ],
+      "file_id": "joiner-int8",
+      "install_order": 2,
+      "installed_size": 163380,
+      "license": {
+        "attribution": "sherpa-onnx GigaSpeech KWS demo assets; see pinned Phase 4 README/license evidence",
+        "commercial_use": true,
+        "identifier": "Apache-2.0",
+        "redistribution": "redistribution_allowed",
+        "text_sha256": "74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2",
+        "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
+      },
+      "processing": {
+        "operator_inventory_sha256": "c784aa0c662d232db0ec7f8e7e3e57908d7a4faa3dc32d77a4e75ac45239d33e",
+        "postprocessing_abi": "aurora-kws-candidate-v1",
+        "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
+        "shapes": {
+          "cache_state": [],
+          "channels": 1,
+          "frame_size": 512,
+          "sample_rate_hz": 16000,
+          "window_size": 512
+        },
+        "tokenizer_sha256": "d45e8e848289466065545a536181af6e61ab8a40fa2875c9c3abe8a152f1c61d"
+      },
+      "provenance": {
+        "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
+        "upstream_revision": "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a",
+        "upstream_source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2"
+      },
+      "raven": null,
+      "revocation": null,
+      "sha256": "eae9da0c7e1e6c6a3f4cc42d167899c388f6c6701b94cb96320e4f55df79624c",
+      "task": "kws",
+      "url": "/aurora/model-packs/candidates/sha256/eae9da0c7e1e6c6a3f4cc42d167899c388f6c6701b94cb96320e4f55df79624c/joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx"
+    },
+    {
+      "asset_id": "tokens.txt",
+      "byte_size": 5006,
+      "compression": "none",
+      "dependencies": [],
+      "file_id": "tokens",
+      "install_order": 3,
+      "installed_size": 5006,
+      "license": {
+        "attribution": "sherpa-onnx GigaSpeech KWS demo assets; see pinned Phase 4 README/license evidence",
+        "commercial_use": true,
+        "identifier": "Apache-2.0",
+        "redistribution": "redistribution_allowed",
+        "text_sha256": "74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2",
+        "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
+      },
+      "processing": {
+        "operator_inventory_sha256": "c784aa0c662d232db0ec7f8e7e3e57908d7a4faa3dc32d77a4e75ac45239d33e",
+        "postprocessing_abi": "aurora-kws-candidate-v1",
+        "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
+        "shapes": {
+          "cache_state": [],
+          "channels": 1,
+          "frame_size": 512,
+          "sample_rate_hz": 16000,
+          "window_size": 512
+        },
+        "tokenizer_sha256": "d45e8e848289466065545a536181af6e61ab8a40fa2875c9c3abe8a152f1c61d"
+      },
+      "provenance": {
+        "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
+        "upstream_revision": "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a",
+        "upstream_source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2"
+      },
+      "raven": null,
+      "revocation": null,
+      "sha256": "fd2ded4050a55d2b1578870ba8697d02371980217806b7558bd0a5cc60f3ba53",
+      "task": "kws",
+      "url": "/aurora/model-packs/candidates/sha256/fd2ded4050a55d2b1578870ba8697d02371980217806b7558bd0a5cc60f3ba53/tokens.txt"
+    },
+    {
+      "asset_id": "bpe.model",
+      "byte_size": 244837,
+      "compression": "none",
+      "dependencies": [],
+      "file_id": "bpe",
+      "install_order": 4,
+      "installed_size": 244837,
+      "license": {
+        "attribution": "sherpa-onnx GigaSpeech KWS demo assets; see pinned Phase 4 README/license evidence",
+        "commercial_use": true,
+        "identifier": "Apache-2.0",
+        "redistribution": "redistribution_allowed",
+        "text_sha256": "74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2",
+        "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
+      },
+      "processing": {
+        "operator_inventory_sha256": "c784aa0c662d232db0ec7f8e7e3e57908d7a4faa3dc32d77a4e75ac45239d33e",
+        "postprocessing_abi": "aurora-kws-candidate-v1",
+        "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
+        "shapes": {
+          "cache_state": [],
+          "channels": 1,
+          "frame_size": 512,
+          "sample_rate_hz": 16000,
+          "window_size": 512
+        },
+        "tokenizer_sha256": "d45e8e848289466065545a536181af6e61ab8a40fa2875c9c3abe8a152f1c61d"
+      },
+      "provenance": {
+        "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
+        "upstream_revision": "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a",
+        "upstream_source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2"
+      },
+      "raven": null,
+      "revocation": null,
+      "sha256": "c8a2a0129c4ab8e463164c142f82d25649661b122c8cd0b7aab5c9e80b90ad24",
+      "task": "kws",
+      "url": "/aurora/model-packs/candidates/sha256/c8a2a0129c4ab8e463164c142f82d25649661b122c8cd0b7aab5c9e80b90ad24/bpe.model"
+    },
+    {
+      "asset_id": "keywords.txt",
+      "byte_size": 184,
+      "compression": "none",
+      "dependencies": [],
+      "file_id": "keywords",
+      "install_order": 5,
+      "installed_size": 184,
+      "license": {
+        "attribution": "sherpa-onnx GigaSpeech KWS demo assets; see pinned Phase 4 README/license evidence",
+        "commercial_use": true,
+        "identifier": "Apache-2.0",
+        "redistribution": "redistribution_allowed",
+        "text_sha256": "74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2",
+        "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
+      },
+      "processing": {
+        "operator_inventory_sha256": "c784aa0c662d232db0ec7f8e7e3e57908d7a4faa3dc32d77a4e75ac45239d33e",
+        "postprocessing_abi": "aurora-kws-candidate-v1",
+        "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
+        "shapes": {
+          "cache_state": [],
+          "channels": 1,
+          "frame_size": 512,
+          "sample_rate_hz": 16000,
+          "window_size": 512
+        },
+        "tokenizer_sha256": "d45e8e848289466065545a536181af6e61ab8a40fa2875c9c3abe8a152f1c61d"
+      },
+      "provenance": {
+        "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
+        "upstream_revision": "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a",
+        "upstream_source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2"
+      },
+      "raven": null,
+      "revocation": null,
+      "sha256": "b1740c4925d7c83337de2cffa04e8d35450fab2af8f583e65c54aad6257c4bd6",
+      "task": "kws",
+      "url": "/aurora/model-packs/candidates/sha256/b1740c4925d7c83337de2cffa04e8d35450fab2af8f583e65c54aad6257c4bd6/keywords.txt"
+    },
+    {
+      "asset_id": "keywords_raw.txt",
+      "byte_size": 102,
+      "compression": "none",
+      "dependencies": [],
+      "file_id": "keywords-raw",
+      "install_order": 6,
+      "installed_size": 102,
+      "license": {
+        "attribution": "sherpa-onnx GigaSpeech KWS demo assets; see pinned Phase 4 README/license evidence",
+        "commercial_use": true,
+        "identifier": "Apache-2.0",
+        "redistribution": "redistribution_allowed",
+        "text_sha256": "74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2",
+        "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
+      },
+      "processing": {
+        "operator_inventory_sha256": "c784aa0c662d232db0ec7f8e7e3e57908d7a4faa3dc32d77a4e75ac45239d33e",
+        "postprocessing_abi": "aurora-kws-candidate-v1",
+        "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
+        "shapes": {
+          "cache_state": [],
+          "channels": 1,
+          "frame_size": 512,
+          "sample_rate_hz": 16000,
+          "window_size": 512
+        },
+        "tokenizer_sha256": "d45e8e848289466065545a536181af6e61ab8a40fa2875c9c3abe8a152f1c61d"
+      },
+      "provenance": {
+        "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
+        "upstream_revision": "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a",
+        "upstream_source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2"
+      },
+      "raven": null,
+      "revocation": null,
+      "sha256": "f8d067c3c84bcf9240988b17bd28ce7a21e86f5ad9c01a4f1d6e052f9c38053d",
+      "task": "kws",
+      "url": "/aurora/model-packs/candidates/sha256/f8d067c3c84bcf9240988b17bd28ce7a21e86f5ad9c01a4f1d6e052f9c38053d/keywords_raw.txt"
+    },
+    {
+      "asset_id": "test_wavs/test_keywords.txt",
+      "byte_size": 52,
+      "compression": "none",
+      "dependencies": [],
+      "file_id": "test-keywords",
+      "install_order": 7,
+      "installed_size": 52,
+      "license": {
+        "attribution": "sherpa-onnx GigaSpeech KWS demo assets; see pinned Phase 4 README/license evidence",
+        "commercial_use": true,
+        "identifier": "Apache-2.0",
+        "redistribution": "redistribution_allowed",
+        "text_sha256": "74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2",
+        "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
+      },
+      "processing": {
+        "operator_inventory_sha256": "c784aa0c662d232db0ec7f8e7e3e57908d7a4faa3dc32d77a4e75ac45239d33e",
+        "postprocessing_abi": "aurora-kws-candidate-v1",
+        "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
+        "shapes": {
+          "cache_state": [],
+          "channels": 1,
+          "frame_size": 512,
+          "sample_rate_hz": 16000,
+          "window_size": 512
+        },
+        "tokenizer_sha256": "d45e8e848289466065545a536181af6e61ab8a40fa2875c9c3abe8a152f1c61d"
+      },
+      "provenance": {
+        "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
+        "upstream_revision": "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a",
+        "upstream_source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2"
+      },
+      "raven": null,
+      "revocation": null,
+      "sha256": "fd9c3b504ab922bc96ce8613eff02193f8a5526fcf74a14df436c7af74ad649d",
+      "task": "kws",
+      "url": "/aurora/model-packs/candidates/sha256/fd9c3b504ab922bc96ce8613eff02193f8a5526fcf74a14df436c7af74ad649d/test_wavs-test_keywords.txt"
+    }
+  ],
+  "languages": [
+    {
+      "auto_detect": false,
+      "fixed_language": true,
+      "language": "en",
+      "locale": "en-US"
+    }
+  ],
+  "license": {
+    "attribution": "sherpa-onnx GigaSpeech KWS demo assets; see pinned Phase 4 README/license evidence",
+    "commercial_use": true,
+    "identifier": "Apache-2.0",
+    "redistribution": "redistribution_allowed",
+    "text_sha256": "74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2",
+    "text_url": "/aurora/model-packs/candidates/sha256/74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2/LICENSE-Apache-2.0"
+  },
+  "pack_id": "aurora-candidate-sherpa-gigaspeech-kws-en",
+  "pack_version": "2024.01.01-candidate.20260807",
+  "provenance": {
+    "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
+    "upstream_revision": "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a",
+    "upstream_source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2"
+  },
+  "revocation": null,
+  "rollback_from": null,
+  "schema_version": 1,
+  "signature": {
+    "algorithm": "ed25519",
+    "key_id": "aurora-phase6-signed-candidate-20260807",
+    "value": "gwBF4MFdo2cwpfHkMFDSlpeXr5e4XJGReBiIjNPev+7h52Oc3FLWE+rknUTmbpVnrkXTkczW0nUewhVZ9ctmDg=="
+  },
+  "supersedes_pack_id": null,
+  "tasks": [
+    "kws"
+  ],
+  "variants": [
+    {
+      "abi": {
+        "build_flags": [
+          "candidate",
+          "cpu",
+          "english-only",
+          "interoperable-false"
+        ],
+        "engine_source_revision": "sherpa-onnx@142807252687d81b40d6315f23470a1512a00de3;onnxruntime@8f0278c77bf44b0cc83c098c6c722b92a36ac4b5",
+        "min_aurora_version": "0.1.0",
+        "min_engine_version": "1.13.4",
+        "min_runtime_version": "0.1.0"
+      },
+      "arch": "x86_64",
+      "compatibility": {
+        "channels": 1,
+        "frame_size": 512,
+        "group_id": "aurora-phase6-kws-candidate",
+        "interoperable": false,
+        "postprocessing_abi": "aurora-kws-candidate-v1",
+        "preprocessing_abi": "sherpa-onnx-1.13.4-kws-pcm16k-mono",
+        "sample_rate_hz": 16000,
+        "voice_state_group_id": "none"
+      },
+      "engine": "sherpa_onnx",
+      "file_ids": [
+        "encoder-int8",
+        "decoder",
+        "joiner-int8"
+      ],
+      "min_device_memory_mb": null,
+      "os": "linux",
+      "required_browser_features": [],
+      "resource_budget": {
+        "max_download_bytes": 6283909,
+        "max_installed_bytes": 6283909,
+        "max_memory_bytes": 201326592
+      },
+      "revocation": null,
+      "runtime_gates": {
+        "max_rtf_millis_per_second": 1000,
+        "min_cpu_threads": 1,
+        "min_device_class": "balanced"
+      },
+      "target": "desktop",
+      "variant_id": "linux-x86_64-sherpa-1.13.4-cpu-int8-demo-phrases"
+    }
+  ]
+}

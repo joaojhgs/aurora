@@ -1,0 +1,20 @@
+{
+  "dispositions": [
+    {
+      "id": "pockettts-standard-voice-packs",
+      "license_boundary": "non-commercial model assets",
+      "reason": "PocketTTS inspected voice/model packs remain non-commercial; English-only availability does not permit Aurora production shipping, auto-download, or advertising.",
+      "status": "blocked"
+    },
+    {
+      "id": "piper-espeak-sherpa-tts-chain",
+      "license_boundary": "GPL/safety review required before any selectable TTS manifest",
+      "reason": "Piper/espeak remains blocked by GPL distribution obligations and unresolved espeak-ng memory-safety findings from Phase 4 evidence.",
+      "status": "blocked"
+    }
+  ],
+  "schema_version": 1,
+  "selectable_model_pack": false,
+  "status": "blocked",
+  "subject": "Phase 6 candidate TTS disposition"
+}

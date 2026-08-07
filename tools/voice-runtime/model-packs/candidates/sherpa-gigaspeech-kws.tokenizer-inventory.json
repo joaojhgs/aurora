@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "tokenizer_assets": [
+    {
+      "path": "tokens.txt",
+      "sha256": "fd2ded4050a55d2b1578870ba8697d02371980217806b7558bd0a5cc60f3ba53",
+      "size_bytes": 5006
+    },
+    {
+      "path": "bpe.model",
+      "sha256": "c8a2a0129c4ab8e463164c142f82d25649661b122c8cd0b7aab5c9e80b90ad24",
+      "size_bytes": 244837
+    },
+    {
+      "language": "en",
+      "path": "keywords.txt",
+      "purpose": "demo phrases",
+      "sha256": "b1740c4925d7c83337de2cffa04e8d35450fab2af8f583e65c54aad6257c4bd6",
+      "size_bytes": 184
+    },
+    {
+      "language": "en",
+      "path": "keywords_raw.txt",
+      "purpose": "demo phrases",
+      "sha256": "f8d067c3c84bcf9240988b17bd28ce7a21e86f5ad9c01a4f1d6e052f9c38053d",
+      "size_bytes": 102
+    },
+    {
+      "language": "en",
+      "path": "test_wavs/test_keywords.txt",
+      "purpose": "demo phrase expected labels only; audio test WAVs are not selectable assets",
+      "sha256": "fd9c3b504ab922bc96ce8613eff02193f8a5526fcf74a14df436c7af74ad649d",
+      "size_bytes": 52
+    }
+  ]
+}

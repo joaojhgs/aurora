@@ -1,0 +1,131 @@
+{
+  "capabilities": {
+    "cancellation": true,
+    "streaming": true
+  },
+  "display_name": "Silero VAD v4 candidate",
+  "files": [
+    {
+      "asset_id": "silero-vad-v4.0.onnx",
+      "byte_size": 1807522,
+      "compression": "none",
+      "dependencies": [],
+      "file_id": "silero-vad-v4.0.onnx",
+      "install_order": 0,
+      "installed_size": 1807522,
+      "license": {
+        "attribution": "Silero VAD upstream v4.0; see pinned Phase 4 license evidence",
+        "commercial_use": true,
+        "identifier": "MIT",
+        "redistribution": "redistribution_allowed",
+        "text_sha256": "2e63e9a38b6e8fc0c7bc37ce174caca1862870856c6daf5697cfb785e925520b",
+        "text_url": "/aurora/model-packs/candidates/sha256/2e63e9a38b6e8fc0c7bc37ce174caca1862870856c6daf5697cfb785e925520b/LICENSE-MIT"
+      },
+      "processing": {
+        "operator_inventory_sha256": "3882b0f78bc1737700e0aac02f44bca53f2de59e0b57f31b958427054bc7d37c",
+        "postprocessing_abi": "aurora-vad-candidate-v1",
+        "preprocessing_abi": "sherpa-onnx-1.13.4-vad-pcm16k-mono",
+        "shapes": {
+          "cache_state": [],
+          "channels": 1,
+          "frame_size": 512,
+          "sample_rate_hz": 16000,
+          "window_size": 512
+        },
+        "tokenizer_sha256": null
+      },
+      "provenance": {
+        "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
+        "upstream_revision": "915dd3d639b8333a52e001af095f87c5b7f1e0ac",
+        "upstream_source": "https://raw.githubusercontent.com/snakers4/silero-vad/915dd3d639b8333a52e001af095f87c5b7f1e0ac/files/silero_vad.onnx"
+      },
+      "raven": null,
+      "revocation": null,
+      "sha256": "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28",
+      "task": "vad",
+      "url": "/aurora/model-packs/candidates/sha256/a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28/silero-vad-v4.0.onnx"
+    }
+  ],
+  "languages": [
+    {
+      "auto_detect": false,
+      "fixed_language": true,
+      "language": "und",
+      "locale": null
+    }
+  ],
+  "license": {
+    "attribution": "Silero VAD upstream v4.0; see pinned Phase 4 license evidence",
+    "commercial_use": true,
+    "identifier": "MIT",
+    "redistribution": "redistribution_allowed",
+    "text_sha256": "2e63e9a38b6e8fc0c7bc37ce174caca1862870856c6daf5697cfb785e925520b",
+    "text_url": "/aurora/model-packs/candidates/sha256/2e63e9a38b6e8fc0c7bc37ce174caca1862870856c6daf5697cfb785e925520b/LICENSE-MIT"
+  },
+  "pack_id": "aurora-candidate-silero-vad-v4",
+  "pack_version": "4.0.0-candidate.20260807",
+  "provenance": {
+    "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
+    "upstream_revision": "915dd3d639b8333a52e001af095f87c5b7f1e0ac",
+    "upstream_source": "https://raw.githubusercontent.com/snakers4/silero-vad/915dd3d639b8333a52e001af095f87c5b7f1e0ac/files/silero_vad.onnx"
+  },
+  "revocation": null,
+  "rollback_from": null,
+  "schema_version": 1,
+  "signature": {
+    "algorithm": "ed25519",
+    "key_id": "aurora-phase6-signed-candidate-20260807",
+    "value": "ANEJXdQuqRZPjzqrmFypI9oUcZ+1hRhPVke8HzAEjBUIMV+egFxELjLO+Co3sNohE2m8WKrvWieatpbbKncUCQ=="
+  },
+  "supersedes_pack_id": null,
+  "tasks": [
+    "vad"
+  ],
+  "variants": [
+    {
+      "abi": {
+        "build_flags": [
+          "candidate",
+          "cpu",
+          "language-neutral",
+          "interoperable-false"
+        ],
+        "engine_source_revision": "sherpa-onnx@142807252687d81b40d6315f23470a1512a00de3;onnxruntime@8f0278c77bf44b0cc83c098c6c722b92a36ac4b5",
+        "min_aurora_version": "0.1.0",
+        "min_engine_version": "1.13.4",
+        "min_runtime_version": "0.1.0"
+      },
+      "arch": "x86_64",
+      "compatibility": {
+        "channels": 1,
+        "frame_size": 512,
+        "group_id": "aurora-phase6-vad-candidate",
+        "interoperable": false,
+        "postprocessing_abi": "aurora-vad-candidate-v1",
+        "preprocessing_abi": "sherpa-onnx-1.13.4-vad-pcm16k-mono",
+        "sample_rate_hz": 16000,
+        "voice_state_group_id": "none"
+      },
+      "engine": "sherpa_onnx",
+      "file_ids": [
+        "silero-vad-v4.0.onnx"
+      ],
+      "min_device_memory_mb": null,
+      "os": "linux",
+      "required_browser_features": [],
+      "resource_budget": {
+        "max_download_bytes": 1807522,
+        "max_installed_bytes": 1807522,
+        "max_memory_bytes": 67108864
+      },
+      "revocation": null,
+      "runtime_gates": {
+        "max_rtf_millis_per_second": 1000,
+        "min_cpu_threads": 1,
+        "min_device_class": "balanced"
+      },
+      "target": "desktop",
+      "variant_id": "linux-x86_64-sherpa-1.13.4-cpu"
+    }
+  ]
+}
