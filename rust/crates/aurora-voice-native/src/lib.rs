@@ -7,6 +7,7 @@ mod audio;
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
 mod desktop_capture;
 mod downloader;
+mod gateway_capture_handoff;
 mod gateway_stt;
 mod gateway_tts;
 mod model_store;
@@ -23,6 +24,9 @@ pub use desktop_capture::{
 pub use downloader::{
     AssetIntegrity, DownloadError, DownloadPolicy, DownloadProgress, DownloadReceipt,
     NativeDownloader,
+};
+pub use gateway_capture_handoff::{
+    NativeGatewayCaptureGrant, NativeGatewayCaptureHandoff, NativeGatewayCaptureHandoffConfig,
 };
 pub use gateway_stt::{NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig};
 pub use gateway_tts::{NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer};
