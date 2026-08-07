@@ -6,6 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 description = "Thin WebAssembly host boundary for the Aurora voice core"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 async-trait.workspace = true
 aurora-contracts = { path = "../aurora-contracts" }

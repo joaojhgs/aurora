@@ -14,8 +14,10 @@ use aurora_voice_engine::{
     TargetArch, TargetOs, TrustPolicy, VerifiedManifest,
 };
 use aurora_voice_wasm::{
-    BrowserPersistenceKind, InMemoryNetworkHost, InMemoryWebHost, WebDownloadPolicy, WebHostError,
-    WebModelDownloader, WebModelStore, WebModelStoreHost, WebRecoverySignal,
+    AuroraVoiceWasmRuntime, BrowserPersistenceKind, InMemoryNetworkHost, InMemoryWebHost,
+    WasmCapabilities, WasmGenerationRequest, WasmPushFrame, WasmRuntimeConfig, WasmRuntimeSnapshot,
+    WasmSessionStart, WasmStartedSession, WasmStopRequest, WasmStoppedSession, WebDownloadPolicy,
+    WebHostError, WebModelDownloader, WebModelStore, WebModelStoreHost, WebRecoverySignal,
 };
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -47,6 +49,148 @@ fn shared_cancellation_token_executes_inside_wasm() {
     assert!(cancellation.check().is_ok());
     cancellation.cancel();
     assert!(cancellation.check().is_err());
+}
+
+#[wasm_bindgen_test]
+fn wasm_bindgen_runtime_facade_executes_bounded_session_flow() {
+    let config = serde_wasm_bindgen::to_value(&WasmRuntimeConfig {
+        surface: "hosted-web".to_owned(),
+        max_frames: 4,
+        max_samples: 16_000,
+    })
+    .expect("config");
+    let mut runtime = AuroraVoiceWasmRuntime::new(config).expect("runtime");
+    let current_epoch_micros = 1_786_102_400_123_000.0;
+    let started: WasmStartedSession = serde_wasm_bindgen::from_value(
+        runtime
+            .start_session(
+                serde_wasm_bindgen::to_value(&WasmSessionStart {
+                    session_id: "session-1".to_owned(),
+                    route_revision: 3,
+                    at_micros: current_epoch_micros,
+                })
+                .expect("start request"),
+            )
+            .expect("start"),
+    )
+    .expect("started");
+    assert_eq!(started.generation, 1);
+    assert_eq!(started.route_revision, 3);
+    runtime
+        .push_pcm_i16(
+            serde_wasm_bindgen::to_value(&WasmPushFrame {
+                session_id: "session-1".to_owned(),
+                generation: started.generation,
+                sequence: 0,
+                timestamp_micros: current_epoch_micros + 1.0,
+                discontinuity: false,
+                sample_rate_hz: 16_000,
+                channels: 1,
+                samples: vec![1, 2, 3],
+            })
+            .expect("frame"),
+        )
+        .expect("push");
+    let stopped: WasmStoppedSession = serde_wasm_bindgen::from_value(
+        runtime
+            .stop_session(
+                serde_wasm_bindgen::to_value(&WasmStopRequest {
+                    session_id: "session-1".to_owned(),
+                    generation: started.generation,
+                    at_micros: current_epoch_micros + 2.0,
+                })
+                .expect("stop request"),
+            )
+            .expect("stop"),
+    )
+    .expect("stopped");
+    assert_eq!(stopped.pcm_i16, vec![1, 2, 3]);
+    assert_eq!(
+        runtime
+            .complete_turn(
+                serde_wasm_bindgen::to_value(&WasmGenerationRequest {
+                    generation: started.generation,
+                    at_micros: current_epoch_micros + 3.0,
+                })
+                .expect("complete request"),
+            )
+            .expect("complete"),
+        "Idle"
+    );
+    let second: WasmStartedSession = serde_wasm_bindgen::from_value(
+        runtime
+            .start_session(
+                serde_wasm_bindgen::to_value(&WasmSessionStart {
+                    session_id: "session-2".to_owned(),
+                    route_revision: 4,
+                    at_micros: current_epoch_micros + 4.0,
+                })
+                .expect("second start request"),
+            )
+            .expect("second start"),
+    )
+    .expect("second");
+    assert!(second.generation > started.generation);
+    let caps: WasmCapabilities =
+        serde_wasm_bindgen::from_value(runtime.capabilities().expect("capabilities"))
+            .expect("capabilities");
+    assert_eq!(
+        caps,
+        WasmCapabilities {
+            vad: false,
+            kws: false,
+            stt: false,
+            tts: false
+        }
+    );
+}
+
+#[wasm_bindgen_test]
+fn wasm_bindgen_runtime_rejects_stale_generation_and_redacts_error() {
+    let mut runtime = AuroraVoiceWasmRuntime::new(
+        serde_wasm_bindgen::to_value(&WasmRuntimeConfig {
+            surface: "hosted-web".to_owned(),
+            max_frames: 4,
+            max_samples: 16_000,
+        })
+        .expect("config"),
+    )
+    .expect("runtime");
+    let started: WasmStartedSession = serde_wasm_bindgen::from_value(
+        runtime
+            .start_session(
+                serde_wasm_bindgen::to_value(&WasmSessionStart {
+                    session_id: "session-1".to_owned(),
+                    route_revision: 3,
+                    at_micros: 1.0,
+                })
+                .expect("start request"),
+            )
+            .expect("start"),
+    )
+    .expect("started");
+    let err = runtime
+        .push_pcm_i16(
+            serde_wasm_bindgen::to_value(&WasmPushFrame {
+                session_id: "session-1".to_owned(),
+                generation: started.generation + 1,
+                sequence: 0,
+                timestamp_micros: 2.0,
+                discontinuity: false,
+                sample_rate_hz: 16_000,
+                channels: 1,
+                samples: vec![1234, 5678],
+            })
+            .expect("frame"),
+        )
+        .expect_err("stale generation");
+    assert_eq!(err.as_string().as_deref(), Some("stale_generation"));
+    let snapshot: WasmRuntimeSnapshot =
+        serde_wasm_bindgen::from_value(runtime.snapshot().expect("snapshot")).expect("snapshot");
+    let snapshot_json = serde_json::to_string(&snapshot).expect("json");
+    assert!(!snapshot_json.contains("session-1"));
+    assert!(!snapshot_json.contains("1234"));
+    assert!(!snapshot_json.contains("5678"));
 }
 
 #[wasm_bindgen_test(async)]

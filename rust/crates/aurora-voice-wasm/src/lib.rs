@@ -4,6 +4,11 @@
 
 use async_trait::async_trait;
 use aurora_voice_core::CancellationToken;
+use aurora_voice_core::{
+    BoundedPcmBuffer, CaptureLeaseManager, CaptureOwnerKind, CaptureStartReason, Generation,
+    PcmFrame, RedactedSnapshot, ResourceReport, RouteRevision, TaskReadiness, TimestampMicros,
+    TransitionReason, VoiceCaptureLease, VoiceCoreError, VoiceState, VoiceStateMachine, VoiceTask,
+};
 use aurora_voice_engine::{
     apply_lifecycle_event, create_lifecycle_snapshot, file_storage_key, lifecycle_storage_key,
     ActivePackIdentity, DownloadTask, ImmutableModelFile, InstallEvent, InstallState,
@@ -15,6 +20,8 @@ use sha2::{Digest, Sha256};
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 
 const ACTIVE_PREFIX: &str = "aurora.voice.web-store.v1:active:";
 const ROLLBACK_PREFIX: &str = "aurora.voice.web-store.v1:rollback:";
@@ -27,6 +34,16 @@ const EXPECTED_SELECTION_PREFIX: &str = "aurora.voice.web-store.v1:expected-sele
 const FILE_PREFIX: &str = "aurora.voice.web-store.v1:file:";
 const WITHDRAWAL_KEY: &str = "aurora.voice.web-store.v1:withdrawn";
 const HASH_CHUNK_BYTES: u64 = 64 * 1024;
+const WASM_SAMPLE_RATE_HZ: u32 = 16_000;
+const WASM_CHANNELS: u16 = 1;
+const WASM_MAX_SECONDS: u32 = 60;
+const WASM_MAX_SAMPLES: usize = WASM_SAMPLE_RATE_HZ as usize * WASM_MAX_SECONDS as usize;
+const WASM_MAX_FRAME_SAMPLES: usize = 4_800;
+const WASM_MAX_FRAMES: usize = 4_096;
+const WASM_MAX_ID_BYTES: usize = 96;
+const WASM_MAX_SURFACE_BYTES: usize = 64;
+const JS_MAX_SAFE_INTEGER_MICROS: f64 = 9_007_199_254_740_991.0;
+const WASM_DEFAULT_ROUTE_REVISION: RouteRevision = RouteRevision(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -40,6 +57,794 @@ pub struct WebPersistenceReport {
     pub status: StoreStatus,
     pub kind: BrowserPersistenceKind,
     pub evicted: bool,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WasmRuntimeConfig {
+    pub surface: String,
+    #[serde(default = "default_wasm_max_frames")]
+    pub max_frames: usize,
+    #[serde(default = "default_wasm_max_samples")]
+    pub max_samples: usize,
+}
+
+impl std::fmt::Debug for WasmRuntimeConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("WasmRuntimeConfig")
+            .field("surface", &self.surface)
+            .field("max_frames", &self.max_frames)
+            .field("max_samples", &self.max_samples)
+            .finish()
+    }
+}
+
+impl Default for WasmRuntimeConfig {
+    fn default() -> Self {
+        Self {
+            surface: "web".to_owned(),
+            max_frames: WASM_MAX_FRAMES,
+            max_samples: WASM_MAX_SAMPLES,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WasmSessionStart {
+    pub session_id: String,
+    #[serde(default)]
+    pub route_revision: u32,
+    #[serde(default)]
+    pub at_micros: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WasmStartedSession {
+    pub generation: u32,
+    pub route_revision: u32,
+    pub state: VoiceState,
+    pub sample_rate_hz: u32,
+    pub channels: u16,
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+pub struct WasmPushFrame {
+    pub session_id: String,
+    pub generation: u32,
+    pub sequence: u32,
+    pub timestamp_micros: f64,
+    #[serde(default)]
+    pub discontinuity: bool,
+    pub sample_rate_hz: u32,
+    pub channels: u16,
+    pub samples: Vec<i16>,
+}
+
+impl std::fmt::Debug for WasmPushFrame {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("WasmPushFrame")
+            .field("session_id", &"<redacted>")
+            .field("generation", &self.generation)
+            .field("sequence", &self.sequence)
+            .field("timestamp_micros", &self.timestamp_micros)
+            .field("discontinuity", &self.discontinuity)
+            .field("sample_rate_hz", &self.sample_rate_hz)
+            .field("channels", &self.channels)
+            .field("sample_count", &self.samples.len())
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WasmPushReceipt {
+    pub generation: u32,
+    pub sequence: u32,
+    pub buffered_frames: usize,
+    pub buffered_samples: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WasmStopRequest {
+    pub session_id: String,
+    pub generation: u32,
+    #[serde(default)]
+    pub at_micros: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WasmGenerationRequest {
+    pub generation: u32,
+    #[serde(default)]
+    pub at_micros: f64,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WasmStoppedSession {
+    pub generation: u32,
+    pub route_revision: u32,
+    pub state: VoiceState,
+    pub frame_count: usize,
+    pub sample_count: usize,
+    pub sample_rate_hz: u32,
+    pub channels: u16,
+    pub pcm_i16: Vec<i16>,
+}
+
+impl std::fmt::Debug for WasmStoppedSession {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("WasmStoppedSession")
+            .field("generation", &self.generation)
+            .field("route_revision", &self.route_revision)
+            .field("state", &self.state)
+            .field("frame_count", &self.frame_count)
+            .field("sample_count", &self.sample_count)
+            .field("sample_rate_hz", &self.sample_rate_hz)
+            .field("channels", &self.channels)
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WasmCapabilities {
+    pub vad: bool,
+    pub kws: bool,
+    pub stt: bool,
+    pub tts: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WasmRuntimeSnapshot {
+    pub active: bool,
+    pub generation: Option<u32>,
+    pub route_revision: u32,
+    pub state: VoiceState,
+    pub buffered_frames: usize,
+    pub buffered_samples: usize,
+    pub dropped_frames: u64,
+    pub discontinuities: u64,
+    pub closed: bool,
+    pub capabilities: WasmCapabilities,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct WasmFacadeError {
+    code: &'static str,
+}
+
+impl WasmFacadeError {
+    fn new(code: &'static str) -> Self {
+        Self { code }
+    }
+
+    pub fn code(&self) -> &'static str {
+        self.code
+    }
+}
+
+impl std::fmt::Debug for WasmFacadeError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("WasmFacadeError")
+            .field("code", &self.code)
+            .finish()
+    }
+}
+
+impl std::fmt::Display for WasmFacadeError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "aurora_voice_wasm:{}", self.code)
+    }
+}
+
+impl std::error::Error for WasmFacadeError {}
+
+impl From<VoiceCoreError> for WasmFacadeError {
+    fn from(error: VoiceCoreError) -> Self {
+        match error {
+            VoiceCoreError::Backpressure => Self::new("backpressure"),
+            VoiceCoreError::BufferClosed => Self::new("buffer_closed"),
+            VoiceCoreError::Cancelled => Self::new("cancelled"),
+            VoiceCoreError::EmptyFrame | VoiceCoreError::SampleCountMismatch => {
+                Self::new("empty_frame")
+            }
+            VoiceCoreError::InvalidIdentifier => Self::new("invalid_id"),
+            VoiceCoreError::InvalidTransition => Self::new("invalid_state"),
+            VoiceCoreError::LockPoisoned => Self::new("internal"),
+            VoiceCoreError::NoOwnerActive => Self::new("no_session"),
+            VoiceCoreError::OwnerAlreadyActive => Self::new("session_active"),
+            VoiceCoreError::OwnerMismatch => Self::new("session_mismatch"),
+            VoiceCoreError::SampleNotFinite | VoiceCoreError::SampleOutOfRange => {
+                Self::new("invalid_audio")
+            }
+            VoiceCoreError::StaleGeneration => Self::new("stale_generation"),
+            VoiceCoreError::TransportFault { .. } | VoiceCoreError::Engine(_) => {
+                Self::new("internal")
+            }
+        }
+    }
+}
+
+struct ActiveWasmSession {
+    session_id: String,
+    generation: Generation,
+    route_revision: RouteRevision,
+    buffer: BoundedPcmBuffer,
+    next_sequence: u64,
+    sample_count: usize,
+}
+
+pub struct AuroraVoiceWasmSessionCore {
+    config: WasmRuntimeConfig,
+    leases: CaptureLeaseManager,
+    state: VoiceStateMachine,
+    active: Option<ActiveWasmSession>,
+    last_route_revision: RouteRevision,
+}
+
+impl std::fmt::Debug for AuroraVoiceWasmSessionCore {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("AuroraVoiceWasmSessionCore")
+            .field("surface", &self.config.surface)
+            .field("active", &self.active.is_some())
+            .field("state", &self.state.state())
+            .field("generation", &self.state.generation().0)
+            .field("route_revision", &self.last_route_revision.0)
+            .finish()
+    }
+}
+
+impl AuroraVoiceWasmSessionCore {
+    pub fn new(config: WasmRuntimeConfig) -> Result<Self, WasmFacadeError> {
+        validate_ascii_id(&config.surface, WASM_MAX_SURFACE_BYTES)?;
+        if config.max_frames == 0
+            || config.max_frames > WASM_MAX_FRAMES
+            || config.max_samples == 0
+            || config.max_samples > WASM_MAX_SAMPLES
+        {
+            return Err(WasmFacadeError::new("config_bounds"));
+        }
+        let mut state = VoiceStateMachine::new(config.surface.clone());
+        state.transition(
+            VoiceState::Idle,
+            TransitionReason::Enable,
+            Generation(0),
+            WASM_DEFAULT_ROUTE_REVISION,
+            TimestampMicros(0),
+        )?;
+        Ok(Self {
+            config,
+            leases: CaptureLeaseManager::new(),
+            state,
+            active: None,
+            last_route_revision: WASM_DEFAULT_ROUTE_REVISION,
+        })
+    }
+
+    pub fn start_session(
+        &mut self,
+        start: WasmSessionStart,
+    ) -> Result<WasmStartedSession, WasmFacadeError> {
+        validate_ascii_id(&start.session_id, WASM_MAX_ID_BYTES)?;
+        if self.active.is_some() {
+            return Err(WasmFacadeError::new("session_active"));
+        }
+        let route_revision = bounded_route_revision(u64::from(start.route_revision))?;
+        let now = TimestampMicros(js_safe_micros(start.at_micros)?);
+        let lease = self.leases.request_start(VoiceCaptureLease {
+            owner: CaptureOwnerKind::Web,
+            surface: self.config.surface.clone(),
+            device_route: "browser".to_owned(),
+            start_reason: CaptureStartReason::PushToTalk,
+            generation: Generation(0),
+            created_at: now,
+            route_revision,
+            background_eligible: false,
+            consent_revision: 0,
+            heartbeat_at: now,
+            stop_deadline: None,
+        })?;
+        if let Err(error) = self.state.transition(
+            VoiceState::Arming,
+            TransitionReason::PushToTalk,
+            lease.generation,
+            route_revision,
+            now,
+        ) {
+            let _ = self
+                .leases
+                .release(&CaptureOwnerKind::Web, lease.generation);
+            return Err(error.into());
+        }
+        if let Err(error) = self.state.transition(
+            VoiceState::CapturingUtterance,
+            TransitionReason::SpeechStarted,
+            lease.generation,
+            route_revision,
+            now,
+        ) {
+            let _ = self
+                .leases
+                .release(&CaptureOwnerKind::Web, lease.generation);
+            return Err(error.into());
+        }
+        self.last_route_revision = route_revision;
+        self.active = Some(ActiveWasmSession {
+            session_id: start.session_id,
+            generation: lease.generation,
+            route_revision,
+            buffer: BoundedPcmBuffer::nonblocking_queue(
+                self.config.max_frames,
+                self.config.max_samples,
+                lease.generation,
+            ),
+            next_sequence: 0,
+            sample_count: 0,
+        });
+        Ok(WasmStartedSession {
+            generation: u32_from_u64(lease.generation.0, "generation_bounds")?,
+            route_revision: u32_from_u64(route_revision.0, "route_bounds")?,
+            state: self.state.state(),
+            sample_rate_hz: WASM_SAMPLE_RATE_HZ,
+            channels: WASM_CHANNELS,
+        })
+    }
+
+    pub fn push_pcm_i16(
+        &mut self,
+        frame: WasmPushFrame,
+    ) -> Result<WasmPushReceipt, WasmFacadeError> {
+        if frame.sample_rate_hz != WASM_SAMPLE_RATE_HZ || frame.channels != WASM_CHANNELS {
+            return Err(WasmFacadeError::new("audio_format"));
+        }
+        let active = self
+            .active
+            .as_mut()
+            .ok_or(WasmFacadeError::new("no_session"))?;
+        validate_ascii_id(&frame.session_id, WASM_MAX_ID_BYTES)?;
+        if active.session_id != frame.session_id {
+            return Err(WasmFacadeError::new("session_mismatch"));
+        }
+        let generation = Generation(u64::from(frame.generation));
+        if active.generation != generation || !self.leases.accepts_generation(generation) {
+            return Err(WasmFacadeError::new("stale_generation"));
+        }
+        let sequence = u64::from(frame.sequence);
+        if !frame.discontinuity && active.next_sequence != sequence {
+            return Err(WasmFacadeError::new("sequence"));
+        }
+        if frame.samples.is_empty() {
+            return Err(WasmFacadeError::new("empty_frame"));
+        }
+        if frame.samples.len() > WASM_MAX_FRAME_SAMPLES {
+            return Err(WasmFacadeError::new("frame_bounds"));
+        }
+        let sample_count = active
+            .sample_count
+            .checked_add(frame.samples.len())
+            .ok_or(WasmFacadeError::new("audio_bounds"))?;
+        if sample_count > self.config.max_samples || sample_count > WASM_MAX_SAMPLES {
+            return Err(WasmFacadeError::new("audio_bounds"));
+        }
+        let pcm = PcmFrame::from_i16(
+            &frame.samples,
+            TimestampMicros(js_safe_micros(frame.timestamp_micros)?),
+            sequence,
+            frame.discontinuity,
+            active.route_revision,
+            active.generation,
+        )?;
+        active.buffer.push(pcm)?;
+        active.sample_count = sample_count;
+        active.next_sequence = sequence
+            .checked_add(1)
+            .ok_or(WasmFacadeError::new("sequence"))?;
+        let stats = active.buffer.stats()?;
+        Ok(WasmPushReceipt {
+            generation: u32_from_u64(active.generation.0, "generation_bounds")?,
+            sequence: frame.sequence,
+            buffered_frames: stats.frames,
+            buffered_samples: stats.samples,
+        })
+    }
+
+    pub fn stop_session(
+        &mut self,
+        session_id: &str,
+        generation: u64,
+        at_micros: u64,
+    ) -> Result<WasmStoppedSession, WasmFacadeError> {
+        validate_ascii_id(session_id, WASM_MAX_ID_BYTES)?;
+        let active = self
+            .active
+            .take()
+            .ok_or(WasmFacadeError::new("no_session"))?;
+        if active.session_id != session_id || active.generation != Generation(generation) {
+            self.active = Some(active);
+            return Err(WasmFacadeError::new("session_mismatch"));
+        }
+        self.state.transition(
+            VoiceState::Transcribing,
+            TransitionReason::SpeechEnded,
+            active.generation,
+            active.route_revision,
+            TimestampMicros(at_micros),
+        )?;
+        self.leases
+            .release(&CaptureOwnerKind::Web, active.generation)?;
+        let mut pcm_i16 = Vec::with_capacity(active.sample_count);
+        let mut frame_count = 0_usize;
+        while let Some(frame) = active.buffer.pop()? {
+            frame_count = frame_count
+                .checked_add(1)
+                .ok_or(WasmFacadeError::new("audio_bounds"))?;
+            for sample in frame.samples() {
+                pcm_i16.push(f32_to_i16(*sample));
+            }
+        }
+        self.state.transition(
+            VoiceState::Dispatching,
+            TransitionReason::Transcribed,
+            active.generation,
+            active.route_revision,
+            TimestampMicros(at_micros),
+        )?;
+        Ok(WasmStoppedSession {
+            generation: u32_from_u64(active.generation.0, "generation_bounds")?,
+            route_revision: u32_from_u64(active.route_revision.0, "route_bounds")?,
+            state: self.state.state(),
+            frame_count,
+            sample_count: pcm_i16.len(),
+            sample_rate_hz: WASM_SAMPLE_RATE_HZ,
+            channels: WASM_CHANNELS,
+            pcm_i16,
+        })
+    }
+
+    pub fn cancel_generation(
+        &mut self,
+        generation: u64,
+        at_micros: u64,
+    ) -> Result<(), WasmFacadeError> {
+        self.cancel_matching_generation(Generation(generation), TimestampMicros(at_micros))
+    }
+
+    pub fn transition_response_ready(
+        &mut self,
+        generation: u64,
+        at_micros: u64,
+    ) -> Result<VoiceState, WasmFacadeError> {
+        self.state.transition(
+            VoiceState::AwaitingResponse,
+            TransitionReason::Dispatched,
+            Generation(generation),
+            self.last_route_revision,
+            TimestampMicros(at_micros),
+        )?;
+        Ok(self.state.state())
+    }
+
+    pub fn complete_turn(
+        &mut self,
+        generation: u64,
+        at_micros: u64,
+    ) -> Result<VoiceState, WasmFacadeError> {
+        let generation = Generation(generation);
+        let at = TimestampMicros(at_micros);
+        match self.state.state() {
+            VoiceState::Dispatching => {
+                self.state.transition(
+                    VoiceState::AwaitingResponse,
+                    TransitionReason::Dispatched,
+                    generation,
+                    self.last_route_revision,
+                    at,
+                )?;
+                self.state.transition(
+                    VoiceState::Speaking,
+                    TransitionReason::ResponseReady,
+                    generation,
+                    self.last_route_revision,
+                    at,
+                )?;
+                self.state.transition(
+                    VoiceState::Idle,
+                    TransitionReason::PlaybackEnded,
+                    generation,
+                    self.last_route_revision,
+                    at,
+                )?;
+            }
+            VoiceState::AwaitingResponse => {
+                self.state.transition(
+                    VoiceState::Speaking,
+                    TransitionReason::ResponseReady,
+                    generation,
+                    self.last_route_revision,
+                    at,
+                )?;
+                self.state.transition(
+                    VoiceState::Idle,
+                    TransitionReason::PlaybackEnded,
+                    generation,
+                    self.last_route_revision,
+                    at,
+                )?;
+            }
+            VoiceState::Speaking => {
+                self.state.transition(
+                    VoiceState::Idle,
+                    TransitionReason::PlaybackEnded,
+                    generation,
+                    self.last_route_revision,
+                    at,
+                )?;
+            }
+            VoiceState::Idle => {}
+            _ => return Err(WasmFacadeError::new("invalid_state")),
+        }
+        Ok(self.state.state())
+    }
+
+    pub fn snapshot(&self) -> Result<WasmRuntimeSnapshot, WasmFacadeError> {
+        let (
+            generation,
+            buffered_frames,
+            buffered_samples,
+            dropped_frames,
+            discontinuities,
+            closed,
+        ) = if let Some(active) = &self.active {
+            let stats = active.buffer.stats()?;
+            (
+                Some(u32_from_u64(active.generation.0, "generation_bounds")?),
+                stats.frames,
+                stats.samples,
+                stats.dropped_frames,
+                stats.discontinuities,
+                stats.closed,
+            )
+        } else {
+            (None, 0, 0, 0, 0, false)
+        };
+        Ok(WasmRuntimeSnapshot {
+            active: self.active.is_some(),
+            generation,
+            route_revision: u32_from_u64(self.last_route_revision.0, "route_bounds")?,
+            state: self.state.state(),
+            buffered_frames,
+            buffered_samples,
+            dropped_frames,
+            discontinuities,
+            closed,
+            capabilities: self.capabilities(),
+        })
+    }
+
+    pub fn capabilities(&self) -> WasmCapabilities {
+        WasmCapabilities {
+            vad: false,
+            kws: false,
+            stt: false,
+            tts: false,
+        }
+    }
+
+    pub fn resource_report(&self, at_micros: u64) -> RedactedSnapshot {
+        RedactedSnapshot {
+            state: self.state.state(),
+            generation: self.state.generation(),
+            surface: self.config.surface.clone(),
+            route_revision: self.last_route_revision,
+            capability: false_capability_report(),
+            at: TimestampMicros(at_micros),
+        }
+    }
+
+    fn cancel_matching_generation(
+        &mut self,
+        generation: Generation,
+        at: TimestampMicros,
+    ) -> Result<(), WasmFacadeError> {
+        let Some(active) = self.active.take() else {
+            return Ok(());
+        };
+        if active.generation != generation {
+            self.active = Some(active);
+            return Err(WasmFacadeError::new("stale_generation"));
+        }
+        active.buffer.close()?;
+        self.leases
+            .release(&CaptureOwnerKind::Web, active.generation)?;
+        self.state
+            .cancel(active.generation, active.route_revision, at)?;
+        self.state.transition(
+            VoiceState::Idle,
+            TransitionReason::Stop,
+            active.generation,
+            active.route_revision,
+            at,
+        )?;
+        self.last_route_revision = active.route_revision;
+        Ok(())
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub struct AuroraVoiceWasmRuntime {
+    core: AuroraVoiceWasmSessionCore,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+impl AuroraVoiceWasmRuntime {
+    #[wasm_bindgen(constructor)]
+    pub fn new(config: JsValue) -> Result<AuroraVoiceWasmRuntime, JsValue> {
+        let config = if config.is_null() || config.is_undefined() {
+            WasmRuntimeConfig::default()
+        } else {
+            serde_wasm_bindgen::from_value(config).map_err(|_| js_error("config_shape"))?
+        };
+        Ok(Self {
+            core: AuroraVoiceWasmSessionCore::new(config).map_err(js_facade_error)?,
+        })
+    }
+
+    pub fn start_session(&mut self, request: JsValue) -> Result<JsValue, JsValue> {
+        let request: WasmSessionStart =
+            serde_wasm_bindgen::from_value(request).map_err(|_| js_error("request_shape"))?;
+        to_js(self.core.start_session(request))
+    }
+
+    pub fn push_pcm_i16(&mut self, frame: JsValue) -> Result<JsValue, JsValue> {
+        let frame: WasmPushFrame =
+            serde_wasm_bindgen::from_value(frame).map_err(|_| js_error("request_shape"))?;
+        to_js(self.core.push_pcm_i16(frame))
+    }
+
+    pub fn stop_session(&mut self, request: JsValue) -> Result<JsValue, JsValue> {
+        let request: WasmStopRequest =
+            serde_wasm_bindgen::from_value(request).map_err(|_| js_error("request_shape"))?;
+        to_js(self.core.stop_session(
+            &request.session_id,
+            u64::from(request.generation),
+            js_safe_micros(request.at_micros).map_err(js_facade_error)?,
+        ))
+    }
+
+    pub fn cancel_generation(&mut self, request: JsValue) -> Result<(), JsValue> {
+        let request: WasmGenerationRequest =
+            serde_wasm_bindgen::from_value(request).map_err(|_| js_error("request_shape"))?;
+        self.core
+            .cancel_generation(
+                u64::from(request.generation),
+                js_safe_micros(request.at_micros).map_err(js_facade_error)?,
+            )
+            .map_err(js_facade_error)
+    }
+
+    pub fn transition_response_ready(&mut self, request: JsValue) -> Result<String, JsValue> {
+        let request: WasmGenerationRequest =
+            serde_wasm_bindgen::from_value(request).map_err(|_| js_error("request_shape"))?;
+        self.core
+            .transition_response_ready(
+                u64::from(request.generation),
+                js_safe_micros(request.at_micros).map_err(js_facade_error)?,
+            )
+            .map(|state| format!("{state:?}"))
+            .map_err(js_facade_error)
+    }
+
+    pub fn complete_turn(&mut self, request: JsValue) -> Result<String, JsValue> {
+        let request: WasmGenerationRequest =
+            serde_wasm_bindgen::from_value(request).map_err(|_| js_error("request_shape"))?;
+        self.core
+            .complete_turn(
+                u64::from(request.generation),
+                js_safe_micros(request.at_micros).map_err(js_facade_error)?,
+            )
+            .map(|state| format!("{state:?}"))
+            .map_err(js_facade_error)
+    }
+
+    pub fn snapshot(&self) -> Result<JsValue, JsValue> {
+        to_js(self.core.snapshot())
+    }
+
+    pub fn capabilities(&self) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.core.capabilities()).map_err(|_| js_error("serialize"))
+    }
+
+    pub fn resource_report(&self, at_micros: f64) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(
+            &self
+                .core
+                .resource_report(js_safe_micros(at_micros).map_err(js_facade_error)?),
+        )
+        .map_err(|_| js_error("serialize"))
+    }
+}
+
+fn default_wasm_max_frames() -> usize {
+    WASM_MAX_FRAMES
+}
+
+fn default_wasm_max_samples() -> usize {
+    WASM_MAX_SAMPLES
+}
+
+fn validate_ascii_id(value: &str, max_bytes: usize) -> Result<(), WasmFacadeError> {
+    if value.is_empty()
+        || value.len() > max_bytes
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b':'))
+    {
+        Err(WasmFacadeError::new("invalid_id"))
+    } else {
+        Ok(())
+    }
+}
+
+fn bounded_route_revision(route_revision: u64) -> Result<RouteRevision, WasmFacadeError> {
+    if route_revision == 0 {
+        Ok(WASM_DEFAULT_ROUTE_REVISION)
+    } else if route_revision > (1_u64 << 52) {
+        Err(WasmFacadeError::new("route_bounds"))
+    } else {
+        Ok(RouteRevision(route_revision))
+    }
+}
+
+fn u32_from_u64(value: u64, code: &'static str) -> Result<u32, WasmFacadeError> {
+    u32::try_from(value).map_err(|_| WasmFacadeError::new(code))
+}
+
+fn js_safe_micros(value: f64) -> Result<u64, WasmFacadeError> {
+    if !value.is_finite() || value < 0.0 || value.fract() != 0.0 {
+        return Err(WasmFacadeError::new("timestamp"));
+    }
+    if value > JS_MAX_SAFE_INTEGER_MICROS {
+        return Err(WasmFacadeError::new("timestamp_bounds"));
+    }
+    Ok(value as u64)
+}
+
+fn f32_to_i16(sample: f32) -> i16 {
+    let clamped = sample.clamp(-1.0, 1.0);
+    if clamped <= -1.0 {
+        i16::MIN
+    } else {
+        (clamped * f32::from(i16::MAX)).round() as i16
+    }
+}
+
+fn false_capability_report() -> ResourceReport {
+    ResourceReport {
+        loaded_tasks: Vec::<VoiceTask>::new(),
+        memory_bytes: 0,
+        active_streams: 0,
+        readiness: TaskReadiness::Unavailable,
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn to_js<T: Serialize>(result: Result<T, WasmFacadeError>) -> Result<JsValue, JsValue> {
+    let value = result.map_err(js_facade_error)?;
+    serde_wasm_bindgen::to_value(&value).map_err(|_| js_error("serialize"))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn js_facade_error(error: WasmFacadeError) -> JsValue {
+    js_error(error.code())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn js_error(code: &'static str) -> JsValue {
+    JsValue::from_str(code)
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -2251,4 +3056,433 @@ fn encode_hex(bytes: &[u8]) -> String {
         output.push_str(&format!("{byte:02x}"));
     }
     output
+}
+
+#[cfg(test)]
+mod wasm_facade_tests {
+    use super::*;
+
+    fn runtime() -> AuroraVoiceWasmSessionCore {
+        AuroraVoiceWasmSessionCore::new(WasmRuntimeConfig {
+            surface: "hosted-web".to_owned(),
+            max_frames: 8,
+            max_samples: 32_000,
+        })
+        .expect("runtime")
+    }
+
+    fn start(runtime: &mut AuroraVoiceWasmSessionCore) -> WasmStartedSession {
+        runtime
+            .start_session(WasmSessionStart {
+                session_id: "session-1".to_owned(),
+                route_revision: 7,
+                at_micros: 10.0,
+            })
+            .expect("start")
+    }
+
+    fn frame(generation: u32, sequence: u32, samples: Vec<i16>) -> WasmPushFrame {
+        WasmPushFrame {
+            session_id: "session-1".to_owned(),
+            generation,
+            sequence,
+            timestamp_micros: f64::from(20_u32.saturating_add(sequence)),
+            discontinuity: false,
+            sample_rate_hz: WASM_SAMPLE_RATE_HZ,
+            channels: WASM_CHANNELS,
+            samples,
+        }
+    }
+
+    #[test]
+    fn rejects_overlapping_sessions_and_preserves_active_session() {
+        let mut runtime = runtime();
+        let started = start(&mut runtime);
+        let err = runtime
+            .start_session(WasmSessionStart {
+                session_id: "session-2".to_owned(),
+                route_revision: 7,
+                at_micros: 11.0,
+            })
+            .expect_err("overlap should fail");
+        assert_eq!(err.code(), "session_active");
+        assert_eq!(
+            runtime.snapshot().expect("snapshot").generation,
+            Some(started.generation)
+        );
+    }
+
+    #[test]
+    fn requires_exact_generation_session_and_sequence() {
+        let mut runtime = runtime();
+        let started = start(&mut runtime);
+        assert_eq!(
+            runtime
+                .push_pcm_i16(frame(started.generation + 1, 0, vec![1, 2]))
+                .expect_err("stale generation")
+                .code(),
+            "stale_generation"
+        );
+        let mut wrong_session = frame(started.generation, 0, vec![1, 2]);
+        wrong_session.session_id = "session-2".to_owned();
+        assert_eq!(
+            runtime
+                .push_pcm_i16(wrong_session)
+                .expect_err("session mismatch")
+                .code(),
+            "session_mismatch"
+        );
+        assert_eq!(
+            runtime
+                .push_pcm_i16(frame(started.generation, 1, vec![1, 2]))
+                .expect_err("sequence gap")
+                .code(),
+            "sequence"
+        );
+        runtime
+            .push_pcm_i16(frame(started.generation, 0, vec![1, 2]))
+            .expect("first frame");
+        assert_eq!(
+            runtime
+                .push_pcm_i16(frame(started.generation, 0, vec![3, 4]))
+                .expect_err("duplicate sequence")
+                .code(),
+            "sequence"
+        );
+    }
+
+    #[test]
+    fn enforces_audio_format_and_total_bounds() {
+        let mut runtime = AuroraVoiceWasmSessionCore::new(WasmRuntimeConfig {
+            surface: "web".to_owned(),
+            max_frames: 8,
+            max_samples: 4,
+        })
+        .expect("runtime");
+        let started = runtime
+            .start_session(WasmSessionStart {
+                session_id: "session-1".to_owned(),
+                route_revision: 1,
+                at_micros: 0.0,
+            })
+            .expect("start");
+        let mut wrong_rate = frame(started.generation, 0, vec![1]);
+        wrong_rate.sample_rate_hz = 8_000;
+        assert_eq!(
+            runtime.push_pcm_i16(wrong_rate).expect_err("format").code(),
+            "audio_format"
+        );
+        runtime
+            .push_pcm_i16(frame(started.generation, 0, vec![1, 2, 3, 4]))
+            .expect("within bounds");
+        assert_eq!(
+            runtime
+                .push_pcm_i16(frame(started.generation, 1, vec![5]))
+                .expect_err("bounds")
+                .code(),
+            "audio_bounds"
+        );
+    }
+
+    #[test]
+    fn caps_each_pcm_frame_at_forty_eight_hundred_samples() {
+        let mut runtime = AuroraVoiceWasmSessionCore::new(WasmRuntimeConfig {
+            surface: "web".to_owned(),
+            max_frames: 8,
+            max_samples: 16_000,
+        })
+        .expect("runtime");
+        let started = runtime
+            .start_session(WasmSessionStart {
+                session_id: "session-1".to_owned(),
+                route_revision: 1,
+                at_micros: 0.0,
+            })
+            .expect("start");
+        runtime
+            .push_pcm_i16(frame(
+                started.generation,
+                0,
+                vec![0; WASM_MAX_FRAME_SAMPLES],
+            ))
+            .expect("4800 sample frame");
+        assert_eq!(
+            runtime
+                .push_pcm_i16(frame(
+                    started.generation,
+                    1,
+                    vec![0; WASM_MAX_FRAME_SAMPLES + 1],
+                ))
+                .expect_err("4801 sample frame")
+                .code(),
+            "frame_bounds"
+        );
+    }
+
+    #[test]
+    fn stop_returns_exact_bounded_pcm_and_metadata() {
+        let mut runtime = runtime();
+        let started = start(&mut runtime);
+        runtime
+            .push_pcm_i16(frame(started.generation, 0, vec![i16::MIN, 0, i16::MAX]))
+            .expect("first frame");
+        runtime
+            .push_pcm_i16(frame(started.generation, 1, vec![42]))
+            .expect("second frame");
+        let stopped = runtime
+            .stop_session("session-1", u64::from(started.generation), 30)
+            .expect("stop");
+        assert_eq!(stopped.generation, started.generation);
+        assert_eq!(stopped.route_revision, 7);
+        assert_eq!(stopped.frame_count, 2);
+        assert_eq!(stopped.sample_count, 4);
+        assert_eq!(stopped.pcm_i16, vec![i16::MIN, 0, i16::MAX, 42]);
+        assert!(!runtime.snapshot().expect("snapshot").active);
+    }
+
+    #[test]
+    fn cancel_erases_pcm_and_rejects_post_cancel_stop() {
+        let mut runtime = runtime();
+        let started = start(&mut runtime);
+        runtime
+            .push_pcm_i16(frame(started.generation, 0, vec![7, 8, 9]))
+            .expect("frame");
+        runtime
+            .cancel_generation(u64::from(started.generation), 40)
+            .expect("cancel");
+        let snapshot = runtime.snapshot().expect("snapshot");
+        assert!(!snapshot.active);
+        assert_eq!(snapshot.buffered_samples, 0);
+        assert_eq!(
+            runtime
+                .stop_session("session-1", u64::from(started.generation), 41)
+                .expect_err("no post-cancel result")
+                .code(),
+            "no_session"
+        );
+        let restarted = start(&mut runtime);
+        assert!(restarted.generation > started.generation);
+    }
+
+    #[test]
+    fn discontinuity_is_recoverable_and_resets_sequence_expectation() {
+        let mut runtime = runtime();
+        let started = start(&mut runtime);
+        runtime
+            .push_pcm_i16(frame(started.generation, 0, vec![1]))
+            .expect("first frame");
+        let mut discontinuous = frame(started.generation, 0, vec![2, 3]);
+        discontinuous.discontinuity = true;
+        runtime.push_pcm_i16(discontinuous).expect("discontinuity");
+        let snapshot = runtime.snapshot().expect("snapshot");
+        assert!(snapshot.active);
+        assert_eq!(snapshot.discontinuities, 1);
+        runtime
+            .push_pcm_i16(frame(started.generation, 1, vec![4]))
+            .expect("sequence follows reset marker");
+    }
+
+    #[test]
+    fn lifecycle_state_advances_to_remote_response_wait() {
+        let mut runtime = runtime();
+        let started = start(&mut runtime);
+        runtime
+            .push_pcm_i16(frame(started.generation, 0, vec![1, 2]))
+            .expect("frame");
+        let stopped = runtime
+            .stop_session("session-1", u64::from(started.generation), 30)
+            .expect("stop");
+        assert_eq!(stopped.state, VoiceState::Dispatching);
+        let state = runtime
+            .transition_response_ready(u64::from(started.generation), 31)
+            .expect("response wait");
+        assert_eq!(state, VoiceState::AwaitingResponse);
+    }
+
+    #[test]
+    fn complete_turn_returns_to_idle_and_allows_repeat_turn() {
+        let mut runtime = runtime();
+        let first = start(&mut runtime);
+        runtime
+            .push_pcm_i16(frame(first.generation, 0, vec![1, 2]))
+            .expect("first frame");
+        runtime
+            .stop_session("session-1", u64::from(first.generation), 30)
+            .expect("first stop");
+        assert_eq!(
+            runtime
+                .start_session(WasmSessionStart {
+                    session_id: "session-2".to_owned(),
+                    route_revision: 7,
+                    at_micros: 31.0,
+                })
+                .expect_err("dispatching is not idle")
+                .code(),
+            "invalid_state"
+        );
+        assert_eq!(
+            runtime
+                .complete_turn(u64::from(first.generation), 32)
+                .expect("complete"),
+            VoiceState::Idle
+        );
+        let second = runtime
+            .start_session(WasmSessionStart {
+                session_id: "session-2".to_owned(),
+                route_revision: 8,
+                at_micros: 33.0,
+            })
+            .expect("second start");
+        assert!(second.generation > first.generation);
+        assert_eq!(second.state, VoiceState::CapturingUtterance);
+    }
+
+    #[test]
+    fn default_frame_bound_accepts_sixty_seconds_of_twenty_millisecond_frames() {
+        let mut runtime =
+            AuroraVoiceWasmSessionCore::new(WasmRuntimeConfig::default()).expect("default runtime");
+        let started = runtime
+            .start_session(WasmSessionStart {
+                session_id: "session-1".to_owned(),
+                route_revision: 1,
+                at_micros: 0.0,
+            })
+            .expect("start");
+        for sequence in 0..3_000_u32 {
+            runtime
+                .push_pcm_i16(frame(started.generation, sequence, vec![0; 320]))
+                .expect("20ms frame");
+        }
+        let snapshot = runtime.snapshot().expect("snapshot");
+        assert_eq!(snapshot.buffered_frames, 3_000);
+        assert_eq!(snapshot.buffered_samples, WASM_MAX_SAMPLES);
+        assert_eq!(
+            runtime
+                .push_pcm_i16(frame(started.generation, 3_000, vec![0]))
+                .expect_err("past 60 seconds")
+                .code(),
+            "audio_bounds"
+        );
+    }
+
+    #[test]
+    fn snapshots_reports_errors_and_debug_are_redacted() {
+        let mut runtime = runtime();
+        let started = start(&mut runtime);
+        runtime
+            .push_pcm_i16(frame(started.generation, 0, vec![321, 654]))
+            .expect("frame");
+        let frame_debug = format!(
+            "{:?}",
+            frame(started.generation, 1, vec![111, 222, 333, 444])
+        );
+        assert!(frame_debug.contains("sample_count"));
+        assert!(!frame_debug.contains("111"));
+        assert!(!frame_debug.contains("session-1"));
+        let stopped = runtime
+            .stop_session("session-1", u64::from(started.generation + 99), 99)
+            .expect_err("mismatch");
+        assert_eq!(format!("{stopped}"), "aurora_voice_wasm:session_mismatch");
+        let snapshot = runtime.snapshot().expect("snapshot");
+        let json = serde_json::to_string(&snapshot).expect("json");
+        assert!(!json.contains("session-1"));
+        assert!(!json.contains("321"));
+        assert!(!json.contains("654"));
+    }
+
+    #[test]
+    fn accepts_large_js_safe_microsecond_timestamps_without_u32_rollover() {
+        let large_micros = 1_786_102_400_123_000.0;
+        let mut runtime = runtime();
+        let started = runtime
+            .start_session(WasmSessionStart {
+                session_id: "session-1".to_owned(),
+                route_revision: 1,
+                at_micros: large_micros,
+            })
+            .expect("large timestamp start");
+        runtime
+            .push_pcm_i16(WasmPushFrame {
+                session_id: "session-1".to_owned(),
+                generation: started.generation,
+                sequence: 0,
+                timestamp_micros: large_micros + 4_500_000_000.0,
+                discontinuity: false,
+                sample_rate_hz: WASM_SAMPLE_RATE_HZ,
+                channels: WASM_CHANNELS,
+                samples: vec![1, 2],
+            })
+            .expect("large timestamp frame");
+        let stopped = runtime
+            .stop_session(
+                "session-1",
+                u64::from(started.generation),
+                large_micros as u64 + 1,
+            )
+            .expect("large timestamp stop");
+        assert_eq!(stopped.sample_count, 2);
+    }
+
+    #[test]
+    fn rejects_non_safe_js_timestamp_values() {
+        assert_eq!(
+            js_safe_micros(-1.0).expect_err("negative").code(),
+            "timestamp"
+        );
+        assert_eq!(
+            js_safe_micros(1.5).expect_err("fractional").code(),
+            "timestamp"
+        );
+        assert_eq!(
+            js_safe_micros(f64::NAN).expect_err("nan").code(),
+            "timestamp"
+        );
+        assert_eq!(
+            js_safe_micros(JS_MAX_SAFE_INTEGER_MICROS + 2.0)
+                .expect_err("too large")
+                .code(),
+            "timestamp_bounds"
+        );
+    }
+
+    #[test]
+    fn capabilities_remain_false_and_resource_report_is_unavailable() {
+        let runtime = runtime();
+        assert_eq!(
+            runtime.capabilities(),
+            WasmCapabilities {
+                vad: false,
+                kws: false,
+                stt: false,
+                tts: false
+            }
+        );
+        let report = runtime.resource_report(50);
+        assert!(report.capability.loaded_tasks.is_empty());
+        assert_eq!(report.capability.memory_bytes, 0);
+        assert_eq!(report.capability.active_streams, 0);
+        assert_eq!(report.capability.readiness, TaskReadiness::Unavailable);
+    }
+
+    #[test]
+    fn rejects_non_ascii_or_oversized_ids_without_leaking_values() {
+        let err = AuroraVoiceWasmSessionCore::new(WasmRuntimeConfig {
+            surface: "web\nhidden".to_owned(),
+            max_frames: 8,
+            max_samples: 32,
+        })
+        .expect_err("surface");
+        assert_eq!(err.code(), "invalid_id");
+        assert!(!format!("{err:?}").contains("web"));
+        let mut runtime = runtime();
+        let err = runtime
+            .start_session(WasmSessionStart {
+                session_id: "session with spaces".to_owned(),
+                route_revision: 1,
+                at_micros: 0.0,
+            })
+            .expect_err("id");
+        assert_eq!(err.code(), "invalid_id");
+        assert!(!format!("{err:?}").contains("spaces"));
+    }
 }
