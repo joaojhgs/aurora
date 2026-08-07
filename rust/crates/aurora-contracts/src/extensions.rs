@@ -1,9 +1,86 @@
+use std::collections::BTreeSet;
+
 use serde_json::{Map, Value};
 
 const MAX_SCHEMA_DEPTH: usize = 128;
 
 pub(crate) fn validate(schema: &Value, value: &Value) -> Result<(), String> {
     validate_node(schema, schema, value, 0)
+}
+
+pub(crate) fn normalize(schema: &Value, value: &mut Value) -> Result<(), String> {
+    normalize_node(schema, schema, value, 0)
+}
+
+fn normalize_node(
+    root: &Value,
+    schema: &Value,
+    value: &mut Value,
+    depth: usize,
+) -> Result<(), String> {
+    if depth > MAX_SCHEMA_DEPTH {
+        return Err("contract schema reference depth exceeded".to_owned());
+    }
+    let Some(node) = schema.as_object() else {
+        return Ok(());
+    };
+
+    if let Some(reference) = node.get("$ref").and_then(Value::as_str) {
+        normalize_node(root, resolve_reference(root, reference)?, value, depth + 1)?;
+    }
+
+    normalize_markers(node, value)?;
+
+    normalize_branch_group(root, node.get("allOf"), value, depth, BranchMode::All)?;
+    normalize_branch_group(root, node.get("anyOf"), value, depth, BranchMode::Any)?;
+    normalize_branch_group(root, node.get("oneOf"), value, depth, BranchMode::Any)?;
+
+    if let (Some(properties), Some(instance)) = (
+        node.get("properties").and_then(Value::as_object),
+        value.as_object_mut(),
+    ) {
+        for (name, property_schema) in properties {
+            if let Some(property_value) = instance.get_mut(name) {
+                normalize_node(root, property_schema, property_value, depth + 1)?;
+            }
+        }
+    }
+    if let (Some(items), Some(instance)) = (node.get("items"), value.as_array_mut()) {
+        for item in instance {
+            normalize_node(root, items, item, depth + 1)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn normalize_branch_group(
+    root: &Value,
+    branches: Option<&Value>,
+    value: &mut Value,
+    depth: usize,
+    mode: BranchMode,
+) -> Result<(), String> {
+    let Some(branches) = branches.and_then(Value::as_array) else {
+        return Ok(());
+    };
+    match mode {
+        BranchMode::All => {
+            for branch in branches {
+                normalize_node(root, branch, value, depth + 1)?;
+            }
+            Ok(())
+        }
+        BranchMode::Any => {
+            for branch in branches {
+                if branch_matches(root, branch, value, depth + 1)? {
+                    normalize_node(root, branch, value, depth + 1)?;
+                    return Ok(());
+                }
+            }
+            Ok(())
+        }
+    }
 }
 
 fn validate_node(root: &Value, schema: &Value, value: &Value, depth: usize) -> Result<(), String> {
@@ -206,6 +283,92 @@ fn validate_markers(schema: &Map<String, Value>, value: &Value) -> Result<(), St
     {
         validate_projection_identity(value)?;
     }
+    if schema
+        .get("x-aurora-tts-operation-id")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_operation_id(value)?;
+    }
+    if schema
+        .get("x-aurora-bounded-nonblank-string-set-normalize")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_bounded_nonblank_string_set(value)?;
+    }
+    if schema
+        .get("x-aurora-route-explain-no-raw-payload")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_route_explain_no_raw_payload(value)?;
+    }
+    if schema
+        .get("x-aurora-route-explain-selector-fields")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_route_explain_selector_fields(value)?;
+    }
+    if schema
+        .get("x-aurora-route-explain-speech-no-raw-payload")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_route_explain_speech_no_raw_payload(value)?;
+    }
+    Ok(())
+}
+
+fn normalize_markers(schema: &Map<String, Value>, value: &mut Value) -> Result<(), String> {
+    if schema
+        .get("x-aurora-speech-language-string-normalize")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        normalize_speech_language_value(value, schema_is_nullable(schema));
+    }
+    if schema
+        .get("x-aurora-speech-language-auto-null")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        normalize_speech_language_auto_null_value(value);
+    }
+    if schema
+        .get("x-aurora-speech-language-array-normalize")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        normalize_speech_language_array(value);
+    }
+    if schema
+        .get("x-aurora-bounded-nonblank-string-set-normalize")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        normalize_string_set(value);
+    }
+    if schema
+        .get("x-aurora-unique-string-array-normalize")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        normalize_string_set(value);
+    }
+    if schema
+        .get("x-aurora-tts-operation-id")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        if let Some(text) = value.as_str() {
+            if text.chars().count() > 128 {
+                return Err("operation_id must be a non-blank portable identifier".to_owned());
+            }
+            *value = Value::String(text.trim().to_owned());
+        }
+    }
     Ok(())
 }
 
@@ -242,6 +405,209 @@ fn validate_projection_page(value: &Value) -> Result<(), String> {
 
 fn has_non_null(object: &Map<String, Value>, field: &str) -> bool {
     object.get(field).is_some_and(|value| !value.is_null())
+}
+
+fn schema_is_nullable(schema: &Map<String, Value>) -> bool {
+    schema
+        .get("anyOf")
+        .or_else(|| schema.get("oneOf"))
+        .and_then(Value::as_array)
+        .is_some_and(|options| {
+            options.iter().any(|option| {
+                option
+                    .as_object()
+                    .and_then(|node| node.get("type"))
+                    .and_then(Value::as_str)
+                    == Some("null")
+            })
+        })
+}
+
+fn normalize_speech_language_value(value: &mut Value, blank_as_null: bool) {
+    let Some(text) = value.as_str() else {
+        return;
+    };
+    let normalized = text.trim().replace('_', "-").to_lowercase();
+    if blank_as_null && normalized.is_empty() {
+        *value = Value::Null;
+    } else {
+        *value = Value::String(normalized);
+    }
+}
+
+fn normalize_speech_language_auto_null_value(value: &mut Value) {
+    let Some(text) = value.as_str() else {
+        return;
+    };
+    let normalized = text.trim().replace('_', "-").to_lowercase();
+    if normalized.is_empty() || normalized == "auto" {
+        *value = Value::Null;
+    } else {
+        *value = Value::String(normalized);
+    }
+}
+
+fn normalize_speech_language_array(value: &mut Value) {
+    let Some(items) = value.as_array() else {
+        return;
+    };
+    let mut normalized = Vec::with_capacity(items.len());
+    for item in items {
+        let Some(text) = item.as_str() else {
+            return;
+        };
+        normalized.push(text.trim().replace('_', "-").to_lowercase());
+    }
+    normalized.sort();
+    normalized.dedup();
+    *value = Value::Array(normalized.into_iter().map(Value::String).collect());
+}
+
+fn normalize_string_set(value: &mut Value) {
+    let Some(items) = value.as_array() else {
+        return;
+    };
+    let mut normalized = BTreeSet::new();
+    for item in items {
+        let Some(text) = item.as_str() else {
+            return;
+        };
+        normalized.insert(text.to_owned());
+    }
+    *value = Value::Array(normalized.into_iter().map(Value::String).collect());
+}
+
+fn validate_tts_operation_id(value: &Value) -> Result<(), String> {
+    let Some(text) = value.as_str() else {
+        return Ok(());
+    };
+    if text.chars().count() > 128 || !is_tts_operation_id(text) {
+        return Err("operation_id must be a non-blank portable identifier".to_owned());
+    }
+    Ok(())
+}
+
+fn is_tts_operation_id(value: &str) -> bool {
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    first.is_ascii_alphanumeric()
+        && chars.count() <= 127
+        && value.chars().skip(1).all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | ':' | '-')
+        })
+}
+
+fn validate_bounded_nonblank_string_set(value: &Value) -> Result<(), String> {
+    let Some(items) = value.as_array() else {
+        return Ok(());
+    };
+    if items.iter().any(|item| {
+        item.as_str().is_some_and(|text| {
+            text.chars().count() == 0 || text.trim().is_empty() || text.chars().count() > 256
+        })
+    }) {
+        return Err("string set items must be non-blank and bounded".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_route_explain_no_raw_payload(value: &Value) -> Result<(), String> {
+    validate_route_explain_raw_payload_node(value, &mut Vec::new())
+}
+
+fn validate_route_explain_raw_payload_node(
+    value: &Value,
+    path: &mut Vec<String>,
+) -> Result<(), String> {
+    match value {
+        Value::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                path.push(index.to_string());
+                validate_route_explain_raw_payload_node(item, path)?;
+                path.pop();
+            }
+        }
+        Value::Object(object) => {
+            for (key, child) in object {
+                if is_route_explain_raw_payload_key(key) {
+                    return Err(format!(
+                        "route explanations must not include request payload fields at {}",
+                        issue_path(path, key)
+                    ));
+                }
+                if path.is_empty() && key == "speech" {
+                    continue;
+                }
+                path.push(key.clone());
+                validate_route_explain_raw_payload_node(child, path)?;
+                path.pop();
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn validate_route_explain_selector_fields(value: &Value) -> Result<(), String> {
+    let Some(selector) = value
+        .as_object()
+        .and_then(|object| object.get("selector"))
+        .and_then(Value::as_object)
+    else {
+        return Ok(());
+    };
+    for key in selector.keys() {
+        if !matches!(
+            key.as_str(),
+            "peer_id"
+                | "provider_id"
+                | "service_instance_id"
+                | "resource_namespace"
+                | "tool_id"
+                | "hardware_target"
+                | "data_scope"
+        ) {
+            return Err(format!(
+                "route explanation selectors must use typed selector fields at $.selector.{key}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_route_explain_speech_no_raw_payload(value: &Value) -> Result<(), String> {
+    let Some(speech) = value
+        .as_object()
+        .and_then(|object| object.get("speech"))
+        .and_then(Value::as_object)
+    else {
+        return Ok(());
+    };
+    for key in speech.keys() {
+        if is_route_explain_raw_payload_key(key) {
+            return Err(format!(
+                "speech route hints must not include request payload fields at $.speech.{key}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn is_route_explain_raw_payload_key(key: &str) -> bool {
+    matches!(
+        key,
+        "text" | "audio" | "audio_data" | "payload" | "message" | "messages" | "input" | "params"
+    )
+}
+
+fn issue_path(path: &[String], key: &str) -> String {
+    if path.is_empty() {
+        format!("$.{key}")
+    } else {
+        format!("$.{}.{key}", path.join("."))
+    }
 }
 
 fn validate_projection_identity(value: &Value) -> Result<(), String> {

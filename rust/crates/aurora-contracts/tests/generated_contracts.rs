@@ -22,6 +22,7 @@ struct ParseVector {
     input: Value,
     issue_category: Option<String>,
     issue_path: Option<String>,
+    marker_paths: Option<Vec<String>>,
     normalized: Option<Value>,
     normalized_hash: Option<String>,
     schema_id: String,
@@ -41,6 +42,96 @@ fn canonical_hash(value: &Value) -> Result<String, serde_json::Error> {
         write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
     }
     Ok(output)
+}
+
+fn without_null_fields(value: Value) -> Value {
+    match value {
+        Value::Array(items) => Value::Array(items.into_iter().map(without_null_fields).collect()),
+        Value::Object(object) => Value::Object(
+            object
+                .into_iter()
+                .filter_map(|(key, value)| {
+                    if value.is_null() {
+                        None
+                    } else {
+                        Some((key, without_null_fields(value)))
+                    }
+                })
+                .collect(),
+        ),
+        other => other,
+    }
+}
+
+fn expected_input_shape(expected: &Value, input: &Value) -> Value {
+    match (expected, input) {
+        (Value::Object(expected_object), Value::Object(input_object)) => Value::Object(
+            input_object
+                .keys()
+                .filter_map(|key| {
+                    expected_object
+                        .get(key)
+                        .filter(|value| !value.is_null())
+                        .map(|value| {
+                            let input_value = input_object.get(key).expect("input key exists");
+                            (key.clone(), expected_input_shape(value, input_value))
+                        })
+                })
+                .collect(),
+        ),
+        (Value::Array(expected_items), Value::Array(input_items)) => {
+            if input_items.is_empty() {
+                Value::Array(Vec::new())
+            } else if expected_items.len() == input_items.len() {
+                Value::Array(
+                    expected_items
+                        .iter()
+                        .zip(input_items)
+                        .map(|(expected_item, input_item)| {
+                            expected_input_shape(expected_item, input_item)
+                        })
+                        .collect(),
+                )
+            } else {
+                expected.clone()
+            }
+        }
+        _ => expected.clone(),
+    }
+}
+
+fn parsed_input_shape(parsed: &Value, input: &Value) -> Value {
+    match (parsed, input) {
+        (Value::Object(parsed_object), Value::Object(input_object)) => Value::Object(
+            input_object
+                .keys()
+                .filter_map(|key| {
+                    parsed_object.get(key).map(|value| {
+                        let input_value = input_object.get(key).expect("input key exists");
+                        (key.clone(), parsed_input_shape(value, input_value))
+                    })
+                })
+                .collect(),
+        ),
+        (Value::Array(parsed_items), Value::Array(input_items)) => {
+            if input_items.is_empty() {
+                Value::Array(Vec::new())
+            } else if parsed_items.len() == input_items.len() {
+                Value::Array(
+                    parsed_items
+                        .iter()
+                        .zip(input_items)
+                        .map(|(parsed_item, input_item)| {
+                            parsed_input_shape(parsed_item, input_item)
+                        })
+                        .collect(),
+                )
+            } else {
+                parsed.clone()
+            }
+        }
+        _ => parsed.clone(),
+    }
 }
 
 #[test]
@@ -69,12 +160,21 @@ fn rust_parser_matches_shared_positive_and_negative_vectors() {
     let mut wrongly_accepted = Vec::new();
 
     for vector in fixture.vectors {
-        let parsed = normalize_generated_contract(&vector.schema_id, vector.input);
+        let input = vector.input;
+        let parsed = normalize_generated_contract(&vector.schema_id, input.clone());
         if vector.accepted {
-            parsed.unwrap_or_else(|error| {
+            let parsed = parsed.unwrap_or_else(|error| {
                 panic!("{} rejected a positive vector: {error}", vector.schema_id)
             });
             let expected = vector.normalized.expect("positive vector normalization");
+            if vector.marker_paths.is_some() {
+                assert_eq!(
+                    parsed_input_shape(&parsed, &input),
+                    without_null_fields(expected_input_shape(&expected, &input)),
+                    "{} normalized payload",
+                    vector.schema_id
+                );
+            }
             normalize_generated_contract(&vector.schema_id, expected.clone()).unwrap_or_else(
                 |error| {
                     panic!(

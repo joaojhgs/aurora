@@ -148,7 +148,10 @@ pub struct EventDescriptor {
     pub remote_raw_audio_route: bool,
 }
 
-fn validate_contract_schema(schema_id: &str, value: &Value) -> Result<(), ContractParseError> {
+fn normalize_contract_value(
+    schema_id: &str,
+    mut value: Value,
+) -> Result<(Value, &'static CompiledSchema), ContractParseError> {
     let schemas =
         COMPILED_SCHEMAS
             .as_ref()
@@ -159,6 +162,26 @@ fn validate_contract_schema(schema_id: &str, value: &Value) -> Result<(), Contra
     let compiled = schemas
         .get(schema_id)
         .ok_or_else(|| ContractParseError::UnknownSchema(schema_id.to_owned()))?;
+    extensions::normalize(&compiled.schema, &mut value).map_err(|message| {
+        ContractParseError::Validation {
+            schema_id: schema_id.to_owned(),
+            message,
+        }
+    })?;
+    Ok((value, compiled))
+}
+
+fn validate_normalized_contract_schema(
+    schema_id: &str,
+    compiled: &CompiledSchema,
+    value: &Value,
+) -> Result<(), ContractParseError> {
+    extensions::validate(&compiled.schema, value).map_err(|message| {
+        ContractParseError::Validation {
+            schema_id: schema_id.to_owned(),
+            message,
+        }
+    })?;
     compiled
         .validator
         .validate(value)
@@ -169,12 +192,7 @@ fn validate_contract_schema(schema_id: &str, value: &Value) -> Result<(), Contra
                 error.instance_path()
             ),
         })?;
-    extensions::validate(&compiled.schema, value).map_err(|message| {
-        ContractParseError::Validation {
-            schema_id: schema_id.to_owned(),
-            message,
-        }
-    })
+    Ok(())
 }
 
 mod generated;
