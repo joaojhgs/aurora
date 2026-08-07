@@ -51,6 +51,8 @@ pub enum VoiceCoreError {
     InvalidTransition,
     #[error("cancelled")]
     Cancelled,
+    #[error("transport fault: {code}")]
+    TransportFault { code: String },
     #[error("internal state lock poisoned")]
     LockPoisoned,
     #[error("engine error: {0}")]
