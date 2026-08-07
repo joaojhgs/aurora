@@ -60,6 +60,10 @@ pub struct DownloadPolicy {
     pub max_asset_bytes: u64,
     /// Permit cleartext HTTP only for a loopback development/test origin.
     pub allow_loopback_http: bool,
+    /// Maximum wait for response headers.
+    pub request_timeout: Duration,
+    /// Maximum wait between streamed body chunks.
+    pub idle_timeout: Duration,
 }
 
 impl DownloadPolicy {
@@ -71,6 +75,8 @@ impl DownloadPolicy {
         Ok(Self {
             max_asset_bytes,
             allow_loopback_http: false,
+            request_timeout: Duration::from_secs(30),
+            idle_timeout: Duration::from_secs(30),
         })
     }
 }
@@ -115,6 +121,8 @@ pub enum DownloadError {
     HashMismatch,
     #[error("asset download was cancelled")]
     Cancelled,
+    #[error("asset download timed out")]
+    Timeout,
 }
 
 /// Reqwest-backed native downloader that never promotes staged bytes itself.
@@ -126,11 +134,26 @@ pub struct NativeDownloader {
 impl NativeDownloader {
     /// Create a downloader using the supplied bounded policy.
     pub fn new(policy: DownloadPolicy) -> Result<Self, DownloadError> {
-        if policy.max_asset_bytes == 0 {
+        if policy.max_asset_bytes == 0
+            || policy.request_timeout.is_zero()
+            || policy.idle_timeout.is_zero()
+        {
             return Err(DownloadError::InvalidPolicy);
         }
+        let allow_loopback_http = policy.allow_loopback_http;
         let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::limited(5))
+            .redirect(reqwest::redirect::Policy::custom(move |attempt| {
+                if redirect_is_allowed(
+                    attempt.previous().last(),
+                    attempt.url(),
+                    attempt.previous().len(),
+                    allow_loopback_http,
+                ) {
+                    attempt.follow()
+                } else {
+                    attempt.error("redirect target is not permitted")
+                }
+            }))
             .build()
             .map_err(|_| DownloadError::Request)?;
         Ok(Self { client, policy })
@@ -202,9 +225,10 @@ impl NativeDownloader {
             request = request.header(RANGE, format!("bytes={resumed_from}-"));
         }
 
-        let response = await_with_cancellation(request.send(), cancellation)
+        let response = await_bounded(request.send(), cancellation, self.policy.request_timeout)
             .await?
             .map_err(|_| DownloadError::Request)?;
+        self.validate_source(response.url())?;
         let status = response.status();
         if !status.is_success() {
             return Err(DownloadError::HttpStatus {
@@ -254,7 +278,7 @@ impl NativeDownloader {
                 sync_partial(&mut file).await?;
                 return Err(DownloadError::Cancelled);
             }
-            let next = await_with_cancellation(stream.next(), cancellation).await?;
+            let next = await_bounded(stream.next(), cancellation, self.policy.idle_timeout).await?;
             let Some(chunk) = next else {
                 break;
             };
@@ -297,30 +321,45 @@ impl NativeDownloader {
     }
 
     fn validate_source(&self, source: &Url) -> Result<(), DownloadError> {
-        if source.scheme() == "https" {
-            return Ok(());
-        }
-        if self.policy.allow_loopback_http
-            && source.scheme() == "http"
-            && matches!(source.host_str(), Some("localhost" | "127.0.0.1" | "::1"))
-        {
+        if source_is_allowed(source, self.policy.allow_loopback_http) {
             return Ok(());
         }
         Err(DownloadError::UnsafeSource)
     }
 }
 
-async fn await_with_cancellation<F>(
+fn source_is_allowed(source: &Url, allow_loopback_http: bool) -> bool {
+    source.scheme() == "https"
+        || (allow_loopback_http
+            && source.scheme() == "http"
+            && matches!(source.host_str(), Some("localhost" | "127.0.0.1" | "::1")))
+}
+
+fn redirect_is_allowed(
+    previous: Option<&Url>,
+    target: &Url,
+    redirect_count: usize,
+    allow_loopback_http: bool,
+) -> bool {
+    redirect_count < 5
+        && source_is_allowed(target, allow_loopback_http)
+        && !previous.is_some_and(|source| source.scheme() == "https" && target.scheme() != "https")
+}
+
+async fn await_bounded<F>(
     future: F,
     cancellation: &CancellationToken,
+    timeout: Duration,
 ) -> Result<F::Output, DownloadError>
 where
     F: std::future::Future,
 {
     tokio::pin!(future);
+    let deadline = tokio::time::Instant::now() + timeout;
     loop {
         tokio::select! {
             output = &mut future => return Ok(output),
+            () = tokio::time::sleep_until(deadline) => return Err(DownloadError::Timeout),
             () = tokio::time::sleep(CANCELLATION_POLL_INTERVAL) => {
                 if cancellation.is_cancelled() {
                     return Err(DownloadError::Cancelled);
@@ -494,6 +533,25 @@ mod tests {
                 thread: Some(thread),
             }
         }
+
+        fn delayed_response(prefix: Vec<u8>, delay: Duration, suffix: Vec<u8>) -> Self {
+            let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
+            let address = listener.local_addr().expect("read test server address");
+            let thread = thread::spawn(move || {
+                let (mut stream, _) = listener.accept().expect("accept request");
+                let _request = read_request(&mut stream);
+                if !prefix.is_empty() {
+                    stream.write_all(&prefix).expect("write response prefix");
+                    stream.flush().expect("flush response prefix");
+                }
+                thread::sleep(delay);
+                let _ = stream.write_all(&suffix);
+            });
+            Self {
+                url: Url::parse(&format!("http://{address}/asset.bin")).expect("parse URL"),
+                thread: Some(thread),
+            }
+        }
     }
 
     impl Drop for TestServer {
@@ -520,11 +578,23 @@ mod tests {
     }
 
     fn loopback_downloader(max_asset_bytes: u64) -> NativeDownloader {
-        NativeDownloader::new(DownloadPolicy {
+        loopback_downloader_with_timeouts(
             max_asset_bytes,
-            allow_loopback_http: true,
-        })
-        .expect("construct downloader")
+            Duration::from_secs(30),
+            Duration::from_secs(30),
+        )
+    }
+
+    fn loopback_downloader_with_timeouts(
+        max_asset_bytes: u64,
+        request_timeout: Duration,
+        idle_timeout: Duration,
+    ) -> NativeDownloader {
+        let mut policy = DownloadPolicy::https_only(max_asset_bytes).expect("valid policy");
+        policy.allow_loopback_http = true;
+        policy.request_timeout = request_timeout;
+        policy.idle_timeout = idle_timeout;
+        NativeDownloader::new(policy).expect("construct downloader")
     }
 
     fn integrity(body: &[u8]) -> AssetIntegrity {
@@ -681,11 +751,106 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn rejects_redirects_to_an_unsafe_source() {
+        let response = b"HTTP/1.1 302 Found\r\nLocation: http://models.example.invalid/model.bin\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec();
+        let server = TestServer::delayed_response(response, Duration::ZERO, Vec::new());
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let result = loopback_downloader(1024)
+            .download_to_staging(
+                &server.url,
+                &staging_path(&directory),
+                &integrity(b"asset"),
+                &CancellationToken::new(),
+                |_| {},
+            )
+            .await;
+
+        assert_eq!(result, Err(DownloadError::Request));
+    }
+
+    #[tokio::test]
+    async fn request_timeout_bounds_stalled_response_headers() {
+        let server = TestServer::delayed_response(
+            Vec::new(),
+            Duration::from_millis(100),
+            b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nasset".to_vec(),
+        );
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let result = loopback_downloader_with_timeouts(
+            1024,
+            Duration::from_millis(20),
+            Duration::from_secs(1),
+        )
+        .download_to_staging(
+            &server.url,
+            &staging_path(&directory),
+            &integrity(b"asset"),
+            &CancellationToken::new(),
+            |_| {},
+        )
+        .await;
+
+        assert_eq!(result, Err(DownloadError::Timeout));
+    }
+
+    #[tokio::test]
+    async fn idle_timeout_bounds_stalled_response_bodies() {
+        let server = TestServer::delayed_response(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\n".to_vec(),
+            Duration::from_millis(100),
+            b"asset".to_vec(),
+        );
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let result = loopback_downloader_with_timeouts(
+            1024,
+            Duration::from_secs(1),
+            Duration::from_millis(20),
+        )
+        .download_to_staging(
+            &server.url,
+            &staging_path(&directory),
+            &integrity(b"asset"),
+            &CancellationToken::new(),
+            |_| {},
+        )
+        .await;
+
+        assert_eq!(result, Err(DownloadError::Timeout));
+    }
+
+    #[test]
+    fn redirect_policy_rejects_downgrades_and_excessive_hops() {
+        let https_source = Url::parse("https://models.example.invalid/model.bin").expect("URL");
+        let http_target = Url::parse("http://127.0.0.1/model.bin").expect("URL");
+        let https_target = Url::parse("https://cdn.example.invalid/model.bin").expect("URL");
+
+        assert!(!redirect_is_allowed(
+            Some(&https_source),
+            &http_target,
+            1,
+            true
+        ));
+        assert!(!redirect_is_allowed(
+            Some(&https_source),
+            &https_target,
+            5,
+            false
+        ));
+        assert!(redirect_is_allowed(
+            Some(&https_source),
+            &https_target,
+            1,
+            false
+        ));
+    }
+
     #[test]
     fn errors_do_not_disclose_source_or_staging_path() {
         let rendered = [
             DownloadError::UnsafeSource,
             DownloadError::Request,
+            DownloadError::Timeout,
             DownloadError::Staging { operation: "write" },
             DownloadError::HashMismatch,
         ]
