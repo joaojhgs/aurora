@@ -16,8 +16,16 @@ mod native;
 mod native {
     use super::{SileroVadConfig, SpeechSegment, VadError};
 
-    #[derive(Debug)]
     pub(crate) struct Detector;
+
+    impl std::fmt::Debug for Detector {
+        fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter
+                .debug_struct("Detector")
+                .field("native", &"unavailable")
+                .finish()
+        }
+    }
 
     impl Detector {
         pub(crate) fn new(_config: &SileroVadConfig) -> Result<Self, VadError> {
@@ -65,8 +73,16 @@ const DEFAULT_SAMPLE_RATE: i32 = 16_000;
 const DEFAULT_NUM_THREADS: i32 = 1;
 const DEFAULT_PROVIDER: &str = "cpu";
 const DEFAULT_BUFFER_SIZE_SECONDS: f32 = 30.0;
+const MIN_DURATION_SECONDS: f32 = 0.001;
+const MAX_DURATION_SECONDS: f32 = 300.0;
+const MIN_SAMPLE_RATE: i32 = 8_000;
+const MAX_SAMPLE_RATE: i32 = 48_000;
+const MAX_NUM_THREADS: i32 = 16;
+const MAX_WINDOW_SIZE: i32 = 8_192;
+const MAX_NATIVE_SEGMENTS: usize = 4096;
+const MAX_NATIVE_SEGMENT_SAMPLES: usize = 14_400_000;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SileroVadConfig {
     model_path: PathBuf,
     threshold: f32,
@@ -198,17 +214,18 @@ impl SileroVadConfig {
                 code: ErrorCode::ConfigModelPathEmpty,
             });
         }
-        if path_bytes(&self.model_path).contains(&0) {
+        let model_path = path_bytes(&self.model_path)?;
+        if model_path.contains(&0) {
             return Err(VadError::InvalidConfig {
                 code: ErrorCode::ConfigModelPathNul,
             });
         }
-        validate_probability(self.threshold, ErrorCode::ConfigThresholdRange)?;
+        validate_threshold(self.threshold)?;
         validate_positive_finite(
             self.min_silence_duration,
             ErrorCode::ConfigMinSilenceDurationRange,
         )?;
-        validate_nonnegative_finite(
+        validate_positive_finite(
             self.min_speech_duration,
             ErrorCode::ConfigMinSpeechDurationRange,
         )?;
@@ -221,12 +238,17 @@ impl SileroVadConfig {
                 code: ErrorCode::ConfigWindowSizeRange,
             });
         }
-        if self.sample_rate <= 0 {
+        if self.window_size > MAX_WINDOW_SIZE {
+            return Err(VadError::InvalidConfig {
+                code: ErrorCode::ConfigWindowSizeRange,
+            });
+        }
+        if !(MIN_SAMPLE_RATE..=MAX_SAMPLE_RATE).contains(&self.sample_rate) {
             return Err(VadError::InvalidConfig {
                 code: ErrorCode::ConfigSampleRateRange,
             });
         }
-        if self.num_threads <= 0 {
+        if !(1..=MAX_NUM_THREADS).contains(&self.num_threads) {
             return Err(VadError::InvalidConfig {
                 code: ErrorCode::ConfigNumThreadsRange,
             });
@@ -245,20 +267,71 @@ impl SileroVadConfig {
             self.buffer_size_seconds,
             ErrorCode::ConfigBufferSizeSecondsRange,
         )?;
+        if self.buffer_size_seconds < self.max_speech_duration {
+            return Err(VadError::InvalidConfig {
+                code: ErrorCode::ConfigBufferSizeLessThanMaxSpeech,
+            });
+        }
+        let bounds = SegmentBounds::from_config(self)?;
+        if bounds.max_segments() == 0 || bounds.max_segment_samples() == 0 {
+            return Err(VadError::InvalidConfig {
+                code: ErrorCode::ConfigBufferSizeSecondsRange,
+            });
+        }
         Ok(())
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl fmt::Debug for SileroVadConfig {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SileroVadConfig")
+            .field("model_path", &"<redacted>")
+            .field("threshold", &self.threshold)
+            .field("min_silence_duration", &self.min_silence_duration)
+            .field("min_speech_duration", &self.min_speech_duration)
+            .field("max_speech_duration", &self.max_speech_duration)
+            .field("window_size", &self.window_size)
+            .field("sample_rate", &self.sample_rate)
+            .field("num_threads", &self.num_threads)
+            .field("provider", &"<redacted>")
+            .field("debug", &self.debug)
+            .field("buffer_size_seconds", &self.buffer_size_seconds)
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq)]
 pub struct SpeechSegment {
     pub start: i32,
     pub samples: Vec<f32>,
 }
 
-#[derive(Debug)]
+impl fmt::Debug for SpeechSegment {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SpeechSegment")
+            .field("start", &self.start)
+            .field("sample_count", &self.samples.len())
+            .field("samples", &"<redacted>")
+            .finish()
+    }
+}
+
 pub struct VoiceActivityDetector {
     inner: native::Detector,
+    max_accept_samples: i32,
     _not_send_sync: PhantomData<Rc<()>>,
+}
+
+impl fmt::Debug for VoiceActivityDetector {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("VoiceActivityDetector")
+            .field("inner", &"<redacted>")
+            .field("send_sync", &"!Send + !Sync")
+            .finish()
+    }
 }
 
 impl VoiceActivityDetector {
@@ -267,12 +340,13 @@ impl VoiceActivityDetector {
         let inner = native::Detector::new(config)?;
         Ok(Self {
             inner,
+            max_accept_samples: config.window_size(),
             _not_send_sync: PhantomData,
         })
     }
 
     pub fn accept_waveform(&mut self, pcm: &[f32]) -> Result<(), VadError> {
-        validate_pcm(pcm)?;
+        validate_pcm(pcm, self.max_accept_samples)?;
         self.inner.accept_waveform(pcm)
     }
 
@@ -305,6 +379,7 @@ impl VoiceActivityDetector {
 pub enum ErrorCode {
     ConfigModelPathEmpty,
     ConfigModelPathNul,
+    ConfigModelPathEncoding,
     ConfigThresholdRange,
     ConfigMinSilenceDurationRange,
     ConfigMinSpeechDurationRange,
@@ -315,15 +390,21 @@ pub enum ErrorCode {
     ConfigProviderEmpty,
     ConfigProviderNul,
     ConfigBufferSizeSecondsRange,
+    ConfigBufferSizeLessThanMaxSpeech,
     WaveformEmpty,
     WaveformTooLong,
+    WaveformChunkTooLong,
     WaveformNonFinite,
     WaveformOutOfRange,
     NativeUnavailable,
     NativeCreateFailed,
     NativeNullSegment,
+    NativeSegmentCountExceeded,
+    NativeInvalidSegmentStart,
     NativeInvalidSegmentLength,
+    NativeSegmentLengthExceeded,
     NativeInvalidSegmentSamples,
+    NativeInvalidSegmentSample,
 }
 
 impl ErrorCode {
@@ -331,6 +412,7 @@ impl ErrorCode {
         match self {
             Self::ConfigModelPathEmpty => "config.model_path_empty",
             Self::ConfigModelPathNul => "config.model_path_nul",
+            Self::ConfigModelPathEncoding => "config.model_path_encoding",
             Self::ConfigThresholdRange => "config.threshold_range",
             Self::ConfigMinSilenceDurationRange => "config.min_silence_duration_range",
             Self::ConfigMinSpeechDurationRange => "config.min_speech_duration_range",
@@ -341,15 +423,21 @@ impl ErrorCode {
             Self::ConfigProviderEmpty => "config.provider_empty",
             Self::ConfigProviderNul => "config.provider_nul",
             Self::ConfigBufferSizeSecondsRange => "config.buffer_size_seconds_range",
+            Self::ConfigBufferSizeLessThanMaxSpeech => "config.buffer_size_less_than_max_speech",
             Self::WaveformEmpty => "waveform.empty",
             Self::WaveformTooLong => "waveform.too_long",
+            Self::WaveformChunkTooLong => "waveform.chunk_too_long",
             Self::WaveformNonFinite => "waveform.nonfinite",
             Self::WaveformOutOfRange => "waveform.out_of_range",
             Self::NativeUnavailable => "native.unavailable",
             Self::NativeCreateFailed => "native.create_failed",
             Self::NativeNullSegment => "native.null_segment",
+            Self::NativeSegmentCountExceeded => "native.segment_count_exceeded",
+            Self::NativeInvalidSegmentStart => "native.invalid_segment_start",
             Self::NativeInvalidSegmentLength => "native.invalid_segment_length",
+            Self::NativeSegmentLengthExceeded => "native.segment_length_exceeded",
             Self::NativeInvalidSegmentSamples => "native.invalid_segment_samples",
+            Self::NativeInvalidSegmentSample => "native.invalid_segment_sample",
         }
     }
 }
@@ -367,8 +455,12 @@ pub enum VadError {
     NativeUnavailable,
     NativeCreateFailed,
     NativeNullSegment,
+    NativeSegmentCountExceeded,
+    NativeInvalidSegmentStart,
     NativeInvalidSegmentLength,
+    NativeSegmentLengthExceeded,
     NativeInvalidSegmentSamples,
+    NativeInvalidSegmentSample,
 }
 
 impl VadError {
@@ -378,8 +470,12 @@ impl VadError {
             Self::NativeUnavailable => ErrorCode::NativeUnavailable,
             Self::NativeCreateFailed => ErrorCode::NativeCreateFailed,
             Self::NativeNullSegment => ErrorCode::NativeNullSegment,
+            Self::NativeSegmentCountExceeded => ErrorCode::NativeSegmentCountExceeded,
+            Self::NativeInvalidSegmentStart => ErrorCode::NativeInvalidSegmentStart,
             Self::NativeInvalidSegmentLength => ErrorCode::NativeInvalidSegmentLength,
+            Self::NativeSegmentLengthExceeded => ErrorCode::NativeSegmentLengthExceeded,
             Self::NativeInvalidSegmentSamples => ErrorCode::NativeInvalidSegmentSamples,
+            Self::NativeInvalidSegmentSample => ErrorCode::NativeInvalidSegmentSample,
         }
     }
 }
@@ -392,32 +488,31 @@ impl fmt::Display for VadError {
 
 impl Error for VadError {}
 
-fn validate_probability(value: f32, code: ErrorCode) -> Result<(), VadError> {
-    if value.is_finite() && (0.0..=1.0).contains(&value) {
+fn validate_threshold(value: f32) -> Result<(), VadError> {
+    if value.is_finite() && (0.01..1.0).contains(&value) {
         Ok(())
     } else {
-        Err(VadError::InvalidConfig { code })
+        Err(VadError::InvalidConfig {
+            code: ErrorCode::ConfigThresholdRange,
+        })
     }
 }
 
 fn validate_positive_finite(value: f32, code: ErrorCode) -> Result<(), VadError> {
-    if value.is_finite() && value > 0.0 {
+    if value.is_finite() && (MIN_DURATION_SECONDS..=MAX_DURATION_SECONDS).contains(&value) {
         Ok(())
     } else {
         Err(VadError::InvalidConfig { code })
     }
 }
 
-fn validate_nonnegative_finite(value: f32, code: ErrorCode) -> Result<(), VadError> {
-    if value.is_finite() && value >= 0.0 {
-        Ok(())
-    } else {
-        Err(VadError::InvalidConfig { code })
+pub fn validate_pcm(pcm: &[f32], max_accept_samples: i32) -> Result<(), VadError> {
+    let len = pcm_len_i32(pcm)?;
+    if len > max_accept_samples {
+        return Err(VadError::InvalidWaveform {
+            code: ErrorCode::WaveformChunkTooLong,
+        });
     }
-}
-
-pub fn validate_pcm(pcm: &[f32]) -> Result<(), VadError> {
-    let _ = pcm_len_i32(pcm)?;
     for sample in pcm {
         if !sample.is_finite() {
             return Err(VadError::InvalidWaveform {
@@ -428,6 +523,74 @@ pub fn validate_pcm(pcm: &[f32]) -> Result<(), VadError> {
             return Err(VadError::InvalidWaveform {
                 code: ErrorCode::WaveformOutOfRange,
             });
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SegmentBounds {
+    max_segments: usize,
+    max_segment_samples: usize,
+}
+
+impl SegmentBounds {
+    pub(crate) fn from_config(config: &SileroVadConfig) -> Result<Self, VadError> {
+        let max_segments = checked_ceil_to_usize(
+            config.buffer_size_seconds() / config.min_speech_duration(),
+            MAX_NATIVE_SEGMENTS.saturating_sub(1),
+            ErrorCode::ConfigBufferSizeSecondsRange,
+        )?
+        .checked_add(1)
+        .ok_or(VadError::InvalidConfig {
+            code: ErrorCode::ConfigBufferSizeSecondsRange,
+        })?;
+        let max_segment_samples = checked_ceil_to_usize(
+            config.sample_rate() as f32 * config.buffer_size_seconds(),
+            MAX_NATIVE_SEGMENT_SAMPLES,
+            ErrorCode::ConfigBufferSizeSecondsRange,
+        )?;
+
+        Ok(Self {
+            max_segments,
+            max_segment_samples,
+        })
+    }
+
+    pub(crate) fn max_segments(self) -> usize {
+        self.max_segments
+    }
+
+    pub(crate) fn max_segment_samples(self) -> usize {
+        self.max_segment_samples
+    }
+}
+
+fn checked_ceil_to_usize(value: f32, max: usize, code: ErrorCode) -> Result<usize, VadError> {
+    if !value.is_finite() || value < 1.0 || value > max as f32 {
+        return Err(VadError::InvalidConfig { code });
+    }
+    Ok(value.ceil() as usize)
+}
+
+#[cfg(any(test, all(feature = "native-vad", not(target_arch = "wasm32"))))]
+pub(crate) fn validate_native_segment_parts(
+    start: i32,
+    samples: &[f32],
+    bounds: SegmentBounds,
+) -> Result<(), VadError> {
+    if start < 0 {
+        return Err(VadError::NativeInvalidSegmentStart);
+    }
+    if samples.is_empty() {
+        return Err(VadError::NativeInvalidSegmentLength);
+    }
+    if samples.len() > bounds.max_segment_samples() {
+        return Err(VadError::NativeSegmentLengthExceeded);
+    }
+    for sample in samples {
+        if !sample.is_finite() || !(-1.0..=1.0).contains(sample) {
+            return Err(VadError::NativeInvalidSegmentSample);
         }
     }
     Ok(())
@@ -445,15 +608,18 @@ pub(crate) fn pcm_len_i32(pcm: &[f32]) -> Result<i32, VadError> {
 }
 
 #[cfg(unix)]
-pub(crate) fn path_bytes(path: &Path) -> Vec<u8> {
+pub(crate) fn path_bytes(path: &Path) -> Result<Vec<u8>, VadError> {
     use std::os::unix::ffi::OsStrExt;
 
-    path.as_os_str().as_bytes().to_vec()
+    Ok(path.as_os_str().as_bytes().to_vec())
 }
 
 #[cfg(not(unix))]
-pub(crate) fn path_bytes(path: &Path) -> Vec<u8> {
-    path.as_os_str().to_string_lossy().as_bytes().to_vec()
+pub(crate) fn path_bytes(path: &Path) -> Result<Vec<u8>, VadError> {
+    let value = path.as_os_str().to_str().ok_or(VadError::InvalidConfig {
+        code: ErrorCode::ConfigModelPathEncoding,
+    })?;
+    Ok(value.as_bytes().to_vec())
 }
 
 #[cfg(test)]
@@ -487,6 +653,45 @@ mod tests {
     }
 
     #[test]
+    fn debug_output_redacts_sensitive_config_and_pcm() {
+        let config =
+            SileroVadConfig::new("/tmp/private-user-token/silero-vad.onnx").with_provider("cuda");
+        let segment = SpeechSegment {
+            start: 5728,
+            samples: vec![0.1, -0.2, 0.3],
+        };
+        let detector_error = VoiceActivityDetector::new(&config)
+            .expect_err("default build should not create native detector");
+
+        let config_debug = format!("{config:?}");
+        let segment_debug = format!("{segment:?}");
+        let detector_error_debug = format!("{detector_error:?}");
+
+        assert!(config_debug.contains("model_path: \"<redacted>\""));
+        assert!(config_debug.contains("provider: \"<redacted>\""));
+        assert!(!config_debug.contains("private-user-token"));
+        assert!(!config_debug.contains("cuda"));
+        assert!(segment_debug.contains("sample_count: 3"));
+        assert!(segment_debug.contains("samples: \"<redacted>\""));
+        assert!(!segment_debug.contains("0.1"));
+        assert!(!detector_error_debug.contains("private-user-token"));
+    }
+
+    #[test]
+    fn threshold_edges_match_silero_constraints() {
+        let valid = SileroVadConfig::new("silero-vad.onnx").with_threshold(0.01);
+        assert!(valid.validate().is_ok());
+
+        for threshold in [0.009_999, 1.0, f32::INFINITY] {
+            let error = SileroVadConfig::new("silero-vad.onnx")
+                .with_threshold(threshold)
+                .validate()
+                .expect_err("threshold edge should be rejected");
+            assert_eq!(error.code(), ErrorCode::ConfigThresholdRange);
+        }
+    }
+
+    #[test]
     fn invalid_config_cases_are_rejected() {
         let cases = [
             (SileroVadConfig::new(""), ErrorCode::ConfigModelPathEmpty),
@@ -495,7 +700,19 @@ mod tests {
                 ErrorCode::ConfigMinSilenceDurationRange,
             ),
             (
+                SileroVadConfig::new("silero-vad.onnx").with_min_silence_duration(0.000_1),
+                ErrorCode::ConfigMinSilenceDurationRange,
+            ),
+            (
+                SileroVadConfig::new("silero-vad.onnx").with_min_silence_duration(301.0),
+                ErrorCode::ConfigMinSilenceDurationRange,
+            ),
+            (
                 SileroVadConfig::new("silero-vad.onnx").with_min_speech_duration(-0.1),
+                ErrorCode::ConfigMinSpeechDurationRange,
+            ),
+            (
+                SileroVadConfig::new("silero-vad.onnx").with_min_speech_duration(0.0),
                 ErrorCode::ConfigMinSpeechDurationRange,
             ),
             (
@@ -507,11 +724,23 @@ mod tests {
                 ErrorCode::ConfigWindowSizeRange,
             ),
             (
-                SileroVadConfig::new("silero-vad.onnx").with_sample_rate(-16_000),
+                SileroVadConfig::new("silero-vad.onnx").with_window_size(MAX_WINDOW_SIZE + 1),
+                ErrorCode::ConfigWindowSizeRange,
+            ),
+            (
+                SileroVadConfig::new("silero-vad.onnx").with_sample_rate(MIN_SAMPLE_RATE - 1),
+                ErrorCode::ConfigSampleRateRange,
+            ),
+            (
+                SileroVadConfig::new("silero-vad.onnx").with_sample_rate(MAX_SAMPLE_RATE + 1),
                 ErrorCode::ConfigSampleRateRange,
             ),
             (
                 SileroVadConfig::new("silero-vad.onnx").with_num_threads(0),
+                ErrorCode::ConfigNumThreadsRange,
+            ),
+            (
+                SileroVadConfig::new("silero-vad.onnx").with_num_threads(MAX_NUM_THREADS + 1),
                 ErrorCode::ConfigNumThreadsRange,
             ),
             (
@@ -521,6 +750,12 @@ mod tests {
             (
                 SileroVadConfig::new("silero-vad.onnx").with_buffer_size_seconds(0.0),
                 ErrorCode::ConfigBufferSizeSecondsRange,
+            ),
+            (
+                SileroVadConfig::new("silero-vad.onnx")
+                    .with_buffer_size_seconds(5.0)
+                    .with_max_speech_duration(10.0),
+                ErrorCode::ConfigBufferSizeLessThanMaxSpeech,
             ),
         ];
 
@@ -540,9 +775,64 @@ mod tests {
         ];
 
         for (pcm, code) in cases {
-            let error = validate_pcm(pcm).expect_err("pcm should be rejected");
+            let error = validate_pcm(pcm, 512).expect_err("pcm should be rejected");
             assert_eq!(error.code(), code);
         }
+
+        let too_long = vec![0.0; 513];
+        let error = validate_pcm(&too_long, 512).expect_err("chunk should be rejected");
+        assert_eq!(error.code(), ErrorCode::WaveformChunkTooLong);
+
+        validate_pcm(&too_long[..512], 512).expect("window-sized chunk should validate");
+    }
+
+    #[test]
+    fn native_segment_validation_rejects_invalid_bounds_and_samples() {
+        let derived_bounds = SegmentBounds::from_config(
+            &SileroVadConfig::new("silero-vad.onnx")
+                .with_min_speech_duration(0.25)
+                .with_buffer_size_seconds(30.0),
+        )
+        .expect("bounds should derive");
+        assert_eq!(derived_bounds.max_segments(), 121);
+        assert_eq!(derived_bounds.max_segment_samples(), 480_000);
+
+        let bounds = SegmentBounds {
+            max_segments: 2,
+            max_segment_samples: 3,
+        };
+
+        let cases = [
+            (
+                validate_native_segment_parts(-1, &[0.0], bounds),
+                ErrorCode::NativeInvalidSegmentStart,
+            ),
+            (
+                validate_native_segment_parts(1, &[], bounds),
+                ErrorCode::NativeInvalidSegmentLength,
+            ),
+            (
+                validate_native_segment_parts(1, &[0.0, 0.0, 0.0, 0.0], bounds),
+                ErrorCode::NativeSegmentLengthExceeded,
+            ),
+            (
+                validate_native_segment_parts(1, &[0.0, f32::NAN], bounds),
+                ErrorCode::NativeInvalidSegmentSample,
+            ),
+            (
+                validate_native_segment_parts(1, &[0.0, 1.01], bounds),
+                ErrorCode::NativeInvalidSegmentSample,
+            ),
+        ];
+
+        for (result, code) in cases {
+            let error = result.expect_err("native segment should be rejected");
+            assert_eq!(error.code(), code);
+        }
+
+        validate_native_segment_parts(0, &[0.0, -1.0, 1.0], bounds)
+            .expect("bounded native segment should validate");
+        assert_eq!(bounds.max_segments(), 2);
     }
 
     #[test]

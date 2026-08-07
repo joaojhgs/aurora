@@ -3,12 +3,14 @@ use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rerun-if-env-changed=AURORA_SHERPA_ONNX_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=AURORA_SHERPA_ONNX_LINK_KIND");
 
     let native_enabled = env::var_os("CARGO_FEATURE_NATIVE_VAD").is_some();
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
     if !native_enabled || target_arch == "wasm32" {
         return;
     }
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
 
     let lib_dir = env::var_os("AURORA_SHERPA_ONNX_LIB_DIR")
         .map(PathBuf::from)
@@ -20,30 +22,60 @@ fn main() {
         panic!("AURORA_SHERPA_ONNX_LIB_DIR must name an existing directory");
     }
 
-    let dynamic_lib = lib_dir.join(dynamic_library_name());
-    let static_lib = lib_dir.join(static_library_name());
-    if !dynamic_lib.is_file() && !static_lib.is_file() {
-        panic!("AURORA_SHERPA_ONNX_LIB_DIR does not contain the sherpa-onnx C API library");
+    let link_kind = select_link_kind(&lib_dir, &target_os);
+    let artifact = link_artifact_name(&target_os, link_kind);
+    if !lib_dir.join(artifact).is_file() {
+        panic!("AURORA_SHERPA_ONNX_LIB_DIR does not contain the requested sherpa-onnx C API link artifact");
     }
 
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
-    println!("cargo:rustc-link-lib=dylib=sherpa-onnx-c-api");
+    println!(
+        "cargo:rustc-link-lib={}=sherpa-onnx-c-api",
+        link_kind.rustc_name()
+    );
 }
 
-fn dynamic_library_name() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "sherpa-onnx-c-api.dll"
-    } else if cfg!(target_os = "macos") || cfg!(target_os = "ios") {
-        "libsherpa-onnx-c-api.dylib"
-    } else {
-        "libsherpa-onnx-c-api.so"
+#[derive(Clone, Copy)]
+enum LinkKind {
+    Dynamic,
+    Static,
+}
+
+impl LinkKind {
+    fn rustc_name(self) -> &'static str {
+        match self {
+            Self::Dynamic => "dylib",
+            Self::Static => "static",
+        }
     }
 }
 
-fn static_library_name() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "sherpa-onnx-c-api.lib"
-    } else {
-        "libsherpa-onnx-c-api.a"
+fn select_link_kind(lib_dir: &std::path::Path, target_os: &str) -> LinkKind {
+    match env::var("AURORA_SHERPA_ONNX_LINK_KIND") {
+        Ok(value) if value == "dynamic" => LinkKind::Dynamic,
+        Ok(value) if value == "static" => LinkKind::Static,
+        Ok(_) => panic!("AURORA_SHERPA_ONNX_LINK_KIND must be dynamic or static"),
+        Err(env::VarError::NotPresent) => {
+            if lib_dir
+                .join(link_artifact_name(target_os, LinkKind::Dynamic))
+                .is_file()
+            {
+                LinkKind::Dynamic
+            } else {
+                LinkKind::Static
+            }
+        }
+        Err(env::VarError::NotUnicode(_)) => {
+            panic!("AURORA_SHERPA_ONNX_LINK_KIND must be valid unicode")
+        }
+    }
+}
+
+fn link_artifact_name(target_os: &str, link_kind: LinkKind) -> &'static str {
+    match (target_os, link_kind) {
+        ("windows", _) => "sherpa-onnx-c-api.lib",
+        ("macos" | "ios", LinkKind::Dynamic) => "libsherpa-onnx-c-api.dylib",
+        (_, LinkKind::Dynamic) => "libsherpa-onnx-c-api.so",
+        (_, LinkKind::Static) => "libsherpa-onnx-c-api.a",
     }
 }
