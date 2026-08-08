@@ -58,9 +58,7 @@ def test_redacted_copy_summarizes_top_level_speech_content():
     assert scalar_summary["redacted"] is True
     assert scalar_summary["kind"] == "speech"
     assert scalar_summary["char_length"] == 13
-    assert redacted_copy(
-        ["private", "segments"], method_id=TranscriptionMethods.TRANSCRIBE
-    ) == {
+    assert redacted_copy(["private", "segments"], method_id=TranscriptionMethods.TRANSCRIBE) == {
         "redacted": True,
         "kind": "speech",
         "element_count": 2,

@@ -97,9 +97,7 @@ def test_tts_stream_contracts_require_use_permissions():
 
 
 @pytest.mark.asyncio
-async def test_tts_service_logs_text_metadata_without_private_speech(
-    service: TTSService, mock_bus
-):
+async def test_tts_service_logs_text_metadata_without_private_speech(service: TTSService, mock_bus):
     private_text = "read my private recovery phrase aloud"
 
     with patch("app.services.tts.service.log_info") as mock_log_info:

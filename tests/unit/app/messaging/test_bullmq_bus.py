@@ -78,6 +78,7 @@ class FakePubSub:
         if False:
             yield None
 
+
 @pytest.fixture
 def mock_bullmq():
     """Mock BullMQ dependencies."""
@@ -241,7 +242,9 @@ class TestBullMQBusInterface:
 
         assert "AuroraTest.Bullmq.Dynamic.Fail" not in bus._event_handlers
         assert "AuroraTest.Bullmq.Dynamic.Fail" not in bus._event_worker_queues
-        assert not any(name.startswith("event.AuroraTest.Bullmq.Dynamic.Fail") for name in bus._workers)
+        assert not any(
+            name.startswith("event.AuroraTest.Bullmq.Dynamic.Fail") for name in bus._workers
+        )
 
     async def test_subscribe_event_wildcard_failure_cleans_up_handler_and_ready_state(
         self, mock_bullmq
@@ -261,9 +264,7 @@ class TestBullMQBusInterface:
         assert "AuroraTest.Bullmq.Dynamic.*" not in bus._event_wildcard_patterns
         assert "AuroraTest.Bullmq.Dynamic.*" not in bus._event_patterns
 
-    async def test_subscribe_event_waits_for_pending_sync_wildcard_readiness(
-        self, mock_bullmq
-    ):
+    async def test_subscribe_event_waits_for_pending_sync_wildcard_readiness(self, mock_bullmq):
         """Awaited wildcard subscriptions do not treat pending sync psubscribe as ready."""
         bus = BullMQBus(validate_topics=False)
         bus._available = True

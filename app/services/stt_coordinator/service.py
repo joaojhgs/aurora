@@ -305,9 +305,7 @@ class STTCoordinatorService(BaseService):
         await self.bus.subscribe_event(WakeWordMethods.DETECTED, self._on_wake_word_detected)
 
         # Subscribe to transcription result events
-        await self.bus.subscribe_event(
-            TranscriptionMethods.RESULT, self._on_transcription_result
-        )
+        await self.bus.subscribe_event(TranscriptionMethods.RESULT, self._on_transcription_result)
         await self.bus.subscribe_event(TTSMethods.STARTED, self._on_tts_lifecycle_event)
         await self.bus.subscribe_event(TTSMethods.STOPPED, self._on_tts_lifecycle_event)
         await self.bus.subscribe_event(TTSMethods.PAUSED, self._on_tts_lifecycle_event)
@@ -644,9 +642,7 @@ class STTCoordinatorService(BaseService):
         Args:
             reason: Reason for stopping
         """
-        capture_thread_alive = bool(
-            self._capture_thread and self._capture_thread.is_alive()
-        )
+        capture_thread_alive = bool(self._capture_thread and self._capture_thread.is_alive())
         if not self._capturing and not capture_thread_alive and self._stream is None:
             return
 
@@ -1088,8 +1084,7 @@ class STTCoordinatorService(BaseService):
             )
 
             log_info(
-                f"Transcription captured: "
-                f"{_transcript_log_metadata(final_text, result.confidence)}"
+                f"Transcription captured: {_transcript_log_metadata(final_text, result.confidence)}"
             )
 
             # Cancel timeout

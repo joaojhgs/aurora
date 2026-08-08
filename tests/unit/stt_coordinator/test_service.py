@@ -583,9 +583,7 @@ async def test_capture_prepare_stops_python_before_native_grant(service):
 
     service._stop_audio_capture = AsyncMock(side_effect=stop_capture)
 
-    response = await service._on_capture_prepare(
-        STTCapturePrepareRequest(owner_id="tauri-local")
-    )
+    response = await service._on_capture_prepare(STTCapturePrepareRequest(owner_id="tauri-local"))
 
     assert order == [("stop", "native_handoff_prepare", "python")]
     assert response.granted
@@ -698,9 +696,7 @@ async def test_capture_prepare_failure_does_not_grant_native_lease(service):
     service._capture_owner = "python"
     service._stop_audio_capture = AsyncMock(side_effect=RuntimeError("device /dev/snd/pcmC0D0c"))
 
-    response = await service._on_capture_prepare(
-        STTCapturePrepareRequest(owner_id="tauri-local")
-    )
+    response = await service._on_capture_prepare(STTCapturePrepareRequest(owner_id="tauri-local"))
 
     assert not response.granted
     assert response.status == "unavailable"
@@ -781,9 +777,7 @@ async def test_capture_prepare_does_not_grant_if_stream_close_fails(service):
 @pytest.mark.asyncio
 async def test_capture_release_rejects_stale_and_foreign_leases(service):
     """Only the exact native owner, lease, and generation can release capture."""
-    prepare = await service._on_capture_prepare(
-        STTCapturePrepareRequest(owner_id="tauri-local")
-    )
+    prepare = await service._on_capture_prepare(STTCapturePrepareRequest(owner_id="tauri-local"))
 
     stale = await service._on_capture_release(
         STTCaptureReleaseRequest(
@@ -813,9 +807,7 @@ async def test_capture_release_rejects_stale_and_foreign_leases(service):
 @pytest.mark.asyncio
 async def test_capture_release_is_idempotent_for_same_released_lease(service):
     """A duplicate release for the same native lease is safe and does not restart twice."""
-    prepare = await service._on_capture_prepare(
-        STTCapturePrepareRequest(owner_id="tauri-local")
-    )
+    prepare = await service._on_capture_prepare(STTCapturePrepareRequest(owner_id="tauri-local"))
     lease_id = prepare.lease_id or "missing"
     lease_task = service._capture_lease_expiry_task
 
@@ -852,9 +844,7 @@ async def test_capture_release_restarts_python_only_when_lifecycle_allows(servic
     service._running = True
     service._audio_input_available = True
     service._pyaudio = MagicMock()
-    prepare = await service._on_capture_prepare(
-        STTCapturePrepareRequest(owner_id="tauri-local")
-    )
+    prepare = await service._on_capture_prepare(STTCapturePrepareRequest(owner_id="tauri-local"))
 
     async def start_capture():
         service._capturing = True
@@ -940,9 +930,7 @@ async def test_capture_prepare_quiesces_active_session_and_ignores_late_transcri
     await service._start_session("manual_start", session_id="legacy-session")
     service._ambient_transcription_enabled = True
 
-    response = await service._on_capture_prepare(
-        STTCapturePrepareRequest(owner_id="tauri-local")
-    )
+    response = await service._on_capture_prepare(STTCapturePrepareRequest(owner_id="tauri-local"))
 
     assert response.granted
     assert service._state == STTState.IDLE
@@ -972,9 +960,7 @@ async def test_capture_prepare_quiesces_active_session_and_ignores_late_transcri
 
 
 @pytest.mark.asyncio
-async def test_capture_prepare_waits_for_late_wakeword_handler_before_grant(
-    service, mock_bus
-):
+async def test_capture_prepare_waits_for_late_wakeword_handler_before_grant(service, mock_bus):
     """Prepare cannot grant between a stale wakeword check and session mutation."""
     entered_start = asyncio.Event()
     release_start = asyncio.Event()
@@ -1025,9 +1011,7 @@ async def test_capture_prepare_waits_for_late_wakeword_handler_before_grant(
 
 
 @pytest.mark.asyncio
-async def test_native_capture_ignores_late_wakeword_partial_and_manual_listen(
-    service, mock_bus
-):
+async def test_native_capture_ignores_late_wakeword_partial_and_manual_listen(service, mock_bus):
     """Native ownership blocks Python wake, partial transcription, and listen starts."""
     service._capture_owner = "native"
     service._capture_owner_id = "tauri-local"
@@ -1099,9 +1083,7 @@ async def test_capture_release_python_restart_failure_rolls_back_to_no_owner(ser
     service._running = True
     service._audio_input_available = True
     service._pyaudio = MagicMock()
-    prepare = await service._on_capture_prepare(
-        STTCapturePrepareRequest(owner_id="tauri-local")
-    )
+    prepare = await service._on_capture_prepare(STTCapturePrepareRequest(owner_id="tauri-local"))
     service._start_audio_capture = AsyncMock(side_effect=RuntimeError("device disappeared"))
 
     response = await service._on_capture_release(

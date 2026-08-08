@@ -1777,8 +1777,7 @@ class TTSService(BaseService):
         """
         try:
             log_info(
-                f"TTS request: {_text_log_metadata(request.text)} "
-                f"interrupt={request.interrupt}"
+                f"TTS request: {_text_log_metadata(request.text)} interrupt={request.interrupt}"
             )
 
             # Handle interruption
