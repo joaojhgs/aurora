@@ -62,6 +62,8 @@ assert(plugin.includes('voiceCredentialDelete'), 'native plugin must expose cred
 assert(plugin.includes('voiceCredentialStatus'), 'native plugin must expose redacted credential status')
 assert(plugin.includes('AuroraIOSVoiceSessionHost('), 'foreground start must construct the Rust session host')
 assert(plugin.includes('voiceSession?.cancel'), 'foreground stop must cancel the Rust session generation')
+assert(plugin.includes('voiceForegroundCaptureFinish'), 'foreground PTT must expose a finish command')
+assert(plugin.includes('session.finish(generation: generation)'), 'finish must complete the Rust generation')
 assert(plugin.includes('voiceSessionGeneration'), 'foreground lifecycle must retain generation identity')
 for (const notification of [
   'AVAudioSession.interruptionNotification',

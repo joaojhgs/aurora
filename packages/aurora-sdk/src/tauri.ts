@@ -58,6 +58,10 @@ export interface TauriCommandNames {
   notificationStatus: string
   notificationSend: string
   iosVoiceStatus: string
+  iosVoiceForegroundCaptureStart: string
+  iosVoiceForegroundCaptureStop: string
+  iosVoiceForegroundCaptureFinish: string
+  iosVoiceForegroundCaptureStatus: string
   iosBackgroundStatus: string
   dialogStatus: string
   audioBridgeStatus: string
@@ -155,6 +159,20 @@ export interface IosVoiceCredentialStatus {
   hasBearer: boolean
   remoteAudioConsent: boolean
   endpointClass?: 'loopback' | 'secure_remote' | string
+  secretsRedacted: true
+}
+
+export interface IosVoiceCaptureStatus {
+  available: boolean
+  foregroundOnly: boolean
+  running: boolean
+  queuedChunks: number
+  acceptedChunks: number
+  droppedChunks: number
+  discontinuities: number
+  rawAudioLogged: false
+  backgroundListening: false
+  siriReplacement: false
   secretsRedacted: true
 }
 
@@ -339,6 +357,10 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   notificationStatus: 'aurora_notification_status',
   notificationSend: 'aurora_notification_send',
   iosVoiceStatus: 'aurora_ios_voice_status',
+  iosVoiceForegroundCaptureStart: 'aurora_ios_voice_foreground_capture_start',
+  iosVoiceForegroundCaptureStop: 'aurora_ios_voice_foreground_capture_stop',
+  iosVoiceForegroundCaptureFinish: 'aurora_ios_voice_foreground_capture_finish',
+  iosVoiceForegroundCaptureStatus: 'aurora_ios_voice_foreground_capture_status',
   iosBackgroundStatus: 'aurora_ios_background_status',
   dialogStatus: 'aurora_dialog_status',
   audioBridgeStatus: 'aurora_audio_bridge_status',
@@ -496,6 +518,22 @@ export class TauriLocalTransport implements AuroraTransport {
 
   getIosVoiceStatus(): Promise<TauriNativeFeatureStatus> {
     return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.iosVoiceStatus)
+  }
+
+  startIosVoiceForegroundCapture(): Promise<IosVoiceCaptureStatus> {
+    return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceForegroundCaptureStart)
+  }
+
+  stopIosVoiceForegroundCapture(): Promise<IosVoiceCaptureStatus> {
+    return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceForegroundCaptureStop)
+  }
+
+  finishIosVoiceForegroundCapture(): Promise<IosVoiceCaptureStatus> {
+    return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceForegroundCaptureFinish)
+  }
+
+  getIosVoiceForegroundCaptureStatus(): Promise<IosVoiceCaptureStatus> {
+    return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceForegroundCaptureStatus)
   }
 
   getIosBackgroundStatus(): Promise<TauriNativeFeatureStatus> {

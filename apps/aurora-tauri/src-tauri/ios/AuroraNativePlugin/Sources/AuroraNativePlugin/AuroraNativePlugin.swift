@@ -513,6 +513,10 @@ public final class AuroraNativePlugin: Plugin {
         return
       }
       do {
+        if let existing = self.voiceSession, existing.status()?.active == false {
+          self.voiceSession = nil
+          self.voiceSessionGeneration = nil
+        }
         if self.voiceSession == nil {
           self.voiceSession = try AuroraIOSVoiceSessionHost(
             storedConfiguration: AVAudioSession.sharedInstance()
@@ -553,6 +557,20 @@ public final class AuroraNativePlugin: Plugin {
     voiceSession = nil
     voiceCapture.stop()
     invoke.resolve(AuroraNativePlugin.voiceCapturePayload(voiceCapture.stats()))
+  }
+
+  @objc public func voiceForegroundCaptureFinish(_ invoke: Invoke) {
+    guard let session = voiceSession, let generation = voiceSessionGeneration else {
+      invoke.reject("capture_not_active")
+      return
+    }
+    do {
+      try session.finish(generation: generation)
+      let stats = session.captureStats() ?? voiceCapture.stats()
+      invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats))
+    } catch {
+      invoke.reject("capture_finish_failed")
+    }
   }
 
   @objc public func voiceForegroundCaptureStatus(_ invoke: Invoke) {
