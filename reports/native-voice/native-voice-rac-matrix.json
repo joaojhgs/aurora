@@ -29,7 +29,7 @@
     {"id":"RAC-16","status":"pass","evidence":"model-pack compatibility-group and voice-state binding tests"},
     {"id":"RAC-17","status":"pass","evidence":"native/testkit atomic install, resume, rollback, revocation, quota, and corruption tests"},
     {"id":"RAC-18","status":"pass","evidence":"wrong-hash, revoked, incompatible, and unsupported-operator fail-closed tests"},
-    {"id":"RAC-19","status":"partial","evidence":"APK artifact verification reports no forbidden model/Python/credential assets; hosted web, desktop, AAB, and IPA scans remain open"},
+    {"id":"RAC-19","status":"partial","evidence":"Hosted web production build passed; Linux desktop AppImage/DEB client bundles and Android APK/AAB client artifacts pass forbidden model/Python/credential scans; IPA scan/build remains unavailable on Linux"},
     {"id":"RAC-20","status":"partial","evidence":"declared bounds and residency tests pass; physical thermal/battery budgets remain unmeasured"},
     {"id":"RAC-21","status":"pass","evidence":"aurora-voice-web uses the Rust/WASM facade and worker host"},
     {"id":"RAC-22","status":"partial","evidence":"Chromium/Firefox/WebKit worker parity passes; full browser PTT matrix remains bounded"},

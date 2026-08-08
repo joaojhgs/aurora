@@ -16,6 +16,36 @@
     "sizeBytes": 344316584,
     "verification": "pnpm --dir apps/aurora-tauri android:verify:client:apk passed"
   },
+  "artifactClassEvidence": {
+    "hostedWeb": {
+      "build": "pnpm --filter @aurora/web build passed",
+      "roleModeInjection": false
+    },
+    "desktopLinux": [
+      {
+        "kind": "appimage",
+        "path": "apps/aurora-tauri/src-tauri/target/release/bundle/appimage/Aurora_0.1.0_amd64.AppImage",
+        "sha256": "2dfc7c099e535720149ad580a25c27f7e81db9cf6e2a4f616706e8a15d8f514d",
+        "sizeBytes": 92137976
+      },
+      {
+        "kind": "deb",
+        "path": "apps/aurora-tauri/src-tauri/target/release/bundle/deb/Aurora_0.1.0_amd64.deb",
+        "sha256": "19cf166db178e4817ccc040630dfd3344a94660ccc8f33057a4dd7fcee7ff8d5",
+        "sizeBytes": 19116472
+      }
+    ],
+    "androidAab": {
+      "path": "apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/bundle/universalDebug/app-universal-debug.aab",
+      "sha256": "c58f23f046f5722830e951bf5a322d66198a9cf0fd4a3257f334120ca05b1739",
+      "sizeBytes": 347061847,
+      "verification": "pnpm --dir apps/aurora-tauri android:verify:client:aab passed"
+    },
+    "ipa": {
+      "build": "unavailable on Linux host",
+      "scan": "withheld"
+    }
+  },
   "waydroid": {
     "endpoint": "192.168.240.112:5555",
     "android": "13",
