@@ -720,9 +720,11 @@ describe('Tauri CI native evidence contract', () => {
     }
     expect(barcodeManifest).toContain('android.permission.CAMERA')
     expect(androidManifest).toContain('android.software.webview')
-    expect(androidManifest).toContain('android:usesCleartextTraffic="true"')
+    expect(androidManifest).toContain('android:usesCleartextTraffic="false"')
+    expect(androidManifest).toContain('android:networkSecurityConfig="@xml/aurora_network_security_config"')
     expect(androidSyncScript).toContain('android.software.webview')
-    expect(androidSyncScript).toContain('android:usesCleartextTraffic="true"')
+    expect(androidSyncScript).toContain('android:usesCleartextTraffic="false"')
+    expect(androidSyncScript).toContain('android:networkSecurityConfig="@xml/aurora_network_security_config"')
     expect(androidPlugin).toContain(
       'override fun onPermissionRequest(request: PermissionRequest)',
     )

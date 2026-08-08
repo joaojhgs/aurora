@@ -36,6 +36,53 @@ describe('Android native voice route policy', () => {
     expect(voiceStore).toContain('fun clearRoute(context: Context)')
     expect(voiceStore).toContain('VOICE_GATEWAY_KEY')
     expect(voiceStore).toContain('VOICE_BEARER_KEY')
+    expect(voiceStore).toContain('VOICE_REMOTE_AUDIO_CONSENT_KEY')
+    const setRouteBody = voiceStore.slice(
+      voiceStore.indexOf('fun setRoute(context: Context, gateway: String, bearer: String)'),
+      voiceStore.indexOf('fun clearRoute(context: Context)', voiceStore.indexOf('fun setRoute(context: Context, gateway: String, bearer: String)')),
+    )
+    expect(setRouteBody).toContain('.remove(VOICE_REMOTE_AUDIO_CONSENT_KEY)')
+    const clearRouteBody = voiceStore.slice(
+      voiceStore.indexOf('fun clearRoute(context: Context)'),
+      voiceStore.indexOf('fun load(context: Context)', voiceStore.indexOf('fun clearRoute(context: Context)')),
+    )
+    expect(clearRouteBody).toContain('.remove(VOICE_REMOTE_AUDIO_CONSENT_KEY)')
+    expect(voiceStore).toContain('?: false')
+  })
+
+  it('keeps Android voice cleartext limited to loopback routes', () => {
+    const voiceStore = repoText(voiceStorePath)
+    const manifest = repoText(
+      'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/AndroidManifest.xml',
+    )
+    const networkSecurity = repoText(
+      'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/res/xml/aurora_network_security_config.xml',
+    )
+
+    expect(voiceStore).toContain('scheme == "https" || (scheme == "http" && loopback)')
+    expect(manifest).toContain('android:usesCleartextTraffic="false"')
+    expect(manifest).toContain('android:networkSecurityConfig="@xml/aurora_network_security_config"')
+    expect(networkSecurity).toContain('<base-config cleartextTrafficPermitted="false" />')
+    expect(networkSecurity).toContain('<domain includeSubdomains="false">localhost</domain>')
+    expect(networkSecurity).toContain('<domain includeSubdomains="false">127.0.0.1</domain>')
+    expect(networkSecurity).not.toContain('includeSubdomains="true"')
+  })
+
+  it('keeps assistant and background voice entry points disabled before native session creation', () => {
+    const plugin = repoText(kotlinPath)
+    const foregroundService = repoText(voiceStorePath)
+    const assistantService = repoText(
+      'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraVoiceInteractionSessionService.kt',
+    )
+
+    expect(plugin).toContain('if (args.backgroundSession) {')
+    expect(plugin).toContain('reason", "background_voice_unavailable"')
+    expect(foregroundService).toContain('private const val BACKGROUND_VOICE_AVAILABLE = false')
+    expect(foregroundService).toContain('ACTION_START_ASSISTANT')
+    expect(foregroundService).toContain('backgroundSession && !BACKGROUND_VOICE_AVAILABLE')
+    expect(foregroundService).toContain('nativeSession.startBackground()')
+    expect(assistantService).toContain('action = AuroraVoiceForegroundService.ACTION_START_ASSISTANT')
+    expect(assistantService).not.toContain('AuroraVoiceNativeConfigStore.setRemoteAudioConsent')
   })
 
   it('keeps the thin APK on narrow profile/peer-storage permissions', () => {

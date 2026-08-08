@@ -483,6 +483,7 @@ if (argv[0] === 'build:frontend:android-client') {
       'drawable/ic_aurora_entrypoint.xml',
       'layout/aurora_widget.xml',
       'xml/aurora_shortcuts.xml',
+      'xml/aurora_network_security_config.xml',
       'xml/aurora_voice_interaction_service.xml',
       'xml/aurora_widget_info.xml',
     ]) {
@@ -668,7 +669,7 @@ if (argv[0] === 'build:frontend:android-client') {
     }
   })
 
-  it('allows runtime cleartext LAN endpoints in the Android client application manifest', () => {
+  it('keeps Android client cleartext fail-closed outside loopback', () => {
     const manifest = readFileSync(
       join(
         packageRoot,
@@ -682,11 +683,31 @@ if (argv[0] === 'build:frontend:android-client') {
       'utf8',
     )
 
-    expect(manifest).toContain('android:usesCleartextTraffic="true"')
+    const networkSecurity = readFileSync(
+      join(
+        packageRoot,
+        'src-tauri',
+        'android',
+        'aurora-native-plugin',
+        'src',
+        'main',
+        'res',
+        'xml',
+        'aurora_network_security_config.xml',
+      ),
+      'utf8',
+    )
+
+    expect(manifest).toContain('android:usesCleartextTraffic="false"')
+    expect(manifest).toContain('android:networkSecurityConfig="@xml/aurora_network_security_config"')
     expect(manifest).toContain('android.software.webview')
+    expect(networkSecurity).toContain('<base-config cleartextTrafficPermitted="false" />')
+    expect(networkSecurity).toContain('<domain includeSubdomains="false">localhost</domain>')
+    expect(networkSecurity).toContain('<domain includeSubdomains="false">127.0.0.1</domain>')
     const syncScript = readFileSync(syncNativePlugin, 'utf8')
     expect(syncScript).toContain('android.software.webview')
-    expect(syncScript).toContain('android:usesCleartextTraffic="true"')
+    expect(syncScript).toContain('android:usesCleartextTraffic="false"')
+    expect(syncScript).toContain('android:networkSecurityConfig="@xml/aurora_network_security_config"')
   })
 })
 

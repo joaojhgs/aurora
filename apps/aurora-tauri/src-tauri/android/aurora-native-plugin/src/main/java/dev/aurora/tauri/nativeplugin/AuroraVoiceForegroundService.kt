@@ -70,6 +70,7 @@ object AuroraVoiceNativeConfigStore {
         prefs.edit()
             .putString(VOICE_GATEWAY_KEY, encrypt(validatedGateway))
             .putString(VOICE_BEARER_KEY, encrypt(bearer))
+            .remove(VOICE_REMOTE_AUDIO_CONSENT_KEY)
             .apply()
     }
 
@@ -78,6 +79,7 @@ object AuroraVoiceNativeConfigStore {
             .edit()
             .remove(VOICE_GATEWAY_KEY)
             .remove(VOICE_BEARER_KEY)
+            .remove(VOICE_REMOTE_AUDIO_CONSENT_KEY)
             .apply()
     }
 
