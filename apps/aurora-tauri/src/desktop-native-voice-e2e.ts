@@ -133,7 +133,6 @@ export function isDesktopNativeVoiceE2eHookEnabled(
 ): boolean {
   return Boolean(
     env.VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E === "1" &&
-      env.VITE_AURORA_RUNTIME_MODE === "desktop-local" &&
       env.VITE_AURORA_TAURI_DEV_AUTOSIDECAR === "0",
   );
 }

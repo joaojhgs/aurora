@@ -340,7 +340,10 @@ describe("Tauri native desktop voice port", () => {
     expect(desktopThin.mode).toBe("desktop-thin");
     expect(desktopThin.nativeVoice).toBeDefined();
 
-    vi.stubEnv("VITE_AURORA_RUNTIME_MODE", "android");
+    Object.defineProperty(window.navigator, "userAgent", {
+      value: "Mozilla/5.0 (Linux; Android 15; Aurora)",
+      configurable: true,
+    });
     const mobile = createAuroraTauriRuntime({
       runtimeProfileDocument: mobileDocument,
     });

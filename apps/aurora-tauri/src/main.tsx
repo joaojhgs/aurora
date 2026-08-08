@@ -10,7 +10,6 @@ import { AuroraTauriApp } from './tauri-app'
 const root = document.getElementById('root') as HTMLElement
 const isOverlaySurface = new URLSearchParams(window.location.search).get('surface') === 'overlay' || window.location.hash.includes('overlay')
 const surfaceProfile = getAuroraSurfaceProfile({
-  runtimeMode: import.meta.env.VITE_AURORA_RUNTIME_MODE,
   userAgent: window.navigator.userAgent,
 })
 

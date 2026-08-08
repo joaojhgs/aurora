@@ -27,7 +27,7 @@ describe("desktop native voice E2E hook", () => {
     })).toBe(false);
     expect(isDesktopNativeVoiceE2eHookEnabled({
       ...liveEnv,
-      VITE_AURORA_RUNTIME_MODE: "desktop-thin",
+      VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E: "0",
     })).toBe(false);
     expect(isDesktopNativeVoiceE2eHookEnabled({
       ...liveEnv,

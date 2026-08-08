@@ -117,7 +117,6 @@ if [[ "${AURORA_DESKTOP_NATIVE_VOICE_E2E_SKIP_BUILD:-0}" != "1" ]]; then
   AURORA_TAURI_DEV_AUTOSIDECAR=0 \
     VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E=1 \
     VITE_AURORA_TAURI_DEV_AUTOSIDECAR=0 \
-    VITE_AURORA_RUNTIME_MODE=desktop-local \
     pnpm --filter @aurora/tauri-ui tauri build --config src-tauri/tauri.desktop-native-voice-e2e.conf.json --debug --no-bundle
 fi
 
@@ -145,7 +144,6 @@ export AURORA_DESKTOP_NATIVE_VOICE_E2E=1
 export AURORA_TAURI_DEV_AUTOSIDECAR=0
 export VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E=1
 export VITE_AURORA_TAURI_DEV_AUTOSIDECAR=0
-export VITE_AURORA_RUNTIME_MODE=desktop-local
 export AURORA_GATEWAY_URL="$gateway_url"
 export AURORA_DESKTOP_NATIVE_VOICE_E2E_GATEWAY_PORT="$gateway_port"
 export AURORA_DESKTOP_NATIVE_VOICE_E2E_APPLICATION="$application_wrapper"

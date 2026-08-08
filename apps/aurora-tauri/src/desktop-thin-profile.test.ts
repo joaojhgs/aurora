@@ -516,26 +516,14 @@ describe('desktop-thin live connection profiles', () => {
       runtimeProfileDocument: pythonFullDocument,
       packageCapabilities: createTauriPackageCapabilities({
         source: 'test',
-        runtimeMode: 'desktop-local',
         includesPython: false,
       }),
       consumeThinInvite: false,
     })).toThrow(/bundled Python/)
-    expect(() => createAuroraTauriRuntime({
-      runtimeProfileDocument: pythonFullDocument,
-      packageCapabilities: createTauriPackageCapabilities({
-        source: 'test',
-        runtimeMode: 'desktop-thin',
-        includesPython: true,
-      }),
-      consumeThinInvite: false,
-    })).toThrow(/bundled Python/)
-
     const runtime = createAuroraTauriRuntime({
       runtimeProfileDocument: pythonFullDocument,
       packageCapabilities: createTauriPackageCapabilities({
         source: 'test',
-        runtimeMode: 'desktop-local',
         includesPython: true,
       }),
       consumeThinInvite: false,
@@ -632,7 +620,6 @@ describe('desktop-thin live connection profiles', () => {
       runtimeProfileDocument: fullDocument,
       packageCapabilities: createTauriPackageCapabilities({
         source: 'test',
-        runtimeMode: 'desktop-local',
         includesPython: true,
       }),
       consumeThinInvite: false,
@@ -773,7 +760,7 @@ describe('desktop-thin live connection profiles', () => {
     await restarted.dispose()
   })
 
-  it('preserves a packaged desktop-thin fragment invite until async profile bootstrap owns it', async () => {
+  it('keeps a fragment invite pending until async profile bootstrap owns the runtime role', async () => {
     vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
     vi.stubEnv('VITE_AURORA_CONNECTION_MODE', 'webrtc-only')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
@@ -809,8 +796,8 @@ describe('desktop-thin live connection profiles', () => {
       await originalDispose()
     }
 
-    expect(initial.mode).toBe('desktop-thin')
-    expect(initial.thinDiagnostics().join(' ')).not.toContain('tauri-room')
+    expect(initial.mode).toBe('desktop-local')
+    expect(initial.thinDiagnostics().join(' ')).toContain('desktop-local')
     expect(window.location.hash).toContain('invite=')
 
     const pending = bootstrapAuroraTauriRuntime(store)
@@ -1195,10 +1182,9 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('classifies a packaged iOS-thin build without relying on the WebView user agent', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'ios-thin')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     Object.defineProperty(window.navigator, 'userAgent', {
-      value: 'Mozilla/5.0 (Linux; Android 15) conflicting-test-agent',
+      value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
       configurable: true,
     })
 

@@ -200,7 +200,6 @@ export type AuroraRuntimeProfileDocument = AuroraRuntimeProfileDocumentV2;
 
 export interface AuroraTauriPythonRuntimeProof {
   source: "native-package" | "test";
-  runtimeMode: string;
   includesPython: boolean;
 }
 
@@ -436,7 +435,10 @@ export function createInitialAuroraTauriRuntime(): AuroraTauriRuntime {
 }
 
 export function requiresAsyncAuroraTauriBootstrap(): boolean {
-  return isPackagedDesktopThinRuntime() || (isTauriRuntime() && isMobileTauriRuntime());
+  // Every native shell must load the persisted runtime profile before selecting
+  // a local node or remote-console path. The package is role-neutral; profile
+  // state, not a build flag, decides the runtime.
+  return isTauriRuntime();
 }
 
 export function createAuroraTauriRuntime({
@@ -659,11 +661,11 @@ export function createAuroraTauriRuntime({
     if (
       runtimeTier !== "python-full" &&
       (
-        isPackagedDesktopThinRuntime() ||
         configuredRuntimeProfile ||
         configuredProfile ||
         configuredGatewayUrl ||
-        thinConnectionMode !== "http-only"
+        thinConnectionMode !== "http-only" ||
+        thinInviteText
       )
     ) {
       const thinRuntime = createTauriWebThinRuntime({
@@ -1825,8 +1827,7 @@ function hasPythonFullRuntimeCapability(
   return packageCapabilities.pythonFullRuntime === true
     && !!proof
     && proof.includesPython === true
-    && (proof.source === "native-package" || proof.source === "test")
-    && proof.runtimeMode === import.meta.env.VITE_AURORA_RUNTIME_MODE;
+    && (proof.source === "native-package" || proof.source === "test");
 }
 
 function defaultThinProfileDocument(): AuroraThinProfileDocument {
@@ -1869,13 +1870,6 @@ function isTauriRuntime(): boolean {
   return "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
 }
 
-function isPackagedDesktopThinRuntime(): boolean {
-  return (
-    isDesktopTauriRuntime() &&
-    import.meta.env.VITE_AURORA_RUNTIME_MODE === "desktop-thin"
-  );
-}
-
 function isDesktopTauriRuntime(): boolean {
   return isTauriRuntime() && !isMobileTauriRuntime();
 }
@@ -1901,7 +1895,6 @@ function tauriNativePlatform(): string {
 
 function currentAuroraSurfaceProfile() {
   return getAuroraSurfaceProfile({
-    runtimeMode: import.meta.env.VITE_AURORA_RUNTIME_MODE,
     transportKind: DEFAULT_THIN_CONNECTION_MODE,
     userAgent: typeof navigator === "undefined" ? undefined : navigator.userAgent,
   });

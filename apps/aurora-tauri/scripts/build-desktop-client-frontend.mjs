@@ -13,11 +13,6 @@ const env = {
   VITE_AURORA_SIGNALING_URL: '',
   VITE_AURORA_CONNECTION_MODE: liveHookEnabled ? 'webrtc-only' : '',
   VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: liveHookEnabled ? '1' : '',
-  ...(liveHookEnabled
-    ? {
-        VITE_AURORA_RUNTIME_MODE: 'desktop-thin',
-      }
-    : {}),
 }
 
 rmSync(outputRoot, { recursive: true, force: true })
