@@ -135,6 +135,7 @@ function scanFilesystemPath(path, rel, archiveDepth = 0) {
       target = normalizePath(readlinkSync(path))
     } catch {}
     if (normalizedRel) checkPath(normalizedRel, location)
+    if (target !== '<unreadable>' && isContainedSymlink(artifactRoot, path, target)) return
     checkPath(target, `${location}->${redacted(target)}`)
     addFailure('symlink-unsupported', location, `symbolic links are not allowed in release artifacts; target=${redacted(target)}`)
     return
@@ -200,7 +201,7 @@ function inspectAppImage(path, rel) {
     const root = join(extractDir, 'squashfs-root')
     if (!existsSync(root)) throw new Error('AppImage extraction did not create squashfs-root')
     report.checkedInstallers += 1
-    scanExtractedTree(root, `appimage:${rel}`)
+    scanExtractedTree(root, `appimage:${rel}`, artifactRoot)
   } catch (error) {
     addFailure('installer-inspection', `installer:${rel}`, `failed to extract AppImage installer: ${errorMessage(error)}`)
   } finally {
@@ -208,7 +209,7 @@ function inspectAppImage(path, rel) {
   }
 }
 
-function scanExtractedTree(root, prefix) {
+function scanExtractedTree(root, prefix, externalRoot = null) {
   for (const extracted of walkFilesystem(root)) {
     const rel = normalizePath(relative(root, extracted))
     const stat = lstatSync(extracted)
@@ -220,6 +221,7 @@ function scanExtractedTree(root, prefix) {
         target = normalizePath(readlinkSync(extracted))
       } catch {}
       checkPath(rel, location)
+      if (target !== '<unreadable>' && isContainedSymlink(root, extracted, target, externalRoot)) continue
       checkPath(target, `${location}->${redacted(target)}`)
       addFailure('symlink-unsupported', location, `symbolic links are not allowed in release artifacts; target=${redacted(target)}`)
       continue
@@ -231,6 +233,18 @@ function scanExtractedTree(root, prefix) {
     inspectRecognizedContainer(extracted, `${prefix}/${rel}`, 0)
     if (shouldScanText(extracted)) checkText(readFileSync(extracted), location)
   }
+}
+
+function isContainedSymlink(root, linkPath, target, externalRoot = null) {
+  if (!target || target.startsWith('<') || target.includes('\0')) return false
+  const resolvedTarget = resolve(dirname(linkPath), target)
+  return [root, externalRoot]
+    .filter(Boolean)
+    .some((candidateRoot) => {
+      const relativeTarget = relative(resolve(candidateRoot), resolvedTarget)
+      return relativeTarget === ''
+        || (!relativeTarget.startsWith('..') && !relativeTarget.startsWith('/') && !relativeTarget.match(/^[A-Za-z]:[/\\]/))
+    })
 }
 
 function inspectZipLikeArchive(buffer, label, depth) {

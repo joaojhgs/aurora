@@ -184,6 +184,20 @@ describe('native voice desktop artifact policy', () => {
     expect(JSON.stringify(report.forbiddenMatches)).toContain('<tmp>/site-packages')
   })
 
+  it('allows package-internal symlinks while rejecting links that escape the artifact root', () => {
+    const context = createContext()
+    writeArtifact(context, 'usr/share/applications/aurora.desktop', '[Desktop Entry]\nName=Aurora\n')
+    mkdirSync(join(context.artifactRoot, 'usr', 'share', 'icons'), { recursive: true })
+    symlinkSync('../applications/aurora.desktop', join(context.artifactRoot, 'usr', 'share', 'icons', 'aurora.desktop'))
+
+    const result = runPolicy(context)
+
+    expect(result.status, result.stderr).toBe(0)
+    const report = JSON.parse(readFileSync(context.reportPath, 'utf8'))
+    expect(report.checkedSymlinks).toBe(1)
+    expect(report.forbiddenMatches).toEqual([])
+  })
+
   it('rejects secrets inside zip entry content', () => {
     const context = createContext()
     mkdirSync(context.artifactRoot, { recursive: true })
