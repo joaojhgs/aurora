@@ -444,6 +444,8 @@ export function AssistantView({
   const nativeVoiceOperationTokenRef = useRef(0)
   const nativeVoicePendingCancelReasonRef = useRef<NativeDesktopVoiceStopReason | null>(null)
   const nativeVoiceCancelledGenerationsRef = useRef<Set<number>>(new Set())
+  const nativeMobileVoiceOperationTokenRef = useRef(0)
+  const nativeMobileVoiceStartInFlightRef = useRef(false)
   const assistantViewDisposedRef = useRef(false)
   const sessionLoadGenerationRef = useRef(0)
   function setVoiceCaptureStatus(next: VoiceCaptureStatus) {
@@ -825,7 +827,8 @@ export function AssistantView({
     stopStreamedTtsPlayback()
     stopLocalCapture()
     void cancelNativeDesktopVoice('shutdown')
-    if (voiceCaptureStatusRef.current === 'listening' || voiceCaptureStatusRef.current === 'processing') {
+    nativeMobileVoiceOperationTokenRef.current += 1
+    if (nativeMobileVoiceStartInFlightRef.current || voiceCaptureStatusRef.current === 'listening' || voiceCaptureStatusRef.current === 'processing') {
       void cancelNativeMobileVoice({ updateUi: false })
     }
     const token = browserVoiceOperationTokenRef.current
@@ -2805,8 +2808,14 @@ export function AssistantView({
     }
     setVoiceConsentGranted(true)
     setStreamState((current) => ({ ...current, status: 'streaming', message: 'Starting voice...' }))
+    const operationToken = ++nativeMobileVoiceOperationTokenRef.current
+    nativeMobileVoiceStartInFlightRef.current = true
     try {
       const status = await nativeMobileVoice.start({ remoteAudioConsent: true })
+      if (assistantViewDisposedRef.current || operationToken !== nativeMobileVoiceOperationTokenRef.current) {
+        await nativeMobileVoice.cancel().catch(() => undefined)
+        return false
+      }
       if (!status.available || status.phase === 'unavailable' || status.phase === 'faulted') {
         setVoiceCaptureStatus('error')
         setLastError('Voice could not start. Check microphone access on this device.')
@@ -2815,9 +2824,14 @@ export function AssistantView({
       setVoiceCaptureStatus('listening')
       return true
     } catch {
+      if (assistantViewDisposedRef.current || operationToken !== nativeMobileVoiceOperationTokenRef.current) return false
       setVoiceCaptureStatus('error')
       setLastError('Voice could not start. Check microphone access on this device.')
       return false
+    } finally {
+      if (operationToken === nativeMobileVoiceOperationTokenRef.current) {
+        nativeMobileVoiceStartInFlightRef.current = false
+      }
     }
   }
 
@@ -2845,6 +2859,7 @@ export function AssistantView({
 
   async function cancelNativeMobileVoice(options: { updateUi?: boolean } = {}): Promise<boolean> {
     if (!nativeMobileVoice) return false
+    nativeMobileVoiceOperationTokenRef.current += 1
     const updateUi = options.updateUi !== false
     try {
       await nativeMobileVoice.cancel()

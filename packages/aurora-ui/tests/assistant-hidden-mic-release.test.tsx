@@ -223,6 +223,50 @@ describe('Assistant focused WebView microphone policy', () => {
     expect(nativeMobileVoice.cancel).toHaveBeenCalledTimes(1)
   })
 
+  it('cancels a pending Android native start that resolves after unmount', async () => {
+    let resolveStart: ((status: NativeMobileVoiceStatus) => void) | undefined
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    nativeMobileVoice.start.mockImplementationOnce(() => new Promise<NativeMobileVoiceStatus>((resolve) => {
+      resolveStart = resolve
+    }))
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          surfaceProfile={getAuroraSurfaceProfile({
+            runtimeMode: 'mobile-native',
+            transportKind: 'native-mobile',
+            nativePlatform: 'android',
+            nativeVoicePresent: true,
+            nativeVoiceAvailable: true,
+          })}
+          nativeMobileVoice={nativeMobileVoice}
+        />
+      )
+      await Promise.resolve()
+    })
+    await act(async () => {
+      findButton(container, 'Push to talk').click()
+      await vi.waitFor(() => expect(nativeMobileVoice.start).toHaveBeenCalledTimes(1))
+    })
+
+    await act(async () => {
+      root.unmount()
+      await vi.waitFor(() => expect(nativeMobileVoice.cancel).toHaveBeenCalledTimes(1))
+      resolveStart?.(nativeMobileStatus('listening', true))
+      await Promise.resolve()
+    })
+
+    expect(nativeMobileVoice.cancel).toHaveBeenCalledTimes(2)
+  })
+
   it('stops focused push-to-talk media tracks when the thin shell is hidden', async () => {
     const stopped = vi.fn()
     const stream = { getTracks: () => [{ stop: stopped }] } as unknown as MediaStream
