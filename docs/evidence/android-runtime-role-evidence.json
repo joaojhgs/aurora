@@ -1,0 +1,95 @@
+{
+  "$schema": "aurora.android_runtime_role_evidence.v1",
+  "capturedAtUtc": "2026-08-08",
+  "integrationHead": "719285d4",
+  "scope": "Android runtime-role selection and native voice-route mirroring",
+  "invariants": {
+    "roleSelectedByEnvironment": false,
+    "roleSelectedByApkBuild": false,
+    "singleApkSupportsRemoteConsoleAndMeshNode": true,
+    "nativeRouteSyncSelectsRole": false
+  },
+  "artifact": {
+    "path": "apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk",
+    "sha256": "24c00282399f88cd543f926dea14bc4253292b0a15298f3ccc2661d8224ef9f6",
+    "sizeBytes": 344316584,
+    "verification": "pnpm --dir apps/aurora-tauri android:verify:client:apk passed"
+  },
+  "waydroid": {
+    "endpoint": "192.168.240.112:5555",
+    "android": "13",
+    "abi": "x86_64",
+    "installAndLaunch": "passed",
+    "mobileMcpCrashes": [],
+    "screenshots": [
+      {
+        "name": "role-selected",
+        "path": "/tmp/waydroid-role-selected-fixed.png",
+        "sha256": "9dd39e07ca3bd2af8d6f2761f91eef38cd56e78b80c59a2a8aaf6e4272ee1522",
+        "dimensions": "1080x2400",
+        "uiState": "role choice and device availability connection screen"
+      },
+      {
+        "name": "final-route-sync",
+        "path": "/tmp/waydroid-final-route-sync-fixed.png",
+        "sha256": "6739c95ab91985e77a30063db32ecca4be5785915ce6af3c7bb54549a3f0a51d",
+        "dimensions": "1080x2400",
+        "uiState": "onboarding role-choice screen"
+      }
+    ],
+    "profileRouteSync": {
+      "profileRole": "remote-console",
+      "transport": "http-only",
+      "gateway": "redacted",
+      "bearer": "redacted",
+      "result": "voice_route_configured",
+      "rawCredentialsExposedToWebView": false
+    },
+    "nativeStatus": {
+      "nativeSessionReady": true,
+      "startable": true,
+      "notificationReady": true,
+      "microphoneGranted": true,
+      "manifestReady": true,
+      "foregroundServiceReady": true
+    },
+    "nativeCapture": {
+      "latestActiveChunks": 16,
+      "latestActiveSamples": 25600,
+      "cleanupChunks": 0,
+      "cleanupSamples": 0,
+      "captureActiveAfterFinish": false
+    }
+  },
+  "headlessEmulator": {
+    "serial": "emulator-5558",
+    "android": "15",
+    "abi": "x86_64",
+    "command": "ANDROID_SERIAL=emulator-5558 AURORA_ANDROID_TEST_TIMEOUT_MS=600000 AURORA_ANDROID_INSTALL_TIMEOUT_MS=600000 pnpm --dir apps/aurora-tauri android:smoke",
+    "installAndLaunch": "passed",
+    "scriptedE2e": "failed",
+    "durationSeconds": 136.17,
+    "failureClass": "fatal WebView renderer crash",
+    "signatures": [
+      "crashpad_client_linux.cc(745) Render process",
+      "crash wasn't handled by all associated webviews"
+    ],
+    "promotedAsRenderedAuroraPass": false
+  },
+  "verification": {
+    "makeCheck": "passed",
+    "routePolicyTests": "3 passed",
+    "fullGatewayTurn": false,
+    "physicalDevice": false,
+    "backgroundCapture": false,
+    "iosNative": false,
+    "releaseSigning": false,
+    "physicalTurnOrRelay": false,
+    "secretsRedacted": true
+  },
+  "limitations": [
+    "Waydroid microphone input was silent, so no end-to-end Gateway turn was observed.",
+    "Headless scripted E2E remains blocked by the renderer crash and is not counted as a pass.",
+    "Physical ARM64, iOS/macOS, background lifecycle, release signing, and physical TURN/relay evidence remain outstanding."
+  ]
+}
