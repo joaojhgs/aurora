@@ -9,7 +9,7 @@
     "resumedAtUtc": "2026-08-08T22:15:10Z",
     "goalThreadId": "019fd073-38a1-7801-8d62-31ae70d46580",
     "verdict": "active_remediation",
-    "resumeGate": "Reconcile the capsule, this matrix, Phase 4 CPAL evidence, and current docs; fix and prove remote-audio consent before advancing later phases.",
+    "resumeGate": "Phase 4 CPAL evidence is reconciled against Cargo.lock and docs; fix and prove remote-audio consent before advancing later phases.",
     "statusCounts": {
       "pass": 24,
       "partial": 22,
@@ -82,7 +82,6 @@
     {"id":"RAC-56","status":"partial","evidence":"unmet physical/performance gates keep affected capabilities false; no policy is weakened"}
   ],
   "globalGaps": [
-    "The Phase 4 manifest still selects CPAL 0.17.3 while current documentation and Cargo.lock pin 0.18.1; the validator did not catch the contradiction.",
     "Desktop and mobile UI call sites send remoteAudioConsent true unconditionally, and Android clearRoute does not clear persisted consent; Android cleartext policy also requires review.",
     "Every Phase 6 production VAD, KWS, STT, and TTS capability is false; no shippable production speech pack is selected.",
     "No full Aurora Gateway request/response voice turn was observed on Waydroid; the headless emulator lane has a Chromium/WebView renderer crash, and the Mobile-MCP transport closed before a complete audit.",

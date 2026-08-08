@@ -52,7 +52,7 @@ later implementation phases:
 | sherpa-onnx source archive | `v1.13.4`, tag commit `142807252687d81b40d6315f23470a1512a00de3` | `3243cb386d3a4ac87596adf7d2c89fddf23e2948b154942b987b4d91c1fee295` | Pinned |
 | ONNX Runtime source archive | `v1.27.0`, commit `8f0278c77bf44b0cc83c098c6c722b92a36ac4b5` | `b41d09905a3c2f3a25709d1dcce8ef3942a4c2799d1046f74be7b6bbebc45e6a` | Pinned |
 | ONNX Runtime Linux x64 probe package | `1.27.0`, glibc 2.17 release | `9f0c0a6998f1b94c399eeddcb443beb4a922c9a4fd431fdc9cd6de67a1935d00` | Exact prebuilt consumed by the Linux shared-library probe; the source archive above is provenance input, not a source-build claim |
-| CPAL crates.io package | `v0.18.1` | registry checksum `5f77b11176c37874be37e8d691c946e31b2b8c357abce9526f6a99eb469e1028` | Pinned in `rust/Cargo.lock`; source archive provenance is not claimed |
+| CPAL crates.io package | `v0.18.1` | registry checksum `5f77b11176c37874be37e8d691c946e31b2b8c357abce9526f6a99eb469e1028` | Pinned in `rust/Cargo.lock` and `tools/voice-runtime/phase4_manifest.json`; source archive provenance is not claimed |
 | Emscripten SDK archive | `4.0.23` | `a91a4c1f42dbb0345faac093161e27d43e9b6964840d8c8d80976ab8d3eaf2d3` | Pinned |
 | ONNX Runtime Android package | `1.27.0` | `a78f303a26b5e75c84c8b2a97fa2ddb400b2d1b5e069bec19aa229ccd3597fdb` | Pinned; staged prebuilt for Android source builds |
 | ONNX Runtime WASM SIMD static package | `1.27.0` | `076680969c74225caf0a6d08c0be5edd2c242b081c33cede77dcc5eac355bbcf` | Pinned |
@@ -65,7 +65,10 @@ sherpa builds: kaldi-native-fbank, KissFFT, kaldi-decoder, kaldifst, OpenFST,
 Eigen, simple-sentencepiece, and nlohmann/json. Piper-phonemize and espeak-ng
 are recorded at their exact source revisions but are blocked. Supplying an
 artifact root to `tools/voice-runtime/validate_phase4_manifest.py` verifies all
-24 declared archives and license evidence files by path, size, and SHA-256.
+24 declared source, crate, model, and package artifacts plus license evidence
+files by path, size, and SHA-256. The structural validator also checks the CPAL
+manifest row against `rust/Cargo.lock` and this decision record so future CPAL
+version or checksum drift fails before Phase 4 evidence is accepted.
 
 ## Selected model candidates
 

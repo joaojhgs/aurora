@@ -256,19 +256,18 @@
       }
     },
     {
-      "id": "cpal-source-v0.17.3",
-      "kind": "source",
+      "id": "cpal-crate-v0.18.1",
+      "kind": "crate",
       "role": "desktop-audio-io-candidate",
       "status": "selected",
-      "url": "https://github.com/RustAudio/cpal/archive/refs/tags/v0.17.3.tar.gz",
-      "version": "v0.17.3",
-      "commit": "fd3b945bffcaa493fa7cb5ceddf9db1f9330fd30",
-      "sha256": "1997859032580ec8a45235d8aeee093f12c69780c27051411de83d415028d14f",
-      "size_bytes": 180728,
-      "archive_path": "sources/cpal-v0.17.3.tar.gz",
+      "url": "https://crates.io/api/v1/crates/cpal/0.18.1/download",
+      "version": "v0.18.1",
+      "sha256": "5f77b11176c37874be37e8d691c946e31b2b8c357abce9526f6a99eb469e1028",
+      "size_bytes": 222732,
+      "archive_path": "sources/cpal-0.18.1.crate",
       "license": {
         "spdx": "Apache-2.0",
-        "evidence": "sources/extracted/cpal-0.17.3/LICENSE",
+        "evidence": "sources/extracted/cpal-0.18.1/LICENSE",
         "evidence_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
         "disposition": "allowed"
       }

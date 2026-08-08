@@ -10,6 +10,7 @@ import os
 import re
 import stat
 import sys
+import tomllib
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
@@ -42,9 +43,13 @@ REQUIRED_ARTIFACT_STATUSES = {
     "simple-sentencepiece-source-v0.7": "selected",
     "nlohmann-json-source-v3.12.0": "selected",
     "onnxruntime-linux-x64-release-1.27.0": "selected",
+    "cpal-crate-v0.18.1": "selected",
     "piper-phonemize-source-f3ff95af": "blocked",
     "espeak-ng-source-ed530aa1": "blocked",
 }
+CPAL_ARTIFACT_ID = "cpal-crate-v0.18.1"
+CPAL_DOC_PATH = Path("docs/NATIVE_VOICE_RUNTIME_PHASE4.md")
+CPAL_LOCK_PATH = Path("rust/Cargo.lock")
 
 
 class ManifestError(RuntimeError):
@@ -59,7 +64,11 @@ def load_manifest(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def validate_manifest(data: dict[str, Any], artifact_root: Path | None = None) -> list[str]:
+def validate_manifest(
+    data: dict[str, Any],
+    artifact_root: Path | None = None,
+    repo_root: Path | None = None,
+) -> list[str]:
     errors: list[str] = []
     if data.get("schema_version") != 1:
         errors.append("schema_version must be 1")
@@ -103,6 +112,8 @@ def validate_manifest(data: dict[str, Any], artifact_root: Path | None = None) -
     _require_denial(data, "pockettts-standard-voice-packs", errors)
     _require_denial(data, "sherpa-exported-silero-vad-v4-16k-derivative", errors)
     _require_denial(data, "piper-espeak-tts-runtime-chain", errors)
+    if repo_root is not None:
+        errors.extend(_validate_cpal_alignment(data, repo_root))
     return errors
 
 
@@ -353,10 +364,76 @@ def _require_denial(data: dict[str, Any], denial_id: str, errors: list[str]) -> 
     errors.append(f"policy denial {denial_id} is required")
 
 
+def _validate_cpal_alignment(data: dict[str, Any], repo_root: Path) -> list[str]:
+    errors: list[str] = []
+    lock_version, lock_checksum = _read_locked_cpal(repo_root / CPAL_LOCK_PATH)
+    expected_version = f"v{lock_version}"
+    expected_url = f"https://crates.io/api/v1/crates/cpal/{lock_version}/download"
+    expected_archive = f"sources/cpal-{lock_version}.crate"
+    expected_license = f"sources/extracted/cpal-{lock_version}/LICENSE"
+
+    artifact = _find_artifact(data, CPAL_ARTIFACT_ID)
+    if artifact is None:
+        return [f"artifact {CPAL_ARTIFACT_ID} is required for CPAL lockfile alignment"]
+
+    if artifact.get("version") != expected_version:
+        errors.append(
+            f"{CPAL_ARTIFACT_ID}.version must match {CPAL_LOCK_PATH}: {expected_version}"
+        )
+    if artifact.get("sha256") != lock_checksum:
+        errors.append(f"{CPAL_ARTIFACT_ID}.sha256 must match {CPAL_LOCK_PATH}: {lock_checksum}")
+    if artifact.get("url") != expected_url:
+        errors.append(f"{CPAL_ARTIFACT_ID}.url must match crates.io package URL: {expected_url}")
+    if artifact.get("archive_path") != expected_archive:
+        errors.append(f"{CPAL_ARTIFACT_ID}.archive_path must be {expected_archive}")
+
+    license_info = artifact.get("license")
+    if not isinstance(license_info, dict):
+        errors.append(f"{CPAL_ARTIFACT_ID}.license must be an object")
+    elif license_info.get("evidence") != expected_license:
+        errors.append(f"{CPAL_ARTIFACT_ID}.license.evidence must be {expected_license}")
+
+    doc_path = repo_root / CPAL_DOC_PATH
+    try:
+        doc_text = doc_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        errors.append(f"{CPAL_DOC_PATH} cannot be read for CPAL alignment: {exc}")
+    else:
+        if f"CPAL `v{lock_version}`" not in doc_text:
+            errors.append(f"{CPAL_DOC_PATH} must pin CPAL `v{lock_version}`")
+        if lock_checksum not in doc_text:
+            errors.append(f"{CPAL_DOC_PATH} must include CPAL checksum {lock_checksum}")
+
+    return errors
+
+
+def _read_locked_cpal(lock_path: Path) -> tuple[str, str]:
+    try:
+        lock_data = tomllib.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        raise ManifestError(f"{CPAL_LOCK_PATH} cannot be read for CPAL alignment: {exc}") from exc
+
+    for package in lock_data.get("package", []):
+        if package.get("name") == "cpal":
+            version = package.get("version")
+            checksum = package.get("checksum")
+            if isinstance(version, str) and isinstance(checksum, str):
+                return version, checksum
+            break
+    raise ManifestError(f"{CPAL_LOCK_PATH} must contain cpal with version and checksum")
+
+
+def _find_artifact(data: dict[str, Any], artifact_id: str) -> dict[str, Any] | None:
+    for artifact in data.get("artifacts", []):
+        if isinstance(artifact, dict) and artifact.get("id") == artifact_id:
+            return artifact
+    return None
+
+
 def command_validate(args: argparse.Namespace) -> int:
     manifest_path = args.manifest
     data = load_manifest(manifest_path)
-    errors = validate_manifest(data, args.artifact_root)
+    errors = validate_manifest(data, args.artifact_root, _repo_root_from_manifest(manifest_path))
     payload = {
         "manifest": str(manifest_path),
         "status": "valid" if not errors else "invalid",
@@ -370,6 +447,14 @@ def command_validate(args: argparse.Namespace) -> int:
     if errors:
         return 2
     return 0
+
+
+def _repo_root_from_manifest(manifest_path: Path) -> Path:
+    resolved = manifest_path.resolve()
+    for parent in (resolved.parent, *resolved.parents):
+        if (parent / CPAL_LOCK_PATH).is_file() and (parent / CPAL_DOC_PATH).is_file():
+            return parent
+    return Path.cwd()
 
 
 def build_parser() -> argparse.ArgumentParser:
