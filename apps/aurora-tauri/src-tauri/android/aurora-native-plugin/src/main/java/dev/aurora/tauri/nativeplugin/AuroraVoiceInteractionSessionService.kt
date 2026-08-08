@@ -1,5 +1,6 @@
 package dev.aurora.tauri.nativeplugin
 
+import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -17,6 +18,11 @@ private class AuroraVoiceInteractionSession(
 ) : VoiceInteractionSession(context) {
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
+        val roleManager = context.getSystemService(RoleManager::class.java)
+        if (roleManager?.isRoleHeld(RoleManager.ROLE_ASSISTANT) != true) {
+            hide()
+            return
+        }
         val intent = Intent(this@AuroraVoiceInteractionSession.context, AuroraVoiceForegroundService::class.java).apply {
             action = AuroraVoiceForegroundService.ACTION_START_ASSISTANT
         }
