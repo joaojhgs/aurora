@@ -63,6 +63,15 @@ assert(plugin.includes('voiceCredentialStatus'), 'native plugin must expose reda
 assert(plugin.includes('AuroraIOSVoiceSessionHost('), 'foreground start must construct the Rust session host')
 assert(plugin.includes('voiceSession?.cancel'), 'foreground stop must cancel the Rust session generation')
 assert(plugin.includes('voiceSessionGeneration'), 'foreground lifecycle must retain generation identity')
+for (const notification of [
+  'AVAudioSession.interruptionNotification',
+  'AVAudioSession.routeChangeNotification',
+  'AVAudioSession.mediaServicesWereResetNotification',
+]) {
+  assert(sessionHost.includes(notification), `session host must observe ${notification}`)
+}
+assert(sessionHost.includes('cancelForLifecycleChange'), 'audio lifecycle changes must cancel the Rust generation')
+assert(sessionHost.includes('removeLifecycleObservers'), 'audio lifecycle observers must be removed on teardown')
 assert(playback.includes('aurora_ios_audio_output_drain'), 'playback must drain Rust-owned output')
 assert(playback.includes('aurora_ios_audio_output_acknowledge'), 'playback must acknowledge consumed output')
 assert(playback.includes('AVAudioPlayerNode'), 'playback must use native AVAudioPlayerNode')

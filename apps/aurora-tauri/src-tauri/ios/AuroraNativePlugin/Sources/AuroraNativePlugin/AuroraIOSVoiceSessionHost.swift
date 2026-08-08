@@ -21,6 +21,8 @@ public final class AuroraIOSVoiceSessionHost {
   private var capture: AuroraIOSVoiceCapture?
   private var playback: AuroraIOSVoicePlayback?
   private let output: OpaquePointer?
+  private var activeGeneration: UInt64?
+  private var lifecycleObservers: [NSObjectProtocol] = []
 
   public convenience init(
     storedConfiguration audioSession: AVAudioSession = .sharedInstance()
@@ -75,9 +77,12 @@ public final class AuroraIOSVoiceSessionHost {
     if let output = self.output {
       self.playback = AuroraIOSVoicePlayback(output: output, audioSession: audioSession)
     }
+    self.activeGeneration = nil
+    installLifecycleObservers()
   }
 
   deinit {
+    removeLifecycleObservers()
     playback?.stop()
     playback = nil
     capture?.stop()
@@ -99,6 +104,7 @@ public final class AuroraIOSVoiceSessionHost {
     guard code == AURORA_IOS_VOICE_OK else {
       throw AuroraIOSVoiceSessionHostError.commandFailed(code)
     }
+    activeGeneration = generation
     do {
       try capture?.start()
       try playback?.start()
@@ -118,6 +124,7 @@ public final class AuroraIOSVoiceSessionHost {
     guard code == AURORA_IOS_VOICE_OK else {
       throw AuroraIOSVoiceSessionHostError.commandFailed(code)
     }
+    activeGeneration = generation
     do {
       try capture?.start()
       try playback?.start()
@@ -149,6 +156,7 @@ public final class AuroraIOSVoiceSessionHost {
     guard code == AURORA_IOS_VOICE_OK else {
       throw AuroraIOSVoiceSessionHostError.commandFailed(code)
     }
+    activeGeneration = nil
   }
 
   public func stopCapture() {
@@ -170,5 +178,61 @@ public final class AuroraIOSVoiceSessionHost {
       return nil
     }
     return status
+  }
+
+  private func installLifecycleObservers() {
+    let center = NotificationCenter.default
+    lifecycleObservers.append(
+      center.addObserver(
+        forName: AVAudioSession.interruptionNotification,
+        object: nil,
+        queue: .main
+      ) { [weak self] notification in
+        guard
+          let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+          let type = AVAudioSession.InterruptionType(rawValue: rawType),
+          type == .began
+        else { return }
+        self?.cancelForLifecycleChange()
+      }
+    )
+    lifecycleObservers.append(
+      center.addObserver(
+        forName: AVAudioSession.routeChangeNotification,
+        object: nil,
+        queue: .main
+      ) { [weak self] notification in
+        guard
+          let rawReason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+          let reason = AVAudioSession.RouteChangeReason(rawValue: rawReason),
+          reason == .oldDeviceUnavailable
+            || reason == .noSuitableRouteForCategory
+        else { return }
+        self?.cancelForLifecycleChange()
+      }
+    )
+    lifecycleObservers.append(
+      center.addObserver(
+        forName: AVAudioSession.mediaServicesWereResetNotification,
+        object: nil,
+        queue: .main
+      ) { [weak self] _ in
+        self?.cancelForLifecycleChange()
+      }
+    )
+  }
+
+  private func removeLifecycleObservers() {
+    let center = NotificationCenter.default
+    lifecycleObservers.forEach(center.removeObserver)
+    lifecycleObservers.removeAll()
+  }
+
+  private func cancelForLifecycleChange() {
+    capture?.stop()
+    playback?.stop()
+    guard let nativeSession, let generation = activeGeneration else { return }
+    _ = aurora_ios_voice_session_cancel(nativeSession, generation)
+    activeGeneration = nil
   }
 }
