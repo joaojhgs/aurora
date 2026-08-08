@@ -59,6 +59,28 @@ data class AuroraVoiceNativeConfig(
 object AuroraVoiceNativeConfigStore {
     fun isConfigured(context: Context): Boolean = load(context) != null
 
+    /**
+     * Stores the native voice route without exposing the bearer to the WebView.
+     * The caller must have already resolved the route from the persisted runtime
+     * profile and native peer-credential store.
+     */
+    fun setRoute(context: Context, gateway: String, bearer: String) {
+        val validatedGateway = validateGateway(gateway)
+        val prefs = context.getSharedPreferences(VOICE_SECURE_STORAGE_PREFS, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString(VOICE_GATEWAY_KEY, encrypt(validatedGateway))
+            .putString(VOICE_BEARER_KEY, encrypt(bearer))
+            .apply()
+    }
+
+    fun clearRoute(context: Context) {
+        context.getSharedPreferences(VOICE_SECURE_STORAGE_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .remove(VOICE_GATEWAY_KEY)
+            .remove(VOICE_BEARER_KEY)
+            .apply()
+    }
+
     fun load(context: Context): AuroraVoiceNativeConfig? {
         val prefs = context.getSharedPreferences(VOICE_SECURE_STORAGE_PREFS, Context.MODE_PRIVATE)
         val gateway = (prefs.getString(VOICE_GATEWAY_KEY, null)
@@ -66,14 +88,12 @@ object AuroraVoiceNativeConfigStore {
         val bearer = (prefs.getString(VOICE_BEARER_KEY, null)
             ?: prefs.getString(VOICE_GENERIC_BEARER_KEY, null))?.let(::decrypt).orEmpty()
         if (gateway.isBlank()) return null
-        val uri = runCatching { android.net.Uri.parse(gateway) }.getOrNull() ?: return null
-        val loopback = uri.host == "127.0.0.1" || uri.host == "localhost" || uri.host == "::1"
-        if (uri.scheme != "https" && !(uri.scheme == "http" && loopback)) return null
+        val validatedGateway = runCatching { validateGateway(gateway) }.getOrNull() ?: return null
         val remoteAudioConsent = prefs.getString(VOICE_REMOTE_AUDIO_CONSENT_KEY, null)
             ?.let { decrypt(it) }
             ?.toBooleanStrictOrNull()
             ?: false
-        return AuroraVoiceNativeConfig(gateway, bearer, remoteAudioConsent)
+        return AuroraVoiceNativeConfig(validatedGateway, bearer, remoteAudioConsent)
     }
 
     fun setRemoteAudioConsent(context: Context, granted: Boolean) {
@@ -81,6 +101,18 @@ object AuroraVoiceNativeConfigStore {
         prefs.edit()
             .putString(VOICE_REMOTE_AUDIO_CONSENT_KEY, encrypt(granted.toString()))
             .apply()
+    }
+
+    private fun validateGateway(value: String): String {
+        val gateway = value.trim()
+        require(gateway.isNotEmpty() && gateway.length <= 2_048) { "voice_gateway_invalid" }
+        val uri = android.net.Uri.parse(gateway)
+        val scheme = uri.scheme?.lowercase()
+        val host = uri.host
+        require(host != null && uri.userInfo == null && uri.fragment == null) { "voice_gateway_invalid" }
+        val loopback = host == "127.0.0.1" || host == "localhost" || host == "::1"
+        require(scheme == "https" || (scheme == "http" && loopback)) { "voice_gateway_invalid" }
+        return gateway
     }
 
     private fun encrypt(value: String): String {

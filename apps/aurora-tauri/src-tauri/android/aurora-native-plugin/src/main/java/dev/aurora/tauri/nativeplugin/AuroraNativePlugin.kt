@@ -92,6 +92,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     override fun onResume() {
         foreground = true
         focused = true
+        syncNativeVoiceRoute()
         if (!microphonePermissionRequestInFlight) {
             resolvePendingMicRequests(allowRuntimePrompt = false)
         }
@@ -760,7 +761,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             record.put("createdAtMs", if (args.createdAtMs > 0) args.createdAtMs else currentUnixMs())
             if (args.expiresAtMs > 0) record.put("expiresAtMs", args.expiresAtMs)
             securePrefs().edit().putString(thinPeerCredentialKey(args.peerId), encryptSecureValue(record.toString())).apply()
-            invoke.resolve(thinPeerStatusResponse(args.peerId, record, true))
+            val response = thinPeerStatusResponse(args.peerId, record, true)
+            response.put("voiceRoute", syncNativeVoiceRoute())
+            invoke.resolve(response)
         } catch (error: Exception) {
             invoke.reject(error.message ?: "thin_peer_credential_set_failed")
         }
@@ -784,7 +787,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         try {
             validateNonEmpty("peerId", args.peerId, 256)
             securePrefs().edit().remove(thinPeerCredentialKey(args.peerId)).apply()
-            invoke.resolve(thinPeerStatusResponse(args.peerId, null, false))
+            val response = thinPeerStatusResponse(args.peerId, null, false)
+            response.put("voiceRoute", syncNativeVoiceRoute())
+            invoke.resolve(response)
         } catch (error: Exception) {
             invoke.reject(error.message ?: "thin_peer_credential_delete_failed")
         }
@@ -901,6 +906,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val ret = thinProfileStatusObject()
         ret.put("key", THIN_PROFILE_KEY)
         ret.put("ok", true)
+        ret.put("voiceRoute", syncNativeVoiceRoute())
         invoke.resolve(ret)
     }
 
@@ -1629,6 +1635,75 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("persisted", true)
         ret.put("privacyClass", "nonsecret-connection-profile")
         ret.put("secretsRedacted", true)
+        return ret
+    }
+
+    /**
+     * Resolve the native voice route from the active runtime profile and the
+     * native peer credential store. This deliberately does not select a role;
+     * it only mirrors the route already selected by onboarding/profile state.
+     */
+    private fun syncNativeVoiceRoute(): JSObject {
+        val profile = activity
+            .getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE)
+            .getString(THIN_PROFILE_KEY, null)
+            ?.let { raw -> runCatching { JSONObject(raw) }.getOrNull() }
+        val candidate = profile?.let(::voiceRouteCandidate)
+        if (candidate == null) {
+            AuroraVoiceNativeConfigStore.clearRoute(activity)
+            return voiceRouteStatusObject("voice_route_profile_missing")
+        }
+
+        val uri = Uri.parse(candidate.gateway)
+        val loopback = uri.host == "127.0.0.1" || uri.host == "localhost" || uri.host == "::1"
+        val bearer = candidate.peerId
+            ?.let(::loadUnexpiredThinPeerCredential)
+            ?.optString("rawBearerToken")
+            .orEmpty()
+        if (!loopback && bearer.isBlank()) {
+            AuroraVoiceNativeConfigStore.clearRoute(activity)
+            return voiceRouteStatusObject("voice_route_credential_missing")
+        }
+
+        return try {
+            AuroraVoiceNativeConfigStore.setRoute(activity, candidate.gateway, bearer)
+            voiceRouteStatusObject("voice_route_configured")
+        } catch (_: Exception) {
+            AuroraVoiceNativeConfigStore.clearRoute(activity)
+            voiceRouteStatusObject("voice_route_invalid")
+        }
+    }
+
+    private fun voiceRouteCandidate(document: JSONObject): VoiceRouteCandidate? {
+        val profiles = document.optJSONArray("profiles") ?: return null
+        val activeProfileId = document.optString("activeProfileId").takeIf { it.isNotBlank() } ?: return null
+        val profile = (0 until profiles.length())
+            .mapNotNull { profiles.optJSONObject(it) }
+            .firstOrNull { it.optString("id") == activeProfileId }
+            ?: return null
+        val home = profile.optJSONObject("homeConnection")
+        val mode = home?.optString("mode")?.takeIf { it.isNotBlank() }
+            ?: profile.optString("mode").takeIf { it.isNotBlank() }
+        if (mode == null || mode !in setOf("http-only", "webrtc-preferred")) return null
+        val gateway = home?.optString("gatewayUrl")?.trim()?.takeIf { it.isNotBlank() }
+            ?: profile.optString("gatewayUrl").trim().takeIf { it.isNotBlank() }
+            ?: return null
+        val homeWebRtc = home?.optJSONObject("webrtcProfile")
+        val profileWebRtc = profile.optJSONObject("webrtcProfile")
+        val peerId = home?.optString("homePeerId")?.takeIf { it.isNotBlank() }
+            ?: homeWebRtc?.optString("expectedStablePeerId")?.takeIf { it.isNotBlank() }
+            ?: profileWebRtc?.optString("expectedStablePeerId")?.takeIf { it.isNotBlank() }
+        return VoiceRouteCandidate(gateway, peerId)
+    }
+
+    private fun voiceRouteStatusObject(reason: String): JSObject {
+        val configured = AuroraVoiceNativeConfigStore.load(activity) != null
+        val ret = JSObject()
+        ret.put("platform", "android")
+        ret.put("configured", configured)
+        ret.put("reason", if (configured) "voice_route_configured" else reason)
+        ret.put("secretsRedacted", true)
+        ret.put("redactedFields", JSArray().apply { put("gateway"); put("bearer") })
         return ret
     }
 
@@ -2500,6 +2575,11 @@ class AndroidVoiceForegroundServiceStartArgs {
     var remoteAudioConsent: Boolean = false
     var backgroundSession: Boolean = false
 }
+
+private data class VoiceRouteCandidate(
+    val gateway: String,
+    val peerId: String?,
+)
 
 @InvokeArg
 class AndroidShareTextArgs {
