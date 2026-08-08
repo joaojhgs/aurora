@@ -111,6 +111,40 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(iosPackaged.supportsWebRtcThin).toBe(true)
   })
 
+  it('propagates centralized voice ownership into runtime features', async () => {
+    const web = createBrowserWebThinRuntime({
+      createClient,
+      mode: 'http-only',
+      runtimeMode: 'web',
+      gatewayUrl: 'https://aurora.example',
+      fetchImpl: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    })
+    const android = createBrowserWebThinRuntime({
+      createClient,
+      mode: 'http-only',
+      runtimeMode: 'mobile-native',
+      nativePlatform: 'android',
+      gatewayUrl: 'https://aurora.example',
+      fetchImpl: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    })
+
+    expect(web.surface.voiceCapture.usesBrowserVoiceRuntime).toBe(true)
+    expect(web.features).toMatchObject({
+      usesBrowserVoiceRuntime: true,
+      focusedPushToTalkOwner: 'webview-focused',
+      wakewordOwner: 'webview-focused',
+    })
+    expect(android.surface.voiceCapture.usesBrowserVoiceRuntime).toBe(false)
+    expect(android.features).toMatchObject({
+      usesBrowserVoiceRuntime: false,
+      focusedPushToTalkOwner: 'webview-focused',
+      wakewordOwner: 'webview-focused',
+    })
+
+    await web.close()
+    await android.close()
+  })
+
   it('builds a memory-only WebRTC profile from an invite without browser storage', () => {
     const localStorageSet = vi.spyOn(Storage.prototype, 'setItem')
     const sessionStorageSet = vi.spyOn(Storage.prototype, 'setItem')
@@ -377,6 +411,9 @@ describe('browser WebRTC thin-shell runtime', () => {
         meshNodeRuntimeEnabled: false,
         localToolProviderEnabled: false,
         lightweightOrchestratorEnabled: false,
+        usesBrowserVoiceRuntime: true,
+        focusedPushToTalkOwner: 'webview-focused',
+        wakewordOwner: 'webview-focused',
       })
       expect(runtimeOptions[3]?.nodeRole).toBe('mesh-node')
       expect(runtimeOptions[3]).not.toHaveProperty('peerAuthorityResolver')
@@ -388,6 +425,9 @@ describe('browser WebRTC thin-shell runtime', () => {
         meshNodeRuntimeEnabled: true,
         localToolProviderEnabled: false,
         lightweightOrchestratorEnabled: true,
+        usesBrowserVoiceRuntime: true,
+        focusedPushToTalkOwner: 'webview-focused',
+        wakewordOwner: 'webview-focused',
       })
       expect(runtimeOptions[4]?.nodeRole).toBe('mesh-node')
       expect(runtimeOptions[4]?.peerAuthorityResolver).toBe(peerAuthorityResolver)
@@ -398,6 +438,9 @@ describe('browser WebRTC thin-shell runtime', () => {
         meshNodeRuntimeEnabled: true,
         localToolProviderEnabled: true,
         lightweightOrchestratorEnabled: false,
+        usesBrowserVoiceRuntime: true,
+        focusedPushToTalkOwner: 'webview-focused',
+        wakewordOwner: 'webview-focused',
       })
 
       await meshNode.close()

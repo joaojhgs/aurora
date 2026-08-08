@@ -119,6 +119,10 @@ export interface BrowserRuntimeFeatureState {
   meshNodeRuntimeEnabled: boolean
   localToolProviderEnabled: boolean
   lightweightOrchestratorEnabled: boolean
+  /** Voice ownership is derived from the centralized surface profile. */
+  usesBrowserVoiceRuntime: boolean
+  focusedPushToTalkOwner: AuroraSurfaceProfile['voiceCapture']['focusedPushToTalkOwner']
+  wakewordOwner: AuroraSurfaceProfile['voiceCapture']['wakewordOwner']
 }
 
 export interface BrowserWebRtcSnapshot extends PeerConnectionSnapshot {
@@ -181,14 +185,6 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     ? 'mesh-node'
     : 'remote-console'
   const localToolProviderEnabled = activeNodeRole === 'mesh-node' && rolloutFlags.local_tool_provider_v1
-  const features: BrowserRuntimeFeatureState = Object.freeze({
-    requestedNodeRole,
-    activeNodeRole,
-    meshNodeRuntimeEnabled: activeNodeRole === 'mesh-node',
-    localToolProviderEnabled,
-    lightweightOrchestratorEnabled:
-      activeNodeRole === 'mesh-node' && rolloutFlags.lightweight_orchestrator_v1,
-  })
   const http = httpOptionsFromConfig(config)
   const webrtcDisabled = mode !== 'http-only' && !rolloutFlags.webrtc_thin_client
   const rollbackHttp = webrtcDisabled && mode === 'webrtc-preferred' ? http : null
@@ -199,6 +195,17 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     userAgent: config.userAgent ?? browserUserAgent(),
     nodeMode: activeNodeRole,
     runtimeTier: activeNodeRole === 'mesh-node' ? 'lightweight-ts' : 'none',
+  })
+  const features: BrowserRuntimeFeatureState = Object.freeze({
+    requestedNodeRole,
+    activeNodeRole,
+    meshNodeRuntimeEnabled: activeNodeRole === 'mesh-node',
+    localToolProviderEnabled,
+    lightweightOrchestratorEnabled:
+      activeNodeRole === 'mesh-node' && rolloutFlags.lightweight_orchestrator_v1,
+    usesBrowserVoiceRuntime: surface.voiceCapture.usesBrowserVoiceRuntime,
+    focusedPushToTalkOwner: surface.voiceCapture.focusedPushToTalkOwner,
+    wakewordOwner: surface.voiceCapture.wakewordOwner,
   })
   const securityContext: BrowserRuntimeSecurityContext = {
     ...config,
