@@ -2666,6 +2666,17 @@ export interface AndroidVoiceForegroundServiceStatus {
   reason: string
   privacyClass: PrivacyClass | string
   backendAudioEvidenceRequired: boolean
+  /** Native AudioRecord -> Rust ingress is actively accepting bounded PCM chunks. */
+  captureActive?: boolean
+  /** Redacted native capture backend identifier, when the platform reports one. */
+  captureBackend?: string
+  sampleRateHz?: number
+  acceptedChunks?: number
+  acceptedSamples?: number
+  droppedChunks?: number
+  discontinuities?: number
+  queuedChunks?: number
+  captureError?: string | null
   evidenceSource: string
   secretsRedacted: boolean
 }

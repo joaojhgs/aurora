@@ -55,4 +55,5 @@ webrtc = "0.11.0"
 tauri-plugin-barcode-scanner = { path = "vendor/tauri-plugin-barcode-scanner" }
 
 [target.'cfg(target_os = "android")'.dependencies]
+aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native" }
 jni = "0.21"

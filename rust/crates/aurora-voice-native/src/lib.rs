@@ -2,6 +2,7 @@
 
 #![forbid(unsafe_code)]
 
+mod android_capture;
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
 mod audio;
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
@@ -14,6 +15,7 @@ mod model_store;
 mod transport;
 mod trust;
 
+pub use android_capture::{AndroidPcmIngress, AndroidPcmIngressStats, AndroidPcmPushResult};
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
 pub use audio::{CpalAudioOutput, NativeAudioConfig, NativeAudioStatus};
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]

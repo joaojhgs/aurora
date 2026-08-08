@@ -9371,6 +9371,8 @@ mod tests {
             "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt"
         );
         let rust_audio = include_str!("android_audio.rs");
+        let shared_audio =
+            include_str!("../../../../rust/crates/aurora-voice-native/src/android_capture.rs");
         for required in [
             "AudioRecord.Builder()",
             "HandlerThread(\"aurora-audio-capture\")",
@@ -9392,11 +9394,20 @@ mod tests {
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativeStats",
             "AUDIO_BACKPRESSURE",
             "capacity_chunks",
-            "MAX_CHUNK_SAMPLES",
         ] {
             assert!(
                 rust_audio.contains(required),
                 "missing Rust audio contract: {required}"
+            );
+        }
+        for required in [
+            "AndroidPcmIngress",
+            "MAX_CHUNK_SAMPLES",
+            "AndroidPcmPushResult",
+        ] {
+            assert!(
+                shared_audio.contains(required),
+                "missing shared Rust audio contract: {required}"
             );
         }
         assert!(plugin.contains("captureBackend"));
