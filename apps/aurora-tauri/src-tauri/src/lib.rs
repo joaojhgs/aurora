@@ -8546,6 +8546,13 @@ mod tests {
         assert!(swift_capture.contains("aurora_ios_audio_state_push_pcm_f32"));
         assert!(swift_capture.contains("aurora_ios_audio_state_reset"));
         assert!(swift_capture.contains("setActive(false"));
+        let swift_session = include_str!(
+            "../ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraIOSVoiceSessionHost.swift"
+        );
+        assert!(swift_session.contains("AuroraIOSVoiceSessionHost"));
+        assert!(swift_session.contains("aurora_ios_voice_session_start"));
+        assert!(swift_session.contains("aurora_ios_voice_session_cancel"));
+        assert!(swift_session.contains("capture = nil"));
         let rust_source = include_str!("lib.rs");
         assert!(rust_source.contains("AURORA_IOS_VOICE_BRIDGE_LINK_ANCHOR"));
 

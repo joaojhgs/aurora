@@ -24,6 +24,7 @@ public final class AuroraIOSVoiceCapture {
   private let engine = AVAudioEngine()
   private let session: AVAudioSession
   private let state: OpaquePointer?
+  private let ownsState: Bool
   private let maxChunkSamples: AVAudioFrameCount
   private var sequence: UInt64 = 0
   private var running = false
@@ -36,11 +37,25 @@ public final class AuroraIOSVoiceCapture {
     self.session = session
     self.maxChunkSamples = AVAudioFrameCount(max(1, maxChunkSamples))
     self.state = aurora_ios_audio_state_new(UInt(capacityChunks), UInt(maxChunkSamples))
+    self.ownsState = true
+  }
+
+  /// Create an audio host over a Rust voice session's borrowed ingress queue.
+  /// The session owner remains responsible for closing and freeing that queue.
+  public init(
+    borrowingState state: OpaquePointer,
+    session: AVAudioSession = .sharedInstance(),
+    maxChunkSamples: Int = 4096
+  ) {
+    self.session = session
+    self.maxChunkSamples = AVAudioFrameCount(max(1, maxChunkSamples))
+    self.state = state
+    self.ownsState = false
   }
 
   deinit {
     stop()
-    if let state {
+    if ownsState, let state {
       aurora_ios_audio_state_close(state)
       aurora_ios_audio_state_free(state)
     }
