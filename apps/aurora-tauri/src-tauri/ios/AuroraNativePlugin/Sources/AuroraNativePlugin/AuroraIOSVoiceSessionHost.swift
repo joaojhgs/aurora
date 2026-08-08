@@ -21,6 +21,7 @@ public final class AuroraIOSVoiceSessionHost {
   private var capture: AuroraIOSVoiceCapture?
   private var playback: AuroraIOSVoicePlayback?
   private let output: OpaquePointer?
+  private let audioSession: AVAudioSession
   private var activeGeneration: UInt64?
   private var lifecycleObservers: [NSObjectProtocol] = []
 
@@ -70,6 +71,7 @@ public final class AuroraIOSVoiceSessionHost {
     }
     self.nativeSession = session
     self.output = aurora_ios_voice_session_output(session)
+    self.audioSession = audioSession
     self.capture = AuroraIOSVoiceCapture(
       borrowingState: state,
       session: audioSession
@@ -185,7 +187,7 @@ public final class AuroraIOSVoiceSessionHost {
     lifecycleObservers.append(
       center.addObserver(
         forName: AVAudioSession.interruptionNotification,
-        object: nil,
+        object: audioSession,
         queue: .main
       ) { [weak self] notification in
         guard
@@ -199,7 +201,7 @@ public final class AuroraIOSVoiceSessionHost {
     lifecycleObservers.append(
       center.addObserver(
         forName: AVAudioSession.routeChangeNotification,
-        object: nil,
+        object: audioSession,
         queue: .main
       ) { [weak self] notification in
         guard
@@ -214,7 +216,7 @@ public final class AuroraIOSVoiceSessionHost {
     lifecycleObservers.append(
       center.addObserver(
         forName: AVAudioSession.mediaServicesWereResetNotification,
-        object: nil,
+        object: audioSession,
         queue: .main
       ) { [weak self] _ in
         self?.cancelForLifecycleChange()
