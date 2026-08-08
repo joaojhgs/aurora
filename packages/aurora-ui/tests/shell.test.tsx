@@ -138,8 +138,9 @@ it('centralizes voice capture ownership by target surface', () => {
 
   const mobile = getAuroraSurfaceProfile({ transportKind: 'native-mobile', nativePlatform: 'ios' })
   expect(mobile.kind).toBe('ios')
-  expect(mobile.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
-  expect(mobile.voiceCapture.wakewordOwner).toBe('mobile-native')
+  expect(mobile.voiceCapture.focusedPushToTalkOwner).toBe('unavailable')
+  expect(mobile.voiceCapture.wakewordOwner).toBe('unavailable')
+  expect(mobile.voiceCapture.canUseWebViewVisualizer).toBe(false)
 })
 
 class RecordingMockAuroraTransport extends MockAuroraTransport {
