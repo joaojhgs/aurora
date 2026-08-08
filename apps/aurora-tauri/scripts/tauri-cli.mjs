@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { existsSync } from 'node:fs'
-import { spawn } from 'node:child_process'
-import { dirname, resolve } from 'node:path'
+import { spawn, spawnSync } from 'node:child_process'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
@@ -16,6 +16,7 @@ if (!existsSync(tauriCli)) {
 }
 
 const env = { ...process.env }
+if (args[0] === 'android') Object.assign(env, resolveAndroidJava(env))
 if (args[0] === 'dev') {
   if (env.AURORA_TAURI_DEV_AUTOSIDECAR !== '0') applyDevSidecarDefaults(env)
   printDevBanner(env)
@@ -91,4 +92,67 @@ function printDevBanner(env) {
   console.log(`[tauri] sidecar cwd: ${env.AURORA_TAURI_SIDECAR_CWD}`)
   console.log(`[tauri] architecture mode: ${env.AURORA_ARCHITECTURE_MODE}`)
   console.log(`[tauri] gateway: ${env.AURORA_GATEWAY_URL}`)
+}
+
+function resolveAndroidJava(env) {
+  if (env.JAVA_HOME && existsSync(join(env.JAVA_HOME, 'bin', javaExecutable()))) return env
+  if (javaCommandWorks(env)) return env
+
+  const version = asdfJavaVersions(env)[0]
+  if (!version) return env
+  const home = asdfJavaHome(version, env)
+  if (!home || !existsSync(join(home, 'bin', javaExecutable()))) return env
+
+  return {
+    ...env,
+    ASDF_JAVA_VERSION: version,
+    JAVA_HOME: home,
+    PATH: `${join(home, 'bin')}${delimiter}${env.PATH ?? ''}`,
+  }
+}
+
+function javaExecutable() {
+  return process.platform === 'win32' ? 'java.exe' : 'java'
+}
+
+function javaCommandWorks(env) {
+  const result = spawnSync('java', ['-version'], {
+    cwd: appDir,
+    env,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  })
+  return result.status === 0
+}
+
+function asdfJavaVersions(env) {
+  const result = spawnSync('asdf', ['list', 'java'], {
+    cwd: appDir,
+    env,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  })
+  if (result.status !== 0) return []
+  return result.stdout
+    .split('\n')
+    .map((line) => line.trim().replace(/^\*\s*/, ''))
+    .filter(Boolean)
+    .sort((left, right) => javaVersionRank(right) - javaVersionRank(left))
+}
+
+function asdfJavaHome(version, env) {
+  const result = spawnSync('asdf', ['where', 'java', version], {
+    cwd: appDir,
+    env,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  })
+  return result.status === 0 ? result.stdout.trim() : null
+}
+
+function javaVersionRank(version) {
+  const match = version.match(/(?:^|[-_])(\d+)(?:[._-]|$)/)
+  if (!match) return 0
+  const major = Number(match[1])
+  return Number.isFinite(major) ? major : 0
 }

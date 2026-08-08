@@ -125,6 +125,18 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     expect(wrapper).toContain('child.kill(signal)')
   })
 
+  it('selects an installed asdf JDK for Android Tauri commands when java is shim-blocked', () => {
+    const wrapper = repoText('apps/aurora-tauri/scripts/tauri-cli.mjs')
+
+    expect(wrapper).toContain("if (args[0] === 'android') Object.assign(env, resolveAndroidJava(env))")
+    expect(wrapper).toContain("spawnSync('java', ['-version']")
+    expect(wrapper).toContain("spawnSync('asdf', ['list', 'java']")
+    expect(wrapper).toContain("spawnSync('asdf', ['where', 'java', version]")
+    expect(wrapper).toContain('JAVA_HOME: home')
+    expect(wrapper).toContain('ASDF_JAVA_VERSION: version')
+    expect(wrapper).toContain('PATH: `${join(home, \'bin\')}${delimiter}${env.PATH ?? \'\'}`')
+  })
+
   it('keeps package build profiles explicit while normal dev stays one command', () => {
     const packageJson = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
     const prepare = repoText('apps/aurora-tauri/scripts/prepare-sidecar.mjs')
