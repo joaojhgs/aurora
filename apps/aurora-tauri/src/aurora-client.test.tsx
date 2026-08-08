@@ -1785,6 +1785,113 @@ describe("Aurora Tauri runtime wrapper", () => {
     }
   });
 
+  it("keeps the device setup route on the invite-backed thin profile path", async () => {
+    const client = new Aurora({ transport: new RecordingMockAuroraTransport() });
+    const document = {
+      version: 1 as const,
+      activeProfileId: "saved-home",
+      profiles: [{
+        id: "saved-home",
+        label: "Saved Connect to Aurora",
+        mode: "webrtc-only" as const,
+        gatewayUrl: "",
+        signalingUrl: "wss://old.example/mqtt",
+        nodeName: "Aurora mobile",
+        localStablePeerId: "mobile-peer-old",
+        webrtcProfile: webRtcProfileFromInvite(testMeshInviteText())!,
+      }],
+    };
+    let savedProfile: AuroraThinConnectionProfile | null = null;
+    const modeWrites: string[] = [];
+    const tierWrites: string[] = [];
+    let runtime!: AuroraTauriRuntime;
+    const controller: NonNullable<AuroraTauriRuntime["thinProfileController"]> = {
+      evidence: "test runtime profile store",
+      document,
+      saveProfile: async (profile) => {
+        savedProfile = profile;
+        return {
+          version: 1,
+          activeProfileId: profile.id,
+          profiles: [profile],
+        };
+      },
+      selectProfile: async () => document,
+      createRuntime: async () => runtime,
+    };
+    runtime = {
+      ...testRuntime(client),
+      mode: "mobile-native",
+      thinConnectionMode: "webrtc-only",
+      thinPeer: fakeThinPeer({ status: "needs-invite" }),
+      thinProfileConfigured: true,
+      requiresOnboarding: false,
+      pendingThinInviteText: null,
+      thinProfile: document.profiles[0],
+      thinProfileController: controller,
+      modePreferenceStore: {
+        evidence: "test runtime-backed mode preference",
+        readSelectedMode: async () => "mesh-node",
+        readSelectedRuntimeTier: async () => "lightweight-ts",
+        writeSelectedMode: async (modeId) => {
+          modeWrites.push(modeId);
+          return true;
+        },
+        writeSelectedRuntimeTier: async (runtimeTier) => {
+          tierWrites.push(runtimeTier);
+          return true;
+        },
+      },
+      nodeMode: "mesh-node",
+      runtimeTier: "lightweight-ts",
+    };
+    window.history.replaceState({}, "", "/onboarding");
+
+    const mounted = await mountOutcomeApp(runtime);
+    try {
+      await waitUntil(() => {
+        const activeCard = mounted.container.querySelector<HTMLButtonElement>(
+          'button[role="radio"][aria-checked="true"]',
+        );
+        expect(activeCard?.textContent).toContain("Make this device available");
+      });
+      await clickButtonByLabel(mounted.container, "Connect to Aurora");
+      await waitUntil(() => {
+        expect(modeWrites).toContain("remote-console");
+        expect(tierWrites).toContain("none");
+      });
+      await clickButtonByLabel(mounted.container, "Continue");
+      await flushReactWork();
+      const invite = mounted.container.querySelector<HTMLTextAreaElement>(
+        "#webthin-invite",
+      );
+      const valueSetter = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )?.set;
+      expect(invite).not.toBeNull();
+      expect(mounted.container.textContent).toContain("Save invite and continue");
+      expect(mounted.container.textContent).not.toContain("Username");
+      expect(mounted.container.textContent).not.toContain("Sign in");
+      await act(async () => {
+        valueSetter?.call(invite, testMeshInviteText());
+        invite?.dispatchEvent(new Event("input", { bubbles: true }));
+        invite?.dispatchEvent(new Event("change", { bubbles: true }));
+        await flushReactWork();
+      });
+      await clickButtonByLabel(mounted.container, "Save invite and continue");
+      await waitUntil(() => expect(window.location.pathname).toBe("/mesh"));
+      expect(savedProfile).toMatchObject({
+        mode: "webrtc-only",
+        signalingUrl: "wss://old.example/mqtt",
+        webrtcProfile: { room: "tauri-room" },
+      });
+    } finally {
+      await act(async () => mounted.root.unmount());
+      mounted.container.remove();
+    }
+  });
+
   it("keeps desktop-local startup outside the thin-client onboarding gate", () => {
     const runtime: AuroraTauriRuntime = {
       ...testRuntime(new Aurora({ transport: new MockAuroraTransport() })),

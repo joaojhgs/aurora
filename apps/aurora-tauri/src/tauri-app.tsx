@@ -375,15 +375,42 @@ export const tauriRouteRegistry = {
   models: ({ client }) => <ModelsView client={client} />,
   onboarding: ({
     snapshot,
+    nativeContext,
     client,
     modePreferenceStore,
     applyModePreference,
+    navigate,
   }) => (
     <OnboardingView
       client={client}
       snapshot={snapshot}
       modePreferenceStore={modePreferenceStore}
       onApplyModePreference={applyModePreference}
+      {...(nativeContext.thinPeer && nativeContext.thinProfileController
+        ? {
+            setupRequired: true,
+            thinConnectionPanel: (
+              <WebThinConnectionPanel
+                peer={nativeContext.thinPeer}
+                mode={nativeContext.thinConnectionMode}
+                transportKind={client.transport.kind}
+                nativePlatform={snapshot.nativePlatform}
+                initialInviteText={initialThinInviteFromUrl()}
+                profile={nativeContext.thinProfile}
+                profiles={nativeContext.thinProfileController.document.profiles}
+                profileStoreEvidence={nativeContext.thinProfileController.evidence}
+                localFeatureSharing={nativeContext.localFeatureSharing}
+                onSaveProfile={async (profile, roomSecret) => {
+                  await nativeContext.saveThinProfile(profile, roomSecret);
+                  navigate("/mesh");
+                }}
+                onSelectProfile={nativeContext.selectThinProfile}
+                configureOnly
+                {...(isMobileTauriShell() ? { onScanQr: scanMeshInviteQr } : {})}
+              />
+            ),
+          }
+        : {})}
     />
   ),
 } satisfies Record<TauriRouteId, TauriRouteRenderer>;
