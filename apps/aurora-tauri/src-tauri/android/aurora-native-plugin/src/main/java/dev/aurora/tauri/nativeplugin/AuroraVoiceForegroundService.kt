@@ -8,7 +8,10 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
 import android.media.AudioFormat
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
@@ -203,10 +206,39 @@ private class AuroraAudioCapture(
 
 class AuroraVoiceForegroundService : Service() {
     private var capture: AuroraAudioCapture? = null
+    private var audioManager: AudioManager? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
+
+    private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        when (change) {
+            AudioManager.AUDIOFOCUS_LOSS,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                captureError = when (change) {
+                    AudioManager.AUDIOFOCUS_LOSS -> "audio_focus_lost"
+                    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> "audio_focus_interrupted"
+                    else -> "audio_focus_ducked"
+                }
+                capture?.close()
+                capture = null
+                captureSnapshot = emptySnapshot(captureError)
+                updateNotification(captureSnapshot)
+                if (change == AudioManager.AUDIOFOCUS_LOSS) stopSelf()
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                // A foreground session never restarts the microphone implicitly
+                // after a call/media interruption; the user must tap Start again.
+                captureError = "audio_focus_released_restart_required"
+                captureSnapshot = emptySnapshot(captureError)
+                updateNotification(captureSnapshot)
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
         running = true
+        audioManager = getSystemService(AudioManager::class.java)
         ensureNotificationChannel()
     }
 
@@ -219,6 +251,11 @@ class AuroraVoiceForegroundService : Service() {
         startForeground(AURORA_VOICE_NOTIFICATION_ID, foregroundNotification("Starting microphone…"))
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             captureError = "microphone_permission_missing"
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        if (!requestAudioFocus()) {
+            captureError = "audio_focus_unavailable"
             stopSelf()
             return START_NOT_STICKY
         }
@@ -236,12 +273,64 @@ class AuroraVoiceForegroundService : Service() {
     override fun onDestroy() {
         capture?.close()
         capture = null
+        abandonAudioFocus()
+        audioFocusRequest = null
+        audioManager = null
         running = false
         captureSnapshot = emptySnapshot(captureError)
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    @Suppress("DEPRECATION")
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_COMPLETE) {
+            captureError = "service_memory_pressure"
+            stopSelf()
+        }
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // An explicitly started foreground session is allowed to outlive the
+        // launcher task. Process death and platform memory policy still stop it.
+        super.onTaskRemoved(rootIntent)
+    }
+
+    private fun requestAudioFocus(): Boolean {
+        val manager = audioManager ?: return false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build(),
+                )
+                .setAcceptsDelayedFocusGain(false)
+                .setOnAudioFocusChangeListener(audioFocusListener)
+                .build()
+            audioFocusRequest = request
+            return manager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        }
+        @Suppress("DEPRECATION")
+        return manager.requestAudioFocus(
+            audioFocusListener,
+            AudioManager.STREAM_VOICE_CALL,
+            AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE,
+        ) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    }
+
+    private fun abandonAudioFocus() {
+        val manager = audioManager ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { manager.abandonAudioFocusRequest(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            manager.abandonAudioFocus(audioFocusListener)
+        }
+    }
 
     private fun updateNotification(snapshot: AuroraVoiceCaptureSnapshot) {
         if (!running) return

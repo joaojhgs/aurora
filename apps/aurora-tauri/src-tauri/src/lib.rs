@@ -9382,6 +9382,10 @@ mod tests {
             "nativePushPcm",
             "nativeStats",
             "audio_record_read_failed",
+            "requestAudioFocus",
+            "onTrimMemory",
+            "onTaskRemoved",
+            "AUDIOFOCUS_LOSS_TRANSIENT",
         ] {
             assert!(
                 service.contains(required),
