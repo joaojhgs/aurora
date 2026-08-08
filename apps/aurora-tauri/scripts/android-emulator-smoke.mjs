@@ -13,6 +13,8 @@ const NATIVE_PAYLOAD_LOGCAT_ARGS = [
   '*:S',
 ]
 
+const DEFAULT_DEVICE_WAIT_TIMEOUT_MS = 30_000
+
 const adb = resolveAdbCommand()
 
 export async function runAndroidEmulatorSmoke() {
@@ -23,7 +25,12 @@ export async function runAndroidEmulatorSmoke() {
     throw new Error('No Android APK found. Run pnpm --filter @aurora/tauri-ui android:build:apk first.')
   }
 
-  run(adb, ['wait-for-device'])
+  run(adb, ['wait-for-device'], {
+    timeoutMs: resolvePositiveTimeout(
+      process.env.AURORA_ANDROID_DEVICE_WAIT_TIMEOUT_MS,
+      DEFAULT_DEVICE_WAIT_TIMEOUT_MS,
+    ),
+  })
   installApk(apk)
   run(adb, ['logcat', '-c'])
   launchApp(appId)
@@ -74,8 +81,23 @@ function walk(dir) {
   })
 }
 
-function run(command, args) {
-  execFileSync(command, args, { stdio: 'inherit' })
+function run(command, args, { timeoutMs } = {}) {
+  try {
+    return execFileSync(command, args, {
+      stdio: 'inherit',
+      ...(timeoutMs === undefined ? {} : { timeout: timeoutMs }),
+    })
+  } catch (error) {
+    if (timeoutMs !== undefined && error?.code === 'ETIMEDOUT') {
+      throw new Error(`android_device_wait_timeout: adb wait-for-device exceeded ${timeoutMs}ms`)
+    }
+    throw error
+  }
+}
+
+function resolvePositiveTimeout(value, fallback) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
 function installApk(apk) {
