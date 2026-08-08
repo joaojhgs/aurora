@@ -81,6 +81,7 @@ import {
 } from "./tauri-mesh-node-services";
 import { createTauriNativeDesktopVoicePort } from "./native-voice";
 import { createTauriNativeAndroidVoicePort } from "./native-android-voice";
+import { createTauriNativeIosVoicePort } from "./native-ios-voice";
 
 export const TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS = 90_000;
 
@@ -508,6 +509,8 @@ export function createAuroraTauriRuntime({
       : undefined;
     const nativeMobileVoice = isAndroidTauriRuntime()
       ? createTauriNativeAndroidVoicePort(invoke)
+      : isIosTauriRuntime()
+        ? createTauriNativeIosVoicePort(invoke)
       : undefined;
     const isMobileNative = isMobileTauriRuntime();
 
