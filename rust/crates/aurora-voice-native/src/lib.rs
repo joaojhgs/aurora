@@ -13,6 +13,7 @@ mod downloader;
 mod gateway_capture_handoff;
 mod gateway_stt;
 mod gateway_tts;
+mod ios_session;
 mod model_store;
 mod transport;
 mod trust;
@@ -42,6 +43,10 @@ pub use gateway_capture_handoff::{
 };
 pub use gateway_stt::{NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig};
 pub use gateway_tts::{NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer};
+pub use ios_session::{
+    IosVoiceSession, IosVoiceSessionCommandError, IosVoiceSessionConfig, IosVoiceSessionPhase,
+    IosVoiceSessionStatus, IosVoiceStartMode,
+};
 pub use model_store::{NativeImmutableModelFile, NativeModelStore, NativeModelStoreConfig};
 pub use transport::{
     GatewayAuth, GatewayEvent, MicrophoneAudioPolicy, NativeEventStream,

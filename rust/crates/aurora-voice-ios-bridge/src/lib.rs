@@ -97,7 +97,7 @@ impl Clone for AuroraIosAudioState {
 }
 
 impl AuroraIosAudioState {
-    fn new(capacity_chunks: usize, max_chunk_samples: usize) -> Self {
+    pub fn new(capacity_chunks: usize, max_chunk_samples: usize) -> Self {
         let capacity_chunks = if capacity_chunks == 0 {
             DEFAULT_CAPACITY_CHUNKS
         } else {
@@ -165,7 +165,7 @@ impl AuroraIosAudioState {
         self.drain_chunk().map_or(0, |chunk| chunk.samples.len())
     }
 
-    fn close(&self) {
+    pub fn close(&self) {
         let mut inner = self.inner.lock().expect("iOS audio state mutex poisoned");
         inner.stats.closed = 1;
         inner.queue.clear();
