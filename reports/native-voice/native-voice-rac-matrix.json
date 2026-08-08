@@ -2,8 +2,19 @@
   "$schema": "aurora.native_voice_rac_matrix.v1",
   "planSha256": "50181a35cd42e12aa33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6",
   "handoffSha256": "70b1b5ebb32c6df0e52c119b2bd73adad79c2611433bd33da7391d6e273fe196",
-  "codeEvidenceBaselineHead": "719285d4",
-  "reportCommit": "932e4ae2",
+  "codeEvidenceBaselineHead": "66d71c88",
+  "reportCommit": "AUDIT_COMMIT_PENDING",
+  "audit": {
+    "auditedAtUtc": "2026-08-08T21:56:49Z",
+    "verdict": "paused_incomplete",
+    "resumeGate": "Reconcile the capsule, this matrix, Phase 4 CPAL evidence, and current docs; fix and prove remote-audio consent before advancing later phases.",
+    "statusCounts": {
+      "pass": 24,
+      "partial": 22,
+      "withheld": 6,
+      "blocked": 4
+    }
+  },
   "statusVocabulary": {
     "pass": "Current evidence proves the criterion for the claimed scope.",
     "partial": "A bounded subset is proven; the remaining scope is named and not advertised.",
@@ -11,14 +22,14 @@
     "blocked": "Required external or platform evidence cannot be produced in this environment."
   },
   "rows": [
-    {"id":"RAC-01","status":"pass","evidence":"rust/crates/aurora-voice-core, aurora-voice-native, aurora-voice-wasm; Rust workspace tests"},
+    {"id":"RAC-01","status":"partial","evidence":"Shared Rust core/crates and tests exist; iOS native transport is disabled and cross-platform production runtime proof is incomplete"},
     {"id":"RAC-02","status":"pass","evidence":"aurora-voice-core dependency boundary and workspace tests"},
     {"id":"RAC-03","status":"pass","evidence":"native/iOS/WASM bounded PCM, lifecycle, playback, storage, and transport ports"},
     {"id":"RAC-04","status":"pass","evidence":"owner lease and overlap tests in aurora-voice-core/native/testkit"},
     {"id":"RAC-05","status":"pass","evidence":"generation handoff, stale-frame, and cancellation tests"},
-    {"id":"RAC-06","status":"pass","evidence":"testkit fake PTT/background turns run without UI attachment"},
+    {"id":"RAC-06","status":"partial","evidence":"Fake UI-detached turns and a Linux hidden-window turn exist; full platform detach/freeze/suspend proof is incomplete"},
     {"id":"RAC-07","status":"pass","evidence":"bounded queue, backpressure, discontinuity, and slow-consumer tests"},
-    {"id":"RAC-08","status":"pass","evidence":"native/testkit cancellation, failure, shutdown, and stale-audio cleanup tests"},
+    {"id":"RAC-08","status":"partial","evidence":"Unit cleanup is strong; real permission-loss, low-memory, device lifecycle, and all-platform audible-audio cleanup proof is incomplete"},
     {"id":"RAC-09","status":"pass","evidence":"docs/NATIVE_VOICE_RUNTIME_PHASE4.md pins sherpa-onnx v1.13.4 as candidate"},
     {"id":"RAC-10","status":"pass","evidence":"candidate manifests, immutable hashes, ABI/operator/tokenizer inventories"},
     {"id":"RAC-11","status":"partial","evidence":"selected VAD/ASR/KWS native/WASM compatibility is proven; TTS remains withheld"},
@@ -43,12 +54,12 @@
     {"id":"RAC-30","status":"pass","evidence":"installed-surface native ownership and browser-mic suppression regression tests"},
     {"id":"RAC-31","status":"partial","evidence":"sleep/device/permission/network lifecycle logic is tested; release-device matrix remains open"},
     {"id":"RAC-32","status":"blocked","evidence":"Windows/macOS/Linux signed release and installer evidence is not available in this Linux lane"},
-    {"id":"RAC-33","status":"pass","evidence":"Waydroid native foreground capture: 16 chunks/25,600 samples, cleanup to zero"},
-    {"id":"RAC-34","status":"pass","evidence":"Android foreground-service gates and Waydroid native status all ready"},
-    {"id":"RAC-35","status":"pass","evidence":"Waydroid notificationReady, immediate finish/cancel, and capture release"},
+    {"id":"RAC-33","status":"partial","evidence":"Waydroid native capture and cleanup are proven; no complete Gateway voice turn or physical-device proof exists"},
+    {"id":"RAC-34","status":"partial","evidence":"Foreground-service fail-closed structure is proven; the complete OS permission/background-start/lifecycle matrix is incomplete"},
+    {"id":"RAC-35","status":"withheld","evidence":"Ordinary background session remains disabled; notification/Stop behavior exists only for the user-started foreground service"},
     {"id":"RAC-36","status":"blocked","evidence":"physical ARM64 locked-screen full-turn evidence is unavailable"},
     {"id":"RAC-37","status":"withheld","evidence":"VoiceInteractionService/default-assistant capability remains disabled pending device/OEM gates"},
-    {"id":"RAC-38","status":"pass","evidence":"assistant-role lightweight boundary and fallback tests"},
+    {"id":"RAC-38","status":"partial","evidence":"The assistant boundary is lightweight; accepted-wake-to-full-runtime resource proof is absent and assistant start remains disabled"},
     {"id":"RAC-39","status":"partial","evidence":"source/emulator interruption and restart coverage passes; physical/OEM lifecycle evidence is open"},
     {"id":"RAC-40","status":"blocked","evidence":"false-trigger, thermal, battery, and endurance gates require reference hardware"},
     {"id":"RAC-41","status":"blocked","evidence":"physical iOS PTT cannot be built or run on this Linux host"},
@@ -60,18 +71,20 @@
     {"id":"RAC-47","status":"pass","evidence":"iOS background capability remains disabled pending physical/distribution review"},
     {"id":"RAC-48","status":"pass","evidence":"generated contracts, deterministic descriptors, and backend inventory check"},
     {"id":"RAC-49","status":"partial","evidence":"bounded native HTTP/SSE cancellation, reconnect, ordering, timeout, and redaction tests pass; full Gateway turn is open"},
-    {"id":"RAC-50","status":"pass","evidence":"permission, route binding, consent, language/voice, revision, and dispatch checks"},
-    {"id":"RAC-51","status":"pass","evidence":"Android route credentials remain native-encrypted and redacted from WebView/log output"},
-    {"id":"RAC-52","status":"pass","evidence":"raw PCM/credentials/audio redaction tests across Rust/native/UI boundaries"},
-    {"id":"RAC-53","status":"pass","evidence":"getAuroraSurfaceProfile ownership plus production-copy/accessibility suites"},
-    {"id":"RAC-54","status":"pass","evidence":"model-store rollback and native readiness-withdrawal tests"},
+    {"id":"RAC-50","status":"partial","evidence":"Backend permission and route checks pass; consent is not fully proven because UI call sites send remoteAudioConsent true unconditionally"},
+    {"id":"RAC-51","status":"partial","evidence":"Android/iOS secure-storage source exists; full cross-platform native background credential and model-key runtime proof is absent"},
+    {"id":"RAC-52","status":"partial","evidence":"Redaction tests pass; cloned source/embedding/state deletion and import/export/rollback privacy are not proven end to end"},
+    {"id":"RAC-53","status":"partial","evidence":"Centralized surface, production-copy, and accessibility tests pass; model/download/voice-management states are not fully implemented"},
+    {"id":"RAC-54","status":"partial","evidence":"Model-store rollback primitives pass; readiness withdrawal, Python/remote restoration, and user voice-data preservation are not proven end to end"},
     {"id":"RAC-55","status":"pass","evidence":"policy and evidence report distinguish emulator/Waydroid integration from physical claims"},
     {"id":"RAC-56","status":"partial","evidence":"unmet physical/performance gates keep affected capabilities false; no policy is weakened"}
   ],
   "globalGaps": [
-    "No full Aurora Gateway request/response turn was observed on Waydroid because microphone input was silent.",
-    "The headless emulator scripted lane fails on a Chromium/WebView renderer crash and is not a pass.",
-    "Physical ARM64 Android, physical iOS, Windows/macOS release, background endurance, forced TURN, signing, and store-policy evidence remain external or blocked."
+    "The Phase 4 manifest still selects CPAL 0.17.3 while current documentation and Cargo.lock pin 0.18.1; the validator did not catch the contradiction.",
+    "Desktop and mobile UI call sites send remoteAudioConsent true unconditionally, and Android clearRoute does not clear persisted consent; Android cleartext policy also requires review.",
+    "Every Phase 6 production VAD, KWS, STT, and TTS capability is false; no shippable production speech pack is selected.",
+    "No full Aurora Gateway request/response voice turn was observed on Waydroid; the headless emulator lane has a Chromium/WebView renderer crash, and the Mobile-MCP transport closed before a complete audit.",
+    "Physical ARM64 Android, physical iOS, Windows/macOS signed release, SBOM/store/security review, background endurance, forced TURN, staged rollback, and full Phase 12 mutation evidence remain external, blocked, or incomplete."
   ],
   "secretsRedacted": true
 }
