@@ -58,6 +58,8 @@ public final class AuroraNativePlugin: Plugin {
   ]
 
   private let voiceCapture = AuroraIOSVoiceCapture()
+  private var voiceSession: AuroraIOSVoiceSessionHost?
+  private var voiceSessionGeneration: UInt64?
 
   private let mobileIntegrations: [[String: Any]] = [
     [
@@ -511,8 +513,14 @@ public final class AuroraNativePlugin: Plugin {
         return
       }
       do {
-        try self.voiceCapture.start()
-        invoke.resolve(AuroraNativePlugin.voiceCapturePayload(self.voiceCapture.stats()))
+        if self.voiceSession == nil {
+          self.voiceSession = try AuroraIOSVoiceSessionHost(
+            storedConfiguration: AVAudioSession.sharedInstance()
+          )
+        }
+        self.voiceSessionGeneration = try self.voiceSession?.start()
+        let stats = self.voiceSession?.captureStats() ?? self.voiceCapture.stats()
+        invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats))
       } catch {
         invoke.reject("capture_unavailable")
       }
@@ -538,12 +546,18 @@ public final class AuroraNativePlugin: Plugin {
   }
 
   @objc public func voiceForegroundCaptureStop(_ invoke: Invoke) {
+    if let generation = voiceSessionGeneration {
+      try? voiceSession?.cancel(generation: generation)
+      voiceSessionGeneration = nil
+    }
+    voiceSession = nil
     voiceCapture.stop()
     invoke.resolve(AuroraNativePlugin.voiceCapturePayload(voiceCapture.stats()))
   }
 
   @objc public func voiceForegroundCaptureStatus(_ invoke: Invoke) {
-    invoke.resolve(AuroraNativePlugin.voiceCapturePayload(voiceCapture.stats()))
+    let stats = voiceSession?.captureStats() ?? voiceCapture.stats()
+    invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats))
   }
 
   @objc public func notificationStatus(_ invoke: Invoke) throws {
