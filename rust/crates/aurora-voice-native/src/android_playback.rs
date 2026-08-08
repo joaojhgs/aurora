@@ -52,6 +52,10 @@ impl AndroidAudioOutput {
         self.inner.lock().ok()?.queue.pop_front()
     }
 
+    pub fn queued_chunks(&self) -> usize {
+        self.inner.lock().map_or(0, |inner| inner.queue.len())
+    }
+
     pub fn close(&self) {
         if let Ok(mut inner) = self.inner.lock() {
             inner.queue.clear();

@@ -195,6 +195,26 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutpu
 }
 
 #[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeStats(
+    env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) -> jlongArray {
+    let Some(output) = output_from_handle(handle) else {
+        return ptr::null_mut();
+    };
+    let queued_chunks = output.queued_chunks() as jlong;
+    let values = [queued_chunks];
+    let Ok(array) = env.new_long_array(values.len() as jint) else {
+        return ptr::null_mut();
+    };
+    if env.set_long_array_region(&array, 0, &values).is_err() {
+        return ptr::null_mut();
+    }
+    array.into_raw()
+}
+
+#[no_mangle]
 pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeClose(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,

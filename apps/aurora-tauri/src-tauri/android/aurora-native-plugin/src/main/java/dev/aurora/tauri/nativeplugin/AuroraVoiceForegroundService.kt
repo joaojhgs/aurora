@@ -13,6 +13,7 @@ import android.media.AudioFormat
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.AudioRecord
+import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Handler
@@ -97,6 +98,11 @@ private class AuroraNativeAudioOutputBridge : AutoCloseable {
         return if (current == 0L) ShortArray(0) else nativeDrainPcm(current)
     }
 
+    fun queuedChunks(): Long {
+        val current = handle
+        return if (current == 0L) 0L else nativeStats(current).getOrElse(0) { 0L }
+    }
+
     override fun close() {
         val current = handle
         if (current != 0L) {
@@ -108,6 +114,7 @@ private class AuroraNativeAudioOutputBridge : AutoCloseable {
 
     private external fun nativeCreate(capacityChunks: Int): Long
     private external fun nativeDrainPcm(handle: Long): ShortArray
+    private external fun nativeStats(handle: Long): LongArray
     private external fun nativeClose(handle: Long)
     private external fun nativeFree(handle: Long)
 
@@ -115,6 +122,75 @@ private class AuroraNativeAudioOutputBridge : AutoCloseable {
         init {
             System.loadLibrary("aurora_tauri_lib")
         }
+    }
+}
+
+/** Native AudioTrack host for Rust-owned TTS chunks; no WebView audio path is used. */
+private class AuroraAudioPlayback(
+    private val bridge: AuroraNativeAudioOutputBridge,
+) : AutoCloseable {
+    private val running = AtomicBoolean(false)
+    private val worker = HandlerThread("aurora-audio-playback")
+    private var handler: Handler? = null
+    private var track: AudioTrack? = null
+
+    fun start() {
+        if (!running.compareAndSet(false, true)) return
+        worker.start()
+        handler = Handler(worker.looper)
+        handler?.post { playbackLoop() }
+    }
+
+    private fun playbackLoop() {
+        val currentTrack = try {
+            AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build(),
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(SAMPLE_RATE_HZ)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build(),
+                )
+                .setBufferSizeInBytes(SAMPLE_RATE_HZ * 2 / 2)
+                .build()
+        } catch (_: RuntimeException) {
+            running.set(false)
+            return
+        }
+        track = currentTrack
+        try {
+            currentTrack.play()
+            while (running.get()) {
+                val samples = bridge.drainPcm()
+                if (samples.isEmpty()) {
+                    Thread.sleep(10L)
+                    continue
+                }
+                currentTrack.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+            }
+        } catch (_: RuntimeException) {
+            running.set(false)
+        } finally {
+            runCatching { currentTrack.stop() }
+            currentTrack.release()
+            track = null
+        }
+    }
+
+    override fun close() {
+        running.set(false)
+        handler?.removeCallbacksAndMessages(null)
+        worker.quitSafely()
+        if (worker.state != Thread.State.NEW) {
+            runCatching { worker.join() }
+        }
+        bridge.close()
     }
 }
 
@@ -242,6 +318,7 @@ private class AuroraAudioCapture(
 
 class AuroraVoiceForegroundService : Service() {
     private var capture: AuroraAudioCapture? = null
+    private var playback: AuroraAudioPlayback? = null
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
 
@@ -276,6 +353,7 @@ class AuroraVoiceForegroundService : Service() {
         running = true
         audioManager = getSystemService(AudioManager::class.java)
         ensureNotificationChannel()
+        playback = AuroraAudioPlayback(AuroraNativeAudioOutputBridge()).also { it.start() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -309,6 +387,8 @@ class AuroraVoiceForegroundService : Service() {
     override fun onDestroy() {
         capture?.close()
         capture = null
+        playback?.close()
+        playback = null
         abandonAudioFocus()
         audioFocusRequest = null
         audioManager = null
