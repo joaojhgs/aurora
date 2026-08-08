@@ -410,6 +410,7 @@ export async function rebuildAuroraThinRuntime(
 const DESKTOP_LOCAL_GATEWAY_READY_TIMEOUT_MS = 45_000;
 const DESKTOP_LOCAL_GATEWAY_RETRY_DELAY_MS = 500;
 const DESKTOP_LOCAL_SNAPSHOT_READY_TIMEOUT_MS = 10_000;
+const NATIVE_MOBILE_VOICE_STATUS_POLL_MS = 2_000;
 
 export function AuroraTauriApp({
   runtimeOverride,
@@ -466,15 +467,21 @@ export function AuroraTauriApp({
       return;
     }
     let active = true;
-    void nativeMobileVoice.status()
-      .then((status) => {
+    const refresh = async () => {
+      try {
+        const status = await nativeMobileVoice.status();
         if (active) setNativeMobileVoiceAvailable(status.available);
-      })
-      .catch(() => {
+      } catch {
         if (active) setNativeMobileVoiceAvailable(false);
-      });
+      }
+    };
+    void refresh();
+    const poll = window.setInterval(() => {
+      void refresh();
+    }, NATIVE_MOBILE_VOICE_STATUS_POLL_MS);
     return () => {
       active = false;
+      window.clearInterval(poll);
     };
   }, [runtime.nativeMobileVoice]);
 
