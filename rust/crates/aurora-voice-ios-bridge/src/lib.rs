@@ -5,7 +5,18 @@
 //! crate intentionally does not claim a complete iOS assistant turn.
 
 use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::fmt;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
+
+use async_trait::async_trait;
+use aurora_voice_core::{
+    AudioInput, CaptureOwnerKind, Generation, PcmFrame, RouteRevision, TimestampMicros,
+    TransitionReason, VoiceCaptureLease, VoiceCoreError,
+};
+use tokio::time::{sleep, Duration};
 
 const DEFAULT_CAPACITY_CHUNKS: usize = 8;
 const DEFAULT_MAX_CHUNK_SAMPLES: usize = 48_000;
@@ -35,6 +46,14 @@ struct PcmChunk {
     sample_rate_hz: u32,
 }
 
+/// One bounded PCM chunk drained by the shared native voice runtime.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AuroraIosAudioChunk {
+    pub samples: Vec<f32>,
+    pub sequence: u64,
+    pub sample_rate_hz: u32,
+}
+
 #[derive(Debug)]
 struct Inner {
     queue: VecDeque<PcmChunk>,
@@ -45,7 +64,33 @@ struct Inner {
 pub struct AuroraIosAudioState {
     capacity_chunks: usize,
     max_chunk_samples: usize,
-    inner: Mutex<Inner>,
+    inner: Arc<Mutex<Inner>>,
+}
+
+impl fmt::Debug for AuroraIosAudioState {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let stats = self.stats();
+        formatter
+            .debug_struct("AuroraIosAudioState")
+            .field("capacity_chunks", &self.capacity_chunks)
+            .field("max_chunk_samples", &self.max_chunk_samples)
+            .field("accepted_chunks", &stats.accepted_chunks)
+            .field("accepted_samples", &stats.accepted_samples)
+            .field("dropped_chunks", &stats.dropped_chunks)
+            .field("queued_chunks", &stats.queued_chunks)
+            .field("closed", &stats.closed)
+            .finish()
+    }
+}
+
+impl Clone for AuroraIosAudioState {
+    fn clone(&self) -> Self {
+        Self {
+            capacity_chunks: self.capacity_chunks,
+            max_chunk_samples: self.max_chunk_samples,
+            inner: Arc::clone(&self.inner),
+        }
+    }
 }
 
 impl AuroraIosAudioState {
@@ -63,11 +108,11 @@ impl AuroraIosAudioState {
         Self {
             capacity_chunks,
             max_chunk_samples,
-            inner: Mutex::new(Inner {
+            inner: Arc::new(Mutex::new(Inner {
                 queue: VecDeque::with_capacity(capacity_chunks),
                 stats: AuroraIosAudioStats::default(),
                 last_sequence: None,
-            }),
+            })),
         }
     }
 
@@ -103,16 +148,18 @@ impl AuroraIosAudioState {
         AURORA_IOS_AUDIO_OK
     }
 
-    fn drain_one(&self) -> usize {
+    /// Drain one owned chunk for a native runtime adapter.
+    pub fn drain_chunk(&self) -> Option<AuroraIosAudioChunk> {
         let mut inner = self.inner.lock().expect("iOS audio state mutex poisoned");
-        inner
-            .queue
-            .pop_front()
-            .map(|chunk| {
-                let _ = (chunk.sequence, chunk.sample_rate_hz);
-                chunk.samples.len()
-            })
-            .unwrap_or(0)
+        inner.queue.pop_front().map(|chunk| AuroraIosAudioChunk {
+            samples: chunk.samples,
+            sequence: chunk.sequence,
+            sample_rate_hz: chunk.sample_rate_hz,
+        })
+    }
+
+    fn drain_one(&self) -> usize {
+        self.drain_chunk().map_or(0, |chunk| chunk.samples.len())
     }
 
     fn close(&self) {
@@ -137,6 +184,175 @@ impl AuroraIosAudioState {
         stats.queued_chunks = inner.queue.len() as u32;
         stats
     }
+}
+
+const IOS_FRAME_POLL_INTERVAL: Duration = Duration::from_millis(5);
+const IOS_RUNTIME_SAMPLE_RATE_HZ: u32 = 16_000;
+
+/// Finish/interruption control shared by the iOS host and the Rust input port.
+#[derive(Debug, Clone, Default)]
+pub struct AuroraIosCaptureControl {
+    finished: Arc<AtomicBool>,
+    interrupted: Arc<AtomicBool>,
+    active_generation: Arc<Mutex<Option<Generation>>>,
+}
+
+impl AuroraIosCaptureControl {
+    pub fn finish(&self, generation: Generation) {
+        if self.matches_active_generation(generation) {
+            self.finished.store(true, Ordering::SeqCst);
+        }
+    }
+
+    pub fn interrupt(&self, generation: Generation) {
+        if self.matches_active_generation(generation) {
+            self.interrupted.store(true, Ordering::SeqCst);
+            self.finished.store(true, Ordering::SeqCst);
+        }
+    }
+
+    fn matches_active_generation(&self, generation: Generation) -> bool {
+        self.active_generation
+            .lock()
+            .ok()
+            .and_then(|active| *active)
+            == Some(generation)
+    }
+
+    fn set_generation(&self, generation: Option<Generation>) {
+        if let Ok(mut active) = self.active_generation.lock() {
+            *active = generation;
+        }
+        self.finished.store(false, Ordering::SeqCst);
+        self.interrupted.store(false, Ordering::SeqCst);
+    }
+}
+
+/// Shared-core audio input adapter for AVAudioEngine PCM.
+#[derive(Debug, Clone)]
+pub struct AuroraIosAudioInput {
+    state: AuroraIosAudioState,
+    control: AuroraIosCaptureControl,
+    active_generation: Option<Generation>,
+    route_revision: RouteRevision,
+    started_at: TimestampMicros,
+    next_sequence: u64,
+    expected_ingress_sequence: Option<u64>,
+}
+
+impl AuroraIosAudioInput {
+    pub fn new(state: AuroraIosAudioState) -> Self {
+        Self {
+            state,
+            control: AuroraIosCaptureControl::default(),
+            active_generation: None,
+            route_revision: RouteRevision(0),
+            started_at: TimestampMicros(0),
+            next_sequence: 0,
+            expected_ingress_sequence: None,
+        }
+    }
+
+    pub fn control(&self) -> AuroraIosCaptureControl {
+        self.control.clone()
+    }
+}
+
+#[async_trait(?Send)]
+impl AudioInput for AuroraIosAudioInput {
+    async fn start(&mut self, lease: VoiceCaptureLease) -> Result<(), VoiceCoreError> {
+        if self.active_generation.is_some() {
+            return Err(VoiceCoreError::OwnerAlreadyActive);
+        }
+        if lease.owner != CaptureOwnerKind::Native {
+            return Err(VoiceCoreError::OwnerMismatch);
+        }
+        while self.state.drain_chunk().is_some() {}
+        self.active_generation = Some(lease.generation);
+        self.route_revision = lease.route_revision;
+        self.started_at = lease.created_at;
+        self.next_sequence = 0;
+        self.expected_ingress_sequence = None;
+        self.control.set_generation(self.active_generation);
+        Ok(())
+    }
+
+    async fn stop(&mut self, _reason: TransitionReason) -> Result<(), VoiceCoreError> {
+        self.control.set_generation(None);
+        self.active_generation = None;
+        self.expected_ingress_sequence = None;
+        Ok(())
+    }
+
+    async fn next_frame(&mut self) -> Result<Option<PcmFrame>, VoiceCoreError> {
+        let Some(generation) = self.active_generation else {
+            return Ok(None);
+        };
+        loop {
+            if self.control.interrupted.load(Ordering::SeqCst) {
+                return Err(VoiceCoreError::Cancelled);
+            }
+            if let Some(chunk) = self.state.drain_chunk() {
+                let discontinuity = self
+                    .expected_ingress_sequence
+                    .is_some_and(|expected| expected != chunk.sequence);
+                self.expected_ingress_sequence = Some(chunk.sequence.saturating_add(1));
+                let samples = resample_to_runtime_rate(&chunk.samples, chunk.sample_rate_hz)?;
+                let timestamp = TimestampMicros(self.started_at.0.saturating_add(
+                    self.next_sequence.saturating_mul(1_000_000)
+                        / u64::from(IOS_RUNTIME_SAMPLE_RATE_HZ),
+                ));
+                let frame = PcmFrame::new(
+                    samples,
+                    timestamp,
+                    self.next_sequence,
+                    discontinuity,
+                    self.route_revision,
+                    generation,
+                )?;
+                self.next_sequence = self.next_sequence.saturating_add(1);
+                return Ok(Some(frame));
+            }
+            if self.control.finished.load(Ordering::SeqCst) || self.state.stats().closed != 0 {
+                return Ok(None);
+            }
+            sleep(IOS_FRAME_POLL_INTERVAL).await;
+        }
+    }
+
+    fn current_route_revision(&self) -> RouteRevision {
+        self.route_revision
+    }
+}
+
+fn resample_to_runtime_rate(
+    samples: &[f32],
+    source_rate_hz: u32,
+) -> Result<Vec<f32>, VoiceCoreError> {
+    if source_rate_hz == 0 || samples.is_empty() {
+        return Err(VoiceCoreError::EmptyFrame);
+    }
+    if source_rate_hz == IOS_RUNTIME_SAMPLE_RATE_HZ {
+        return Ok(samples.to_vec());
+    }
+    let output_len = ((samples.len() as u64)
+        .saturating_mul(u64::from(IOS_RUNTIME_SAMPLE_RATE_HZ))
+        .saturating_add(u64::from(source_rate_hz).saturating_sub(1))
+        / u64::from(source_rate_hz)) as usize;
+    if output_len == 0 {
+        return Err(VoiceCoreError::EmptyFrame);
+    }
+    let last = samples.len().saturating_sub(1);
+    let mut output = Vec::with_capacity(output_len);
+    for index in 0..output_len {
+        let source_position =
+            (index as f64 * f64::from(source_rate_hz)) / f64::from(IOS_RUNTIME_SAMPLE_RATE_HZ);
+        let left = (source_position.floor() as usize).min(last);
+        let right = (left.saturating_add(1)).min(last);
+        let fraction = (source_position - left as f64) as f32;
+        output.push(samples[left] + (samples[right] - samples[left]) * fraction);
+    }
+    Ok(output)
 }
 
 #[no_mangle]
@@ -262,5 +478,45 @@ mod tests {
         state.close();
         assert_eq!(state.push_pcm(&[0.0], 1, 16_000), AURORA_IOS_AUDIO_CLOSED);
         assert_eq!(state.reset(), AURORA_IOS_AUDIO_CLOSED);
+    }
+
+    #[test]
+    fn resampling_normalizes_non_16khz_capture() {
+        let output = resample_to_runtime_rate(&[0.0, 1.0, 0.0], 8_000).expect("resample");
+        assert_eq!(output.len(), 6);
+        assert!((output[1] - 0.5).abs() < 0.001);
+        assert!((output[2] - 1.0).abs() < 0.001);
+    }
+
+    #[tokio::test]
+    async fn audio_input_drains_frames_with_generation_and_discontinuity() {
+        let state = AuroraIosAudioState::new(4, 8);
+        let mut input = AuroraIosAudioInput::new(state);
+        let lease = VoiceCaptureLease {
+            owner: CaptureOwnerKind::Native,
+            surface: "ios".to_owned(),
+            device_route: "default".to_owned(),
+            start_reason: aurora_voice_core::CaptureStartReason::PushToTalk,
+            generation: Generation(7),
+            created_at: TimestampMicros(100),
+            route_revision: RouteRevision(2),
+            background_eligible: false,
+            consent_revision: 1,
+            heartbeat_at: TimestampMicros(100),
+            stop_deadline: None,
+        };
+        input.start(lease).await.expect("start");
+        assert_eq!(
+            input.state.push_pcm(&[0.0, 0.5], 4, 16_000),
+            AURORA_IOS_AUDIO_OK
+        );
+        let frame = input.next_frame().await.expect("frame").expect("frame");
+        assert_eq!(frame.generation(), Generation(7));
+        assert_eq!(frame.route_revision(), RouteRevision(2));
+        assert_eq!(frame.sequence(), 0);
+        assert!(!frame.discontinuity());
+        assert_eq!(frame.samples(), &[0.0, 0.5]);
+        input.control().finish(Generation(7));
+        assert!(input.next_frame().await.expect("finish").is_none());
     }
 }

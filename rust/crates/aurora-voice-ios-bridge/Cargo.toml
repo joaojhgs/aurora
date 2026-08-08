@@ -8,5 +8,10 @@ license.workspace = true
 [lib]
 crate-type = ["rlib", "staticlib"]
 
+[dependencies]
+async-trait.workspace = true
+aurora-voice-core = { path = "../aurora-voice-core" }
+tokio = { workspace = true, features = ["time"] }
+
 [lints]
 workspace = true
