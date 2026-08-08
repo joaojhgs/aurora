@@ -26,15 +26,19 @@ inputs only and are not client runtime code.
 ## Decision boundary
 
 Phase 4 chooses the native runtime direction and fail-closed dependency set for
-later implementation phases:
+later implementation phases. Phase 6 release disposition is tracked in
+`tools/voice-runtime/model-packs/candidates/phase6-capability-disposition.json`;
+candidate manifests referenced there are validation inputs only and remain
+excluded from release eligibility until a later release decision changes that
+file and its gates.
 
-- Rust `1.88.0` is the selected and pinned local build toolchain for this lane.
+- Rust `1.88.0` is the pinned local build toolchain for this lane.
   The Tauri crate declaration and native CI workflows are aligned to that
   minimum after the complete Phase 4 build matrix.
 - sherpa-onnx `v1.13.4`, ONNX Runtime `v1.27.0`, CPAL `v0.18.1`, and
-  Emscripten `4.0.23` are the pinned runtime/build inputs for the selected
-  integration shape.
-- The selected first-pass model set is English-only for ASR, VAD, and KWS:
+  Emscripten `4.0.23` are the pinned runtime/build inputs for the Phase 4
+  validation shape.
+- The Phase 4 validation-only model set is English-only for ASR, VAD, and KWS:
   offline Moonshine v2 ASR, upstream Silero VAD v4.0, and GigaSpeech KWS.
   Piper LJSpeech medium TTS is evidence-only and blocked for activation until
   the espeak dependency chain is patched and approved or replaced.
@@ -42,8 +46,9 @@ later implementation phases:
   currently inspected pack is non-commercial. Package code availability does not
   make any PocketTTS model or voice asset redistributable.
 - The sherpa-exported Silero derivative is rejected for the reproducible default
-  pack because its exact byte-for-byte export recipe is not proven. The upstream
-  Silero v4.0 ONNX file is selected after exact native/WASM compatibility proof.
+  pack because its exact byte-for-byte export recipe is not validated. The
+  upstream Silero v4.0 ONNX file is the Phase 4 validation input after exact
+  native/WASM compatibility checks.
 
 ## Pinned sources and artifacts
 
@@ -70,13 +75,13 @@ files by path, size, and SHA-256. The structural validator also checks the CPAL
 manifest row against `rust/Cargo.lock` and this decision record so future CPAL
 version or checksum drift fails before Phase 4 evidence is accepted.
 
-## Selected model candidates
+## Phase 4 validation model candidates
 
 | Function | Candidate | SHA-256 | Decision |
 | --- | --- | --- | --- |
-| ASR | `sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27` | `9ec31b342d8fa3240c3b81b8f82e1cf7e3ac467c93ca5a999b741d5887164f8d` | Selected English-only offline Moonshine v2 candidate; multilingual and auto-language claims remain blocked |
-| VAD | upstream `silero-vad-v4.0.onnx` | `a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28` | Selected after native and WASM parity; the embedded WASM data range is byte-identical to this pinned file |
-| KWS | `sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01` | `f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a` | Selected English BPE candidate; the smaller `-mobile` pack is disqualified until its ONNX Runtime reshape abort is resolved |
+| ASR | `sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27` | `9ec31b342d8fa3240c3b81b8f82e1cf7e3ac467c93ca5a999b741d5887164f8d` | Phase 4 English-only offline Moonshine v2 validation input; multilingual and auto-language claims remain blocked |
+| VAD | upstream `silero-vad-v4.0.onnx` | `a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28` | Phase 4 validation input after native and WASM parity; the embedded WASM data range is byte-identical to this pinned file |
+| KWS | `sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01` | `f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a` | Phase 4 English BPE validation input; the smaller `-mobile` pack is disqualified until its ONNX Runtime reshape abort is resolved |
 | TTS | `vits-piper-en_US-ljspeech-medium` | `3dfb4b759d8be032a4903a9538d128b0fda2a06ab1de6cbc2d93a97e2dd83dba` | Blocked for activation; kept as C API evidence only until the pinned Piper/espeak chain clears memory-safety and GPL distribution review or is replaced |
 
 Moonshine extracted file hashes already recorded for integration:
@@ -89,30 +94,30 @@ Moonshine extracted file hashes already recorded for integration:
 
 | Surface | Decision | Current status |
 | --- | --- | --- |
-| Desktop local | Use Rust host code for model lifecycle and native HTTP/SSE; use CPAL `0.18.1` as the desktop audio capture/playback candidate. | Linux sherpa shared-library build completed. Standalone CPAL capture/playback and Android comparison checks passed; the full integrated local audio path remains pending. |
-| Hosted web and WebView foreground capture | Use browser microphone capture and worker-hosted WASM modules; keep the UI thread nonblocking. | Chromium, Firefox, and WebKit pass worker-hosted VAD, Moonshine ASR, and KWS with COOP/COEP and `SharedArrayBuffer`. KWS uses the selected full GigaSpeech BPE pack and detects `LOVELY CHILD` and `FOREVER`; the smaller mobile pack remains disqualified by the ONNX Runtime reshape abort. TTS is withheld from activation. |
+| Desktop local | Use Rust host code for model lifecycle and native HTTP/SSE; use CPAL `0.18.1` for the Phase 4 desktop audio validation path. | Linux sherpa shared-library build completed. Standalone CPAL capture/playback and Android comparison checks passed; the full integrated local audio path remains pending. |
+| Hosted web and WebView foreground capture | Use browser microphone capture and worker-hosted WASM modules; keep the UI thread nonblocking. | Chromium, Firefox, and WebKit pass worker-hosted VAD, Moonshine ASR, and KWS with COOP/COEP and `SharedArrayBuffer`. KWS uses the Phase 4 validation full GigaSpeech BPE pack and detects `LOVELY CHILD` and `FOREVER`; the smaller mobile pack remains disqualified by the ONNX Runtime reshape abort. TTS is withheld from activation. |
 | Android | Use Kotlin `AudioRecord`/`AudioManager` lifecycle and data plane into Rust with bounded PCM transfer. Treat CPAL/AAudio as comparison only for this phase. | sherpa source-built for `arm64-v8a` and `x86_64` against staged prebuilt ONNX Runtime. All four inspected libraries are ELF-correct and every LOAD segment is `0x4000` aligned. Kotlin audio ingress through JNI into a bounded Rust PCM queue packages for `arm64-v8a` and `x86_64`; the API 35 x86_64 emulator smoke proves synthetic JNI ingress and permission-granted `AudioRecord` frames reaching Rust. WebView parity, durable background voice, physical-device results, and Android sherpa VAD/STT runtime remain pending. |
 | iOS | Use Swift `AVAudioEngine`/`AVAudioSession` lifecycle and data plane into Rust. Treat CPAL/CoreAudio as comparison only for this phase. | The Rust `IosVoiceSession` executor now owns typed Gateway HTTP/SSE STT/TTS transport, generation/cancellation, bounded ingress/egress, and redacted status. Swift owns AVAudioEngine capture, AVAudioPlayerNode playback, Keychain-backed native credentials, PTT finish/cancel, and fail-closed interruption/route/media-reset handling. App background/lock/termination and low-power notifications are explicitly handled; only a future user-started background session may survive backgrounding or lock. Hash-pinned XCFrameworks contain the expected device `arm64`/iOS slice and simulator `arm64`+`x86_64`/iOSSimulator slices. Swift compilation, runtime linking, signing, simulator execution, device microphone behavior, and packaged runtime validation remain pending. |
 
-## Proven, rejected, and pending
+## Validated, rejected, and pending
 
 | Area | Status | Boundary |
 | --- | --- | --- |
-| Linux sherpa source build | Proven locally | sherpa `v1.13.4` configured with the exact pinned ONNX Runtime Linux x64 prebuilt, TTS enabled for evidence, C API enabled, and installed shared libraries. The source-identity wrapper pins the sherpa archive/commit and suppresses an enclosing Aurora Git identity. |
-| Android source-build package alignment | Proven locally for `arm64-v8a` and `x86_64` | ONNX Runtime remains staged prebuilt. sherpa was source-built for both ABIs, all four inspected libraries were ELF-correct, and every LOAD segment reported `0x4000` alignment. |
-| Android audio-to-Rust ingress | Proven locally on package build and API 35 x86_64 emulator | Kotlin `AudioRecord`/`AudioManager` owns capture lifecycle, a JNI shim calls a narrow Rust C ABI, and Rust `1.88.0` owns bounded PCM queueing, backpressure, discontinuity counting, shutdown, and null-safe FFI. The debug APK includes `classes.dex` plus `arm64-v8a` and `x86_64` JNI libraries. Emulator logcat reported `synthetic result ok=true accepted=2 dropped=0 queued=2` and `capture result ok=true acceptedDelta=11 samplesDelta=17600 dropped=3`. Physical-device runtime remains pending. |
-| Android emulator runtime | Partly proven with software acceleration | API 35 x86_64 boots and runs the Android audio ingress smoke when started without KVM acceleration. API 35 ARM64 remains rejected by QEMU2 on this x86_64 host. Android sherpa VAD/STT runtime and physical-device checks remain pending. |
-| iOS XCFramework slice inspection | Proven locally for downloaded packages | Hash-pinned ONNX Runtime and sherpa XCFrameworks expose device `arm64`/iOS and simulator `arm64`+`x86_64`/iOSSimulator slices. Runtime link, signing, simulator, and physical-device checks remain pending. |
-| iOS audio-to-Rust/session boundary | Proven as source structure and host-Rust behavior | Swift `AVAudioSession`/`AVAudioEngine` capture and `AVAudioPlayerNode` playback feed a narrow C ABI backed by a Rust `1.88.0` bounded PCM queue and Gateway session executor. Rust tests prove validation, backpressure, discontinuity accounting, reset, generation-safe finish/cancel, transport redaction, and start-stop-start semantics; structural tests prove native credential storage, typed PTT finish, playback acknowledgement, and fail-closed AVAudio/app lifecycle handling. Swift/Xcode compilation, linking, simulator execution, and physical microphone behavior are not claimed on this Linux host. |
-| Rust MSRV | Proven and declared for the current lockfile | `cargo +1.88.0 check --locked` passed; older Rust `1.85.1` failed on locked dependency MSRV requirements. Tauri and native CI now pin `1.88.0`. |
+| Linux sherpa source build | Validated locally | sherpa `v1.13.4` configured with the exact pinned ONNX Runtime Linux x64 prebuilt, TTS enabled for evidence, C API enabled, and installed shared libraries. The source-identity wrapper pins the sherpa archive/commit and suppresses an enclosing Aurora Git identity. |
+| Android source-build package alignment | Validated locally for `arm64-v8a` and `x86_64` | ONNX Runtime remains staged prebuilt. sherpa was source-built for both ABIs, all four inspected libraries were ELF-correct, and every LOAD segment reported `0x4000` alignment. |
+| Android audio-to-Rust ingress | Validated locally on package build and API 35 x86_64 emulator | Kotlin `AudioRecord`/`AudioManager` owns capture lifecycle, a JNI shim calls a narrow Rust C ABI, and Rust `1.88.0` owns bounded PCM queueing, backpressure, discontinuity counting, shutdown, and null-safe FFI. The debug APK includes `classes.dex` plus `arm64-v8a` and `x86_64` JNI libraries. Emulator logcat reported `synthetic result ok=true accepted=2 dropped=0 queued=2` and `capture result ok=true acceptedDelta=11 samplesDelta=17600 dropped=3`. Physical-device runtime remains pending. |
+| Android emulator runtime | Partly validated with software acceleration | API 35 x86_64 boots and runs the Android audio ingress smoke when started without KVM acceleration. API 35 ARM64 remains rejected by QEMU2 on this x86_64 host. Android sherpa VAD/STT runtime and physical-device checks remain pending. |
+| iOS XCFramework slice inspection | Validated locally for downloaded packages | Hash-pinned ONNX Runtime and sherpa XCFrameworks expose device `arm64`/iOS and simulator `arm64`+`x86_64`/iOSSimulator slices. Runtime link, signing, simulator, and physical-device checks remain pending. |
+| iOS audio-to-Rust/session boundary | Validated as source structure and host-Rust behavior | Swift `AVAudioSession`/`AVAudioEngine` capture and `AVAudioPlayerNode` playback feed a narrow C ABI backed by a Rust `1.88.0` bounded PCM queue and Gateway session executor. Rust tests validate behavior for input validation, backpressure, discontinuity accounting, reset, generation-safe finish/cancel, transport redaction, and start-stop-start semantics; structural tests validate native credential storage, typed PTT finish, playback acknowledgement, and fail-closed AVAudio/app lifecycle handling. Swift/Xcode compilation, linking, simulator execution, and physical microphone behavior are not claimed on this Linux host. |
+| Rust MSRV | Validated and declared for the current lockfile | `cargo +1.88.0 check --locked` passed; older Rust `1.85.1` failed on locked dependency MSRV requirements. Tauri and native CI now pin `1.88.0`. |
 | PocketTTS production use | Rejected | The inspected model pack is non-commercial. Do not ship, auto-download, or advertise it for production. |
 | sherpa-exported Silero VAD | Rejected as default | The byte file is traceable as a k2-fsa-exported Silero v4 derivative, but the exact reproducible export recipe is missing. |
-| Piper/espeak TTS source build | Rejected for activation | The Linux build emitted upstream espeak-ng `-Wstringop-overflow` warnings in `langopts.c`, and the pinned espeak chain carries GPL-3.0-or-later distribution obligations. Do not ship, auto-download, or activate this TTS path until a patched audited chain or replacement is selected. |
-| Native C API parity and TTS cancellation | Proven locally for evidence only | ASR, VAD, KWS, TTS generation, and TTS callback cancellation probes pass against the local selected/evidence packs. A Rust `1.88.0` wrapper proves header-backed C ABI ownership, STT, and callback cancellation without mirroring sherpa config structs in Rust. The TTS pass does not override the Piper/espeak activation block. |
-| Native HTTP/SSE transport | Proven for a bounded live loopback server | Rust `1.88.0` tests prove ordered event parsing, cancellation, redaction, and bounded non-success bodies, including multibyte input. A live Aurora Gateway process, authentication lifecycle, reconnect, and end-to-end turn remain Phase 5+ work. |
-| WASM linking | Proven locally with the selected split | One combined VAD+Moonshine STT module and one separate KWS module run behind narrow Worker host boundaries; evidence-only TTS remains separate and blocked. The combined module embeds the exact selected upstream Silero file. |
-| WASM parity and browser nonblocking behavior | Proven locally in Chromium, Firefox, and WebKit | All three browsers decoded the Moonshine test WAV to the same JFK phrase and detected `LOVELY CHILD` plus `FOREVER` with the selected full GigaSpeech BPE pack. The modules ran in dedicated Workers with cross-origin isolation and `SharedArrayBuffer`; page timers continued throughout the final fail-closed matrix with measured maximum lag of about `11.30 ms`, `7.32 ms`, and `339.36 ms`, respectively. Final served KWS artifacts are pinned as JavaScript `75c1bac71f4ce8de73bb24c27f3f4d2f7382861447c5f15ccf0a1d1994b9d883`, WASM `950fc0a780d71ebd098fea9f901b06cec23aec8ad422377dc11424b3c967e011`, and data `c2cd5f08b7cecc883b1d592ef79dfd8eb2cc9e88c3f2612ea3b6c07b6cd66cdc`. The smaller mobile KWS archive remains rejected by the ONNX Runtime reshape abort. |
-| iOS runtime evidence | Pending external platform work | Linux source/host tests establish the typed native session boundary but do not prove Swift compilation, simulator, device, microphone, signing, or App Store readiness. The public iOS native voice capability remains disabled until those gates pass. |
+| Piper/espeak TTS source build | Rejected for activation | The Linux build emitted upstream espeak-ng `-Wstringop-overflow` warnings in `langopts.c`, and the pinned espeak chain carries GPL-3.0-or-later distribution obligations. Do not ship, auto-download, or activate this TTS path until a patched audited chain or replacement is approved. |
+| Native C API parity and TTS cancellation | Validated locally for evidence only | ASR, VAD, KWS, TTS generation, and TTS callback cancellation probes pass against the local validation/evidence packs. A Rust `1.88.0` wrapper validates header-backed C ABI ownership, STT, and callback cancellation without mirroring sherpa config structs in Rust. The TTS pass does not override the Piper/espeak activation block. |
+| Native HTTP/SSE transport | Validated for a bounded live loopback server | Rust `1.88.0` tests validate ordered event parsing, cancellation, redaction, and bounded non-success bodies, including multibyte input. A live Aurora Gateway process, authentication lifecycle, reconnect, and end-to-end turn remain Phase 5+ work. |
+| WASM linking | Validated locally with the Phase 4 split | One combined VAD+Moonshine STT module and one separate KWS module run behind narrow Worker host boundaries; evidence-only TTS remains separate and blocked. The combined module embeds the exact Phase 4 validation upstream Silero file. |
+| WASM parity and browser nonblocking behavior | Validated locally in Chromium, Firefox, and WebKit | All three browsers decoded the Moonshine test WAV to the same JFK phrase and detected `LOVELY CHILD` plus `FOREVER` with the Phase 4 validation full GigaSpeech BPE pack. The modules ran in dedicated Workers with cross-origin isolation and `SharedArrayBuffer`; page timers continued throughout the final fail-closed matrix with measured maximum lag of about `11.30 ms`, `7.32 ms`, and `339.36 ms`, respectively. Final served KWS artifacts are pinned as JavaScript `75c1bac71f4ce8de73bb24c27f3f4d2f7382861447c5f15ccf0a1d1994b9d883`, WASM `950fc0a780d71ebd098fea9f901b06cec23aec8ad422377dc11424b3c967e011`, and data `c2cd5f08b7cecc883b1d592ef79dfd8eb2cc9e88c3f2612ea3b6c07b6cd66cdc`. The smaller mobile KWS archive remains rejected by the ONNX Runtime reshape abort. |
+| iOS runtime evidence | Pending external platform work | Linux source/host tests establish the typed native session boundary but do not validate Swift compilation, simulator, device, microphone, signing, or App Store readiness. The public iOS native voice capability remains disabled until those gates pass. |
 
 ## Comparison candidates
 
@@ -130,10 +135,10 @@ the Phase 5 production runtime unless a later decision record replaces this one.
 ## Phase 4 exit decision
 
 Phase 4 exits with one Rust orchestration core and task-specific sherpa adapters;
-it does not authorize a new inference engine. Desktop uses CPAL as its selected
-audio candidate, Android uses Kotlin `AudioRecord` into Rust, iOS uses Swift
+it does not authorize a new inference engine. Desktop uses CPAL as its Phase 4
+validation audio path, Android uses Kotlin `AudioRecord` into Rust, iOS uses Swift
 `AVAudioEngine` into Rust, and pure web uses browser capture with dedicated
-Workers. The selected web linking shape is a combined VAD+STT module plus a
+Workers. The Phase 4 validation web linking shape is a combined VAD+STT module plus a
 separate KWS module. Native HTTP/SSE is the initial transport boundary.
 
 The current iOS implementation extends the Phase 4 boundary with a Rust-owned

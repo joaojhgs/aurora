@@ -19,6 +19,7 @@ PACK_BY_TASK = {
     "kws": "aurora-candidate-sherpa-gigaspeech-kws-en",
     "stt": "aurora-candidate-moonshine-tiny-en-stt",
 }
+PHASE4_DOC_PATH = ROOT / "docs" / "NATIVE_VOICE_RUNTIME_PHASE4.md"
 
 
 def load_json(path: Path) -> dict:
@@ -27,6 +28,20 @@ def load_json(path: Path) -> dict:
 
 def disposition() -> dict:
     return load_json(DISPOSITION_PATH)
+
+
+def candidate_manifest_references(data: dict) -> set[str]:
+    references = {
+        reference
+        for reference in data["source_references"]
+        if reference.endswith(".candidate.manifest.json")
+    }
+    references.update(
+        entry["candidate_manifest"]
+        for entry in data["candidate_validations"].values()
+        if entry.get("candidate_manifest")
+    )
+    return references
 
 
 def test_phase6_disposition_is_fail_closed_for_release_capabilities():
@@ -97,6 +112,61 @@ def test_disposition_cross_checks_current_candidate_manifests_and_trust():
         assert language["language"] == "en"
         assert language["fixed_language"] is True
         assert language["auto_detect"] is False
+
+
+def test_every_disposition_candidate_manifest_is_release_ineligible():
+    data = disposition()
+    manifest_references = candidate_manifest_references(data)
+
+    assert manifest_references
+
+    validation_by_manifest = {
+        entry["candidate_manifest"]: entry
+        for entry in data["candidate_validations"].values()
+        if entry.get("candidate_manifest")
+    }
+
+    for reference in sorted(manifest_references):
+        manifest = load_json(ROOT / reference)
+        pack_id = manifest["pack_id"]
+        entry = validation_by_manifest[reference]
+
+        assert entry["candidate_pack_id"] == pack_id
+        assert entry["release_capability"] is False
+        assert entry["release_index_eligible"] is False
+        assert data["release_index_eligible"][pack_id] is False
+        assert manifest["variants"]
+        assert all(
+            variant["compatibility"]["interoperable"] is False
+            for variant in manifest["variants"]
+        )
+
+
+def test_phase4_docs_describe_phase6_candidates_as_validation_only():
+    data = disposition()
+    doc = PHASE4_DOC_PATH.read_text(encoding="utf-8")
+    manifest_references = candidate_manifest_references(data)
+
+    assert "phase6-capability-disposition.json" in doc
+    assert "validation inputs only" in doc
+    assert "excluded from release eligibility" in doc
+
+    forbidden_release_selection_language = (
+        r"\bselected\s+model\s+candidates\b",
+        r"\bselected\s+English(?:-only)?\b",
+        r"\bselected\s+full\s+GigaSpeech\b",
+        r"\bselected\s+upstream\s+Silero\b",
+        r"\brelease[- ]selected\b",
+        r"\bshippable\b",
+        r"\bproduction\s+speech\s+pack\s+is\s+selected\b",
+    )
+    for pattern in forbidden_release_selection_language:
+        assert re.search(pattern, doc, flags=re.IGNORECASE) is None, pattern
+
+    for reference in manifest_references:
+        manifest = load_json(ROOT / reference)
+        assert manifest["pack_id"] in data["release_index_eligible"]
+        assert data["release_index_eligible"][manifest["pack_id"]] is False
 
 
 def test_tts_disposition_references_all_blocked_candidates():
