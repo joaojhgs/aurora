@@ -5,11 +5,11 @@
   "codeEvidenceBaselineHead": "3202af9d",
   "reportCommit": "799c4ad1",
   "audit": {
-    "auditedAtUtc": "2026-08-08T23:20:00Z",
+    "auditedAtUtc": "2026-08-08T23:39:00Z",
     "resumedAtUtc": "2026-08-08T22:15:10Z",
     "goalThreadId": "019fd073-38a1-7801-8d62-31ae70d46580",
     "verdict": "active_remediation",
-    "resumeGate": "Phase 4 CPAL evidence and the Phase 5 remote-audio consent source boundary are independently approved through 3202af9d. The Phase 6 disposition decision is independently approved as withheld, with every production speech capability still false. A fresh Android client APK was built and artifact-verified on 2026-08-08; Waydroid at 192.168.240.112:5555 passed the scripted APK smoke and Mobile-MCP-assisted onboarding screenshots. The headless API35 emulator still fails on a Chromium/WebView renderer SIGTRAP before frontend mount, Docker-backed WebRTC interop is unavailable, and no complete Gateway voice turn exists; RAC-50 remains partial.",
+    "resumeGate": "Phase 4 CPAL evidence and the Phase 5 remote-audio consent source boundary are independently approved through 3202af9d. The Phase 6 disposition decision is independently approved as withheld, with every production speech capability still false. A fresh Android client APK was built and artifact-verified on 2026-08-08; Waydroid at 192.168.240.112:5555 passed the scripted APK smoke and Mobile-MCP-assisted onboarding/navigation screenshots through first-run device availability, Mesh, Assistant, and Settings. The headless API35 emulator still fails before frontend proof: APK smoke does not observe the native plugin payload after launch, and WebView Shell module self-report times out with no harness requests. Docker-backed WebRTC interop is unavailable, and no complete Gateway voice turn exists; RAC-50 remains partial.",
     "statusCounts": {
       "pass": 24,
       "partial": 22,
@@ -56,7 +56,7 @@
     {"id":"RAC-30","status":"pass","evidence":"installed-surface native ownership and browser-mic suppression regression tests"},
     {"id":"RAC-31","status":"partial","evidence":"sleep/device/permission/network lifecycle logic is tested; release-device matrix remains open"},
     {"id":"RAC-32","status":"blocked","evidence":"Windows/macOS/Linux signed release and installer evidence is not available in this Linux lane"},
-    {"id":"RAC-33","status":"partial","evidence":"Waydroid APK install/launch/render smoke passes on 192.168.240.112:5555 with Mobile-MCP-assisted onboarding screenshots; no complete Gateway voice turn or physical-device proof exists"},
+    {"id":"RAC-33","status":"partial","evidence":"Waydroid APK install/launch/render smoke passes on 192.168.240.112:5555 with Mobile-MCP-assisted first-run, Mesh, Assistant, and Settings screenshots from the fresh APK; no complete Gateway voice turn or physical-device proof exists"},
     {"id":"RAC-34","status":"partial","evidence":"Foreground-service fail-closed structure is proven; the complete OS permission/background-start/lifecycle matrix is incomplete"},
     {"id":"RAC-35","status":"withheld","evidence":"Ordinary background session remains disabled; notification/Stop behavior exists only for the user-started foreground service"},
     {"id":"RAC-36","status":"blocked","evidence":"physical ARM64 locked-screen full-turn evidence is unavailable"},
@@ -73,7 +73,7 @@
     {"id":"RAC-47","status":"pass","evidence":"iOS background capability remains disabled pending physical/distribution review"},
     {"id":"RAC-48","status":"pass","evidence":"generated contracts, deterministic descriptors, and backend inventory check"},
     {"id":"RAC-49","status":"partial","evidence":"bounded native HTTP/SSE cancellation, reconnect, ordering, timeout, and redaction tests pass; full Gateway turn is open"},
-    {"id":"RAC-50","status":"partial","evidence":"Backend permission and route checks, route-scoped consent, browser revoke ordering, native-mobile truth-table coverage, Android route reset/cleartext policy, independent source review, rebuilt APK verification, Waydroid scripted smoke, and Mobile-MCP-assisted onboarding screenshots pass through 3202af9d; headless WebView rendering, Docker-backed WebRTC interop, and a complete Waydroid Gateway/UI turn remain open"},
+    {"id":"RAC-50","status":"partial","evidence":"Backend permission and route checks, route-scoped consent, browser revoke ordering, native-mobile truth-table coverage, Android route reset/cleartext policy, independent source review, rebuilt APK verification, Waydroid scripted smoke, and Mobile-MCP-assisted fresh-APK onboarding/navigation screenshots pass through 3202af9d; headless APK/WebView rendering, Docker-backed WebRTC interop, and a complete Waydroid Gateway/UI turn remain open"},
     {"id":"RAC-51","status":"partial","evidence":"Android/iOS secure-storage source exists; full cross-platform native background credential and model-key runtime proof is absent"},
     {"id":"RAC-52","status":"partial","evidence":"Redaction tests pass; cloned source/embedding/state deletion and import/export/rollback privacy are not proven end to end"},
     {"id":"RAC-53","status":"partial","evidence":"Centralized surface, production-copy, and accessibility tests pass; model/download/voice-management states are not fully implemented"},
@@ -84,7 +84,7 @@
   "globalGaps": [
     "The Phase 5 remote-audio consent source boundary is independently approved through 3202af9d, and the current Android client APK builds, verifies, and smokes on Waydroid; RAC-50 remains partial until headless WebView rendering and complete device/Gateway/UI proof exist.",
     "The Phase 6 disposition decision is independently approved as withheld: every production VAD, KWS, STT, and TTS capability is false and no shippable production speech pack is selected.",
-    "No full Aurora Gateway request/response voice turn was observed on Waydroid; the headless API35 emulator lane has a Chromium/WebView renderer SIGTRAP before frontend mount, while Waydroid Mobile-MCP onboarding screenshots were captured.",
+    "No full Aurora Gateway request/response voice turn was observed on Waydroid; the headless API35 emulator lane fails before frontend proof because APK smoke does not observe the native plugin payload after launch and WebView Shell module self-report times out with no harness requests, while Waydroid Mobile-MCP onboarding/navigation screenshots were captured.",
     "Physical ARM64 Android, physical iOS, Windows/macOS signed release, SBOM/store/security review, background endurance, forced TURN, staged rollback, and full Phase 12 mutation evidence remain external, blocked, or incomplete."
   ],
   "secretsRedacted": true

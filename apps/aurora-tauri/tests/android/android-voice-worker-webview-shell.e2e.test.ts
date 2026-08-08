@@ -13,6 +13,7 @@ import {
   createAndroidWebViewShellHarness,
   launchAndroidBrowser,
   packageVersion,
+  removeAdbReverseMapping,
   resolveAdb,
   resolveDeviceSerial,
   runAdb,
@@ -266,7 +267,7 @@ async function createResources(options: Parameters<typeof createAndroidWebViewSh
       reverseMappings: priorReverseMappings
     }
     reversedPorts.push(port)
-    runAdb(adb, serial, ['reverse', '--remove', `tcp:${port}`])
+    removeAdbReverseMapping(adb, serial, `tcp:${port}`)
     runAdb(adb, serial, ['reverse', `tcp:${port}`, `tcp:${port}`])
     launchAndroidBrowser(adb, serial, webViewShellTarget, `${harness.baseUrl}/`)
     return {
