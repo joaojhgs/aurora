@@ -9384,6 +9384,7 @@ mod tests {
             "nativePushPcm",
             "nativeDrainPcm",
             "nativeStats",
+            "AuroraNativeAudioOutputBridge",
             "audio_record_read_failed",
             "requestAudioFocus",
             "onTrimMemory",
@@ -9400,6 +9401,9 @@ mod tests {
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativePushPcm",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativeDrainPcm",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativeStats",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeCreate",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeDrainPcm",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeFree",
             "AUDIO_BACKPRESSURE",
             "capacity_chunks",
         ] {

@@ -88,6 +88,36 @@ private class AuroraNativeAudioBridge : AutoCloseable {
     }
 }
 
+/** JNI handle for the bounded Rust-native TTS playback queue. */
+private class AuroraNativeAudioOutputBridge : AutoCloseable {
+    private var handle: Long = nativeCreate(16)
+
+    fun drainPcm(): ShortArray {
+        val current = handle
+        return if (current == 0L) ShortArray(0) else nativeDrainPcm(current)
+    }
+
+    override fun close() {
+        val current = handle
+        if (current != 0L) {
+            nativeClose(current)
+            nativeFree(current)
+            handle = 0L
+        }
+    }
+
+    private external fun nativeCreate(capacityChunks: Int): Long
+    private external fun nativeDrainPcm(handle: Long): ShortArray
+    private external fun nativeClose(handle: Long)
+    private external fun nativeFree(handle: Long)
+
+    companion object {
+        init {
+            System.loadLibrary("aurora_tauri_lib")
+        }
+    }
+}
+
 private class AuroraAudioCapture(
     private val bridge: AuroraNativeAudioBridge,
     private val onSnapshot: (AuroraVoiceCaptureSnapshot) -> Unit,

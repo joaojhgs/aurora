@@ -1,6 +1,6 @@
 //! Android JNI binding for the shared Rust-native PCM ingress.
 
-use aurora_voice_native::{AndroidPcmIngress, AndroidPcmPushResult};
+use aurora_voice_native::{AndroidAudioOutput, AndroidPcmIngress, AndroidPcmPushResult};
 use jni::objects::{JClass, JShortArray};
 use jni::sys::{jint, jlong, jlongArray, jshortArray};
 use jni::JNIEnv;
@@ -18,6 +18,13 @@ fn state_from_handle(handle: jlong) -> Option<&'static AndroidPcmIngress> {
     // The Kotlin owner joins the AudioRecord thread before nativeFree, so this
     // opaque handle cannot be used after its Rust allocation is released.
     Some(unsafe { &*(handle as *const AndroidPcmIngress) })
+}
+
+fn output_from_handle(handle: jlong) -> Option<&'static AndroidAudioOutput> {
+    if handle == 0 {
+        return None;
+    }
+    Some(unsafe { &*(handle as *const AndroidAudioOutput) })
 }
 
 #[no_mangle]
@@ -152,4 +159,59 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridg
         return ptr::null_mut();
     }
     array.into_raw()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeCreate(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    capacity_chunks: jint,
+) -> jlong {
+    Box::into_raw(Box::new(AndroidAudioOutput::new(
+        capacity_chunks.max(0) as usize
+    ))) as jlong
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeDrainPcm(
+    env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) -> jshortArray {
+    let Some(output) = output_from_handle(handle) else {
+        return ptr::null_mut();
+    };
+    let samples = output
+        .drain_chunk()
+        .map(|chunk| chunk.samples)
+        .unwrap_or_default();
+    let Ok(array) = env.new_short_array(samples.len() as jint) else {
+        return ptr::null_mut();
+    };
+    if env.set_short_array_region(&array, 0, &samples).is_err() {
+        return ptr::null_mut();
+    }
+    array.into_raw()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeClose(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) {
+    if let Some(output) = output_from_handle(handle) {
+        output.close();
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeFree(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) {
+    if handle != 0 {
+        unsafe { drop(Box::from_raw(handle as *mut AndroidAudioOutput)) };
+    }
 }
