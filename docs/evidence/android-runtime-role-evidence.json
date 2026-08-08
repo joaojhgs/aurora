@@ -79,6 +79,9 @@
   "verification": {
     "makeCheck": "passed",
     "routePolicyTests": "3 passed",
+    "uiSuite": "67 files / 658 tests passed",
+    "tauriSuite": "34 files / 312 tests passed; 14 skipped",
+    "rustWorkspace": "all workspace tests passed; 144 native, 48 testkit, 20 WASM facade, 7 iOS bridge",
     "fullGatewayTurn": false,
     "physicalDevice": false,
     "backgroundCapture": false,
