@@ -4,6 +4,7 @@ import Foundation
 
 public enum AuroraIOSVoiceSessionHostError: Error {
   case invalidGateway
+  case credentialsUnavailable
   case nativeSessionUnavailable
   case audioStateUnavailable
   case commandFailed(Int32)
@@ -20,6 +21,20 @@ public final class AuroraIOSVoiceSessionHost {
   private var capture: AuroraIOSVoiceCapture?
   private var playback: AuroraIOSVoicePlayback?
   private let output: OpaquePointer?
+
+  public convenience init(
+    storedConfiguration audioSession: AVAudioSession = .sharedInstance()
+  ) throws {
+    guard let configuration = try AuroraIOSVoiceCredentialStore.load() else {
+      throw AuroraIOSVoiceSessionHostError.credentialsUnavailable
+    }
+    try self.init(
+      gateway: configuration.gateway,
+      bearer: configuration.bearer,
+      remoteAudioConsent: configuration.remoteAudioConsent,
+      audioSession: audioSession
+    )
+  }
 
   public init(
     gateway: String,

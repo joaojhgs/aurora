@@ -722,11 +722,48 @@ public final class AuroraNativePlugin: Plugin {
           "aurora.session",
           "aurora.auth",
           "aurora.gateway",
+          "aurora.voice",
           "aurora.mesh",
           "aurora.admin"
         ]
       ]
     ])
+  }
+
+  @objc public func voiceCredentialSet(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraIOSVoiceCredentialSetArgs.self)
+      invoke.resolve(try AuroraIOSVoiceCredentialStore.set(args))
+    } catch let error as AuroraIOSVoiceCredentialStoreError {
+      switch error {
+      case .invalidGateway:
+        invoke.reject("voice_credential_invalid_gateway")
+      case .invalidBearer:
+        invoke.reject("voice_credential_invalid_bearer")
+      case .corruptRecord:
+        invoke.reject("voice_credential_corrupt")
+      case .keychainFailure:
+        invoke.reject("voice_credential_storage_failed")
+      }
+    } catch {
+      invoke.reject("voice_credential_set_failed")
+    }
+  }
+
+  @objc public func voiceCredentialStatus(_ invoke: Invoke) {
+    do {
+      invoke.resolve(try AuroraIOSVoiceCredentialStore.status())
+    } catch {
+      invoke.reject("voice_credential_status_unavailable")
+    }
+  }
+
+  @objc public func voiceCredentialDelete(_ invoke: Invoke) {
+    do {
+      invoke.resolve(try AuroraIOSVoiceCredentialStore.delete())
+    } catch {
+      invoke.reject("voice_credential_delete_failed")
+    }
   }
 
   @objc public func thinPeerCredentialSet(_ invoke: Invoke) {

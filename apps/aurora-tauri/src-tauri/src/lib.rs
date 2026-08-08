@@ -810,6 +810,14 @@ struct NativeShowNotificationRequest {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct IosVoiceCredentialSetRequest {
+    gateway: String,
+    bearer: Option<String>,
+    remote_audio_consent: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct IosAdminUnlockRequest {
     reason: String,
     action: Option<String>,
@@ -2378,6 +2386,72 @@ async fn aurora_ios_secure_storage_status(
             "source": "tauri-ios-native-plugin",
             "reason": "iOS Keychain status requires an iOS target built with Xcode/Tauri mobile.",
             "details": ios_native_details()
+        }))
+    }
+}
+
+#[tauri::command]
+async fn aurora_ios_voice_credential_set(
+    request: IosVoiceCredentialSetRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    let payload =
+        serde_json::to_value(&request).map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+
+    #[cfg(target_os = "ios")]
+    {
+        // The Swift plugin stores the bearer in the device-only Keychain and
+        // returns only redacted status. Never log this request payload.
+        return run_ios_plugin_command(native, "voiceCredentialSet", payload);
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = (native, payload);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "iOS voice credentials require the iOS Tauri shell".to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_ios_voice_credential_status(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(native, "voiceCredentialStatus", json!({}));
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        Ok(json!({
+            "configured": false,
+            "hasBearer": false,
+            "remoteAudioConsent": false,
+            "secretsRedacted": true
+        }))
+    }
+}
+
+#[tauri::command]
+async fn aurora_ios_voice_credential_delete(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(native, "voiceCredentialDelete", json!({}));
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        Ok(json!({
+            "configured": false,
+            "hasBearer": false,
+            "remoteAudioConsent": false,
+            "secretsRedacted": true
         }))
     }
 }
@@ -7449,6 +7523,9 @@ pub fn run() {
             aurora_local_data_envelope_decrypt,
             aurora_local_data_envelope_rotate,
             aurora_ios_secure_storage_status,
+            aurora_ios_voice_credential_set,
+            aurora_ios_voice_credential_status,
+            aurora_ios_voice_credential_delete,
             aurora_ios_biometric_status,
             aurora_ios_admin_unlock,
             aurora_biometric_admin_unlock_status,
@@ -8494,6 +8571,9 @@ mod tests {
         assert!(ios_permission.contains("aurora_ios_entrypoint_payload"));
         assert!(ios_permission.contains("aurora_ios_invoke_action"));
         assert!(ios_permission.contains("aurora_ios_secure_storage_status"));
+        assert!(ios_permission.contains("aurora_ios_voice_credential_set"));
+        assert!(ios_permission.contains("aurora_ios_voice_credential_status"));
+        assert!(ios_permission.contains("aurora_ios_voice_credential_delete"));
         assert!(ios_permission.contains("aurora_ios_biometric_status"));
         assert!(ios_permission.contains("aurora_ios_admin_unlock"));
         let ios_voice_permission = include_str!("../permissions/aurora-ios-voice.toml");
@@ -8515,6 +8595,9 @@ mod tests {
         assert!(swift_plugin.contains("voiceForegroundCaptureStart"));
         assert!(swift_plugin.contains("voiceForegroundCaptureStop"));
         assert!(swift_plugin.contains("voiceForegroundCaptureStatus"));
+        assert!(swift_plugin.contains("voiceCredentialSet"));
+        assert!(swift_plugin.contains("voiceCredentialStatus"));
+        assert!(swift_plugin.contains("voiceCredentialDelete"));
         assert!(swift_plugin.contains("nativeTurnTransportAvailable = false"));
         assert!(swift_plugin.contains("notificationStatus"));
         assert!(swift_plugin.contains("backgroundStatus"));
