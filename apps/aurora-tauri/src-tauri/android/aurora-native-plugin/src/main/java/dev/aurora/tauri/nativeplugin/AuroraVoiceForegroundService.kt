@@ -112,7 +112,7 @@ object AuroraVoiceNativeConfigStore {
         val scheme = uri.scheme?.lowercase()
         val host = uri.host
         require(host != null && uri.userInfo == null && uri.fragment == null) { "voice_gateway_invalid" }
-        val loopback = host == "127.0.0.1" || host == "localhost" || host == "::1"
+        val loopback = host == "127.0.0.1" || host == "localhost"
         require(scheme == "https" || (scheme == "http" && loopback)) { "voice_gateway_invalid" }
         return gateway
     }
@@ -594,16 +594,6 @@ class AuroraVoiceForegroundService : Service() {
         running = true
         audioManager = getSystemService(AudioManager::class.java)
         ensureNotificationChannel()
-        val nativeConfig = AuroraVoiceNativeConfigStore.load(this)
-        session = nativeConfig?.let {
-            AuroraNativeVoiceSessionBridge(it.gateway, it.bearer, it.remoteAudioConsent)
-        }
-        playback = if (session != null) {
-            AuroraAudioPlayback(session!!, closeBridgeOnClose = false)
-        } else {
-            AuroraAudioPlayback(AuroraNativeAudioOutputBridge())
-        }
-        playback?.start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -634,6 +624,7 @@ class AuroraVoiceForegroundService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        initializeNativeVoiceSession()
         if (capture == null) {
             captureError = null
             session?.let { nativeSession ->
@@ -656,6 +647,20 @@ class AuroraVoiceForegroundService : Service() {
             if (capture?.start() != true) stopSelf()
         }
         return START_NOT_STICKY
+    }
+
+    private fun initializeNativeVoiceSession() {
+        if (playback != null) return
+        val nativeConfig = AuroraVoiceNativeConfigStore.load(this)
+        session = nativeConfig?.let {
+            AuroraNativeVoiceSessionBridge(it.gateway, it.bearer, it.remoteAudioConsent)
+        }
+        playback = if (session != null) {
+            AuroraAudioPlayback(session!!, closeBridgeOnClose = false)
+        } else {
+            AuroraAudioPlayback(AuroraNativeAudioOutputBridge())
+        }
+        playback?.start()
     }
 
     override fun onDestroy() {

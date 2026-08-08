@@ -66,6 +66,7 @@ describe('Android native voice route policy', () => {
     expect(networkSecurity).toContain('<domain includeSubdomains="false">localhost</domain>')
     expect(networkSecurity).toContain('<domain includeSubdomains="false">127.0.0.1</domain>')
     expect(networkSecurity).not.toContain('includeSubdomains="true"')
+    expect(voiceStore).not.toContain('host == "::1"')
   })
 
   it('keeps assistant and background voice entry points disabled before native session creation', () => {
@@ -83,6 +84,22 @@ describe('Android native voice route policy', () => {
     expect(foregroundService).toContain('nativeSession.startBackground()')
     expect(assistantService).toContain('action = AuroraVoiceForegroundService.ACTION_START_ASSISTANT')
     expect(assistantService).not.toContain('AuroraVoiceNativeConfigStore.setRemoteAudioConsent')
+
+    const onCreateBody = foregroundService.slice(
+      foregroundService.indexOf('override fun onCreate()'),
+      foregroundService.indexOf('override fun onStartCommand', foregroundService.indexOf('override fun onCreate()')),
+    )
+    expect(onCreateBody).not.toContain('AuroraVoiceNativeConfigStore.load')
+    expect(onCreateBody).not.toContain('AuroraNativeVoiceSessionBridge')
+
+    const onStartBody = foregroundService.slice(
+      foregroundService.indexOf('override fun onStartCommand'),
+      foregroundService.indexOf('private fun initializeNativeVoiceSession', foregroundService.indexOf('override fun onStartCommand')),
+    )
+    expect(onStartBody.indexOf('backgroundSession && !BACKGROUND_VOICE_AVAILABLE')).toBeGreaterThanOrEqual(0)
+    expect(onStartBody.indexOf('initializeNativeVoiceSession()')).toBeGreaterThan(
+      onStartBody.indexOf('backgroundSession && !BACKGROUND_VOICE_AVAILABLE'),
+    )
   })
 
   it('keeps the thin APK on narrow profile/peer-storage permissions', () => {
