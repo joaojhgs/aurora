@@ -54,6 +54,8 @@ data class AuroraVoiceNativeConfig(
 )
 
 object AuroraVoiceNativeConfigStore {
+    fun isConfigured(context: Context): Boolean = load(context) != null
+
     fun load(context: Context): AuroraVoiceNativeConfig? {
         val prefs = context.getSharedPreferences(VOICE_SECURE_STORAGE_PREFS, Context.MODE_PRIVATE)
         val gateway = prefs.getString(VOICE_GATEWAY_KEY, null)?.let(::decrypt) ?: return null

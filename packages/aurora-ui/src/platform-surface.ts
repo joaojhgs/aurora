@@ -274,12 +274,12 @@ export function getAuroraVoiceCapturePolicy(
       if (options.nativeVoiceAvailable === true) {
         return {
           focusedPushToTalkOwner: 'mobile-native',
-          wakewordOwner: 'mobile-native',
-          wakewordRequiresFocus: false,
+          wakewordOwner: 'unavailable',
+          wakewordRequiresFocus: true,
           canUseWebViewVisualizer: false,
           avoidCoordinatorPushToTalk: true,
           usesBrowserVoiceRuntime: false,
-          detail: 'Android voice controls use the device microphone outside the app window.'
+          detail: 'Android push-to-talk uses the device microphone. Hands-free voice is unavailable on this device.'
         }
       }
       return {

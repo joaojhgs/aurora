@@ -9566,6 +9566,7 @@ mod tests {
             "AuroraAudioPlayback",
             "AuroraNativeVoiceSessionBridge",
             "AuroraVoiceNativeConfigStore",
+            "isConfigured",
             "VOICE_GATEWAY_KEY",
             "VOICE_BEARER_KEY",
             "VOICE_REMOTE_AUDIO_CONSENT_KEY",
@@ -9631,6 +9632,8 @@ mod tests {
             );
         }
         assert!(plugin.contains("captureBackend"));
+        assert!(plugin.contains("nativeSessionReady"));
+        assert!(plugin.contains("native_voice_route_missing"));
         for command in [
             "startVoiceForegroundService",
             "finishVoiceForegroundService",
