@@ -470,7 +470,7 @@ public final class AuroraNativePlugin: Plugin {
 
   @objc public func voiceStatus(_ invoke: Invoke) throws {
     let permission = AVAudioSession.sharedInstance().recordPermission
-    let capture = voiceCapture.stats()
+    let capture = voiceSession?.captureStats() ?? voiceCapture.stats()
     let reason: Any = !AuroraNativePlugin.nativeTurnTransportAvailable
       ? "iOS native voice transport is not available on this build."
       : permission == .granted

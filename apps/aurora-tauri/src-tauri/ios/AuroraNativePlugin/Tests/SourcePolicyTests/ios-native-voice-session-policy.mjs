@@ -67,6 +67,7 @@ assert(plugin.includes('voiceSession?.cancel'), 'foreground stop must cancel the
 assert(plugin.includes('voiceForegroundCaptureFinish'), 'foreground PTT must expose a finish command')
 assert(plugin.includes('session.finish(generation: generation)'), 'finish must complete the Rust generation')
 assert(plugin.includes('voiceSessionGeneration'), 'foreground lifecycle must retain generation identity')
+assert(plugin.includes('voiceSession?.captureStats() ?? voiceCapture.stats()'), 'status must report Rust-owned capture stats after cutover')
 for (const notification of [
   'AVAudioSession.interruptionNotification',
   'AVAudioSession.routeChangeNotification',
