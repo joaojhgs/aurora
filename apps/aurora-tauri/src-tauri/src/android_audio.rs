@@ -219,6 +219,17 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutpu
 }
 
 #[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeAcknowledgeDrained(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) {
+    if let Some(output) = output_from_handle(handle) {
+        output.acknowledge_drained();
+    }
+}
+
+#[no_mangle]
 pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeStats(
     env: JNIEnv<'_>,
     _class: JClass<'_>,
@@ -385,6 +396,17 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
         return ptr::null_mut();
     }
     array.into_raw()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeAcknowledgeDrained(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) {
+    if let Some(session) = session_from_handle(handle) {
+        session.output().acknowledge_drained();
+    }
 }
 
 #[no_mangle]

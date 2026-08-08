@@ -102,6 +102,7 @@ private interface AuroraPcmIngressBridge : AutoCloseable {
 
 private interface AuroraPcmOutputBridge : AutoCloseable {
     fun drainPcm(): ShortArray
+    fun acknowledgeDrained()
 }
 
 data class AuroraVoiceCaptureSnapshot(
@@ -173,6 +174,11 @@ private class AuroraNativeAudioOutputBridge : AuroraPcmOutputBridge {
         return if (current == 0L) ShortArray(0) else nativeDrainPcm(current)
     }
 
+    override fun acknowledgeDrained() {
+        val current = handle
+        if (current != 0L) nativeAcknowledgeDrained(current)
+    }
+
     fun queuedChunks(): Long {
         val current = handle
         return if (current == 0L) 0L else nativeStats(current).getOrElse(0) { 0L }
@@ -189,6 +195,7 @@ private class AuroraNativeAudioOutputBridge : AuroraPcmOutputBridge {
 
     private external fun nativeCreate(capacityChunks: Int): Long
     private external fun nativeDrainPcm(handle: Long): ShortArray
+    private external fun nativeAcknowledgeDrained(handle: Long)
     private external fun nativeStats(handle: Long): LongArray
     private external fun nativeClose(handle: Long)
     private external fun nativeFree(handle: Long)
@@ -234,6 +241,11 @@ private class AuroraNativeVoiceSessionBridge(
         return if (current == 0L) ShortArray(0) else nativeDrainPcm(current)
     }
 
+    override fun acknowledgeDrained() {
+        val current = handle
+        if (current != 0L) nativeAcknowledgeDrained(current)
+    }
+
     override fun stats(): LongArray {
         val current = handle
         return if (current == 0L) LongArray(11) else nativeStats(current)
@@ -256,6 +268,7 @@ private class AuroraNativeVoiceSessionBridge(
     private external fun nativeCancel(handle: Long, generation: Long): Int
     private external fun nativePushPcm(handle: Long, samples: ShortArray, sampleCount: Int, sequence: Long): Int
     private external fun nativeDrainPcm(handle: Long): ShortArray
+    private external fun nativeAcknowledgeDrained(handle: Long)
     private external fun nativeStats(handle: Long): LongArray
     private external fun nativeClose(handle: Long)
     private external fun nativeFree(handle: Long)
@@ -316,6 +329,7 @@ private class AuroraAudioPlayback(
                     continue
                 }
                 currentTrack.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+                bridge.acknowledgeDrained()
             }
         } catch (_: RuntimeException) {
             running.set(false)
