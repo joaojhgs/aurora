@@ -15,7 +15,9 @@ mod model_store;
 mod transport;
 mod trust;
 
-pub use android_capture::{AndroidPcmIngress, AndroidPcmIngressStats, AndroidPcmPushResult};
+pub use android_capture::{
+    AndroidPcmChunk, AndroidPcmIngress, AndroidPcmIngressStats, AndroidPcmPushResult,
+};
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
 pub use audio::{CpalAudioOutput, NativeAudioConfig, NativeAudioStatus};
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]

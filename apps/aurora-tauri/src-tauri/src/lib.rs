@@ -9382,6 +9382,7 @@ mod tests {
             ".addAction(Notification.Action.Builder",
             "System.loadLibrary(\"aurora_tauri_lib\")",
             "nativePushPcm",
+            "nativeDrainPcm",
             "nativeStats",
             "audio_record_read_failed",
             "requestAudioFocus",
@@ -9397,6 +9398,7 @@ mod tests {
         for required in [
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativeCreate",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativePushPcm",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativeDrainPcm",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativeStats",
             "AUDIO_BACKPRESSURE",
             "capacity_chunks",
@@ -9410,6 +9412,7 @@ mod tests {
             "AndroidPcmIngress",
             "MAX_CHUNK_SAMPLES",
             "AndroidPcmPushResult",
+            "drain_chunk",
         ] {
             assert!(
                 shared_audio.contains(required),

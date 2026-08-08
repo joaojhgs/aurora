@@ -54,6 +54,11 @@ private class AuroraNativeAudioBridge : AutoCloseable {
         return if (current == 0L) 0 else nativeDrainOne(current)
     }
 
+    fun drainPcm(): ShortArray {
+        val current = handle
+        return if (current == 0L) ShortArray(0) else nativeDrainPcm(current)
+    }
+
     fun stats(): LongArray {
         val current = handle
         return if (current == 0L) LongArray(6) { 0 } else nativeStats(current)
@@ -71,6 +76,7 @@ private class AuroraNativeAudioBridge : AutoCloseable {
     private external fun nativeCreate(capacityChunks: Int, maxChunkSamples: Int): Long
     private external fun nativePushPcm(handle: Long, samples: ShortArray, sampleCount: Int, sequence: Long): Int
     private external fun nativeDrainOne(handle: Long): Int
+    private external fun nativeDrainPcm(handle: Long): ShortArray
     private external fun nativeStats(handle: Long): LongArray
     private external fun nativeClose(handle: Long)
     private external fun nativeFree(handle: Long)

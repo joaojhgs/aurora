@@ -32,6 +32,13 @@ struct PcmChunk {
     sequence: u64,
 }
 
+/// One bounded PCM chunk drained from the Android capture ingress.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AndroidPcmChunk {
+    pub samples: Vec<i16>,
+    pub sequence: u64,
+}
+
 #[derive(Debug)]
 struct Inner {
     queue: VecDeque<PcmChunk>,
@@ -108,17 +115,18 @@ impl AndroidPcmIngress {
     }
 
     pub fn drain_one(&self) -> usize {
+        self.drain_chunk().map_or(0, |chunk| chunk.samples.len())
+    }
+
+    /// Drain one owned PCM chunk for the native voice runtime.
+    pub fn drain_chunk(&self) -> Option<AndroidPcmChunk> {
         let Ok(mut inner) = self.inner.lock() else {
-            return 0;
+            return None;
         };
-        let drained = inner
-            .queue
-            .pop_front()
-            .map(|chunk| {
-                let _sequence = chunk.sequence;
-                chunk.samples.len()
-            })
-            .unwrap_or(0);
+        let drained = inner.queue.pop_front().map(|chunk| AndroidPcmChunk {
+            samples: chunk.samples,
+            sequence: chunk.sequence,
+        });
         inner.stats.queued_chunks = inner.queue.len() as u32;
         drained
     }
@@ -170,5 +178,19 @@ mod tests {
         ingress.close();
         assert_eq!(ingress.push(&[1], 0), AndroidPcmPushResult::Closed);
         assert!(ingress.stats().closed);
+    }
+
+    #[test]
+    fn drain_chunk_preserves_sequence_and_samples() {
+        let ingress = AndroidPcmIngress::new(2, 4);
+        assert_eq!(ingress.push(&[1, -2, 3], 7), AndroidPcmPushResult::Accepted);
+        assert_eq!(
+            ingress.drain_chunk(),
+            Some(AndroidPcmChunk {
+                samples: vec![1, -2, 3],
+                sequence: 7,
+            })
+        );
+        assert!(ingress.drain_chunk().is_none());
     }
 }

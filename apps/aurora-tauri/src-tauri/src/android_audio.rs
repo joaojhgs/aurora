@@ -2,7 +2,7 @@
 
 use aurora_voice_native::{AndroidPcmIngress, AndroidPcmPushResult};
 use jni::objects::{JClass, JShortArray};
-use jni::sys::{jint, jlong, jlongArray};
+use jni::sys::{jint, jlong, jlongArray, jshortArray};
 use jni::JNIEnv;
 use std::ptr;
 
@@ -76,6 +76,33 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridg
     state_from_handle(handle)
         .map(|state| state.drain_one() as jint)
         .unwrap_or(0)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativeDrainPcm(
+    env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) -> jshortArray {
+    let Some(state) = state_from_handle(handle) else {
+        return ptr::null_mut();
+    };
+    let Some(chunk) = state.drain_chunk() else {
+        return env
+            .new_short_array(0)
+            .map(|array| array.into_raw())
+            .unwrap_or(ptr::null_mut());
+    };
+    let Ok(array) = env.new_short_array(chunk.samples.len() as jint) else {
+        return ptr::null_mut();
+    };
+    if env
+        .set_short_array_region(&array, 0, &chunk.samples)
+        .is_err()
+    {
+        return ptr::null_mut();
+    }
+    array.into_raw()
 }
 
 #[no_mangle]
