@@ -125,6 +125,71 @@ private class AuroraNativeAudioOutputBridge : AutoCloseable {
     }
 }
 
+/** JNI bridge for the shared Rust VoiceRuntime session executor. */
+private class AuroraNativeVoiceSessionBridge(
+    gateway: String,
+    bearer: String,
+    remoteAudioConsent: Boolean,
+) : AutoCloseable {
+    private var handle: Long = nativeCreate(gateway, bearer, remoteAudioConsent)
+
+    fun start(): Long {
+        val current = handle
+        return if (current == 0L) 0L else nativeStart(current)
+    }
+
+    fun finish(generation: Long): Int {
+        val current = handle
+        return if (current == 0L) -1 else nativeFinish(current, generation)
+    }
+
+    fun cancel(generation: Long): Int {
+        val current = handle
+        return if (current == 0L) -1 else nativeCancel(current, generation)
+    }
+
+    fun pushPcm(samples: ShortArray, sampleCount: Int, sequence: Long): Int {
+        val current = handle
+        if (current == 0L || sampleCount !in 1..samples.size) return -1
+        return nativePushPcm(current, samples, sampleCount, sequence)
+    }
+
+    fun drainPcm(): ShortArray {
+        val current = handle
+        return if (current == 0L) ShortArray(0) else nativeDrainPcm(current)
+    }
+
+    fun stats(): LongArray {
+        val current = handle
+        return if (current == 0L) LongArray(7) else nativeStats(current)
+    }
+
+    override fun close() {
+        val current = handle
+        if (current != 0L) {
+            nativeClose(current)
+            nativeFree(current)
+            handle = 0L
+        }
+    }
+
+    private external fun nativeCreate(gateway: String, bearer: String, remoteAudioConsent: Boolean): Long
+    private external fun nativeStart(handle: Long): Long
+    private external fun nativeFinish(handle: Long, generation: Long): Int
+    private external fun nativeCancel(handle: Long, generation: Long): Int
+    private external fun nativePushPcm(handle: Long, samples: ShortArray, sampleCount: Int, sequence: Long): Int
+    private external fun nativeDrainPcm(handle: Long): ShortArray
+    private external fun nativeStats(handle: Long): LongArray
+    private external fun nativeClose(handle: Long)
+    private external fun nativeFree(handle: Long)
+
+    companion object {
+        init {
+            System.loadLibrary("aurora_tauri_lib")
+        }
+    }
+}
+
 /** Native AudioTrack host for Rust-owned TTS chunks; no WebView audio path is used. */
 private class AuroraAudioPlayback(
     private val bridge: AuroraNativeAudioOutputBridge,
