@@ -404,7 +404,7 @@ export function AssistantView({
   const [lastError, setLastError] = useState<string | null>(null)
   const [lastPrompt, setLastPrompt] = useState<string | null>(null)
   const [streamState, setStreamState] = useState<AssistantStreamState>(() => idleAssistantStreamState())
-  const [voiceConsentGranted, setVoiceConsentGranted] = useState(false)
+  const [voiceConsentGranted, setVoiceConsentGrantedState] = useState(false)
   const [voiceCaptureStatus, setVoiceCaptureStatusState] = useState<VoiceCaptureStatus>('idle')
   const [activeAssistantPendingId, setActiveAssistantPendingId] = useState<string | null>(null)
   const [voiceResponsePendingId, setVoiceResponsePendingId] = useState<string | null>(null)
@@ -436,6 +436,8 @@ export function AssistantView({
   const voiceCaptureStatusRef = useRef<VoiceCaptureStatus>('idle')
   const voicePendingAssistantIdRef = useRef<string | null>(null)
   const voiceTranscriptPreviewRef = useRef('')
+  const voiceConsentGrantedRef = useRef(false)
+  const voiceConsentRouteKeyRef = useRef<string | null>(null)
   const browserVoiceRuntimeRef = useRef<AuroraBrowserVoiceRuntimeInstance | null>(null)
   const browserVoiceOperationTokenRef = useRef(0)
   const browserVoiceTurnSettlementRef = useRef<BrowserVoiceTurnSettlement | null>(null)
@@ -622,6 +624,73 @@ export function AssistantView({
       voiceWaveformBars
     ]
   )
+  const voiceConsentRouteKey = useMemo(
+    () => remoteAudioConsentRouteKey(voiceModel.remoteAudioRoute),
+    [voiceModel.remoteAudioRoute]
+  )
+  const connectedVoiceAccessGranted = voiceConsentGranted && voiceConsentRouteKeyRef.current === voiceConsentRouteKey
+
+  useEffect(() => {
+    if (!voiceConsentGranted) return
+    if (voiceConsentRouteKeyRef.current === voiceConsentRouteKey) return
+    setRemoteAudioConsent(false)
+  }, [voiceConsentGranted, voiceConsentRouteKey])
+
+  function setRemoteAudioConsent(granted: boolean) {
+    voiceConsentGrantedRef.current = granted
+    voiceConsentRouteKeyRef.current = granted ? voiceConsentRouteKey : null
+    setVoiceConsentGrantedState(granted)
+  }
+
+  function remoteAudioConsentForCurrentRoute(): boolean | null {
+    const route = voiceModel.remoteAudioRoute
+    if (!requiresRemoteAudioConsent(route)) return false
+    if (voiceConsentGrantedRef.current && voiceConsentRouteKeyRef.current === voiceConsentRouteKey) return true
+    const message = 'Review connected voice access before starting speech.'
+    setLastError(message)
+    setVoiceCaptureStatus('idle')
+    setStreamState((current) => ({ ...current, status: 'lost', message }))
+    return null
+  }
+
+  async function toggleRemoteAudioConsent() {
+    if (voiceConsentGrantedRef.current && voiceConsentRouteKeyRef.current === voiceConsentRouteKey) {
+      await stopActiveRemoteAudioForConsentRevoke()
+      setRemoteAudioConsent(false)
+      return
+    }
+    setLastError(null)
+    setRemoteAudioConsent(true)
+  }
+
+  async function stopActiveRemoteAudioForConsentRevoke() {
+    if (!requiresRemoteAudioConsent(voiceModel.remoteAudioRoute)) return
+    if (!['listening', 'processing', 'speaking'].includes(voiceCaptureStatusRef.current)) return
+    if (usesNativeDesktopVoice) {
+      await cancelNativeDesktopVoice('user_request')
+    } else if (usesNativeMobileVoice) {
+      await cancelNativeMobileVoice()
+    } else if (surfaceProfile.voiceCapture.usesBrowserVoiceRuntime) {
+      releaseBrowserVoiceCaptureForReason('consent_revoked')
+    } else {
+      const sessionId = activeVoiceSessionRef.current
+      if (sessionId && coordinatorVoiceSessionIdsRef.current.has(sessionId)) {
+        const stopped = await client.assistant.stopVoiceListen({
+          sessionId,
+          reason: 'user_request',
+          routePolicy: routePolicyFromRoute(voiceModel.transcriptionRoute)
+        })
+        if (!stopped.ok) setLastError(productAssistantErrorCopy(stopped.error))
+      }
+      stopLocalCapture({ finalizeTranscription: false })
+    }
+    setVoiceCaptureStatus('idle')
+    activeVoiceSessionRef.current = null
+    ownedVoiceSessionIdsRef.current.clear()
+    coordinatorVoiceSessionIdsRef.current.clear()
+    voicePendingAssistantIdRef.current = null
+    setVoiceResponsePendingId(null)
+  }
 
   function enqueueStreamedTtsAudio(update: AssistantStreamUpdate) {
     const chunk = update.ttsAudio
@@ -2080,7 +2149,6 @@ export function AssistantView({
       setSpeakingMessageId(null)
     }
     if (status.phase === 'listening') {
-      setVoiceConsentGranted(true)
       setStreamState((current) => ({ ...current, status: 'streaming', message: 'Aurora is listening.' }))
     } else if (status.phase === 'processing') {
       setStreamState((current) => ({ ...current, status: 'streaming', message: 'Voice captured. Aurora is processing the request.' }))
@@ -2582,7 +2650,6 @@ export function AssistantView({
   async function startCoordinatorPushToTalk(sessionId: string, options: { fallback?: boolean } = {}): Promise<boolean> {
     activeVoiceSessionRef.current = sessionId
     ownedVoiceSessionIdsRef.current.add(sessionId)
-    setVoiceConsentGranted(true)
     setVoiceCaptureStatus('listening')
     setStreamState((current) => ({
       ...current,
@@ -2642,6 +2709,8 @@ export function AssistantView({
   }
 
   async function startNativeDesktopVoice(): Promise<boolean> {
+    const remoteAudioConsent = remoteAudioConsentForCurrentRoute()
+    if (remoteAudioConsent === null) return false
     if (!nativeVoice) {
       nativeVoiceStatusRef.current = null
       nativeVoiceGenerationRef.current = null
@@ -2654,12 +2723,11 @@ export function AssistantView({
     nativeVoiceOperationTokenRef.current = token
     nativeVoicePendingCancelReasonRef.current = null
     nativeVoiceCancelledGenerationsRef.current.clear()
-    setVoiceConsentGranted(true)
     setStreamState((current) => ({ ...current, status: 'streaming', message: 'Starting voice...' }))
     try {
       const status = await nativeVoice.start({
         trigger: 'focused_push_to_talk',
-        remoteAudioConsent: true
+        remoteAudioConsent
       })
       const pendingReason = nativeVoicePendingCancelReasonRef.current
       if (
@@ -2801,17 +2869,18 @@ export function AssistantView({
   }
 
   async function startNativeMobileVoice(): Promise<boolean> {
+    const remoteAudioConsent = remoteAudioConsentForCurrentRoute()
+    if (remoteAudioConsent === null) return false
     if (!nativeMobileVoice) {
       setVoiceCaptureStatus('no-device')
       setLastError('Voice is unavailable on this device.')
       return false
     }
-    setVoiceConsentGranted(true)
     setStreamState((current) => ({ ...current, status: 'streaming', message: 'Starting voice...' }))
     const operationToken = ++nativeMobileVoiceOperationTokenRef.current
     nativeMobileVoiceStartInFlightRef.current = true
     try {
-      const status = await nativeMobileVoice.start({ remoteAudioConsent: true })
+      const status = await nativeMobileVoice.start({ remoteAudioConsent })
       if (assistantViewDisposedRef.current || operationToken !== nativeMobileVoiceOperationTokenRef.current) {
         await nativeMobileVoice.cancel().catch(() => undefined)
         return false
@@ -3034,7 +3103,6 @@ export function AssistantView({
     browserVoiceTurnSettlementRef.current = { token, state: 'open', outcome: null, promise: null }
     activeVoiceSessionRef.current = sessionId
     ownedVoiceSessionIdsRef.current.add(sessionId)
-    setVoiceConsentGranted(true)
     setVoiceCaptureStatus('listening')
     setStreamState((current) => ({
       ...current,
@@ -3221,6 +3289,7 @@ export function AssistantView({
     const sessionId = `voice-${Date.now()}`
     voiceTranscriptPreviewRef.current = ''
     setLastError(null)
+    if (remoteAudioConsentForCurrentRoute() === null) return
     if (usesNativeDesktopVoice) {
       await startNativeDesktopVoice()
       return
@@ -3252,7 +3321,6 @@ export function AssistantView({
     activeVoiceSessionRef.current = sessionId
     ownedVoiceSessionIdsRef.current.add(sessionId)
     try {
-      setVoiceConsentGranted(true)
       setVoiceCaptureStatus('listening')
       setStreamState((current) => ({
         ...current,
@@ -3925,6 +3993,17 @@ export function AssistantView({
               >
                 <Paperclip size={18} aria-hidden />
               </button>
+              <button
+                type="button"
+                className="aui-secondary-button aui-composer-icon"
+                data-voice-access={connectedVoiceAccessGranted ? 'granted' : 'required'}
+                aria-label={connectedVoiceAccessGranted ? 'Stop connected voice access' : 'Allow connected voice'}
+                title={connectedVoiceAccessGranted ? 'Stop connected voice access' : 'Allow connected voice'}
+                onClick={(event) => { event.preventDefault(); void toggleRemoteAudioConsent() }}
+              >
+                <ShieldAlert size={18} aria-hidden />
+                <span className="aui-sr-only">{connectedVoiceAccessGranted ? 'Stop connected voice access' : 'Allow connected voice'}</span>
+              </button>
               <div className="aui-composer-input-shell" data-voice-active={voiceCaptureStatus === 'listening' ? 'true' : undefined}>
                 <textarea
                   id="assistant-prompt"
@@ -3996,24 +4075,34 @@ export function AssistantView({
           {route.disabled ? <p role="alert">Assistant send is disabled: {assistantRouteBlockerCopy(route)}.</p> : null}
           {lastError ? <p role="alert">{lastError}</p> : null}
           {routeDetailsOpen ? (
-            <RouteSheet
-              client={client}
-              title="Assistant route preview"
-              description="Aurora checks where this prompt can run before it leaves this device."
-              payload={{
-                message: text.trim() || '<pending prompt>',
-                session_id: session.sessionId,
-                route_surface: route.item.id
-              }}
-              routeRequest={{
-                topic: `${route.item.capabilityModule}.${route.item.capabilityMethod ?? ''}`,
-                method: route.item.capabilityMethod ?? null,
-                include_candidates: true
-              }}
-              privacyClass={route.item.privacyClass}
-              auditReceiptTarget={route.providerLabel}
-              requiresAdminAction={route.requiresAdminAction}
-            />
+            <>
+              <VoiceModePanel
+                client={client}
+                model={voiceModel}
+                captureStatus={voiceCaptureStatus}
+                elapsedSeconds={voiceElapsedSeconds}
+                onToggleCapture={requestVoiceToggle}
+                onToggleConsent={() => { void toggleRemoteAudioConsent() }}
+              />
+              <RouteSheet
+                client={client}
+                title="Assistant route preview"
+                description="Aurora checks where this prompt can run before it leaves this device."
+                payload={{
+                  message: text.trim() || '<pending prompt>',
+                  session_id: session.sessionId,
+                  route_surface: route.item.id
+                }}
+                routeRequest={{
+                  topic: `${route.item.capabilityModule}.${route.item.capabilityMethod ?? ''}`,
+                  method: route.item.capabilityMethod ?? null,
+                  include_candidates: true
+                }}
+                privacyClass={route.item.privacyClass}
+                auditReceiptTarget={route.providerLabel}
+                requiresAdminAction={route.requiresAdminAction}
+              />
+            </>
           ) : null}
         </aside>
       </div>
@@ -5195,6 +5284,35 @@ function modelCountLabel(count: number): string {
 
 function isRemoteRouteCandidate(candidate: RouteAvailability['candidateProviders'][number]): boolean {
   return /mesh|remote/i.test(`${candidate.providerKind ?? ''} ${candidate.providerId ?? ''} ${candidate.id} ${candidate.serviceInstanceId ?? ''} ${candidate.label}`)
+}
+
+function requiresRemoteAudioConsent(route: RouteAvailability): boolean {
+  return route.state === 'available-remote' ||
+    route.selectorRequired ||
+    route.candidateProviders.some(isRemoteRouteCandidate)
+}
+
+function remoteAudioConsentRouteKey(route: RouteAvailability): string {
+  const candidateKey = route.candidateProviders
+    .filter((candidate) => candidate.selectable || isRemoteRouteCandidate(candidate))
+    .map((candidate) => [
+      candidate.id,
+      candidate.providerId ?? '',
+      candidate.peerId ?? '',
+      candidate.serviceInstanceId ?? '',
+      candidate.state,
+      candidate.selectable ? 'selectable' : 'fixed'
+    ].join(':'))
+    .sort()
+    .join('|')
+  return [
+    route.item.id,
+    route.item.capabilityMethod ?? '',
+    route.state,
+    route.selectorRequired ? 'selector' : 'direct',
+    route.providerLabel,
+    candidateKey
+  ].join('::')
 }
 
 function peerIdFromProviderIdentity(providerId: string): string | null {

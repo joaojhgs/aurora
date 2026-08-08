@@ -7,7 +7,8 @@ import { AssistantView } from '../src/assistant-view'
 import { auroraNavSections, navItemSnapshot } from '../src/nav'
 import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from '../src/platform-surface'
 import type { NativeDesktopVoicePort, NativeDesktopVoiceStatus } from '../src/native-desktop-voice'
-import type { RouteAvailability } from '../src/shell-data'
+import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
+import type { AssistantVoiceRoutes, RouteAvailability } from '../src/shell-data'
 
 const voiceRuntimeMock = vi.hoisted(() => ({
   create: vi.fn()
@@ -521,7 +522,7 @@ describe('Assistant hosted browser voice runtime', () => {
 
     expect(nativeVoice.start).toHaveBeenCalledWith({
       trigger: 'focused_push_to_talk',
-      remoteAudioConsent: true
+      remoteAudioConsent: false
     })
     expect(nativeVoice.finish).toHaveBeenCalledWith({ generation: 1, reason: 'user_request' })
     expect(voiceRuntimeMock.create).not.toHaveBeenCalled()
@@ -532,6 +533,135 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(stopVoiceListen).not.toHaveBeenCalled()
     expect(transcribe).not.toHaveBeenCalled()
     expect(cancel).not.toHaveBeenCalled()
+  })
+
+  it('keeps local focused voice local even when the user allowed connected voice earlier in the session', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeVoice = createNativeDesktopVoicePort()
+    const container = renderAssistant(client, getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-local',
+      transportKind: 'tauri-local',
+      nativePlatform: 'linux'
+    }), nativeVoice)
+
+    await clickButton(container, 'Allow connected voice')
+    await vi.waitFor(() => expect(findButton(container, 'Stop connected voice access')).toBeTruthy())
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(nativeVoice.start).toHaveBeenCalledTimes(1))
+
+    expect(nativeVoice.start).toHaveBeenCalledWith({
+      trigger: 'focused_push_to_talk',
+      remoteAudioConsent: false
+    })
+  })
+
+  it('blocks connected speech capture before native start until the user explicitly allows it', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeVoice = createNativeDesktopVoicePort()
+    const container = renderAssistant(client, getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-thin',
+      transportKind: 'tauri-thin',
+      nativePlatform: 'linux'
+    }), nativeVoice, { voiceRoutes: remoteVoiceRoutes('studio') })
+
+    await clickButton(container, 'Push to talk')
+    await act(async () => { await Promise.resolve() })
+
+    expect(nativeVoice.start).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Review connected voice access before starting speech.')
+
+    await clickButton(container, 'Allow connected voice')
+    await vi.waitFor(() => expect(findButton(container, 'Stop connected voice access')).toBeTruthy())
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(nativeVoice.start).toHaveBeenCalledTimes(1))
+
+    expect(nativeVoice.start).toHaveBeenCalledWith({
+      trigger: 'focused_push_to_talk',
+      remoteAudioConsent: true
+    })
+  })
+
+  it('stops active connected speech capture when connected voice access is revoked', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeVoice = createNativeDesktopVoicePort()
+    const container = renderAssistant(client, getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-thin',
+      transportKind: 'tauri-thin',
+      nativePlatform: 'linux'
+    }), nativeVoice, { voiceRoutes: remoteVoiceRoutes('studio') })
+
+    await clickButton(container, 'Allow connected voice')
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(nativeVoice.start).toHaveBeenCalledTimes(1))
+    await clickButton(container, 'Stop connected voice access')
+    await vi.waitFor(() => expect(nativeVoice.cancel).toHaveBeenCalledTimes(1))
+
+    expect(nativeVoice.cancel).toHaveBeenCalledWith({ generation: 1, reason: 'user_request' })
+    expect(findButton(container, 'Allow connected voice')).toBeTruthy()
+  })
+
+  it('invalidates connected voice access when the connected speech target changes', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeVoice = createNativeDesktopVoicePort()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    const surfaceProfile = getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-thin',
+      transportKind: 'tauri-thin',
+      nativePlatform: 'linux'
+    })
+
+    await act(async () => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          surfaceProfile={surfaceProfile}
+          nativeVoice={nativeVoice}
+          voiceRoutes={remoteVoiceRoutes('studio')}
+        />
+      )
+      await Promise.resolve()
+    })
+
+    await clickButton(container, 'Allow connected voice')
+    await vi.waitFor(() => expect(findButton(container, 'Stop connected voice access')).toBeTruthy())
+
+    await act(async () => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          surfaceProfile={surfaceProfile}
+          nativeVoice={nativeVoice}
+          voiceRoutes={remoteVoiceRoutes('lab')}
+        />
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(findButton(container, 'Allow connected voice')).toBeTruthy()
+    await clickButton(container, 'Push to talk')
+    expect(nativeVoice.start).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Review connected voice access before starting speech.')
+  })
+
+  it('keeps connected voice access copy product-facing', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const container = renderAssistant(client, hostedSurface(), undefined, { voiceRoutes: remoteVoiceRoutes('studio') })
+
+    await clickButton(container, 'Allow connected voice')
+    await vi.waitFor(() => expect(findButton(container, 'Stop connected voice access')).toBeTruthy())
+
+    const visible = (container.textContent ?? '').replace(/\s+/g, ' ')
+    const attributes = Array.from(container.querySelectorAll('[aria-label], [title]'))
+      .flatMap((node) => [node.getAttribute('aria-label'), node.getAttribute('title')])
+      .filter((value): value is string => Boolean(value))
+      .join(' ')
+    expect(findForbiddenProductionCopyTerms(`${visible} ${attributes}`)).toEqual([])
   })
 
   it('routes desktop-thin focused voice only through the native desktop port', async () => {
@@ -846,16 +976,69 @@ function deferred<T>() {
 function renderAssistant(
   client: AuroraClient,
   surfaceProfile: ReturnType<typeof getAuroraSurfaceProfile>,
-  nativeVoice?: NativeDesktopVoicePort
+  nativeVoice?: NativeDesktopVoicePort,
+  props: Partial<Parameters<typeof AssistantView>[0]> = {}
 ): HTMLElement {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   roots.push(root)
   act(() => {
-    root.render(<AssistantView client={client} route={assistantRoute()} surfaceProfile={surfaceProfile} nativeVoice={nativeVoice} />)
+    root.render(<AssistantView client={client} route={assistantRoute()} surfaceProfile={surfaceProfile} nativeVoice={nativeVoice} {...props} />)
   })
   return container
+}
+
+function remoteVoiceRoutes(peerId: string): AssistantVoiceRoutes {
+  const remote = remoteAudioRoute(peerId)
+  return {
+    transcription: remote,
+    wakeProcess: remote,
+    wakeControl: remote,
+    ttsSynthesize: remoteAudioRoute(peerId, 'voice-tts-synthesize', 'TTS synthesis', 'personal'),
+    ttsStop: remoteAudioRoute(peerId, 'voice-tts-stop', 'TTS playback stop', 'personal')
+  }
+}
+
+function remoteAudioRoute(
+  peerId: string,
+  id = 'voice-transcription',
+  label = 'Remote transcription',
+  privacyClass: RouteAvailability['item']['privacyClass'] = 'raw-audio'
+): RouteAvailability {
+  const base = assistantRoute()
+  return {
+    ...base,
+    item: {
+      ...base.item,
+      id,
+      label,
+      capabilityModule: id.includes('tts') ? 'TTS' : 'Transcription',
+      capabilityMethod: id.includes('tts') ? 'Synthesize' : 'Transcribe',
+      privacyClass
+    },
+    state: 'available-remote',
+    explanation: 'Connected Aurora device can help with speech.',
+    providerLabel: `Connected device ${peerId}`,
+    candidateProviders: [
+      {
+        id: `remote:${peerId}:Transcription`,
+        providerId: `remote:${peerId}:Transcription`,
+        providerKind: 'remote',
+        peerId,
+        nodeName: peerId,
+        serviceInstanceId: `remote:${peerId}:Transcription`,
+        label: `Connected device ${peerId}`,
+        state: 'available-remote',
+        selectable: true,
+        reason: 'available',
+        requiredAction: null
+      }
+    ],
+    evidenceSources: ['Transcription.Transcribe'],
+    selectorRequired: false,
+    disabled: false
+  }
 }
 
 function createNativeDesktopVoicePort(): NativeDesktopVoicePort & {
