@@ -9,18 +9,28 @@ platform="$(uname -s)"
 webdriver_provider="${AURORA_DESKTOP_NATIVE_VOICE_E2E_WEBDRIVER_PROVIDER:-official}"
 driver_bin="${AURORA_DESKTOP_NATIVE_VOICE_E2E_TAURI_DRIVER_BIN:-tauri-driver}"
 application_bin="${AURORA_DESKTOP_NATIVE_VOICE_E2E_APPLICATION_BIN:-$repo_root/apps/aurora-tauri/src-tauri/target/debug/aurora-tauri}"
-application_wrapper="$repo_root/scripts/desktop_live_application.sh"
+application_wrapper="$repo_root/scripts/desktop_native_voice_application.sh"
 app_pid_file="${AURORA_DESKTOP_NATIVE_VOICE_E2E_APP_PID_FILE:-$artifact_dir/desktop-native-voice-application.pid}"
+sidecar_pid_file="${AURORA_DESKTOP_NATIVE_VOICE_E2E_SIDECAR_PID_FILE:-$artifact_dir/desktop-native-voice-sidecar.pid}"
 driver_log="$artifact_dir/webdriver.log"
 frontend_dist="$repo_root/apps/aurora-tauri/dist"
 driver_pid=""
 
 read_application_pid() {
-  if [[ ! -f "$app_pid_file" ]]; then
+  read_pid_file "$app_pid_file"
+}
+
+read_sidecar_pid() {
+  read_pid_file "$sidecar_pid_file"
+}
+
+read_pid_file() {
+  local pid_file="$1"
+  if [[ ! -f "$pid_file" ]]; then
     return 1
   fi
   local pid
-  pid="$(tr -d '[:space:]' <"$app_pid_file" 2>/dev/null || true)"
+  pid="$(tr -d '[:space:]' <"$pid_file" 2>/dev/null || true)"
   if [[ "$pid" =~ ^[1-9][0-9]{0,19}$ ]]; then
     printf '%s\n' "$pid"
     return 0
@@ -51,6 +61,15 @@ cleanup() {
       wait_for_pid_exit "$application_pid" 100 0.05 || true
     fi
   fi
+  local sidecar_pid=""
+  sidecar_pid="$(read_sidecar_pid || true)"
+  if [[ -n "$sidecar_pid" ]] && kill -0 "$sidecar_pid" 2>/dev/null; then
+    kill "$sidecar_pid" 2>/dev/null || true
+    if ! wait_for_pid_exit "$sidecar_pid" 100 0.05; then
+      kill -9 "$sidecar_pid" 2>/dev/null || true
+      wait_for_pid_exit "$sidecar_pid" 100 0.05 || true
+    fi
+  fi
   if [[ -n "$driver_pid" ]] && kill -0 "$driver_pid" 2>/dev/null; then
     kill "$driver_pid" 2>/dev/null || true
     wait "$driver_pid" 2>/dev/null || true
@@ -59,6 +78,7 @@ cleanup() {
     find "$frontend_dist" -type f -delete 2>/dev/null || true
     find "$frontend_dist" -depth -type d -empty -delete 2>/dev/null || true
   fi
+  rm -f "$app_pid_file" "$sidecar_pid_file"
 }
 trap cleanup EXIT INT TERM
 
@@ -77,7 +97,8 @@ if [[ "$platform" == "Linux" && -z "${DISPLAY:-}" && "${AURORA_DESKTOP_NATIVE_VO
     echo "desktop native voice E2E requires xvfb-run when DISPLAY is unavailable" >&2
     exit 2
   fi
-  exec env AURORA_DESKTOP_NATIVE_VOICE_E2E_UNDER_XVFB=1 xvfb-run -a "$0" "$@"
+  exec env AURORA_DESKTOP_NATIVE_VOICE_E2E_UNDER_XVFB=1 \
+    xvfb-run -a "$repo_root/scripts/desktop_native_voice_e2e.sh" "$@"
 fi
 
 if ! command -v "$driver_bin" >/dev/null 2>&1; then
@@ -90,13 +111,14 @@ if [[ "$platform" == "Linux" ]] && ! command -v WebKitWebDriver >/dev/null 2>&1;
 fi
 
 mkdir -p "$artifact_dir"
-rm -f "$app_pid_file" "$driver_log"
+rm -f "$app_pid_file" "$sidecar_pid_file" "$driver_log"
 
 if [[ "${AURORA_DESKTOP_NATIVE_VOICE_E2E_SKIP_BUILD:-0}" != "1" ]]; then
   AURORA_TAURI_DEV_AUTOSIDECAR=0 \
     VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E=1 \
+    VITE_AURORA_TAURI_DEV_AUTOSIDECAR=0 \
     VITE_AURORA_RUNTIME_MODE=desktop-local \
-    pnpm --filter @aurora/tauri-ui tauri build --debug --no-bundle
+    pnpm --filter @aurora/tauri-ui tauri build --config src-tauri/tauri.desktop-native-voice-e2e.conf.json --debug --no-bundle
 fi
 
 if [[ ! -x "$application_bin" ]]; then
@@ -122,17 +144,21 @@ gateway_url="http://127.0.0.1:$gateway_port"
 export AURORA_DESKTOP_NATIVE_VOICE_E2E=1
 export AURORA_TAURI_DEV_AUTOSIDECAR=0
 export VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E=1
+export VITE_AURORA_TAURI_DEV_AUTOSIDECAR=0
 export VITE_AURORA_RUNTIME_MODE=desktop-local
 export AURORA_GATEWAY_URL="$gateway_url"
-export AURORA_TAURI_REMOTE_GATEWAY_URL="$gateway_url"
 export AURORA_DESKTOP_NATIVE_VOICE_E2E_GATEWAY_PORT="$gateway_port"
 export AURORA_DESKTOP_NATIVE_VOICE_E2E_APPLICATION="$application_wrapper"
 export AURORA_DESKTOP_NATIVE_VOICE_E2E_APPLICATION_BIN="$application_bin"
 export AURORA_DESKTOP_NATIVE_VOICE_E2E_APP_PID_FILE="$app_pid_file"
+export AURORA_DESKTOP_NATIVE_VOICE_E2E_SIDECAR_PID_FILE="$sidecar_pid_file"
 export AURORA_DESKTOP_LIVE_E2E_APPLICATION_BIN="$application_bin"
 export AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE="$app_pid_file"
 export AURORA_DESKTOP_NATIVE_VOICE_E2E_ARTIFACT_DIR="$artifact_dir"
 export AURORA_DESKTOP_NATIVE_VOICE_E2E_WEBDRIVER_URL="$webdriver_url"
+export AURORA_TAURI_SIDECAR_PROGRAM="$(command -v node)"
+export AURORA_TAURI_SIDECAR_ARGS="$repo_root/tests/e2e/desktop_native_voice/sidecar-sentinel.mjs"
+export AURORA_TAURI_SIDECAR_CWD="$repo_root"
 
 "$driver_bin" --port "$webdriver_port" >"$driver_log" 2>&1 &
 driver_pid="$!"

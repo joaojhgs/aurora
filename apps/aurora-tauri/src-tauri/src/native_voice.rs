@@ -510,8 +510,7 @@ impl NativeVoiceActor {
             } => {
                 if self.active.as_ref().is_some_and(|active| {
                     active.ui_generation == ui_generation
-                        && (!active.expected_terminal
-                            || matches!(phase, NativeVoicePhase::Stopping))
+                        && late_phase_allowed(active.expected_terminal, phase)
                 }) {
                     self.set_status(phase, Some(ui_generation), reason_code);
                 }
@@ -738,12 +737,11 @@ impl NativeVoiceActor {
         if request.generation != active.ui_generation {
             return Err(NativeVoiceCommandError::invalid(STALE_CONTROL_REASON));
         }
-        if cancel {
+        if control_requires_terminal_suppression(cancel) {
             active.expected_terminal = true;
             active.cancellation.cancel();
             active.control.interrupt(active.core_generation);
         } else {
-            active.expected_terminal = true;
             active.control.finish(active.core_generation);
         }
         let ui_generation = active.ui_generation;
@@ -1874,6 +1872,8 @@ mod tests {
 
     #[test]
     fn late_runtime_phase_cannot_regress_after_terminal_request() {
+        assert!(!control_requires_terminal_suppression(false));
+        assert!(control_requires_terminal_suppression(true));
         assert!(late_phase_allowed(false, NativeVoicePhase::Processing));
         assert!(late_phase_allowed(true, NativeVoicePhase::Stopping));
         assert!(!late_phase_allowed(true, NativeVoicePhase::Processing));
@@ -2078,7 +2078,10 @@ fn worst_case_queued_shutdown_before_stop_wait() -> Duration {
         + HANDOFF_OPERATION_TIMEOUT
 }
 
-#[cfg(test)]
 fn late_phase_allowed(expected_terminal: bool, phase: NativeVoicePhase) -> bool {
     !expected_terminal || matches!(phase, NativeVoicePhase::Stopping)
+}
+
+fn control_requires_terminal_suppression(cancel: bool) -> bool {
+    cancel
 }

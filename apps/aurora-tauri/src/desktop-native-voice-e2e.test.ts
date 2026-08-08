@@ -15,7 +15,7 @@ import {
 const liveEnv = {
   VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E: "1",
   VITE_AURORA_RUNTIME_MODE: "desktop-local",
-  AURORA_TAURI_DEV_AUTOSIDECAR: "0",
+  VITE_AURORA_TAURI_DEV_AUTOSIDECAR: "0",
 };
 
 describe("desktop native voice E2E hook", () => {
@@ -31,7 +31,7 @@ describe("desktop native voice E2E hook", () => {
     })).toBe(false);
     expect(isDesktopNativeVoiceE2eHookEnabled({
       ...liveEnv,
-      AURORA_TAURI_DEV_AUTOSIDECAR: "1",
+      VITE_AURORA_TAURI_DEV_AUTOSIDECAR: "1",
     })).toBe(false);
   });
 
@@ -67,9 +67,9 @@ describe("desktop native voice E2E hook", () => {
       { sequence: 3, status: status("stopping", 1) },
     ];
     expect(summarizeNativeVoiceEvents(events, new Map([[1, "completed"]]))).toEqual([
-      { sequence: 1, phase: "idle", turn: "unknown", redacted: true },
-      { sequence: 2, phase: "starting", turn: "completed", redacted: true },
-      { sequence: 3, phase: "stopping", turn: "completed", redacted: true },
+      { sequence: 1, phase: "idle", reasonCode: null, turn: "unknown", redacted: true },
+      { sequence: 2, phase: "starting", reasonCode: null, turn: "completed", redacted: true },
+      { sequence: 3, phase: "stopping", reasonCode: null, turn: "completed", redacted: true },
     ]);
     expect(() => summarizeNativeVoiceEvents([events[1], events[0]])).toThrow(/monotonic/u);
     expect(() => summarizeNativeVoiceEvents([])).toThrow(/required/u);
@@ -90,6 +90,9 @@ describe("desktop native voice E2E hook", () => {
     };
     const invoke = vi.fn(async (command: string) => {
       commands.push(command);
+      if (command === "aurora_sidecar_session") return { token: "sidecar-session-token" };
+      if (command === "aurora_sidecar_start") return { running: true };
+      if (command === "aurora_sidecar_stop") return { running: false };
       if (command === "aurora_native_voice_status") {
         return activeGeneration === null ? status("idle", null) : status("processing", activeGeneration);
       }
@@ -97,13 +100,17 @@ describe("desktop native voice E2E hook", () => {
         startCount += 1;
         activeGeneration = startCount === 1 ? 7 : 8;
         emit("starting", activeGeneration);
-        emit(activeGeneration === 8 ? "processing" : "listening", activeGeneration);
+        emit("listening", activeGeneration);
         return status("starting", activeGeneration);
       }
       if (command === "aurora_native_voice_finish") {
         const generation = activeGeneration;
         emit("stopping", generation);
-        activeGeneration = null;
+        if (generation === 8) {
+          emit("processing", generation);
+        } else {
+          activeGeneration = null;
+        }
         return status("stopping", generation);
       }
       if (command === "aurora_native_voice_cancel") {
@@ -148,6 +155,7 @@ describe("desktop native voice E2E hook", () => {
     expect(report.tauriPidDigest).toBe("0".repeat(64));
     expect(report.noWebViewMicrophone).toBe(true);
     expect(report.desktopResult.windowHidden).toBe(true);
+    expect(report.desktopResult.sidecarLoopback).toBe(true);
     expect(report.desktopResult.distinctGenerations).toBe(true);
     expect(report.desktopResult.completedTurn).toMatchObject({
       turn: "completed",
@@ -169,12 +177,17 @@ describe("desktop native voice E2E hook", () => {
     ]);
     expect(commands).toContain("aurora_native_voice_finish");
     expect(commands).toContain("aurora_native_voice_cancel");
+    expect(commands).toContain("aurora_sidecar_start");
+    expect(commands).toContain("aurora_sidecar_stop");
   });
 
   it("fails when native status events are absent", async () => {
     const payload = { ...samplePayload(), timeoutMs: 1_000 };
     let clock = 0;
     const invoke = vi.fn(async (command: string) => {
+      if (command === "aurora_sidecar_session") return { token: "sidecar-session-token" };
+      if (command === "aurora_sidecar_start") return { running: true };
+      if (command === "aurora_sidecar_stop") return { running: false };
       if (command === "aurora_native_voice_status") return status("idle", null);
       if (command === "aurora_native_voice_start") return status("starting", 7);
       if (command === "aurora_native_voice_finish") return status("stopping", 7);

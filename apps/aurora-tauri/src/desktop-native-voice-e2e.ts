@@ -42,11 +42,15 @@ export type NativeVoiceEvent = {
   status: NativeVoiceStatus;
 };
 
+type SidecarSession = { token: string };
+type SidecarStatus = { running: boolean };
+
 export type NativeVoiceTurnLabel = "completed" | "cancelled";
 
 export type NativeVoiceEventSummary = {
   sequence: number;
   phase: NativeVoicePhase;
+  reasonCode: string | null;
   turn: NativeVoiceTurnLabel | "unknown";
   redacted: true;
 };
@@ -86,6 +90,7 @@ export type DesktopNativeVoiceE2eReport = {
     distinctGenerations: true;
     commands: string[];
     windowHidden: boolean;
+    sidecarLoopback: true;
     forbiddenWebViewCalls: [];
     reportHash: string;
   };
@@ -129,7 +134,7 @@ export function isDesktopNativeVoiceE2eHookEnabled(
   return Boolean(
     env.VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E === "1" &&
       env.VITE_AURORA_RUNTIME_MODE === "desktop-local" &&
-      env.AURORA_TAURI_DEV_AUTOSIDECAR === "0",
+      env.VITE_AURORA_TAURI_DEV_AUTOSIDECAR === "0",
   );
 }
 
@@ -210,6 +215,7 @@ export function summarizeNativeVoiceEvents(
     return {
       sequence: event.sequence,
       phase: event.status.phase,
+      reasonCode: event.status.reasonCode,
       turn: event.status.generation === null
         ? "unknown"
         : generationLabels.get(event.status.generation) ?? "unknown",
@@ -227,6 +233,25 @@ async function runDesktopNativeVoiceE2e(
   const guards = installWebViewGuards(target);
   const events: NativeVoiceEvent[] = [];
   let unlisten: UnlistenFn | undefined;
+  let sidecarCommandToken: { token: string } | undefined;
+  let sidecarStopped = false;
+  const invokeNative = async <T>(command: string, args?: Record<string, unknown>): Promise<T> => {
+    try {
+      return await bridge.invoke<T>(command, args);
+    } catch (error) {
+      const detail = typeof error === "object" && error !== null
+        ? JSON.stringify(Object.fromEntries(
+          ["code", "reasonCode", "kind", "status"].flatMap((key) => {
+            const value = (error as Record<string, unknown>)[key];
+            return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+              ? [[key, value]]
+              : [];
+          }),
+        ))
+        : String(error);
+      throw new Error(`native voice command ${command} failed: ${detail}`);
+    }
+  };
   try {
     await bridge.hideWindow();
     const stepTimeoutMs = payload.timeoutMs ?? DEFAULT_STEP_TIMEOUT_MS;
@@ -234,9 +259,17 @@ async function runDesktopNativeVoiceE2e(
       const parsed = parseNativeVoiceEvent(event.payload);
       events.push(parsed);
     });
+    const sidecarSession = await bridge.invoke<SidecarSession>("aurora_sidecar_session");
+    sidecarCommandToken = {
+      token: requireBoundedString(sidecarSession.token, "sidecar session", 16, 512),
+    };
+    const sidecarStarted = await bridge.invoke<SidecarStatus>("aurora_sidecar_start", {
+      commandToken: sidecarCommandToken,
+    });
+    if (sidecarStarted.running !== true) throw new Error("managed sidecar did not start");
     const initial = await commandStatus(bridge.invoke);
     assertNativeVoiceStatusRedacted(initial);
-    const completedStart = await bridge.invoke<NativeVoiceStatus>("aurora_native_voice_start", {
+    const completedStart = await invokeNative<NativeVoiceStatus>("aurora_native_voice_start", {
       request: {
         trigger: "focused_push_to_talk",
         remoteAudioConsent: false,
@@ -247,7 +280,8 @@ async function runDesktopNativeVoiceE2e(
       throw new Error("completed native voice start did not return a generation");
     }
     await waitForEvent(events, completedStart.generation, ["starting"], stepTimeoutMs, bridge.now);
-    const completedTerminal = await bridge.invoke<NativeVoiceStatus>("aurora_native_voice_finish", {
+    await sleep(750);
+    const completedTerminal = await invokeNative<NativeVoiceStatus>("aurora_native_voice_finish", {
       request: {
         generation: completedStart.generation,
         reason: "user_request",
@@ -257,7 +291,7 @@ async function runDesktopNativeVoiceE2e(
     await waitForEvent(events, completedStart.generation, ["stopping"], stepTimeoutMs, bridge.now);
     await waitForIdle(bridge.invoke, stepTimeoutMs, bridge.now);
 
-    const cancelledStart = await bridge.invoke<NativeVoiceStatus>("aurora_native_voice_start", {
+    const cancelledStart = await invokeNative<NativeVoiceStatus>("aurora_native_voice_start", {
       request: {
         trigger: "focused_push_to_talk",
         remoteAudioConsent: false,
@@ -271,14 +305,32 @@ async function runDesktopNativeVoiceE2e(
       throw new Error("native voice cancel lifecycle did not use a distinct generation");
     }
     await waitForEvent(events, cancelledStart.generation, ["starting"], stepTimeoutMs, bridge.now);
-    await waitForEvent(
-      events,
-      cancelledStart.generation,
-      ["listening", "processing", "speaking"],
-      stepTimeoutMs,
-      bridge.now,
-    );
-    const cancelledTerminal = await bridge.invoke<NativeVoiceStatus>("aurora_native_voice_cancel", {
+    await waitForEvent(events, cancelledStart.generation, ["listening"], stepTimeoutMs, bridge.now);
+    await sleep(750);
+    const cancelledFinish = await invokeNative<NativeVoiceStatus>("aurora_native_voice_finish", {
+      request: {
+        generation: cancelledStart.generation,
+        reason: "user_request",
+      },
+    });
+    assertNativeVoiceStatusRedacted(cancelledFinish);
+    await waitForEvent(events, cancelledStart.generation, ["processing"], stepTimeoutMs, bridge.now);
+    const beforeCancel = await commandStatus(bridge.invoke);
+    if (beforeCancel.generation !== cancelledStart.generation ||
+        !["processing", "speaking"].includes(beforeCancel.phase)) {
+      throw new Error(`native voice cancellation precondition failed: ${JSON.stringify({
+        phase: beforeCancel.phase,
+        generation: beforeCancel.generation,
+        expectedGeneration: cancelledStart.generation,
+        recentEvents: events.slice(-12).map((event) => ({
+          sequence: event.sequence,
+          phase: event.status.phase,
+          generation: event.status.generation,
+          reasonCode: event.status.reasonCode,
+        })),
+      })}`);
+    }
+    const cancelledTerminal = await invokeNative<NativeVoiceStatus>("aurora_native_voice_cancel", {
       request: {
         generation: cancelledStart.generation,
         reason: "window_hidden",
@@ -287,6 +339,11 @@ async function runDesktopNativeVoiceE2e(
     assertNativeVoiceStatusRedacted(cancelledTerminal);
     await waitForEvent(events, cancelledStart.generation, ["stopping"], stepTimeoutMs, bridge.now);
     await waitForIdle(bridge.invoke, stepTimeoutMs, bridge.now);
+    const sidecarStoppedStatus = await bridge.invoke<SidecarStatus>("aurora_sidecar_stop", {
+      commandToken: sidecarCommandToken,
+    });
+    if (sidecarStoppedStatus.running !== false) throw new Error("managed sidecar did not stop");
+    sidecarStopped = true;
     if (guards.calls.length > 0) throw new Error("WebView voice/model path was used");
     const generationLabels = new Map<number, NativeVoiceTurnLabel>([
       [completedStart.generation, "completed"],
@@ -322,6 +379,7 @@ async function runDesktopNativeVoiceE2e(
           "aurora_native_voice_cancel",
         ],
         windowHidden: true,
+        sidecarLoopback: true,
         forbiddenWebViewCalls: [] as [],
         reportHash: "",
       },
@@ -337,6 +395,11 @@ async function runDesktopNativeVoiceE2e(
     assertReportHasNoSensitiveMaterial(report);
     return report;
   } finally {
+    if (sidecarCommandToken && !sidecarStopped) {
+      await bridge.invoke<SidecarStatus>("aurora_sidecar_stop", {
+        commandToken: sidecarCommandToken,
+      }).catch(() => undefined);
+    }
     guards.restore();
     unlisten?.();
   }

@@ -12,6 +12,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 const defaultArtifactDir = path.join(repoRoot, 'reports/desktop-native-voice-e2e')
 const runnerScript = path.join(repoRoot, 'scripts/desktop_native_voice_e2e.sh')
 const applicationWrapperScript = path.join(repoRoot, 'scripts/desktop_live_application.sh')
+const nativeVoiceApplicationWrapperScript = path.join(repoRoot, 'scripts/desktop_native_voice_application.sh')
+const sidecarSentinelScript = path.join(repoRoot, 'tests/e2e/desktop_native_voice/sidecar-sentinel.mjs')
 const hookEnvelopeSchema = 'aurora.desktop_native_voice_e2e.webdriver_result.v1'
 const hookPayloadSchema = 'aurora.desktop_native_voice_e2e.hook_payload.v1'
 const webdriverReportSchema = 'aurora.desktop_native_voice_e2e.webdriver_report.v1'
@@ -46,6 +48,8 @@ async function runCheckOnly() {
       node: commandAvailable('node'),
       maintainedRunner: await fileExists(runnerScript),
       applicationWrapper: await fileExists(applicationWrapperScript),
+      nativeVoiceApplicationWrapper: await fileExists(nativeVoiceApplicationWrapperScript),
+      managedSidecarSentinel: await fileExists(sidecarSentinelScript),
     },
     launchContract: nativeVoiceLaunchContract(),
     reportPolicy: reportPolicy(),
@@ -56,6 +60,8 @@ async function runCheckOnly() {
   await writeJson(path.join(artifactDir, 'desktop-native-voice-check.json'), report)
   assert.equal(report.prerequisites.maintainedRunner, true)
   assert.equal(report.prerequisites.applicationWrapper, true)
+  assert.equal(report.prerequisites.nativeVoiceApplicationWrapper, true)
+  assert.equal(report.prerequisites.managedSidecarSentinel, true)
   console.log(JSON.stringify(report, null, 2))
 }
 
@@ -70,7 +76,7 @@ async function runLive() {
   const appPidFile = process.env.AURORA_DESKTOP_NATIVE_VOICE_E2E_APP_PID_FILE
   const application = process.env.AURORA_DESKTOP_NATIVE_VOICE_E2E_APPLICATION
   const webdriverUrl = process.env.AURORA_DESKTOP_NATIVE_VOICE_E2E_WEBDRIVER_URL
-  const timeoutMs = parsePositiveIntegerEnv('AURORA_DESKTOP_NATIVE_VOICE_E2E_TIMEOUT_MS', 180_000)
+  const timeoutMs = parsePositiveIntegerEnv('AURORA_DESKTOP_NATIVE_VOICE_E2E_TIMEOUT_MS', 15_000)
   const sessionNonce = `native-${crypto.randomBytes(20).toString('base64url')}`
   const gateway = await startFakeGateway()
   let session
@@ -83,9 +89,8 @@ async function runLive() {
       throw new Error('missing application, WebDriver URL, or application PID file')
     }
     process.env.AURORA_GATEWAY_URL = gateway.origin
-    process.env.AURORA_TAURI_REMOTE_GATEWAY_URL = gateway.origin
     session = await createSession(webdriverUrl, application)
-    await setSessionTimeouts(webdriverUrl, session.sessionId, timeoutMs)
+    await setSessionTimeouts(webdriverUrl, session.sessionId, Math.max(timeoutMs + 30_000, 60_000))
     const tauriPid = await waitForApplicationPid(appPidFile, 30_000)
     const payload = {
       schema: hookPayloadSchema,
@@ -97,6 +102,7 @@ async function runLive() {
       timeoutMs,
     }
     const hookResult = await invokeDesktopHook(webdriverUrl, session.sessionId, payload)
+    await writeJson(path.join(artifactDir, 'desktop-native-voice-hook-result.json'), hookResult)
     validateHookReport(hookResult, { sessionNonce, tauriPid })
     await writeJson(reportPath, {
       schema: webdriverReportSchema,
@@ -133,6 +139,7 @@ async function runLive() {
       gatewayDigest: finalReport.gatewayReportDigest,
     }, null, 2)}\n`)
   } catch (error) {
+    await writeJson(path.join(artifactDir, 'desktop-native-voice-gateway-failure-report.json'), gateway.report())
     await writeJson(path.join(artifactDir, 'desktop-native-voice-failure.json'), {
       schema: 'aurora.desktop_native_voice_e2e.failure.v1',
       status: 'failed',
@@ -166,6 +173,7 @@ async function startFakeGateway() {
     ['/api/TTS/Synthesize', 0],
   ])
   let captureGeneration = 1
+  let orchestratorTurns = 0
   const server = http.createServer(async (request, response) => {
     try {
       if (!request.url) throw new Error('missing request URL')
@@ -201,24 +209,37 @@ async function startFakeGateway() {
             redacted: true,
           })
         case '/api/STTCoordinator/CaptureRelease':
+          {
+          const releasedGeneration = Number(body.generation ?? 1)
           return sendJson(response, {
             released: true,
             status: 'released',
-            generation: Number(body.generation ?? 1),
+            generation: releasedGeneration + 1,
             owner: 'none',
             python_capture_active: Boolean(body.restart_python_capture ?? body.restartPythonCapture),
             restarted_python_capture: Boolean(body.restart_python_capture ?? body.restartPythonCapture),
             redacted: true,
           })
+          }
         case '/api/Transcription/Transcribe':
+          {
+          const sampleRate = Number(body.sample_rate ?? body.sampleRate ?? 16_000)
+          const rawAudioBytes = typeof body.audio_data === 'string'
+            ? Buffer.from(body.audio_data, 'base64').length
+            : 0
           return sendJson(response, {
             text: 'aurora desktop native voice test',
             model_used: 'desktop-native-voice-e2e',
-            duration_ms: 120,
+            duration_ms: rawAudioBytes > 0
+              ? Math.round((rawAudioBytes / 2 / sampleRate) * 1000)
+              : 0,
             confidence: 0.99,
             language: 'en',
           })
+          }
         case '/api/Orchestrator/ExternalUserInput':
+          orchestratorTurns += 1
+          if (orchestratorTurns > 1) await sleep(5_000)
           return sendJson(response, {
             text: 'Aurora native voice response',
             session_id: body.session_id ?? body.sessionId ?? 'native-voice-session',
@@ -275,13 +296,15 @@ async function startFakeGateway() {
 function nativeVoiceLaunchContract() {
   return {
     command: 'scripts/desktop_native_voice_e2e.sh',
-    application: 'scripts/desktop_live_application.sh',
+    application: 'scripts/desktop_native_voice_application.sh',
     webdriverCapability: 'tauri:options.application',
     env: {
       AURORA_TAURI_DEV_AUTOSIDECAR: '0',
       VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E: '1',
+      VITE_AURORA_TAURI_DEV_AUTOSIDECAR: '0',
       VITE_AURORA_RUNTIME_MODE: 'desktop-local',
       AURORA_GATEWAY_URL: 'loopback fake Gateway set by runner',
+      AURORA_TAURI_SIDECAR_PROGRAM: 'repository-owned Node sentinel',
     },
     forbiddenWebViewCapabilities: ['getUserMedia', 'Worker', 'SharedWorker', 'browser model loads'],
       requiredNativeCommands: [
@@ -316,6 +339,18 @@ async function invokeDesktopHook(baseUrl, sessionId, payload) {
     const payload = arguments[0];
     const envelopeSchema = arguments[1];
     const done = arguments[arguments.length - 1];
+    const describeError = (error) => {
+      if (typeof error === 'string') return error;
+      if (!error || typeof error !== 'object') return String(error);
+      const bounded = {};
+      for (const key of ['code', 'message', 'kind', 'reason', 'reasonCode', 'status', 'error']) {
+        const value = error[key];
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+          bounded[key] = value;
+        }
+      }
+      return Object.keys(bounded).length > 0 ? JSON.stringify(bounded) : 'structured command error';
+    };
     const finish = (result) => {
       let serialized;
       try {
@@ -326,7 +361,7 @@ async function invokeDesktopHook(baseUrl, sessionId, payload) {
           result: {
             status: 'failed',
             blocker: 'desktop-native-voice-hook-serialization-failed',
-            detail: error && typeof error.message === 'string' ? error.message : String(error)
+            detail: describeError(error)
           }
         });
       }
@@ -356,7 +391,7 @@ async function invokeDesktopHook(baseUrl, sessionId, payload) {
     }).then((result) => finish({ runtime: { readyState: String(document.readyState || '') }, ...result }), (error) => finish({
       status: 'failed',
       blocker: 'desktop-native-voice-hook-threw',
-      detail: error && typeof error.message === 'string' ? error.message : String(error)
+      detail: describeError(error)
     }));
   `, [payload, hookEnvelopeSchema])
   return parseHookEnvelope(value)
@@ -380,7 +415,21 @@ function parseHookEnvelope(value) {
 }
 
 function validateHookReport(report, { sessionNonce, tauriPid }) {
-  assert.equal(report.schema, 'aurora.desktop_native_voice_e2e.webview_report.v1')
+  if (report.schema !== 'aurora.desktop_native_voice_e2e.webview_report.v1') {
+    const status = typeof report.status === 'string' ? report.status : 'unknown'
+    const blocker = typeof report.blocker === 'string' ? report.blocker : 'invalid-report-schema'
+    const detail = typeof report.detail === 'string'
+      ? sanitizeHookDiagnostic(report.detail)
+      : 'no bounded diagnostic was returned'
+    console.error(JSON.stringify({
+      schema: 'aurora.desktop_native_voice_e2e.diagnostic.v1',
+      status,
+      blocker,
+      detail,
+      secretsRedacted: true,
+    }))
+    throw new Error(`desktop native voice hook did not return a report: ${status}/${blocker}`)
+  }
   assert.equal(report.status, 'passed')
   assert.match(String(report.sessionNonceDigest), /^[0-9a-f]{64}$/u, 'sessionNonceDigest is required')
   assert.match(String(report.tauriPidDigest), /^[0-9a-f]{64}$/u, 'tauriPidDigest is required')
@@ -393,6 +442,7 @@ function validateHookReport(report, { sessionNonce, tauriPid }) {
   assert.equal(report.desktopResult?.monotonicStatuses, true)
   assert.equal(report.desktopResult?.distinctGenerations, true)
   assert.equal(report.desktopResult?.windowHidden, true)
+  assert.equal(report.desktopResult?.sidecarLoopback, true)
   assert.deepEqual(report.desktopResult?.forbiddenWebViewCalls, [])
   assert.match(String(report.desktopResult?.reportHash), /^[0-9a-f]{64}$/u)
   assertLifecycle(report.desktopResult?.completedTurn, 'completed')
@@ -407,7 +457,8 @@ function validateHookReport(report, { sessionNonce, tauriPid }) {
     assert.ok(['starting', 'listening', 'processing', 'speaking', 'stopping', 'idle'].includes(event.phase))
     assert.ok(['completed', 'cancelled', 'unknown'].includes(event.turn))
     assert.equal(event.redacted, true)
-    assert.deepEqual(Object.keys(event).sort(), ['phase', 'redacted', 'sequence', 'turn'])
+    assert.ok(event.reasonCode === null || /^[a-z0-9_]{1,64}$/u.test(String(event.reasonCode)))
+    assert.deepEqual(Object.keys(event).sort(), ['phase', 'reasonCode', 'redacted', 'sequence', 'turn'])
   }
   assert.deepEqual(report.desktopResult?.commands, [
     'aurora_native_voice_status',
@@ -690,6 +741,15 @@ function sanitize(value) {
     .replace(/token["']?\s*[:=]\s*["'][^"']+["']/giu, 'token:<redacted>')
 }
 
+function sanitizeHookDiagnostic(value) {
+  return sanitize(String(value))
+    .replace(/https?:\/\/[^\s"']+/giu, '<redacted-url>')
+    .replace(/\b[0-9a-f]{24,}\b/giu, '<redacted-id>')
+    .replace(/\b(?:authorization|bearer|token|rawAudio|audioData|audio_data|transcript|leaseId|lease_id|modelPath)\b/giu, '<redacted-field>')
+    .replace(/[\r\n\t]+/gu, ' ')
+    .slice(0, 512)
+}
+
 function assertNoSensitiveMaterial(value, label) {
   const text = JSON.stringify(value)
   if (forbiddenReportText.test(text)) throw new Error(`${label} contains sensitive material`)
@@ -754,6 +814,25 @@ async function runSelfTest() {
   assert.match(script, /wait_for_pid_exit/u)
   assert.match(script, /AURORA_DESKTOP_LIVE_E2E_APPLICATION_BIN/u)
   assert.match(script, /AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE/u)
+  assert.match(script, /desktop_native_voice_application\.sh/u)
+  assert.match(script, /AURORA_DESKTOP_NATIVE_VOICE_E2E_SIDECAR_PID_FILE/u)
+  assert.match(script, /tauri\.desktop-native-voice-e2e\.conf\.json/u)
+  assert.equal(await fileExists(sidecarSentinelScript), true)
+  for (const capability of ['aurora-main.json', 'aurora-thin.json']) {
+    const value = JSON.parse(await fs.readFile(
+      path.join(repoRoot, 'apps/aurora-tauri/src-tauri/capabilities', capability),
+      'utf8',
+    ))
+    assert.equal(value.permissions.includes('core:window:allow-hide'), false)
+  }
+  const liveConfig = JSON.parse(await fs.readFile(
+    path.join(repoRoot, 'apps/aurora-tauri/src-tauri/tauri.desktop-native-voice-e2e.conf.json'),
+    'utf8',
+  ))
+  assert.equal(
+    liveConfig.app.security.capabilities[2].permissions.includes('core:window:allow-hide'),
+    true,
+  )
   assert.throws(() =>
     validateHookReport({
       schema: 'aurora.desktop_native_voice_e2e.webview_report.v1',
@@ -768,6 +847,7 @@ async function runSelfTest() {
         monotonicStatuses: true,
         distinctGenerations: true,
         windowHidden: true,
+        sidecarLoopback: true,
         forbiddenWebViewCalls: [],
         reportHash: '0'.repeat(64),
         commands: [
