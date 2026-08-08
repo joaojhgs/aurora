@@ -176,7 +176,10 @@ impl NativeVoiceCommandError {
 
 #[derive(Default)]
 pub struct NativeVoiceState {
+    #[cfg(desktop)]
     inner: Arc<Mutex<Option<NativeVoiceHandle>>>,
+    #[cfg(not(desktop))]
+    inner: Arc<Mutex<Option<()>>>,
 }
 
 impl NativeVoiceState {
