@@ -682,6 +682,7 @@ class AuroraVoiceForegroundService : Service() {
 
     companion object {
         const val ACTION_STOP = "dev.aurora.tauri.nativeplugin.action.STOP_VOICE_CAPTURE"
+        const val ACTION_START_ASSISTANT = "dev.aurora.tauri.nativeplugin.action.START_ASSISTANT_VOICE"
 
         @Volatile
         var running: Boolean = false

@@ -9375,6 +9375,9 @@ mod tests {
         let rust_audio = include_str!("android_audio.rs");
         let shared_audio =
             include_str!("../../../../rust/crates/aurora-voice-native/src/android_capture.rs");
+        let interaction_session = include_str!(
+            "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraVoiceInteractionSessionService.kt"
+        );
         for required in [
             "AudioRecord.Builder()",
             "HandlerThread(\"aurora-audio-capture\")",
@@ -9448,6 +9451,19 @@ mod tests {
         }
         assert!(plugin.contains("captureBackend"));
         assert!(plugin.contains("backendAudioEvidenceRequired"));
+        for required in [
+            "VoiceInteractionSessionService",
+            "AuroraVoiceInteractionSession",
+            "onShow(args: Bundle?, showFlags: Int)",
+            "ACTION_START_ASSISTANT",
+            "startForegroundService(intent)",
+            "hide()",
+        ] {
+            assert!(
+                interaction_session.contains(required) || service.contains(required),
+                "missing Android assistant-session contract: {required}"
+            );
+        }
     }
 
     #[test]
@@ -9610,7 +9626,6 @@ mod tests {
             assert!(mobile_mesh.contains(required), "{required}");
         }
     }
-
     #[test]
     fn android_thin_overlay_does_not_inherit_desktop_main_capabilities() {
         let base: Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
