@@ -426,6 +426,7 @@ dependencies = [
  "async-trait",
  "aurora-voice-core",
  "aurora-voice-engine",
+ "aurora-voice-ios-bridge",
  "aurora-voice-native",
  "base64 0.22.1",
  "bytes",
@@ -478,6 +479,10 @@ dependencies = [
  "sha2 0.10.9",
  "thiserror 2.0.18",
 ]
+
+[[package]]
+name = "aurora-voice-ios-bridge"
+version = "0.1.0"
 
 [[package]]
 name = "aurora-voice-native"

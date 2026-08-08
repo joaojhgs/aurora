@@ -34,6 +34,8 @@ use url::Url;
 
 #[cfg(target_os = "android")]
 mod android_audio;
+#[cfg(target_os = "ios")]
+use aurora_voice_ios_bridge::*;
 mod local_data_native;
 mod native_voice;
 mod native_webrtc;
@@ -1639,6 +1641,66 @@ async fn aurora_ios_voice_status(
         let _ = native;
         serde_json::to_value(ios_voice_status()?)
             .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
+    }
+}
+
+#[tauri::command]
+async fn aurora_ios_voice_foreground_capture_start(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        let payload = run_ios_plugin_command(native, "voiceForegroundCaptureStart", json!({}))?;
+        log_ios_native_plugin_payload("voiceForegroundCaptureStart", &payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "iOS foreground voice capture is only available in the iOS Tauri shell".to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_ios_voice_foreground_capture_stop(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        let payload = run_ios_plugin_command(native, "voiceForegroundCaptureStop", json!({}))?;
+        log_ios_native_plugin_payload("voiceForegroundCaptureStop", &payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "iOS foreground voice capture is only available in the iOS Tauri shell".to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_ios_voice_foreground_capture_status(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        let payload = run_ios_plugin_command(native, "voiceForegroundCaptureStatus", json!({}))?;
+        log_ios_native_plugin_payload("voiceForegroundCaptureStatus", &payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "iOS foreground voice capture is only available in the iOS Tauri shell".to_string(),
+        ))
     }
 }
 
@@ -7246,6 +7308,9 @@ pub fn run() {
             aurora_native_open_deep_link,
             aurora_native_show_notification,
             aurora_ios_voice_status,
+            aurora_ios_voice_foreground_capture_start,
+            aurora_ios_voice_foreground_capture_stop,
+            aurora_ios_voice_foreground_capture_status,
             aurora_ios_background_status,
             aurora_dialog_status,
             aurora_audio_bridge_status,
@@ -8345,6 +8410,9 @@ mod tests {
         let ios_voice_permission = include_str!("../permissions/aurora-ios-voice.toml");
         assert!(ios_capability.contains("\"aurora-ios-voice\""));
         assert!(ios_voice_permission.contains("aurora_ios_voice_status"));
+        assert!(ios_voice_permission.contains("aurora_ios_voice_foreground_capture_start"));
+        assert!(ios_voice_permission.contains("aurora_ios_voice_foreground_capture_stop"));
+        assert!(ios_voice_permission.contains("aurora_ios_voice_foreground_capture_status"));
         assert!(ios_voice_permission.contains("aurora_ios_background_status"));
 
         let swift_plugin = include_str!(
@@ -8355,6 +8423,9 @@ mod tests {
         assert!(swift_plugin.contains("invocationStatus"));
         assert!(swift_plugin.contains("localLightInferenceStatus"));
         assert!(swift_plugin.contains("voiceStatus"));
+        assert!(swift_plugin.contains("voiceForegroundCaptureStart"));
+        assert!(swift_plugin.contains("voiceForegroundCaptureStop"));
+        assert!(swift_plugin.contains("voiceForegroundCaptureStatus"));
         assert!(swift_plugin.contains("notificationStatus"));
         assert!(swift_plugin.contains("backgroundStatus"));
         assert!(swift_plugin.contains("iosEntrypointPayload"));
@@ -8376,6 +8447,21 @@ mod tests {
         assert!(swift_plugin.contains("\"ios.voiceForegroundCapture\": false"));
         assert!(swift_plugin.contains("\"ios.backgroundVoice\": false"));
         assert!(swift_plugin.contains("\"aurora.iosSiriReplacement\": false"));
+
+        let swift_capture = include_str!(
+            "../ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraIOSVoiceCapture.swift"
+        );
+        assert!(swift_capture.contains("AVAudioEngine"));
+        assert!(swift_capture.contains("installTap(onBus: 0"));
+        assert!(swift_capture.contains("aurora_ios_audio_state_push_pcm_f32"));
+        assert!(swift_capture.contains("aurora_ios_audio_state_reset"));
+        assert!(swift_capture.contains("setActive(false"));
+
+        let voice_header = include_str!(
+            "../ios/AuroraNativePlugin/Sources/CAuroraIOSVoiceBridge/include/aurora_ios_voice_bridge.h"
+        );
+        assert!(voice_header.contains("aurora_ios_audio_state_push_pcm_f32"));
+        assert!(voice_header.contains("AuroraIosAudioStats"));
 
         let swift_entrypoints = include_str!(
             "../ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraEntrypointPayloads.swift"

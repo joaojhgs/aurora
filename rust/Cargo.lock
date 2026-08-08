@@ -112,6 +112,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "aurora-voice-ios-bridge"
+version = "0.1.0"
+
+[[package]]
 name = "aurora-voice-native"
 version = "0.1.0"
 dependencies = [

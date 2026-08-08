@@ -53,6 +53,8 @@ public final class AuroraNativePlugin: Plugin {
     "aurora-local"
   ]
 
+  private let voiceCapture = AuroraIOSVoiceCapture()
+
   private let mobileIntegrations: [[String: Any]] = [
     [
       "platform": "ios",
@@ -462,6 +464,7 @@ public final class AuroraNativePlugin: Plugin {
 
   @objc public func voiceStatus(_ invoke: Invoke) throws {
     let permission = AVAudioSession.sharedInstance().recordPermission
+    let capture = voiceCapture.stats()
     let reason: Any = permission == .granted
       ? NSNull()
       : "iOS microphone capture requires foreground microphone permission, audio consent, and a visible stop control."
@@ -480,9 +483,36 @@ public final class AuroraNativePlugin: Plugin {
         "supportsSiriReplacement": false,
         "consentRequired": true,
         "stopRevokeRequired": true,
+        "captureRunning": capture.running,
+        "queuedChunks": capture.queuedChunks,
+        "acceptedChunks": capture.acceptedChunks,
+        "droppedChunks": capture.droppedChunks,
+        "discontinuities": capture.discontinuities,
         "secretsRedacted": true
       ]
     ])
+  }
+
+  @objc public func voiceForegroundCaptureStart(_ invoke: Invoke) {
+    guard AVAudioSession.sharedInstance().recordPermission == .granted else {
+      invoke.reject("microphone_permission_required")
+      return
+    }
+    do {
+      try voiceCapture.start()
+      invoke.resolve(AuroraNativePlugin.voiceCapturePayload(voiceCapture.stats()))
+    } catch {
+      invoke.reject("capture_unavailable")
+    }
+  }
+
+  @objc public func voiceForegroundCaptureStop(_ invoke: Invoke) {
+    voiceCapture.stop()
+    invoke.resolve(AuroraNativePlugin.voiceCapturePayload(voiceCapture.stats()))
+  }
+
+  @objc public func voiceForegroundCaptureStatus(_ invoke: Invoke) {
+    invoke.resolve(AuroraNativePlugin.voiceCapturePayload(voiceCapture.stats()))
   }
 
   @objc public func notificationStatus(_ invoke: Invoke) throws {
@@ -1004,6 +1034,22 @@ public final class AuroraNativePlugin: Plugin {
       "fallbackProviderId": "local:Orchestrator:llama-cpp",
       "reason": "backend_model_catalog_and_device_model_proof_required",
       "evidenceSource": "ios-native-local-light-adapter",
+      "secretsRedacted": true
+    ]
+  }
+
+  private static func voiceCapturePayload(_ stats: AuroraIOSVoiceCaptureStats) -> [String: Any] {
+    [
+      "available": true,
+      "foregroundOnly": true,
+      "running": stats.running,
+      "queuedChunks": stats.queuedChunks,
+      "acceptedChunks": stats.acceptedChunks,
+      "droppedChunks": stats.droppedChunks,
+      "discontinuities": stats.discontinuities,
+      "rawAudioLogged": false,
+      "backgroundListening": false,
+      "siriReplacement": false,
       "secretsRedacted": true
     ]
   }
