@@ -58,6 +58,7 @@ describe('Android native voice route policy', () => {
 
     expect(kotlin).toContain('activeProfileId')
     expect(syncBody).toContain('candidate.gateway')
+    expect(kotlin).toContain('Both remote-console and mesh-node profiles')
     expect(syncBody).not.toContain('nodeMode =')
     expect(syncBody).not.toContain('runtimeTier =')
     expect(syncBody).not.toContain('VITE_AURORA_RUNTIME_MODE')

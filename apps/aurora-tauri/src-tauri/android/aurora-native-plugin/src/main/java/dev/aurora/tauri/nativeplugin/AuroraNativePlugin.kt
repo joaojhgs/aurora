@@ -1640,8 +1640,10 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     /**
      * Resolve the native voice route from the active runtime profile and the
-     * native peer credential store. This deliberately does not select a role;
-     * it only mirrors the route already selected by onboarding/profile state.
+     * native peer credential store. Both remote-console and mesh-node profiles
+     * may legitimately own a Gateway route. This deliberately does not select
+     * or gate a role; it only mirrors the route already authorized by
+     * onboarding/profile state.
      */
     private fun syncNativeVoiceRoute(): JSObject {
         val profile = activity
