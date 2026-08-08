@@ -840,4 +840,71 @@ mod tests {
         host.acknowledge_drained();
         assert_eq!(play.await.expect("play").sample_count, 2);
     }
+
+    #[tokio::test]
+    async fn audio_output_c_bridge_preserves_chunks_until_capacity_is_sufficient() {
+        let output = aurora_ios_audio_output_new(1);
+        assert!(!output.is_null());
+        let output_ref = unsafe { &mut *output };
+        let context = AudioPlaybackContext {
+            generation: Generation(4),
+            route_revision: RouteRevision(2),
+            started_at: TimestampMicros(200),
+        };
+        let host = output_ref.clone();
+        let mut play = Box::pin(output_ref.play(context, playback_audio(), &|| false));
+        tokio::select! {
+            result = &mut play => panic!("play completed before host acknowledgement: {result:?}"),
+            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
+        }
+        assert_eq!(host.queued_chunks(), 1);
+
+        let mut too_small = [0_i16; 1];
+        let mut sample_count = 0;
+        let mut sample_rate_hz = 0;
+        let mut channels = 0;
+        let mut sequence = 0;
+        let mut final_chunk = 0;
+        assert_eq!(
+            unsafe {
+                aurora_ios_audio_output_drain(
+                    output,
+                    too_small.as_mut_ptr(),
+                    too_small.len(),
+                    &mut sample_count,
+                    &mut sample_rate_hz,
+                    &mut channels,
+                    &mut sequence,
+                    &mut final_chunk,
+                )
+            },
+            AURORA_IOS_AUDIO_BACKPRESSURE
+        );
+
+        let mut samples = [0_i16; 2];
+        assert_eq!(
+            unsafe {
+                aurora_ios_audio_output_drain(
+                    output,
+                    samples.as_mut_ptr(),
+                    samples.len(),
+                    &mut sample_count,
+                    &mut sample_rate_hz,
+                    &mut channels,
+                    &mut sequence,
+                    &mut final_chunk,
+                )
+            },
+            AURORA_IOS_AUDIO_OK
+        );
+        assert_eq!(&samples[..sample_count], &[1, -1]);
+        assert_eq!(
+            (sample_rate_hz, channels, sequence, final_chunk),
+            (16_000, 1, 1, 1)
+        );
+        unsafe { aurora_ios_audio_output_acknowledge(output) };
+        assert_eq!(play.await.expect("play").sample_count, 2);
+        unsafe { aurora_ios_audio_output_close(output) };
+        unsafe { aurora_ios_audio_output_free(output) };
+    }
 }
