@@ -24,6 +24,8 @@ export interface AuroraSurfaceProfileInput {
   userAgent?: string | null | undefined
   nodeMode?: AuroraNodeMode | null | undefined
   runtimeTier?: AuroraRuntimeTier | null | undefined
+  /** The native voice adapter exists, but its route may still be unavailable. */
+  nativeVoicePresent?: boolean | undefined
   nativeVoiceAvailable?: boolean | undefined
 }
 
@@ -157,6 +159,7 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
   const ownsLocalNodeState = nodeMode === 'mesh-node' || usesLocalSidecar
   const isRemoteConsole = !ownsLocalNodeState
   const voiceCapture = getAuroraVoiceCapturePolicy(legacyKind, {
+    nativeVoicePresent: input.nativeVoicePresent === true,
     nativeVoiceAvailable: input.nativeVoiceAvailable === true,
   })
   const usesBrowserVoiceRuntime = physicalKind === 'hosted-web' && !usesNativeShell
@@ -237,7 +240,7 @@ export function shouldShowForSurface(profile: AuroraSurfaceProfile, feature: Aur
 
 export function getAuroraVoiceCapturePolicy(
   kind: LegacyAuroraSurfaceKind,
-  options: { nativeVoiceAvailable?: boolean } = {},
+  options: { nativeVoicePresent?: boolean; nativeVoiceAvailable?: boolean } = {},
 ): AuroraVoiceCapturePolicy {
   switch (kind) {
     case 'desktop-local':
@@ -280,6 +283,17 @@ export function getAuroraVoiceCapturePolicy(
           avoidCoordinatorPushToTalk: true,
           usesBrowserVoiceRuntime: false,
           detail: 'Android push-to-talk uses the device microphone. Hands-free voice is unavailable on this device.'
+        }
+      }
+      if (options.nativeVoicePresent === true) {
+        return {
+          focusedPushToTalkOwner: 'unavailable',
+          wakewordOwner: 'unavailable',
+          wakewordRequiresFocus: true,
+          canUseWebViewVisualizer: false,
+          avoidCoordinatorPushToTalk: true,
+          usesBrowserVoiceRuntime: false,
+          detail: 'Voice capture is unavailable on this device right now.'
         }
       }
       return {

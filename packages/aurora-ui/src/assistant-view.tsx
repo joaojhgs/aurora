@@ -825,7 +825,9 @@ export function AssistantView({
     stopStreamedTtsPlayback()
     stopLocalCapture()
     void cancelNativeDesktopVoice('shutdown')
-    void cancelNativeMobileVoice()
+    if (voiceCaptureStatusRef.current === 'listening' || voiceCaptureStatusRef.current === 'processing') {
+      void cancelNativeMobileVoice({ updateUi: false })
+    }
     const token = browserVoiceOperationTokenRef.current
     browserVoiceOperationTokenRef.current += 1
     void (async () => {
@@ -2841,17 +2843,20 @@ export function AssistantView({
     }
   }
 
-  async function cancelNativeMobileVoice(): Promise<boolean> {
+  async function cancelNativeMobileVoice(options: { updateUi?: boolean } = {}): Promise<boolean> {
     if (!nativeMobileVoice) return false
+    const updateUi = options.updateUi !== false
     try {
       await nativeMobileVoice.cancel()
-      setVoiceCaptureStatus('idle')
+      if (updateUi) setVoiceCaptureStatus('idle')
       activeVoiceSessionRef.current = null
       ownedVoiceSessionIdsRef.current.clear()
       return true
     } catch {
-      setVoiceCaptureStatus('error')
-      setLastError('Voice could not stop cleanly. Try again.')
+      if (updateUi) {
+        setVoiceCaptureStatus('error')
+        setLastError('Voice could not stop cleanly. Try again.')
+      }
       return false
     }
   }

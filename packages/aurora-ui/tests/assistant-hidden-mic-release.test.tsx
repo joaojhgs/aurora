@@ -8,6 +8,7 @@ import { auroraNavSections, navItemSnapshot } from '../src/nav'
 import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from '../src/platform-surface'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import type { NativeDesktopVoicePort, NativeDesktopVoiceStatus } from '../src/native-desktop-voice'
+import type { NativeMobileVoicePort, NativeMobileVoiceStatus } from '../src/native-mobile-voice'
 import type { RouteAvailability } from '../src/shell-data'
 
 const roots: Root[] = []
@@ -181,6 +182,45 @@ describe('Assistant focused WebView microphone policy', () => {
     expect(transcribe).not.toHaveBeenCalled()
     expect(cancel).not.toHaveBeenCalled()
     expect(renderedElementCopy(container)).not.toContain('No microphone audio was captured')
+  })
+
+  it('cancels active Android native voice when the assistant view unmounts', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          surfaceProfile={getAuroraSurfaceProfile({
+            runtimeMode: 'mobile-native',
+            transportKind: 'native-mobile',
+            nativePlatform: 'android',
+            nativeVoicePresent: true,
+            nativeVoiceAvailable: true,
+          })}
+          nativeMobileVoice={nativeMobileVoice}
+        />
+      )
+      await Promise.resolve()
+    })
+    await act(async () => {
+      findButton(container, 'Push to talk').click()
+      await vi.waitFor(() => expect(nativeMobileVoice.start).toHaveBeenCalledTimes(1))
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      root.unmount()
+      await vi.waitFor(() => expect(nativeMobileVoice.cancel).toHaveBeenCalledTimes(1))
+    })
+
+    expect(nativeMobileVoice.cancel).toHaveBeenCalledTimes(1)
   })
 
   it('stops focused push-to-talk media tracks when the thin shell is hidden', async () => {
@@ -647,6 +687,36 @@ function createNativeDesktopVoicePort(): NativeDesktopVoicePort & {
     })
   }
   return port
+}
+
+function createNativeMobileVoicePort(): NativeMobileVoicePort & {
+  status: ReturnType<typeof vi.fn>
+  start: ReturnType<typeof vi.fn>
+  finish: ReturnType<typeof vi.fn>
+  cancel: ReturnType<typeof vi.fn>
+} {
+  const port = {
+    status: vi.fn(async () => nativeMobileStatus('idle', true)),
+    start: vi.fn(async () => nativeMobileStatus('listening', true)),
+    startBackground: vi.fn(async () => nativeMobileStatus('idle', true)),
+    finish: vi.fn(async () => nativeMobileStatus('processing', true)),
+    cancel: vi.fn(async () => nativeMobileStatus('idle', true)),
+  }
+  return port
+}
+
+function nativeMobileStatus(
+  phase: NativeMobileVoiceStatus['phase'],
+  available: boolean,
+): NativeMobileVoiceStatus {
+  return {
+    available,
+    phase,
+    running: phase === 'listening' || phase === 'processing',
+    captureActive: phase === 'listening',
+    reasonCode: null,
+    redacted: true,
+  }
 }
 
 function nativeStatus(

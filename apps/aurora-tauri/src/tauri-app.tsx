@@ -456,6 +456,27 @@ export function AuroraTauriApp({
     useState<AndroidForegroundRuntimeStatus | null>(null);
   const [androidMediaPolicy, setAndroidMediaPolicy] =
     useState<AndroidMediaPolicyStatus | null>(null);
+  const [nativeMobileVoiceAvailable, setNativeMobileVoiceAvailable] =
+    useState(false);
+
+  useEffect(() => {
+    const nativeMobileVoice = runtime.nativeMobileVoice;
+    if (!nativeMobileVoice) {
+      setNativeMobileVoiceAvailable(false);
+      return;
+    }
+    let active = true;
+    void nativeMobileVoice.status()
+      .then((status) => {
+        if (active) setNativeMobileVoiceAvailable(status.available);
+      })
+      .catch(() => {
+        if (active) setNativeMobileVoiceAvailable(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [runtime.nativeMobileVoice]);
 
   useEffect(() => {
     if (runtimeOverride || !requiresAsyncAuroraTauriBootstrap()) return;
@@ -789,7 +810,8 @@ export function AuroraTauriApp({
     nativePlatform: snapshot.nativePlatform,
     nodeMode: runtime.nodeMode,
     runtimeTier: runtime.runtimeTier,
-    nativeVoiceAvailable: runtime.nativeMobileVoice !== undefined,
+    nativeVoicePresent: runtime.nativeMobileVoice !== undefined,
+    nativeVoiceAvailable: nativeMobileVoiceAvailable,
     userAgent:
       typeof window === "undefined" ? undefined : window.navigator.userAgent,
   });
