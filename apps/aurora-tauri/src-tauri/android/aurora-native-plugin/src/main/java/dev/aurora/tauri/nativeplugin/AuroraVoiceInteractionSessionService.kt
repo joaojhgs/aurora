@@ -18,6 +18,10 @@ private class AuroraVoiceInteractionSession(
 ) : VoiceInteractionSession(context) {
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            hide()
+            return
+        }
         val roleManager = context.getSystemService(RoleManager::class.java)
         if (roleManager?.isRoleHeld(RoleManager.ROLE_ASSISTANT) != true) {
             hide()

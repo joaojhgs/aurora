@@ -373,7 +373,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         }
 
         val roleManager = roleManagerOrNull()
-        if (roleManager == null) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || roleManager == null) {
             val ret = JSObject()
             ret.put("started", false)
             ret.put("status", status)
@@ -997,8 +997,16 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private fun assistantRoleStatusObject(): JSObject {
         val sdkSupportsRole = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
         val roleManager = roleManagerOrNull()
-        val roleAvailable = roleManager?.isRoleAvailable(RoleManager.ROLE_ASSISTANT) == true
-        val roleHeld = roleManager?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true
+        val roleAvailable = if (sdkSupportsRole) {
+            roleManager?.isRoleAvailable(RoleManager.ROLE_ASSISTANT) == true
+        } else {
+            false
+        }
+        val roleHeld = if (sdkSupportsRole) {
+            roleManager?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true
+        } else {
+            false
+        }
         val handlesAssistActivity = packageHandlesAssist()
         val declaresVoiceInteractionService = packageDeclaresVoiceInteractionService()
         val packageQualified = handlesAssistActivity && declaresVoiceInteractionService
@@ -1007,7 +1015,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
         val ret = JSObject()
         ret.put("platform", "android")
-        ret.put("roleName", RoleManager.ROLE_ASSISTANT)
+        ret.put("roleName", if (sdkSupportsRole) RoleManager.ROLE_ASSISTANT else "android.app.role.ASSISTANT")
         ret.put("sdkSupportsRole", sdkSupportsRole)
         ret.put("handlesAssistActivity", handlesAssistActivity)
         ret.put("declaresVoiceInteractionService", declaresVoiceInteractionService)

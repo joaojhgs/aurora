@@ -391,6 +391,7 @@ private class AuroraAudioPlayback(
 }
 
 private class AuroraAudioCapture(
+    private val context: Context,
     private val bridge: AuroraPcmIngressBridge,
     private val onSnapshot: (AuroraVoiceCaptureSnapshot) -> Unit,
     private val closeBridgeOnClose: Boolean = true,
@@ -404,6 +405,10 @@ private class AuroraAudioCapture(
 
     fun start(): Boolean {
         if (!running.compareAndSet(false, true)) return true
+        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            fail("microphone_permission_missing")
+            return false
+        }
         val minimumBuffer = AudioRecord.getMinBufferSize(
             SAMPLE_RATE_HZ,
             AudioFormat.CHANNEL_IN_MONO,
@@ -604,7 +609,7 @@ class AuroraVoiceForegroundService : Service() {
                 }
             }
             val ingress = session ?: AuroraNativeAudioBridge()
-            capture = AuroraAudioCapture(ingress, { snapshot ->
+            capture = AuroraAudioCapture(this, ingress, { snapshot ->
                 captureSnapshot = snapshot
                 updateNotification(snapshot)
             }, closeBridgeOnClose = session == null)
