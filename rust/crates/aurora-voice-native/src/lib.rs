@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 mod android_capture;
+mod android_playback;
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
 mod audio;
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
@@ -19,6 +20,7 @@ pub use android_capture::{
     AndroidAudioInput, AndroidCaptureControl, AndroidPcmChunk, AndroidPcmIngress,
     AndroidPcmIngressStats, AndroidPcmPushResult,
 };
+pub use android_playback::{AndroidAudioOutput, AndroidPcmPlaybackChunk};
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
 pub use audio::{CpalAudioOutput, NativeAudioConfig, NativeAudioStatus};
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
