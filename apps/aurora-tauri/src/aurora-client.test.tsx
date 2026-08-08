@@ -29,6 +29,7 @@ import {
   encodeMeshInviteToken,
   webRtcProfileFromInvite,
   type BrowserWebRtcSnapshot,
+  type NativeDesktopVoicePort,
 } from "@aurora/ui";
 import {
   MemoryLocalDataBackend,
@@ -2527,7 +2528,7 @@ describe("Tauri CI/E2E route gates", () => {
     }
   });
 
-  it("e2e:assistant projects realtime voice partials into the composer textbox with recorder above it", async () => {
+  it("e2e:assistant does not project coordinator voice events into the installed desktop composer", async () => {
     const transport = assistantGatewayTransport();
     transport.register(ORCHESTRATOR_MODEL_METHODS.getRuntime, () =>
       cloneFixture(modelRuntimeCatalogFixture),
@@ -2564,23 +2565,18 @@ describe("Tauri CI/E2E route gates", () => {
     window.history.replaceState({}, "", "/");
     const mounted = await mountOutcomeApp(runtime);
     try {
-      await waitUntil(() => {
-        const textarea =
-          mounted.container.querySelector<HTMLTextAreaElement>(
-            "#assistant-prompt",
-          );
-        const recorder = mounted.container.querySelector<HTMLElement>(
+      await new Promise((resolve) => window.setTimeout(resolve, 25));
+      const textarea = mounted.container.querySelector<HTMLTextAreaElement>(
+        "#assistant-prompt",
+      );
+      expect(textarea?.value).toBe("");
+      expect(
+        mounted.container.querySelector<HTMLElement>(
           ".aui-composer-recorder-row",
-        );
-        expect(textarea?.value).toBe("what is the weather");
-        expect(textarea?.readOnly).toBe(true);
-        expect(recorder).not.toBeNull();
-        expect(recorder!.compareDocumentPosition(textarea!)).toBe(
-          Node.DOCUMENT_POSITION_FOLLOWING,
-        );
-      });
+        ),
+      ).toBeNull();
       writeOutcomeArtifact(
-        "assistant-voice-partial-textbox-recorder-above",
+        "assistant-voice-partial-not-projected-in-desktop-native",
         mounted.container.innerHTML,
       );
     } finally {
@@ -2639,7 +2635,7 @@ describe("Tauri CI/E2E route gates", () => {
     }
   });
 
-  it("e2e:assistant push-to-talk tries focused WebView capture and falls back to local STT in Tauri local mode", async () => {
+  it("e2e:assistant push-to-talk uses the installed desktop voice port in Tauri local mode", async () => {
     const transport = new RecordingMockAuroraTransport();
     transport.register(GATEWAY_METHODS.health, () => ({ status: "healthy" }));
     transport.register(GATEWAY_METHODS.getCapabilityCatalog, () =>
@@ -2651,17 +2647,61 @@ describe("Tauri CI/E2E route gates", () => {
     transport.register(ORCHESTRATOR_MODEL_METHODS.getRuntime, () =>
       cloneFixture(modelRuntimeCatalogFixture),
     );
-    transport.register(STT_METHODS.listen, (request) => ({
-      success: true,
-      session_id:
-        (request.payload as { session_id?: string } | undefined)?.session_id ??
-        "voice-test-session",
-    }));
+    const nativeCalls = { start: 0, finish: 0, cancel: 0 };
+    const nativeVoice: NativeDesktopVoicePort = {
+      status: async () => ({
+        available: true,
+        phase: "idle",
+        generation: null,
+        backgroundEligible: false,
+        connection: "this_device",
+        reasonCode: null,
+        redacted: true,
+      }),
+      start: async () => {
+        nativeCalls.start += 1;
+        return {
+          available: true,
+          phase: "listening",
+          generation: 1,
+          backgroundEligible: false,
+          connection: "this_device",
+          reasonCode: null,
+          redacted: true,
+        };
+      },
+      finish: async () => {
+        nativeCalls.finish += 1;
+        return {
+          available: true,
+          phase: "processing",
+          generation: 1,
+          backgroundEligible: false,
+          connection: "this_device",
+          reasonCode: null,
+          redacted: true,
+        };
+      },
+      cancel: async () => {
+        nativeCalls.cancel += 1;
+        return {
+          available: true,
+          phase: "idle",
+          generation: null,
+          backgroundEligible: false,
+          connection: "this_device",
+          reasonCode: null,
+          redacted: true,
+        };
+      },
+      subscribe: async () => () => undefined,
+    };
     const runtime = {
       ...testRuntime(
         new Aurora({ transport: tauriLocalTransportProxy(transport) }),
       ),
       mode: "desktop-local" as const,
+      nativeVoice,
       sidecarStatus: async () => ({
         running: true,
         mode: "threads",
@@ -2683,7 +2723,8 @@ describe("Tauri CI/E2E route gates", () => {
       });
       await clickButtonByLabel(mounted.container, "Push to talk");
       await waitUntil(() => {
-        expect(requestMethods(transport)).toContain(STT_METHODS.listen);
+        expect(nativeCalls.start).toBe(1);
+        expect(requestMethods(transport)).not.toContain(STT_METHODS.listen);
         expect(mounted.container.textContent).toContain("Stop listening");
       });
     } finally {
