@@ -462,8 +462,8 @@ export function AuroraTauriApp({
 
   useEffect(() => {
     const nativeMobileVoice = runtime.nativeMobileVoice;
+    setNativeMobileVoiceAvailable(false);
     if (!nativeMobileVoice) {
-      setNativeMobileVoiceAvailable(false);
       return;
     }
     let active = true;

@@ -9570,6 +9570,8 @@ mod tests {
             "isConfigured",
             "VOICE_GATEWAY_KEY",
             "VOICE_BEARER_KEY",
+            "VOICE_GENERIC_GATEWAY_KEY",
+            "VOICE_GENERIC_BEARER_KEY",
             "VOICE_REMOTE_AUDIO_CONSENT_KEY",
             "setRemoteAudioConsent",
             "toBooleanStrictOrNull",
