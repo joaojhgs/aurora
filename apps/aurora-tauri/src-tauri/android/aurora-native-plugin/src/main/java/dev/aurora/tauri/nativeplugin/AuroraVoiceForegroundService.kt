@@ -7,6 +7,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioFormat
@@ -19,7 +20,15 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import org.json.JSONObject
+import java.security.KeyStore
 import java.util.concurrent.atomic.AtomicBoolean
+import javax.crypto.Cipher
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 
 private const val AURORA_VOICE_CHANNEL_ID = "aurora_voice_capture"
 private const val AURORA_VOICE_NOTIFICATION_ID = 4203
@@ -28,6 +37,72 @@ private const val CHANNEL_COUNT = 1
 private const val QUEUE_CAPACITY_CHUNKS = 8
 private const val MAX_CHUNK_SAMPLES = 4_096
 private const val AUDIO_SOURCE = MediaRecorder.AudioSource.VOICE_RECOGNITION
+private const val VOICE_SECURE_STORAGE_PREFS = "aurora_secure_storage"
+private const val VOICE_SECURE_STORAGE_KEY_ALIAS = "aurora_secure_storage_v1"
+private const val VOICE_SECURE_STORAGE_KEYSTORE = "AndroidKeyStore"
+private const val VOICE_SECURE_STORAGE_TRANSFORMATION = "AES/GCM/NoPadding"
+private const val VOICE_SECURE_STORAGE_TAG_BITS = 128
+private const val VOICE_GATEWAY_KEY = "aurora.voice.gateway"
+private const val VOICE_BEARER_KEY = "aurora.voice.bearer"
+
+private data class AuroraVoiceNativeConfig(
+    val gateway: String,
+    val bearer: String,
+    val remoteAudioConsent: Boolean,
+)
+
+private object AuroraVoiceNativeConfigStore {
+    fun load(context: Context): AuroraVoiceNativeConfig? {
+        val prefs = context.getSharedPreferences(VOICE_SECURE_STORAGE_PREFS, Context.MODE_PRIVATE)
+        val gateway = prefs.getString(VOICE_GATEWAY_KEY, null)?.let(::decrypt) ?: return null
+        val bearer = prefs.getString(VOICE_BEARER_KEY, null)?.let(::decrypt).orEmpty()
+        if (gateway.isBlank()) return null
+        val uri = runCatching { android.net.Uri.parse(gateway) }.getOrNull() ?: return null
+        val loopback = uri.host == "127.0.0.1" || uri.host == "localhost" || uri.host == "::1"
+        if (uri.scheme != "https" && !(uri.scheme == "http" && loopback)) return null
+        return AuroraVoiceNativeConfig(gateway, bearer, bearer.isNotEmpty())
+    }
+
+    private fun decrypt(encoded: String): String? = runCatching {
+        val payload = JSONObject(encoded)
+        val iv = Base64.decode(payload.getString("iv"), Base64.NO_WRAP)
+        val ciphertext = Base64.decode(payload.getString("ciphertext"), Base64.NO_WRAP)
+        val cipher = Cipher.getInstance(VOICE_SECURE_STORAGE_TRANSFORMATION)
+        cipher.init(
+            Cipher.DECRYPT_MODE,
+            secureStorageKey(),
+            GCMParameterSpec(VOICE_SECURE_STORAGE_TAG_BITS, iv),
+        )
+        String(cipher.doFinal(ciphertext), Charsets.UTF_8)
+    }.getOrNull()
+
+    private fun secureStorageKey(): SecretKey {
+        val keyStore = KeyStore.getInstance(VOICE_SECURE_STORAGE_KEYSTORE).apply { load(null) }
+        (keyStore.getKey(VOICE_SECURE_STORAGE_KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        val keyGenerator = javax.crypto.KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, VOICE_SECURE_STORAGE_KEYSTORE)
+        keyGenerator.init(
+            KeyGenParameterSpec.Builder(
+                VOICE_SECURE_STORAGE_KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setRandomizedEncryptionRequired(true)
+                .build(),
+        )
+        return keyGenerator.generateKey()
+    }
+}
+
+private interface AuroraPcmIngressBridge : AutoCloseable {
+    fun pushPcm(samples: ShortArray, sampleCount: Int, sequence: Long): Int
+    fun drainOne(): Int
+    fun stats(): LongArray
+}
+
+private interface AuroraPcmOutputBridge : AutoCloseable {
+    fun drainPcm(): ShortArray
+}
 
 data class AuroraVoiceCaptureSnapshot(
     val captureActive: Boolean,
@@ -41,16 +116,16 @@ data class AuroraVoiceCaptureSnapshot(
 )
 
 /** JNI handle for the bounded Rust-owned PCM ingress queue. */
-private class AuroraNativeAudioBridge : AutoCloseable {
+private class AuroraNativeAudioBridge : AuroraPcmIngressBridge {
     private var handle: Long = nativeCreate(QUEUE_CAPACITY_CHUNKS, MAX_CHUNK_SAMPLES)
 
-    fun pushPcm(samples: ShortArray, sampleCount: Int, sequence: Long): Int {
+    override fun pushPcm(samples: ShortArray, sampleCount: Int, sequence: Long): Int {
         val current = handle
         if (current == 0L || sampleCount !in 1..samples.size) return -1
         return nativePushPcm(current, samples, sampleCount, sequence)
     }
 
-    fun drainOne(): Int {
+    override fun drainOne(): Int {
         val current = handle
         return if (current == 0L) 0 else nativeDrainOne(current)
     }
@@ -60,7 +135,7 @@ private class AuroraNativeAudioBridge : AutoCloseable {
         return if (current == 0L) ShortArray(0) else nativeDrainPcm(current)
     }
 
-    fun stats(): LongArray {
+    override fun stats(): LongArray {
         val current = handle
         return if (current == 0L) LongArray(6) { 0 } else nativeStats(current)
     }
@@ -90,10 +165,10 @@ private class AuroraNativeAudioBridge : AutoCloseable {
 }
 
 /** JNI handle for the bounded Rust-native TTS playback queue. */
-private class AuroraNativeAudioOutputBridge : AutoCloseable {
+private class AuroraNativeAudioOutputBridge : AuroraPcmOutputBridge {
     private var handle: Long = nativeCreate(16)
 
-    fun drainPcm(): ShortArray {
+    override fun drainPcm(): ShortArray {
         val current = handle
         return if (current == 0L) ShortArray(0) else nativeDrainPcm(current)
     }
@@ -130,7 +205,7 @@ private class AuroraNativeVoiceSessionBridge(
     gateway: String,
     bearer: String,
     remoteAudioConsent: Boolean,
-) : AutoCloseable {
+) : AuroraPcmIngressBridge, AuroraPcmOutputBridge {
     private var handle: Long = nativeCreate(gateway, bearer, remoteAudioConsent)
 
     fun start(): Long {
@@ -148,21 +223,23 @@ private class AuroraNativeVoiceSessionBridge(
         return if (current == 0L) -1 else nativeCancel(current, generation)
     }
 
-    fun pushPcm(samples: ShortArray, sampleCount: Int, sequence: Long): Int {
+    override fun pushPcm(samples: ShortArray, sampleCount: Int, sequence: Long): Int {
         val current = handle
         if (current == 0L || sampleCount !in 1..samples.size) return -1
         return nativePushPcm(current, samples, sampleCount, sequence)
     }
 
-    fun drainPcm(): ShortArray {
+    override fun drainPcm(): ShortArray {
         val current = handle
         return if (current == 0L) ShortArray(0) else nativeDrainPcm(current)
     }
 
-    fun stats(): LongArray {
+    override fun stats(): LongArray {
         val current = handle
-        return if (current == 0L) LongArray(7) else nativeStats(current)
+        return if (current == 0L) LongArray(11) else nativeStats(current)
     }
+
+    override fun drainOne(): Int = drainPcm().size
 
     override fun close() {
         val current = handle
@@ -192,7 +269,8 @@ private class AuroraNativeVoiceSessionBridge(
 
 /** Native AudioTrack host for Rust-owned TTS chunks; no WebView audio path is used. */
 private class AuroraAudioPlayback(
-    private val bridge: AuroraNativeAudioOutputBridge,
+    private val bridge: AuroraPcmOutputBridge,
+    private val closeBridgeOnClose: Boolean = true,
 ) : AutoCloseable {
     private val running = AtomicBoolean(false)
     private val worker = HandlerThread("aurora-audio-playback")
@@ -255,13 +333,14 @@ private class AuroraAudioPlayback(
         if (worker.state != Thread.State.NEW) {
             runCatching { worker.join() }
         }
-        bridge.close()
+        if (closeBridgeOnClose) bridge.close()
     }
 }
 
 private class AuroraAudioCapture(
-    private val bridge: AuroraNativeAudioBridge,
+    private val bridge: AuroraPcmIngressBridge,
     private val onSnapshot: (AuroraVoiceCaptureSnapshot) -> Unit,
+    private val closeBridgeOnClose: Boolean = true,
 ) : AutoCloseable {
     private val running = AtomicBoolean(false)
     private val worker = HandlerThread("aurora-audio-capture")
@@ -376,7 +455,7 @@ private class AuroraAudioCapture(
         }
         recorder?.release()
         recorder = null
-        bridge.close()
+        if (closeBridgeOnClose) bridge.close()
         publishSnapshot()
     }
 }
@@ -384,6 +463,8 @@ private class AuroraAudioCapture(
 class AuroraVoiceForegroundService : Service() {
     private var capture: AuroraAudioCapture? = null
     private var playback: AuroraAudioPlayback? = null
+    private var session: AuroraNativeVoiceSessionBridge? = null
+    private var sessionGeneration: Long = 0L
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
 
@@ -399,6 +480,7 @@ class AuroraVoiceForegroundService : Service() {
                 }
                 capture?.close()
                 capture = null
+                stopNativeSession()
                 captureSnapshot = emptySnapshot(captureError)
                 updateNotification(captureSnapshot)
                 if (change == AudioManager.AUDIOFOCUS_LOSS) stopSelf()
@@ -418,7 +500,16 @@ class AuroraVoiceForegroundService : Service() {
         running = true
         audioManager = getSystemService(AudioManager::class.java)
         ensureNotificationChannel()
-        playback = AuroraAudioPlayback(AuroraNativeAudioOutputBridge()).also { it.start() }
+        val nativeConfig = AuroraVoiceNativeConfigStore.load(this)
+        session = nativeConfig?.let {
+            AuroraNativeVoiceSessionBridge(it.gateway, it.bearer, it.remoteAudioConsent)
+        }
+        playback = if (session != null) {
+            AuroraAudioPlayback(session!!, closeBridgeOnClose = false)
+        } else {
+            AuroraAudioPlayback(AuroraNativeAudioOutputBridge())
+        }
+        playback?.start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -440,10 +531,19 @@ class AuroraVoiceForegroundService : Service() {
         }
         if (capture == null) {
             captureError = null
-            capture = AuroraAudioCapture(AuroraNativeAudioBridge()) { snapshot ->
+            session?.let { nativeSession ->
+                sessionGeneration = nativeSession.start()
+                if (sessionGeneration == 0L) {
+                    captureError = "voice_runtime_unavailable"
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+            }
+            val ingress = session ?: AuroraNativeAudioBridge()
+            capture = AuroraAudioCapture(ingress, { snapshot ->
                 captureSnapshot = snapshot
                 updateNotification(snapshot)
-            }
+            }, closeBridgeOnClose = session == null)
             if (capture?.start() != true) stopSelf()
         }
         return START_NOT_STICKY
@@ -452,6 +552,7 @@ class AuroraVoiceForegroundService : Service() {
     override fun onDestroy() {
         capture?.close()
         capture = null
+        stopNativeSession()
         playback?.close()
         playback = null
         abandonAudioFocus()
@@ -511,6 +612,16 @@ class AuroraVoiceForegroundService : Service() {
             @Suppress("DEPRECATION")
             manager.abandonAudioFocus(audioFocusListener)
         }
+    }
+
+    private fun stopNativeSession() {
+        val nativeSession = session ?: return
+        if (sessionGeneration != 0L) {
+            nativeSession.cancel(sessionGeneration)
+        }
+        sessionGeneration = 0L
+        nativeSession.close()
+        session = null
     }
 
     private fun updateNotification(snapshot: AuroraVoiceCaptureSnapshot) {

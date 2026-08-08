@@ -397,7 +397,13 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
         return ptr::null_mut();
     };
     let status = session.status();
+    let capture = session.ingress().stats();
     let values = [
+        capture.accepted_chunks as jlong,
+        capture.accepted_samples as jlong,
+        capture.dropped_chunks as jlong,
+        capture.discontinuities as jlong,
+        capture.queued_chunks as jlong,
         if status.active { 1 } else { 0 },
         status.phase as jlong,
         status
@@ -405,7 +411,6 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
             .map_or(0, |generation| generation.0 as jlong),
         status.completed_turns as jlong,
         status.failed_turns as jlong,
-        session.ingress().stats().queued_chunks as jlong,
         session.output().queued_chunks() as jlong,
     ];
     let Ok(array) = env.new_long_array(values.len() as jint) else {
