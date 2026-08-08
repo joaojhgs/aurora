@@ -13,9 +13,11 @@ use std::sync::{
 
 use async_trait::async_trait;
 use aurora_voice_core::{
-    AudioInput, CaptureOwnerKind, Generation, PcmFrame, RouteRevision, TimestampMicros,
-    TransitionReason, VoiceCaptureLease, VoiceCoreError,
+    AudioInput, AudioOutput, AudioPlaybackContext, AudioPlaybackReceipt, CaptureOwnerKind,
+    Generation, PcmFrame, RouteRevision, TimestampMicros, TransitionReason, VoiceCaptureLease,
+    VoiceCoreError,
 };
+use aurora_voice_engine::TtsSynthesisResult;
 use tokio::time::{sleep, Duration};
 
 const DEFAULT_CAPACITY_CHUNKS: usize = 8;
@@ -355,6 +357,194 @@ fn resample_to_runtime_rate(
     Ok(output)
 }
 
+const DEFAULT_OUTPUT_CAPACITY_CHUNKS: usize = 16;
+const MAX_OUTPUT_CAPACITY_CHUNKS: usize = 64;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuroraIosAudioPlaybackChunk {
+    pub samples: Vec<i16>,
+    pub sample_rate_hz: u32,
+    pub channels: u16,
+    pub sequence: u64,
+    pub final_chunk: bool,
+}
+
+#[derive(Debug, Default)]
+struct OutputInner {
+    queue: VecDeque<AuroraIosAudioPlaybackChunk>,
+    active_generation: Option<Generation>,
+    final_sequence: Option<u64>,
+    last_drained: Option<(u64, bool)>,
+    completed_generation: Option<Generation>,
+    closed: bool,
+}
+
+/// Bounded TTS handoff for a future AVAudioEngine/AVAudioPlayer host.
+#[derive(Debug, Clone)]
+pub struct AuroraIosAudioOutput {
+    capacity_chunks: usize,
+    inner: Arc<Mutex<OutputInner>>,
+}
+
+impl AuroraIosAudioOutput {
+    pub fn new(capacity_chunks: usize) -> Self {
+        Self {
+            capacity_chunks: if capacity_chunks == 0 {
+                DEFAULT_OUTPUT_CAPACITY_CHUNKS
+            } else {
+                capacity_chunks.min(MAX_OUTPUT_CAPACITY_CHUNKS)
+            },
+            inner: Arc::new(Mutex::new(OutputInner::default())),
+        }
+    }
+
+    pub fn drain_chunk(&self) -> Option<AuroraIosAudioPlaybackChunk> {
+        let mut inner = self.inner.lock().ok()?;
+        let chunk = inner.queue.pop_front();
+        if let Some(chunk) = &chunk {
+            inner.last_drained = Some((chunk.sequence, chunk.final_chunk));
+        }
+        chunk
+    }
+
+    pub fn acknowledge_drained(&self) {
+        if let Ok(mut inner) = self.inner.lock() {
+            let Some((sequence, final_chunk)) = inner.last_drained.take() else {
+                return;
+            };
+            if final_chunk && inner.final_sequence == Some(sequence) {
+                inner.completed_generation = inner.active_generation;
+                inner.active_generation = None;
+                inner.final_sequence = None;
+            }
+        }
+    }
+
+    pub fn queued_chunks(&self) -> usize {
+        self.inner.lock().map_or(0, |inner| inner.queue.len())
+    }
+
+    pub fn close(&self) {
+        if let Ok(mut inner) = self.inner.lock() {
+            inner.queue.clear();
+            inner.active_generation = None;
+            inner.final_sequence = None;
+            inner.last_drained = None;
+            inner.completed_generation = None;
+            inner.closed = true;
+        }
+    }
+}
+
+#[async_trait(?Send)]
+impl AudioOutput for AuroraIosAudioOutput {
+    async fn play(
+        &mut self,
+        context: AudioPlaybackContext,
+        audio: TtsSynthesisResult,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<AudioPlaybackReceipt, VoiceCoreError> {
+        let (final_sequence, sample_count) = {
+            let mut inner = self
+                .inner
+                .lock()
+                .map_err(|_| VoiceCoreError::LockPoisoned)?;
+            if inner.closed {
+                return Err(VoiceCoreError::BufferClosed);
+            }
+            if inner.active_generation.is_some() {
+                return Err(VoiceCoreError::OwnerAlreadyActive);
+            }
+            if audio.chunks().len() > self.capacity_chunks {
+                return Err(VoiceCoreError::Backpressure);
+            }
+            if cancellation() {
+                return Err(VoiceCoreError::Cancelled);
+            }
+            inner.queue.clear();
+            inner.active_generation = Some(context.generation);
+            inner.completed_generation = None;
+            inner.last_drained = None;
+            inner.final_sequence = None;
+            let mut sample_count = 0_u64;
+            for chunk in audio.chunks() {
+                if cancellation() || chunk.channels() != 1 || chunk.samples().is_empty() {
+                    inner.queue.clear();
+                    inner.active_generation = None;
+                    return Err(if cancellation() {
+                        VoiceCoreError::Cancelled
+                    } else {
+                        VoiceCoreError::Engine(aurora_voice_core::EngineError::InvalidRequest)
+                    });
+                }
+                sample_count = sample_count.saturating_add(chunk.samples().len() as u64);
+                inner.queue.push_back(AuroraIosAudioPlaybackChunk {
+                    samples: chunk.samples().to_vec(),
+                    sample_rate_hz: chunk.sample_rate_hz(),
+                    channels: chunk.channels(),
+                    sequence: chunk.sequence(),
+                    final_chunk: chunk.final_chunk(),
+                });
+            }
+            inner.final_sequence = inner.queue.back().map(|chunk| chunk.sequence);
+            (inner.final_sequence, sample_count)
+        };
+        loop {
+            if cancellation() {
+                self.stop(context.generation, TransitionReason::Cancel)
+                    .await?;
+                return Err(VoiceCoreError::Cancelled);
+            }
+            let (completed, closed) = {
+                let inner = self
+                    .inner
+                    .lock()
+                    .map_err(|_| VoiceCoreError::LockPoisoned)?;
+                (
+                    inner.completed_generation == Some(context.generation),
+                    inner.closed,
+                )
+            };
+            if completed {
+                return Ok(AudioPlaybackReceipt::new(
+                    context,
+                    audio.chunk_count(),
+                    sample_count,
+                    TimestampMicros(
+                        context
+                            .started_at
+                            .0
+                            .saturating_add(sample_count.saturating_mul(1_000_000) / 16_000),
+                    ),
+                ));
+            }
+            if closed || final_sequence.is_none() {
+                return Err(VoiceCoreError::BufferClosed);
+            }
+            sleep(Duration::from_millis(5)).await;
+        }
+    }
+
+    async fn stop(
+        &mut self,
+        generation: Generation,
+        _reason: TransitionReason,
+    ) -> Result<(), VoiceCoreError> {
+        let mut inner = self
+            .inner
+            .lock()
+            .map_err(|_| VoiceCoreError::LockPoisoned)?;
+        if inner.active_generation == Some(generation) {
+            inner.queue.clear();
+            inner.active_generation = None;
+            inner.final_sequence = None;
+            inner.last_drained = None;
+            inner.completed_generation = None;
+        }
+        Ok(())
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn aurora_ios_audio_state_new(
     capacity_chunks: usize,
@@ -518,5 +708,40 @@ mod tests {
         assert_eq!(frame.samples(), &[0.0, 0.5]);
         input.control().finish(Generation(7));
         assert!(input.next_frame().await.expect("finish").is_none());
+    }
+
+    fn playback_audio() -> TtsSynthesisResult {
+        let route =
+            aurora_voice_core::RouteTtsBinding::new("gateway", "voice", 16_000, 1).expect("route");
+        let request = aurora_voice_core::BoundTtsSynthesisRequest::new_route(
+            aurora_voice_core::RouteTtsSynthesisRequest::new(route, None, 2).expect("request"),
+            "hello",
+            aurora_voice_core::TtsSynthesisConfig::new("default", "voice", 16_000, 64, None)
+                .expect("config"),
+        )
+        .expect("bound request");
+        let chunk =
+            aurora_voice_engine::TtsAudioChunk::new(&request, 1, 16_000, 1, vec![1, -1], true)
+                .expect("chunk");
+        TtsSynthesisResult::new(&request, vec![chunk], false).expect("result")
+    }
+
+    #[tokio::test]
+    async fn audio_output_waits_for_host_acknowledgement() {
+        let mut output = AuroraIosAudioOutput::new(1);
+        let host = output.clone();
+        let context = AudioPlaybackContext {
+            generation: Generation(3),
+            route_revision: RouteRevision(1),
+            started_at: TimestampMicros(100),
+        };
+        let mut play = Box::pin(output.play(context, playback_audio(), &|| false));
+        tokio::select! {
+            result = &mut play => panic!("play completed before host acknowledgement: {result:?}"),
+            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
+        }
+        assert_eq!(host.drain_chunk().expect("chunk").samples, vec![1, -1]);
+        host.acknowledge_drained();
+        assert_eq!(play.await.expect("play").sample_count, 2);
     }
 }

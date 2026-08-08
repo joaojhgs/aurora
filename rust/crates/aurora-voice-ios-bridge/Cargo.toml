@@ -11,6 +11,7 @@ crate-type = ["rlib", "staticlib"]
 [dependencies]
 async-trait.workspace = true
 aurora-voice-core = { path = "../aurora-voice-core" }
+aurora-voice-engine = { path = "../aurora-voice-engine" }
 tokio = { workspace = true, features = ["time"] }
 
 [lints]
