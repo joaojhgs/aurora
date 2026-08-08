@@ -306,6 +306,17 @@ export function getAuroraVoiceCapturePolicy(
         detail: 'Android capture is available while Aurora is open in the foreground.'
       }
     case 'ios':
+      if (options.nativeVoiceAvailable === true) {
+        return {
+          focusedPushToTalkOwner: 'mobile-native',
+          wakewordOwner: 'unavailable',
+          wakewordRequiresFocus: true,
+          canUseWebViewVisualizer: false,
+          avoidCoordinatorPushToTalk: true,
+          usesBrowserVoiceRuntime: false,
+          detail: 'iOS push-to-talk uses the device microphone. Hands-free voice is unavailable on this device.'
+        }
+      }
       return {
         focusedPushToTalkOwner: 'unavailable',
         wakewordOwner: 'unavailable',
