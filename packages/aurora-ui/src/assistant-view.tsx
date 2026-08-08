@@ -642,10 +642,12 @@ export function AssistantView({
     setVoiceConsentGrantedState(granted)
   }
 
-  function remoteAudioConsentForCurrentRoute(): boolean | null {
-    const route = voiceModel.remoteAudioRoute
+  function remoteAudioConsentForCurrentRoute(route = voiceModel.remoteAudioRoute): boolean | null {
     if (!requiresRemoteAudioConsent(route)) return false
-    if (voiceConsentGrantedRef.current && voiceConsentRouteKeyRef.current === voiceConsentRouteKey) return true
+    if (
+      voiceConsentGrantedRef.current &&
+      voiceConsentRouteKeyRef.current === remoteAudioConsentRouteKey(route)
+    ) return true
     const message = 'Review connected voice access before starting speech.'
     setLastError(message)
     setVoiceCaptureStatus('idle')
@@ -2709,7 +2711,7 @@ export function AssistantView({
   }
 
   async function startNativeDesktopVoice(): Promise<boolean> {
-    const remoteAudioConsent = remoteAudioConsentForCurrentRoute()
+    const remoteAudioConsent = remoteAudioConsentForCurrentRoute(voiceModel.transcriptionRoute)
     if (remoteAudioConsent === null) return false
     if (!nativeVoice) {
       nativeVoiceStatusRef.current = null
@@ -2869,7 +2871,7 @@ export function AssistantView({
   }
 
   async function startNativeMobileVoice(): Promise<boolean> {
-    const remoteAudioConsent = remoteAudioConsentForCurrentRoute()
+    const remoteAudioConsent = remoteAudioConsentForCurrentRoute(voiceModel.transcriptionRoute)
     if (remoteAudioConsent === null) return false
     if (!nativeMobileVoice) {
       setVoiceCaptureStatus('no-device')
@@ -3293,7 +3295,6 @@ export function AssistantView({
     const sessionId = `voice-${Date.now()}`
     voiceTranscriptPreviewRef.current = ''
     setLastError(null)
-    if (remoteAudioConsentForCurrentRoute() === null) return
     if (usesNativeDesktopVoice) {
       await startNativeDesktopVoice()
       return
@@ -3311,6 +3312,7 @@ export function AssistantView({
       setLastError('Voice is unavailable on this device right now.')
       return
     }
+    if (remoteAudioConsentForCurrentRoute(voiceModel.transcriptionRoute) === null) return
     void interruptTtsForVoiceCapture()
     if (!surfaceProfile.voiceCapture.avoidCoordinatorPushToTalk) {
       await startCoordinatorPushToTalk(sessionId)
@@ -4234,7 +4236,7 @@ export function buildAssistantVoiceModel(input: {
     nativePlatform: input.nativePlatform
   })
   const browserCaptureState = browserCaptureAvailability(surfaceProfile, input.captureStatus)
-  const remoteAudioRoute = remoteAudioRouteFor(transcription, ttsSynthesize, wakeProcess)
+  const remoteAudioRoute = remoteAudioRouteFor(transcription, wakeProcess)
 
   return {
     captureStatus: input.captureStatus,
@@ -5293,7 +5295,7 @@ function isRemoteRouteCandidate(candidate: RouteAvailability['candidateProviders
 function requiresRemoteAudioConsent(route: RouteAvailability): boolean {
   return route.state === 'available-remote' ||
     route.selectorRequired ||
-    route.candidateProviders.some(isRemoteRouteCandidate)
+    (route.state !== 'available-local' && route.candidateProviders.some(isRemoteRouteCandidate))
 }
 
 function remoteAudioConsentRouteKey(route: RouteAvailability): string {

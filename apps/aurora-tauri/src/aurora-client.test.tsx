@@ -2647,7 +2647,12 @@ describe("Tauri CI/E2E route gates", () => {
     transport.register(ORCHESTRATOR_MODEL_METHODS.getRuntime, () =>
       cloneFixture(modelRuntimeCatalogFixture),
     );
-    const nativeCalls = { start: 0, finish: 0, cancel: 0 };
+    const nativeCalls = {
+      start: 0,
+      finish: 0,
+      cancel: 0,
+      startRequests: [] as Array<Parameters<NativeDesktopVoicePort["start"]>[0]>,
+    };
     const nativeVoice: NativeDesktopVoicePort = {
       status: async () => ({
         available: true,
@@ -2658,8 +2663,9 @@ describe("Tauri CI/E2E route gates", () => {
         reasonCode: null,
         redacted: true,
       }),
-      start: async () => {
+      start: async (request) => {
         nativeCalls.start += 1;
+        nativeCalls.startRequests.push(request);
         return {
           available: true,
           phase: "listening",
@@ -2724,6 +2730,12 @@ describe("Tauri CI/E2E route gates", () => {
       await clickButtonByLabel(mounted.container, "Push to talk");
       await waitUntil(() => {
         expect(nativeCalls.start).toBe(1);
+        expect(nativeCalls.startRequests).toEqual([
+          {
+            trigger: "focused_push_to_talk",
+            remoteAudioConsent: false,
+          },
+        ]);
         expect(requestMethods(transport)).not.toContain(STT_METHODS.listen);
         expect(mounted.container.textContent).toContain("Stop listening");
       });

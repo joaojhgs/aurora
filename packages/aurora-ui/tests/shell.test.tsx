@@ -1356,6 +1356,8 @@ describe('Aurora production shell', () => {
     expect(model.chips.find((chip) => chip.id === 'remote-processing')?.state).toBe('available-local')
     expect(model.transcriptionRoute.item.capabilityMethod).toBe('Transcribe')
     expect(model.transcriptionRoute.state).toBe('available-local')
+    expect(model.remoteAudioRoute.item.capabilityMethod).toBe('Transcribe')
+    expect(model.remoteAudioRoute.state).toBe('available-local')
     expect(model.speechRoute.item.capabilityMethod).toBe('Synthesize')
     expect(model.speechRoute.state).toBe('available-remote')
     expect(model.controls.find((control) => control.id === 'remote-transcription')?.reason).toContain('Audio can start')

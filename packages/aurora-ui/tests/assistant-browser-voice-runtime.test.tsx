@@ -556,6 +556,47 @@ describe('Assistant hosted browser voice runtime', () => {
     })
   })
 
+  it('keeps local focused voice local when a connected transcription alternative is available', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeVoice = createNativeDesktopVoicePort()
+    const container = renderAssistant(client, getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-local',
+      transportKind: 'tauri-local',
+      nativePlatform: 'linux'
+    }), nativeVoice, { voiceRoutes: localVoiceRoutesWithRemoteAlternative('studio') })
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(nativeVoice.start).toHaveBeenCalledTimes(1), { timeout: 5_000 })
+
+    expect(nativeVoice.start).toHaveBeenCalledWith({
+      trigger: 'focused_push_to_talk',
+      remoteAudioConsent: false
+    })
+  })
+
+  it('blocks a privacy-limited connected transcription candidate before native start', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeVoice = createNativeDesktopVoicePort()
+    const routes = remoteVoiceRoutes('studio')
+    routes.transcription = {
+      ...routes.transcription,
+      state: 'privacy-blocked',
+      selectorRequired: false,
+      disabled: true
+    }
+    const container = renderAssistant(client, getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-thin',
+      transportKind: 'tauri-thin',
+      nativePlatform: 'linux'
+    }), nativeVoice, { voiceRoutes: routes })
+
+    await clickButton(container, 'Push to talk')
+    await act(async () => { await Promise.resolve() })
+
+    expect(nativeVoice.start).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Review connected voice access before starting speech.')
+  })
+
   it('blocks connected speech capture before native start until the user explicitly allows it', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const nativeVoice = createNativeDesktopVoicePort()
@@ -1064,6 +1105,36 @@ function remoteVoiceRoutes(peerId: string): AssistantVoiceRoutes {
     wakeControl: remote,
     ttsSynthesize: remoteAudioRoute(peerId, 'voice-tts-synthesize', 'TTS synthesis', 'personal'),
     ttsStop: remoteAudioRoute(peerId, 'voice-tts-stop', 'TTS playback stop', 'personal')
+  }
+}
+
+function localVoiceRoutesWithRemoteAlternative(peerId: string): AssistantVoiceRoutes {
+  const routes = remoteVoiceRoutes(peerId)
+  const remoteCandidate = routes.transcription.candidateProviders[0]!
+  return {
+    ...routes,
+    transcription: {
+      ...routes.transcription,
+      state: 'available-local',
+      providerLabel: 'This device',
+      candidateProviders: [
+        {
+          ...remoteCandidate,
+          id: 'local:Transcription',
+          providerId: 'local:Transcription',
+          providerKind: 'local',
+          peerId: null,
+          nodeName: 'This device',
+          serviceInstanceId: 'transcription-local',
+          label: 'This device',
+          state: 'available-local',
+          reason: 'available'
+        },
+        remoteCandidate
+      ],
+      selectorRequired: false,
+      disabled: false
+    }
   }
 }
 
