@@ -460,6 +460,14 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     fun startVoiceForegroundService(invoke: Invoke) {
         val args = invoke.parseArgs(AndroidVoiceForegroundServiceStartArgs::class.java)
         val status = voiceForegroundServiceStatusObject()
+        if (args.backgroundSession) {
+            val ret = JSObject()
+            ret.put("started", false)
+            ret.put("status", status)
+            ret.put("reason", "background_voice_unavailable")
+            invoke.resolve(ret)
+            return
+        }
         if (!status.getBoolean("startable")) {
             val ret = JSObject()
             ret.put("started", false)

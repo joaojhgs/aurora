@@ -33,6 +33,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 private const val AURORA_VOICE_CHANNEL_ID = "aurora_voice_capture"
 private const val AURORA_VOICE_NOTIFICATION_ID = 4203
+private const val BACKGROUND_VOICE_AVAILABLE = false
 private const val SAMPLE_RATE_HZ = 16_000
 private const val CHANNEL_COUNT = 1
 private const val QUEUE_CAPACITY_CHUNKS = 8
@@ -582,6 +583,11 @@ class AuroraVoiceForegroundService : Service() {
         }
         val backgroundSession = intent?.action == ACTION_START_BACKGROUND ||
             intent?.action == ACTION_START_ASSISTANT
+        if (backgroundSession && !BACKGROUND_VOICE_AVAILABLE) {
+            captureError = "background_voice_unavailable"
+            stopSelf()
+            return START_NOT_STICKY
+        }
         running = true
         startForeground(AURORA_VOICE_NOTIFICATION_ID, foregroundNotification("Starting microphone…"))
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {

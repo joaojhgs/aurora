@@ -9524,6 +9524,7 @@ mod tests {
         assert!(plugin.contains("if (scheme != \"https\") return null"));
         assert!(plugin.contains("origin.contains(\"*\")"));
         assert!(plugin.contains("backgroundWakeword",));
+        assert!(plugin.contains("background_voice_unavailable"));
         assert!(!plugin.contains(r#"rawBearerToken", record.getString"#));
         for invariant in [
             "validateLocalDataId(\"profileId\", profileId)",
@@ -9657,6 +9658,8 @@ mod tests {
             assert!(rust_source.contains(command), "{command}");
         }
         assert!(plugin.contains("backendAudioEvidenceRequired"));
+        assert!(service.contains("BACKGROUND_VOICE_AVAILABLE = false"));
+        assert!(service.contains("background_voice_unavailable"));
         for required in [
             "VoiceInteractionSessionService",
             "AuroraVoiceInteractionSession",
