@@ -4,7 +4,7 @@ import type {
   NativeMobileVoiceStatus,
 } from "@aurora/ui";
 
-type NativeInvoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+type NativeInvoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
 export function createTauriNativeAndroidVoicePort(
   invoke: NativeInvoke,

@@ -458,6 +458,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun startVoiceForegroundService(invoke: Invoke) {
+        val args = invoke.parseArgs(AndroidVoiceForegroundServiceStartArgs::class.java)
         val status = voiceForegroundServiceStatusObject()
         if (!status.getBoolean("startable")) {
             val ret = JSObject()
@@ -467,6 +468,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             invoke.resolve(ret)
             return
         }
+
+        AuroraVoiceNativeConfigStore.setRemoteAudioConsent(activity, args.remoteAudioConsent)
 
         val intent = Intent(activity, AuroraVoiceForegroundService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -2464,6 +2467,11 @@ class AssistantRoleResultArgs {
 @InvokeArg
 class AndroidPermissionRequestArgs {
     var permission: String = ""
+}
+
+@InvokeArg
+class AndroidVoiceForegroundServiceStartArgs {
+    var remoteAudioConsent: Boolean = false
 }
 
 @InvokeArg

@@ -45,14 +45,15 @@ private const val VOICE_SECURE_STORAGE_TRANSFORMATION = "AES/GCM/NoPadding"
 private const val VOICE_SECURE_STORAGE_TAG_BITS = 128
 private const val VOICE_GATEWAY_KEY = "aurora.voice.gateway"
 private const val VOICE_BEARER_KEY = "aurora.voice.bearer"
+private const val VOICE_REMOTE_AUDIO_CONSENT_KEY = "aurora.voice.remote_audio_consent"
 
-private data class AuroraVoiceNativeConfig(
+data class AuroraVoiceNativeConfig(
     val gateway: String,
     val bearer: String,
     val remoteAudioConsent: Boolean,
 )
 
-private object AuroraVoiceNativeConfigStore {
+object AuroraVoiceNativeConfigStore {
     fun load(context: Context): AuroraVoiceNativeConfig? {
         val prefs = context.getSharedPreferences(VOICE_SECURE_STORAGE_PREFS, Context.MODE_PRIVATE)
         val gateway = prefs.getString(VOICE_GATEWAY_KEY, null)?.let(::decrypt) ?: return null
@@ -61,7 +62,29 @@ private object AuroraVoiceNativeConfigStore {
         val uri = runCatching { android.net.Uri.parse(gateway) }.getOrNull() ?: return null
         val loopback = uri.host == "127.0.0.1" || uri.host == "localhost" || uri.host == "::1"
         if (uri.scheme != "https" && !(uri.scheme == "http" && loopback)) return null
-        return AuroraVoiceNativeConfig(gateway, bearer, bearer.isNotEmpty())
+        val remoteAudioConsent = prefs.getString(VOICE_REMOTE_AUDIO_CONSENT_KEY, null)
+            ?.let { decrypt(it) }
+            ?.toBooleanStrictOrNull()
+            ?: false
+        return AuroraVoiceNativeConfig(gateway, bearer, remoteAudioConsent)
+    }
+
+    fun setRemoteAudioConsent(context: Context, granted: Boolean) {
+        val prefs = context.getSharedPreferences(VOICE_SECURE_STORAGE_PREFS, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString(VOICE_REMOTE_AUDIO_CONSENT_KEY, encrypt(granted.toString()))
+            .apply()
+    }
+
+    private fun encrypt(value: String): String {
+        val cipher = Cipher.getInstance(VOICE_SECURE_STORAGE_TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, secureStorageKey())
+        val iv = cipher.iv
+        val ciphertext = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
+        return JSONObject()
+            .put("iv", Base64.encodeToString(iv, Base64.NO_WRAP))
+            .put("ciphertext", Base64.encodeToString(ciphertext, Base64.NO_WRAP))
+            .toString()
     }
 
     private fun decrypt(encoded: String): String? = runCatching {

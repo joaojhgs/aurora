@@ -3,7 +3,7 @@ import { createTauriNativeAndroidVoicePort } from "./native-android-voice";
 
 describe("native Android voice port", () => {
   it("routes status and turn controls through the foreground service commands", async () => {
-    const invoke = vi.fn(async (command: string) => {
+    const invoke = vi.fn(async (command: string, _args?: Record<string, unknown>): Promise<unknown> => {
       if (command.endsWith("status")) {
         return { startable: true, running: true, captureActive: true };
       }

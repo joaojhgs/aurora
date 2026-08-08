@@ -233,6 +233,12 @@ struct AndroidWebviewMicrophonePermissionDecisionRequest {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct AndroidVoiceForegroundServiceStartRequest {
+    remote_audio_consent: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ThinPeerCredentialSetRequest {
     peer_id: String,
     token_id: String,
@@ -1855,16 +1861,22 @@ async fn aurora_android_voice_foreground_service_status(
 
 #[tauri::command]
 async fn aurora_android_voice_foreground_service_start(
+    request: AndroidVoiceForegroundServiceStartRequest,
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
     #[cfg(target_os = "android")]
     {
-        run_android_plugin_command(native, "startVoiceForegroundService", json!({}))
+        run_android_plugin_command(
+            native,
+            "startVoiceForegroundService",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        )
     }
 
     #[cfg(not(target_os = "android"))]
     {
-        let _ = native;
+        let _ = (request, native);
         Err(AuroraCommandError::UnsupportedFeature(
             "Android voice foreground service start is only available in the Android Tauri shell"
                 .to_string(),
@@ -9550,6 +9562,9 @@ mod tests {
             "AuroraVoiceNativeConfigStore",
             "VOICE_GATEWAY_KEY",
             "VOICE_BEARER_KEY",
+            "VOICE_REMOTE_AUDIO_CONSENT_KEY",
+            "setRemoteAudioConsent",
+            "toBooleanStrictOrNull",
             "sessionGeneration",
             "closeBridgeOnClose",
             "nativeStart",
@@ -9615,6 +9630,9 @@ mod tests {
         ] {
             assert!(plugin.contains(command), "{command}");
         }
+        assert!(plugin.contains("AndroidVoiceForegroundServiceStartArgs"));
+        assert!(rust_source.contains("AndroidVoiceForegroundServiceStartRequest"));
+        assert!(rust_source.contains("serde_json::to_value(&request)"));
         for command in [
             "aurora_android_voice_foreground_service_start",
             "aurora_android_voice_foreground_service_finish",
