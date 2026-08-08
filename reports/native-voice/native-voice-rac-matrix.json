@@ -9,10 +9,10 @@
     "resumedAtUtc": "2026-08-08T22:15:10Z",
     "goalThreadId": "019fd073-38a1-7801-8d62-31ae70d46580",
     "verdict": "active_remediation",
-    "resumeGate": "Phase 4 CPAL evidence is reconciled against Cargo.lock and docs; fix and prove remote-audio consent before advancing later phases.",
+    "resumeGate": "Phase 4 CPAL evidence and Phase 5 remote-audio consent are reconciled; make the Phase 6 shippable-pack decision before advancing later phases.",
     "statusCounts": {
-      "pass": 24,
-      "partial": 22,
+      "pass": 25,
+      "partial": 21,
       "withheld": 6,
       "blocked": 4
     }
@@ -73,7 +73,7 @@
     {"id":"RAC-47","status":"pass","evidence":"iOS background capability remains disabled pending physical/distribution review"},
     {"id":"RAC-48","status":"pass","evidence":"generated contracts, deterministic descriptors, and backend inventory check"},
     {"id":"RAC-49","status":"partial","evidence":"bounded native HTTP/SSE cancellation, reconnect, ordering, timeout, and redaction tests pass; full Gateway turn is open"},
-    {"id":"RAC-50","status":"partial","evidence":"Backend permission and route checks pass; consent is not fully proven because UI call sites send remoteAudioConsent true unconditionally"},
+    {"id":"RAC-50","status":"pass","evidence":"Backend permission and route checks pass; UI focused voice now requires explicit route-scoped connected voice access before sending remoteAudioConsent true, local routes send false, route changes/revoke clear consent, and Android route set/clear removes persisted consent while cleartext is fail-closed outside loopback"},
     {"id":"RAC-51","status":"partial","evidence":"Android/iOS secure-storage source exists; full cross-platform native background credential and model-key runtime proof is absent"},
     {"id":"RAC-52","status":"partial","evidence":"Redaction tests pass; cloned source/embedding/state deletion and import/export/rollback privacy are not proven end to end"},
     {"id":"RAC-53","status":"partial","evidence":"Centralized surface, production-copy, and accessibility tests pass; model/download/voice-management states are not fully implemented"},
@@ -82,7 +82,6 @@
     {"id":"RAC-56","status":"partial","evidence":"unmet physical/performance gates keep affected capabilities false; no policy is weakened"}
   ],
   "globalGaps": [
-    "Desktop and mobile UI call sites send remoteAudioConsent true unconditionally, and Android clearRoute does not clear persisted consent; Android cleartext policy also requires review.",
     "Every Phase 6 production VAD, KWS, STT, and TTS capability is false; no shippable production speech pack is selected.",
     "No full Aurora Gateway request/response voice turn was observed on Waydroid; the headless emulator lane has a Chromium/WebView renderer crash, and the Mobile-MCP transport closed before a complete audit.",
     "Physical ARM64 Android, physical iOS, Windows/macOS signed release, SBOM/store/security review, background endurance, forced TURN, staged rollback, and full Phase 12 mutation evidence remain external, blocked, or incomplete."
