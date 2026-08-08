@@ -27,7 +27,8 @@ public final class AuroraIOSVoicePlayback {
   public func start() throws {
     try queue.sync {
       guard !running else { return }
-      try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.duckOthers])
+      // The capture host configures the shared AVAudioSession category and
+      // route. Do not replace its mode while a microphone tap is active.
       try audioSession.setActive(true)
       let format = AVAudioFormat(
         standardFormatWithSampleRate: 16_000,
