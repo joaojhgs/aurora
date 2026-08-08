@@ -35,12 +35,22 @@ use url::Url;
 #[cfg(target_os = "android")]
 mod android_audio;
 #[cfg(target_os = "ios")]
+mod ios_voice;
+#[cfg(target_os = "ios")]
 use aurora_voice_ios_bridge::*;
 #[cfg(target_os = "ios")]
 #[used]
 static AURORA_IOS_VOICE_BRIDGE_LINK_ANCHOR:
     extern "C" fn(usize, usize) -> *mut aurora_voice_ios_bridge::AuroraIosAudioState =
     aurora_voice_ios_bridge::aurora_ios_audio_state_new;
+#[cfg(target_os = "ios")]
+#[used]
+static AURORA_IOS_VOICE_SESSION_LINK_ANCHOR:
+    unsafe extern "C" fn(
+        *const std::os::raw::c_char,
+        *const std::os::raw::c_char,
+        u32,
+    ) -> *mut aurora_voice_native::IosVoiceSession = ios_voice::aurora_ios_voice_session_new;
 mod local_data_native;
 mod native_voice;
 mod native_webrtc;
@@ -8547,6 +8557,14 @@ mod tests {
         assert!(voice_header.contains("aurora_ios_audio_output_drain"));
         assert!(voice_header.contains("aurora_ios_audio_output_acknowledge"));
         assert!(voice_header.contains("AURORA_IOS_AUDIO_EMPTY"));
+        assert!(voice_header.contains("aurora_ios_voice_session_new"));
+        assert!(voice_header.contains("aurora_ios_voice_session_start_background"));
+        assert!(voice_header.contains("aurora_ios_voice_session_status"));
+        assert!(voice_header.contains("AuroraIosVoiceSessionStatus"));
+        let ios_voice_source = include_str!("ios_voice.rs");
+        assert!(ios_voice_source.contains("aurora_ios_voice_session_new"));
+        assert!(ios_voice_source.contains("remote_audio_consent"));
+        assert!(ios_voice_source.contains("AURORA_IOS_VOICE_OK"));
 
         let swift_entrypoints = include_str!(
             "../ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraEntrypointPayloads.swift"

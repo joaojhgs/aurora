@@ -498,6 +498,7 @@ dependencies = [
  "aurora-contracts",
  "aurora-voice-core",
  "aurora-voice-engine",
+ "aurora-voice-ios-bridge",
  "base64 0.22.1",
  "cpal",
  "crossbeam-queue",

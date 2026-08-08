@@ -6,6 +6,25 @@
 
 typedef struct AuroraIosAudioState AuroraIosAudioState;
 typedef struct AuroraIosAudioOutput AuroraIosAudioOutput;
+typedef struct AuroraIosVoiceSession AuroraIosVoiceSession;
+
+typedef struct AuroraIosVoiceSessionStatus {
+  uint32_t active;
+  int64_t phase;
+  uint32_t has_generation;
+  uint64_t generation;
+  uint64_t completed_turns;
+  uint64_t failed_turns;
+} AuroraIosVoiceSessionStatus;
+
+enum {
+  AURORA_IOS_VOICE_OK = 0,
+  AURORA_IOS_VOICE_INVALID_ARGUMENT = -1,
+  AURORA_IOS_VOICE_UNAVAILABLE = 1,
+  AURORA_IOS_VOICE_ALREADY_ACTIVE = 2,
+  AURORA_IOS_VOICE_NOT_ACTIVE = 3,
+  AURORA_IOS_VOICE_CLOSED = 4,
+};
 
 typedef struct AuroraIosAudioStats {
   uint64_t accepted_chunks;
@@ -54,5 +73,34 @@ int32_t aurora_ios_audio_output_drain(
     uint32_t *out_final_chunk);
 void aurora_ios_audio_output_acknowledge(AuroraIosAudioOutput *output);
 void aurora_ios_audio_output_close(AuroraIosAudioOutput *output);
+
+// `gateway` and `bearer` are copied during this call. The returned session
+// owns its audio queues; borrowed state/output pointers remain valid only
+// until `aurora_ios_voice_session_free` is called.
+AuroraIosVoiceSession *aurora_ios_voice_session_new(
+    const char *gateway,
+    const char *bearer,
+    uint32_t remote_audio_consent);
+void aurora_ios_voice_session_free(AuroraIosVoiceSession *session);
+AuroraIosAudioState *aurora_ios_voice_session_audio_state(
+    AuroraIosVoiceSession *session);
+AuroraIosAudioOutput *aurora_ios_voice_session_output(
+    AuroraIosVoiceSession *session);
+int32_t aurora_ios_voice_session_start(
+    AuroraIosVoiceSession *session,
+    uint64_t *out_generation);
+int32_t aurora_ios_voice_session_start_background(
+    AuroraIosVoiceSession *session,
+    uint64_t *out_generation);
+int32_t aurora_ios_voice_session_finish(
+    AuroraIosVoiceSession *session,
+    uint64_t generation);
+int32_t aurora_ios_voice_session_cancel(
+    AuroraIosVoiceSession *session,
+    uint64_t generation);
+int32_t aurora_ios_voice_session_status(
+    AuroraIosVoiceSession *session,
+    AuroraIosVoiceSessionStatus *out_status);
+void aurora_ios_voice_session_close(AuroraIosVoiceSession *session);
 
 #endif
