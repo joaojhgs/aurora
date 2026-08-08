@@ -32,6 +32,8 @@ use thiserror::Error;
 use tokio::sync::watch;
 use url::Url;
 
+#[cfg(target_os = "android")]
+mod android_audio;
 mod local_data_native;
 mod native_voice;
 mod native_webrtc;
@@ -9358,6 +9360,47 @@ mod tests {
         ] {
             assert!(plugin.contains(invariant), "{invariant}");
         }
+    }
+
+    #[test]
+    fn android_voice_service_owns_audiorecord_and_rust_queue_with_visible_stop() {
+        let service = include_str!(
+            "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraVoiceForegroundService.kt"
+        );
+        let plugin = include_str!(
+            "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt"
+        );
+        let rust_audio = include_str!("android_audio.rs");
+        for required in [
+            "AudioRecord.Builder()",
+            "HandlerThread(\"aurora-audio-capture\")",
+            "ACTION_STOP",
+            ".addAction(Notification.Action.Builder",
+            "System.loadLibrary(\"aurora_tauri_lib\")",
+            "nativePushPcm",
+            "nativeStats",
+            "audio_record_read_failed",
+        ] {
+            assert!(
+                service.contains(required),
+                "missing Android service contract: {required}"
+            );
+        }
+        for required in [
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativeCreate",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativePushPcm",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativeStats",
+            "AUDIO_BACKPRESSURE",
+            "capacity_chunks",
+            "MAX_CHUNK_SAMPLES",
+        ] {
+            assert!(
+                rust_audio.contains(required),
+                "missing Rust audio contract: {required}"
+            );
+        }
+        assert!(plugin.contains("captureBackend"));
+        assert!(plugin.contains("backendAudioEvidenceRequired"));
     }
 
     #[test]

@@ -431,6 +431,7 @@ dependencies = [
  "bytes",
  "getrandom 0.2.17",
  "hmac",
+ "jni 0.21.1",
  "keyring",
  "reqwest 0.12.28",
  "serde",
