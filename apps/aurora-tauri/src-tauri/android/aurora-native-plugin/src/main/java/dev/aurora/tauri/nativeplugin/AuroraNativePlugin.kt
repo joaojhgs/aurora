@@ -1250,7 +1250,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val manifestReady = hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE) &&
             (Build.VERSION.SDK_INT < 34 || hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE_MICROPHONE))
         val nativeSessionReady = AuroraVoiceNativeConfigStore.isConfigured(activity)
-        val startable = microphoneGranted && foregroundServiceReady && manifestReady && nativeSessionReady
+        val notificationReady = canPostNotifications()
+        val startable = microphoneGranted && foregroundServiceReady && manifestReady && notificationReady && nativeSessionReady
         val ret = JSObject()
         ret.put("platform", "android")
         ret.put("running", AuroraVoiceForegroundService.running)
@@ -1267,11 +1268,12 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("startable", startable)
         ret.put("microphoneGranted", microphoneGranted)
         ret.put("notificationsGranted", notificationsGranted)
+        ret.put("notificationReady", notificationReady)
         ret.put("foregroundServiceReady", foregroundServiceReady)
         ret.put("manifestReady", manifestReady)
         ret.put("nativeSessionReady", nativeSessionReady)
-        ret.put("state", voiceForegroundState(startable, manifestReady, microphoneGranted, notificationsGranted, nativeSessionReady))
-        ret.put("reason", voiceForegroundReason(startable, manifestReady, microphoneGranted, notificationsGranted, nativeSessionReady))
+        ret.put("state", voiceForegroundState(startable, manifestReady, microphoneGranted, notificationReady, nativeSessionReady))
+        ret.put("reason", voiceForegroundReason(startable, manifestReady, microphoneGranted, notificationReady, nativeSessionReady))
         ret.put("privacyClass", "raw-audio")
         ret.put("backendAudioEvidenceRequired", !capture.captureActive)
         ret.put("evidenceSource", "android-permission-foreground-service")
@@ -1283,12 +1285,12 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         startable: Boolean,
         manifestReady: Boolean,
         microphoneGranted: Boolean,
-        notificationsGranted: Boolean,
+        notificationReady: Boolean,
         nativeSessionReady: Boolean,
     ): String {
         if (!manifestReady) return "unsupported_platform"
         if (!microphoneGranted) return "needs_native_permission"
-        if (!notificationsGranted) return "degraded"
+        if (!notificationReady) return "degraded"
         if (!nativeSessionReady) return "degraded"
         if (startable) return "available"
         return "degraded"
@@ -1298,12 +1300,12 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         startable: Boolean,
         manifestReady: Boolean,
         microphoneGranted: Boolean,
-        notificationsGranted: Boolean,
+        notificationReady: Boolean,
         nativeSessionReady: Boolean,
     ): String {
         if (!manifestReady) return "foreground_service_manifest_missing"
         if (!microphoneGranted) return "microphone_permission_missing"
-        if (!notificationsGranted) return "notification_permission_missing"
+        if (!notificationReady) return "notification_delivery_unavailable"
         if (!nativeSessionReady) return "native_voice_route_missing"
         if (startable) return "foreground_service_startable"
         return "foreground_service_degraded"

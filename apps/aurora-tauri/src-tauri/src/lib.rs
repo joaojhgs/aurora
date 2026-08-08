@@ -9801,6 +9801,9 @@ mod tests {
         }
         assert!(plugin.contains("captureBackend"));
         assert!(plugin.contains("nativeSessionReady"));
+        assert!(plugin.contains("notificationReady"));
+        assert!(plugin.contains("canPostNotifications()"));
+        assert!(plugin.contains("notification_delivery_unavailable"));
         assert!(plugin.contains("native_voice_route_missing"));
         for command in [
             "startVoiceForegroundService",
