@@ -18,6 +18,7 @@ public enum AuroraIOSVoiceSessionHostError: Error {
 public final class AuroraIOSVoiceSessionHost {
   private var nativeSession: OpaquePointer?
   private var capture: AuroraIOSVoiceCapture?
+  private var playback: AuroraIOSVoicePlayback?
   private let output: OpaquePointer?
 
   public init(
@@ -56,9 +57,14 @@ public final class AuroraIOSVoiceSessionHost {
       borrowingState: state,
       session: audioSession
     )
+    if let output = self.output {
+      self.playback = AuroraIOSVoicePlayback(output: output, audioSession: audioSession)
+    }
   }
 
   deinit {
+    playback?.stop()
+    playback = nil
     capture?.stop()
     // Destroy the Swift audio host while the Rust-owned borrowed queue is
     // still valid, then close and free the opaque Rust session.
@@ -78,7 +84,14 @@ public final class AuroraIOSVoiceSessionHost {
     guard code == AURORA_IOS_VOICE_OK else {
       throw AuroraIOSVoiceSessionHostError.commandFailed(code)
     }
-    return generation
+    do {
+      try capture?.start()
+      try playback?.start()
+      return generation
+    } catch {
+      _ = try? cancel(generation: generation)
+      throw error
+    }
   }
 
   public func startBackground() throws -> UInt64 {
@@ -90,13 +103,21 @@ public final class AuroraIOSVoiceSessionHost {
     guard code == AURORA_IOS_VOICE_OK else {
       throw AuroraIOSVoiceSessionHostError.commandFailed(code)
     }
-    return generation
+    do {
+      try capture?.start()
+      try playback?.start()
+      return generation
+    } catch {
+      _ = try? cancel(generation: generation)
+      throw error
+    }
   }
 
   public func finish(generation: UInt64) throws {
     guard let nativeSession else {
       throw AuroraIOSVoiceSessionHostError.nativeSessionUnavailable
     }
+    capture?.stop()
     let code = aurora_ios_voice_session_finish(nativeSession, generation)
     guard code == AURORA_IOS_VOICE_OK else {
       throw AuroraIOSVoiceSessionHostError.commandFailed(code)
@@ -107,6 +128,8 @@ public final class AuroraIOSVoiceSessionHost {
     guard let nativeSession else {
       throw AuroraIOSVoiceSessionHostError.nativeSessionUnavailable
     }
+    capture?.stop()
+    playback?.stop()
     let code = aurora_ios_voice_session_cancel(nativeSession, generation)
     guard code == AURORA_IOS_VOICE_OK else {
       throw AuroraIOSVoiceSessionHostError.commandFailed(code)

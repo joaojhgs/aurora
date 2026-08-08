@@ -6,6 +6,7 @@ const testDir = dirname(fileURLToPath(import.meta.url))
 const packageRoot = resolve(testDir, '..', '..')
 const sourceRoot = resolve(packageRoot, 'Sources', 'AuroraNativePlugin')
 const sessionHost = readFileSync(resolve(sourceRoot, 'AuroraIOSVoiceSessionHost.swift'), 'utf8')
+const playback = readFileSync(resolve(sourceRoot, 'AuroraIOSVoicePlayback.swift'), 'utf8')
 const capture = readFileSync(resolve(sourceRoot, 'AuroraIOSVoiceCapture.swift'), 'utf8')
 const plugin = readFileSync(resolve(sourceRoot, 'AuroraNativePlugin.swift'), 'utf8')
 const header = readFileSync(
@@ -36,6 +37,11 @@ assert(capture.includes('borrowingState state'), 'capture host must support Rust
 assert(capture.includes('self.ownsState = false'), 'borrowed ingress must not be freed by Swift')
 assert(sessionHost.includes('capture = nil'), 'session host must destroy borrowed audio before Rust free')
 assert(sessionHost.includes('remoteAudioConsent'), 'session host must preserve explicit remote consent')
+assert(playback.includes('aurora_ios_audio_output_drain'), 'playback must drain Rust-owned output')
+assert(playback.includes('aurora_ios_audio_output_acknowledge'), 'playback must acknowledge consumed output')
+assert(playback.includes('AVAudioPlayerNode'), 'playback must use native AVAudioPlayerNode')
+assert(playback.includes('aurora_ios_audio_output_close'), 'playback must close output on stop')
+assert(playback.includes('chunkInFlight'), 'playback must acknowledge one chunk before draining another')
 assert(
   plugin.includes('nativeTurnTransportAvailable = false'),
   'public iOS capability must remain withheld until runtime evidence exists',

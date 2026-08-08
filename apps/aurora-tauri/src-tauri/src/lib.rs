@@ -8553,6 +8553,12 @@ mod tests {
         assert!(swift_session.contains("aurora_ios_voice_session_start"));
         assert!(swift_session.contains("aurora_ios_voice_session_cancel"));
         assert!(swift_session.contains("capture = nil"));
+        let swift_playback = include_str!(
+            "../ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraIOSVoicePlayback.swift"
+        );
+        assert!(swift_playback.contains("aurora_ios_audio_output_drain"));
+        assert!(swift_playback.contains("aurora_ios_audio_output_acknowledge"));
+        assert!(swift_playback.contains("chunkInFlight"));
         let rust_source = include_str!("lib.rs");
         assert!(rust_source.contains("AURORA_IOS_VOICE_BRIDGE_LINK_ANCHOR"));
 
