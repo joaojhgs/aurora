@@ -1,7 +1,7 @@
 # Native voice runtime Phase 4 decision record
 
 **Status:** Current bounded check — Phase 4 architecture frozen
-**Snapshot date:** 2026-08-07
+**Snapshot date:** 2026-08-08
 **Audience:** contributors integrating the cross-surface local voice runtime
 
 This page freezes the Phase 4 native voice runtime engine, audio, linking,
@@ -89,7 +89,7 @@ Moonshine extracted file hashes already recorded for integration:
 | Desktop local | Use Rust host code for model lifecycle and native HTTP/SSE; use CPAL `0.18.1` as the desktop audio capture/playback candidate. | Linux sherpa shared-library build completed. Standalone CPAL capture/playback and Android comparison checks passed; the full integrated local audio path remains pending. |
 | Hosted web and WebView foreground capture | Use browser microphone capture and worker-hosted WASM modules; keep the UI thread nonblocking. | Chromium, Firefox, and WebKit pass worker-hosted VAD, Moonshine ASR, and KWS with COOP/COEP and `SharedArrayBuffer`. KWS uses the selected full GigaSpeech BPE pack and detects `LOVELY CHILD` and `FOREVER`; the smaller mobile pack remains disqualified by the ONNX Runtime reshape abort. TTS is withheld from activation. |
 | Android | Use Kotlin `AudioRecord`/`AudioManager` lifecycle and data plane into Rust with bounded PCM transfer. Treat CPAL/AAudio as comparison only for this phase. | sherpa source-built for `arm64-v8a` and `x86_64` against staged prebuilt ONNX Runtime. All four inspected libraries are ELF-correct and every LOAD segment is `0x4000` aligned. Kotlin audio ingress through JNI into a bounded Rust PCM queue packages for `arm64-v8a` and `x86_64`; the API 35 x86_64 emulator smoke proves synthetic JNI ingress and permission-granted `AudioRecord` frames reaching Rust. WebView parity, durable background voice, physical-device results, and Android sherpa VAD/STT runtime remain pending. |
-| iOS | Use Swift `AVAudioEngine`/`AVAudioSession` lifecycle and data plane into Rust. Treat CPAL/CoreAudio as comparison only for this phase. | A bounded Swift-to-C-to-Rust source spike and host-Rust tests prove the ownership, restart, queue, and FFI shape. Hash-pinned XCFrameworks contain the expected device `arm64`/iOS slice and simulator `arm64`+`x86_64`/iOSSimulator slices. Swift compilation, runtime linking, signing, simulator execution, device microphone behavior, and packaged runtime validation remain pending. |
+| iOS | Use Swift `AVAudioEngine`/`AVAudioSession` lifecycle and data plane into Rust. Treat CPAL/CoreAudio as comparison only for this phase. | The Rust `IosVoiceSession` executor now owns typed Gateway HTTP/SSE STT/TTS transport, generation/cancellation, bounded ingress/egress, and redacted status. Swift owns AVAudioEngine capture, AVAudioPlayerNode playback, Keychain-backed native credentials, PTT finish/cancel, and fail-closed interruption/route/media-reset handling. Hash-pinned XCFrameworks contain the expected device `arm64`/iOS slice and simulator `arm64`+`x86_64`/iOSSimulator slices. Swift compilation, runtime linking, signing, simulator execution, device microphone behavior, and packaged runtime validation remain pending. |
 
 ## Proven, rejected, and pending
 
@@ -100,7 +100,7 @@ Moonshine extracted file hashes already recorded for integration:
 | Android audio-to-Rust ingress | Proven locally on package build and API 35 x86_64 emulator | Kotlin `AudioRecord`/`AudioManager` owns capture lifecycle, a JNI shim calls a narrow Rust C ABI, and Rust `1.88.0` owns bounded PCM queueing, backpressure, discontinuity counting, shutdown, and null-safe FFI. The debug APK includes `classes.dex` plus `arm64-v8a` and `x86_64` JNI libraries. Emulator logcat reported `synthetic result ok=true accepted=2 dropped=0 queued=2` and `capture result ok=true acceptedDelta=11 samplesDelta=17600 dropped=3`. Physical-device runtime remains pending. |
 | Android emulator runtime | Partly proven with software acceleration | API 35 x86_64 boots and runs the Android audio ingress smoke when started without KVM acceleration. API 35 ARM64 remains rejected by QEMU2 on this x86_64 host. Android sherpa VAD/STT runtime and physical-device checks remain pending. |
 | iOS XCFramework slice inspection | Proven locally for downloaded packages | Hash-pinned ONNX Runtime and sherpa XCFrameworks expose device `arm64`/iOS and simulator `arm64`+`x86_64`/iOSSimulator slices. Runtime link, signing, simulator, and physical-device checks remain pending. |
-| iOS audio-to-Rust boundary | Proven as source structure and host-Rust behavior | Swift `AVAudioSession`/`AVAudioEngine` capture feeds a narrow C ABI backed by a Rust `1.88.0` bounded PCM queue. Rust tests prove validation, backpressure, discontinuity accounting, reset, and start-stop-start semantics; structural tests prove the intended Swift call path. Swift/Xcode compilation, linking, simulator execution, and physical microphone behavior are not claimed on this Linux host. |
+| iOS audio-to-Rust/session boundary | Proven as source structure and host-Rust behavior | Swift `AVAudioSession`/`AVAudioEngine` capture and `AVAudioPlayerNode` playback feed a narrow C ABI backed by a Rust `1.88.0` bounded PCM queue and Gateway session executor. Rust tests prove validation, backpressure, discontinuity accounting, reset, generation-safe finish/cancel, transport redaction, and start-stop-start semantics; structural tests prove native credential storage, typed PTT finish, playback acknowledgement, and fail-closed lifecycle handling. Swift/Xcode compilation, linking, simulator execution, and physical microphone behavior are not claimed on this Linux host. |
 | Rust MSRV | Proven and declared for the current lockfile | `cargo +1.88.0 check --locked` passed; older Rust `1.85.1` failed on locked dependency MSRV requirements. Tauri and native CI now pin `1.88.0`. |
 | PocketTTS production use | Rejected | The inspected model pack is non-commercial. Do not ship, auto-download, or advertise it for production. |
 | sherpa-exported Silero VAD | Rejected as default | The byte file is traceable as a k2-fsa-exported Silero v4 derivative, but the exact reproducible export recipe is missing. |
@@ -109,7 +109,7 @@ Moonshine extracted file hashes already recorded for integration:
 | Native HTTP/SSE transport | Proven for a bounded live loopback server | Rust `1.88.0` tests prove ordered event parsing, cancellation, redaction, and bounded non-success bodies, including multibyte input. A live Aurora Gateway process, authentication lifecycle, reconnect, and end-to-end turn remain Phase 5+ work. |
 | WASM linking | Proven locally with the selected split | One combined VAD+Moonshine STT module and one separate KWS module run behind narrow Worker host boundaries; evidence-only TTS remains separate and blocked. The combined module embeds the exact selected upstream Silero file. |
 | WASM parity and browser nonblocking behavior | Proven locally in Chromium, Firefox, and WebKit | All three browsers decoded the Moonshine test WAV to the same JFK phrase and detected `LOVELY CHILD` plus `FOREVER` with the selected full GigaSpeech BPE pack. The modules ran in dedicated Workers with cross-origin isolation and `SharedArrayBuffer`; page timers continued throughout the final fail-closed matrix with measured maximum lag of about `11.30 ms`, `7.32 ms`, and `339.36 ms`, respectively. Final served KWS artifacts are pinned as JavaScript `75c1bac71f4ce8de73bb24c27f3f4d2f7382861447c5f15ccf0a1d1994b9d883`, WASM `950fc0a780d71ebd098fea9f901b06cec23aec8ad422377dc11424b3c967e011`, and data `c2cd5f08b7cecc883b1d592ef79dfd8eb2cc9e88c3f2612ea3b6c07b6cd66cdc`. The smaller mobile KWS archive remains rejected by the ONNX Runtime reshape abort. |
-| iOS runtime evidence | Pending external platform work | Linux source/host tests establish the intended boundary but do not prove Swift compilation, simulator, device, microphone, signing, or App Store readiness. |
+| iOS runtime evidence | Pending external platform work | Linux source/host tests establish the typed native session boundary but do not prove Swift compilation, simulator, device, microphone, signing, or App Store readiness. The public iOS native voice capability remains disabled until those gates pass. |
 
 ## Comparison candidates
 
@@ -132,6 +132,14 @@ audio candidate, Android uses Kotlin `AudioRecord` into Rust, iOS uses Swift
 `AVAudioEngine` into Rust, and pure web uses browser capture with dedicated
 Workers. The selected web linking shape is a combined VAD+STT module plus a
 separate KWS module. Native HTTP/SSE is the initial transport boundary.
+
+The current iOS implementation extends the Phase 4 boundary with a Rust-owned
+native session executor and Swift-owned audio lifecycle: credentials are stored
+in a device-only Keychain item, PTT finish and cancel remain separate commands,
+playback drains acknowledged Rust PCM chunks, and interruptions, unusable route
+changes, and media-services resets cancel the active generation. These are
+source/host-tested integration boundaries only; no Apple runtime or distribution
+claim is made.
 
 The reproducible dependency manifest, native and WASM builds, native callback
 cancellation, browser parity/nonblocking matrix, Rust `1.88.0` pin, Android
