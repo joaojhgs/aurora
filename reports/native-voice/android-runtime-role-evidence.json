@@ -1,7 +1,8 @@
 {
   "$schema": "aurora.android_runtime_role_evidence.v1",
   "capturedAtUtc": "2026-08-08",
-  "integrationHead": "719285d4",
+  "codeEvidenceBaselineHead": "719285d4",
+  "reportCommit": "93225dc5",
   "scope": "Android runtime-role selection and native voice-route mirroring",
   "invariants": {
     "roleSelectedByEnvironment": false,

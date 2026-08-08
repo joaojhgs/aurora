@@ -2,7 +2,8 @@
   "$schema": "aurora.native_voice_rac_matrix.v1",
   "planSha256": "50181a35cd42e12aa33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6",
   "handoffSha256": "70b1b5ebb32c6df0e52c119b2bd73adad79c2611433bd33da7391d6e273fe196",
-  "evidenceBaselineHead": "719285d4",
+  "codeEvidenceBaselineHead": "719285d4",
+  "reportCommit": "932e4ae2",
   "statusVocabulary": {
     "pass": "Current evidence proves the criterion for the claimed scope.",
     "partial": "A bounded subset is proven; the remaining scope is named and not advertised.",
