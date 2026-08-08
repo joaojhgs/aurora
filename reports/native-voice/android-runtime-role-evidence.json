@@ -1,8 +1,8 @@
 {
   "$schema": "aurora.android_runtime_role_evidence.v1",
   "capturedAtUtc": "2026-08-08",
-  "codeEvidenceBaselineHead": "719285d4",
-  "reportCommit": "93225dc5",
+  "codeEvidenceBaselineHead": "c833a41e",
+  "reportCommit": "c833a41e",
   "scope": "Android runtime-role selection and native voice-route mirroring",
   "invariants": {
     "roleSelectedByEnvironment": false,
@@ -12,7 +12,7 @@
   },
   "artifact": {
     "path": "apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk",
-    "sha256": "24c00282399f88cd543f926dea14bc4253292b0a15298f3ccc2661d8224ef9f6",
+    "sha256": "28a1aed66f1d26e1f9fa32ee5e8b91bfc27f4c6232f8f0a0497d17a288005d97",
     "sizeBytes": 344316584,
     "verification": "pnpm --dir apps/aurora-tauri android:verify:client:apk passed"
   },
@@ -76,6 +76,12 @@
       "result": "voice_route_configured",
       "rawCredentialsExposedToWebView": false
     },
+    "maintainedSmoke": {
+      "command": "ANDROID_SERIAL=192.168.240.112:5555 pnpm --dir apps/aurora-tauri android:smoke",
+      "status": "passed",
+      "durationSeconds": 80.97,
+      "apkSha256": "28a1aed66f1d26e1f9fa32ee5e8b91bfc27f4c6232f8f0a0497d17a288005d97"
+    },
     "nativeStatus": {
       "nativeSessionReady": true,
       "startable": true,
@@ -99,7 +105,8 @@
     "command": "ANDROID_SERIAL=emulator-5558 AURORA_ANDROID_TEST_TIMEOUT_MS=600000 AURORA_ANDROID_INSTALL_TIMEOUT_MS=600000 pnpm --dir apps/aurora-tauri android:smoke",
     "installAndLaunch": "passed",
     "scriptedE2e": "failed",
-    "durationSeconds": 136.17,
+    "durationSeconds": 142.62,
+    "apkSha256": "28a1aed66f1d26e1f9fa32ee5e8b91bfc27f4c6232f8f0a0497d17a288005d97",
     "failureClass": "fatal WebView renderer crash",
     "signatures": [
       "crashpad_client_linux.cc(745) Render process",
@@ -122,7 +129,7 @@
     "secretsRedacted": true
   },
   "limitations": [
-    "Waydroid microphone input was silent, so no end-to-end Gateway turn was observed.",
+    "A complete end-to-end Gateway turn was not observed; an earlier Waydroid microphone attempt was silent.",
     "Headless scripted E2E remains blocked by the renderer crash and is not counted as a pass.",
     "Physical ARM64, iOS/macOS, background lifecycle, release signing, and physical TURN/relay evidence remain outstanding."
   ]
