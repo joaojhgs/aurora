@@ -407,6 +407,24 @@ impl AuroraIosAudioOutput {
         chunk
     }
 
+    pub fn drain_into(&self, samples: &mut [i16]) -> Option<(usize, u32, u16, u64, bool)> {
+        let mut inner = self.inner.lock().ok()?;
+        let chunk = inner.queue.front()?;
+        if samples.len() < chunk.samples.len() {
+            return None;
+        }
+        let chunk = inner.queue.pop_front()?;
+        samples[..chunk.samples.len()].copy_from_slice(&chunk.samples);
+        inner.last_drained = Some((chunk.sequence, chunk.final_chunk));
+        Some((
+            chunk.samples.len(),
+            chunk.sample_rate_hz,
+            chunk.channels,
+            chunk.sequence,
+            chunk.final_chunk,
+        ))
+    }
+
     pub fn acknowledge_drained(&self) {
         if let Ok(mut inner) = self.inner.lock() {
             let Some((sequence, final_chunk)) = inner.last_drained.take() else {
@@ -554,6 +572,84 @@ pub extern "C" fn aurora_ios_audio_state_new(
         capacity_chunks,
         max_chunk_samples,
     )))
+}
+
+#[no_mangle]
+pub extern "C" fn aurora_ios_audio_output_new(capacity_chunks: usize) -> *mut AuroraIosAudioOutput {
+    Box::into_raw(Box::new(AuroraIosAudioOutput::new(capacity_chunks)))
+}
+
+/// # Safety
+/// `output` must be null or a pointer returned by `aurora_ios_audio_output_new`
+/// that has not already been freed.
+#[no_mangle]
+pub unsafe extern "C" fn aurora_ios_audio_output_free(output: *mut AuroraIosAudioOutput) {
+    if !output.is_null() {
+        // SAFETY: caller owns the allocation returned by `output_new`.
+        unsafe { drop(Box::from_raw(output)) };
+    }
+}
+
+/// # Safety
+/// `output` and all non-null output pointers must be valid for this call.
+#[no_mangle]
+pub unsafe extern "C" fn aurora_ios_audio_output_drain(
+    output: *mut AuroraIosAudioOutput,
+    samples: *mut i16,
+    sample_capacity: usize,
+    out_sample_count: *mut usize,
+    out_sample_rate_hz: *mut u32,
+    out_channels: *mut u16,
+    out_sequence: *mut u64,
+    out_final_chunk: *mut u32,
+) -> i32 {
+    if output.is_null()
+        || samples.is_null()
+        || out_sample_count.is_null()
+        || out_sample_rate_hz.is_null()
+        || out_channels.is_null()
+        || out_sequence.is_null()
+        || out_final_chunk.is_null()
+    {
+        return AURORA_IOS_AUDIO_INVALID_ARGUMENT;
+    }
+    // SAFETY: pointers are non-null and the caller guarantees the sample capacity.
+    let output = unsafe { &*output };
+    let samples = unsafe { std::slice::from_raw_parts_mut(samples, sample_capacity) };
+    let Some((sample_count, sample_rate_hz, channels, sequence, final_chunk)) =
+        output.drain_into(samples)
+    else {
+        return AURORA_IOS_AUDIO_BACKPRESSURE;
+    };
+    // SAFETY: output pointers were validated non-null and are caller-owned.
+    unsafe {
+        *out_sample_count = sample_count;
+        *out_sample_rate_hz = sample_rate_hz;
+        *out_channels = channels;
+        *out_sequence = sequence;
+        *out_final_chunk = u32::from(final_chunk);
+    }
+    AURORA_IOS_AUDIO_OK
+}
+
+/// # Safety
+/// `output` must be null or a valid output pointer.
+#[no_mangle]
+pub unsafe extern "C" fn aurora_ios_audio_output_acknowledge(output: *mut AuroraIosAudioOutput) {
+    if !output.is_null() {
+        // SAFETY: non-null output pointer is valid by contract.
+        unsafe { &*output }.acknowledge_drained();
+    }
+}
+
+/// # Safety
+/// `output` must be null or a valid output pointer.
+#[no_mangle]
+pub unsafe extern "C" fn aurora_ios_audio_output_close(output: *mut AuroraIosAudioOutput) {
+    if !output.is_null() {
+        // SAFETY: non-null output pointer is valid by contract.
+        unsafe { &*output }.close();
+    }
 }
 
 /// # Safety

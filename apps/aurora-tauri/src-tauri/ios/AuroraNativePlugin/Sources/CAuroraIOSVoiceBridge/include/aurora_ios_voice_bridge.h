@@ -5,6 +5,7 @@
 #include <stddef.h>
 
 typedef struct AuroraIosAudioState AuroraIosAudioState;
+typedef struct AuroraIosAudioOutput AuroraIosAudioOutput;
 
 typedef struct AuroraIosAudioStats {
   uint64_t accepted_chunks;
@@ -38,5 +39,19 @@ void aurora_ios_audio_state_close(AuroraIosAudioState *state);
 int32_t aurora_ios_audio_state_stats(
     AuroraIosAudioState *state,
     AuroraIosAudioStats *out_stats);
+
+AuroraIosAudioOutput *aurora_ios_audio_output_new(uintptr_t capacity_chunks);
+void aurora_ios_audio_output_free(AuroraIosAudioOutput *output);
+int32_t aurora_ios_audio_output_drain(
+    AuroraIosAudioOutput *output,
+    int16_t *samples,
+    uintptr_t sample_capacity,
+    uintptr_t *out_sample_count,
+    uint32_t *out_sample_rate_hz,
+    uint16_t *out_channels,
+    uint64_t *out_sequence,
+    uint32_t *out_final_chunk);
+void aurora_ios_audio_output_acknowledge(AuroraIosAudioOutput *output);
+void aurora_ios_audio_output_close(AuroraIosAudioOutput *output);
 
 #endif

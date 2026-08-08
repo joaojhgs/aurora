@@ -483,6 +483,12 @@ dependencies = [
 [[package]]
 name = "aurora-voice-ios-bridge"
 version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "aurora-voice-core",
+ "aurora-voice-engine",
+ "tokio",
+]
 
 [[package]]
 name = "aurora-voice-native"
