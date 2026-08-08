@@ -3210,6 +3210,11 @@ export function AssistantView({
       await startNativeMobileVoice()
       return
     }
+    if (surfaceProfile.kind === 'ios' && surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'unavailable') {
+      setVoiceCaptureStatus('no-device')
+      setLastError('Voice is unavailable on this device right now.')
+      return
+    }
     void interruptTtsForVoiceCapture()
     if (!surfaceProfile.voiceCapture.avoidCoordinatorPushToTalk) {
       await startCoordinatorPushToTalk(sessionId)

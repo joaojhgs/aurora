@@ -292,6 +292,15 @@ export function getAuroraVoiceCapturePolicy(
         detail: 'Android capture is available while Aurora is open in the foreground.'
       }
     case 'ios':
+      return {
+        focusedPushToTalkOwner: 'unavailable',
+        wakewordOwner: 'unavailable',
+        wakewordRequiresFocus: true,
+        canUseWebViewVisualizer: false,
+        avoidCoordinatorPushToTalk: true,
+        usesBrowserVoiceRuntime: false,
+        detail: 'Voice capture is unavailable on this device right now.'
+      }
     case 'mobile':
       return {
         focusedPushToTalkOwner: 'webview-focused',

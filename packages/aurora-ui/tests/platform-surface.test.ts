@@ -105,6 +105,11 @@ describe('Aurora surface profile regression coverage', () => {
       transportKind: 'native-mobile',
       nativePlatform: 'android',
     })
+    const ios = getAuroraSurfaceProfile({
+      runtimeMode: 'ios-thin',
+      transportKind: 'native-mobile',
+      nativePlatform: 'ios',
+    })
 
     expect(desktopLocal.voiceCapture.focusedPushToTalkOwner).toBe('native-desktop')
     expect(desktopLocal.voiceCapture.wakewordOwner).toBe('unavailable')
@@ -118,6 +123,11 @@ describe('Aurora surface profile regression coverage', () => {
     expect(android.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
     expect(android.voiceCapture.wakewordOwner).toBe('webview-focused')
     expect(android.voiceCapture.detail).toBe('Android capture is available while Aurora is open in the foreground.')
+    expect(ios.voiceCapture.focusedPushToTalkOwner).toBe('unavailable')
+    expect(ios.voiceCapture.wakewordOwner).toBe('unavailable')
+    expect(ios.voiceCapture.canUseWebViewVisualizer).toBe(false)
+    expect(ios.voiceCapture.usesBrowserVoiceRuntime).toBe(false)
+    expect(findForbiddenProductionCopyTerms(ios.voiceCapture.detail)).toEqual([])
   })
 
   it('keeps mobile browsers on the hosted web runtime when web mode is explicit', () => {

@@ -52,6 +52,47 @@ describe('Assistant focused WebView microphone policy', () => {
     expect(voiceResponses).not.toHaveBeenCalled()
   })
 
+  it('does not fall back to WebView microphone capture on iOS before native voice is ready', async () => {
+    const getUserMedia = vi.fn()
+    const mediaRecorder = vi.fn()
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia }
+    })
+    vi.stubGlobal('MediaRecorder', mediaRecorder)
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          surfaceProfile={getAuroraSurfaceProfile({
+            runtimeMode: 'ios-thin',
+            transportKind: 'native-mobile',
+            nativePlatform: 'ios'
+          })}
+        />
+      )
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      findButton(container, 'Push to talk').click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(getUserMedia).not.toHaveBeenCalled()
+    expect(mediaRecorder).not.toHaveBeenCalled()
+    expect(renderedElementCopy(container)).toContain('Voice is unavailable on this device right now.')
+  })
+
   it('keeps desktop native voice off coordinator-wide subscriptions', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const voiceEvents = vi.spyOn(client.assistant, 'streamVoiceEvents').mockImplementation(async function* () {})
