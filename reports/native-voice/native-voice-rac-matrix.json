@@ -3,7 +3,7 @@
   "planSha256": "50181a35cd42e12aa33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6",
   "handoffSha256": "70b1b5ebb32c6df0e52c119b2bd73adad79c2611433bd33da7391d6e273fe196",
   "codeEvidenceBaselineHead": "66d71c88",
-  "reportCommit": "AUDIT_COMMIT_PENDING",
+  "reportCommit": "799c4ad1",
   "audit": {
     "auditedAtUtc": "2026-08-08T21:56:49Z",
     "verdict": "paused_incomplete",
