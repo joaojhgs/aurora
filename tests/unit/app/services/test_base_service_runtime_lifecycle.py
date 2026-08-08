@@ -215,6 +215,8 @@ async def test_service_announcement_carries_callable_feature_metadata(local_bus)
             "speech_playback",
             "speech_streaming",
             "speech_synthesis",
+            "speech_voice_discovery",
+            "speech_voice_management",
         ]
         assert [method.bus_topic for method in announcement.methods] == ["TTS.Synthesize"]
         method = announcement.methods[0]
