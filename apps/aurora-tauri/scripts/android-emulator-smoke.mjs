@@ -14,6 +14,7 @@ const NATIVE_PAYLOAD_LOGCAT_ARGS = [
 ]
 
 const DEFAULT_DEVICE_WAIT_TIMEOUT_MS = 30_000
+const DEFAULT_INSTALL_TIMEOUT_MS = 5 * 60_000
 
 const adb = resolveAdbCommand()
 
@@ -30,6 +31,7 @@ export async function runAndroidEmulatorSmoke() {
       process.env.AURORA_ANDROID_DEVICE_WAIT_TIMEOUT_MS,
       DEFAULT_DEVICE_WAIT_TIMEOUT_MS,
     ),
+    timeoutCode: 'android_device_wait_timeout',
   })
   installApk(apk)
   run(adb, ['logcat', '-c'])
@@ -81,7 +83,7 @@ function walk(dir) {
   })
 }
 
-function run(command, args, { timeoutMs } = {}) {
+function run(command, args, { timeoutMs, timeoutCode = 'android_command_timeout' } = {}) {
   try {
     return execFileSync(command, args, {
       stdio: 'inherit',
@@ -89,7 +91,7 @@ function run(command, args, { timeoutMs } = {}) {
     })
   } catch (error) {
     if (timeoutMs !== undefined && error?.code === 'ETIMEDOUT') {
-      throw new Error(`android_device_wait_timeout: adb wait-for-device exceeded ${timeoutMs}ms`)
+      throw new Error(`${timeoutCode}: adb command exceeded ${timeoutMs}ms`)
     }
     throw error
   }
@@ -105,7 +107,13 @@ function installApk(apk) {
   try {
     run(adb, ['push', apk, remoteApk])
     run(adb, ['shell', 'chmod', '644', remoteApk])
-    run(adb, ['shell', 'pm', 'install', '-r', remoteApk])
+    run(adb, ['shell', 'pm', 'install', '-r', remoteApk], {
+      timeoutMs: resolvePositiveTimeout(
+        process.env.AURORA_ANDROID_INSTALL_TIMEOUT_MS,
+        DEFAULT_INSTALL_TIMEOUT_MS,
+      ),
+      timeoutCode: 'android_install_timeout',
+    })
   } finally {
     spawnSync(adb, ['shell', 'rm', '-f', remoteApk], { stdio: 'ignore' })
   }
