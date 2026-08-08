@@ -20,6 +20,7 @@ use url::Url;
 
 const EVENT_STREAM_PATH: &str = "api/events/stream";
 const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(10);
+const MAX_STREAM_RECONNECTS: usize = 2;
 const MAX_FILTER_COUNT: usize = 16;
 const MAX_FILTER_LENGTH: usize = 256;
 const ASSISTANT_SOURCE: &str = "native_voice";
@@ -509,6 +510,8 @@ impl NativeGatewayTransport {
         let mut stream = self
             .open_event_stream(&subscription, cancellation.clone())
             .await?;
+        let mut reconnect_count = 0;
+        let mut last_event_id = None;
         let result = async {
             let _ack = self
                 .invoke_assistant_request(request.clone(), cancellation.clone())
@@ -517,8 +520,47 @@ impl NativeGatewayTransport {
             let mut assembler = AssistantStreamAssembler::new();
             loop {
                 cancellation_check(&cancellation)?;
-                let Some(event) = stream.next_event().await? else {
-                    return Err(TransportError::InvalidStream);
+                let event = match stream.next_event().await {
+                    Ok(Some(event)) => {
+                        last_event_id = Some(event.event_id.clone());
+                        event
+                    }
+                    Ok(None) => {
+                        if reconnect_count >= MAX_STREAM_RECONNECTS {
+                            return Err(TransportError::InvalidStream);
+                        }
+                        reconnect_count += 1;
+                        let resumed = if let Some(event_id) = last_event_id.as_deref() {
+                            subscription.clone().with_last_event_id(event_id)?
+                        } else {
+                            subscription.clone()
+                        };
+                        stream = self
+                            .open_event_stream(&resumed, cancellation.clone())
+                            .await?;
+                        continue;
+                    }
+                    Err(error)
+                        if matches!(
+                            error,
+                            TransportError::RequestFailed | TransportError::Timeout
+                        ) =>
+                    {
+                        if reconnect_count >= MAX_STREAM_RECONNECTS {
+                            return Err(error);
+                        }
+                        reconnect_count += 1;
+                        let resumed = if let Some(event_id) = last_event_id.as_deref() {
+                            subscription.clone().with_last_event_id(event_id)?
+                        } else {
+                            subscription.clone()
+                        };
+                        stream = self
+                            .open_event_stream(&resumed, cancellation.clone())
+                            .await?;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
                 };
                 match event.assistant_stream_event(&request)? {
                     AssistantStreamRead::Ignore => continue,
@@ -2064,6 +2106,45 @@ mod tests {
         assert_eq!(response.text, "hell");
         let _stream_request = server.request.recv().expect("stream subscription");
         let _assistant_request = server.request.recv().expect("assistant request");
+    }
+
+    #[tokio::test]
+    async fn streaming_reconnects_after_clean_close_and_resumes_from_last_event() {
+        let first_stream = assistant_frame_for(
+            20,
+            assistant_payload_with_sequence_for(20, 1, "assistant.delta", "hel", "", false),
+            serde_json::json!({"event_id": "event-1"}),
+        );
+        let resumed_stream = assistant_frame_for(
+            20,
+            assistant_payload_with_sequence_for(20, 2, "assistant.completed", "", "hello", true),
+            serde_json::json!({"event_id": "event-2", "kind": "assistant.completed"}),
+        );
+        let server = FixtureServer::responses([
+            sse_response(&first_stream),
+            assistant_ack_response(20),
+            sse_response(&resumed_stream),
+        ]);
+        let mut transport = NativeGatewayTransport::new(
+            server.base_url.clone(),
+            GatewayAuth::None,
+            loopback_limits(),
+        )
+        .expect("transport");
+
+        let response = transport
+            .invoke_assistant_streaming(
+                assistant_request(20, "reconnect stream"),
+                CancellationToken::new(),
+            )
+            .await
+            .expect("reconnected assistant stream");
+
+        assert_eq!(response.text, "hello");
+        let _initial_stream_request = server.request.recv().expect("initial stream request");
+        let _assistant_request = server.request.recv().expect("assistant request");
+        let resumed_request = server.request.recv().expect("resumed stream request");
+        assert!(resumed_request.contains("last_event_id=event-1"));
     }
 
     #[tokio::test]

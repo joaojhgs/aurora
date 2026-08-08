@@ -838,7 +838,7 @@ fn capture_callback<T>(
 }
 
 fn downmix_to_mono(samples: &[f32], channels: u16) -> Result<Vec<f32>, VoiceCoreError> {
-    if samples.is_empty() || channels == 0 || samples.len() % channels as usize != 0 {
+    if samples.is_empty() || channels == 0 || !samples.len().is_multiple_of(channels as usize) {
         return Err(capture_fault("invalid-input-frame"));
     }
     let channels = channels as usize;

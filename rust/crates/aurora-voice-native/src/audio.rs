@@ -496,7 +496,7 @@ fn render_for_output(
         || output_rate_hz == 0
         || input_channels == 0
         || output_channels == 0
-        || input.len() % input_channels as usize != 0
+        || !input.len().is_multiple_of(input_channels as usize)
     {
         return Err(audio_fault("invalid-render-format"));
     }
@@ -617,7 +617,7 @@ fn resampled_frame_count(
 
 fn output_frames_for_samples(samples: usize, channels: u16) -> Result<u64, VoiceCoreError> {
     let channels = usize::from(channels);
-    if channels == 0 || samples % channels != 0 {
+    if channels == 0 || !samples.is_multiple_of(channels) {
         return Err(audio_fault("invalid-output-config"));
     }
     u64::try_from(samples / channels).map_err(|_| audio_fault("playback-audio-too-long"))
@@ -676,7 +676,7 @@ fn validate_playback_sample_bound(
     if sample_rate_hz == 0 || channels == 0 || sample_count == 0 {
         return Err(audio_fault("invalid-playback-format"));
     }
-    if sample_count % usize::from(channels) != 0 {
+    if !sample_count.is_multiple_of(usize::from(channels)) {
         return Err(audio_fault("invalid-render-format"));
     }
     let max_frames = duration_to_frames(max_playback_duration, sample_rate_hz)?;

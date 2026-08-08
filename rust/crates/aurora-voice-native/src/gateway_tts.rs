@@ -400,7 +400,7 @@ fn parse_pcm16_mono_wav(
                 validate_fmt_chunk(&bytes[data_start..data_end], sample_rate_hz)?;
             }
             b"data" => {
-                if data_seen || len == 0 || len % PCM16_BYTES_PER_SAMPLE != 0 {
+                if data_seen || len == 0 || !len.is_multiple_of(PCM16_BYTES_PER_SAMPLE) {
                     return Err(provider_fault());
                 }
                 let samples = len / PCM16_BYTES_PER_SAMPLE;
