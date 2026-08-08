@@ -8545,6 +8545,7 @@ mod tests {
         assert!(voice_header.contains("AuroraIosAudioStats"));
         assert!(voice_header.contains("aurora_ios_audio_output_drain"));
         assert!(voice_header.contains("aurora_ios_audio_output_acknowledge"));
+        assert!(voice_header.contains("AURORA_IOS_AUDIO_EMPTY"));
 
         let swift_entrypoints = include_str!(
             "../ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraEntrypointPayloads.swift"

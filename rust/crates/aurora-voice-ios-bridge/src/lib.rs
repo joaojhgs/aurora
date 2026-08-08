@@ -28,6 +28,7 @@ const MAX_CHUNK_SAMPLES: usize = 96_000;
 pub const AURORA_IOS_AUDIO_OK: i32 = 0;
 pub const AURORA_IOS_AUDIO_BACKPRESSURE: i32 = 1;
 pub const AURORA_IOS_AUDIO_CLOSED: i32 = 2;
+pub const AURORA_IOS_AUDIO_EMPTY: i32 = 3;
 pub const AURORA_IOS_AUDIO_INVALID_ARGUMENT: i32 = -1;
 
 #[repr(C)]
@@ -442,6 +443,10 @@ impl AuroraIosAudioOutput {
         self.inner.lock().map_or(0, |inner| inner.queue.len())
     }
 
+    pub fn is_closed(&self) -> bool {
+        self.inner.lock().map_or(true, |inner| inner.closed)
+    }
+
     pub fn close(&self) {
         if let Ok(mut inner) = self.inner.lock() {
             inner.queue.clear();
@@ -615,6 +620,12 @@ pub unsafe extern "C" fn aurora_ios_audio_output_drain(
     }
     // SAFETY: pointers are non-null and the caller guarantees the sample capacity.
     let output = unsafe { &*output };
+    if output.is_closed() {
+        return AURORA_IOS_AUDIO_CLOSED;
+    }
+    if output.queued_chunks() == 0 {
+        return AURORA_IOS_AUDIO_EMPTY;
+    }
     let samples = unsafe { std::slice::from_raw_parts_mut(samples, sample_capacity) };
     let Some((sample_count, sample_rate_hz, channels, sequence, final_chunk)) =
         output.drain_into(samples)
@@ -904,7 +915,37 @@ mod tests {
         );
         unsafe { aurora_ios_audio_output_acknowledge(output) };
         assert_eq!(play.await.expect("play").sample_count, 2);
+        assert_eq!(
+            unsafe {
+                aurora_ios_audio_output_drain(
+                    output,
+                    samples.as_mut_ptr(),
+                    samples.len(),
+                    &mut sample_count,
+                    &mut sample_rate_hz,
+                    &mut channels,
+                    &mut sequence,
+                    &mut final_chunk,
+                )
+            },
+            AURORA_IOS_AUDIO_EMPTY
+        );
         unsafe { aurora_ios_audio_output_close(output) };
+        assert_eq!(
+            unsafe {
+                aurora_ios_audio_output_drain(
+                    output,
+                    samples.as_mut_ptr(),
+                    samples.len(),
+                    &mut sample_count,
+                    &mut sample_rate_hz,
+                    &mut channels,
+                    &mut sequence,
+                    &mut final_chunk,
+                )
+            },
+            AURORA_IOS_AUDIO_CLOSED
+        );
         unsafe { aurora_ios_audio_output_free(output) };
     }
 }
