@@ -148,6 +148,12 @@ async function waitForWebviewMount(appId) {
   let lastAnrCheckAt = 0
 
   while (Date.now() < deadline) {
+    const crashEvidence = recentAndroidCrashEvidence(appId)
+    if (isFatalAndroidWebviewCrash(crashEvidence)) {
+      throw new Error(
+        `Android package ${appId} reported a fatal WebView renderer crash:\n${crashEvidence}`,
+      )
+    }
     if (Date.now() - lastAnrCheckAt > 5000) {
       dismissSystemUiAnrDialog()
       lastAnrCheckAt = Date.now()
@@ -395,10 +401,20 @@ function recentAndroidCrashEvidence(appId) {
         || line.includes('AndroidRuntime')
         || lower.includes('force finishing')
         || lower.includes('has died')
+        || lower.includes('crashpad_client_linux')
+        || lower.includes('render process')
+        || (lower.includes('chromium') && lower.includes('fatal'))
     })
     .slice(-40)
     .join('\n')
     .trim()
+}
+
+function isFatalAndroidWebviewCrash(evidence) {
+  const lower = evidence.toLowerCase()
+  return lower.includes('crashpad_client_linux')
+    || lower.includes('render process')
+    || (lower.includes('chromium') && lower.includes('fatal'))
 }
 
 function sleep(milliseconds) {
