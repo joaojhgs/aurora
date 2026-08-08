@@ -39,6 +39,8 @@ for (const symbol of [
 
 assert(capture.includes('borrowingState state'), 'capture host must support Rust-owned ingress')
 assert(capture.includes('self.ownsState = false'), 'borrowed ingress must not be freed by Swift')
+assert(capture.includes('sequenceLock'), 'capture sequence allocation must be synchronized across audio/lifecycle threads')
+assert(capture.includes('nextSequence()'), 'capture callback must use synchronized sequence allocation')
 assert(sessionHost.includes('capture = nil'), 'session host must destroy borrowed audio before Rust free')
 assert(sessionHost.includes('remoteAudioConsent'), 'session host must preserve explicit remote consent')
 assert(

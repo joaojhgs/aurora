@@ -26,6 +26,7 @@ public final class AuroraIOSVoiceCapture {
   private let state: OpaquePointer?
   private let ownsState: Bool
   private let maxChunkSamples: AVAudioFrameCount
+  private let sequenceLock = NSLock()
   private var sequence: UInt64 = 0
   private var running = false
 
@@ -76,19 +77,21 @@ public final class AuroraIOSVoiceCapture {
       throw AuroraIOSVoiceCaptureError.inputFormatUnavailable
     }
 
+    sequenceLock.lock()
     sequence = 0
+    sequenceLock.unlock()
     input.installTap(onBus: 0, bufferSize: maxChunkSamples, format: format) { [weak self] buffer, _ in
       guard let self, let state = self.state, let channels = buffer.floatChannelData else { return }
       let frameCount = Int(buffer.frameLength)
       guard frameCount > 0 else { return }
+      let sequence = self.nextSequence()
       let result = aurora_ios_audio_state_push_pcm_f32(
         state,
         channels[0],
         UInt(frameCount),
-        self.sequence,
+        sequence,
         UInt32(format.sampleRate.rounded())
       )
-      self.sequence &+= 1
       if result == AURORA_IOS_AUDIO_BACKPRESSURE {
         _ = aurora_ios_audio_state_drain_one(state)
       }
@@ -126,5 +129,13 @@ public final class AuroraIOSVoiceCapture {
       closed: raw.closed != 0,
       running: running
     )
+  }
+
+  private func nextSequence() -> UInt64 {
+    sequenceLock.lock()
+    defer { sequenceLock.unlock() }
+    let current = sequence
+    sequence &+= 1
+    return current
   }
 }
