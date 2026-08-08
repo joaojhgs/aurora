@@ -240,8 +240,16 @@ private class AuroraNativeVoiceSessionBridge(
     private var handle: Long = nativeCreate(gateway, bearer, remoteAudioConsent)
 
     fun start(): Long {
+        return start(background = false)
+    }
+
+    fun startBackground(): Long {
+        return start(background = true)
+    }
+
+    private fun start(background: Boolean): Long {
         val current = handle
-        return if (current == 0L) 0L else nativeStart(current)
+        return if (current == 0L) 0L else if (background) nativeStartBackground(current) else nativeStart(current)
     }
 
     fun finish(generation: Long): Int {
@@ -288,6 +296,7 @@ private class AuroraNativeVoiceSessionBridge(
 
     private external fun nativeCreate(gateway: String, bearer: String, remoteAudioConsent: Boolean): Long
     private external fun nativeStart(handle: Long): Long
+    private external fun nativeStartBackground(handle: Long): Long
     private external fun nativeFinish(handle: Long, generation: Long): Int
     private external fun nativeCancel(handle: Long, generation: Long): Int
     private external fun nativePushPcm(handle: Long, samples: ShortArray, sampleCount: Int, sequence: Long): Int
@@ -560,6 +569,8 @@ class AuroraVoiceForegroundService : Service() {
             finishNativeSession()
             return START_NOT_STICKY
         }
+        val backgroundSession = intent?.action == ACTION_START_BACKGROUND ||
+            intent?.action == ACTION_START_ASSISTANT
         running = true
         startForeground(AURORA_VOICE_NOTIFICATION_ID, foregroundNotification("Starting microphone…"))
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -575,7 +586,11 @@ class AuroraVoiceForegroundService : Service() {
         if (capture == null) {
             captureError = null
             session?.let { nativeSession ->
-                sessionGeneration = nativeSession.start()
+                sessionGeneration = if (backgroundSession) {
+                    nativeSession.startBackground()
+                } else {
+                    nativeSession.start()
+                }
                 if (sessionGeneration == 0L) {
                     captureError = "voice_runtime_unavailable"
                     stopSelf()
@@ -739,6 +754,7 @@ class AuroraVoiceForegroundService : Service() {
     companion object {
         const val ACTION_STOP = "dev.aurora.tauri.nativeplugin.action.STOP_VOICE_CAPTURE"
         const val ACTION_FINISH = "dev.aurora.tauri.nativeplugin.action.FINISH_VOICE_CAPTURE"
+        const val ACTION_START_BACKGROUND = "dev.aurora.tauri.nativeplugin.action.START_BACKGROUND_VOICE"
         const val ACTION_START_ASSISTANT = "dev.aurora.tauri.nativeplugin.action.START_ASSISTANT_VOICE"
 
         @Volatile

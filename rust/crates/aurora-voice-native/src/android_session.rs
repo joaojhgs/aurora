@@ -107,6 +107,7 @@ pub enum AndroidVoiceSessionCommandError {
 
 enum Command {
     Start {
+        mode: AndroidVoiceStartMode,
         reply: mpsc::Sender<Result<Generation, AndroidVoiceSessionCommandError>>,
     },
     Finish {
@@ -118,6 +119,12 @@ enum Command {
         reply: mpsc::Sender<Result<(), AndroidVoiceSessionCommandError>>,
     },
     Shutdown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AndroidVoiceStartMode {
+    PushToTalk,
+    BackgroundSession,
 }
 
 /// Native Android voice runtime handle shared by JNI capture, playback, and
@@ -190,9 +197,20 @@ impl AndroidVoiceSession {
     }
 
     pub fn start(&self) -> Result<Generation, AndroidVoiceSessionCommandError> {
+        self.start_with_mode(AndroidVoiceStartMode::PushToTalk)
+    }
+
+    pub fn start_background(&self) -> Result<Generation, AndroidVoiceSessionCommandError> {
+        self.start_with_mode(AndroidVoiceStartMode::BackgroundSession)
+    }
+
+    fn start_with_mode(
+        &self,
+        mode: AndroidVoiceStartMode,
+    ) -> Result<Generation, AndroidVoiceSessionCommandError> {
         let (reply, response) = mpsc::channel();
         self.commands
-            .send(Command::Start { reply })
+            .send(Command::Start { mode, reply })
             .map_err(|_| AndroidVoiceSessionCommandError::Closed)?;
         response
             .recv()
@@ -326,6 +344,17 @@ fn is_loopback(url: &Url) -> bool {
     )
 }
 
+fn capture_start_reason(mode: AndroidVoiceStartMode) -> CaptureStartReason {
+    match mode {
+        AndroidVoiceStartMode::PushToTalk => CaptureStartReason::PushToTalk,
+        AndroidVoiceStartMode::BackgroundSession => CaptureStartReason::BackgroundSession,
+    }
+}
+
+fn background_eligible(mode: AndroidVoiceStartMode) -> bool {
+    matches!(mode, AndroidVoiceStartMode::BackgroundSession)
+}
+
 fn run_session_thread(
     mut voice_runtime: RuntimeCore,
     mut commands: tokio_mpsc::UnboundedReceiver<Command>,
@@ -349,7 +378,7 @@ fn run_session_thread(
                 break;
             };
             match command {
-                Command::Start { reply } => {
+                Command::Start { mode, reply } => {
                     if voice_runtime.has_active_capture() {
                         let _ = reply.send(Err(AndroidVoiceSessionCommandError::AlreadyActive));
                         continue;
@@ -366,11 +395,11 @@ fn run_session_thread(
                         owner: CaptureOwnerKind::Native,
                         surface: ANDROID_SURFACE.to_owned(),
                         device_route: "default".to_owned(),
-                        start_reason: CaptureStartReason::PushToTalk,
+                        start_reason: capture_start_reason(mode),
                         generation,
                         created_at: now,
                         route_revision: RouteRevision(ROUTE_REVISION),
-                        background_eligible: false,
+                        background_eligible: background_eligible(mode),
                         consent_revision: if remote_audio_consent { 1 } else { 0 },
                         heartbeat_at: now,
                         stop_deadline: None,
@@ -381,6 +410,7 @@ fn run_session_thread(
                     let result = run_turn(
                         &mut voice_runtime,
                         &mut commands,
+                        mode,
                         lease,
                         now,
                         cancellation,
@@ -406,14 +436,21 @@ fn run_session_thread(
 async fn run_turn<'a>(
     runtime: &'a mut RuntimeCore,
     commands: &'a mut tokio_mpsc::UnboundedReceiver<Command>,
+    mode: AndroidVoiceStartMode,
     lease: VoiceCaptureLease,
     at: TimestampMicros,
     cancellation: CancellationToken,
     control: AndroidCaptureControl,
 ) -> Result<String, VoiceCoreError> {
     let generation = lease.generation;
-    let mut turn: Pin<Box<dyn Future<Output = Result<String, VoiceCoreError>> + 'a>> =
-        Box::pin(runtime.run_push_to_talk_turn(lease, at, cancellation.clone()));
+    let mut turn: Pin<Box<dyn Future<Output = Result<String, VoiceCoreError>> + 'a>> = match mode {
+        AndroidVoiceStartMode::PushToTalk => {
+            Box::pin(runtime.run_push_to_talk_turn(lease, at, cancellation.clone()))
+        }
+        AndroidVoiceStartMode::BackgroundSession => {
+            Box::pin(runtime.run_wake_turn(lease, at, cancellation.clone()))
+        }
+    };
     loop {
         tokio::select! {
             result = &mut turn => return result,
@@ -431,7 +468,7 @@ async fn run_turn<'a>(
                     Some(Command::Finish { reply, .. }) | Some(Command::Cancel { reply, .. }) => {
                         let _ = reply.send(Err(AndroidVoiceSessionCommandError::NotActive));
                     }
-                    Some(Command::Start { reply }) => {
+                    Some(Command::Start { reply, .. }) => {
                         let _ = reply.send(Err(AndroidVoiceSessionCommandError::AlreadyActive));
                     }
                     Some(Command::Shutdown) | None => {
@@ -577,6 +614,22 @@ mod tests {
             phase_for_state(VoiceState::Faulted),
             AndroidVoiceSessionPhase::Faulted
         );
+    }
+
+    #[test]
+    fn background_mode_uses_background_lease_semantics() {
+        assert_eq!(
+            capture_start_reason(AndroidVoiceStartMode::BackgroundSession),
+            CaptureStartReason::BackgroundSession
+        );
+        assert!(background_eligible(
+            AndroidVoiceStartMode::BackgroundSession
+        ));
+        assert_eq!(
+            capture_start_reason(AndroidVoiceStartMode::PushToTalk),
+            CaptureStartReason::PushToTalk
+        );
+        assert!(!background_eligible(AndroidVoiceStartMode::PushToTalk));
     }
 
     #[test]

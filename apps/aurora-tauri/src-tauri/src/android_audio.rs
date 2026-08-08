@@ -313,6 +313,17 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
 }
 
 #[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeStartBackground(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) -> jlong {
+    session_from_handle(handle)
+        .and_then(|session| session.start_background().ok())
+        .map_or(0, |generation| generation.0 as jlong)
+}
+
+#[no_mangle]
 pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeFinish(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,

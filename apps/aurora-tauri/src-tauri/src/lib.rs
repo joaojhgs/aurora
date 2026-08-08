@@ -235,6 +235,8 @@ struct AndroidWebviewMicrophonePermissionDecisionRequest {
 #[serde(rename_all = "camelCase")]
 struct AndroidVoiceForegroundServiceStartRequest {
     remote_audio_consent: bool,
+    #[serde(default)]
+    background_session: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -9549,6 +9551,7 @@ mod tests {
             "HandlerThread(\"aurora-audio-capture\")",
             "ACTION_STOP",
             "ACTION_FINISH",
+            "ACTION_START_BACKGROUND",
             "finishHandler",
             "awaitFinishedSession",
             ".addAction(Notification.Action.Builder",
@@ -9568,6 +9571,7 @@ mod tests {
             "sessionGeneration",
             "closeBridgeOnClose",
             "nativeStart",
+            "nativeStartBackground",
             "nativeFinish",
             "nativeCancel",
             "finishNativeSession",
@@ -9595,6 +9599,7 @@ mod tests {
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeFree",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeCreate",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeStart",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeStartBackground",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeFinish",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeCancel",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativePushPcm",
@@ -9631,6 +9636,8 @@ mod tests {
             assert!(plugin.contains(command), "{command}");
         }
         assert!(plugin.contains("AndroidVoiceForegroundServiceStartArgs"));
+        assert!(plugin.contains("backgroundSession"));
+        assert!(plugin.contains("ACTION_START_BACKGROUND"));
         assert!(rust_source.contains("AndroidVoiceForegroundServiceStartRequest"));
         assert!(rust_source.contains("serde_json::to_value(&request)"));
         for command in [
