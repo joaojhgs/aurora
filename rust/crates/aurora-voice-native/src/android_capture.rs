@@ -1,7 +1,17 @@
 //! Android-native PCM ingress shared by the Kotlin capture adapter and Rust runtime.
 
 use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
+
+use async_trait::async_trait;
+use aurora_voice_core::{
+    AudioInput, Generation, PcmFrame, RouteRevision, TimestampMicros, TransitionReason,
+    VoiceCaptureLease, VoiceCoreError,
+};
+use tokio::time::{sleep, Duration};
 
 const DEFAULT_CAPACITY_CHUNKS: usize = 8;
 const MAX_CAPACITY_CHUNKS: usize = 64;
@@ -51,11 +61,11 @@ struct Inner {
 /// The queue owns only short PCM chunks and redacted counters. It deliberately has
 /// no logging, transport, credential, or model responsibilities; those remain in
 /// the shared voice runtime and typed native transport layers.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AndroidPcmIngress {
     capacity_chunks: usize,
     max_chunk_samples: usize,
-    inner: Mutex<Inner>,
+    inner: Arc<Mutex<Inner>>,
 }
 
 impl AndroidPcmIngress {
@@ -73,11 +83,11 @@ impl AndroidPcmIngress {
         Self {
             capacity_chunks,
             max_chunk_samples,
-            inner: Mutex::new(Inner {
+            inner: Arc::new(Mutex::new(Inner {
                 queue: VecDeque::with_capacity(capacity_chunks),
                 stats: AndroidPcmIngressStats::default(),
                 last_sequence: None,
-            }),
+            })),
         }
     }
 
@@ -151,6 +161,156 @@ impl AndroidPcmIngress {
     }
 }
 
+const ANDROID_FRAME_POLL_INTERVAL: Duration = Duration::from_millis(5);
+
+/// Audio-input adapter that turns bounded Android PCM ingress into runtime frames.
+///
+/// The Android service owns microphone capture and pushes PCM into the ingress. This
+/// adapter is the only shared-runtime consumer; it tags every frame with the active
+/// generation and route revision and stops on an explicit finish or interruption.
+#[derive(Debug, Clone)]
+pub struct AndroidAudioInput {
+    ingress: AndroidPcmIngress,
+    control: AndroidCaptureControl,
+    active_generation: Option<Generation>,
+    route_revision: RouteRevision,
+    started_at: TimestampMicros,
+    next_sequence: u64,
+    expected_ingress_sequence: Option<u64>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AndroidCaptureControl {
+    finished: Arc<AtomicBool>,
+    interrupted: Arc<AtomicBool>,
+    active_generation: Arc<Mutex<Option<Generation>>>,
+}
+
+impl AndroidCaptureControl {
+    pub fn finish(&self, generation: Generation) {
+        if self.matches_active_generation(generation) {
+            self.finished.store(true, Ordering::SeqCst);
+        }
+    }
+
+    pub fn interrupt(&self, generation: Generation) {
+        if self.matches_active_generation(generation) {
+            self.interrupted.store(true, Ordering::SeqCst);
+            self.finished.store(true, Ordering::SeqCst);
+        }
+    }
+
+    fn matches_active_generation(&self, generation: Generation) -> bool {
+        self.active_generation
+            .lock()
+            .ok()
+            .and_then(|active| *active)
+            == Some(generation)
+    }
+
+    fn set_generation(&self, generation: Option<Generation>) {
+        if let Ok(mut active) = self.active_generation.lock() {
+            *active = generation;
+        }
+        self.finished.store(false, Ordering::SeqCst);
+        self.interrupted.store(false, Ordering::SeqCst);
+    }
+}
+
+impl AndroidAudioInput {
+    pub fn new(ingress: AndroidPcmIngress) -> Self {
+        Self {
+            ingress,
+            control: AndroidCaptureControl::default(),
+            active_generation: None,
+            route_revision: RouteRevision(0),
+            started_at: TimestampMicros(0),
+            next_sequence: 0,
+            expected_ingress_sequence: None,
+        }
+    }
+
+    pub fn control(&self) -> AndroidCaptureControl {
+        self.control.clone()
+    }
+
+    fn clear_pending_chunks(&self) {
+        while self.ingress.drain_chunk().is_some() {}
+    }
+}
+
+#[async_trait(?Send)]
+impl AudioInput for AndroidAudioInput {
+    async fn start(&mut self, lease: VoiceCaptureLease) -> Result<(), VoiceCoreError> {
+        if self.active_generation.is_some() {
+            return Err(VoiceCoreError::OwnerAlreadyActive);
+        }
+        if lease.owner != aurora_voice_core::CaptureOwnerKind::Native {
+            return Err(VoiceCoreError::OwnerMismatch);
+        }
+        self.clear_pending_chunks();
+        self.active_generation = Some(lease.generation);
+        self.route_revision = lease.route_revision;
+        self.started_at = lease.created_at;
+        self.next_sequence = 0;
+        self.expected_ingress_sequence = None;
+        self.control.set_generation(self.active_generation);
+        Ok(())
+    }
+
+    async fn stop(&mut self, _reason: TransitionReason) -> Result<(), VoiceCoreError> {
+        self.control.set_generation(None);
+        self.active_generation = None;
+        self.expected_ingress_sequence = None;
+        Ok(())
+    }
+
+    async fn next_frame(&mut self) -> Result<Option<PcmFrame>, VoiceCoreError> {
+        let Some(generation) = self.active_generation else {
+            return Ok(None);
+        };
+        loop {
+            if self.control.interrupted.load(Ordering::SeqCst) {
+                return Err(VoiceCoreError::Cancelled);
+            }
+            if let Some(chunk) = self.ingress.drain_chunk() {
+                let discontinuity = self
+                    .expected_ingress_sequence
+                    .is_some_and(|expected| expected != chunk.sequence);
+                self.expected_ingress_sequence = Some(chunk.sequence.saturating_add(1));
+                let samples = chunk
+                    .samples
+                    .into_iter()
+                    .map(|sample| f32::from(sample) / 32_768.0)
+                    .collect::<Vec<_>>();
+                let timestamp = TimestampMicros(
+                    self.started_at
+                        .0
+                        .saturating_add(self.next_sequence.saturating_mul(1_000_000) / 16_000),
+                );
+                let frame = PcmFrame::new(
+                    samples,
+                    timestamp,
+                    self.next_sequence,
+                    discontinuity,
+                    self.route_revision,
+                    generation,
+                )?;
+                self.next_sequence = self.next_sequence.saturating_add(1);
+                return Ok(Some(frame));
+            }
+            if self.control.finished.load(Ordering::SeqCst) || self.ingress.stats().closed {
+                return Ok(None);
+            }
+            sleep(ANDROID_FRAME_POLL_INTERVAL).await;
+        }
+    }
+
+    fn current_route_revision(&self) -> RouteRevision {
+        self.route_revision
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -192,5 +352,36 @@ mod tests {
             })
         );
         assert!(ingress.drain_chunk().is_none());
+    }
+
+    #[tokio::test]
+    async fn android_audio_input_tags_frames_and_honors_finish() {
+        let ingress = AndroidPcmIngress::new(2, 4);
+        let mut input = AndroidAudioInput::new(ingress.clone());
+        let lease = VoiceCaptureLease {
+            owner: aurora_voice_core::CaptureOwnerKind::Native,
+            surface: "android".to_owned(),
+            device_route: "default".to_owned(),
+            start_reason: aurora_voice_core::CaptureStartReason::PushToTalk,
+            generation: Generation(9),
+            created_at: TimestampMicros(100),
+            route_revision: RouteRevision(3),
+            background_eligible: false,
+            consent_revision: 0,
+            heartbeat_at: TimestampMicros(100),
+            stop_deadline: None,
+        };
+        input.start(lease).await.expect("start input");
+        ingress.push(&[16_384, -16_384], 4);
+        let frame = input
+            .next_frame()
+            .await
+            .expect("next frame")
+            .expect("frame");
+        assert_eq!(frame.generation(), Generation(9));
+        assert_eq!(frame.route_revision(), RouteRevision(3));
+        assert_eq!(frame.samples(), &[0.5, -0.5]);
+        input.control().finish(Generation(9));
+        assert!(input.next_frame().await.expect("finish frame").is_none());
     }
 }
