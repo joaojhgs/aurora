@@ -6,7 +6,9 @@
   "reportCommit": "799c4ad1",
   "audit": {
     "auditedAtUtc": "2026-08-08T21:56:49Z",
-    "verdict": "paused_incomplete",
+    "resumedAtUtc": "2026-08-08T22:15:10Z",
+    "goalThreadId": "019fd073-38a1-7801-8d62-31ae70d46580",
+    "verdict": "active_remediation",
     "resumeGate": "Reconcile the capsule, this matrix, Phase 4 CPAL evidence, and current docs; fix and prove remote-audio consent before advancing later phases.",
     "statusCounts": {
       "pass": 24,
