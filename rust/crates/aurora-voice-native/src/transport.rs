@@ -476,6 +476,29 @@ impl NativeGatewayTransport {
         })
     }
 
+    async fn open_event_stream_with_retries(
+        &self,
+        subscription: &SseSubscription,
+        cancellation: CancellationToken,
+        reconnect_count: &mut usize,
+    ) -> Result<NativeEventStream, TransportError> {
+        loop {
+            match self
+                .open_event_stream(subscription, cancellation.clone())
+                .await
+            {
+                Ok(stream) => return Ok(stream),
+                Err(_error @ (TransportError::RequestFailed | TransportError::Timeout))
+                    if *reconnect_count < MAX_STREAM_RECONNECTS =>
+                {
+                    *reconnect_count += 1;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
     pub async fn invoke_assistant_turn(
         &mut self,
         request: AssistantTurnRequest,
@@ -507,10 +530,14 @@ impl NativeGatewayTransport {
         request.stream = true;
         let generation = request.generation;
         let subscription = SseSubscription::assistant_response(&request)?;
-        let mut stream = self
-            .open_event_stream(&subscription, cancellation.clone())
-            .await?;
         let mut reconnect_count = 0;
+        let mut stream = self
+            .open_event_stream_with_retries(
+                &subscription,
+                cancellation.clone(),
+                &mut reconnect_count,
+            )
+            .await?;
         let mut last_event_id = None;
         let result = async {
             let _ack = self
@@ -536,7 +563,11 @@ impl NativeGatewayTransport {
                             subscription.clone()
                         };
                         stream = self
-                            .open_event_stream(&resumed, cancellation.clone())
+                            .open_event_stream_with_retries(
+                                &resumed,
+                                cancellation.clone(),
+                                &mut reconnect_count,
+                            )
                             .await?;
                         continue;
                     }
@@ -556,7 +587,11 @@ impl NativeGatewayTransport {
                             subscription.clone()
                         };
                         stream = self
-                            .open_event_stream(&resumed, cancellation.clone())
+                            .open_event_stream_with_retries(
+                                &resumed,
+                                cancellation.clone(),
+                                &mut reconnect_count,
+                            )
                             .await?;
                         continue;
                     }
@@ -2145,6 +2180,39 @@ mod tests {
         let _assistant_request = server.request.recv().expect("assistant request");
         let resumed_request = server.request.recv().expect("resumed stream request");
         assert!(resumed_request.contains("last_event_id=event-1"));
+    }
+
+    #[tokio::test]
+    async fn streaming_retries_transient_initial_subscription_failure() {
+        let stream_body = assistant_frame_for(
+            21,
+            assistant_payload_with_sequence_for(21, 1, "assistant.completed", "", "ready", true),
+            serde_json::json!({"kind": "assistant.completed"}),
+        );
+        let server = FixtureServer::responses([
+            Vec::new(),
+            sse_response(&stream_body),
+            assistant_ack_response(21),
+        ]);
+        let mut transport = NativeGatewayTransport::new(
+            server.base_url.clone(),
+            GatewayAuth::None,
+            loopback_limits(),
+        )
+        .expect("transport");
+
+        let response = transport
+            .invoke_assistant_streaming(
+                assistant_request(21, "retry initial stream"),
+                CancellationToken::new(),
+            )
+            .await
+            .expect("assistant stream after transient subscription failure");
+
+        assert_eq!(response.text, "ready");
+        let _failed_stream_request = server.request.recv().expect("failed stream request");
+        let _retried_stream_request = server.request.recv().expect("retried stream request");
+        let _assistant_request = server.request.recv().expect("assistant request");
     }
 
     #[tokio::test]
