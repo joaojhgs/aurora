@@ -5435,6 +5435,7 @@ fn validate_secure_storage_key(key: &str) -> Result<(), AuroraCommandError> {
         "aurora.gateway",
         "aurora.mesh",
         "aurora.admin",
+        "aurora.voice",
     ];
     if allowed
         .iter()
@@ -9145,6 +9146,7 @@ mod tests {
             "aurora.auth.refresh-token",
             "aurora.mesh.peer_01",
             "aurora.admin.unlock",
+            "aurora.voice.transport",
         ] {
             assert!(validate_secure_storage_key(key).is_ok(), "{key}");
         }

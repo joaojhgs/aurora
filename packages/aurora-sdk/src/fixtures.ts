@@ -3757,7 +3757,7 @@ export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = 
     backend: 'android-keystore',
     persisted: true,
     privacyClass: 'credential',
-    allowedKeyPrefixes: 'aurora.session,aurora.auth,aurora.gateway,aurora.mesh,aurora.admin',
+    allowedKeyPrefixes: 'aurora.session,aurora.auth,aurora.gateway,aurora.mesh,aurora.admin,aurora.voice',
     evidenceSource: 'android-keystore-shared-preferences',
     secretsRedacted: true
   },

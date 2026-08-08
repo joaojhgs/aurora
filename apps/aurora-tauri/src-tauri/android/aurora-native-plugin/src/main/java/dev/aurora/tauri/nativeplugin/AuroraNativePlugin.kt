@@ -1283,7 +1283,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("backend", "android-keystore")
         ret.put("persisted", true)
         ret.put("privacyClass", "credential")
-        ret.put("allowedKeyPrefixes", "aurora.session,aurora.auth,aurora.gateway,aurora.mesh,aurora.admin")
+        ret.put("allowedKeyPrefixes", "aurora.session,aurora.auth,aurora.gateway,aurora.mesh,aurora.admin,aurora.voice")
         ret.put("evidenceSource", "android-keystore-shared-preferences")
         ret.put("secretsRedacted", true)
         return ret
@@ -1547,6 +1547,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             "aurora.gateway",
             "aurora.mesh",
             "aurora.admin",
+            "aurora.voice",
         )
         if (allowed.none { key == it || key.startsWith("${it}.") || key.startsWith("${it}-") || key.startsWith("${it}_") }) {
             throw IllegalArgumentException("secure storage key must be in an Aurora credential namespace")
