@@ -14,13 +14,16 @@ import {
 
 const liveEnv = {
   VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E: "1",
-  VITE_AURORA_RUNTIME_MODE: "desktop-local",
   VITE_AURORA_TAURI_DEV_AUTOSIDECAR: "0",
 };
 
 describe("desktop native voice E2E hook", () => {
   it("is gated to the explicit installed desktop local E2E environment", () => {
     expect(isDesktopNativeVoiceE2eHookEnabled(liveEnv)).toBe(true);
+    expect(Object.keys(liveEnv).sort()).toEqual([
+      "VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E",
+      "VITE_AURORA_TAURI_DEV_AUTOSIDECAR",
+    ]);
     expect(isDesktopNativeVoiceE2eHookEnabled({
       ...liveEnv,
       VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E: "0",
