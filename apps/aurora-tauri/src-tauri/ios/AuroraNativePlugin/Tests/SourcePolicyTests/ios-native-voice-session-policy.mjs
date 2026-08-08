@@ -72,12 +72,18 @@ for (const notification of [
   'AVAudioSession.interruptionNotification',
   'AVAudioSession.routeChangeNotification',
   'AVAudioSession.mediaServicesWereResetNotification',
+  'UIApplication.didEnterBackgroundNotification',
+  'UIApplication.protectedDataWillBecomeUnavailableNotification',
+  'ProcessInfo.powerStateDidChangeNotification',
+  'UIApplication.willTerminateNotification',
 ]) {
   assert(sessionHost.includes(notification), `session host must observe ${notification}`)
 }
 assert(sessionHost.includes('cancelForLifecycleChange'), 'audio lifecycle changes must cancel the Rust generation')
 assert(sessionHost.includes('removeLifecycleObservers'), 'audio lifecycle observers must be removed on teardown')
 assert(sessionHost.includes('object: audioSession'), 'lifecycle observers must be scoped to Aurora audio session')
+assert(sessionHost.includes('backgroundSessionActive'), 'lifecycle policy must distinguish explicit background sessions')
+assert(sessionHost.includes('respectBackgroundSession: true'), 'foreground lifecycle loss must preserve only explicit background sessions')
 assert(playback.includes('aurora_ios_audio_output_drain'), 'playback must drain Rust-owned output')
 assert(playback.includes('aurora_ios_audio_output_acknowledge'), 'playback must acknowledge consumed output')
 assert(playback.includes('AVAudioPlayerNode'), 'playback must use native AVAudioPlayerNode')

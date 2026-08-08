@@ -1,6 +1,7 @@
 import AVFAudio
 import CAuroraIOSVoiceBridge
 import Foundation
+import UIKit
 
 public enum AuroraIOSVoiceSessionHostError: Error {
   case invalidGateway
@@ -23,6 +24,7 @@ public final class AuroraIOSVoiceSessionHost {
   private let output: OpaquePointer?
   private let audioSession: AVAudioSession
   private var activeGeneration: UInt64?
+  private var backgroundSessionActive = false
   private var lifecycleObservers: [NSObjectProtocol] = []
 
   public convenience init(
@@ -106,6 +108,7 @@ public final class AuroraIOSVoiceSessionHost {
     guard code == AURORA_IOS_VOICE_OK else {
       throw AuroraIOSVoiceSessionHostError.commandFailed(code)
     }
+    backgroundSessionActive = false
     activeGeneration = generation
     do {
       try capture?.start()
@@ -126,6 +129,7 @@ public final class AuroraIOSVoiceSessionHost {
     guard code == AURORA_IOS_VOICE_OK else {
       throw AuroraIOSVoiceSessionHostError.commandFailed(code)
     }
+    backgroundSessionActive = true
     activeGeneration = generation
     do {
       try capture?.start()
@@ -158,6 +162,7 @@ public final class AuroraIOSVoiceSessionHost {
     guard code == AURORA_IOS_VOICE_OK else {
       throw AuroraIOSVoiceSessionHostError.commandFailed(code)
     }
+    backgroundSessionActive = false
     activeGeneration = nil
   }
 
@@ -222,6 +227,43 @@ public final class AuroraIOSVoiceSessionHost {
         self?.cancelForLifecycleChange()
       }
     )
+    lifecycleObservers.append(
+      center.addObserver(
+        forName: UIApplication.didEnterBackgroundNotification,
+        object: nil,
+        queue: .main
+      ) { [weak self] _ in
+        self?.cancelForLifecycleChange(respectBackgroundSession: true)
+      }
+    )
+    lifecycleObservers.append(
+      center.addObserver(
+        forName: UIApplication.protectedDataWillBecomeUnavailableNotification,
+        object: nil,
+        queue: .main
+      ) { [weak self] _ in
+        self?.cancelForLifecycleChange(respectBackgroundSession: true)
+      }
+    )
+    lifecycleObservers.append(
+      center.addObserver(
+        forName: ProcessInfo.powerStateDidChangeNotification,
+        object: nil,
+        queue: .main
+      ) { [weak self] _ in
+        guard ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
+        self?.cancelForLifecycleChange()
+      }
+    )
+    lifecycleObservers.append(
+      center.addObserver(
+        forName: UIApplication.willTerminateNotification,
+        object: nil,
+        queue: .main
+      ) { [weak self] _ in
+        self?.cancelForLifecycleChange()
+      }
+    )
   }
 
   private func removeLifecycleObservers() {
@@ -230,11 +272,13 @@ public final class AuroraIOSVoiceSessionHost {
     lifecycleObservers.removeAll()
   }
 
-  private func cancelForLifecycleChange() {
+  private func cancelForLifecycleChange(respectBackgroundSession: Bool = false) {
+    if respectBackgroundSession && backgroundSessionActive { return }
     capture?.stop()
     playback?.stop()
     guard let nativeSession, let generation = activeGeneration else { return }
     _ = aurora_ios_voice_session_cancel(nativeSession, generation)
+    backgroundSessionActive = false
     activeGeneration = nil
   }
 }
