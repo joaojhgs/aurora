@@ -653,7 +653,7 @@
       "handler": "_on_listen",
       "source": {
         "file": "app/services/stt_coordinator/service.py",
-        "line": 1192
+        "line": 1201
       },
       "exposure": "both",
       "method_type": "use",
@@ -674,7 +674,7 @@
       "handler": "_on_stop_listening",
       "source": {
         "file": "app/services/stt_coordinator/service.py",
-        "line": 1245
+        "line": 1254
       },
       "exposure": "both",
       "method_type": "use",
@@ -695,7 +695,7 @@
       "handler": "_on_capture_prepare",
       "source": {
         "file": "app/services/stt_coordinator/service.py",
-        "line": 1427
+        "line": 1436
       },
       "exposure": "both",
       "method_type": "manage",
@@ -716,7 +716,7 @@
       "handler": "_on_capture_release",
       "source": {
         "file": "app/services/stt_coordinator/service.py",
-        "line": 1531
+        "line": 1540
       },
       "exposure": "both",
       "method_type": "manage",
@@ -737,7 +737,7 @@
       "handler": "_on_capture_status",
       "source": {
         "file": "app/services/stt_coordinator/service.py",
-        "line": 1603
+        "line": 1612
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1661,7 +1661,7 @@
       "handler": "get_capabilities",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 976
+        "line": 981
       },
       "exposure": "both",
       "method_type": "use",
@@ -1681,7 +1681,7 @@
       "handler": "list_voices",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1057
+        "line": 1062
       },
       "exposure": "both",
       "method_type": "use",
@@ -1701,7 +1701,7 @@
       "handler": "list_voice_profiles",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1082
+        "line": 1087
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1721,7 +1721,7 @@
       "handler": "get_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1105
+        "line": 1110
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1741,7 +1741,7 @@
       "handler": "update_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1128
+        "line": 1133
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1761,7 +1761,7 @@
       "handler": "install_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1155
+        "line": 1160
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1781,7 +1781,7 @@
       "handler": "remove_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1313
+        "line": 1318
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1801,7 +1801,7 @@
       "handler": "set_default_voice",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1340
+        "line": 1345
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1821,7 +1821,7 @@
       "handler": "voice_import_start",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1368
+        "line": 1373
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1841,7 +1841,7 @@
       "handler": "voice_import_chunk",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1432
+        "line": 1437
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1861,7 +1861,7 @@
       "handler": "voice_import_end",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1515
+        "line": 1520
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1881,7 +1881,7 @@
       "handler": "voice_import_abort",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1574
+        "line": 1579
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1901,7 +1901,7 @@
       "handler": "create_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1623
+        "line": 1628
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1921,7 +1921,7 @@
       "handler": "delete_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1679
+        "line": 1684
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1941,7 +1941,7 @@
       "handler": "_on_tts_request",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1754
+        "line": 1759
       },
       "exposure": "both",
       "method_type": "use",
@@ -1961,7 +1961,7 @@
       "handler": "_on_stream_start",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1807
+        "line": 1815
       },
       "exposure": "both",
       "method_type": "use",
@@ -1981,7 +1981,7 @@
       "handler": "_on_stream_chunk",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1875
+        "line": 1883
       },
       "exposure": "both",
       "method_type": "use",
@@ -2001,7 +2001,7 @@
       "handler": "_on_stream_end",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1923
+        "line": 1931
       },
       "exposure": "both",
       "method_type": "use",
@@ -2021,7 +2021,7 @@
       "handler": "synthesize",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2347
+        "line": 2355
       },
       "exposure": "both",
       "method_type": "use",
