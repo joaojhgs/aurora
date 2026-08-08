@@ -11,6 +11,18 @@ runtime or for any later device release. Every pending row remains blocked
 until the corresponding build, device, browser, or parity check has a fresh
 report.
 
+## Superseded TypeScript prototype disposition
+
+The former `@aurora/local-speech` workspace package was a provider-neutral
+manifest/lifecycle/storage prototype. It had no production imports. Its
+trust-boundary, lifecycle, atomic-install, revocation, quota, and rollback
+semantics are now covered by the Rust `aurora-voice-engine` and
+`aurora-voice-testkit` model-pack/store contracts and tests. The unused package
+was retired from the workspace during the Phase 8/9 integration cleanup so
+there is one production ownership path and one generated model-pack contract.
+The benchmark fixtures under `benchmarks/local-speech/` remain comparison
+inputs only and are not client runtime code.
+
 ## Decision boundary
 
 Phase 4 chooses the native runtime direction and fail-closed dependency set for
@@ -19,7 +31,7 @@ later implementation phases:
 - Rust `1.88.0` is the selected and pinned local build toolchain for this lane.
   The Tauri crate declaration and native CI workflows are aligned to that
   minimum after the complete Phase 4 build matrix.
-- sherpa-onnx `v1.13.4`, ONNX Runtime `v1.27.0`, CPAL `v0.17.3`, and
+- sherpa-onnx `v1.13.4`, ONNX Runtime `v1.27.0`, CPAL `v0.18.1`, and
   Emscripten `4.0.23` are the pinned runtime/build inputs for the selected
   integration shape.
 - The selected first-pass model set is English-only for ASR, VAD, and KWS:
@@ -40,7 +52,7 @@ later implementation phases:
 | sherpa-onnx source archive | `v1.13.4`, tag commit `142807252687d81b40d6315f23470a1512a00de3` | `3243cb386d3a4ac87596adf7d2c89fddf23e2948b154942b987b4d91c1fee295` | Pinned |
 | ONNX Runtime source archive | `v1.27.0`, commit `8f0278c77bf44b0cc83c098c6c722b92a36ac4b5` | `b41d09905a3c2f3a25709d1dcce8ef3942a4c2799d1046f74be7b6bbebc45e6a` | Pinned |
 | ONNX Runtime Linux x64 probe package | `1.27.0`, glibc 2.17 release | `9f0c0a6998f1b94c399eeddcb443beb4a922c9a4fd431fdc9cd6de67a1935d00` | Exact prebuilt consumed by the Linux shared-library probe; the source archive above is provenance input, not a source-build claim |
-| CPAL source archive | `v0.17.3`, commit `fd3b945bffcaa493fa7cb5ceddf9db1f9330fd30` | `1997859032580ec8a45235d8aeee093f12c69780c27051411de83d415028d14f` | Pinned |
+| CPAL crates.io package | `v0.18.1` | registry checksum `5f77b11176c37874be37e8d691c946e31b2b8c357abce9526f6a99eb469e1028` | Pinned in `rust/Cargo.lock`; source archive provenance is not claimed |
 | Emscripten SDK archive | `4.0.23` | `a91a4c1f42dbb0345faac093161e27d43e9b6964840d8c8d80976ab8d3eaf2d3` | Pinned |
 | ONNX Runtime Android package | `1.27.0` | `a78f303a26b5e75c84c8b2a97fa2ddb400b2d1b5e069bec19aa229ccd3597fdb` | Pinned; staged prebuilt for Android source builds |
 | ONNX Runtime WASM SIMD static package | `1.27.0` | `076680969c74225caf0a6d08c0be5edd2c242b081c33cede77dcc5eac355bbcf` | Pinned |
@@ -74,7 +86,7 @@ Moonshine extracted file hashes already recorded for integration:
 
 | Surface | Decision | Current status |
 | --- | --- | --- |
-| Desktop local | Use Rust host code for model lifecycle and native HTTP/SSE; use CPAL `0.17.3` as the desktop audio capture/playback candidate. | Linux sherpa shared-library build completed. Standalone CPAL capture/playback and Android comparison checks passed; the full integrated local audio path remains pending. |
+| Desktop local | Use Rust host code for model lifecycle and native HTTP/SSE; use CPAL `0.18.1` as the desktop audio capture/playback candidate. | Linux sherpa shared-library build completed. Standalone CPAL capture/playback and Android comparison checks passed; the full integrated local audio path remains pending. |
 | Hosted web and WebView foreground capture | Use browser microphone capture and worker-hosted WASM modules; keep the UI thread nonblocking. | Chromium, Firefox, and WebKit pass worker-hosted VAD, Moonshine ASR, and KWS with COOP/COEP and `SharedArrayBuffer`. KWS uses the selected full GigaSpeech BPE pack and detects `LOVELY CHILD` and `FOREVER`; the smaller mobile pack remains disqualified by the ONNX Runtime reshape abort. TTS is withheld from activation. |
 | Android | Use Kotlin `AudioRecord`/`AudioManager` lifecycle and data plane into Rust with bounded PCM transfer. Treat CPAL/AAudio as comparison only for this phase. | sherpa source-built for `arm64-v8a` and `x86_64` against staged prebuilt ONNX Runtime. All four inspected libraries are ELF-correct and every LOAD segment is `0x4000` aligned. Kotlin audio ingress through JNI into a bounded Rust PCM queue packages for `arm64-v8a` and `x86_64`; the API 35 x86_64 emulator smoke proves synthetic JNI ingress and permission-granted `AudioRecord` frames reaching Rust. WebView parity, durable background voice, physical-device results, and Android sherpa VAD/STT runtime remain pending. |
 | iOS | Use Swift `AVAudioEngine`/`AVAudioSession` lifecycle and data plane into Rust. Treat CPAL/CoreAudio as comparison only for this phase. | A bounded Swift-to-C-to-Rust source spike and host-Rust tests prove the ownership, restart, queue, and FFI shape. Hash-pinned XCFrameworks contain the expected device `arm64`/iOS slice and simulator `arm64`+`x86_64`/iOSSimulator slices. Swift compilation, runtime linking, signing, simulator execution, device microphone behavior, and packaged runtime validation remain pending. |

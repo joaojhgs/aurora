@@ -241,6 +241,9 @@ describe('createAuroraBrowserClient', () => {
       meshNodeRuntimeEnabled: false,
       localToolProviderEnabled: false,
       lightweightOrchestratorEnabled: false,
+      usesBrowserVoiceRuntime: true,
+      focusedPushToTalkOwner: 'webview-focused',
+      wakewordOwner: 'webview-focused',
     })
     expect(runtime.peer.snapshot().protocolCapabilities).not.toContain('hybrid')
     await runtime.close()
