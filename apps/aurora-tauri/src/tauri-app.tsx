@@ -197,6 +197,7 @@ export const tauriRouteRegistry = {
       executionHost={nativeContext.thinPeer ? "connected-device" : "this-device"}
       localAssistant={tauriLocalAssistant(nativeContext, client)}
       nativeVoice={nativeContext.nativeVoice}
+      nativeMobileVoice={nativeContext.nativeMobileVoice}
       runtimeHealth={{
         selectedModel: null,
         routeLabel: nativeContext.thinPeer
@@ -788,6 +789,7 @@ export function AuroraTauriApp({
     nativePlatform: snapshot.nativePlatform,
     nodeMode: runtime.nodeMode,
     runtimeTier: runtime.runtimeTier,
+    nativeVoiceAvailable: runtime.nativeMobileVoice !== undefined,
     userAgent:
       typeof window === "undefined" ? undefined : window.navigator.userAgent,
   });
@@ -820,6 +822,7 @@ export function AuroraTauriApp({
     runtimeProfile: runtime.runtimeProfile,
     localData: runtime.localData,
     nativeVoice: runtime.nativeVoice,
+    nativeMobileVoice: runtime.nativeMobileVoice,
     thinProfile: runtime.thinProfile,
     thinProfileController: runtime.thinProfileController,
     saveThinProfile,
@@ -1301,6 +1304,7 @@ interface NativeContext {
   runtimeProfile?: AuroraTauriRuntime["runtimeProfile"];
   localData?: AuroraTauriRuntime["localData"];
   nativeVoice?: AuroraTauriRuntime["nativeVoice"];
+  nativeMobileVoice?: AuroraTauriRuntime["nativeMobileVoice"];
   thinProfile?: AuroraThinConnectionProfile | undefined;
   thinProfileController?: AuroraTauriRuntime["thinProfileController"];
   saveThinProfile: (

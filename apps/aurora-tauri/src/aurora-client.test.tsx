@@ -1608,6 +1608,9 @@ describe("Aurora Tauri runtime wrapper", () => {
         meshNodeRuntimeEnabled: true,
         localToolProviderEnabled: true,
         lightweightOrchestratorEnabled: true,
+        usesBrowserVoiceRuntime: false,
+        focusedPushToTalkOwner: "native-desktop",
+        wakewordOwner: "unavailable",
       },
       localAssistant: {
         provider: {

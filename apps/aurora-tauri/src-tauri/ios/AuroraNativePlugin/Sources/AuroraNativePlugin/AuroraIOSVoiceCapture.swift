@@ -35,7 +35,7 @@ public final class AuroraIOSVoiceCapture {
   ) {
     self.session = session
     self.maxChunkSamples = AVAudioFrameCount(max(1, maxChunkSamples))
-    self.state = aurora_ios_audio_state_new(capacityChunks, maxChunkSamples)
+    self.state = aurora_ios_audio_state_new(UInt(capacityChunks), UInt(maxChunkSamples))
   }
 
   deinit {
@@ -69,7 +69,7 @@ public final class AuroraIOSVoiceCapture {
       let result = aurora_ios_audio_state_push_pcm_f32(
         state,
         channels[0],
-        frameCount,
+        UInt(frameCount),
         self.sequence,
         UInt32(format.sampleRate.rounded())
       )

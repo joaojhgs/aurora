@@ -49,6 +49,7 @@ import {
   type BrowserPeerPersistenceStatus,
   type BrowserWebThinRuntime,
   type NativeDesktopVoicePort,
+  type NativeMobileVoicePort,
 } from "@aurora/ui";
 import {
   NativePeerCredentialStore,
@@ -79,6 +80,7 @@ import {
   type TauriMeshNodeServicesOptions,
 } from "./tauri-mesh-node-services";
 import { createTauriNativeDesktopVoicePort } from "./native-voice";
+import { createTauriNativeAndroidVoicePort } from "./native-android-voice";
 
 export const TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS = 90_000;
 
@@ -102,6 +104,7 @@ export interface AuroraTauriRuntime {
   localAssistant?: AuroraTauriLightweightAssistantConfig | undefined;
   localData?: AuroraTauriLocalDataRuntime | undefined;
   nativeVoice?: NativeDesktopVoicePort | undefined;
+  nativeMobileVoice?: NativeMobileVoicePort | undefined;
   thinProfileConfigured: boolean;
   requiresOnboarding: boolean;
   pendingThinInviteText: string | null;
@@ -503,6 +506,9 @@ export function createAuroraTauriRuntime({
     const nativeVoice = isDesktopTauriRuntime()
       ? createTauriNativeDesktopVoicePort({ invoke, listen })
       : undefined;
+    const nativeMobileVoice = isAndroidTauriRuntime()
+      ? createTauriNativeAndroidVoicePort(invoke)
+      : undefined;
     const isMobileNative = isMobileTauriRuntime();
 
     if (isMobileNative) {
@@ -564,6 +570,7 @@ export function createAuroraTauriRuntime({
             ? localAssistant ?? connectedAuroraInferenceAssistant(thinRuntime.client)
             : undefined,
           localData: localDataRuntime(meshNodeServices),
+          nativeMobileVoice,
           thinProfileConfigured: runtimeProfileConfigured,
           requiresOnboarding: !runtimeProfileConfigured,
           pendingThinInviteText: thinInviteText,

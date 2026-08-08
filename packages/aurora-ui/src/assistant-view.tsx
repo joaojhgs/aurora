@@ -78,6 +78,7 @@ import { EvidenceBadge, StatusBadge } from './status-badges'
 import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from './platform-surface'
 import type { AuroraSurfaceProfile } from './platform-surface'
 import type { NativeDesktopVoicePhase, NativeDesktopVoicePort, NativeDesktopVoiceStatus, NativeDesktopVoiceStopReason } from './native-desktop-voice'
+import type { NativeMobileVoicePort } from './native-mobile-voice'
 import {
   createLightweightAssistantOrchestrator,
   isLightweightLocalAssistantAvailable,
@@ -102,6 +103,7 @@ export interface AssistantViewProps {
   localAssistant?: LightweightAssistantDependencies | null | undefined
   surfaceProfile?: AuroraSurfaceProfile | undefined
   nativeVoice?: NativeDesktopVoicePort | null | undefined
+  nativeMobileVoice?: NativeMobileVoicePort | null | undefined
 }
 
 export interface AssistantRuntimeHealth {
@@ -371,7 +373,8 @@ export function AssistantView({
   executionHost = 'this-device',
   localAssistant = null,
   surfaceProfile: providedSurfaceProfile,
-  nativeVoice = null
+  nativeVoice = null,
+  nativeMobileVoice = null
 }: AssistantViewProps) {
   const [session, setSession] = useState<AssistantSessionSnapshot>(() => initialSession ?? defaultAssistantSessionForTransport(client.transport.kind))
   const [sessionIndex, setSessionIndex] = useState<DBSessionRecord[]>([])
@@ -584,6 +587,7 @@ export function AssistantView({
     userAgent: typeof navigator === 'undefined' ? undefined : navigator.userAgent
   }), [client.transport.kind, nativePlatform, providedSurfaceProfile])
   const usesNativeDesktopVoice = surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'native-desktop'
+  const usesNativeMobileVoice = surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'mobile-native'
   const receivesCoordinatorVoiceEvents = surfaceProfile.voiceCapture.wakewordOwner === 'coordinator-daemon'
   const remotePrivacyWarning = assistantRemotePrivacyWarning(route)
   const voiceModel = useMemo(
@@ -821,6 +825,7 @@ export function AssistantView({
     stopStreamedTtsPlayback()
     stopLocalCapture()
     void cancelNativeDesktopVoice('shutdown')
+    void cancelNativeMobileVoice()
     const token = browserVoiceOperationTokenRef.current
     browserVoiceOperationTokenRef.current += 1
     void (async () => {
@@ -984,6 +989,26 @@ export function AssistantView({
   }, [nativeVoice, usesNativeDesktopVoice])
 
   useEffect(() => {
+    if (!usesNativeMobileVoice || !nativeMobileVoice) return
+    let active = true
+    void nativeMobileVoice.status().then((status) => {
+      if (!active) return
+      if (!status.available) {
+        setVoiceCaptureStatus('no-device')
+      } else if (status.phase === 'faulted') {
+        setVoiceCaptureStatus('error')
+      } else if (status.captureActive) {
+        setVoiceCaptureStatus('listening')
+      }
+    }).catch(() => {
+      if (active) setVoiceCaptureStatus('error')
+    })
+    return () => {
+      active = false
+    }
+  }, [nativeMobileVoice, usesNativeMobileVoice])
+
+  useEffect(() => {
     if (!surfaceProfile.voiceCapture.avoidCoordinatorPushToTalk) return
     if (typeof document === 'undefined' || typeof window === 'undefined') return
     const releaseFocusedCapture = (event?: Event) => {
@@ -993,6 +1018,10 @@ export function AssistantView({
       if (!hidden && !blurred && !nativeRelease) return
       if (usesNativeDesktopVoice) {
         requestNativeDesktopVoiceCancel('window_hidden')
+        return
+      }
+      if (usesNativeMobileVoice) {
+        void cancelNativeMobileVoice()
         return
       }
       if (!voiceStreamRef.current && !browserVoiceRuntimeRef.current) return
@@ -1007,7 +1036,7 @@ export function AssistantView({
       window.removeEventListener('blur', releaseFocusedCapture)
       window.removeEventListener(AURORA_RELEASE_FOCUSED_MEDIA_EVENT, releaseFocusedCapture)
     }
-  }, [surfaceProfile.voiceCapture.avoidCoordinatorPushToTalk, usesNativeDesktopVoice])
+  }, [surfaceProfile.voiceCapture.avoidCoordinatorPushToTalk, usesNativeDesktopVoice, usesNativeMobileVoice])
 
   useEffect(() => {
     const active = voiceCaptureStatus === 'listening' || voiceCaptureStatus === 'processing' || voiceCaptureStatus === 'speaking'
@@ -2766,6 +2795,67 @@ export function AssistantView({
     }
   }
 
+  async function startNativeMobileVoice(): Promise<boolean> {
+    if (!nativeMobileVoice) {
+      setVoiceCaptureStatus('no-device')
+      setLastError('Voice is unavailable on this device.')
+      return false
+    }
+    setVoiceConsentGranted(true)
+    setStreamState((current) => ({ ...current, status: 'streaming', message: 'Starting voice...' }))
+    try {
+      const status = await nativeMobileVoice.start({ remoteAudioConsent: voiceConsentGranted })
+      if (!status.available || status.phase === 'unavailable' || status.phase === 'faulted') {
+        setVoiceCaptureStatus('error')
+        setLastError('Voice could not start. Check microphone access on this device.')
+        return false
+      }
+      setVoiceCaptureStatus('listening')
+      return true
+    } catch {
+      setVoiceCaptureStatus('error')
+      setLastError('Voice could not start. Check microphone access on this device.')
+      return false
+    }
+  }
+
+  async function finishNativeMobileVoice(): Promise<boolean> {
+    if (!nativeMobileVoice) return false
+    setVoiceCaptureStatus('processing')
+    setStreamState((current) => ({ ...current, status: 'streaming', message: 'Voice captured. Aurora is processing the request.' }))
+    try {
+      const status = await nativeMobileVoice.finish()
+      if (status.phase === 'faulted') {
+        setVoiceCaptureStatus('error')
+        setLastError('Voice could not finish cleanly. Try again.')
+        return false
+      }
+      setVoiceCaptureStatus('idle')
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.clear()
+      return true
+    } catch {
+      setVoiceCaptureStatus('error')
+      setLastError('Voice could not finish cleanly. Try again.')
+      return false
+    }
+  }
+
+  async function cancelNativeMobileVoice(): Promise<boolean> {
+    if (!nativeMobileVoice) return false
+    try {
+      await nativeMobileVoice.cancel()
+      setVoiceCaptureStatus('idle')
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.clear()
+      return true
+    } catch {
+      setVoiceCaptureStatus('error')
+      setLastError('Voice could not stop cleanly. Try again.')
+      return false
+    }
+  }
+
   function browserVoiceLifecycleEligibility() {
     const visible = typeof document === 'undefined' ? true : document.visibilityState !== 'hidden'
     const focused = typeof document === 'undefined' || typeof document.hasFocus !== 'function' || document.hasFocus()
@@ -3076,6 +3166,10 @@ export function AssistantView({
         await finishNativeDesktopVoice()
         return
       }
+      if (usesNativeMobileVoice) {
+        await finishNativeMobileVoice()
+        return
+      }
       const sessionId = activeVoiceSessionRef.current
       if (surfaceProfile.voiceCapture.usesBrowserVoiceRuntime) {
         await stopBrowserVoiceCapture()
@@ -3109,6 +3203,11 @@ export function AssistantView({
     setLastError(null)
     if (usesNativeDesktopVoice) {
       await startNativeDesktopVoice()
+      return
+    }
+    if (usesNativeMobileVoice) {
+      await interruptTtsForVoiceCapture()
+      await startNativeMobileVoice()
       return
     }
     void interruptTtsForVoiceCapture()

@@ -494,15 +494,35 @@ public final class AuroraNativePlugin: Plugin {
   }
 
   @objc public func voiceForegroundCaptureStart(_ invoke: Invoke) {
-    guard AVAudioSession.sharedInstance().recordPermission == .granted else {
-      invoke.reject("microphone_permission_required")
-      return
+    let startCapture: () -> Void = { [weak self] in
+      guard let self else {
+        invoke.reject("capture_unavailable")
+        return
+      }
+      do {
+        try self.voiceCapture.start()
+        invoke.resolve(AuroraNativePlugin.voiceCapturePayload(self.voiceCapture.stats()))
+      } catch {
+        invoke.reject("capture_unavailable")
+      }
     }
-    do {
-      try voiceCapture.start()
-      invoke.resolve(AuroraNativePlugin.voiceCapturePayload(voiceCapture.stats()))
-    } catch {
-      invoke.reject("capture_unavailable")
+    switch AVAudioSession.sharedInstance().recordPermission {
+    case .granted:
+      startCapture()
+    case .undetermined:
+      AVAudioSession.sharedInstance().requestRecordPermission { granted in
+        DispatchQueue.main.async {
+          guard granted else {
+            invoke.reject("microphone_permission_denied")
+            return
+          }
+          startCapture()
+        }
+      }
+    case .denied:
+      invoke.reject("microphone_permission_denied")
+    @unknown default:
+      invoke.reject("microphone_permission_unavailable")
     }
   }
 

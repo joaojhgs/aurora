@@ -36,6 +36,11 @@ use url::Url;
 mod android_audio;
 #[cfg(target_os = "ios")]
 use aurora_voice_ios_bridge::*;
+#[cfg(target_os = "ios")]
+#[used]
+static AURORA_IOS_VOICE_BRIDGE_LINK_ANCHOR:
+    extern "C" fn(usize, usize) -> *mut aurora_voice_ios_bridge::AuroraIosAudioState =
+    aurora_voice_ios_bridge::aurora_ios_audio_state_new;
 mod local_data_native;
 mod native_voice;
 mod native_webrtc;
@@ -1843,6 +1848,63 @@ async fn aurora_android_voice_foreground_service_status(
         let _ = native;
         Err(AuroraCommandError::UnsupportedFeature(
             "Android voice foreground service status is only available in the Android Tauri shell"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_android_voice_foreground_service_start(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(native, "startVoiceForegroundService", json!({}))
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android voice foreground service start is only available in the Android Tauri shell"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_android_voice_foreground_service_finish(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(native, "finishVoiceForegroundService", json!({}))
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android voice foreground service finish is only available in the Android Tauri shell"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_android_voice_foreground_service_cancel(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(native, "stopVoiceForegroundService", json!({}))
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android voice foreground service cancel is only available in the Android Tauri shell"
                 .to_string(),
         ))
     }
@@ -7323,6 +7385,9 @@ pub fn run() {
             aurora_android_lifecycle_status,
             aurora_android_webview_microphone_permission_decision,
             aurora_android_voice_foreground_service_status,
+            aurora_android_voice_foreground_service_start,
+            aurora_android_voice_foreground_service_finish,
+            aurora_android_voice_foreground_service_cancel,
             aurora_ios_native_plugin_manifest,
             aurora_ios_invocation_status,
             aurora_ios_local_light_inference_status,
@@ -8456,6 +8521,8 @@ mod tests {
         assert!(swift_capture.contains("aurora_ios_audio_state_push_pcm_f32"));
         assert!(swift_capture.contains("aurora_ios_audio_state_reset"));
         assert!(swift_capture.contains("setActive(false"));
+        let rust_source = include_str!("lib.rs");
+        assert!(rust_source.contains("AURORA_IOS_VOICE_BRIDGE_LINK_ANCHOR"));
 
         let voice_header = include_str!(
             "../ios/AuroraNativePlugin/Sources/CAuroraIOSVoiceBridge/include/aurora_ios_voice_bridge.h"
@@ -9464,10 +9531,14 @@ mod tests {
         let interaction_session = include_str!(
             "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraVoiceInteractionSessionService.kt"
         );
+        let rust_source = include_str!("lib.rs");
         for required in [
             "AudioRecord.Builder()",
             "HandlerThread(\"aurora-audio-capture\")",
             "ACTION_STOP",
+            "ACTION_FINISH",
+            "finishHandler",
+            "awaitFinishedSession",
             ".addAction(Notification.Action.Builder",
             "System.loadLibrary(\"aurora_tauri_lib\")",
             "nativePushPcm",
@@ -9484,6 +9555,7 @@ mod tests {
             "nativeStart",
             "nativeFinish",
             "nativeCancel",
+            "finishNativeSession",
             "AudioTrack.Builder()",
             "audio_record_read_failed",
             "requestAudioFocus",
@@ -9536,6 +9608,20 @@ mod tests {
             );
         }
         assert!(plugin.contains("captureBackend"));
+        for command in [
+            "startVoiceForegroundService",
+            "finishVoiceForegroundService",
+            "stopVoiceForegroundService",
+        ] {
+            assert!(plugin.contains(command), "{command}");
+        }
+        for command in [
+            "aurora_android_voice_foreground_service_start",
+            "aurora_android_voice_foreground_service_finish",
+            "aurora_android_voice_foreground_service_cancel",
+        ] {
+            assert!(rust_source.contains(command), "{command}");
+        }
         assert!(plugin.contains("backendAudioEvidenceRequired"));
         for required in [
             "VoiceInteractionSessionService",

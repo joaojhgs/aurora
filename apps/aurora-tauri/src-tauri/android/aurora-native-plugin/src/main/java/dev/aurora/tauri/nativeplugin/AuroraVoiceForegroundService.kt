@@ -20,6 +20,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.os.Looper
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -481,6 +482,7 @@ class AuroraVoiceForegroundService : Service() {
     private var sessionGeneration: Long = 0L
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
+    private val finishHandler = Handler(Looper.getMainLooper())
 
     private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { change ->
         when (change) {
@@ -531,6 +533,10 @@ class AuroraVoiceForegroundService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        if (intent?.action == ACTION_FINISH) {
+            finishNativeSession()
+            return START_NOT_STICKY
+        }
         running = true
         startForeground(AURORA_VOICE_NOTIFICATION_ID, foregroundNotification("Starting microphone…"))
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -564,6 +570,7 @@ class AuroraVoiceForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        finishHandler.removeCallbacksAndMessages(null)
         capture?.close()
         capture = null
         stopNativeSession()
@@ -638,6 +645,32 @@ class AuroraVoiceForegroundService : Service() {
         session = null
     }
 
+    private fun finishNativeSession() {
+        val nativeSession = session ?: return
+        if (sessionGeneration != 0L) {
+            nativeSession.finish(sessionGeneration)
+        }
+        capture?.close()
+        capture = null
+        sessionGeneration = 0L
+        awaitFinishedSession()
+    }
+
+    private fun awaitFinishedSession() {
+        val nativeSession = session ?: run {
+            stopSelf()
+            return
+        }
+        val stats = nativeSession.stats()
+        val active = stats.getOrElse(5) { 0L } != 0L
+        val queuedOutput = stats.getOrElse(10) { 0L }
+        if (active || queuedOutput > 0L) {
+            finishHandler.postDelayed({ awaitFinishedSession() }, 100L)
+            return
+        }
+        stopSelf()
+    }
+
     private fun updateNotification(snapshot: AuroraVoiceCaptureSnapshot) {
         if (!running) return
         val manager = getSystemService(NotificationManager::class.java)
@@ -682,6 +715,7 @@ class AuroraVoiceForegroundService : Service() {
 
     companion object {
         const val ACTION_STOP = "dev.aurora.tauri.nativeplugin.action.STOP_VOICE_CAPTURE"
+        const val ACTION_FINISH = "dev.aurora.tauri.nativeplugin.action.FINISH_VOICE_CAPTURE"
         const val ACTION_START_ASSISTANT = "dev.aurora.tauri.nativeplugin.action.START_ASSISTANT_VOICE"
 
         @Volatile

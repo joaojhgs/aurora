@@ -492,6 +492,24 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     }
 
     @Command
+    fun finishVoiceForegroundService(invoke: Invoke) {
+        val intent = Intent(activity, AuroraVoiceForegroundService::class.java).apply {
+            action = AuroraVoiceForegroundService.ACTION_FINISH
+        }
+        val delivered = if (AuroraVoiceForegroundService.running) {
+            activity.startService(intent)
+            true
+        } else {
+            false
+        }
+        val ret = JSObject()
+        ret.put("finished", delivered)
+        ret.put("status", voiceForegroundServiceStatusObject())
+        ret.put("reason", if (delivered) "foreground_service_finish_requested" else "foreground_service_not_running")
+        invoke.resolve(ret)
+    }
+
+    @Command
     fun entrypointPayload(invoke: Invoke) {
         val ret = JSObject()
         ret.put("payload", lastEntrypointPayloadObject())

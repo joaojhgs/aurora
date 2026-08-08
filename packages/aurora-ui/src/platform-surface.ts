@@ -24,6 +24,7 @@ export interface AuroraSurfaceProfileInput {
   userAgent?: string | null | undefined
   nodeMode?: AuroraNodeMode | null | undefined
   runtimeTier?: AuroraRuntimeTier | null | undefined
+  nativeVoiceAvailable?: boolean | undefined
 }
 
 export interface AuroraSurfaceProfile {
@@ -155,7 +156,9 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
   const canManageLocalServiceConfiguration = usesLocalSidecar || legacyKind === 'mock'
   const ownsLocalNodeState = nodeMode === 'mesh-node' || usesLocalSidecar
   const isRemoteConsole = !ownsLocalNodeState
-  const voiceCapture = getAuroraVoiceCapturePolicy(legacyKind)
+  const voiceCapture = getAuroraVoiceCapturePolicy(legacyKind, {
+    nativeVoiceAvailable: input.nativeVoiceAvailable === true,
+  })
   const usesBrowserVoiceRuntime = physicalKind === 'hosted-web' && !usesNativeShell
   return {
     physicalKind,
@@ -232,7 +235,10 @@ export function shouldShowForSurface(profile: AuroraSurfaceProfile, feature: Aur
   }
 }
 
-export function getAuroraVoiceCapturePolicy(kind: LegacyAuroraSurfaceKind): AuroraVoiceCapturePolicy {
+export function getAuroraVoiceCapturePolicy(
+  kind: LegacyAuroraSurfaceKind,
+  options: { nativeVoiceAvailable?: boolean } = {},
+): AuroraVoiceCapturePolicy {
   switch (kind) {
     case 'desktop-local':
       return {
@@ -265,6 +271,17 @@ export function getAuroraVoiceCapturePolicy(kind: LegacyAuroraSurfaceKind): Auro
         detail: 'Browser capture is available only while the page is focused.'
       }
     case 'android':
+      if (options.nativeVoiceAvailable === true) {
+        return {
+          focusedPushToTalkOwner: 'mobile-native',
+          wakewordOwner: 'mobile-native',
+          wakewordRequiresFocus: false,
+          canUseWebViewVisualizer: false,
+          avoidCoordinatorPushToTalk: true,
+          usesBrowserVoiceRuntime: false,
+          detail: 'Android voice controls use the device microphone outside the app window.'
+        }
+      }
       return {
         focusedPushToTalkOwner: 'webview-focused',
         wakewordOwner: 'webview-focused',
