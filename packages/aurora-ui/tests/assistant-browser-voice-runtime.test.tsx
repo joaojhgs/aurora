@@ -521,7 +521,7 @@ describe('Assistant hosted browser voice runtime', () => {
 
     expect(nativeVoice.start).toHaveBeenCalledWith({
       trigger: 'focused_push_to_talk',
-      remoteAudioConsent: false
+      remoteAudioConsent: true
     })
     expect(nativeVoice.finish).toHaveBeenCalledWith({ generation: 1, reason: 'user_request' })
     expect(voiceRuntimeMock.create).not.toHaveBeenCalled()

@@ -2654,7 +2654,7 @@ export function AssistantView({
     try {
       const status = await nativeVoice.start({
         trigger: 'focused_push_to_talk',
-        remoteAudioConsent: voiceConsentGranted
+        remoteAudioConsent: true
       })
       const pendingReason = nativeVoicePendingCancelReasonRef.current
       if (
@@ -2804,7 +2804,7 @@ export function AssistantView({
     setVoiceConsentGranted(true)
     setStreamState((current) => ({ ...current, status: 'streaming', message: 'Starting voice...' }))
     try {
-      const status = await nativeMobileVoice.start({ remoteAudioConsent: voiceConsentGranted })
+      const status = await nativeMobileVoice.start({ remoteAudioConsent: true })
       if (!status.available || status.phase === 'unavailable' || status.phase === 'faulted') {
         setVoiceCaptureStatus('error')
         setLastError('Voice could not start. Check microphone access on this device.')
