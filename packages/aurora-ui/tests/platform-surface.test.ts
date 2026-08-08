@@ -177,6 +177,17 @@ describe('Aurora surface profile regression coverage', () => {
     expect(findForbiddenProductionCopyTerms(android.voiceCapture.detail)).toEqual([])
   })
 
+  it('fails closed for legacy mobile profiles without a native voice adapter', () => {
+    const mobile = getAuroraSurfaceProfile({ runtimeMode: 'mobile', transportKind: 'native-mobile' })
+
+    expect(mobile.kind).toBe('mobile')
+    expect(mobile.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
+    expect(mobile.voiceCapture.wakewordOwner).toBe('unavailable')
+    expect(mobile.voiceCapture.wakewordRequiresFocus).toBe(true)
+    expect(mobile.voiceCapture.canUseWebViewVisualizer).toBe(true)
+    expect(findForbiddenProductionCopyTerms(mobile.voiceCapture.detail)).toEqual([])
+  })
+
   it('withholds Android voice when the native adapter exists without a ready route', () => {
     const android = getAuroraSurfaceProfile({
       runtimeMode: 'mobile-native',

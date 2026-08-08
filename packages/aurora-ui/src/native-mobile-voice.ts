@@ -17,7 +17,6 @@ export interface NativeMobileVoiceStatus {
 export interface NativeMobileVoicePort {
   status(): Promise<NativeMobileVoiceStatus>
   start(request: { remoteAudioConsent: boolean }): Promise<NativeMobileVoiceStatus>
-  startBackground(request: { remoteAudioConsent: boolean }): Promise<NativeMobileVoiceStatus>
   finish(): Promise<NativeMobileVoiceStatus>
   cancel(): Promise<NativeMobileVoiceStatus>
 }

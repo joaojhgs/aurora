@@ -742,7 +742,6 @@ function createNativeMobileVoicePort(): NativeMobileVoicePort & {
   const port = {
     status: vi.fn(async () => nativeMobileStatus('idle', true)),
     start: vi.fn(async () => nativeMobileStatus('listening', true)),
-    startBackground: vi.fn(async () => nativeMobileStatus('idle', true)),
     finish: vi.fn(async () => nativeMobileStatus('processing', true)),
     cancel: vi.fn(async () => nativeMobileStatus('idle', true)),
   }

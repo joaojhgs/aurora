@@ -318,12 +318,12 @@ export function getAuroraVoiceCapturePolicy(
     case 'mobile':
       return {
         focusedPushToTalkOwner: 'webview-focused',
-        wakewordOwner: 'mobile-native',
+        wakewordOwner: 'unavailable',
         wakewordRequiresFocus: true,
         canUseWebViewVisualizer: true,
         avoidCoordinatorPushToTalk: true,
         usesBrowserVoiceRuntime: false,
-        detail: 'Mobile push-to-talk is available while Aurora is open. Background voice depends on device support.'
+        detail: 'Mobile push-to-talk is available while Aurora is open. Background voice is unavailable on this device.'
       }
     case 'mock':
     case 'unknown':

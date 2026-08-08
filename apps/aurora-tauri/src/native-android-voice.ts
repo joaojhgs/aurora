@@ -16,11 +16,6 @@ export function createTauriNativeAndroidVoicePort(
         request: { remoteAudioConsent },
       }),
     ),
-    startBackground: async ({ remoteAudioConsent }) => parseStatus(
-      await callNative("aurora_android_voice_foreground_service_start", {
-        request: { remoteAudioConsent, backgroundSession: true },
-      }),
-    ),
     finish: async () => parseStatus(
       await callNative("aurora_android_voice_foreground_service_finish"),
     ),
