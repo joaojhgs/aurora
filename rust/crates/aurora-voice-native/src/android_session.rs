@@ -448,7 +448,7 @@ async fn run_turn<'a>(
             Box::pin(runtime.run_push_to_talk_turn(lease, at, cancellation.clone()))
         }
         AndroidVoiceStartMode::BackgroundSession => {
-            Box::pin(runtime.run_wake_turn(lease, at, cancellation.clone()))
+            Box::pin(runtime.run_background_turn(lease, at, cancellation.clone()))
         }
     };
     loop {

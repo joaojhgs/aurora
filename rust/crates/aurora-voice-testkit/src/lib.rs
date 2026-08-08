@@ -1411,6 +1411,44 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn fake_background_turn_preserves_background_capture_lease() -> Result<(), VoiceCoreError>
+    {
+        let frames = vec![fake_frame(1, Generation(1))?];
+        let audio = FakeAudioInput::new(frames);
+        let engine = FakeEngine::new("background phrase");
+        let transport = FakeTransport::new("background answer");
+        let output = FakeAudioOutput::new();
+        let sink = FakeEventSink::default();
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine.clone(),
+            engine,
+            transport,
+            output,
+            sink,
+            "test",
+            "android-background-test",
+        )?;
+        let mut lease = fake_lease(CaptureStartReason::BackgroundSession);
+        lease.background_eligible = true;
+
+        let response = runtime
+            .run_background_turn(lease, TimestampMicros(40), CancellationToken::new())
+            .await?;
+        assert_eq!(response, "background answer");
+        assert_eq!(runtime.state(), VoiceState::Idle);
+        let (audio, _engine, _tts, _transport, _output, _sink) = runtime.into_parts();
+        let started = audio.started();
+        assert_eq!(started.len(), 1);
+        assert_eq!(
+            started[0].start_reason,
+            CaptureStartReason::BackgroundSession
+        );
+        assert!(started[0].background_eligible);
+        Ok(())
+    }
+
     #[test]
     fn fake_clock_is_deterministic() {
         let mut clock = FakeClock::new();

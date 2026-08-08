@@ -1001,11 +1001,39 @@ where
 
     pub async fn run_wake_turn(
         &mut self,
-        mut lease: VoiceCaptureLease,
+        lease: VoiceCaptureLease,
         at: TimestampMicros,
         cancellation: CancellationToken,
     ) -> Result<String, VoiceCoreError> {
-        lease.start_reason = CaptureStartReason::ForegroundWake;
+        self.run_wake_turn_with_reason(lease, at, cancellation, CaptureStartReason::ForegroundWake)
+            .await
+    }
+
+    /// Runs a native background session through the same wake/turn path while
+    /// preserving the background start reason on the accepted capture lease.
+    pub async fn run_background_turn(
+        &mut self,
+        lease: VoiceCaptureLease,
+        at: TimestampMicros,
+        cancellation: CancellationToken,
+    ) -> Result<String, VoiceCoreError> {
+        self.run_wake_turn_with_reason(
+            lease,
+            at,
+            cancellation,
+            CaptureStartReason::BackgroundSession,
+        )
+        .await
+    }
+
+    async fn run_wake_turn_with_reason(
+        &mut self,
+        mut lease: VoiceCaptureLease,
+        at: TimestampMicros,
+        cancellation: CancellationToken,
+        start_reason: CaptureStartReason,
+    ) -> Result<String, VoiceCoreError> {
+        lease.start_reason = start_reason;
         let lease = self.leases.request_start(lease)?;
         let mut capture_started = false;
         let result = match cancellation.check() {
