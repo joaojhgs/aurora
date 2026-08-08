@@ -4,28 +4,28 @@ import type {
   NativeMobileVoiceStatus,
 } from "@aurora/ui";
 
-type NativeInvoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
+type NativeCommand = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
 export function createTauriNativeAndroidVoicePort(
-  invoke: NativeInvoke,
+  callNative: NativeCommand,
 ): NativeMobileVoicePort {
   return {
-    status: async () => parseStatus(await invoke("aurora_android_voice_foreground_service_status")),
+    status: async () => parseStatus(await callNative("aurora_android_voice_foreground_service_status")),
     start: async ({ remoteAudioConsent }) => parseStatus(
-      await invoke("aurora_android_voice_foreground_service_start", {
+      await callNative("aurora_android_voice_foreground_service_start", {
         request: { remoteAudioConsent },
       }),
     ),
     startBackground: async ({ remoteAudioConsent }) => parseStatus(
-      await invoke("aurora_android_voice_foreground_service_start", {
+      await callNative("aurora_android_voice_foreground_service_start", {
         request: { remoteAudioConsent, backgroundSession: true },
       }),
     ),
     finish: async () => parseStatus(
-      await invoke("aurora_android_voice_foreground_service_finish"),
+      await callNative("aurora_android_voice_foreground_service_finish"),
     ),
     cancel: async () => parseStatus(
-      await invoke("aurora_android_voice_foreground_service_cancel"),
+      await callNative("aurora_android_voice_foreground_service_cancel"),
     ),
   };
 }
