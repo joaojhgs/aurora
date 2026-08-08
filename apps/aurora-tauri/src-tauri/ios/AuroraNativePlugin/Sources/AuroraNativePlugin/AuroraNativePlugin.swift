@@ -40,6 +40,10 @@ struct AuroraShowNotificationArgs: Decodable {
 
 @objc(AuroraNativePlugin)
 public final class AuroraNativePlugin: Plugin {
+  // The current iOS bridge owns bounded capture/playback plumbing only. It
+  // must not report a usable voice turn or open the microphone until the
+  // native typed transport/session executor is linked into the app target.
+  private static let nativeTurnTransportAvailable = false
   private static let maxSharedTextLength = 8192
   private static let maxTitleLength = 120
   private static let maxNotificationBodyLength = 512
@@ -465,11 +469,13 @@ public final class AuroraNativePlugin: Plugin {
   @objc public func voiceStatus(_ invoke: Invoke) throws {
     let permission = AVAudioSession.sharedInstance().recordPermission
     let capture = voiceCapture.stats()
-    let reason: Any = permission == .granted
-      ? NSNull()
-      : "iOS microphone capture requires foreground microphone permission, audio consent, and a visible stop control."
+    let reason: Any = !AuroraNativePlugin.nativeTurnTransportAvailable
+      ? "iOS native voice transport is not available on this build."
+      : permission == .granted
+        ? NSNull()
+        : "iOS microphone capture requires foreground microphone permission, audio consent, and a visible stop control."
     invoke.resolve([
-      "available": permission == .granted,
+      "available": AuroraNativePlugin.nativeTurnTransportAvailable && permission == .granted,
       "permission": "aurora.iosMicrophoneCapture",
       "capability": "ios.voiceForegroundCapture",
       "source": "tauri-ios-native-plugin",
@@ -480,6 +486,7 @@ public final class AuroraNativePlugin: Plugin {
         "privacyClass": "raw-audio",
         "foregroundOnly": true,
         "supportsBackgroundListening": false,
+        "nativeTurnTransportAvailable": AuroraNativePlugin.nativeTurnTransportAvailable,
         "supportsSiriReplacement": false,
         "consentRequired": true,
         "stopRevokeRequired": true,
@@ -494,6 +501,10 @@ public final class AuroraNativePlugin: Plugin {
   }
 
   @objc public func voiceForegroundCaptureStart(_ invoke: Invoke) {
+    guard AuroraNativePlugin.nativeTurnTransportAvailable else {
+      invoke.reject("native_voice_transport_unavailable")
+      return
+    }
     let startCapture: () -> Void = { [weak self] in
       guard let self else {
         invoke.reject("capture_unavailable")

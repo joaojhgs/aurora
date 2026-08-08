@@ -8505,6 +8505,7 @@ mod tests {
         assert!(swift_plugin.contains("voiceForegroundCaptureStart"));
         assert!(swift_plugin.contains("voiceForegroundCaptureStop"));
         assert!(swift_plugin.contains("voiceForegroundCaptureStatus"));
+        assert!(swift_plugin.contains("nativeTurnTransportAvailable = false"));
         assert!(swift_plugin.contains("notificationStatus"));
         assert!(swift_plugin.contains("backgroundStatus"));
         assert!(swift_plugin.contains("iosEntrypointPayload"));
