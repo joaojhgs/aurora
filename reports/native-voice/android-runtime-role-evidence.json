@@ -52,6 +52,12 @@
     "abi": "x86_64",
     "installAndLaunch": "passed",
     "mobileMcpCrashes": [],
+    "mobileMcpTransport": {
+      "status": "unavailable",
+      "attempts": 2,
+      "failure": "mobile_list_available_devices transport closed",
+      "fallback": "direct ADB UI inspection against the same Waydroid endpoint"
+    },
     "screenshots": [
       {
         "name": "role-selected",
@@ -66,8 +72,32 @@
         "sha256": "6739c95ab91985e77a30063db32ecca4be5785915ce6af3c7bb54549a3f0a51d",
         "dimensions": "1080x2400",
         "uiState": "onboarding role-choice screen"
+      },
+      {
+        "name": "adb-role-choice-connect-selected",
+        "path": "/tmp/waydroid-connect-selected.png",
+        "sha256": "08144fca1380cfa2bd337d3f9825363d029fbc361946abc6fd7c76c5cff90fc8",
+        "dimensions": "1080x2400",
+        "uiState": "Connect to Aurora selected; saved choice visible"
+      },
+      {
+        "name": "adb-invite-onboarding",
+        "path": "/tmp/waydroid-connect-flow-final.png",
+        "sha256": "54e35b44d2a45b04ca1970b6d47a75528ef8216b934f0847955f20cc2145755b",
+        "dimensions": "1080x2400",
+        "uiState": "Invite onboarding reached after Continue"
       }
     ],
+    "uiNavigation": {
+      "tool": "adb direct fallback",
+      "endpoint": "192.168.240.112:5555",
+      "launch": "passed",
+      "roleSelection": "passed",
+      "continueToInviteOnboarding": "passed",
+      "uiautomatorPackage": "dev.aurora.desktop",
+      "webViewVisible": true,
+      "appCrashAfterNavigation": false
+    },
     "profileRouteSync": {
       "profileRole": "remote-console",
       "transport": "http-only",
