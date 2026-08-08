@@ -671,7 +671,7 @@ export function AssistantView({
     } else if (usesNativeMobileVoice) {
       await cancelNativeMobileVoice()
     } else if (surfaceProfile.voiceCapture.usesBrowserVoiceRuntime) {
-      releaseBrowserVoiceCaptureForReason('consent_revoked')
+      await cancelBrowserVoiceCaptureForReason('consent_revoked')
     } else {
       const sessionId = activeVoiceSessionRef.current
       if (sessionId && coordinatorVoiceSessionIdsRef.current.has(sessionId)) {
@@ -2975,6 +2975,10 @@ export function AssistantView({
   }
 
   function releaseBrowserVoiceCaptureForReason(reason: string) {
+    void cancelBrowserVoiceCaptureForReason(reason)
+  }
+
+  async function cancelBrowserVoiceCaptureForReason(reason: string) {
     const token = browserVoiceOperationTokenRef.current
     browserVoiceOperationTokenRef.current = token + 1
     const settlement = browserVoiceTurnSettlementRef.current
@@ -2982,10 +2986,10 @@ export function AssistantView({
       voiceCaptureStatusRef.current === 'processing'
       || settlement?.token === token && settlement.state === 'settling'
     ) {
-      void settleBrowserVoiceTurn(token, 'cancel', reason)
+      await settleBrowserVoiceTurn(token, 'cancel', reason)
       return
     }
-    void cancelBrowserVoiceRuntime(reason)
+    await cancelBrowserVoiceRuntime(reason)
   }
 
   function browserVoiceRuntime(): AuroraBrowserVoiceRuntimeInstance {

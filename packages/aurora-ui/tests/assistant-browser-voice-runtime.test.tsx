@@ -9,6 +9,7 @@ import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from '../
 import type { NativeDesktopVoicePort, NativeDesktopVoiceStatus } from '../src/native-desktop-voice'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import type { AssistantVoiceRoutes, RouteAvailability } from '../src/shell-data'
+import type { NativeMobileVoicePort, NativeMobileVoiceStatus } from '../src/native-mobile-voice'
 
 const voiceRuntimeMock = vi.hoisted(() => ({
   create: vi.fn()
@@ -600,6 +601,72 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(findButton(container, 'Allow connected voice')).toBeTruthy()
   })
 
+  it('waits for browser connected speech capture cancellation before showing access as revoked', async () => {
+    const runtime = createRuntimeMock({ capturedPcm: new Int16Array([1, 2, 3, 4, 5]) })
+    const cancel = deferred<undefined>()
+    runtime.cancel.mockReturnValue(cancel.promise)
+    voiceRuntimeMock.create.mockReturnValue(runtime)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const container = renderAssistant(client, hostedSurface(), undefined, { voiceRoutes: remoteVoiceRoutes('studio') })
+
+    await clickButton(container, 'Allow connected voice')
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(runtime.start).toHaveBeenCalledTimes(1))
+    await clickButton(container, 'Stop connected voice access')
+
+    expect(runtime.cancel).toHaveBeenCalledWith('consent_revoked')
+    expect(findButton(container, 'Stop connected voice access')).toBeTruthy()
+    expect(findButtonOrNull(container, 'Allow connected voice')).toBeNull()
+
+    cancel.resolve(undefined)
+    await vi.waitFor(() => expect(findButton(container, 'Allow connected voice')).toBeTruthy())
+  })
+
+  it('applies connected voice access truth table to native mobile capture', async () => {
+    const localClient = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const localMobileVoice = createNativeMobileVoicePort()
+    const localContainer = renderAssistant(localClient, nativeMobileSurface(), undefined, {
+      nativeMobileVoice: localMobileVoice,
+      nativeAvailable: true,
+      nativePlatform: 'android'
+    })
+
+    await clickButton(localContainer, 'Push to talk')
+    await vi.waitFor(() => expect(localMobileVoice.start).toHaveBeenCalledTimes(1))
+    expect(localMobileVoice.start).toHaveBeenCalledWith({ remoteAudioConsent: false })
+
+    const blockedClient = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const blockedMobileVoice = createNativeMobileVoicePort()
+    const blockedContainer = renderAssistant(blockedClient, nativeMobileSurface(), undefined, {
+      nativeMobileVoice: blockedMobileVoice,
+      nativeAvailable: true,
+      nativePlatform: 'android',
+      voiceRoutes: remoteVoiceRoutes('studio')
+    })
+
+    await clickButton(blockedContainer, 'Push to talk')
+    await act(async () => { await Promise.resolve() })
+    expect(blockedMobileVoice.start).not.toHaveBeenCalled()
+    expect(blockedContainer.textContent).toContain('Review connected voice access before starting speech.')
+
+    const grantedClient = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const grantedMobileVoice = createNativeMobileVoicePort()
+    const grantedContainer = renderAssistant(grantedClient, nativeMobileSurface(), undefined, {
+      nativeMobileVoice: grantedMobileVoice,
+      nativeAvailable: true,
+      nativePlatform: 'android',
+      voiceRoutes: remoteVoiceRoutes('studio')
+    })
+
+    await clickButton(grantedContainer, 'Allow connected voice')
+    await clickButton(grantedContainer, 'Push to talk')
+    await vi.waitFor(() => expect(grantedMobileVoice.start).toHaveBeenCalledTimes(1))
+    expect(grantedMobileVoice.start).toHaveBeenCalledWith({ remoteAudioConsent: true })
+  })
+
   it('invalidates connected voice access when the connected speech target changes', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const nativeVoice = createNativeDesktopVoicePort()
@@ -1129,6 +1196,30 @@ function createDeferredSubscribeNativeDesktopVoicePort(): NativeDesktopVoicePort
   return port
 }
 
+function createNativeMobileVoicePort(): NativeMobileVoicePort & {
+  start: ReturnType<typeof vi.fn>
+  finish: ReturnType<typeof vi.fn>
+  cancel: ReturnType<typeof vi.fn>
+} {
+  return {
+    status: vi.fn(async () => nativeMobileStatus('idle')),
+    start: vi.fn(async () => nativeMobileStatus('listening')),
+    finish: vi.fn(async () => nativeMobileStatus('processing')),
+    cancel: vi.fn(async () => nativeMobileStatus('idle'))
+  }
+}
+
+function nativeMobileStatus(phase: NativeMobileVoiceStatus['phase']): NativeMobileVoiceStatus {
+  return {
+    available: phase !== 'unavailable',
+    phase,
+    running: phase === 'listening' || phase === 'processing',
+    captureActive: phase === 'listening',
+    reasonCode: null,
+    redacted: true
+  }
+}
+
 function nativeStatus(
   phase: NativeDesktopVoiceStatus['phase'],
   generation: number | null,
@@ -1158,6 +1249,16 @@ function hostedSurface() {
     runtimeMode: 'web',
     transportKind: 'http',
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 Safari/605.1.15'
+  })
+}
+
+function nativeMobileSurface() {
+  return getAuroraSurfaceProfile({
+    runtimeMode: 'mobile',
+    transportKind: 'native-mobile',
+    nativePlatform: 'android',
+    nativeVoiceAvailable: true,
+    userAgent: 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Mobile Safari/537.36'
   })
 }
 
