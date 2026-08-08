@@ -1,0 +1,6 @@
+[[permission]]
+identifier = "aurora-ios-background-voice"
+description = "Allow an explicitly user-started iOS background voice session only after the native transport, physical-device, and distribution-policy gates are enabled."
+commands.allow = [
+  "aurora_ios_voice_background_capture_start",
+]

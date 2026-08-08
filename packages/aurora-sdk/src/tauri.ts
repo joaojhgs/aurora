@@ -59,6 +59,7 @@ export interface TauriCommandNames {
   notificationSend: string
   iosVoiceStatus: string
   iosVoiceForegroundCaptureStart: string
+  iosVoiceBackgroundCaptureStart: string
   iosVoiceForegroundCaptureStop: string
   iosVoiceForegroundCaptureFinish: string
   iosVoiceForegroundCaptureStatus: string
@@ -358,6 +359,7 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   notificationSend: 'aurora_notification_send',
   iosVoiceStatus: 'aurora_ios_voice_status',
   iosVoiceForegroundCaptureStart: 'aurora_ios_voice_foreground_capture_start',
+  iosVoiceBackgroundCaptureStart: 'aurora_ios_voice_background_capture_start',
   iosVoiceForegroundCaptureStop: 'aurora_ios_voice_foreground_capture_stop',
   iosVoiceForegroundCaptureFinish: 'aurora_ios_voice_foreground_capture_finish',
   iosVoiceForegroundCaptureStatus: 'aurora_ios_voice_foreground_capture_status',
@@ -522,6 +524,10 @@ export class TauriLocalTransport implements AuroraTransport {
 
   startIosVoiceForegroundCapture(): Promise<IosVoiceCaptureStatus> {
     return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceForegroundCaptureStart)
+  }
+
+  startIosVoiceBackgroundCapture(): Promise<IosVoiceCaptureStatus> {
+    return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceBackgroundCaptureStart)
   }
 
   stopIosVoiceForegroundCapture(): Promise<IosVoiceCaptureStatus> {

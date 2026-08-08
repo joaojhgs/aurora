@@ -503,6 +503,17 @@ public final class AuroraNativePlugin: Plugin {
   }
 
   @objc public func voiceForegroundCaptureStart(_ invoke: Invoke) {
+    startVoiceCapture(invoke, background: false)
+  }
+
+  /// Starts a user-initiated background audio session. The command remains
+  /// behind the separate background permission and the native transport gate;
+  /// it must never be treated as an always-on or silently restarting path.
+  @objc public func voiceBackgroundCaptureStart(_ invoke: Invoke) {
+    startVoiceCapture(invoke, background: true)
+  }
+
+  private func startVoiceCapture(_ invoke: Invoke, background: Bool) {
     guard AuroraNativePlugin.nativeTurnTransportAvailable else {
       invoke.reject("native_voice_transport_unavailable")
       return
@@ -522,7 +533,11 @@ public final class AuroraNativePlugin: Plugin {
             storedConfiguration: AVAudioSession.sharedInstance()
           )
         }
-        self.voiceSessionGeneration = try self.voiceSession?.start()
+        if background {
+          self.voiceSessionGeneration = try self.voiceSession?.startBackground()
+        } else {
+          self.voiceSessionGeneration = try self.voiceSession?.start()
+        }
         let stats = self.voiceSession?.captureStats() ?? self.voiceCapture.stats()
         invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats))
       } catch {

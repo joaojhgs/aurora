@@ -65,6 +65,8 @@ assert(plugin.includes('voiceCredentialStatus'), 'native plugin must expose reda
 assert(plugin.includes('AuroraIOSVoiceSessionHost('), 'foreground start must construct the Rust session host')
 assert(plugin.includes('voiceSession?.cancel'), 'foreground stop must cancel the Rust session generation')
 assert(plugin.includes('voiceForegroundCaptureFinish'), 'foreground PTT must expose a finish command')
+assert(plugin.includes('voiceBackgroundCaptureStart'), 'explicit background voice must expose a separate start command')
+assert(plugin.includes('startBackground()'), 'background start must use the Rust background-session ABI')
 assert(plugin.includes('session.finish(generation: generation)'), 'finish must complete the Rust generation')
 assert(plugin.includes('voiceSessionGeneration'), 'foreground lifecycle must retain generation identity')
 assert(plugin.includes('voiceSession?.captureStats() ?? voiceCapture.stats()'), 'status must report Rust-owned capture stats after cutover')

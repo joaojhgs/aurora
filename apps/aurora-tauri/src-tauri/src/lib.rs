@@ -1696,6 +1696,26 @@ async fn aurora_ios_voice_foreground_capture_start(
 }
 
 #[tauri::command]
+async fn aurora_ios_voice_background_capture_start(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        let payload = run_ios_plugin_command(native, "voiceBackgroundCaptureStart", json!({}))?;
+        log_ios_native_plugin_payload("voiceBackgroundCaptureStart", &payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "iOS background voice capture is only available in the iOS Tauri shell".to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
 async fn aurora_ios_voice_foreground_capture_stop(
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
@@ -7489,6 +7509,7 @@ pub fn run() {
             aurora_native_show_notification,
             aurora_ios_voice_status,
             aurora_ios_voice_foreground_capture_start,
+            aurora_ios_voice_background_capture_start,
             aurora_ios_voice_foreground_capture_stop,
             aurora_ios_voice_foreground_capture_finish,
             aurora_ios_voice_foreground_capture_status,
@@ -8601,6 +8622,11 @@ mod tests {
         assert!(ios_capability.contains("\"aurora-ios-voice\""));
         assert!(ios_voice_permission.contains("aurora_ios_voice_status"));
         assert!(ios_voice_permission.contains("aurora_ios_voice_foreground_capture_start"));
+        let ios_background_voice_permission =
+            include_str!("../permissions/aurora-ios-background-voice.toml");
+        assert!(
+            ios_background_voice_permission.contains("aurora_ios_voice_background_capture_start")
+        );
         assert!(ios_voice_permission.contains("aurora_ios_voice_foreground_capture_stop"));
         assert!(ios_voice_permission.contains("aurora_ios_voice_foreground_capture_finish"));
         assert!(ios_voice_permission.contains("aurora_ios_voice_foreground_capture_status"));
@@ -8615,6 +8641,7 @@ mod tests {
         assert!(swift_plugin.contains("localLightInferenceStatus"));
         assert!(swift_plugin.contains("voiceStatus"));
         assert!(swift_plugin.contains("voiceForegroundCaptureStart"));
+        assert!(swift_plugin.contains("voiceBackgroundCaptureStart"));
         assert!(swift_plugin.contains("voiceForegroundCaptureStop"));
         assert!(swift_plugin.contains("voiceForegroundCaptureFinish"));
         assert!(swift_plugin.contains("voiceForegroundCaptureStatus"));

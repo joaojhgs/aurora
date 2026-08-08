@@ -555,6 +555,12 @@
           "markdownDescription": "Allow desktop mesh-node runtimes to store, retrieve, and delete exact SDK-scoped inbound verifier records in the platform keychain. This is not a generic secure-storage namespace and does not grant outbound bearer-token or reconnect-proof access."
         },
         {
+          "description": "Allow an explicitly user-started iOS background voice session only after the native transport, physical-device, and distribution-policy gates are enabled.",
+          "type": "string",
+          "const": "aurora-ios-background-voice",
+          "markdownDescription": "Allow an explicitly user-started iOS background voice session only after the native transport, physical-device, and distribution-policy gates are enabled."
+        },
+        {
           "description": "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods, plus dedicated iOS Keychain inbound verifier storage commands. Outgoing user actions are granted separately through the mobile-only capability.",
           "type": "string",
           "const": "aurora-ios-native-plugin",
