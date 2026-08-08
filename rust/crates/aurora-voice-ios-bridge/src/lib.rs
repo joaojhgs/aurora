@@ -817,6 +817,49 @@ mod tests {
         assert!(input.next_frame().await.expect("finish").is_none());
     }
 
+    #[tokio::test]
+    async fn audio_input_supports_start_stop_start_without_stale_frames() {
+        let state = AuroraIosAudioState::new(4, 8);
+        let mut input = AuroraIosAudioInput::new(state.clone());
+        let lease = VoiceCaptureLease {
+            owner: CaptureOwnerKind::Native,
+            surface: "ios".to_owned(),
+            device_route: "default".to_owned(),
+            start_reason: aurora_voice_core::CaptureStartReason::PushToTalk,
+            generation: Generation(8),
+            created_at: TimestampMicros(200),
+            route_revision: RouteRevision(3),
+            background_eligible: false,
+            consent_revision: 1,
+            heartbeat_at: TimestampMicros(200),
+            stop_deadline: None,
+        };
+        input.start(lease.clone()).await.expect("first start");
+        assert_eq!(state.push_pcm(&[0.25], 0, 16_000), AURORA_IOS_AUDIO_OK);
+        assert!(input.next_frame().await.expect("first frame").is_some());
+        input
+            .stop(TransitionReason::Stop)
+            .await
+            .expect("first stop");
+
+        let restarted = VoiceCaptureLease {
+            generation: Generation(9),
+            created_at: TimestampMicros(300),
+            heartbeat_at: TimestampMicros(300),
+            ..lease
+        };
+        input.start(restarted).await.expect("second start");
+        assert_eq!(state.push_pcm(&[0.75], 0, 16_000), AURORA_IOS_AUDIO_OK);
+        let frame = input
+            .next_frame()
+            .await
+            .expect("second frame")
+            .expect("second frame");
+        assert_eq!(frame.generation(), Generation(9));
+        assert_eq!(frame.sequence(), 0);
+        assert!(!frame.discontinuity());
+    }
+
     fn playback_audio() -> TtsSynthesisResult {
         let route =
             aurora_voice_core::RouteTtsBinding::new("gateway", "voice", 16_000, 1).expect("route");
