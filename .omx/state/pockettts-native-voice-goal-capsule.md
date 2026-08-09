@@ -1,12 +1,12 @@
 # PocketTTS native/WASM voice goal capsule
 
-Updated: 2026-08-09T03:25:53Z
+Updated: 2026-08-09T03:31:29Z
 
 ## Goal identity and authority
 
 - Active resumed Codex Goal thread: `019fd073-38a1-7801-8d62-31ae70d46580`
 - Resume authority: on 2026-08-08 the user explicitly resumed this thread and overrode the older handoff instruction not to resume it; the strict audited phase/RAC state below remains mandatory
-- Objective attachment provenance: `pasted-text-1.txt` with SHA-256 `70b1b5ebb32c6df0e52c119b2bd73adad79c2611433bd33da7391d6e273fe196`; the external attachment is optional after transfer because the complete authoritative plan is tracked in the repository
+- Objective attachment: `pasted-text-1.txt` with SHA-256 `70b1b5ebb32c6df0e52c119b2bd73adad79c2611433bd33da7391d6e273fe196`; the complete authoritative plan is tracked in the repository, but the paused Codex Goal metadata still names the original absolute attachment path, so copy or remap this attachment with the session
 - Authoritative plan: `.omx/plans/pockettts-cross-surface-local-voice-plan.md`
 - Transfer/resume branch: `feat/ui-multi-platform-integration` (use the fetched remote tip as the new integration baseline)
 - Historical integration branch: `integrate/pockettts-p8-python-handoff-staging-20260807` at `f8cc01d8`
