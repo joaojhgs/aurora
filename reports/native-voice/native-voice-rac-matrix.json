@@ -2,17 +2,17 @@
   "$schema": "aurora.native_voice_rac_matrix.v1",
   "planSha256": "50181a35cd42e12a33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6",
   "handoffSha256": "70b1b5ebb32c6df0e52c119b2bd73adad79c2611433bd33da7391d6e273fe196",
-  "codeEvidenceBaselineHead": "3202af9d",
+  "codeEvidenceBaselineHead": "16f58c8e",
   "reportCommit": "799c4ad1",
   "audit": {
-    "auditedAtUtc": "2026-08-09T00:43:30Z",
+    "auditedAtUtc": "2026-08-09T01:53:00Z",
     "resumedAtUtc": "2026-08-08T22:15:10Z",
     "goalThreadId": "019fd073-38a1-7801-8d62-31ae70d46580",
     "verdict": "active_remediation",
-    "resumeGate": "Phase 4 CPAL evidence and the Phase 5 remote-audio consent source boundary are independently approved through 3202af9d. The Phase 6 disposition decision is independently approved as withheld, with every production speech capability still false. RAC-24 is closed at af425907 with hidden, frozen, pagehide, pageshow/resume, and discarded-startup lifecycle proof across unit and real-browser Playwright gates. RAC-25 and RAC-26 remain partial: verified-pack offline reuse through the real Rust/WASM verifier and the complete remote-fallback state matrix remain open. A prior rebuilt Android APK hash was installed on Waydroid and direct-ADB first-run role/onboarding inspection passed; persisted evidence says Mobile-MCP was unavailable, and latest source changes require a fresh APK before final pairing or voice-turn validation. The original API35 emulator reproduces its renderer SIGTRAP in the stock WebView shell; a known-good emulator and Docker-backed interop rerun remain required. Docker is reachable now (server 29.1.3), so interop is pending evidence rather than daemon availability.",
+    "resumeGate": "Phase 4 CPAL evidence and the Phase 5 remote-audio consent source boundary are independently approved through 3202af9d. The Phase 6 disposition decision is independently approved as withheld, with every production speech capability still false. RAC-24 is closed at af425907 with hidden, frozen, pagehide, pageshow/resume, and discarded-startup lifecycle proof across unit and real-browser Playwright gates. RAC-26 is closed at 16f58c8e: all five sanitized non-ready local speech states restore through the saved browser runtime while every local engine capability remains false, authorized remote STT/TTS selection is preserved, and connected-audio consent still fails closed. RAC-25 remains partial because verified-pack offline reuse through the real Rust/WASM verifier is not yet proven. A prior rebuilt Android APK hash was installed on Waydroid and direct-ADB first-run role/onboarding inspection passed; persisted evidence says Mobile-MCP was unavailable, and latest source changes require a fresh APK before final pairing or voice-turn validation. The original API35 emulator reproduces its renderer SIGTRAP in the stock WebView shell; a known-good emulator and Docker-backed interop rerun remain required. Docker-backed interop is still pending fresh evidence.",
     "statusCounts": {
-      "pass": 21,
-      "partial": 25,
+      "pass": 22,
+      "partial": 24,
       "withheld": 6,
       "blocked": 4
     }
@@ -49,7 +49,7 @@
     {"id":"RAC-23","status":"pass","evidence":"browser worker/nonblocking matrix with measured timer lag"},
     {"id":"RAC-24","status":"pass","evidence":"hidden/focus/audio lifecycle invalidation plus frozen, discarded, pagehide, pageshow, and resume behavior pass in unit coverage and 35 production browser lifecycle Playwright cases across Chromium, Firefox, WebKit, Android-emulated Chrome, and mobile Safari emulation"},
     {"id":"RAC-25","status":"partial","evidence":"browser storage quota, interruption, eviction, recovery, and reload persistence pass; verified-pack install through the WASM verifier followed by actual offline reuse is not proven end to end"},
-    {"id":"RAC-26","status":"partial","evidence":"authorized remote routing, consent, and unavailable-local cases pass; the complete disabled, downloading, incompatible, and over-budget local-WASM fallback matrix is incomplete"},
+    {"id":"RAC-26","status":"pass","evidence":"all five sanitized non-ready local speech states persist and restore through the hosted runtime; UI/runtime tests keep VAD/KWS/STT/TTS false, preserve authorized remote STT/TTS route selection, and keep connected-audio consent fail-closed; two independent reviews approved the closure at 16f58c8e"},
     {"id":"RAC-27","status":"partial","evidence":"desktop native ownership and sidecar/no-sidecar profile boundaries are tested; integrated live turn remains open"},
     {"id":"RAC-28","status":"withheld","evidence":"no full UI-detached desktop background turn is promoted"},
     {"id":"RAC-29","status":"pass","evidence":"Python/native ownership handoff and coordinator exclusion tests"},
@@ -84,7 +84,7 @@
   "globalGaps": [
     "The Phase 5 remote-audio consent source boundary is independently approved through 3202af9d, and the prior rebuilt Android APK hash installed and rendered first-run onboarding on Waydroid; latest source changes require a fresh APK before final Waydroid validation, and RAC-50 remains partial until known-good headless WebView, Docker-backed interop rerun evidence, pairing, and complete device/Gateway/UI proof exist.",
     "The Phase 6 disposition decision is independently approved as withheld: every production VAD, KWS, STT, and TTS capability is false and no shippable production speech pack is selected.",
-    "RAC-24 is closed at af425907 with page lifecycle proof; RAC-25 and RAC-26 remain partial because verified-pack offline reuse through the real Rust/WASM verifier and the complete remote-fallback state matrix are not proven end to end.",
+    "RAC-24 is closed at af425907 with page lifecycle proof and RAC-26 is closed at 16f58c8e with the persisted five-state remote-fallback matrix; RAC-25 remains partial because verified-pack offline reuse through the real Rust/WASM verifier is not proven end to end.",
     "RAC-30 is partial rather than pass: focused installed-desktop suppression is tested, but the full cutover and UI-closed background turn are not implemented or proven.",
     "No full Aurora Gateway request/response voice turn was observed on Waydroid; the saved invite remains offline with no pairing request, and the original API35 emulator reproduces its Chromium/WebView renderer SIGTRAP in the stock WebView shell.",
     "Physical ARM64 Android, physical iOS, Windows/macOS signed release, SBOM/store/security review, background endurance, forced TURN, staged rollback, and full Phase 12 mutation evidence remain external, blocked, or incomplete."
