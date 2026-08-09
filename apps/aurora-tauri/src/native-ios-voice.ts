@@ -9,6 +9,10 @@ type NativeCommand = (
   args?: Record<string, unknown>,
 ) => Promise<unknown>;
 
+type NativeIosVoiceStartRequest = {
+  remoteAudioConsent: boolean;
+};
+
 /**
  * Adapts the iOS Rust-session Tauri commands to the shared mobile PTT port.
  *
@@ -28,8 +32,10 @@ export function createTauriNativeIosVoicePort(
       ]);
       return parseStatus(capability, capture);
     },
-    start: async () => parseStatus(
-      await callNative("aurora_ios_voice_foreground_capture_start"),
+    start: async (request) => parseStatus(
+      await callNative("aurora_ios_voice_foreground_capture_start", {
+        request: validateStartRequest(request),
+      }),
       await callNative("aurora_ios_voice_foreground_capture_status"),
     ),
     finish: async () => parseStatus(
@@ -77,4 +83,22 @@ function parseStatus(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validateStartRequest(request: unknown): NativeIosVoiceStartRequest {
+  if (
+    !isRecord(request) ||
+    !hasOnlyKeys(request, ["remoteAudioConsent"]) ||
+    typeof request.remoteAudioConsent !== "boolean"
+  ) {
+    throw new Error("Native iOS voice start request is invalid.");
+  }
+  return {
+    remoteAudioConsent: request.remoteAudioConsent,
+  };
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, allowed: string[]): boolean {
+  const allowedKeys = new Set(allowed);
+  return Object.keys(value).every((key) => allowedKeys.has(key));
 }
