@@ -1,21 +1,21 @@
 # PocketTTS native/WASM voice goal capsule
 
-Updated: 2026-08-09T03:20:00Z
+Updated: 2026-08-09T03:25:53Z
 
 ## Goal identity and authority
 
 - Active resumed Codex Goal thread: `019fd073-38a1-7801-8d62-31ae70d46580`
 - Resume authority: on 2026-08-08 the user explicitly resumed this thread and overrode the older handoff instruction not to resume it; the strict audited phase/RAC state below remains mandatory
-- Objective attachment: `/home/developer/.codex/attachments/3e728279-d718-4ab5-97bd-4c3c1e1bc777/pasted-text-1.txt`
-- Authoritative plan: `/home/developer/projects/aurora/.omx/plans/pockettts-cross-surface-local-voice-plan.md`
-- Primary user worktree: `/home/developer/projects/aurora` (must remain untouched by implementation commits)
-- Integration worktree: `/home/developer/projects/aurora-worktrees/pockettts-p8-python-integration-20260807`
-- Integration branch: `integrate/pockettts-p8-python-handoff-staging-20260807`
+- Objective attachment provenance: `pasted-text-1.txt` with SHA-256 `70b1b5ebb32c6df0e52c119b2bd73adad79c2611433bd33da7391d6e273fe196`; the external attachment is optional after transfer because the complete authoritative plan is tracked in the repository
+- Authoritative plan: `.omx/plans/pockettts-cross-surface-local-voice-plan.md`
+- Transfer/resume branch: `feat/ui-multi-platform-integration` (use the fetched remote tip as the new integration baseline)
+- Historical integration branch: `integrate/pockettts-p8-python-handoff-staging-20260807` at `f8cc01d8`
+- Transfer integration checkpoint before this final state refresh: `97f7e812`; it merges the audited lineage onto remote base `a59cae0a` and includes RAC-27 as `54b395a9`/`4b07352c`, RAC-48 hardening as `39257f30`, RAC-25 groundwork as `a49a17e9`, and the repository-native handoff state
 - Stopped pre-replacement baseline: `961120a443af48bf3c2254121bba333c5356f7c8`
 - Preserved Phase 0-3 baseline named by the plan: `5a8a33dc5392c3b50b1b4860c5f90230f96e9cdc`
 - Audited code/evidence checkpoint: `66d71c88` on `integrate/pockettts-p8-python-handoff-staging-20260807`
-- Tracked RAC audit commit: `799c4ad1`; pointer commit: `c503a89e`; active-remediation state commit: `b5c91401`; consent correction: `3202af9d`; device-evidence reconciliation checkpoint: `c32c2e2c`; interop-gate correction checkpoint: `deecdc36`; dynamic-role onboarding checkpoint: `09455cca`; web-thin explicit-role checkpoint: `091add3a`; RAC24 lifecycle checkpoint: `af425907`; resume-matrix checkpoint: `770a9fd7`; Mobile-MCP evidence-truth correction: `f2ef2274`; RAC30 scope correction: `18811e46`; all-invite dynamic-role save guard: `93473814`; RAC26 persisted-fallback checkpoint: `16f58c8e`; surface role-neutral checkpoint: `73b1039f` and `b48040a4`; native persisted-role checkpoint: `3ac40ba1`; strict native role/tier checkpoint: `06e2f081`; current RAC tracker checkpoint: `37a506dc`; disabled speech fixture checkpoint: `a1e39b74`; current integration checkpoint: `f8cc01d8`
-- Canonical implementation-state records: this capsule and `reports/native-voice/native-voice-rac-matrix.json` in the integration worktree
+- Tracked RAC audit commit: `799c4ad1`; pointer commit: `c503a89e`; active-remediation state commit: `b5c91401`; consent correction: `3202af9d`; device-evidence reconciliation checkpoint: `c32c2e2c`; interop-gate correction checkpoint: `deecdc36`; dynamic-role onboarding checkpoint: `09455cca`; web-thin explicit-role checkpoint: `091add3a`; RAC24 lifecycle checkpoint: `af425907`; resume-matrix checkpoint: `770a9fd7`; Mobile-MCP evidence-truth correction: `f2ef2274`; RAC30 scope correction: `18811e46`; all-invite dynamic-role save guard: `93473814`; RAC26 persisted-fallback checkpoint: `16f58c8e`; surface role-neutral checkpoint: `73b1039f` and `b48040a4`; native persisted-role checkpoint: `3ac40ba1`; strict native role/tier checkpoint: `06e2f081`; RAC tracker checkpoint: `37a506dc`; disabled speech fixture checkpoint: `a1e39b74`; audited-lineage checkpoint: `f8cc01d8`; transfer integration checkpoint: `97f7e812`
+- Canonical implementation-state records: this capsule and `reports/native-voice/native-voice-rac-matrix.json` on `feat/ui-multi-platform-integration`
 - Superseded artifacts: `.omx/plans/pockettts-ultrawork-goal-prompt.md` and the old integration-worktree `pockettts-goal-capsule.md`
 
 ## Authoritative hashes
@@ -38,7 +38,7 @@ This section is the authoritative resume state from the 2026-08-08 strict code-a
 - Runtime role is dynamic profile state. It is never selected by environment variables, APK flavor, compiled artifact, platform surface, or transport mode; one APK may operate as a thin client managing a server or as a node itself.
 - All invite-backed Tauri save surfaces now pass through one reviewed guard at `93473814`, which writes `remote-console` and `none` before runtime-profile reconstruction; explicit device-sharing flows remain the only route to `mesh-node`.
 - Dynamic-role defect repair is integrated through `06e2f081` and tracked at `37a506dc`. Surface defaults no longer assign `mesh-node` or a runtime tier from sidecar/platform signals, desktop-local capable Tauri shells stay `remote-console`/`none` until onboarding saves a runtime profile, and desktop native voice resolves persisted role/tier before sidecar availability. Remote-console and legacy remote profiles stay remote even when a sidecar is running; local sidecar voice requires an active persisted `mesh-node` profile with `runtimeTier` `python-full` and an available sidecar; lightweight mesh-node, absent, or invalid role state fails closed. This closes the audited role-inference defect but does not by itself advance RAC-27 or Phase 8.
-- Resume order is mandatory from checkpoint `f8cc01d8`: (1) repair/adjudicate RAC-25 against its real verifier, offline browser proof, unchanged WASM bundle-size gate, and production trust boundary, retaining partial unless every gate passes; (2) continue Phase 8 onward in dependency order with the dynamic-role invariant preserved; (3) keep known-good headless emulator and Docker-backed interop lanes running in parallel; and (4) only after final source integration, rebuild and clean-install Waydroid and use actual Mobile-MCP for runtime-profile persistence, pairing, navigation, screenshots, and Gateway/UI validation. Do not promote blocked physical/platform claims.
+- Resume order is mandatory from the pushed `feat/ui-multi-platform-integration` tip: (1) retain RAC-25 as partial while production release trust and release-hash support remain open; (2) finish RAC-27's packaged all-route desktop run, then continue Phase 8 onward in dependency order with the dynamic-role invariant preserved; (3) rerun direct/STUN/TURN on the known-good headless emulator; and (4) rebuild and clean-install the final APK on Waydroid, then use actual Mobile-MCP for runtime-profile persistence, pairing, navigation, screenshots, and Gateway/UI validation. Do not promote blocked physical/platform claims.
 - Forward-work gate: do not promote a phase or RAC status until a fresh independent verifier confirms the code, current tests, and persisted evidence agree.
 
 ## Audited phase status
