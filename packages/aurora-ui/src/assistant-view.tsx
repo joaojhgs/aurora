@@ -2999,7 +2999,8 @@ export function AssistantView({
       browserVoiceRuntimeRef.current = createAuroraBrowserVoiceRuntime({
         ownerId: 'aurora-assistant-view',
         lifecycle: browserVoiceLifecycleEligibility,
-        onAudioLifecycleLost: releaseBrowserVoiceCaptureForLifecycle
+        onAudioLifecycleLost: releaseBrowserVoiceCaptureForLifecycle,
+        onPageLifecycleLost: releaseBrowserVoiceCaptureForLifecycle
       })
     }
     return browserVoiceRuntimeRef.current

@@ -218,10 +218,17 @@ export class AuroraVoiceWebRuntime {
   }
 
   async refreshLifecycle(): Promise<void> {
-    const eligibility = this.currentLifecycle()
+    await this.refreshLifecycleEligibility(this.currentLifecycle())
+  }
+
+  protected async refreshLifecycleEligibility(eligibility: AuroraVoiceLifecycleEligibility): Promise<void> {
+    eligibility = validateLifecycle(eligibility)
     if ((this.session === null && this.pendingStoppedSession === null) || eligibility.eligible && eligibility.visible && !eligibility.frozen) return
-    await this.cancel('lifecycle_lost')
-    this.emit('lifecycle_lost', null, null, 0, 0, 0, eligibility.reason)
+    try {
+      await this.cancel('lifecycle_lost')
+    } finally {
+      this.emit('lifecycle_lost', null, null, 0, 0, 0, eligibility.reason)
+    }
   }
 
   async dispose(): Promise<void> {

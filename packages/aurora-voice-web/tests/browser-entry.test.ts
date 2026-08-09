@@ -6,6 +6,7 @@ import * as rootEntry from '../src/index.js'
 describe('@aurora/voice-web entrypoints', () => {
   it('keeps browser constructors on the explicit browser entrypoint', () => {
     expect(browserEntry).toHaveProperty('createAuroraBrowserVoiceRuntime')
+    expect(browserEntry).toHaveProperty('createAuroraBrowserPageLifecycle')
     expect(browserEntry).toHaveProperty('BrowserAudioWorkletPcmSource')
     expect(browserEntry).toHaveProperty('AuroraBrowserModelStoreHost')
     expect(browserEntry).toHaveProperty('AuroraAcknowledgedWorkerHost')

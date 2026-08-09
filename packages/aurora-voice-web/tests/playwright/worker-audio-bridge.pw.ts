@@ -265,6 +265,61 @@ test('deterministic production BrowserAudioWorklet source releases capture on ca
   expect(result.lifecycle.portClosed).toBe(true)
 })
 
+test('production browser lifecycle cancels page-hidden and frozen sessions without automatic restart', async ({ page }, testInfo) => {
+  testInfo.annotations.push({
+    type: 'page-lifecycle-boundary',
+    description: 'Uses the production browser lifecycle adapter and Worker/WASM runtime with synthetic page lifecycle signals; it does not claim browser background execution.'
+  })
+  await installVoiceHarness(page)
+
+  const result = await page.evaluate(async () => {
+    const harness = await window.__auroraWorkerAudioBridge.createRuntime('browser-page-lifecycle')
+    const waitForState = async (state: 'cancelled') => {
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        if (harness.snapshot().state === state) return
+        await new Promise((resolve) => setTimeout(resolve, 5))
+      }
+      throw new Error(`voice runtime did not reach ${state}`)
+    }
+
+    const first = await harness.start()
+    window.dispatchEvent(new Event('pagehide'))
+    await waitForState('cancelled')
+    const hidden = harness.snapshot()
+
+    window.dispatchEvent(new Event('pageshow'))
+    const restoredWithoutRestart = harness.snapshot()
+    const second = await harness.start()
+    document.dispatchEvent(new Event('freeze'))
+    await waitForState('cancelled')
+    const frozen = harness.snapshot()
+
+    document.dispatchEvent(new Event('resume'))
+    const resumedWithoutRestart = harness.snapshot()
+    await harness.dispose()
+    return {
+      first,
+      second,
+      hidden,
+      restoredWithoutRestart,
+      frozen,
+      resumedWithoutRestart,
+      cancelled: harness.cancelled(),
+      events: harness.events()
+    }
+  })
+
+  expect(result.first).toMatchObject({ generation: 1 })
+  expect(result.second).toMatchObject({ generation: 2 })
+  expect(result.hidden).toMatchObject({ state: 'cancelled', sessionId: null, lifecycle: { reason: 'pagehide', eligible: false } })
+  expect(result.restoredWithoutRestart).toMatchObject({ state: 'cancelled', sessionId: null, lifecycle: { reason: 'visible', eligible: true } })
+  expect(result.frozen).toMatchObject({ state: 'cancelled', sessionId: null, lifecycle: { reason: 'frozen', eligible: false } })
+  expect(result.resumedWithoutRestart).toMatchObject({ state: 'cancelled', sessionId: null, lifecycle: { reason: 'visible', eligible: true } })
+  expect(result.cancelled).toEqual(['browser-page-lifecycle:1', 'browser-page-lifecycle:2'])
+  expect(result.events.filter((event) => event.kind === 'lifecycle_lost').map((event) => event.reason)).toEqual(['pagehide', 'frozen'])
+  expect(result.events.every((event) => event.redacted === true)).toBe(true)
+})
+
 test('production Worker/WASM bridge keeps main-thread timer and computed long-task p95 under 50 ms', async ({ page }, testInfo) => {
   testInfo.annotations.push({
     type: 'responsiveness-boundary',
@@ -401,6 +456,8 @@ function voiceHarnessModule(): string {
         complete: () => runtime.completeTurn(),
         abandon: () => runtime.abandonTurn(),
         cancel: (reason) => runtime.cancel(reason),
+        dispose: () => runtime.dispose(),
+        cancelled: () => [...source.cancelled],
         snapshot: () => runtime.snapshot(),
         events: () => events.map((event) => ({ ...event }))
       };
@@ -714,6 +771,8 @@ declare global {
         complete(): Promise<void>
         abandon(): Promise<void>
         cancel(reason?: string): Promise<void>
+        dispose(): Promise<void>
+        cancelled(): string[]
         snapshot(): {
           readonly ownerId: string
           readonly state: 'idle' | 'active' | 'cancelled' | 'stopped'

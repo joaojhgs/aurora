@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import { createAuroraBrowserVoiceRuntime } from '../src/browser-runtime.js'
-import { AURORA_VOICE_WORKER_PROTOCOL_VERSION, type AuroraAudioWorkletPcmSink, type AuroraAudioWorkletPcmSource, type AuroraVoiceWebSession, type AuroraVoiceWorkerRequestEnvelope, type AuroraVoiceWorkerResponseEnvelope } from '../src/types.js'
+import { createAuroraBrowserPageLifecycle, type AuroraBrowserPageLifecycleDocument, type AuroraBrowserPageLifecycleListener, type AuroraBrowserPageLifecyclePort, type AuroraBrowserPageLifecycleWindow } from '../src/browser-lifecycle.js'
+import { hiddenLifecycle, visibleLifecycle } from '../src/runtime.js'
+import { AURORA_VOICE_WORKER_PROTOCOL_VERSION, type AuroraAudioWorkletPcmSink, type AuroraAudioWorkletPcmSource, type AuroraVoiceLifecycleEligibility, type AuroraVoiceWebEvent, type AuroraVoiceWebSession, type AuroraVoiceWorkerRequestEnvelope, type AuroraVoiceWorkerResponseEnvelope } from '../src/types.js'
 import type { AuroraAudioContextLike, AuroraAudioWorkletNodeLike, AuroraAudioNodeLike, AuroraMediaStreamAudioSourceNodeLike } from '../src/audio-worklet-source.js'
 import type { AuroraBrowserWorkerPort } from '../src/worker-rpc.js'
 
@@ -90,6 +92,113 @@ describe('createAuroraBrowserVoiceRuntime', () => {
     expect(factoryCalls[0]?.options).toEqual({ type: 'module', name: 'aurora-voice-worker' })
     expect(factoryCalls[0]?.url.href).toBe('https://voice.example/assets/voice-worker.js?cache=1&wasm=https%3A%2F%2Fvoice.example%2Fassets%2Faurora_voice_wasm_bg.wasm')
   })
+
+  it('cancels active capture on pagehide and does not resurrect it on pageshow', async () => {
+    const worker = new LoopbackWorker()
+    const pageLifecycle = new ControllablePageLifecycle(visibleLifecycle())
+    const events: AuroraVoiceWebEvent[] = []
+    const lifecycleLosses: string[] = []
+    const runtime = createAuroraBrowserVoiceRuntime({
+      ownerId: 'browser',
+      worker,
+      pcmSource: new FakePcmSource(),
+      pageLifecycle,
+      onPageLifecycleLost: (reason) => lifecycleLosses.push(reason),
+      sessionIdFactory: (ownerId, generation) => `${ownerId}:${generation}`
+    })
+    runtime.onEvent((event) => events.push(event))
+
+    await runtime.start()
+    pageLifecycle.set(hiddenLifecycle('pagehide'))
+    pageLifecycle.set(visibleLifecycle())
+    await waitFor(() => runtime.snapshot().state === 'cancelled')
+
+    expect(worker.commands.map((command) => command.type)).toEqual(['init', 'start', 'cancel'])
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'lifecycle_lost', reason: 'pagehide', redacted: true }))
+    expect(lifecycleLosses).toEqual(['pagehide'])
+    expect(runtime.snapshot()).toMatchObject({ state: 'cancelled', lifecycle: { eligible: true, reason: 'visible' } })
+
+    await runtime.start()
+    expect(worker.commands.map((command) => command.type)).toEqual(['init', 'start', 'cancel', 'init', 'start'])
+    await runtime.dispose()
+    expect(pageLifecycle.listenerCount()).toBe(0)
+  })
+
+  it('rejects a discarded startup until pageshow restores foreground eligibility', async () => {
+    const worker = new LoopbackWorker()
+    const pageDocument = new FakePageLifecycleDocument(true)
+    const pageWindow = new FakePageLifecycleWindow()
+    const pageLifecycle = createAuroraBrowserPageLifecycle({ document: pageDocument, window: pageWindow })
+    if (pageLifecycle === null) throw new Error('expected browser page lifecycle')
+    const runtime = createAuroraBrowserVoiceRuntime({
+      ownerId: 'browser',
+      worker,
+      pcmSource: new FakePcmSource(),
+      pageLifecycle
+    })
+
+    await expect(runtime.start()).rejects.toMatchObject({ code: 'lifecycle_ineligible' })
+    expect(worker.commands).toEqual([])
+
+    pageWindow.dispatch('pageshow')
+    await runtime.start()
+    expect(worker.commands.map((command) => command.type)).toEqual(['init', 'start'])
+    await runtime.dispose()
+  })
+
+  it('combines page lifecycle with stricter caller focus eligibility', async () => {
+    const pageLifecycle = new ControllablePageLifecycle(visibleLifecycle())
+    const runtime = createAuroraBrowserVoiceRuntime({
+      ownerId: 'browser',
+      worker: new LoopbackWorker(),
+      pcmSource: new FakePcmSource(),
+      pageLifecycle,
+      lifecycle: () => hiddenLifecycle('ineligible')
+    })
+
+    await expect(runtime.start()).rejects.toMatchObject({ code: 'lifecycle_ineligible' })
+    await runtime.dispose()
+  })
+
+  it('does not let a lifecycle event with no owner cancel a later session', async () => {
+    const worker = new LoopbackWorker()
+    const pageLifecycle = new ControllablePageLifecycle(visibleLifecycle())
+    const runtime = createAuroraBrowserVoiceRuntime({
+      ownerId: 'browser',
+      worker,
+      pcmSource: new FakePcmSource(),
+      pageLifecycle
+    })
+
+    pageLifecycle.set(hiddenLifecycle('pagehide'))
+    pageLifecycle.set(visibleLifecycle())
+    await runtime.start()
+    await Promise.resolve()
+
+    expect(runtime.snapshot().state).toBe('active')
+    expect(worker.commands.map((command) => command.type)).toEqual(['init', 'start'])
+    await runtime.dispose()
+  })
+
+  it('coalesces caller and page lifecycle cancellation for the same session', async () => {
+    const worker = new LoopbackWorker()
+    const pageLifecycle = new ControllablePageLifecycle(visibleLifecycle())
+    const runtime = createAuroraBrowserVoiceRuntime({
+      ownerId: 'browser',
+      worker,
+      pcmSource: new FakePcmSource(),
+      pageLifecycle
+    })
+
+    await runtime.start()
+    const callerCancellation = runtime.cancel('window_hidden')
+    pageLifecycle.set(hiddenLifecycle('hidden'))
+    await callerCancellation
+    await waitFor(() => runtime.snapshot().state === 'cancelled')
+
+    expect(worker.commands.filter((command) => command.type === 'cancel')).toHaveLength(1)
+    await runtime.dispose()
+  })
 })
 
 class LoopbackWorker implements AuroraBrowserWorkerPort {
@@ -158,6 +267,58 @@ class FakePcmSource implements AuroraAudioWorkletPcmSource {
   async stop(_sessionId: string): Promise<void> {}
   async cancel(_sessionId: string): Promise<void> {}
 }
+
+class ControllablePageLifecycle implements AuroraBrowserPageLifecyclePort {
+  private readonly listeners = new Set<AuroraBrowserPageLifecycleListener>()
+
+  constructor(private eligibility: AuroraVoiceLifecycleEligibility) {}
+
+  current(): AuroraVoiceLifecycleEligibility {
+    return this.eligibility
+  }
+
+  subscribe(listener: AuroraBrowserPageLifecycleListener): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
+  set(eligibility: AuroraVoiceLifecycleEligibility): void {
+    this.eligibility = eligibility
+    for (const listener of this.listeners) listener(eligibility)
+  }
+
+  listenerCount(): number {
+    return this.listeners.size
+  }
+}
+
+class FakePageLifecycleTarget {
+  private readonly listeners = new Map<string, Set<EventListener>>()
+
+  addEventListener(type: string, listener: EventListener): void {
+    const listeners = this.listeners.get(type) ?? new Set<EventListener>()
+    listeners.add(listener)
+    this.listeners.set(type, listeners)
+  }
+
+  removeEventListener(type: string, listener: EventListener): void {
+    this.listeners.get(type)?.delete(listener)
+  }
+
+  dispatch(type: string): void {
+    for (const listener of this.listeners.get(type) ?? []) listener({ type } as Event)
+  }
+}
+
+class FakePageLifecycleDocument extends FakePageLifecycleTarget implements AuroraBrowserPageLifecycleDocument {
+  readonly visibilityState = 'visible' as const
+
+  constructor(public readonly wasDiscarded: boolean) {
+    super()
+  }
+}
+
+class FakePageLifecycleWindow extends FakePageLifecycleTarget implements AuroraBrowserPageLifecycleWindow {}
 
 async function waitFor(predicate: () => boolean): Promise<void> {
   for (let attempt = 0; attempt < 20; attempt += 1) {

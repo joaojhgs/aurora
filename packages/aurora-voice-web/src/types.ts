@@ -18,6 +18,8 @@ export type AuroraVoiceLifecycleReason =
   | 'visible'
   | 'hidden'
   | 'frozen'
+  | 'pagehide'
+  | 'discarded'
   | 'ineligible'
   | 'cancelled'
   | 'stopped'
