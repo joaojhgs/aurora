@@ -1919,6 +1919,18 @@ describe("Aurora Tauri runtime wrapper", () => {
     expect(markup).toContain("Assistant");
   });
 
+  it("routes every invite-backed profile save through the Connect role guard", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/tauri-app.tsx"),
+      "utf8",
+    );
+
+    expect(source).not.toContain(
+      "onSaveProfile: nativeContext.saveThinProfile",
+    );
+    expect(source.match(/saveRemoteConsoleThinProfile\(/g)).toHaveLength(4);
+  });
+
   it("renders the models page for the models route", () => {
     vi.stubEnv("VITE_AURORA_GATEWAY_URL", "");
     window.history.replaceState({}, "", "/models");
