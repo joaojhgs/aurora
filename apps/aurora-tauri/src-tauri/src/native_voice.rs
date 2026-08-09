@@ -1224,7 +1224,7 @@ struct RuntimeProfileV2 {
     _label: String,
     node_mode: String,
     #[serde(rename = "runtimeTier")]
-    _runtime_tier: String,
+    runtime_tier: String,
     #[serde(default)]
     home_connection: Option<HomeConnectionProfile>,
     #[serde(rename = "localNode")]
@@ -1341,21 +1341,32 @@ fn resolve_profile_from_document(
     credential_loader: impl Fn(&str) -> Option<ThinBearerCredential>,
     now_ms: impl Fn() -> u64,
 ) -> Result<RuntimeProfile, &'static str> {
-    let Some(node_mode) = persisted_node_mode(document)? else {
+    let Some(role) = persisted_runtime_role(document)? else {
         return Err(PROFILE_REASON);
     };
-    match node_mode {
-        "remote-console" => {
+    match role {
+        PersistedRuntimeRole::RemoteConsole => {
             resolve_remote_profile(document, remote_audio_consent, credential_loader, now_ms)
         }
-        "mesh-node" if sidecar_available => RuntimeProfile::local(),
-        "mesh-node" => Err(PROFILE_REASON),
-        _ => Err(PROFILE_REASON),
+        PersistedRuntimeRole::PythonFullMeshNode if sidecar_available => RuntimeProfile::local(),
+        PersistedRuntimeRole::PythonFullMeshNode | PersistedRuntimeRole::NonLocalMeshNode => {
+            Err(PROFILE_REASON)
+        }
     }
 }
 
 #[cfg(desktop)]
-fn persisted_node_mode(document: &ThinProfileDocument) -> Result<Option<&str>, &'static str> {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PersistedRuntimeRole {
+    RemoteConsole,
+    PythonFullMeshNode,
+    NonLocalMeshNode,
+}
+
+#[cfg(desktop)]
+fn persisted_runtime_role(
+    document: &ThinProfileDocument,
+) -> Result<Option<PersistedRuntimeRole>, &'static str> {
     match document {
         ThinProfileDocument::V1(document) => {
             if document.version != 1 {
@@ -1364,7 +1375,7 @@ fn persisted_node_mode(document: &ThinProfileDocument) -> Result<Option<&str>, &
             Ok(document
                 .active_profile_id
                 .as_deref()
-                .map(|_| "remote-console"))
+                .map(|_| PersistedRuntimeRole::RemoteConsole))
         }
         ThinProfileDocument::V2(document) => {
             if document.version != 2 {
@@ -1383,7 +1394,14 @@ fn persisted_node_mode(document: &ThinProfileDocument) -> Result<Option<&str>, &
             if profile.version != 2 {
                 return Err(PROFILE_REASON);
             }
-            Ok(Some(profile.node_mode.as_str()))
+            match profile.node_mode.as_str() {
+                "remote-console" => Ok(Some(PersistedRuntimeRole::RemoteConsole)),
+                "mesh-node" if profile.runtime_tier == "python-full" => {
+                    Ok(Some(PersistedRuntimeRole::PythonFullMeshNode))
+                }
+                "mesh-node" => Ok(Some(PersistedRuntimeRole::NonLocalMeshNode)),
+                _ => Err(PROFILE_REASON),
+            }
         }
     }
 }
@@ -1798,12 +1816,23 @@ mod tests {
         let mut mesh_document = test_runtime_profile_document("http-only", Some("home-peer"));
         if let ThinProfileDocument::V2(inner) = &mut mesh_document {
             inner.profiles[0].node_mode = "mesh-node".to_owned();
+            inner.profiles[0].runtime_tier = "python-full".to_owned();
         }
         let local = resolve_profile_from_document(&mesh_document, true, true, |_| None, || 10)
             .expect("mesh node uses available sidecar");
         assert_eq!(local.connection(), NativeVoiceConnection::ThisDevice);
         assert!(matches!(
             resolve_profile_from_document(&mesh_document, true, false, |_| None, || 10),
+            Err(PROFILE_REASON)
+        ));
+
+        let mut lightweight_mesh = test_runtime_profile_document("http-only", Some("home-peer"));
+        if let ThinProfileDocument::V2(inner) = &mut lightweight_mesh {
+            inner.profiles[0].node_mode = "mesh-node".to_owned();
+            inner.profiles[0].runtime_tier = "lightweight-ts".to_owned();
+        }
+        assert!(matches!(
+            resolve_profile_from_document(&lightweight_mesh, true, true, |_| None, || 10),
             Err(PROFILE_REASON)
         ));
 
@@ -1815,6 +1844,43 @@ mod tests {
             resolve_profile_from_document(&missing_active, true, true, |_| None, || 10),
             Err(PROFILE_REASON)
         ));
+    }
+
+    #[test]
+    fn legacy_remote_profile_is_not_shadowed_by_running_sidecar() {
+        let document = ThinProfileDocument::V1(ThinProfileDocumentV1 {
+            version: 1,
+            active_profile_id: Some("legacy-remote".to_owned()),
+            profiles: vec![ThinConnectionProfileV1 {
+                id: "legacy-remote".to_owned(),
+                _label: "Legacy remote".to_owned(),
+                mode: "http-only".to_owned(),
+                gateway_url: "https://gateway.example.test".to_owned(),
+                _signaling_url: "wss://signal.example.test".to_owned(),
+                _node_name: "Remote".to_owned(),
+                _local_stable_peer_id: "legacy-local-peer".to_owned(),
+                webrtc_profile: Some(test_webrtc_profile("home-peer")),
+            }],
+        });
+        let resolved = resolve_profile_from_document(
+            &document,
+            true,
+            true,
+            |peer_id| {
+                assert_eq!(peer_id, "home-peer");
+                Some(ThinBearerCredential {
+                    raw_bearer_token: "secret".to_owned(),
+                    expires_at_ms: None,
+                })
+            },
+            || 10,
+        )
+        .expect("legacy remote profile should remain remote");
+
+        assert_eq!(
+            resolved.connection(),
+            NativeVoiceConnection::ConnectedDevice
+        );
     }
 
     #[test]
@@ -2056,7 +2122,7 @@ fn test_runtime_profile_document(mode: &str, home_peer_id: Option<&str>) -> Thin
             id: "p2".to_owned(),
             _label: "Home".to_owned(),
             node_mode: "remote-console".to_owned(),
-            _runtime_tier: "thin".to_owned(),
+            runtime_tier: "none".to_owned(),
             home_connection: Some(HomeConnectionProfile {
                 mode: mode.to_owned(),
                 gateway_url: Some("https://gateway.example.test".to_owned()),
