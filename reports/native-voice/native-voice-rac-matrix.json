@@ -1,18 +1,18 @@
 {
   "$schema": "aurora.native_voice_rac_matrix.v1",
-  "planSha256": "50181a35cd42e12aa33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6",
+  "planSha256": "50181a35cd42e12a33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6",
   "handoffSha256": "70b1b5ebb32c6df0e52c119b2bd73adad79c2611433bd33da7391d6e273fe196",
   "codeEvidenceBaselineHead": "3202af9d",
   "reportCommit": "799c4ad1",
   "audit": {
-    "auditedAtUtc": "2026-08-08T23:40:00Z",
+    "auditedAtUtc": "2026-08-09T00:26:00Z",
     "resumedAtUtc": "2026-08-08T22:15:10Z",
     "goalThreadId": "019fd073-38a1-7801-8d62-31ae70d46580",
     "verdict": "active_remediation",
-    "resumeGate": "Phase 4 CPAL evidence and the Phase 5 remote-audio consent source boundary are independently approved through 3202af9d. The Phase 6 disposition decision is independently approved as withheld, with every production speech capability still false. Strict Phase 7 review reopened RAC-24, RAC-25, and RAC-26 as partial: frozen/discarded lifecycle proof, verified-pack offline reuse, and the complete remote-fallback state matrix remain open. The exact rebuilt Android APK hash is installed on Waydroid and Mobile-MCP first-run role/onboarding/navigation passes, but the saved Gateway invite remains offline with no pairing or voice turn. The original API35 emulator reproduces its renderer SIGTRAP in the stock WebView shell; a known-good emulator and Docker-backed interop rerun remain required, with Docker currently blocked until the daemon is reachable.",
+    "resumeGate": "Phase 4 CPAL evidence and the Phase 5 remote-audio consent source boundary are independently approved through 3202af9d. The Phase 6 disposition decision is independently approved as withheld, with every production speech capability still false. RAC-24 is closed at af425907 with hidden, frozen, pagehide, pageshow/resume, and discarded-startup lifecycle proof across unit and real-browser Playwright gates. RAC-25 and RAC-26 remain partial: verified-pack offline reuse through the real Rust/WASM verifier and the complete remote-fallback state matrix remain open. The prior rebuilt Android APK hash was installed on Waydroid and Mobile-MCP first-run role/onboarding/navigation passed, but latest source changes require a fresh APK before final pairing or voice-turn validation. The original API35 emulator reproduces its renderer SIGTRAP in the stock WebView shell; a known-good emulator and Docker-backed interop rerun remain required. Docker is reachable now (server 29.1.3), so interop is pending evidence rather than daemon availability.",
     "statusCounts": {
-      "pass": 21,
-      "partial": 25,
+      "pass": 22,
+      "partial": 24,
       "withheld": 6,
       "blocked": 4
     }
@@ -47,7 +47,7 @@
     {"id":"RAC-21","status":"pass","evidence":"aurora-voice-web uses the Rust/WASM facade and worker host"},
     {"id":"RAC-22","status":"partial","evidence":"Chromium/Firefox/WebKit worker parity passes; full browser PTT matrix remains bounded"},
     {"id":"RAC-23","status":"pass","evidence":"browser worker/nonblocking matrix with measured timer lag"},
-    {"id":"RAC-24","status":"partial","evidence":"hidden/focus/audio lifecycle invalidation and foreground-only browser behavior pass; frozen, discarded, and pagehide lifecycle proof is incomplete"},
+    {"id":"RAC-24","status":"pass","evidence":"hidden/focus/audio lifecycle invalidation plus frozen, discarded, pagehide, pageshow, and resume behavior pass in unit coverage and 35 production browser lifecycle Playwright cases across Chromium, Firefox, WebKit, Android-emulated Chrome, and mobile Safari emulation"},
     {"id":"RAC-25","status":"partial","evidence":"browser storage quota, interruption, eviction, recovery, and reload persistence pass; verified-pack install through the WASM verifier followed by actual offline reuse is not proven end to end"},
     {"id":"RAC-26","status":"partial","evidence":"authorized remote routing, consent, and unavailable-local cases pass; the complete disabled, downloading, incompatible, and over-budget local-WASM fallback matrix is incomplete"},
     {"id":"RAC-27","status":"partial","evidence":"desktop native ownership and sidecar/no-sidecar profile boundaries are tested; integrated live turn remains open"},
@@ -73,7 +73,7 @@
     {"id":"RAC-47","status":"pass","evidence":"iOS background capability remains disabled pending physical/distribution review"},
     {"id":"RAC-48","status":"pass","evidence":"generated contracts, deterministic descriptors, and backend inventory check"},
     {"id":"RAC-49","status":"partial","evidence":"bounded native HTTP/SSE cancellation, reconnect, ordering, timeout, and redaction tests pass; full Gateway turn is open"},
-    {"id":"RAC-50","status":"partial","evidence":"Backend permission and route checks, route-scoped consent, browser revoke ordering, native-mobile truth-table coverage, Android route reset/cleartext policy, independent source review, rebuilt APK verification, exact installed-APK hash match, and Mobile-MCP first-run navigation pass through 3202af9d; known-good headless WebView rendering, Docker-backed interop, successful Waydroid pairing, and a complete Gateway/UI turn remain open"},
+    {"id":"RAC-50","status":"partial","evidence":"Backend permission and route checks, route-scoped consent, browser revoke ordering, native-mobile truth-table coverage, Android route reset/cleartext policy, independent source review, prior rebuilt APK verification, exact installed-APK hash match, and Mobile-MCP first-run navigation pass through 3202af9d; latest source changes require a fresh APK before final Waydroid validation, and known-good headless WebView rendering, Docker-backed interop rerun evidence, successful Waydroid pairing, and a complete Gateway/UI turn remain open"},
     {"id":"RAC-51","status":"partial","evidence":"Android/iOS secure-storage source exists; full cross-platform native background credential and model-key runtime proof is absent"},
     {"id":"RAC-52","status":"partial","evidence":"Redaction tests pass; cloned source/embedding/state deletion and import/export/rollback privacy are not proven end to end"},
     {"id":"RAC-53","status":"partial","evidence":"Centralized surface, production-copy, and accessibility tests pass; model/download/voice-management states are not fully implemented"},
@@ -82,9 +82,9 @@
     {"id":"RAC-56","status":"partial","evidence":"unmet physical/performance gates keep affected capabilities false; no policy is weakened"}
   ],
   "globalGaps": [
-    "The Phase 5 remote-audio consent source boundary is independently approved through 3202af9d, and the exact rebuilt Android APK hash installs and renders first-run onboarding on Waydroid; RAC-50 remains partial until known-good headless WebView, interop, pairing, and complete device/Gateway/UI proof exist.",
+    "The Phase 5 remote-audio consent source boundary is independently approved through 3202af9d, and the prior rebuilt Android APK hash installed and rendered first-run onboarding on Waydroid; latest source changes require a fresh APK before final Waydroid validation, and RAC-50 remains partial until known-good headless WebView, Docker-backed interop rerun evidence, pairing, and complete device/Gateway/UI proof exist.",
     "The Phase 6 disposition decision is independently approved as withheld: every production VAD, KWS, STT, and TTS capability is false and no shippable production speech pack is selected.",
-    "Strict Phase 7 review corrected RAC-24, RAC-25, and RAC-26 to partial because frozen/discarded lifecycle behavior, verified-pack offline reuse, and the complete remote-fallback state matrix are not proven end to end.",
+    "RAC-24 is closed at af425907 with page lifecycle proof; RAC-25 and RAC-26 remain partial because verified-pack offline reuse through the real Rust/WASM verifier and the complete remote-fallback state matrix are not proven end to end.",
     "No full Aurora Gateway request/response voice turn was observed on Waydroid; the saved invite remains offline with no pairing request, and the original API35 emulator reproduces its Chromium/WebView renderer SIGTRAP in the stock WebView shell.",
     "Physical ARM64 Android, physical iOS, Windows/macOS signed release, SBOM/store/security review, background endurance, forced TURN, staged rollback, and full Phase 12 mutation evidence remain external, blocked, or incomplete."
   ],
