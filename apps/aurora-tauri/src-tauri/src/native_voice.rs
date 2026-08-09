@@ -761,15 +761,13 @@ impl NativeVoiceActor {
         &mut self,
         remote_audio_consent: bool,
     ) -> Result<RuntimeProfile, &'static str> {
-        if sidecar_running(&self.sidecar) {
-            return RuntimeProfile::local();
-        }
         let Some(document) = load_thin_profile_document() else {
             return Err(PROFILE_REASON);
         };
-        resolve_remote_profile(
+        resolve_profile_from_document(
             &document,
             remote_audio_consent,
+            sidecar_running(&self.sidecar),
             load_peer_bearer,
             super::current_unix_ms,
         )
@@ -1336,6 +1334,61 @@ fn resolve_remote_profile(
 }
 
 #[cfg(desktop)]
+fn resolve_profile_from_document(
+    document: &ThinProfileDocument,
+    remote_audio_consent: bool,
+    sidecar_available: bool,
+    credential_loader: impl Fn(&str) -> Option<ThinBearerCredential>,
+    now_ms: impl Fn() -> u64,
+) -> Result<RuntimeProfile, &'static str> {
+    let Some(node_mode) = persisted_node_mode(document)? else {
+        return Err(PROFILE_REASON);
+    };
+    match node_mode {
+        "remote-console" => {
+            resolve_remote_profile(document, remote_audio_consent, credential_loader, now_ms)
+        }
+        "mesh-node" if sidecar_available => RuntimeProfile::local(),
+        "mesh-node" => Err(PROFILE_REASON),
+        _ => Err(PROFILE_REASON),
+    }
+}
+
+#[cfg(desktop)]
+fn persisted_node_mode(document: &ThinProfileDocument) -> Result<Option<&str>, &'static str> {
+    match document {
+        ThinProfileDocument::V1(document) => {
+            if document.version != 1 {
+                return Err(PROFILE_REASON);
+            }
+            Ok(document
+                .active_profile_id
+                .as_deref()
+                .map(|_| "remote-console"))
+        }
+        ThinProfileDocument::V2(document) => {
+            if document.version != 2 {
+                return Err(PROFILE_REASON);
+            }
+            let Some(active_id) = document.active_profile_id.as_deref() else {
+                return Ok(None);
+            };
+            let Some(profile) = document
+                .profiles
+                .iter()
+                .find(|profile| profile.id == active_id)
+            else {
+                return Ok(None);
+            };
+            if profile.version != 2 {
+                return Err(PROFILE_REASON);
+            }
+            Ok(Some(profile.node_mode.as_str()))
+        }
+    }
+}
+
+#[cfg(desktop)]
 struct RemoteProfileCandidate {
     gateway: Url,
     peer_id: String,
@@ -1719,6 +1772,47 @@ mod tests {
         }
         assert!(matches!(
             resolve_remote_profile(&document, true, |_| None, || 10),
+            Err(PROFILE_REASON)
+        ));
+    }
+
+    #[test]
+    fn persisted_runtime_role_decides_native_profile_before_sidecar_state() {
+        let remote_document = test_runtime_profile_document("http-only", Some("home-peer"));
+        let remote = resolve_profile_from_document(
+            &remote_document,
+            true,
+            true,
+            |peer_id| {
+                assert_eq!(peer_id, "home-peer");
+                Some(ThinBearerCredential {
+                    raw_bearer_token: "secret".to_owned(),
+                    expires_at_ms: None,
+                })
+            },
+            || 10,
+        )
+        .expect("remote profile remains remote");
+        assert_eq!(remote.connection(), NativeVoiceConnection::ConnectedDevice);
+
+        let mut mesh_document = test_runtime_profile_document("http-only", Some("home-peer"));
+        if let ThinProfileDocument::V2(inner) = &mut mesh_document {
+            inner.profiles[0].node_mode = "mesh-node".to_owned();
+        }
+        let local = resolve_profile_from_document(&mesh_document, true, true, |_| None, || 10)
+            .expect("mesh node uses available sidecar");
+        assert_eq!(local.connection(), NativeVoiceConnection::ThisDevice);
+        assert!(matches!(
+            resolve_profile_from_document(&mesh_document, true, false, |_| None, || 10),
+            Err(PROFILE_REASON)
+        ));
+
+        let mut missing_active = test_runtime_profile_document("http-only", Some("home-peer"));
+        if let ThinProfileDocument::V2(inner) = &mut missing_active {
+            inner.active_profile_id = None;
+        }
+        assert!(matches!(
+            resolve_profile_from_document(&missing_active, true, true, |_| None, || 10),
             Err(PROFILE_REASON)
         ));
     }

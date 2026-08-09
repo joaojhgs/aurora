@@ -767,13 +767,10 @@ export function createAuroraTauriRuntime({
       ],
       thinProfileConfigured: false,
       runtimeProfile: configuredRuntimeProfile,
-      nodeMode: configuredRuntimeProfile?.nodeMode ?? "mesh-node",
-      runtimeTier: configuredRuntimeProfile?.runtimeTier
-        ?? (surfaceSupportsRuntimeTier(currentAuroraSurfaceProfile(), "python-full", {
-          packageIncludesPython: hasPythonFullRuntimeCapability(packageCapabilities),
-        }) ? "python-full" : "lightweight-ts"),
+      nodeMode: runtimeNodeMode,
+      runtimeTier,
       nativeVoice,
-      requiresOnboarding: false,
+      requiresOnboarding: !runtimeProfileConfigured,
       pendingThinInviteText: null,
       modePreferenceStore: secureModePreferenceStore(
         nativeTransport,

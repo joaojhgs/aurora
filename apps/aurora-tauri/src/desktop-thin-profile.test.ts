@@ -181,6 +181,17 @@ function fakeAndroidThinRuntime(mode: 'http-only' | 'webrtc-only' | 'webrtc-pref
       usesBrowserVoiceRuntime: false,
       focusedPushToTalkOwner: 'unavailable',
       wakewordOwner: 'unavailable',
+      localSpeechPack: {
+        state: 'disabled',
+        availabilityState: 'unsupported',
+        label: 'On-device speech',
+        detail: 'On-device speech is not set up on this device.',
+        blockers: ['not-configured'],
+        canRunLocalVad: false,
+        canRunLocalKws: false,
+        canRunLocalStt: false,
+        canRunLocalTts: false,
+      },
     },
     close: vi.fn(async () => undefined),
     calls,
@@ -567,6 +578,22 @@ describe('desktop-thin live connection profiles', () => {
     expect(runtime.nodeMode).toBe('remote-console')
     expect(runtime.runtimeTier).toBe('none')
     expect(await runtime.sidecarStatus()).toBeNull()
+    await runtime.dispose()
+  })
+
+  it('keeps a desktop-local capable artifact role-neutral until onboarding saves a runtime profile', async () => {
+    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-local')
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
+
+    const runtime = createAuroraTauriRuntime({
+      consumeThinInvite: false,
+    })
+
+    expect(runtime.mode).toBe('desktop-local')
+    expect(runtime.runtimeProfile).toBeUndefined()
+    expect(runtime.nodeMode).toBe('remote-console')
+    expect(runtime.runtimeTier).toBe('none')
+    expect(runtime.requiresOnboarding).toBe(true)
     await runtime.dispose()
   })
 

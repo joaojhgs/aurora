@@ -1612,6 +1612,17 @@ describe("Aurora Tauri runtime wrapper", () => {
         usesBrowserVoiceRuntime: false,
         focusedPushToTalkOwner: "native-desktop",
         wakewordOwner: "unavailable",
+        localSpeechPack: {
+          state: "disabled",
+          availabilityState: "unsupported",
+          label: "On-device speech",
+          detail: "On-device speech is not set up on this device.",
+          blockers: ["not-configured"],
+          canRunLocalVad: false,
+          canRunLocalKws: false,
+          canRunLocalStt: false,
+          canRunLocalTts: false,
+        },
       },
       localAssistant: {
         provider: {
