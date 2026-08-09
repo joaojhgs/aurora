@@ -437,6 +437,9 @@ enum AuroraThinPeerStorage {
     do {
       record = try JSONDecoder().decode(AuroraThinPeerCredentialRecord.self, from: encoded)
     } catch {
+      if let account = try? credentialAccount(peerId: peerId) {
+        try? keychainDelete(account: account)
+      }
       throw AuroraThinStorageError.corruptCredential
     }
     if let expiresAtMs = record.expiresAtMs, expiresAtMs <= currentUnixMs() {

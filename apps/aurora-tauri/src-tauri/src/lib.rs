@@ -6172,9 +6172,22 @@ fn load_thin_peer_credential_value(_peer_id: &str) -> Result<Option<String>, Aur
 fn parse_thin_peer_credential_record(
     stored: &str,
 ) -> Result<ThinPeerCredentialRecord, AuroraCommandError> {
-    serde_json::from_str(stored).map_err(|_| {
+    let record: ThinPeerCredentialRecord = serde_json::from_str(stored).map_err(|_| {
         AuroraCommandError::SecureStorage("stored peer credential is invalid".to_string())
-    })
+    })?;
+    validate_credential_record_fields(
+        &record.token_id,
+        &record.claimant_peer_id,
+        &record.verifier_peer_id,
+        &record.claimant_signaling_peer_id,
+        &record.verifier_signaling_peer_id,
+        &record.room_name,
+        &record.raw_bearer_token,
+    )
+    .map_err(|_| {
+        AuroraCommandError::SecureStorage("stored peer credential is invalid".to_string())
+    })?;
+    Ok(record)
 }
 
 fn resolve_unexpired_thin_peer_credential_record(
@@ -9569,6 +9582,41 @@ mod tests {
         assert!(serialized.contains("stored peer credential is invalid"));
         assert!(serialized.contains("secrets_redacted"));
         assert!(!serialized.contains("synthetic-reconnect-token"));
+    }
+
+    #[test]
+    fn semantically_invalid_stored_peer_credentials_fail_closed_and_are_deleted() {
+        let stored = serde_json::to_string(&ThinPeerCredentialRecord {
+            token_id: "token-fixture-001".to_string(),
+            claimant_peer_id: "stable-answer".to_string(),
+            verifier_peer_id: "stable-offer".to_string(),
+            claimant_signaling_peer_id: "sig-answer".to_string(),
+            verifier_signaling_peer_id: "sig-offer".to_string(),
+            room_name: "lab-room".to_string(),
+            raw_bearer_token: "".to_string(),
+            created_at_ms: Some(1),
+            expires_at_ms: None,
+        })
+        .unwrap();
+        let deleted = Mutex::new(Vec::<String>::new());
+
+        let result = resolve_unexpired_thin_peer_credential_record(
+            "stable-answer",
+            Some(stored.clone()),
+            |peer_id| {
+                deleted.lock().unwrap().push(peer_id.to_string());
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert!(result.is_none());
+        assert_eq!(deleted.lock().unwrap().as_slice(), ["stable-answer"]);
+        let serialized =
+            serde_json::to_string(&parse_thin_peer_credential_record(&stored).unwrap_err())
+                .unwrap();
+        assert!(serialized.contains("stored peer credential is invalid"));
+        assert!(serialized.contains("secrets_redacted"));
     }
 
     #[test]

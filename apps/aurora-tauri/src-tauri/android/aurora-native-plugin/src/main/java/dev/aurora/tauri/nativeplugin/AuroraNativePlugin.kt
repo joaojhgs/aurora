@@ -1792,6 +1792,12 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             securePrefs().edit().remove(key).apply()
             return null
         }
+        try {
+            validateThinPeerCredentialRecord(record)
+        } catch (_: Exception) {
+            securePrefs().edit().remove(key).apply()
+            return null
+        }
         val expiresAt = record.optLong("expiresAtMs", 0L)
         if (expiresAt > 0 && expiresAt <= currentUnixMs()) {
             securePrefs().edit().remove(key).apply()
@@ -2138,6 +2144,29 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         validateNonEmpty("verifierSignalingPeerId", args.verifierSignalingPeerId, 256)
         validateNonEmpty("roomName", args.roomName, 512)
         validateNonEmpty("rawBearerToken", args.rawBearerToken, 4096)
+    }
+
+    private fun validateThinPeerCredentialRecord(record: JSONObject) {
+        validateNonEmpty("tokenId", record.optString("tokenId"), 128)
+        validateNonEmpty("claimantPeerId", record.optString("claimantPeerId"), 256)
+        validateNonEmpty("verifierPeerId", record.optString("verifierPeerId"), 256)
+        validateNonEmpty("claimantSignalingPeerId", record.optString("claimantSignalingPeerId"), 256)
+        validateNonEmpty("verifierSignalingPeerId", record.optString("verifierSignalingPeerId"), 256)
+        validateNonEmpty("roomName", record.optString("roomName"), 512)
+        validateNonEmpty("rawBearerToken", record.optString("rawBearerToken"), 4096)
+        validateOptionalJsonLong(record, "createdAtMs")
+        validateOptionalJsonLong(record, "expiresAtMs", requirePositive = true)
+    }
+
+    private fun validateOptionalJsonLong(record: JSONObject, field: String, requirePositive: Boolean = false) {
+        if (!record.has(field)) return
+        val value = record.get(field)
+        if (value !is Number || value is Double || value is Float || !value.toString().matches(Regex("^[0-9]+$"))) {
+            throw IllegalArgumentException("$field must be an unsigned integer")
+        }
+        if (requirePositive && value.toLong() <= 0L) {
+            throw IllegalArgumentException("$field must be a positive integer")
+        }
     }
 
     private fun validateReconnectChallenge(challenge: MeshReconnectChallengeFrameArgs) {

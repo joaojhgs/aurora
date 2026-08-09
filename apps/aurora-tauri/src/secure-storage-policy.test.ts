@@ -304,12 +304,19 @@ describe('Tauri secure storage policy', () => {
 
     expect(rustSource).toContain('parse_thin_peer_credential_record')
     expect(rustSource).toContain('resolve_unexpired_thin_peer_credential_record')
+    expect(rustSource).toContain('validate_credential_record_fields(')
+    expect(rustSource).toContain('semantically_invalid_stored_peer_credentials_fail_closed_and_are_deleted')
     expect(rustSource).toMatch(/delete_record\(peer_id\)\?;[\s\S]*Ok\(None\)/)
-    expect(rustParseBody).not.toContain('raw_bearer_token')
+    expect(rustParseBody).not.toContain('synthetic-reconnect-token')
+    expect(kotlinSource).toContain('validateThinPeerCredentialRecord(record)')
+    expect(kotlinSource).toContain('validateNonEmpty("rawBearerToken", record.optString("rawBearerToken"), 4096)')
     expect(kotlinSource).toMatch(
       /catch \(_:\s*Exception\) \{[\s\S]*securePrefs\(\)\.edit\(\)\.remove\(key\)\.apply\(\)[\s\S]*return null/,
     )
     expect(kotlinSource).not.toMatch(/Log\.[a-z]\([^)]*rawBearerToken/u)
+    expect(swiftStorage).toMatch(
+      /catch \{[\s\S]*try\? keychainDelete\(account: account\)[\s\S]*throw AuroraThinStorageError\.corruptCredential/,
+    )
     expect(swiftStorage).toContain('throw AuroraThinStorageError.corruptCredential')
     expect(swiftPlugin).toContain('AuroraThinStorageError.redactedCode')
     expect(swiftPlugin).not.toContain('rawBearerToken')

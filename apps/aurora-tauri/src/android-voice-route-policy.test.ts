@@ -147,10 +147,45 @@ describe('Android native voice route policy', () => {
 
     expect(loadBody).toContain('val key = thinPeerCredentialKey(peerId)')
     expect(loadBody).toContain('JSONObject(decryptSecureValue(stored))')
+    expect(loadBody).toContain('validateThinPeerCredentialRecord(record)')
     expect(loadBody).toContain('catch (_: Exception)')
     expect(loadBody).toMatch(/securePrefs\(\)\.edit\(\)\.remove\(key\)\.apply\(\)[\s\S]*return null/)
     expect(syncBody).toContain('?.let(::loadUnexpiredThinPeerCredential)')
     expect(syncBody).toContain('AuroraVoiceNativeConfigStore.clearRoute(activity)')
     expect(syncBody).not.toContain('rawBearerToken", record.getString')
+  })
+
+  it('rejects stored peer credentials with missing bearer fields before route provisioning', () => {
+    const kotlin = repoText(kotlinPath)
+    const loadBody = kotlin.slice(
+      kotlin.indexOf('private fun loadUnexpiredThinPeerCredential(peerId: String)'),
+      kotlin.indexOf(
+        'private fun thinPeerStatusResponse',
+        kotlin.indexOf('private fun loadUnexpiredThinPeerCredential(peerId: String)'),
+      ),
+    )
+    const validatorBody = kotlin.slice(
+      kotlin.indexOf('private fun validateThinPeerCredentialRecord(record: JSONObject)'),
+      kotlin.indexOf(
+        'private fun validateReconnectChallenge',
+        kotlin.indexOf('private fun validateThinPeerCredentialRecord(record: JSONObject)'),
+      ),
+    )
+
+    expect(loadBody).toMatch(/validateThinPeerCredentialRecord\(record\)[\s\S]*catch \(_:\s*Exception\)/)
+    expect(loadBody).toMatch(/catch \(_:\s*Exception\) \{[\s\S]*securePrefs\(\)\.edit\(\)\.remove\(key\)\.apply\(\)[\s\S]*return null/)
+    for (const field of [
+      'tokenId',
+      'claimantPeerId',
+      'verifierPeerId',
+      'claimantSignalingPeerId',
+      'verifierSignalingPeerId',
+      'roomName',
+      'rawBearerToken',
+    ]) {
+      expect(validatorBody).toContain(`validateNonEmpty("${field}"`)
+    }
+    expect(validatorBody).toContain('validateOptionalJsonLong(record, "createdAtMs")')
+    expect(validatorBody).toContain('validateOptionalJsonLong(record, "expiresAtMs", requirePositive = true)')
   })
 })
