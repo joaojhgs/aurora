@@ -7,6 +7,7 @@ const HOOK_PAYLOAD_SCHEMA = "aurora.desktop_native_voice_e2e.hook_payload.v1";
 const REPORT_SCHEMA = "aurora.desktop_native_voice_e2e.webview_report.v1";
 const STATUS_EVENT = "aurora://native-voice-status";
 const DESKTOP_RUNTIME_PROFILE_KEY = "aurora.session.desktop-thin-connection-profiles.v1";
+const REMOTE_AUDIO_CONSENT_REASON = "remote_audio_consent_required";
 const FORBIDDEN_TEXT_RE =
   /\b(?:transcript|rawAudio|audioData|audio_data|authorization|bearer|token|leaseId|lease_id|endpoint|gatewayUrl|modelPath|getUserMedia|Worker)\b/iu;
 const DEFAULT_STEP_TIMEOUT_MS = 15_000;
@@ -582,7 +583,7 @@ function assertRouteScenarios(scenarios: NativeVoiceRouteScenarioSummary[]): voi
       if (scenario.persistedNodeMode !== "remote-console" || scenario.persistedRuntimeTier !== "none") {
         throw new Error("remote route scenario is not profile-selected");
       }
-      if (scenario.startBlockedReasonCode !== "remote_audio_consent") {
+      if (scenario.startBlockedReasonCode !== REMOTE_AUDIO_CONSENT_REASON) {
         throw new Error("remote route did not fail closed before local capture");
       }
       if (scenario.observedConnection === "this_device") {

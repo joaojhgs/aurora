@@ -18,6 +18,7 @@ const liveEnv = {
   VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E: "1",
   VITE_AURORA_TAURI_DEV_AUTOSIDECAR: "0",
 };
+const REMOTE_AUDIO_CONSENT_REASON = "remote_audio_consent_required";
 
 describe("desktop native voice E2E hook", () => {
   it("is gated to the explicit installed desktop local E2E environment", () => {
@@ -116,14 +117,14 @@ describe("desktop native voice E2E hook", () => {
         if (activeProfile().nodeMode === "remote-console") {
           return status("unavailable", null, {
             connection: "unavailable",
-            reasonCode: "remote_audio_consent",
+            reasonCode: REMOTE_AUDIO_CONSENT_REASON,
           });
         }
         return activeGeneration === null ? status("idle", null) : status("processing", activeGeneration);
       }
       if (command === "aurora_native_voice_start") {
         if (activeProfile().nodeMode === "remote-console") {
-          throw { reasonCode: "remote_audio_consent" };
+          throw { reasonCode: REMOTE_AUDIO_CONSENT_REASON };
         }
         startCount += 1;
         activeGeneration = startCount === 1 ? 7 : 8;
@@ -192,7 +193,7 @@ describe("desktop native voice E2E hook", () => {
         persistedRuntimeTier: "none",
         sidecarRunning: false,
         expectedScope: "remote-gateway",
-        startBlockedReasonCode: "remote_audio_consent",
+        startBlockedReasonCode: REMOTE_AUDIO_CONSENT_REASON,
         redacted: true,
       }),
       expect.objectContaining({
@@ -201,7 +202,7 @@ describe("desktop native voice E2E hook", () => {
         persistedRuntimeTier: "none",
         sidecarRunning: true,
         expectedScope: "remote-gateway",
-        startBlockedReasonCode: "remote_audio_consent",
+        startBlockedReasonCode: REMOTE_AUDIO_CONSENT_REASON,
         redacted: true,
       }),
       expect.objectContaining({
@@ -294,11 +295,11 @@ describe("desktop native voice E2E hook", () => {
       if (command === "aurora_sidecar_stop") return { running: false };
       if (command === "aurora_native_voice_status") {
         return activeProfile().nodeMode === "remote-console"
-          ? status("unavailable", null, { connection: "unavailable", reasonCode: "remote_audio_consent" })
+          ? status("unavailable", null, { connection: "unavailable", reasonCode: REMOTE_AUDIO_CONSENT_REASON })
           : status("idle", null);
       }
       if (command === "aurora_native_voice_start") {
-        if (activeProfile().nodeMode === "remote-console") throw { reasonCode: "remote_audio_consent" };
+        if (activeProfile().nodeMode === "remote-console") throw { reasonCode: REMOTE_AUDIO_CONSENT_REASON };
         return status("starting", 7);
       }
       if (command === "aurora_native_voice_finish") return status("stopping", 7);

@@ -22,6 +22,7 @@ const aggregateReportSchema = 'aurora.desktop_native_voice_e2e.report.v1'
 const forbiddenReportText =
   /\b(?:authorization|bearer|token|rawAudio|audioData|audio_data|transcript|leaseId|lease_id|modelPath)\b/iu
 const sensitiveFieldName = /^(?:audioData|audio_data|text|leaseId|lease_id|token|authorization|transcript)$/iu
+const remoteAudioConsentReason = 'remote_audio_consent_required'
 const interruptScopes = new Set(['generation', 'session', 'tool_call', 'tts_playback'])
 const interruptStatuses = new Set(['cancelled', 'failed', 'no_active_work', 'not_supported'])
 
@@ -512,7 +513,7 @@ function assertRouteScenarios(value) {
     assert.equal(scenario.persistedNodeMode, 'remote-console')
     assert.equal(scenario.persistedRuntimeTier, 'none')
     assert.equal(scenario.expectedScope, 'remote-gateway')
-    assert.equal(scenario.startBlockedReasonCode, 'remote_audio_consent')
+    assert.equal(scenario.startBlockedReasonCode, remoteAudioConsentReason)
     assert.notEqual(scenario.observedConnection, 'this_device')
   }
   assert.equal(remoteNoSidecar.sidecarRunning, false)
@@ -918,8 +919,8 @@ async function runSelfTest() {
             expectedScope: 'remote-gateway',
             observedConnection: 'unavailable',
             observedAvailable: false,
-            observedReasonCode: 'remote_audio_consent',
-            startBlockedReasonCode: 'remote_audio_consent',
+            observedReasonCode: remoteAudioConsentReason,
+            startBlockedReasonCode: remoteAudioConsentReason,
             redacted: true,
           },
           {
@@ -930,8 +931,8 @@ async function runSelfTest() {
             expectedScope: 'remote-gateway',
             observedConnection: 'unavailable',
             observedAvailable: false,
-            observedReasonCode: 'remote_audio_consent',
-            startBlockedReasonCode: 'remote_audio_consent',
+            observedReasonCode: remoteAudioConsentReason,
+            startBlockedReasonCode: remoteAudioConsentReason,
             redacted: true,
           },
           {
