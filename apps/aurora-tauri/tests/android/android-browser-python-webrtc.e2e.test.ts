@@ -27,7 +27,13 @@ import {
   type InteropBrowserResult,
 } from '../../../../tests/e2e/webrtc_interop/assertions.js'
 import {
+  androidWebRtcBrokerUrl,
+  androidWebRtcComposeArgs,
+  androidWebRtcServicesComposeYaml,
+  androidWebRtcStunUrl,
+  androidWebRtcTurnUrl,
   createAndroidHarnessRequestLog,
+  resolveAndroidWebRtcServicePorts,
   type AndroidHarnessRequestLogEntry,
 } from './android-webrtc-harness-utils.js'
 
@@ -63,8 +69,8 @@ const repoRoot = resolve(
   '../../../..',
 )
 const appRoot = resolve(repoRoot, 'apps/aurora-tauri')
-const serviceScript = resolve(repoRoot, 'scripts/webrtc_interop_services.sh')
 process.env.COMPOSE_PROJECT_NAME ||= 'aurora-android-mobile-webrtc-e2e'
+const composeProjectName = process.env.COMPOSE_PROJECT_NAME
 const gatewayScript = resolve(repoRoot, 'scripts/webrtc_interop_gateway.py')
 const scannerScript = resolve(repoRoot, 'scripts/webrtc_interop_scan.py')
 const browserEntry = resolve(
@@ -258,6 +264,7 @@ describe('Android mobile-browser WebRTC interoperability', () => {
 
 async function createInteropResources() {
   const timeoutMs = interopTimeoutMs
+  const servicePorts = resolveAndroidWebRtcServicePorts()
   const roomSecret = crypto.randomBytes(32).toString('base64url')
   const token = `android-mobile.${crypto
     .randomBytes(24)
@@ -267,11 +274,13 @@ async function createInteropResources() {
   const hostIpv4 =
     interopLane === 'direct' ? undefined : await resolveHostIpv4()
   const stunServer =
-    interopLane === 'stun' ? `stun:${hostIpv4}:3478` : undefined
+    interopLane === 'stun' && hostIpv4 !== undefined
+      ? androidWebRtcStunUrl(hostIpv4, servicePorts)
+      : undefined
   const turnServer =
-    interopLane === 'turn'
+    interopLane === 'turn' && hostIpv4 !== undefined
       ? (process.env.AURORA_ANDROID_WEBRTC_TURN_URL ??
-        `turn:${hostIpv4}:3478?transport=tcp`)
+        androidWebRtcTurnUrl(hostIpv4, servicePorts))
       : undefined
   const readyPath = join(artifactDir, 'gateway-ready.json')
   const donePath = join(artifactDir, 'android-mobile-done.json')
@@ -288,6 +297,10 @@ async function createInteropResources() {
     artifactDir,
     'crypto-worker-bundle.js',
   )
+  const serviceComposePath = join(
+    artifactDir,
+    'docker-compose.webrtc-interop.generated.yml',
+  )
   const transientPaths = [
     readyPath,
     donePath,
@@ -298,6 +311,7 @@ async function createInteropResources() {
     mqttBundlePath,
     legacyMqttBundlePath,
     cryptoWorkerBundlePath,
+    serviceComposePath,
   ]
   await fs.mkdir(artifactDir, { recursive: true })
   await Promise.all(
@@ -347,10 +361,18 @@ async function createInteropResources() {
       }
     }
     if (servicesStarted) {
-      spawnSync(serviceScript, ['down'], {
-        cwd: repoRoot,
-        stdio: 'inherit',
-      })
+      spawnSync(
+        'docker',
+        androidWebRtcComposeArgs(
+          serviceComposePath,
+          'down',
+          composeProjectName,
+        ),
+        {
+          cwd: repoRoot,
+          stdio: 'inherit',
+        },
+      )
     }
     if (
       pythonPeer?.exitCode &&
@@ -367,11 +389,21 @@ async function createInteropResources() {
   }
 
   try {
-    run(serviceScript, ['up'], repoRoot)
+    assertAndroidDevicePreflight('Android mobile-browser WebRTC interop')
+    resolveAndroidBrowserTarget()
+    await fs.writeFile(
+      serviceComposePath,
+      androidWebRtcServicesComposeYaml(servicePorts),
+    )
+    run(
+      'docker',
+      androidWebRtcComposeArgs(serviceComposePath, 'up', composeProjectName),
+      repoRoot,
+    )
     servicesStarted = true
     await Promise.all([
-      waitForPort(9001, timeoutMs),
-      waitForPort(3478, timeoutMs),
+      waitForPort(servicePorts.mqttWsHostPort, timeoutMs),
+      waitForPort(servicePorts.turnHostPort, timeoutMs),
     ])
     run(
       'pnpm',
@@ -473,7 +505,6 @@ async function createInteropResources() {
 
     hostPort = address.port
     run(adb, ['wait-for-device'])
-    resolveAndroidBrowserTarget()
     // Chrome setup writes its first-run preferences directly. Root only the
     // emulator for that browser family; other installed browsers do not need it.
     if (isChromeFamilyBrowser()) {
@@ -484,7 +515,11 @@ async function createInteropResources() {
     run(adb, ['shell', 'svc', 'power', 'stayon', 'true'])
     run(adb, ['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'])
     run(adb, ['shell', 'wm', 'dismiss-keyguard'])
-    for (const port of [hostPort, 9001, 3478]) {
+    for (const port of [
+      hostPort,
+      servicePorts.mqttWsHostPort,
+      servicePorts.turnHostPort,
+    ]) {
       run(adb, ['reverse', `tcp:${port}`, `tcp:${port}`])
       reversedPorts.add(port)
     }
@@ -502,7 +537,7 @@ async function createInteropResources() {
       '--report',
       pythonReportPath,
       '--broker',
-      'ws://127.0.0.1:9001/mqtt',
+      androidWebRtcBrokerUrl(servicePorts),
       '--room',
       room,
       '--timeout',
@@ -1063,6 +1098,29 @@ function resolveAdbCommand(): string {
             0),
     ) ?? 'adb'
   )
+}
+
+function assertAndroidDevicePreflight(label: string): void {
+  const serial = process.env.ANDROID_SERIAL?.trim()
+  const state = spawnSync(adb, ['get-state'], { encoding: 'utf8' })
+  if (state.status !== 0 || state.stdout.trim() !== 'device') {
+    throw new Error(
+      `${label} requires a connected API35 x86_64 QEMU device${
+        serial ? ` selected by ANDROID_SERIAL=${serial}` : ''
+      }; adb get-state returned ${JSON.stringify(
+        state.stdout.trim() || state.stderr.trim() || 'no-device',
+      )}`,
+    )
+  }
+
+  const qemu = adbOutput(['shell', 'getprop', 'ro.kernel.qemu']).trim()
+  const sdk = adbOutput(['shell', 'getprop', 'ro.build.version.sdk']).trim()
+  const abi = adbOutput(['shell', 'getprop', 'ro.product.cpu.abi']).trim()
+  if (qemu !== '1' || sdk !== '35' || abi !== 'x86_64') {
+    throw new Error(
+      `${label} requires API35 x86_64 QEMU; got ro.kernel.qemu=${qemu}, sdk=${sdk}, abi=${abi}`,
+    )
+  }
 }
 
 function resolveAndroidBrowserTarget(): void {

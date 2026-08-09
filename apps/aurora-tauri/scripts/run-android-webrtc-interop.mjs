@@ -27,6 +27,11 @@ const browserReportPath = join(
   'android-mobile-browser',
   'report.json',
 )
+const webViewExpectations = resolveAndroidInteropExpectations(
+  process.env.AURORA_ANDROID_WEBRTC_LANE,
+  'AURORA_ANDROID_WEBRTC_LANE',
+  'turn',
+)
 const mobileBrowserExpectations = resolveMobileBrowserExpectations(
   process.env.AURORA_ANDROID_MOBILE_WEBRTC_LANE,
 )
@@ -89,20 +94,23 @@ const requiredNegativeAssertions = [
  */
 export function buildAndroidInteropAggregate(
   input,
-  expectations = mobileBrowserExpectations,
+  expectations = {
+    webview: webViewExpectations,
+    mobileBrowser: mobileBrowserExpectations,
+  },
 ) {
   const webview = summarizeChild({
     id: 'android-webview',
     sourceReport: 'android-webview/report.json',
-    expectedLane: 'turn',
-    expectedPathCategories: ['relay'],
+    expectedLane: expectations.webview.lane,
+    expectedPathCategories: expectations.webview.pathCategories,
     readResult: input.webview,
   })
   const browser = summarizeChild({
     id: 'android-mobile-browser',
     sourceReport: 'android-mobile-browser/report.json',
-    expectedLane: expectations.lane,
-    expectedPathCategories: expectations.pathCategories,
+    expectedLane: expectations.mobileBrowser.lane,
+    expectedPathCategories: expectations.mobileBrowser.pathCategories,
     readResult: input.browser,
   })
   const testCommandPassed = input.commandStatus === 0
@@ -275,7 +283,19 @@ function safeEnum(value, allowed) {
 }
 
 export function resolveMobileBrowserExpectations(value = 'direct') {
-  const lane = readLane(value, 'AURORA_ANDROID_MOBILE_WEBRTC_LANE')
+  return resolveAndroidInteropExpectations(
+    value,
+    'AURORA_ANDROID_MOBILE_WEBRTC_LANE',
+    'direct',
+  )
+}
+
+export function resolveAndroidInteropExpectations(
+  value,
+  source,
+  defaultLane,
+) {
+  const lane = readLane(value ?? defaultLane, source)
   const pathCategories =
     lane === 'turn'
       ? ['relay']

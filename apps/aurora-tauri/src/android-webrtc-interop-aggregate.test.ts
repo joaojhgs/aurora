@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 // @ts-expect-error The Node-executed .mjs runner intentionally has no TS build output.
-import { buildAndroidInteropAggregate, resolveMobileBrowserExpectations } from '../scripts/run-android-webrtc-interop.mjs'
+import { buildAndroidInteropAggregate, resolveAndroidInteropExpectations, resolveMobileBrowserExpectations } from '../scripts/run-android-webrtc-interop.mjs'
 
 const digest = 'a'.repeat(64)
 
 function completeReport(
-  lane: 'direct' | 'turn',
-  pathCategory: 'host' | 'relay',
+  lane: 'direct' | 'stun' | 'turn',
+  pathCategory: 'host' | 'srflx' | 'prflx' | 'relay',
 ) {
   return {
     schema: 'aurora.webrtc_interop.report.v1',
@@ -204,13 +204,64 @@ describe('Android mobile-to-Python WebRTC aggregate', () => {
 
     const aggregate = buildAndroidInteropAggregate(
       value,
-      resolveMobileBrowserExpectations('turn'),
+      {
+        webview: resolveAndroidInteropExpectations(
+          'turn',
+          'AURORA_ANDROID_WEBRTC_LANE',
+          'turn',
+        ),
+        mobileBrowser: resolveMobileBrowserExpectations('turn'),
+      },
     )
 
     expect(aggregate.children.mobileBrowser).toMatchObject({
       expectedLane: 'turn',
       observedLane: 'turn',
       observedPathCategory: 'relay',
+      passed: true,
+    })
+    expect(aggregate.status).toBe('passed')
+  })
+
+  it('accepts explicit direct WebView lane expectations from operator reruns', () => {
+    const value = input()
+    value.webview.report = completeReport('direct', 'host')
+
+    const aggregate = buildAndroidInteropAggregate(value, {
+      webview: resolveAndroidInteropExpectations(
+        'direct',
+        'AURORA_ANDROID_WEBRTC_LANE',
+        'turn',
+      ),
+      mobileBrowser: resolveMobileBrowserExpectations('direct'),
+    })
+
+    expect(aggregate.children.webview).toMatchObject({
+      expectedLane: 'direct',
+      observedLane: 'direct',
+      observedPathCategory: 'host',
+      passed: true,
+    })
+    expect(aggregate.status).toBe('passed')
+  })
+
+  it('accepts explicit configured-STUN WebView lane expectations from operator reruns', () => {
+    const value = input()
+    value.webview.report = completeReport('stun', 'srflx')
+
+    const aggregate = buildAndroidInteropAggregate(value, {
+      webview: resolveAndroidInteropExpectations(
+        'stun',
+        'AURORA_ANDROID_WEBRTC_LANE',
+        'turn',
+      ),
+      mobileBrowser: resolveMobileBrowserExpectations('direct'),
+    })
+
+    expect(aggregate.children.webview).toMatchObject({
+      expectedLane: 'stun',
+      observedLane: 'stun',
+      observedPathCategory: 'srflx',
       passed: true,
     })
     expect(aggregate.status).toBe('passed')

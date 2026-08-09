@@ -33,6 +33,127 @@ type AndroidRuntimeCallFrame = {
   columnNumber?: unknown
 }
 
+export type AndroidWebRtcServicePorts = {
+  mqttWsHostPort: number
+  turnHostPort: number
+}
+
+export function resolveAndroidWebRtcServicePorts(
+  env: Record<string, string | undefined> = process.env,
+): AndroidWebRtcServicePorts {
+  return {
+    mqttWsHostPort: readPortEnv(
+      env.AURORA_ANDROID_WEBRTC_MQTT_WS_HOST_PORT,
+      'AURORA_ANDROID_WEBRTC_MQTT_WS_HOST_PORT',
+      9001,
+    ),
+    turnHostPort: readPortEnv(
+      env.AURORA_ANDROID_WEBRTC_TURN_HOST_PORT,
+      'AURORA_ANDROID_WEBRTC_TURN_HOST_PORT',
+      3478,
+    ),
+  }
+}
+
+export function androidWebRtcBrokerUrl(
+  ports: AndroidWebRtcServicePorts,
+): string {
+  return `ws://127.0.0.1:${ports.mqttWsHostPort}/mqtt`
+}
+
+export function androidWebRtcStunUrl(
+  hostIpv4: string,
+  ports: AndroidWebRtcServicePorts,
+): string {
+  return `stun:${hostIpv4}:${ports.turnHostPort}`
+}
+
+export function androidWebRtcTurnUrl(
+  hostIpv4: string,
+  ports: AndroidWebRtcServicePorts,
+): string {
+  return `turn:${hostIpv4}:${ports.turnHostPort}?transport=tcp`
+}
+
+export function androidWebRtcServicesComposeYaml(
+  ports: AndroidWebRtcServicePorts,
+): string {
+  return `services:
+  webrtc-interop-mqtt:
+    image: eclipse-mosquitto:2
+    entrypoint: ["/bin/sh", "-lc"]
+    command:
+      - |
+        cat > /tmp/mosquitto.conf <<'MOSQ'
+        per_listener_settings false
+        allow_anonymous true
+        listener 1883 0.0.0.0
+        protocol mqtt
+        listener 9001 0.0.0.0
+        protocol websockets
+        MOSQ
+        exec mosquitto -c /tmp/mosquitto.conf
+    ports:
+      - "${ports.mqttWsHostPort}:9001"
+  webrtc-interop-turn:
+    image: coturn/coturn:4.6
+    entrypoint: ["/bin/sh", "-lc"]
+    command:
+      - |
+        cat > /tmp/turnserver.conf <<'TURN'
+        listening-port=3478
+        fingerprint
+        lt-cred-mech
+        user=interop:interop
+        realm=aurora-interop.test
+        no-tls
+        no-dtls
+        verbose
+        TURN
+        exec turnserver -c /tmp/turnserver.conf
+    ports:
+      - "${ports.turnHostPort}:3478/udp"
+      - "${ports.turnHostPort}:3478/tcp"
+`
+}
+
+export function androidWebRtcComposeArgs(
+  composePath: string,
+  action: 'up' | 'down' | 'logs',
+  projectName: string,
+): string[] {
+  const base = ['compose', '-p', projectName, '-f', composePath]
+  if (action === 'up') {
+    return [
+      ...base,
+      'up',
+      '-d',
+      'webrtc-interop-mqtt',
+      'webrtc-interop-turn',
+    ]
+  }
+  if (action === 'down') {
+    return [...base, 'down', '-v', '--remove-orphans']
+  }
+  return [...base, 'logs', '--no-color', 'webrtc-interop-mqtt', 'webrtc-interop-turn']
+}
+
+function readPortEnv(
+  value: string | undefined,
+  name: string,
+  fallback: number,
+): number {
+  if (value === undefined || value.trim() === '') return fallback
+  if (!/^\d+$/u.test(value.trim())) {
+    throw new Error(`${name} must be a TCP/UDP port number`)
+  }
+  const port = Number(value)
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`${name} must be between 1 and 65535`)
+  }
+  return port
+}
+
 const tauriBootstrapRedefineProperties = new Set([
   'postMessage',
   'metadata',

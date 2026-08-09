@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  androidWebRtcBrokerUrl,
+  androidWebRtcComposeArgs,
+  androidWebRtcServicesComposeYaml,
+  androidWebRtcStunUrl,
+  androidWebRtcTurnUrl,
   createAndroidHarnessRequestLog,
   formatAndroidRuntimeException,
   isBenignTauriBootstrapRedefineError,
+  resolveAndroidWebRtcServicePorts,
   splitAndroidConsoleErrors,
 } from '../tests/android/android-webrtc-harness-utils.js'
 
@@ -129,6 +135,66 @@ describe('Android WebRTC harness utilities', () => {
         kind: 'config',
         path: '/interop-config',
       }),
+    ])
+  })
+
+  it('uses env-selected WebRTC service host ports without binding host MQTT TCP', () => {
+    const ports = resolveAndroidWebRtcServicePorts({
+      AURORA_ANDROID_WEBRTC_MQTT_WS_HOST_PORT: '19091',
+      AURORA_ANDROID_WEBRTC_TURN_HOST_PORT: '13479',
+    })
+
+    expect(ports).toEqual({
+      mqttWsHostPort: 19091,
+      turnHostPort: 13479,
+    })
+    expect(androidWebRtcBrokerUrl(ports)).toBe(
+      'ws://127.0.0.1:19091/mqtt',
+    )
+    expect(androidWebRtcStunUrl('10.0.2.2', ports)).toBe(
+      'stun:10.0.2.2:13479',
+    )
+    expect(androidWebRtcTurnUrl('10.0.2.2', ports)).toBe(
+      'turn:10.0.2.2:13479?transport=tcp',
+    )
+
+    const composeYaml = androidWebRtcServicesComposeYaml(ports)
+    expect(composeYaml).toContain('"19091:9001"')
+    expect(composeYaml).toContain('"13479:3478/tcp"')
+    expect(composeYaml).toContain('"13479:3478/udp"')
+    expect(composeYaml).not.toContain(':1883"')
+  })
+
+  it('rejects invalid Android WebRTC service host ports', () => {
+    expect(() =>
+      resolveAndroidWebRtcServicePorts({
+        AURORA_ANDROID_WEBRTC_MQTT_WS_HOST_PORT: 'not-a-port',
+      }),
+    ).toThrow('AURORA_ANDROID_WEBRTC_MQTT_WS_HOST_PORT')
+    expect(() =>
+      resolveAndroidWebRtcServicePorts({
+        AURORA_ANDROID_WEBRTC_TURN_HOST_PORT: '70000',
+      }),
+    ).toThrow('AURORA_ANDROID_WEBRTC_TURN_HOST_PORT')
+  })
+
+  it('builds deterministic docker compose commands for generated service files', () => {
+    expect(
+      androidWebRtcComposeArgs(
+        '/tmp/android-webrtc-compose.yml',
+        'up',
+        'aurora-android-mobile-webrtc-e2e',
+      ),
+    ).toEqual([
+      'compose',
+      '-p',
+      'aurora-android-mobile-webrtc-e2e',
+      '-f',
+      '/tmp/android-webrtc-compose.yml',
+      'up',
+      '-d',
+      'webrtc-interop-mqtt',
+      'webrtc-interop-turn',
     ])
   })
 })
