@@ -127,4 +127,30 @@ describe('Android native voice route policy', () => {
     expect(syncBody).not.toContain('runtimeTier =')
     expect(syncBody).not.toContain('VITE_AURORA_RUNTIME_MODE')
   })
+
+  it('fails closed when encrypted peer credentials are unreadable before route provisioning', () => {
+    const kotlin = repoText(kotlinPath)
+    const loadBody = kotlin.slice(
+      kotlin.indexOf('private fun loadUnexpiredThinPeerCredential(peerId: String)'),
+      kotlin.indexOf(
+        'private fun thinPeerStatusResponse',
+        kotlin.indexOf('private fun loadUnexpiredThinPeerCredential(peerId: String)'),
+      ),
+    )
+    const syncBody = kotlin.slice(
+      kotlin.indexOf('private fun syncNativeVoiceRoute()'),
+      kotlin.indexOf(
+        'private fun voiceRouteCandidate',
+        kotlin.indexOf('private fun syncNativeVoiceRoute()'),
+      ),
+    )
+
+    expect(loadBody).toContain('val key = thinPeerCredentialKey(peerId)')
+    expect(loadBody).toContain('JSONObject(decryptSecureValue(stored))')
+    expect(loadBody).toContain('catch (_: Exception)')
+    expect(loadBody).toMatch(/securePrefs\(\)\.edit\(\)\.remove\(key\)\.apply\(\)[\s\S]*return null/)
+    expect(syncBody).toContain('?.let(::loadUnexpiredThinPeerCredential)')
+    expect(syncBody).toContain('AuroraVoiceNativeConfigStore.clearRoute(activity)')
+    expect(syncBody).not.toContain('rawBearerToken", record.getString')
+  })
 })

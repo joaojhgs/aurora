@@ -1786,7 +1786,12 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private fun loadUnexpiredThinPeerCredential(peerId: String): JSONObject? {
         val key = thinPeerCredentialKey(peerId)
         val stored = securePrefs().getString(key, null) ?: return null
-        val record = JSONObject(decryptSecureValue(stored))
+        val record = try {
+            JSONObject(decryptSecureValue(stored))
+        } catch (_: Exception) {
+            securePrefs().edit().remove(key).apply()
+            return null
+        }
         val expiresAt = record.optLong("expiresAtMs", 0L)
         if (expiresAt > 0 && expiresAt <= currentUnixMs()) {
             securePrefs().edit().remove(key).apply()

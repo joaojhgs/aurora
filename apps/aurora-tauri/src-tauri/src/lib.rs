@@ -6152,48 +6152,65 @@ fn validate_hex64(field: &str, value: &str) -> Result<(), AuroraCommandError> {
 }
 
 #[cfg(desktop)]
-fn load_thin_peer_credential_record(
-    peer_id: &str,
-) -> Result<Option<ThinPeerCredentialRecord>, AuroraCommandError> {
+fn load_thin_peer_credential_value(peer_id: &str) -> Result<Option<String>, AuroraCommandError> {
     let storage_key = thin_peer_credential_key(peer_id)?;
-    let stored = match peer_credential_storage_entry(&storage_key)?.get_password() {
-        Ok(value) => Some(value),
-        Err(keyring::Error::NoEntry) => None,
-        Err(error) => return Err(AuroraCommandError::SecureStorage(error.to_string())),
-    };
-    stored
-        .map(|stored| {
-            serde_json::from_str(&stored).map_err(|_| {
-                AuroraCommandError::SecureStorage("stored peer credential is invalid".to_string())
-            })
-        })
-        .transpose()
+    match peer_credential_storage_entry(&storage_key)?.get_password() {
+        Ok(value) => Ok(Some(value)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
+    }
 }
 
 #[cfg(not(desktop))]
-fn load_thin_peer_credential_record(
-    _peer_id: &str,
-) -> Result<Option<ThinPeerCredentialRecord>, AuroraCommandError> {
+fn load_thin_peer_credential_value(_peer_id: &str) -> Result<Option<String>, AuroraCommandError> {
     Err(AuroraCommandError::UnsupportedFeature(
         "desktop-thin peer credential keychain storage is only available on desktop Tauri targets"
             .to_string(),
     ))
 }
 
-fn load_unexpired_thin_peer_credential_record(
+fn parse_thin_peer_credential_record(
+    stored: &str,
+) -> Result<ThinPeerCredentialRecord, AuroraCommandError> {
+    serde_json::from_str(stored).map_err(|_| {
+        AuroraCommandError::SecureStorage("stored peer credential is invalid".to_string())
+    })
+}
+
+fn resolve_unexpired_thin_peer_credential_record(
     peer_id: &str,
+    stored: Option<String>,
+    mut delete_record: impl FnMut(&str) -> Result<(), AuroraCommandError>,
 ) -> Result<Option<ThinPeerCredentialRecord>, AuroraCommandError> {
-    let Some(record) = load_thin_peer_credential_record(peer_id)? else {
+    let Some(stored) = stored else {
         return Ok(None);
+    };
+    let record = match parse_thin_peer_credential_record(&stored) {
+        Ok(record) => record,
+        Err(AuroraCommandError::SecureStorage(_)) => {
+            delete_record(peer_id)?;
+            return Ok(None);
+        }
+        Err(error) => return Err(error),
     };
     if record
         .expires_at_ms
         .is_some_and(|expires_at_ms| expires_at_ms <= current_unix_ms())
     {
-        delete_thin_peer_credential_record(peer_id)?;
+        delete_record(peer_id)?;
         return Ok(None);
     }
     Ok(Some(record))
+}
+
+fn load_unexpired_thin_peer_credential_record(
+    peer_id: &str,
+) -> Result<Option<ThinPeerCredentialRecord>, AuroraCommandError> {
+    resolve_unexpired_thin_peer_credential_record(
+        peer_id,
+        load_thin_peer_credential_value(peer_id)?,
+        delete_thin_peer_credential_record,
+    )
 }
 
 fn delete_thin_peer_credential_record(peer_id: &str) -> Result<(), AuroraCommandError> {
@@ -9529,6 +9546,59 @@ mod tests {
         assert!(!android_capability.contains("aurora-sidecar-start"));
         assert!(!android_capability.contains("aurora-audio-bridge"));
         assert!(!android_capability.contains("shell:"));
+    }
+
+    #[test]
+    fn corrupt_stored_peer_credentials_fail_closed_and_are_deleted() {
+        let deleted = Mutex::new(Vec::<String>::new());
+        let result = resolve_unexpired_thin_peer_credential_record(
+            "stable-answer",
+            Some("not-json synthetic-reconnect-token".to_string()),
+            |peer_id| {
+                deleted.lock().unwrap().push(peer_id.to_string());
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert!(result.is_none());
+        assert_eq!(deleted.lock().unwrap().as_slice(), ["stable-answer"]);
+        let err =
+            parse_thin_peer_credential_record("not-json synthetic-reconnect-token").unwrap_err();
+        let serialized = serde_json::to_string(&err).unwrap();
+        assert!(serialized.contains("stored peer credential is invalid"));
+        assert!(serialized.contains("secrets_redacted"));
+        assert!(!serialized.contains("synthetic-reconnect-token"));
+    }
+
+    #[test]
+    fn expired_stored_peer_credentials_fail_closed_and_are_deleted() {
+        let stored = serde_json::to_string(&ThinPeerCredentialRecord {
+            token_id: "token-fixture-001".to_string(),
+            claimant_peer_id: "stable-answer".to_string(),
+            verifier_peer_id: "stable-offer".to_string(),
+            claimant_signaling_peer_id: "sig-answer".to_string(),
+            verifier_signaling_peer_id: "sig-offer".to_string(),
+            room_name: "lab-room".to_string(),
+            raw_bearer_token: "synthetic-reconnect-token".to_string(),
+            created_at_ms: Some(1),
+            expires_at_ms: Some(1),
+        })
+        .unwrap();
+        let deleted = Mutex::new(Vec::<String>::new());
+
+        let result = resolve_unexpired_thin_peer_credential_record(
+            "stable-answer",
+            Some(stored),
+            |peer_id| {
+                deleted.lock().unwrap().push(peer_id.to_string());
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert!(result.is_none());
+        assert_eq!(deleted.lock().unwrap().as_slice(), ["stable-answer"]);
     }
 
     #[test]

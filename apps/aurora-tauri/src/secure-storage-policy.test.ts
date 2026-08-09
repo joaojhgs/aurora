@@ -275,4 +275,43 @@ describe('Tauri secure storage policy', () => {
     expect(overlay).toContain('"resources": {}')
     expect(overlay).not.toContain('aurora-sidecar')
   })
+
+  it('fails closed on corrupt peer credential records without exposing bearer material', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const rustSource = readFileSync(
+      resolve(repoRoot, 'apps/aurora-tauri/src-tauri/src/lib.rs'),
+      'utf8',
+    )
+    const kotlinSource = readFileSync(
+      resolve(
+        repoRoot,
+        'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt',
+      ),
+      'utf8',
+    )
+    const swiftStorage = readFileSync(
+      resolve(
+        repoRoot,
+        'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraThinPeerStorage.swift',
+      ),
+      'utf8',
+    )
+    const swiftPlugin = readFileSync(resolve(repoRoot, iosNativePluginPath), 'utf8')
+    const rustParseBody = rustSource.slice(
+      rustSource.indexOf('fn parse_thin_peer_credential_record'),
+      rustSource.indexOf('fn resolve_unexpired_thin_peer_credential_record'),
+    )
+
+    expect(rustSource).toContain('parse_thin_peer_credential_record')
+    expect(rustSource).toContain('resolve_unexpired_thin_peer_credential_record')
+    expect(rustSource).toMatch(/delete_record\(peer_id\)\?;[\s\S]*Ok\(None\)/)
+    expect(rustParseBody).not.toContain('raw_bearer_token')
+    expect(kotlinSource).toMatch(
+      /catch \(_:\s*Exception\) \{[\s\S]*securePrefs\(\)\.edit\(\)\.remove\(key\)\.apply\(\)[\s\S]*return null/,
+    )
+    expect(kotlinSource).not.toMatch(/Log\.[a-z]\([^)]*rawBearerToken/u)
+    expect(swiftStorage).toContain('throw AuroraThinStorageError.corruptCredential')
+    expect(swiftPlugin).toContain('AuroraThinStorageError.redactedCode')
+    expect(swiftPlugin).not.toContain('rawBearerToken')
+  })
 })
