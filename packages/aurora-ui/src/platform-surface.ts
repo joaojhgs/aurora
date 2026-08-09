@@ -173,7 +173,7 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
   const prefersWebRtcTransport = usesWebRtcTransport
   const trustsNativeWebViewOrigin = usesNativeShell
   const ownsLocalNodeState = nodeMode === 'mesh-node'
-  const canManageLocalServiceConfiguration = ownsLocalNodeState && (usesLocalSidecar || legacyKind === 'mock')
+  const canManageLocalServiceConfiguration = legacyKind === 'mock' || (ownsLocalNodeState && usesLocalSidecar)
   const isRemoteConsole = !ownsLocalNodeState
   const voiceCapture = getAuroraVoiceCapturePolicy(legacyKind, {
     nativeVoicePresent: input.nativeVoicePresent === true,

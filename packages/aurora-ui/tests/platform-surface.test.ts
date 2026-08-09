@@ -80,6 +80,19 @@ describe('Aurora surface profile regression coverage', () => {
     expect(profile.isRemoteConsole).toBe(true)
   })
 
+  it('keeps mock service configuration available without assigning local-node ownership', () => {
+    const profile = getAuroraSurfaceProfile({
+      runtimeMode: 'mock',
+      transportKind: 'mock',
+    })
+
+    expect(profile.kind).toBe('mock')
+    expect(profile.nodeMode).toBe('remote-console')
+    expect(profile.runtimeTier).toBe('none')
+    expect(profile.ownsLocalNodeState).toBe(false)
+    expect(profile.canManageLocalServiceConfiguration).toBe(true)
+  })
+
   it('limits the native WebRTC bridge to Linux desktop shells', () => {
     const linux = getAuroraSurfaceProfile({
       runtimeMode: 'desktop-thin',
