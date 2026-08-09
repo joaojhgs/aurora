@@ -11,6 +11,8 @@ import {
 import { MemoryWebModelStoreHost } from '../src/test-doubles/index.js'
 
 const TEST_PRIVATE_KEY_PKCS8_BASE64 = 'MC4CAQAwBQYDK2VwBCIEIBVNj/cSHz9pWMrteoqMMTyDd+p51OEdgbIRQJDEHiBP'
+const TEST_PUBLIC_KEY_BASE64 = 'k1NEXA5D4H1jAs3GBxo9Cr42I6BUeYEA/HqYiTOUKhc='
+const TEST_RELEASE_KEY_ID = 'aurora-release-web-wasm-test'
 
 describe('browser model pack verification', () => {
   it('requires signed trust and keeps non-production trust behind an explicit option', async () => {
@@ -64,6 +66,86 @@ describe('browser model pack verification', () => {
     )
     expect(reopened?.identity).toEqual(receipt.identity)
     expect(Array.from(await reopened?.files[0]?.readAll() ?? [])).toEqual([4, 5, 6, 7])
+  })
+
+  it('requires release key, release hash, and signature for production release-hash trust', async () => {
+    const manifest = await signedManifest(new Uint8Array([41, 42, 43]), {}, TEST_RELEASE_KEY_ID)
+    const expectedReleaseManifestSha256 = await manifestSha256(manifest)
+    const trustedReleaseKeys = [{ keyId: TEST_RELEASE_KEY_ID, publicKeyBase64: TEST_PUBLIC_KEY_BASE64 }]
+
+    await expect(verifyBrowserModelPackManifest(manifest, {
+      trustedReleaseKeys,
+      expectedReleaseManifestSha256
+    })).resolves.toMatchObject({
+      manifest_sha256: expectedReleaseManifestSha256,
+      verification_mode: 'release-hash',
+      key_id: TEST_RELEASE_KEY_ID
+    })
+
+    await expect(verifyBrowserModelPackManifest(manifest, { trustedReleaseKeys }))
+      .rejects.toMatchObject({ code: 'release_hash' })
+    await expect(verifyBrowserModelPackManifest(manifest, {
+      trustedReleaseKeys,
+      expectedReleaseManifestSha256: '0'.repeat(64)
+    })).rejects.toMatchObject({ code: 'release_hash' })
+    await expect(verifyBrowserModelPackManifest(manifest, {
+      trustedReleaseKeys: [],
+      expectedReleaseManifestSha256
+    })).rejects.toMatchObject({ code: 'untrusted_key' })
+    await expect(verifyBrowserModelPackManifest({ ...manifest, signature: null }, {
+      trustedReleaseKeys,
+      expectedReleaseManifestSha256
+    })).rejects.toMatchObject({ code: 'unsigned' })
+
+    const signature = manifest.signature
+    expect(signature).not.toBeNull()
+    expect(signature).toBeDefined()
+    await expect(verifyBrowserModelPackManifest({
+      ...manifest,
+      signature: {
+        key_id: signature?.key_id ?? TEST_RELEASE_KEY_ID,
+        algorithm: signature?.algorithm ?? AURORA_MODEL_PACK_SIGNATURE_ALGORITHM,
+        value: encodeBase64(new Uint8Array(64))
+      }
+    }, {
+      trustedReleaseKeys,
+      expectedReleaseManifestSha256
+    })).rejects.toMatchObject({ code: 'signature' })
+  })
+
+  it('reopens release-hash trusted packs offline only when the pinned hash is supplied again', async () => {
+    const bytes = new Uint8Array([51, 52, 53, 54])
+    const manifest = await signedManifest(bytes, {}, TEST_RELEASE_KEY_ID)
+    const releaseTrust = {
+      trustedReleaseKeys: [{ keyId: TEST_RELEASE_KEY_ID, publicKeyBase64: TEST_PUBLIC_KEY_BASE64 }],
+      expectedReleaseManifestSha256: await manifestSha256(manifest)
+    }
+    const host = new MemoryWebModelStoreHost()
+    let fetchCount = 0
+
+    const receipt = await installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      ...releaseTrust,
+      fetchBytes: async () => {
+        fetchCount += 1
+        return bytes
+      }
+    })
+
+    expect(receipt).toMatchObject({
+      manifestSha256: releaseTrust.expectedReleaseManifestSha256,
+      verificationMode: 'release-hash',
+      verificationKeyId: TEST_RELEASE_KEY_ID
+    })
+    expect(fetchCount).toBe(1)
+
+    const reopened = await openActiveBrowserModelPack(host, { task: 'stt' }, releaseTrust)
+    expect(Array.from(await reopened?.files[0]?.readAll() ?? [])).toEqual([51, 52, 53, 54])
+    expect(fetchCount).toBe(1)
+    await expect(openActiveBrowserModelPack(host, { task: 'stt' }, {
+      trustedReleaseKeys: releaseTrust.trustedReleaseKeys
+    })).rejects.toMatchObject({ code: 'release_hash' })
   })
 
   it('rejects forged active metadata instead of trusting browser-mutable receipts', async () => {
@@ -144,7 +226,8 @@ describe('browser model pack verification', () => {
 
 async function signedManifest(
   bytes: Uint8Array,
-  extraFields: Record<string, unknown> = {}
+  extraFields: Record<string, unknown> = {},
+  keyId = AURORA_NON_PRODUCTION_MODEL_PACK_KEY_ID
 ): Promise<AuroraBrowserModelPackManifest> {
   const unsigned: AuroraBrowserModelPackManifest = {
     ...extraFields,
@@ -177,7 +260,7 @@ async function signedManifest(
   return {
     ...unsigned,
     signature: {
-      key_id: AURORA_NON_PRODUCTION_MODEL_PACK_KEY_ID,
+      key_id: keyId,
       algorithm: AURORA_MODEL_PACK_SIGNATURE_ALGORITHM,
       value: signature
     }
@@ -204,6 +287,10 @@ function stripSignature(manifest: AuroraBrowserModelPackManifest): Record<string
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes)
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+async function manifestSha256(manifest: AuroraBrowserModelPackManifest): Promise<string> {
+  return sha256Hex(encodeUtf8(canonicalJson(stripSignature(manifest))))
 }
 
 function canonicalJson(value: unknown): string {

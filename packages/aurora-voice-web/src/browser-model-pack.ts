@@ -4,7 +4,6 @@ export const AURORA_NON_PRODUCTION_MODEL_PACK_KEY_ID = 'aurora-nonproduction-web
 export const AURORA_MODEL_PACK_SIGNATURE_ALGORITHM = 'ed25519'
 
 const NON_PRODUCTION_WEB_WASM_PUBLIC_KEY_BASE64 = 'k1NEXA5D4H1jAs3GBxo9Cr42I6BUeYEA/HqYiTOUKhc='
-const RELEASE_TRUST_KEYS = new Map<string, string>()
 
 const ACTIVE_PREFIX = 'aurora.voice.web-store.v1:active:'
 const EXPECTED_SELECTION_PREFIX = 'aurora.voice.web-store.v1:expected-selection:'
@@ -57,8 +56,17 @@ export interface AuroraBrowserModelPackScope {
   readonly slotId?: string
 }
 
+export type AuroraBrowserModelPackVerificationMode = 'signature' | 'release-hash'
+
+export interface AuroraBrowserModelPackReleaseTrustKey {
+  readonly keyId: string
+  readonly publicKeyBase64: string
+}
+
 export interface AuroraBrowserModelPackTrustOptions {
   readonly allowNonProductionTestSignature?: boolean
+  readonly trustedReleaseKeys?: readonly AuroraBrowserModelPackReleaseTrustKey[]
+  readonly expectedReleaseManifestSha256?: string
 }
 
 export interface AuroraBrowserModelPackInstallOptions extends AuroraBrowserModelPackTrustOptions {
@@ -87,7 +95,7 @@ export interface AuroraBrowserModelPackInstallReceipt {
   readonly identity: AuroraBrowserModelPackIdentity
   readonly files: readonly AuroraBrowserModelPackFileReceipt[]
   readonly manifestSha256: string
-  readonly verificationMode: 'signature'
+  readonly verificationMode: AuroraBrowserModelPackVerificationMode
   readonly verificationKeyId: string
 }
 
@@ -137,7 +145,7 @@ export interface AuroraBrowserManifestVerificationReceipt {
   readonly pack_id: string
   readonly pack_version: string
   readonly manifest_sha256: string
-  readonly verification_mode: 'signature'
+  readonly verification_mode: AuroraBrowserModelPackVerificationMode
   readonly key_id: string
   readonly variant_id: string
   readonly target: string
@@ -154,6 +162,12 @@ export class AuroraBrowserModelPackError extends Error {
   }
 }
 
+interface ResolvedManifestTrust {
+  readonly publicKeyBase64: string
+  readonly verificationMode: AuroraBrowserModelPackVerificationMode
+  readonly expectedManifestSha256?: string
+}
+
 export async function verifyBrowserModelPackManifest(
   manifest: AuroraBrowserModelPackManifest,
   options: AuroraBrowserModelPackTrustOptions = {}
@@ -163,19 +177,24 @@ export async function verifyBrowserModelPackManifest(
   const signature = manifest.signature
   if (!signature) throw modelPackError('unsigned')
   if (signature.algorithm !== AURORA_MODEL_PACK_SIGNATURE_ALGORITHM) throw modelPackError('algorithm')
-  const publicKeyBase64 = trustedPublicKey(signature.key_id, options)
-  if (publicKeyBase64 === null) throw modelPackError('untrusted_key')
+  const trust = resolveManifestTrust(signature.key_id, options)
+  if (trust === null) throw modelPackError('untrusted_key')
 
   const canonical = canonicalJson(stripSignature(manifest))
-  const verified = await verifyEd25519(publicKeyBase64, signature.value, encodeUtf8(canonical))
+  const canonicalBytes = encodeUtf8(canonical)
+  const manifestSha256 = await sha256Hex(canonicalBytes)
+  if (trust.expectedManifestSha256 !== undefined && trust.expectedManifestSha256 !== manifestSha256) {
+    throw modelPackError('release_hash')
+  }
+  const verified = await verifyEd25519(trust.publicKeyBase64, signature.value, canonicalBytes)
   if (!verified) throw modelPackError('signature')
 
   const variant = selectWebWasmVariant(manifest)
   return {
     pack_id: manifest.pack_id,
     pack_version: manifest.pack_version,
-    manifest_sha256: await sha256Hex(encodeUtf8(canonical)),
-    verification_mode: 'signature',
+    manifest_sha256: manifestSha256,
+    verification_mode: trust.verificationMode,
     key_id: signature.key_id,
     variant_id: variant.variant_id,
     target: variant.target,
@@ -196,11 +215,18 @@ export async function installVerifiedBrowserModelPack({
   scope,
   fetchBytes = defaultFetchBytes,
   allowNonProductionTestSignature = false,
+  trustedReleaseKeys,
+  expectedReleaseManifestSha256,
   nowMs = Date.now
 }: AuroraBrowserModelPackInstallOptions): Promise<AuroraBrowserModelPackInstallReceipt> {
-  const verificationReceipt = await verifyBrowserModelPackManifest(manifest, {
-    allowNonProductionTestSignature
-  })
+  const trustOptions: AuroraBrowserModelPackTrustOptions = { allowNonProductionTestSignature }
+  if (trustedReleaseKeys !== undefined) {
+    Object.assign(trustOptions, { trustedReleaseKeys })
+  }
+  if (expectedReleaseManifestSha256 !== undefined) {
+    Object.assign(trustOptions, { expectedReleaseManifestSha256 })
+  }
+  const verificationReceipt = await verifyBrowserModelPackManifest(manifest, trustOptions)
   const variant = selectReceiptVariant(manifest, verificationReceipt)
   const normalizedScope = normalizeScope(scope, manifest.tasks[0])
   const records: StoredFileRecord[] = []
@@ -271,7 +297,7 @@ export async function installVerifiedBrowserModelPack({
       byteLength: record.byte_size
     })),
     manifestSha256: verificationReceipt.manifest_sha256,
-    verificationMode: 'signature',
+    verificationMode: verificationReceipt.verification_mode,
     verificationKeyId: verificationReceipt.key_id
   }
 }
@@ -320,11 +346,38 @@ export async function openActiveBrowserModelPack(
   }
 }
 
-function trustedPublicKey(keyId: string, options: AuroraBrowserModelPackTrustOptions): string | null {
+function resolveManifestTrust(keyId: string, options: AuroraBrowserModelPackTrustOptions): ResolvedManifestTrust | null {
+  if (!safeId(keyId)) throw modelPackError('invalid_id')
   if (options.allowNonProductionTestSignature === true && keyId === AURORA_NON_PRODUCTION_MODEL_PACK_KEY_ID) {
-    return NON_PRODUCTION_WEB_WASM_PUBLIC_KEY_BASE64
+    return {
+      publicKeyBase64: NON_PRODUCTION_WEB_WASM_PUBLIC_KEY_BASE64,
+      verificationMode: 'signature'
+    }
   }
-  return RELEASE_TRUST_KEYS.get(keyId) ?? null
+
+  const releaseKey = resolveReleaseTrustKey(keyId, options.trustedReleaseKeys ?? [])
+  if (releaseKey === null) return null
+  if (!isSha256(options.expectedReleaseManifestSha256)) throw modelPackError('release_hash')
+  return {
+    publicKeyBase64: releaseKey.publicKeyBase64,
+    verificationMode: 'release-hash',
+    expectedManifestSha256: options.expectedReleaseManifestSha256
+  }
+}
+
+function resolveReleaseTrustKey(
+  keyId: string,
+  trustedReleaseKeys: readonly AuroraBrowserModelPackReleaseTrustKey[]
+): AuroraBrowserModelPackReleaseTrustKey | null {
+  let matched: AuroraBrowserModelPackReleaseTrustKey | null = null
+  const seen = new Set<string>()
+  for (const key of trustedReleaseKeys) {
+    if (!safeId(key.keyId)) throw modelPackError('invalid_id')
+    if (seen.has(key.keyId)) throw modelPackError('untrusted_key')
+    seen.add(key.keyId)
+    if (key.keyId === keyId) matched = key
+  }
+  return matched
 }
 
 function validateManifestShape(manifest: AuroraBrowserModelPackManifest): void {
@@ -441,7 +494,7 @@ function validateActiveReceipt(active: ActiveRecord, freshReceipt: AuroraBrowser
     receipt.pack_id !== active.identity.pack_id ||
     receipt.pack_version !== active.identity.pack_version ||
     receipt.variant_id !== active.identity.variant_id ||
-    receipt.verification_mode !== 'signature' ||
+    receipt.verification_mode !== freshReceipt.verification_mode ||
     receipt.key_id !== freshReceipt.key_id ||
     receipt.manifest_sha256 !== freshReceipt.manifest_sha256 ||
     receipt.target !== 'web' ||
