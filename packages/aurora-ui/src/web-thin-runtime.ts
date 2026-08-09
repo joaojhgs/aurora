@@ -180,7 +180,7 @@ export function isBrowserWebRtcConnected(
 export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {}): BrowserWebThinRuntime {
   const mode = normalizeConnectionMode(config.mode)
   const rolloutFlags = normalizeAuroraWebRtcRolloutFlags(config.rolloutFlags)
-  const requestedNodeRole = config.nodeRole ?? (config.runtimeMode === 'mesh-node' ? 'mesh-node' : 'remote-console')
+  const requestedNodeRole = config.nodeRole ?? 'remote-console'
   const activeNodeRole = requestedNodeRole === 'mesh-node' && rolloutFlags.mesh_node_runtime_v1
     ? 'mesh-node'
     : 'remote-console'
@@ -377,7 +377,7 @@ export function explainBrowserThinRuntime(config: BrowserThinRuntimeConfig = {})
   if (mode !== 'http-only' && !rolloutFlags.webrtc_scoped_subscriptions) notes.push('scoped WebRTC subscriptions disabled by rollout flag')
   if (mode !== 'http-only' && !rolloutFlags.webrtc_fragmentation) notes.push('WebRTC fragmentation/backpressure disabled by rollout flag')
   if (mode !== 'http-only' && !rolloutFlags.webrtc_app_layer_e2ee) notes.push('application-layer WebRTC E2EE disabled by rollout flag; profiles requiring it fail closed')
-  const requestedNodeRole = config.nodeRole ?? (config.runtimeMode === 'mesh-node' ? 'mesh-node' : 'remote-console')
+  const requestedNodeRole = config.nodeRole ?? 'remote-console'
   if (requestedNodeRole === 'mesh-node' && !rolloutFlags.mesh_node_runtime_v1) notes.push('mesh-node runtime disabled by rollout flag; remote-console behavior remains active')
   if (requestedNodeRole === 'mesh-node' && !rolloutFlags.local_tool_provider_v1) notes.push('local tool provider disabled by rollout flag')
   if (requestedNodeRole === 'mesh-node' && !rolloutFlags.lightweight_orchestrator_v1) notes.push('lightweight orchestrator disabled by rollout flag')
