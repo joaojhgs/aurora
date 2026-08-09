@@ -401,6 +401,10 @@ export const tauriRouteRegistry = {
                 profileStoreEvidence={nativeContext.thinProfileController.evidence}
                 localFeatureSharing={nativeContext.localFeatureSharing}
                 onSaveProfile={async (profile, roomSecret) => {
+                  await Promise.all([
+                    modePreferenceStore?.writeSelectedMode("remote-console"),
+                    modePreferenceStore?.writeSelectedRuntimeTier?.("none"),
+                  ]);
                   await nativeContext.saveThinProfile(profile, roomSecret);
                   navigate("/mesh");
                 }}
@@ -921,6 +925,10 @@ export function AuroraTauriApp({
             profileStoreEvidence={runtime.thinProfileController.evidence}
             localFeatureSharing={runtime.localFeatureSharing}
             onSaveProfile={async (profile, roomSecret) => {
+              await Promise.all([
+                runtime.modePreferenceStore?.writeSelectedMode("remote-console"),
+                runtime.modePreferenceStore?.writeSelectedRuntimeTier?.("none"),
+              ]);
               await saveThinProfile(profile, roomSecret);
               navigate("/mesh");
             }}

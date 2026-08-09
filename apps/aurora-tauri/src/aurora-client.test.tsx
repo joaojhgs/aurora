@@ -1862,6 +1862,8 @@ describe("Aurora Tauri runtime wrapper", () => {
       });
       await clickButtonByLabel(mounted.container, "Continue");
       await flushReactWork();
+      modeWrites.length = 0;
+      tierWrites.length = 0;
       const invite = mounted.container.querySelector<HTMLTextAreaElement>(
         "#webthin-invite",
       );
@@ -1881,6 +1883,8 @@ describe("Aurora Tauri runtime wrapper", () => {
       });
       await clickButtonByLabel(mounted.container, "Save invite and continue");
       await waitUntil(() => expect(window.location.pathname).toBe("/mesh"));
+      expect(modeWrites).toEqual(["remote-console"]);
+      expect(tierWrites).toEqual(["none"]);
       expect(savedProfile).toMatchObject({
         mode: "webrtc-only",
         signalingUrl: "wss://old.example/mqtt",
