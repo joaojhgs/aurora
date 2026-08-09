@@ -202,6 +202,14 @@ make integration       # Integration tests
 make coverage          # Coverage report
 ```
 
+### Android Device Selection
+
+- Use Waydroid as the default Android target for local development, quick iteration, APK install/launch, logcat, screenshots, and interactive or scripted test runs. It is the fast, GPU-accelerated device on this host.
+- Discover Waydroid from `adb devices -l` instead of assuming its IP. Prefer the device whose description contains `WayDroid`; pass its serial explicitly with `adb -s "$WAYDROID_SERIAL" ...` when more than one device is connected.
+- Use the QEMU Android Emulator only when a task requires a specific API level, Google/Play system image, virtual hardware or sensor behavior, snapshot isolation, clean-device reproducibility, ABI coverage, or parity with emulator-based CI/CD.
+- Do not start QEMU merely because an Android device is needed, and do not leave a QEMU emulator running after a compatibility test. Shut it down when the test finishes so it does not reserve CPU and memory needed by other development runtimes.
+- Before reporting an Android failure, state which device class was tested. Reproduce compatibility-sensitive failures on the CI-equivalent QEMU image before treating a Waydroid-only difference as a release blocker.
+
 See [`tests/AGENTS.md`](tests/AGENTS.md) for test patterns and markers.
 
 ---
