@@ -133,16 +133,58 @@ describe('browser WebRTC thin-shell runtime', () => {
       usesBrowserVoiceRuntime: true,
       focusedPushToTalkOwner: 'webview-focused',
       wakewordOwner: 'webview-focused',
+      localSpeechPack: {
+        state: 'disabled',
+        canRunLocalVad: false,
+        canRunLocalKws: false,
+        canRunLocalStt: false,
+        canRunLocalTts: false,
+      },
     })
     expect(android.surface.voiceCapture.usesBrowserVoiceRuntime).toBe(false)
     expect(android.features).toMatchObject({
       usesBrowserVoiceRuntime: false,
       focusedPushToTalkOwner: 'webview-focused',
       wakewordOwner: 'webview-focused',
+      localSpeechPack: {
+        state: 'disabled',
+        canRunLocalStt: false,
+      },
     })
 
     await web.close()
     await android.close()
+  })
+
+  it('propagates local speech pack state without changing hosted browser capture ownership', async () => {
+    const runtime = createBrowserWebThinRuntime({
+      createClient,
+      mode: 'webrtc-only',
+      runtimeMode: 'web-thin',
+      nodeRole: 'mesh-node',
+      enabledCapabilityPacks: ['foreground-voice'],
+      localSpeechPackState: 'downloading',
+      inviteText: inviteText(),
+      windowLocation: { protocol: 'https:', hostname: 'app.example' },
+    })
+
+    expect(runtime.surface.voiceCapture.usesBrowserVoiceRuntime).toBe(true)
+    expect(runtime.features).toMatchObject({
+      requestedNodeRole: 'mesh-node',
+      activeNodeRole: 'mesh-node',
+      usesBrowserVoiceRuntime: true,
+      focusedPushToTalkOwner: 'webview-focused',
+      localSpeechPack: {
+        state: 'downloading',
+        availabilityState: 'pending',
+        canRunLocalVad: false,
+        canRunLocalKws: false,
+        canRunLocalStt: false,
+        canRunLocalTts: false,
+      },
+    })
+
+    await runtime.close()
   })
 
   it('does not infer mesh-node role from runtimeMode without an explicit nodeRole', async () => {
@@ -488,6 +530,11 @@ describe('browser WebRTC thin-shell runtime', () => {
         usesBrowserVoiceRuntime: true,
         focusedPushToTalkOwner: 'webview-focused',
         wakewordOwner: 'webview-focused',
+        localSpeechPack: expect.objectContaining({
+          state: 'disabled',
+          canRunLocalStt: false,
+          canRunLocalTts: false,
+        }),
       })
       expect(runtimeOptions[4]?.nodeRole).toBe('mesh-node')
       expect(runtimeOptions[4]).not.toHaveProperty('peerAuthorityResolver')
@@ -502,6 +549,11 @@ describe('browser WebRTC thin-shell runtime', () => {
         usesBrowserVoiceRuntime: true,
         focusedPushToTalkOwner: 'webview-focused',
         wakewordOwner: 'webview-focused',
+        localSpeechPack: expect.objectContaining({
+          state: 'disabled',
+          canRunLocalStt: false,
+          canRunLocalTts: false,
+        }),
       })
       expect(runtimeOptions[5]?.nodeRole).toBe('mesh-node')
       expect(runtimeOptions[5]?.peerAuthorityResolver).toBe(peerAuthorityResolver)
@@ -515,6 +567,11 @@ describe('browser WebRTC thin-shell runtime', () => {
         usesBrowserVoiceRuntime: true,
         focusedPushToTalkOwner: 'webview-focused',
         wakewordOwner: 'webview-focused',
+        localSpeechPack: expect.objectContaining({
+          state: 'disabled',
+          canRunLocalStt: false,
+          canRunLocalTts: false,
+        }),
       })
 
       await meshNode.close()

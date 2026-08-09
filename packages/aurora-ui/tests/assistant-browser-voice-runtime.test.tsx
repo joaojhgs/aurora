@@ -3,9 +3,13 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuroraClient, MockAuroraTransport, ORCHESTRATOR_METHODS, type AssistantStreamUpdate } from '@aurora/client'
-import { AssistantView } from '../src/assistant-view'
+import { AssistantView, buildAssistantVoiceModel } from '../src/assistant-view'
 import { auroraNavSections, navItemSnapshot } from '../src/nav'
-import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from '../src/platform-surface'
+import {
+  AURORA_RELEASE_FOCUSED_MEDIA_EVENT,
+  getAuroraSurfaceProfile,
+  type AuroraLocalSpeechPackState,
+} from '../src/platform-surface'
 import type { NativeDesktopVoicePort, NativeDesktopVoiceStatus } from '../src/native-desktop-voice'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import type { AssistantVoiceRoutes, RouteAvailability } from '../src/shell-data'
@@ -82,6 +86,121 @@ describe('Assistant hosted browser voice runtime', () => {
     }))
     expect(runtime.abandonTurn).not.toHaveBeenCalled()
     expect(runtime.cancel).not.toHaveBeenCalled()
+  })
+
+  it('shows on-device speech state while hosted capture still uses connected transcription', async () => {
+    const runtime = createRuntimeMock({
+      capturedPcm: new Int16Array([7, 8, 9])
+    })
+    voiceRuntimeMock.create.mockReturnValue(runtime)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const transcribe = vi.spyOn(client.assistant, 'transcribeVoiceAudio').mockResolvedValue(successfulTranscription('hello aurora'))
+    vi.spyOn(client.assistant, 'streamMessage').mockImplementation(async function* () {
+      yield completedUpdate('done')
+    })
+    const surfaceProfile = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'mesh',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      enabledCapabilityPacks: ['foreground-voice'],
+      localSpeechPackState: 'over-budget',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 Safari/605.1.15'
+    })
+    const model = buildAssistantVoiceModel({
+      client,
+      route: assistantRoute(),
+      surfaceProfile,
+      captureStatus: 'idle',
+      consentGranted: false,
+    })
+    const localSpeechChip = model.chips.find((chip) => chip.id === 'local-speech-pack')
+    const container = renderAssistant(client, surfaceProfile)
+
+    expect(localSpeechChip).toMatchObject({
+      label: 'On-device speech',
+      detail: expect.stringContaining('needs more available storage or memory'),
+    })
+    expect(findForbiddenProductionCopyTerms(`${localSpeechChip?.label ?? ''} ${localSpeechChip?.detail ?? ''}`)).toEqual([])
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(runtime.start).toHaveBeenCalledTimes(1))
+    await clickButton(container, 'Stop listening')
+    await vi.waitFor(() => expect(transcribe).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(runtime.completeTurn).toHaveBeenCalledTimes(1))
+
+    expect(transcribe.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      routePolicy: expect.any(Object)
+    }))
+    expect(runtime.abandonTurn).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['disabled', []],
+    ['unavailable', ['foreground-voice']],
+    ['downloading', ['foreground-voice']],
+    ['incompatible', ['foreground-voice']],
+    ['over-budget', ['foreground-voice']],
+  ] as const)('keeps authorized remote STT and TTS routes selected when local speech is %s', (
+    localSpeechPackState,
+    enabledCapabilityPacks,
+  ) => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const routes = remoteVoiceRoutes('studio')
+    const surfaceProfile = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'mesh',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      enabledCapabilityPacks,
+      localSpeechPackState: localSpeechPackState as AuroraLocalSpeechPackState,
+    })
+    const model = buildAssistantVoiceModel({
+      client,
+      route: assistantRoute(),
+      voiceRoutes: routes,
+      surfaceProfile,
+      captureStatus: 'idle',
+      consentGranted: true,
+    })
+
+    expect(surfaceProfile.nodeMode).toBe('mesh-node')
+    expect(surfaceProfile.localSpeechPack).toMatchObject({
+      state: localSpeechPackState,
+      canRunLocalVad: false,
+      canRunLocalKws: false,
+      canRunLocalStt: false,
+      canRunLocalTts: false,
+    })
+    expect(model.transcriptionRoute).toBe(routes.transcription)
+    expect(model.transcriptionRoute).toMatchObject({ state: 'available-remote', disabled: false })
+    expect(model.speechRoute).toBe(routes.ttsSynthesize)
+    expect(model.speechRoute).toMatchObject({ state: 'available-remote', disabled: false })
+  })
+
+  it('does not let a local download state bypass connected-voice consent', async () => {
+    const runtime = createRuntimeMock({ capturedPcm: new Int16Array([1, 2, 3]) })
+    voiceRuntimeMock.create.mockReturnValue(runtime)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const container = renderAssistant(client, getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'mesh',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      enabledCapabilityPacks: ['foreground-voice'],
+      localSpeechPackState: 'downloading',
+    }), undefined, { voiceRoutes: remoteVoiceRoutes('studio') })
+
+    await clickButton(container, 'Push to talk')
+    await act(async () => { await Promise.resolve() })
+
+    expect(runtime.start).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Review connected voice access before starting speech.')
   })
 
   it('abandons the hosted turn when transcription fails', async () => {

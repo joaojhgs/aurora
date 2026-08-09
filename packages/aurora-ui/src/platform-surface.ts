@@ -1,5 +1,5 @@
-import type { AuroraNodeMode, AuroraRuntimeTier, AuroraSurfaceKind, LegacyAuroraSurfaceKind } from './runtime-profile'
-export type { AuroraSurfaceKind, LegacyAuroraSurfaceKind } from './runtime-profile'
+import type { AuroraCapabilityPack, AuroraLocalSpeechPackState, AuroraNodeMode, AuroraRuntimeTier, AuroraSurfaceKind, LegacyAuroraSurfaceKind } from './runtime-profile'
+export type { AuroraLocalSpeechPackState, AuroraSurfaceKind, LegacyAuroraSurfaceKind } from './runtime-profile'
 
 /**
  * Native shells dispatch this event when foreground media must be released
@@ -24,6 +24,8 @@ export interface AuroraSurfaceProfileInput {
   userAgent?: string | null | undefined
   nodeMode?: AuroraNodeMode | null | undefined
   runtimeTier?: AuroraRuntimeTier | null | undefined
+  enabledCapabilityPacks?: readonly AuroraCapabilityPack[] | null | undefined
+  localSpeechPackState?: AuroraLocalSpeechPackState | null | undefined
   /** The native voice adapter exists, but its route may still be unavailable. */
   nativeVoicePresent?: boolean | undefined
   nativeVoiceAvailable?: boolean | undefined
@@ -76,11 +78,25 @@ export interface AuroraSurfaceProfile {
   isRemoteConsole: boolean
   /** Hosted web uses the browser Rust/WASM voice runtime for focused foreground capture. */
   usesBrowserVoiceRuntime: boolean
+  /** Product-safe state for on-device speech assets; this never implies browser capture can run local VAD/KWS/STT/TTS. */
+  localSpeechPack: AuroraLocalSpeechPackStatus
   voiceCapture: AuroraVoiceCapturePolicy
 }
 
 export type AuroraVoiceCaptureOwner = 'coordinator-daemon' | 'webview-focused' | 'mobile-native' | 'unavailable'
   | 'native-desktop'
+
+export interface AuroraLocalSpeechPackStatus {
+  state: AuroraLocalSpeechPackState
+  availabilityState: 'pending' | 'degraded' | 'unsupported'
+  label: string
+  detail: string
+  blockers: string[]
+  canRunLocalVad: boolean
+  canRunLocalKws: boolean
+  canRunLocalStt: boolean
+  canRunLocalTts: boolean
+}
 
 export interface AuroraVoiceCapturePolicy {
   /** Foreground push-to-talk can capture from the WebView with getUserMedia. */
@@ -129,6 +145,7 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
     ?? (usesLocalSidecar ? 'mesh-node' : 'remote-console')
   const runtimeTier: AuroraRuntimeTier = input.runtimeTier
     ?? (usesLocalSidecar ? 'python-full' : 'none')
+  const enabledCapabilityPacks = input.enabledCapabilityPacks ?? []
 
   const legacyKind: LegacyAuroraSurfaceKind = nativeAndroid
     ? 'android'
@@ -163,6 +180,11 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
     nativeVoiceAvailable: input.nativeVoiceAvailable === true,
   })
   const usesBrowserVoiceRuntime = physicalKind === 'hosted-web' && !usesNativeShell
+  const localSpeechPack = resolveAuroraLocalSpeechPack({
+    requestedState: input.localSpeechPackState ?? undefined,
+    runtimeTier,
+    enabledCapabilityPacks,
+  })
   return {
     physicalKind,
     kind: legacyKind,
@@ -190,10 +212,82 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
     ownsLocalNodeState,
     isRemoteConsole,
     usesBrowserVoiceRuntime,
+    localSpeechPack,
     voiceCapture: {
       ...voiceCapture,
       usesBrowserVoiceRuntime,
     },
+  }
+}
+
+export function resolveAuroraLocalSpeechPack(input: {
+  requestedState?: AuroraLocalSpeechPackState | undefined
+  runtimeTier: AuroraRuntimeTier
+  enabledCapabilityPacks?: readonly AuroraCapabilityPack[] | null | undefined
+}): AuroraLocalSpeechPackStatus {
+  const requestedState = input.requestedState && isAuroraLocalSpeechPackState(input.requestedState)
+    ? input.requestedState
+    : null
+  const foregroundVoiceEnabled = input.enabledCapabilityPacks?.includes('foreground-voice') === true
+  const state: AuroraLocalSpeechPackState = !foregroundVoiceEnabled
+    ? 'disabled'
+    : requestedState
+      ?? (input.runtimeTier === 'none' ? 'incompatible' : 'unavailable')
+  const availabilityState = localSpeechAvailabilityState(state)
+  return {
+    state,
+    availabilityState,
+    label: 'On-device speech',
+    detail: localSpeechPackDetail(state),
+    blockers: localSpeechPackBlockers(state),
+    canRunLocalVad: false,
+    canRunLocalKws: false,
+    canRunLocalStt: false,
+    canRunLocalTts: false,
+  }
+}
+
+function isAuroraLocalSpeechPackState(value: string): value is AuroraLocalSpeechPackState {
+  return value === 'disabled'
+    || value === 'downloading'
+    || value === 'incompatible'
+    || value === 'over-budget'
+    || value === 'unavailable'
+}
+
+function localSpeechAvailabilityState(state: AuroraLocalSpeechPackState): AuroraLocalSpeechPackStatus['availabilityState'] {
+  if (state === 'downloading') return 'pending'
+  if (state === 'over-budget') return 'degraded'
+  return 'unsupported'
+}
+
+function localSpeechPackDetail(state: AuroraLocalSpeechPackState): string {
+  switch (state) {
+    case 'downloading':
+      return 'On-device speech is still being prepared.'
+    case 'incompatible':
+      return 'On-device speech is not compatible with this device.'
+    case 'over-budget':
+      return 'On-device speech needs more available storage or memory before it can run.'
+    case 'unavailable':
+      return 'On-device speech is unavailable on this device right now.'
+    case 'disabled':
+      return 'On-device speech is turned off on this device.'
+  }
+}
+
+function localSpeechPackBlockers(state: AuroraLocalSpeechPackState): string[] {
+  switch (state) {
+    case 'downloading':
+      return ['local_speech_downloading']
+    case 'incompatible':
+      return ['local_speech_incompatible']
+    case 'over-budget':
+      return ['local_speech_over_budget']
+    case 'unavailable':
+      return ['local_speech_unavailable']
+    case 'disabled':
+      return ['local_speech_disabled']
   }
 }
 

@@ -4238,6 +4238,7 @@ export function buildAssistantVoiceModel(input: {
   })
   const browserCaptureState = browserCaptureAvailability(surfaceProfile, input.captureStatus)
   const remoteAudioRoute = remoteAudioRouteFor(transcription, wakeProcess)
+  const localSpeechPack = surfaceProfile.localSpeechPack
 
   return {
     captureStatus: input.captureStatus,
@@ -4259,6 +4260,16 @@ export function buildAssistantVoiceModel(input: {
         detail: browserCaptureState.detail,
         blockers: browserCaptureState.blockers,
         evidence: ['device_voice_status']
+      },
+      {
+        id: 'local-speech-pack',
+        label: localSpeechPack.label,
+        state: localSpeechPack.availabilityState,
+        privacyClass: 'raw-audio',
+        providerLabel: 'This device',
+        detail: localSpeechPack.detail,
+        blockers: localSpeechPack.blockers,
+        evidence: ['local_speech_pack_state']
       },
       nativeCapture,
       voiceChip('remote-processing', 'Connected speech help', transcription, 'raw-audio', input.consentGranted

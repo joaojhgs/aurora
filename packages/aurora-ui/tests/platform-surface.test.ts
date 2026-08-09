@@ -120,6 +120,14 @@ describe('Aurora surface profile regression coverage', () => {
     expect(findForbiddenProductionCopyTerms(desktopLocal.voiceCapture.detail)).toEqual([])
     expect(hosted.voiceCapture.wakewordOwner).toBe('webview-focused')
     expect(hosted.voiceCapture.wakewordRequiresFocus).toBe(true)
+    expect(hosted.localSpeechPack).toMatchObject({
+      state: 'disabled',
+      availabilityState: 'unsupported',
+      canRunLocalVad: false,
+      canRunLocalKws: false,
+      canRunLocalStt: false,
+      canRunLocalTts: false,
+    })
     expect(android.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
     expect(android.voiceCapture.wakewordOwner).toBe('webview-focused')
     expect(android.voiceCapture.detail).toBe('Android capture is available while Aurora is open in the foreground.')
@@ -128,6 +136,60 @@ describe('Aurora surface profile regression coverage', () => {
     expect(ios.voiceCapture.canUseWebViewVisualizer).toBe(false)
     expect(ios.voiceCapture.usesBrowserVoiceRuntime).toBe(false)
     expect(findForbiddenProductionCopyTerms(ios.voiceCapture.detail)).toEqual([])
+  })
+
+  it.each([
+    ['disabled', [], 'unsupported'],
+    ['unavailable', ['foreground-voice'], 'unsupported'],
+    ['downloading', ['foreground-voice'], 'pending'],
+    ['incompatible', ['foreground-voice'], 'unsupported'],
+    ['over-budget', ['foreground-voice'], 'degraded'],
+  ] as const)('models %s local speech without enabling unapproved local engines', (
+    localSpeechPackState,
+    enabledCapabilityPacks,
+    availabilityState,
+  ) => {
+    const profile = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'mesh',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      enabledCapabilityPacks,
+      localSpeechPackState,
+    })
+
+    expect(profile.localSpeechPack).toMatchObject({
+      state: localSpeechPackState,
+      availabilityState,
+      canRunLocalVad: false,
+      canRunLocalKws: false,
+      canRunLocalStt: false,
+      canRunLocalTts: false,
+    })
+    expect(findForbiddenProductionCopyTerms(profile.localSpeechPack.detail)).toEqual([])
+  })
+
+  it('derives disabled, incompatible, and unavailable defaults from the persisted capability selection', () => {
+    const disabled = getAuroraSurfaceProfile({
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      enabledCapabilityPacks: [],
+      localSpeechPackState: 'downloading',
+    })
+    const incompatible = getAuroraSurfaceProfile({
+      nodeMode: 'mesh-node',
+      runtimeTier: 'none',
+      enabledCapabilityPacks: ['foreground-voice'],
+    })
+    const unavailable = getAuroraSurfaceProfile({
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      enabledCapabilityPacks: ['foreground-voice'],
+    })
+
+    expect(disabled.localSpeechPack.state).toBe('disabled')
+    expect(incompatible.localSpeechPack.state).toBe('incompatible')
+    expect(unavailable.localSpeechPack.state).toBe('unavailable')
   })
 
   it('keeps mobile browsers on the hosted web runtime when web mode is explicit', () => {
