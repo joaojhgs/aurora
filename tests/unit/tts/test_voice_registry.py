@@ -1137,13 +1137,14 @@ async def test_delete_surfaces_tombstone_delete_failure_and_restart_finishes(
 ) -> None:
     registry_root = tmp_path / "registry"
     registry = VoiceRegistry(registry_root)
+    artifact_bytes = _safetensors_bytes()
     clone = await registry.create_clone_profile(
         display_name="Sensitive",
         runtime_target="pockettts-python",
         language_bundle="en-us-compact",
         compatibility_group="pockettts-en-compact-v1",
         artifact_revision="rev-a",
-        artifact_bytes=_safetensors_bytes(),
+        artifact_bytes=artifact_bytes,
         clone_uuid=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
     )
     original_rmtree = shutil.rmtree
@@ -1162,11 +1163,16 @@ async def test_delete_surfaces_tombstone_delete_failure_and_restart_finishes(
     assert state["profiles"] == {}
     assert clone.profile_key in state["deletions"]
     assert not (registry_root / "artifacts" / clone.profile_key).exists()
-    assert (registry_root / "tombstones" / clone.profile_key).exists()
+    tombstone_dir = registry_root / "tombstones" / clone.profile_key
+    tombstone_artifact = tombstone_dir / "voice-state.safetensors"
+    assert tombstone_artifact.exists()
+    assert tombstone_artifact.read_bytes() == b"\x00" * len(artifact_bytes)
+    state_json = (registry_root / "voice_registry.json").read_text(encoding="utf-8")
+    assert clone.voice_id not in state_json
 
     monkeypatch.setattr(shutil, "rmtree", original_rmtree)
     assert await VoiceRegistry(registry_root).inventory() == ()
-    assert not (registry_root / "tombstones" / clone.profile_key).exists()
+    assert not tombstone_dir.exists()
     assert _read_state(registry_root)["deletions"] == {}
 
 

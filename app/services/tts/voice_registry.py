@@ -308,8 +308,8 @@ class _DeletionRecord(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
     profile_key: str
-    voice_id: str
     tombstone_ref: str
+    voice_id: str | None = None
 
 
 class _RegistryState(BaseModel):
@@ -872,9 +872,9 @@ class VoiceRegistry:
                 os.replace(source_dir, tombstone_dir)
                 _fsync_dir(self._artifacts_dir)
                 _fsync_dir(self._tombstones_dir)
+                _scrub_tree_files(tombstone_dir)
             deletions[profile_key] = _DeletionRecord(
                 profile_key=profile_key,
-                voice_id=profile.voice_id,
                 tombstone_ref=str(PurePosixPath("tombstones") / profile_key),
             )
             remaining.pop(profile_key, None)
@@ -969,7 +969,8 @@ class VoiceRegistry:
         for key, record in state.deletions.items():
             if key != record.profile_key or not _PROFILE_KEY_RE.fullmatch(record.profile_key):
                 raise VoiceArtifactError("registry deletion record is invalid")
-            validate_logical_voice_id(record.voice_id)
+            if record.voice_id is not None:
+                validate_logical_voice_id(record.voice_id)
             tombstone_path = self._resolve_registry_ref(record.tombstone_ref, must_exist=False)
             expected = _profile_dir(self._tombstones_dir, record.profile_key)
             if tombstone_path != expected:
@@ -1005,7 +1006,6 @@ class VoiceRegistry:
                     continue
                 remaining_deletions[profile_key] = _DeletionRecord(
                     profile_key=profile_key,
-                    voice_id=profile.voice_id,
                     tombstone_ref=str(PurePosixPath("tombstones") / profile_key),
                 )
                 discovered = True
@@ -1022,6 +1022,7 @@ class VoiceRegistry:
         for key, record in state.deletions.items():
             tombstone_path = self._resolve_registry_ref(record.tombstone_ref, must_exist=False)
             if tombstone_path.exists():
+                _scrub_tree_files(tombstone_path)
                 _remove_tree(tombstone_path)
                 _fsync_dir(self._tombstones_dir)
             remaining.pop(key, None)
@@ -1403,6 +1404,48 @@ def _open_no_follow_read(path: Path) -> int:
         if exc.errno == errno.ELOOP:
             raise VoiceArtifactError("path uses symlink") from exc
         raise
+
+
+def _scrub_tree_files(path: Path) -> None:
+    if path.is_symlink():
+        raise VoiceArtifactError("refusing to scrub symlink")
+    for root, dirs, files in os.walk(path, topdown=True, followlinks=False):
+        root_path = Path(root)
+        kept_dirs: list[str] = []
+        for directory in dirs:
+            directory_path = root_path / directory
+            if directory_path.is_symlink():
+                continue
+            kept_dirs.append(directory)
+        dirs[:] = kept_dirs
+        for filename in files:
+            file_path = root_path / filename
+            if file_path.is_symlink():
+                continue
+            _scrub_file_no_follow(file_path)
+
+
+def _scrub_file_no_follow(path: Path) -> None:
+    fd = -1
+    try:
+        fd = os.open(path, os.O_WRONLY | _O_NOFOLLOW)
+        size = os.fstat(fd).st_size
+        os.lseek(fd, 0, os.SEEK_SET)
+        chunk = b"\x00" * min(size, 1024 * 1024)
+        remaining = size
+        while remaining:
+            written = os.write(fd, chunk[: min(len(chunk), remaining)])
+            if written <= 0:
+                raise VoiceArtifactError("artifact scrub failed")
+            remaining -= written
+        os.fsync(fd)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise VoiceArtifactError("path uses symlink") from exc
+        raise
+    finally:
+        if fd >= 0:
+            os.close(fd)
 
 
 def _profile_key(
