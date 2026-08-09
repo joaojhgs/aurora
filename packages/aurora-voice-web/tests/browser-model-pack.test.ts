@@ -148,6 +148,99 @@ describe('browser model pack verification', () => {
     })).rejects.toMatchObject({ code: 'release_hash' })
   })
 
+  it('rejects duplicate active file ids instead of reopening an incomplete two-file pack', async () => {
+    const firstBytes = new Uint8Array([61, 62, 63])
+    const secondBytes = new Uint8Array([71, 72, 73])
+    const manifest = await signedTwoFileManifest(firstBytes, secondBytes)
+    const host = new MemoryWebModelStoreHost()
+    await installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      fetchBytes: async (url) => {
+        if (url === '/fixtures/pockettts-web-test-a.bin') return firstBytes
+        if (url === '/fixtures/pockettts-web-test-b.bin') return secondBytes
+        throw new Error(`unexpected fixture url: ${url}`)
+      }
+    })
+
+    const [activeKey] = await host.listJsonKeys('aurora.voice.web-store.v1:active:')
+    expect(activeKey).toBeDefined()
+    const active = JSON.parse(await host.readJson(activeKey ?? '') ?? '{}') as {
+      files: Array<Record<string, unknown>>
+    }
+    active.files = [active.files[0] ?? {}, { ...(active.files[0] ?? {}) }]
+    await host.writeJson(activeKey ?? '', JSON.stringify(active))
+
+    await expect(openActiveBrowserModelPack(
+      host,
+      { task: 'stt' },
+      { allowNonProductionTestSignature: true }
+    )).rejects.toMatchObject({ code: 'receipt' })
+  })
+
+  it('rejects duplicate manifest and receipt file collections at trust boundaries', async () => {
+    const firstBytes = new Uint8Array([81, 82, 83])
+    const secondBytes = new Uint8Array([91, 92, 93])
+    const manifest = await signedTwoFileManifest(firstBytes, secondBytes)
+
+    await expect(verifyBrowserModelPackManifest({
+      ...manifest,
+      files: [
+        manifest.files[0] ?? manifest.files[1]!,
+        { ...(manifest.files[1] ?? manifest.files[0]!), file_id: manifest.files[0]?.file_id ?? 'model-a' }
+      ]
+    }, { allowNonProductionTestSignature: true })).rejects.toMatchObject({ code: 'duplicate_id' })
+
+    await expect(verifyBrowserModelPackManifest({
+      ...manifest,
+      variants: [{
+        ...(manifest.variants[0] ?? {
+          variant_id: 'web-wasm32-test',
+          target: 'web',
+          os: 'web',
+          arch: 'wasm32'
+        }),
+        file_ids: ['model-a', 'model-a']
+      }]
+    }, { allowNonProductionTestSignature: true })).rejects.toMatchObject({ code: 'duplicate_id' })
+
+    const host = new MemoryWebModelStoreHost()
+    await installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      fetchBytes: async (url) => url.endsWith('-a.bin') ? firstBytes : secondBytes
+    })
+    const [activeKey] = await host.listJsonKeys('aurora.voice.web-store.v1:active:')
+    const active = JSON.parse(await host.readJson(activeKey ?? '') ?? '{}') as {
+      verification_receipt: {
+        file_ids: string[]
+        files: Array<Record<string, unknown>>
+      }
+    }
+
+    active.verification_receipt.file_ids = ['model-a', 'model-a']
+    await host.writeJson(activeKey ?? '', JSON.stringify(active))
+    await expect(openActiveBrowserModelPack(
+      host,
+      { task: 'stt' },
+      { allowNonProductionTestSignature: true }
+    )).rejects.toMatchObject({ code: 'receipt' })
+
+    active.verification_receipt.file_ids = ['model-a', 'model-b']
+    active.verification_receipt.files = [
+      active.verification_receipt.files[0] ?? {},
+      { ...(active.verification_receipt.files[0] ?? {}) }
+    ]
+    await host.writeJson(activeKey ?? '', JSON.stringify(active))
+    await expect(openActiveBrowserModelPack(
+      host,
+      { task: 'stt' },
+      { allowNonProductionTestSignature: true }
+    )).rejects.toMatchObject({ code: 'receipt' })
+  })
+
   it('rejects forged active metadata instead of trusting browser-mutable receipts', async () => {
     const bytes = new Uint8Array([8, 9, 10])
     const manifest = await signedManifest(bytes)
@@ -256,6 +349,62 @@ async function signedManifest(
     revocation: null,
     signature: null
   }
+  const signature = await signCanonicalManifest(unsigned)
+  return {
+    ...unsigned,
+    signature: {
+      key_id: keyId,
+      algorithm: AURORA_MODEL_PACK_SIGNATURE_ALGORITHM,
+      value: signature
+    }
+  }
+}
+
+async function signedTwoFileManifest(
+  firstBytes: Uint8Array,
+  secondBytes: Uint8Array
+): Promise<AuroraBrowserModelPackManifest> {
+  return signedUnsignedManifest({
+    schema_version: 1,
+    pack_id: 'pockettts-web-test',
+    pack_version: '1.0.0',
+    display_name: 'PocketTTS Web Test',
+    tasks: ['stt'],
+    files: [{
+      file_id: 'model-a',
+      asset_id: 'model-a',
+      task: 'stt',
+      url: '/fixtures/pockettts-web-test-a.bin',
+      sha256: await sha256Hex(firstBytes),
+      byte_size: firstBytes.byteLength,
+      installed_size: firstBytes.byteLength,
+      compression: 'none'
+    }, {
+      file_id: 'model-b',
+      asset_id: 'model-b',
+      task: 'stt',
+      url: '/fixtures/pockettts-web-test-b.bin',
+      sha256: await sha256Hex(secondBytes),
+      byte_size: secondBytes.byteLength,
+      installed_size: secondBytes.byteLength,
+      compression: 'none'
+    }],
+    variants: [{
+      variant_id: 'web-wasm32-test',
+      file_ids: ['model-a', 'model-b'],
+      target: 'web',
+      os: 'web',
+      arch: 'wasm32'
+    }],
+    revocation: null,
+    signature: null
+  })
+}
+
+async function signedUnsignedManifest(
+  unsigned: AuroraBrowserModelPackManifest,
+  keyId = AURORA_NON_PRODUCTION_MODEL_PACK_KEY_ID
+): Promise<AuroraBrowserModelPackManifest> {
   const signature = await signCanonicalManifest(unsigned)
   return {
     ...unsigned,

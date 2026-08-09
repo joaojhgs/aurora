@@ -391,9 +391,11 @@ function validateManifestShape(manifest: AuroraBrowserModelPackManifest): void {
   if (!Array.isArray(manifest.tasks) || manifest.tasks.length === 0) throw modelPackError('empty')
   if (!Array.isArray(manifest.files) || manifest.files.length === 0) throw modelPackError('empty')
   if (!Array.isArray(manifest.variants) || manifest.variants.length === 0) throw modelPackError('empty')
+  if (!hasUniqueStrings(manifest.tasks)) throw modelPackError('duplicate_id')
   for (const task of manifest.tasks) {
     if (!safeId(task)) throw modelPackError('invalid_id')
   }
+  if (!hasUniqueStrings(manifest.files.map((file) => file.file_id))) throw modelPackError('duplicate_id')
   for (const file of manifest.files) {
     if (!safeId(file.file_id) || !safeId(file.asset_id) || !safeId(file.task)) throw modelPackError('invalid_id')
     if (!isSha256(file.sha256) || !Number.isSafeInteger(file.byte_size) || file.byte_size <= 0) {
@@ -402,6 +404,13 @@ function validateManifestShape(manifest: AuroraBrowserModelPackManifest): void {
     if (!Number.isSafeInteger(file.installed_size) || file.installed_size < file.byte_size) throw modelPackError('size')
     if (file.compression !== 'none') throw modelPackError('compression')
     if (!manifest.tasks.includes(file.task)) throw modelPackError('variant_file')
+  }
+  if (!hasUniqueStrings(manifest.variants.map((variant) => variant.variant_id))) throw modelPackError('duplicate_id')
+  for (const variant of manifest.variants) {
+    if (!safeId(variant.variant_id) || !safeId(variant.target) || !safeId(variant.os) || !safeId(variant.arch)) {
+      throw modelPackError('invalid_id')
+    }
+    if (!hasUniqueStrings(variant.file_ids)) throw modelPackError('duplicate_id')
   }
 }
 
@@ -426,7 +435,7 @@ function selectReceiptVariant(
   const variant = manifest.variants.find((candidate) => candidate.variant_id === receipt.variant_id)
   if (!variant) throw modelPackError('no_variant')
   if (variant.target !== 'web' || variant.os !== 'web' || variant.arch !== 'wasm32') throw modelPackError('target')
-  if (!sameStringSet(variant.file_ids, receipt.file_ids)) throw modelPackError('target')
+  if (!sameStringMultiset(variant.file_ids, receipt.file_ids)) throw modelPackError('target')
   return variant
 }
 
@@ -490,6 +499,9 @@ function parseManifestJson(raw: string): AuroraBrowserModelPackManifest {
 
 function validateActiveReceipt(active: ActiveRecord, freshReceipt: AuroraBrowserManifestVerificationReceipt): void {
   const receipt = active.verification_receipt
+  if (!Array.isArray(receipt.file_ids) || !Array.isArray(receipt.files)) throw modelPackError('receipt')
+  const receiptFileIds = receipt.files.map((file) => file.file_id)
+  const activeFileIds = active.files.map((file) => file.file_id)
   if (
     receipt.pack_id !== active.identity.pack_id ||
     receipt.pack_version !== active.identity.pack_version ||
@@ -501,11 +513,15 @@ function validateActiveReceipt(active: ActiveRecord, freshReceipt: AuroraBrowser
     receipt.os !== 'web' ||
     receipt.arch !== 'wasm32' ||
     !isSha256(receipt.manifest_sha256) ||
-    !sameStringSet(receipt.file_ids, freshReceipt.file_ids)
+    !hasUniqueStrings(receipt.file_ids) ||
+    !hasUniqueStrings(receiptFileIds) ||
+    !hasUniqueStrings(activeFileIds) ||
+    !sameStringMultiset(receipt.file_ids, receiptFileIds) ||
+    !sameStringMultiset(receipt.file_ids, freshReceipt.file_ids)
   ) {
     throw modelPackError('receipt')
   }
-  if (!sameStringSet(active.files.map((file) => file.file_id), receipt.file_ids)) throw modelPackError('receipt')
+  if (!sameStringMultiset(activeFileIds, receipt.file_ids)) throw modelPackError('receipt')
   for (const file of active.files) {
     const verified = receipt.files.find((candidate) => candidate.file_id === file.file_id)
     const fresh = freshReceipt.files.find((candidate) => candidate.file_id === file.file_id)
@@ -642,10 +658,26 @@ function isSha256(value: unknown): value is string {
   return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
 }
 
-function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
+function hasUniqueStrings(values: readonly string[]): boolean {
+  return new Set(values).size === values.length
+}
+
+function sameStringMultiset(left: readonly string[], right: readonly string[]): boolean {
   if (left.length !== right.length) return false
-  const rightSet = new Set(right)
-  return left.every((value) => rightSet.has(value))
+  const counts = new Map<string, number>()
+  for (const value of left) {
+    counts.set(value, (counts.get(value) ?? 0) + 1)
+  }
+  for (const value of right) {
+    const count = counts.get(value)
+    if (count === undefined) return false
+    if (count === 1) {
+      counts.delete(value)
+    } else {
+      counts.set(value, count - 1)
+    }
+  }
+  return counts.size === 0
 }
 
 function modelPackError(code: string): AuroraBrowserModelPackError {
