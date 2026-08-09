@@ -185,13 +185,13 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
   const mode = normalizeConnectionMode(config.mode)
   const rolloutFlags = normalizeAuroraWebRtcRolloutFlags(config.rolloutFlags)
   const requestedNodeRole = config.nodeRole ?? 'remote-console'
-  const activeNodeRole = requestedNodeRole === 'mesh-node' && rolloutFlags.mesh_node_runtime_v1
-    ? 'mesh-node'
-    : 'remote-console'
-  const localToolProviderEnabled = activeNodeRole === 'mesh-node' && rolloutFlags.local_tool_provider_v1
   const http = httpOptionsFromConfig(config)
   const webrtcDisabled = mode !== 'http-only' && !rolloutFlags.webrtc_thin_client
   const rollbackHttp = webrtcDisabled && mode === 'webrtc-preferred' ? http : null
+  const activeNodeRole = resolveActiveNodeRole(requestedNodeRole, rolloutFlags)
+  const webrtcRuntimeAvailable = !webrtcDisabled
+  const meshNodeRuntimeEnabled = webrtcRuntimeAvailable && activeNodeRole === 'mesh-node'
+  const localToolProviderEnabled = meshNodeRuntimeEnabled && rolloutFlags.local_tool_provider_v1
   const surface = getAuroraSurfaceProfile({
     runtimeMode: config.runtimeMode ?? (mode === 'http-only' ? 'web' : 'web-thin'),
     transportKind: mode === 'http-only' || rollbackHttp ? 'http' : 'mesh',
@@ -205,10 +205,10 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
   const features: BrowserRuntimeFeatureState = Object.freeze({
     requestedNodeRole,
     activeNodeRole,
-    meshNodeRuntimeEnabled: activeNodeRole === 'mesh-node',
+    meshNodeRuntimeEnabled,
     localToolProviderEnabled,
     lightweightOrchestratorEnabled:
-      activeNodeRole === 'mesh-node' && rolloutFlags.lightweight_orchestrator_v1,
+      meshNodeRuntimeEnabled && rolloutFlags.lightweight_orchestrator_v1,
     usesBrowserVoiceRuntime: surface.voiceCapture.usesBrowserVoiceRuntime,
     focusedPushToTalkOwner: surface.voiceCapture.focusedPushToTalkOwner,
     wakewordOwner: surface.voiceCapture.wakewordOwner,
@@ -370,12 +370,12 @@ export function explainBrowserThinRuntime(config: BrowserThinRuntimeConfig = {})
   const mode = normalizeConnectionMode(config.mode)
   const rolloutFlags = normalizeAuroraWebRtcRolloutFlags(config.rolloutFlags)
   const requestedNodeRole = config.nodeRole ?? 'remote-console'
-  const activeNodeRole = requestedNodeRole === 'mesh-node' && rolloutFlags.mesh_node_runtime_v1
-    ? 'mesh-node'
-    : 'remote-console'
+  const webrtcDisabled = mode !== 'http-only' && !rolloutFlags.webrtc_thin_client
+  const rollbackHttp = webrtcDisabled && mode === 'webrtc-preferred' ? httpOptionsFromConfig(config) : null
+  const activeNodeRole = resolveActiveNodeRole(requestedNodeRole, rolloutFlags)
   const surface = getAuroraSurfaceProfile({
     runtimeMode: config.runtimeMode ?? (mode === 'http-only' ? 'web' : 'web-thin'),
-    transportKind: mode === 'http-only' ? 'http' : 'mesh',
+    transportKind: mode === 'http-only' || rollbackHttp ? 'http' : 'mesh',
     nativePlatform: config.nativePlatform,
     userAgent: config.userAgent ?? browserUserAgent(),
     nodeMode: activeNodeRole,
@@ -388,7 +388,7 @@ export function explainBrowserThinRuntime(config: BrowserThinRuntimeConfig = {})
   const notes = [`mode=${mode}`]
   if (config.gatewayUrl) notes.push('http endpoint configured')
   if (config.signalingUrl) notes.push('signaling endpoint configured')
-  if (mode !== 'http-only' && !rolloutFlags.webrtc_thin_client) notes.push('WebRTC disabled by webrtc_thin_client rollout flag; HTTP/local modes remain available')
+  if (webrtcDisabled) notes.push('WebRTC disabled by webrtc_thin_client rollout flag; HTTP/local modes remain available')
   if (mode !== 'http-only' && !rolloutFlags.webrtc_scoped_subscriptions) notes.push('scoped WebRTC subscriptions disabled by rollout flag')
   if (mode !== 'http-only' && !rolloutFlags.webrtc_fragmentation) notes.push('WebRTC fragmentation/backpressure disabled by rollout flag')
   if (mode !== 'http-only' && !rolloutFlags.webrtc_app_layer_e2ee) notes.push('application-layer WebRTC E2EE disabled by rollout flag; profiles requiring it fail closed')
@@ -408,6 +408,15 @@ export function explainBrowserThinRuntime(config: BrowserThinRuntimeConfig = {})
   }
   if (mode === 'webrtc-only' && !summary && !config.profile) notes.push('blocked: invite/profile required')
   return notes
+}
+
+function resolveActiveNodeRole(
+  requestedNodeRole: BrowserThinNodeRole,
+  rolloutFlags: AuroraWebRtcRolloutFlags,
+): BrowserThinNodeRole {
+  return requestedNodeRole === 'mesh-node' && rolloutFlags.mesh_node_runtime_v1
+    ? 'mesh-node'
+    : 'remote-console'
 }
 
 export class BrowserWebRtcPeerController implements PeerConnectionController {

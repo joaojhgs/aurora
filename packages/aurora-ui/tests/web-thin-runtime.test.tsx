@@ -791,6 +791,58 @@ describe('browser WebRTC thin-shell runtime', () => {
     await runtime.close()
   })
 
+  it('withdraws WebRTC-dependent readiness during WebRTC-preferred HTTP rollback without changing the saved role or voice state', async () => {
+    const credentialStore = Object.assign(new MemoryPeerCredentialStore(), {
+      loadConnectionProfile: vi.fn(() => null),
+      saveConnectionProfile: vi.fn(),
+      setRoomSecret: vi.fn(),
+    })
+    const runtime = createBrowserWebThinRuntime({
+      createClient,
+      createDemoClient,
+      mode: 'webrtc-preferred',
+      nodeRole: 'mesh-node',
+      enabledCapabilityPacks: ['foreground-voice'],
+      localSpeechPackState: 'downloading',
+      inviteText: inviteText(),
+      gatewayUrl: 'https://aurora.example',
+      credentialStore,
+      rolloutFlags: { webrtc_thin_client: false },
+      windowLocation: { protocol: 'https:', hostname: 'app.example' },
+      fetchImpl: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    })
+
+    expect(runtime.client.transport.kind).toBe('http')
+    expect(runtime.features).toMatchObject({
+      requestedNodeRole: 'mesh-node',
+      activeNodeRole: 'mesh-node',
+      meshNodeRuntimeEnabled: false,
+      localToolProviderEnabled: false,
+      lightweightOrchestratorEnabled: false,
+      localSpeechPack: {
+        state: 'downloading',
+        availabilityState: 'pending',
+        canRunLocalStt: false,
+        canRunLocalTts: false,
+      },
+    })
+    expect(runtime.surface).toMatchObject({
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      ownsLocalNodeState: true,
+      isRemoteConsole: false,
+      prefersWebRtcTransport: false,
+    })
+    expect(runtime.peer.snapshot()).toMatchObject({
+      status: 'disabled',
+      hasHttpFallback: true,
+    })
+    expect(credentialStore.loadConnectionProfile).not.toHaveBeenCalled()
+    expect(credentialStore.saveConnectionProfile).not.toHaveBeenCalled()
+    expect(credentialStore.setRoomSecret).not.toHaveBeenCalled()
+    await runtime.close()
+  })
+
   it('fails WebRTC-only closed when the thin-client rollout flag is disabled', async () => {
     const runtime = createBrowserWebThinRuntime({
       createClient,
