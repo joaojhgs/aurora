@@ -279,7 +279,7 @@ class AuthService(BaseService):
     # ── Token Validation ─────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.ValidateToken",
+        method_id=AuthMethods.VALIDATE_TOKEN,
         summary="Validate a bearer token and return the resolved identity",
         input_model=ValidateTokenRequest,
         output_model=ValidateTokenResponse,
@@ -369,7 +369,7 @@ class AuthService(BaseService):
     # ── Token Refresh ────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.RefreshToken",
+        method_id=AuthMethods.REFRESH_TOKEN,
         summary="Refresh a token (revoke old, issue new with same scopes)",
         input_model=TokenRefreshRequest,
         output_model=TokenRefreshResponse,
@@ -392,7 +392,7 @@ class AuthService(BaseService):
     # ── WhoAmI ───────────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.WhoAmI",
+        method_id=AuthMethods.WHO_AM_I,
         summary="Get the identity of the authenticated principal",
         input_model=WhoAmIRequest,
         output_model=WhoAmIResponse,
@@ -653,7 +653,7 @@ class AuthService(BaseService):
     # ── Principal CRUD ───────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.ListPrincipals",
+        method_id=AuthMethods.LIST_PRINCIPALS,
         summary="List all principals",
         input_model=PrincipalListRequest,
         output_model=PrincipalListResponse,
@@ -676,7 +676,7 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.CreatePrincipal",
+        method_id=AuthMethods.CREATE_PRINCIPAL,
         summary="Create a new principal (user or device account)",
         input_model=PrincipalCreateRequest,
         output_model=PrincipalResponse,
@@ -703,7 +703,7 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.GetPrincipal",
+        method_id=AuthMethods.GET_PRINCIPAL,
         summary="Get a principal by ID",
         input_model=PrincipalGetRequest,
         output_model=PrincipalResponse,
@@ -725,7 +725,7 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.UpdatePrincipal",
+        method_id=AuthMethods.UPDATE_PRINCIPAL,
         summary="Update a principal's fields",
         input_model=PrincipalUpdateRequest,
         output_model=PrincipalResponse,
@@ -755,7 +755,7 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.DeletePrincipal",
+        method_id=AuthMethods.DELETE_PRINCIPAL,
         summary="Delete a principal (cascades to devices and tokens)",
         input_model=PrincipalDeleteRequest,
         output_model=PrincipalDeleteResponse,
@@ -771,7 +771,7 @@ class AuthService(BaseService):
     # ── Permissions ──────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.SetPermissions",
+        method_id=AuthMethods.SET_PERMISSIONS,
         summary="Set permissions for a principal (full replace)",
         input_model=PermissionSetRequest,
         output_model=PermissionSetResponse,
@@ -783,7 +783,7 @@ class AuthService(BaseService):
         return PermissionSetResponse(success=success)
 
     @method_contract(
-        method_id="Auth.PatchPermissions",
+        method_id=AuthMethods.PATCH_PERMISSIONS,
         summary="Add/remove specific permissions for a principal",
         input_model=PermissionPatchRequest,
         output_model=PermissionPatchResponse,
@@ -801,7 +801,7 @@ class AuthService(BaseService):
     # ── Password ─────────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.ChangePassword",
+        method_id=AuthMethods.CHANGE_PASSWORD,
         summary="Change a principal's password",
         input_model=PasswordChangeRequest,
         output_model=PasswordChangeResponse,
@@ -817,7 +817,7 @@ class AuthService(BaseService):
     # ── Token CRUD ───────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.ListTokens",
+        method_id=AuthMethods.LIST_TOKENS,
         summary="List tokens, optionally filtered by principal or device",
         input_model=TokenListRequest,
         output_model=TokenListResponse,
@@ -844,7 +844,7 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.CreateToken",
+        method_id=AuthMethods.CREATE_TOKEN,
         summary="Create a token for a principal",
         input_model=TokenCreateRequest,
         output_model=TokenCreateResponse,
@@ -877,7 +877,7 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.UpdateTokenScopes",
+        method_id=AuthMethods.UPDATE_TOKEN_SCOPES,
         summary="Update token scopes",
         input_model=TokenScopeUpdateRequest,
         output_model=TokenScopeUpdateResponse,
@@ -894,7 +894,7 @@ class AuthService(BaseService):
         return TokenScopeUpdateResponse(success=success)
 
     @method_contract(
-        method_id="Auth.RevokeToken",
+        method_id=AuthMethods.REVOKE_TOKEN,
         summary="Revoke a token",
         input_model=TokenRevokeRequest,
         output_model=TokenRevokeResponse,
@@ -908,7 +908,7 @@ class AuthService(BaseService):
     # ── Devices ──────────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.ListDevices",
+        method_id=AuthMethods.LIST_DEVICES,
         summary="List devices, optionally filtered by principal",
         input_model=DeviceListRequest,
         output_model=DeviceListResponse,
@@ -932,7 +932,7 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.DeleteDevice",
+        method_id=AuthMethods.DELETE_DEVICE,
         summary="Delete a device",
         input_model=DeviceDeleteRequest,
         output_model=DeviceDeleteResponse,
@@ -1009,7 +1009,7 @@ class AuthService(BaseService):
     # ── Mesh Credentials ─────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.SaveMeshCredential",
+        method_id=AuthMethods.SAVE_MESH_CREDENTIAL,
         summary="Save an outbound mesh token for a remote peer",
         input_model=MeshCredentialSaveRequest,
         output_model=MeshCredentialSaveResponse,
@@ -1028,7 +1028,7 @@ class AuthService(BaseService):
         return MeshCredentialSaveResponse(success=success)
 
     @method_contract(
-        method_id="Auth.LoadMeshCredential",
+        method_id=AuthMethods.LOAD_MESH_CREDENTIAL,
         summary="Load a previously saved mesh token for a room",
         input_model=MeshCredentialLoadRequest,
         output_model=MeshCredentialLoadResponse,
@@ -1042,7 +1042,7 @@ class AuthService(BaseService):
         return MeshCredentialLoadResponse(token=token)
 
     @method_contract(
-        method_id="Auth.DeleteMeshCredential",
+        method_id=AuthMethods.DELETE_MESH_CREDENTIAL,
         summary="Delete a stored mesh credential",
         input_model=MeshCredentialDeleteRequest,
         output_model=MeshCredentialDeleteResponse,
@@ -1058,7 +1058,7 @@ class AuthService(BaseService):
     # ── Mesh Identity ────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.LoadMeshIdentity",
+        method_id=AuthMethods.LOAD_MESH_IDENTITY,
         summary="Load this instance's stable mesh identity",
         input_model=MeshIdentityLoadRequest,
         output_model=MeshIdentityLoadResponse,
@@ -1075,7 +1075,7 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.SaveMeshIdentity",
+        method_id=AuthMethods.SAVE_MESH_IDENTITY,
         summary="Save this instance's stable mesh identity",
         input_model=MeshIdentitySaveRequest,
         output_model=MeshBoolResponse,
@@ -1095,7 +1095,7 @@ class AuthService(BaseService):
     # ── Mesh Peer Management ─────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.MeshUpsertPeer",
+        method_id=AuthMethods.MESH_UPSERT_PEER,
         summary="Create or update a mesh peer record on discovery",
         input_model=MeshPeerUpsertRequest,
         output_model=MeshBoolResponse,
@@ -1120,7 +1120,7 @@ class AuthService(BaseService):
             return MeshBoolResponse(success=False, message=str(e))
 
     @method_contract(
-        method_id="Auth.MeshListPeers",
+        method_id=AuthMethods.MESH_LIST_PEERS,
         summary="List known mesh peers with optional filters",
         input_model=MeshPeerListRequest,
         output_model=MeshPeerListResponse,
@@ -1187,7 +1187,7 @@ class AuthService(BaseService):
         return MeshPeerAuthoritySnapshotResponse(authorities=authorities)
 
     @method_contract(
-        method_id="Auth.MeshApprovePeer",
+        method_id=AuthMethods.MESH_APPROVE_PEER,
         summary="Approve a mesh peer with specific permissions",
         input_model=MeshPeerApproveRequest,
         output_model=MeshBoolResponse,
@@ -1222,7 +1222,7 @@ class AuthService(BaseService):
         return MeshBoolResponse(success=False, message=f"Peer {data.peer_id} not found")
 
     @method_contract(
-        method_id="Auth.MeshDenyPeer",
+        method_id=AuthMethods.MESH_DENY_PEER,
         summary="Deny/block a mesh peer",
         input_model=MeshPeerDenyRequest,
         output_model=MeshBoolResponse,
@@ -1236,7 +1236,7 @@ class AuthService(BaseService):
         return MeshBoolResponse(success=False, message=f"Peer {data.peer_id} not found")
 
     @method_contract(
-        method_id="Auth.MeshUpdatePeerPermissions",
+        method_id=AuthMethods.MESH_UPDATE_PEER_PERMISSIONS,
         summary="Update permissions for an approved mesh peer",
         input_model=MeshPeerUpdatePermissionsRequest,
         output_model=MeshBoolResponse,
@@ -1272,7 +1272,7 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.MeshRemovePeer",
+        method_id=AuthMethods.MESH_REMOVE_PEER,
         summary="Remove a mesh peer record entirely",
         input_model=MeshPeerRemoveRequest,
         output_model=MeshBoolResponse,
@@ -1334,7 +1334,7 @@ class AuthService(BaseService):
         return MeshPeerLoadInboundResponse(credentials=credentials)
 
     @method_contract(
-        method_id="Auth.MeshUpdatePeerConnection",
+        method_id=AuthMethods.MESH_UPDATE_PEER_CONNECTION,
         summary="Update connection status of a mesh peer",
         input_model=MeshPeerUpdateConnectionRequest,
         output_model=EmptyOutput,
