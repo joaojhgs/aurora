@@ -74,7 +74,12 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(desktop.voiceCapture.wakewordOwner).toBe('unavailable')
     expect(desktop.voiceCapture.wakewordRequiresFocus).toBe(true)
 
-    const local = getAuroraSurfaceProfile({ runtimeMode: 'desktop-local', transportKind: 'tauri-local' })
+    const local = getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-local',
+      transportKind: 'tauri-local',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'python-full',
+    })
     expect(local.voiceCapture.focusedPushToTalkOwner).toBe('native-desktop')
     expect(local.voiceCapture.wakewordOwner).toBe('unavailable')
     expect(local.voiceCapture.wakewordRequiresFocus).toBe(true)

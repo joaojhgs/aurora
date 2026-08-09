@@ -142,9 +142,9 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
   const usesWebRtcTransport = transportKind === 'mesh' || transportKind === 'webrtc' || transportKind === 'webrtc-preferred' || transportKind === 'webrtc-only'
   const usesNativeShell = usesLocalSidecar || isDesktopThin || transportKind.startsWith('tauri') || runtimeSaysNativeMobile || nativeAndroid || nativeIos
   const nodeMode: AuroraNodeMode = input.nodeMode
-    ?? (usesLocalSidecar ? 'mesh-node' : 'remote-console')
+    ?? 'remote-console'
   const runtimeTier: AuroraRuntimeTier = input.runtimeTier
-    ?? (usesLocalSidecar ? 'python-full' : 'none')
+    ?? 'none'
   const enabledCapabilityPacks = input.enabledCapabilityPacks ?? []
 
   const legacyKind: LegacyAuroraSurfaceKind = nativeAndroid
@@ -172,8 +172,8 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
   const supportsWebRtcThin = isWebThin || isMobile
   const prefersWebRtcTransport = usesWebRtcTransport
   const trustsNativeWebViewOrigin = usesNativeShell
-  const canManageLocalServiceConfiguration = usesLocalSidecar || legacyKind === 'mock'
-  const ownsLocalNodeState = nodeMode === 'mesh-node' || usesLocalSidecar
+  const ownsLocalNodeState = nodeMode === 'mesh-node'
+  const canManageLocalServiceConfiguration = ownsLocalNodeState && (usesLocalSidecar || legacyKind === 'mock')
   const isRemoteConsole = !ownsLocalNodeState
   const voiceCapture = getAuroraVoiceCapturePolicy(legacyKind, {
     nativeVoicePresent: input.nativeVoicePresent === true,

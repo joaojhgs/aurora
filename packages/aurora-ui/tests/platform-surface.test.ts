@@ -43,6 +43,8 @@ describe('Aurora surface profile regression coverage', () => {
     const local = getAuroraSurfaceProfile({
       runtimeMode: 'desktop-local',
       transportKind: 'tauri-local',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'python-full',
     })
     const remote = getAuroraSurfaceProfile({
       runtimeMode: 'desktop-thin',
@@ -61,6 +63,21 @@ describe('Aurora surface profile regression coverage', () => {
     expect(remote.usesLocalSidecar).toBe(false)
     expect(remote.canManageLocalServiceConfiguration).toBe(false)
     expect(remote.trustsNativeWebViewOrigin).toBe(true)
+  })
+
+  it('does not derive product role or tier from a local sidecar surface', () => {
+    const profile = getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-local',
+      transportKind: 'tauri-local',
+    })
+
+    expect(profile.kind).toBe('desktop-local')
+    expect(profile.usesLocalSidecar).toBe(true)
+    expect(profile.nodeMode).toBe('remote-console')
+    expect(profile.runtimeTier).toBe('none')
+    expect(profile.ownsLocalNodeState).toBe(false)
+    expect(profile.canManageLocalServiceConfiguration).toBe(false)
+    expect(profile.isRemoteConsole).toBe(true)
   })
 
   it('limits the native WebRTC bridge to Linux desktop shells', () => {
