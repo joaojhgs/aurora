@@ -4,6 +4,8 @@ import {
   assertNativeVoiceStatusRedacted,
   installDesktopNativeVoiceE2eHook,
   isDesktopNativeVoiceE2eHookEnabled,
+  meshNodePythonFullProfileDocument,
+  remoteConsoleProfileDocument,
   summarizeNativeVoiceEvents,
   validateDesktopNativeVoiceE2ePayload,
   type DesktopNativeVoiceE2ePayload,
@@ -86,20 +88,43 @@ describe("desktop native voice E2E hook", () => {
     let activeGeneration: number | null = null;
     let startCount = 0;
     let clock = 0;
+    let persistedProfile = "";
     const emit = (phase: NativeVoiceStatus["phase"], generation: number | null) => {
       listeners.forEach((listener) => listener({
         payload: { sequence: nextSequence++, status: status(phase, generation) },
       }));
     };
-    const invoke = vi.fn(async (command: string) => {
+    const activeProfile = () => JSON.parse(persistedProfile).profiles[0] as {
+      nodeMode: "remote-console" | "mesh-node";
+      runtimeTier: "none" | "python-full";
+    };
+    const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
       commands.push(command);
+      if (command === "aurora_secure_storage_get") return { value: null, secretsRedacted: true };
+      if (command === "aurora_secure_storage_set") {
+        persistedProfile = String(args?.value ?? "");
+        return { ok: true, secretsRedacted: true };
+      }
+      if (command === "aurora_secure_storage_delete") {
+        persistedProfile = "";
+        return { ok: true, secretsRedacted: true };
+      }
       if (command === "aurora_sidecar_session") return { token: "sidecar-session-token" };
       if (command === "aurora_sidecar_start") return { running: true };
       if (command === "aurora_sidecar_stop") return { running: false };
       if (command === "aurora_native_voice_status") {
+        if (activeProfile().nodeMode === "remote-console") {
+          return status("unavailable", null, {
+            connection: "unavailable",
+            reasonCode: "remote_audio_consent",
+          });
+        }
         return activeGeneration === null ? status("idle", null) : status("processing", activeGeneration);
       }
       if (command === "aurora_native_voice_start") {
+        if (activeProfile().nodeMode === "remote-console") {
+          throw { reasonCode: "remote_audio_consent" };
+        }
         startCount += 1;
         activeGeneration = startCount === 1 ? 7 : 8;
         emit("starting", activeGeneration);
@@ -159,6 +184,37 @@ describe("desktop native voice E2E hook", () => {
     expect(report.noWebViewMicrophone).toBe(true);
     expect(report.desktopResult.windowHidden).toBe(true);
     expect(report.desktopResult.sidecarLoopback).toBe(true);
+    expect(report.desktopResult.persistedRoleSource).toBe("runtime-profile");
+    expect(report.desktopResult.routeScenarios).toEqual([
+      expect.objectContaining({
+        name: "remote-console-without-sidecar",
+        persistedNodeMode: "remote-console",
+        persistedRuntimeTier: "none",
+        sidecarRunning: false,
+        expectedScope: "remote-gateway",
+        startBlockedReasonCode: "remote_audio_consent",
+        redacted: true,
+      }),
+      expect.objectContaining({
+        name: "remote-console-with-running-sidecar",
+        persistedNodeMode: "remote-console",
+        persistedRuntimeTier: "none",
+        sidecarRunning: true,
+        expectedScope: "remote-gateway",
+        startBlockedReasonCode: "remote_audio_consent",
+        redacted: true,
+      }),
+      expect.objectContaining({
+        name: "mesh-node-python-full-with-sidecar",
+        persistedNodeMode: "mesh-node",
+        persistedRuntimeTier: "python-full",
+        sidecarRunning: true,
+        expectedScope: "loopback-sidecar",
+        observedConnection: "this_device",
+        startBlockedReasonCode: null,
+        redacted: true,
+      }),
+    ]);
     expect(report.desktopResult.distinctGenerations).toBe(true);
     expect(report.desktopResult.completedTurn).toMatchObject({
       turn: "completed",
@@ -173,6 +229,9 @@ describe("desktop native voice E2E hook", () => {
     expect(report.desktopResult.statusSequence.map((event) => event.turn)).toContain("completed");
     expect(report.desktopResult.statusSequence.map((event) => event.turn)).toContain("cancelled");
     expect(report.desktopResult.commands).toEqual([
+      "aurora_secure_storage_get",
+      "aurora_secure_storage_set",
+      "aurora_secure_storage_delete",
       "aurora_native_voice_status",
       "aurora_native_voice_start",
       "aurora_native_voice_finish",
@@ -182,17 +241,66 @@ describe("desktop native voice E2E hook", () => {
     expect(commands).toContain("aurora_native_voice_cancel");
     expect(commands).toContain("aurora_sidecar_start");
     expect(commands).toContain("aurora_sidecar_stop");
+    expect(persistedProfile).toBe("");
+  });
+
+  it("builds route profiles from persisted roles rather than environment runtime mode", () => {
+    const local = meshNodePythonFullProfileDocument("http://127.0.0.1:8123");
+    const remote = remoteConsoleProfileDocument("remote-profile", "home-peer");
+    expect(JSON.stringify(local)).not.toContain("VITE_AURORA_RUNTIME_MODE");
+    expect(JSON.stringify(remote)).not.toContain("VITE_AURORA_RUNTIME_MODE");
+    expect(local).toMatchObject({
+      version: 2,
+      activeProfileId: "rac27-local-python-full",
+      profiles: [{
+        nodeMode: "mesh-node",
+        runtimeTier: "python-full",
+      }],
+    });
+    expect(remote).toMatchObject({
+      version: 2,
+      activeProfileId: "remote-profile",
+      profiles: [{
+        nodeMode: "remote-console",
+        runtimeTier: "none",
+        homeConnection: {
+          mode: "http-only",
+          gatewayUrl: "https://gateway.example.invalid",
+          homePeerId: "home-peer",
+        },
+      }],
+    });
   });
 
   it("fails when native status events are absent", async () => {
     const payload = { ...samplePayload(), timeoutMs: 1_000 };
     let clock = 0;
-    const invoke = vi.fn(async (command: string) => {
+    let persistedProfile = "";
+    const activeProfile = () => persistedProfile ? JSON.parse(persistedProfile).profiles[0] as {
+      nodeMode: "remote-console" | "mesh-node";
+    } : { nodeMode: "mesh-node" as const };
+    const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      if (command === "aurora_secure_storage_get") return { value: null, secretsRedacted: true };
+      if (command === "aurora_secure_storage_set") {
+        persistedProfile = String(args?.value ?? "");
+        return { ok: true, secretsRedacted: true };
+      }
+      if (command === "aurora_secure_storage_delete") {
+        persistedProfile = "";
+        return { ok: true, secretsRedacted: true };
+      }
       if (command === "aurora_sidecar_session") return { token: "sidecar-session-token" };
       if (command === "aurora_sidecar_start") return { running: true };
       if (command === "aurora_sidecar_stop") return { running: false };
-      if (command === "aurora_native_voice_status") return status("idle", null);
-      if (command === "aurora_native_voice_start") return status("starting", 7);
+      if (command === "aurora_native_voice_status") {
+        return activeProfile().nodeMode === "remote-console"
+          ? status("unavailable", null, { connection: "unavailable", reasonCode: "remote_audio_consent" })
+          : status("idle", null);
+      }
+      if (command === "aurora_native_voice_start") {
+        if (activeProfile().nodeMode === "remote-console") throw { reasonCode: "remote_audio_consent" };
+        return status("starting", 7);
+      }
       if (command === "aurora_native_voice_finish") return status("stopping", 7);
       if (command === "aurora_native_voice_cancel") return status("stopping", 8);
       throw new Error(`unexpected command ${command}`);
@@ -241,7 +349,11 @@ function samplePayload(): DesktopNativeVoiceE2ePayload {
   };
 }
 
-function status(phase: NativeVoiceStatus["phase"], generation: number | null): NativeVoiceStatus {
+function status(
+  phase: NativeVoiceStatus["phase"],
+  generation: number | null,
+  overrides: Partial<NativeVoiceStatus> = {},
+): NativeVoiceStatus {
   return {
     available: phase !== "unavailable",
     phase,
@@ -250,6 +362,7 @@ function status(phase: NativeVoiceStatus["phase"], generation: number | null): N
     connection: phase === "unavailable" ? "unavailable" : "this_device",
     reasonCode: null,
     redacted: true,
+    ...overrides,
   };
 }
 

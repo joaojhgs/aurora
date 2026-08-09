@@ -302,7 +302,6 @@ function nativeVoiceLaunchContract() {
       AURORA_TAURI_DEV_AUTOSIDECAR: '0',
       VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E: '1',
       VITE_AURORA_TAURI_DEV_AUTOSIDECAR: '0',
-      VITE_AURORA_RUNTIME_MODE: 'desktop-local',
       AURORA_GATEWAY_URL: 'loopback fake Gateway set by runner',
       AURORA_TAURI_SIDECAR_PROGRAM: 'repository-owned Node sentinel',
     },
@@ -443,6 +442,8 @@ function validateHookReport(report, { sessionNonce, tauriPid }) {
   assert.equal(report.desktopResult?.distinctGenerations, true)
   assert.equal(report.desktopResult?.windowHidden, true)
   assert.equal(report.desktopResult?.sidecarLoopback, true)
+  assert.equal(report.desktopResult?.persistedRoleSource, 'runtime-profile')
+  assertRouteScenarios(report.desktopResult?.routeScenarios)
   assert.deepEqual(report.desktopResult?.forbiddenWebViewCalls, [])
   assert.match(String(report.desktopResult?.reportHash), /^[0-9a-f]{64}$/u)
   assertLifecycle(report.desktopResult?.completedTurn, 'completed')
@@ -461,12 +462,69 @@ function validateHookReport(report, { sessionNonce, tauriPid }) {
     assert.deepEqual(Object.keys(event).sort(), ['phase', 'reasonCode', 'redacted', 'sequence', 'turn'])
   }
   assert.deepEqual(report.desktopResult?.commands, [
+    'aurora_secure_storage_get',
+    'aurora_secure_storage_set',
+    'aurora_secure_storage_delete',
     'aurora_native_voice_status',
     'aurora_native_voice_start',
     'aurora_native_voice_finish',
     'aurora_native_voice_cancel',
   ])
   assertNoSensitiveMaterial(report, 'desktop native voice hook report')
+}
+
+function assertRouteScenarios(value) {
+  assert.ok(Array.isArray(value), 'route scenario matrix is required')
+  const byName = new Map(value.map((scenario) => [scenario?.name, scenario]))
+  for (const name of [
+    'remote-console-without-sidecar',
+    'remote-console-with-running-sidecar',
+    'mesh-node-python-full-with-sidecar',
+  ]) {
+    assert.ok(byName.has(name), `missing route scenario ${name}`)
+  }
+  for (const scenario of value) {
+    assert.equal(scenario.redacted, true)
+    assert.ok(['remote-gateway', 'loopback-sidecar'].includes(scenario.expectedScope))
+    assert.ok(['remote-console', 'mesh-node'].includes(scenario.persistedNodeMode))
+    assert.ok(['none', 'python-full'].includes(scenario.persistedRuntimeTier))
+    assert.ok(typeof scenario.sidecarRunning === 'boolean')
+    assert.ok(['this_device', 'connected_device', 'unavailable'].includes(scenario.observedConnection))
+    assert.ok(typeof scenario.observedAvailable === 'boolean')
+    assert.ok(scenario.observedReasonCode === null || /^[a-z0-9_]{1,128}$/u.test(String(scenario.observedReasonCode)))
+    assert.ok(scenario.startBlockedReasonCode === null || /^[a-z0-9_]{1,128}$/u.test(String(scenario.startBlockedReasonCode)))
+    assert.deepEqual(Object.keys(scenario).sort(), [
+      'expectedScope',
+      'name',
+      'observedAvailable',
+      'observedConnection',
+      'observedReasonCode',
+      'persistedNodeMode',
+      'persistedRuntimeTier',
+      'redacted',
+      'sidecarRunning',
+      'startBlockedReasonCode',
+    ])
+  }
+  const remoteNoSidecar = byName.get('remote-console-without-sidecar')
+  const remoteWithSidecar = byName.get('remote-console-with-running-sidecar')
+  for (const scenario of [remoteNoSidecar, remoteWithSidecar]) {
+    assert.equal(scenario.persistedNodeMode, 'remote-console')
+    assert.equal(scenario.persistedRuntimeTier, 'none')
+    assert.equal(scenario.expectedScope, 'remote-gateway')
+    assert.equal(scenario.startBlockedReasonCode, 'remote_audio_consent')
+    assert.notEqual(scenario.observedConnection, 'this_device')
+  }
+  assert.equal(remoteNoSidecar.sidecarRunning, false)
+  assert.equal(remoteWithSidecar.sidecarRunning, true)
+  const local = byName.get('mesh-node-python-full-with-sidecar')
+  assert.equal(local.persistedNodeMode, 'mesh-node')
+  assert.equal(local.persistedRuntimeTier, 'python-full')
+  assert.equal(local.expectedScope, 'loopback-sidecar')
+  assert.equal(local.sidecarRunning, true)
+  assert.equal(local.observedConnection, 'this_device')
+  assert.equal(local.observedAvailable, true)
+  assert.equal(local.startBlockedReasonCode, null)
 }
 
 function assertLifecycle(value, turn) {
@@ -809,6 +867,7 @@ async function runSelfTest() {
   const launch = nativeVoiceLaunchContract()
   assert.ok(launch.existingWrapperEnv.includes('AURORA_DESKTOP_LIVE_E2E_APPLICATION_BIN'))
   assert.ok(launch.existingWrapperEnv.includes('AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE'))
+  assert.equal('VITE_AURORA_RUNTIME_MODE' in launch.env, false)
   const script = await fs.readFile(runnerScript, 'utf8')
   assert.match(script, /read_application_pid/u)
   assert.match(script, /wait_for_pid_exit/u)
@@ -817,6 +876,7 @@ async function runSelfTest() {
   assert.match(script, /desktop_native_voice_application\.sh/u)
   assert.match(script, /AURORA_DESKTOP_NATIVE_VOICE_E2E_SIDECAR_PID_FILE/u)
   assert.match(script, /tauri\.desktop-native-voice-e2e\.conf\.json/u)
+  assert.doesNotMatch(script, /VITE_AURORA_RUNTIME_MODE/u)
   assert.equal(await fileExists(sidecarSentinelScript), true)
   for (const capability of ['aurora-main.json', 'aurora-thin.json']) {
     const value = JSON.parse(await fs.readFile(
@@ -848,9 +908,51 @@ async function runSelfTest() {
         distinctGenerations: true,
         windowHidden: true,
         sidecarLoopback: true,
+        persistedRoleSource: 'runtime-profile',
+        routeScenarios: [
+          {
+            name: 'remote-console-without-sidecar',
+            persistedNodeMode: 'remote-console',
+            persistedRuntimeTier: 'none',
+            sidecarRunning: false,
+            expectedScope: 'remote-gateway',
+            observedConnection: 'unavailable',
+            observedAvailable: false,
+            observedReasonCode: 'remote_audio_consent',
+            startBlockedReasonCode: 'remote_audio_consent',
+            redacted: true,
+          },
+          {
+            name: 'remote-console-with-running-sidecar',
+            persistedNodeMode: 'remote-console',
+            persistedRuntimeTier: 'none',
+            sidecarRunning: true,
+            expectedScope: 'remote-gateway',
+            observedConnection: 'unavailable',
+            observedAvailable: false,
+            observedReasonCode: 'remote_audio_consent',
+            startBlockedReasonCode: 'remote_audio_consent',
+            redacted: true,
+          },
+          {
+            name: 'mesh-node-python-full-with-sidecar',
+            persistedNodeMode: 'mesh-node',
+            persistedRuntimeTier: 'python-full',
+            sidecarRunning: true,
+            expectedScope: 'loopback-sidecar',
+            observedConnection: 'this_device',
+            observedAvailable: true,
+            observedReasonCode: null,
+            startBlockedReasonCode: null,
+            redacted: true,
+          },
+        ],
         forbiddenWebViewCalls: [],
         reportHash: '0'.repeat(64),
         commands: [
+          'aurora_secure_storage_get',
+          'aurora_secure_storage_set',
+          'aurora_secure_storage_delete',
           'aurora_native_voice_status',
           'aurora_native_voice_start',
           'aurora_native_voice_finish',

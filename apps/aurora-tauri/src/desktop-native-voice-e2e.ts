@@ -6,6 +6,7 @@ const HOOK_NAME = "__AURORA_DESKTOP_NATIVE_VOICE_E2E__";
 const HOOK_PAYLOAD_SCHEMA = "aurora.desktop_native_voice_e2e.hook_payload.v1";
 const REPORT_SCHEMA = "aurora.desktop_native_voice_e2e.webview_report.v1";
 const STATUS_EVENT = "aurora://native-voice-status";
+const DESKTOP_RUNTIME_PROFILE_KEY = "aurora.session.desktop-thin-connection-profiles.v1";
 const FORBIDDEN_TEXT_RE =
   /\b(?:transcript|rawAudio|audioData|audio_data|authorization|bearer|token|leaseId|lease_id|endpoint|gatewayUrl|modelPath|getUserMedia|Worker)\b/iu;
 const DEFAULT_STEP_TIMEOUT_MS = 15_000;
@@ -44,8 +45,27 @@ export type NativeVoiceEvent = {
 
 type SidecarSession = { token: string };
 type SidecarStatus = { running: boolean };
+type SecureStorageGet = { value: string | null; secretsRedacted: true };
+type SecureStorageWrite = { ok: true; secretsRedacted: true };
 
 export type NativeVoiceTurnLabel = "completed" | "cancelled";
+export type NativeVoiceRouteScenarioName =
+  | "remote-console-without-sidecar"
+  | "remote-console-with-running-sidecar"
+  | "mesh-node-python-full-with-sidecar";
+
+export type NativeVoiceRouteScenarioSummary = {
+  name: NativeVoiceRouteScenarioName;
+  persistedNodeMode: "remote-console" | "mesh-node";
+  persistedRuntimeTier: "none" | "python-full";
+  sidecarRunning: boolean;
+  expectedScope: "remote-gateway" | "loopback-sidecar";
+  observedConnection: NativeVoiceStatus["connection"];
+  observedAvailable: boolean;
+  observedReasonCode: string | null;
+  startBlockedReasonCode: string | null;
+  redacted: true;
+};
 
 export type NativeVoiceEventSummary = {
   sequence: number;
@@ -91,6 +111,8 @@ export type DesktopNativeVoiceE2eReport = {
     commands: string[];
     windowHidden: boolean;
     sidecarLoopback: true;
+    routeScenarios: NativeVoiceRouteScenarioSummary[];
+    persistedRoleSource: "runtime-profile";
     forbiddenWebViewCalls: [];
     reportHash: string;
   };
@@ -234,6 +256,7 @@ async function runDesktopNativeVoiceE2e(
   let unlisten: UnlistenFn | undefined;
   let sidecarCommandToken: { token: string } | undefined;
   let sidecarStopped = false;
+  let savedProfile: string | null | undefined;
   const invokeNative = async <T>(command: string, args?: Record<string, unknown>): Promise<T> => {
     try {
       return await bridge.invoke<T>(command, args);
@@ -258,6 +281,16 @@ async function runDesktopNativeVoiceE2e(
       const parsed = parseNativeVoiceEvent(event.payload);
       events.push(parsed);
     });
+    savedProfile = await readPersistedRuntimeProfile(bridge.invoke);
+    await persistRuntimeProfile(
+      bridge.invoke,
+      remoteConsoleProfileDocument("remote-no-sidecar", "home-peer-remote"),
+    );
+    const remoteWithoutSidecar = await summarizeBlockedRemoteScenario(
+      bridge.invoke,
+      "remote-console-without-sidecar",
+      false,
+    );
     const sidecarSession = await bridge.invoke<SidecarSession>("aurora_sidecar_session");
     sidecarCommandToken = {
       token: requireBoundedString(sidecarSession.token, "sidecar session", 16, 512),
@@ -266,8 +299,24 @@ async function runDesktopNativeVoiceE2e(
       commandToken: sidecarCommandToken,
     });
     if (sidecarStarted.running !== true) throw new Error("managed sidecar did not start");
+    await persistRuntimeProfile(
+      bridge.invoke,
+      remoteConsoleProfileDocument("remote-with-sidecar", "home-peer-running-sidecar"),
+    );
+    const remoteWithSidecar = await summarizeBlockedRemoteScenario(
+      bridge.invoke,
+      "remote-console-with-running-sidecar",
+      true,
+    );
+    await persistRuntimeProfile(
+      bridge.invoke,
+      meshNodePythonFullProfileDocument(payload.expectedGatewayOrigin),
+    );
     const initial = await commandStatus(bridge.invoke);
     assertNativeVoiceStatusRedacted(initial);
+    if (initial.connection !== "this_device" || initial.available !== true) {
+      throw new Error("persisted mesh-node python-full profile did not select local native voice");
+    }
     const completedStart = await invokeNative<NativeVoiceStatus>("aurora_native_voice_start", {
       request: {
         trigger: "focused_push_to_talk",
@@ -351,6 +400,23 @@ async function runDesktopNativeVoiceE2e(
     const statusSequence = summarizeNativeVoiceEvents(events, generationLabels);
     const completedTurn = summarizeLifecycle(statusSequence, "completed");
     const cancelledTurn = summarizeLifecycle(statusSequence, "cancelled");
+    const routeScenarios: NativeVoiceRouteScenarioSummary[] = [
+      remoteWithoutSidecar,
+      remoteWithSidecar,
+      {
+        name: "mesh-node-python-full-with-sidecar",
+        persistedNodeMode: "mesh-node",
+        persistedRuntimeTier: "python-full",
+        sidecarRunning: true,
+        expectedScope: "loopback-sidecar",
+        observedConnection: initial.connection,
+        observedAvailable: initial.available,
+        observedReasonCode: initial.reasonCode,
+        startBlockedReasonCode: null,
+        redacted: true,
+      },
+    ];
+    assertRouteScenarios(routeScenarios);
     const reportWithoutHash: Omit<DesktopNativeVoiceE2eReport, "desktopResult"> & {
       desktopResult: Omit<DesktopNativeVoiceE2eReport["desktopResult"], "reportHash"> & {
         reportHash: "";
@@ -372,6 +438,9 @@ async function runDesktopNativeVoiceE2e(
         monotonicStatuses: true as const,
         distinctGenerations: true as const,
         commands: [
+          "aurora_secure_storage_get",
+          "aurora_secure_storage_set",
+          "aurora_secure_storage_delete",
           "aurora_native_voice_status",
           "aurora_native_voice_start",
           "aurora_native_voice_finish",
@@ -379,6 +448,8 @@ async function runDesktopNativeVoiceE2e(
         ],
         windowHidden: true,
         sidecarLoopback: true,
+        routeScenarios,
+        persistedRoleSource: "runtime-profile",
         forbiddenWebViewCalls: [] as [],
         reportHash: "",
       },
@@ -399,9 +470,201 @@ async function runDesktopNativeVoiceE2e(
         commandToken: sidecarCommandToken,
       }).catch(() => undefined);
     }
+    if (savedProfile !== undefined) {
+      await restorePersistedRuntimeProfile(bridge.invoke, savedProfile).catch(() => undefined);
+    }
     guards.restore();
     unlisten?.();
   }
+}
+
+async function readPersistedRuntimeProfile(invokeCommand: NativeVoiceInvoke): Promise<string | null> {
+  const result = await invokeCommand<SecureStorageGet>("aurora_secure_storage_get", {
+    key: DESKTOP_RUNTIME_PROFILE_KEY,
+  });
+  if (result.secretsRedacted !== true) throw new Error("profile storage read was not redacted");
+  return result.value ?? null;
+}
+
+async function persistRuntimeProfile(
+  invokeCommand: NativeVoiceInvoke,
+  document: Record<string, unknown>,
+): Promise<void> {
+  const serialized = JSON.stringify(document);
+  if (serialized.includes("VITE_AURORA_RUNTIME_MODE")) {
+    throw new Error("runtime profile must not use an environment-selected role");
+  }
+  const result = await invokeCommand<SecureStorageWrite>("aurora_secure_storage_set", {
+    key: DESKTOP_RUNTIME_PROFILE_KEY,
+    value: serialized,
+  });
+  if (result.secretsRedacted !== true) throw new Error("profile storage write was not redacted");
+}
+
+async function restorePersistedRuntimeProfile(
+  invokeCommand: NativeVoiceInvoke,
+  value: string | null,
+): Promise<void> {
+  if (value === null) {
+    await invokeCommand<SecureStorageWrite>("aurora_secure_storage_delete", {
+      key: DESKTOP_RUNTIME_PROFILE_KEY,
+    });
+    return;
+  }
+  await invokeCommand<SecureStorageWrite>("aurora_secure_storage_set", {
+    key: DESKTOP_RUNTIME_PROFILE_KEY,
+    value,
+  });
+}
+
+async function summarizeBlockedRemoteScenario(
+  invokeCommand: NativeVoiceInvoke,
+  name: Extract<NativeVoiceRouteScenarioName, "remote-console-without-sidecar" | "remote-console-with-running-sidecar">,
+  sidecarRunning: boolean,
+): Promise<NativeVoiceRouteScenarioSummary> {
+  const observed = await commandStatus(invokeCommand);
+  assertNativeVoiceStatusRedacted(observed);
+  const startBlockedReasonCode = await expectNativeVoiceStartBlocked(invokeCommand);
+  return {
+    name,
+    persistedNodeMode: "remote-console",
+    persistedRuntimeTier: "none",
+    sidecarRunning,
+    expectedScope: "remote-gateway",
+    observedConnection: observed.connection,
+    observedAvailable: observed.available,
+    observedReasonCode: observed.reasonCode,
+    startBlockedReasonCode,
+    redacted: true,
+  };
+}
+
+async function expectNativeVoiceStartBlocked(
+  invokeCommand: NativeVoiceInvoke,
+): Promise<string | null> {
+  try {
+    await invokeCommand<NativeVoiceStatus>("aurora_native_voice_start", {
+      request: {
+        trigger: "focused_push_to_talk",
+        remoteAudioConsent: false,
+      },
+    });
+  } catch (error) {
+    return boundedReasonCodeFromError(error);
+  }
+  throw new Error("remote-console native voice start was not blocked without explicit consent");
+}
+
+function boundedReasonCodeFromError(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  for (const key of ["reasonCode", "reason", "code", "status"]) {
+    const value = (error as Record<string, unknown>)[key];
+    if (typeof value === "string" && /^[a-z0-9_]{1,128}$/u.test(value)) return value;
+  }
+  return null;
+}
+
+function assertRouteScenarios(scenarios: NativeVoiceRouteScenarioSummary[]): void {
+  const names = scenarios.map((scenario) => scenario.name).sort();
+  if (JSON.stringify(names) !== JSON.stringify([
+    "mesh-node-python-full-with-sidecar",
+    "remote-console-with-running-sidecar",
+    "remote-console-without-sidecar",
+  ].sort())) {
+    throw new Error("native voice route matrix is incomplete");
+  }
+  for (const scenario of scenarios) {
+    if (scenario.redacted !== true) throw new Error("route scenario is not redacted");
+    if (FORBIDDEN_TEXT_RE.test(JSON.stringify(scenario))) {
+      throw new Error("route scenario contains sensitive material");
+    }
+    if (scenario.name.startsWith("remote-console")) {
+      if (scenario.persistedNodeMode !== "remote-console" || scenario.persistedRuntimeTier !== "none") {
+        throw new Error("remote route scenario is not profile-selected");
+      }
+      if (scenario.startBlockedReasonCode !== "remote_audio_consent") {
+        throw new Error("remote route did not fail closed before local capture");
+      }
+      if (scenario.observedConnection === "this_device") {
+        throw new Error("remote route was shadowed by a local sidecar");
+      }
+    }
+    if (scenario.name === "mesh-node-python-full-with-sidecar") {
+      if (
+        scenario.persistedNodeMode !== "mesh-node" ||
+        scenario.persistedRuntimeTier !== "python-full" ||
+        scenario.observedConnection !== "this_device" ||
+        scenario.observedAvailable !== true ||
+        scenario.startBlockedReasonCode !== null
+      ) {
+        throw new Error("local route scenario is not profile-selected");
+      }
+    }
+  }
+}
+
+export function meshNodePythonFullProfileDocument(expectedGatewayOrigin: string): Record<string, unknown> {
+  requireLoopbackOrigin(expectedGatewayOrigin);
+  return {
+    version: 2,
+    activeProfileId: "rac27-local-python-full",
+    profiles: [{
+      version: 2,
+      id: "rac27-local-python-full",
+      label: "RAC27 local Python full",
+      nodeMode: "mesh-node",
+      runtimeTier: "python-full",
+      localNode: {
+        nodeName: "RAC27 desktop node",
+        stablePeerId: "rac27-desktop-local",
+        enabledCapabilityPacks: ["foreground-voice"],
+        meshMembership: {
+          signalingUrl: "wss://broker.example.invalid",
+          webrtcProfile: webRtcProfile("rac27-local-room", "rac27-desktop-local"),
+        },
+      },
+    }],
+  };
+}
+
+export function remoteConsoleProfileDocument(
+  id: string,
+  homePeerId: string,
+): Record<string, unknown> {
+  return {
+    version: 2,
+    activeProfileId: id,
+    profiles: [{
+      version: 2,
+      id,
+      label: "RAC27 remote console",
+      nodeMode: "remote-console",
+      runtimeTier: "none",
+      homeConnection: {
+        mode: "http-only",
+        gatewayUrl: "https://gateway.example.invalid",
+        homePeerId,
+      },
+      localNode: {
+        nodeName: "RAC27 desktop console",
+        stablePeerId: `rac27-console-${homePeerId}`,
+        enabledCapabilityPacks: [],
+      },
+    }],
+  };
+}
+
+function webRtcProfile(room: string, expectedStablePeerId: string): Record<string, unknown> {
+  return {
+    mode: "webrtc-only",
+    appId: "aurora",
+    room,
+    roomSecretRef: `ref:memory:${room}`,
+    signalingBrokers: ["wss://broker.example.invalid"],
+    expectedStablePeerId,
+    nodeName: "RAC27 desktop node",
+    requireAppLayerE2ee: true,
+  };
 }
 
 async function waitForEvent(
