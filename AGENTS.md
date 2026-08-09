@@ -518,7 +518,7 @@ make clean                       # Remove temp files
 <!-- gitnexus:start -->
 # GitNexus MCP
 
-This project is indexed by GitNexus as **aurora** (15864 symbols, 54592 relationships, 300 execution flows).
+This project is indexed by GitNexus as **aurora** (21394 symbols, 71655 relationships, 300 execution flows).
 
 GitNexus provides a knowledge graph over this codebase — call chains, blast radius, execution flows, and semantic search.
 
@@ -582,6 +582,7 @@ RETURN caller.name, caller.filePath
 
 - All Aurora UI fixes must preserve the multi-surface contract unless the change is explicitly platform-specific: desktop Tauri local, desktop Tauri thin, web thin, Android, and iOS must route through centralized surface detection rather than ad hoc transport checks.
 - Use `packages/aurora-ui/src/platform-surface.ts` (`getAuroraSurfaceProfile`) as the single source for desktop-local vs desktop-thin vs web vs Android/iOS/mobile behavior. Add new platform capability flags there first, then consume them from pages/components.
+- Runtime role is never selected by an environment variable or compiled into an APK/desktop bundle; the old `VITE_AURORA_RUNTIME_MODE` build-time role assignments must not be reintroduced. A single Android/iOS/desktop client may dynamically act as a thin client managing a remote server, or as a node itself; persist and resolve those `roles` from runtime onboarding/profile state and keep them independent from the physical platform surface and transport mode.
 - Production UI is for end users only. Never show implementation/process wording such as proof, evidence, fixture, assertion, implementation, tested, debug, fallback, provider/consumer/hybrid, route counts, manifest, contract, protocol, transport, runtime, schema, migration, SQLite, IndexedDB, OPFS, sidecar, thin, or similar engineering terms in user-facing labels, empty states, toasts, dialogs, menus, setup text, or errors. Show useful user state, impact, action, remedy, and optional non-sensitive error IDs instead; keep implementation terms in logs, tests, developer docs, and non-rendered redacted support exports only.
 - Voice ownership is split intentionally: desktop-local daemon wakeword/background capture remains owned by `STTCoordinator`; focused push-to-talk and visual waveform capture use WebView/browser microphone capture when available. Thin web wakeword may use focused WebView/Gateway streaming only while the page is focused. Mobile push-to-talk may use focused WebView capture, while durable wake/background behavior requires platform-native adapters.
 - Any new bus method or event must follow the typed contract process: add constants and IO models under `app/shared/contracts/models/`, implement with `@method_contract` and correct `exposure`/`method_type`/permissions, route only via bus/SDK/Gateway boundaries, update SDK descriptors/types, and add tests proving redaction plus route/event behavior. Never introduce literal bus topics.
