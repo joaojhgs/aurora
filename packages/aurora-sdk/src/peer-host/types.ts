@@ -5,6 +5,7 @@ import type { AuthenticatedPeerContext, PeerRevocationBroadcaster } from './auth
 
 export type PeerHostMethodType = 'unary' | 'stream' | 'event'
 export type PeerHostProjectionMethodType = 'use' | 'manage'
+export type PeerHostMethodExposure = 'internal' | 'external' | 'both'
 
 export interface PeerHostIdentity {
   readonly callerPeerId: string
@@ -25,8 +26,22 @@ export interface PeerHostCallContext {
   readonly deadlineAtMs: number
 }
 
-export interface PeerHostSubscribeContext {
+export interface PeerHostEventEmitOptions {
+  readonly correlationId?: string
+}
+
+export interface PeerHostEventEmissionContext {
+  readonly correlationId?: string
+}
+
+export type PeerHostEventEmissionValidator<TEvent = unknown> = (
+  event: TEvent,
+  context: PeerHostEventEmissionContext
+) => void
+
+export interface PeerHostSubscribeContext<TEvent = unknown> {
   readonly id: string
+  readonly topic: string
   readonly remotePeerId: string
   readonly authenticatedPeerContext?: AuthenticatedPeerContext
   readonly topics: readonly string[]
@@ -34,6 +49,7 @@ export interface PeerHostSubscribeContext {
   readonly ttlSeconds: number
   readonly signal: AbortSignal
   readonly receivedAtMs: number
+  emit(event: TEvent, options?: PeerHostEventEmitOptions): Promise<boolean>
 }
 
 export interface PeerHostSubscriptionHandle {
@@ -52,13 +68,25 @@ export interface PeerHostErrorBody {
 
 export interface PeerHostMethodDescriptor<TInput = unknown, TOutput = unknown> {
   readonly methodId: string
+  readonly module?: string
+  readonly name?: string
+  readonly summary?: string
+  readonly busTopic?: string
+  readonly exposure?: PeerHostMethodExposure
   readonly methodType: PeerHostMethodType
   readonly projectionMethodType?: PeerHostProjectionMethodType
   readonly inputSchemaId: string
   readonly outputSchemaId: string
+  readonly inputModel?: string
+  readonly outputModel?: string
   readonly inputSchema: z.ZodType<TInput>
   readonly outputSchema: z.ZodType<TOutput>
   readonly requiredPermissions: readonly string[]
+  readonly callableFeatureIds?: readonly string[]
+  readonly speechConstraints?: JsonObject | null
+  readonly serviceCapabilities?: readonly string[]
+  readonly serviceVersion?: string
+  readonly maxConcurrent?: number
   readonly maxRequestBytes?: number
   readonly timeoutMs?: number
   readonly handler: (input: TInput, context: PeerHostCallContext) => Promise<TOutput> | TOutput
@@ -67,11 +95,16 @@ export interface PeerHostMethodDescriptor<TInput = unknown, TOutput = unknown> {
 
 export interface PeerHostEventDescriptor<TEvent = unknown> {
   readonly topic: string
+  readonly module?: string
+  readonly name?: string
   readonly outputSchemaId: string
   readonly outputSchema: z.ZodType<TEvent>
   readonly requiredPermissions: readonly string[]
   readonly maxTtlSeconds?: number
-  readonly handler: (context: PeerHostSubscribeContext) => Promise<PeerHostSubscriptionHandle | void> | PeerHostSubscriptionHandle | void
+  readonly maxEventBytes?: number
+  readonly orderedEventGroup?: string | null
+  readonly createEmissionValidator?: () => PeerHostEventEmissionValidator<TEvent>
+  readonly handler: (context: PeerHostSubscribeContext<TEvent>) => Promise<PeerHostSubscriptionHandle | void> | PeerHostSubscriptionHandle | void
 }
 
 export interface PeerHostAuthorizeRequest {
@@ -166,7 +199,7 @@ export interface ProviderLeaseRecord {
 }
 
 export interface PeerHostFrameSender {
-  sendFrame(frame: Record<string, unknown>): Promise<void>
+  sendFrame(frame: Record<string, unknown>, signal?: AbortSignal): Promise<void>
 }
 
 export interface PeerHostOptions {

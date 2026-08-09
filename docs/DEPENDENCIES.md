@@ -48,7 +48,7 @@ uv run --extra test-all pytest tests/unit
 | Service extras | `service-db`, `service-tts`, `service-orchestrator`, `gateway` | Install only for services that need them, especially in containers. |
 | Mode extras | `mode-threads`, `mode-processes` | Process mode owns Redis/BullMQ dependencies. |
 | Hardware/local-model extras | `cuda`, `rocm`, `metal`, `vulkan`, `sycl`, `torch-cpu` | Keep explicit; do not include in Python-free client or API-only builds. |
-| Integration extras | `google`, `jira`, `github`, `slack`, `openrecall` | Optional plugin/tooling integrations. |
+| Integration extras | `google`, `jira`, `github`, `slack` | Optional plugin/tooling integrations. Submodules such as OpenRecall own and lock their dependencies independently. |
 | Test/dev extras | `dev`, `test-unit`, `test-integration`, `test-e2e`, `test-performance`, `test-all` | CI and local validation profiles. |
 
 ## Service dependency groups
@@ -66,7 +66,7 @@ The service groups in `pyproject.toml` mirror Aurora process-mode boundaries:
 | `service-stt-wakeword` | Wake-word service dependencies. |
 | `service-stt-transcription` | Speech transcription service dependencies. |
 | `service-stt-coordinator` | Coordinator-side STT orchestration dependencies. |
-| `service-tts` | TTS/audio synthesis dependencies. |
+| `service-tts` | Piper and PocketTTS synthesis/audio dependencies. Piper remains the default provider. Model files, PocketTTS base weights, standard voice packs, and cloned voice states remain separately managed data. |
 | `service-orchestrator` | LangGraph/LangChain orchestration and default LLM client support. |
 | `gateway` | FastAPI Gateway, WebRTC, ACL, and mesh transport dependencies. |
 | `all-services` | Convenience group for full local service runtime. |
@@ -83,6 +83,97 @@ The service groups in `pyproject.toml` mirror Aurora process-mode boundaries:
 | DB local embeddings | `service-db-local-embeddings` or `embeddings-local` | Heavy local embedding profile. |
 
 ## Tauri sidecar and client package profiles
+
+`sidecar-local-audio`, `service-tts`, and the aggregate `runtime` profile carry
+both Piper and `pocket-tts[audio]==2.1.0` code. The `sidecar-thin` profile
+carries neither TTS runtime. Model weights, standard voice packs, and user voice
+state are not dependency-profile inputs and must remain outside packaged
+application artifacts. Process-mode TTS keeps managed downloads and voice state
+in the persistent `aurora_voice_models` volume mounted at `/app/voice_models`;
+PocketTTS uses `voice_models/pockettts` for its model cache and
+`voice_models/pockettts/voices` for voice-state artifacts by default.
+
+Hardware-backed local speech installs establish the selected Torch triplet before
+resolving PocketTTS. The Docker and sidecar builders enforce that order. For a
+manual service environment, use the frozen-export sequence in `docs/UV_USAGE.md`;
+do not start from an unconstrained editable extra install.
+
+PocketTTS currently exposes these product-language selections through the TTS
+config:
+
+| Product language | Compact config | Quality config |
+| --- | --- | --- |
+| English | `english_2026-04` | `english_2026-04` |
+| German | `german` | `german_24l` |
+| Portuguese | `portuguese` | `portuguese_24l` |
+| Italian | `italian` | `italian_24l` |
+| Spanish | `spanish` | `spanish_24l` |
+| French | unavailable | `french_24l` |
+
+The legacy internal IDs `english` and `english_2026-01` are compatibility-only
+aliases. A plain `french` PocketTTS config is unavailable; choose the `quality`
+tier to resolve French to `french_24l`.
+
+The exact internal config IDs recognized by the provider are `english`,
+`english_2026-01`, `english_2026-04`, `german`, `german_24l`, `portuguese`,
+`portuguese_24l`, `italian`, `italian_24l`, `spanish`, `spanish_24l`, and
+`french_24l`.
+
+The supported PocketTTS runtime is one resident base model with serialized
+synthesis entry. Use `services.tts.provider = "piper"` for the default and
+immediate rollback path. To opt into PocketTTS, set `services.tts.provider =
+"pockettts"` and configure:
+
+| Field | Default | Notes |
+| --- | --- | --- |
+| `services.tts.providers.pockettts.quality_tier` | `compact` | `compact` or `quality`; French is available only as `quality`. |
+| `services.tts.providers.pockettts.cache_dir` | `voice_models/pockettts` | Persistent model/cache directory. Set this inside a persistent process-mode volume. |
+| `services.tts.providers.pockettts.voice_state_dir` | `voice_models/pockettts/voices` | Sensitive local voice-state storage. Keep it private and backed up according to user consent. |
+| `services.tts.providers.pockettts.device` | `cpu` | Current schema accepts CPU only. Hardware extras affect package contents, not this runtime field yet. |
+| `services.tts.providers.pockettts.initialization_timeout_s` | `120.0` | Model initialization timeout. |
+| `services.tts.providers.pockettts.request_timeout_s` | `120.0` | Per-request synthesis timeout. |
+| `services.tts.providers.pockettts.max_concurrent_requests` | `1` | Schema and provider enforce serialized entry. |
+| `services.tts.providers.pockettts.preload_model` | `true` | Preload the selected base at provider start. |
+| `services.tts.providers.pockettts.preload_voice_ids` | `[]` | Additional logical voices must exist in the registry and be supported by the provider. |
+| `services.tts.providers.pockettts.temperature` | `null` | Optional provider sampling control. |
+| `services.tts.providers.pockettts.lsd_decode_steps` | `1` | Optional provider decode control. |
+| `services.tts.providers.pockettts.noise_clamp` | `null` | Optional provider noise control. |
+| `services.tts.providers.pockettts.eos_threshold` | `-4.0` | Optional provider EOS control. |
+| `services.tts.providers.pockettts.quantize` | `false` | Provider quantization flag. |
+
+`services.tts.providers.pockettts.custom_config_path` exists in the schema but
+is intentionally fail-closed in the service. Bare custom PocketTTS config files
+are unavailable until Aurora can validate their manifest, model identity, and
+license metadata.
+
+Standard voice packs require separately approved manifests. Aurora does not
+bundle or auto-download a licensed starter PocketTTS model or voice asset. Model
+and voice-asset licenses, attribution, and redistribution terms are separate
+from Aurora's MIT-licensed package code. Cloned voice states are sensitive local
+data managed by the voice registry; do not copy them into images, sidecars, logs,
+or support bundles.
+
+PocketTTS standard voices are registry-installed artifacts, not provider
+built-ins. The service accepts provider-neutral
+`standard:<pack>:<voice>` IDs only when the local `VoiceRegistry` contains an
+exact ready `pockettts-python` voice-state artifact whose language bundle and
+compatibility group match the selected resident PocketTTS base. Default and
+preload voice IDs fail closed when no compatible registry entry exists; Aurora
+does not guess from upstream PocketTTS voice names and does not accept a bare
+`standard:alba` ID.
+
+Current upstream provenance is intentionally treated as input to a future
+manifest, not as release approval. Kyutai publishes the
+[`pocket-tts`](https://github.com/kyutai-labs/pocket-tts) package code under
+MIT, the
+[`kyutai/pocket-tts-without-voice-cloning`](https://huggingface.co/kyutai/pocket-tts-without-voice-cloning)
+model card lists `cc-by-4.0`, and Kyutai's
+[`tts-voices`](https://huggingface.co/kyutai/tts-voices) card lists per-source
+voice licenses including CC BY 4.0 and non-commercial sources. Kyutai also lists
+prohibited uses for unlawful, deceptive, or non-consensual voice use. Do not
+enable redistribution or automatic download for any PocketTTS model or voice
+asset until an approved Aurora manifest records the exact upstream repo, path,
+revision, SHA-256, size, license, attribution, and redistribution decision.
 
 Tauri desktop packages stage a Python sidecar using `apps/aurora-tauri/scripts/prepare-sidecar.mjs` and `scripts/build.py`. Profiles are explicit so the default bundle does not install every local dependency.
 
@@ -102,10 +193,12 @@ Legacy `*:thin` package scripts remain compatibility aliases for the neutral `*:
 
 Android client artifact proof is package-content evidence, not device-runtime
 evidence. Current-main x86_64 debug APK and universal four-ABI debug AAB scans
-pass with no Python/sidecar/endpoint/secrets; emulator/device WebRTC proof
-still requires usable KVM access or an authorized physical device. iOS client
-source, policy, frontend, and overlay gates are Linux-safe, but simulator,
-Swift runtime, signing, and App Store proof require macOS/Xcode.
+pass with no Python/sidecar/endpoint/secrets, and a packaged API 30 application
+launch smoke passes on the workspace emulator. No API 35 packaged-WebView or
+Chrome WebRTC report is claimed from that launch-only smoke; run the API 35
+workflow or an authorized physical device for those lanes. iOS client source,
+policy, frontend, and overlay gates are Linux-safe, but simulator, Swift
+runtime, signing, and App Store proof require macOS/Xcode.
 
 See [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md) for sidecar build mechanics and signing boundaries.
 

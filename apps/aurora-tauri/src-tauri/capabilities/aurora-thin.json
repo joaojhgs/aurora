@@ -19,6 +19,7 @@
     "aurora-local-data-envelope-crypto",
     "aurora-assistant-provider",
     "aurora-native-webrtc",
+    "aurora-native-voice",
     "aurora-tray",
     "aurora-notifications",
     "aurora-dialogs",

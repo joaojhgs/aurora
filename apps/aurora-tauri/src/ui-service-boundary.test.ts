@@ -31,6 +31,10 @@ const approvedClientFactoryFiles = new Set([
   'apps/aurora-tauri/src/eventstream-smoke.tsx',
   'apps/aurora-tauri/src/local-data/tauri-local-data-invoke.ts',
   'apps/aurora-tauri/src/native-webrtc.ts',
+  // The installed desktop voice E2E harness is the reviewed native Tauri boundary
+  // itself; it must invoke commands and listen for status events without routing
+  // through the production AuroraClient factory.
+  'apps/aurora-tauri/src/desktop-native-voice-e2e.ts',
   'apps/aurora-web/app/aurora-client.ts',
   'packages/aurora-sdk/src/http.ts',
   'packages/aurora-sdk/src/mock.ts',

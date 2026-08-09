@@ -8,7 +8,7 @@ import pytest
 from pydantic import BaseModel
 
 from app.messaging.bus import QueryResult
-from app.services.gateway.mesh.peer_bridge import PeerBridge
+from app.services.gateway.mesh.peer_bridge import PeerBridge, PeerBridgePreAcceptRejectedError
 
 
 class FakePayload(BaseModel):
@@ -88,7 +88,8 @@ class TestPeerBridgeCall:
             correlation_id="trace-send-failure",
         )
         assert result.ok is False
-        assert "not connected" in result.error
+        assert result.error == "not_sent"
+        assert result.data == {"accepted": False, "reason_code": "not_sent"}
 
     @pytest.mark.asyncio
     async def test_call_with_dict_payload(self, bridge, mock_rtc_client):
@@ -277,6 +278,32 @@ class TestPeerBridgeCall:
         assert sent_payloads[-1] == {"type": "cancel", "id": "stream-cancel"}
 
     @pytest.mark.asyncio
+    async def test_stream_call_send_failure_raises_preaccept_without_cancel(
+        self, bridge, mock_rtc_client
+    ):
+        from app.shared.contracts.models.orchestrator import OrchestratorMethods
+
+        mock_rtc_client.send_to_peer.return_value = False
+
+        with pytest.raises(PeerBridgePreAcceptRejectedError) as exc_info:
+            _ = [
+                chunk
+                async for chunk in bridge.stream_call(
+                    "peer-1",
+                    OrchestratorMethods.STREAM_INFER_CHAT,
+                    FakePayload(),
+                    timeout=5.0,
+                    correlation_id="stream-not-sent",
+                )
+            ]
+
+        assert exc_info.value.reason_code == "not_sent"
+        sent_payloads = [
+            json.loads(call.args[1]) for call in mock_rtc_client.send_to_peer.call_args_list
+        ]
+        assert [payload["type"] for payload in sent_payloads] == ["call"]
+
+    @pytest.mark.asyncio
     async def test_call_sends_correlation_id(self, bridge, mock_rtc_client):
         async def simulate_response():
             await asyncio.sleep(0.05)
@@ -326,6 +353,57 @@ class TestPeerBridgeOnResponse:
         result = fut.result()
         assert result.ok is True
         assert result.data == {"data": 42}
+
+    @pytest.mark.asyncio
+    async def test_capability_changed_result_is_unsuccessful(self, bridge):
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        bridge._pending_calls[("peer-1", "req-cap")] = fut
+
+        bridge.on_response(
+            "peer-1",
+            {
+                "type": "result",
+                "id": "req-cap",
+                "result": {
+                    "accepted": False,
+                    "reason_code": "capability_changed",
+                    "error": "capability_changed",
+                },
+            },
+        )
+
+        result = fut.result()
+        assert result.ok is False
+        assert result.error == "capability_changed"
+        assert result.data["accepted"] is False
+
+    @pytest.mark.asyncio
+    async def test_stream_capability_changed_result_enqueues_preaccept_rejection(self, bridge):
+        queue: asyncio.Queue = asyncio.Queue()
+        bridge._pending_streams[("peer-1", "req-stream")] = queue
+
+        bridge.on_response(
+            "peer-1",
+            {
+                "type": "result",
+                "id": "req-stream",
+                "result": {
+                    "accepted": False,
+                    "reason_code": "capability_changed",
+                    "error": "capability_changed",
+                },
+            },
+        )
+
+        assert await queue.get() == (
+            "preaccept_rejected",
+            {
+                "accepted": False,
+                "reason_code": "capability_changed",
+                "error": "capability_changed",
+            },
+        )
 
     @pytest.mark.asyncio
     async def test_error_response(self, bridge):

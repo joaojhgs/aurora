@@ -11,7 +11,7 @@ import json
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, create_model
+from pydantic import BaseModel, ConfigDict, ValidationError, create_model
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging.priority_helpers import get_system_priority
@@ -38,7 +38,7 @@ from app.shared.contracts.models.db import (
     DBMethods,
     DBSaveMessageRequest,
 )
-from app.shared.contracts.models.gateway import GatewayMethods, MethodInfo
+from app.shared.contracts.models.gateway import GatewayMethods, MethodInfo, RouteExplainRequest
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
 from app.shared.contracts.models.tooling import ToolingMethods
 from app.shared.mesh.tracing import redacted_copy
@@ -808,7 +808,10 @@ class RouteGenerator:
                 request_timeout = _request_timeout_for(topic, payload, timeout)
 
                 # Make the bus request
-                log_debug(f"Gateway forwarding to {topic} with payload: {payload}")
+                log_debug(
+                    f"Gateway forwarding to {topic} with payload: "
+                    f"{redacted_copy(payload, method_id=topic)}"
+                )
                 result = await self._bus.request(
                     topic,
                     payload,
@@ -823,7 +826,8 @@ class RouteGenerator:
                     else None,
                 )
                 log_debug(
-                    f"Gateway received result: ok={result.ok}, data={redacted_copy(result.data)}"
+                    "Gateway received result: "
+                    f"ok={result.ok}, data={redacted_copy(result.data, method_id=topic)}"
                 )
 
                 if result.ok:
@@ -854,7 +858,9 @@ class RouteGenerator:
                         response = result.data if result.data else {"success": True}
                     else:
                         response = {"data": result.data}
-                    log_debug(f"Gateway returning response: {redacted_copy(response)}")
+                    log_debug(
+                        f"Gateway returning response: {redacted_copy(response, method_id=topic)}"
+                    )
                     return response
                 else:
                     # Service returned an error
@@ -909,14 +915,18 @@ class RouteGenerator:
         # Create request model from schema for input validation
         request_model_name = f"{module_name}_{method_info.name}_Request"
 
-        request_model_cls = _create_model_from_schema(
-            request_model_name,
-            method_info.input_schema,
+        method_id = method_info.bus_topic or f"{module_name}.{method_info.name}"
+        request_model_cls = (
+            RouteExplainRequest
+            if method_id == GatewayMethods.EXPLAIN_ROUTE
+            else _create_model_from_schema(
+                request_model_name,
+                method_info.input_schema,
+            )
         )
 
         # Rebuild model to ensure it's fully defined
         request_model_cls.model_rebuild()
-        method_id = method_info.bus_topic or f"{module_name}.{method_info.name}"
         admin_action_manager = self._admin_action_manager
 
         # Create handler factory to properly capture the model types
@@ -940,11 +950,11 @@ class RouteGenerator:
             ) -> Any:
                 return _auth
 
-            async def typed_handler(
+            async def dispatch_validated_body(
                 http_request: Request,
                 request_body: req_model,
-                _auth: Any = Security(auth_dependency),  # noqa: B008
-            ) -> dict[str, Any]:  # type: ignore[valid-type]
+                _auth: Any,
+            ) -> dict[str, Any]:
                 from fastapi.responses import JSONResponse
 
                 # Extract principal_id from the resolved Identity
@@ -985,7 +995,9 @@ class RouteGenerator:
                 else:
                     response_data = {"data": result}
 
-                log_debug(f"typed_handler returning: {redacted_copy(response_data)}")
+                log_debug(
+                    f"typed_handler returning: {redacted_copy(response_data, method_id=method_id)}"
+                )
                 # Return JSONResponse to ensure proper serialization
                 headers = {}
                 if admin_action_receipt:
@@ -994,12 +1006,52 @@ class RouteGenerator:
                     )
                 return JSONResponse(content=response_data, headers=headers)
 
+            if method_id == GatewayMethods.EXPLAIN_ROUTE:
+
+                async def typed_handler(
+                    http_request: Request,
+                    _auth: Any = Security(auth_dependency),  # noqa: B008
+                ) -> dict[str, Any]:
+                    from fastapi import HTTPException
+
+                    try:
+                        raw_body = await http_request.json()
+                    except Exception:
+                        raw_body = None
+                    if not isinstance(raw_body, dict):
+                        raise HTTPException(
+                            status_code=422,
+                            detail="Invalid route explanation request.",
+                        )
+                    try:
+                        request_body = RouteExplainRequest.model_validate(raw_body)
+                    except ValidationError as exc:
+                        log_warning(
+                            "Invalid ExplainRoute request body rejected before dispatch: "
+                            f"{exc.error_count()} validation error(s)"
+                        )
+                        raise HTTPException(
+                            status_code=422,
+                            detail="Invalid route explanation request.",
+                        ) from None
+                    return await dispatch_validated_body(http_request, request_body, _auth)
+
+            else:
+
+                async def typed_handler(
+                    http_request: Request,
+                    request_body: req_model,
+                    _auth: Any = Security(auth_dependency),  # noqa: B008
+                ) -> dict[str, Any]:  # type: ignore[valid-type]
+                    return await dispatch_validated_body(http_request, request_body, _auth)
+
             # Explicitly set annotations to actual model classes (not strings)
             typed_handler.__annotations__ = {
                 "http_request": Request,
-                "request_body": req_model,
                 "return": dict[str, Any],
             }
+            if method_id != GatewayMethods.EXPLAIN_ROUTE:
+                typed_handler.__annotations__["request_body"] = req_model
             return typed_handler
 
         scopes = list(method_info.required_perms) if method_info.required_perms else []

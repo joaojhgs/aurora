@@ -29,6 +29,7 @@ import {
   encodeMeshInviteToken,
   webRtcProfileFromInvite,
   type BrowserWebRtcSnapshot,
+  type NativeDesktopVoicePort,
 } from "@aurora/ui";
 import {
   MemoryLocalDataBackend,
@@ -1608,6 +1609,20 @@ describe("Aurora Tauri runtime wrapper", () => {
         meshNodeRuntimeEnabled: true,
         localToolProviderEnabled: true,
         lightweightOrchestratorEnabled: true,
+        usesBrowserVoiceRuntime: false,
+        focusedPushToTalkOwner: "native-desktop",
+        wakewordOwner: "unavailable",
+        localSpeechPack: {
+          state: "disabled",
+          availabilityState: "unsupported",
+          label: "On-device speech",
+          detail: "On-device speech is turned off on this device.",
+          blockers: ["local_speech_disabled"],
+          canRunLocalVad: false,
+          canRunLocalKws: false,
+          canRunLocalStt: false,
+          canRunLocalTts: false,
+        },
       },
       localAssistant: {
         provider: {
@@ -1781,6 +1796,117 @@ describe("Aurora Tauri runtime wrapper", () => {
     }
   });
 
+  it("keeps the device setup route on the invite-backed thin profile path", async () => {
+    const client = new Aurora({ transport: new RecordingMockAuroraTransport() });
+    const document = {
+      version: 1 as const,
+      activeProfileId: "saved-home",
+      profiles: [{
+        id: "saved-home",
+        label: "Saved Connect to Aurora",
+        mode: "webrtc-only" as const,
+        gatewayUrl: "",
+        signalingUrl: "wss://old.example/mqtt",
+        nodeName: "Aurora mobile",
+        localStablePeerId: "mobile-peer-old",
+        webrtcProfile: webRtcProfileFromInvite(testMeshInviteText())!,
+      }],
+    };
+    let savedProfile: AuroraThinConnectionProfile | null = null;
+    const modeWrites: string[] = [];
+    const tierWrites: string[] = [];
+    let runtime!: AuroraTauriRuntime;
+    const controller: NonNullable<AuroraTauriRuntime["thinProfileController"]> = {
+      evidence: "test runtime profile store",
+      document,
+      saveProfile: async (profile) => {
+        savedProfile = profile;
+        return {
+          version: 1,
+          activeProfileId: profile.id,
+          profiles: [profile],
+        };
+      },
+      selectProfile: async () => document,
+      createRuntime: async () => runtime,
+    };
+    runtime = {
+      ...testRuntime(client),
+      mode: "mobile-native",
+      thinConnectionMode: "webrtc-only",
+      thinPeer: fakeThinPeer({ status: "needs-invite" }),
+      thinProfileConfigured: true,
+      requiresOnboarding: false,
+      pendingThinInviteText: null,
+      thinProfile: document.profiles[0],
+      thinProfileController: controller,
+      modePreferenceStore: {
+        evidence: "test runtime-backed mode preference",
+        readSelectedMode: async () => "mesh-node",
+        readSelectedRuntimeTier: async () => "lightweight-ts",
+        writeSelectedMode: async (modeId) => {
+          modeWrites.push(modeId);
+          return true;
+        },
+        writeSelectedRuntimeTier: async (runtimeTier) => {
+          tierWrites.push(runtimeTier);
+          return true;
+        },
+      },
+      nodeMode: "mesh-node",
+      runtimeTier: "lightweight-ts",
+    };
+    window.history.replaceState({}, "", "/onboarding");
+
+    const mounted = await mountOutcomeApp(runtime);
+    try {
+      await waitUntil(() => {
+        const activeCard = mounted.container.querySelector<HTMLButtonElement>(
+          'button[role="radio"][aria-checked="true"]',
+        );
+        expect(activeCard?.textContent).toContain("Make this device available");
+      });
+      await clickButtonByLabel(mounted.container, "Connect to Aurora");
+      await waitUntil(() => {
+        expect(modeWrites).toContain("remote-console");
+        expect(tierWrites).toContain("none");
+      });
+      await clickButtonByLabel(mounted.container, "Continue");
+      await flushReactWork();
+      modeWrites.length = 0;
+      tierWrites.length = 0;
+      const invite = mounted.container.querySelector<HTMLTextAreaElement>(
+        "#webthin-invite",
+      );
+      const valueSetter = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )?.set;
+      expect(invite).not.toBeNull();
+      expect(mounted.container.textContent).toContain("Save invite and continue");
+      expect(mounted.container.textContent).not.toContain("Username");
+      expect(mounted.container.textContent).not.toContain("Sign in");
+      await act(async () => {
+        valueSetter?.call(invite, testMeshInviteText());
+        invite?.dispatchEvent(new Event("input", { bubbles: true }));
+        invite?.dispatchEvent(new Event("change", { bubbles: true }));
+        await flushReactWork();
+      });
+      await clickButtonByLabel(mounted.container, "Save invite and continue");
+      await waitUntil(() => expect(window.location.pathname).toBe("/mesh"));
+      expect(modeWrites).toEqual(["remote-console"]);
+      expect(tierWrites).toEqual(["none"]);
+      expect(savedProfile).toMatchObject({
+        mode: "webrtc-only",
+        signalingUrl: "wss://old.example/mqtt",
+        webrtcProfile: { room: "tauri-room" },
+      });
+    } finally {
+      await act(async () => mounted.root.unmount());
+      mounted.container.remove();
+    }
+  });
+
   it("keeps desktop-local startup outside the thin-client onboarding gate", () => {
     const runtime: AuroraTauriRuntime = {
       ...testRuntime(new Aurora({ transport: new MockAuroraTransport() })),
@@ -1802,6 +1928,18 @@ describe("Aurora Tauri runtime wrapper", () => {
     expect(markup).not.toContain("Connect this Aurora client");
     expect(markup).toContain('id="content"');
     expect(markup).toContain("Assistant");
+  });
+
+  it("routes every invite-backed profile save through the Connect role guard", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/tauri-app.tsx"),
+      "utf8",
+    );
+
+    expect(source).not.toContain(
+      "onSaveProfile: nativeContext.saveThinProfile",
+    );
+    expect(source.match(/saveRemoteConsoleThinProfile\(/g)).toHaveLength(4);
   });
 
   it("renders the models page for the models route", () => {
@@ -2524,7 +2662,7 @@ describe("Tauri CI/E2E route gates", () => {
     }
   });
 
-  it("e2e:assistant projects realtime voice partials into the composer textbox with recorder above it", async () => {
+  it("e2e:assistant does not project coordinator voice events into the installed desktop composer", async () => {
     const transport = assistantGatewayTransport();
     transport.register(ORCHESTRATOR_MODEL_METHODS.getRuntime, () =>
       cloneFixture(modelRuntimeCatalogFixture),
@@ -2561,23 +2699,18 @@ describe("Tauri CI/E2E route gates", () => {
     window.history.replaceState({}, "", "/");
     const mounted = await mountOutcomeApp(runtime);
     try {
-      await waitUntil(() => {
-        const textarea =
-          mounted.container.querySelector<HTMLTextAreaElement>(
-            "#assistant-prompt",
-          );
-        const recorder = mounted.container.querySelector<HTMLElement>(
+      await new Promise((resolve) => window.setTimeout(resolve, 25));
+      const textarea = mounted.container.querySelector<HTMLTextAreaElement>(
+        "#assistant-prompt",
+      );
+      expect(textarea?.value).toBe("");
+      expect(
+        mounted.container.querySelector<HTMLElement>(
           ".aui-composer-recorder-row",
-        );
-        expect(textarea?.value).toBe("what is the weather");
-        expect(textarea?.readOnly).toBe(true);
-        expect(recorder).not.toBeNull();
-        expect(recorder!.compareDocumentPosition(textarea!)).toBe(
-          Node.DOCUMENT_POSITION_FOLLOWING,
-        );
-      });
+        ),
+      ).toBeNull();
       writeOutcomeArtifact(
-        "assistant-voice-partial-textbox-recorder-above",
+        "assistant-voice-partial-not-projected-in-desktop-native",
         mounted.container.innerHTML,
       );
     } finally {
@@ -2636,7 +2769,7 @@ describe("Tauri CI/E2E route gates", () => {
     }
   });
 
-  it("e2e:assistant push-to-talk tries focused WebView capture and falls back to local STT in Tauri local mode", async () => {
+  it("e2e:assistant push-to-talk uses the installed desktop voice port in Tauri local mode", async () => {
     const transport = new RecordingMockAuroraTransport();
     transport.register(GATEWAY_METHODS.health, () => ({ status: "healthy" }));
     transport.register(GATEWAY_METHODS.getCapabilityCatalog, () =>
@@ -2648,17 +2781,67 @@ describe("Tauri CI/E2E route gates", () => {
     transport.register(ORCHESTRATOR_MODEL_METHODS.getRuntime, () =>
       cloneFixture(modelRuntimeCatalogFixture),
     );
-    transport.register(STT_METHODS.listen, (request) => ({
-      success: true,
-      session_id:
-        (request.payload as { session_id?: string } | undefined)?.session_id ??
-        "voice-test-session",
-    }));
+    const nativeCalls = {
+      start: 0,
+      finish: 0,
+      cancel: 0,
+      startRequests: [] as Array<Parameters<NativeDesktopVoicePort["start"]>[0]>,
+    };
+    const nativeVoice: NativeDesktopVoicePort = {
+      status: async () => ({
+        available: true,
+        phase: "idle",
+        generation: null,
+        backgroundEligible: false,
+        connection: "this_device",
+        reasonCode: null,
+        redacted: true,
+      }),
+      start: async (request) => {
+        nativeCalls.start += 1;
+        nativeCalls.startRequests.push(request);
+        return {
+          available: true,
+          phase: "listening",
+          generation: 1,
+          backgroundEligible: false,
+          connection: "this_device",
+          reasonCode: null,
+          redacted: true,
+        };
+      },
+      finish: async () => {
+        nativeCalls.finish += 1;
+        return {
+          available: true,
+          phase: "processing",
+          generation: 1,
+          backgroundEligible: false,
+          connection: "this_device",
+          reasonCode: null,
+          redacted: true,
+        };
+      },
+      cancel: async () => {
+        nativeCalls.cancel += 1;
+        return {
+          available: true,
+          phase: "idle",
+          generation: null,
+          backgroundEligible: false,
+          connection: "this_device",
+          reasonCode: null,
+          redacted: true,
+        };
+      },
+      subscribe: async () => () => undefined,
+    };
     const runtime = {
       ...testRuntime(
         new Aurora({ transport: tauriLocalTransportProxy(transport) }),
       ),
       mode: "desktop-local" as const,
+      nativeVoice,
       sidecarStatus: async () => ({
         running: true,
         mode: "threads",
@@ -2680,7 +2863,14 @@ describe("Tauri CI/E2E route gates", () => {
       });
       await clickButtonByLabel(mounted.container, "Push to talk");
       await waitUntil(() => {
-        expect(requestMethods(transport)).toContain(STT_METHODS.listen);
+        expect(nativeCalls.start).toBe(1);
+        expect(nativeCalls.startRequests).toEqual([
+          {
+            trigger: "focused_push_to_talk",
+            remoteAudioConsent: false,
+          },
+        ]);
+        expect(requestMethods(transport)).not.toContain(STT_METHODS.listen);
         expect(mounted.container.textContent).toContain("Stop listening");
       });
     } finally {

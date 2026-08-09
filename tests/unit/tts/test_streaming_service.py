@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -14,10 +14,12 @@ from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.tts import (
     TTSAudioChunkEvent,
     TTSMethods,
+    TTSRequest,
     TTSStopRequest,
     TTSStreamChunkRequest,
     TTSStreamEndRequest,
     TTSStreamStartRequest,
+    TTSSynthesizeRequest,
 )
 from app.shared.messaging import bus_init
 
@@ -36,8 +38,11 @@ def service(mock_bus, monkeypatch):
     svc = TTSService()
     svc.stream = Mock()
     svc.stream.stop = Mock()
+    synth_requests: list[dict[str, object]] = []
+    svc.test_synth_requests = synth_requests
 
-    async def synthesize(text: str) -> tuple[bytes, int]:
+    async def synthesize(text: str, **kwargs) -> tuple[bytes, int]:
+        synth_requests.append({"text": text, **kwargs})
         return f"pcm:{text}".encode(), 22050
 
     monkeypatch.setattr(svc, "_synthesize_to_bytes", synthesize)
@@ -74,6 +79,10 @@ def _audio_publish_calls(mock_bus):
     ]
 
 
+def _logged_messages(mock_log) -> str:
+    return "\n".join(str(call.args[0]) for call in mock_log.call_args_list)
+
+
 def test_tts_stream_contracts_require_use_permissions():
     assert TTSService._on_tts_request._contract_metadata["required_perms"] == [TTSMethods.REQUEST]
     assert TTSService._on_stream_start._contract_metadata["required_perms"] == [
@@ -85,6 +94,42 @@ def test_tts_stream_contracts_require_use_permissions():
     assert TTSService._on_stream_end._contract_metadata["required_perms"] == [TTSMethods.STREAM_END]
     assert TTSService._on_stop._contract_metadata["input_model"] is TTSStopRequest
     assert TTSService.synthesize._contract_metadata["required_perms"] == [TTSMethods.SYNTHESIZE]
+
+
+@pytest.mark.asyncio
+async def test_tts_service_logs_text_metadata_without_private_speech(service: TTSService, mock_bus):
+    private_text = "read my private recovery phrase aloud"
+
+    with patch("app.services.tts.service.log_info") as mock_log_info:
+        await service._on_tts_request(TTSRequest(text=private_text))
+
+    logged = _logged_messages(mock_log_info)
+    assert private_text not in logged
+    assert "text_chars=37" in logged
+    assert "interrupt=True" in logged
+    assert "Playing TTS" in logged
+
+    started_events = [
+        call.args[1]
+        for call in mock_bus.publish.await_args_list
+        if call.args[0] == TTSMethods.STARTED
+    ]
+    assert started_events
+    assert started_events[-1].text == private_text
+
+
+@pytest.mark.asyncio
+async def test_tts_synthesize_logs_metadata_without_private_speech(service: TTSService):
+    private_text = "convert this private sentence into audio"
+
+    with patch("app.services.tts.service.log_info") as mock_log_info:
+        response = await service.synthesize(TTSSynthesizeRequest(text=private_text, format="raw"))
+
+    logged = _logged_messages(mock_log_info)
+    assert private_text not in logged
+    assert "text_chars=40" in logged
+    assert "format=raw" in logged
+    assert response.text == private_text
 
 
 @pytest.mark.asyncio
@@ -204,6 +249,30 @@ async def test_stream_start_plays_server_audio_when_enabled(service: TTSService)
     assert service.stream.feed.call_args_list[0].args == ("daemon audio",)
     assert service.stream.feed.call_args_list[1].args == (" continues",)
     service.stream.play_async.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_stream_synthesis_receives_logical_voice_speed_and_sample_rate(service: TTSService):
+    await service._on_stream_start(
+        TTSStreamStartRequest(
+            stream_id="voice-stream",
+            voice="standard:test:voice-a",
+            speed=0.8,
+            sample_rate=24000,
+            format="raw",
+            play_on_server=False,
+        )
+    )
+
+    await service._on_stream_chunk(
+        TTSStreamChunkRequest(stream_id="voice-stream", sequence=0, text="voice audio")
+    )
+
+    assert service.test_synth_requests[-1]["text"] == "voice audio"
+    assert service.test_synth_requests[-1]["voice"] == "standard:test:voice-a"
+    assert service.test_synth_requests[-1]["speed"] == 0.8
+    assert service.test_synth_requests[-1]["sample_rate"] == 24000
+    assert service.test_synth_requests[-1]["request_id"] == "voice-stream:0"
 
 
 @pytest.mark.asyncio
@@ -811,7 +880,7 @@ async def test_stop_during_in_flight_synthesis_suppresses_late_audio_chunk(
     synthesis_started = asyncio.Event()
     release_synthesis = asyncio.Event()
 
-    async def blocked_synthesize(text: str) -> tuple[bytes, int]:
+    async def blocked_synthesize(text: str, **kwargs) -> tuple[bytes, int]:
         synthesis_started.set()
         await release_synthesis.wait()
         return f"pcm:{text}".encode(), 22050
@@ -863,7 +932,7 @@ async def test_stop_during_in_flight_synthesis_suppresses_late_audio_chunk(
 async def test_concurrent_stream_chunk_delivery_keeps_audio_order(
     service: TTSService, mock_bus, monkeypatch
 ):
-    async def delayed_synthesize(text: str) -> tuple[bytes, int]:
+    async def delayed_synthesize(text: str, **kwargs) -> tuple[bytes, int]:
         if text == "first":
             await asyncio.sleep(0.02)
         return f"pcm:{text}".encode(), 22050

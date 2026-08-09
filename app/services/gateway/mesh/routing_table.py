@@ -19,6 +19,7 @@ from app.shared.contracts.models.stt import STTMethods, TranscriptionMethods, Wa
 from app.shared.contracts.models.tts import TTSMethods
 
 from .models import RouteDecision
+from .provider_eligibility import SpeechRouteConstraints, speech_route_binding_from_decision
 
 if TYPE_CHECKING:
     from app.services.gateway.config import MeshConfig, MeshServicePolicy
@@ -60,6 +61,7 @@ class RoutingTable:
         exclude: list[str] | None = None,
         selector: MeshAddressSelector | None = None,
         policy_snapshot: MeshPolicySnapshot | None = None,
+        speech_constraints: SpeechRouteConstraints | None = None,
     ) -> RouteDecision:
         """Determine where to route a message.
 
@@ -106,6 +108,7 @@ class RoutingTable:
                 mesh_config=mesh_config,
                 selector=selector,
                 policy_snapshot=policy_snapshot,
+                speech_constraints=speech_constraints,
             )
 
         # No routing config or mesh disabled → always local
@@ -142,18 +145,65 @@ class RoutingTable:
             # Local is preferred, but we note remote is available for fallback
             return RouteDecision(target="local", module=module)
 
+        if prefer in ("network", "network_only") and _registered_method_type(topic) in {
+            "lookup_failed",
+            "manage",
+        }:
+            return _route_error(
+                module=module,
+                selector=selector,
+                code="selector_required",
+                message=f"{topic} requires an explicit mesh selector",
+            )
+
         if prefer in ("network", "network_only"):
             # Try to find a remote peer
-            best = self._registry.get_best_provider(
-                module=module,
-                topic=topic,
-                routing_config=routing_config,
-                version_policy=mesh_config.version_policy,
-                exclude=exclude or [],
-                peer_selection=mesh_config.peer_selection,
-                policy_snapshot=policy_snapshot,
+            get_best_candidate = getattr(self._registry, "get_best_provider_candidate", None)
+            candidate = (
+                get_best_candidate(
+                    module=module,
+                    topic=topic,
+                    routing_config=routing_config,
+                    version_policy=mesh_config.version_policy,
+                    exclude=exclude or [],
+                    peer_selection=mesh_config.peer_selection,
+                    policy_snapshot=policy_snapshot,
+                    speech_constraints=speech_constraints,
+                )
+                if callable(get_best_candidate)
+                else None
             )
+            if not _is_real_provider_candidate(candidate):
+                candidate = None
+            if candidate is None and speech_constraints is None:
+                best = self._registry.get_best_provider(
+                    module=module,
+                    topic=topic,
+                    routing_config=routing_config,
+                    version_policy=mesh_config.version_policy,
+                    exclude=exclude or [],
+                    peer_selection=mesh_config.peer_selection,
+                    policy_snapshot=policy_snapshot,
+                    speech_constraints=speech_constraints,
+                )
+            elif candidate is None:
+                best = None
+            else:
+                best = candidate.peer
             if best:
+                projected_method_type = (
+                    getattr(candidate.decision, "method_type", None)
+                    if candidate is not None and candidate.decision is not None
+                    else None
+                )
+                selected_method_type = _authoritative_method_type(topic, projected_method_type)
+                if selected_method_type == "manage":
+                    return _route_error(
+                        module=module,
+                        selector=selector,
+                        code="selector_required",
+                        message=f"{topic} requires an explicit mesh selector",
+                    )
                 # Get the service version from the peer's manifest
                 version = ""
                 if best.manifest:
@@ -161,6 +211,20 @@ class RoutingTable:
                         if svc.module == module:
                             version = svc.version
                             break
+                binding = (
+                    speech_route_binding_from_decision(candidate.decision)
+                    if speech_constraints is not None
+                    and candidate is not None
+                    and candidate.decision is not None
+                    else None
+                )
+                if speech_constraints is not None and binding is None:
+                    return _route_error(
+                        module=module,
+                        selector=selector,
+                        code="speech_route_binding_unavailable",
+                        message=f"{module} speech route binding is unavailable",
+                    )
 
                 return RouteDecision(
                     target="remote",
@@ -168,6 +232,8 @@ class RoutingTable:
                     module=module,
                     version=version,
                     latency_ms=best.latency_ms,
+                    speech_route_binding=binding,
+                    method_type=selected_method_type,
                 )
 
             # No remote peer available
@@ -206,6 +272,7 @@ class RoutingTable:
         mesh_config: MeshConfig,
         selector: MeshAddressSelector,
         policy_snapshot: MeshPolicySnapshot | None = None,
+        speech_constraints: SpeechRouteConstraints | None = None,
     ) -> RouteDecision:
         peer_id, conflict_error, provider_kind = _selector_target(selector, module)
         if conflict_error:
@@ -276,6 +343,7 @@ class RoutingTable:
             policy_snapshot=policy_snapshot,
             version_policy=mesh_config.version_policy,
             explicit_peer_id=peer_id,
+            speech_constraints=speech_constraints,
         )
         if not decision.eligible:
             return _route_error(
@@ -283,6 +351,14 @@ class RoutingTable:
                 selector=selector,
                 code=f"selector_{decision.reason_code}",
                 message=f"{module} selector peer/provider '{peer_id}': {decision.reason}",
+            )
+        binding = speech_route_binding_from_decision(decision)
+        if speech_constraints is not None and binding is None:
+            return _route_error(
+                module=module,
+                selector=selector,
+                code="speech_route_binding_unavailable",
+                message=f"{module} speech route binding is unavailable",
             )
 
         return RouteDecision(
@@ -292,6 +368,8 @@ class RoutingTable:
             version=svc.version,
             latency_ms=peer.latency_ms,
             selector=selector,
+            speech_route_binding=binding,
+            method_type=decision.method_type,
         )
 
     def resolve_fallback(
@@ -302,6 +380,7 @@ class RoutingTable:
         failed_peer_id: str | None = None,
         selector: MeshAddressSelector | None = None,
         policy_snapshot: MeshPolicySnapshot | None = None,
+        speech_constraints: SpeechRouteConstraints | None = None,
     ) -> RouteDecision:
         """Resolve a fallback route after a primary route failure.
 
@@ -351,28 +430,80 @@ class RoutingTable:
             return RouteDecision(target="local", module=module)
         elif fallback == "network":
             # Try another remote peer
-            best = self._registry.get_best_provider(
-                module=module,
-                topic=topic,
-                routing_config=routing_config,
-                version_policy=mesh_config.version_policy,
-                exclude=exclude,
-                peer_selection=mesh_config.peer_selection,
-                policy_snapshot=policy_snapshot,
+            get_best_candidate = getattr(self._registry, "get_best_provider_candidate", None)
+            candidate = (
+                get_best_candidate(
+                    module=module,
+                    topic=topic,
+                    routing_config=routing_config,
+                    version_policy=mesh_config.version_policy,
+                    exclude=exclude,
+                    peer_selection=mesh_config.peer_selection,
+                    policy_snapshot=policy_snapshot,
+                    speech_constraints=speech_constraints,
+                )
+                if callable(get_best_candidate)
+                else None
             )
+            if not _is_real_provider_candidate(candidate):
+                candidate = None
+            if candidate is None and speech_constraints is None:
+                best = self._registry.get_best_provider(
+                    module=module,
+                    topic=topic,
+                    routing_config=routing_config,
+                    version_policy=mesh_config.version_policy,
+                    exclude=exclude,
+                    peer_selection=mesh_config.peer_selection,
+                    policy_snapshot=policy_snapshot,
+                    speech_constraints=speech_constraints,
+                )
+            elif candidate is None:
+                best = None
+            else:
+                best = candidate.peer
             if best:
+                projected_method_type = (
+                    getattr(candidate.decision, "method_type", None)
+                    if candidate is not None and candidate.decision is not None
+                    else None
+                )
+                selected_method_type = _authoritative_method_type(topic, projected_method_type)
+                if selected_method_type == "manage":
+                    return _route_error(
+                        module=module,
+                        selector=selector,
+                        code="selector_required",
+                        message=f"{topic} requires an explicit mesh selector",
+                    )
                 version = ""
                 if best.manifest:
                     for svc in best.manifest.shared_services:
                         if svc.module == module:
                             version = svc.version
                             break
+                binding = (
+                    speech_route_binding_from_decision(candidate.decision)
+                    if speech_constraints is not None
+                    and candidate is not None
+                    and candidate.decision is not None
+                    else None
+                )
+                if speech_constraints is not None and binding is None:
+                    return _route_error(
+                        module=module,
+                        selector=selector,
+                        code="speech_route_binding_unavailable",
+                        message=f"{module} speech route binding is unavailable",
+                    )
                 return RouteDecision(
                     target="remote",
                     peer_id=best.peer_id,
                     module=module,
                     version=version,
                     latency_ms=best.latency_ms,
+                    speech_route_binding=binding,
+                    method_type=selected_method_type,
                 )
             # No more remote peers → try local as last resort
             return RouteDecision(target="local", module=module)
@@ -420,6 +551,31 @@ def _requires_explicit_audio_selector(topic: str) -> bool:
     """Return True for audio operations that must name a target peer/device."""
 
     return topic in _EXPLICIT_AUDIO_TOPICS
+
+
+def _is_real_provider_candidate(candidate: object) -> bool:
+    peer = getattr(candidate, "peer", None)
+    return isinstance(getattr(peer, "peer_id", None), str)
+
+
+def _registered_method_type(topic: str) -> str | None:
+    try:
+        from app.shared.contracts.registry import get_contract
+
+        contract = get_contract(topic)
+    except Exception:
+        return "lookup_failed"
+    method_type = getattr(contract, "method_type", None)
+    return method_type if method_type in {"use", "manage"} else None
+
+
+def _authoritative_method_type(topic: str, projected_method_type: str | None) -> str | None:
+    registered_method_type = _registered_method_type(topic)
+    if registered_method_type in {"lookup_failed", "manage"} or projected_method_type == "manage":
+        return "manage"
+    if registered_method_type == "use" or projected_method_type == "use":
+        return "use"
+    return "manage"
 
 
 def _selector_target(

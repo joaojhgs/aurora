@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "aurora.local_speech.stt.fixtures.v0.1",
+  "additionalProperties": false,
+  "properties": {
+    "fixtures": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "audio_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          },
+          "bucket": { "type": "string" },
+          "duration_ms": { "minimum": 1, "type": "integer" },
+          "fixture_id": { "pattern": "^stt-[a-z0-9-]+$", "type": "string" },
+          "language": { "pattern": "^[a-z]{2,3}(-[A-Z]{2})?$", "type": "string" },
+          "local_audio_path": { "type": "string" },
+          "reference_text": { "minLength": 1, "type": "string" },
+          "smoke_hypotheses": {
+            "additionalProperties": { "type": "string" },
+            "type": "object"
+          }
+        },
+        "required": [
+          "fixture_id",
+          "language",
+          "bucket",
+          "duration_ms",
+          "audio_sha256",
+          "reference_text"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "manifest_version": { "const": "aurora.local_speech.stt.fixtures.v0.1" },
+    "redaction": {
+      "additionalProperties": false,
+      "properties": {
+        "approved_fixture_ids_only_in_reports": { "const": true },
+        "audio_paths_private": { "const": true },
+        "reference_text_private": { "const": true }
+      },
+      "required": [
+        "approved_fixture_ids_only_in_reports",
+        "audio_paths_private",
+        "reference_text_private"
+      ],
+      "type": "object"
+    }
+  },
+  "required": ["manifest_version", "fixtures", "redaction"],
+  "title": "Aurora Local STT Fixture Manifest",
+  "type": "object"
+}

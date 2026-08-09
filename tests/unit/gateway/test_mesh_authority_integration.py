@@ -209,15 +209,18 @@ def _reconnect_proof(record: _ReconnectChallengeRecord) -> dict[str, str]:
 
 class _FakeBus:
     def __init__(self, result: QueryResult | None = None):
-        self.subscribed: list[tuple[str, object]] = []
+        self.subscribed: list[tuple[str, object, bool]] = []
         self.unsubscribed: list[tuple[str, object]] = []
         self.request = AsyncMock(
             return_value=result or QueryResult(ok=True, data={"authorities": []})
         )
         self.publish = AsyncMock()
 
-    def subscribe(self, topic: str, handler: object) -> None:
-        self.subscribed.append((topic, handler))
+    def subscribe(self, topic: str, handler: object, *, event: bool = False) -> None:
+        self.subscribed.append((topic, handler, event))
+
+    async def subscribe_event(self, topic: str, handler: object) -> None:
+        self.subscribed.append((topic, handler, True))
 
     def unsubscribe(self, topic: str, handler: object) -> None:
         self.unsubscribed.append((topic, handler))
@@ -258,7 +261,7 @@ async def test_canonical_subscribe_unsubscribe_only(monkeypatch) -> None:
 
     await service.on_start()
 
-    topics = [topic for topic, _handler in bus.subscribed]
+    topics = [topic for topic, _handler, _event in bus.subscribed]
     assert MeshEvents.PEER_AUTHORITY_CHANGED in topics
     assert MeshEvents.PEER_APPROVED not in topics
     assert MeshEvents.PEER_PERMISSIONS_UPDATED not in topics
@@ -1560,6 +1563,105 @@ async def test_forced_identical_manifest_reannounce_keeps_provider_ready(
     assert client._local_provider_ready["peer-a"] == active_readiness
     assert client._manifest_ack_expectations.get("peer-a") is None
     assert client._is_local_provider_ready_for_session("session-a", "TTS")
+
+
+@pytest.mark.asyncio
+async def test_authority_changed_reannounce_sends_unavailable_before_replacing_ready_projection(
+    monkeypatch,
+) -> None:
+    client = _client()
+    identity = _identity({"TTS.Synthesize", "Scheduler.ListJobs"})
+    client._peer_acl["session-a"] = identity
+    client._peer_acl["peer-a"] = identity
+    client._registry = None
+    hello = build_protocol_hello(role="hybrid", capabilities=(CAP_PROVIDER_LEASE_V1,))
+    protocol = negotiate_protocol(hello, hello)
+    client._peer_protocols["session-a"] = protocol
+    client._peer_protocols["peer-a"] = protocol
+    assert client.apply_peer_authority_changed(
+        MeshPeerAuthorityChangedEvent(
+            peer_id="peer-a",
+            auth_grant_revision=1,
+            disposition="present",
+            state="active",
+            effective_permissions=("TTS.Synthesize",),
+            reason="approved",
+        )
+    )
+    monkeypatch.setattr(
+        "app.shared.contracts.registry.list_modules",
+        lambda: {
+            "TTS": _mesh_module(
+                "TTS",
+                "TTS.Synthesize",
+                feature_id="speech_synthesis",
+                permission="TTS.Synthesize",
+                method_name="Synthesize",
+            ),
+            "Scheduler": _mesh_module(
+                "Scheduler",
+                "Scheduler.ListJobs",
+                feature_id="job_discovery",
+                permission="Scheduler.ListJobs",
+                method_name="ListJobs",
+            ),
+        },
+    )
+    monkeypatch.setattr("app.shared.contracts.registry._get_package_version", lambda: "1.0.0")
+    provider_mesh_config = MeshConfig(
+        enabled=True,
+        services={
+            "TTS": mesh_policy(share=True),
+            "Scheduler": mesh_policy(share=True),
+        },
+    )
+    consumer_mesh_config = MeshConfig(enabled=True, services={"TTS": mesh_policy(prefer="network")})
+    client._peer_registry = MagicMock()
+    client._peer_registry.update_manifest_ack = AsyncMock()
+    client._schedule_provider_export_shadow = MagicMock()
+    client.retry_tooling_projection_invalidation = MagicMock(return_value=True)
+    frames: list[dict[str, object]] = []
+
+    async def send_and_ack_first_manifest(_peer_id: str, text: str) -> bool:
+        payload = json.loads(text)
+        frames.append(payload)
+        if len(frames) == 1:
+            manifest = parse_manifest_with_evidence(payload).manifest
+            assert manifest is not None
+            ack = generate_manifest_ack(manifest, consumer_mesh_config)
+            await client._on_manifest_ack("session-a", manifest_ack_to_dict(ack))
+        return True
+
+    client.send_to_peer_async = AsyncMock(side_effect=send_and_ack_first_manifest)  # type: ignore[method-assign]
+
+    assert await client._send_manifest("peer-a", mesh_config=provider_mesh_config)
+    ready = client._local_provider_ready["peer-a"]
+    assert ready.compatible_services == ("TTS",)
+
+    assert client.apply_peer_authority_changed(
+        MeshPeerAuthorityChangedEvent(
+            peer_id="peer-a",
+            auth_grant_revision=2,
+            disposition="present",
+            state="active",
+            effective_permissions=("*",),
+            reason="permissions_updated",
+        )
+    )
+    assert await client._send_manifest("peer-a", mesh_config=provider_mesh_config)
+
+    assert [frame["type"] for frame in frames] == [
+        "manifest",
+        "provider_lease",
+        "provider_unavailable",
+        "manifest",
+    ]
+    tombstone = frames[2]
+    assert tombstone["connection_epoch"] == ready.connection_epoch
+    assert tombstone["availability_revision"] == 2
+    assert tombstone["reason_code"] == "provider_export_invalidated"
+    assert client._local_provider_ready.get("peer-a") is None
+    assert client._manifest_ack_expectations["peer-a"].auth_grant_revision == 2
 
 
 @pytest.mark.asyncio

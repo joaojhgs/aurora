@@ -100,6 +100,54 @@ const effective = resolveEffectivePermissions({
 })
 ```
 
+## Generated Speech Client And Peer Host
+
+`AuroraClient.speech` is generated-contract-backed and grouped by service responsibility:
+
+```ts
+const capabilities = await client.speech.tts.getCapabilities({
+  mesh_selector: { peer_id: 'peer-studio', module: 'TTS' }
+})
+
+const synthesis = await client.speech.tts.synthesize({
+  text: 'Hello',
+  language: 'en',
+  voice: 'standard:starter_en:alba',
+  mesh_selector: { peer_id: 'peer-studio', module: 'TTS' }
+})
+
+const route = await client.routes.explain({
+  topic: 'TTS.Synthesize',
+  selector: { peer_id: 'peer-studio', module: 'TTS' },
+  speech: {
+    language_requirement: { mode: 'exact', language: 'en' },
+    voice_id: 'standard:starter_en:alba'
+  }
+})
+```
+
+The namespaces are `speech.tts`, `speech.stt`, `speech.wakeWord`, and `speech.transcription`. TTS includes capability/voice discovery, profile and import management, playback/streaming, and synthesis. Focused listening, bounded wake detection, and transcription are exposed through their matching namespaces. Continuous `WakeWord.ProcessAudio` is intentionally absent and fails with `privacy_blocked` if runtime typing is bypassed.
+
+Requests and responses are parsed with the generated Zod schemas at HTTP, WebRTC, Tauri, or native-mobile boundaries. The SDK preserves backend method IDs, route paths, method types, permissions, and speech metadata; it does not maintain a second speech DTO model.
+
+Lightweight providers can register generated handlers through `@aurora/client/webrtc`:
+
+```ts
+import {
+  PeerHostContractRegistry,
+  registerGeneratedPeerHostMethod
+} from '@aurora/client/webrtc'
+
+const registry = new PeerHostContractRegistry()
+registerGeneratedPeerHostMethod(registry, 'TTS.Synthesize', synthesizeHandler, {
+  speechConstraints: residentSpeechConstraints
+})
+```
+
+Generated peer-host registration derives input/output schemas, projection method type, permissions, callable features, and default speech metadata from the backend artifact. Recipient grants decide which methods appear in the manifest; forged frame permissions cannot add a method. The host remains unavailable until a structured manifest ACK classifies every advertised service and matches protocol, projection digest, registry revision, export-policy revision, and auth-grant revision. Only then does it publish a provider lease.
+
+`provider_unavailable` tombstones withdraw the lease and cancel active work. Call, stream, and subscription IDs share one reservation boundary: a duplicate active ID is rejected before handler dispatch, and the ID becomes reusable only after the original work is fully released.
+
 ## Tauri Local
 
 ```ts

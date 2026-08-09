@@ -42,7 +42,7 @@ from app.shared.contracts.models.config import (
     ConfigSetResponse,
 )
 from app.shared.contracts.models.db import DBMethods
-from app.shared.contracts.models.gateway import GatewayMethods, MethodInfo
+from app.shared.contracts.models.gateway import GatewayMethods, MethodInfo, RouteExplainRequest
 from app.shared.contracts.models.orchestrator import (
     OrchestratorInferChatRequest,
     OrchestratorMethods,
@@ -96,6 +96,148 @@ async def _start_app(app: FastAPI, router: APIRouter, generator: RouteGenerator)
     app.include_router(router)
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("payload", "secret"),
+    [
+        (
+            {
+                "topic": GatewayMethods.EXPLAIN_ROUTE,
+                "text": "top-level route secret",
+                "audio": "top-level audio secret",
+                "payload": {"token": "top-level payload secret"},
+            },
+            "top-level route secret",
+        ),
+        (
+            {
+                "topic": GatewayMethods.EXPLAIN_ROUTE,
+                "speech": {
+                    "language_requirement": {"mode": "exact", "language": "en"},
+                    "text": "nested speech secret",
+                },
+            },
+            "nested speech secret",
+        ),
+        (
+            {
+                "topic": GatewayMethods.EXPLAIN_ROUTE,
+                "selector": {
+                    "peer_id": "peer-1",
+                    "unknown_selector_field": "selector unknown secret",
+                },
+            },
+            "selector unknown secret",
+        ),
+        (
+            {
+                "topic": GatewayMethods.EXPLAIN_ROUTE,
+                "selector": {
+                    "peer_id": "peer-1",
+                    "payload": "selector raw secret",
+                },
+            },
+            "selector raw secret",
+        ),
+    ],
+)
+async def test_explain_route_generated_http_rejects_unsafe_payloads_without_echoing_values(
+    generated_route_app, payload, secret
+):
+    app, router, generator, bus, _ = generated_route_app("Gateway", _explain_route_method())
+    await _start_app(app, router, generator)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/Gateway/ExplainRoute", json=payload)
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Invalid route explanation request."}
+    assert secret not in response.text
+    assert "top-level audio secret" not in response.text
+    assert "top-level payload secret" not in response.text
+    bus.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("payload", ["malformed route secret", ["malformed route secret"]])
+async def test_explain_route_generated_http_rejects_non_object_json_without_dispatch(
+    generated_route_app, payload
+):
+    app, router, generator, bus, _ = generated_route_app("Gateway", _explain_route_method())
+    await _start_app(app, router, generator)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/Gateway/ExplainRoute", json=payload)
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Invalid route explanation request."}
+    assert "malformed route secret" not in response.text
+    bus.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_explain_route_generated_http_rejects_malformed_json_without_dispatch(
+    generated_route_app,
+):
+    app, router, generator, bus, _ = generated_route_app("Gateway", _explain_route_method())
+    await _start_app(app, router, generator)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/Gateway/ExplainRoute",
+            content='{"topic": "Gateway.ExplainRoute", "text": "malformed route secret"',
+            headers={"content-type": "application/json"},
+        )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Invalid route explanation request."}
+    assert "malformed route secret" not in response.text
+    bus.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_explain_route_generated_http_valid_payload_reaches_bus_unchanged(
+    generated_route_app,
+):
+    app, router, generator, bus, _ = generated_route_app("Gateway", _explain_route_method())
+    bus.request.return_value = QueryResult(ok=True, data={"selected_target": "remote"})
+    await _start_app(app, router, generator)
+    payload = {
+        "topic": "TTS.Synthesize",
+        "selector": {
+            "peer_id": "peer-1",
+            "resource_namespace": "speaker",
+        },
+        "speech": {
+            "language_requirement": {"mode": "exact", "language": "en"},
+            "voice_id": "standard:piper:amy",
+        },
+        "include_candidates": False,
+    }
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/Gateway/ExplainRoute", json=payload)
+
+    assert response.status_code == 200
+    assert response.json() == {"selected_target": "remote"}
+    bus.request.assert_awaited_once()
+    expected_payload = RouteExplainRequest.model_validate(payload).model_dump(exclude_unset=True)
+    assert bus.request.await_args.args[:2] == (GatewayMethods.EXPLAIN_ROUTE, expected_payload)
+
+
+@pytest.mark.asyncio
+async def test_explain_route_generated_http_retains_request_body_schema(
+    generated_route_app,
+):
+    app, router, generator, _bus, _ = generated_route_app("Gateway", _explain_route_method())
+    await _start_app(app, router, generator)
+
+    operation = app.openapi()["paths"]["/api/Gateway/ExplainRoute"]["post"]
+    schema = operation["requestBody"]["content"]["application/json"]["schema"]
+    assert schema["title"] == "RouteExplainRequest"
+    assert {"topic", "selector", "speech", "include_candidates"}.issubset(schema["properties"])
+
+
 def _config_set_method() -> MethodInfo:
     return MethodInfo(
         name="Set",
@@ -123,6 +265,21 @@ def _config_rollback_method() -> MethodInfo:
         output_model="ConfigRollbackResponse",
         input_schema=ConfigRollbackRequest.model_json_schema(),
         output_schema=ConfigRollbackResponse.model_json_schema(),
+    )
+
+
+def _explain_route_method() -> MethodInfo:
+    return MethodInfo(
+        name="ExplainRoute",
+        summary="Explain route",
+        bus_topic=GatewayMethods.EXPLAIN_ROUTE,
+        exposure="external",
+        method_type="use",
+        required_perms=["Gateway.use"],
+        input_model="RouteExplainRequest",
+        output_model="RouteExplainResponse",
+        input_schema=RouteExplainRequest.model_json_schema(),
+        output_schema={"type": "object", "properties": {"selected_target": {"type": "string"}}},
     )
 
 

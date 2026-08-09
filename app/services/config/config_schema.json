@@ -92,6 +92,86 @@
           "type": "string",
           "description": "Base directory for voice/model files",
           "default": "voice_models/"
+        },
+        "primary_language": {
+          "type": "string",
+          "title": "Primary language",
+          "description": "Language Aurora uses whenever one device language is required.",
+          "enum": [
+            "en",
+            "pt",
+            "es",
+            "fr",
+            "de",
+            "it",
+            "ja",
+            "ko",
+            "zh"
+          ],
+          "ui_choices": [
+            "en",
+            "pt",
+            "es",
+            "fr",
+            "de",
+            "it",
+            "ja",
+            "ko",
+            "zh"
+          ],
+          "default": "en",
+          "reload_impact": {
+            "reload_required": true,
+            "restart_required": false,
+            "affected_services": [
+              "tts",
+              "stt_transcription",
+              "stt_wakeword",
+              "stt_coordinator",
+              "gateway"
+            ]
+          }
+        },
+        "voice_language": {
+          "type": "string",
+          "title": "Voice language",
+          "description": "Automatic detects speech while spoken replies and wake listening use the primary language.",
+          "enum": [
+            "auto",
+            "en",
+            "pt",
+            "es",
+            "fr",
+            "de",
+            "it",
+            "ja",
+            "ko",
+            "zh"
+          ],
+          "ui_choices": [
+            "auto",
+            "en",
+            "pt",
+            "es",
+            "fr",
+            "de",
+            "it",
+            "ja",
+            "ko",
+            "zh"
+          ],
+          "default": "auto",
+          "reload_impact": {
+            "reload_required": true,
+            "restart_required": false,
+            "affected_services": [
+              "tts",
+              "stt_transcription",
+              "stt_wakeword",
+              "stt_coordinator",
+              "gateway"
+            ]
+          }
         }
       }
     },
@@ -400,6 +480,36 @@
               "description": "Enable TTS service",
               "default": false
             },
+            "provider": {
+              "type": "string",
+              "description": "Text-to-speech provider",
+              "enum": [
+                "piper",
+                "pockettts"
+              ],
+              "default": "piper"
+            },
+            "fallback_provider": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Explicit fallback provider used only when configured",
+              "enum": [
+                "piper",
+                "pockettts",
+                null
+              ],
+              "default": null
+            },
+            "default_voice_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Default logical voice for this device",
+              "default": null
+            },
             "mesh_sharing": {
               "$ref": "#/$defs/mesh_sharing"
             },
@@ -410,6 +520,221 @@
               "type": "boolean",
               "description": "Enable hardware acceleration for TTS",
               "default": false
+            },
+            "providers": {
+              "type": "object",
+              "description": "Provider-specific text-to-speech settings",
+              "additionalProperties": false,
+              "properties": {
+                "piper": {
+                  "type": "object",
+                  "description": "Piper provider settings",
+                  "additionalProperties": false,
+                  "properties": {
+                    "model_file_path": {
+                      "type": "string",
+                      "description": "Path to the Piper model file",
+                      "ui_type": "file",
+                      "ui_file_filter": "ONNX files (*.onnx)|*.onnx|All files (*.*)|*.*",
+                      "default": "voice_models/en_US-lessac-medium.onnx"
+                    },
+                    "model_config_file_path": {
+                      "type": "string",
+                      "description": "Path to the Piper model configuration file",
+                      "ui_type": "file",
+                      "ui_file_filter": "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+                      "default": "voice_models/en_US-lessac-medium.onnx.txt"
+                    },
+                    "model_sample_rate": {
+                      "type": "integer",
+                      "minimum": 8000,
+                      "maximum": 48000,
+                      "description": "Sample rate for Piper output",
+                      "default": 22050
+                    },
+                    "executable_path": {
+                      "type": "string",
+                      "description": "Path to Piper executable",
+                      "ui_type": "file",
+                      "ui_file_filter": "Executable files (*.exe)|*.exe|All files (*.*)|*.*",
+                      "default": ""
+                    }
+                  },
+                  "default": {}
+                },
+                "pockettts": {
+                  "type": "object",
+                  "description": "PocketTTS provider settings",
+                  "additionalProperties": false,
+                  "properties": {
+                    "quality_tier": {
+                      "type": "string",
+                      "enum": [
+                        "compact",
+                        "quality"
+                      ],
+                      "default": "compact"
+                    },
+                    "custom_config_path": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "default": null
+                    },
+                    "cache_dir": {
+                      "type": "string",
+                      "default": "voice_models/pockettts"
+                    },
+                    "voice_state_dir": {
+                      "type": "string",
+                      "default": "voice_models/pockettts/voices"
+                    },
+                    "device": {
+                      "type": "string",
+                      "enum": [
+                        "cpu"
+                      ],
+                      "default": "cpu"
+                    },
+                    "initialization_timeout_s": {
+                      "type": "number",
+                      "minimum": 1.0,
+                      "default": 120.0
+                    },
+                    "request_timeout_s": {
+                      "type": "number",
+                      "minimum": 1.0,
+                      "default": 120.0
+                    },
+                    "max_concurrent_requests": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1,
+                      "default": 1
+                    },
+                    "preload_model": {
+                      "type": "boolean",
+                      "default": true
+                    },
+                    "preload_voice_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "default": []
+                    },
+                    "temperature": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "default": null
+                    },
+                    "lsd_decode_steps": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "default": 1
+                    },
+                    "noise_clamp": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "default": null
+                    },
+                    "eos_threshold": {
+                      "type": "number",
+                      "default": -4.0
+                    },
+                    "quantize": {
+                      "type": "boolean",
+                      "default": false
+                    }
+                  },
+                  "default": {}
+                }
+              },
+              "default": {}
+            },
+            "voice_registry": {
+              "type": "object",
+              "description": "Logical voice registry settings",
+              "additionalProperties": false,
+              "properties": {
+                "manifest_path": {
+                  "type": "string",
+                  "default": "voice_models/voices.manifest.json"
+                },
+                "asset_base_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "default": null
+                },
+                "cache_dir": {
+                  "type": "string",
+                  "default": "voice_models/voice-pack"
+                },
+                "verify_sha256": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "standard_pack_enabled": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "cloning_enabled": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "retain_clone_source": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "clone_min_duration_s": {
+                  "type": "number",
+                  "minimum": 0.1,
+                  "default": 6.0
+                },
+                "clone_max_duration_s": {
+                  "type": "number",
+                  "minimum": 0.1,
+                  "default": 15.0
+                },
+                "clone_max_source_bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "default": 20971520
+                },
+                "clone_max_wire_bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "default": 2097152
+                },
+                "accepted_import_formats": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "wav",
+                      "mp3",
+                      "mp4",
+                      "m4a",
+                      "webm"
+                    ]
+                  },
+                  "default": [
+                    "wav",
+                    "mp3",
+                    "mp4",
+                    "m4a",
+                    "webm"
+                  ]
+                }
+              },
+              "default": {}
             },
             "model_file_path": {
               "type": "string",

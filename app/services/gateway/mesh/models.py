@@ -19,6 +19,7 @@ from app.shared.contracts.mesh_compatibility import (
 )
 from app.shared.contracts.models.gateway import MethodInfo
 from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.speech import SpeechRouteBinding
 from app.shared.contracts.registry import CallableFeatureContract
 
 
@@ -265,6 +266,8 @@ class RouteDecision(BaseModel):
     selector: MeshAddressSelector | None = None
     error_code: str | None = None
     error_message: str | None = None
+    speech_route_binding: SpeechRouteBinding | None = None
+    method_type: str | None = None
 
 
 class CapacityUpdate(BaseModel):

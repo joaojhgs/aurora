@@ -248,9 +248,11 @@ class ToolingToolInfo(IOModel):
     rate_limit_hints: ToolingRateLimitHints | None = None
     provenance: ToolingToolProvenance
 
-    @field_validator("legacy_global_tool_ids")
+    @field_validator("legacy_global_tool_ids", mode="before")
     @classmethod
     def _bounded_unique_legacy_ids(cls, value: list[str]) -> list[str]:
+        if not isinstance(value, list):
+            return value
         normalized = sorted(set(value))
         if any(not item or item != item.strip() or len(item) > 512 for item in normalized):
             raise ValueError("legacy global tool IDs must be non-empty, trimmed, and bounded")

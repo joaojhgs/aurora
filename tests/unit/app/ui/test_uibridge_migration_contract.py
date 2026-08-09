@@ -93,7 +93,7 @@ def test_uibridge_bus_topic_inventory_is_checked() -> None:
         if topic is None:
             continue
 
-        if call_name == "self.bus.subscribe":
+        if call_name == "self.bus.subscribe_event":
             subscribed.add(topic)
         elif call_name == "self.bus.publish":
             published.add(topic)

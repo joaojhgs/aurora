@@ -10,7 +10,6 @@ import { AuroraTauriApp } from './tauri-app'
 const root = document.getElementById('root') as HTMLElement
 const isOverlaySurface = new URLSearchParams(window.location.search).get('surface') === 'overlay' || window.location.hash.includes('overlay')
 const surfaceProfile = getAuroraSurfaceProfile({
-  runtimeMode: import.meta.env.VITE_AURORA_RUNTIME_MODE,
   userAgent: window.navigator.userAgent,
 })
 
@@ -20,6 +19,12 @@ document.body.dataset.auroraPlatform = surfaceProfile.kind
 if (import.meta.env.VITE_AURORA_DESKTOP_LIVE_E2E === '1') {
   void import('./desktop-live-e2e').then(({ installDesktopLiveE2eHook }) => {
     installDesktopLiveE2eHook()
+  })
+}
+
+if (import.meta.env.VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E === '1') {
+  void import('./desktop-native-voice-e2e').then(({ installDesktopNativeVoiceE2eHook }) => {
+    installDesktopNativeVoiceE2eHook()
   })
 }
 

@@ -47,6 +47,13 @@ export type AuroraCapabilityPack =
   | 'foreground-voice'
   | 'local-inference'
 
+export type AuroraLocalSpeechPackState =
+  | 'disabled'
+  | 'downloading'
+  | 'incompatible'
+  | 'over-budget'
+  | 'unavailable'
+
 export interface AuroraHomeConnectionProfile {
   mode: AuroraConnectionMode
   gatewayUrl?: string | undefined
@@ -64,6 +71,8 @@ export interface AuroraLocalNodeProfile {
   nodeName: string
   stablePeerId: string
   enabledCapabilityPacks: AuroraCapabilityPack[]
+  /** Last known non-ready state; the voice engine remains the execution authority. */
+  localSpeechPackState?: AuroraLocalSpeechPackState | undefined
   meshMembership?: AuroraMeshMembershipProfile | undefined
 }
 
@@ -342,6 +351,7 @@ function sanitizeLocalNode(value: AuroraLocalNodeProfile, nodeMode: AuroraNodeMo
   const nodeName = requiredText(value.nodeName, 'node name', 160)
   const stablePeerId = requiredText(value.stablePeerId, 'stable peer id', 160)
   const enabledCapabilityPacks = sanitizeCapabilityPacks(value.enabledCapabilityPacks)
+  const localSpeechPackState = sanitizeLocalSpeechPackState(value.localSpeechPackState)
   const meshMembership = value.meshMembership === undefined
     ? undefined
     : sanitizeMeshMembership(value.meshMembership)
@@ -355,6 +365,7 @@ function sanitizeLocalNode(value: AuroraLocalNodeProfile, nodeMode: AuroraNodeMo
     nodeName,
     stablePeerId,
     enabledCapabilityPacks,
+    ...(localSpeechPackState ? { localSpeechPackState } : {}),
     ...(meshMembership ? { meshMembership } : {}),
   }
 }
@@ -387,6 +398,18 @@ function isCapabilityPack(value: unknown): value is AuroraCapabilityPack {
     || value === 'lightweight-orchestrator'
     || value === 'foreground-voice'
     || value === 'local-inference'
+}
+
+function sanitizeLocalSpeechPackState(value: unknown): AuroraLocalSpeechPackState | undefined {
+  if (value === undefined) return undefined
+  if (
+    value === 'disabled'
+    || value === 'downloading'
+    || value === 'incompatible'
+    || value === 'over-budget'
+    || value === 'unavailable'
+  ) return value
+  throw new Error('Runtime profile local speech state is invalid')
 }
 
 function isHomeConnectionConfigured(value: AuroraHomeConnectionProfile | undefined): boolean {

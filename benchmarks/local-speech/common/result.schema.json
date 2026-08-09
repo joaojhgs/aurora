@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "aurora.local_speech.stt.benchmark.v0.1",
+  "additionalProperties": true,
+  "properties": {
+    "aggregates": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": { "type": "string" },
+          "candidate_id": { "type": "string" },
+          "failed_runs": { "minimum": 0, "type": "integer" },
+          "failure_buckets": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "finalization_latency_ms_p50": { "type": ["number", "null"] },
+          "finalization_latency_ms_p95": { "type": ["number", "null"] },
+          "language": { "type": "string" },
+          "language_mode": { "enum": ["fixed", "auto"] },
+          "ok_runs": { "minimum": 0, "type": "integer" },
+          "wer_mean": { "type": ["number", "null"] }
+        },
+        "required": [
+          "candidate_id",
+          "language",
+          "bucket",
+          "language_mode",
+          "ok_runs",
+          "failed_runs",
+          "wer_mean",
+          "finalization_latency_ms_p50",
+          "finalization_latency_ms_p95",
+          "failure_buckets"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "benchmark_id": { "type": "string" },
+    "decisions": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "candidate_id": { "type": "string" },
+          "model_artifacts": { "type": "array" },
+          "notes": { "items": { "type": "string" }, "type": "array" },
+          "ok_runs": { "minimum": 0, "type": "integer" },
+          "rejected_alternatives": { "type": "array" },
+          "revision": { "type": "string" },
+          "role": { "type": "string" },
+          "source_url": { "type": "string" },
+          "unavailable_or_failed_runs": { "minimum": 0, "type": "integer" }
+        },
+        "required": [
+          "candidate_id",
+          "role",
+          "revision",
+          "source_url",
+          "model_artifacts",
+          "ok_runs",
+          "unavailable_or_failed_runs",
+          "rejected_alternatives",
+          "notes"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "generated_at_utc": { "type": "string" },
+    "matrix": {
+      "additionalProperties": false,
+      "properties": {
+        "buckets": { "items": { "type": "string" }, "type": "array" },
+        "candidate_ids": { "items": { "type": "string" }, "type": "array" },
+        "fixture_ids": { "items": { "type": "string" }, "type": "array" },
+        "language_modes": {
+          "items": { "enum": ["fixed", "auto"] },
+          "type": "array"
+        },
+        "languages": { "items": { "type": "string" }, "type": "array" },
+        "metrics": { "items": { "type": "string" }, "type": "array" }
+      },
+      "required": [
+        "candidate_ids",
+        "fixture_ids",
+        "languages",
+        "buckets",
+        "language_modes",
+        "metrics"
+      ],
+      "type": "object"
+    },
+    "redaction": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_fixture_identifiers_only": { "const": true },
+        "audio_logged": { "const": false },
+        "private_text_logged": { "const": false }
+      },
+      "required": [
+        "audio_logged",
+        "private_text_logged",
+        "allowed_fixture_identifiers_only"
+      ],
+      "type": "object"
+    },
+    "report_sha256_without_self": { "type": "string" },
+    "runs": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "browser_features": { "items": { "type": "string" }, "type": "array" },
+          "bucket": { "type": "string" },
+          "candidate_id": { "type": "string" },
+          "download_bytes": { "type": ["integer", "null"] },
+          "failure_bucket": { "type": ["string", "null"] },
+          "finalization_latency_ms": { "type": ["number", "null"] },
+          "fixture_id": { "type": "string" },
+          "initialization_ms": { "type": ["number", "null"] },
+          "language": { "type": "string" },
+          "language_mode": { "enum": ["fixed", "auto"] },
+          "peak_memory_mb": { "type": ["number", "null"] },
+          "run_id": { "type": "string" },
+          "status": { "enum": ["ok", "unsupported", "unavailable", "failed"] },
+          "thermal_state": { "type": ["string", "null"] },
+          "wer": { "type": "number" }
+        },
+        "required": [
+          "run_id",
+          "candidate_id",
+          "fixture_id",
+          "language",
+          "bucket",
+          "language_mode",
+          "status",
+          "failure_bucket",
+          "finalization_latency_ms",
+          "initialization_ms",
+          "download_bytes",
+          "peak_memory_mb",
+          "thermal_state",
+          "browser_features"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "schema_version": { "const": "aurora.local_speech.stt.benchmark.v0.1" },
+    "source": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_config_sha256": { "type": "string" },
+        "fixture_manifest_sha256": { "type": "string" },
+        "harness_revision": { "type": "string" }
+      },
+      "required": [
+        "harness_revision",
+        "candidate_config_sha256",
+        "fixture_manifest_sha256"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "benchmark_id",
+    "generated_at_utc",
+    "source",
+    "matrix",
+    "runs",
+    "aggregates",
+    "decisions",
+    "redaction",
+    "report_sha256_without_self"
+  ],
+  "title": "Aurora Local STT Benchmark Report",
+  "type": "object"
+}

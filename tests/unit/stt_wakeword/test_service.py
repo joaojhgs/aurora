@@ -37,6 +37,7 @@ def mock_bus():
     """Create a mock message bus."""
     bus = Mock(spec=MessageBus)
     bus.subscribe = Mock()
+    bus.subscribe_event = AsyncMock()
     bus.publish = AsyncMock()
     return bus
 
@@ -216,9 +217,12 @@ async def test_start_service(service, mock_bus):
     # Set backend type since we're mocking _load_config
     service._backend_type = WakeWordBackendType.OPENWAKEWORD
 
+    load_config = AsyncMock(spec=service._load_config)
+    initialize_backend = AsyncMock(spec=service._initialize_backend)
+
     with (
-        patch.object(service, "_load_config", new_callable=AsyncMock),
-        patch.object(service, "_initialize_backend", new_callable=AsyncMock),
+        patch.object(service, "_load_config", new=load_config),
+        patch.object(service, "_initialize_backend", new=initialize_backend),
     ):
         await service.start()
 
@@ -226,10 +230,9 @@ async def test_start_service(service, mock_bus):
         assert service._enabled is True
 
         # Verify subscriptions - at least the microphone stream
-        assert any(
-            call.args[0] == AudioTopics.STREAM_MICROPHONE
-            for call in mock_bus.subscribe.call_args_list
-        ), "Missing subscription to STREAM_MICROPHONE"
+        mock_bus.subscribe_event.assert_any_await(
+            AudioTopics.STREAM_MICROPHONE, service._on_audio_chunk
+        )
 
 
 @pytest.mark.asyncio

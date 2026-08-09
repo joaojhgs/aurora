@@ -6,11 +6,14 @@ from pydantic import Field, ValidationError, field_validator
 
 from scripts import generate_backend_inventory
 from scripts.sdk_zod_codegen import (
+    BOUNDED_NONBLANK_STRING_SET_MARKER,
     JSON_VALUE_MARKER,
     PROJECTION_IDENTITY_MARKER,
     PROJECTION_PAGE_TERMINATION_MARKER,
+    SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER,
     STRING_NON_BLANK_MARKER,
     STRING_TRIMMED_MARKER,
+    TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
     UNIQUE_STRING_ARRAY_NORMALIZE_MARKER,
     CompileContext,
     UnsupportedSchemaError,
@@ -75,7 +78,7 @@ def test_zod_codegen_maps_only_validated_string_formats() -> None:
                         "format": fmt,
                     },
                 }
-                for fmt in ("duration", "hostname", "ipv4", "ipv6")
+                for fmt in ("duration", "hostname", "ipv4", "ipv6", "binary")
             ]
         }
     )
@@ -84,6 +87,49 @@ def test_zod_codegen_maps_only_validated_string_formats() -> None:
     assert "z.hostname()" in rendered
     assert "z.ipv4()" in rendered
     assert "z.ipv6()" in rendered
+    assert '.meta({"format":"binary"})' in rendered
+
+
+def test_sdk_contract_integer_guard_rejects_one_sided_bounds() -> None:
+    for schema in (
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "maximum": 10},
+        {"type": "integer", "exclusiveMinimum": 0},
+        {"type": "integer", "exclusiveMaximum": 10},
+    ):
+        with pytest.raises(ValueError, match="minimum and maximum"):
+            generate_backend_inventory._assert_no_unbounded_integer_schema(
+                schema, context="Example.Bounds"
+            )
+
+    generate_backend_inventory._assert_no_unbounded_integer_schema(
+        {"type": "integer", "minimum": 0, "maximum": 10}, context="Example.Bounds"
+    )
+    generate_backend_inventory._assert_no_unbounded_integer_schema(
+        {"type": "integer", "enum": [1, 2]}, context="Example.Bounds"
+    )
+
+
+@pytest.mark.parametrize(
+    "schema",
+    (
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "maximum": 10},
+        {"type": "integer", "exclusiveMinimum": 0},
+        {"type": "integer", "exclusiveMaximum": 10},
+    ),
+)
+def test_zod_codegen_rejects_one_sided_integer_bounds(schema: dict[str, object]) -> None:
+    compiler = ZodCompiler(
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", **schema},
+        ctx=CompileContext("Example.Bounds", "input", "BoundedInteger"),
+        symbol_prefix="BoundedInteger",
+    )
+
+    with pytest.raises(
+        UnsupportedSchemaError, match="integer schema must declare minimum and maximum bounds"
+    ):
+        compiler.compile_root()
 
 
 def test_zod_codegen_rejects_unsafe_regex_refs_literals_numbers_and_unions() -> None:
@@ -91,10 +137,6 @@ def test_zod_codegen_rejects_unsafe_regex_refs_literals_numbers_and_unions() -> 
         (
             {"type": "array", "items": {"type": "string"}, "uniqueItems": True},
             "unsupported schema keyword 'uniqueItems'",
-        ),
-        (
-            {"type": "object", "minProperties": 1, "properties": {}},
-            "unsupported schema keyword 'minProperties'",
         ),
         (
             {"type": "object", "patternProperties": {"^x": {"type": "string"}}},
@@ -158,6 +200,22 @@ def test_zod_codegen_rejects_unsafe_regex_refs_literals_numbers_and_unions() -> 
             "only applies to string arrays",
         ),
         (
+            {
+                "type": "array",
+                "items": {"type": "integer"},
+                BOUNDED_NONBLANK_STRING_SET_MARKER: True,
+            },
+            "only applies to string arrays",
+        ),
+        (
+            {
+                "type": "array",
+                "items": {"type": "integer"},
+                SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER: True,
+            },
+            "only applies to string arrays",
+        ),
+        (
             {"type": "string", PROJECTION_PAGE_TERMINATION_MARKER: True},
             "only applies to export page objects",
         ),
@@ -181,6 +239,13 @@ def test_zod_codegen_rejects_unsafe_regex_refs_literals_numbers_and_unions() -> 
         (
             {"type": "object", STRING_NON_BLANK_MARKER: False},
             "must be literal true",
+        ),
+        (
+            {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                STRING_NON_BLANK_MARKER: True,
+            },
+            "only applies to string schemas",
         ),
         (
             {
@@ -315,19 +380,114 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     assert manifest["zod_version"] == "4.4.3"
     assert provider["provider_service_instance_id"] == "local:aurora-sdk-local-provider-v1:Tooling"
     assert {item["method_id"] for item in provider["methods"]} == set(
-        generate_backend_inventory.SDK_CONTRACT_ALLOWLIST
+        generate_backend_inventory.SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST
     )
     provider_methods = {item["method_id"]: item for item in provider["methods"]}
     assert provider_methods["Tooling.GetExportCatalog"]["required_permission"] == "Tooling.GetTools"
     assert (
         provider_methods["Tooling.PrepareExecution"]["required_permission"] == "Tooling.ExecuteTool"
     )
-    assert schema["allowlist"] == [
-        "Tooling.GetTools",
-        "Tooling.GetExportCatalog",
-        "Tooling.PrepareExecution",
-        "Tooling.ExecuteTool",
-    ]
+    assert schema["allowlist"] == list(generate_backend_inventory.SDK_CONTRACT_ALLOWLIST)
+    assert schema["tooling_provider_allowlist"] == (
+        list(generate_backend_inventory.SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST)
+    )
+    assert len(schema["allowlist"]) == 35
+    assert len(schema["schemas"]) == 74
+    assert len(schema["method_descriptors"]) == 35
+    assert len(schema["event_descriptors"]) == 3
+    assert len(schema["envelope_descriptors"]) == 1
+    assert len(provider["methods"]) == 4
+    descriptors = {item["method_id"]: item for item in schema["method_descriptors"]}
+    descriptor_ids = set(descriptors)
+    assert descriptor_ids == set(generate_backend_inventory.SDK_CONTRACT_ALLOWLIST)
+    assert "Gateway.ExplainRoute" in descriptor_ids
+    assert "TTS.Synthesize" in descriptor_ids
+    assert "STTCoordinator.Listen" in descriptor_ids
+    assert "STTCoordinator.CapturePrepare" in descriptor_ids
+    assert "STTCoordinator.CaptureRelease" in descriptor_ids
+    assert "STTCoordinator.CaptureStatus" in descriptor_ids
+    assert "Orchestrator.ExternalUserInput" in descriptor_ids
+    assert "Orchestrator.Interrupt" in descriptor_ids
+    assert "Aurora.EventStream" not in descriptor_ids
+    assert all(not method_id.startswith("AudioSession.") for method_id in descriptor_ids)
+    assert descriptors["TTS.CreateVoiceProfile"]["method_type"] == "manage"
+    assert descriptors["TTS.CreateVoiceProfile"]["required_perms"] == ["TTS.manage"]
+    event_descriptors = {item["event_topic"]: item for item in schema["event_descriptors"]}
+    assert set(event_descriptors) == {
+        "TTS.AudioChunk",
+        "Orchestrator.Response",
+        "Orchestrator.Interrupted",
+    }
+    assert event_descriptors["TTS.AudioChunk"] == {
+        "event_topic": "TTS.AudioChunk",
+        "module": "TTS",
+        "name": "AudioChunk",
+        "topic": "TTS.AudioChunk",
+        "model": "TTSAudioChunkEvent",
+        "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent",
+        "schema_hash": event_descriptors["TTS.AudioChunk"]["schema_hash"],
+        "required_permission": "TTS.use",
+        "required_perms": ["TTS.use"],
+        "bounded": True,
+        "authorized": True,
+        "ordered_event_group": "tts_text_stream",
+        "remote_raw_audio_route": False,
+    }
+    assert event_descriptors["Orchestrator.Response"]["schema_id"] == (
+        "Orchestrator.Response.event.AssistantStreamEvent"
+    )
+    assert event_descriptors["Orchestrator.Response"]["required_perms"] == ["Orchestrator.use"]
+    assert event_descriptors["Orchestrator.Response"]["ordered_event_group"] == "assistant_stream"
+    assert event_descriptors["Orchestrator.Interrupted"]["schema_id"] == (
+        "Orchestrator.Interrupted.event.OrchestratorInterruptedEvent"
+    )
+    envelope = schema["envelope_descriptors"][0]
+    assert envelope["envelope_topic"] == "Aurora.EventStream"
+    assert envelope["descriptor_kind"] == "sse_envelope"
+    assert envelope["required_permissions_broad"] == ["Gateway.manage"]
+    assert envelope["required_permissions_scoped"] == ["Orchestrator.use"]
+    assert envelope["scoped_topics"] == ["Orchestrator.Response", "TTS.AudioChunk"]
+    assert envelope["scoped_categories"] == ["assistant"]
+    assert envelope["requires_correlation_id"] is True
+    assert event_descriptors["TTS.AudioChunk"]["schema_hash"] == next(
+        item["schema_hash"]
+        for item in schema["schemas"]
+        if item["schema_id"] == "TTS.AudioChunk.event.TTSAudioChunkEvent"
+    )
+    event_schema = next(
+        item
+        for item in schema["schemas"]
+        if item["schema_id"] == "TTS.AudioChunk.event.TTSAudioChunkEvent"
+    )
+    assert event_schema["schema"][TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER] is True
+    assert any(
+        vector["issue_path"] == "$"
+        and vector["input"]["audio_data"] == ""
+        and vector["input"]["is_final"] is False
+        for vector in event_schema["vectors"]["negative_cases"]
+    )
+    for method_id in ("TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd"):
+        assert descriptors[method_id]["streaming"] == {
+            "event_topic": "TTS.AudioChunk",
+            "ordered_command_group": "tts_text_stream",
+            "request_stream": False,
+            "response_stream": False,
+            "rpc_kind": "unary",
+        }
+    assert descriptors["Transcription.ProcessAudio"]["streaming"] == {
+        "event_topic": None,
+        "ordered_command_group": None,
+        "request_stream": False,
+        "response_stream": False,
+        "rpc_kind": "unary",
+    }
+    assert all(
+        descriptor["input_schema_id"]
+        and descriptor["output_schema_id"]
+        and descriptor["input_schema_hash"]
+        and descriptor["output_schema_hash"]
+        for descriptor in descriptors.values()
+    )
     assert (
         provider["canonical_digest_vectors"]["identity_digest"]["reordered_json_a"]
         != provider["canonical_digest_vectors"]["identity_digest"]["reordered_json_b"]
@@ -366,6 +526,54 @@ def test_sdk_contract_outputs_do_not_overwrite_on_render_failure(
         generate_backend_inventory.write_sdk_contract_outputs(**paths)
 
     assert {path.read_text(encoding="utf-8") for path in paths.values()} == {"old"}
+
+
+def test_sdk_contract_outputs_preserve_backup_after_incomplete_rollback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = {
+        "schema_output": tmp_path / "backend-contracts.schema.json",
+        "zod_output": tmp_path / "backend-contracts.zod.ts",
+        "manifest_output": tmp_path / "backend-contracts.manifest.json",
+        "tooling_provider_output": tmp_path / "tooling-local-provider-v1.json",
+    }
+    for path in paths.values():
+        path.write_text("old", encoding="utf-8")
+
+    def fail_with_recovery_backup(staged_outputs: list[tuple[Path, Path, str]]) -> None:
+        target, _tmp, _hash = staged_outputs[0]
+        target.replace(generate_backend_inventory._promotion_backup_path(target))
+        raise RuntimeError("rollback interrupted")
+
+    monkeypatch.setattr(
+        generate_backend_inventory,
+        "_promote_staged_outputs",
+        fail_with_recovery_backup,
+    )
+
+    with pytest.raises(RuntimeError, match="rollback interrupted"):
+        generate_backend_inventory.write_sdk_contract_outputs(**paths)
+
+    backup = generate_backend_inventory._promotion_backup_path(paths["schema_output"])
+    assert backup.read_text(encoding="utf-8") == "old"
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "maximum": 10},
+        {"type": "integer"},
+    ],
+)
+def test_sdk_contract_schema_rejects_one_sided_or_unbounded_integers(
+    schema: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError, match="must declare minimum and maximum"):
+        generate_backend_inventory._assert_no_unbounded_integer_schema(
+            schema,
+            context="Example.Integer",
+        )
 
 
 def test_validator_extension_audit_rejects_unmapped_nested_validator() -> None:
@@ -530,6 +738,29 @@ def test_generated_vectors_capture_strip_and_reject_semantics() -> None:
     get_tools_negative = by_model["ToolingGetToolsResponse"]["vectors"]["negative"]
     assert get_tools_negative["accepted"] is False
     assert get_tools_negative["issue_path"] == "$.tools.0.legacy_global_tool_ids"
+    get_tools_duplicate_case = next(
+        case
+        for case in by_model["ToolingGetToolsResponse"]["vectors"]["positive_cases"]
+        if case["normalized"]["tools"][0]["legacy_global_tool_ids"] == ["legacy-a", "legacy-b"]
+    )
+    assert len(get_tools_duplicate_case["input"]["tools"][0]["legacy_global_tool_ids"]) == 40
+    assert any(
+        case["issue_path"] == "$.tools.0.legacy_global_tool_ids"
+        and len(case["input"]["tools"][0]["legacy_global_tool_ids"]) == 17
+        for case in by_model["ToolingGetToolsResponse"]["vectors"]["negative_cases"]
+    )
+
+    export_duplicate_case = next(
+        case
+        for case in by_model["ToolingGetExportCatalogResponse"]["vectors"]["positive_cases"]
+        if case["normalized"]["tools"][0]["legacy_global_tool_ids"] == ["legacy-a", "legacy-b"]
+    )
+    assert len(export_duplicate_case["input"]["tools"][0]["legacy_global_tool_ids"]) == 40
+    assert any(
+        case["issue_path"] == "$.tools.0.legacy_global_tool_ids"
+        and len(case["input"]["tools"][0]["legacy_global_tool_ids"]) == 17
+        for case in by_model["ToolingGetExportCatalogResponse"]["vectors"]["negative_cases"]
+    )
 
     execute_negative = by_model["ToolingExecuteToolRequest"]["vectors"]["negative"]
     assert execute_negative["accepted"] is False
@@ -552,6 +783,28 @@ def test_authoritative_python_contracts_reject_out_of_range_integers() -> None:
         ToolingGetToolsRequest.model_validate({"top_k": 2**53})
     with pytest.raises(ValidationError):
         ToolingGetToolsRequest.model_validate({"top_k": -(2**53)})
+
+
+def test_authoritative_tts_audio_chunk_event_preserves_terminal_empty_audio_only() -> None:
+    from app.shared.contracts.models.tts import TTSAudioChunkEvent
+
+    terminal = {
+        "stream_id": "stream-1",
+        "sequence": 1,
+        "source_sequence": 0,
+        "audio_data": "",
+        "format": "raw",
+        "sample_rate": 0,
+        "channels": 1,
+        "duration_ms": 0,
+        "is_final": True,
+        "reason": "completed",
+    }
+
+    TTSAudioChunkEvent.model_validate(terminal)
+
+    with pytest.raises(ValidationError, match="non-final audio chunk requires audio data"):
+        TTSAudioChunkEvent.model_validate({**terminal, "is_final": False, "sample_rate": 24000})
 
 
 def _walk_schema_objects(value: object) -> list[dict[str, object]]:

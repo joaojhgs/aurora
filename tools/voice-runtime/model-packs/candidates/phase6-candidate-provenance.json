@@ -1,0 +1,35 @@
+{
+  "candidate_constraints": [
+    "Silero VAD is language-neutral",
+    "KWS and STT are English only",
+    "interoperable:false until parity and target gates land",
+    "no Android, iOS, or physical-device runtime evidence is claimed by these manifests",
+    "signatures are non-production candidate trust only"
+  ],
+  "phase4_sources": {
+    "artifact_root": "pockettts/p4-native-voice",
+    "decision_record_sha256": "c0dfabe0d48388139aaafadd12094ca26685f3ad3b4bc9f147cb7b3f61247262",
+    "manifest_sha256": "0056d02e62dda98bfb0208ff63e51a4403542c9c5ee8ddfa444ea8b935bebcf0"
+  },
+  "pinned_runtime_sources": [
+    {
+      "archive_sha256": "3243cb386d3a4ac87596adf7d2c89fddf23e2948b154942b987b4d91c1fee295",
+      "archive_size_bytes": 9840376,
+      "id": "sherpa-onnx",
+      "license": "Apache-2.0",
+      "revision": "142807252687d81b40d6315f23470a1512a00de3",
+      "version": "v1.13.4"
+    },
+    {
+      "archive_sha256": "b41d09905a3c2f3a25709d1dcce8ef3942a4c2799d1046f74be7b6bbebc45e6a",
+      "archive_size_bytes": 285714570,
+      "id": "onnxruntime",
+      "license": "MIT",
+      "revision": "8f0278c77bf44b0cc83c098c6c722b92a36ac4b5",
+      "version": "v1.27.0"
+    }
+  ],
+  "schema_version": 1,
+  "status": "non-production candidate provenance",
+  "trust_boundary": "candidate only; not a release index and not production trust"
+}

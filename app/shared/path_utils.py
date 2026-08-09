@@ -5,6 +5,7 @@ and other resources relative to the Aurora project root directory.
 """
 
 import os
+import sys
 from pathlib import Path
 
 
@@ -119,14 +120,27 @@ def get_data_dir() -> Path:
 
     Resolution order:
     1. ``AURORA_DATA_DIR`` env var (set explicitly in Docker Compose)
-    2. ``get_project_root() / "data"``
+    2. The platform app-data directory for a frozen executable
+    3. ``get_project_root() / "data"`` for a source checkout
 
     The directory is created if it doesn't exist. A write probe verifies the
     process can actually create files there — if not, a clear ``RuntimeError``
     is raised so operators see the permission mismatch immediately.
     """
     env_dir = os.environ.get("AURORA_DATA_DIR")
-    data_dir = Path(env_dir) if env_dir else get_project_root() / "data"
+    if env_dir:
+        data_dir = Path(env_dir)
+    elif getattr(sys, "frozen", False):
+        if sys.platform == "win32":
+            app_data_root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+            data_dir = app_data_root / "Aurora" / "data"
+        elif sys.platform == "darwin":
+            data_dir = Path.home() / "Library" / "Application Support" / "Aurora" / "data"
+        else:
+            app_data_root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+            data_dir = app_data_root / "aurora" / "data"
+    else:
+        data_dir = get_project_root() / "data"
 
     data_dir.mkdir(parents=True, exist_ok=True)
 

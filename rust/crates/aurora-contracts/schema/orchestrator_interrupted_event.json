@@ -1,0 +1,153 @@
+{
+  "$defs": {
+    "OrchestratorInterruptScopeResult": {
+      "description": "Cancellation result for one requested scope.",
+      "properties": {
+        "cancelled_count": {
+          "default": 0,
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Cancelled Count",
+          "type": "integer"
+        },
+        "message": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Message",
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "generation",
+            "session",
+            "tool_call",
+            "tts_playback"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "cancelled",
+            "failed",
+            "no_active_work",
+            "not_supported"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope",
+        "status"
+      ],
+      "title": "OrchestratorInterruptScopeResult",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Event emitted after an interrupt request is handled.",
+  "properties": {
+    "audit_event": {
+      "default": "orchestrator.interrupt.requested",
+      "title": "Audit Event",
+      "type": "string"
+    },
+    "interrupt_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Interrupt Id",
+      "type": "string"
+    },
+    "principal_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Principal Id"
+    },
+    "reason": {
+      "default": "user_interrupt",
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Reason",
+      "type": "string"
+    },
+    "request_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Request Id"
+    },
+    "requested_scopes": {
+      "items": {
+        "enum": [
+          "generation",
+          "session",
+          "tool_call",
+          "tts_playback"
+        ],
+        "type": "string"
+      },
+      "maxItems": 4,
+      "title": "Requested Scopes",
+      "type": "array"
+    },
+    "results": {
+      "items": {
+        "$ref": "#/$defs/OrchestratorInterruptScopeResult"
+      },
+      "maxItems": 4,
+      "title": "Results",
+      "type": "array"
+    },
+    "secrets_redacted": {
+      "default": true,
+      "title": "Secrets Redacted",
+      "type": "boolean"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Id"
+    },
+    "status": {
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "interrupt_id",
+    "status"
+  ],
+  "title": "OrchestratorInterruptedEvent",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

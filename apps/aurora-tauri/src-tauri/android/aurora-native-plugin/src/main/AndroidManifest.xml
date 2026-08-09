@@ -14,7 +14,9 @@
             <data android:mimeType="text/plain" />
         </intent>
     </queries>
-    <application android:usesCleartextTraffic="true">
+    <application
+        android:networkSecurityConfig="@xml/aurora_network_security_config"
+        android:usesCleartextTraffic="false">
         <service
             android:name="dev.aurora.tauri.nativeplugin.AuroraVoiceForegroundService"
             android:enabled="true"

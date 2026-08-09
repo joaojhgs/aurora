@@ -44,10 +44,11 @@
     "README.md"
   ],
   "scripts": {
-    "build": "pnpm --dir ../.. --filter @aurora/client build && tsc -p tsconfig.build.json && cp src/styles.css dist/styles.css",
-    "typecheck": "tsc --noEmit --incremental false",
-    "test": "pnpm --dir ../.. --filter @aurora/client build && vitest run --environment node --exclude 'dist/**'",
-    "test:accessibility": "pnpm --dir ../.. --filter @aurora/client build && vitest run --environment node tests/accessibility-responsive-visual.test.tsx"
+    "build": "pnpm run build:workspace-dependencies && tsc -p tsconfig.build.json && cp src/styles.css dist/styles.css",
+    "build:workspace-dependencies": "pnpm --dir ../.. --filter @aurora/client build && pnpm --dir ../.. --filter @aurora/voice-web build",
+    "typecheck": "pnpm --dir ../.. --filter @aurora/voice-web build && tsc --noEmit --incremental false",
+    "test": "pnpm run build:workspace-dependencies && vitest run --environment node --exclude 'dist/**'",
+    "test:accessibility": "pnpm run build:workspace-dependencies && vitest run --environment node tests/accessibility-responsive-visual.test.tsx"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.14.26",
@@ -57,6 +58,7 @@
     "@assistant-ui/react-syntax-highlighter": "^0.14.2",
     "@assistant-ui/store": "^0.2.19",
     "@aurora/client": "workspace:*",
+    "@aurora/voice-web": "workspace:*",
     "@base-ui-components/react": "1.0.0-rc.0",
     "@base-ui/react": "^1.5.0",
     "@floating-ui/react": "^0.27.19",

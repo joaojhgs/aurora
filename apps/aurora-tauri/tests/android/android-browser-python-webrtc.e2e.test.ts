@@ -1050,6 +1050,7 @@ function resolveAdbCommand(): string {
     process.env.ANDROID_SDK_ROOT
       ? join(process.env.ANDROID_SDK_ROOT, 'platform-tools', 'adb')
       : undefined,
+    join(os.homedir(), 'Android/Sdk/platform-tools/adb'),
     join(os.homedir(), '.local/share/android-sdk/platform-tools/adb'),
     'adb',
   ].filter((candidate): candidate is string => Boolean(candidate))

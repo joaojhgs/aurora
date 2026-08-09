@@ -198,9 +198,40 @@ function mergePluginManifest(content) {
       '\n    <uses-feature android:name="android.software.webview" android:required="true" />\n$1',
     )
   }
+  // The generated Tauri manifest includes an optional Leanback launcher by
+  // default, but Aurora does not ship an Android TV surface or TV banner.
+  // Remove that template-only declaration so the packaged client does not
+  // advertise an unsupported TV target and Android lint stays meaningful.
+  patched = patched
+    .replace(/\s*<!-- AndroidTV support -->\s*/g, '\n')
+    .replace(/\s*<uses-feature android:name="android\.software\.leanback" android:required="false" \/>\s*/g, '\n')
+    .replace(/\s*<category android:name="android\.intent\.category\.LEANBACK_LAUNCHER" \/>\s*/g, '\n')
   patched = patched.replace(
-    /android:usesCleartextTraffic="[^"]*"/,
-    'android:usesCleartextTraffic="true"',
+    /<application\b([^>]*)>/,
+    (application, attributes) => {
+      let patchedApplication = application
+      if (attributes.includes('android:usesCleartextTraffic=')) {
+        patchedApplication = patchedApplication.replace(
+          /android:usesCleartextTraffic="[^"]*"/,
+          'android:usesCleartextTraffic="false"',
+        )
+      } else {
+        patchedApplication = patchedApplication.replace(
+          /<application\b/,
+          '<application android:usesCleartextTraffic="false"',
+        )
+      }
+      if (attributes.includes('android:networkSecurityConfig=')) {
+        return patchedApplication.replace(
+          /android:networkSecurityConfig="[^"]*"/,
+          'android:networkSecurityConfig="@xml/aurora_network_security_config"',
+        )
+      }
+      return patchedApplication.replace(
+        /<application\b/,
+        '<application android:networkSecurityConfig="@xml/aurora_network_security_config"',
+      )
+    },
   )
   patched = patched.replace(
     /<activity\b(?=[^>]*android:name="[^"]*\.MainActivity")[^>]*>/,

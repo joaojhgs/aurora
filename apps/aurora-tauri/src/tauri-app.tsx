@@ -196,6 +196,8 @@ export const tauriRouteRegistry = {
       surfaceProfile={nativeContext.surfaceProfile}
       executionHost={nativeContext.thinPeer ? "connected-device" : "this-device"}
       localAssistant={tauriLocalAssistant(nativeContext, client)}
+      nativeVoice={nativeContext.nativeVoice}
+      nativeMobileVoice={nativeContext.nativeMobileVoice}
       runtimeHealth={{
         selectedModel: null,
         routeLabel: nativeContext.thinPeer
@@ -352,13 +354,21 @@ export const tauriRouteRegistry = {
   pairing: ({ route, client }) => (
     <PairingQueueView client={client} route={route} />
   ),
-  diagnostics: ({ route, snapshot, nativeContext, client, shutdown }) => (
+  diagnostics: ({
+    route,
+    snapshot,
+    nativeContext,
+    client,
+    shutdown,
+    modePreferenceStore,
+  }) => (
     <TauriDiagnosticsPage
       route={route}
       snapshot={snapshot}
       nativeContext={nativeContext}
       client={client}
       shutdown={shutdown}
+      modePreferenceStore={modePreferenceStore}
     />
   ),
   data: ({ route, client }) => (
@@ -373,15 +383,47 @@ export const tauriRouteRegistry = {
   models: ({ client }) => <ModelsView client={client} />,
   onboarding: ({
     snapshot,
+    nativeContext,
     client,
     modePreferenceStore,
     applyModePreference,
+    navigate,
   }) => (
     <OnboardingView
       client={client}
       snapshot={snapshot}
       modePreferenceStore={modePreferenceStore}
       onApplyModePreference={applyModePreference}
+      {...(nativeContext.thinPeer && nativeContext.thinProfileController
+        ? {
+            setupRequired: true,
+            thinConnectionPanel: (
+              <WebThinConnectionPanel
+                peer={nativeContext.thinPeer}
+                mode={nativeContext.thinConnectionMode}
+                transportKind={client.transport.kind}
+                nativePlatform={snapshot.nativePlatform}
+                initialInviteText={initialThinInviteFromUrl()}
+                profile={nativeContext.thinProfile}
+                profiles={nativeContext.thinProfileController.document.profiles}
+                profileStoreEvidence={nativeContext.thinProfileController.evidence}
+                localFeatureSharing={nativeContext.localFeatureSharing}
+                onSaveProfile={async (profile, roomSecret) => {
+                  await saveRemoteConsoleThinProfile(
+                    modePreferenceStore,
+                    nativeContext.saveThinProfile,
+                    profile,
+                    roomSecret,
+                  );
+                  navigate("/mesh");
+                }}
+                onSelectProfile={nativeContext.selectThinProfile}
+                configureOnly
+                {...(isMobileTauriShell() ? { onScanQr: scanMeshInviteQr } : {})}
+              />
+            ),
+          }
+        : {})}
     />
   ),
 } satisfies Record<TauriRouteId, TauriRouteRenderer>;
@@ -408,6 +450,7 @@ export async function rebuildAuroraThinRuntime(
 const DESKTOP_LOCAL_GATEWAY_READY_TIMEOUT_MS = 45_000;
 const DESKTOP_LOCAL_GATEWAY_RETRY_DELAY_MS = 500;
 const DESKTOP_LOCAL_SNAPSHOT_READY_TIMEOUT_MS = 10_000;
+const NATIVE_MOBILE_VOICE_STATUS_POLL_MS = 2_000;
 
 export function AuroraTauriApp({
   runtimeOverride,
@@ -454,6 +497,33 @@ export function AuroraTauriApp({
     useState<AndroidForegroundRuntimeStatus | null>(null);
   const [androidMediaPolicy, setAndroidMediaPolicy] =
     useState<AndroidMediaPolicyStatus | null>(null);
+  const [nativeMobileVoiceAvailable, setNativeMobileVoiceAvailable] =
+    useState(false);
+
+  useEffect(() => {
+    const nativeMobileVoice = runtime.nativeMobileVoice;
+    setNativeMobileVoiceAvailable(false);
+    if (!nativeMobileVoice) {
+      return;
+    }
+    let active = true;
+    const refresh = async () => {
+      try {
+        const status = await nativeMobileVoice.status();
+        if (active) setNativeMobileVoiceAvailable(status.available);
+      } catch {
+        if (active) setNativeMobileVoiceAvailable(false);
+      }
+    };
+    void refresh();
+    const poll = window.setInterval(() => {
+      void refresh();
+    }, NATIVE_MOBILE_VOICE_STATUS_POLL_MS);
+    return () => {
+      active = false;
+      window.clearInterval(poll);
+    };
+  }, [runtime.nativeMobileVoice]);
 
   useEffect(() => {
     if (runtimeOverride || !requiresAsyncAuroraTauriBootstrap()) return;
@@ -787,6 +857,8 @@ export function AuroraTauriApp({
     nativePlatform: snapshot.nativePlatform,
     nodeMode: runtime.nodeMode,
     runtimeTier: runtime.runtimeTier,
+    nativeVoicePresent: runtime.nativeMobileVoice !== undefined,
+    nativeVoiceAvailable: nativeMobileVoiceAvailable,
     userAgent:
       typeof window === "undefined" ? undefined : window.navigator.userAgent,
   });
@@ -818,6 +890,8 @@ export function AuroraTauriApp({
     remoteTools: assistantRemoteTools,
     runtimeProfile: runtime.runtimeProfile,
     localData: runtime.localData,
+    nativeVoice: runtime.nativeVoice,
+    nativeMobileVoice: runtime.nativeMobileVoice,
     thinProfile: runtime.thinProfile,
     thinProfileController: runtime.thinProfileController,
     saveThinProfile,
@@ -860,7 +934,12 @@ export function AuroraTauriApp({
             profileStoreEvidence={runtime.thinProfileController.evidence}
             localFeatureSharing={runtime.localFeatureSharing}
             onSaveProfile={async (profile, roomSecret) => {
-              await saveThinProfile(profile, roomSecret);
+              await saveRemoteConsoleThinProfile(
+                runtime.modePreferenceStore,
+                saveThinProfile,
+                profile,
+                roomSecret,
+              );
               navigate("/mesh");
             }}
             onSelectProfile={selectThinProfile}
@@ -1298,6 +1377,8 @@ interface NativeContext {
   remoteTools?: readonly ToolingProjectionToolInfo[];
   runtimeProfile?: AuroraTauriRuntime["runtimeProfile"];
   localData?: AuroraTauriRuntime["localData"];
+  nativeVoice?: AuroraTauriRuntime["nativeVoice"];
+  nativeMobileVoice?: AuroraTauriRuntime["nativeMobileVoice"];
   thinProfile?: AuroraThinConnectionProfile | undefined;
   thinProfileController?: AuroraTauriRuntime["thinProfileController"];
   saveThinProfile: (
@@ -1312,6 +1393,19 @@ interface NativeContext {
   androidBaseline: TauriAndroidBaselineStatus | null;
   androidForeground: AndroidForegroundRuntimeStatus | null;
   androidMediaPolicy: AndroidMediaPolicyStatus | null;
+}
+
+async function saveRemoteConsoleThinProfile(
+  modePreferenceStore: OnboardingModePreferenceStore | undefined,
+  saveThinProfile: NativeContext["saveThinProfile"],
+  profile: AuroraThinConnectionProfile,
+  roomSecret?: WebThinRoomSecret,
+): Promise<void> {
+  await Promise.all([
+    modePreferenceStore?.writeSelectedMode("remote-console"),
+    modePreferenceStore?.writeSelectedRuntimeTier?.("none"),
+  ]);
+  await saveThinProfile(profile, roomSecret);
 }
 
 function localMeshNodeIdentity(
@@ -1852,12 +1946,14 @@ function TauriDiagnosticsPage({
   nativeContext,
   client,
   shutdown,
+  modePreferenceStore,
 }: {
   route: RouteAvailability;
   snapshot: AuroraShellSnapshot;
   nativeContext: NativeContext;
   client: AuroraTauriClient;
   shutdown: () => Promise<void>;
+  modePreferenceStore?: OnboardingModePreferenceStore | undefined;
 }) {
   return (
     <div className="ata-page-stack">
@@ -1874,7 +1970,16 @@ function TauriDiagnosticsPage({
           localFeatureSharing={nativeContext.localFeatureSharing}
           {...(nativeContext.thinProfileController
             ? {
-                onSaveProfile: nativeContext.saveThinProfile,
+                onSaveProfile: (
+                  profile: AuroraThinConnectionProfile,
+                  roomSecret?: WebThinRoomSecret,
+                ) =>
+                  saveRemoteConsoleThinProfile(
+                    modePreferenceStore,
+                    nativeContext.saveThinProfile,
+                    profile,
+                    roomSecret,
+                  ),
                 onSelectProfile: nativeContext.selectThinProfile,
               }
             : {})}

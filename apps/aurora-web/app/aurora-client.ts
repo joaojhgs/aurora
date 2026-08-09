@@ -299,6 +299,8 @@ function createAuroraBrowserRuntimeFromStore(
   const runtime = createBrowserWebThinRuntime({
     mode,
     nodeRole: effectiveMeshNodeServices?.enabled ? 'mesh-node' : 'remote-console',
+    enabledCapabilityPacks: runtimeProfile?.localNode.enabledCapabilityPacks ?? [],
+    localSpeechPackState: runtimeProfile?.localNode.localSpeechPackState,
     gatewayUrl,
     bearerToken: () => runtime.client.auth.bearerToken(),
     signalingUrl: thinProfile?.signalingUrl,
@@ -601,11 +603,15 @@ export function isAuroraWebDemoMode(): boolean {
 
 export function auroraBrowserRuntimeDiagnostics(): string[] {
   const profile = auroraBrowserThinProfile()
+  const runtimeProfile = auroraBrowserRuntimeProfile()
   return explainBrowserThinRuntime({
     mode: profile?.mode,
     gatewayUrl: profile?.gatewayUrl,
     signalingUrl: profile?.signalingUrl,
     profile: profile?.webrtcProfile,
+    nodeRole: runtimeProfile?.nodeMode,
+    enabledCapabilityPacks: runtimeProfile?.localNode.enabledCapabilityPacks,
+    localSpeechPackState: runtimeProfile?.localNode.localSpeechPackState,
     rolloutFlags: browserWebRtcRolloutFlags(),
   })
 }

@@ -15,6 +15,8 @@ from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
+from app.shared.contracts.models.speech import SpeechRouteBinding
+
 
 class Envelope(BaseModel):
     """Transport envelope for all messages.
@@ -55,6 +57,7 @@ class Envelope(BaseModel):
     projected_method_id: str | None = None
     projected_method_topics: list[str] | None = None
     projected_method_set_digest: str | None = None
+    speech_route_binding: SpeechRouteBinding | None = None
 
     class Config:
         arbitrary_types_allowed = True
@@ -162,6 +165,7 @@ class MessageBus(Protocol):
         projected_method_id: str | None = None,
         projected_method_topics: list[str] | None = None,
         projected_method_set_digest: str | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
         correlation_id: str | None = None,
     ) -> None:
         """Publish a message to a topic.
@@ -205,6 +209,7 @@ class MessageBus(Protocol):
         projected_method_id: str | None = None,
         projected_method_topics: list[str] | None = None,
         projected_method_set_digest: str | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
         correlation_id: str | None = None,
     ) -> QueryResult:
         """Send a request and wait for a response.
@@ -224,12 +229,22 @@ class MessageBus(Protocol):
         """
         ...
 
-    def subscribe(self, topic: str, handler: Handler) -> None:
+    def subscribe(self, topic: str, handler: Handler, *, event: bool = False) -> None:
         """Subscribe to a topic with a handler.
 
         Args:
             topic: Topic pattern (supports wildcards, e.g., "TTS.*")
             handler: Async function to handle messages
+            event: True when subscribing to broadcast events; False for commands/replies.
+        """
+        ...
+
+    async def subscribe_event(self, topic: str, handler: Handler) -> None:
+        """Subscribe to a broadcast event and wait for transport readiness.
+
+        This is the readiness-aware event subscription API. Existing
+        ``subscribe(..., event=True)`` remains a synchronous compatibility path
+        for callers that do not need startup ordering guarantees.
         """
         ...
 

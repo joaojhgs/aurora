@@ -48,6 +48,8 @@ import {
   type AuroraThinConnectionMode,
   type BrowserPeerPersistenceStatus,
   type BrowserWebThinRuntime,
+  type NativeDesktopVoicePort,
+  type NativeMobileVoicePort,
 } from "@aurora/ui";
 import {
   NativePeerCredentialStore,
@@ -77,6 +79,9 @@ import {
   type TauriMeshNodeServices,
   type TauriMeshNodeServicesOptions,
 } from "./tauri-mesh-node-services";
+import { createTauriNativeDesktopVoicePort } from "./native-voice";
+import { createTauriNativeAndroidVoicePort } from "./native-android-voice";
+import { createTauriNativeIosVoicePort } from "./native-ios-voice";
 
 export const TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS = 90_000;
 
@@ -99,6 +104,8 @@ export interface AuroraTauriRuntime {
   localToolApprovals?: ProviderLocalApprovalControllerPort | undefined;
   localAssistant?: AuroraTauriLightweightAssistantConfig | undefined;
   localData?: AuroraTauriLocalDataRuntime | undefined;
+  nativeVoice?: NativeDesktopVoicePort | undefined;
+  nativeMobileVoice?: NativeMobileVoicePort | undefined;
   thinProfileConfigured: boolean;
   requiresOnboarding: boolean;
   pendingThinInviteText: string | null;
@@ -193,7 +200,6 @@ export type AuroraRuntimeProfileDocument = AuroraRuntimeProfileDocumentV2;
 
 export interface AuroraTauriPythonRuntimeProof {
   source: "native-package" | "test";
-  runtimeMode: string;
   includesPython: boolean;
 }
 
@@ -429,7 +435,10 @@ export function createInitialAuroraTauriRuntime(): AuroraTauriRuntime {
 }
 
 export function requiresAsyncAuroraTauriBootstrap(): boolean {
-  return isPackagedDesktopThinRuntime() || (isTauriRuntime() && isMobileTauriRuntime());
+  // Every native shell must load the persisted runtime profile before selecting
+  // a local node or remote-console path. The package is role-neutral; profile
+  // state, not a build flag, decides the runtime.
+  return isTauriRuntime();
 }
 
 export function createAuroraTauriRuntime({
@@ -497,6 +506,14 @@ export function createAuroraTauriRuntime({
 
   if (isTauriRuntime()) {
     const nativeTransport = new TauriLocalTransport({ invoke, listen });
+    const nativeVoice = isDesktopTauriRuntime()
+      ? createTauriNativeDesktopVoicePort({ invoke, listen })
+      : undefined;
+    const nativeMobileVoice = isAndroidTauriRuntime()
+      ? createTauriNativeAndroidVoicePort(invoke)
+      : isIosTauriRuntime()
+        ? createTauriNativeIosVoicePort(invoke)
+      : undefined;
     const isMobileNative = isMobileTauriRuntime();
 
     if (isMobileNative) {
@@ -558,6 +575,7 @@ export function createAuroraTauriRuntime({
             ? localAssistant ?? connectedAuroraInferenceAssistant(thinRuntime.client)
             : undefined,
           localData: localDataRuntime(meshNodeServices),
+          nativeMobileVoice,
           thinProfileConfigured: runtimeProfileConfigured,
           requiresOnboarding: !runtimeProfileConfigured,
           pendingThinInviteText: thinInviteText,
@@ -643,11 +661,11 @@ export function createAuroraTauriRuntime({
     if (
       runtimeTier !== "python-full" &&
       (
-        isPackagedDesktopThinRuntime() ||
         configuredRuntimeProfile ||
         configuredProfile ||
         configuredGatewayUrl ||
-        thinConnectionMode !== "http-only"
+        thinConnectionMode !== "http-only" ||
+        thinInviteText
       )
     ) {
       const thinRuntime = createTauriWebThinRuntime({
@@ -702,6 +720,7 @@ export function createAuroraTauriRuntime({
           ? localAssistant ?? connectedAuroraInferenceAssistant(thinRuntime.client)
           : undefined,
         localData: localDataRuntime(meshNodeServices),
+        nativeVoice,
         thinProfileConfigured: runtimeProfileConfigured,
         requiresOnboarding: !runtimeProfileConfigured,
         pendingThinInviteText: thinInviteText,
@@ -748,12 +767,10 @@ export function createAuroraTauriRuntime({
       ],
       thinProfileConfigured: false,
       runtimeProfile: configuredRuntimeProfile,
-      nodeMode: configuredRuntimeProfile?.nodeMode ?? "mesh-node",
-      runtimeTier: configuredRuntimeProfile?.runtimeTier
-        ?? (surfaceSupportsRuntimeTier(currentAuroraSurfaceProfile(), "python-full", {
-          packageIncludesPython: hasPythonFullRuntimeCapability(packageCapabilities),
-        }) ? "python-full" : "lightweight-ts"),
-      requiresOnboarding: false,
+      nodeMode: runtimeNodeMode,
+      runtimeTier,
+      nativeVoice,
+      requiresOnboarding: !runtimeProfileConfigured,
       pendingThinInviteText: null,
       modePreferenceStore: secureModePreferenceStore(
         nativeTransport,
@@ -1807,8 +1824,7 @@ function hasPythonFullRuntimeCapability(
   return packageCapabilities.pythonFullRuntime === true
     && !!proof
     && proof.includesPython === true
-    && (proof.source === "native-package" || proof.source === "test")
-    && proof.runtimeMode === import.meta.env.VITE_AURORA_RUNTIME_MODE;
+    && (proof.source === "native-package" || proof.source === "test");
 }
 
 function defaultThinProfileDocument(): AuroraThinProfileDocument {
@@ -1851,13 +1867,6 @@ function isTauriRuntime(): boolean {
   return "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
 }
 
-function isPackagedDesktopThinRuntime(): boolean {
-  return (
-    isDesktopTauriRuntime() &&
-    import.meta.env.VITE_AURORA_RUNTIME_MODE === "desktop-thin"
-  );
-}
-
 function isDesktopTauriRuntime(): boolean {
   return isTauriRuntime() && !isMobileTauriRuntime();
 }
@@ -1883,7 +1892,6 @@ function tauriNativePlatform(): string {
 
 function currentAuroraSurfaceProfile() {
   return getAuroraSurfaceProfile({
-    runtimeMode: import.meta.env.VITE_AURORA_RUNTIME_MODE,
     transportKind: DEFAULT_THIN_CONNECTION_MODE,
     userAgent: typeof navigator === "undefined" ? undefined : navigator.userAgent,
   });

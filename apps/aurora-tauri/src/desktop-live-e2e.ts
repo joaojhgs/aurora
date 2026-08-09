@@ -204,7 +204,6 @@ export function isDesktopLiveE2eHookEnabled(
 ): boolean {
   return Boolean(
     env.VITE_AURORA_DESKTOP_LIVE_E2E === "1" &&
-    env.VITE_AURORA_RUNTIME_MODE === "desktop-thin" &&
     env.VITE_AURORA_CONNECTION_MODE === "webrtc-only" &&
     env.VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK === "1",
   );
@@ -236,9 +235,6 @@ function desktopLiveSurfaceSupportsNativeWebRtc(
   env: Record<string, unknown>,
 ): boolean {
   return getAuroraSurfaceProfile({
-    runtimeMode: typeof env.VITE_AURORA_RUNTIME_MODE === "string"
-      ? env.VITE_AURORA_RUNTIME_MODE
-      : undefined,
     transportKind: typeof env.VITE_AURORA_CONNECTION_MODE === "string"
       ? env.VITE_AURORA_CONNECTION_MODE
       : undefined,

@@ -17,6 +17,9 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.shared.contracts.io_model import IOModel
+from app.shared.contracts.models.speech import SpeechMethodConstraints
+
 # Optional imports for version detection
 try:
     from importlib.metadata import version as get_package_version_from_metadata
@@ -27,12 +30,6 @@ try:
     import toml
 except ImportError:
     toml = None
-
-
-class IOModel(BaseModel):
-    """Base class for input/output models in method contracts."""
-
-    pass
 
 
 class CallableFeatureContract(BaseModel):
@@ -83,6 +80,7 @@ class MethodContract(BaseModel):
     method_type: str = "use"
     input_model: type[BaseModel]
     output_model: type[BaseModel] | None = None
+    speech_constraints: SpeechMethodConstraints | None = None
     exposure: str = "internal"
     always_available: bool = False
 
@@ -229,6 +227,7 @@ def method_contract(
     always_available: bool = False,
     callable_feature_ids: list[str] | tuple[str, ...] | None = None,
     public_infrastructure: bool = False,
+    speech_constraints: Any | None = None,
     **kwargs,
 ):
     """Register a method contract.
@@ -267,6 +266,7 @@ def method_contract(
             "always_available": always_available,
             "callable_feature_ids": list(callable_feature_ids or []),
             "public_infrastructure": public_infrastructure,
+            "speech_constraints": _normalize_speech_constraints(speech_constraints),
             **kwargs,
         }
         return fn
@@ -307,6 +307,9 @@ def register_method(
         module_name,
         metadata["bus_topic"],
         metadata["callable_feature_ids"],
+    )
+    metadata["speech_constraints"] = _normalize_speech_constraints(
+        metadata.get("speech_constraints")
     )
 
     # Create and register contract — key by full bus_topic to avoid
@@ -438,6 +441,9 @@ def export() -> str:
                     "exposure": m.exposure,
                     "input_model": m.input_model.__name__ if m.input_model else None,
                     "output_model": m.output_model.__name__ if m.output_model else None,
+                    "speech_constraints": m.speech_constraints.model_dump(mode="json")
+                    if m.speech_constraints is not None
+                    else None,
                 }
                 for m in module.methods
             ],
@@ -511,3 +517,17 @@ def method_contract_advertisable(contract: MethodContract) -> bool:
     """Whether a contract may be advertised outside its service process."""
 
     return not validate_method_contract(contract)
+
+
+def _normalize_speech_constraints(
+    value: Any | None,
+) -> SpeechMethodConstraints | None:
+    """Validate and canonicalize optional speech route constraints."""
+
+    if value is None:
+        return None
+    if isinstance(value, SpeechMethodConstraints):
+        return SpeechMethodConstraints.model_validate(value.model_dump(mode="json"))
+    if hasattr(value, "model_dump"):
+        value = value.model_dump(mode="json")
+    return SpeechMethodConstraints.model_validate(value)

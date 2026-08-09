@@ -61,6 +61,7 @@ class ScriptedPeerBridge:
         caller_peer_id: str | None = None,
         auth_grant_revision: int | None = None,
         manifest_revision: int | None = None,
+        speech_route_binding: Any | None = None,
     ) -> QueryResult:
         _ = (
             principal_id,
@@ -70,6 +71,7 @@ class ScriptedPeerBridge:
             caller_peer_id,
             auth_grant_revision,
             manifest_revision,
+            speech_route_binding,
         )
         self.calls.append((peer_id, method, correlation_id))
         outcomes = self._outcomes.get(peer_id)
@@ -175,7 +177,7 @@ def _service_for_module(module: str, *, max_concurrent: int) -> PeerServiceInfo:
 @pytest.mark.integration
 class TestMeshChaosFallbacks:
     @pytest.mark.asyncio
-    async def test_provider_disconnect_mid_request_falls_back_to_local(
+    async def test_provider_disconnect_mid_request_returns_terminal_error(
         self,
         inner_bus: AsyncMock,
         routing_table: RoutingTable,
@@ -188,15 +190,17 @@ class TestMeshChaosFallbacks:
 
         result = await mesh_bus.request(OrchestratorMethods.USER_INPUT, ChaosPayload())
 
-        assert result.ok is True
-        assert result.data == {"source": "local"}
+        assert result.ok is False
+        assert result.error == "No available device can handle this action."
+        assert result.data == {"reason_code": "remote_transport_unavailable"}
+        assert "data channel closed" not in result.error
         assert len(bridge.calls) == 1
         assert bridge.calls[0][0:2] == ("orchestrator-peer", OrchestratorMethods.USER_INPUT)
         assert bridge.calls[0][2]
-        inner_bus.request.assert_awaited_once()
+        inner_bus.request.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_remote_failure_falls_back_to_second_network_provider(
+    async def test_remote_app_error_does_not_try_second_network_provider(
         self,
         inner_bus: AsyncMock,
         routing_table: RoutingTable,
@@ -217,6 +221,49 @@ class TestMeshChaosFallbacks:
         bridge = ScriptedPeerBridge(
             {
                 "orchestrator-fast": [QueryResult(ok=False, error="provider overloaded")],
+                "orchestrator-slow": [QueryResult(ok=True, data={"source": "orchestrator-slow"})],
+            }
+        )
+        mesh_bus = MeshBus(inner_bus, routing_table, bridge, mesh_config)
+
+        result = await mesh_bus.request(OrchestratorMethods.USER_INPUT, ChaosPayload())
+
+        assert result.ok is False
+        assert result.error == "provider overloaded"
+        assert [call[0:2] for call in bridge.calls] == [
+            ("orchestrator-fast", OrchestratorMethods.USER_INPUT),
+        ]
+        assert all(call[2] for call in bridge.calls)
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_capability_changed_preaccept_tries_second_network_provider(
+        self,
+        inner_bus: AsyncMock,
+        routing_table: RoutingTable,
+        peer_registry: PeerRegistry,
+        mesh_config: MeshConfig,
+    ) -> None:
+        mesh_config = mesh_config.model_copy(
+            update={
+                "services": {
+                    **dict(mesh_config.services),
+                    "Orchestrator": mesh_policy(prefer="network", fallback="network"),
+                }
+            }
+        )
+        routing_table = RoutingTable(mesh_config, peer_registry)
+        await _register_peer(peer_registry, "orchestrator-fast", ["Orchestrator"], latency_ms=5.0)
+        await _register_peer(peer_registry, "orchestrator-slow", ["Orchestrator"], latency_ms=25.0)
+        bridge = ScriptedPeerBridge(
+            {
+                "orchestrator-fast": [
+                    QueryResult(
+                        ok=False,
+                        data={"accepted": False, "reason_code": "capability_changed"},
+                        error="capability_changed",
+                    )
+                ],
                 "orchestrator-slow": [QueryResult(ok=True, data={"source": "orchestrator-slow"})],
             }
         )
@@ -286,7 +333,8 @@ class TestMeshChaosSafeHardFailures:
         result = await mesh_bus.request(ToolingMethods.EXECUTE_TOOL, payload)
 
         assert result.ok is False
-        assert "not negotiated" in result.error
+        assert result.error == "The selected device is unavailable."
+        assert result.data == {"reason_code": "selector_peer_stale"}
         assert bridge.calls == []
         inner_bus.request.assert_not_awaited()
 
@@ -319,7 +367,8 @@ class TestMeshChaosSafeHardFailures:
         result = await mesh_bus.request(ToolingMethods.EXECUTE_TOOL, payload)
 
         assert result.ok is False
-        assert "not allowed by policy" in result.error
+        assert result.error == "The selected device is not allowed to handle this action."
+        assert result.data == {"reason_code": "selector_peer_unauthorized"}
         assert bridge.calls == []
         inner_bus.request.assert_not_awaited()
 
@@ -345,7 +394,8 @@ class TestMeshChaosSafeHardFailures:
         result = await mesh_bus.request(ToolingMethods.EXECUTE_TOOL, payload)
 
         assert result.ok is False
-        assert "at capacity" in result.error
+        assert result.error == "The selected device is busy."
+        assert result.data == {"reason_code": "selector_provider_at_capacity"}
         assert bridge.calls == []
         inner_bus.request.assert_not_awaited()
 
@@ -361,7 +411,8 @@ class TestMeshChaosSafeHardFailures:
         result = await mesh_bus.request(ToolingMethods.EXECUTE_TOOL, ChaosPayload())
 
         assert result.ok is False
-        assert "No route available" in result.error
+        assert result.error == "No available device can handle this action."
+        assert result.data == {"reason_code": "no_route"}
         inner_bus.request.assert_not_awaited()
 
     @pytest.mark.asyncio

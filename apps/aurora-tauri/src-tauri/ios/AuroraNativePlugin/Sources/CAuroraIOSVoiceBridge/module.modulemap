@@ -1,0 +1,4 @@
+module CAuroraIOSVoiceBridge {
+  header "include/aurora_ios_voice_bridge.h"
+  export *
+}

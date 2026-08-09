@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.shared.contracts.mesh_compatibility import (
     MeshCompatibilityReasonCode,
@@ -27,6 +27,12 @@ from app.shared.contracts.models.orchestrator import (
     OrchestratorInferChatChunk,
     OrchestratorInferChatRequest,
     OrchestratorInferChatResponse,
+)
+from app.shared.contracts.models.speech import (
+    MAX_JS_SAFE_INTEGER,
+    LogicalVoiceId,
+    SpeechLanguageRequirement,
+    SpeechMethodConstraints,
 )
 from app.shared.contracts.models.tooling import (
     ToolingGetExportCatalogRequest,
@@ -116,6 +122,7 @@ class MethodInfo(IOModel):
     callable_features: list[CallableFeatureContract] = Field(default_factory=list)
     public_infrastructure: bool = False
     method_type: str = "use"
+    speech_constraints: SpeechMethodConstraints | None = None
     # JSON Schema for input/output models (for OpenAPI generation)
     input_schema: dict[str, Any] | None = None
     output_schema: dict[str, Any] | None = None
@@ -1078,9 +1085,9 @@ class RouteCandidateDecision(IOModel):
     projection_revision: str = ""
     projection_digest: str = ""
     latency_ms: float | None = None
-    active_calls: int = 0
-    max_concurrent: int = 0
-    available_capacity: int | None = None
+    active_calls: int = Field(default=0, ge=0, le=MAX_JS_SAFE_INTEGER)
+    max_concurrent: int = Field(default=0, ge=0, le=MAX_JS_SAFE_INTEGER)
+    available_capacity: int | None = Field(default=None, ge=0, le=MAX_JS_SAFE_INTEGER)
     policy: CapabilityPolicyDecisionInfo = Field(default_factory=CapabilityPolicyDecisionInfo)
     freshness: CapabilityFreshnessInfo = Field(default_factory=CapabilityFreshnessInfo)
     auth_rbac_state: str = "unknown"
@@ -1089,14 +1096,67 @@ class RouteCandidateDecision(IOModel):
     blockers: list[RouteBlockerInfo] = Field(default_factory=list)
 
 
+_RAW_SPEECH_HINT_FIELDS = frozenset(
+    {"text", "audio", "audio_data", "payload", "message", "messages", "input", "params"}
+)
+_MESH_SELECTOR_FIELDS = frozenset(MeshAddressSelector.model_fields)
+
+
+def _contains_raw_payload_key(value: Any) -> bool:
+    if isinstance(value, dict):
+        if _RAW_SPEECH_HINT_FIELDS.intersection(value):
+            return True
+        return any(_contains_raw_payload_key(item) for item in value.values())
+    if isinstance(value, list | tuple):
+        return any(_contains_raw_payload_key(item) for item in value)
+    return False
+
+
+class RouteExplainSpeechConstraints(IOModel):
+    """Typed speech routing hints for ExplainRoute without request payload data."""
+
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    language_requirement: SpeechLanguageRequirement | None = None
+    voice_id: LogicalVoiceId | None = None
+
+
 class RouteExplainRequest(IOModel):
     """Explain how Gateway would route a topic/module selector."""
+
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
 
     topic: str | None = None
     module: str | None = None
     method: str | None = None
     selector: MeshAddressSelector | None = None
+    speech: RouteExplainSpeechConstraints | None = None
     include_candidates: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_raw_payload_fields(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            if _RAW_SPEECH_HINT_FIELDS.intersection(value):
+                raise ValueError("route explanations must not include request payload fields")
+            for key, item in value.items():
+                if key != "speech" and _contains_raw_payload_key(item):
+                    raise ValueError("route explanations must not include request payload fields")
+        return value
+
+    @field_validator("selector", mode="before")
+    @classmethod
+    def _reject_unknown_selector_fields(cls, value: Any) -> Any:
+        if isinstance(value, dict) and set(value) - _MESH_SELECTOR_FIELDS:
+            raise ValueError("route explanation selectors must use typed selector fields")
+        return value
+
+    @field_validator("speech", mode="before")
+    @classmethod
+    def _reject_raw_speech_payload_fields(cls, value: Any) -> Any:
+        if isinstance(value, dict) and _RAW_SPEECH_HINT_FIELDS.intersection(value):
+            raise ValueError("speech route hints must not include request payload fields")
+        return value
 
 
 class RouteExplainResponse(IOModel):

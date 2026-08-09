@@ -92,6 +92,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     override fun onResume() {
         foreground = true
         focused = true
+        syncNativeVoiceRoute()
         if (!microphonePermissionRequestInFlight) {
             resolvePendingMicRequests(allowRuntimePrompt = false)
         }
@@ -373,7 +374,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         }
 
         val roleManager = roleManagerOrNull()
-        if (roleManager == null) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || roleManager == null) {
             val ret = JSObject()
             ret.put("started", false)
             ret.put("status", status)
@@ -458,7 +459,16 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun startVoiceForegroundService(invoke: Invoke) {
+        val args = invoke.parseArgs(AndroidVoiceForegroundServiceStartArgs::class.java)
         val status = voiceForegroundServiceStatusObject()
+        if (args.backgroundSession) {
+            val ret = JSObject()
+            ret.put("started", false)
+            ret.put("status", status)
+            ret.put("reason", "background_voice_unavailable")
+            invoke.resolve(ret)
+            return
+        }
         if (!status.getBoolean("startable")) {
             val ret = JSObject()
             ret.put("started", false)
@@ -468,7 +478,11 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             return
         }
 
-        val intent = Intent(activity, AuroraVoiceForegroundService::class.java)
+        AuroraVoiceNativeConfigStore.setRemoteAudioConsent(activity, args.remoteAudioConsent)
+
+        val intent = Intent(activity, AuroraVoiceForegroundService::class.java).apply {
+            if (args.backgroundSession) action = AuroraVoiceForegroundService.ACTION_START_BACKGROUND
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             activity.startForegroundService(intent)
         } else {
@@ -488,6 +502,24 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("stopped", stopped)
         ret.put("status", voiceForegroundServiceStatusObject())
         ret.put("reason", if (stopped) "foreground_service_stop_requested" else "foreground_service_not_running")
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun finishVoiceForegroundService(invoke: Invoke) {
+        val intent = Intent(activity, AuroraVoiceForegroundService::class.java).apply {
+            action = AuroraVoiceForegroundService.ACTION_FINISH
+        }
+        val delivered = if (AuroraVoiceForegroundService.running) {
+            activity.startService(intent)
+            true
+        } else {
+            false
+        }
+        val ret = JSObject()
+        ret.put("finished", delivered)
+        ret.put("status", voiceForegroundServiceStatusObject())
+        ret.put("reason", if (delivered) "foreground_service_finish_requested" else "foreground_service_not_running")
         invoke.resolve(ret)
     }
 
@@ -729,7 +761,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             record.put("createdAtMs", if (args.createdAtMs > 0) args.createdAtMs else currentUnixMs())
             if (args.expiresAtMs > 0) record.put("expiresAtMs", args.expiresAtMs)
             securePrefs().edit().putString(thinPeerCredentialKey(args.peerId), encryptSecureValue(record.toString())).apply()
-            invoke.resolve(thinPeerStatusResponse(args.peerId, record, true))
+            val response = thinPeerStatusResponse(args.peerId, record, true)
+            response.put("voiceRoute", syncNativeVoiceRoute())
+            invoke.resolve(response)
         } catch (error: Exception) {
             invoke.reject(error.message ?: "thin_peer_credential_set_failed")
         }
@@ -753,7 +787,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         try {
             validateNonEmpty("peerId", args.peerId, 256)
             securePrefs().edit().remove(thinPeerCredentialKey(args.peerId)).apply()
-            invoke.resolve(thinPeerStatusResponse(args.peerId, null, false))
+            val response = thinPeerStatusResponse(args.peerId, null, false)
+            response.put("voiceRoute", syncNativeVoiceRoute())
+            invoke.resolve(response)
         } catch (error: Exception) {
             invoke.reject(error.message ?: "thin_peer_credential_delete_failed")
         }
@@ -870,6 +906,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val ret = thinProfileStatusObject()
         ret.put("key", THIN_PROFILE_KEY)
         ret.put("ok", true)
+        ret.put("voiceRoute", syncNativeVoiceRoute())
         invoke.resolve(ret)
     }
 
@@ -974,8 +1011,16 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private fun assistantRoleStatusObject(): JSObject {
         val sdkSupportsRole = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
         val roleManager = roleManagerOrNull()
-        val roleAvailable = roleManager?.isRoleAvailable(RoleManager.ROLE_ASSISTANT) == true
-        val roleHeld = roleManager?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true
+        val roleAvailable = if (sdkSupportsRole) {
+            roleManager?.isRoleAvailable(RoleManager.ROLE_ASSISTANT) == true
+        } else {
+            false
+        }
+        val roleHeld = if (sdkSupportsRole) {
+            roleManager?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true
+        } else {
+            false
+        }
         val handlesAssistActivity = packageHandlesAssist()
         val declaresVoiceInteractionService = packageDeclaresVoiceInteractionService()
         val packageQualified = handlesAssistActivity && declaresVoiceInteractionService
@@ -984,7 +1029,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
         val ret = JSObject()
         ret.put("platform", "android")
-        ret.put("roleName", RoleManager.ROLE_ASSISTANT)
+        ret.put("roleName", if (sdkSupportsRole) RoleManager.ROLE_ASSISTANT else "android.app.role.ASSISTANT")
         ret.put("sdkSupportsRole", sdkSupportsRole)
         ret.put("handlesAssistActivity", handlesAssistActivity)
         ret.put("declaresVoiceInteractionService", declaresVoiceInteractionService)
@@ -1210,19 +1255,33 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     ): JSObject {
         val manifestReady = hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE) &&
             (Build.VERSION.SDK_INT < 34 || hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE_MICROPHONE))
-        val startable = microphoneGranted && foregroundServiceReady && manifestReady
+        val nativeSessionReady = AuroraVoiceNativeConfigStore.isConfigured(activity)
+        val notificationReady = canPostNotifications()
+        val startable = microphoneGranted && foregroundServiceReady && manifestReady && notificationReady && nativeSessionReady
         val ret = JSObject()
         ret.put("platform", "android")
         ret.put("running", AuroraVoiceForegroundService.running)
+        val capture = AuroraVoiceForegroundService.captureSnapshot
+        ret.put("captureActive", capture.captureActive)
+        ret.put("captureBackend", "android-audiorecord-rust-queue")
+        ret.put("sampleRateHz", capture.sampleRateHz)
+        ret.put("acceptedChunks", capture.acceptedChunks)
+        ret.put("acceptedSamples", capture.acceptedSamples)
+        ret.put("droppedChunks", capture.droppedChunks)
+        ret.put("discontinuities", capture.discontinuities)
+        ret.put("queuedChunks", capture.queuedChunks)
+        ret.put("captureError", capture.errorCode)
         ret.put("startable", startable)
         ret.put("microphoneGranted", microphoneGranted)
         ret.put("notificationsGranted", notificationsGranted)
+        ret.put("notificationReady", notificationReady)
         ret.put("foregroundServiceReady", foregroundServiceReady)
         ret.put("manifestReady", manifestReady)
-        ret.put("state", voiceForegroundState(startable, manifestReady, microphoneGranted, notificationsGranted))
-        ret.put("reason", voiceForegroundReason(startable, manifestReady, microphoneGranted, notificationsGranted))
+        ret.put("nativeSessionReady", nativeSessionReady)
+        ret.put("state", voiceForegroundState(startable, manifestReady, microphoneGranted, notificationReady, nativeSessionReady))
+        ret.put("reason", voiceForegroundReason(startable, manifestReady, microphoneGranted, notificationReady, nativeSessionReady))
         ret.put("privacyClass", "raw-audio")
-        ret.put("backendAudioEvidenceRequired", true)
+        ret.put("backendAudioEvidenceRequired", !capture.captureActive)
         ret.put("evidenceSource", "android-permission-foreground-service")
         ret.put("secretsRedacted", true)
         return ret
@@ -1232,11 +1291,13 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         startable: Boolean,
         manifestReady: Boolean,
         microphoneGranted: Boolean,
-        notificationsGranted: Boolean,
+        notificationReady: Boolean,
+        nativeSessionReady: Boolean,
     ): String {
         if (!manifestReady) return "unsupported_platform"
         if (!microphoneGranted) return "needs_native_permission"
-        if (!notificationsGranted) return "degraded"
+        if (!notificationReady) return "degraded"
+        if (!nativeSessionReady) return "degraded"
         if (startable) return "available"
         return "degraded"
     }
@@ -1245,11 +1306,13 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         startable: Boolean,
         manifestReady: Boolean,
         microphoneGranted: Boolean,
-        notificationsGranted: Boolean,
+        notificationReady: Boolean,
+        nativeSessionReady: Boolean,
     ): String {
         if (!manifestReady) return "foreground_service_manifest_missing"
         if (!microphoneGranted) return "microphone_permission_missing"
-        if (!notificationsGranted) return "notification_permission_missing"
+        if (!notificationReady) return "notification_delivery_unavailable"
+        if (!nativeSessionReady) return "native_voice_route_missing"
         if (startable) return "foreground_service_startable"
         return "foreground_service_degraded"
     }
@@ -1273,7 +1336,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("backend", "android-keystore")
         ret.put("persisted", true)
         ret.put("privacyClass", "credential")
-        ret.put("allowedKeyPrefixes", "aurora.session,aurora.auth,aurora.gateway,aurora.mesh,aurora.admin")
+        ret.put("allowedKeyPrefixes", "aurora.session,aurora.auth,aurora.gateway,aurora.mesh,aurora.admin,aurora.voice")
         ret.put("evidenceSource", "android-keystore-shared-preferences")
         ret.put("secretsRedacted", true)
         return ret
@@ -1537,6 +1600,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             "aurora.gateway",
             "aurora.mesh",
             "aurora.admin",
+            "aurora.voice",
         )
         if (allowed.none { key == it || key.startsWith("${it}.") || key.startsWith("${it}-") || key.startsWith("${it}_") }) {
             throw IllegalArgumentException("secure storage key must be in an Aurora credential namespace")
@@ -1571,6 +1635,77 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("persisted", true)
         ret.put("privacyClass", "nonsecret-connection-profile")
         ret.put("secretsRedacted", true)
+        return ret
+    }
+
+    /**
+     * Resolve the native voice route from the active runtime profile and the
+     * native peer credential store. Both remote-console and mesh-node profiles
+     * may legitimately own a Gateway route. This deliberately does not select
+     * or gate a role; it only mirrors the route already authorized by
+     * onboarding/profile state.
+     */
+    private fun syncNativeVoiceRoute(): JSObject {
+        val profile = activity
+            .getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE)
+            .getString(THIN_PROFILE_KEY, null)
+            ?.let { raw -> runCatching { JSONObject(raw) }.getOrNull() }
+        val candidate = profile?.let(::voiceRouteCandidate)
+        if (candidate == null) {
+            AuroraVoiceNativeConfigStore.clearRoute(activity)
+            return voiceRouteStatusObject("voice_route_profile_missing")
+        }
+
+        val uri = Uri.parse(candidate.gateway)
+        val loopback = uri.host == "127.0.0.1" || uri.host == "localhost" || uri.host == "::1"
+        val bearer = candidate.peerId
+            ?.let(::loadUnexpiredThinPeerCredential)
+            ?.optString("rawBearerToken")
+            .orEmpty()
+        if (!loopback && bearer.isBlank()) {
+            AuroraVoiceNativeConfigStore.clearRoute(activity)
+            return voiceRouteStatusObject("voice_route_credential_missing")
+        }
+
+        return try {
+            AuroraVoiceNativeConfigStore.setRoute(activity, candidate.gateway, bearer)
+            voiceRouteStatusObject("voice_route_configured")
+        } catch (_: Exception) {
+            AuroraVoiceNativeConfigStore.clearRoute(activity)
+            voiceRouteStatusObject("voice_route_invalid")
+        }
+    }
+
+    private fun voiceRouteCandidate(document: JSONObject): VoiceRouteCandidate? {
+        val profiles = document.optJSONArray("profiles") ?: return null
+        val activeProfileId = document.optString("activeProfileId").takeIf { it.isNotBlank() } ?: return null
+        val profile = (0 until profiles.length())
+            .mapNotNull { profiles.optJSONObject(it) }
+            .firstOrNull { it.optString("id") == activeProfileId }
+            ?: return null
+        val home = profile.optJSONObject("homeConnection")
+        val mode = home?.optString("mode")?.takeIf { it.isNotBlank() }
+            ?: profile.optString("mode").takeIf { it.isNotBlank() }
+        if (mode == null || mode !in setOf("http-only", "webrtc-preferred")) return null
+        val gateway = home?.optString("gatewayUrl")?.trim()?.takeIf { it.isNotBlank() }
+            ?: profile.optString("gatewayUrl").trim().takeIf { it.isNotBlank() }
+            ?: return null
+        val homeWebRtc = home?.optJSONObject("webrtcProfile")
+        val profileWebRtc = profile.optJSONObject("webrtcProfile")
+        val peerId = home?.optString("homePeerId")?.takeIf { it.isNotBlank() }
+            ?: homeWebRtc?.optString("expectedStablePeerId")?.takeIf { it.isNotBlank() }
+            ?: profileWebRtc?.optString("expectedStablePeerId")?.takeIf { it.isNotBlank() }
+        return VoiceRouteCandidate(gateway, peerId)
+    }
+
+    private fun voiceRouteStatusObject(reason: String): JSObject {
+        val configured = AuroraVoiceNativeConfigStore.load(activity) != null
+        val ret = JSObject()
+        ret.put("platform", "android")
+        ret.put("configured", configured)
+        ret.put("reason", if (configured) "voice_route_configured" else reason)
+        ret.put("secretsRedacted", true)
+        ret.put("redactedFields", JSArray().apply { put("gateway"); put("bearer") })
         return ret
     }
 
@@ -2436,6 +2571,17 @@ class AssistantRoleResultArgs {
 class AndroidPermissionRequestArgs {
     var permission: String = ""
 }
+
+@InvokeArg
+class AndroidVoiceForegroundServiceStartArgs {
+    var remoteAudioConsent: Boolean = false
+    var backgroundSession: Boolean = false
+}
+
+private data class VoiceRouteCandidate(
+    val gateway: String,
+    val peerId: String?,
+)
 
 @InvokeArg
 class AndroidShareTextArgs {

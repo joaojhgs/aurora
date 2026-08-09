@@ -39,6 +39,11 @@ from app.shared.contracts.models.orchestrator import (
     OrchestratorMethods,
 )
 from app.shared.contracts.models.scheduler import SchedulerMethods
+from app.shared.contracts.models.speech import (
+    SpeechMethodConstraints,
+    SpeechRouteBinding,
+    compute_speech_projection_binding_revision,
+)
 from app.shared.contracts.models.stt import (
     AudioSessionMethods,
     TranscriptionMethods,
@@ -46,6 +51,7 @@ from app.shared.contracts.models.stt import (
 )
 from app.shared.contracts.models.tooling import ToolingMethods
 from app.shared.contracts.models.tts import TTSMethods
+from app.shared.contracts.speech_routing import compute_speech_route_requirement_digest_for_payload
 from app.shared.mesh.tracing import (
     audit_details_hash,
     ensure_correlation_id,
@@ -547,6 +553,7 @@ class RPCHandler:
         local_peer_role_provider: Callable[[], str] | None = None,
         event_topic_authorizer: Callable[[str, str, Identity], bool | Any] | None = None,
         provider_readiness_provider: Callable[[str], bool] | None = None,
+        provider_binding_state_provider: Callable[[], tuple[Any, int] | None] | None = None,
     ):
         self._bus = bus
         self._registry = registry
@@ -569,6 +576,7 @@ class RPCHandler:
         self._local_peer_role_provider = local_peer_role_provider
         self._event_topic_authorizer = event_topic_authorizer
         self._provider_readiness_provider = provider_readiness_provider
+        self._provider_binding_state_provider = provider_binding_state_provider
         # Track active remote calls per module for capacity limiting
         self._active_remote_calls: dict[str, int] = {}
         self._active_rpc_tasks: dict[str, asyncio.Task[Any]] = {}
@@ -800,6 +808,15 @@ class RPCHandler:
         except Exception as error:
             log_warning(f"RPCHandler: Failed to resolve provider readiness: {error}")
             return False
+
+    def _local_provider_binding_state(self) -> tuple[Any, int] | None:
+        if self._provider_binding_state_provider is None:
+            return None
+        try:
+            return self._provider_binding_state_provider()
+        except Exception as error:
+            log_warning(f"RPCHandler: Failed to resolve provider binding state: {error}")
+            return None
 
     async def _authorized_event_topics(
         self, requested_topics: tuple[str, ...], identity: Identity
@@ -1066,6 +1083,12 @@ class RPCHandler:
     async def _handle_call(self, msg: dict[str, Any]) -> None:
         method_name = msg.get("method")
         params = msg.get("params") or {}
+        identity_meta = msg.get("identity") if isinstance(msg.get("identity"), dict) else {}
+        speech_route_binding = self._parse_speech_route_binding(identity_meta)
+        if isinstance(params, dict):
+            params = dict(params)
+            params.pop("speech_route_binding", None)
+            params.pop("route_binding", None)
         req_id = msg.get("id")
         correlation_id = ensure_correlation_id(
             params,
@@ -1459,31 +1482,6 @@ class RPCHandler:
         module_for_capacity = svc_name
         capacity_acquired = False
         try:
-            if active_projection is not None and projected_service is not None:
-                capacity = dict(projected_service.capacity or {})
-                max_concurrent = int(capacity.get("max_concurrent") or 0)
-                if max_concurrent > 0:
-                    active = self._active_remote_calls.get(module_for_capacity, 0)
-                    if active >= max_concurrent:
-                        await self._deny_rpc(
-                            req_id,
-                            method_name,
-                            correlation_id,
-                            "service_at_capacity",
-                            429,
-                            f"Service {module_for_capacity} at capacity",
-                            params=params,
-                            principal_id=identity.principal_id,
-                            details={"module": module_for_capacity, "active": active},
-                        )
-                        return
-                self._active_remote_calls[module_for_capacity] = (
-                    self._active_remote_calls.get(module_for_capacity, 0) + 1
-                )
-                capacity_acquired = True
-                self._notify_capacity_change(module_for_capacity, max_concurrent)
-
-            log_debug(f"RPCHandler: Executing {topic} via bus correlation_id={correlation_id}")
             typed_params = params
             if isinstance(params, dict):
                 if topic.startswith("Tooling."):
@@ -1541,6 +1539,48 @@ class RPCHandler:
                         correlation_id=correlation_id,
                     )
                     return
+            if not self._validate_speech_route_binding(
+                topic=topic,
+                typed_params=typed_params,
+                binding=speech_route_binding,
+                active_projection=active_projection,
+                projected_service=projected_service,
+                projected_method=projected_method,
+            ):
+                await self._send_capability_changed(
+                    req_id=req_id,
+                    method_name=method_name,
+                    correlation_id=correlation_id,
+                    params=params,
+                    principal_id=identity.principal_id,
+                )
+                return
+
+            if active_projection is not None and projected_service is not None:
+                capacity = dict(projected_service.capacity or {})
+                max_concurrent = int(capacity.get("max_concurrent") or 0)
+                if max_concurrent > 0:
+                    active = self._active_remote_calls.get(module_for_capacity, 0)
+                    if active >= max_concurrent:
+                        await self._deny_rpc(
+                            req_id,
+                            method_name,
+                            correlation_id,
+                            "service_at_capacity",
+                            429,
+                            f"Service {module_for_capacity} at capacity",
+                            params=params,
+                            principal_id=identity.principal_id,
+                            details={"module": module_for_capacity, "active": active},
+                        )
+                        return
+                self._active_remote_calls[module_for_capacity] = (
+                    self._active_remote_calls.get(module_for_capacity, 0) + 1
+                )
+                capacity_acquired = True
+                self._notify_capacity_change(module_for_capacity, max_concurrent)
+
+            log_debug(f"RPCHandler: Executing {topic} via bus correlation_id={correlation_id}")
             is_streaming_method = topic == OrchestratorMethods.STREAM_INFER_CHAT
             stream_request = getattr(self._bus, "stream_request", None)
             if is_streaming_method and not callable(stream_request):
@@ -1565,6 +1605,7 @@ class RPCHandler:
                         identity_source="webrtc_rpc",
                         method_type=meta.method_type or "use",
                         caller_peer_id=self._stable_authenticated_peer_id() or self._peer_id,
+                        **_speech_route_binding_kwarg(speech_route_binding),
                         correlation_id=correlation_id,
                     ):
                         self._send_chunk(req_id, chunk)
@@ -1657,8 +1698,19 @@ class RPCHandler:
                 auth_grant_revision=auth_grant_revision,
                 manifest_revision=manifest_revision,
                 **projection_evidence,
+                **_speech_route_binding_kwarg(speech_route_binding),
                 correlation_id=correlation_id,
             )
+
+            if not res.ok and res.error == "capability_changed":
+                await self._send_capability_changed(
+                    req_id=req_id,
+                    method_name=method_name,
+                    correlation_id=correlation_id,
+                    params=params,
+                    principal_id=identity.principal_id,
+                )
+                return
 
             contract_result = (
                 isinstance(res.data, dict)
@@ -1941,6 +1993,112 @@ class RPCHandler:
             return "authority_unknown"
         return None
 
+    @staticmethod
+    def _parse_speech_route_binding(identity_meta: dict[str, Any]) -> SpeechRouteBinding | None:
+        raw = identity_meta.get("speech_route_binding")
+        if raw is None:
+            return None
+        try:
+            return SpeechRouteBinding.model_validate(raw)
+        except Exception:
+            return None
+
+    def _validate_speech_route_binding(
+        self,
+        *,
+        topic: str,
+        typed_params: Any,
+        binding: SpeechRouteBinding | None,
+        active_projection: ProjectionResult | None,
+        projected_service: Any | None,
+        projected_method: Any | None,
+    ) -> bool:
+        constraints_value = getattr(projected_method, "speech_constraints", None)
+        if constraints_value is None:
+            return binding is None
+        try:
+            constraints = SpeechMethodConstraints.model_validate(constraints_value)
+        except Exception:
+            return False
+        if binding is None or active_projection is None or projected_service is None:
+            return False
+
+        provider_peer_id = active_projection.cache_key.provider_peer_id
+        service_id = str(getattr(projected_service, "service_id", "") or "")
+        expected_service_instance_id = f"remote:{provider_peer_id}:{service_id}"
+        if binding.service_instance_id != expected_service_instance_id:
+            return False
+
+        provider_state = self._local_provider_binding_state()
+        if provider_state is None:
+            return False
+        readiness, availability_revision = provider_state
+        cache_key = active_projection.cache_key
+        if (
+            str(getattr(readiness, "registry_revision", "") or "") != cache_key.registry_revision
+            or str(getattr(readiness, "export_policy_revision", "") or "")
+            != cache_key.policy_revision
+            or int(getattr(readiness, "auth_grant_revision", 0) or 0)
+            != cache_key.authority_revision
+        ):
+            return False
+        if service_id not in tuple(getattr(readiness, "compatible_services", ()) or ()):
+            return False
+        if binding.provider_lease_epoch != getattr(readiness, "connection_epoch", ""):
+            return False
+        if binding.provider_lease_revision != availability_revision:
+            return False
+        projection_digest = str(getattr(readiness, "projection_digest", "") or "")
+        if binding.projection_digest != projection_digest:
+            return False
+        expected_projection_revision = compute_speech_projection_binding_revision(
+            projection_digest=projection_digest,
+            registry_revision=str(getattr(readiness, "registry_revision", "") or ""),
+            policy_revision=str(getattr(readiness, "export_policy_revision", "") or ""),
+            auth_grant_revision=int(getattr(readiness, "auth_grant_revision", 0) or 0),
+        )
+        if binding.projection_revision != expected_projection_revision:
+            return False
+        if binding.speech_capability_revision != constraints.speech_capability_revision:
+            return False
+        return binding.requirement_digest == compute_speech_route_requirement_digest_for_payload(
+            topic,
+            typed_params,
+        )
+
+    async def _send_capability_changed(
+        self,
+        *,
+        req_id: Any,
+        method_name: str,
+        correlation_id: str,
+        params: Any,
+        principal_id: str | None,
+    ) -> None:
+        await self._audit_rpc_event(
+            "access.denied.rpc",
+            method_name=method_name,
+            correlation_id=correlation_id,
+            status="denied",
+            reason="capability_changed",
+            principal_id=principal_id,
+            details={"params": params},
+        )
+        self._send(
+            json.dumps(
+                {
+                    "type": "result",
+                    "id": req_id,
+                    "correlation_id": correlation_id,
+                    "result": {
+                        "accepted": False,
+                        "reason_code": "capability_changed",
+                        "error": "capability_changed",
+                    },
+                }
+            )
+        )
+
     async def _deny_rpc(
         self,
         req_id: Any,
@@ -2027,3 +2185,9 @@ class RPCHandler:
             )
             return False
         return True
+
+
+def _speech_route_binding_kwarg(
+    binding: SpeechRouteBinding | None,
+) -> dict[str, SpeechRouteBinding]:
+    return {"speech_route_binding": binding} if binding is not None else {}

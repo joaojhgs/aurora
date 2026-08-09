@@ -375,6 +375,30 @@
           "markdownDescription": "Enables the aurora_native_show_notification command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_native_voice_cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-native-voice-cancel",
+          "markdownDescription": "Enables the aurora_native_voice_cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_native_voice_finish command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-native-voice-finish",
+          "markdownDescription": "Enables the aurora_native_voice_finish command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_native_voice_start command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-native-voice-start",
+          "markdownDescription": "Enables the aurora_native_voice_start command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_native_voice_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-native-voice-status",
+          "markdownDescription": "Enables the aurora_native_voice_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_remote_origin_policy command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-remote-origin-policy",
@@ -495,10 +519,10 @@
           "markdownDescription": "Enables the native_capabilities command without any pre-configured scope."
         },
         {
-          "description": "Allow Android client/mobile runtime to read bounded native status and use narrow Android Keystore-backed inbound verifier storage. Outgoing user actions and generic secure storage are granted separately.",
+          "description": "Allow Android client/mobile runtime to read bounded native status, control the foreground voice session, and use narrow Android Keystore-backed inbound verifier storage. Generic secure storage is granted separately.",
           "type": "string",
           "const": "aurora-android-native-plugin",
-          "markdownDescription": "Allow Android client/mobile runtime to read bounded native status and use narrow Android Keystore-backed inbound verifier storage. Outgoing user actions and generic secure storage are granted separately."
+          "markdownDescription": "Allow Android client/mobile runtime to read bounded native status, control the foreground voice session, and use narrow Android Keystore-backed inbound verifier storage. Generic secure storage is granted separately."
         },
         {
           "description": "Allow the trusted Tauri shell to configure a narrow assistant provider, check redacted provider status, and complete assistant turns without returning provider secrets to WebView JavaScript.",
@@ -531,16 +555,22 @@
           "markdownDescription": "Allow desktop mesh-node runtimes to store, retrieve, and delete exact SDK-scoped inbound verifier records in the platform keychain. This is not a generic secure-storage namespace and does not grant outbound bearer-token or reconnect-proof access."
         },
         {
+          "description": "Allow an explicitly user-started iOS background voice session only after the native transport, physical-device, and distribution-policy gates are enabled.",
+          "type": "string",
+          "const": "aurora-ios-background-voice",
+          "markdownDescription": "Allow an explicitly user-started iOS background voice session only after the native transport, physical-device, and distribution-policy gates are enabled."
+        },
+        {
           "description": "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods, plus dedicated iOS Keychain inbound verifier storage commands. Outgoing user actions are granted separately through the mobile-only capability.",
           "type": "string",
           "const": "aurora-ios-native-plugin",
           "markdownDescription": "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods, plus dedicated iOS Keychain inbound verifier storage commands. Outgoing user actions are granted separately through the mobile-only capability."
         },
         {
-          "description": "Allow iOS voice, invocation, and background-limit status checks without granting microphone capture, background listening, or system assistant ownership.",
+          "description": "Allow iOS foreground voice status and explicit start/stop controls without granting background listening or system assistant ownership.",
           "type": "string",
           "const": "aurora-ios-voice",
-          "markdownDescription": "Allow iOS voice, invocation, and background-limit status checks without granting microphone capture, background listening, or system assistant ownership."
+          "markdownDescription": "Allow iOS foreground voice status and explicit start/stop controls without granting background listening or system assistant ownership."
         },
         {
           "description": "Allow the private local-data adapter to encrypt, decrypt, and rotate structured-data envelopes through platform key handles with guarantee os_protected_opaque_to_webview. Raw key material is never returned.",
@@ -583,6 +613,12 @@
           "type": "string",
           "const": "aurora-native-permissions",
           "markdownDescription": "Allow the frontend SDK adapter to read the Aurora desktop native permission and capability status without granting denied OS surfaces."
+        },
+        {
+          "description": "Allow desktop Aurora surfaces to control the redacted native voice host.",
+          "type": "string",
+          "const": "aurora-native-voice",
+          "markdownDescription": "Allow desktop Aurora surfaces to control the redacted native voice host."
         },
         {
           "description": "Allow the Python-free desktop thin shell to use the Linux native RTCPeerConnection/DataChannel fallback when the packaged WebKitGTK runtime omits the browser WebRTC API. Signaling, pairing, encryption, reconnect, and Aurora RPC remain in the shared TypeScript runtime.",
@@ -871,6 +907,30 @@
           "type": "string",
           "const": "deny-aurora-native-show-notification",
           "markdownDescription": "Denies the aurora_native_show_notification command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_native_voice_cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-native-voice-cancel",
+          "markdownDescription": "Denies the aurora_native_voice_cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_native_voice_finish command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-native-voice-finish",
+          "markdownDescription": "Denies the aurora_native_voice_finish command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_native_voice_start command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-native-voice-start",
+          "markdownDescription": "Denies the aurora_native_voice_start command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_native_voice_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-native-voice-status",
+          "markdownDescription": "Denies the aurora_native_voice_status command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_remote_origin_policy command without any pre-configured scope.",

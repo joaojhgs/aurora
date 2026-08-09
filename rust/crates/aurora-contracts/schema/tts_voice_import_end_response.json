@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Sealed single-use clone prompt reference.",
+  "properties": {
+    "accepted_total_bytes": {
+      "exclusiveMinimum": 0,
+      "maximum": 2097152,
+      "title": "Accepted Total Bytes",
+      "type": "integer"
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "expires_at": {
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Expires At",
+      "type": "string",
+      "x-aurora-string-non-blank": true
+    },
+    "final_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Final Sha256",
+      "type": "string"
+    },
+    "idempotent": {
+      "default": false,
+      "title": "Idempotent",
+      "type": "boolean"
+    },
+    "sealed_audio_ref": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Sealed Audio Ref",
+      "type": "string",
+      "x-aurora-string-non-blank": true
+    },
+    "status": {
+      "const": "sealed",
+      "default": "sealed",
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "accepted_total_bytes",
+    "expires_at",
+    "final_sha256",
+    "sealed_audio_ref"
+  ],
+  "title": "TTSVoiceImportEndResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid"
+}

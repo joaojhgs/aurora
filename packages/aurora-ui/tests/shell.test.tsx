@@ -103,6 +103,7 @@ import {
   parseMeshPermissionList,
   redactDiagnosticText,
   retainThinShellSnapshot,
+  assistantExecutionOptions,
   routePolicyDraftChange,
   routePolicyFromRoute,
   routePolicyScenarios,
@@ -123,9 +124,11 @@ import {
 it('centralizes voice capture ownership by target surface', () => {
   const desktopLocal = getAuroraSurfaceProfile({ runtimeMode: 'desktop-local', transportKind: 'tauri-local' })
   expect(desktopLocal.kind).toBe('desktop-local')
-  expect(desktopLocal.voiceCapture.wakewordOwner).toBe('coordinator-daemon')
-  expect(desktopLocal.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
+  expect(desktopLocal.voiceCapture.focusedPushToTalkOwner).toBe('native-desktop')
+  expect(desktopLocal.voiceCapture.wakewordOwner).toBe('unavailable')
+  expect(desktopLocal.voiceCapture.wakewordRequiresFocus).toBe(true)
   expect(desktopLocal.voiceCapture.avoidCoordinatorPushToTalk).toBe(true)
+  expect(desktopLocal.voiceCapture.canUseWebViewVisualizer).toBe(false)
 
   const webThin = getAuroraSurfaceProfile({ transportKind: 'http' })
   expect(webThin.kind).toBe('web')
@@ -135,8 +138,9 @@ it('centralizes voice capture ownership by target surface', () => {
 
   const mobile = getAuroraSurfaceProfile({ transportKind: 'native-mobile', nativePlatform: 'ios' })
   expect(mobile.kind).toBe('ios')
-  expect(mobile.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
-  expect(mobile.voiceCapture.wakewordOwner).toBe('mobile-native')
+  expect(mobile.voiceCapture.focusedPushToTalkOwner).toBe('unavailable')
+  expect(mobile.voiceCapture.wakewordOwner).toBe('unavailable')
+  expect(mobile.voiceCapture.canUseWebViewVisualizer).toBe(false)
 })
 
 class RecordingMockAuroraTransport extends MockAuroraTransport {
@@ -1352,6 +1356,8 @@ describe('Aurora production shell', () => {
     expect(model.chips.find((chip) => chip.id === 'remote-processing')?.state).toBe('available-local')
     expect(model.transcriptionRoute.item.capabilityMethod).toBe('Transcribe')
     expect(model.transcriptionRoute.state).toBe('available-local')
+    expect(model.remoteAudioRoute.item.capabilityMethod).toBe('Transcribe')
+    expect(model.remoteAudioRoute.state).toBe('available-local')
     expect(model.speechRoute.item.capabilityMethod).toBe('Synthesize')
     expect(model.speechRoute.state).toBe('available-remote')
     expect(model.controls.find((control) => control.id === 'remote-transcription')?.reason).toContain('Audio can start')
@@ -1699,6 +1705,51 @@ describe('Aurora production shell', () => {
     expect(assistantErrorMessage(new AuroraError({ code: 'timeout', message: 'slow' }))).toContain('timed out')
     expect(assistantErrorMessage(new AuroraError({ code: 'auth', message: 'denied' }))).toContain('denied')
     expect(assistantErrorMessage(new AuroraError({ code: 'unavailable_service', message: 'down' }))).toContain('unavailable')
+  })
+
+  it('keeps default route policy on the local provider until explicit peer dispatch is selected', async () => {
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
+    const candidateRoute = enabledRoute(route(snapshot, 'assistant'), {
+      candidateProviders: [
+        {
+          id: 'local:Transcription',
+          providerId: 'local:Transcription',
+          providerKind: 'local',
+          peerId: null,
+          nodeName: 'This device',
+          serviceInstanceId: 'local:Transcription',
+          label: 'local / Transcription.Transcribe',
+          state: 'available-local',
+          selectable: true,
+          reason: 'available',
+          requiredAction: null
+        },
+        {
+          id: 'remote:peer-studio:Transcription',
+          providerId: 'remote:peer-studio:Transcription',
+          providerKind: 'remote',
+          peerId: 'peer-studio',
+          nodeName: 'Studio',
+          serviceInstanceId: 'remote:peer-studio:Transcription',
+          label: 'remote / Transcription.Transcribe',
+          state: 'available-remote',
+          selectable: true,
+          reason: 'available',
+          requiredAction: null
+        }
+      ]
+    })
+
+    expect(routePolicyFromRoute(candidateRoute)).toEqual(expect.objectContaining({
+      providerId: 'local:Transcription',
+      peerId: null,
+      serviceInstanceId: null
+    }))
+    expect(assistantExecutionOptions(candidateRoute)[1]?.routePolicy).toEqual(expect.objectContaining({
+      providerId: 'remote:peer-studio:Transcription',
+      peerId: 'peer-studio',
+      serviceInstanceId: 'remote:peer-studio:Transcription'
+    }))
   })
 
   it('wires admin services and contract explorer from Aurora SDK resources', async () => {

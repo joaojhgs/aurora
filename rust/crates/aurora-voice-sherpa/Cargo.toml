@@ -1,0 +1,23 @@
+[package]
+name = "aurora-voice-sherpa"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Sherpa engine adapter boundary reserved for Phase 6 integration"
+
+[dependencies]
+async-trait.workspace = true
+aurora-voice-core = { path = "../aurora-voice-core" }
+aurora-voice-engine = { path = "../aurora-voice-engine" }
+aurora-voice-sherpa-sys = { path = "../aurora-voice-sherpa-sys", optional = true }
+thiserror.workspace = true
+
+[features]
+default = []
+native-kws = ["dep:aurora-voice-sherpa-sys", "aurora-voice-sherpa-sys/native-kws"]
+native-stt = ["dep:aurora-voice-sherpa-sys", "aurora-voice-sherpa-sys/native-stt"]
+native-vad = ["dep:aurora-voice-sherpa-sys", "aurora-voice-sherpa-sys/native-vad"]
+
+[lints]
+workspace = true

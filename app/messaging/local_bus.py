@@ -18,6 +18,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.shared.contracts.models.speech import SpeechRouteBinding
 from app.shared.contracts.registry import all_contracts
 
 from .bus import Envelope, Handler, QueryResult, query_result_from_reply_payload
@@ -112,12 +113,13 @@ class LocalBus:
         self._evt_workers_started.clear()
         log_info("LocalBus stopped")
 
-    def subscribe(self, topic: str, handler: Handler) -> None:
+    def subscribe(self, topic: str, handler: Handler, *, event: bool = False) -> None:
         """Subscribe to a topic with a handler.
 
         Args:
             topic: Topic name (supports wildcards like "TTS.*")
             handler: Async function to handle messages
+            event: True when the handler consumes broadcast events
 
         Raises:
             ValueError: If topic validation is enabled and topic is invalid
@@ -135,7 +137,7 @@ class LocalBus:
         # concrete topic only — do not start an idle worker for the pattern key.
         # Request reply topics are unique and one-shot, so publish() delivers them
         # directly instead of creating a permanent worker for every request.
-        if "*" in topic or topic.startswith("reply."):
+        if "*" in topic or topic.startswith("reply.") or not event:
             return
 
         # Start event worker for this topic if not already started
@@ -145,6 +147,10 @@ class LocalBus:
                 self._event_worker(topic),
                 name=f"local-bus-event-worker:{topic}",
             )
+
+    async def subscribe_event(self, topic: str, handler: Handler) -> None:
+        """Subscribe to an event topic and return when the local worker is ready."""
+        self.subscribe(topic, handler, event=True)
 
     def unsubscribe(self, topic: str, handler: Handler) -> None:
         """Remove a handler previously registered with ``subscribe``."""
@@ -356,6 +362,7 @@ class LocalBus:
         projected_method_id: str | None = None,
         projected_method_topics: list[str] | None = None,
         projected_method_set_digest: str | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
         correlation_id: str | None = None,
     ) -> None:
         """Publish a message to a topic.
@@ -404,6 +411,7 @@ class LocalBus:
             projected_method_id=projected_method_id,
             projected_method_topics=projected_method_topics,
             projected_method_set_digest=projected_method_set_digest,
+            speech_route_binding=speech_route_binding,
             correlation_id=correlation_id,
         )
 
@@ -473,6 +481,7 @@ class LocalBus:
         projected_method_id: str | None = None,
         projected_method_topics: list[str] | None = None,
         projected_method_set_digest: str | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
         correlation_id: str | None = None,
     ) -> QueryResult:
         """Send a request and wait for a response.
@@ -547,6 +556,7 @@ class LocalBus:
                 projected_method_id=projected_method_id,
                 projected_method_topics=projected_method_topics,
                 projected_method_set_digest=projected_method_set_digest,
+                speech_route_binding=speech_route_binding,
                 correlation_id=request_correlation_id,
             )
 
@@ -581,6 +591,7 @@ class LocalBus:
         projected_method_id: str | None = None,
         projected_method_topics: list[str] | None = None,
         projected_method_set_digest: str | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
         correlation_id: str | None = None,
     ) -> AsyncIterator[Any]:
         """Stream a local service response without reply-topic serialization."""
@@ -606,6 +617,7 @@ class LocalBus:
                 projected_method_id=projected_method_id,
                 projected_method_topics=projected_method_topics,
                 projected_method_set_digest=projected_method_set_digest,
+                speech_route_binding=speech_route_binding,
                 correlation_id=correlation_id,
             )
             if not result.ok:
@@ -631,6 +643,7 @@ class LocalBus:
             projected_method_id=projected_method_id,
             projected_method_topics=projected_method_topics,
             projected_method_set_digest=projected_method_set_digest,
+            speech_route_binding=speech_route_binding,
             correlation_id=correlation_id,
         )
         result = await handler(env)

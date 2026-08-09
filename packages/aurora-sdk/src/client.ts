@@ -26,6 +26,8 @@ import {
 } from './descriptors.js'
 import { buildAdminOverviewManifest, buildCapabilityGraph, summarizeCapabilities } from './capabilities.js'
 import { ConfigClient } from './config.js'
+import { GeneratedContractClient } from './generated-contracts.js'
+import { SpeechClient } from './speech.js'
 import { buildPermissionCatalog, checkAccess, hasPermission, resolveEffectivePermissions } from './permissions.js'
 import { evaluateRoutePolicy } from './policy.js'
 import { BackupClient } from './backup.js'
@@ -231,6 +233,8 @@ export class AuroraClient {
   readonly adminOverview: AdminOverviewClient
   readonly permissions: PermissionClient
   readonly routes: RouteClient
+  readonly contracts: GeneratedContractClient
+  readonly speech: SpeechClient
   readonly assistant: AssistantClient
   readonly models: ModelRuntimeClient
   readonly memory: MemoryClient
@@ -257,6 +261,8 @@ export class AuroraClient {
     this.adminOverview = new AdminOverviewClient(this)
     this.permissions = new PermissionClient(this)
     this.routes = new RouteClient(this)
+    this.contracts = new GeneratedContractClient(this)
+    this.speech = new SpeechClient(this.contracts)
     this.assistant = new AssistantClient(this)
     this.models = new ModelRuntimeClient(this)
     this.memory = new MemoryClient(this)

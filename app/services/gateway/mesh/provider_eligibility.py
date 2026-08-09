@@ -12,6 +12,14 @@ from app.services.gateway.mesh.policy_store import MeshPolicySnapshot
 from app.shared.auth.permissions import check_access
 from app.shared.contracts.mesh_compatibility import MeshCompatibilityReasonCode
 from app.shared.contracts.models.gateway import MethodInfo
+from app.shared.contracts.models.speech import (
+    LogicalVoiceId,
+    SpeechLanguageRequirement,
+    SpeechMethodConstraints,
+    SpeechRouteBinding,
+    compute_speech_projection_binding_revision,
+    compute_speech_route_requirement_digest,
+)
 
 from .version_compat import is_compatible
 
@@ -23,6 +31,25 @@ ProviderEligibilityReason = (
         "provider_unavailable",
     ]
 )
+
+
+@dataclass(frozen=True, slots=True)
+class SpeechRouteConstraints:
+    """Immutable request-derived speech routing requirements."""
+
+    topic: str
+    language_requirement: SpeechLanguageRequirement | None = None
+    voice_id: LogicalVoiceId | None = None
+
+    @property
+    def requirement_digest(self) -> str:
+        """Canonical digest over every speech requirement derived from the request."""
+
+        return compute_speech_route_requirement_digest(
+            topic=self.topic,
+            language_requirement=self.language_requirement,
+            voice_id=self.voice_id,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +66,7 @@ class OutboundRouteRequirements:
     version_policy: str = "compatible"
     attempted_peer_ids: frozenset[str] = frozenset()
     explicit_peer_id: str | None = None
+    speech_constraints: SpeechRouteConstraints | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +92,8 @@ class OutboundProviderSnapshot:
     grants: frozenset[str] | None = None
     local_authority_state: str | None = None
     local_grants: frozenset[str] | None = None
+    provider_lease_epoch: str | None = None
+    provider_lease_revision: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +122,13 @@ class ProviderEligibilityDecision:
     active_calls: int = 0
     max_concurrent: int = 0
     available_capacity: int | None = None
+    speech_capability_revision: int | None = None
+    resident_model_identity_digest: str | None = None
+    speech_requirement_digest: str | None = None
+    service_instance_id: str | None = None
+    projection_binding_revision: str | None = None
+    provider_lease_epoch: str | None = None
+    provider_lease_revision: int | None = None
 
 
 def evaluate_outbound_provider(
@@ -111,11 +148,24 @@ def evaluate_outbound_provider(
         "projection_policy_revision": provider.policy_revision,
         "auth_grant_revision": provider.auth_grant_revision,
         "projection_digest": provider.projection_digest,
+        "projection_binding_revision": compute_speech_projection_binding_revision(
+            projection_digest=provider.projection_digest,
+            registry_revision=provider.registry_revision,
+            policy_revision=provider.policy_revision,
+            auth_grant_revision=provider.auth_grant_revision,
+        )
+        if provider.projection_digest and provider.registry_revision and provider.policy_revision
+        else None,
         "service_version": service.version if service else "",
         "service_digest": service.digest if service else "",
         "active_calls": provider.active_calls_for_module,
         "max_concurrent": service.max_concurrent if service else 0,
         "available_capacity": _available_capacity(service, provider.active_calls_for_module),
+        "service_instance_id": _service_instance_id(provider.peer_id, requirements.module)
+        if service is not None
+        else None,
+        "provider_lease_epoch": provider.provider_lease_epoch,
+        "provider_lease_revision": provider.provider_lease_revision,
     }
 
     if provider.peer_id in requirements.attempted_peer_ids:
@@ -202,6 +252,7 @@ def evaluate_outbound_provider(
         "method_type": method.method_type,
         "required_perms": tuple(method.required_perms),
         "granted_permissions": tuple(sorted(provider.grants or ())),
+        **_speech_decision_metadata(method.speech_constraints, requirements.speech_constraints),
     }
     if provider.local_authority_state is not None:
         if provider.local_authority_state != "active" or provider.local_grants is None:
@@ -244,6 +295,19 @@ def evaluate_outbound_provider(
             eligible=False,
             reason_code="permission_denied",
             reason=f"recipient grants do not satisfy {requirements.topic}",
+        )
+
+    speech_decision = _evaluate_speech_route_constraints(
+        method.speech_constraints,
+        requirements.speech_constraints,
+    )
+    if speech_decision is not None:
+        reason_code, reason = speech_decision
+        return _decision(
+            **method_base,
+            eligible=False,
+            reason_code=reason_code,
+            reason=reason,
         )
 
     required_features = tuple(routing.required_provider_feature_ids if routing else ())
@@ -297,6 +361,27 @@ def evaluate_outbound_provider(
             reason="provider is at capacity",
         )
 
+    if requirements.speech_constraints is not None:
+        missing_binding_fields = [
+            name
+            for name, value in {
+                "projection_digest": provider.projection_digest,
+                "projection_binding_revision": method_base.get("projection_binding_revision"),
+                "service_instance_id": method_base.get("service_instance_id"),
+                "provider_lease_epoch": provider.provider_lease_epoch,
+                "provider_lease_revision": provider.provider_lease_revision,
+                "speech_capability_revision": method_base.get("speech_capability_revision"),
+            }.items()
+            if value is None or value == ""
+        ]
+        if missing_binding_fields:
+            return _decision(
+                **method_base,
+                eligible=False,
+                reason_code="provider_unavailable",
+                reason="provider speech route binding metadata is unavailable",
+            )
+
     return _decision(
         **method_base, eligible=True, reason_code="eligible", reason="eligible provider"
     )
@@ -311,6 +396,78 @@ def _find_exact_method(service: PeerServiceInfo, topic: str) -> MethodInfo | Non
         if method.bus_topic == topic:
             return method
     return None
+
+
+def _evaluate_speech_route_constraints(
+    method_constraints: SpeechMethodConstraints | None,
+    request_constraints: SpeechRouteConstraints | None,
+) -> tuple[ProviderEligibilityReason, str] | None:
+    if request_constraints is None:
+        return None
+    if method_constraints is None:
+        return (
+            "language_capability_unknown",
+            "provider did not advertise speech route constraints",
+        )
+    if method_constraints.resident_model_identity_digest is None:
+        return (
+            "language_capability_unknown",
+            "provider did not advertise ready speech model identity",
+        )
+
+    language_requirement = request_constraints.language_requirement
+    if language_requirement is not None:
+        if language_requirement.mode == "exact":
+            language = language_requirement.language
+            exact_languages = set(method_constraints.exact_languages)
+            fallback_languages = {
+                fallback.requested_language
+                for fallback in method_constraints.locale_fallbacks
+                if fallback.served_language in exact_languages
+            }
+            if language not in exact_languages and language not in fallback_languages:
+                return (
+                    "language_incompatible",
+                    "provider is not ready for the requested exact speech language",
+                )
+        else:
+            candidates = set(language_requirement.auto_language_candidates)
+            if not method_constraints.supports_auto_detect:
+                return (
+                    "language_incompatible",
+                    "provider does not support speech language auto-detect",
+                )
+            if not candidates.issubset(set(method_constraints.auto_detect_languages)):
+                return (
+                    "language_incompatible",
+                    "provider cannot auto-detect every requested speech language candidate",
+                )
+
+    if (
+        request_constraints.voice_id is not None
+        and request_constraints.voice_id not in method_constraints.ready_voice_ids
+    ):
+        return ("voice_unavailable", "provider is not ready for the requested logical voice")
+    return None
+
+
+def _speech_decision_metadata(
+    method_constraints: SpeechMethodConstraints | None,
+    request_constraints: SpeechRouteConstraints | None,
+) -> dict[str, object]:
+    if request_constraints is None:
+        return {}
+    metadata: dict[str, object] = {
+        "speech_requirement_digest": request_constraints.requirement_digest,
+    }
+    if method_constraints is not None:
+        metadata.update(
+            {
+                "speech_capability_revision": method_constraints.speech_capability_revision,
+                "resident_model_identity_digest": method_constraints.resident_model_identity_digest,
+            }
+        )
+    return metadata
 
 
 def _is_stale(
@@ -336,3 +493,33 @@ def _available_capacity(service: PeerServiceInfo | None, active_calls: int) -> i
     if service is None or service.max_concurrent <= 0:
         return None
     return max(service.max_concurrent - active_calls, 0)
+
+
+def _service_instance_id(peer_id: str, module: str) -> str:
+    return f"remote:{peer_id}:{module}"
+
+
+def speech_route_binding_from_decision(
+    decision: ProviderEligibilityDecision,
+) -> SpeechRouteBinding | None:
+    """Build trusted route metadata from the actually selected provider decision."""
+
+    if not decision.eligible or decision.speech_requirement_digest is None:
+        return None
+    if (
+        decision.service_instance_id is None
+        or decision.projection_binding_revision is None
+        or decision.provider_lease_epoch is None
+        or decision.provider_lease_revision is None
+        or decision.speech_capability_revision is None
+    ):
+        return None
+    return SpeechRouteBinding(
+        service_instance_id=decision.service_instance_id,
+        projection_digest=decision.projection_digest,
+        projection_revision=decision.projection_binding_revision or "",
+        provider_lease_epoch=decision.provider_lease_epoch,
+        provider_lease_revision=decision.provider_lease_revision,
+        speech_capability_revision=decision.speech_capability_revision,
+        requirement_digest=decision.speech_requirement_digest,
+    )

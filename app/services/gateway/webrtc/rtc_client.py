@@ -151,6 +151,23 @@ class _ManifestAckExpectation:
 
 
 @dataclass(frozen=True, slots=True)
+class _LocalProviderUnavailableWork:
+    session_peer_id: str
+    connection_epoch: str
+    projection_digest: str
+    availability_revision: int
+    reason_code: str
+    local_provider_peer_id: str | None
+    expectation: _ManifestAckExpectation
+
+
+@dataclass(slots=True)
+class _LocalProviderUnavailableQueue:
+    items: deque[_LocalProviderUnavailableWork]
+    task: asyncio.Task[None]
+
+
+@dataclass(frozen=True, slots=True)
 class _ReconnectChallengeRecord:
     pc: RTCPeerConnection
     challenge: str
@@ -290,6 +307,7 @@ class _PairingDeniedError(RuntimeError):
 _MESH_AUTH_CHALLENGE_TYPE = "mesh_auth_challenge_v1"
 _MESH_AUTH_PROOF_TYPE = "mesh_auth_proof_v1"
 _MESH_AUTH_CHALLENGE_TTL_MS = 20_000
+_PROVIDER_UNAVAILABLE_CLOSE_DRAIN_TIMEOUT_S = 0.25
 _PROVIDER_EXPORT_DIAGNOSTIC_LIMIT = 50
 _PROVIDER_EXPORT_DIAGNOSTIC_FIELDS = frozenset(
     {
@@ -465,6 +483,7 @@ class RTCClient:
         self._local_provider_ready: dict[str, _ManifestAckExpectation] = {}
         self._local_provider_lease_revisions: dict[str, int] = {}
         self._local_provider_lease_tasks: dict[str, tuple[str, str, int, asyncio.Task[None]]] = {}
+        self._local_provider_unavailable_tasks: dict[str, _LocalProviderUnavailableQueue] = {}
         self._provider_export_tasks: set[asyncio.Task[None]] = set()
         self._rpc_send_tasks: set[asyncio.Task[bool]] = set()
         self._tooling_projection_refresh_tasks: dict[str, asyncio.Task[None]] = {}
@@ -777,6 +796,146 @@ class RTCClient:
         ):
             self._local_provider_ready.pop(stable_peer_id, None)
 
+    def _schedule_local_provider_unavailable(
+        self,
+        stable_peer_id: str,
+        *,
+        reason_code: str,
+        session_peer_id: str | None = None,
+    ) -> bool:
+        ready = self._local_provider_ready.get(stable_peer_id)
+        if ready is None:
+            return False
+        if session_peer_id is not None and ready.session_peer_id != session_peer_id:
+            return False
+        work = _LocalProviderUnavailableWork(
+            session_peer_id=ready.session_peer_id,
+            connection_epoch=ready.connection_epoch,
+            projection_digest=ready.projection_digest,
+            availability_revision=self._local_provider_lease_revisions.get(stable_peer_id, 0),
+            reason_code=reason_code,
+            local_provider_peer_id=self._mesh_peer_id,
+            expectation=ready,
+        )
+        current = self._local_provider_unavailable_tasks.get(stable_peer_id)
+        if current is not None:
+            has_matching_work = any(
+                self._same_unavailable_snapshot(pending, work) for pending in current.items
+            )
+            if not has_matching_work:
+                current.items.append(work)
+            if current.task.done() and current.items:
+                self._start_local_provider_unavailable_drain(stable_peer_id, current.items)
+            if has_matching_work:
+                return True
+            return True
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return False
+
+        self._start_local_provider_unavailable_drain(stable_peer_id, deque([work]))
+        return True
+
+    def _start_local_provider_unavailable_drain(
+        self,
+        stable_peer_id: str,
+        items: deque[_LocalProviderUnavailableWork],
+    ) -> None:
+        task = asyncio.create_task(
+            self._drain_local_provider_unavailable(
+                stable_peer_id,
+            ),
+            name=f"provider-unavailable:{stable_peer_id[:8]}",
+        )
+        self._local_provider_unavailable_tasks[stable_peer_id] = _LocalProviderUnavailableQueue(
+            items,
+            task,
+        )
+        task.add_done_callback(
+            lambda completed, peer=stable_peer_id: self._local_provider_unavailable_done(
+                peer,
+                completed,
+            )
+        )
+
+    @staticmethod
+    def _same_unavailable_snapshot(
+        left: _LocalProviderUnavailableWork,
+        right: _LocalProviderUnavailableWork,
+    ) -> bool:
+        return (
+            left.session_peer_id == right.session_peer_id
+            and left.connection_epoch == right.connection_epoch
+            and left.projection_digest == right.projection_digest
+            and left.availability_revision == right.availability_revision
+        )
+
+    async def _drain_local_provider_unavailable(self, stable_peer_id: str) -> None:
+        while True:
+            current = self._local_provider_unavailable_tasks.get(stable_peer_id)
+            if current is None or not current.items:
+                return
+            work = current.items[0]
+            try:
+                await self._send_local_provider_unavailable(
+                    stable_peer_id,
+                    reason_code=work.reason_code,
+                    session_peer_id=work.session_peer_id,
+                    expectation=work.expectation,
+                    local_provider_peer_id=work.local_provider_peer_id,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self._record_diagnostic_error(
+                    "provider_unavailable_send_failed",
+                    str(exc),
+                    work.session_peer_id,
+                )
+            current = self._local_provider_unavailable_tasks.get(stable_peer_id)
+            if current is not None and current.items and current.items[0] is work:
+                current.items.popleft()
+
+    def _local_provider_unavailable_done(
+        self,
+        stable_peer_id: str,
+        task: asyncio.Task[None],
+    ) -> None:
+        current = self._local_provider_unavailable_tasks.get(stable_peer_id)
+        if current is not None and current.task is task:
+            self._local_provider_unavailable_tasks.pop(stable_peer_id, None)
+        if task.cancelled():
+            return
+        with contextlib.suppress(Exception):
+            task.result()
+
+    async def _wait_for_local_provider_unavailable(self, stable_peer_id: str) -> None:
+        while True:
+            current = self._local_provider_unavailable_tasks.get(stable_peer_id)
+            if current is None or current.task is asyncio.current_task():
+                return
+            await asyncio.gather(current.task, return_exceptions=True)
+
+    async def _drain_local_provider_unavailable_for_close(
+        self,
+        tasks: list[asyncio.Task[Any]],
+    ) -> None:
+        if not tasks:
+            return
+        done, pending = await asyncio.wait(
+            tasks,
+            timeout=_PROVIDER_UNAVAILABLE_CLOSE_DRAIN_TIMEOUT_S,
+        )
+        if pending:
+            self._record_diagnostic_error(
+                "provider_unavailable_shutdown_timeout",
+                f"Timed out draining {len(pending)} provider unavailable task(s) during shutdown",
+            )
+            for task in pending:
+                task.cancel()
+        await asyncio.gather(*done, *pending, return_exceptions=True)
+
     def _is_local_provider_ready_for_session(
         self,
         session_peer_id: str,
@@ -801,6 +960,24 @@ class RTCClient:
             and (service_id is None or service_id in ready.compatible_services)
         )
 
+    def _local_provider_binding_state_for_session(
+        self,
+        session_peer_id: str,
+    ) -> tuple[_ManifestAckExpectation, int] | None:
+        stable_peer_id = self._peer_stable_ids.get(session_peer_id)
+        if not stable_peer_id:
+            return None
+        ready = self._local_provider_ready.get(stable_peer_id)
+        if (
+            ready is None
+            or ready.session_peer_id != session_peer_id
+            or self._stable_peer_sessions.get(stable_peer_id) != session_peer_id
+            or not self._has_authenticated_stable_peer(stable_peer_id)
+        ):
+            return None
+        revision = self._local_provider_lease_revisions.get(stable_peer_id, 0)
+        return ready, revision
+
     async def _send_local_provider_unavailable(
         self,
         stable_peer_id: str,
@@ -808,8 +985,10 @@ class RTCClient:
         reason_code: str,
         session_peer_id: str | None = None,
         expectation: _ManifestAckExpectation | None = None,
+        local_provider_peer_id: str | None = None,
     ) -> bool:
-        if not self._mesh_peer_id:
+        provider_peer_id = local_provider_peer_id or self._mesh_peer_id
+        if not provider_peer_id:
             return False
         session = session_peer_id or self._stable_peer_sessions.get(stable_peer_id)
         if not session or not self._is_peer_session_active(session):
@@ -821,7 +1000,7 @@ class RTCClient:
         now_ms = self._provider_lease_clock_ms()
         frame = {
             "type": "provider_unavailable",
-            "peer_id": self._mesh_peer_id,
+            "peer_id": provider_peer_id,
             "connection_epoch": connection_epoch,
             "availability_revision": revision,
             "issued_at_ms": now_ms,
@@ -1178,6 +1357,11 @@ class RTCClient:
         previous_session = self._stable_peer_sessions.get(stable)
         if previous_session and previous_session != session_peer_id:
             self._cancel_provider_lease_task(stable, session_peer_id=previous_session)
+            self._schedule_local_provider_unavailable(
+                stable,
+                reason_code="session_replaced",
+                session_peer_id=previous_session,
+            )
             self._reset_local_provider_readiness(stable, session_peer_id=previous_session)
         if stable != session_peer_id:
             self._peer_stable_ids[session_peer_id] = stable
@@ -1582,17 +1766,16 @@ class RTCClient:
 
     async def close(self) -> None:
         if not self._closing:
-            tombstone_tasks = [
-                self._send_local_provider_unavailable(
+            for stable_peer_id, expectation in list(self._local_provider_ready.items()):
+                self._schedule_local_provider_unavailable(
                     stable_peer_id,
                     reason_code="peer_closing",
                     session_peer_id=expectation.session_peer_id,
-                    expectation=expectation,
                 )
-                for stable_peer_id, expectation in list(self._local_provider_ready.items())
+            tombstone_tasks = [
+                queue.task for queue in self._local_provider_unavailable_tasks.values()
             ]
-            if tombstone_tasks:
-                await asyncio.gather(*tombstone_tasks, return_exceptions=True)
+            await self._drain_local_provider_unavailable_for_close(tombstone_tasks)
         # Set this before broadcasting or closing any peer connection. aiortc
         # dispatches state-change callbacks asynchronously, so those callbacks
         # may run while (or just after) the close loop below is in progress.
@@ -1639,6 +1822,11 @@ class RTCClient:
         if shadow_tasks:
             await asyncio.gather(*shadow_tasks, return_exceptions=True)
         self._provider_export_tasks.clear()
+        unavailable_tasks = [
+            queue.task for queue in self._local_provider_unavailable_tasks.values()
+        ]
+        await self._drain_local_provider_unavailable_for_close(unavailable_tasks)
+        self._local_provider_unavailable_tasks.clear()
         rpc_send_tasks = list(self._rpc_send_tasks)
         for peer_id in list(self._peer_send_queues):
             self._cancel_peer_send_lane(peer_id)
@@ -1715,7 +1903,7 @@ class RTCClient:
         self._peer_auth_challenges.clear()
         self._used_peer_auth_challenges.clear()
         self._reconnect_suppressed_pcs.clear()
-        self._invalidate_provider_export_all()
+        self._invalidate_provider_export_all(notify_provider_unavailable=False)
         self._provider_export_cache.trusted_reset_all_authority()
         self._provider_export_authority.clear()
         self._provider_export_authority_pending.clear()
@@ -1921,7 +2109,7 @@ class RTCClient:
         self._peer_claimed_names.pop(session_peer_id, None)
         self._peer_stable_ids.pop(session_peer_id, None)
         self._stable_peer_sessions.pop(stable_peer_id, None)
-        self._invalidate_provider_export_peer(stable_peer_id)
+        self._invalidate_provider_export_peer(stable_peer_id, notify_provider_unavailable=False)
         if self._peer_registry:
             await self._peer_registry.remove_peer(stable_peer_id)
         log_info(f"Force disconnected peer {peer_id}")
@@ -2230,13 +2418,13 @@ class RTCClient:
         self._mesh_enabled = False
         self._mesh_config = None
         self._cancel_manifest_reannounce_retries()
+        self._invalidate_provider_export_all(reason_code="mesh_disabled")
         if policy_provider is not None:
             self._mesh_policy_provider = policy_provider
         self._peer_registry = None
         self._peer_bridge = None
         self._mesh_peer_id = None
         self._mesh_node_name = ""
-        self._invalidate_provider_export_all()
         for handler in self._rpc_handlers.values():
             handler.set_mesh_policy_provider(self._mesh_policy_provider)
         log_info("RTCClient: Mesh P2P disabled")
@@ -2273,6 +2461,7 @@ class RTCClient:
 
             async def _refresh(peer_id: str = stable_peer_id) -> None:
                 try:
+                    await self._wait_for_local_provider_unavailable(peer_id)
                     await self.reannounce_manifest_for_peer(peer_id)
                 finally:
                     task = self._tooling_projection_refresh_tasks.get(peer_id)
@@ -2284,19 +2473,40 @@ class RTCClient:
                 name=f"tooling-projection-refresh:{stable_peer_id}",
             )
 
-    def _invalidate_provider_export_all(self) -> int:
+    def _invalidate_provider_export_all(
+        self,
+        *,
+        notify_provider_unavailable: bool = True,
+        reason_code: str = "provider_export_invalidated",
+    ) -> int:
         self._provider_export_generation += 1
         self._provider_export_active.clear()
         self._manifest_ack_expectations.clear()
         for stable_peer_id in list(self._local_provider_ready):
+            if notify_provider_unavailable:
+                self._schedule_local_provider_unavailable(
+                    stable_peer_id,
+                    reason_code=reason_code,
+                )
             self._reset_local_provider_readiness(stable_peer_id)
         return self._provider_export_cache.invalidate_all()
 
-    def _invalidate_provider_export_peer(self, stable_peer_id: str) -> int:
+    def _invalidate_provider_export_peer(
+        self,
+        stable_peer_id: str,
+        *,
+        notify_provider_unavailable: bool = True,
+        reason_code: str = "provider_export_invalidated",
+    ) -> int:
         generation = self._provider_export_peer_generations.get(stable_peer_id, 0) + 1
         self._provider_export_peer_generations[stable_peer_id] = generation
         self._provider_export_active.pop(stable_peer_id, None)
         self._manifest_ack_expectations.pop(stable_peer_id, None)
+        if notify_provider_unavailable:
+            self._schedule_local_provider_unavailable(
+                stable_peer_id,
+                reason_code=reason_code,
+            )
         self._reset_local_provider_readiness(stable_peer_id)
         return self._provider_export_cache.invalidate_peer(stable_peer_id)
 
@@ -3480,6 +3690,7 @@ class RTCClient:
 
         session_peer_id = self._session_for_peer_id(peer_id)
         stable_peer_id = self._stable_peer_id_for_session(session_peer_id)
+        await self._wait_for_local_provider_unavailable(stable_peer_id)
         projection = self._current_provider_export_projection(
             stable_peer_id,
             mesh_config=mesh_config,
@@ -3524,6 +3735,13 @@ class RTCClient:
             },
         )
         if not pending_matches_projection and not active_matches_projection:
+            if active_readiness is not None:
+                await self._send_local_provider_unavailable(
+                    stable_peer_id,
+                    reason_code="manifest_replaced",
+                    session_peer_id=session_peer_id,
+                    expectation=active_readiness,
+                )
             self._reset_local_provider_readiness(stable_peer_id, session_peer_id=session_peer_id)
         evidence = manifest.recipient_projection_evidence
         expected_ack: _ManifestAckExpectation | None = None
@@ -4063,11 +4281,24 @@ class RTCClient:
             log_info(f"RTCClient: Signaling peer {peer} departed ({reason})")
             self._reconnect_suppressed_pcs.add(pc)
             stable_peer_id = self._stable_peer_id_for_session(peer)
-            self._invalidate_provider_export_peer(stable_peer_id)
+            await self._send_local_provider_unavailable(
+                stable_peer_id,
+                reason_code="peer_departed",
+                session_peer_id=peer,
+            )
+            self._invalidate_provider_export_peer(
+                stable_peer_id,
+                notify_provider_unavailable=False,
+            )
             await self._close_peer_connection(pc)
             return
 
         stable_peer_id = self._stable_peer_id_for_session(peer)
+        await self._send_local_provider_unavailable(
+            stable_peer_id,
+            reason_code="peer_departed",
+            session_peer_id=peer,
+        )
         self._clear_pairing_state(peer)
         self._peer_claimed_stable_ids.pop(peer, None)
         self._peer_claimed_names.pop(peer, None)
@@ -4076,7 +4307,10 @@ class RTCClient:
         self._peer_names.pop(peer, None)
         self._peer_names.pop(stable_peer_id, None)
         self._cancel_provider_lease_task(stable_peer_id)
-        self._invalidate_provider_export_peer(stable_peer_id)
+        self._invalidate_provider_export_peer(
+            stable_peer_id,
+            notify_provider_unavailable=False,
+        )
         if self._peer_registry:
             await self._peer_registry.remove_peer(stable_peer_id)
 
@@ -5139,6 +5373,9 @@ class RTCClient:
             provider_readiness_provider=lambda service_id, peer=peer: (
                 self._is_local_provider_ready_for_session(peer, service_id)
             ),
+            provider_binding_state_provider=lambda peer=peer: (
+                self._local_provider_binding_state_for_session(peer)
+            ),
         )
         self._rpc_handlers[peer] = handler
 
@@ -5718,6 +5955,11 @@ class RTCClient:
                 )
                 identity = self._peer_acl.get(peer, ANONYMOUS)
                 was_authenticated = identity != ANONYMOUS
+                await self._send_local_provider_unavailable(
+                    stable_peer_id,
+                    reason_code="peer_disconnected",
+                    session_peer_id=peer,
+                )
                 # Cancel pending auth timeout task
                 timeout_task = self._peer_timeout_tasks.pop(peer, None)
                 if timeout_task and timeout_task is not asyncio.current_task():
@@ -5747,7 +5989,10 @@ class RTCClient:
                 self._peer_auth_challenges.pop(peer, None)
                 self._peer_stable_ids.pop(peer, None)
                 self._stable_peer_sessions.pop(stable_peer_id, None)
-                self._invalidate_provider_export_peer(stable_peer_id)
+                self._invalidate_provider_export_peer(
+                    stable_peer_id,
+                    notify_provider_unavailable=False,
+                )
                 # Remove from mesh peer registry
                 if self._peer_registry:
                     await self._peer_registry.remove_peer(stable_peer_id)

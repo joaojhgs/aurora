@@ -40,6 +40,10 @@ struct AuroraShowNotificationArgs: Decodable {
 
 @objc(AuroraNativePlugin)
 public final class AuroraNativePlugin: Plugin {
+  // The current iOS bridge owns bounded capture/playback plumbing only. It
+  // must not report a usable voice turn or open the microphone until the
+  // native typed transport/session executor is linked into the app target.
+  private static let nativeTurnTransportAvailable = false
   private static let maxSharedTextLength = 8192
   private static let maxTitleLength = 120
   private static let maxNotificationBodyLength = 512
@@ -52,6 +56,10 @@ public final class AuroraNativePlugin: Plugin {
     "aurora",
     "aurora-local"
   ]
+
+  private let voiceCapture = AuroraIOSVoiceCapture()
+  private var voiceSession: AuroraIOSVoiceSessionHost?
+  private var voiceSessionGeneration: UInt64?
 
   private let mobileIntegrations: [[String: Any]] = [
     [
@@ -462,11 +470,14 @@ public final class AuroraNativePlugin: Plugin {
 
   @objc public func voiceStatus(_ invoke: Invoke) throws {
     let permission = AVAudioSession.sharedInstance().recordPermission
-    let reason: Any = permission == .granted
-      ? NSNull()
-      : "iOS microphone capture requires foreground microphone permission, audio consent, and a visible stop control."
+    let capture = voiceSession?.captureStats() ?? voiceCapture.stats()
+    let reason: Any = !AuroraNativePlugin.nativeTurnTransportAvailable
+      ? "iOS native voice transport is not available on this build."
+      : permission == .granted
+        ? NSNull()
+        : "iOS microphone capture requires foreground microphone permission, audio consent, and a visible stop control."
     invoke.resolve([
-      "available": permission == .granted,
+      "available": AuroraNativePlugin.nativeTurnTransportAvailable && permission == .granted,
       "permission": "aurora.iosMicrophoneCapture",
       "capability": "ios.voiceForegroundCapture",
       "source": "tauri-ios-native-plugin",
@@ -477,12 +488,109 @@ public final class AuroraNativePlugin: Plugin {
         "privacyClass": "raw-audio",
         "foregroundOnly": true,
         "supportsBackgroundListening": false,
+        "nativeTurnTransportAvailable": AuroraNativePlugin.nativeTurnTransportAvailable,
         "supportsSiriReplacement": false,
         "consentRequired": true,
         "stopRevokeRequired": true,
+        "captureRunning": capture.running,
+        "queuedChunks": capture.queuedChunks,
+        "acceptedChunks": capture.acceptedChunks,
+        "droppedChunks": capture.droppedChunks,
+        "discontinuities": capture.discontinuities,
         "secretsRedacted": true
       ]
     ])
+  }
+
+  @objc public func voiceForegroundCaptureStart(_ invoke: Invoke) {
+    startVoiceCapture(invoke, background: false)
+  }
+
+  /// Starts a user-initiated background audio session. The command remains
+  /// behind the separate background permission and the native transport gate;
+  /// it must never be treated as an always-on or silently restarting path.
+  @objc public func voiceBackgroundCaptureStart(_ invoke: Invoke) {
+    startVoiceCapture(invoke, background: true)
+  }
+
+  private func startVoiceCapture(_ invoke: Invoke, background: Bool) {
+    guard AuroraNativePlugin.nativeTurnTransportAvailable else {
+      invoke.reject("native_voice_transport_unavailable")
+      return
+    }
+    let startCapture: () -> Void = { [weak self] in
+      guard let self else {
+        invoke.reject("capture_unavailable")
+        return
+      }
+      do {
+        if let existing = self.voiceSession, existing.status()?.active == false {
+          self.voiceSession = nil
+          self.voiceSessionGeneration = nil
+        }
+        if self.voiceSession == nil {
+          self.voiceSession = try AuroraIOSVoiceSessionHost(
+            storedConfiguration: AVAudioSession.sharedInstance()
+          )
+        }
+        if background {
+          self.voiceSessionGeneration = try self.voiceSession?.startBackground()
+        } else {
+          self.voiceSessionGeneration = try self.voiceSession?.start()
+        }
+        let stats = self.voiceSession?.captureStats() ?? self.voiceCapture.stats()
+        invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats))
+      } catch {
+        invoke.reject("capture_unavailable")
+      }
+    }
+    switch AVAudioSession.sharedInstance().recordPermission {
+    case .granted:
+      startCapture()
+    case .undetermined:
+      AVAudioSession.sharedInstance().requestRecordPermission { granted in
+        DispatchQueue.main.async {
+          guard granted else {
+            invoke.reject("microphone_permission_denied")
+            return
+          }
+          startCapture()
+        }
+      }
+    case .denied:
+      invoke.reject("microphone_permission_denied")
+    @unknown default:
+      invoke.reject("microphone_permission_unavailable")
+    }
+  }
+
+  @objc public func voiceForegroundCaptureStop(_ invoke: Invoke) {
+    if let generation = voiceSessionGeneration {
+      try? voiceSession?.cancel(generation: generation)
+      voiceSessionGeneration = nil
+    }
+    voiceSession = nil
+    voiceCapture.stop()
+    invoke.resolve(AuroraNativePlugin.voiceCapturePayload(voiceCapture.stats()))
+  }
+
+  @objc public func voiceForegroundCaptureFinish(_ invoke: Invoke) {
+    guard let session = voiceSession, let generation = voiceSessionGeneration else {
+      invoke.reject("capture_not_active")
+      return
+    }
+    do {
+      try session.finish(generation: generation)
+      let stats = session.captureStats() ?? voiceCapture.stats()
+      invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats))
+    } catch {
+      invoke.reject("capture_finish_failed")
+    }
+  }
+
+  @objc public func voiceForegroundCaptureStatus(_ invoke: Invoke) {
+    let stats = voiceSession?.captureStats() ?? voiceCapture.stats()
+    invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats))
   }
 
   @objc public func notificationStatus(_ invoke: Invoke) throws {
@@ -661,11 +769,48 @@ public final class AuroraNativePlugin: Plugin {
           "aurora.session",
           "aurora.auth",
           "aurora.gateway",
+          "aurora.voice",
           "aurora.mesh",
           "aurora.admin"
         ]
       ]
     ])
+  }
+
+  @objc public func voiceCredentialSet(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraIOSVoiceCredentialSetArgs.self)
+      invoke.resolve(try AuroraIOSVoiceCredentialStore.set(args))
+    } catch let error as AuroraIOSVoiceCredentialStoreError {
+      switch error {
+      case .invalidGateway:
+        invoke.reject("voice_credential_invalid_gateway")
+      case .invalidBearer:
+        invoke.reject("voice_credential_invalid_bearer")
+      case .corruptRecord:
+        invoke.reject("voice_credential_corrupt")
+      case .keychainFailure:
+        invoke.reject("voice_credential_storage_failed")
+      }
+    } catch {
+      invoke.reject("voice_credential_set_failed")
+    }
+  }
+
+  @objc public func voiceCredentialStatus(_ invoke: Invoke) {
+    do {
+      invoke.resolve(try AuroraIOSVoiceCredentialStore.status())
+    } catch {
+      invoke.reject("voice_credential_status_unavailable")
+    }
+  }
+
+  @objc public func voiceCredentialDelete(_ invoke: Invoke) {
+    do {
+      invoke.resolve(try AuroraIOSVoiceCredentialStore.delete())
+    } catch {
+      invoke.reject("voice_credential_delete_failed")
+    }
   }
 
   @objc public func thinPeerCredentialSet(_ invoke: Invoke) {
@@ -1004,6 +1149,22 @@ public final class AuroraNativePlugin: Plugin {
       "fallbackProviderId": "local:Orchestrator:llama-cpp",
       "reason": "backend_model_catalog_and_device_model_proof_required",
       "evidenceSource": "ios-native-local-light-adapter",
+      "secretsRedacted": true
+    ]
+  }
+
+  private static func voiceCapturePayload(_ stats: AuroraIOSVoiceCaptureStats) -> [String: Any] {
+    [
+      "available": true,
+      "foregroundOnly": true,
+      "running": stats.running,
+      "queuedChunks": stats.queuedChunks,
+      "acceptedChunks": stats.acceptedChunks,
+      "droppedChunks": stats.droppedChunks,
+      "discontinuities": stats.discontinuities,
+      "rawAudioLogged": false,
+      "backgroundListening": false,
+      "siriReplacement": false,
       "secretsRedacted": true
     ]
   }

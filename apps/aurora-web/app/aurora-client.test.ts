@@ -241,6 +241,14 @@ describe('createAuroraBrowserClient', () => {
       meshNodeRuntimeEnabled: false,
       localToolProviderEnabled: false,
       lightweightOrchestratorEnabled: false,
+      usesBrowserVoiceRuntime: true,
+      focusedPushToTalkOwner: 'webview-focused',
+      wakewordOwner: 'webview-focused',
+      localSpeechPack: expect.objectContaining({
+        state: 'disabled',
+        canRunLocalStt: false,
+        canRunLocalTts: false,
+      }),
     })
     expect(runtime.peer.snapshot().protocolCapabilities).not.toContain('hybrid')
     await runtime.close()
@@ -359,6 +367,18 @@ describe('createAuroraBrowserClient', () => {
     vi.stubEnv('NODE_ENV', 'production')
     installBrowserStorage()
     await saveMeshOnboardingProfile('mesh-ready')
+    const savedProfile = auroraBrowserRuntimeProfile()
+    if (!savedProfile) throw new Error('missing saved runtime profile')
+    await saveAuroraBrowserRuntimeProfile({
+      ...savedProfile,
+      localNode: {
+        ...savedProfile.localNode,
+        enabledCapabilityPacks: [
+          ...savedProfile.localNode.enabledCapabilityPacks,
+          'foreground-voice',
+        ],
+      },
+    })
     const closeServices = vi.fn(async () => undefined)
     const services = fakeMeshNodeServices(closeServices)
     const factory = vi.fn(async () => services)
@@ -367,13 +387,23 @@ describe('createAuroraBrowserClient', () => {
     const runtime = await createAuroraBrowserRuntimeAsync()
 
     expect(factory).toHaveBeenCalledTimes(1)
-    expect(auroraBrowserRuntimeProfile()?.localNode.enabledCapabilityPacks).toEqual(['native-actions'])
+    expect(auroraBrowserRuntimeProfile()?.localNode.enabledCapabilityPacks).toEqual([
+      'native-actions',
+      'foreground-voice',
+    ])
     expect(runtime.features).toMatchObject({
       requestedNodeRole: 'mesh-node',
       activeNodeRole: 'mesh-node',
       meshNodeRuntimeEnabled: true,
       localToolProviderEnabled: true,
       lightweightOrchestratorEnabled: true,
+      localSpeechPack: {
+        state: 'unavailable',
+        canRunLocalVad: false,
+        canRunLocalKws: false,
+        canRunLocalStt: false,
+        canRunLocalTts: false,
+      },
     })
     expect(runtime.localData).toEqual({
       session: services.session,
@@ -393,6 +423,51 @@ describe('createAuroraBrowserClient', () => {
     expect(auroraBrowserMeshNodeCompositionStatus()).toMatchObject({ state: 'ready' })
     await runtime.close()
     expect(closeServices).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['disabled', false],
+    ['unavailable', true],
+    ['downloading', true],
+    ['incompatible', true],
+    ['over-budget', true],
+  ] as const)('restores persisted %s local speech state without enabling local inference', async (
+    localSpeechPackState,
+    enableForegroundVoice,
+  ) => {
+    vi.stubEnv('NODE_ENV', 'production')
+    installBrowserStorage()
+    await saveMeshOnboardingProfile(`mesh-voice-${localSpeechPackState}`)
+    const savedProfile = auroraBrowserRuntimeProfile()
+    if (!savedProfile) throw new Error('missing saved runtime profile')
+    const enabledCapabilityPacks = enableForegroundVoice
+      ? [...savedProfile.localNode.enabledCapabilityPacks, 'foreground-voice' as const]
+      : savedProfile.localNode.enabledCapabilityPacks
+    await saveAuroraBrowserRuntimeProfile({
+      ...savedProfile,
+      localNode: {
+        ...savedProfile.localNode,
+        enabledCapabilityPacks,
+        localSpeechPackState,
+      },
+    })
+    const services = fakeMeshNodeServices(vi.fn(async () => undefined))
+    setAuroraBrowserMeshNodeServicesFactoryForTests(vi.fn(async () => services))
+
+    const runtime = await createAuroraBrowserRuntimeAsync()
+
+    expect(auroraBrowserRuntimeProfile()?.localNode).toMatchObject({
+      enabledCapabilityPacks,
+      localSpeechPackState,
+    })
+    expect(runtime.features.localSpeechPack).toMatchObject({
+      state: localSpeechPackState,
+      canRunLocalVad: false,
+      canRunLocalKws: false,
+      canRunLocalStt: false,
+      canRunLocalTts: false,
+    })
+    await runtime.close()
   })
 
   it('attaches an explicitly injected on-device provider only while the rollout is enabled', async () => {

@@ -300,7 +300,6 @@ function desktopClientLaunchContract() {
     env: {
       AURORA_TAURI_DEV_AUTOSIDECAR: '0',
       VITE_AURORA_DESKTOP_LIVE_E2E: '1',
-      VITE_AURORA_RUNTIME_MODE: 'desktop-thin',
       VITE_AURORA_CONNECTION_MODE: 'webrtc-only',
       VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: '1',
       VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC:
@@ -312,6 +311,31 @@ function desktopClientLaunchContract() {
 
 function buildRuntimeProfileDocument(ready) {
   const profileId = `desktop-live-${ready.lane ?? 'direct'}`
+  const homeConnection = {
+    mode: 'webrtc-only',
+    signalingUrl: ready.brokerUrl,
+    homePeerId: ready.expectedStablePeerId,
+    webrtcProfile: {
+      mode: 'webrtc-only',
+      appId: ready.appId,
+      room: ready.room,
+      roomSecretRef: `${profileId}.room`,
+      signalingBrokers: [ready.brokerUrl],
+      expectedStablePeerId: ready.expectedStablePeerId,
+      expectedSignalingPeerId: ready.expectedSignalingPeerId,
+      nodeName: ready.nodeName,
+      production: false,
+      allowInsecureLoopbackSignaling: true,
+      stunServers: ready.stunServers ?? [],
+      turnServers: ready.turnServers ?? [],
+      requireAppLayerE2ee: true,
+    },
+  }
+  const localNode = {
+    nodeName: 'Aurora desktop live E2E',
+    stablePeerId: ready.localStablePeerId ?? 'desktop-live-g009',
+    enabledCapabilityPacks: ['native-actions', 'local-tools'],
+  }
   return {
     version: 2,
     activeProfileId: profileId,
@@ -321,30 +345,9 @@ function buildRuntimeProfileDocument(ready) {
       label: 'Desktop live peer',
       nodeMode: 'mesh-node',
       runtimeTier: 'lightweight-ts',
-      homeConnection: {
-        mode: 'webrtc-only',
-        signalingUrl: ready.brokerUrl,
-        homePeerId: ready.expectedStablePeerId,
-        webrtcProfile: {
-          mode: 'webrtc-only',
-          appId: ready.appId,
-          room: ready.room,
-          roomSecretRef: `${profileId}.room`,
-          signalingBrokers: [ready.brokerUrl],
-          expectedStablePeerId: ready.expectedStablePeerId,
-          expectedSignalingPeerId: ready.expectedSignalingPeerId,
-          nodeName: ready.nodeName,
-          production: false,
-          allowInsecureLoopbackSignaling: true,
-          stunServers: ready.stunServers ?? [],
-          turnServers: ready.turnServers ?? [],
-          requireAppLayerE2ee: true,
-        },
-      },
+      homeConnection,
       localNode: {
-        nodeName: 'Aurora desktop live E2E',
-        stablePeerId: ready.localStablePeerId ?? 'desktop-live-g009',
-        enabledCapabilityPacks: ['native-actions', 'local-tools'],
+        ...localNode,
         meshMembership: {
           signalingUrl: ready.brokerUrl,
           webrtcProfile: {
@@ -363,6 +366,17 @@ function buildRuntimeProfileDocument(ready) {
             requireAppLayerE2ee: true,
           },
         },
+      },
+    }, {
+      version: 2,
+      id: `${profileId}-remote-console`,
+      label: 'Desktop live remote console',
+      nodeMode: 'remote-console',
+      runtimeTier: 'none',
+      homeConnection,
+      localNode: {
+        ...localNode,
+        enabledCapabilityPacks: [],
       },
     }],
   }
@@ -800,9 +814,28 @@ async function runSelfTest() {
   assert.equal(profile.activeProfileId, 'desktop-live-direct')
   assert.equal(profile.profiles[0].runtimeTier, 'lightweight-ts')
   assert.equal(profile.profiles[0].homeConnection.webrtcProfile.requireAppLayerE2ee, true)
+  assert.deepEqual(
+    profile.profiles.map((runtimeProfile) => runtimeProfile.nodeMode).sort(),
+    ['mesh-node', 'remote-console'],
+  )
+  assert.equal(
+    profile.profiles.find((runtimeProfile) => runtimeProfile.id === profile.activeProfileId).nodeMode,
+    'mesh-node',
+  )
+  assert.equal(
+    profile.profiles.find((runtimeProfile) => runtimeProfile.nodeMode === 'remote-console').runtimeTier,
+    'none',
+  )
   const invite = buildDesktopInvite(ready, 'secret-room')
   assert.equal(invite.signaling.room_password, 'secret-room')
-  assert.match(JSON.stringify(desktopClientLaunchContract()), /AURORA_TAURI_DEV_AUTOSIDECAR/)
+  const launchContract = desktopClientLaunchContract()
+  assert.deepEqual(Object.keys(launchContract.env).sort(), [
+    'AURORA_TAURI_DEV_AUTOSIDECAR',
+    'VITE_AURORA_CONNECTION_MODE',
+    'VITE_AURORA_DESKTOP_LIVE_E2E',
+    'VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC',
+    'VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK',
+  ])
   const redacted = redactSeeded('token-value room-secret', ['token-value', 'room-secret'])
   assert.equal(redacted, '<redacted> <redacted>')
   assert.doesNotThrow(() => assertNoSeededSecretsInText(redacted, ['token-value'], 'self-test redaction'))

@@ -192,6 +192,7 @@ def _build_services_from_local(
                         callable_feature_ids=mc.callable_feature_ids,
                         callable_features=list(getattr(mc, "callable_features", []) or []),
                         public_infrastructure=bool(getattr(mc, "public_infrastructure", False)),
+                        speech_constraints=getattr(mc, "speech_constraints", None),
                         input_schema=input_schema,
                         output_schema=output_schema,
                     )
@@ -257,6 +258,7 @@ def registry_snapshot_from_local_contracts(revision: str = "local") -> RegistryS
                     output_schema=output_schema,
                     feature_ids=tuple(mc.callable_feature_ids or ()),
                     public_infrastructure=bool(getattr(mc, "public_infrastructure", False)),
+                    speech_constraints=getattr(mc, "speech_constraints", None),
                 )
             )
         services.append(
@@ -375,6 +377,9 @@ def _method_info_from_snapshot(
         callable_features=list(feature_contracts_for_topic(method.topic)),
         public_infrastructure=method.public_infrastructure,
         method_type=method.method_type,
+        speech_constraints=_plain_mapping(method.speech_constraints)
+        if method.speech_constraints is not None
+        else None,
         input_schema=_plain_mapping(method.input_schema) if method.input_schema_present else None,
         output_schema=_plain_mapping(method.output_schema)
         if method.output_schema_present
@@ -463,6 +468,9 @@ def _method_info_from_exported_method(
         callable_features=_feature_contracts_for_ids(module_name, set(method_feature_ids)),
         public_infrastructure=method.public_infrastructure,
         method_type=method.method_type,
+        speech_constraints=_plain_mapping(method.speech_constraints)
+        if method.speech_constraints is not None
+        else None,
         input_schema=_plain_mapping(method.input_schema) if method.input_schema_present else None,
         output_schema=_plain_mapping(method.output_schema)
         if method.output_schema_present
@@ -854,6 +862,7 @@ _ALLOWED_METHOD_FIELDS = {
     "callable_features",
     "public_infrastructure",
     "method_type",
+    "speech_constraints",
     "input_schema",
     "output_schema",
 }

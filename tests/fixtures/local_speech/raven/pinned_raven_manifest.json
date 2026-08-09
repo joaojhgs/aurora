@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "plan_sha256": "75eb81a4c0aaf5fb42a27f9c7862ca8b615b556cd324ebcc702b506c514b6f56",
+  "sources": {
+    "pocket_tts_raven": {
+      "repo": "https://github.com/pkalogiros/pocket-tts-raven",
+      "commit": "abd26158ab50f954616eaf42296b09c4856489d7",
+      "license": "MIT"
+    },
+    "kyutai_pocket_tts_v2_1_0": {
+      "repo": "https://github.com/kyutai-labs/pocket-tts",
+      "commit": "058886528d0b6f2f2d4022de2e244a5260729e6e",
+      "tag": "v2.1.0"
+    },
+    "community_onnx_mirror": {
+      "repo": "https://huggingface.co/KevinAHM/pocket-tts-onnx",
+      "commit": "58a6d00cf13d239b6748cb0769f35c580a8f606c",
+      "use": "candidate input only; locally hash-pinned but not official release proof"
+    },
+    "sibling_sperandiodev": {
+      "path": "~/projects/sperandiodev",
+      "commit": "7342bb0fbe2af04b66b6e54c17b4ac8f765eb989",
+      "status_note": "read-only prototype; untracked safaricheck.mjs observed and ignored"
+    }
+  },
+  "release_evidence": {
+    "official_source_provenance": false,
+    "license_review": false,
+    "conversion_equivalence": false,
+    "browser_runtime": false,
+    "mobile_runtime": false,
+    "thermal_measurement": false,
+    "cancellation_stale_audio": false
+  },
+  "packs": {
+    "english_2026-04": {
+      "language": "en",
+      "canonical_config": "english_2026-04",
+      "tier": "compact",
+      "layers": 6,
+      "state_slots": 18,
+      "claims_compact": true,
+      "conversion": {
+        "source_role": "candidate-input",
+        "command": "BUNDLE_URL=https://huggingface.co/KevinAHM/pocket-tts-onnx/resolve/58a6d00cf13d239b6748cb0769f35c580a8f606c/onnx/english_2026-04 ./tools/prepare_models.sh --web",
+        "expected_equivalence": "Raven delta-KV and merged-flow equivalence against pinned English source graphs"
+      },
+      "assets": {
+        "tokenizer.model": {"sha256": "d461765ae179566678c93091c5fa6f2984c31bbe990bf1aa62d92c64d91bc3f6", "size_bytes": 59339},
+        "spm_vocab.json": {"sha256": "354255248387036e66271fe9ee44bfb56055f7bd62600f8fcc84d2cd18e02315", "size_bytes": 109060},
+        "text_conditioner.onnx": {"sha256": "4ecee995fb69f85c7a7493d11f7b5ee15d9950facc7ab3f5c9c49ef1e03847bb", "size_bytes": 16388344},
+        "flow_lm_main_int8.onnx": {"sha256": "f9bd8106b79a0192c1c43399ab938fb24900a95c1c599870d75a884e99000116", "size_bytes": 76341079},
+        "flow_lm_flow_int8.onnx": {"sha256": "3dd781ee5abee9e195320bf0106bebd6372a852b3b36352524ee78b40554635d", "size_bytes": 9962530},
+        "mimi_decoder_int8.onnx": {"sha256": "3630450a3297a101792a6ac66619ebc70ab916b265e6220c2afaef8b1673f925", "size_bytes": 22684077},
+        "bos_before_voice.npy": {"sha256": "f46edf4f7007b7ba4ea58831f49d003e59e167b4641c44bb3addfe9231a780b1", "size_bytes": 4224}
+      }
+    },
+    "portuguese": {
+      "language": "pt",
+      "canonical_config": "portuguese",
+      "tier": "compact",
+      "layers": 6,
+      "state_slots": 18,
+      "claims_compact": true,
+      "conversion": {
+        "source_role": "candidate-input",
+        "command": "BUNDLE_URL=https://huggingface.co/KevinAHM/pocket-tts-onnx/resolve/58a6d00cf13d239b6748cb0769f35c580a8f606c/onnx/portuguese BUNDLE_FILES_MANIFEST=<observed-portuguese-hashes> ./tools/prepare_models.sh --web",
+        "expected_equivalence": "Raven delta-KV and merged-flow equivalence against locally hash-pinned candidate ONNX source; candidate mirror is not official release proof",
+        "observed_outputs": {
+          "flow_lm_main_delta_attn_flow_int8.onnx": {"sha256": "bce8d67c033e448dca619cc15a3fc4214ad3498d6496d998feed66cc3632d96a", "size_bytes": 86028189},
+          "mimi_decoder_delta_int8.onnx": {"sha256": "6fec2578b893ecf418fb822b68963608748199fc6aef9c05e80e16524edb97ae", "size_bytes": 22672933},
+          "mimi_decoder_delta_convtr_int8.onnx": {"sha256": "637d5bc0b15f9e612ff435270447892516edbecb458e832e8dc6f612b03c227e", "size_bytes": 22584497},
+          "webdemo/models/flow_lm_main_delta_flow_int8.onnx": {"sha256": "4278387c0e84ecb2770b83ed3e90d55d022fcce2fb6c480860250917ed0f19d5", "size_bytes": 86301327},
+          "webdemo/models/spm_vocab.json": {"sha256": "44672bdd2666f1bd592b16e468fb53d747938152e0e44d3609ea31d094eaac96", "size_bytes": 125508}
+        }
+      },
+      "assets": {
+        "tokenizer.model": {"sha256": "3aa51309c55f114771c156aaeb86f6fc325991364aa3c38af74aecf1cbd0fade", "size_bytes": 60995},
+        "spm_vocab.json": {"sha256": "44672bdd2666f1bd592b16e468fb53d747938152e0e44d3609ea31d094eaac96", "size_bytes": 125508},
+        "text_conditioner.onnx": {"sha256": "693523a9b8e8853a7130676fd0e8189939255411700f0207664715226a26c409", "size_bytes": 16388344},
+        "flow_lm_main_int8.onnx": {"sha256": "119e5ce926cadc273508565143c86a7a9cd86450fa99cad6a37a79ba50f9db02", "size_bytes": 76341079},
+        "flow_lm_flow_int8.onnx": {"sha256": "53c50fc75f892687920c316513715bfbefbdb3b7642786e287c7971df53edb26", "size_bytes": 9962530},
+        "mimi_decoder_int8.onnx": {"sha256": "691f89f074585c828914cecd5396e30e0e2a14dbfa4890bd1b5806d303daeb4e", "size_bytes": 22684077},
+        "bos_before_voice.npy": {"sha256": "9396378d581d63554cc30f2861e5d5b825650ff3dd3594a9ddc73d18df0973f1", "size_bytes": 4224}
+      }
+    },
+    "french_24l": {
+      "language": "fr",
+      "canonical_config": "french_24l",
+      "tier": "quality",
+      "layers": 24,
+      "state_slots": 72,
+      "claims_compact": false,
+      "conversion": {
+        "source_role": "candidate-input",
+        "command": "BUNDLE_URL=https://huggingface.co/KevinAHM/pocket-tts-onnx/resolve/58a6d00cf13d239b6748cb0769f35c580a8f606c/onnx/french_24l BUNDLE_FILES_MANIFEST=<observed-french_24l-hashes> ./tools/prepare_models.sh --web",
+        "expected_equivalence": "Raven delta-KV and merged-flow equivalence against locally hash-pinned candidate ONNX source after graph-derived 24-layer AttentionTail coverage; candidate mirror is not official release proof",
+        "observed_attention_tail_replacements": 24,
+        "observed_state_slots": 72,
+        "layer_inference_patch": {
+          "path": "tools/pockettts-raven/patches/0001-raven-infer-attention-tail-layers.patch",
+          "sha256": "7660b938ea2e44149c774a432bb780aeee79a89694359ebf2a41407bb3088406",
+          "apply": "git apply --unidiff-zero --whitespace=error-all tools/pockettts-raven/patches/0001-raven-infer-attention-tail-layers.patch"
+        },
+        "observed_outputs": {
+          "flow_lm_main_delta_attn_flow_int8.onnx": {"sha256": "ce151eea3a47c2813be7f4d92ff3fab940bfe2f1f1df8425472658c734411991", "size_bytes": 314006315},
+          "mimi_decoder_delta_int8.onnx": {"sha256": "f058edb4b2bfc2b811aeb618b7010603c37d2552a16ed4000a43861f8725fed0", "size_bytes": 22672933},
+          "mimi_decoder_delta_convtr_int8.onnx": {"sha256": "8f6d5d002558eb3f74787d7e9b999071c70123bbf046b3a1bc5008b98cc5ced0", "size_bytes": 22584497},
+          "webdemo/models/flow_lm_main_delta_flow_int8.onnx": {"sha256": "b0e74bef70e9df9712f6ca811f765bb576cfe77ac683be771e3515a337c16362", "size_bytes": 315137841},
+          "webdemo/models/flow_lm_main_delta_attn_flow_int8.onnx": {"sha256": "ce151eea3a47c2813be7f4d92ff3fab940bfe2f1f1df8425472658c734411991", "size_bytes": 314006315},
+          "webdemo/models/mimi_decoder_delta_int8.onnx": {"sha256": "f058edb4b2bfc2b811aeb618b7010603c37d2552a16ed4000a43861f8725fed0", "size_bytes": 22672933},
+          "webdemo/models/spm_vocab.json": {"sha256": "cdc144ff81fa755712383f1ab484d153f218a73ea3a0e6c2753a40b392bf3390", "size_bytes": 124835}
+        }
+      },
+      "assets": {
+        "tokenizer.model": {"sha256": "521c85bdb2da10618f4be52021ed1cb2a7a6299b040708487f133193f7b305e2", "size_bytes": 60173},
+        "spm_vocab.json": {"sha256": "cdc144ff81fa755712383f1ab484d153f218a73ea3a0e6c2753a40b392bf3390", "size_bytes": 124835},
+        "text_conditioner.onnx": {"sha256": "89d1b6ac55e618e42d2bd840438ce918bffb14960475ef091847ca39be641e65", "size_bytes": 16388344},
+        "flow_lm_main_int8.onnx": {"sha256": "6130a6b98fae175147d82752263e250fb7b8483c1ef5373753ad335c16f4a129", "size_bytes": 305144125},
+        "flow_lm_flow_int8.onnx": {"sha256": "d340c549d5a1e0e7b88a0fb26fcae53c3b76486872f4418398a395bb1bc88701", "size_bytes": 9962530},
+        "mimi_decoder_int8.onnx": {"sha256": "b329ff3de3aa95455d2dee1cf371943dec269dd8711008017501ca129cb18d8c", "size_bytes": 22684077},
+        "bos_before_voice.npy": {"sha256": "5759269802d691d49481b8e06d6a5649da85ea01135e270bd7641e3b091c7237", "size_bytes": 4224}
+      }
+    }
+  }
+}

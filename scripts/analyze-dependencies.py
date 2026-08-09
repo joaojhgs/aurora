@@ -48,7 +48,6 @@ IMPORT_TO_PACKAGE = {
     "duckduckgo_search": "duckduckgo-search",
     "openwakeword": "openwakeword",
     "faster_whisper": "faster-whisper",
-    "RealtimeSTT": "RealtimeSTT",
     "realtimetts": "realtimetts",
     "piper_tts": "piper-tts",
     "piper_phonemize": "piper-phonemize",

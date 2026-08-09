@@ -1,0 +1,17 @@
+{
+  "app": {
+    "security": {
+      "capabilities": [
+        "aurora-main",
+        "aurora-overlay",
+        {
+          "identifier": "aurora-desktop-native-voice-e2e",
+          "description": "Debug-only capability for the maintained desktop native voice live test.",
+          "windows": ["main"],
+          "platforms": ["macOS", "linux", "windows"],
+          "permissions": ["core:window:allow-hide"]
+        }
+      ]
+    }
+  }
+}

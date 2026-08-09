@@ -45,6 +45,7 @@ def mock_bus():
     """Create a mock message bus."""
     bus = Mock(spec=MessageBus)
     bus.subscribe = Mock()
+    bus.subscribe_event = AsyncMock()
     bus.publish = AsyncMock()
     return bus
 
@@ -213,8 +214,7 @@ class TestLifecycle:
         assert service._process_thread is not None
 
         # Verify subscriptions - at least the audio stream subscription
-        assert service.bus.subscribe.call_count >= 1
-        service.bus.subscribe.assert_any_call(
+        service.bus.subscribe_event.assert_any_await(
             AudioTopics.STREAM_MICROPHONE, service._on_audio_chunk
         )
         # Service uses auto-subscription via contracts

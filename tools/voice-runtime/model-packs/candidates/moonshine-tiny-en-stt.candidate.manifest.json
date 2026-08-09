@@ -1,0 +1,265 @@
+{
+  "capabilities": {
+    "cancellation": true,
+    "streaming": true
+  },
+  "display_name": "Moonshine tiny English STT candidate",
+  "files": [
+    {
+      "asset_id": "encoder_model.ort",
+      "byte_size": 13281600,
+      "compression": "none",
+      "dependencies": [
+        "tokens"
+      ],
+      "file_id": "encoder",
+      "install_order": 0,
+      "installed_size": 13281600,
+      "license": {
+        "attribution": "sherpa-onnx Moonshine tiny English model pack; see pinned Phase 4 license evidence",
+        "commercial_use": true,
+        "identifier": "MIT",
+        "redistribution": "redistribution_allowed",
+        "text_sha256": "6148d7574a6554b7379b633cfd4c4fe5840c3f548d13bc83e00b52dc6fa00abd",
+        "text_url": "/aurora/model-packs/candidates/sha256/6148d7574a6554b7379b633cfd4c4fe5840c3f548d13bc83e00b52dc6fa00abd/LICENSE-MIT"
+      },
+      "processing": {
+        "operator_inventory_sha256": "73338f5ec4dd8d669dee4ef0b2dcd19dee712e5b3de66d42cbf94be001e1a947",
+        "postprocessing_abi": "aurora-stt-candidate-v1",
+        "preprocessing_abi": "sherpa-onnx-1.13.4-stt-pcm16k-mono",
+        "shapes": {
+          "cache_state": [],
+          "channels": 1,
+          "frame_size": 512,
+          "sample_rate_hz": 16000,
+          "window_size": 512
+        },
+        "tokenizer_sha256": "19e291f7c26294b51495d6aa8e9523c825541ab84b5cf5b6a07a5e52903347d5"
+      },
+      "provenance": {
+        "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
+        "upstream_revision": "9ec31b342d8fa3240c3b81b8f82e1cf7e3ac467c93ca5a999b741d5887164f8d",
+        "upstream_source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27.tar.bz2"
+      },
+      "raven": null,
+      "revocation": null,
+      "sha256": "94e90a4654fc45cdfedb77c4c08e1739f48862998e58fada384b25118134f221",
+      "task": "stt",
+      "url": "/aurora/model-packs/candidates/sha256/94e90a4654fc45cdfedb77c4c08e1739f48862998e58fada384b25118134f221/encoder_model.ort"
+    },
+    {
+      "asset_id": "decoder_model_merged.ort",
+      "byte_size": 30412256,
+      "compression": "none",
+      "dependencies": [
+        "tokens"
+      ],
+      "file_id": "decoder-merged",
+      "install_order": 1,
+      "installed_size": 30412256,
+      "license": {
+        "attribution": "sherpa-onnx Moonshine tiny English model pack; see pinned Phase 4 license evidence",
+        "commercial_use": true,
+        "identifier": "MIT",
+        "redistribution": "redistribution_allowed",
+        "text_sha256": "6148d7574a6554b7379b633cfd4c4fe5840c3f548d13bc83e00b52dc6fa00abd",
+        "text_url": "/aurora/model-packs/candidates/sha256/6148d7574a6554b7379b633cfd4c4fe5840c3f548d13bc83e00b52dc6fa00abd/LICENSE-MIT"
+      },
+      "processing": {
+        "operator_inventory_sha256": "73338f5ec4dd8d669dee4ef0b2dcd19dee712e5b3de66d42cbf94be001e1a947",
+        "postprocessing_abi": "aurora-stt-candidate-v1",
+        "preprocessing_abi": "sherpa-onnx-1.13.4-stt-pcm16k-mono",
+        "shapes": {
+          "cache_state": [
+            "past_key_values.0.decoder.key",
+            "past_key_values.0.decoder.value",
+            "past_key_values.0.encoder.key",
+            "past_key_values.0.encoder.value",
+            "past_key_values.1.decoder.key",
+            "past_key_values.1.decoder.value",
+            "past_key_values.1.encoder.key",
+            "past_key_values.1.encoder.value",
+            "past_key_values.2.decoder.key",
+            "past_key_values.2.decoder.value",
+            "past_key_values.2.encoder.key",
+            "past_key_values.2.encoder.value",
+            "past_key_values.3.decoder.key",
+            "past_key_values.3.decoder.value",
+            "past_key_values.3.encoder.key",
+            "past_key_values.3.encoder.value",
+            "past_key_values.4.decoder.key",
+            "past_key_values.4.decoder.value",
+            "past_key_values.4.encoder.key",
+            "past_key_values.4.encoder.value",
+            "past_key_values.5.decoder.key",
+            "past_key_values.5.decoder.value",
+            "past_key_values.5.encoder.key",
+            "past_key_values.5.encoder.value",
+            "present.0.decoder.key",
+            "present.0.decoder.value",
+            "present.0.encoder.key",
+            "present.0.encoder.value",
+            "present.1.decoder.key",
+            "present.1.decoder.value",
+            "present.1.encoder.key",
+            "present.1.encoder.value",
+            "present.2.decoder.key",
+            "present.2.decoder.value",
+            "present.2.encoder.key",
+            "present.2.encoder.value",
+            "present.3.decoder.key",
+            "present.3.decoder.value",
+            "present.3.encoder.key",
+            "present.3.encoder.value",
+            "present.4.decoder.key",
+            "present.4.decoder.value",
+            "present.4.encoder.key",
+            "present.4.encoder.value",
+            "present.5.decoder.key",
+            "present.5.decoder.value",
+            "present.5.encoder.key",
+            "present.5.encoder.value"
+          ],
+          "channels": 1,
+          "frame_size": 512,
+          "sample_rate_hz": 16000,
+          "window_size": 512
+        },
+        "tokenizer_sha256": "19e291f7c26294b51495d6aa8e9523c825541ab84b5cf5b6a07a5e52903347d5"
+      },
+      "provenance": {
+        "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
+        "upstream_revision": "9ec31b342d8fa3240c3b81b8f82e1cf7e3ac467c93ca5a999b741d5887164f8d",
+        "upstream_source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27.tar.bz2"
+      },
+      "raven": null,
+      "revocation": null,
+      "sha256": "cf524c4862d36e9e5ab032eddc73637efd822d70e868ac575cf1a46e1e4708a0",
+      "task": "stt",
+      "url": "/aurora/model-packs/candidates/sha256/cf524c4862d36e9e5ab032eddc73637efd822d70e868ac575cf1a46e1e4708a0/decoder_model_merged.ort"
+    },
+    {
+      "asset_id": "tokens.txt",
+      "byte_size": 549350,
+      "compression": "none",
+      "dependencies": [],
+      "file_id": "tokens",
+      "install_order": 2,
+      "installed_size": 549350,
+      "license": {
+        "attribution": "sherpa-onnx Moonshine tiny English model pack; see pinned Phase 4 license evidence",
+        "commercial_use": true,
+        "identifier": "MIT",
+        "redistribution": "redistribution_allowed",
+        "text_sha256": "6148d7574a6554b7379b633cfd4c4fe5840c3f548d13bc83e00b52dc6fa00abd",
+        "text_url": "/aurora/model-packs/candidates/sha256/6148d7574a6554b7379b633cfd4c4fe5840c3f548d13bc83e00b52dc6fa00abd/LICENSE-MIT"
+      },
+      "processing": {
+        "operator_inventory_sha256": "73338f5ec4dd8d669dee4ef0b2dcd19dee712e5b3de66d42cbf94be001e1a947",
+        "postprocessing_abi": "aurora-stt-candidate-v1",
+        "preprocessing_abi": "sherpa-onnx-1.13.4-stt-pcm16k-mono",
+        "shapes": {
+          "cache_state": [],
+          "channels": 1,
+          "frame_size": 512,
+          "sample_rate_hz": 16000,
+          "window_size": 512
+        },
+        "tokenizer_sha256": "19e291f7c26294b51495d6aa8e9523c825541ab84b5cf5b6a07a5e52903347d5"
+      },
+      "provenance": {
+        "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
+        "upstream_revision": "9ec31b342d8fa3240c3b81b8f82e1cf7e3ac467c93ca5a999b741d5887164f8d",
+        "upstream_source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27.tar.bz2"
+      },
+      "raven": null,
+      "revocation": null,
+      "sha256": "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+      "task": "stt",
+      "url": "/aurora/model-packs/candidates/sha256/2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049/tokens.txt"
+    }
+  ],
+  "languages": [
+    {
+      "auto_detect": false,
+      "fixed_language": true,
+      "language": "en",
+      "locale": "en-US"
+    }
+  ],
+  "license": {
+    "attribution": "sherpa-onnx Moonshine tiny English model pack; see pinned Phase 4 license evidence",
+    "commercial_use": true,
+    "identifier": "MIT",
+    "redistribution": "redistribution_allowed",
+    "text_sha256": "6148d7574a6554b7379b633cfd4c4fe5840c3f548d13bc83e00b52dc6fa00abd",
+    "text_url": "/aurora/model-packs/candidates/sha256/6148d7574a6554b7379b633cfd4c4fe5840c3f548d13bc83e00b52dc6fa00abd/LICENSE-MIT"
+  },
+  "pack_id": "aurora-candidate-moonshine-tiny-en-stt",
+  "pack_version": "2026.02.27-candidate.20260807",
+  "provenance": {
+    "build_recipe_sha256": "fca6438ab3733ae554e74bd922e92c494be7a49773ad27b431c44431a2b7bbe3",
+    "upstream_revision": "9ec31b342d8fa3240c3b81b8f82e1cf7e3ac467c93ca5a999b741d5887164f8d",
+    "upstream_source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27.tar.bz2"
+  },
+  "revocation": null,
+  "rollback_from": null,
+  "schema_version": 1,
+  "signature": {
+    "algorithm": "ed25519",
+    "key_id": "aurora-phase6-signed-candidate-20260807",
+    "value": "f3tOjfP1Cg6mfNsmT2P5cee3Ui1bZZfkFmNE4VMm+wnYFUx37hrrXD6EKgt9cMlR4RaiogZyq/9x0A3vD5l4DA=="
+  },
+  "supersedes_pack_id": null,
+  "tasks": [
+    "stt"
+  ],
+  "variants": [
+    {
+      "abi": {
+        "build_flags": [
+          "candidate",
+          "cpu",
+          "english-only",
+          "interoperable-false"
+        ],
+        "engine_source_revision": "sherpa-onnx@142807252687d81b40d6315f23470a1512a00de3;onnxruntime@8f0278c77bf44b0cc83c098c6c722b92a36ac4b5",
+        "min_aurora_version": "0.1.0",
+        "min_engine_version": "1.13.4",
+        "min_runtime_version": "0.1.0"
+      },
+      "arch": "x86_64",
+      "compatibility": {
+        "channels": 1,
+        "frame_size": 512,
+        "group_id": "aurora-phase6-stt-candidate",
+        "interoperable": false,
+        "postprocessing_abi": "aurora-stt-candidate-v1",
+        "preprocessing_abi": "sherpa-onnx-1.13.4-stt-pcm16k-mono",
+        "sample_rate_hz": 16000,
+        "voice_state_group_id": "none"
+      },
+      "engine": "sherpa_onnx",
+      "file_ids": [
+        "encoder",
+        "decoder-merged"
+      ],
+      "min_device_memory_mb": null,
+      "os": "linux",
+      "required_browser_features": [],
+      "resource_budget": {
+        "max_download_bytes": 44243206,
+        "max_installed_bytes": 44243206,
+        "max_memory_bytes": 402653184
+      },
+      "revocation": null,
+      "runtime_gates": {
+        "max_rtf_millis_per_second": 1000,
+        "min_cpu_threads": 1,
+        "min_device_class": "balanced"
+      },
+      "target": "desktop",
+      "variant_id": "linux-x86_64-sherpa-1.13.4-ort-1.27-cpu"
+    }
+  ]
+}

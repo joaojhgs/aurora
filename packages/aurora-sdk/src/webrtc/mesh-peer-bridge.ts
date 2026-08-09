@@ -98,7 +98,7 @@ type SubscribeAck = {
 }
 
 type AsyncDispatchFailure = {
-  operation: 'inbound_call' | 'inbound_subscribe' | 'manifest_ack' | 'manifest_response'
+  operation: 'inbound_call' | 'inbound_subscribe' | 'inbound_unsubscribe' | 'manifest_ack' | 'manifest_response'
   reason: 'bridge_closed' | 'send_failed' | 'handler_failed'
 }
 
@@ -186,7 +186,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.clock = options.clock ?? (() => Date.now() / 1000)
     this.peerHost = options.peerHost
     this.authenticatedPeerContext = this.assertAuthenticatedPeerSnapshot(this.session.getSnapshot())
-    this.peerHost?.attach({ sendFrame: (frame) => this.sendPeerHostFrame(frame) })
+    this.peerHost?.attach({ sendFrame: (frame, signal) => this.sendPeerHostFrame(frame, signal) })
     this.eventSubscriptions = new MeshEventSubscriptionRegistry({ maxTopicsPerPeer: 32, clock: this.clock })
     this.reassembler = new FragmentReassembler({ limits: new PeerProtocolLimits(), clock: this.clock })
     this.unsubscribeFrames = this.session.subscribeFrames((frame) => this.handleFrame(frame))
@@ -623,6 +623,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       case 'subscribe':
         this.observeAsyncDispatch('inbound_subscribe', this.handleInboundSubscribe(frame as unknown as import('./protocol.js').SubscribeFrame))
         return
+      case 'unsubscribe':
+        this.observeAsyncDispatch('inbound_unsubscribe', this.handleInboundUnsubscribe(String(frame.id)))
+        return
       case 'subscribe_rejected':
         this.rejectSubscribe(String(frame.id), new Error(String(frame.reason)))
         return
@@ -862,6 +865,15 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     await this.peerHost.handleSubscribe(frame, this.remotePeerId, this.authenticatedPeerContext)
   }
 
+  private async handleInboundUnsubscribe(id: string): Promise<void> {
+    this.assertOpen()
+    if (!this.peerHost) {
+      await this.sendLogicalFrame({ type: 'unsubscribed', id, subscription_id: id, removed: false })
+      return
+    }
+    await this.peerHost.handleUnsubscribe(id)
+  }
+
   private async handleManifest(frame: unknown): Promise<void> {
     if (!this.manifestParser) return
     const generation = this.incomingManifestGeneration + 1
@@ -981,9 +993,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     return true
   }
 
-  private async sendPeerHostFrame(frame: Record<string, unknown>): Promise<void> {
+  private async sendPeerHostFrame(frame: Record<string, unknown>, signal?: AbortSignal): Promise<void> {
     if (isLeaseBearingFrame(frame) && !this.remoteProtocol?.capabilities.has(CAP_PROVIDER_LEASE_V1)) return
-    await this.sendLogicalFrame(frame)
+    await this.sendLogicalFrame(frame, signal)
   }
 
   private observeAsyncDispatch(operation: AsyncDispatchFailure['operation'], promise: Promise<void>): void {
@@ -1048,7 +1060,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     }
   }
 
-  private async sendLogicalFrame(frame: Record<string, unknown>): Promise<void> {
+  private async sendLogicalFrame(frame: Record<string, unknown>, signal?: AbortSignal): Promise<void> {
     this.assertOpen()
     const json = JSON.stringify(frame)
     const bytes = utf8Bytes(json)
@@ -1060,12 +1072,12 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       const fragments = fragmentMessage(json, { messageId: this.randomId(), limits })
       this.sentFragmentCount += fragments.length
       for (const fragment of fragments) {
-        await this.session.sendFrame(fragment)
+        await this.session.sendFrame(fragment, signal)
       }
       return
     }
     if (bytes > MAX_INLINE_LOGICAL_BYTES && !this.remoteProtocol?.capabilities.has(CAP_FRAGMENTATION_V1)) throw new Error('WebRTC mesh frame too large without fragmentation_v1')
-    await this.session.sendFrame(frame)
+    await this.session.sendFrame(frame, signal)
   }
 
   private armTimer(ms: number, callback: () => void): unknown {

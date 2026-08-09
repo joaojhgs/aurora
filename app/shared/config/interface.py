@@ -6,6 +6,7 @@ It uses the message bus under the hood to communicate with the ConfigService.
 
 from __future__ import annotations
 
+import asyncio
 import warnings
 from typing import Any, TypeVar, overload
 
@@ -618,6 +619,11 @@ class ConfigAPI:
     def add_config_observer(self, callback):
         """Add observer for configuration changes.
 
+        This legacy synchronous observer path is best-effort: when an event
+        loop is already running it schedules the readiness-aware subscription
+        in the background. Lifecycle-critical services use BaseService's
+        awaited config subscription during startup instead.
+
         Args:
             callback: Callback function to call on config changes
         """
@@ -632,7 +638,16 @@ class ConfigAPI:
                     getattr(payload, "new_value", None),
                 )
 
-            self.bus.subscribe(ConfigMethods.UPDATED, on_config_changed)
+            subscribe_event = getattr(self.bus, "subscribe_event", None)
+            if callable(subscribe_event):
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    self.bus.subscribe(ConfigMethods.UPDATED, on_config_changed, event=True)
+                else:
+                    loop.create_task(subscribe_event(ConfigMethods.UPDATED, on_config_changed))
+            else:
+                self.bus.subscribe(ConfigMethods.UPDATED, on_config_changed, event=True)
         except Exception as e:
             log_error(f"Error adding config observer: {e}")
 

@@ -11,6 +11,7 @@ import pytest_asyncio
 from app.messaging.local_bus import LocalBus
 from app.services.config.messages import ConfigChangedEvent
 from app.shared.contracts.models.common import EmptyInput
+from app.shared.contracts.models.speech import SpeechMethodConstraints
 from app.shared.contracts.registry import clear_registry, method_contract
 from app.shared.messaging.bus_init import set_bus as set_shared_bus
 from app.shared.services.base_service import BaseService
@@ -83,6 +84,12 @@ class CallableFeatureAnnouncementService(BaseService):
         method_type="use",
         required_perms=["TTS.Synthesize"],
         callable_feature_ids=["speech_synthesis"],
+        speech_constraints=SpeechMethodConstraints(
+            exact_languages=["en"],
+            ready_voice_ids=["standard:test:voice-a"],
+            resident_model_identity_digest="b" * 64,
+            speech_capability_revision=11,
+        ),
     )
     async def synthesize(self, _data: EmptyInput) -> RuntimeTestResponse:
         return RuntimeTestResponse()
@@ -128,8 +135,12 @@ async def local_bus():
 
 @pytest.mark.asyncio
 async def test_config_event_decodes_dict_and_pydantic_payloads(local_bus) -> None:
+    from app.shared.contracts.models.config import ConfigMethods
+
     service = RuntimeLifecycleService()
     await service.start()
+
+    assert ConfigMethods.UPDATED in local_bus._evt_worker_tasks
 
     await service._handle_config_changed(
         {
@@ -162,6 +173,25 @@ async def test_config_event_decodes_dict_and_pydantic_payloads(local_bus) -> Non
 
 
 @pytest.mark.asyncio
+async def test_config_subscription_failure_blocks_service_start() -> None:
+    """A service must not report started if config event readiness fails."""
+
+    class FailingConfigBus:
+        async def subscribe_event(self, topic, handler) -> None:
+            raise RuntimeError("config listener unavailable")
+
+    set_shared_bus(FailingConfigBus())
+    service = RuntimeLifecycleService()
+
+    with pytest.raises(RuntimeError, match="config listener unavailable"):
+        await service.start()
+
+    assert service._started is False
+    assert service._runtime_state == "inactive"
+    assert service._config_change_subscription is None
+
+
+@pytest.mark.asyncio
 async def test_service_announcement_carries_callable_feature_metadata(local_bus) -> None:
     from app.shared.contracts.models.gateway import GatewayMethods, ServiceAnnouncement
 
@@ -185,12 +215,17 @@ async def test_service_announcement_carries_callable_feature_metadata(local_bus)
             "speech_playback",
             "speech_streaming",
             "speech_synthesis",
+            "speech_voice_discovery",
+            "speech_voice_management",
         ]
         assert [method.bus_topic for method in announcement.methods] == ["TTS.Synthesize"]
         method = announcement.methods[0]
         assert method.required_perms == ["TTS.Synthesize"]
         assert method.callable_feature_ids == ["speech_synthesis"]
         assert method.callable_features[0].feature_id == "speech_synthesis"
+        assert method.speech_constraints is not None
+        assert method.speech_constraints.exact_languages == ["en"]
+        assert method.speech_constraints.speech_capability_revision == 11
         await service.stop()
     finally:
         local_bus.unsubscribe(GatewayMethods.SERVICE_ANNOUNCE, capture)

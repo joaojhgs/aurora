@@ -234,6 +234,9 @@ importers:
       '@aurora/client':
         specifier: workspace:*
         version: link:../aurora-sdk
+      '@aurora/voice-web':
+        specifier: workspace:*
+        version: link:../aurora-voice-web
       '@base-ui-components/react':
         specifier: 1.0.0-rc.0
         version: 1.0.0-rc.0(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -340,6 +343,18 @@ importers:
       react-dom:
         specifier: ^19
         version: 19.2.7(react@19.2.7)
+      typescript:
+        specifier: 5.7.3
+        version: 5.7.3
+      vitest:
+        specifier: ^4.0.16
+        version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@24.13.2)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@24.13.2)(esbuild@0.27.7)(jiti@2.7.0))
+
+  packages/aurora-voice-web:
+    devDependencies:
+      esbuild:
+        specifier: ^0.27.7
+        version: 0.27.7
       typescript:
         specifier: 5.7.3
         version: 5.7.3

@@ -190,6 +190,48 @@ describe('runtime profile document', () => {
     expect(isRuntimeProfileConfigured(meshNode)).toBe(true)
   })
 
+  it.each([
+    'disabled',
+    'unavailable',
+    'downloading',
+    'incompatible',
+    'over-budget',
+  ] as const)('sanitizes the persisted %s local speech state', (localSpeechPackState) => {
+    const profile: AuroraRuntimeProfileV2 = {
+      version: 2,
+      id: `voice-${localSpeechPackState}`,
+      label: 'Voice state',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      localNode: {
+        nodeName: 'Hosted browser',
+        stablePeerId: 'browser-peer',
+        enabledCapabilityPacks: ['foreground-voice'],
+        localSpeechPackState,
+        meshMembership: {
+          signalingUrl: 'wss://signal.example.test/mqtt',
+          webrtcProfile: {
+            ...webrtcProfile,
+            mode: 'webrtc-only',
+          },
+        },
+      },
+    }
+
+    expect(sanitizeRuntimeProfile(profile).localNode.localSpeechPackState).toBe(localSpeechPackState)
+  })
+
+  it('rejects unknown persisted local speech states', () => {
+    const migrated = migrateThinProfileDocumentToRuntime(v1Document).profiles[0]!
+    expect(() => sanitizeRuntimeProfile({
+      ...migrated,
+      localNode: {
+        ...migrated.localNode,
+        localSpeechPackState: 'ready',
+      },
+    } as unknown as AuroraRuntimeProfileV2)).toThrow(/local speech state/u)
+  })
+
   it('uses product-safe physical surface labels', () => {
     expect(getAuroraSurfaceProfile({ runtimeMode: 'desktop-thin' }).label).toBe('Desktop app')
     expect(getAuroraSurfaceProfile({ runtimeMode: 'web-thin' }).label).toBe('Web app')

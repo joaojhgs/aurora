@@ -1,0 +1,166 @@
+{
+  "$schema": "aurora.android_runtime_role_evidence.v1",
+  "capturedAtUtc": "2026-08-08",
+  "codeEvidenceBaselineHead": "c833a41e",
+  "reportCommit": "c833a41e",
+  "scope": "Android runtime-role selection and native voice-route mirroring",
+  "invariants": {
+    "roleSelectedByEnvironment": false,
+    "roleSelectedByApkBuild": false,
+    "singleApkSupportsRemoteConsoleAndMeshNode": true,
+    "nativeRouteSyncSelectsRole": false
+  },
+  "artifact": {
+    "path": "apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk",
+    "sha256": "28a1aed66f1d26e1f9fa32ee5e8b91bfc27f4c6232f8f0a0497d17a288005d97",
+    "sizeBytes": 344316584,
+    "verification": "pnpm --dir apps/aurora-tauri android:verify:client:apk passed"
+  },
+  "artifactClassEvidence": {
+    "hostedWeb": {
+      "build": "pnpm --filter @aurora/web build passed",
+      "roleModeInjection": false
+    },
+    "desktopLinux": [
+      {
+        "kind": "appimage",
+        "path": "apps/aurora-tauri/src-tauri/target/release/bundle/appimage/Aurora_0.1.0_amd64.AppImage",
+        "sha256": "2dfc7c099e535720149ad580a25c27f7e81db9cf6e2a4f616706e8a15d8f514d",
+        "sizeBytes": 92137976
+      },
+      {
+        "kind": "deb",
+        "path": "apps/aurora-tauri/src-tauri/target/release/bundle/deb/Aurora_0.1.0_amd64.deb",
+        "sha256": "19cf166db178e4817ccc040630dfd3344a94660ccc8f33057a4dd7fcee7ff8d5",
+        "sizeBytes": 19116472
+      }
+    ],
+    "androidAab": {
+      "path": "apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/bundle/universalDebug/app-universal-debug.aab",
+      "sha256": "c58f23f046f5722830e951bf5a322d66198a9cf0fd4a3257f334120ca05b1739",
+      "sizeBytes": 347061847,
+      "verification": "pnpm --dir apps/aurora-tauri android:verify:client:aab passed"
+    },
+    "ipa": {
+      "build": "unavailable on Linux host",
+      "scan": "withheld"
+    }
+  },
+  "waydroid": {
+    "endpoint": "192.168.240.112:5555",
+    "android": "13",
+    "abi": "x86_64",
+    "installAndLaunch": "passed",
+    "mobileMcpCrashes": [],
+    "mobileMcpTransport": {
+      "status": "unavailable",
+      "attempts": 2,
+      "failure": "mobile_list_available_devices transport closed",
+      "fallback": "direct ADB UI inspection against the same Waydroid endpoint"
+    },
+    "screenshots": [
+      {
+        "name": "role-selected",
+        "path": "/tmp/waydroid-role-selected-fixed.png",
+        "sha256": "9dd39e07ca3bd2af8d6f2761f91eef38cd56e78b80c59a2a8aaf6e4272ee1522",
+        "dimensions": "1080x2400",
+        "uiState": "role choice and device availability connection screen"
+      },
+      {
+        "name": "final-route-sync",
+        "path": "/tmp/waydroid-final-route-sync-fixed.png",
+        "sha256": "6739c95ab91985e77a30063db32ecca4be5785915ce6af3c7bb54549a3f0a51d",
+        "dimensions": "1080x2400",
+        "uiState": "onboarding role-choice screen"
+      },
+      {
+        "name": "adb-role-choice-connect-selected",
+        "path": "/tmp/waydroid-connect-selected.png",
+        "sha256": "08144fca1380cfa2bd337d3f9825363d029fbc361946abc6fd7c76c5cff90fc8",
+        "dimensions": "1080x2400",
+        "uiState": "Connect to Aurora selected; saved choice visible"
+      },
+      {
+        "name": "adb-invite-onboarding",
+        "path": "/tmp/waydroid-connect-flow-final.png",
+        "sha256": "54e35b44d2a45b04ca1970b6d47a75528ef8216b934f0847955f20cc2145755b",
+        "dimensions": "1080x2400",
+        "uiState": "Invite onboarding reached after Continue"
+      }
+    ],
+    "uiNavigation": {
+      "tool": "adb direct fallback",
+      "endpoint": "192.168.240.112:5555",
+      "launch": "passed",
+      "roleSelection": "passed",
+      "continueToInviteOnboarding": "passed",
+      "uiautomatorPackage": "dev.aurora.desktop",
+      "webViewVisible": true,
+      "appCrashAfterNavigation": false
+    },
+    "profileRouteSync": {
+      "profileRole": "remote-console",
+      "transport": "http-only",
+      "gateway": "redacted",
+      "bearer": "redacted",
+      "result": "voice_route_configured",
+      "rawCredentialsExposedToWebView": false
+    },
+    "maintainedSmoke": {
+      "command": "ANDROID_SERIAL=192.168.240.112:5555 pnpm --dir apps/aurora-tauri android:smoke",
+      "status": "passed",
+      "durationSeconds": 80.97,
+      "apkSha256": "28a1aed66f1d26e1f9fa32ee5e8b91bfc27f4c6232f8f0a0497d17a288005d97"
+    },
+    "nativeStatus": {
+      "nativeSessionReady": true,
+      "startable": true,
+      "notificationReady": true,
+      "microphoneGranted": true,
+      "manifestReady": true,
+      "foregroundServiceReady": true
+    },
+    "nativeCapture": {
+      "latestActiveChunks": 16,
+      "latestActiveSamples": 25600,
+      "cleanupChunks": 0,
+      "cleanupSamples": 0,
+      "captureActiveAfterFinish": false
+    }
+  },
+  "headlessEmulator": {
+    "serial": "emulator-5558",
+    "android": "15",
+    "abi": "x86_64",
+    "command": "ANDROID_SERIAL=emulator-5558 AURORA_ANDROID_TEST_TIMEOUT_MS=600000 AURORA_ANDROID_INSTALL_TIMEOUT_MS=600000 pnpm --dir apps/aurora-tauri android:smoke",
+    "installAndLaunch": "passed",
+    "scriptedE2e": "failed",
+    "durationSeconds": 142.62,
+    "apkSha256": "28a1aed66f1d26e1f9fa32ee5e8b91bfc27f4c6232f8f0a0497d17a288005d97",
+    "failureClass": "fatal WebView renderer crash",
+    "signatures": [
+      "crashpad_client_linux.cc(745) Render process",
+      "crash wasn't handled by all associated webviews"
+    ],
+    "promotedAsRenderedAuroraPass": false
+  },
+  "verification": {
+    "makeCheck": "passed",
+    "routePolicyTests": "3 passed",
+    "uiSuite": "67 files / 658 tests passed",
+    "tauriSuite": "34 files / 312 tests passed; 14 skipped",
+    "rustWorkspace": "all workspace tests passed; 144 native, 48 testkit, 20 WASM facade, 7 iOS bridge",
+    "fullGatewayTurn": false,
+    "physicalDevice": false,
+    "backgroundCapture": false,
+    "iosNative": false,
+    "releaseSigning": false,
+    "physicalTurnOrRelay": false,
+    "secretsRedacted": true
+  },
+  "limitations": [
+    "A complete end-to-end Gateway turn was not observed; an earlier Waydroid microphone attempt was silent.",
+    "Headless scripted E2E remains blocked by the renderer crash and is not counted as a pass.",
+    "Physical ARM64, iOS/macOS, background lifecycle, release signing, and physical TURN/relay evidence remain outstanding."
+  ]
+}

@@ -1,0 +1,571 @@
+{
+  "schema_version": 1,
+  "name": "pockettts-cross-surface-native-voice-phase4",
+  "plan_sha256": "50181a35cd42e12a33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6",
+  "handoff_sha256": "70b1b5ebb32c6df0e52c119b2bd73adad79c2611433bd33da7391d6e273fe196",
+  "policy": {
+    "selected_statuses": [
+      "selected"
+    ],
+    "blocked_statuses": [
+      "blocked"
+    ],
+    "required_artifact_fields": [
+      "id",
+      "kind",
+      "role",
+      "status",
+      "url",
+      "version",
+      "sha256",
+      "size_bytes",
+      "archive_path",
+      "license"
+    ]
+  },
+  "artifacts": [
+    {
+      "id": "sherpa-onnx-source-v1.13.4",
+      "kind": "source",
+      "role": "native-speech-runtime",
+      "status": "selected",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/archive/refs/tags/v1.13.4.tar.gz",
+      "version": "v1.13.4",
+      "commit": "142807252687d81b40d6315f23470a1512a00de3",
+      "sha256": "3243cb386d3a4ac87596adf7d2c89fddf23e2948b154942b987b4d91c1fee295",
+      "size_bytes": 9840376,
+      "archive_path": "sources/sherpa-onnx-v1.13.4.tar.gz",
+      "extraction_path": "sources/extracted/sherpa-onnx-1.13.4",
+      "license": {
+        "spdx": "Apache-2.0",
+        "evidence": "sources/extracted/sherpa-onnx-1.13.4/LICENSE",
+        "evidence_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "disposition": "allowed"
+      }
+    },
+    {
+      "id": "kaldi-native-fbank-source-v1.22.3",
+      "kind": "source",
+      "role": "native-feature-extraction-dependency",
+      "status": "selected",
+      "url": "https://github.com/csukuangfj/kaldi-native-fbank/archive/refs/tags/v1.22.3.tar.gz",
+      "version": "v1.22.3",
+      "sha256": "9176cc66fc7ce1edf85cf355b06e320c57db6297df74277f575183468893cf61",
+      "size_bytes": 71144,
+      "archive_path": "builds/linux-x86_64/_deps/kaldi_native_fbank-subbuild/kaldi_native_fbank-populate-prefix/src/v1.22.3.tar.gz",
+      "license": {
+        "spdx": "Apache-2.0",
+        "evidence": "builds/linux-x86_64/_deps/kaldi_native_fbank-src/LICENSE",
+        "evidence_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "disposition": "allowed"
+      }
+    },
+    {
+      "id": "kissfft-source-febd4cae",
+      "kind": "source",
+      "role": "native-fft-dependency",
+      "status": "selected",
+      "url": "https://github.com/mborgerding/kissfft/archive/febd4caeed32e33ad8b2e0bb5ea77542c40f18ec.zip",
+      "version": "febd4caeed32e33ad8b2e0bb5ea77542c40f18ec",
+      "commit": "febd4caeed32e33ad8b2e0bb5ea77542c40f18ec",
+      "sha256": "497103e664168ebe39580b757adbe616f6cf85a16572af581ca7bc42d0ab13fd",
+      "size_bytes": 74252,
+      "archive_path": "builds/linux-x86_64/_deps/kissfft-subbuild/kissfft-populate-prefix/src/febd4caeed32e33ad8b2e0bb5ea77542c40f18ec.zip",
+      "license": {
+        "spdx": "BSD-3-Clause",
+        "evidence": "builds/linux-x86_64/_deps/kissfft-src/COPYING",
+        "evidence_sha256": "a2840585f8411be8e6826a31ef15ae65c950bd74a2437a73b013398a934ad0c6",
+        "disposition": "allowed"
+      }
+    },
+    {
+      "id": "kaldi-decoder-source-v0.3.0",
+      "kind": "source",
+      "role": "native-decoder-dependency",
+      "status": "selected",
+      "url": "https://github.com/k2-fsa/kaldi-decoder/archive/refs/tags/v0.3.0.tar.gz",
+      "version": "v0.3.0",
+      "sha256": "b9f34cfb4fd3b1344100eead79ef4d37aa15962274b9e3056de345021f76a1b0",
+      "size_bytes": 51199,
+      "archive_path": "builds/linux-x86_64/_deps/kaldi_decoder-subbuild/kaldi_decoder-populate-prefix/src/v0.3.0.tar.gz",
+      "license": {
+        "spdx": "Apache-2.0",
+        "evidence": "builds/linux-x86_64/_deps/kaldi_decoder-src/LICENSE",
+        "evidence_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "disposition": "allowed"
+      }
+    },
+    {
+      "id": "kaldifst-source-v1.8.0",
+      "kind": "source",
+      "role": "native-fst-dependency",
+      "status": "selected",
+      "url": "https://github.com/k2-fsa/kaldifst/archive/refs/tags/v1.8.0.tar.gz",
+      "version": "v1.8.0",
+      "sha256": "3f247b7e5a2409071202f5e2bc6200060f66728c0a3443c03923ad2723e040b3",
+      "size_bytes": 172147,
+      "archive_path": "builds/linux-x86_64/_deps/kaldifst-subbuild/kaldifst-populate-prefix/src/v1.8.0.tar.gz",
+      "license": {
+        "spdx": "Apache-2.0",
+        "evidence": "builds/linux-x86_64/_deps/kaldifst-src/LICENSE",
+        "evidence_sha256": "a682d6efd1ee5dee08a8e405c233c2c198ea70ae0718129daa83ab58cfe31c5d",
+        "disposition": "allowed"
+      }
+    },
+    {
+      "id": "openfst-source-v1.8.5-2026-04-11",
+      "kind": "source",
+      "role": "native-fst-dependency",
+      "status": "selected",
+      "url": "https://github.com/csukuangfj/openfst/archive/refs/tags/v1.8.5-2026-04-11.tar.gz",
+      "version": "v1.8.5-2026-04-11",
+      "sha256": "57fbc4b950ae81b1a0e1e298af15652da968a6723a592b7874e9b4027a80a5b4",
+      "size_bytes": 1501059,
+      "archive_path": "builds/linux-x86_64/_deps/openfst-subbuild/openfst-populate-prefix/src/v1.8.5-2026-04-11.tar.gz",
+      "license": {
+        "spdx": "Apache-2.0",
+        "evidence": "builds/linux-x86_64/_deps/openfst-src/COPYING",
+        "evidence_sha256": "4300529197035fd3452350718a0b8cee984e9412c9932d7f35fcde849fc97a4b",
+        "disposition": "allowed"
+      }
+    },
+    {
+      "id": "eigen-source-5.0.1",
+      "kind": "source",
+      "role": "native-linear-algebra-dependency",
+      "status": "selected",
+      "url": "https://gitlab.com/libeigen/eigen/-/archive/5.0.1/eigen-5.0.1.tar.gz",
+      "version": "5.0.1",
+      "sha256": "e9c326dc8c05cd1e044c71f30f1b2e34a6161a3b6ecf445d56b53ff1669e3dec",
+      "size_bytes": 2967272,
+      "archive_path": "builds/linux-x86_64/_deps/eigen-subbuild/eigen-populate-prefix/src/eigen-5.0.1.tar.gz",
+      "license": {
+        "spdx": "MPL-2.0",
+        "evidence": "builds/linux-x86_64/_deps/eigen-src/LICENSE",
+        "evidence_sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5",
+        "disposition": "allowed"
+      },
+      "notes": "Eigen also carries separately identified compatible third-party files; retain its complete upstream notice set in release SBOM output."
+    },
+    {
+      "id": "simple-sentencepiece-source-v0.7",
+      "kind": "source",
+      "role": "native-tokenizer-dependency",
+      "status": "selected",
+      "url": "https://github.com/pkufool/simple-sentencepiece/archive/refs/tags/v0.7.tar.gz",
+      "version": "v0.7",
+      "sha256": "1748a822060a35baa9f6609f84efc8eb54dc0e74b9ece3d82367b7119fdc75af",
+      "size_bytes": 355335,
+      "archive_path": "builds/linux-x86_64/_deps/simple-sentencepiece-subbuild/simple-sentencepiece-populate-prefix/src/v0.7.tar.gz",
+      "license": {
+        "spdx": "Apache-2.0",
+        "evidence": "builds/linux-x86_64/_deps/simple-sentencepiece-src/LICENSE",
+        "evidence_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+        "disposition": "allowed"
+      }
+    },
+    {
+      "id": "nlohmann-json-source-v3.12.0",
+      "kind": "source",
+      "role": "native-json-dependency",
+      "status": "selected",
+      "url": "https://github.com/nlohmann/json/archive/refs/tags/v3.12.0.tar.gz",
+      "version": "v3.12.0",
+      "sha256": "4b92eb0c06d10683f7447ce9406cb97cd4b453be18d7279320f7b2f025c10187",
+      "size_bytes": 9678593,
+      "archive_path": "builds/linux-x86_64/_deps/json-subbuild/json-populate-prefix/src/v3.12.0.tar.gz",
+      "license": {
+        "spdx": "MIT",
+        "evidence": "builds/linux-x86_64/_deps/json-src/LICENSE.MIT",
+        "evidence_sha256": "46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603",
+        "disposition": "allowed"
+      }
+    },
+    {
+      "id": "onnxruntime-linux-x64-release-1.27.0",
+      "kind": "prebuilt",
+      "role": "linux-inference-runtime-probe",
+      "status": "selected",
+      "url": "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/onnxruntime-linux-x64-glibc2_17-Release-1.27.0.zip",
+      "version": "1.27.0",
+      "sha256": "9f0c0a6998f1b94c399eeddcb443beb4a922c9a4fd431fdc9cd6de67a1935d00",
+      "size_bytes": 8509524,
+      "archive_path": "builds/linux-x86_64/_deps/onnxruntime-subbuild/onnxruntime-populate-prefix/src/onnxruntime-linux-x64-glibc2_17-Release-1.27.0.zip",
+      "license": {
+        "spdx": "MIT",
+        "evidence": "sources/extracted/onnxruntime-1.27.0/LICENSE",
+        "evidence_sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
+        "disposition": "allowed"
+      },
+      "notes": "This is the exact prebuilt ONNX Runtime package consumed by the Linux shared-library probe; the separately pinned source archive is provenance input, not a claim that this probe source-built ONNX Runtime."
+    },
+    {
+      "id": "piper-phonemize-source-f3ff95af",
+      "kind": "source",
+      "role": "blocked-tts-phonemizer-dependency",
+      "status": "blocked",
+      "url": "https://github.com/csukuangfj/piper-phonemize/archive/f3ff95afc03640bc1399e113e83361192a2fafb4.zip",
+      "version": "f3ff95afc03640bc1399e113e83361192a2fafb4",
+      "commit": "f3ff95afc03640bc1399e113e83361192a2fafb4",
+      "sha256": "d9cca4e2bdc7d6dd8dffb96a4668283dbd3f77a9c194a3e530c1e8eba9406a5d",
+      "size_bytes": 9805962,
+      "archive_path": "builds/linux-x86_64/_deps/piper_phonemize-subbuild/piper_phonemize-populate-prefix/src/f3ff95afc03640bc1399e113e83361192a2fafb4.zip",
+      "license": {
+        "spdx": "MIT",
+        "evidence": "builds/linux-x86_64/_deps/piper_phonemize-src/LICENSE.md",
+        "evidence_sha256": "13746d509d74e55ea2265fbef204bb7cdbf84a8315b0207e988326cb54387028",
+        "disposition": "blocked"
+      },
+      "notes": "Blocked because this exact source path embeds the separately blocked espeak-ng fork."
+    },
+    {
+      "id": "espeak-ng-source-ed530aa1",
+      "kind": "source",
+      "role": "blocked-tts-phonemizer-runtime",
+      "status": "blocked",
+      "url": "https://github.com/csukuangfj/espeak-ng/archive/ed530aa113046142eb5115cf2fc9157854d0ffe1.zip",
+      "version": "ed530aa113046142eb5115cf2fc9157854d0ffe1",
+      "commit": "ed530aa113046142eb5115cf2fc9157854d0ffe1",
+      "sha256": "e4e262cbe34f7fe21f91f1ba3397f2728e1f30eafbae7853f2b753a9ed13f0dd",
+      "size_bytes": 18011501,
+      "archive_path": "builds/linux-x86_64/_deps/espeak_ng-subbuild/espeak_ng-populate-prefix/src/ed530aa113046142eb5115cf2fc9157854d0ffe1.zip",
+      "license": {
+        "spdx": "GPL-3.0-or-later",
+        "evidence": "builds/linux-x86_64/_deps/espeak_ng-src/COPYING",
+        "evidence_sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+        "disposition": "blocked"
+      },
+      "notes": "Current upstream still contains the fixed-buffer unbounded string scan found in this pin; no audited fixed release is available."
+    },
+    {
+      "id": "onnxruntime-source-v1.27.0",
+      "kind": "source",
+      "role": "inference-runtime-source",
+      "status": "selected",
+      "url": "https://github.com/microsoft/onnxruntime/archive/refs/tags/v1.27.0.tar.gz",
+      "version": "v1.27.0",
+      "commit": "8f0278c77bf44b0cc83c098c6c722b92a36ac4b5",
+      "sha256": "b41d09905a3c2f3a25709d1dcce8ef3942a4c2799d1046f74be7b6bbebc45e6a",
+      "size_bytes": 285714570,
+      "archive_path": "sources/onnxruntime-v1.27.0.tar.gz",
+      "license": {
+        "spdx": "MIT",
+        "evidence": "sources/extracted/onnxruntime-1.27.0/LICENSE",
+        "evidence_sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
+        "disposition": "allowed"
+      }
+    },
+    {
+      "id": "cpal-crate-v0.18.1",
+      "kind": "crate",
+      "role": "desktop-audio-io-candidate",
+      "status": "selected",
+      "url": "https://crates.io/api/v1/crates/cpal/0.18.1/download",
+      "version": "v0.18.1",
+      "sha256": "5f77b11176c37874be37e8d691c946e31b2b8c357abce9526f6a99eb469e1028",
+      "size_bytes": 222732,
+      "archive_path": "sources/cpal-0.18.1.crate",
+      "license": {
+        "spdx": "Apache-2.0",
+        "evidence": "sources/extracted/cpal-0.18.1/LICENSE",
+        "evidence_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+        "disposition": "allowed"
+      }
+    },
+    {
+      "id": "emsdk-source-4.0.23",
+      "kind": "source",
+      "role": "wasm-toolchain",
+      "status": "selected",
+      "url": "https://github.com/emscripten-core/emsdk/archive/refs/tags/4.0.23.tar.gz",
+      "version": "4.0.23",
+      "sha256": "a91a4c1f42dbb0345faac093161e27d43e9b6964840d8c8d80976ab8d3eaf2d3",
+      "size_bytes": 208375,
+      "archive_path": "sources/emsdk-4.0.23.tar.gz",
+      "license": {
+        "spdx": "MIT",
+        "evidence": "tools/emsdk-4.0.23/LICENSE",
+        "evidence_sha256": "99d9a9616fbde3f5ee22a71d8645799a8522d48526130c5ba6dc27ad15ce01f1",
+        "disposition": "allowed"
+      }
+    },
+    {
+      "id": "onnxruntime-android-1.27.0",
+      "kind": "prebuilt",
+      "role": "android-inference-runtime",
+      "status": "selected",
+      "url": "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/onnxruntime-android-1.27.0.zip",
+      "version": "1.27.0",
+      "sha256": "a78f303a26b5e75c84c8b2a97fa2ddb400b2d1b5e069bec19aa229ccd3597fdb",
+      "size_bytes": 32794323,
+      "archive_path": "sources/onnxruntime-android-1.27.0.zip",
+      "license": {
+        "spdx": "MIT",
+        "evidence": "sources/extracted/onnxruntime-1.27.0/LICENSE",
+        "evidence_sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
+        "disposition": "allowed"
+      },
+      "notes": "Prebuilt arm64-v8a and x86_64 shared objects were inspected for 0x4000 LOAD segment alignment in the Phase 4 artifact report."
+    },
+    {
+      "id": "onnxruntime-ios-static-xcframework-1.27.0",
+      "kind": "prebuilt",
+      "role": "ios-inference-runtime",
+      "status": "selected",
+      "url": "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/onnxruntime-ios-static-xcframework-1.27.0.zip",
+      "version": "1.27.0",
+      "sha256": "2c4b6eda7fcf03ca51814bbc88e3709cc080e623581fce085286182cc30d60c1",
+      "size_bytes": 32580685,
+      "archive_path": "sources/onnxruntime-ios-static-xcframework-1.27.0.zip",
+      "license": {
+        "spdx": "MIT",
+        "evidence": "sources/extracted/onnxruntime-1.27.0/LICENSE",
+        "evidence_sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
+        "disposition": "allowed"
+      }
+    },
+    {
+      "id": "onnxruntime-wasm-static-lib-simd-1.27.0",
+      "kind": "prebuilt",
+      "role": "wasm-inference-runtime",
+      "status": "selected",
+      "url": "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/onnxruntime-wasm-static_lib-simd-1.27.0.zip",
+      "version": "1.27.0",
+      "sha256": "076680969c74225caf0a6d08c0be5edd2c242b081c33cede77dcc5eac355bbcf",
+      "size_bytes": 21015625,
+      "archive_path": "sources/onnxruntime-wasm-static_lib-simd-1.27.0.zip",
+      "license": {
+        "spdx": "MIT",
+        "evidence": "sources/extracted/onnxruntime-1.27.0/LICENSE",
+        "evidence_sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
+        "disposition": "allowed"
+      }
+    },
+    {
+      "id": "sherpa-onnx-android-1.13.4",
+      "kind": "prebuilt",
+      "role": "android-speech-runtime-comparison",
+      "status": "selected",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.4/sherpa-onnx-v1.13.4-android.tar.bz2",
+      "version": "v1.13.4",
+      "sha256": "7983fc3de23f6e64148f2fb05fa94a2efaa8c0516cc1573383dc5c7d4d2a43b0",
+      "size_bytes": 45068327,
+      "archive_path": "sources/sherpa-onnx-v1.13.4-android.tar.bz2",
+      "license": {
+        "spdx": "Apache-2.0",
+        "evidence": "sources/extracted/sherpa-onnx-1.13.4/LICENSE",
+        "evidence_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "disposition": "allowed"
+      }
+    },
+    {
+      "id": "sherpa-onnx-ios-static-xcframework-1.13.4",
+      "kind": "prebuilt",
+      "role": "ios-speech-runtime-comparison",
+      "status": "selected",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.4/sherpa-onnx-v1.13.4-ios.xcframework.zip",
+      "version": "v1.13.4",
+      "sha256": "c5a62904bba73edc4bac89bbf51b4c3db1dd6c1b397a16ee95b2ff94701e9846",
+      "size_bytes": 16977545,
+      "archive_path": "sources/sherpa-onnx-v1.13.4-ios.xcframework.zip",
+      "license": {
+        "spdx": "Apache-2.0",
+        "evidence": "sources/extracted/sherpa-onnx-1.13.4/LICENSE",
+        "evidence_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "disposition": "allowed"
+      }
+    },
+    {
+      "id": "moonshine-tiny-en-quantized-2026-02-27",
+      "kind": "model",
+      "role": "stt-en-candidate",
+      "status": "selected",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27.tar.bz2",
+      "version": "2026-02-27",
+      "sha256": "9ec31b342d8fa3240c3b81b8f82e1cf7e3ac467c93ca5a999b741d5887164f8d",
+      "size_bytes": 29858559,
+      "archive_path": "models/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27.tar.bz2",
+      "license": {
+        "spdx": "MIT",
+        "evidence": "models/extracted/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/LICENSE",
+        "evidence_sha256": "6148d7574a6554b7379b633cfd4c4fe5840c3f548d13bc83e00b52dc6fa00abd",
+        "disposition": "allowed"
+      },
+      "contained_files": [
+        {
+          "path": "encoder_model.ort",
+          "size_bytes": 13281600,
+          "sha256": "94e90a4654fc45cdfedb77c4c08e1739f48862998e58fada384b25118134f221"
+        },
+        {
+          "path": "decoder_model_merged.ort",
+          "size_bytes": 30412256,
+          "sha256": "cf524c4862d36e9e5ab032eddc73637efd822d70e868ac575cf1a46e1e4708a0"
+        },
+        {
+          "path": "tokens.txt",
+          "size_bytes": 549350,
+          "sha256": "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049"
+        }
+      ]
+    },
+    {
+      "id": "sherpa-kws-gigaspeech-2024-01-01",
+      "kind": "model",
+      "role": "kws-en-candidate",
+      "status": "selected",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2",
+      "version": "2024-01-01",
+      "sha256": "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a",
+      "size_bytes": 17626723,
+      "archive_path": "models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2",
+      "license": {
+        "spdx": "Apache-2.0",
+        "evidence": "models/extracted/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/README.md",
+        "evidence_sha256": "74e42d37d63acd2366b042151d576fcc0c4917a41de339414a37f1e79f4e80e2",
+        "disposition": "allowed"
+      },
+      "contained_files": [
+        {
+          "path": "encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+          "size_bytes": 4807159,
+          "sha256": "1e721676515bcd42a186979733981213c66c80db680e1cc582dfedf3be76e678"
+        },
+        {
+          "path": "encoder-epoch-12-avg-2-chunk-16-left-64.onnx",
+          "size_bytes": 12174219,
+          "sha256": "063fbc1aeae8a9b574607a331a00e60371846ef9eaa3c1d9ea48176665dfc693"
+        },
+        {
+          "path": "decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
+          "size_bytes": 1063189,
+          "sha256": "f61ebd3eed3773a44d088d53dfae92dbb6aec4839f4dcaee2d402414741663a3"
+        },
+        {
+          "path": "joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+          "size_bytes": 163380,
+          "sha256": "eae9da0c7e1e6c6a3f4cc42d167899c388f6c6701b94cb96320e4f55df79624c"
+        },
+        {
+          "path": "tokens.txt",
+          "size_bytes": 5006,
+          "sha256": "fd2ded4050a55d2b1578870ba8697d02371980217806b7558bd0a5cc60f3ba53"
+        },
+        {
+          "path": "bpe.model",
+          "size_bytes": 244837,
+          "sha256": "c8a2a0129c4ab8e463164c142f82d25649661b122c8cd0b7aab5c9e80b90ad24"
+        },
+        {
+          "path": "keywords.txt",
+          "size_bytes": 184,
+          "sha256": "b1740c4925d7c83337de2cffa04e8d35450fab2af8f583e65c54aad6257c4bd6"
+        },
+        {
+          "path": "keywords_raw.txt",
+          "size_bytes": 102,
+          "sha256": "f8d067c3c84bcf9240988b17bd28ce7a21e86f5ad9c01a4f1d6e052f9c38053d"
+        },
+        {
+          "path": "test_wavs/test_keywords.txt",
+          "size_bytes": 52,
+          "sha256": "fd9c3b504ab922bc96ce8613eff02193f8a5526fcf74a14df436c7af74ad649d"
+        }
+      ]
+    },
+    {
+      "id": "silero-vad-upstream-v4.0",
+      "kind": "model",
+      "role": "vad-candidate",
+      "status": "selected",
+      "url": "https://raw.githubusercontent.com/snakers4/silero-vad/915dd3d639b8333a52e001af095f87c5b7f1e0ac/files/silero_vad.onnx",
+      "version": "v4.0",
+      "commit": "915dd3d639b8333a52e001af095f87c5b7f1e0ac",
+      "tag_object": "7a176cc294a2c40615458e50895ed9703782638d",
+      "sha256": "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28",
+      "size_bytes": 1807522,
+      "archive_path": "models/silero-vad-v4.0.onnx",
+      "license": {
+        "spdx": "MIT",
+        "evidence": "models/silero-vad-v4.0.LICENSE",
+        "evidence_sha256": "2e63e9a38b6e8fc0c7bc37ce174caca1862870856c6daf5697cfb785e925520b",
+        "disposition": "allowed"
+      }
+    },
+    {
+      "id": "vits-piper-en-us-ljspeech-medium",
+      "kind": "model",
+      "role": "tts-en-candidate",
+      "status": "blocked",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-ljspeech-medium.tar.bz2",
+      "version": "2025-07-26",
+      "sha256": "3dfb4b759d8be032a4903a9538d128b0fda2a06ab1de6cbc2d93a97e2dd83dba",
+      "size_bytes": 67169893,
+      "archive_path": "models/vits-piper-en_US-ljspeech-medium.tar.bz2",
+      "license": {
+        "spdx": "Public-Domain",
+        "evidence": "models/extracted/vits-piper-en_US-ljspeech-medium/MODEL_CARD",
+        "evidence_sha256": "fbee1529c89d36b3fe76d7e9f3f832dce17f44900a52d76a9bda735654766b4d",
+        "disposition": "blocked"
+      },
+      "notes": "The model card is public domain, but the distributable pack and sherpa Piper path include espeak-ng data/runtime dependencies. Keep as C API evidence only until the espeak memory-safety findings and GPL distribution obligations are resolved.",
+      "contained_files": [
+        {
+          "path": "en_US-ljspeech-medium.onnx",
+          "size_bytes": 63531507,
+          "sha256": "8ceba58a4b540d4e7e7e24ad079cf0d92762a4fd334e059f12940787c6c37b3d"
+        },
+        {
+          "path": "en_US-ljspeech-medium.onnx.json",
+          "size_bytes": 4972,
+          "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860"
+        },
+        {
+          "path": "tokens.txt",
+          "size_bytes": 940,
+          "sha256": "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"
+        },
+        {
+          "path": "espeak-ng-data",
+          "size_bytes": 17991651,
+          "sha256": "eb8b19ec00b564ee1725efe626775ae20deef533a43be16d8f9310077daf5cb3",
+          "aggregate": "sha256 of sorted relative-path, size, and file-hash records for 355 files"
+        }
+      ]
+    }
+  ],
+  "policy_denials": [
+    {
+      "id": "pockettts-standard-voice-packs",
+      "status": "blocked",
+      "subject": "PocketTTS standard voice/model packs",
+      "reason": "Current Phase 4 evidence found non-commercial and mixed voice-pack licensing; Aurora must not ship, auto-download, or advertise these packs until an approved exact manifest exists.",
+      "license": {
+        "disposition": "blocked",
+        "evidence": "docs/DEPENDENCIES.md PocketTTS boundary and Phase 4 handoff"
+      }
+    },
+    {
+      "id": "sherpa-exported-silero-vad-v4-16k-derivative",
+      "status": "blocked",
+      "subject": "Sherpa-exported 643854-byte Silero VAD derivative",
+      "sha256": "9e2449b0656e4cd9355e6ccfa27e2f1196fbacbe01065916ae426246fe40e55d",
+      "size_bytes": 643854,
+      "reason": "The byte-identical export recipe was not reproduced from public upstream inputs; select the upstream Silero v4.0 ONNX asset instead.",
+      "license": {
+        "disposition": "blocked",
+        "evidence": "Phase 4 model provenance research"
+      }
+    },
+    {
+      "id": "piper-espeak-tts-runtime-chain",
+      "status": "blocked",
+      "subject": "Piper/espeak TTS runtime and packaged espeak data",
+      "reason": "sherpa-onnx v1.13.4 pins an espeak-ng fork with unresolved fixed-buffer parsing warnings and GPL-3.0-or-later distribution obligations; do not ship, auto-download, or activate Piper/espeak TTS until a patched audited chain or replacement is selected.",
+      "license": {
+        "disposition": "blocked",
+        "evidence": "Phase 4 Piper/espeak dependency audit"
+      }
+    }
+  ]
+}

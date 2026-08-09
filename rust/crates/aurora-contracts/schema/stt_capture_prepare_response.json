@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Redacted capture-owner grant response.",
+  "properties": {
+    "generation": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Generation",
+      "type": "integer"
+    },
+    "granted": {
+      "title": "Granted",
+      "type": "boolean"
+    },
+    "lease_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Lease Id"
+    },
+    "message": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Message"
+    },
+    "owner": {
+      "enum": [
+        "native",
+        "none",
+        "python"
+      ],
+      "title": "Owner",
+      "type": "string"
+    },
+    "python_capture_active": {
+      "title": "Python Capture Active",
+      "type": "boolean"
+    },
+    "redacted": {
+      "default": true,
+      "title": "Redacted",
+      "type": "boolean"
+    },
+    "status": {
+      "enum": [
+        "already_owned",
+        "granted",
+        "unavailable"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "stopped_python_capture": {
+      "default": false,
+      "title": "Stopped Python Capture",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "generation",
+    "granted",
+    "owner",
+    "python_capture_active",
+    "status"
+  ],
+  "title": "STTCapturePrepareResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

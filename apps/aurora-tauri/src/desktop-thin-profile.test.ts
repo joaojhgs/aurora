@@ -178,6 +178,20 @@ function fakeAndroidThinRuntime(mode: 'http-only' | 'webrtc-only' | 'webrtc-pref
       meshNodeRuntimeEnabled: false,
       localToolProviderEnabled: false,
       lightweightOrchestratorEnabled: false,
+      usesBrowserVoiceRuntime: false,
+      focusedPushToTalkOwner: 'unavailable',
+      wakewordOwner: 'unavailable',
+      localSpeechPack: {
+        state: 'disabled',
+        availabilityState: 'unsupported',
+        label: 'On-device speech',
+        detail: 'On-device speech is turned off on this device.',
+        blockers: ['local_speech_disabled'],
+        canRunLocalVad: false,
+        canRunLocalKws: false,
+        canRunLocalStt: false,
+        canRunLocalTts: false,
+      },
     },
     close: vi.fn(async () => undefined),
     calls,
@@ -238,7 +252,6 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('loads the packaged profile asynchronously before creating the live runtime', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     let release!: (value: AuroraThinProfileDocument) => void
     const load = vi.fn(() => new Promise<AuroraThinProfileDocument>((resolve) => {
@@ -267,7 +280,6 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('awaits durable mesh-node services before advertising the desktop client as a mesh node', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     const store: AuroraRuntimeProfileStore = {
       kind: 'runtime-profile',
@@ -319,7 +331,6 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('composes the configured native assistant provider without exposing its credential to JavaScript', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     const store: AuroraRuntimeProfileStore = {
       kind: 'runtime-profile',
@@ -376,7 +387,6 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('keeps an explicitly injected assistant provider ahead of native provider discovery', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     const store: AuroraRuntimeProfileStore = {
       kind: 'runtime-profile',
@@ -402,7 +412,6 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('fails bootstrap when mesh-node composition throws unexpectedly', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     const store: AuroraRuntimeProfileStore = {
       kind: 'runtime-profile',
@@ -424,7 +433,6 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('composes desktop thin runtime from an actual v2 runtime profile document', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
 
     const runtime = createAuroraTauriRuntime({
@@ -454,7 +462,6 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('preserves legacy v1 profiles across sequential controller saves and selects', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     let saved: AuroraThinProfileDocument = document
     const store = {
@@ -491,7 +498,6 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('requires explicit package capability proof before accepting python-full runtime profiles', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-local')
     const pythonFullDocument: AuroraRuntimeProfileDocument = {
       ...runtimeDocument,
       profiles: [{
@@ -513,26 +519,14 @@ describe('desktop-thin live connection profiles', () => {
       runtimeProfileDocument: pythonFullDocument,
       packageCapabilities: createTauriPackageCapabilities({
         source: 'test',
-        runtimeMode: 'desktop-local',
         includesPython: false,
       }),
       consumeThinInvite: false,
     })).toThrow(/bundled Python/)
-    expect(() => createAuroraTauriRuntime({
-      runtimeProfileDocument: pythonFullDocument,
-      packageCapabilities: createTauriPackageCapabilities({
-        source: 'test',
-        runtimeMode: 'desktop-thin',
-        includesPython: true,
-      }),
-      consumeThinInvite: false,
-    })).toThrow(/bundled Python/)
-
     const runtime = createAuroraTauriRuntime({
       runtimeProfileDocument: pythonFullDocument,
       packageCapabilities: createTauriPackageCapabilities({
         source: 'test',
-        runtimeMode: 'desktop-local',
         includesPython: true,
       }),
       consumeThinInvite: false,
@@ -544,7 +538,6 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('uses a remote-console runtime profile instead of starting desktop-local sidecar in a universal desktop artifact', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-local')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     const remoteDocument: AuroraRuntimeProfileDocument = {
       version: 2,
@@ -579,8 +572,22 @@ describe('desktop-thin live connection profiles', () => {
     await runtime.dispose()
   })
 
+  it('keeps a desktop-local capable artifact role-neutral until onboarding saves a runtime profile', async () => {
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
+
+    const runtime = createAuroraTauriRuntime({
+      consumeThinInvite: false,
+    })
+
+    expect(runtime.mode).toBe('desktop-local')
+    expect(runtime.runtimeProfile).toBeUndefined()
+    expect(runtime.nodeMode).toBe('remote-console')
+    expect(runtime.runtimeTier).toBe('none')
+    expect(runtime.requiresOnboarding).toBe(true)
+    await runtime.dispose()
+  })
+
   it('keeps lightweight mesh-only profiles off the desktop-local sidecar path', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-local')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     const meshOnlyDocument: AuroraRuntimeProfileDocument = {
       ...runtimeDocument,
@@ -615,7 +622,6 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('uses desktop-local sidecar only for proven python-full runtime profiles', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-local')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     const fullDocument: AuroraRuntimeProfileDocument = {
       ...runtimeDocument,
@@ -629,7 +635,6 @@ describe('desktop-thin live connection profiles', () => {
       runtimeProfileDocument: fullDocument,
       packageCapabilities: createTauriPackageCapabilities({
         source: 'test',
-        runtimeMode: 'desktop-local',
         includesPython: true,
       }),
       consumeThinInvite: false,
@@ -642,7 +647,6 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('rejects spoofed env-only package capability for python-full profiles', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-local')
     vi.stubEnv('VITE_AURORA_PACKAGE_INCLUDES_PYTHON', '1')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     const fullDocument: AuroraRuntimeProfileDocument = {
@@ -660,7 +664,6 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('does not classify a v1 store as runtime storage from human evidence text', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     const save = vi.fn(async () => undefined)
     const store = {
@@ -685,7 +688,6 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('preserves mesh-only v2 profiles across sequential controller saves and runtime recreation', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-local')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     const meshOnly = {
       ...runtimeDocument.profiles[0]!,
@@ -752,7 +754,6 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('restores a v2 runtime role from the nonsecret store on restart', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     const store = createMemoryRuntimeProfileStore(runtimeDocument)
 
@@ -770,8 +771,7 @@ describe('desktop-thin live connection profiles', () => {
     await restarted.dispose()
   })
 
-  it('preserves a packaged desktop-thin fragment invite until async profile bootstrap owns it', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
+  it('keeps a fragment invite pending until async profile bootstrap owns the runtime role', async () => {
     vi.stubEnv('VITE_AURORA_CONNECTION_MODE', 'webrtc-only')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     const inviteText = encodeMeshInviteToken({
@@ -806,8 +806,8 @@ describe('desktop-thin live connection profiles', () => {
       await originalDispose()
     }
 
-    expect(initial.mode).toBe('desktop-thin')
-    expect(initial.thinDiagnostics().join(' ')).not.toContain('tauri-room')
+    expect(initial.mode).toBe('desktop-local')
+    expect(initial.thinDiagnostics().join(' ')).toContain('desktop-local')
     expect(window.location.hash).toContain('invite=')
 
     const pending = bootstrapAuroraTauriRuntime(store)
@@ -1151,7 +1151,6 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('uses runtime-configured desktop-thin endpoints without enabling sidecar ownership', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     Object.defineProperty(window.navigator, 'userAgent', {
       value: 'Mozilla/5.0 (X11; Linux x86_64) Aurora Desktop',
@@ -1192,10 +1191,9 @@ describe('desktop-thin live connection profiles', () => {
   })
 
   it('classifies a packaged iOS-thin build without relying on the WebView user agent', async () => {
-    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'ios-thin')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     Object.defineProperty(window.navigator, 'userAgent', {
-      value: 'Mozilla/5.0 (Linux; Android 15) conflicting-test-agent',
+      value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
       configurable: true,
     })
 

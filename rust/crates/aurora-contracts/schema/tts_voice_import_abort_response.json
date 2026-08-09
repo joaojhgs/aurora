@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Clone prompt upload abort result.",
+  "properties": {
+    "correlation_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "deleted_bytes": {
+      "default": 0,
+      "maximum": 2097152,
+      "minimum": 0,
+      "title": "Deleted Bytes",
+      "type": "integer"
+    },
+    "idempotent": {
+      "default": false,
+      "title": "Idempotent",
+      "type": "boolean"
+    },
+    "status": {
+      "enum": [
+        "aborted",
+        "expired",
+        "not_found"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "upload_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Upload Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "upload_id"
+  ],
+  "title": "TTSVoiceImportAbortResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid"
+}

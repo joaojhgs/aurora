@@ -1,4 +1,11 @@
 [[permission]]
 identifier = "aurora-ios-voice"
-description = "Allow iOS voice, invocation, and background-limit status checks without granting microphone capture, background listening, or system assistant ownership."
-commands.allow = ["aurora_ios_voice_status", "aurora_ios_background_status"]
+description = "Allow iOS foreground voice status and explicit start/stop controls without granting background listening or system assistant ownership."
+commands.allow = [
+  "aurora_ios_voice_status",
+  "aurora_ios_voice_foreground_capture_start",
+  "aurora_ios_voice_foreground_capture_stop",
+  "aurora_ios_voice_foreground_capture_finish",
+  "aurora_ios_voice_foreground_capture_status",
+  "aurora_ios_background_status",
+]

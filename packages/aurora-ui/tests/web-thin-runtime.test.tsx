@@ -70,9 +70,19 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(desktop.usesLocalSidecar).toBe(false)
     expect(desktop.trustsNativeWebViewOrigin).toBe(true)
     expect(desktop.canManageLocalServiceConfiguration).toBe(false)
+    expect(desktop.voiceCapture.focusedPushToTalkOwner).toBe('native-desktop')
+    expect(desktop.voiceCapture.wakewordOwner).toBe('unavailable')
+    expect(desktop.voiceCapture.wakewordRequiresFocus).toBe(true)
 
-    const local = getAuroraSurfaceProfile({ runtimeMode: 'desktop-local', transportKind: 'tauri-local' })
-    expect(local.voiceCapture.wakewordOwner).toBe('coordinator-daemon')
+    const local = getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-local',
+      transportKind: 'tauri-local',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'python-full',
+    })
+    expect(local.voiceCapture.focusedPushToTalkOwner).toBe('native-desktop')
+    expect(local.voiceCapture.wakewordOwner).toBe('unavailable')
+    expect(local.voiceCapture.wakewordRequiresFocus).toBe(true)
     expect(local.canManageLocalServiceConfiguration).toBe(true)
 
     const androidHttp = getAuroraSurfaceProfile({ runtimeMode: 'mobile-native', transportKind: 'http', nativePlatform: 'android' })
@@ -106,6 +116,105 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(iosPackaged.supportsWebRtcThin).toBe(true)
   })
 
+  it('propagates centralized voice ownership into runtime features', async () => {
+    const web = createBrowserWebThinRuntime({
+      createClient,
+      mode: 'http-only',
+      runtimeMode: 'web',
+      gatewayUrl: 'https://aurora.example',
+      fetchImpl: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    })
+    const android = createBrowserWebThinRuntime({
+      createClient,
+      mode: 'http-only',
+      runtimeMode: 'mobile-native',
+      nativePlatform: 'android',
+      gatewayUrl: 'https://aurora.example',
+      fetchImpl: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    })
+
+    expect(web.surface.voiceCapture.usesBrowserVoiceRuntime).toBe(true)
+    expect(web.features).toMatchObject({
+      usesBrowserVoiceRuntime: true,
+      focusedPushToTalkOwner: 'webview-focused',
+      wakewordOwner: 'webview-focused',
+      localSpeechPack: {
+        state: 'disabled',
+        canRunLocalVad: false,
+        canRunLocalKws: false,
+        canRunLocalStt: false,
+        canRunLocalTts: false,
+      },
+    })
+    expect(android.surface.voiceCapture.usesBrowserVoiceRuntime).toBe(false)
+    expect(android.features).toMatchObject({
+      usesBrowserVoiceRuntime: false,
+      focusedPushToTalkOwner: 'webview-focused',
+      wakewordOwner: 'webview-focused',
+      localSpeechPack: {
+        state: 'disabled',
+        canRunLocalStt: false,
+      },
+    })
+
+    await web.close()
+    await android.close()
+  })
+
+  it('propagates local speech pack state without changing hosted browser capture ownership', async () => {
+    const runtime = createBrowserWebThinRuntime({
+      createClient,
+      mode: 'webrtc-only',
+      runtimeMode: 'web-thin',
+      nodeRole: 'mesh-node',
+      enabledCapabilityPacks: ['foreground-voice'],
+      localSpeechPackState: 'downloading',
+      inviteText: inviteText(),
+      windowLocation: { protocol: 'https:', hostname: 'app.example' },
+    })
+
+    expect(runtime.surface.voiceCapture.usesBrowserVoiceRuntime).toBe(true)
+    expect(runtime.features).toMatchObject({
+      requestedNodeRole: 'mesh-node',
+      activeNodeRole: 'mesh-node',
+      usesBrowserVoiceRuntime: true,
+      focusedPushToTalkOwner: 'webview-focused',
+      localSpeechPack: {
+        state: 'downloading',
+        availabilityState: 'pending',
+        canRunLocalVad: false,
+        canRunLocalKws: false,
+        canRunLocalStt: false,
+        canRunLocalTts: false,
+      },
+    })
+
+    await runtime.close()
+  })
+
+  it('does not infer mesh-node role from runtimeMode without an explicit nodeRole', async () => {
+    const runtime = createBrowserWebThinRuntime({
+      createClient,
+      createDemoClient,
+      mode: 'webrtc-only',
+      runtimeMode: 'mesh-node',
+      inviteText: inviteText(),
+      windowLocation: { protocol: 'https:', hostname: 'app.example' },
+    })
+
+    expect(runtime.features).toMatchObject({
+      requestedNodeRole: 'remote-console',
+      activeNodeRole: 'remote-console',
+      meshNodeRuntimeEnabled: false,
+      localToolProviderEnabled: false,
+      lightweightOrchestratorEnabled: false,
+    })
+    expect(runtime.surface.nodeMode).toBe('remote-console')
+    expect(runtime.surface.runtimeTier).toBe('none')
+
+    await runtime.close()
+  })
+
   it('builds a memory-only WebRTC profile from an invite without browser storage', () => {
     const localStorageSet = vi.spyOn(Storage.prototype, 'setItem')
     const sessionStorageSet = vi.spyOn(Storage.prototype, 'setItem')
@@ -136,6 +245,34 @@ describe('browser WebRTC thin-shell runtime', () => {
       'invite room=studio-room; brokers=1; secret=provided',
     )
     expect(notes.join('\n')).not.toContain('secret=memory-only')
+  })
+
+  it('does not explain mesh-node gates from runtimeMode without an explicit nodeRole', () => {
+    const rolloutFlags = {
+      mesh_node_runtime_v1: false,
+      local_tool_provider_v1: false,
+      lightweight_orchestrator_v1: false,
+    }
+    const runtimeModeOnlyNotes = explainBrowserThinRuntime({
+      mode: 'webrtc-only',
+      runtimeMode: 'mesh-node',
+      rolloutFlags,
+    })
+    const explicitMeshNodeNotes = explainBrowserThinRuntime({
+      mode: 'webrtc-only',
+      runtimeMode: 'web-thin',
+      nodeRole: 'mesh-node',
+      rolloutFlags,
+    })
+
+    expect(runtimeModeOnlyNotes.join('\n')).not.toContain('mesh-node runtime disabled')
+    expect(runtimeModeOnlyNotes.join('\n')).not.toContain('local tool provider disabled')
+    expect(runtimeModeOnlyNotes.join('\n')).not.toContain('lightweight orchestrator disabled')
+    expect(explicitMeshNodeNotes).toEqual(expect.arrayContaining([
+      'mesh-node runtime disabled by rollout flag; remote-console behavior remains active',
+      'local tool provider disabled by rollout flag',
+      'lightweight orchestrator disabled by rollout flag',
+    ]))
   })
 
   it('uses the exact nonsecret profile signaling endpoint over invite metadata', () => {
@@ -320,6 +457,16 @@ describe('browser WebRTC thin-shell runtime', () => {
         nodeRole: 'remote-console',
         windowLocation: { protocol: 'https:', hostname: 'app.example' },
       })
+      const runtimeModeOnly = createIsolatedBrowserWebThinRuntime({
+        createClient,
+        createDemoClient,
+        mode: 'webrtc-only',
+        runtimeMode: 'mesh-node',
+        inviteText: inviteText(),
+        peerAuthorityResolver,
+        peerPairingIssuer,
+        windowLocation: { protocol: 'https:', hostname: 'app.example' },
+      })
       const meshRuntimeDisabled = createIsolatedBrowserWebThinRuntime({
         createClient,
         createDemoClient,
@@ -354,7 +501,7 @@ describe('browser WebRTC thin-shell runtime', () => {
         windowLocation: { protocol: 'https:', hostname: 'app.example' },
       })
 
-      expect(runtimeOptions).toHaveLength(5)
+      expect(runtimeOptions).toHaveLength(6)
       expect(runtimeOptions[0]?.nodeRole).toBe('mesh-node')
       expect(runtimeOptions[0]?.peerAuthorityResolver).toBe(peerAuthorityResolver)
       expect(runtimeOptions[0]?.peerPairingIssuer).toBe(peerPairingIssuer)
@@ -366,37 +513,75 @@ describe('browser WebRTC thin-shell runtime', () => {
       expect(runtimeOptions[2]).not.toHaveProperty('peerAuthorityResolver')
       expect(runtimeOptions[2]).not.toHaveProperty('peerPairingIssuer')
       expect(runtimeOptions[2]?.localProtocolCapabilities).toContain(CAP_CONSUMER_ONLY_V1)
+      expect(runtimeModeOnly.features).toMatchObject({
+        requestedNodeRole: 'remote-console',
+        activeNodeRole: 'remote-console',
+        meshNodeRuntimeEnabled: false,
+        localToolProviderEnabled: false,
+        lightweightOrchestratorEnabled: false,
+      })
+      expect(runtimeModeOnly.surface.nodeMode).toBe('remote-console')
+      expect(runtimeModeOnly.surface.runtimeTier).toBe('none')
+      expect(runtimeOptions[3]?.nodeRole).toBe('remote-console')
+      expect(runtimeOptions[3]).not.toHaveProperty('peerAuthorityResolver')
+      expect(runtimeOptions[3]).not.toHaveProperty('peerPairingIssuer')
+      expect(runtimeOptions[3]?.localProtocolCapabilities).toContain(CAP_CONSUMER_ONLY_V1)
       expect(meshRuntimeDisabled.features).toEqual({
         requestedNodeRole: 'mesh-node',
         activeNodeRole: 'remote-console',
         meshNodeRuntimeEnabled: false,
         localToolProviderEnabled: false,
         lightweightOrchestratorEnabled: false,
+        usesBrowserVoiceRuntime: true,
+        focusedPushToTalkOwner: 'webview-focused',
+        wakewordOwner: 'webview-focused',
+        localSpeechPack: expect.objectContaining({
+          state: 'disabled',
+          canRunLocalStt: false,
+          canRunLocalTts: false,
+        }),
       })
-      expect(runtimeOptions[3]?.nodeRole).toBe('mesh-node')
-      expect(runtimeOptions[3]).not.toHaveProperty('peerAuthorityResolver')
-      expect(runtimeOptions[3]).not.toHaveProperty('peerPairingIssuer')
-      expect(runtimeOptions[3]?.localProtocolCapabilities).not.toContain(CAP_CONSUMER_ONLY_V1)
+      expect(runtimeOptions[4]?.nodeRole).toBe('mesh-node')
+      expect(runtimeOptions[4]).not.toHaveProperty('peerAuthorityResolver')
+      expect(runtimeOptions[4]).not.toHaveProperty('peerPairingIssuer')
+      expect(runtimeOptions[4]?.localProtocolCapabilities).not.toContain(CAP_CONSUMER_ONLY_V1)
       expect(localProviderDisabled.features).toEqual({
         requestedNodeRole: 'mesh-node',
         activeNodeRole: 'mesh-node',
         meshNodeRuntimeEnabled: true,
         localToolProviderEnabled: false,
         lightweightOrchestratorEnabled: true,
+        usesBrowserVoiceRuntime: true,
+        focusedPushToTalkOwner: 'webview-focused',
+        wakewordOwner: 'webview-focused',
+        localSpeechPack: expect.objectContaining({
+          state: 'disabled',
+          canRunLocalStt: false,
+          canRunLocalTts: false,
+        }),
       })
-      expect(runtimeOptions[4]?.nodeRole).toBe('mesh-node')
-      expect(runtimeOptions[4]?.peerAuthorityResolver).toBe(peerAuthorityResolver)
-      expect(runtimeOptions[4]?.peerPairingIssuer).toBe(peerPairingIssuer)
+      expect(runtimeOptions[5]?.nodeRole).toBe('mesh-node')
+      expect(runtimeOptions[5]?.peerAuthorityResolver).toBe(peerAuthorityResolver)
+      expect(runtimeOptions[5]?.peerPairingIssuer).toBe(peerPairingIssuer)
       expect(localOrchestratorDisabled.features).toEqual({
         requestedNodeRole: 'mesh-node',
         activeNodeRole: 'mesh-node',
         meshNodeRuntimeEnabled: true,
         localToolProviderEnabled: true,
         lightweightOrchestratorEnabled: false,
+        usesBrowserVoiceRuntime: true,
+        focusedPushToTalkOwner: 'webview-focused',
+        wakewordOwner: 'webview-focused',
+        localSpeechPack: expect.objectContaining({
+          state: 'disabled',
+          canRunLocalStt: false,
+          canRunLocalTts: false,
+        }),
       })
 
       await meshNode.close()
       await remoteConsole.close()
+      await runtimeModeOnly.close()
       await meshRuntimeDisabled.close()
       await localProviderDisabled.close()
       await localOrchestratorDisabled.close()

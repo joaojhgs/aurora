@@ -32,7 +32,27 @@ use thiserror::Error;
 use tokio::sync::watch;
 use url::Url;
 
+#[cfg(target_os = "android")]
+mod android_audio;
+#[cfg(target_os = "ios")]
+mod ios_voice;
+#[cfg(target_os = "ios")]
+use aurora_voice_ios_bridge::*;
+#[cfg(target_os = "ios")]
+#[used]
+static AURORA_IOS_VOICE_BRIDGE_LINK_ANCHOR:
+    extern "C" fn(usize, usize) -> *mut aurora_voice_ios_bridge::AuroraIosAudioState =
+    aurora_voice_ios_bridge::aurora_ios_audio_state_new;
+#[cfg(target_os = "ios")]
+#[used]
+static AURORA_IOS_VOICE_SESSION_LINK_ANCHOR:
+    unsafe extern "C" fn(
+        *const std::os::raw::c_char,
+        *const std::os::raw::c_char,
+        u32,
+    ) -> *mut aurora_voice_native::IosVoiceSession = ios_voice::aurora_ios_voice_session_new;
 mod local_data_native;
+mod native_voice;
 mod native_webrtc;
 mod generated {
     pub mod local_data_migrations;
@@ -42,6 +62,10 @@ use local_data_native::{
     aurora_local_data_open, aurora_local_data_repository_operation, aurora_local_data_status,
     aurora_local_data_transaction_begin, aurora_local_data_transaction_commit,
     aurora_local_data_transaction_rollback, LocalDataCommandState,
+};
+use native_voice::{
+    aurora_native_voice_cancel, aurora_native_voice_finish, aurora_native_voice_start,
+    aurora_native_voice_status, NativeVoiceState,
 };
 
 const DEFAULT_GATEWAY_URL: &str = "http://127.0.0.1:8000";
@@ -74,6 +98,7 @@ const VOICE_OVERLAY_WIDTH: f64 = 220.0;
 const VOICE_OVERLAY_HEIGHT: f64 = 230.0;
 const TEXT_OVERLAY_WIDTH: f64 = 520.0;
 const TEXT_OVERLAY_HEIGHT: f64 = 360.0;
+const GATEWAY_EVENT_STREAM_ERROR_BODY_MAX_BYTES: usize = 4096;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -214,6 +239,14 @@ struct AndroidWebviewMicrophonePermissionDecisionRequest {
     configured_https_origins: Option<Vec<String>>,
     foreground: bool,
     focused: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AndroidVoiceForegroundServiceStartRequest {
+    remote_audio_consent: bool,
+    #[serde(default)]
+    background_session: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -773,6 +806,14 @@ struct NativeShowNotificationRequest {
     title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     body: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IosVoiceCredentialSetRequest {
+    gateway: String,
+    bearer: Option<String>,
+    remote_audio_consent: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -1634,6 +1675,106 @@ async fn aurora_ios_voice_status(
     }
 }
 
+#[tauri::command]
+async fn aurora_ios_voice_foreground_capture_start(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        let payload = run_ios_plugin_command(native, "voiceForegroundCaptureStart", json!({}))?;
+        log_ios_native_plugin_payload("voiceForegroundCaptureStart", &payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "iOS foreground voice capture is only available in the iOS Tauri shell".to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_ios_voice_background_capture_start(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        let payload = run_ios_plugin_command(native, "voiceBackgroundCaptureStart", json!({}))?;
+        log_ios_native_plugin_payload("voiceBackgroundCaptureStart", &payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "iOS background voice capture is only available in the iOS Tauri shell".to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_ios_voice_foreground_capture_stop(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        let payload = run_ios_plugin_command(native, "voiceForegroundCaptureStop", json!({}))?;
+        log_ios_native_plugin_payload("voiceForegroundCaptureStop", &payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "iOS foreground voice capture is only available in the iOS Tauri shell".to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_ios_voice_foreground_capture_finish(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        let payload = run_ios_plugin_command(native, "voiceForegroundCaptureFinish", json!({}))?;
+        log_ios_native_plugin_payload("voiceForegroundCaptureFinish", &payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "iOS foreground voice capture is only available in the iOS Tauri shell".to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_ios_voice_foreground_capture_status(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        let payload = run_ios_plugin_command(native, "voiceForegroundCaptureStatus", json!({}))?;
+        log_ios_native_plugin_payload("voiceForegroundCaptureStatus", &payload);
+        Ok(payload)
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "iOS foreground voice capture is only available in the iOS Tauri shell".to_string(),
+        ))
+    }
+}
+
 fn ios_voice_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
     let mut status = denied_native_feature_status(
         "aurora.iosMicrophoneCapture",
@@ -1773,6 +1914,69 @@ async fn aurora_android_voice_foreground_service_status(
         let _ = native;
         Err(AuroraCommandError::UnsupportedFeature(
             "Android voice foreground service status is only available in the Android Tauri shell"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_android_voice_foreground_service_start(
+    request: AndroidVoiceForegroundServiceStartRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(
+            native,
+            "startVoiceForegroundService",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        )
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (request, native);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android voice foreground service start is only available in the Android Tauri shell"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_android_voice_foreground_service_finish(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(native, "finishVoiceForegroundService", json!({}))
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android voice foreground service finish is only available in the Android Tauri shell"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_android_voice_foreground_service_cancel(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(native, "stopVoiceForegroundService", json!({}))
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android voice foreground service cancel is only available in the Android Tauri shell"
                 .to_string(),
         ))
     }
@@ -2222,6 +2426,72 @@ async fn aurora_ios_secure_storage_status(
             "source": "tauri-ios-native-plugin",
             "reason": "iOS Keychain status requires an iOS target built with Xcode/Tauri mobile.",
             "details": ios_native_details()
+        }))
+    }
+}
+
+#[tauri::command]
+async fn aurora_ios_voice_credential_set(
+    request: IosVoiceCredentialSetRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    let payload =
+        serde_json::to_value(&request).map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+
+    #[cfg(target_os = "ios")]
+    {
+        // The Swift plugin stores the bearer in the device-only Keychain and
+        // returns only redacted status. Never log this request payload.
+        return run_ios_plugin_command(native, "voiceCredentialSet", payload);
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = (native, payload);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "iOS voice credentials require the iOS Tauri shell".to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_ios_voice_credential_status(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(native, "voiceCredentialStatus", json!({}));
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        Ok(json!({
+            "configured": false,
+            "hasBearer": false,
+            "remoteAudioConsent": false,
+            "secretsRedacted": true
+        }))
+    }
+}
+
+#[tauri::command]
+async fn aurora_ios_voice_credential_delete(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(native, "voiceCredentialDelete", json!({}));
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = native;
+        Ok(json!({
+            "configured": false,
+            "hasBearer": false,
+            "remoteAudioConsent": false,
+            "secretsRedacted": true
         }))
     }
 }
@@ -3690,8 +3960,14 @@ async fn aurora_shutdown(
     app: AppHandle,
     state: State<'_, SharedSidecarState>,
     subscription_state: State<'_, SharedSubscriptionState>,
+    native_voice_state: State<'_, NativeVoiceState>,
 ) -> Result<(), AuroraCommandError> {
-    shutdown_aurora(&app, state.inner(), subscription_state.inner())
+    shutdown_aurora(
+        &app,
+        state.inner(),
+        subscription_state.inner(),
+        native_voice_state.inner(),
+    )
 }
 
 impl AuroraCommandError {
@@ -3817,6 +4093,7 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     permissions.insert("aurora.audioBridgeStatus".to_string(), true);
     permissions.insert("aurora.audioCapture".to_string(), false);
     permissions.insert("aurora.audioPlayback".to_string(), false);
+    permissions.insert("aurora.nativeVoice".to_string(), desktop_platform);
     permissions.insert("aurora.iosVoiceStatus".to_string(), true);
     permissions.insert("aurora.iosBackgroundStatus".to_string(), true);
     permissions.insert("aurora.iosMicrophoneCapture".to_string(), false);
@@ -3867,6 +4144,7 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     capabilities.insert("native.audio".to_string(), false);
     capabilities.insert("native.audioCapture".to_string(), false);
     capabilities.insert("native.audioPlayback".to_string(), false);
+    capabilities.insert("desktop.nativeVoice".to_string(), desktop_platform);
     capabilities.insert("ios.voiceForegroundCapture".to_string(), false);
     capabilities.insert("ios.notifications".to_string(), false);
     capabilities.insert("ios.backgroundVoice".to_string(), false);
@@ -5419,6 +5697,7 @@ fn validate_secure_storage_key(key: &str) -> Result<(), AuroraCommandError> {
         "aurora.gateway",
         "aurora.mesh",
         "aurora.admin",
+        "aurora.voice",
     ];
     if allowed
         .iter()
@@ -6390,6 +6669,32 @@ async fn run_gateway_event_stream(
     event_name: String,
     closed_event_name: String,
 ) {
+    let app = app.clone();
+    run_gateway_event_stream_with_emitter(
+        client,
+        url,
+        headers,
+        subscription_id,
+        event_name,
+        closed_event_name,
+        move |event_name, payload| {
+            let _ = app.emit(event_name, payload);
+        },
+    )
+    .await;
+}
+
+async fn run_gateway_event_stream_with_emitter<F>(
+    client: reqwest::Client,
+    url: Url,
+    headers: HeaderMap,
+    subscription_id: String,
+    event_name: String,
+    closed_event_name: String,
+    mut emit: F,
+) where
+    F: FnMut(&str, Value),
+{
     let result = async {
         let response = client
             .get(url)
@@ -6399,7 +6704,8 @@ async fn run_gateway_event_stream(
             .map_err(|error| redacted_gateway_error(&error))?;
         let status = response.status();
         if !status.is_success() {
-            return Err(format!("Gateway event stream returned HTTP {status}"));
+            let body = read_gateway_error_body(response).await?;
+            return Err(redacted_gateway_status_error(status.as_u16(), body));
         }
 
         let mut buffer = String::new();
@@ -6409,7 +6715,7 @@ async fn run_gateway_event_stream(
                 Ok(Some(chunk)) => {
                     let text = String::from_utf8_lossy(&chunk);
                     buffer.push_str(&text);
-                    drain_sse_frames(&app, &event_name, &subscription_id, &mut buffer);
+                    drain_sse_frames(&event_name, &subscription_id, &mut buffer, &mut emit);
                 }
                 Ok(None) => return Ok(()),
                 Err(error) => return Err(redacted_gateway_error(&error)),
@@ -6425,18 +6731,22 @@ async fn run_gateway_event_stream(
         ),
         Err(reason) => ("transport_loss".to_string(), reason),
     };
-    let _ = app.emit(
+    emit(
         &closed_event_name,
-        AuroraSubscriptionClosed {
+        serde_json::to_value(AuroraSubscriptionClosed {
             subscription_id,
             reason,
             code,
             secrets_redacted: true,
-        },
+        })
+        .expect("gateway stream closed payload serializes"),
     );
 }
 
-fn drain_sse_frames(app: &AppHandle, event_name: &str, subscription_id: &str, buffer: &mut String) {
+fn drain_sse_frames<F>(event_name: &str, subscription_id: &str, buffer: &mut String, emit: &mut F)
+where
+    F: FnMut(&str, Value),
+{
     while let Some(index) = find_sse_frame_boundary(buffer) {
         let frame = buffer[..index].to_string();
         let drain_to = if buffer[index..].starts_with("\r\n\r\n") {
@@ -6446,12 +6756,13 @@ fn drain_sse_frames(app: &AppHandle, event_name: &str, subscription_id: &str, bu
         };
         buffer.drain(..drain_to);
         if let Some(event) = parse_sse_frame(&frame) {
-            let _ = app.emit(
+            emit(
                 event_name,
-                AuroraSubscriptionEvent {
+                serde_json::to_value(AuroraSubscriptionEvent {
                     subscription_id: subscription_id.to_string(),
                     event,
-                },
+                })
+                .expect("gateway stream event payload serializes"),
             );
         }
     }
@@ -6477,9 +6788,10 @@ fn parse_sse_frame(frame: &str) -> Option<Value> {
         return None;
     }
     serde_json::from_str::<Value>(&data).ok().or_else(|| {
+        let payload = redact_sensitive_text(&data);
         Some(json!({
             "kind": "event",
-            "payload": data,
+            "payload": payload,
             "redaction": {
                 "secretsRedacted": true,
                 "source": "tauri-gateway-sse-proxy"
@@ -6551,6 +6863,61 @@ fn redacted_gateway_error(error: &reqwest::Error) -> String {
         "Gateway event stream payload decode failed".to_string()
     } else {
         "Gateway event stream failed".to_string()
+    }
+}
+
+struct GatewayErrorBody {
+    bytes: Vec<u8>,
+    truncated: bool,
+}
+
+async fn read_gateway_error_body(
+    mut response: reqwest::Response,
+) -> Result<GatewayErrorBody, String> {
+    let max_read = GATEWAY_EVENT_STREAM_ERROR_BODY_MAX_BYTES.saturating_add(1);
+    let mut bytes = Vec::with_capacity(max_read);
+    let mut truncated = false;
+
+    while bytes.len() < max_read {
+        let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|error| redacted_gateway_error(&error))?
+        else {
+            break;
+        };
+        let remaining = max_read - bytes.len();
+        if chunk.len() > remaining {
+            bytes.extend_from_slice(&chunk[..remaining]);
+            truncated = true;
+            break;
+        }
+        bytes.extend_from_slice(&chunk);
+        if bytes.len() == max_read {
+            truncated = true;
+            break;
+        }
+    }
+
+    if bytes.len() > GATEWAY_EVENT_STREAM_ERROR_BODY_MAX_BYTES {
+        bytes.truncate(GATEWAY_EVENT_STREAM_ERROR_BODY_MAX_BYTES);
+        truncated = true;
+    }
+
+    Ok(GatewayErrorBody { bytes, truncated })
+}
+
+fn redacted_gateway_status_error(status: u16, body: GatewayErrorBody) -> String {
+    let truncated = body.truncated;
+    let body_text = String::from_utf8_lossy(&body.bytes);
+    let mut body = redact_sensitive_text(&body_text);
+    if truncated {
+        body.push_str("... [truncated]");
+    }
+    if body.trim().is_empty() {
+        format!("Gateway event stream returned HTTP {status}")
+    } else {
+        format!("Gateway event stream returned HTTP {status}: {body}")
     }
 }
 
@@ -6676,7 +7043,9 @@ fn shutdown_aurora(
     app: &AppHandle,
     sidecar_state: &SharedSidecarState,
     subscription_state: &SharedSubscriptionState,
+    native_voice_state: &NativeVoiceState,
 ) -> Result<(), AuroraCommandError> {
+    native_voice_state.stop();
     {
         let mut subscriptions = subscription_state
             .lock()
@@ -7054,9 +7423,10 @@ pub fn run() {
         .manage(sidecar_state.clone())
         .manage(subscription_state.clone())
         .manage(overlay_state.clone())
+        .manage(NativeVoiceState::default())
         .manage(LocalDataCommandState::default())
         .manage(native_webrtc::NativeWebRtcState::default())
-        .setup(|app| {
+        .setup(move |app| {
             #[cfg(desktop)]
             {
                 match app
@@ -7083,6 +7453,9 @@ pub fn run() {
                     let _ = window.set_icon(icon);
                 }
                 install_tray(app.handle())?;
+                if let Some(native_voice) = app.try_state::<NativeVoiceState>() {
+                    native_voice.initialize(app.handle().clone(), sidecar_state.clone());
+                }
                 let overlay_window = ensure_overlay_window(app.handle())?;
                 configure_overlay_for_mode(&overlay_window, OverlayMode::Voice, None);
                 let _ = overlay_window.hide();
@@ -7135,14 +7508,26 @@ pub fn run() {
             aurora_native_open_deep_link,
             aurora_native_show_notification,
             aurora_ios_voice_status,
+            aurora_ios_voice_foreground_capture_start,
+            aurora_ios_voice_background_capture_start,
+            aurora_ios_voice_foreground_capture_stop,
+            aurora_ios_voice_foreground_capture_finish,
+            aurora_ios_voice_foreground_capture_status,
             aurora_ios_background_status,
             aurora_dialog_status,
             aurora_audio_bridge_status,
+            aurora_native_voice_status,
+            aurora_native_voice_start,
+            aurora_native_voice_finish,
+            aurora_native_voice_cancel,
             aurora_android_baseline_status,
             aurora_android_native_plugin_payload,
             aurora_android_lifecycle_status,
             aurora_android_webview_microphone_permission_decision,
             aurora_android_voice_foreground_service_status,
+            aurora_android_voice_foreground_service_start,
+            aurora_android_voice_foreground_service_finish,
+            aurora_android_voice_foreground_service_cancel,
             aurora_ios_native_plugin_manifest,
             aurora_ios_invocation_status,
             aurora_ios_local_light_inference_status,
@@ -7180,6 +7565,9 @@ pub fn run() {
             aurora_local_data_envelope_decrypt,
             aurora_local_data_envelope_rotate,
             aurora_ios_secure_storage_status,
+            aurora_ios_voice_credential_set,
+            aurora_ios_voice_credential_status,
+            aurora_ios_voice_credential_delete,
             aurora_ios_biometric_status,
             aurora_ios_admin_unlock,
             aurora_biometric_admin_unlock_status,
@@ -7282,8 +7670,9 @@ fn aurora_desktop_icon(app: &AppHandle) -> Option<Image<'static>> {
 #[cfg(desktop)]
 fn install_tray(app: &AppHandle) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "show", "Show Aurora", true, None::<&str>)?;
+    let voice = MenuItem::with_id(app, "voice", "Voice", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &quit])?;
+    let menu = Menu::with_items(app, &[&show, &voice, &quit])?;
     let mut builder = TrayIconBuilder::with_id("aurora-main")
         .tooltip("Aurora")
         .menu(&menu)
@@ -7297,15 +7686,22 @@ fn install_tray(app: &AppHandle) -> tauri::Result<()> {
                 }
             }
             "quit" => {
-                if let (Some(sidecar), Some(subscriptions)) = (
+                if let (Some(sidecar), Some(subscriptions), Some(native_voice)) = (
                     app.try_state::<SharedSidecarState>(),
                     app.try_state::<SharedSubscriptionState>(),
+                    app.try_state::<NativeVoiceState>(),
                 ) {
-                    let _ = shutdown_aurora(app, sidecar.inner(), subscriptions.inner());
+                    let _ = shutdown_aurora(
+                        app,
+                        sidecar.inner(),
+                        subscriptions.inner(),
+                        native_voice.inner(),
+                    );
                 } else {
                     app.exit(0);
                 }
             }
+            "voice" => native_voice::tray_toggle(app),
             _ => {}
         });
     if let Some(icon) = aurora_desktop_icon(app) {
@@ -7318,8 +7714,69 @@ fn install_tray(app: &AppHandle) -> tauri::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+    use std::net::TcpListener;
+    use std::sync::mpsc;
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    struct LoopbackFixture {
+        base_url: Url,
+        request_rx: mpsc::Receiver<String>,
+        release_tx: Option<mpsc::Sender<()>>,
+        handle: thread::JoinHandle<()>,
+    }
+
+    impl LoopbackFixture {
+        fn join(self) {
+            if let Some(release_tx) = self.release_tx {
+                let _ = release_tx.send(());
+            }
+            self.handle.join().expect("loopback fixture joins");
+        }
+    }
+
+    fn spawn_loopback_fixture(chunks: Vec<Vec<u8>>, hold_open: bool) -> LoopbackFixture {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback fixture");
+        let address = listener
+            .local_addr()
+            .expect("read loopback fixture address");
+        let (request_tx, request_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept loopback SSE request");
+            let mut request = Vec::new();
+            let mut buffer = [0_u8; 1024];
+            loop {
+                let read = stream.read(&mut buffer).expect("read loopback SSE request");
+                if read == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..read]);
+                if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            request_tx
+                .send(String::from_utf8_lossy(&request).to_string())
+                .expect("send captured loopback request");
+            for chunk in chunks {
+                stream.write_all(&chunk).expect("write loopback SSE chunk");
+                stream.flush().expect("flush loopback SSE chunk");
+                thread::sleep(Duration::from_millis(10));
+            }
+            if hold_open {
+                let _ = release_rx.recv_timeout(Duration::from_secs(5));
+            }
+        });
+
+        LoopbackFixture {
+            base_url: Url::parse(&format!("http://{address}")).expect("parse loopback fixture URL"),
+            request_rx,
+            release_tx: hold_open.then_some(release_tx),
+            handle,
+        }
+    }
 
     fn clear_remote_env() {
         env::remove_var("AURORA_TAURI_ALLOW_REMOTE_GATEWAY");
@@ -7377,6 +7834,354 @@ mod tests {
             Some("dig_1")
         );
         assert!(filtered.get("x-some-unrelated-header").is_none());
+    }
+
+    #[test]
+    fn sse_parser_returns_json_events_from_fragmented_crlf_and_lf_frames() {
+        let chunks = [
+            "data: {\"kind\":\"one\"}\r",
+            "\n\r\n",
+            "data: {\"kind\":\"two\"}\n",
+            "\n",
+        ];
+        let mut buffer = String::new();
+        let mut events = Vec::new();
+
+        for chunk in chunks {
+            buffer.push_str(chunk);
+            while let Some(index) = find_sse_frame_boundary(&buffer) {
+                let frame = buffer[..index].to_string();
+                let drain_to = if buffer[index..].starts_with("\r\n\r\n") {
+                    index + 4
+                } else {
+                    index + 2
+                };
+                buffer.drain(..drain_to);
+                if let Some(event) = parse_sse_frame(&frame) {
+                    events.push(event);
+                }
+            }
+        }
+
+        assert_eq!(events, vec![json!({"kind": "one"}), json!({"kind": "two"})]);
+        assert!(buffer.is_empty());
+    }
+
+    #[test]
+    fn sse_parser_ignores_done_frames() {
+        assert_eq!(parse_sse_frame("data: [DONE]"), None);
+        assert_eq!(parse_sse_frame("event: close\ndata: [DONE]"), None);
+    }
+
+    #[test]
+    fn sse_parser_redacts_non_json_event_payloads_before_emit() {
+        let event = parse_sse_frame(
+            "event: error\ndata: Authorization: Bearer gateway-token token=stream-token",
+        )
+        .unwrap();
+
+        let serialized = serde_json::to_string(&event).unwrap();
+        assert!(!serialized.contains("gateway-token"));
+        assert!(!serialized.contains("stream-token"));
+        assert_eq!(
+            event["payload"],
+            json!("Authorization: Bearer [redacted] token=[redacted]")
+        );
+        assert_eq!(event["redaction"]["secretsRedacted"], json!(true));
+    }
+
+    #[test]
+    fn event_stream_url_percent_encodes_subscription_query_values() {
+        let request = AuroraSubscribeRequest {
+            topics: vec!["voice local/partial".to_string()],
+            stream: Some("main stream".to_string()),
+            kinds: Some(vec![
+                "transcript.delta".to_string(),
+                "wake word".to_string(),
+            ]),
+            headers: None,
+            last_event_id: Some("evt/42?cursor=1".to_string()),
+            replay_from: Some("2026-08-07T00:00:00Z".to_string()),
+            correlation_id: Some("corr id+plus".to_string()),
+            backfill: Some(true),
+        };
+
+        let url =
+            event_stream_url(&Url::parse("http://127.0.0.1:8000").unwrap(), &request).unwrap();
+        let pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+
+        assert_eq!(url.path(), "/api/events/stream");
+        assert!(url.as_str().contains("topic=voice+local%2Fpartial"));
+        assert!(pairs.contains(&("stream".to_string(), "main stream".to_string())));
+        assert!(pairs.contains(&("topic".to_string(), "voice local/partial".to_string())));
+        assert!(pairs.contains(&("kind".to_string(), "wake word".to_string())));
+        assert!(pairs.contains(&("last_event_id".to_string(), "evt/42?cursor=1".to_string())));
+        assert!(pairs.contains(&("correlation_id".to_string(), "corr id+plus".to_string())));
+        assert!(pairs.contains(&("backfill".to_string(), "true".to_string())));
+    }
+
+    #[test]
+    fn live_gateway_event_stream_uses_reqwest_without_webview_and_redacts_headers() {
+        let fixture = spawn_loopback_fixture(
+            vec![
+                b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\nconnection: close\r\n\r\n"
+                    .to_vec(),
+                b"data: {\"kind\":\"first\",\"id\":\"stream-event\"}\r".to_vec(),
+                b"\n\r\n".to_vec(),
+                b"event: message\ndata: {\"kind\":\"multi\",\n".to_vec(),
+                b"data: \"message\":\"hello\"}\n\n".to_vec(),
+                b"data: [DONE]\n\n".to_vec(),
+            ],
+            false,
+        );
+        let request = AuroraSubscribeRequest {
+            topics: vec!["voice local/partial".to_string()],
+            stream: Some("main stream".to_string()),
+            kinds: Some(vec!["transcript.delta".to_string()]),
+            headers: Some(BTreeMap::from([
+                (
+                    "Authorization".to_string(),
+                    "Bearer should-not-forward".to_string(),
+                ),
+                (
+                    "X-Aurora-Sidecar-Token".to_string(),
+                    "sidecar-secret".to_string(),
+                ),
+                (
+                    "X-Aurora-AdminAction-Token".to_string(),
+                    "admin-confirm-token".to_string(),
+                ),
+            ])),
+            last_event_id: Some("evt/42?cursor=1".to_string()),
+            replay_from: None,
+            correlation_id: Some("corr id+plus".to_string()),
+            backfill: Some(false),
+        };
+        let url = event_stream_url(&fixture.base_url, &request).unwrap();
+        let headers = filtered_headers(request.headers.clone());
+        let emitted = Arc::new(Mutex::new(Vec::<(String, Value)>::new()));
+        let captured = Arc::clone(&emitted);
+
+        tauri::async_runtime::block_on(run_gateway_event_stream_with_emitter(
+            reqwest::Client::new(),
+            url,
+            headers,
+            "aurora-sub-live".to_string(),
+            "aurora://events/aurora-sub-live".to_string(),
+            "aurora://events/aurora-sub-live/closed".to_string(),
+            move |event_name, payload| {
+                captured
+                    .lock()
+                    .unwrap()
+                    .push((event_name.to_string(), payload));
+            },
+        ));
+
+        let request = fixture
+            .request_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("fixture captured request");
+        fixture.join();
+        assert!(request.starts_with("GET /api/events/stream?"));
+        assert!(request.contains("stream=main+stream"));
+        assert!(request.contains("topic=voice+local%2Fpartial"));
+        assert!(request.contains("last_event_id=evt%2F42%3Fcursor%3D1"));
+        assert!(request.contains("correlation_id=corr+id%2Bplus"));
+        assert!(request.contains("x-aurora-adminaction-token: admin-confirm-token"));
+        assert!(!request.to_ascii_lowercase().contains("authorization:"));
+        assert!(!request.contains("should-not-forward"));
+        assert!(!request.contains("sidecar-secret"));
+
+        let emitted = emitted.lock().unwrap();
+        assert_eq!(emitted.len(), 3);
+        assert_eq!(emitted[0].0, "aurora://events/aurora-sub-live");
+        assert_eq!(emitted[0].1["subscriptionId"], json!("aurora-sub-live"));
+        assert_eq!(
+            emitted[0].1["event"],
+            json!({"kind": "first", "id": "stream-event"})
+        );
+        assert_eq!(
+            emitted[1].1["event"],
+            json!({"kind": "multi", "message": "hello"})
+        );
+        assert_eq!(emitted[2].0, "aurora://events/aurora-sub-live/closed");
+        assert_eq!(emitted[2].1["code"], json!("closed"));
+        assert_eq!(emitted[2].1["secretsRedacted"], json!(true));
+        let serialized = serde_json::to_string(&*emitted).unwrap();
+        assert!(!serialized.contains("admin-confirm-token"));
+        assert!(!serialized.contains("should-not-forward"));
+        assert!(!serialized.contains("sidecar-secret"));
+    }
+
+    #[test]
+    fn live_gateway_event_stream_redacts_error_status_body() {
+        let fixture = spawn_loopback_fixture(
+            vec![
+                b"HTTP/1.1 503 Service Unavailable\r\ncontent-type: text/plain\r\nconnection: close\r\n\r\n"
+                    .to_vec(),
+                b"Authorization: Bearer gateway-token token=body-secret api_key=sk-secret".to_vec(),
+            ],
+            false,
+        );
+        let emitted = Arc::new(Mutex::new(Vec::<(String, Value)>::new()));
+        let captured = Arc::clone(&emitted);
+
+        tauri::async_runtime::block_on(run_gateway_event_stream_with_emitter(
+            reqwest::Client::new(),
+            fixture.base_url.join("api/events/stream").unwrap(),
+            HeaderMap::new(),
+            "aurora-sub-error".to_string(),
+            "aurora://events/aurora-sub-error".to_string(),
+            "aurora://events/aurora-sub-error/closed".to_string(),
+            move |event_name, payload| {
+                captured
+                    .lock()
+                    .unwrap()
+                    .push((event_name.to_string(), payload));
+            },
+        ));
+
+        let _ = fixture
+            .request_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("fixture captured request");
+        fixture.join();
+        let emitted = emitted.lock().unwrap();
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].0, "aurora://events/aurora-sub-error/closed");
+        assert_eq!(emitted[0].1["code"], json!("transport_loss"));
+        let reason = emitted[0].1["reason"].as_str().unwrap();
+        assert!(reason.contains("HTTP 503"));
+        assert!(reason.contains("[redacted]"));
+        assert!(!reason.contains("gateway-token"));
+        assert!(!reason.contains("body-secret"));
+        assert!(!reason.contains("sk-secret"));
+        assert_eq!(emitted[0].1["secretsRedacted"], json!(true));
+    }
+
+    #[test]
+    fn live_gateway_event_stream_caps_oversized_utf8_error_body_before_redaction() {
+        let mut body = b"token=early-secret ".to_vec();
+        body.resize(GATEWAY_EVENT_STREAM_ERROR_BODY_MAX_BYTES - 1, b'a');
+        body.extend_from_slice("🙂".as_bytes());
+        body.extend_from_slice(b" token=too-late-secret");
+        let fixture = spawn_loopback_fixture(
+            vec![
+                format!(
+                    "HTTP/1.1 502 Bad Gateway\r\ncontent-type: text/plain; charset=utf-8\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                    body.len()
+                )
+                .into_bytes(),
+                body,
+            ],
+            false,
+        );
+        let emitted = Arc::new(Mutex::new(Vec::<(String, Value)>::new()));
+        let captured = Arc::clone(&emitted);
+
+        tauri::async_runtime::block_on(run_gateway_event_stream_with_emitter(
+            reqwest::Client::new(),
+            fixture.base_url.join("api/events/stream").unwrap(),
+            HeaderMap::new(),
+            "aurora-sub-large-error".to_string(),
+            "aurora://events/aurora-sub-large-error".to_string(),
+            "aurora://events/aurora-sub-large-error/closed".to_string(),
+            move |event_name, payload| {
+                captured
+                    .lock()
+                    .unwrap()
+                    .push((event_name.to_string(), payload));
+            },
+        ));
+
+        let _ = fixture
+            .request_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("fixture captured request");
+        fixture.join();
+        let emitted = emitted.lock().unwrap();
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(
+            emitted[0].0,
+            "aurora://events/aurora-sub-large-error/closed"
+        );
+        assert_eq!(emitted[0].1["code"], json!("transport_loss"));
+        let reason = emitted[0].1["reason"].as_str().unwrap();
+        assert!(reason.contains("HTTP 502"));
+        assert!(reason.contains("[redacted]"));
+        assert!(reason.contains("[truncated]"));
+        assert!(!reason.contains("early-secret"));
+        assert!(!reason.contains("too-late-secret"));
+        assert_eq!(emitted[0].1["secretsRedacted"], json!(true));
+    }
+
+    #[test]
+    fn live_gateway_event_stream_abort_stops_stale_delivery() {
+        let fixture = spawn_loopback_fixture(
+            vec![
+                b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\nconnection: keep-alive\r\n\r\n"
+                    .to_vec(),
+                b"data: {\"kind\":\"first\"}\n\n".to_vec(),
+            ],
+            true,
+        );
+        let emitted = Arc::new(Mutex::new(Vec::<(String, Value)>::new()));
+        let captured = Arc::clone(&emitted);
+        let handle = tauri::async_runtime::spawn(run_gateway_event_stream_with_emitter(
+            reqwest::Client::new(),
+            fixture.base_url.join("api/events/stream").unwrap(),
+            HeaderMap::new(),
+            "aurora-sub-abort".to_string(),
+            "aurora://events/aurora-sub-abort".to_string(),
+            "aurora://events/aurora-sub-abort/closed".to_string(),
+            move |event_name, payload| {
+                captured
+                    .lock()
+                    .unwrap()
+                    .push((event_name.to_string(), payload));
+            },
+        ));
+
+        let _ = fixture
+            .request_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("fixture captured request");
+        for _ in 0..100 {
+            if emitted.lock().unwrap().len() == 1 {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        handle.abort();
+        thread::sleep(Duration::from_millis(50));
+        fixture.join();
+
+        let emitted = emitted.lock().unwrap();
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].0, "aurora://events/aurora-sub-abort");
+        assert_eq!(emitted[0].1["event"], json!({"kind": "first"}));
+    }
+
+    #[test]
+    fn subscription_remove_aborts_and_bounds_cancelled_tasks() {
+        let mut subscriptions = SubscriptionState::new();
+        let handle = tauri::async_runtime::spawn(async {
+            std::future::pending::<()>().await;
+        });
+
+        subscriptions.insert(
+            "aurora-sub-test".to_string(),
+            SubscriptionTask {
+                handle,
+                ready: watch::channel(false).0,
+            },
+        );
+        assert!(subscriptions.activate("aurora-sub-test"));
+
+        subscriptions.remove("aurora-sub-test");
+
+        assert!(!subscriptions.activate("aurora-sub-test"));
+        assert!(subscriptions.tasks.is_empty());
     }
 
     #[test]
@@ -7808,11 +8613,23 @@ mod tests {
         assert!(ios_permission.contains("aurora_ios_entrypoint_payload"));
         assert!(ios_permission.contains("aurora_ios_invoke_action"));
         assert!(ios_permission.contains("aurora_ios_secure_storage_status"));
+        assert!(ios_permission.contains("aurora_ios_voice_credential_set"));
+        assert!(ios_permission.contains("aurora_ios_voice_credential_status"));
+        assert!(ios_permission.contains("aurora_ios_voice_credential_delete"));
         assert!(ios_permission.contains("aurora_ios_biometric_status"));
         assert!(ios_permission.contains("aurora_ios_admin_unlock"));
         let ios_voice_permission = include_str!("../permissions/aurora-ios-voice.toml");
         assert!(ios_capability.contains("\"aurora-ios-voice\""));
         assert!(ios_voice_permission.contains("aurora_ios_voice_status"));
+        assert!(ios_voice_permission.contains("aurora_ios_voice_foreground_capture_start"));
+        let ios_background_voice_permission =
+            include_str!("../permissions/aurora-ios-background-voice.toml");
+        assert!(
+            ios_background_voice_permission.contains("aurora_ios_voice_background_capture_start")
+        );
+        assert!(ios_voice_permission.contains("aurora_ios_voice_foreground_capture_stop"));
+        assert!(ios_voice_permission.contains("aurora_ios_voice_foreground_capture_finish"));
+        assert!(ios_voice_permission.contains("aurora_ios_voice_foreground_capture_status"));
         assert!(ios_voice_permission.contains("aurora_ios_background_status"));
 
         let swift_plugin = include_str!(
@@ -7823,6 +8640,15 @@ mod tests {
         assert!(swift_plugin.contains("invocationStatus"));
         assert!(swift_plugin.contains("localLightInferenceStatus"));
         assert!(swift_plugin.contains("voiceStatus"));
+        assert!(swift_plugin.contains("voiceForegroundCaptureStart"));
+        assert!(swift_plugin.contains("voiceBackgroundCaptureStart"));
+        assert!(swift_plugin.contains("voiceForegroundCaptureStop"));
+        assert!(swift_plugin.contains("voiceForegroundCaptureFinish"));
+        assert!(swift_plugin.contains("voiceForegroundCaptureStatus"));
+        assert!(swift_plugin.contains("voiceCredentialSet"));
+        assert!(swift_plugin.contains("voiceCredentialStatus"));
+        assert!(swift_plugin.contains("voiceCredentialDelete"));
+        assert!(swift_plugin.contains("nativeTurnTransportAvailable = false"));
         assert!(swift_plugin.contains("notificationStatus"));
         assert!(swift_plugin.contains("backgroundStatus"));
         assert!(swift_plugin.contains("iosEntrypointPayload"));
@@ -7844,6 +8670,47 @@ mod tests {
         assert!(swift_plugin.contains("\"ios.voiceForegroundCapture\": false"));
         assert!(swift_plugin.contains("\"ios.backgroundVoice\": false"));
         assert!(swift_plugin.contains("\"aurora.iosSiriReplacement\": false"));
+
+        let swift_capture = include_str!(
+            "../ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraIOSVoiceCapture.swift"
+        );
+        assert!(swift_capture.contains("AVAudioEngine"));
+        assert!(swift_capture.contains("installTap(onBus: 0"));
+        assert!(swift_capture.contains("aurora_ios_audio_state_push_pcm_f32"));
+        assert!(swift_capture.contains("aurora_ios_audio_state_reset"));
+        assert!(swift_capture.contains("setActive(false"));
+        let swift_session = include_str!(
+            "../ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraIOSVoiceSessionHost.swift"
+        );
+        assert!(swift_session.contains("AuroraIOSVoiceSessionHost"));
+        assert!(swift_session.contains("aurora_ios_voice_session_start"));
+        assert!(swift_session.contains("aurora_ios_voice_session_cancel"));
+        assert!(swift_session.contains("capture = nil"));
+        let swift_playback = include_str!(
+            "../ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraIOSVoicePlayback.swift"
+        );
+        assert!(swift_playback.contains("aurora_ios_audio_output_drain"));
+        assert!(swift_playback.contains("aurora_ios_audio_output_acknowledge"));
+        assert!(swift_playback.contains("chunkInFlight"));
+        let rust_source = include_str!("lib.rs");
+        assert!(rust_source.contains("AURORA_IOS_VOICE_BRIDGE_LINK_ANCHOR"));
+
+        let voice_header = include_str!(
+            "../ios/AuroraNativePlugin/Sources/CAuroraIOSVoiceBridge/include/aurora_ios_voice_bridge.h"
+        );
+        assert!(voice_header.contains("aurora_ios_audio_state_push_pcm_f32"));
+        assert!(voice_header.contains("AuroraIosAudioStats"));
+        assert!(voice_header.contains("aurora_ios_audio_output_drain"));
+        assert!(voice_header.contains("aurora_ios_audio_output_acknowledge"));
+        assert!(voice_header.contains("AURORA_IOS_AUDIO_EMPTY"));
+        assert!(voice_header.contains("aurora_ios_voice_session_new"));
+        assert!(voice_header.contains("aurora_ios_voice_session_start_background"));
+        assert!(voice_header.contains("aurora_ios_voice_session_status"));
+        assert!(voice_header.contains("AuroraIosVoiceSessionStatus"));
+        let ios_voice_source = include_str!("ios_voice.rs");
+        assert!(ios_voice_source.contains("aurora_ios_voice_session_new"));
+        assert!(ios_voice_source.contains("remote_audio_consent"));
+        assert!(ios_voice_source.contains("AURORA_IOS_VOICE_OK"));
 
         let swift_entrypoints = include_str!(
             "../ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraEntrypointPayloads.swift"
@@ -8614,6 +9481,7 @@ mod tests {
             "aurora.auth.refresh-token",
             "aurora.mesh.peer_01",
             "aurora.admin.unlock",
+            "aurora.voice.transport",
         ] {
             assert!(validate_secure_storage_key(key).is_ok(), "{key}");
         }
@@ -8820,6 +9688,7 @@ mod tests {
         assert!(plugin.contains("if (scheme != \"https\") return null"));
         assert!(plugin.contains("origin.contains(\"*\")"));
         assert!(plugin.contains("backgroundWakeword",));
+        assert!(plugin.contains("background_voice_unavailable"));
         assert!(!plugin.contains(r#"rawBearerToken", record.getString"#));
         for invariant in [
             "validateLocalDataId(\"profileId\", profileId)",
@@ -8828,6 +9697,151 @@ mod tests {
             "it.code <= 0x7f",
         ] {
             assert!(plugin.contains(invariant), "{invariant}");
+        }
+    }
+
+    #[test]
+    fn android_voice_service_owns_audiorecord_and_rust_queue_with_visible_stop() {
+        let service = include_str!(
+            "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraVoiceForegroundService.kt"
+        );
+        let plugin = include_str!(
+            "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt"
+        );
+        let rust_audio = include_str!("android_audio.rs");
+        let shared_audio =
+            include_str!("../../../../rust/crates/aurora-voice-native/src/android_capture.rs");
+        let interaction_session = include_str!(
+            "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraVoiceInteractionSessionService.kt"
+        );
+        let rust_source = include_str!("lib.rs");
+        for required in [
+            "AudioRecord.Builder()",
+            "HandlerThread(\"aurora-audio-capture\")",
+            "ACTION_STOP",
+            "ACTION_FINISH",
+            "ACTION_START_BACKGROUND",
+            "finishHandler",
+            "awaitFinishedSession",
+            ".addAction(Notification.Action.Builder",
+            "System.loadLibrary(\"aurora_tauri_lib\")",
+            "nativePushPcm",
+            "nativeDrainPcm",
+            "nativeStats",
+            "AuroraNativeAudioOutputBridge",
+            "AuroraAudioPlayback",
+            "AuroraNativeVoiceSessionBridge",
+            "AuroraVoiceNativeConfigStore",
+            "isConfigured",
+            "VOICE_GATEWAY_KEY",
+            "VOICE_BEARER_KEY",
+            "VOICE_GENERIC_GATEWAY_KEY",
+            "VOICE_GENERIC_BEARER_KEY",
+            "VOICE_REMOTE_AUDIO_CONSENT_KEY",
+            "setRemoteAudioConsent",
+            "toBooleanStrictOrNull",
+            "sessionGeneration",
+            "closeBridgeOnClose",
+            "nativeStart",
+            "nativeStartBackground",
+            "nativeFinish",
+            "nativeCancel",
+            "finishNativeSession",
+            "AudioTrack.Builder()",
+            "audio_record_read_failed",
+            "requestAudioFocus",
+            "onTrimMemory",
+            "onTaskRemoved",
+            "AUDIOFOCUS_LOSS_TRANSIENT",
+        ] {
+            assert!(
+                service.contains(required),
+                "missing Android service contract: {required}"
+            );
+        }
+        for required in [
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativeCreate",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativePushPcm",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativeDrainPcm",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativeStats",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeCreate",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeDrainPcm",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeAcknowledgeDrained",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeStats",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeFree",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeCreate",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeStart",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeStartBackground",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeFinish",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeCancel",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativePushPcm",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeDrainPcm",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeAcknowledgeDrained",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeStats",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeClose",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeFree",
+            "AUDIO_BACKPRESSURE",
+            "capacity_chunks",
+        ] {
+            assert!(
+                rust_audio.contains(required),
+                "missing Rust audio contract: {required}"
+            );
+        }
+        for required in [
+            "AndroidPcmIngress",
+            "MAX_CHUNK_SAMPLES",
+            "AndroidPcmPushResult",
+            "drain_chunk",
+        ] {
+            assert!(
+                shared_audio.contains(required),
+                "missing shared Rust audio contract: {required}"
+            );
+        }
+        assert!(plugin.contains("captureBackend"));
+        assert!(plugin.contains("nativeSessionReady"));
+        assert!(plugin.contains("notificationReady"));
+        assert!(plugin.contains("canPostNotifications()"));
+        assert!(plugin.contains("notification_delivery_unavailable"));
+        assert!(plugin.contains("native_voice_route_missing"));
+        for command in [
+            "startVoiceForegroundService",
+            "finishVoiceForegroundService",
+            "stopVoiceForegroundService",
+        ] {
+            assert!(plugin.contains(command), "{command}");
+        }
+        assert!(plugin.contains("AndroidVoiceForegroundServiceStartArgs"));
+        assert!(plugin.contains("backgroundSession"));
+        assert!(plugin.contains("ACTION_START_BACKGROUND"));
+        assert!(rust_source.contains("AndroidVoiceForegroundServiceStartRequest"));
+        assert!(rust_source.contains("serde_json::to_value(&request)"));
+        for command in [
+            "aurora_android_voice_foreground_service_start",
+            "aurora_android_voice_foreground_service_finish",
+            "aurora_android_voice_foreground_service_cancel",
+        ] {
+            assert!(rust_source.contains(command), "{command}");
+        }
+        assert!(plugin.contains("backendAudioEvidenceRequired"));
+        assert!(service.contains("BACKGROUND_VOICE_AVAILABLE = false"));
+        assert!(service.contains("background_voice_unavailable"));
+        for required in [
+            "VoiceInteractionSessionService",
+            "AuroraVoiceInteractionSession",
+            "onShow(args: Bundle?, showFlags: Int)",
+            "RoleManager",
+            "isRoleHeld",
+            "ROLE_ASSISTANT",
+            "ACTION_START_ASSISTANT",
+            "startForegroundService(intent)",
+            "hide()",
+        ] {
+            assert!(
+                interaction_session.contains(required) || service.contains(required),
+                "missing Android assistant-session contract: {required}"
+            );
         }
     }
 
@@ -8991,7 +10005,6 @@ mod tests {
             assert!(mobile_mesh.contains(required), "{required}");
         }
     }
-
     #[test]
     fn android_thin_overlay_does_not_inherit_desktop_main_capabilities() {
         let base: Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();

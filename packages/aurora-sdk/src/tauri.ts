@@ -58,6 +58,11 @@ export interface TauriCommandNames {
   notificationStatus: string
   notificationSend: string
   iosVoiceStatus: string
+  iosVoiceForegroundCaptureStart: string
+  iosVoiceBackgroundCaptureStart: string
+  iosVoiceForegroundCaptureStop: string
+  iosVoiceForegroundCaptureFinish: string
+  iosVoiceForegroundCaptureStatus: string
   iosBackgroundStatus: string
   dialogStatus: string
   audioBridgeStatus: string
@@ -74,6 +79,9 @@ export interface TauriCommandNames {
   secureStorageSet: string
   secureStorageDelete: string
   iosSecureStorageStatus: string
+  iosVoiceCredentialSet: string
+  iosVoiceCredentialStatus: string
+  iosVoiceCredentialDelete: string
   iosBiometricStatus: string
   iosAdminUnlock: string
   biometricAdminUnlockStatus: string
@@ -139,6 +147,34 @@ export interface TauriNativeFeatureStatus {
   source: string
   reason?: string | null
   details?: JsonObject
+}
+
+export interface IosVoiceCredentialRequest {
+  gateway: string
+  bearer?: string | null
+  remoteAudioConsent: boolean
+}
+
+export interface IosVoiceCredentialStatus {
+  configured: boolean
+  hasBearer: boolean
+  remoteAudioConsent: boolean
+  endpointClass?: 'loopback' | 'secure_remote' | string
+  secretsRedacted: true
+}
+
+export interface IosVoiceCaptureStatus {
+  available: boolean
+  foregroundOnly: boolean
+  running: boolean
+  queuedChunks: number
+  acceptedChunks: number
+  droppedChunks: number
+  discontinuities: number
+  rawAudioLogged: false
+  backgroundListening: false
+  siriReplacement: false
+  secretsRedacted: true
 }
 
 export interface TauriAndroidAssistantRoleStatus {
@@ -322,6 +358,11 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   notificationStatus: 'aurora_notification_status',
   notificationSend: 'aurora_notification_send',
   iosVoiceStatus: 'aurora_ios_voice_status',
+  iosVoiceForegroundCaptureStart: 'aurora_ios_voice_foreground_capture_start',
+  iosVoiceBackgroundCaptureStart: 'aurora_ios_voice_background_capture_start',
+  iosVoiceForegroundCaptureStop: 'aurora_ios_voice_foreground_capture_stop',
+  iosVoiceForegroundCaptureFinish: 'aurora_ios_voice_foreground_capture_finish',
+  iosVoiceForegroundCaptureStatus: 'aurora_ios_voice_foreground_capture_status',
   iosBackgroundStatus: 'aurora_ios_background_status',
   dialogStatus: 'aurora_dialog_status',
   audioBridgeStatus: 'aurora_audio_bridge_status',
@@ -338,6 +379,9 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   secureStorageSet: 'aurora_secure_storage_set',
   secureStorageDelete: 'aurora_secure_storage_delete',
   iosSecureStorageStatus: 'aurora_ios_secure_storage_status',
+  iosVoiceCredentialSet: 'aurora_ios_voice_credential_set',
+  iosVoiceCredentialStatus: 'aurora_ios_voice_credential_status',
+  iosVoiceCredentialDelete: 'aurora_ios_voice_credential_delete',
   iosBiometricStatus: 'aurora_ios_biometric_status',
   iosAdminUnlock: 'aurora_ios_admin_unlock',
   biometricAdminUnlockStatus: 'aurora_biometric_admin_unlock_status',
@@ -478,6 +522,26 @@ export class TauriLocalTransport implements AuroraTransport {
     return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.iosVoiceStatus)
   }
 
+  startIosVoiceForegroundCapture(): Promise<IosVoiceCaptureStatus> {
+    return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceForegroundCaptureStart)
+  }
+
+  startIosVoiceBackgroundCapture(): Promise<IosVoiceCaptureStatus> {
+    return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceBackgroundCaptureStart)
+  }
+
+  stopIosVoiceForegroundCapture(): Promise<IosVoiceCaptureStatus> {
+    return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceForegroundCaptureStop)
+  }
+
+  finishIosVoiceForegroundCapture(): Promise<IosVoiceCaptureStatus> {
+    return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceForegroundCaptureFinish)
+  }
+
+  getIosVoiceForegroundCaptureStatus(): Promise<IosVoiceCaptureStatus> {
+    return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceForegroundCaptureStatus)
+  }
+
   getIosBackgroundStatus(): Promise<TauriNativeFeatureStatus> {
     return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.iosBackgroundStatus)
   }
@@ -543,6 +607,18 @@ export class TauriLocalTransport implements AuroraTransport {
 
   getIosSecureStorageStatus(): Promise<TauriNativeFeatureStatus> {
     return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.iosSecureStorageStatus)
+  }
+
+  setIosVoiceCredential(request: IosVoiceCredentialRequest): Promise<IosVoiceCredentialStatus> {
+    return this.invokeCommand<IosVoiceCredentialStatus>(this.commands.iosVoiceCredentialSet, { request })
+  }
+
+  getIosVoiceCredentialStatus(): Promise<IosVoiceCredentialStatus> {
+    return this.invokeCommand<IosVoiceCredentialStatus>(this.commands.iosVoiceCredentialStatus)
+  }
+
+  deleteIosVoiceCredential(): Promise<IosVoiceCredentialStatus> {
+    return this.invokeCommand<IosVoiceCredentialStatus>(this.commands.iosVoiceCredentialDelete)
   }
 
   getIosBiometricStatus(): Promise<TauriNativeFeatureStatus> {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 
 import pytest
@@ -18,11 +19,22 @@ from app.shared.contracts.models.gateway import GatewayListEventsResponse, Gatew
 
 
 class _DummyBus:
-    def __init__(self, *, events: list[AuroraEventStreamEvent] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        events: list[AuroraEventStreamEvent] | None = None,
+        list_events_error: str | None = None,
+        list_events_exception: Exception | None = None,
+    ) -> None:
         self.events = events or []
+        self.list_events_error = list_events_error
+        self.list_events_exception = list_events_exception
         self.requests: list[tuple[str, Any]] = []
 
-    def subscribe(self, topic, handler) -> None:
+    def subscribe(self, topic, handler, *, event: bool = False) -> None:
+        pass
+
+    async def subscribe_event(self, topic, handler) -> None:
         pass
 
     def unsubscribe(self, topic, handler) -> None:
@@ -43,6 +55,10 @@ class _DummyBus:
                 },
             )
         if topic == GatewayMethods.LIST_EVENTS:
+            if self.list_events_exception is not None:
+                raise self.list_events_exception
+            if self.list_events_error is not None:
+                return QueryResult(ok=False, error=self.list_events_error)
             return QueryResult(
                 ok=True,
                 data=GatewayListEventsResponse(events=self.events, total=len(self.events)),
@@ -100,6 +116,45 @@ def test_event_stream_route_is_documented_as_sse_builtin():
     assert AuroraMethods.EVENT_STREAM == "Aurora.EventStream"
 
 
+def test_event_stream_contract_rejects_newlines_in_sse_id_and_event_fields():
+    with pytest.raises(ValueError):
+        AuroraEventStreamEvent(
+            event_id="evt-1\nid: injected",
+            topic="Orchestrator.Response",
+            kind="assistant.completed",
+            redacted_payload={},
+        )
+    with pytest.raises(ValueError):
+        AuroraEventStreamEvent(
+            event_id="evt-1",
+            topic="Orchestrator.Response",
+            kind="assistant.completed\nevent: injected",
+            redacted_payload={},
+        )
+
+
+def test_sse_serializer_defensively_rejects_newline_in_id_and_event_fields():
+    event = AuroraEventStreamEvent.model_construct(
+        event_id="evt-1\ndata: injected",
+        topic="Orchestrator.Response",
+        kind="assistant.completed",
+        category="assistant",
+        redacted_payload={},
+    )
+    with pytest.raises(ValueError, match="unsafe SSE id"):
+        _sse_payload(event)
+
+    event = AuroraEventStreamEvent.model_construct(
+        event_id="evt-1",
+        topic="Orchestrator.Response",
+        kind="assistant.completed\ndata: injected",
+        category="assistant",
+        redacted_payload={},
+    )
+    with pytest.raises(ValueError, match="unsafe SSE event"):
+        _sse_payload(event)
+
+
 @pytest.mark.asyncio
 async def test_event_stream_backfill_formats_filtered_sse_events():
     event = AuroraEventStreamEvent(
@@ -138,6 +193,56 @@ async def test_event_stream_backfill_formats_filtered_sse_events():
     assert bus.requests[0][1].topics == ["Orchestrator.Response"]
     assert bus.requests[0][1].kinds == ["assistant.completed"]
     assert bus.requests[0][1].correlation_id == "corr-1"
+
+
+@pytest.mark.asyncio
+async def test_event_stream_backfill_degraded_event_never_exposes_exception_details():
+    secret_error = RuntimeError("failed reading /home/user/secret.wav token=raw-secret")
+    events = [
+        item
+        async for item in _stream_backfill_events(
+            _DummyBus(list_events_exception=secret_error),
+            topics=["Orchestrator.Response"],
+            categories=set(),
+            kinds={"assistant.completed"},
+            correlation_id="corr-1",
+            last_event_id=None,
+            replay_from=None,
+        )
+    ]
+
+    assert len(events) == 1
+    dumped = json.dumps(events[0].model_dump(mode="json"))
+    assert events[0].kind == "stream.degraded"
+    assert events[0].redacted_payload == {
+        "code": "bounded_replay_unavailable",
+        "message": "Recent events are temporarily unavailable.",
+        "durable_replay": False,
+    }
+    assert "secret.wav" not in dumped
+    assert "raw-secret" not in dumped
+    assert "/home/user" not in dumped
+
+
+@pytest.mark.asyncio
+async def test_event_stream_backfill_degraded_event_never_exposes_bus_error_details():
+    events = [
+        item
+        async for item in _stream_backfill_events(
+            _DummyBus(list_events_error="DB path /tmp/private.db token=raw-secret"),
+            topics=["Orchestrator.Response"],
+            categories=set(),
+            kinds={"assistant.completed"},
+            correlation_id="corr-1",
+            last_event_id=None,
+            replay_from=None,
+        )
+    ]
+
+    dumped = json.dumps(events[0].model_dump(mode="json"))
+    assert events[0].redacted_payload["message"] == "Recent events are temporarily unavailable."
+    assert "private.db" not in dumped
+    assert "raw-secret" not in dumped
 
 
 def test_event_stream_route_denies_broad_stream_without_gateway_manage():

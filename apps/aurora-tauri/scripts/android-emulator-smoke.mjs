@@ -1,7 +1,22 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
+import os from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+
+const NATIVE_PAYLOAD_LOGCAT_ARGS = [
+  'logcat',
+  '-d',
+  '-t',
+  '2000',
+  'RustStdoutStderr:I',
+  '*:S',
+]
+
+const DEFAULT_DEVICE_WAIT_TIMEOUT_MS = 30_000
+const DEFAULT_INSTALL_TIMEOUT_MS = 5 * 60_000
+
+const adb = resolveAdbCommand()
 
 export async function runAndroidEmulatorSmoke() {
   const appId = process.env.AURORA_ANDROID_APP_ID ?? 'dev.aurora.desktop'
@@ -11,10 +26,17 @@ export async function runAndroidEmulatorSmoke() {
     throw new Error('No Android APK found. Run pnpm --filter @aurora/tauri-ui android:build:apk first.')
   }
 
-  run('adb', ['wait-for-device'])
-  run('adb', ['install', '-r', apk])
-  run('adb', ['logcat', '-c'])
+  run(adb, ['wait-for-device'], {
+    timeoutMs: resolvePositiveTimeout(
+      process.env.AURORA_ANDROID_DEVICE_WAIT_TIMEOUT_MS,
+      DEFAULT_DEVICE_WAIT_TIMEOUT_MS,
+    ),
+    timeoutCode: 'android_device_wait_timeout',
+  })
+  installApk(apk)
+  run(adb, ['logcat', '-c'])
   launchApp(appId)
+  dismissSystemUiAnrDialog()
 
   const payloadJson = waitForPayloadJson()
   if (!payloadJson) {
@@ -61,27 +83,89 @@ function walk(dir) {
   })
 }
 
-function run(command, args) {
-  execFileSync(command, args, { stdio: 'inherit' })
+function run(command, args, { timeoutMs, timeoutCode = 'android_command_timeout' } = {}) {
+  try {
+    return execFileSync(command, args, {
+      stdio: 'inherit',
+      ...(timeoutMs === undefined ? {} : { timeout: timeoutMs }),
+    })
+  } catch (error) {
+    if (timeoutMs !== undefined && error?.code === 'ETIMEDOUT') {
+      throw new Error(`${timeoutCode}: adb command exceeded ${timeoutMs}ms`)
+    }
+    throw error
+  }
+}
+
+function resolvePositiveTimeout(value, fallback) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function installApk(apk) {
+  const remoteApk = `/data/local/tmp/aurora-smoke-${Date.now()}.apk`
+  try {
+    run(adb, ['push', apk, remoteApk])
+    run(adb, ['shell', 'chmod', '644', remoteApk])
+    run(adb, ['shell', 'pm', 'install', '-r', remoteApk], {
+      timeoutMs: resolvePositiveTimeout(
+        process.env.AURORA_ANDROID_INSTALL_TIMEOUT_MS,
+        DEFAULT_INSTALL_TIMEOUT_MS,
+      ),
+      timeoutCode: 'android_install_timeout',
+    })
+  } finally {
+    spawnSync(adb, ['shell', 'rm', '-f', remoteApk], { stdio: 'ignore' })
+  }
 }
 
 function launchApp(appId) {
   try {
-    run('adb', ['shell', 'monkey', '-p', appId, '-c', 'android.intent.category.LAUNCHER', '1'])
+    run(adb, ['shell', 'monkey', '-p', appId, '-c', 'android.intent.category.LAUNCHER', '1'])
   } catch {
-    run('adb', ['shell', 'am', 'start', '-n', `${appId}/.MainActivity`])
+    run(adb, ['shell', 'am', 'start', '-n', `${appId}/.MainActivity`])
   }
 }
 
+function dismissSystemUiAnrDialog() {
+  const result = spawnSync(adb, ['exec-out', 'uiautomator', 'dump', '/dev/tty'], {
+    encoding: 'utf8',
+    timeout: 15_000,
+  })
+  if (result.error || result.status !== 0) return
+  const output = `${result.stdout}\n${result.stderr}`
+  if (!output.includes("System UI isn't responding")) return
+  const wait = output.match(/text="Wait"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)
+  if (!wait) return
+  const [, left, top, right, bottom] = wait.map(Number)
+  run(adb, ['shell', 'input', 'tap', String(Math.floor((left + right) / 2)), String(Math.floor((top + bottom) / 2))])
+}
+
 async function waitForWebviewMount(appId) {
-  const deadline = Date.now() + Number(process.env.AURORA_ANDROID_WEBVIEW_TIMEOUT_MS ?? 90_000)
+  const deadline = Date.now() + Number(process.env.AURORA_ANDROID_WEBVIEW_TIMEOUT_MS ?? 240_000)
   let lastState = null
   let lastError = null
+  let lastAnrCheckAt = 0
 
   while (Date.now() < deadline) {
-    const pid = adbOutput(['shell', 'pidof', appId]).trim().split(/\s+/)[0]
+    const crashEvidence = recentAndroidCrashEvidence(appId)
+    if (isFatalAndroidWebviewCrash(crashEvidence)) {
+      throw new Error(
+        `Android package ${appId} reported a fatal WebView renderer crash:\n${crashEvidence}`,
+      )
+    }
+    if (Date.now() - lastAnrCheckAt > 5000) {
+      dismissSystemUiAnrDialog()
+      lastAnrCheckAt = Date.now()
+    }
+    const pid = adbOutput(['shell', 'pidof', appId], { allowPidofNoProcess: true }).trim().split(/\s+/)[0]
     if (!pid) {
-      lastError = new Error(`Android package ${appId} is not running.`)
+      const crashEvidence = recentAndroidCrashEvidence(appId)
+      lastError = new Error(
+        crashEvidence
+          ? `Android package ${appId} is not running. Recent crash evidence:\n${crashEvidence}`
+          : `Android package ${appId} is not running.`,
+      )
       await sleep(1000)
       continue
     }
@@ -108,7 +192,7 @@ async function waitForWebviewMount(appId) {
       lastError = error
     } finally {
       if (port) {
-        spawnSync('adb', ['forward', '--remove', `tcp:${port}`], { stdio: 'ignore' })
+        spawnSync(adb, ['forward', '--remove', `tcp:${port}`], { stdio: 'ignore' })
       }
     }
 
@@ -285,13 +369,52 @@ function isStableAuroraWebviewState(state) {
     && state.mobileNavigationPosition === 'fixed'
 }
 
-function adbOutput(args) {
-  const result = spawnSync('adb', args, { encoding: 'utf8' })
+function adbOutput(args, { allowPidofNoProcess = false } = {}) {
+  const result = spawnSync(adb, args, { encoding: 'utf8' })
   if (result.error) throw result.error
   if (result.status !== 0) {
-    throw new Error(`adb ${args.join(' ')} failed: ${`${result.stdout}\n${result.stderr}`.trim()}`)
+    if (allowPidofNoProcess && isPidofNoProcessResult(args, result)) return result.stdout
+    throw new Error(`${adb} ${args.join(' ')} failed: ${`${result.stdout}\n${result.stderr}`.trim()}`)
   }
   return result.stdout
+}
+
+function isPidofNoProcessResult(args, result) {
+  return args[0] === 'shell'
+    && args[1] === 'pidof'
+    && args.length === 3
+    && result.status === 1
+    && result.stdout.trim() === ''
+    && result.stderr.trim() === ''
+}
+
+function recentAndroidCrashEvidence(appId) {
+  const result = spawnSync(adb, ['logcat', '-d', '-t', '300'], { encoding: 'utf8' })
+  if (result.error || result.status !== 0) return ''
+
+  return `${result.stdout}\n${result.stderr}`
+    .split(/\r?\n/)
+    .filter((line) => {
+      const lower = line.toLowerCase()
+      return line.includes(appId)
+        || line.includes('FATAL EXCEPTION')
+        || line.includes('AndroidRuntime')
+        || lower.includes('force finishing')
+        || lower.includes('has died')
+        || lower.includes('crashpad_client_linux')
+        || lower.includes('render process')
+        || (lower.includes('chromium') && lower.includes('fatal'))
+    })
+    .slice(-40)
+    .join('\n')
+    .trim()
+}
+
+function isFatalAndroidWebviewCrash(evidence) {
+  const lower = evidence.toLowerCase()
+  return lower.includes('crashpad_client_linux')
+    || lower.includes('render process')
+    || (lower.includes('chromium') && lower.includes('fatal'))
 }
 
 function sleep(milliseconds) {
@@ -301,7 +424,7 @@ function sleep(milliseconds) {
 function waitForPayloadJson() {
   const deadline = Date.now() + Number(process.env.AURORA_ANDROID_SMOKE_TIMEOUT_MS ?? 60_000)
   while (Date.now() < deadline) {
-    const logcat = spawnSync('adb', ['logcat', '-d', '-t', '2000'], { encoding: 'utf8' })
+    const logcat = spawnSync(adb, NATIVE_PAYLOAD_LOGCAT_ARGS, { encoding: 'utf8' })
     if (logcat.error) {
       throw logcat.error
     }
@@ -311,6 +434,21 @@ function waitForPayloadJson() {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000)
   }
   return null
+}
+
+function resolveAdbCommand() {
+  const candidates = [
+    process.env.ADB,
+    process.env.ANDROID_HOME ? join(process.env.ANDROID_HOME, 'platform-tools', 'adb') : undefined,
+    process.env.ANDROID_SDK_ROOT ? join(process.env.ANDROID_SDK_ROOT, 'platform-tools', 'adb') : undefined,
+    join(os.homedir(), 'Android/Sdk/platform-tools/adb'),
+    join(os.homedir(), '.local/share/android-sdk/platform-tools/adb'),
+    'adb',
+  ].filter(Boolean)
+  return candidates.find((candidate) => {
+    if (candidate === 'adb') return spawnSync(candidate, ['version'], { stdio: 'ignore' }).status === 0
+    return existsSync(candidate) && spawnSync(candidate, ['version'], { stdio: 'ignore' }).status === 0
+  }) ?? 'adb'
 }
 
 function extractChunkedPayload(output) {

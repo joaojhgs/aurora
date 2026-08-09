@@ -1,8 +1,8 @@
-# Aurora Android Native Plugin Skeleton
+# Aurora Android Native Plugin
 
 This directory holds the Android side of the future Aurora Tauri mobile plugin. It follows the official Tauri 2 mobile plugin shape: Kotlin native code extends `app.tauri.plugin.Plugin`, is annotated with `@TauriPlugin`, and exposes methods annotated with `@Command`.
 
-The skeleton is intentionally evidence-only. It reports Android package, permission, role, and fallback-entrypoint state to the Rust/JS bridge, but it does not claim assistant-role availability, microphone capture, notification delivery, or foreground-service behavior without Android OS evidence.
+The plugin reports Android package, permission, role, and fallback-entrypoint state to the Rust/JS bridge and now contains the native foreground voice path: Kotlin owns AudioRecord/AudioTrack and lifecycle controls while the Rust voice session owns bounded PCM, generations, typed Gateway routing, cancellation, and redacted status. Product capabilities remain evidence-gated until Android OS, emulator, and physical-device checks pass.
 
 `pnpm android:sync-native-plugin` copies this source into the generated Tauri
 Android app and applies the canonical Aurora manifest fragments. The app
@@ -29,7 +29,7 @@ that path during every mobile build.
 - `requestAssistantRole`: starts the Android role request only when the OS role is available and the package appears qualified.
 - `requestAndroidPermission`: requests Android runtime permissions for microphone, notifications, or foreground voice controls when the permission is runtime-requestable.
 - `voiceForegroundServiceStatus`: reports microphone, notification, manifest, foreground-service readiness, running state, and raw-audio privacy constraints.
-- `startVoiceForegroundService` / `stopVoiceForegroundService`: starts or stops the minimal privacy-visible foreground service used for voice capture controls. This does not claim backend STT or continuous audio activity; backend audio evidence is still required.
+- `startVoiceForegroundService` / `stopVoiceForegroundService`: starts or stops the privacy-visible foreground service used for native voice capture and playback. The service uses the Rust session when native-only voice credentials are provisioned and retains a bounded capture-only migration path otherwise; backend/model and device evidence are still required before product readiness is advertised.
 - `fallbackEntrypoints`: returns push-to-talk/share/deep-link/widget/shortcut/quick-tile fallback availability so UI can keep non-role flows visible.
 - `entrypointPayload`: returns the last redacted Android intent payload recorded by the native entrypoint activity, widget, or quick tile.
 - `localLightInferenceStatus`: reports the Android local-light inference provider adapter as native manifest evidence. It remains `degraded` until backend model catalog evidence, device/model proof, and a real provider implementation are present; fallback providers stay visible.

@@ -32,7 +32,7 @@ from app.services.stt_wakeword.backends import (
 )
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
-from app.shared.config.models import Wakeword
+from app.shared.config.models import System, Wakeword
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.stt import (
     AudioSessionEvent,
@@ -54,6 +54,10 @@ from app.shared.messaging.models.stt_wakeword_models import (
     WakeWordTimeout,
 )
 from app.shared.services.base_service import BaseService
+from app.shared.speech_language_policy import (
+    SpeechLanguagePolicy,
+    resolve_speech_language_policy,
+)
 
 config_api = ConfigAPI()
 
@@ -86,6 +90,7 @@ class WakeWordService(BaseService):
         self._wake_words: list[str] = []
         self._sensitivity = 0.5
         self._model_paths: list[str] = []
+        self._language_policy = resolve_speech_language_policy("en", "auto")
 
         # State tracking
         self._current_stream_id: str | None = None
@@ -104,8 +109,8 @@ class WakeWordService(BaseService):
         # Initialize wake word backend
         await self._initialize_backend()
 
-        # Subscribe to audio stream (subscribe is not async)
-        self.bus.subscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
+        # Subscribe to audio stream
+        await self.bus.subscribe_event(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
 
         self._running = True
         self._enabled = True
@@ -135,18 +140,46 @@ class WakeWordService(BaseService):
         """
         log_info(f"Reloading WakeWordService configuration: section={config_section}")
         # Reload wake word backend if config changed
-        if config_section is None or config_section in ("services", "services.stt"):
+        if config_section is None or config_section in ("system", "services", "services.stt"):
             log_info("Reloading wake word backend due to config change...")
-            if self._backend:
-                await self._backend.cleanup()
-                self._backend = None
-            await self._load_config()
-            await self._initialize_backend()
+            (
+                backend_type,
+                sensitivity,
+                model_paths,
+                wake_words,
+                language_policy,
+            ) = await self._read_config()
+            new_backend = await self._build_backend(
+                backend_type=backend_type,
+                model_paths=model_paths,
+                sensitivity=sensitivity,
+                wake_words=wake_words,
+            )
+            old_backend = self._backend
+            self._backend_type = backend_type
+            self._sensitivity = sensitivity
+            self._model_paths = model_paths
+            self._wake_words = wake_words
+            self._language_policy = language_policy
+            self._backend = new_backend
+            if old_backend:
+                await old_backend.cleanup()
         log_info("WakeWordService configuration reloaded")
 
     async def _load_config(self) -> None:
         """Load configuration from config manager."""
-        import os
+        (
+            self._backend_type,
+            self._sensitivity,
+            self._model_paths,
+            self._wake_words,
+            self._language_policy,
+        ) = await self._read_config()
+
+    async def _read_config(
+        self,
+    ) -> tuple[WakeWordBackendType, float, list[str], list[str], SpeechLanguagePolicy]:
+        """Read wakeword config without mutating the live backend."""
 
         from app.shared.path_utils import resolve_path
 
@@ -154,22 +187,21 @@ class WakeWordService(BaseService):
         wakeword_cfg = await config_api.aget(
             ConfigKeys.services.stt.wakeword, Wakeword, config_timeout=_t
         )
+        system_cfg = await config_api.aget(ConfigKeys.system, System, config_timeout=_t)
+        if not isinstance(system_cfg, System):
+            system_cfg = System()
+        language_policy = resolve_speech_language_policy(
+            system_cfg.primary_language,
+            system_cfg.voice_language,
+        )
 
         # Backend configuration
         backend_str = wakeword_cfg.backend or "oww"
-        self._backend_type = WakeWordBackendType(backend_str)
+        backend_type = WakeWordBackendType(backend_str)
 
         # Wake word configuration
-        self._sensitivity = wakeword_cfg.threshold if wakeword_cfg.threshold is not None else 0.5
-
-        # Optional override (compose may pass empty string when unset — treat as absent)
-        model_path = os.getenv("AURORA_WAKE_WORD_MODEL_PATH")
-        if not model_path or not str(model_path).strip():
-            model_path = None
-
-        # Fall back to config if env var not set
-        if model_path is None:
-            model_path = wakeword_cfg.model_path or "voice_models/jarvis.onnx"
+        sensitivity = wakeword_cfg.threshold if wakeword_cfg.threshold is not None else 0.5
+        model_path = wakeword_cfg.model_path or "voice_models/jarvis.onnx"
 
         # JSON null / empty string must not become raw_paths [""] (breaks wake word labels / OWW)
         if model_path is None or (isinstance(model_path, str) and not str(model_path).strip()):
@@ -184,42 +216,61 @@ class WakeWordService(BaseService):
             raw_paths = model_path
 
         # Resolve all paths relative to project root
-        self._model_paths = [str(resolve_path(path)) for path in raw_paths]
+        model_paths = [str(resolve_path(path)) for path in raw_paths]
 
         # Extract wake word names from model paths (use original path for name extraction)
-        self._wake_words = []
+        wake_words = []
         for path in raw_paths:
             # Extract filename without extension as wake word name
             name = path.split("/")[-1].replace(".onnx", "").replace(".ppn", "")
-            self._wake_words.append(name)
+            wake_words.append(name)
 
         log_info("Wake word configuration loaded:")
-        log_info(f"  Backend: {self._backend_type.value}")
-        log_info(f"  Wake words: {self._wake_words}")
-        log_info(f"  Model paths (resolved): {self._model_paths}")
-        log_info(f"  Sensitivity: {self._sensitivity}")
+        log_info(f"  Backend: {backend_type.value}")
+        log_info(f"  Wake words: {wake_words}")
+        log_info(f"  Model paths (resolved): {model_paths}")
+        log_info(f"  Sensitivity: {sensitivity}")
+        return backend_type, sensitivity, model_paths, wake_words, language_policy
 
     async def _initialize_backend(self) -> None:
         """Initialize the wake word detection backend."""
-        log_info(f"Initializing wake word backend: {self._backend_type.value}")
+        self._backend = await self._build_backend(
+            backend_type=self._backend_type,
+            model_paths=self._model_paths,
+            sensitivity=self._sensitivity,
+            wake_words=self._wake_words,
+        )
+        log_info("Wake word backend initialized")
 
-        if self._backend_type == WakeWordBackendType.OPENWAKEWORD:
-            self._backend = OpenWakeWordBackend(
-                model_paths=self._model_paths,
-                sensitivity=self._sensitivity,
-                wake_words=self._wake_words,
+    async def _build_backend(
+        self,
+        *,
+        backend_type: WakeWordBackendType | None,
+        model_paths: list[str],
+        sensitivity: float,
+        wake_words: list[str],
+    ) -> WakeWordBackend:
+        """Create and initialize a backend before making it live."""
+
+        log_info(f"Initializing wake word backend: {backend_type.value if backend_type else None}")
+
+        if backend_type == WakeWordBackendType.OPENWAKEWORD:
+            backend = OpenWakeWordBackend(
+                model_paths=model_paths,
+                sensitivity=sensitivity,
+                wake_words=wake_words,
             )
-        elif self._backend_type == WakeWordBackendType.PORCUPINE:
-            self._backend = PorcupineBackend(
-                model_paths=self._model_paths,
-                sensitivity=self._sensitivity,
-                wake_words=self._wake_words,
+        elif backend_type == WakeWordBackendType.PORCUPINE:
+            backend = PorcupineBackend(
+                model_paths=model_paths,
+                sensitivity=sensitivity,
+                wake_words=wake_words,
             )
         else:
-            raise ValueError(f"Unknown wake word backend: {self._backend_type}")
+            raise ValueError(f"Unknown wake word backend: {backend_type}")
 
-        await self._backend.initialize()
-        log_info("Wake word backend initialized")
+        await backend.initialize()
+        return backend
 
     async def _process_audio_data(
         self,

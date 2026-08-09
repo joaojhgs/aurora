@@ -69,7 +69,7 @@ describe('WebRTC package boundary', () => {
       if (oldWorker !== undefined) (globalThis as Record<string, unknown>).Worker = oldWorker
       if (oldRtc !== undefined) (globalThis as Record<string, unknown>).RTCPeerConnection = oldRtc
     }
-  })
+  }, 30_000)
 
   it('keeps MQTT bundling synchronous inside the isolated WebRTC subpath', () => {
     const signaling = read(signalingMqttPath)

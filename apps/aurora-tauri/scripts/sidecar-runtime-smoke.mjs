@@ -73,6 +73,7 @@ if (!childExit && failure === null) {
 }
 
 const dataDir = join(runtimeDir, 'data')
+const outputTail = redact(outputChunks.join('').slice(-20_000))
 const report = {
   schema: 'aurora.tauri.sidecar-runtime-smoke.v1',
   ok: failure === null,
@@ -94,7 +95,7 @@ const report = {
   },
   failure,
   childExit,
-  outputTail: redact(outputChunks.join('').slice(-20_000)),
+  outputTail,
   secretsRedacted: true,
 }
 
@@ -104,6 +105,11 @@ if (
 ) {
   report.ok = false
   report.failure = 'packaged sidecar did not create persistent config and data state'
+}
+
+if (report.ok && hasMissingLocalEmbeddingsError(outputTail)) {
+  report.ok = false
+  report.failure = 'packaged sidecar attempted unavailable local embeddings'
 }
 
 writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
@@ -246,4 +252,9 @@ function redact(text) {
     )
     .replace(/Bearer\s+[A-Za-z0-9._~+/-]+=*/g, 'Bearer <redacted>')
     .replaceAll(runtimeDir, '<runtime-dir-redacted>')
+}
+
+function hasMissingLocalEmbeddingsError(text) {
+  return /langchain-huggingface is required for local embeddings/i.test(text)
+    || /RAG stores disabled: embeddings unavailable.*langchain-huggingface/i.test(text)
 }

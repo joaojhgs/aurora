@@ -27,6 +27,8 @@ from app.shared.contracts.models.gateway import (
 from app.shared.contracts.models.mesh import MeshAddressSelector
 
 from .capability_graph import build_capability_graph
+from .route_errors import public_message_for_reason, public_route_error
+from .speech_constraints import explain_speech_route_constraints
 
 _REDACTED_SCHEMA_KEYS = {
     "api_key",
@@ -121,6 +123,8 @@ def explain_route(
     topic = _topic_from_request(request)
     module = topic.split(".", 1)[0]
     method_name = topic.split(".", 1)[1] if "." in topic else None
+    speech_constraints = explain_speech_route_constraints(request.speech, topic=topic)
+    explicit_target = bool(request.selector and request.selector.has_routing_target())
     config = mesh_config.services.get(module)
     graph = build_capability_graph(
         mesh_config=mesh_config,
@@ -137,6 +141,7 @@ def explain_route(
             mesh_config=mesh_config,
             selector=request.selector,
             policy_snapshot=policy_snapshot,
+            speech_constraints=speech_constraints,
         )
         if routing_table
         else None
@@ -162,6 +167,7 @@ def explain_route(
             selector=request.selector,
             include_ineligible=True,
             policy_snapshot=policy_snapshot,
+            speech_constraints=speech_constraints,
         ):
             candidates.append(
                 _remote_candidate_from_registry(
@@ -171,6 +177,7 @@ def explain_route(
                     graph_services=graph_services,
                     selected_peer_id=route.peer_id if route else None,
                     selected_target=route.target if route else "local",
+                    explicit_target=explicit_target,
                 )
             )
 
@@ -179,14 +186,20 @@ def explain_route(
     selector_code = ""
     selector_message = ""
     if route and route.target == "error":
-        selector_code = route.error_code or "route_error"
-        selector_message = route.error_message or "route resolution failed"
-        selector_valid = not selector_code.startswith("selector_")
+        route_code = route.error_code or "route_error"
+        route_error = public_route_error(
+            route,
+            explicit_target=explicit_target,
+            fallback_reason_code="route_error",
+        )
+        selector_code = route_error.reason_code
+        selector_message = route_error.message
+        selector_valid = not route_code.startswith("selector_")
         blockers.append(
             RouteBlockerInfo(
                 code=selector_code,
                 message=selector_message,
-                security_privacy=_is_security_privacy_blocker(selector_code),
+                security_privacy=route_error.security_privacy,
             )
         )
     for candidate in candidates:
@@ -410,6 +423,7 @@ def _remote_candidate_from_registry(
     graph_services: dict[str, CapabilityServiceInfo],
     selected_peer_id: str | None,
     selected_target: str,
+    explicit_target: bool,
 ) -> RouteCandidateDecision:
     peer = candidate.peer
     service = candidate.service
@@ -423,7 +437,10 @@ def _remote_candidate_from_registry(
         blockers.append(
             RouteBlockerInfo(
                 code=candidate.reason_code or "provider_ineligible",
-                message=candidate.reason or "provider is not eligible",
+                message=public_message_for_reason(
+                    candidate.reason_code or "provider_ineligible",
+                    explicit_target=explicit_target,
+                ),
                 provider_id=service_instance_id,
                 peer_id=peer.peer_id,
                 security_privacy=_is_security_privacy_blocker(candidate.reason_code),

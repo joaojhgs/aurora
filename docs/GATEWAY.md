@@ -220,6 +220,30 @@ Key fields:
 - `routes`: configured route preference/fallback plus the current decision and provider eligibility reasons.
 - `compatibility_failures`: flattened local/remote compatibility failures for quick scanning.
 
+#### Route Explanation for Speech
+
+```text
+POST /api/Gateway/ExplainRoute
+```
+
+`Gateway.ExplainRoute` returns the selected target plus redacted local/remote candidate decisions without executing the request. Speech callers may provide only typed routing requirements, never text, audio, messages, or arbitrary request payload fields:
+
+```json
+{
+  "topic": "TTS.Synthesize",
+  "selector": { "peer_id": "peer-studio", "module": "TTS" },
+  "speech": {
+    "language_requirement": { "mode": "exact", "language": "en" },
+    "voice_id": "standard:starter_en:alba"
+  },
+  "include_candidates": true
+}
+```
+
+The response includes `selected_peer_id`, `selected_service_instance_id`, fallback behavior, per-candidate revision/digest evidence, capacity, policy/freshness state, blockers, and `secrets_redacted=true`. Relevant speech reason codes include `eligible`, `language_incompatible`, `language_capability_unknown`, `voice_unavailable`, `speech_route_binding_unavailable`, and `provider_unavailable`.
+
+An incompatible or legacy provider can appear in the candidate list so the UI can explain why it was skipped, but it is not dispatched. An explicit selector to such a provider returns a sanitized route failure and performs no local or remote service call.
+
 #### Deployment Topology and Bus Health
 ```
 POST /api/Gateway/GetDeploymentTopology

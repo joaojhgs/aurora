@@ -797,6 +797,7 @@ describe('WebRtcMeshPeerBridge', () => {
       buildManifest: vi.fn(),
       handleCall: vi.fn(),
       handleSubscribe: vi.fn(),
+      handleUnsubscribe: vi.fn(),
       markManifestAcknowledged: vi.fn()
     }
     new WebRtcMeshPeerBridge({
@@ -823,6 +824,10 @@ describe('WebRtcMeshPeerBridge', () => {
     await flush()
     expect(peerHost.startEpoch).toHaveBeenCalledTimes(2)
     expect(session.sent.filter((frame) => (frame as any).type === 'manifest')).toHaveLength(1)
+
+    session.emit({ type: 'unsubscribe', id: 'sub-1' })
+    await flush()
+    expect(peerHost.handleUnsubscribe).toHaveBeenCalledWith('sub-1')
   })
 
   it('closes provider epoch and clears stale authority when authenticated snapshot assertion fails', async () => {

@@ -44,6 +44,18 @@ Common forms:
 
 Contract-required permissions are additive with Gateway/Auth policy. Do not bypass them by calling service methods directly.
 
+### Speech permissions and voice ownership
+
+Speech projection applies the same exact, wildcard, type-level, and global permission matching as every other service:
+
+- `TTS.GetCapabilities` and `TTS.ListVoices` are use-safe discovery methods guarded by `TTS.use`; `TTS.Synthesize` declares the exact `TTS.Synthesize` permission and is also eligible under an applicable use-level or wildcard grant.
+- `TTS.ListVoiceProfiles`, `TTS.GetVoiceProfile`, profile update/install/remove/default operations, bounded voice import, and profile create/delete are `method_type="manage"` and require `TTS.manage`.
+- A recipient projection contains only methods authorized for that peer. A forged caller permission, method type, or manifest field cannot add a management method that was not granted.
+- Use-safe voice listing returns only standard voices and cloned voices visible to the authenticated owner or allowed peer. Administrative profile inventory remains separate and omits source paths, uploaded media, engine internals, and other private storage details.
+- Voice-management mutations carry a payload-bound `operation_id`. Replaying the same operation is idempotent; reusing the ID with different input is rejected. The first attempted mutation emits one redacted required audit record before side effects, and an audit-storage failure blocks the mutation.
+
+Permission, visibility, capability, and provider availability are conjunctive gates. Passing one never bypasses the others.
+
 ## External request flow
 
 ```text
@@ -67,7 +79,7 @@ WebView client peers use the same public production Auth/Gateway permission boun
 - event delivery is subscription/correlation scoped; and
 - lane reports pass redacted secret scans.
 
-Tracked cross-engine reports live under `reports/webrtc-interop/{direct,firefox-direct,webkit-direct,stun,firefox-stun,webkit-stun,turn,firefox-turn,webkit-turn}/report.json`; each passing lane includes `selectedCandidatePair` captured from browser `RTCPeerConnection.getStats()` and separates raw selected category (`host`, `srflx`, `prflx`, or `relay`) from lane validation. Hosted Chromium peer behavior is maintained by `pnpm test:hosted-peer:live`; hosted mesh-node behavior is maintained by `scripts/hosted_mesh_node_e2e.sh`; browser persistence and packaged Linux desktop live behavior are maintained by `pnpm test:web-persistence` and `pnpm test:desktop-client:live`. Those commands/scripts write per-run diagnostics to local generated locations rather than committed docs. Packaged macOS/Windows WebViews and physical mobile runtime behavior are not claimed by those reports. Android runtime validation needs usable KVM access or an authorized physical device. iOS runtime/build validation needs macOS/Xcode with the required simulator/runtime/toolchain prerequisites.
+Tracked cross-engine reports live under `reports/webrtc-interop/{direct,firefox-direct,webkit-direct,stun,firefox-stun,webkit-stun,turn,firefox-turn,webkit-turn}/report.json`; each passing lane includes `selectedCandidatePair` captured from browser `RTCPeerConnection.getStats()` and separates raw selected category (`host`, `srflx`, `prflx`, or `relay`) from lane validation. Hosted Chromium peer behavior is maintained by `pnpm test:hosted-peer:live`; hosted mesh-node behavior is maintained by `scripts/hosted_mesh_node_e2e.sh`; browser persistence and packaged Linux desktop live behavior are maintained by `pnpm test:web-persistence` and `pnpm test:desktop-client:live`. Those commands/scripts write per-run diagnostics to local generated locations rather than committed docs. Packaged macOS/Windows WebViews and physical mobile runtime behavior are not claimed by those reports. A packaged Android API 30 application-launch smoke passes on the workspace emulator; full WebView/Chrome auth and mesh interop plus physical-device validation remain open. iOS runtime/build validation needs macOS/Xcode with the required simulator/runtime/toolchain prerequisites.
 
 ## Mesh and peer trust
 

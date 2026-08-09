@@ -680,7 +680,7 @@ function makeRuntimeHarness(options: {
     mode: options.mode ?? 'webrtc-only',
     profile: runtimeProfile,
     http: options.http,
-    pairingConnectPoll: options.pairingConnectPoll ?? { maxAttempts: 3, initialDelayMs: 1, maxDelayMs: 1, rpcTimeoutMs: 10 },
+    pairingConnectPoll: options.pairingConnectPoll ?? { maxAttempts: 3, initialDelayMs: 1, maxDelayMs: 1, rpcTimeoutMs: 1_000 },
     localStablePeerId: 'local-stable',
     localNodeName: 'Thin Shell',
     credentialStore: store,

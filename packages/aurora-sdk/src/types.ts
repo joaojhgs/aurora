@@ -1137,6 +1137,7 @@ export interface MethodInfo {
   required_perms: string[]
   callable_feature_ids?: string[]
   callable_features?: CallableFeatureContract[]
+  speech_constraints?: JsonObject | null
   public_infrastructure?: boolean
   method_type: ContractMethodType
   input_schema?: JsonObject | null
@@ -1929,6 +1930,7 @@ export interface MethodDescriptor {
   requiredPermissions: string[]
   callableFeatureIds: string[]
   callableFeatures: CallableFeatureContract[]
+  speechConstraints: JsonObject | null
   publicInfrastructure: boolean
   inputSchema: JsonObject | null
   outputSchema: JsonObject | null
@@ -1961,6 +1963,7 @@ export interface BackendInventoryMethod {
   required_perms: string[]
   callable_feature_ids?: string[]
   callable_features?: CallableFeatureContract[]
+  speech_constraints?: JsonObject | null
   public_infrastructure?: boolean
   input_model?: string | null
   output_model?: string | null
@@ -2663,6 +2666,17 @@ export interface AndroidVoiceForegroundServiceStatus {
   reason: string
   privacyClass: PrivacyClass | string
   backendAudioEvidenceRequired: boolean
+  /** Native AudioRecord -> Rust ingress is actively accepting bounded PCM chunks. */
+  captureActive?: boolean
+  /** Redacted native capture backend identifier, when the platform reports one. */
+  captureBackend?: string
+  sampleRateHz?: number
+  acceptedChunks?: number
+  acceptedSamples?: number
+  droppedChunks?: number
+  discontinuities?: number
+  queuedChunks?: number
+  captureError?: string | null
   evidenceSource: string
   secretsRedacted: boolean
 }

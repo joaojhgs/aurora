@@ -640,7 +640,6 @@ def _live_display_payload(topic: str, payload: dict[str, Any]) -> dict[str, Any]
     if topic == TTSMethods.AUDIO_CHUNK:
         result = {}
         _copy_string(payload, result, "stream_id")
-        _copy_string(payload, result, "audio_data")
         _copy_string(payload, result, "format")
         _copy_string(payload, result, "reason")
         _copy_string(payload, result, "correlation_id")
@@ -1239,16 +1238,19 @@ class GatewayService(BaseService):
 
     async def on_start(self) -> None:
         """Service-specific startup logic."""
-        self.bus.subscribe(self._event_stream_subscription_topic, self._capture_gateway_event)
-        self.bus.subscribe(
-            self._mesh_authority_event_topic, self._handle_mesh_peer_authority_changed
+        await self.bus.subscribe_event(
+            self._event_stream_subscription_topic, self._capture_gateway_event
         )
-        self.bus.subscribe(
+        await self.bus.subscribe_event(
+            self._mesh_authority_event_topic,
+            self._handle_mesh_peer_authority_changed,
+        )
+        await self.bus.subscribe_event(
             self._tooling_projection_invalidation_topic,
             self._handle_tooling_projection_invalidated,
         )
         self._tooling_invalidation_subscription_ready = True
-        self.bus.subscribe(
+        await self.bus.subscribe_event(
             self._tooling_projection_readiness_topic,
             self._handle_tooling_projection_readiness_changed,
         )

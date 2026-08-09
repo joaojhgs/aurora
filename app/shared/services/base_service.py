@@ -145,7 +145,12 @@ class BaseService(ABC):
 
         self._runtime_state = "starting"
         self._set_started(True)
-        self._subscribe_to_config_changes()
+        try:
+            await self._subscribe_to_config_changes()
+        except Exception:
+            self._set_started(False)
+            self._runtime_state = "inactive"
+            raise
 
         if await self._is_runtime_enabled():
             await self.activate(reason="startup")
@@ -328,7 +333,7 @@ class BaseService(ABC):
             except Exception as e:
                 log_error(f"Failed to unregister config observer: {e}")
 
-    def _subscribe_to_config_changes(self) -> None:
+    async def _subscribe_to_config_changes(self) -> None:
         """Subscribe to config change events.
 
         This method subscribes to Config.Changed events and calls reload() when config changes.
@@ -337,18 +342,19 @@ class BaseService(ABC):
             return
         if self._config_change_subscription is not None:
             return
+        from app.shared.contracts.models.config import ConfigMethods
+
+        async def on_config_changed(envelope: Any) -> None:
+            """Handle config change event."""
+            await self._handle_config_changed(envelope.payload)
+
         try:
-            from app.shared.contracts.models.config import ConfigMethods
-
-            async def on_config_changed(envelope: Any) -> None:
-                """Handle config change event."""
-                await self._handle_config_changed(envelope.payload)
-
-            self.bus.subscribe(ConfigMethods.UPDATED, on_config_changed)
-            self._config_change_subscription = (ConfigMethods.UPDATED, on_config_changed)
-            log_debug(f"{self.module} subscribed to config changes")
+            await self.bus.subscribe_event(ConfigMethods.UPDATED, on_config_changed)
         except Exception as e:
             log_error(f"Failed to subscribe to config changes: {e}")
+            raise
+        self._config_change_subscription = (ConfigMethods.UPDATED, on_config_changed)
+        log_debug(f"{self.module} subscribed to config changes")
 
     def _unsubscribe_from_config_changes(self) -> None:
         """Remove the config change subscription when the process is stopping."""
@@ -556,7 +562,6 @@ class BaseService(ABC):
                         if contract is not None
                         else metadata.get("method_type")
                     )
-
                     if only_always_available and not (
                         contract.always_available
                         if contract is not None
@@ -601,6 +606,12 @@ class BaseService(ABC):
                                             )
                                     except Exception as e:
                                         raise ValueError(f"Validation error: {e}") from e
+                                    if not self._envelope_speech_route_binding_valid(
+                                        envelope,
+                                        data,
+                                        topic=topic,
+                                    ):
+                                        raise RuntimeError("capability_changed")
                                     return await self._invoke_contract_method(
                                         method,
                                         data,
@@ -711,6 +722,27 @@ class BaseService(ABC):
                                                     correlation_id=envelope.correlation_id,
                                                 )
                                             return
+                                        if not self._envelope_speech_route_binding_valid(
+                                            envelope,
+                                            data,
+                                            topic=topic,
+                                        ):
+                                            if envelope.reply_to:
+                                                from app.shared.contracts.models.common import (
+                                                    ErrorOutput,
+                                                )
+
+                                                await self.bus.publish(
+                                                    envelope.reply_to,
+                                                    ErrorOutput(
+                                                        error="capability_changed",
+                                                        code="CAPABILITY_CHANGED",
+                                                    ),
+                                                    event=False,
+                                                    origin=self.module,
+                                                    correlation_id=envelope.correlation_id,
+                                                )
+                                            return
 
                                         # 2. Execute method
                                         result = await self._invoke_contract_method(
@@ -786,6 +818,41 @@ class BaseService(ABC):
 
             except Exception as e:
                 log_error(f"Error setting up subscription for {attr_name}: {e}")
+
+    def _envelope_speech_route_binding_valid(
+        self,
+        envelope: Any,
+        data: Any,
+        *,
+        topic: str,
+    ) -> bool:
+        """Validate trusted speech route metadata after typed payload construction."""
+
+        binding = getattr(envelope, "speech_route_binding", None)
+        is_webrtc_rpc = getattr(envelope, "identity_source", None) == "webrtc_rpc"
+        from app.shared.contracts.registry import get_contract
+
+        contract = get_contract(topic)
+        speech_constraints = contract.speech_constraints if contract is not None else None
+        if speech_constraints is None:
+            return binding is None
+        if not is_webrtc_rpc:
+            return True
+        if binding is None:
+            log_warning(f"{self.module} rejected speech request without route binding")
+            return False
+        try:
+            from app.shared.contracts.speech_routing import (
+                compute_speech_route_requirement_digest_for_payload,
+            )
+
+            expected_digest = compute_speech_route_requirement_digest_for_payload(topic, data)
+        except Exception as exc:
+            log_warning(f"{self.module} rejected speech request with invalid route need: {exc}")
+            return False
+        if binding.requirement_digest != expected_digest:
+            return False
+        return binding.speech_capability_revision == speech_constraints.speech_capability_revision
 
     async def _invoke_contract_method(
         self,
@@ -985,6 +1052,7 @@ class BaseService(ABC):
                         callable_features=method.callable_features,
                         public_infrastructure=method.public_infrastructure,
                         method_type=method.method_type,
+                        speech_constraints=method.speech_constraints,
                         input_schema=input_schema,
                         output_schema=output_schema,
                     )

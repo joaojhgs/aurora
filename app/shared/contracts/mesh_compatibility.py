@@ -17,6 +17,9 @@ MeshCompatibilityReasonCode = Literal[
     "manifest_projection_stale",
     "incompatible_version",
     "provider_at_capacity",
+    "language_capability_unknown",
+    "language_incompatible",
+    "voice_unavailable",
     "legacy_unverifiable",
 ]
 MeshRoutingReasonCode = MeshCompatibilityReasonCode | Literal["provider_unavailable"]

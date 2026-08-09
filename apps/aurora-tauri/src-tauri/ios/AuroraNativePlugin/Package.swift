@@ -20,8 +20,12 @@ let package = Package(
   targets: [
     .target(
       name: "AuroraNativePlugin",
-      dependencies: ["Tauri"],
+      dependencies: ["Tauri", "CAuroraIOSVoiceBridge"],
       path: "Sources/AuroraNativePlugin"
+    ),
+    .systemLibrary(
+      name: "CAuroraIOSVoiceBridge",
+      path: "Sources/CAuroraIOSVoiceBridge"
     )
   ]
 )

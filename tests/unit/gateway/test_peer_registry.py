@@ -21,9 +21,13 @@ from app.services.gateway.mesh.negotiation import (
 )
 from app.services.gateway.mesh.peer_registry import PeerRegistry
 from app.services.gateway.mesh.policy_store import MeshPolicySnapshot, MeshPolicyStore
+from app.services.gateway.mesh.provider_eligibility import SpeechRouteConstraints
 from app.services.gateway.mesh.provider_export import ACTIVE_MANIFEST_PROTOCOL, SUPPORTED_PROTOCOLS
 from app.shared.contracts.models.gateway import MethodInfo
 from app.shared.contracts.models.mesh import MeshAddressSelector, MeshPeerAuthoritySnapshot
+from app.shared.contracts.models.speech import SpeechLanguageRequirement, SpeechMethodConstraints
+from app.shared.contracts.models.stt import TranscriptionMethods
+from app.shared.contracts.models.tts import TTSMethods
 from tests.unit.gateway.mesh_policy_helpers import mesh_policy
 
 
@@ -100,6 +104,7 @@ def _make_service(
     capabilities=None,
     max_concurrent=10,
     method_topic: str | None = None,
+    speech_constraints: SpeechMethodConstraints | None = None,
 ):
     topic = method_topic or f"{module}.Execute"
     method_name = topic.split(".", 1)[1] if "." in topic else "Execute"
@@ -114,9 +119,28 @@ def _make_service(
                 bus_topic=topic,
                 exposure="external",
                 required_perms=[topic],
+                speech_constraints=speech_constraints,
             )
         ],
         max_concurrent=max_concurrent,
+    )
+
+
+def _speech_constraints(
+    *,
+    exact_languages: list[str] | None = None,
+    supports_auto_detect: bool = False,
+    auto_detect_languages: list[str] | None = None,
+    ready_voice_ids: list[str] | None = None,
+    revision: int = 7,
+) -> SpeechMethodConstraints:
+    return SpeechMethodConstraints(
+        exact_languages=exact_languages or ["en"],
+        supports_auto_detect=supports_auto_detect,
+        auto_detect_languages=auto_detect_languages or [],
+        ready_voice_ids=ready_voice_ids or [],
+        resident_model_identity_digest="a" * 64,
+        speech_capability_revision=revision,
     )
 
 
@@ -888,6 +912,171 @@ class TestProviderQueries:
         assert observed_snapshots == [snapshot]
         assert candidates[0].decision.policy_revision == 123
         assert candidates[0].eligible is True
+
+    @pytest.mark.asyncio
+    async def test_speech_request_fails_closed_when_provider_constraints_missing(self, registry):
+        await registry.register_peer("peer-a")
+        await registry.update_manifest(
+            "peer-a",
+            _verified_manifest(
+                "peer-a",
+                [_make_service(method_topic=TTSMethods.SYNTHESIZE)],
+            ),
+        )
+
+        candidates = registry.get_provider_candidates(
+            "TTS",
+            topic=TTSMethods.SYNTHESIZE,
+            speech_constraints=SpeechRouteConstraints(topic=TTSMethods.SYNTHESIZE),
+        )
+
+        assert candidates[0].eligible is False
+        assert candidates[0].reason_code == "language_capability_unknown"
+
+    @pytest.mark.asyncio
+    async def test_exact_speech_language_and_voice_mismatches_are_ineligible(self, registry):
+        await registry.register_peer("peer-a")
+        await registry.update_manifest(
+            "peer-a",
+            _verified_manifest(
+                "peer-a",
+                [
+                    _make_service(
+                        method_topic=TTSMethods.SYNTHESIZE,
+                        speech_constraints=_speech_constraints(
+                            exact_languages=["en"],
+                            ready_voice_ids=["standard:en:alloy"],
+                        ),
+                    )
+                ],
+            ),
+        )
+
+        language_candidates = registry.get_provider_candidates(
+            "TTS",
+            topic=TTSMethods.SYNTHESIZE,
+            speech_constraints=SpeechRouteConstraints(
+                topic=TTSMethods.SYNTHESIZE,
+                language_requirement=SpeechLanguageRequirement(mode="exact", language="de"),
+            ),
+        )
+        voice_candidates = registry.get_provider_candidates(
+            "TTS",
+            topic=TTSMethods.SYNTHESIZE,
+            speech_constraints=SpeechRouteConstraints(
+                topic=TTSMethods.SYNTHESIZE,
+                voice_id="standard:en:nova",
+            ),
+        )
+
+        assert language_candidates[0].eligible is False
+        assert language_candidates[0].reason_code == "language_incompatible"
+        assert voice_candidates[0].eligible is False
+        assert voice_candidates[0].reason_code == "voice_unavailable"
+
+    @pytest.mark.asyncio
+    async def test_auto_speech_requires_auto_detect_and_complete_candidate_subset(
+        self, mesh_config
+    ):
+        mesh_config = _with_service(
+            mesh_config,
+            "Transcription",
+            mesh_policy(share=True, prefer="network", fallback="local"),
+        )
+        registry = PeerRegistry(mesh_config)
+        for peer_id, constraints in (
+            (
+                "exact-only",
+                _speech_constraints(exact_languages=["en", "de"], supports_auto_detect=False),
+            ),
+            (
+                "partial-auto",
+                _speech_constraints(
+                    exact_languages=["en", "de", "fr"],
+                    supports_auto_detect=True,
+                    auto_detect_languages=["en", "de"],
+                ),
+            ),
+            (
+                "ready-auto",
+                _speech_constraints(
+                    exact_languages=["en", "de", "fr"],
+                    supports_auto_detect=True,
+                    auto_detect_languages=["en", "de", "fr"],
+                ),
+            ),
+        ):
+            await registry.register_peer(peer_id)
+            await registry.update_manifest(
+                peer_id,
+                _verified_manifest(
+                    peer_id,
+                    [
+                        _make_service(
+                            module="Transcription",
+                            method_topic=TranscriptionMethods.TRANSCRIBE,
+                            speech_constraints=constraints,
+                        )
+                    ],
+                ),
+            )
+            await registry.apply_provider_lease(_lease(peer_id=peer_id), now_ms=1000)
+
+        request_constraints = SpeechRouteConstraints(
+            topic=TranscriptionMethods.TRANSCRIBE,
+            language_requirement=SpeechLanguageRequirement(
+                mode="auto", auto_language_candidates=["en", "fr"]
+            ),
+        )
+        candidates = registry.get_provider_candidates(
+            "Transcription",
+            topic=TranscriptionMethods.TRANSCRIBE,
+            speech_constraints=request_constraints,
+        )
+
+        reason_codes = {candidate.peer.peer_id: candidate.reason_code for candidate in candidates}
+        assert reason_codes == {
+            "exact-only": "language_incompatible",
+            "partial-auto": "language_incompatible",
+            "ready-auto": "eligible",
+        }
+
+    @pytest.mark.asyncio
+    async def test_speech_eligible_decision_surfaces_binding_metadata(self, registry):
+        await registry.register_peer("peer-a")
+        method_constraints = _speech_constraints(exact_languages=["en", "de"], revision=42)
+        await registry.update_manifest(
+            "peer-a",
+            _verified_manifest(
+                "peer-a",
+                [
+                    _make_service(
+                        method_topic=TTSMethods.SYNTHESIZE,
+                        speech_constraints=method_constraints,
+                    )
+                ],
+            ),
+        )
+        await registry.apply_provider_lease(_lease(peer_id="peer-a"), now_ms=1000)
+        requirement = SpeechLanguageRequirement(mode="exact", language="de")
+
+        candidates = registry.get_provider_candidates(
+            "TTS",
+            topic=TTSMethods.SYNTHESIZE,
+            speech_constraints=SpeechRouteConstraints(
+                topic=TTSMethods.SYNTHESIZE,
+                language_requirement=requirement,
+            ),
+        )
+
+        decision = candidates[0].decision
+        assert candidates[0].eligible is True
+        assert decision.speech_capability_revision == 42
+        assert decision.resident_model_identity_digest == "a" * 64
+        assert decision.speech_requirement_digest != requirement.digest
+        assert decision.provider_lease_epoch == "epoch-1"
+        assert decision.provider_lease_revision == 1
+        assert decision.service_instance_id == "remote:peer-a:TTS"
 
     @pytest.mark.parametrize(
         ("allowed_peers", "expected_reasons"),

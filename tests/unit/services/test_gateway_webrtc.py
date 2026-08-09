@@ -12,6 +12,7 @@ from app.services.gateway.webrtc.rtc_client import RTCClient
 def mock_bus():
     bus = MagicMock()
     bus.request = AsyncMock()
+    bus.subscribe_event = AsyncMock()
     return bus
 
 

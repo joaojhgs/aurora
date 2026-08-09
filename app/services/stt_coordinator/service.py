@@ -19,7 +19,7 @@ import os
 import re
 import threading
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -47,11 +47,17 @@ from app.messaging import (
 )
 from app.messaging.priority_helpers import get_interactive_priority, get_system_priority
 from app.shared.config.interface import ConfigAPI
-from app.shared.config.models import AmbientTranscription, AudioInput, Coordinator
+from app.shared.config.models import AmbientTranscription, AudioInput, Coordinator, System
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.stt import (
     STTAudioChunk,
     STTAudioLevel,
+    STTCapturePrepareRequest,
+    STTCapturePrepareResponse,
+    STTCaptureReleaseRequest,
+    STTCaptureReleaseResponse,
+    STTCaptureStatusRequest,
+    STTCaptureStatusResponse,
     STTCoordinatorControl,
     STTListenRequest,
     STTListenResponse,
@@ -70,6 +76,7 @@ from app.shared.messaging.models.stt_coordinator_models import (
     STTUserSpeechCaptured,
 )
 from app.shared.services.base_service import BaseService
+from app.shared.speech_language_policy import resolve_speech_language_policy
 
 config_api = ConfigAPI()
 
@@ -85,6 +92,12 @@ def _transcript_word_key(word: str) -> str:
 def _transcript_words(text: str) -> list[str]:
     """Split transcript text into display-preserving word tokens."""
     return _TRANSCRIPT_WORD_RE.findall(" ".join(text.split()))
+
+
+def _transcript_log_metadata(text: str, confidence: float | None) -> str:
+    """Return bounded non-content metadata for private transcript text."""
+    confidence_part = "unknown" if confidence is None else f"{confidence:.3f}"
+    return f"text_chars={len(text)} confidence={confidence_part}"
 
 
 def merge_transcript_text(previous: str, incoming: str, *, append_on_miss: bool) -> str:
@@ -212,6 +225,14 @@ class STTCoordinatorService(BaseService):
         self._capturing = False
         self._paused = False
         self._running = False  # Service running state
+        self._capture_owner: str = "none"
+        self._capture_generation = 0
+        self._capture_lease_id: str | None = None
+        self._capture_owner_id: str | None = None
+        self._capture_lease_expires_at: datetime | None = None
+        self._capture_lease_expiry_task: asyncio.Task | None = None
+        self._last_released_capture_lease: tuple[str, int, str] | None = None
+        self._capture_owner_lock = asyncio.Lock()
 
         # Audio configuration
         self._sample_rate = 16000
@@ -239,6 +260,7 @@ class STTCoordinatorService(BaseService):
         self._ambient_transcription_enabled = False
         self._tts_playing = False
         self._tts_interrupted_for_session = False
+        self._language_policy = resolve_speech_language_policy("en", "auto")
 
         # Timeout task
         self._timeout_task: asyncio.Task | None = None
@@ -280,15 +302,15 @@ class STTCoordinatorService(BaseService):
             )
 
         # Subscribe to wake word detection events
-        self.bus.subscribe(WakeWordMethods.DETECTED, self._on_wake_word_detected)
+        await self.bus.subscribe_event(WakeWordMethods.DETECTED, self._on_wake_word_detected)
 
         # Subscribe to transcription result events
-        self.bus.subscribe(TranscriptionMethods.RESULT, self._on_transcription_result)
-        self.bus.subscribe(TTSMethods.STARTED, self._on_tts_lifecycle_event)
-        self.bus.subscribe(TTSMethods.STOPPED, self._on_tts_lifecycle_event)
-        self.bus.subscribe(TTSMethods.PAUSED, self._on_tts_lifecycle_event)
-        self.bus.subscribe(TTSMethods.RESUMED, self._on_tts_lifecycle_event)
-        self.bus.subscribe(TTSMethods.ERROR, self._on_tts_lifecycle_event)
+        await self.bus.subscribe_event(TranscriptionMethods.RESULT, self._on_transcription_result)
+        await self.bus.subscribe_event(TTSMethods.STARTED, self._on_tts_lifecycle_event)
+        await self.bus.subscribe_event(TTSMethods.STOPPED, self._on_tts_lifecycle_event)
+        await self.bus.subscribe_event(TTSMethods.PAUSED, self._on_tts_lifecycle_event)
+        await self.bus.subscribe_event(TTSMethods.RESUMED, self._on_tts_lifecycle_event)
+        await self.bus.subscribe_event(TTSMethods.ERROR, self._on_tts_lifecycle_event)
 
         if not self._ambient_transcription_enabled:
             try:
@@ -332,6 +354,12 @@ class STTCoordinatorService(BaseService):
         # Stop audio capture if active
         if self._capturing:
             await self._stop_audio_capture()
+        lease_task_to_drain = None
+        async with self._capture_owner_lock:
+            if self._capture_owner == "native":
+                lease_task_to_drain = self._clear_native_capture_owner_locked()
+                self._capture_generation += 1
+        await self._drain_cancelled_capture_lease_task(lease_task_to_drain)
 
         # Cancel any pending timeout
         if self._timeout_task and not self._timeout_task.done():
@@ -357,6 +385,11 @@ class STTCoordinatorService(BaseService):
             config_section: The configuration section that changed (None = full reload)
         """
         log_info(f"Reloading STT coordinator configuration (section: {config_section})")
+
+        if config_section == "system":
+            self._language_policy = await self._read_language_policy()
+            log_info("STT coordinator language policy reloaded")
+            return
 
         # If STT or audio config changed, reload
         if (
@@ -385,6 +418,7 @@ class STTCoordinatorService(BaseService):
     async def _load_config(self) -> None:
         """Load configuration from configuration service."""
         coord_config = await config_api.aget(ConfigKeys.services.stt.coordinator, Coordinator)
+        self._language_policy = await self._read_language_policy()
 
         # Audio configuration
         audio_input = coord_config.audio_input or AudioInput()
@@ -417,6 +451,17 @@ class STTCoordinatorService(BaseService):
         ambient = coord_config.ambient_transcription or AmbientTranscription()
         self._ambient_transcription_enabled = (
             ambient.enable if ambient.enable is not None else False
+        )
+
+    async def _read_language_policy(self):
+        """Read canonical speech language policy without mutating other coordinator state."""
+
+        system_config = await config_api.aget(ConfigKeys.system, System)
+        if not isinstance(system_config, System):
+            system_config = System()
+        return resolve_speech_language_policy(
+            system_config.primary_language,
+            system_config.voice_language,
         )
 
     def _initialize_pyaudio(self) -> None:
@@ -504,6 +549,10 @@ class STTCoordinatorService(BaseService):
             log_warning("Audio capture already active")
             return
 
+        if self._capture_owner == "native":
+            log_warning("Audio capture start skipped: native runtime owns the microphone")
+            return
+
         if not self._audio_input_available or self._pyaudio is None:
             log_warning("Audio capture skipped: no PyAudio input device")
             return
@@ -530,6 +579,9 @@ class STTCoordinatorService(BaseService):
 
             self._capturing = True
             self._paused = False
+            self._capture_owner = "python"
+            self._capture_lease_id = None
+            self._capture_owner_id = None
 
             # Create audio format descriptor
             audio_format = AudioFormat(
@@ -562,6 +614,8 @@ class STTCoordinatorService(BaseService):
         except Exception as e:
             log_error(f"Failed to start audio capture: {e}", exc_info=True)
             self._capturing = False
+            if self._capture_owner == "python":
+                self._capture_owner = "none"
             self._capture_thread = None
             if self._stream is not None:
                 with contextlib.suppress(Exception):
@@ -588,25 +642,40 @@ class STTCoordinatorService(BaseService):
         Args:
             reason: Reason for stopping
         """
-        if not self._capturing:
+        capture_thread_alive = bool(self._capture_thread and self._capture_thread.is_alive())
+        if not self._capturing and not capture_thread_alive and self._stream is None:
             return
 
         log_info(f"Stopping audio capture (reason: {reason})...")
 
         self._capturing = False
 
-        # Wait for capture thread to finish
-        if self._capture_thread and self._capture_thread.is_alive():
-            self._capture_thread.join(timeout=5.0)
-
-        # Close PyAudio stream
+        # Stop the stream before joining so a blocking read can return.
         if self._stream:
             try:
-                self._stream.stop_stream()
-                self._stream.close()
+                await asyncio.to_thread(self._stream.stop_stream)
+            except Exception as e:
+                log_error(f"Error stopping audio stream: {e}")
+                self._capturing = True
+                raise RuntimeError("audio_stream_stop_failed") from e
+
+        if self._capture_thread and self._capture_thread.is_alive():
+            await asyncio.to_thread(self._capture_thread.join, 5.0)
+            if self._capture_thread.is_alive():
+                self._capturing = True
+                raise RuntimeError("audio_capture_thread_still_alive")
+        self._capture_thread = None
+
+        if self._stream:
+            try:
+                await asyncio.to_thread(self._stream.close)
             except Exception as e:
                 log_error(f"Error closing audio stream: {e}")
+                self._capturing = True
+                raise RuntimeError("audio_stream_close_failed") from e
             self._stream = None
+        if self._capture_owner == "python":
+            self._capture_owner = "none"
 
         # Calculate total duration
         total_duration_ms = 0.0
@@ -792,19 +861,24 @@ class STTCoordinatorService(BaseService):
         Args:
             envelope: Message envelope containing WakeWordDetected
         """
-        wake_word_event = envelope.payload
-        wake_word = wake_word_event.wake_word
-
-        log_info(f"Wake word detected: '{wake_word}'")
-
-        # Only start new session if in IDLE state
-        async with self._state_lock:
-            if self._state != STTState.IDLE:
-                log_debug(f"Ignoring wake word (state: {self._state.value})")
+        async with self._capture_owner_lock:
+            if self._capture_owner == "native":
+                log_debug("Ignoring wake word while native capture owns the microphone")
                 return
 
-        # Start new listening session
-        await self._start_session(wake_word)
+            wake_word_event = envelope.payload
+            wake_word = wake_word_event.wake_word
+
+            log_info(f"Wake word detected: '{wake_word}'")
+
+            # Only start new session if in IDLE state
+            async with self._state_lock:
+                if self._state != STTState.IDLE:
+                    log_debug(f"Ignoring wake word (state: {self._state.value})")
+                    return
+
+            # Start new listening session
+            await self._start_session(wake_word)
 
     async def _start_session(self, wake_word: str, session_id: str | None = None) -> None:
         """Start a new STT listening session.
@@ -863,6 +937,14 @@ class STTCoordinatorService(BaseService):
 
         # Enable transcription (unpause if paused)
         try:
+            await self.bus.publish(
+                TranscriptionMethods.CONTROL,
+                TranscriptionControl(
+                    action="set_language",
+                    language=self._language_policy.stt_language,
+                ),
+                event=False,
+            )
             await self.bus.publish(
                 TranscriptionMethods.CONTROL, TranscriptionControl(action="resume"), event=False
             )
@@ -950,87 +1032,98 @@ class STTCoordinatorService(BaseService):
         Args:
             envelope: Message envelope containing TranscriptionResult
         """
-        result: TranscriptionResult = envelope.payload
-        text = result.text.strip()
+        async with self._capture_owner_lock:
+            if self._capture_owner == "native":
+                log_debug("Ignoring transcription while native capture owns the microphone")
+                return
 
-        if not text:
-            log_debug("Empty transcription, ignoring")
-            return
+            result: TranscriptionResult = envelope.payload
+            text = result.text.strip()
 
-        if result.transcription_type in {TranscriptionType.REALTIME, TranscriptionType.PARTIAL}:
+            if not text:
+                log_debug("Empty transcription, ignoring")
+                return
+
+            if result.transcription_type in {TranscriptionType.REALTIME, TranscriptionType.PARTIAL}:
+                async with self._state_lock:
+                    should_refresh_timeout = self._state == STTState.LISTENING
+                if should_refresh_timeout:
+                    self._restart_timeout_timer()
+                self._partial_transcription_preview = merge_transcript_text(
+                    self._partial_transcription_preview,
+                    text,
+                    append_on_miss=False,
+                )
+                await self.bus.publish(
+                    STTMethods.PARTIAL,
+                    STTUserSpeechCaptured(
+                        session_id=self._current_session_id or result.stream_id or "unknown",
+                        text=self._partial_transcription_preview,
+                        confidence=result.confidence,
+                        is_final=False,
+                    ),
+                    event=True,
+                    mesh=False,
+                    origin="internal",
+                    priority=get_interactive_priority(),
+                )
+                return
+
             async with self._state_lock:
-                should_refresh_timeout = self._state == STTState.LISTENING
-            if should_refresh_timeout:
-                self._restart_timeout_timer()
-            self._partial_transcription_preview = merge_transcript_text(
-                self._partial_transcription_preview,
+                if self._state not in {STTState.LISTENING, STTState.PROCESSING}:
+                    log_debug(f"Ignoring transcription (state: {self._state.value})")
+                    return
+
+            base_transcription = (
+                self._accumulated_transcription or self._partial_transcription_preview
+            )
+            final_text = merge_transcript_text(
+                base_transcription,
                 text,
-                append_on_miss=False,
+                append_on_miss=bool(self._accumulated_transcription),
+            )
+
+            log_info(
+                f"Transcription captured: {_transcript_log_metadata(final_text, result.confidence)}"
+            )
+
+            # Cancel timeout
+            if self._timeout_task and not self._timeout_task.done():
+                self._timeout_task.cancel()
+
+            self._accumulated_transcription = final_text
+            self._partial_transcription_preview = final_text
+
+            # Transition to PROCESSING state
+            await self._transition_to(STTState.PROCESSING)
+
+            # Emit user speech captured event
+            speech_event = STTUserSpeechCaptured(
+                session_id=self._current_session_id or "unknown",
+                text=final_text,
+                confidence=result.confidence,
+                is_final=True,
+            )
+
+            log_debug(
+                f"Publishing STTUserSpeechCaptured to topic: {STTMethods.USER_SPEECH_CAPTURED}"
             )
             await self.bus.publish(
-                STTMethods.PARTIAL,
-                STTUserSpeechCaptured(
-                    session_id=self._current_session_id or result.stream_id or "unknown",
-                    text=self._partial_transcription_preview,
-                    confidence=result.confidence,
-                    is_final=False,
-                ),
+                STTMethods.USER_SPEECH_CAPTURED,
+                speech_event,
                 event=True,
                 mesh=False,
                 origin="internal",
-                priority=get_interactive_priority(),
             )
-            return
 
-        async with self._state_lock:
-            if self._state not in {STTState.LISTENING, STTState.PROCESSING}:
-                log_debug(f"Ignoring transcription (state: {self._state.value})")
-                return
-
-        base_transcription = self._accumulated_transcription or self._partial_transcription_preview
-        final_text = merge_transcript_text(
-            base_transcription,
-            text,
-            append_on_miss=bool(self._accumulated_transcription),
-        )
-
-        log_info(f"Transcription captured: '{final_text}'")
-
-        # Cancel timeout
-        if self._timeout_task and not self._timeout_task.done():
-            self._timeout_task.cancel()
-
-        self._accumulated_transcription = final_text
-        self._partial_transcription_preview = final_text
-
-        # Transition to PROCESSING state
-        await self._transition_to(STTState.PROCESSING)
-
-        # Emit user speech captured event
-        speech_event = STTUserSpeechCaptured(
-            session_id=self._current_session_id or "unknown",
-            text=final_text,
-            confidence=result.confidence,
-            is_final=True,
-        )
-
-        log_debug(f"Publishing STTUserSpeechCaptured to topic: {STTMethods.USER_SPEECH_CAPTURED}")
-        await self.bus.publish(
-            STTMethods.USER_SPEECH_CAPTURED,
-            speech_event,
-            event=True,
-            mesh=False,
-            origin="internal",
-        )
-
-        # Check if we should continue listening (multi-turn)
-        if self._multi_turn_enabled:
-            log_debug("Multi-turn enabled, continuing to listen...")
-            await self._transition_to(STTState.LISTENING)
-            self._restart_timeout_timer()
-        else:
-            # Single turn - end session
-            await self._end_session("complete")
+            # Check if we should continue listening (multi-turn)
+            if self._multi_turn_enabled:
+                log_debug("Multi-turn enabled, continuing to listen...")
+                await self._transition_to(STTState.LISTENING)
+                self._restart_timeout_timer()
+            else:
+                # Single turn - end session
+                await self._end_session("complete")
 
     async def _end_session(self, reason: str) -> None:
         """End the current STT session.
@@ -1114,33 +1207,44 @@ class STTCoordinatorService(BaseService):
         """Handle listen command idempotently for UI push-to-talk and wakeword races."""
         log_info(f"Received listen request (session_id={request.session_id})")
 
-        async with self._state_lock:
-            state = self._state
-            current_session_id = self._current_session_id
-        if state == STTState.IDLE:
-            session_id = request.session_id
-            await self._start_session("manual", session_id=session_id)
+        async with self._capture_owner_lock:
+            if self._capture_owner == "native":
+                return STTListenResponse(
+                    success=False,
+                    status="unavailable",
+                    session_id=request.session_id,
+                    current_state=self._state.value,
+                    source="push_to_talk",
+                    message="native_capture_active",
+                )
+
+            async with self._state_lock:
+                state = self._state
+                current_session_id = self._current_session_id
+            if state == STTState.IDLE:
+                session_id = request.session_id
+                await self._start_session("manual", session_id=session_id)
+                return STTListenResponse(
+                    success=True,
+                    status="listening",
+                    session_id=session_id or self._current_session_id,
+                    current_state=STTState.LISTENING.value,
+                    source="push_to_talk",
+                    message="listening_started",
+                )
+
+            log_info(
+                "Listen request joined active STT session "
+                f"(state={state.value}, session_id={current_session_id})"
+            )
             return STTListenResponse(
                 success=True,
-                status="listening",
-                session_id=session_id or self._current_session_id,
-                current_state=STTState.LISTENING.value,
-                source="push_to_talk",
-                message="listening_started",
+                status="listening" if state == STTState.LISTENING else state.value,
+                session_id=current_session_id or request.session_id,
+                current_state=state.value,
+                source="sdk",
+                message="already_listening",
             )
-
-        log_info(
-            "Listen request joined active STT session "
-            f"(state={state.value}, session_id={current_session_id})"
-        )
-        return STTListenResponse(
-            success=True,
-            status="listening" if state == STTState.LISTENING else state.value,
-            session_id=current_session_id or request.session_id,
-            current_state=state.value,
-            source="sdk",
-            message="already_listening",
-        )
 
     @method_contract(
         method_id=STTMethods.STOP_LISTENING,
@@ -1179,6 +1283,345 @@ class STTCoordinatorService(BaseService):
 
         return EmptyOutput()
 
+    def _can_restart_python_capture(self) -> bool:
+        """Return whether Python capture may be restarted after native release."""
+        return bool(
+            self._running
+            and self._audio_input_available
+            and self._pyaudio is not None
+            and self._capture_owner != "native"
+        )
+
+    def _schedule_native_capture_lease_expiry_locked(
+        self,
+        *,
+        lease_id: str,
+        generation: int,
+        owner_id: str,
+        ttl_s: int,
+    ) -> asyncio.Task | None:
+        """Schedule or renew native capture lease expiry while owner lock is held."""
+        task_to_drain = None
+        current_task = asyncio.current_task()
+        if (
+            self._capture_lease_expiry_task
+            and self._capture_lease_expiry_task is not current_task
+            and not self._capture_lease_expiry_task.done()
+        ):
+            self._capture_lease_expiry_task.cancel()
+            task_to_drain = self._capture_lease_expiry_task
+
+        self._capture_lease_expires_at = datetime.utcnow() + timedelta(seconds=ttl_s)
+        self._capture_lease_expiry_task = asyncio.create_task(
+            self._native_capture_lease_expiry(
+                lease_id,
+                generation,
+                owner_id,
+                ttl_s,
+            )
+        )
+        return task_to_drain
+
+    async def _drain_cancelled_capture_lease_task(self, task: asyncio.Task | None) -> None:
+        """Drain a canceled lease-expiry task after releasing the owner lock."""
+        if task is None or task is asyncio.current_task():
+            return
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    async def _quiesce_python_voice_for_native_prepare_locked(self) -> None:
+        """End active Python listening work before granting native microphone ownership."""
+        if self._current_session_id:
+            await self._end_session("manual")
+        else:
+            if self._timeout_task and not self._timeout_task.done():
+                self._timeout_task.cancel()
+            self._timeout_task = None
+            self._accumulated_transcription = ""
+            self._partial_transcription_preview = ""
+
+            async with self._state_lock:
+                needs_idle = self._state != STTState.IDLE
+            if needs_idle:
+                await self._transition_to(STTState.IDLE)
+
+        try:
+            await self.bus.publish(
+                TranscriptionMethods.CONTROL,
+                TranscriptionControl(action="pause"),
+                event=False,
+            )
+        except Exception as e:
+            log_warning(f"Failed to pause transcription for native capture: {e}")
+
+    def _clear_native_capture_owner_locked(self) -> asyncio.Task | None:
+        """Clear native capture lease state while the owner lock is held."""
+        self._capture_owner = "none"
+        self._capture_owner_id = None
+        self._capture_lease_id = None
+        self._capture_lease_expires_at = None
+        task_to_drain = None
+        current_task = asyncio.current_task()
+        if (
+            self._capture_lease_expiry_task
+            and self._capture_lease_expiry_task is not current_task
+            and not self._capture_lease_expiry_task.done()
+        ):
+            self._capture_lease_expiry_task.cancel()
+            task_to_drain = self._capture_lease_expiry_task
+        if self._capture_lease_expiry_task is not current_task:
+            self._capture_lease_expiry_task = None
+        return task_to_drain
+
+    async def _restart_python_capture_after_native_release_locked(self) -> bool:
+        """Restart Python capture after native release without leaking failures."""
+        if not self._can_restart_python_capture():
+            return False
+        try:
+            await self._start_audio_capture()
+        except Exception:
+            log_error("Failed to restart Python capture after native release", exc_info=True)
+            self._capture_owner = "none"
+            self._capturing = False
+            return False
+        return self._capturing and self._capture_owner == "python"
+
+    async def _native_capture_lease_expiry(
+        self,
+        lease_id: str,
+        generation: int,
+        owner_id: str,
+        ttl_s: int,
+    ) -> None:
+        """Expire stale native microphone ownership and restore Python when allowed."""
+        try:
+            await asyncio.sleep(ttl_s)
+            async with self._capture_owner_lock:
+                if (
+                    self._capture_owner != "native"
+                    or self._capture_lease_id != lease_id
+                    or self._capture_generation != generation
+                    or self._capture_owner_id != owner_id
+                ):
+                    return
+                self._last_released_capture_lease = (lease_id, generation, owner_id)
+                self._clear_native_capture_owner_locked()
+                self._capture_generation += 1
+                await self._restart_python_capture_after_native_release_locked()
+                if self._capture_lease_expiry_task is asyncio.current_task():
+                    self._capture_lease_expiry_task = None
+        except asyncio.CancelledError:
+            pass
+
+    def _capture_status_response(self) -> STTCaptureStatusResponse:
+        """Build redacted capture-owner status without device details."""
+        return STTCaptureStatusResponse(
+            owner=self._capture_owner,  # type: ignore[arg-type]
+            generation=self._capture_generation,
+            native_lease_active=self._capture_owner == "native",
+            lease_expires_at=self._capture_lease_expires_at.isoformat()
+            if self._capture_lease_expires_at and self._capture_owner == "native"
+            else None,
+            python_capture_active=self._capturing and self._capture_owner == "python",
+            service_running=self._running,
+            audio_input_available=self._audio_input_available,
+            can_restart_python_capture=self._can_restart_python_capture(),
+        )
+
+    @method_contract(
+        method_id=STTMethods.CAPTURE_PREPARE,
+        summary="Prepare native microphone ownership",
+        input_model=STTCapturePrepareRequest,
+        output_model=STTCapturePrepareResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["STTCoordinator.manage"],
+        callable_feature_ids=["listening_session_control"],
+    )
+    async def _on_capture_prepare(
+        self, request: STTCapturePrepareRequest
+    ) -> STTCapturePrepareResponse:
+        """Stop Python capture and grant a generation-bound native microphone lease."""
+        lease_task_to_drain = None
+        async with self._capture_owner_lock:
+            if self._capture_owner == "native":
+                if (
+                    self._capture_owner_id == request.owner_id
+                    and self._capture_lease_id
+                    and request.lease_id == self._capture_lease_id
+                ):
+                    lease_task_to_drain = self._schedule_native_capture_lease_expiry_locked(
+                        lease_id=self._capture_lease_id,
+                        generation=self._capture_generation,
+                        owner_id=request.owner_id,
+                        ttl_s=request.requested_ttl_s,
+                    )
+                    response = STTCapturePrepareResponse(
+                        granted=True,
+                        status="already_owned",
+                        lease_id=self._capture_lease_id,
+                        generation=self._capture_generation,
+                        owner="native",
+                        python_capture_active=False,
+                        message="already_owned",
+                    )
+                else:
+                    response = STTCapturePrepareResponse(
+                        granted=False,
+                        status="unavailable",
+                        generation=self._capture_generation,
+                        owner="native",
+                        python_capture_active=False,
+                        message="capture_owned",
+                    )
+            else:
+                stopped_python_capture = False
+                if self._capturing:
+                    try:
+                        await self._stop_audio_capture("native_handoff_prepare")
+                    except Exception:
+                        log_error(
+                            "Failed to stop Python capture before native handoff",
+                            exc_info=True,
+                        )
+                        return STTCapturePrepareResponse(
+                            granted=False,
+                            status="unavailable",
+                            generation=self._capture_generation,
+                            owner="python",
+                            python_capture_active=self._capturing,
+                            stopped_python_capture=False,
+                            message="python_release_failed",
+                        )
+                    stopped_python_capture = True
+
+                if self._capturing or self._stream is not None:
+                    return STTCapturePrepareResponse(
+                        granted=False,
+                        status="unavailable",
+                        generation=self._capture_generation,
+                        owner="python",
+                        python_capture_active=self._capturing,
+                        stopped_python_capture=stopped_python_capture,
+                        message="python_capture_active",
+                    )
+
+                await self._quiesce_python_voice_for_native_prepare_locked()
+
+                self._capture_generation += 1
+                self._capture_owner = "native"
+                self._capture_owner_id = request.owner_id
+                self._capture_lease_id = request.lease_id or str(uuid.uuid4())
+                self._last_released_capture_lease = None
+                lease_task_to_drain = self._schedule_native_capture_lease_expiry_locked(
+                    lease_id=self._capture_lease_id,
+                    generation=self._capture_generation,
+                    owner_id=request.owner_id,
+                    ttl_s=request.requested_ttl_s,
+                )
+                response = STTCapturePrepareResponse(
+                    granted=True,
+                    status="granted",
+                    lease_id=self._capture_lease_id,
+                    generation=self._capture_generation,
+                    owner="native",
+                    python_capture_active=False,
+                    stopped_python_capture=stopped_python_capture,
+                    message="granted",
+                )
+        await self._drain_cancelled_capture_lease_task(lease_task_to_drain)
+        return response
+
+    @method_contract(
+        method_id=STTMethods.CAPTURE_RELEASE,
+        summary="Release native microphone ownership",
+        input_model=STTCaptureReleaseRequest,
+        output_model=STTCaptureReleaseResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["STTCoordinator.manage"],
+        callable_feature_ids=["listening_session_control"],
+    )
+    async def _on_capture_release(
+        self, request: STTCaptureReleaseRequest
+    ) -> STTCaptureReleaseResponse:
+        """Release a native lease and restart Python capture only when allowed."""
+        lease_task_to_drain = None
+        async with self._capture_owner_lock:
+            release_identity = (request.lease_id, request.generation, request.owner_id)
+            if (
+                self._capture_owner != "native"
+                and self._last_released_capture_lease == release_identity
+            ):
+                return STTCaptureReleaseResponse(
+                    released=True,
+                    status="already_released",
+                    generation=self._capture_generation,
+                    owner=self._capture_owner,  # type: ignore[arg-type]
+                    python_capture_active=self._capturing,
+                    restarted_python_capture=False,
+                    message="already_released",
+                )
+
+            if (
+                self._capture_owner != "native"
+                or self._capture_lease_id != request.lease_id
+                or self._capture_generation != request.generation
+                or self._capture_owner_id != request.owner_id
+            ):
+                return STTCaptureReleaseResponse(
+                    released=False,
+                    status="rejected",
+                    generation=self._capture_generation,
+                    owner=self._capture_owner,  # type: ignore[arg-type]
+                    python_capture_active=self._capturing,
+                    message="stale_or_foreign_lease",
+                )
+
+            lease_task_to_drain = self._clear_native_capture_owner_locked()
+            self._capture_generation += 1
+            self._last_released_capture_lease = release_identity
+
+            restarted = (
+                await self._restart_python_capture_after_native_release_locked()
+                if request.restart_python_capture
+                else False
+            )
+
+            if request.restart_python_capture and not restarted:
+                status = "python_unavailable"
+            else:
+                status = "released"
+            response = STTCaptureReleaseResponse(
+                released=True,
+                status=status,  # type: ignore[arg-type]
+                generation=self._capture_generation,
+                owner=self._capture_owner,  # type: ignore[arg-type]
+                python_capture_active=self._capturing and self._capture_owner == "python",
+                restarted_python_capture=restarted,
+                message=status,
+            )
+        await self._drain_cancelled_capture_lease_task(lease_task_to_drain)
+        return response
+
+    @method_contract(
+        method_id=STTMethods.CAPTURE_STATUS,
+        summary="Get redacted microphone ownership status",
+        input_model=STTCaptureStatusRequest,
+        output_model=STTCaptureStatusResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["STTCoordinator.manage"],
+        callable_feature_ids=["listening_session_control"],
+    )
+    async def _on_capture_status(
+        self, request: STTCaptureStatusRequest
+    ) -> STTCaptureStatusResponse:
+        """Return redacted capture ownership state for native handoff clients."""
+        del request
+        async with self._capture_owner_lock:
+            return self._capture_status_response()
+
     @method_contract(
         method_id=STTMethods.AUDIO,
         summary="Process raw audio chunk",
@@ -1210,10 +1653,14 @@ class STTCoordinatorService(BaseService):
         log_info(f"Control command: {action}")
 
         if action == "start_session":
-            if self._state == STTState.IDLE:
-                await self._start_session("manual")
-            else:
-                log_warning(f"Cannot start session in state: {self._state.value}")
+            async with self._capture_owner_lock:
+                if self._capture_owner == "native":
+                    log_debug("Ignoring start_session while native capture owns the microphone")
+                    return EmptyOutput()
+                if self._state == STTState.IDLE:
+                    await self._start_session("manual")
+                else:
+                    log_warning(f"Cannot start session in state: {self._state.value}")
 
         elif action == "end_session":
             if self._current_session_id:

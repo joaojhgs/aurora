@@ -24,9 +24,16 @@ from app.services.gateway.mesh.provider_export import (
     RecipientEvidence,
 )
 from app.shared.contracts.models.gateway import MethodInfo
+from app.shared.contracts.models.speech import SpeechMethodConstraints
 
 
 def _service() -> PeerServiceInfo:
+    constraints = SpeechMethodConstraints(
+        exact_languages=["en"],
+        ready_voice_ids=["standard:test:voice-a"],
+        resident_model_identity_digest="1" * 64,
+        speech_capability_revision=5,
+    )
     service = PeerServiceInfo(
         module="TTS",
         version="1.0.0",
@@ -39,6 +46,7 @@ def _service() -> PeerServiceInfo:
                 exposure="both",
                 required_perms=["TTS.Speak"],
                 method_type="use",
+                speech_constraints=constraints,
                 input_model="Input",
                 output_model="Output",
                 input_schema={"title": "Input", "type": "object"},
@@ -262,7 +270,29 @@ def test_complete_projection_v1_evidence_is_verified() -> None:
 
     assert result.status == "verified"
     assert result.usable is True
+    assert result.manifest is not None
+    assert result.manifest.shared_services[0].methods[0].speech_constraints is not None
+    assert (
+        result.manifest.shared_services[0].methods[0].speech_constraints.speech_capability_revision
+        == 5
+    )
     assert parse_manifest(payload) is not None
+
+
+def test_projection_manifest_rejects_malformed_speech_constraints() -> None:
+    payload = _projection_manifest()
+    method = payload["shared_services"][0]["methods"][0]
+    method["speech_constraints"] = {
+        "exact_languages": ["pt-BR"],
+        "resident_model_identity_digest": "2" * 64,
+        "speech_capability_revision": 5,
+    }
+
+    result = parse_manifest_with_evidence(payload)
+
+    assert result.status == "invalid"
+    assert result.usable is False
+    assert parse_manifest(payload) is None
 
 
 def test_projection_missing_evidence_is_permissions_unknown_and_unusable() -> None:

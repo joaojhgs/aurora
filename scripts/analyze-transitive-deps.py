@@ -14,7 +14,6 @@ from pathlib import Path
 # Direct dependencies that are actually used
 USED_PACKAGES = {
     "faster-whisper",
-    "RealtimeSTT",
     "PyAudio",
     "openwakeword",
     "webrtcvad-wheels",

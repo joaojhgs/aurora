@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Response from tool execution.",
+  "properties": {
+    "args_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Args Hash"
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "data": {
+      "anyOf": [
+        {
+          "x-aurora-json-value": true
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Data"
+    },
+    "display_args_preview": {
+      "additionalProperties": {
+        "x-aurora-json-value": true
+      },
+      "title": "Display Args Preview",
+      "type": "object",
+      "x-aurora-extra-behavior": "preserve"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Code"
+    },
+    "global_tool_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Global Tool Id"
+    },
+    "ok": {
+      "title": "Ok",
+      "type": "boolean"
+    },
+    "policy_decision_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Policy Decision Id"
+    },
+    "provider_peer_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider Peer Id"
+    },
+    "status": {
+      "anyOf": [
+        {
+          "enum": [
+            "denied",
+            "dry_run",
+            "failed",
+            "not_found",
+            "success"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Status"
+    }
+  },
+  "required": [
+    "ok"
+  ],
+  "title": "ToolingExecuteToolResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

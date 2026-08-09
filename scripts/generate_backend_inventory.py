@@ -34,12 +34,40 @@ from app.shared.contracts.registry import (
 
 try:
     from scripts.sdk_zod_codegen import (
+        BOUNDED_NONBLANK_STRING_SET_MARKER,
         GENERATOR_FORMAT_VERSION,
         JSON_VALUE_MARKER,
+        LOGICAL_VOICE_ARRAY_NORMALIZE_MARKER,
         PROJECTION_IDENTITY_MARKER,
         PROJECTION_PAGE_TERMINATION_MARKER,
+        ROUTE_EXPLAIN_NO_RAW_PAYLOAD_MARKER,
+        ROUTE_EXPLAIN_SELECTOR_FIELDS_MARKER,
+        ROUTE_EXPLAIN_SPEECH_NO_RAW_PAYLOAD_MARKER,
+        SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER,
+        SPEECH_LANGUAGE_AUTO_NULL_MARKER,
+        SPEECH_LANGUAGE_REQUIREMENT_MARKER,
+        SPEECH_LANGUAGE_STRING_NORMALIZE_MARKER,
+        SPEECH_LOCALE_FALLBACK_MARKER,
+        SPEECH_METHOD_CONSTRAINTS_MARKER,
         STRING_NON_BLANK_MARKER,
         STRING_TRIMMED_MARKER,
+        STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
+        TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
+        TTS_CAPABILITIES_INVARIANT_MARKER,
+        TTS_CREATE_PROFILE_RESPONSE_INVARIANT_MARKER,
+        TTS_DELETE_PROFILE_REQUEST_INVARIANT_MARKER,
+        TTS_DELETE_PROFILE_RESPONSE_INVARIANT_MARKER,
+        TTS_GET_PROFILE_RESPONSE_INVARIANT_MARKER,
+        TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
+        TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
+        TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
+        TTS_OPERATION_ID_MARKER,
+        TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER,
+        TTS_PROFILE_LIST_INVARIANT_MARKER,
+        TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER,
+        TTS_UPDATE_PROFILE_PATCH_INVARIANT_MARKER,
+        TTS_VOICE_DESCRIPTOR_INVARIANT_MARKER,
+        TTS_VOICE_LIST_INVARIANT_MARKER,
         UNIQUE_STRING_ARRAY_NORMALIZE_MARKER,
         canonical_json,
         normalize_schema,
@@ -49,12 +77,40 @@ try:
     )
 except ModuleNotFoundError:  # pragma: no cover - direct script execution
     from sdk_zod_codegen import (
+        BOUNDED_NONBLANK_STRING_SET_MARKER,
         GENERATOR_FORMAT_VERSION,
         JSON_VALUE_MARKER,
+        LOGICAL_VOICE_ARRAY_NORMALIZE_MARKER,
         PROJECTION_IDENTITY_MARKER,
         PROJECTION_PAGE_TERMINATION_MARKER,
+        ROUTE_EXPLAIN_NO_RAW_PAYLOAD_MARKER,
+        ROUTE_EXPLAIN_SELECTOR_FIELDS_MARKER,
+        ROUTE_EXPLAIN_SPEECH_NO_RAW_PAYLOAD_MARKER,
+        SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER,
+        SPEECH_LANGUAGE_AUTO_NULL_MARKER,
+        SPEECH_LANGUAGE_REQUIREMENT_MARKER,
+        SPEECH_LANGUAGE_STRING_NORMALIZE_MARKER,
+        SPEECH_LOCALE_FALLBACK_MARKER,
+        SPEECH_METHOD_CONSTRAINTS_MARKER,
         STRING_NON_BLANK_MARKER,
         STRING_TRIMMED_MARKER,
+        STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
+        TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
+        TTS_CAPABILITIES_INVARIANT_MARKER,
+        TTS_CREATE_PROFILE_RESPONSE_INVARIANT_MARKER,
+        TTS_DELETE_PROFILE_REQUEST_INVARIANT_MARKER,
+        TTS_DELETE_PROFILE_RESPONSE_INVARIANT_MARKER,
+        TTS_GET_PROFILE_RESPONSE_INVARIANT_MARKER,
+        TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
+        TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
+        TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
+        TTS_OPERATION_ID_MARKER,
+        TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER,
+        TTS_PROFILE_LIST_INVARIANT_MARKER,
+        TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER,
+        TTS_UPDATE_PROFILE_PATCH_INVARIANT_MARKER,
+        TTS_VOICE_DESCRIPTOR_INVARIANT_MARKER,
+        TTS_VOICE_LIST_INVARIANT_MARKER,
         UNIQUE_STRING_ARRAY_NORMALIZE_MARKER,
         canonical_json,
         normalize_schema,
@@ -77,11 +133,45 @@ DEFAULT_SDK_TOOLING_PROVIDER_OUTPUT = (
     REPO_ROOT / "packages/aurora-sdk/src/generated/tooling-local-provider-v1.json"
 )
 
-SDK_CONTRACT_ALLOWLIST: tuple[str, ...] = (
+SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST: tuple[str, ...] = (
     "Tooling.GetTools",
     "Tooling.GetExportCatalog",
     "Tooling.PrepareExecution",
     "Tooling.ExecuteTool",
+)
+SDK_CONTRACT_ALLOWLIST: tuple[str, ...] = (
+    *SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST,
+    "Gateway.ExplainRoute",
+    "Orchestrator.ExternalUserInput",
+    "Orchestrator.Interrupt",
+    "TTS.GetCapabilities",
+    "TTS.ListVoices",
+    "TTS.ListVoiceProfiles",
+    "TTS.GetVoiceProfile",
+    "TTS.UpdateVoiceProfile",
+    "TTS.InstallVoiceProfile",
+    "TTS.RemoveVoiceProfile",
+    "TTS.SetDefaultVoice",
+    "TTS.VoiceImportStart",
+    "TTS.VoiceImportChunk",
+    "TTS.VoiceImportEnd",
+    "TTS.VoiceImportAbort",
+    "TTS.CreateVoiceProfile",
+    "TTS.DeleteVoiceProfile",
+    "TTS.Request",
+    "TTS.StreamStart",
+    "TTS.StreamChunk",
+    "TTS.StreamEnd",
+    "TTS.Synthesize",
+    "STTCoordinator.Listen",
+    "STTCoordinator.StopListening",
+    "STTCoordinator.CapturePrepare",
+    "STTCoordinator.CaptureRelease",
+    "STTCoordinator.CaptureStatus",
+    "WakeWord.ProcessAudio",
+    "WakeWord.Detect",
+    "Transcription.ProcessAudio",
+    "Transcription.Transcribe",
 )
 TOOLING_PROVIDER_PEER_ID = "aurora-sdk-local-provider-v1"
 TOOLING_PROVIDER_SERVICE_INSTANCE_ID = f"local:{quote(TOOLING_PROVIDER_PEER_ID, safe='')}:Tooling"
@@ -89,6 +179,12 @@ SDK_PROVIDER_REQUIRED_PERMISSION_OVERRIDES = {
     "Tooling.GetExportCatalog": "Tooling.GetTools",
     "Tooling.PrepareExecution": "Tooling.ExecuteTool",
 }
+SDK_EVENT_ALLOWLIST: tuple[str, ...] = (
+    "Orchestrator.Response",
+    "Orchestrator.Interrupted",
+    "TTS.AudioChunk",
+)
+SDK_ENVELOPE_ALLOWLIST: tuple[str, ...] = ("Aurora.EventStream",)
 
 SERVICE_CLASSES: tuple[tuple[str, str, str], ...] = (
     ("Config", "app.services.config.service", "ConfigService"),
@@ -378,6 +474,125 @@ def _assert_projection_identity(entry: ValidatorDiscovery, schema: dict[str, Any
         raise ValueError(f"{entry.error_context()}: missing {PROJECTION_IDENTITY_MARKER}")
 
 
+def _assert_model_marker(marker: str):
+    def verifier(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+        model_schema = _resolve_schema_pointer(schema, entry.model_pointer)
+        if not isinstance(model_schema, dict) or model_schema.get(marker) is not True:
+            raise ValueError(f"{entry.error_context()}: missing {marker}")
+
+    return verifier
+
+
+def _assert_field_pattern(pattern: str):
+    def verifier(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+        for field_schema in _validator_field_schemas(entry, schema):
+            if not any(
+                option.get("pattern") == pattern for option in _string_options(field_schema)
+            ):
+                raise ValueError(f"{entry.error_context()}: missing {pattern}")
+
+    return verifier
+
+
+def _assert_string_field_non_blank(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    for field_schema in _validator_field_schemas(entry, schema):
+        direct_marker = (
+            field_schema.get("type") == "string"
+            and field_schema.get(STRING_NON_BLANK_MARKER) is True
+        )
+        nested_marker = any(
+            option.get(STRING_NON_BLANK_MARKER) is True for option in _string_options(field_schema)
+        )
+        if not direct_marker and not nested_marker:
+            raise ValueError(f"{entry.error_context()}: missing {STRING_NON_BLANK_MARKER}")
+
+
+def _assert_sorted_unique_string_array(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    for field_schema in _validator_field_schemas(entry, schema):
+        if not any(
+            array_schema.get(UNIQUE_STRING_ARRAY_NORMALIZE_MARKER) is True
+            for array_schema in _array_schema_options(field_schema)
+        ):
+            raise ValueError(
+                f"{entry.error_context()}: missing {UNIQUE_STRING_ARRAY_NORMALIZE_MARKER}"
+            )
+
+
+def _assert_bounded_nonblank_string_set(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    for field_schema in _validator_field_schemas(entry, schema):
+        if not any(
+            array_schema.get(BOUNDED_NONBLANK_STRING_SET_MARKER) is True
+            for array_schema in _array_schema_options(field_schema)
+        ):
+            raise ValueError(
+                f"{entry.error_context()}: missing {BOUNDED_NONBLANK_STRING_SET_MARKER}"
+            )
+
+
+def _assert_speech_language_array(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    for field_schema in _validator_field_schemas(entry, schema):
+        if not any(
+            array_schema.get(SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER) is True
+            for array_schema in _array_schema_options(field_schema)
+        ):
+            raise ValueError(
+                f"{entry.error_context()}: missing {SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER}"
+            )
+
+
+def _assert_logical_voice_array(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    for field_schema in _validator_field_schemas(entry, schema):
+        if not any(
+            array_schema.get(LOGICAL_VOICE_ARRAY_NORMALIZE_MARKER) is True
+            for array_schema in _array_schema_options(field_schema)
+        ):
+            raise ValueError(
+                f"{entry.error_context()}: missing {LOGICAL_VOICE_ARRAY_NORMALIZE_MARKER}"
+            )
+
+
+def _assert_speech_language_string(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    for field_schema in _validator_field_schemas(entry, schema):
+        if field_schema.get(SPEECH_LANGUAGE_STRING_NORMALIZE_MARKER) is not True:
+            raise ValueError(
+                f"{entry.error_context()}: missing {SPEECH_LANGUAGE_STRING_NORMALIZE_MARKER}"
+            )
+
+
+def _assert_operation_id_marker(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    for field_schema in _validator_field_schemas(entry, schema):
+        if not any(
+            option.get(TTS_OPERATION_ID_MARKER) is True for option in _string_options(field_schema)
+        ):
+            raise ValueError(f"{entry.error_context()}: missing {TTS_OPERATION_ID_MARKER}")
+
+
+def _assert_named_model_invariant(marker: str):
+    def verifier(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+        model_schema = _resolve_schema_pointer(schema, entry.model_pointer)
+        if not isinstance(model_schema, dict) or model_schema.get(marker) is not True:
+            raise ValueError(f"{entry.error_context()}: missing {marker}")
+
+    return verifier
+
+
+def _assert_all(*verifiers: Any):
+    def verifier(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+        for assert_extension in verifiers:
+            assert_extension(entry, schema)
+
+    return verifier
+
+
+def _assert_language_field(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    for field_schema in _validator_field_schemas(entry, schema):
+        if (
+            field_schema.get(SPEECH_LANGUAGE_STRING_NORMALIZE_MARKER) is not True
+            and field_schema.get(SPEECH_LANGUAGE_AUTO_NULL_MARKER) is not True
+        ):
+            raise ValueError(f"{entry.error_context()}: missing speech language normalization")
+
+
 VALIDATOR_EXTENSION_VERIFIERS = {
     ("MeshAddressSelector", "_non_blank"): _assert_mesh_non_blank,
     ("ToolingToolInfo", "_bounded_unique_legacy_ids"): _assert_tooling_legacy_ids,
@@ -392,7 +607,200 @@ VALIDATOR_EXTENSION_VERIFIERS = {
     ("ToolingGetExportCatalogResponse", "_validate_projection_identity"): (
         _assert_projection_identity
     ),
+    ("RouteExplainRequest", "_reject_raw_payload_fields"): _assert_model_marker(
+        ROUTE_EXPLAIN_NO_RAW_PAYLOAD_MARKER
+    ),
+    ("RouteExplainRequest", "_reject_unknown_selector_fields"): _assert_model_marker(
+        ROUTE_EXPLAIN_SELECTOR_FIELDS_MARKER
+    ),
+    ("RouteExplainRequest", "_reject_raw_speech_payload_fields"): _assert_model_marker(
+        ROUTE_EXPLAIN_SPEECH_NO_RAW_PAYLOAD_MARKER
+    ),
+    ("SpeechLanguageRequirement", "_normalize_language"): _assert_speech_language_string,
+    ("SpeechLanguageRequirement", "_normalize_candidates"): _assert_speech_language_array,
+    ("SpeechLanguageRequirement", "_normalize_digest"): _assert_lowercase_digest,
+    ("SpeechLanguageRequirement", "_validate_shape_and_digest"): _assert_model_marker(
+        SPEECH_LANGUAGE_REQUIREMENT_MARKER
+    ),
+    ("SpeechLocaleFallback", "_normalize_language"): _assert_speech_language_string,
+    ("SpeechLocaleFallback", "_validate_declared_fallback"): _assert_model_marker(
+        SPEECH_LOCALE_FALLBACK_MARKER
+    ),
+    ("SpeechMethodConstraints", "_normalize_language_set"): _assert_speech_language_array,
+    ("SpeechMethodConstraints", "_normalize_voice_ids"): _assert_logical_voice_array,
+    ("SpeechMethodConstraints", "_normalize_locale_fallbacks"): _assert_model_marker(
+        SPEECH_METHOD_CONSTRAINTS_MARKER
+    ),
+    ("SpeechMethodConstraints", "_normalize_resident_digest"): _assert_lowercase_digest,
+    ("SpeechMethodConstraints", "_validate_constraints"): _assert_model_marker(
+        SPEECH_METHOD_CONSTRAINTS_MARKER
+    ),
+    ("SpeechRouteBinding", "_non_blank"): _assert_mesh_non_blank,
+    ("SpeechRouteBinding", "_normalize_digest"): _assert_lowercase_digest,
 }
+
+for _model, _validator in (
+    ("TTSRequest", "_normalize_language"),
+    ("TTSSynthesizeRequest", "_normalize_language"),
+    ("TTSStreamStartRequest", "_normalize_language"),
+    ("TTSListVoicesRequest", "_normalize_language"),
+    ("TTSCreateVoiceProfileRequest", "_normalize_language"),
+    ("TranscribeAudioRequest", "_normalize_language"),
+):
+    VALIDATOR_EXTENSION_VERIFIERS[(_model, _validator)] = _assert_language_field
+
+for _model, _validator in (
+    ("TTSResidentLanguagePack", "_normalize_languages"),
+    ("TTSCapabilities", "_normalize_languages"),
+    ("TranscribeAudioRequest", "_normalize_candidates"),
+):
+    VALIDATOR_EXTENSION_VERIFIERS[(_model, _validator)] = _assert_speech_language_array
+
+for _model, _validator in (
+    ("TTSCapabilities", "_nonblank_pack_ids"),
+    ("TTSVoiceDescriptor", "_normalize_language_pack_ids"),
+    ("TTSVoiceProfileDescriptor", "_normalize_language_pack_ids"),
+    ("TTSVoiceProfileDescriptor", "_normalize_peer_ids"),
+    ("TTSUpdateVoiceProfileRequest", "_normalize_peer_ids"),
+):
+    VALIDATOR_EXTENSION_VERIFIERS[(_model, _validator)] = _assert_bounded_nonblank_string_set
+
+for _model, _validator in (
+    ("TTSRequest", "_validate_voice_id"),
+    ("TTSSynthesizeRequest", "_validate_voice_id"),
+    ("TTSStreamStartRequest", "_validate_voice_id"),
+    ("TTSVoiceDescriptor", "_validate_voice_id"),
+    ("TTSVoiceProfileDescriptor", "_validate_voice_id"),
+    ("TTSGetVoiceProfileRequest", "_validate_voice_id"),
+    ("TTSUpdateVoiceProfileRequest", "_validate_voice_id"),
+    ("TTSInstallVoiceProfileRequest", "_validate_voice_id"),
+    ("TTSRemoveVoiceProfileRequest", "_validate_voice_id"),
+    ("TTSSetDefaultVoiceRequest", "_validate_voice_id"),
+    ("TTSSetDefaultVoiceResponse", "_validate_voice_id"),
+    ("TTSUpdateVoiceProfileResponse", "_validate_voice_id"),
+    ("TTSInstallVoiceProfileResponse", "_validate_voice_id"),
+    ("TTSRemoveVoiceProfileResponse", "_validate_voice_id"),
+    ("TTSCreateVoiceProfileResponse", "_validate_voice_id"),
+    ("TTSDeleteVoiceProfileRequest", "_validate_voice_id"),
+    ("TTSDeleteVoiceProfileResponse", "_validate_voice_id"),
+):
+    VALIDATOR_EXTENSION_VERIFIERS[(_model, _validator)] = _assert_field_pattern(
+        __import__(
+            "app.shared.contracts.models.speech",
+            fromlist=["LOGICAL_VOICE_ID_PATTERN"],
+        ).LOGICAL_VOICE_ID_PATTERN
+    )
+
+VALIDATOR_EXTENSION_VERIFIERS[("TTSCreateVoiceProfileResponse", "_validate_voice_id")] = (
+    _assert_all(
+        VALIDATOR_EXTENSION_VERIFIERS[("TTSCreateVoiceProfileResponse", "_validate_voice_id")],
+        _assert_named_model_invariant(TTS_CREATE_PROFILE_RESPONSE_INVARIANT_MARKER),
+    )
+)
+VALIDATOR_EXTENSION_VERIFIERS[("TTSDeleteVoiceProfileResponse", "_validate_voice_id")] = (
+    _assert_all(
+        VALIDATOR_EXTENSION_VERIFIERS[("TTSDeleteVoiceProfileResponse", "_validate_voice_id")],
+        _assert_named_model_invariant(TTS_DELETE_PROFILE_RESPONSE_INVARIANT_MARKER),
+    )
+)
+
+for _model, _validator in (
+    ("TTSCreateVoiceProfileRequest", "_validate_expected_revision"),
+    ("TTSDeleteVoiceProfileRequest", "_validate_expected_revision"),
+    ("TTSInstallVoiceProfileRequest", "_validate_expected_revision"),
+    ("TTSRemoveVoiceProfileRequest", "_validate_expected_revision"),
+    ("TTSSetDefaultVoiceRequest", "_validate_expected_revision"),
+    ("TTSUpdateVoiceProfileRequest", "_validate_expected_revision"),
+    ("TTSVoiceImportAbortRequest", "_validate_expected_revision"),
+    ("TTSVoiceImportChunkRequest", "_validate_expected_revision"),
+    ("TTSVoiceImportEndRequest", "_validate_expected_revision"),
+    ("TTSVoiceImportStartRequest", "_validate_expected_revision"),
+    ("TTSCreateVoiceProfileRequest", "_validate_nonblank"),
+    ("TTSUpdateVoiceProfileRequest", "_validate_label"),
+    ("TTSVoiceDescriptor", "_validate_nonblank"),
+    ("TTSVoiceProfileDescriptor", "_validate_nonblank"),
+    ("TTSVoiceImportAbortRequest", "_validate_upload_id"),
+    ("TTSVoiceImportChunkRequest", "_validate_upload_id"),
+    ("TTSVoiceImportEndRequest", "_validate_upload_id"),
+    ("TTSVoiceImportEndResponse", "_validate_nonblank"),
+    ("TTSVoiceImportStartResponse", "_validate_nonblank"),
+    ("TTSResidentLanguagePack", "_validate_pack_id"),
+):
+    VALIDATOR_EXTENSION_VERIFIERS[(_model, _validator)] = _assert_string_field_non_blank
+
+for _model, _validator in (
+    ("TTSCreateVoiceProfileRequest", "_validate_operation_id"),
+    ("TTSDeleteVoiceProfileRequest", "_validate_operation_id"),
+    ("TTSInstallVoiceProfileRequest", "_validate_operation_id"),
+    ("TTSRemoveVoiceProfileRequest", "_validate_operation_id"),
+    ("TTSSetDefaultVoiceRequest", "_validate_operation_id"),
+    ("TTSUpdateVoiceProfileRequest", "_validate_operation_id"),
+    ("TTSVoiceImportAbortRequest", "_validate_operation_id"),
+    ("TTSVoiceImportChunkRequest", "_validate_operation_id"),
+    ("TTSVoiceImportEndRequest", "_validate_operation_id"),
+    ("TTSVoiceImportStartRequest", "_validate_operation_id"),
+):
+    VALIDATOR_EXTENSION_VERIFIERS[(_model, _validator)] = _assert_operation_id_marker
+
+for _model, _validator in (
+    ("TTSVoiceImportStartRequest", "_validate_sha256"),
+    ("TTSVoiceImportChunkRequest", "_validate_chunk_sha256"),
+    ("TTSVoiceImportEndRequest", "_validate_final_sha256"),
+    ("TTSVoiceImportEndResponse", "_validate_final_sha256"),
+):
+    VALIDATOR_EXTENSION_VERIFIERS[(_model, _validator)] = _assert_lowercase_digest
+
+VALIDATOR_EXTENSION_VERIFIERS[("TTSCreateVoiceProfileRequest", "_validate_sealed_audio_ref")] = (
+    _assert_field_pattern("^voice-import:[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$")
+)
+
+_MODEL_INVARIANT_VERIFIERS = {
+    ("TTSCapabilities", "_validate_capabilities"): TTS_CAPABILITIES_INVARIANT_MARKER,
+    ("TTSCapabilities", "_validate_sample_rates"): TTS_CAPABILITIES_INVARIANT_MARKER,
+    ("TTSVoiceDescriptor", "_validate_ready_voice"): TTS_VOICE_DESCRIPTOR_INVARIANT_MARKER,
+    ("TTSListVoicesResponse", "_validate_use_safe_voices"): TTS_VOICE_LIST_INVARIANT_MARKER,
+    ("TTSVoiceProfileDescriptor", "_validate_profile_state"): (
+        TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER
+    ),
+    ("TTSListVoiceProfilesResponse", "_validate_unique_profiles"): (
+        TTS_PROFILE_LIST_INVARIANT_MARKER
+    ),
+    ("TTSGetVoiceProfileResponse", "_validate_found_profile"): (
+        TTS_GET_PROFILE_RESPONSE_INVARIANT_MARKER
+    ),
+    ("TTSUpdateVoiceProfileRequest", "_validate_patch"): (
+        TTS_UPDATE_PROFILE_PATCH_INVARIANT_MARKER
+    ),
+    ("TTSCreateVoiceProfileResponse", "_validate_result_revision"): (
+        TTS_CREATE_PROFILE_RESPONSE_INVARIANT_MARKER
+    ),
+    ("TTSDeleteVoiceProfileRequest", "_validate_clone_id"): (
+        TTS_DELETE_PROFILE_REQUEST_INVARIANT_MARKER
+    ),
+    ("TTSUpdateVoiceProfileResponse", "_validate_revision"): (
+        TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER
+    ),
+    ("TTSInstallVoiceProfileResponse", "_validate_revision"): (
+        TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER
+    ),
+    ("TTSRemoveVoiceProfileResponse", "_validate_revision"): (
+        TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER
+    ),
+    ("TTSDeleteVoiceProfileResponse", "_validate_revision"): (
+        TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER
+    ),
+    ("TTSVoiceImportStartResponse", "_validate_capacity"): (
+        TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER
+    ),
+    ("TTSVoiceImportChunkRequest", "_validate_chunk"): (TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER),
+    ("TTSVoiceImportChunkResponse", "_validate_acknowledgement"): (
+        TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER
+    ),
+    ("TTSAudioChunkEvent", "_validate_audio_payload"): TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
+    ("TranscribeAudioRequest", "_validate_language_shape"): STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
+}
+for _key, _marker in _MODEL_INVARIANT_VERIFIERS.items():
+    VALIDATOR_EXTENSION_VERIFIERS[_key] = _assert_named_model_invariant(_marker)
 
 
 def _assert_validator_extension_coverage(
@@ -427,7 +835,10 @@ def _assert_no_unbounded_integer_schema(schema: Any, *, context: str, pointer: s
         schema.get("type") == "integer"
         and "enum" not in schema
         and "const" not in schema
-        and ("minimum" not in schema or "maximum" not in schema)
+        and (
+            ("minimum" not in schema and "exclusiveMinimum" not in schema)
+            or ("maximum" not in schema and "exclusiveMaximum" not in schema)
+        )
     ):
         raise ValueError(f"{context} {pointer}: integer schema must declare minimum and maximum")
     for key, item in schema.items():
@@ -440,6 +851,16 @@ def _model_schema(model: Any) -> dict[str, Any] | None:
         return None
     with contextlib.suppress(Exception):
         return model.model_json_schema()
+    return None
+
+
+def _speech_constraints_value(value: Any) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    if isinstance(value, dict):
+        return value
     return None
 
 
@@ -519,6 +940,7 @@ def _static_contracts_from_source(
                 "method_type": kwargs.get("method_type", "use"),
                 "required_perms": list(kwargs.get("required_perms", [])),
                 "callable_feature_ids": list(kwargs.get("callable_feature_ids", [])),
+                "speech_constraints": _speech_constraints_value(kwargs.get("speech_constraints")),
                 "public_infrastructure": bool(kwargs.get("public_infrastructure", False)),
                 "input_model": _model_name(input_model),
                 "output_model": _model_name(output_model),
@@ -572,6 +994,7 @@ def _live_contract_to_inventory(contract: MethodContract) -> dict[str, Any]:
         "callable_features": [
             feature.model_dump(mode="json") for feature in contract.callable_features
         ],
+        "speech_constraints": _speech_constraints_value(contract.speech_constraints),
         "public_infrastructure": contract.public_infrastructure,
         "input_model": _model_name(contract.input_model),
         "output_model": _model_name(contract.output_model),
@@ -758,7 +1181,10 @@ def _annotate_schema(schema: Any) -> Any:
     if schema == {}:
         return {JSON_VALUE_MARKER: True}
 
-    annotated = {key: _annotate_schema(value) for key, value in schema.items()}
+    annotated = {
+        key: (value if key == "properties" and value == {} else _annotate_schema(value))
+        for key, value in schema.items()
+    }
     if (
         annotated.get("type") == "object"
         and not annotated.get("properties")
@@ -772,6 +1198,40 @@ def _annotate_schema(schema: Any) -> Any:
 
 def _contract_schema_id(method_id: str, direction: str, model_name: str) -> str:
     return f"{method_id}.{direction}.{model_name}"
+
+
+def _event_schema_id(event_topic: str, model_name: str) -> str:
+    return f"{event_topic}.event.{model_name}"
+
+
+def _envelope_schema_id(envelope_topic: str, model_name: str) -> str:
+    return f"{envelope_topic}.envelope.{model_name}"
+
+
+def _streaming_shape(method_id: str) -> dict[str, Any]:
+    if method_id in {"TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd"}:
+        return {
+            "rpc_kind": "unary",
+            "ordered_command_group": "tts_text_stream",
+            "request_stream": False,
+            "response_stream": False,
+            "event_topic": "TTS.AudioChunk",
+        }
+    if method_id in {"WakeWord.ProcessAudio", "Transcription.ProcessAudio"}:
+        return {
+            "rpc_kind": "unary",
+            "ordered_command_group": None,
+            "request_stream": False,
+            "response_stream": False,
+            "event_topic": None,
+        }
+    return {
+        "rpc_kind": "unary",
+        "ordered_command_group": None,
+        "request_stream": False,
+        "response_stream": False,
+        "event_topic": None,
+    }
 
 
 def _model_wire_schema(model: Any, *, mode: str) -> dict[str, Any]:
@@ -837,6 +1297,7 @@ def _tool_info_fixture() -> dict[str, Any]:
 def _annotate_lossless_model_schema(model_name: str, schema: dict[str, Any]) -> dict[str, Any]:
     _annotate_mesh_address_selector_schemas(schema)
     _annotate_tooling_tool_info_schemas(schema)
+    _annotate_speech_model_schemas(schema)
     if model_name == "ToolingGetExportCatalogResponse":
         schema[PROJECTION_PAGE_TERMINATION_MARKER] = True
         schema[PROJECTION_IDENTITY_MARKER] = True
@@ -857,7 +1318,204 @@ def _annotate_lossless_model_schema(model_name: str, schema: dict[str, Any]) -> 
                 for option in final_checksum.get("anyOf") or ():
                     if isinstance(option, dict) and option.get("type") == "string":
                         option.setdefault("pattern", digest_pattern)
+    if model_name == "RouteExplainRequest":
+        schema[ROUTE_EXPLAIN_NO_RAW_PAYLOAD_MARKER] = True
+        schema[ROUTE_EXPLAIN_SELECTOR_FIELDS_MARKER] = True
+        schema[ROUTE_EXPLAIN_SPEECH_NO_RAW_PAYLOAD_MARKER] = True
     return schema
+
+
+def _annotate_speech_model_schemas(schema: Any) -> None:
+    if isinstance(schema, list):
+        for item in schema:
+            _annotate_speech_model_schemas(item)
+        return
+    if not isinstance(schema, dict):
+        return
+    title = schema.get("title")
+    properties = schema.get("properties")
+    if title == "SpeechLanguageRequirement":
+        schema[SPEECH_LANGUAGE_REQUIREMENT_MARKER] = True
+        if isinstance(properties, dict):
+            language = properties.get("language")
+            if isinstance(language, dict):
+                language[SPEECH_LANGUAGE_STRING_NORMALIZE_MARKER] = True
+            candidates = properties.get("auto_language_candidates")
+            if isinstance(candidates, dict):
+                for array_schema in _array_schema_options(candidates):
+                    array_schema[SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER] = True
+            digest = properties.get("digest")
+            if isinstance(digest, dict):
+                _annotate_optional_string_pattern(digest, "^[0-9a-f]{64}$")
+    elif title == "SpeechLocaleFallback":
+        schema[SPEECH_LOCALE_FALLBACK_MARKER] = True
+        if isinstance(properties, dict):
+            for field_name in ("requested_language", "served_language"):
+                field_schema = properties.get(field_name)
+                if isinstance(field_schema, dict):
+                    field_schema[SPEECH_LANGUAGE_STRING_NORMALIZE_MARKER] = True
+    elif title == "SpeechMethodConstraints":
+        schema[SPEECH_METHOD_CONSTRAINTS_MARKER] = True
+        if isinstance(properties, dict):
+            for field_name in ("exact_languages", "auto_detect_languages"):
+                field_schema = properties.get(field_name)
+                if isinstance(field_schema, dict):
+                    for array_schema in _array_schema_options(field_schema):
+                        array_schema[SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER] = True
+            ready_voice_ids = properties.get("ready_voice_ids")
+            if isinstance(ready_voice_ids, dict):
+                for array_schema in _array_schema_options(ready_voice_ids):
+                    array_schema[LOGICAL_VOICE_ARRAY_NORMALIZE_MARKER] = True
+            digest = properties.get("resident_model_identity_digest")
+            if isinstance(digest, dict):
+                _annotate_optional_string_pattern(digest, "^[0-9a-f]{64}$")
+    elif title == "SpeechRouteBinding" and isinstance(properties, dict):
+        for field_name in ("projection_digest", "requirement_digest"):
+            field_schema = properties.get(field_name)
+            if isinstance(field_schema, dict):
+                field_schema.setdefault("pattern", "^[0-9a-f]{64}$")
+        for field_name in ("service_instance_id", "projection_revision", "provider_lease_epoch"):
+            field_schema = properties.get(field_name)
+            if isinstance(field_schema, dict):
+                field_schema.setdefault("minLength", 1)
+                field_schema[STRING_NON_BLANK_MARKER] = True
+    if isinstance(title, str) and (title.startswith("TTS") or title in {"TranscribeAudioRequest"}):
+        _annotate_tts_validator_fields(title, schema)
+    for item in schema.values():
+        _annotate_speech_model_schemas(item)
+
+
+def _annotate_optional_string_pattern(schema: dict[str, Any], pattern: str) -> None:
+    if schema.get("type") == "string":
+        schema.setdefault("pattern", pattern)
+        return
+    for option in schema.get("anyOf") or ():
+        if isinstance(option, dict) and option.get("type") == "string":
+            option.setdefault("pattern", pattern)
+
+
+def _annotate_optional_string_marker(schema: dict[str, Any], marker: str) -> None:
+    if schema.get("type") == "string":
+        schema[marker] = True
+        return
+    for option in schema.get("anyOf") or ():
+        if isinstance(option, dict) and option.get("type") == "string":
+            option[marker] = True
+
+
+def _annotate_tts_validator_fields(title: str, schema: dict[str, Any]) -> None:
+    from app.shared.contracts.models.speech import LOGICAL_VOICE_ID_PATTERN
+
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return
+    invariant_markers = {
+        "TTSCapabilities": TTS_CAPABILITIES_INVARIANT_MARKER,
+        "TTSVoiceDescriptor": TTS_VOICE_DESCRIPTOR_INVARIANT_MARKER,
+        "TTSListVoicesResponse": TTS_VOICE_LIST_INVARIANT_MARKER,
+        "TTSVoiceProfileDescriptor": TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER,
+        "TTSListVoiceProfilesResponse": TTS_PROFILE_LIST_INVARIANT_MARKER,
+        "TTSGetVoiceProfileResponse": TTS_GET_PROFILE_RESPONSE_INVARIANT_MARKER,
+        "TTSUpdateVoiceProfileRequest": TTS_UPDATE_PROFILE_PATCH_INVARIANT_MARKER,
+        "TTSCreateVoiceProfileResponse": TTS_CREATE_PROFILE_RESPONSE_INVARIANT_MARKER,
+        "TTSDeleteVoiceProfileRequest": TTS_DELETE_PROFILE_REQUEST_INVARIANT_MARKER,
+        "TTSInstallVoiceProfileResponse": TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER,
+        "TTSRemoveVoiceProfileResponse": TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER,
+        "TTSUpdateVoiceProfileResponse": TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER,
+        "TTSDeleteVoiceProfileResponse": TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER,
+        "TTSVoiceImportStartResponse": TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
+        "TTSVoiceImportChunkRequest": TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
+        "TTSVoiceImportChunkResponse": TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
+        "TTSAudioChunkEvent": TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
+        "TranscribeAudioRequest": STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
+    }
+    marker = invariant_markers.get(title)
+    if marker is not None:
+        schema[marker] = True
+    if title == "TTSDeleteVoiceProfileResponse":
+        schema[TTS_DELETE_PROFILE_RESPONSE_INVARIANT_MARKER] = True
+    for field_name in ("voice_id", "voice"):
+        field_schema = properties.get(field_name)
+        if isinstance(field_schema, dict):
+            _annotate_optional_string_pattern(field_schema, LOGICAL_VOICE_ID_PATTERN)
+    for field_name in ("sha256", "chunk_sha256", "final_sha256"):
+        field_schema = properties.get(field_name)
+        if isinstance(field_schema, dict):
+            _annotate_optional_string_pattern(field_schema, "^[0-9a-f]{64}$")
+    operation_id = properties.get("operation_id")
+    if isinstance(operation_id, dict):
+        _annotate_optional_string_marker(operation_id, TTS_OPERATION_ID_MARKER)
+    sealed_audio_ref = properties.get("sealed_audio_ref")
+    if title == "TTSCreateVoiceProfileRequest" and isinstance(sealed_audio_ref, dict):
+        sealed_audio_ref.setdefault("pattern", "^voice-import:[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$")
+    nonblank_fields_by_title = {
+        "TTSResidentLanguagePack": ("pack_id",),
+        "TTSVoiceDescriptor": ("display_name", "revision"),
+        "TTSVoiceProfileDescriptor": ("display_name", "revision"),
+        "TTSUpdateVoiceProfileRequest": ("expected_revision", "display_name"),
+        "TTSInstallVoiceProfileRequest": ("expected_revision",),
+        "TTSRemoveVoiceProfileRequest": ("expected_revision",),
+        "TTSSetDefaultVoiceRequest": ("expected_revision",),
+        "TTSVoiceImportStartRequest": ("expected_revision",),
+        "TTSVoiceImportChunkRequest": ("expected_revision", "upload_id"),
+        "TTSVoiceImportEndRequest": ("expected_revision", "upload_id"),
+        "TTSVoiceImportAbortRequest": ("expected_revision", "upload_id"),
+        "TTSCreateVoiceProfileRequest": (
+            "operation_id",
+            "expected_revision",
+            "display_name",
+            "sealed_audio_ref",
+        ),
+        "TTSDeleteVoiceProfileRequest": ("expected_revision",),
+        "TTSVoiceImportStartResponse": ("upload_id", "expires_at"),
+        "TTSVoiceImportEndResponse": ("sealed_audio_ref", "expires_at"),
+    }
+    for field_name in nonblank_fields_by_title.get(title, ()):
+        field_schema = properties.get(field_name)
+        if isinstance(field_schema, dict):
+            _annotate_optional_string_marker(field_schema, STRING_NON_BLANK_MARKER)
+    for field_name in ("language",):
+        field_schema = properties.get(field_name)
+        if isinstance(field_schema, dict):
+            field_schema[
+                SPEECH_LANGUAGE_AUTO_NULL_MARKER
+                if title == "TranscribeAudioRequest"
+                else SPEECH_LANGUAGE_STRING_NORMALIZE_MARKER
+            ] = True
+    for field_name in ("ready_languages", "auto_language_candidates"):
+        field_schema = properties.get(field_name)
+        if isinstance(field_schema, dict):
+            for array_schema in _array_schema_options(field_schema):
+                array_schema[SPEECH_LANGUAGE_ARRAY_NORMALIZE_MARKER] = True
+    for field_name in (
+        "supported_language_pack_ids",
+        "installed_language_pack_ids",
+        "resident_language_pack_ids",
+        "compatible_language_pack_ids",
+        "allowed_peer_ids",
+    ):
+        field_schema = properties.get(field_name)
+        if isinstance(field_schema, dict):
+            for array_schema in _array_schema_options(field_schema):
+                array_schema[BOUNDED_NONBLANK_STRING_SET_MARKER] = True
+                items = array_schema.get("items")
+                if (
+                    isinstance(items, dict)
+                    and items.get("type") == "string"
+                    and "enum" not in items
+                ):
+                    items.setdefault("minLength", 1)
+                    items.setdefault("maxLength", 256)
+
+
+def _array_schema_options(schema: dict[str, Any]) -> list[dict[str, Any]]:
+    if schema.get("type") == "array":
+        return [schema]
+    return [
+        option
+        for option in schema.get("anyOf") or ()
+        if isinstance(option, dict) and option.get("type") == "array"
+    ]
 
 
 def _annotate_mesh_address_selector_schemas(schema: Any) -> None:
@@ -903,6 +1561,112 @@ def _annotate_tooling_tool_info_schemas(schema: Any) -> None:
 def _positive_fixture(model_name: str) -> Any | None:
     tool_info = _tool_info_fixture()
     fixtures: dict[str, Any] = {
+        "AuroraEventStreamEvent": {
+            "event_id": "evt-assistant-1",
+            "topic": "Orchestrator.Response",
+            "kind": "assistant.delta",
+            "category": "assistant",
+            "action": "Response",
+            "status": "streaming",
+            "severity": "info",
+            "timestamp": "2026-08-07T00:00:00Z",
+            "correlation_id": "corr-assistant-1",
+            "principal_id": "principal-1",
+            "payload": {
+                "kind": "assistant.delta",
+                "delta": "hel",
+                "session_id": "session-1",
+                "request_id": "request-1",
+                "correlation_id": "corr-assistant-1",
+                "sequence": 1,
+            },
+            "redacted_payload": {
+                "kind": "assistant.delta",
+                "delta": {"redacted": True, "sha256": "a" * 64},
+                "session_id": "session-1",
+                "request_id": "request-1",
+                "correlation_id": "corr-assistant-1",
+                "sequence": 1,
+            },
+            "payload_sha256": "b" * 64,
+            "unexpected": "stripped",
+        },
+        "AssistantStreamEvent": {
+            "kind": "assistant.delta",
+            "delta": "hel",
+            "session_id": "session-1",
+            "request_id": "request-1",
+            "correlation_id": "corr-assistant-1",
+            "message_id": "message-1",
+            "sequence": 1,
+            "metadata": {"source": "native", "stream": True},
+            "unexpected": "stripped",
+        },
+        "OrchestratorInterruptedEvent": {
+            "interrupt_id": "interrupt-1",
+            "status": "cancelled",
+            "requested_scopes": ["generation", "tts_playback"],
+            "results": [
+                {
+                    "scope": "generation",
+                    "status": "cancelled",
+                    "message": "Cancelled 1 active generation task",
+                    "cancelled_count": 1,
+                }
+            ],
+            "session_id": "session-1",
+            "request_id": "request-1",
+            "reason": "user_interrupt",
+            "principal_id": "principal-1",
+            "audit_event": "orchestrator.interrupt.requested",
+            "secrets_redacted": True,
+            "unexpected": "stripped",
+        },
+        "OrchestratorInterruptRequest": {
+            "scopes": ["generation", "tts_playback"],
+            "session_id": "session-1",
+            "request_id": "request-1",
+            "reason": "user_interrupt",
+            "unexpected": "stripped",
+        },
+        "OrchestratorInterruptResponse": {
+            "interrupt_id": "interrupt-1",
+            "status": "cancelled",
+            "requested_scopes": ["generation", "tts_playback"],
+            "results": [
+                {
+                    "scope": "generation",
+                    "status": "cancelled",
+                    "message": "Cancelled 1 active generation task",
+                    "cancelled_count": 1,
+                }
+            ],
+            "session_id": "session-1",
+            "request_id": "request-1",
+            "event_topic": "Orchestrator.Interrupted",
+            "audit_event": "orchestrator.interrupt.requested",
+            "idempotent": True,
+            "secrets_redacted": True,
+            "unexpected": "stripped",
+        },
+        "OrchestratorProcessRequest": {
+            "text": "turn on the kitchen lights",
+            "source": "native",
+            "session_id": "session-1",
+            "request_id": "request-1",
+            "correlation_id": "corr-assistant-1",
+            "stream": True,
+            "client_tts_playback": True,
+            "unexpected": "stripped",
+        },
+        "OrchestratorResponse": {
+            "text": "The kitchen lights are on.",
+            "session_id": "session-1",
+            "request_id": "request-1",
+            "correlation_id": "corr-assistant-1",
+            "metadata": {"source": "native", "stream": False},
+            "unexpected": "stripped",
+        },
         "ToolingExecuteToolRequest": {
             "tool_name": "echo",
             "arguments": {"message": "hello", "unicode": "snowman \u2603"},
@@ -989,6 +1753,20 @@ def _positive_fixture(model_name: str) -> Any | None:
             "argument_visibility": {},
             "unexpected": "stripped",
         },
+        "TTSAudioChunkEvent": {
+            "stream_id": "stream-1",
+            "sequence": 0,
+            "audio_data": "AA==",
+            "format": "raw",
+            "sample_rate": 24000,
+            "channels": 1,
+            "duration_ms": 12.5,
+            "text": "hello",
+            "source_sequence": 0,
+            "is_final": False,
+            "reason": None,
+            "correlation_id": "corr-tts-1",
+        },
     }
     return fixtures.get(model_name)
 
@@ -997,6 +1775,54 @@ def _negative_fixture(model_name: str) -> Any | None:
     tool_info = _tool_info_fixture()
     bad_legacy_tool = {**tool_info, "legacy_global_tool_ids": [" not-trimmed "]}
     fixtures: dict[str, Any] = {
+        "AuroraEventStreamEvent": {
+            "event_id": "evt-assistant-1",
+            "topic": "Orchestrator.Response",
+            "kind": "assistant.delta",
+            "category": "assistant",
+            "payload": {f"k{i}": i for i in range(65)},
+            "redacted_payload": {},
+        },
+        "AssistantStreamEvent": {
+            "kind": "assistant.delta",
+            "delta": "hel",
+            "sequence": 2**53,
+        },
+        "OrchestratorInterruptedEvent": {
+            "interrupt_id": "interrupt-1",
+            "status": "cancelled",
+            "requested_scopes": ["generation"],
+            "results": [
+                {
+                    "scope": "generation",
+                    "status": "cancelled",
+                    "cancelled_count": 2**53,
+                }
+            ],
+        },
+        "OrchestratorInterruptRequest": {
+            "scopes": ["generation", "tool_call", "tts_playback", "session", "generation"],
+            "reason": "user_interrupt",
+        },
+        "OrchestratorInterruptResponse": {
+            "interrupt_id": "interrupt-1",
+            "status": "cancelled",
+            "requested_scopes": ["generation"],
+            "results": [
+                {
+                    "scope": "generation",
+                    "status": "cancelled",
+                    "cancelled_count": 2**53,
+                }
+            ],
+        },
+        "OrchestratorProcessRequest": {
+            "text": "",
+            "source": "native",
+        },
+        "OrchestratorResponse": {
+            "text": "x" * 120_001,
+        },
         "ToolingExecuteToolRequest": {
             "tool_name": 12,
             "arguments": {},
@@ -1044,6 +1870,15 @@ def _negative_fixture(model_name: str) -> Any | None:
             "ok": True,
             "args_hash": "a" * 64,
         },
+        "TTSAudioChunkEvent": {
+            "stream_id": "stream-1",
+            "sequence": 2**53,
+            "audio_data": "AA==",
+            "format": "raw",
+            "sample_rate": 24000,
+            "channels": 1,
+            "duration_ms": 12.5,
+        },
     }
     return fixtures.get(model_name)
 
@@ -1088,6 +1923,17 @@ def _negative_fixtures(model_name: str) -> list[Any]:
                             }
                         ],
                     },
+                    {
+                        **base,
+                        "tools": [
+                            {
+                                **base["tools"][0],
+                                "legacy_global_tool_ids": [
+                                    f"legacy-{index:02d}" for index in range(17)
+                                ],
+                            }
+                        ],
+                    },
                 ]
             )
     if model_name == "ToolingGetToolsRequest":
@@ -1098,12 +1944,110 @@ def _negative_fixtures(model_name: str) -> list[Any]:
                 {"top_k": -(2**53)},
             ]
         )
+    if model_name == "ToolingGetToolsResponse":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.append(
+                {
+                    **base,
+                    "tools": [
+                        {
+                            **base["tools"][0],
+                            "legacy_global_tool_ids": [
+                                f"legacy-{index:02d}" for index in range(17)
+                            ],
+                        }
+                    ],
+                }
+            )
+    if model_name == "TTSAudioChunkEvent":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.extend(
+                [
+                    {**base, "audio_data": ""},
+                    {**base, "source_sequence": 2**53},
+                    {**base, "sample_rate": 192001},
+                    {**base, "channels": 0},
+                ]
+            )
+    if model_name == "AssistantStreamEvent":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.extend(
+                [
+                    {**base, "metadata": {f"k{i}": i for i in range(65)}},
+                    {**base, "delta": "x" * 16_385},
+                ]
+            )
+    if model_name == "AuroraEventStreamEvent":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.extend(
+                [
+                    {**base, "event_id": ""},
+                    {**base, "redacted_payload": {f"k{i}": i for i in range(65)}},
+                ]
+            )
+    if model_name == "OrchestratorInterruptRequest":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.append({**base, "reason": ""})
+    if model_name in {"OrchestratorInterruptResponse", "OrchestratorInterruptedEvent"}:
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.append({**base, "requested_scopes": ["generation"] * 5})
+    return cases
+
+
+def _positive_fixtures(model_name: str) -> list[Any]:
+    first = _positive_fixture(model_name)
+    cases = [] if first is None else [first]
+    if model_name == "AssistantStreamEvent":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.extend(
+                [
+                    {
+                        **base,
+                        "kind": "assistant.completed",
+                        "text": "The kitchen lights are on.",
+                        "delta": "",
+                        "sequence": 2,
+                        "is_final": True,
+                    },
+                    {
+                        **base,
+                        "kind": "assistant.failed",
+                        "text": "Aurora could not complete that request.",
+                        "delta": "",
+                        "sequence": 3,
+                        "is_final": True,
+                        "metadata": {"source": "native", "error": True},
+                    },
+                ]
+            )
+    if model_name in {"ToolingGetToolsResponse", "ToolingGetExportCatalogResponse"}:
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.append(
+                {
+                    **base,
+                    "tools": [
+                        {
+                            **base["tools"][0],
+                            "legacy_global_tool_ids": ["legacy-a"] * 20 + ["legacy-b"] * 20,
+                        }
+                    ],
+                }
+            )
     return cases
 
 
 def _validation_vectors(model: Any, *, method_id: str, direction: str) -> dict[str, Any]:
     model_name = _model_name(model) or str(model)
-    positive = _positive_fixture(model_name)
+    positive_cases = _positive_fixtures(model_name)
+    positive = positive_cases[0] if positive_cases else None
     negative_cases = _negative_fixtures(model_name)
     vectors: dict[str, Any] = {}
     if positive is not None:
@@ -1115,6 +2059,17 @@ def _validation_vectors(model: Any, *, method_id: str, direction: str) -> dict[s
             "normalized": normalized,
             "normalized_hash": sha256_json(normalized),
         }
+    for positive_case in positive_cases[1:]:
+        parsed = model.model_validate(positive_case)
+        normalized = parsed.model_dump(mode="json", by_alias=True)
+        vectors.setdefault("positive_cases", []).append(
+            {
+                "accepted": True,
+                "input": positive_case,
+                "normalized": normalized,
+                "normalized_hash": sha256_json(normalized),
+            }
+        )
     for index, negative in enumerate(negative_cases):
         try:
             model.model_validate(negative)
@@ -1141,6 +2096,13 @@ def build_sdk_contract_schema() -> dict[str, Any]:
     method_inventory = {method["bus_topic"]: method for method in methods}
     contracts = all_contracts()
     schemas: list[dict[str, Any]] = []
+    method_descriptors: list[dict[str, Any]] = []
+    event_descriptors: list[dict[str, Any]] = []
+    from app.shared.contracts.models.aurora import AuroraEventStreamEvent
+    from app.shared.contracts.models.orchestrator import (
+        AssistantStreamEvent,
+        OrchestratorInterruptedEvent,
+    )
     from app.shared.contracts.models.tooling import (
         ToolingExecuteToolRequest,
         ToolingExecuteToolResponse,
@@ -1151,6 +2113,7 @@ def build_sdk_contract_schema() -> dict[str, Any]:
         ToolingPrepareExecutionRequest,
         ToolingPrepareExecutionResponse,
     )
+    from app.shared.contracts.models.tts import TTSAudioChunkEvent
 
     static_models = {
         "Tooling.ExecuteTool": (ToolingExecuteToolRequest, ToolingExecuteToolResponse),
@@ -1164,6 +2127,60 @@ def build_sdk_contract_schema() -> dict[str, Any]:
             ToolingPrepareExecutionResponse,
         ),
     }
+    event_models = {
+        "Orchestrator.Response": {
+            "module": "Orchestrator",
+            "name": "Response",
+            "topic": "Orchestrator.Response",
+            "model": AssistantStreamEvent,
+            "required_permission": "Orchestrator.use",
+            "bounded": True,
+            "authorized": True,
+            "ordered_event_group": "assistant_stream",
+            "remote_raw_audio_route": False,
+        },
+        "Orchestrator.Interrupted": {
+            "module": "Orchestrator",
+            "name": "Interrupted",
+            "topic": "Orchestrator.Interrupted",
+            "model": OrchestratorInterruptedEvent,
+            "required_permission": "Orchestrator.use",
+            "bounded": True,
+            "authorized": True,
+            "ordered_event_group": "assistant_interrupt",
+            "remote_raw_audio_route": False,
+        },
+        "TTS.AudioChunk": {
+            "module": "TTS",
+            "name": "AudioChunk",
+            "topic": "TTS.AudioChunk",
+            "model": TTSAudioChunkEvent,
+            "required_permission": "TTS.use",
+            "bounded": True,
+            "authorized": True,
+            "ordered_event_group": "tts_text_stream",
+            "remote_raw_audio_route": False,
+        },
+    }
+    envelope_models = {
+        "Aurora.EventStream": {
+            "module": "Aurora",
+            "name": "EventStream",
+            "topic": "Aurora.EventStream",
+            "model": AuroraEventStreamEvent,
+            "required_permissions_broad": ["Gateway.manage"],
+            "required_permissions_scoped": ["Orchestrator.use"],
+            "scoped_topics": ["Orchestrator.Response", "TTS.AudioChunk"],
+            "scoped_categories": ["assistant"],
+            "requires_correlation_id": True,
+            "bounded": True,
+            "authorized": True,
+            "route_path": "/api/events/stream",
+            "route_kind": "gateway_sse_builtin",
+            "descriptor_kind": "sse_envelope",
+        }
+    }
+    method_metadata: dict[str, dict[str, Any]] = {}
     for method_id in SDK_CONTRACT_ALLOWLIST:
         contract = contracts.get(method_id)
         inventory_item = method_inventory.get(method_id)
@@ -1179,6 +2196,49 @@ def build_sdk_contract_schema() -> dict[str, Any]:
             if method_id not in static_models:
                 raise ValueError(f"Allowlisted contract is not registered: {method_id}")
             input_model, output_model = static_models[method_id]
+        module, name = method_id.split(".", 1)
+        metadata_source = inventory_item or {}
+        method_metadata[method_id] = {
+            "method_id": method_id,
+            "module": contract.module
+            if contract is not None
+            else metadata_source.get("module", module),
+            "name": contract.name if contract is not None else metadata_source.get("name", name),
+            "topic": contract.bus_topic if contract is not None else method_id,
+            "bus_topic": contract.bus_topic if contract is not None else method_id,
+            "route_path": (
+                metadata_source.get("routePath")
+                or metadata_source.get("route_path")
+                or _method_route_path(module, name, exposure)
+            ),
+            "route_kind": metadata_source.get(
+                "route_kind", "dynamic" if exposure in {"external", "both"} else "internal_bus"
+            ),
+            "exposure": exposure,
+            "method_type": (
+                contract.method_type
+                if contract is not None
+                else metadata_source.get("method_type", "use")
+            ),
+            "required_perms": (
+                list(contract.required_perms)
+                if contract is not None
+                else list(metadata_source.get("required_perms", []))
+            ),
+            "callable_feature_ids": (
+                list(contract.callable_feature_ids)
+                if contract is not None
+                else list(metadata_source.get("callable_feature_ids", []))
+            ),
+            "input_model": _model_name(input_model),
+            "output_model": _model_name(output_model),
+            "streaming": _streaming_shape(method_id),
+            "speech_constraints": (
+                _speech_constraints_value(contract.speech_constraints)
+                if contract is not None
+                else metadata_source.get("speech_constraints")
+            ),
+        }
         for direction, mode, model in (
             ("input", "validation", input_model),
             ("output", "serialization", output_model),
@@ -1208,6 +2268,118 @@ def build_sdk_contract_schema() -> dict[str, Any]:
                 }
             )
 
+    schema_by_method_direction = {(item["method_id"], item["direction"]): item for item in schemas}
+    for method_id in SDK_CONTRACT_ALLOWLIST:
+        descriptor = dict(method_metadata[method_id])
+        input_schema = schema_by_method_direction.get((method_id, "input"))
+        output_schema = schema_by_method_direction.get((method_id, "output"))
+        descriptor.update(
+            {
+                "input_schema_id": input_schema["schema_id"] if input_schema else None,
+                "output_schema_id": output_schema["schema_id"] if output_schema else None,
+                "input_schema_hash": input_schema["schema_hash"] if input_schema else None,
+                "output_schema_hash": output_schema["schema_hash"] if output_schema else None,
+            }
+        )
+        method_descriptors.append(descriptor)
+
+    for event_topic in SDK_EVENT_ALLOWLIST:
+        metadata = event_models.get(event_topic)
+        if metadata is None:
+            raise ValueError(
+                f"Allowlisted event is not registered for SDK generation: {event_topic}"
+            )
+        model = metadata["model"]
+        model_name = _model_name(model) or str(model)
+        schema = _model_wire_schema(model, mode="serialization")
+        schema_id = _event_schema_id(event_topic, model_name)
+        _assert_validator_extension_coverage(
+            method_id=event_topic,
+            direction="event",
+            root_model=model,
+            schema=schema,
+        )
+        _assert_no_unbounded_integer_schema(schema, context=schema_id)
+        schema_item = {
+            "schema_id": schema_id,
+            "method_id": event_topic,
+            "direction": "event",
+            "pydantic_mode": "serialization",
+            "model_name": model_name,
+            "schema": schema,
+            "schema_hash": sha256_json(schema),
+            "vectors": _validation_vectors(model, method_id=event_topic, direction="event"),
+        }
+        schemas.append(schema_item)
+        event_descriptors.append(
+            {
+                "event_topic": event_topic,
+                "module": metadata["module"],
+                "name": metadata["name"],
+                "topic": metadata["topic"],
+                "model": model_name,
+                "schema_id": schema_item["schema_id"],
+                "schema_hash": schema_item["schema_hash"],
+                "required_permission": metadata["required_permission"],
+                "required_perms": [metadata["required_permission"]],
+                "bounded": metadata["bounded"],
+                "authorized": metadata["authorized"],
+                "ordered_event_group": metadata["ordered_event_group"],
+                "remote_raw_audio_route": metadata["remote_raw_audio_route"],
+            }
+        )
+
+    envelope_descriptors: list[dict[str, Any]] = []
+    for envelope_topic in SDK_ENVELOPE_ALLOWLIST:
+        metadata = envelope_models.get(envelope_topic)
+        if metadata is None:
+            raise ValueError(
+                f"Allowlisted envelope is not registered for SDK generation: {envelope_topic}"
+            )
+        model = metadata["model"]
+        model_name = _model_name(model) or str(model)
+        schema = _model_wire_schema(model, mode="serialization")
+        schema_id = _envelope_schema_id(envelope_topic, model_name)
+        _assert_validator_extension_coverage(
+            method_id=envelope_topic,
+            direction="envelope",
+            root_model=model,
+            schema=schema,
+        )
+        _assert_no_unbounded_integer_schema(schema, context=schema_id)
+        schema_item = {
+            "schema_id": schema_id,
+            "method_id": envelope_topic,
+            "direction": "envelope",
+            "pydantic_mode": "serialization",
+            "model_name": model_name,
+            "schema": schema,
+            "schema_hash": sha256_json(schema),
+            "vectors": _validation_vectors(model, method_id=envelope_topic, direction="envelope"),
+        }
+        schemas.append(schema_item)
+        envelope_descriptors.append(
+            {
+                "envelope_topic": envelope_topic,
+                "module": metadata["module"],
+                "name": metadata["name"],
+                "topic": metadata["topic"],
+                "model": model_name,
+                "schema_id": schema_item["schema_id"],
+                "schema_hash": schema_item["schema_hash"],
+                "required_permissions_broad": metadata["required_permissions_broad"],
+                "required_permissions_scoped": metadata["required_permissions_scoped"],
+                "scoped_topics": metadata["scoped_topics"],
+                "scoped_categories": metadata["scoped_categories"],
+                "requires_correlation_id": metadata["requires_correlation_id"],
+                "bounded": metadata["bounded"],
+                "authorized": metadata["authorized"],
+                "route_path": metadata["route_path"],
+                "route_kind": metadata["route_kind"],
+                "descriptor_kind": metadata["descriptor_kind"],
+            }
+        )
+
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "artifact": "aurora-sdk-backend-contracts",
@@ -1215,6 +2387,13 @@ def build_sdk_contract_schema() -> dict[str, Any]:
         "generator_format_version": GENERATOR_FORMAT_VERSION,
         "allowlist": list(SDK_CONTRACT_ALLOWLIST),
         "allowlist_hash": sha256_json(list(SDK_CONTRACT_ALLOWLIST)),
+        "tooling_provider_allowlist": list(SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST),
+        "tooling_provider_allowlist_hash": sha256_json(
+            list(SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST)
+        ),
+        "method_descriptors": method_descriptors,
+        "event_descriptors": event_descriptors,
+        "envelope_descriptors": envelope_descriptors,
         "schemas": sorted(schemas, key=lambda item: item["schema_id"]),
     }
 
@@ -1240,7 +2419,7 @@ def build_tooling_local_provider(contract_schema: dict[str, Any]) -> dict[str, A
         for item in contract_schema["schemas"]
     }
     methods = []
-    for method_id in SDK_CONTRACT_ALLOWLIST:
+    for method_id in SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST:
         methods.append(
             {
                 "method_id": method_id,
@@ -1522,6 +2701,7 @@ def build_sdk_manifest(
         "generator_format_version": GENERATOR_FORMAT_VERSION,
         "generator_source_hash": source_hash,
         "allowlist_hash": contract_schema["allowlist_hash"],
+        "tooling_provider_allowlist_hash": contract_schema["tooling_provider_allowlist_hash"],
         "content_hashes": content_hashes,
         "final_checksum": sha256_json(content_hashes),
     }
@@ -1625,11 +2805,9 @@ def write_sdk_contract_outputs(
         _verify_staged_outputs(staged_outputs)
         _promote_staged_outputs(staged_outputs)
     finally:
-        for target_path, tmp_path, _expected_hash in staged_outputs:
+        for _target_path, tmp_path, _expected_hash in staged_outputs:
             with contextlib.suppress(FileNotFoundError):
                 tmp_path.unlink()
-            with contextlib.suppress(FileNotFoundError):
-                _promotion_backup_path(target_path).unlink()
 
 
 def build_inventory() -> dict[str, Any]:

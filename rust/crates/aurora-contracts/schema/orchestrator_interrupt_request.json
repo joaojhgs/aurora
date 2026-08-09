@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request to interrupt active assistant work.\n\nScopes:\n- ``generation``: cancel in-flight LLM/graph work tracked by Orchestrator.\n- ``tool_call``: cancel active tool execution when a cancellable tool handle exists.\n- ``tts_playback``: stop server-side TTS playback through the TTS service contract.\n- ``session``: cancel all tracked work for a session and stop playback.",
+  "properties": {
+    "reason": {
+      "default": "user_interrupt",
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Reason",
+      "type": "string"
+    },
+    "request_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Request Id"
+    },
+    "scopes": {
+      "items": {
+        "enum": [
+          "generation",
+          "session",
+          "tool_call",
+          "tts_playback"
+        ],
+        "type": "string"
+      },
+      "maxItems": 4,
+      "title": "Scopes",
+      "type": "array"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Id"
+    }
+  },
+  "title": "OrchestratorInterruptRequest",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

@@ -1,0 +1,43 @@
+{
+  "dispositions": [
+    {
+      "id": "pockettts-standard-voice-packs",
+      "license_boundary": "non-commercial model assets",
+      "reason": "PocketTTS inspected voice/model packs remain non-commercial; English-only availability does not permit Aurora production shipping, auto-download, or advertising.",
+      "status": "blocked"
+    },
+    {
+      "id": "piper-espeak-sherpa-tts-chain",
+      "license_boundary": "GPL/safety review required before any selectable TTS manifest",
+      "reason": "Piper/espeak remains blocked by GPL distribution obligations and unresolved espeak-ng memory-safety findings from Phase 4 evidence.",
+      "status": "blocked"
+    },
+    {
+      "archive_sha256": "82fa96f91c4ef8abaae3a14a3f4153facf88bed821d1f7331cec2700f432c427",
+      "code_license_sha256": "0dfe0d0ba84416fe3879d9a34f4909d8d0137c78d1e95834177b0414ac096fa2",
+      "hard_blockers": [
+        "authoritative model-card license is OpenRAIL-M while exact sherpa-pack LICENSE is MIT software text",
+        "legal redistribution and use-restriction review required before any Aurora distribution or auto-download",
+        "upstream GitHub announced July 23 2026 archival/no further official model support"
+      ],
+      "id": "sherpa-onnx-supertonic-3-tts-int8-2026-05-11",
+      "license_boundary": "OpenRAIL-M model weights with MIT software LICENSE mismatch",
+      "model_card_url": "https://huggingface.co/Supertone/supertonic-3",
+      "reason": "The exact sherpa Supertonic 3 TTS pack supports the required en/fr/de/pt/it/es set through pinned sherpa-onnx 1.13.4, but it remains blocked by model-weight license mismatch, redistribution/use-restriction review, and maintenance abandonment risk. Do not advertise, auto-download, or expose it as a selectable TTS model pack.",
+      "release_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2",
+      "status": "blocked",
+      "supported_languages": [
+        "en",
+        "fr",
+        "de",
+        "pt",
+        "it",
+        "es"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "selectable_model_pack": false,
+  "status": "blocked",
+  "subject": "Phase 6 candidate TTS disposition"
+}

@@ -1,0 +1,46 @@
+{
+  "name": "@aurora/voice-web",
+  "version": "0.1.0",
+  "description": "Thin browser host contract for Aurora local voice workers.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js",
+      "default": "./dist/browser.js"
+    },
+    "./test-doubles": {
+      "types": "./dist/test-doubles/index.d.ts",
+      "import": "./dist/test-doubles/index.js",
+      "default": "./dist/test-doubles/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "pnpm run build:typescript && pnpm run build:wasm && pnpm run build:worker",
+    "build:typescript": "tsc -p tsconfig.build.json",
+    "build:wasm": "node scripts/build-wasm.mjs",
+    "build:worker": "node scripts/build-worker.mjs",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test": "vitest run --environment node",
+    "test:browser:voice": "pnpm run build && playwright test --config tests/playwright/worker-audio-bridge.playwright.config.ts"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.7",
+    "typescript": "5.7.3",
+    "vitest": "^4.0.16"
+  }
+}

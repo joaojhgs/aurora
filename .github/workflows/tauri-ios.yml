@@ -39,7 +39,7 @@ jobs:
           xcrun simctl list runtimes
 
       - name: Set up Rust with iOS targets
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.88.0
         with:
           targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
 

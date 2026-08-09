@@ -27,6 +27,7 @@ import {
 import { decodeMeshInvite, meshInviteSummary } from './mesh-invite'
 import { LocalNodeLifecycleController } from './local-node-lifecycle'
 import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from './platform-surface'
+import type { AuroraCapabilityPack } from './runtime-profile'
 import type { BrowserPeerPersistenceStatus, BrowserWebRtcCredentialStore } from './browser-peer-persistence'
 export type { AuroraThinConnectionMode } from './connection-mode'
 import type { AuroraThinConnectionMode } from './connection-mode'
@@ -72,6 +73,8 @@ export interface BrowserThinRuntimeConfig {
   profile?: WebRtcPeerConnectionProfile | null | undefined
   runtimeMode?: string | null | undefined
   nodeRole?: 'remote-console' | 'mesh-node' | null | undefined
+  enabledCapabilityPacks?: readonly AuroraCapabilityPack[] | null | undefined
+  localSpeechPackState?: AuroraSurfaceProfile['localSpeechPack']['state'] | null | undefined
   peerHost?: WebRtcPeerHost | undefined
   peerAuthorityResolver?: BrowserWebRtcRuntimeOptions['peerAuthorityResolver'] | undefined
   peerPairingIssuer?: BrowserWebRtcRuntimeOptions['peerPairingIssuer'] | undefined
@@ -119,6 +122,11 @@ export interface BrowserRuntimeFeatureState {
   meshNodeRuntimeEnabled: boolean
   localToolProviderEnabled: boolean
   lightweightOrchestratorEnabled: boolean
+  /** Voice ownership is derived from the centralized surface profile. */
+  usesBrowserVoiceRuntime: boolean
+  focusedPushToTalkOwner: AuroraSurfaceProfile['voiceCapture']['focusedPushToTalkOwner']
+  wakewordOwner: AuroraSurfaceProfile['voiceCapture']['wakewordOwner']
+  localSpeechPack: AuroraSurfaceProfile['localSpeechPack']
 }
 
 export interface BrowserWebRtcSnapshot extends PeerConnectionSnapshot {
@@ -176,19 +184,11 @@ export function isBrowserWebRtcConnected(
 export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {}): BrowserWebThinRuntime {
   const mode = normalizeConnectionMode(config.mode)
   const rolloutFlags = normalizeAuroraWebRtcRolloutFlags(config.rolloutFlags)
-  const requestedNodeRole = config.nodeRole ?? (config.runtimeMode === 'mesh-node' ? 'mesh-node' : 'remote-console')
+  const requestedNodeRole = config.nodeRole ?? 'remote-console'
   const activeNodeRole = requestedNodeRole === 'mesh-node' && rolloutFlags.mesh_node_runtime_v1
     ? 'mesh-node'
     : 'remote-console'
   const localToolProviderEnabled = activeNodeRole === 'mesh-node' && rolloutFlags.local_tool_provider_v1
-  const features: BrowserRuntimeFeatureState = Object.freeze({
-    requestedNodeRole,
-    activeNodeRole,
-    meshNodeRuntimeEnabled: activeNodeRole === 'mesh-node',
-    localToolProviderEnabled,
-    lightweightOrchestratorEnabled:
-      activeNodeRole === 'mesh-node' && rolloutFlags.lightweight_orchestrator_v1,
-  })
   const http = httpOptionsFromConfig(config)
   const webrtcDisabled = mode !== 'http-only' && !rolloutFlags.webrtc_thin_client
   const rollbackHttp = webrtcDisabled && mode === 'webrtc-preferred' ? http : null
@@ -199,6 +199,20 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     userAgent: config.userAgent ?? browserUserAgent(),
     nodeMode: activeNodeRole,
     runtimeTier: activeNodeRole === 'mesh-node' ? 'lightweight-ts' : 'none',
+    enabledCapabilityPacks: config.enabledCapabilityPacks,
+    localSpeechPackState: config.localSpeechPackState,
+  })
+  const features: BrowserRuntimeFeatureState = Object.freeze({
+    requestedNodeRole,
+    activeNodeRole,
+    meshNodeRuntimeEnabled: activeNodeRole === 'mesh-node',
+    localToolProviderEnabled,
+    lightweightOrchestratorEnabled:
+      activeNodeRole === 'mesh-node' && rolloutFlags.lightweight_orchestrator_v1,
+    usesBrowserVoiceRuntime: surface.voiceCapture.usesBrowserVoiceRuntime,
+    focusedPushToTalkOwner: surface.voiceCapture.focusedPushToTalkOwner,
+    wakewordOwner: surface.voiceCapture.wakewordOwner,
+    localSpeechPack: surface.localSpeechPack,
   })
   const securityContext: BrowserRuntimeSecurityContext = {
     ...config,
@@ -355,11 +369,19 @@ export function webRtcProfileFromInvite(
 export function explainBrowserThinRuntime(config: BrowserThinRuntimeConfig = {}): string[] {
   const mode = normalizeConnectionMode(config.mode)
   const rolloutFlags = normalizeAuroraWebRtcRolloutFlags(config.rolloutFlags)
+  const requestedNodeRole = config.nodeRole ?? 'remote-console'
+  const activeNodeRole = requestedNodeRole === 'mesh-node' && rolloutFlags.mesh_node_runtime_v1
+    ? 'mesh-node'
+    : 'remote-console'
   const surface = getAuroraSurfaceProfile({
     runtimeMode: config.runtimeMode ?? (mode === 'http-only' ? 'web' : 'web-thin'),
     transportKind: mode === 'http-only' ? 'http' : 'mesh',
     nativePlatform: config.nativePlatform,
     userAgent: config.userAgent ?? browserUserAgent(),
+    nodeMode: activeNodeRole,
+    runtimeTier: activeNodeRole === 'mesh-node' ? 'lightweight-ts' : 'none',
+    enabledCapabilityPacks: config.enabledCapabilityPacks,
+    localSpeechPackState: config.localSpeechPackState,
   })
   const invite = config.inviteText ? decodeMeshInvite(config.inviteText) : null
   const summary = invite ? meshInviteSummary(invite) : null
@@ -370,7 +392,6 @@ export function explainBrowserThinRuntime(config: BrowserThinRuntimeConfig = {})
   if (mode !== 'http-only' && !rolloutFlags.webrtc_scoped_subscriptions) notes.push('scoped WebRTC subscriptions disabled by rollout flag')
   if (mode !== 'http-only' && !rolloutFlags.webrtc_fragmentation) notes.push('WebRTC fragmentation/backpressure disabled by rollout flag')
   if (mode !== 'http-only' && !rolloutFlags.webrtc_app_layer_e2ee) notes.push('application-layer WebRTC E2EE disabled by rollout flag; profiles requiring it fail closed')
-  const requestedNodeRole = config.nodeRole ?? (config.runtimeMode === 'mesh-node' ? 'mesh-node' : 'remote-console')
   if (requestedNodeRole === 'mesh-node' && !rolloutFlags.mesh_node_runtime_v1) notes.push('mesh-node runtime disabled by rollout flag; remote-console behavior remains active')
   if (requestedNodeRole === 'mesh-node' && !rolloutFlags.local_tool_provider_v1) notes.push('local tool provider disabled by rollout flag')
   if (requestedNodeRole === 'mesh-node' && !rolloutFlags.lightweight_orchestrator_v1) notes.push('lightweight orchestrator disabled by rollout flag')

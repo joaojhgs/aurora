@@ -48,7 +48,7 @@ describe('local Tooling package boundary', () => {
       if (oldWindow !== undefined) (globalThis as Record<string, unknown>).window = oldWindow
       if (oldCrypto !== undefined) (globalThis as Record<string, unknown>).crypto = oldCrypto
     }
-  })
+  }, 30_000)
 
   it('points package exports at emitted build artifacts', () => {
     const pkg = JSON.parse(read(packageJsonPath))

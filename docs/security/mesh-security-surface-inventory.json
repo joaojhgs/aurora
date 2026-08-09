@@ -653,7 +653,7 @@
       "handler": "_on_listen",
       "source": {
         "file": "app/services/stt_coordinator/service.py",
-        "line": 1103
+        "line": 1201
       },
       "exposure": "both",
       "method_type": "use",
@@ -674,7 +674,7 @@
       "handler": "_on_stop_listening",
       "source": {
         "file": "app/services/stt_coordinator/service.py",
-        "line": 1145
+        "line": 1254
       },
       "exposure": "both",
       "method_type": "use",
@@ -690,12 +690,75 @@
       "permission_status": "protected"
     },
     {
+      "module": "STTCoordinator",
+      "bus_topic": "STTCoordinator.CapturePrepare",
+      "handler": "_on_capture_prepare",
+      "source": {
+        "file": "app/services/stt_coordinator/service.py",
+        "line": 1436
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "STTCoordinator.manage"
+      ],
+      "module_capabilities": [
+        "audio_capture",
+        "session_management",
+        "stt_coordination"
+      ],
+      "proposed_feature_id": "listening_session_control",
+      "permission_status": "protected"
+    },
+    {
+      "module": "STTCoordinator",
+      "bus_topic": "STTCoordinator.CaptureRelease",
+      "handler": "_on_capture_release",
+      "source": {
+        "file": "app/services/stt_coordinator/service.py",
+        "line": 1540
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "STTCoordinator.manage"
+      ],
+      "module_capabilities": [
+        "audio_capture",
+        "session_management",
+        "stt_coordination"
+      ],
+      "proposed_feature_id": "listening_session_control",
+      "permission_status": "protected"
+    },
+    {
+      "module": "STTCoordinator",
+      "bus_topic": "STTCoordinator.CaptureStatus",
+      "handler": "_on_capture_status",
+      "source": {
+        "file": "app/services/stt_coordinator/service.py",
+        "line": 1612
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "STTCoordinator.manage"
+      ],
+      "module_capabilities": [
+        "audio_capture",
+        "session_management",
+        "stt_coordination"
+      ],
+      "proposed_feature_id": "listening_session_control",
+      "permission_status": "protected"
+    },
+    {
       "module": "Transcription",
       "bus_topic": "Transcription.ProcessAudio",
       "handler": "_on_external_audio",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 779
+        "line": 832
       },
       "exposure": "both",
       "method_type": "use",
@@ -716,7 +779,7 @@
       "handler": "transcribe_audio",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1057
+        "line": 1110
       },
       "exposure": "both",
       "method_type": "use",
@@ -737,7 +800,7 @@
       "handler": "_on_external_audio",
       "source": {
         "file": "app/services/stt_wakeword/service.py",
-        "line": 304
+        "line": 355
       },
       "exposure": "both",
       "method_type": "use",
@@ -758,7 +821,7 @@
       "handler": "detect_wake_word",
       "source": {
         "file": "app/services/stt_wakeword/service.py",
-        "line": 489
+        "line": 540
       },
       "exposure": "both",
       "method_type": "use",
@@ -779,7 +842,7 @@
       "handler": "_on_get_export_catalog",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 6104
+        "line": 6118
       },
       "exposure": "both",
       "method_type": "use",
@@ -800,7 +863,7 @@
       "handler": "_on_get_tools",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 6493
+        "line": 6507
       },
       "exposure": "both",
       "method_type": "use",
@@ -821,7 +884,7 @@
       "handler": "_on_get_tool_catalog",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 6765
+        "line": 6779
       },
       "exposure": "both",
       "method_type": "use",
@@ -842,7 +905,7 @@
       "handler": "_on_get_tool_by_name",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7169
+        "line": 7183
       },
       "exposure": "both",
       "method_type": "use",
@@ -863,7 +926,7 @@
       "handler": "_on_get_stats",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7258
+        "line": 7272
       },
       "exposure": "both",
       "method_type": "use",
@@ -884,7 +947,7 @@
       "handler": "_on_get_sharing_policy",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7290
+        "line": 7304
       },
       "exposure": "both",
       "method_type": "manage",
@@ -905,7 +968,7 @@
       "handler": "_on_set_sharing_policy",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7307
+        "line": 7321
       },
       "exposure": "both",
       "method_type": "manage",
@@ -926,7 +989,7 @@
       "handler": "_on_get_tool_export_policy",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7356
+        "line": 7370
       },
       "exposure": "both",
       "method_type": "use",
@@ -947,7 +1010,7 @@
       "handler": "_on_set_tool_export_default",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7436
+        "line": 7450
       },
       "exposure": "both",
       "method_type": "manage",
@@ -968,7 +1031,7 @@
       "handler": "_on_upsert_tool_group_export_policy",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7473
+        "line": 7487
       },
       "exposure": "both",
       "method_type": "manage",
@@ -989,7 +1052,7 @@
       "handler": "_on_upsert_tool_export_override",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7528
+        "line": 7542
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1010,7 +1073,7 @@
       "handler": "_on_clear_tool_export_override",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7579
+        "line": 7593
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1031,7 +1094,7 @@
       "handler": "_on_preview_tool_export_decision",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7618
+        "line": 7632
       },
       "exposure": "both",
       "method_type": "use",
@@ -1052,7 +1115,7 @@
       "handler": "_on_test_sharing_policy",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8140
+        "line": 8154
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1073,7 +1136,7 @@
       "handler": "_on_prepare_execution",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8161
+        "line": 8175
       },
       "exposure": "both",
       "method_type": "use",
@@ -1094,7 +1157,7 @@
       "handler": "_on_request_approval",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8224
+        "line": 8238
       },
       "exposure": "both",
       "method_type": "use",
@@ -1115,7 +1178,7 @@
       "handler": "_on_confirm_execution",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8310
+        "line": 8324
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1136,7 +1199,7 @@
       "handler": "_on_list_approval_grants",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8505
+        "line": 8519
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1157,7 +1220,7 @@
       "handler": "_on_create_approval_grant",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8543
+        "line": 8557
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1178,7 +1241,7 @@
       "handler": "_on_revoke_approval_grant",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8581
+        "line": 8595
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1199,7 +1262,7 @@
       "handler": "_on_evaluate_approval_grant",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8629
+        "line": 8643
       },
       "exposure": "both",
       "method_type": "use",
@@ -1220,7 +1283,7 @@
       "handler": "_on_get_policy_summary",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8942
+        "line": 8956
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1241,7 +1304,7 @@
       "handler": "_on_list_tool_sources",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8980
+        "line": 8994
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1262,7 +1325,7 @@
       "handler": "_on_list_pending_approvals",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9000
+        "line": 9014
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1283,7 +1346,7 @@
       "handler": "_on_get_tool_source_detail",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9016
+        "line": 9030
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1304,7 +1367,7 @@
       "handler": "_on_accept_remote_tool_schema",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9117
+        "line": 9131
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1325,7 +1388,7 @@
       "handler": "_on_set_policy_mode",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9183
+        "line": 9197
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1346,7 +1409,7 @@
       "handler": "_on_upsert_source_policy",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9247
+        "line": 9261
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1367,7 +1430,7 @@
       "handler": "_on_clear_source_policy",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9305
+        "line": 9319
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1388,7 +1451,7 @@
       "handler": "_on_upsert_tool_policy_override",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9343
+        "line": 9357
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1409,7 +1472,7 @@
       "handler": "_on_clear_tool_policy_override",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9403
+        "line": 9417
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1430,7 +1493,7 @@
       "handler": "_on_test_mcp_source",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9549
+        "line": 9563
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1451,7 +1514,7 @@
       "handler": "_on_test_plugin_source",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9577
+        "line": 9591
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1472,7 +1535,7 @@
       "handler": "_on_create_mcp_source",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9605
+        "line": 9619
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1493,7 +1556,7 @@
       "handler": "_on_create_plugin_source",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9629
+        "line": 9643
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1514,7 +1577,7 @@
       "handler": "_on_list_policy_audit_events",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9652
+        "line": 9666
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1535,7 +1598,7 @@
       "handler": "_on_get_onboarding_status",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9726
+        "line": 9740
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1556,7 +1619,7 @@
       "handler": "_on_get_mcp_status",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9848
+        "line": 9862
       },
       "exposure": "both",
       "method_type": "use",
@@ -1577,7 +1640,7 @@
       "handler": "_on_execute_tool",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9916
+        "line": 9930
       },
       "exposure": "both",
       "method_type": "use",
@@ -1594,11 +1657,291 @@
     },
     {
       "module": "TTS",
+      "bus_topic": "TTS.GetCapabilities",
+      "handler": "get_capabilities",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 981
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "TTS.use"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_discovery",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.ListVoices",
+      "handler": "list_voices",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 1062
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "TTS.use"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_discovery",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.ListVoiceProfiles",
+      "handler": "list_voice_profiles",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 1087
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.GetVoiceProfile",
+      "handler": "get_voice_profile",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 1110
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.UpdateVoiceProfile",
+      "handler": "update_voice_profile",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 1133
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.InstallVoiceProfile",
+      "handler": "install_voice_profile",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 1160
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.RemoveVoiceProfile",
+      "handler": "remove_voice_profile",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 1318
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.SetDefaultVoice",
+      "handler": "set_default_voice",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 1345
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.VoiceImportStart",
+      "handler": "voice_import_start",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 1373
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.VoiceImportChunk",
+      "handler": "voice_import_chunk",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 1437
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.VoiceImportEnd",
+      "handler": "voice_import_end",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 1520
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.VoiceImportAbort",
+      "handler": "voice_import_abort",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 1579
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.CreateVoiceProfile",
+      "handler": "create_voice_profile",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 1628
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.DeleteVoiceProfile",
+      "handler": "delete_voice_profile",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 1684
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
       "bus_topic": "TTS.Request",
       "handler": "_on_tts_request",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 327
+        "line": 1759
       },
       "exposure": "both",
       "method_type": "use",
@@ -1618,7 +1961,7 @@
       "handler": "_on_stream_start",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 378
+        "line": 1815
       },
       "exposure": "both",
       "method_type": "use",
@@ -1638,7 +1981,7 @@
       "handler": "_on_stream_chunk",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 446
+        "line": 1883
       },
       "exposure": "both",
       "method_type": "use",
@@ -1658,7 +2001,7 @@
       "handler": "_on_stream_end",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 494
+        "line": 1931
       },
       "exposure": "both",
       "method_type": "use",
@@ -1678,7 +2021,7 @@
       "handler": "synthesize",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 785
+        "line": 2355
       },
       "exposure": "both",
       "method_type": "use",
@@ -1815,7 +2158,7 @@
       ],
       "source": {
         "file": "app/services/gateway/webrtc/rpc.py",
-        "line": 749
+        "line": 757
       }
     },
     {
@@ -1830,7 +2173,7 @@
       ],
       "source": {
         "file": "app/services/gateway/webrtc/rpc.py",
-        "line": 1913
+        "line": 1965
       }
     },
     {
@@ -1848,7 +2191,7 @@
       ],
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 1034
+        "line": 1048
       }
     },
     {
@@ -1864,7 +2207,7 @@
       ],
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 1090
+        "line": 1104
       }
     },
     {
@@ -1879,7 +2222,7 @@
       ],
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 1840
+        "line": 1854
       }
     },
     {
@@ -1943,7 +2286,7 @@
       ],
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 1540
+        "line": 1554
       }
     },
     {
@@ -1959,7 +2302,7 @@
       ],
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 1480
+        "line": 1494
       }
     },
     {

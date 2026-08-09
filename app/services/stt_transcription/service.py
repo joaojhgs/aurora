@@ -43,7 +43,7 @@ from app.messaging import (
 )
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
-from app.shared.config.models import AccurateModel, RealtimeModel, Stt, Transcription
+from app.shared.config.models import AccurateModel, RealtimeModel, Stt, System, Transcription
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.stt import (
     AudioSessionEvent,
@@ -60,6 +60,10 @@ from app.shared.contracts.models.stt import (
 from app.shared.contracts.registry import method_contract
 from app.shared.path_utils import ensure_path_writable_or_tmp
 from app.shared.services.base_service import BaseService
+from app.shared.speech_language_policy import (
+    SpeechLanguagePolicy,
+    resolve_speech_language_policy,
+)
 
 config_api = ConfigAPI()
 
@@ -144,6 +148,7 @@ class TranscriptionService(BaseService):
 
         # Configuration (will be loaded in on_start)
         self._language = ""
+        self._language_policy = resolve_speech_language_policy("en", "auto")
         self._realtime_enabled = True
         self._accurate_enabled = True
         self._min_audio_length_ms = 500  # Minimum audio length to transcribe
@@ -164,22 +169,7 @@ class TranscriptionService(BaseService):
             log_warning("Transcription service already running")
             return
 
-        # Load configuration (async)
-        stt_cfg = await config_api.aget(ConfigKeys.services.stt, Stt)
-        self._language = stt_cfg.language or ""
-        transcription_cfg = stt_cfg.transcription or Transcription()
-
-        realtime_model = transcription_cfg.realtime_model
-        if realtime_model is not None and realtime_model.enabled is not None:
-            self._realtime_enabled = realtime_model.enabled
-        else:
-            self._realtime_enabled = True
-
-        accurate_model = transcription_cfg.accurate_model
-        if accurate_model is not None and accurate_model.enabled is not None:
-            self._accurate_enabled = accurate_model.enabled
-        else:
-            self._accurate_enabled = True
+        await self._load_config()
 
         log_info("Starting transcription service...")
         self._running = True
@@ -197,7 +187,7 @@ class TranscriptionService(BaseService):
         await self._load_models()
 
         # Subscribe to audio stream
-        self.bus.subscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
+        await self.bus.subscribe_event(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
 
         # Start processing thread
         self._start_processing_thread()
@@ -254,32 +244,77 @@ class TranscriptionService(BaseService):
         """
         log_info(f"Reloading TranscriptionService configuration: section={config_section}")
         # Reload transcription models if config changed
-        if config_section is None or config_section in ("services", "services.stt"):
+        if config_section is None or config_section in ("system", "services", "services.stt"):
             log_info("Reloading transcription models due to config change...")
-            if self._realtime_model:
-                del self._realtime_model
-                self._realtime_model = None
-            if self._accurate_model:
-                del self._accurate_model
-                self._accurate_model = None
-            # Reload config and models
-            stt_cfg = await config_api.aget(ConfigKeys.services.stt, Stt)
-            self._language = stt_cfg.language or ""
-            transcription_cfg = stt_cfg.transcription or Transcription()
-
-            realtime_model = transcription_cfg.realtime_model
-            if realtime_model is not None and realtime_model.enabled is not None:
-                self._realtime_enabled = realtime_model.enabled
-            else:
-                self._realtime_enabled = True
-
-            accurate_model = transcription_cfg.accurate_model
-            if accurate_model is not None and accurate_model.enabled is not None:
-                self._accurate_enabled = accurate_model.enabled
-            else:
-                self._accurate_enabled = True
-            await self._load_models()
+            (
+                language,
+                policy,
+                transcription_cfg,
+                realtime_enabled,
+                accurate_enabled,
+            ) = await self._read_runtime_config()
+            new_realtime, new_accurate = await self._create_models(
+                transcription_cfg,
+                realtime_enabled=realtime_enabled,
+                accurate_enabled=accurate_enabled,
+            )
+            old_realtime, old_accurate = self._realtime_model, self._accurate_model
+            self._language = language
+            self._language_policy = policy
+            self._realtime_enabled = realtime_enabled
+            self._accurate_enabled = accurate_enabled
+            self._realtime_model = new_realtime
+            self._accurate_model = new_accurate
+            if old_realtime:
+                del old_realtime
+            if old_accurate:
+                del old_accurate
         log_info("TranscriptionService configuration reloaded")
+
+    async def _load_config(self) -> None:
+        """Load canonical speech and STT configuration."""
+
+        language, policy, _, realtime_enabled, accurate_enabled = await self._read_runtime_config()
+        self._language = language
+        self._language_policy = policy
+        self._realtime_enabled = realtime_enabled
+        self._accurate_enabled = accurate_enabled
+
+    async def _read_runtime_config(
+        self,
+    ) -> tuple[str, SpeechLanguagePolicy, Transcription, bool, bool]:
+        """Read runtime config without mutating live models."""
+
+        stt_cfg = await config_api.aget(ConfigKeys.services.stt, Stt)
+        system_cfg = await config_api.aget(ConfigKeys.system, System)
+        if not isinstance(system_cfg, System):
+            system_cfg = System()
+        policy = resolve_speech_language_policy(
+            system_cfg.primary_language,
+            system_cfg.voice_language,
+        )
+        transcription_cfg = stt_cfg.transcription or Transcription()
+
+        realtime_model = transcription_cfg.realtime_model
+        realtime_enabled = (
+            realtime_model.enabled
+            if realtime_model is not None and realtime_model.enabled is not None
+            else True
+        )
+
+        accurate_model = transcription_cfg.accurate_model
+        accurate_enabled = (
+            accurate_model.enabled
+            if accurate_model is not None and accurate_model.enabled is not None
+            else True
+        )
+        return (
+            policy.stt_language or "",
+            policy,
+            transcription_cfg,
+            realtime_enabled,
+            accurate_enabled,
+        )
 
     def _initialize_vad(self) -> None:
         """Initialize Voice Activity Detection."""
@@ -294,10 +329,25 @@ class TranscriptionService(BaseService):
         """Load Faster Whisper models."""
         log_info("Loading transcription models...")
 
+        transcription_cfg = (await config_api.aget(ConfigKeys.services.stt, Stt)).transcription
+        new_realtime, new_accurate = await self._create_models(
+            transcription_cfg or Transcription(),
+            realtime_enabled=self._realtime_enabled,
+            accurate_enabled=self._accurate_enabled,
+        )
+        self._realtime_model = new_realtime
+        self._accurate_model = new_accurate
+
+    async def _create_models(
+        self,
+        transcription_cfg: Transcription,
+        *,
+        realtime_enabled: bool,
+        accurate_enabled: bool,
+    ) -> tuple[Any | None, Any | None]:
+        """Create Faster Whisper models without mutating live service state."""
+
         try:
-            # Get model configuration
-            stt_cfg = await config_api.aget(ConfigKeys.services.stt, Stt)
-            transcription_cfg = stt_cfg.transcription or Transcription()
             raw_realtime = transcription_cfg.realtime_model
             realtime_model_cfg = raw_realtime or RealtimeModel()
             accurate_model_cfg = transcription_cfg.accurate_model or AccurateModel()
@@ -324,9 +374,10 @@ class TranscriptionService(BaseService):
             download_root = ensure_path_writable_or_tmp(_preferred, tmp_leaf="faster-whisper")
 
             # Load realtime model (fast, lower accuracy)
-            if self._realtime_enabled:
+            realtime_model = None
+            if realtime_enabled:
                 log_info(f"Loading realtime model ({realtime_model_size}) on {realtime_device}...")
-                self._realtime_model = _create_whisper_model(
+                realtime_model = _create_whisper_model(
                     realtime_model_size,
                     device=realtime_device,
                     compute_type=realtime_compute_type,
@@ -335,15 +386,17 @@ class TranscriptionService(BaseService):
                 log_info(f"Realtime model loaded ({realtime_model_size})")
 
             # Load accurate model (slower, higher accuracy)
-            if self._accurate_enabled:
+            accurate_model = None
+            if accurate_enabled:
                 log_info(f"Loading accurate model ({accurate_model_size}) on {accurate_device}...")
-                self._accurate_model = _create_whisper_model(
+                accurate_model = _create_whisper_model(
                     accurate_model_size,
                     device=accurate_device,
                     compute_type=accurate_compute_type,
                     download_root=download_root,
                 )
                 log_info(f"Accurate model loaded ({accurate_model_size})")
+            return realtime_model, accurate_model
 
         except Exception as e:
             log_error(f"Failed to load models: {e}", exc_info=True)
