@@ -175,6 +175,61 @@ test('persists JSON and promoted bytes across reloads', async ({ page }, testInf
   expect(reopened.chunk.complete).toBe(true)
 })
 
+test('reopens a verified signed pack across reload without fetching model bytes again', async ({ page }, testInfo) => {
+  await installNamespacedStore(page, testInfo.project.name)
+  await requireBrowserStoreWriteSupport(page, testInfo.project.name)
+
+  const first = await page.evaluate(async () => {
+    const host = await window.__auroraBrowserStore.create()
+    const bytes = new Uint8Array([21, 22, 23, 24])
+    const manifest = await window.__auroraBrowserModelPack.signedManifest(bytes)
+    let fetchCount = 0
+    const receipt = await window.__auroraBrowserModelPack.installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      fetchBytes: async () => {
+        fetchCount += 1
+        return bytes
+      }
+    })
+    return {
+      fetchCount,
+      receipt,
+      keys: await host.listPromotedKeys()
+    }
+  })
+
+  expect(first.fetchCount).toBe(1)
+  expect(first.keys).toHaveLength(1)
+  expect(first.receipt.manifestSha256).toMatch(/^[a-f0-9]{64}$/)
+
+  await page.reload()
+  await installNamespacedStore(page, testInfo.project.name)
+  const unexpectedNetwork: string[] = []
+  await page.route('**/*', (route) => {
+    unexpectedNetwork.push(route.request().url())
+    return route.abort('blockedbyclient')
+  })
+
+  const reopened = await page.evaluate(async () => {
+    const host = await window.__auroraBrowserStore.create()
+    const active = await window.__auroraBrowserModelPack.openActiveBrowserModelPack(
+      host,
+      { task: 'stt' },
+      { allowNonProductionTestSignature: true }
+    )
+    return {
+      identity: active?.identity ?? null,
+      bytes: active?.files[0] ? Array.from(await active.files[0].readAll()) : []
+    }
+  })
+
+  expect(reopened.identity).toEqual(first.receipt.identity)
+  expect(reopened.bytes).toEqual([21, 22, 23, 24])
+  expect(unexpectedNetwork).toEqual([])
+})
+
 test('replaces JSON snapshots without reviving stale bytes', async ({ page }, testInfo) => {
   await installNamespacedStore(page, testInfo.project.name)
   await requireBrowserStoreWriteSupport(page, testInfo.project.name)
@@ -299,9 +354,16 @@ function browserHarnessModule(): string {
       IndexedDbBrowserModelStorePort,
       OpfsBrowserModelStorePort
     } from '/dist/browser-model-store-host.js';
+    import {
+      AURORA_MODEL_PACK_SIGNATURE_ALGORITHM,
+      AURORA_NON_PRODUCTION_MODEL_PACK_KEY_ID,
+      installVerifiedBrowserModelPack,
+      openActiveBrowserModelPack
+    } from '/dist/browser-model-pack.js';
 
     try {
       const namespace = window.__auroraVoiceWebBrowserStoreTest;
+      const TEST_PRIVATE_KEY_PKCS8_BASE64 = 'MC4CAQAwBQYDK2VwBCIEIBVNj/cSHz9pWMrteoqMMTyDd+p51OEdgbIRQJDEHiBP';
 
       class NamespacedIndexedDbBrowserModelStorePort extends IndexedDbBrowserModelStorePort {
         constructor(globalObject = globalThis) {
@@ -372,9 +434,90 @@ function browserHarnessModule(): string {
         create: async () => new AuroraBrowserModelStoreHost(await createNamespacedPort()),
         createDefault: async () => new AuroraBrowserModelStoreHost(await createBrowserModelStorePort())
       };
+      window.__auroraBrowserModelPack = {
+        installVerifiedBrowserModelPack,
+        openActiveBrowserModelPack,
+        signedManifest: async (bytes) => {
+          const unsigned = {
+            schema_version: 1,
+            pack_id: 'pockettts-web-test',
+            pack_version: '1.0.0',
+            display_name: 'PocketTTS Web Test',
+            tasks: ['stt'],
+            files: [{
+              file_id: 'model',
+              asset_id: 'model',
+              task: 'stt',
+              url: '/fixtures/pockettts-web-test.bin',
+              sha256: await sha256Hex(bytes),
+              byte_size: bytes.byteLength,
+              installed_size: bytes.byteLength,
+              compression: 'none'
+            }],
+            variants: [{
+              variant_id: 'web-wasm32-test',
+              file_ids: ['model'],
+              target: 'web',
+              os: 'web',
+              arch: 'wasm32'
+            }],
+            revocation: null,
+            signature: null
+          };
+          const privateKey = await crypto.subtle.importKey(
+            'pkcs8',
+            decodeBase64(TEST_PRIVATE_KEY_PKCS8_BASE64),
+            'Ed25519',
+            false,
+            ['sign']
+          );
+          const { signature: _signature, ...unsignedPayload } = unsigned;
+          const signature = await crypto.subtle.sign('Ed25519', privateKey, encodeUtf8(canonicalJson(unsignedPayload)));
+          return {
+            ...unsigned,
+            signature: {
+              key_id: AURORA_NON_PRODUCTION_MODEL_PACK_KEY_ID,
+              algorithm: AURORA_MODEL_PACK_SIGNATURE_ALGORITHM,
+              value: encodeBase64(new Uint8Array(signature))
+            }
+          };
+        }
+      };
     } catch (error) {
       window.__auroraBrowserStoreInstallError = String(error?.stack ?? error);
       throw error;
+    }
+
+    async function sha256Hex(bytes) {
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    }
+
+    function canonicalJson(value) {
+      if (value === null) return 'null';
+      if (typeof value === 'boolean') return value ? 'true' : 'false';
+      if (typeof value === 'number') return String(value);
+      if (typeof value === 'string') return JSON.stringify(value);
+      if (Array.isArray(value)) return '[' + value.map(canonicalJson).join(',') + ']';
+      return '{' + Object.keys(value)
+        .sort()
+        .map((key) => JSON.stringify(key) + ':' + canonicalJson(value[key]))
+        .join(',') + '}';
+    }
+
+    function encodeUtf8(value) {
+      return new TextEncoder().encode(value);
+    }
+
+    function decodeBase64(value) {
+      const decoded = atob(value);
+      return Uint8Array.from(decoded, (char) => char.charCodeAt(0));
+    }
+
+    function encodeBase64(value) {
+      let binary = '';
+      for (const byte of value) binary += String.fromCharCode(byte);
+      return btoa(binary);
     }
   `
 }
@@ -413,6 +556,26 @@ declare global {
           deleteBlob(physicalKey: string): Promise<void>
         }
       }>
+    }
+    __auroraBrowserModelPack: {
+      signedManifest(bytes: Uint8Array): Promise<unknown>
+      installVerifiedBrowserModelPack(options: {
+        host: unknown
+        manifest: unknown
+        allowNonProductionTestSignature: true
+        fetchBytes: () => Promise<Uint8Array>
+      }): Promise<{
+        identity: unknown
+        manifestSha256: string
+      }>
+      openActiveBrowserModelPack(
+        host: unknown,
+        scope: { task: string },
+        options: { allowNonProductionTestSignature: true }
+      ): Promise<{
+        identity: unknown
+        files: readonly [{ readAll(): Promise<Uint8Array> }]
+      } | null>
     }
   }
 }
