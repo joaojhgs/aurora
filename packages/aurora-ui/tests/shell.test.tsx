@@ -656,7 +656,7 @@ describe('Aurora production shell', () => {
       expect.objectContaining({
         state: 'available-local',
         selectable: true,
-        requiredAction: 'Turn on the needed Aurora feature before continuing.'
+        requiredAction: 'Choose which approved device should handle this.'
       })
     ]))
   })
@@ -691,6 +691,13 @@ describe('Aurora production shell', () => {
     expect(snapshot.loadState).toBe('error')
     expect(snapshot.routes.every((route) => route.disabled)).toBe(true)
     expect(snapshot.routes.every((route) => route.blockers.includes('sdk_error'))).toBe(true)
+    const userFacing = shellRouteCopySurface([
+      ...snapshot.routes,
+      snapshot.assistantCancellationRoute,
+      ...Object.values(snapshot.assistantVoiceRoutes)
+    ])
+    expect(userFacing).not.toMatch(/runtime|shell|provider|service contract|first-run gate/i)
+    expect(findForbiddenProductionCopyTerms(userFacing).map((term) => term.id), userFacing).toEqual([])
   })
 
   it('keeps internal shell task names out of user-facing route labels and reasons', () => {
@@ -732,6 +739,33 @@ describe('Aurora production shell', () => {
       expect(userFacing).not.toMatch(/service contract|first-run gate/i)
       expect(findForbiddenProductionCopyTerms(userFacing).map((term) => term.id), userFacing).toEqual([])
     }
+  })
+
+  it('sanitizes hostile provider node names before shell data reaches rendered routes', () => {
+    const catalog = cloneFixture(capabilityGraphCatalogFixture)
+    const provider = catalog.providers.find((candidate) => candidate.provider_id === 'mesh:studio-gpu:Orchestrator')
+    const action = catalog.actions.find((candidate) => candidate.action_id === 'assistant-local-external-user-input')
+    if (!provider || !action) throw new Error('missing assistant capability fixture')
+    provider.node_name = 'runtime provider shell'
+    provider.peer_id = 'hostile-runtime-provider'
+    action.provider_id = provider.provider_id
+    action.provider_kind = provider.provider_kind
+    action.peer_id = provider.peer_id
+    action.service_instance_id = provider.service_instance_id
+    action.selector = { peer_id: provider.peer_id, module: provider.module }
+    const graph = buildCapabilityGraph({
+      catalog,
+      registry: null,
+      transportKind: 'mock'
+    })
+    const snapshot = snapshotFromGraph('mock', graph, null)
+    const assistant = route(snapshot, 'assistant')
+
+    expect(assistant.providerLabel).toBe('Connected Aurora device')
+    expect(assistant.candidateProviders[0]?.label).toBe('Connected Aurora device')
+    const userFacing = shellRouteCopySurface([assistant])
+    expect(userFacing).not.toMatch(/runtime provider shell|hostile-runtime-provider/i)
+    expect(findForbiddenProductionCopyTerms(userFacing).map((term) => term.id), userFacing).toEqual([])
   })
 
   it('builds model runtime provider state from SDK catalog, capability graph, and native status', () => {
@@ -2694,6 +2728,21 @@ describe('Aurora production shell', () => {
     expect(retained.availableCount).toBe(0)
     expect(retained.error).toBeNull()
 
+    const hostilePeerSnapshot: BrowserWebRtcSnapshot = {
+      ...thinPeerSnapshot,
+      expectedStablePeerId: 'thin-runtime-provider',
+      nodeName: 'runtime provider shell',
+    }
+    const hostileRetained = retainThinShellSnapshot(ready, failed, hostilePeerSnapshot)
+    expect(hostileRetained.nodeName).toBe('Invited Aurora device')
+    const retainedCopy = shellRouteCopySurface([
+      ...hostileRetained.routes,
+      hostileRetained.assistantCancellationRoute,
+      ...Object.values(hostileRetained.assistantVoiceRoutes)
+    ])
+    expect(retainedCopy).not.toMatch(/runtime provider shell|thin-runtime-provider|last-known provider|mesh route/i)
+    expect(findForbiddenProductionCopyTerms(retainedCopy).map((term) => term.id), retainedCopy).toEqual([])
+
     const coldOffline = retainThinShellSnapshot(
       { ...loadingShellSnapshot, loadState: 'ready' },
       failed,
@@ -2702,7 +2751,7 @@ describe('Aurora production shell', () => {
     expect(coldOffline.routes).toHaveLength(failed.routes.length)
     expect(coldOffline.routes.every((route) => route.state === 'stale')).toBe(true)
     expect(coldOffline.routes[0]?.explanation).toContain(
-      'another trusted mesh route reconnects',
+      'approved Aurora device reconnects',
     )
     expect(coldOffline.error).toBeNull()
 
@@ -3995,6 +4044,24 @@ function route(snapshot: Awaited<ReturnType<typeof buildShellSnapshot>>, id: str
     disabled: navItem.fallbackState === 'unsupported' || navItem.fallbackState === 'privacy-blocked',
     requiresAdminAction: navItem.methodType === 'manage'
   }
+}
+
+function shellRouteCopySurface(
+  routes: Array<Awaited<ReturnType<typeof buildShellSnapshot>>['routes'][number] | null>
+): string {
+  return routes
+    .filter((candidate): candidate is Awaited<ReturnType<typeof buildShellSnapshot>>['routes'][number] => Boolean(candidate))
+    .flatMap((candidate) => [
+      candidate.providerLabel,
+      candidate.explanation,
+      ...candidate.repairActions.flatMap((action) => [action.label, action.reason]),
+      ...candidate.candidateProviders.flatMap((provider) => [
+        provider.label,
+        provider.reason,
+        provider.requiredAction ?? ''
+      ])
+    ])
+    .join(' ')
 }
 
 function productionAnchorAliasPresent(sourceText: string, anchor: string): boolean {

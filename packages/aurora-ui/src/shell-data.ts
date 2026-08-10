@@ -212,10 +212,10 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
   const routes = allShellRouteItems().map((item) => ({
     item: navItemSnapshot(item),
     state: 'unsupported' as const,
-    explanation: 'Capability state could not be loaded from Aurora.',
-    providerLabel: 'Select runtime',
+    explanation: 'Aurora could not load this feature.',
+    providerLabel: pendingFeatureLabel(item),
     blockers: ['sdk_error'],
-    repairActions: [repairAction('retry', 'Retry connection', '/', true, 'The shell needs a fresh Aurora response.')],
+    repairActions: [repairAction('retry', 'Try again', '/', true, 'Aurora needs a fresh response.')],
     candidateProviders: [],
     evidenceSources: ['Aurora service error'],
     selectorRequired: false,
@@ -227,10 +227,10 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
   const assistantCancellationRoute: RouteAvailability = {
     item: navItemSnapshot(auroraAssistantCancellationItem),
     state: 'unsupported',
-    explanation: 'Capability state could not be loaded from Aurora.',
-    providerLabel: 'Select runtime',
+    explanation: 'Aurora could not load this feature.',
+    providerLabel: pendingFeatureLabel(auroraAssistantCancellationItem),
     blockers: ['sdk_error'],
-    repairActions: [repairAction('retry', 'Retry connection', '/', true, 'The shell needs a fresh Aurora response.')],
+    repairActions: [repairAction('retry', 'Try again', '/', true, 'Aurora needs a fresh response.')],
     candidateProviders: [],
     evidenceSources: ['Aurora service error'],
     selectorRequired: false,
@@ -276,19 +276,21 @@ export function retainThinShellSnapshot(
       || current.routes.some((route) => route.candidateProviders.length > 0)
     )
   const base = hasLastKnownGraph ? current : next
-  const peerLabel = peer.nodeName?.trim() || peer.expectedStablePeerId || 'Invited Aurora peer'
+  const peerLabel = safePeerDisplayName(peer)
   const retainRoute = (route: RouteAvailability): RouteAvailability => ({
     ...route,
     state: 'stale',
     explanation: hasLastKnownGraph
-      ? `Last-known capability data is retained while ${peerLabel} is offline.`
-      : `${peerLabel} is offline. Capability providers will appear when this peer or another trusted mesh route reconnects.`,
+      ? `Saved feature choices remain visible while ${peerLabel} is offline.`
+      : `${peerLabel} is offline. Choices will appear when an approved Aurora device reconnects.`,
     blockers: sortedUnique([...route.blockers, 'thin_peer_offline']),
     candidateProviders: route.candidateProviders.map((candidate) => ({
       ...candidate,
       state: 'stale' as const,
       selectable: false,
-      reason: `Last-known provider; ${peerLabel} is offline.`,
+      label: safeDisplayCopy(candidate.label, 'Connected Aurora device'),
+      reason: `Saved choice; ${peerLabel} is offline.`,
+      requiredAction: candidate.requiredAction ? safeRouteReason(candidate.requiredAction) : null,
     })),
     routeable: false,
     disabled: true,
@@ -645,7 +647,7 @@ function providerSourceLabel(provider: Pick<CapabilityProviderCandidate, 'provid
 
 function providerFallbackLabel(provider: Pick<CapabilityProviderCandidate, 'providerKind' | 'nodeName' | 'peerId' | 'providerIdentity'>): string {
   if (provider.providerKind === 'local') return 'This device'
-  if (provider.nodeName?.trim()) return compactDisplayText(provider.nodeName)
+  if (provider.nodeName?.trim()) return safeDisplayCopy(provider.nodeName, 'Connected Aurora device')
   if (provider.peerId) return 'Connected Aurora device'
   return safeDisplayCopy(provider.providerIdentity, 'Aurora source')
 }
@@ -667,7 +669,7 @@ function safeRouteReason(value: string | null | undefined, fallback = 'Review se
   if (/\b(peer|pair|stale|offline|freshness)\b/u.test(normalized)) {
     return 'Reconnect an approved Aurora device before using this.'
   }
-  if (/\b(selector|route)\b/u.test(normalized)) {
+  if (/\b(selector|selection|choose|choice|route)\b/u.test(normalized)) {
     return 'Choose which approved device should handle this.'
   }
   if (/\b(native|microphone|camera|notification|biometric)\b/u.test(normalized)) {
@@ -681,4 +683,11 @@ function safeRouteReason(value: string | null | undefined, fallback = 'Review se
 
 function compactDisplayText(value: string | null | undefined): string {
   return value?.trim().replace(/\s+/gu, ' ') ?? ''
+}
+
+function safePeerDisplayName(peer: BrowserWebRtcSnapshot): string {
+  return safeDisplayCopy(
+    peer.nodeName,
+    safeDisplayCopy(peer.expectedStablePeerId, 'Invited Aurora device')
+  )
 }
