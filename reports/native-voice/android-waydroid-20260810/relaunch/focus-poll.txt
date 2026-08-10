@@ -1,0 +1,16 @@
+--- after 1s cumulative-ish 2026-08-10T14:41:07+00:00 ---
+pid=2570
+  mCurrentFocus=Window{1350643 u0 dev.aurora.desktop/dev.aurora.desktop.MainActivity}
+  mFocusedApp=ActivityRecord{3b7e1b7 u0 dev.aurora.desktop/.MainActivity} t14}
+--- after 3s cumulative-ish 2026-08-10T14:41:10+00:00 ---
+pid=2570
+  mCurrentFocus=Window{1350643 u0 dev.aurora.desktop/dev.aurora.desktop.MainActivity}
+  mFocusedApp=ActivityRecord{3b7e1b7 u0 dev.aurora.desktop/.MainActivity} t14}
+--- after 8s cumulative-ish 2026-08-10T14:41:18+00:00 ---
+pid=2570
+  mCurrentFocus=Window{1350643 u0 dev.aurora.desktop/dev.aurora.desktop.MainActivity}
+  mFocusedApp=ActivityRecord{3b7e1b7 u0 dev.aurora.desktop/.MainActivity} t14}
+--- after 15s cumulative-ish 2026-08-10T14:41:33+00:00 ---
+pid=2570
+  mCurrentFocus=Window{1350643 u0 dev.aurora.desktop/dev.aurora.desktop.MainActivity}
+  mFocusedApp=ActivityRecord{3b7e1b7 u0 dev.aurora.desktop/.MainActivity} t14}

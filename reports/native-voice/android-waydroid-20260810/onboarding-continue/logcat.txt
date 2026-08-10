@@ -1,0 +1,493 @@
+--------- beginning of system
+08-10 14:41:05.906   335   349 D CompatibilityChangeReporter: Compat change id reported: 161252188; UID 10127; state: DISABLED
+08-10 14:41:05.906   335   349 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=dev.aurora.desktop/.MainActivity} from uid 2000
+08-10 14:41:05.907   335   349 D CompatibilityChangeReporter: Compat change id reported: 265464455; UID 10127; state: DISABLED
+08-10 14:41:05.907   335   349 D CompatibilityChangeReporter: Compat change id reported: 265452344; UID 10127; state: DISABLED
+08-10 14:41:05.907   335   349 D CompatibilityChangeReporter: Compat change id reported: 266124927; UID 10127; state: DISABLED
+08-10 14:41:05.907   335   349 D CompatibilityChangeReporter: Compat change id reported: 265451093; UID 10127; state: DISABLED
+08-10 14:41:05.907   335   349 D CompatibilityChangeReporter: Compat change id reported: 265456536; UID 10127; state: DISABLED
+08-10 14:41:05.907   335   349 D CompatibilityChangeReporter: Compat change id reported: 255940284; UID 10127; state: DISABLED
+08-10 14:41:05.907   335   349 D CompatibilityChangeReporter: Compat change id reported: 236283604; UID 10127; state: DISABLED
+08-10 14:41:05.907   335   349 D CompatibilityChangeReporter: Compat change id reported: 263959004; UID 10127; state: DISABLED
+08-10 14:41:05.907   335   349 D CompatibilityChangeReporter: Compat change id reported: 264304459; UID 10127; state: DISABLED
+08-10 14:41:05.907   335   349 D CompatibilityChangeReporter: Compat change id reported: 264301586; UID 10127; state: DISABLED
+08-10 14:41:05.907   335   349 D CompatibilityChangeReporter: Compat change id reported: 254631730; UID 10127; state: DISABLED
+08-10 14:41:05.907   335   349 D CompatibilityChangeReporter: Compat change id reported: 273509367; UID 10127; state: DISABLED
+08-10 14:41:05.907   335   349 D CompatibilityChangeReporter: Compat change id reported: 263259275; UID 10127; state: DISABLED
+08-10 14:41:05.907   335   349 D CompatibilityChangeReporter: Compat change id reported: 194480991; UID 10127; state: ENABLED
+08-10 14:41:05.907   335   349 D CompatibilityChangeReporter: Compat change id reported: 174042980; UID 10127; state: DISABLED
+--------- beginning of main
+08-10 14:41:05.908   335   349 E CellBroadcastUtils: getDefaultCellBroadcastReceiverPackageName: no package found
+08-10 14:41:05.908   335   349 D CompatibilityChangeReporter: Compat change id reported: 184838306; UID 10127; state: DISABLED
+08-10 14:41:05.908   335   349 D CompatibilityChangeReporter: Compat change id reported: 185004937; UID 10127; state: DISABLED
+08-10 14:41:05.908   335   349 D CompatibilityChangeReporter: Compat change id reported: 181136395; UID 10127; state: DISABLED
+08-10 14:41:05.908   335   349 D CompatibilityChangeReporter: Compat change id reported: 174042936; UID 10127; state: DISABLED
+08-10 14:41:05.908   335   349 D CompatibilityChangeReporter: Compat change id reported: 197654537; UID 10127; state: ENABLED
+08-10 14:41:05.909   335   349 D CompatibilityChangeReporter: Compat change id reported: 205907456; UID 10127; state: ENABLED
+08-10 14:41:05.910   335   366 W libprocessgroup: Failed to open /dev/stune/top-app/cgroup.procs: No such file or directory
+08-10 14:41:05.910   335   366 W libprocessgroup: Failed to open /dev/cpuset/top-app/cgroup.procs: No such file or directory
+08-10 14:41:05.910   335   366 W libprocessgroup: Failed to open /dev/blkio//cgroup.procs: No such file or directory
+08-10 14:41:05.911   528   848 W Parcel  : Expecting binder but got null!
+08-10 14:41:05.913   335  1663 D CompatibilityChangeReporter: Compat change id reported: 168419799; UID 10127; state: DISABLED
+08-10 14:41:05.913   335  1663 D CompatibilityChangeReporter: Compat change id reported: 273564678; UID 10127; state: DISABLED
+08-10 14:41:05.913   335   355 D CompatibilityChangeReporter: Compat change id reported: 135634846; UID 10127; state: DISABLED
+08-10 14:41:05.914   335   363 D CompatibilityChangeReporter: Compat change id reported: 143937733; UID 10127; state: ENABLED
+08-10 14:41:05.914   335  1663 D CoreBackPreview: Window{adee253 u0 dev.aurora.desktop/SplashScreen}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@bf2d889, mPriority=0}
+08-10 14:41:05.921    79    79 D Zygote  : Forked child process 2570
+08-10 14:41:05.921   335   363 I ActivityManager: Start proc 2570:dev.aurora.desktop/u0a127 for next-top-activity {dev.aurora.desktop/dev.aurora.desktop.MainActivity}
+08-10 14:41:05.923  2570  2570 E libprocessgroup: Failed to make and chown /sys/fs/cgroup/uid_10127: Read-only file system
+08-10 14:41:05.923  2570  2570 W Zygote  : createProcessGroup failed, kernel missing CONFIG_CGROUP_CPUACCT?
+08-10 14:41:05.924  2570  2570 I .aurora.desktop: Late-enabling -Xcheck:jni
+08-10 14:41:05.927   528   848 E OpenGLRenderer: Unable to match the desired swap behavior.
+08-10 14:41:05.927    89   173 V [minigbm:gbm_mesa_internals.cpp(382)]: Allocated: 1280x768, stride: 5120, map_stride: 0
+08-10 14:41:05.928    89   173 V [minigbm:gbm_mesa_internals.cpp(382)]: Allocated: 1280x768, stride: 5120, map_stride: 0
+08-10 14:41:05.928    89   173 V [minigbm:gbm_mesa_internals.cpp(382)]: Allocated: 1280x768, stride: 5120, map_stride: 0
+08-10 14:41:05.929    99    99 I BpBinder: onLastStrongRef automatically unlinking death recipients: <uncached descriptor>
+08-10 14:41:05.944  2570  2570 W .aurora.desktop: Unexpected CPU variant for x86: x86_64.
+08-10 14:41:05.944  2570  2570 W .aurora.desktop: Known variants: atom, sandybridge, silvermont, kabylake, default
+08-10 14:41:05.953  2570  2570 D CompatibilityChangeReporter: Compat change id reported: 171979766; UID 10127; state: ENABLED
+08-10 14:41:05.959  2570  2570 W ziparchive: Unable to open '/data/app/~~E4gWewbnUsO6N94KCDcWpA==/dev.aurora.desktop-GmWfyDzhhH1ATyp5-yVg9A==/base.dm': No such file or directory
+08-10 14:41:05.959  2570  2570 W ziparchive: Unable to open '/data/app/~~E4gWewbnUsO6N94KCDcWpA==/dev.aurora.desktop-GmWfyDzhhH1ATyp5-yVg9A==/base.dm': No such file or directory
+08-10 14:41:06.123  2570  2570 V GraphicsEnvironment: ANGLE Developer option for 'dev.aurora.desktop' set to: 'default'
+08-10 14:41:06.123  2570  2570 V GraphicsEnvironment: ANGLE GameManagerService for dev.aurora.desktop: false
+08-10 14:41:06.123  2570  2570 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+08-10 14:41:06.124  2570  2570 D NetworkSecurityConfig: Using Network Security Config from resource aurora_network_security_config debugBuild: true
+08-10 14:41:06.125  2570  2570 D NetworkSecurityConfig: Using Network Security Config from resource aurora_network_security_config debugBuild: true
+08-10 14:41:06.168  2570  2570 D AppCompatDelegate: Checking for metadata for AppLocalesMetadataHolderService : Service not found
+08-10 14:41:06.176  2570  2570 I android_os_HwBinder: HwBinder: Starting hwbinderthread pool for getting: vendor.waydroid.window@1.1::IWaydroidWindow/default
+08-10 14:41:06.239  2570  2570 W .aurora.desktop: Accessing hidden method Landroid/view/ViewGroup;->makeOptionalFitsSystemWindows()V (unsupported, reflection, allowed)
+08-10 14:41:06.245  2570  2570 D CompatibilityChangeReporter: Compat change id reported: 237531167; UID 10127; state: DISABLED
+08-10 14:41:06.248  2570  2588 W Parcel  : Expecting binder but got null!
+08-10 14:41:06.249   335  1663 D CoreBackPreview: Window{1350643 u0 dev.aurora.desktop/dev.aurora.desktop.MainActivity}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@4c5f5f9, mPriority=0}
+08-10 14:41:06.257  2570  2588 I MESA    : Using gralloc0 CrOS API
+08-10 14:41:06.258  2570  2588 W EGL-MAIN: failed to get driver name for fd -1
+08-10 14:41:06.258  2570  2588 W EGL-MAIN: MESA-LOADER: failed to retrieve device information
+08-10 14:41:06.258  2570  2588 W EGL-MAIN: failed to get driver name for fd -1
+08-10 14:41:06.271  2570  2592 I RustStdoutStderr: /vendor/etc/hwdata/amdgpu.ids: No such file or directory
+08-10 14:41:06.278   335   356 W Choreographer: Frame time is 0.332113 ms in the future!  Check that graphics HAL is generating vsync timestamps using the correct timebase.
+08-10 14:41:06.280  2570  2588 E OpenGLRenderer: Device claims wide gamut support, cannot find matching config, error = EGL_SUCCESS
+08-10 14:41:06.280  2570  2588 W OpenGLRenderer: Failed to initialize 101010-2 format, error = EGL_SUCCESS
+08-10 14:41:06.290    99   378 E HWComposer: getSupportedContentTypes: getSupportedContentTypes failed for display 0: Unsupported (8)
+08-10 14:41:06.291  2570  2588 E OpenGLRenderer: Unable to match the desired swap behavior.
+08-10 14:41:06.293    23    23 I servicemanager: Could not find android.hardware.graphics.allocator.IAllocator/default in the VINTF manifest.
+08-10 14:41:06.293    89   173 V [minigbm:gbm_mesa_internals.cpp(382)]: Allocated: 1280x768, stride: 5120, map_stride: 0
+08-10 14:41:06.293    89   173 V [minigbm:gbm_mesa_internals.cpp(382)]: Allocated: 1280x768, stride: 5120, map_stride: 0
+08-10 14:41:06.293    89   173 V [minigbm:gbm_mesa_internals.cpp(382)]: Allocated: 1280x768, stride: 5120, map_stride: 0
+08-10 14:41:06.305  2570  2570 W OnBackInvokedCallback: OnBackInvokedCallback is not enabled for the application.
+08-10 14:41:06.305  2570  2570 W OnBackInvokedCallback: Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+08-10 14:41:06.305   335   352 W ziparchive: Unable to open '/data/app/~~E4gWewbnUsO6N94KCDcWpA==/dev.aurora.desktop-GmWfyDzhhH1ATyp5-yVg9A==/base.dm': No such file or directory
+08-10 14:41:06.306   335   352 I ActivityTaskManager: Displayed dev.aurora.desktop/.MainActivity: +399ms
+08-10 14:41:06.308  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: deep-link, command: setEventHandler
+08-10 14:41:06.326   335  1663 D CompatibilityChangeReporter: Compat change id reported: 214016041; UID 10127; state: ENABLED
+08-10 14:41:06.330  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: path, command: getConfigDir
+08-10 14:41:06.342  2570  2592 I RustStdoutStderr: aurora_android_baseline_status={"assistantRole":{"denied":null,"oemUnavailable":null,"packageQualified":null,"probeImplemented":false,"reason":"AND-001 proves Android packaging only; RoleManager qualification waits for AND-004 native probe evidence","requestable":null,"roleAvailable":null,"roleHeld":null},"available":true,"evidenceSource":"tauri-android-baseline","fallbackEntrypoints":{"deepLinkPlanned":false,"manualOpen":true,"remoteGateway":true,"shareIntentPlanned":false},"feature":"android.buildBaseline","platform":"android","secretsRedacted":true,"state":"degraded"}
+08-10 14:41:06.345  2570  2570 I WebViewFactory: Loading com.android.webview version 146.0.7680.153 (code 768015307)
+08-10 14:41:06.347  2570  2570 D ApplicationLoaders: Returning zygote-cached class loader: /system/framework/android.test.base.jar
+08-10 14:41:06.351  2570  2570 W .aurora.desktop: ClassLoaderContext shared library size mismatch. Expected=0, found=2 (PCL[] | PCL[]{PCL[/system/framework/android.test.base.jar*327547567]#PCL[/system/system_ext/framework/androidx.window.extensions.jar*1341008790]})
+08-10 14:41:06.370  2570  2570 I cr_WVCFactoryProvider: version=146.0.7680.153 (768015307) minSdkVersion=29 multiprocess=true packageId=127 splits=<none>
+08-10 14:41:06.386  2570  2570 I cr_LibraryLoader: Successfully loaded native library
+08-10 14:41:06.387  2570  2570 I cr_CachingUmaRecorder: Flushed 20 samples from 19 histograms, 0 samples were dropped.
+08-10 14:41:06.391  2570  2570 I cr_ChildProcLH: ScopedServiceBindingBatch.tryActivate: false
+08-10 14:41:06.392  2570  2570 I cr_CombinedPProvider: #registerProvider() provider:WV.sf@9818c63 isPolicyCacheEnabled:false policyProvidersSize:0
+08-10 14:41:06.393   335   349 D CompatibilityChangeReporter: Compat change id reported: 161145287; UID 10127; state: DISABLED
+08-10 14:41:06.393  2570  2570 I cr_PolicyProvider: #setManagerAndSource() 0
+08-10 14:41:06.395  2570  2570 I cr_DisplayManager: Is Display Topology available: false
+08-10 14:41:06.397   335  1663 D CompatibilityChangeReporter: Compat change id reported: 135634846; UID 99002; state: DISABLED
+08-10 14:41:06.397   335   363 D CompatibilityChangeReporter: Compat change id reported: 143937733; UID 10127; state: ENABLED
+08-10 14:41:06.404   709   709 D Zygote  : Forked child process 2626
+08-10 14:41:06.404   335   363 E libprocessgroup: Failed to make and chown /sys/fs/cgroup/uid_99002: Read-only file system
+08-10 14:41:06.404   335   363 E ActivityManager: Unable to create process group for com.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 (2626)
+08-10 14:41:06.404   335   363 I ActivityManager: Start proc 2626:com.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0/u0i2 for  {dev.aurora.desktop/org.chromium.content.app.SandboxedProcessService0:0}
+08-10 14:41:06.408  2626  2626 W ocessService0:0: Unexpected CPU variant for x86: x86_64.
+08-10 14:41:06.408  2626  2626 W ocessService0:0: Known variants: atom, sandybridge, silvermont, kabylake, default
+08-10 14:41:06.410  2626  2626 E ocessService0:0: Not starting debugger since process cannot load the jdwp agent.
+08-10 14:41:06.411  2570  2570 I cr_CombinedPProvider: #linkNativeInternal() 1
+08-10 14:41:06.412  2570  2570 D CompatibilityChangeReporter: Compat change id reported: 183155436; UID 10127; state: ENABLED
+08-10 14:41:06.412  2570  2570 I cr_AppResProvider: #getApplicationRestrictionsFromUserManager() Bundle[EMPTY_PARCEL]
+08-10 14:41:06.412  2570  2570 I cr_PolicyProvider: #notifySettingsAvailable() 0
+08-10 14:41:06.412  2570  2570 I cr_CombinedPProvider: #onSettingsAvailable() 0
+08-10 14:41:06.412  2570  2570 I cr_CombinedPProvider: #flushPolicies()
+08-10 14:41:06.422  2626  2626 D CompatibilityChangeReporter: Compat change id reported: 171979766; UID 99002; state: ENABLED
+08-10 14:41:06.425  2626  2626 D ApplicationLoaders: Returning zygote-cached class loader: /system/framework/android.test.base.jar
+08-10 14:41:06.428  2626  2626 D NetworkSecurityConfig: No Network Security Config specified, using platform default
+08-10 14:41:06.429  2626  2626 D NetworkSecurityConfig: No Network Security Config specified, using platform default
+08-10 14:41:06.430  2626  2626 I cr_WebViewApkApp: version=146.0.7680.153 (768015307) minSdkVersion=29 processName=com.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0 splits=<none>
+08-10 14:41:06.432  2626  2626 I cr_ChildProcessService: Creating new ChildProcessService pid=2626
+08-10 14:41:06.439  2570  2570 W chromium: [WARNING:android_webview/browser/network_service/net_helpers.cc:137] HTTP Cache size is: 20971520
+08-10 14:41:06.439  2570  2592 I RustStdoutStderr: [WARNING:android_webview/browser/network_service/net_helpers.cc:137] HTTP Cache size is: 20971520
+08-10 14:41:06.447  2570  2570 D CompatibilityChangeReporter: Compat change id reported: 214741472; UID 10127; state: ENABLED
+08-10 14:41:06.452  2570  2570 D CompatibilityChangeReporter: Compat change id reported: 171228096; UID 10127; state: ENABLED
+08-10 14:41:06.459   335  1663 D ConnectivityService: requestNetwork for uid/pid:10127/2570 activeRequest: null callbackRequest: 69 [NetworkRequest [ REQUEST id=70, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10127 RequestorUid: 10127 RequestorPkg: dev.aurora.desktop UnderlyingNetworks: Null] ]] callback flags: 0 order: 2147483647
+08-10 14:41:06.460   335   468 D ConnectivityService: NetReassign [70 : null → 100]
+08-10 14:41:06.461   779   779 D PhoneSwitcherNetworkRequstListener: got request NetworkRequest [ REQUEST id=70, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10127 RequestorUid: 10127 RequestorPkg: dev.aurora.desktop UnderlyingNetworks: Null] ]
+08-10 14:41:06.461   335   467 D EthernetNetworkFactory: eth0: onNetworkNeeded for request: NetworkRequest [ REQUEST id=70, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10127 RequestorUid: 10127 RequestorPkg: dev.aurora.desktop UnderlyingNetworks: Null] ]
+08-10 14:41:06.461   335   467 D EthernetNetworkFactory: IpClient already started
+08-10 14:41:06.462   335   468 D ConnectivityService: NetReassign [no changes]
+08-10 14:41:06.463   335   460 D UntrustedWifiNetworkFactory: got request NetworkRequest [ REQUEST id=70, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10127 RequestorUid: 10127 RequestorPkg: dev.aurora.desktop UnderlyingNetworks: Null] ]
+08-10 14:41:06.463   335   460 D OemPaidWifiNetworkFactory: got request NetworkRequest [ REQUEST id=70, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10127 RequestorUid: 10127 RequestorPkg: dev.aurora.desktop UnderlyingNetworks: Null] ]
+08-10 14:41:06.463   335   460 D MultiInternetWifiNetworkFactory: got request NetworkRequest [ REQUEST id=70, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10127 RequestorUid: 10127 RequestorPkg: dev.aurora.desktop UnderlyingNetworks: Null] ]
+08-10 14:41:06.501  2570  2570 D CompatibilityChangeReporter: Compat change id reported: 193247900; UID 10127; state: ENABLED
+08-10 14:41:06.517  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: nativeCapabilityManifest
+08-10 14:41:06.524   335  1662 I AppsFilter: interaction: PackageSetting{20d6e05 dev.aurora.desktop/10127} -> PackageSetting{6edf58e org.lineageos.jelly/10093} BLOCKED
+08-10 14:41:06.539  2570  2663 I CameraManagerGlobal: Connecting to camera service
+08-10 14:41:06.550  2570  2570 D vulkan  : searching for layers in '/data/app/~~E4gWewbnUsO6N94KCDcWpA==/dev.aurora.desktop-GmWfyDzhhH1ATyp5-yVg9A==/lib/x86_64'
+08-10 14:41:06.550  2570  2570 D vulkan  : searching for layers in '/data/app/~~E4gWewbnUsO6N94KCDcWpA==/dev.aurora.desktop-GmWfyDzhhH1ATyp5-yVg9A==/base.apk!/lib/x86_64'
+08-10 14:41:06.552  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_begin chunks=21 bytes=18824
+08-10 14:41:06.552  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=0 total=21 data={"adminUnlock":{"available":false,"biometricReady":false,"deviceSecure":false,"evidenceSource":"android-biometric-keyguard-keystore","lastDenied":false,"platform":"android","privacyClass":"admin-critical","reason":"device_credential_not_enrolled","requestable":false,"secretsRedacted":true,"state":"needs_native_permission"},"assistantRole":{"declaresVoiceInteractionService":true,"denied":false,"evidenceSource":"android-rolemanager-package-manager","fallbackAvailable":true,"handlesAssistActivity":true,"oemUnavailable":false,"packageQualified":true,"platform":"android","reason":"requestable","requestable":true,"roleAvailable":true,"roleHeld":false,"roleName":"android.app.role.ASSISTANT","sdkSupportsRole":true,"secretsRedacted":true},"capabilities":{"android.adminUnlock":false,"android.appShortcut":true,"android.appWidget":true,"android.assistantRole.available":true,"android.assistantRole.de
+08-10 14:41:06.552  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=1 total=21 data=nied":false,"android.assistantRole.held":false,"android.assistantRole.oemUnavailable":false,"android.assistantRole.packageQualified":true,"android.assistantRole.request":true,"android.assistantRole.status":true,"android.biometric":false,"android.deepLink":true,"android.entrypointPayload":true,"android.fallbackEntrypoints":true,"android.filePick":false,"android.foregroundService":false,"android.inboundVerifierStorage":true,"android.lifecycleEvents":true,"android.localFileRead":false,"android.localFileWrite":false,"android.localLightInference.fallback":true,"android.localLightInference.modelRuntime":false,"android.localLightInference.provider":true,"android.localNetwork":true,"android.microphoneCapture":false,"android.microphonePermissionRequest":true,"android.notificationPermissionRequest":true,"android.notifications":false,"android.openDeepLink":false,"android.quickTile":true,"android.se
+08-10 14:41:06.552  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=2 total=21 data=cureCredentialStorage":true,"android.shareIntent":true,"android.shareText":false,"android.showNotification":false,"android.thinPeerProof":true,"android.thinProfile":true,"android.voiceForegroundService":false,"android.voiceForegroundService.running":false,"android.voiceForegroundService.start":false,"android.webviewMicMediation":true,"native.deviceStatus":true,"native.permissionsManifest":true},"capabilityStates":{"android.adminUnlock":"needs_native_permission","android.appShortcut":"fallback","android.appWidget":"fallback","android.assistantRole.available":"available","android.assistantRole.denied":"degraded","android.assistantRole.held":"needs_native_permission","android.assistantRole.oemUnavailable":"degraded","android.assistantRole.packageQualified":"available","android.assistantRole.request":"needs_native_permission","android.assistantRole.status":"available","android.biometric":"un
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=3 total=21 data=supported_platform","android.deepLink":"available","android.entrypointPayload":"available","android.fallbackEntrypoints":"fallback","android.filePick":"degraded","android.foregroundService":"needs_native_permission","android.inboundVerifierStorage":"available","android.lifecycleEvents":"available","android.localFileRead":"degraded","android.localFileWrite":"degraded","android.localLightInference.fallback":"fallback","android.localLightInference.modelRuntime":"needs_native_permission","android.localLightInference.provider":"degraded","android.localNetwork":"available","android.microphoneCapture":"needs_native_permission","android.microphonePermissionRequest":"needs_native_permission","android.notificationPermissionRequest":"needs_native_permission","android.notifications":"needs_native_permission","android.openDeepLink":"unsupported_platform","android.quickTile":"fallback","android.secure
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=4 total=21 data=CredentialStorage":"available","android.shareIntent":"available","android.shareText":"unsupported_platform","android.showNotification":"needs_native_permission","android.thinPeerProof":"available","android.thinProfile":"available","android.voiceForegroundService":"needs_native_permission","android.voiceForegroundService.running":"degraded","android.voiceForegroundService.start":"needs_native_permission","android.webviewMicMediation":"available","native.deviceStatus":"available","native.permissionsManifest":"available"},"entrypoints":[{"available":true,"backendRequired":true,"capability":"android.shareIntent","id":"share_sheet","intakeType":"text/*, image/*, application/pdf","intentAction":"android.intent.action.SEND","label":"Share sheet","manifestDeclared":true,"payloadCommand":"entrypointPayload","permission":"aurora.android.shareIntent","platform":"android","reason":"native entrypoint
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=5 total=21 data= is declared; backend intake must process redacted payload before Aurora claims action success","state":"fallback"},{"available":true,"backendRequired":true,"capability":"android.shareIntent","id":"share_sheet_multiple","intakeType":"image/*, application/pdf","intentAction":"android.intent.action.SEND_MULTIPLE","label":"Share sheet multiple","manifestDeclared":true,"payloadCommand":"entrypointPayload","permission":"aurora.android.shareIntent","platform":"android","reason":"native entrypoint is declared; backend intake must process redacted payload before Aurora claims action success","state":"fallback"},{"available":true,"backendRequired":true,"capability":"android.shareIntent","id":"process_text","intakeType":"text/plain","intentAction":"android.intent.action.PROCESS_TEXT","label":"Selected text","manifestDeclared":true,"payloadCommand":"entrypointPayload","permission":"aurora.android.s
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=6 total=21 data=hareIntent","platform":"android","reason":"native entrypoint is declared; backend intake must process redacted payload before Aurora claims action success","state":"fallback"},{"available":true,"backendRequired":true,"capability":"android.deepLink","id":"deep_link","intakeType":"aurora://assistant and https://aurora.local/assistant","intentAction":"android.intent.action.VIEW","label":"Aurora deep link","manifestDeclared":true,"payloadCommand":"entrypointPayload","permission":"aurora.android.deepLink","platform":"android","reason":"native entrypoint is declared; backend intake must process redacted payload before Aurora claims action success","state":"fallback"},{"available":true,"backendRequired":false,"capability":"android.appShortcut","id":"app_shortcut","intakeType":"aurora://assistant/new","intentAction":"android.intent.action.VIEW","label":"Launcher shortcut","manifestDeclared":true
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=7 total=21 data=,"payloadCommand":"entrypointPayload","permission":"aurora.android.appShortcut","platform":"android","reason":"native fallback opens Aurora without assistant role","state":"fallback"},{"available":true,"backendRequired":false,"capability":"android.appWidget","id":"app_widget","intakeType":"home_screen","intentAction":"android.appwidget.action.APPWIDGET_UPDATE","label":"Home-screen widget","manifestDeclared":true,"payloadCommand":"entrypointPayload","permission":"aurora.android.appWidget","platform":"android","reason":"native fallback opens Aurora without assistant role","state":"fallback"},{"available":true,"backendRequired":false,"capability":"android.quickTile","id":"quick_tile","intakeType":"qs_tile","intentAction":"android.service.quicksettings.action.QS_TILE","label":"Quick Settings tile","manifestDeclared":true,"payloadCommand":"entrypointPayload","permission":"aurora.android.quick
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=8 total=21 data=Tile","platform":"android","reason":"native fallback opens Aurora without assistant role","state":"fallback"}],"evidenceSource":"android-rolemanager-package-manager","fallbackEntrypoints":[{"available":true,"backendRequired":false,"capability":"android.deepLink","id":"app_open","intentAction":"android.intent.action.MAIN","manifestDeclared":true,"reason":"available without assistant role","state":"fallback"},{"available":false,"backendRequired":false,"capability":"android.microphoneCapture","id":"push_to_talk","manifestDeclared":false,"permission":"aurora.android.microphone","reason":"requires microphone permission and backend audio evidence","state":"needs_native_permission"},{"available":false,"backendRequired":false,"capability":"android.voiceForegroundService","id":"foreground_voice_controls","manifestDeclared":false,"permission":"aurora.android.voiceForegroundService","reason":"requi
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=9 total=21 data=res microphone plus Android foreground-service microphone readiness","state":"needs_native_permission"},{"available":false,"backendRequired":false,"capability":"android.notifications","id":"notification","manifestDeclared":false,"permission":"aurora.android.notifications","reason":"requires notification permission on Android 13+","state":"needs_native_permission"},{"available":true,"backendRequired":false,"capability":"android.quickTile","id":"quick_tile","intentAction":"android.service.quicksettings.action.QS_TILE","manifestDeclared":true,"permission":"aurora.android.quickTile","reason":"Quick Settings tile opens Aurora without assistant role","state":"fallback"},{"available":true,"backendRequired":false,"capability":"android.appWidget","id":"app_widget","intentAction":"android.appwidget.action.APPWIDGET_UPDATE","manifestDeclared":true,"permission":"aurora.android.appWidget","reason":"h
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=10 total=21 data=ome-screen widget opens Aurora without assistant role","state":"fallback"},{"available":true,"backendRequired":false,"capability":"android.appShortcut","id":"app_shortcut","intentAction":"android.intent.action.VIEW","manifestDeclared":true,"permission":"aurora.android.appShortcut","reason":"static launcher shortcut opens Aurora without assistant role","state":"fallback"},{"available":true,"backendRequired":true,"capability":"android.shareIntent","id":"share_intent","intentAction":"android.intent.action.SEND","manifestDeclared":true,"permission":"aurora.android.shareIntent","reason":"share sheet opens Aurora and records redacted intent metadata","state":"fallback"},{"available":true,"backendRequired":true,"capability":"android.deepLink","id":"deep_link","intentAction":"android.intent.action.VIEW","manifestDeclared":true,"permission":"aurora.android.deepLink","reason":"deep links open Auro
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=11 total=21 data=ra and record redacted URI metadata","state":"fallback"}],"inboundVerifierStorage":{"allowedGenericSecureStorage":false,"backend":"android-keystore","evidenceSource":"android-keystore-inbound-verifier-namespace","persisted":true,"platform":"android","privacyClass":"inbound-verifier","rawGetter":true,"redactedFields":["tokenHashHex","rawBearerToken","proof","verifierKey"],"secretsRedacted":true},"lastEntrypointPayload":{"action":null,"categories":[],"extras":[],"host":null,"path":null,"scheme":null,"secretsRedacted":true,"source":"none","type":null},"lifecycle":{"backgroundWakeword":false,"eventName":"aurora://android-lifecycle","evidenceSource":"android-activity-lifecycle-callbacks","focused":true,"foreground":true,"lastMicDenyFailureReason":null,"micDenyFailureCount":0,"mustReleaseMicrophone":false,"platform":"android","reason":"foreground_focused","secretsRedacted":true},"localLightInf
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=12 total=21 data=erence":{"available":false,"backendModelCatalogRequired":true,"evidenceSource":"android-native-local-light-adapter","fallbackAvailable":true,"fallbackProviderId":"local:Orchestrator:llama-cpp","hardwareAcceleration":"unknown","modelId":null,"modelPresent":false,"modelRuntimeProvider":false,"permissionGranted":false,"platform":"android","providerId":"native:mobile-local-light","reason":"backend_model_catalog_and_device_model_proof_required","requestable":false,"secretsRedacted":true,"state":"degraded"},"mobileIntegrations":[{"capability":"android.shareIntent","evidenceSource":"android-manifest-merge-native-plugin","id":"androidShareSheet","label":"Android share sheet","permission":"aurora.android.shareIntent","platform":"android","privacyClass":"personal","support":"supported","userCopy":"Share sheet intent filters are declared; payloads are redacted until backend context ingestion handle
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=13 total=21 data=s them.","verifier":"tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke"},{"capability":"android.deepLink","evidenceSource":"android-manifest-merge-native-plugin","id":"androidDeepLinks","label":"Android deep links","permission":"aurora.android.deepLink","platform":"android","privacyClass":"personal","support":"supported","userCopy":"Aurora and https deep links are declared through Android intent filters.","verifier":"tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke"},{"capability":"android.appShortcut","evidenceSource":"android-manifest-merge-native-plugin","id":"androidStaticShortcut","label":"Android launcher shortcut","permission":"aurora.android.appShortcut","platform":"android","privacyClass":"personal","support":"supported","userCopy":"Static shortcut metadata is packaged and opens Au
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=14 total=21 data=rora through the native entrypoint activity.","verifier":"tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke"},{"capability":"android.appWidget","evidenceSource":"android-manifest-merge-native-plugin","id":"androidWidget","label":"Android home-screen widget","permission":"aurora.android.appWidget","platform":"android","privacyClass":"personal","support":"supported-path","userCopy":"Widget provider is packaged; device launcher placement remains user/OEM controlled.","verifier":"tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke"},{"capability":"android.quickTile","evidenceSource":"android-manifest-merge-native-plugin","id":"androidQuickTile","label":"Android Quick Settings tile","permission":"aurora.android.quickTile","platform":"android","privacyClass":"personal","support":"supported-path","us
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=15 total=21 data=erCopy":"Quick Settings tile service is packaged; tile placement remains user/OEM controlled.","verifier":"tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke"},{"capability":"android.localLightInference.provider","evidenceSource":"android-manifest-merge-native-plugin","id":"androidLocalLightInference","label":"Android local-light inference provider","permission":"aurora.android.localLightInference","platform":"android","privacyClass":"personal","support":"supported-path","userCopy":"Native adapter reports Android local-light inference as a capability-gated provider; backend model catalog and device/model proof are still required before selection.","verifier":"tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke"}],"permissionStates":{"aurora.android.adminUnlock":"needs_native_permission","aurora
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=16 total=21 data=.android.appShortcut":"fallback","aurora.android.appWidget":"fallback","aurora.android.assistantRoleRequest":"needs_native_permission","aurora.android.assistantRoleStatus":"available","aurora.android.biometric":"unsupported_platform","aurora.android.deepLink":"available","aurora.android.entrypointPayload":"available","aurora.android.filePick":"degraded","aurora.android.foregroundServiceMicrophone":"needs_native_permission","aurora.android.inboundVerifierStorage":"available","aurora.android.lifecycleEvents":"available","aurora.android.localFileRead":"degraded","aurora.android.localFileWrite":"degraded","aurora.android.localLightInference":"degraded","aurora.android.localNetwork":"available","aurora.android.microphone":"needs_native_permission","aurora.android.microphoneRequest":"needs_native_permission","aurora.android.notifications":"needs_native_permission","aurora.android.notifications
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=17 total=21 data=Request":"needs_native_permission","aurora.android.openDeepLink":"unsupported_platform","aurora.android.quickTile":"fallback","aurora.android.secureStorage":"available","aurora.android.shareIntent":"available","aurora.android.shareText":"unsupported_platform","aurora.android.showNotification":"needs_native_permission","aurora.android.thinPeerProof":"available","aurora.android.thinProfile":"available","aurora.android.voiceForegroundService":"needs_native_permission","aurora.android.voiceForegroundStart":"needs_native_permission","aurora.android.webviewMicMediation":"available","aurora.nativeCapabilityManifest":"available"},"permissions":{"aurora.android.adminUnlock":false,"aurora.android.appShortcut":true,"aurora.android.appWidget":true,"aurora.android.assistantRoleRequest":true,"aurora.android.assistantRoleStatus":true,"aurora.android.biometric":false,"aurora.android.deepLink":true,"auro
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=18 total=21 data=ra.android.entrypointPayload":true,"aurora.android.filePick":false,"aurora.android.foregroundServiceMicrophone":false,"aurora.android.inboundVerifierStorage":true,"aurora.android.lifecycleEvents":true,"aurora.android.localFileRead":false,"aurora.android.localFileWrite":false,"aurora.android.localLightInference":false,"aurora.android.localNetwork":true,"aurora.android.microphone":false,"aurora.android.microphoneRequest":true,"aurora.android.notifications":false,"aurora.android.notificationsRequest":true,"aurora.android.openDeepLink":false,"aurora.android.quickTile":true,"aurora.android.secureStorage":true,"aurora.android.shareIntent":true,"aurora.android.shareText":false,"aurora.android.showNotification":false,"aurora.android.thinPeerProof":true,"aurora.android.thinProfile":true,"aurora.android.voiceForegroundService":false,"aurora.android.voiceForegroundStart":false,"aurora.android.webvi
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=19 total=21 data=ewMicMediation":true,"aurora.nativeCapabilityManifest":true},"platform":"android","secretsRedacted":true,"secureStorage":{"allowedKeyPrefixes":"aurora.session,aurora.auth,aurora.gateway,aurora.mesh,aurora.admin,aurora.voice","available":true,"backend":"android-keystore","evidenceSource":"android-keystore-shared-preferences","persisted":true,"platform":"android","privacyClass":"credential","secretsRedacted":true},"thinPeerCredentialStorage":"[redacted]","thinProfileStorage":{"backend":"android-private-shared-preferences","persisted":true,"platform":"android","privacyClass":"nonsecret-connection-profile","secretsRedacted":true},"voiceForegroundService":{"acceptedChunks":0,"acceptedSamples":0,"backendAudioEvidenceRequired":true,"captureActive":false,"captureBackend":"android-audiorecord-rust-queue","discontinuities":0,"droppedChunks":0,"evidenceSource":"android-permission-foreground-service
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_chunk index=20 total=21 data=","foregroundServiceReady":false,"manifestReady":true,"microphoneGranted":false,"nativeSessionReady":false,"notificationReady":false,"notificationsGranted":false,"platform":"android","privacyClass":"raw-audio","queuedChunks":0,"reason":"microphone_permission_missing","running":false,"sampleRateHz":16000,"secretsRedacted":true,"startable":false,"state":"needs_native_permission"},"webviewMicrophonePolicy":{"allowHttp":false,"allowWildcard":false,"available":true,"configuredHttpsOrigins":[],"delegateWebChromeClientCaptured":true,"evidenceSource":"android-webview-permission-policy","installedWebChromeClient":true,"lastMicDenyFailureReason":null,"micDenyFailureCount":0,"requiresFocused":true,"requiresForeground":true,"requiresRecordAudio":true,"resource":"android.webkit.resource.AUDIO_CAPTURE","secretsRedacted":true}}
+08-10 14:41:06.553  2570  2592 I RustStdoutStderr: aurora_android_native_plugin_payload_end chunks=21
+08-10 14:41:06.578  2570  2651 W cr_media: BLUETOOTH_CONNECT permission is missing.
+08-10 14:41:06.578  2570  2651 W cr_media: getBluetoothAdapter() requires BLUETOOTH permission
+08-10 14:41:06.578  2570  2651 W cr_media: registerBluetoothIntentsIfNeeded: Requires BLUETOOTH permission
+08-10 14:41:06.587  2626  2653 I cr_LibraryLoader: Successfully loaded native library
+08-10 14:41:06.587  2626  2653 I cr_CachingUmaRecorder: Flushed 2 samples from 2 histograms, 0 samples were dropped.
+08-10 14:41:06.593   335   366 W libprocessgroup: Failed to open /dev/stune/top-app/cgroup.procs: No such file or directory
+08-10 14:41:06.593   335   366 W libprocessgroup: Failed to open /dev/cpuset/top-app/cgroup.procs: No such file or directory
+08-10 14:41:06.593   335   366 W libprocessgroup: Failed to open /dev/blkio//cgroup.procs: No such file or directory
+08-10 14:41:06.597  2626  2653 W chromium: [WARNING:content/child/runtime_features.cc:563] Fenced frames cannot be enabled in this configuration. Use --enable-features=FencedFrames instead.
+08-10 14:41:06.597  2626  2653 W chromium: [WARNING:content/child/runtime_features.cc:588] Topics cannot be enabled in this configuration. Use --enable-features=BrowsingTopics in addition.
+08-10 14:41:06.597  2626  2653 W chromium: [WARNING:content/child/runtime_features.cc:609] SharedStorage cannot be enabled in this configuration. Use --enable-features=SharedStorageAPI in addition.
+08-10 14:41:06.597  2626  2653 W chromium: [WARNING:content/child/runtime_features.cc:619] AttributionReporting cannot be enabled in this configuration. Use --enable-features=ConversionMeasurement in addition.
+08-10 14:41:06.610  2626  2680 W chromium: [WARNING:base/android/library_loader/library_prefetcher.cc:194] Incorrect code ordering
+08-10 14:41:06.610  2626  2680 W chromium: [WARNING:base/android/library_loader/library_prefetcher.cc:260] Cannot prefetch the library. status = 1
+08-10 14:41:06.641  2570  2658 I VideoCapabilities: Unsupported profile 4 for video/mp4v-es
+08-10 14:41:06.660   335  1663 D CoreBackPreview: Window{adee253 u0 dev.aurora.desktop/SplashScreen EXITING}: Setting back callback null
+08-10 14:41:06.660   335  1662 W InputManager-JNI: Input channel object 'adee253 dev.aurora.desktop/SplashScreen (client)' was disposed without first being removed with the input manager!
+08-10 14:41:06.829    99   193 W TransactionTracing: Could not find layer handle 0x7b84dc022b90
+08-10 14:41:07.446  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:07.453  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: thinProfileGet
+08-10 14:41:07.541  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:07.542  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: deep-link, command: getCurrent
+08-10 14:41:09.102   335  1187 E TaskPersister: File error accessing recents directory (directory doesn't exist?).
+08-10 14:41:09.482   335  1662 D CompatibilityChangeReporter: Compat change id reported: 174042980; UID 10127; state: DISABLED
+08-10 14:41:09.482   335  1662 D CompatibilityChangeReporter: Compat change id reported: 181136395; UID 10127; state: DISABLED
+08-10 14:41:09.482   335  1662 D CompatibilityChangeReporter: Compat change id reported: 174042936; UID 10127; state: DISABLED
+08-10 14:41:09.482   335  1662 D CompatibilityChangeReporter: Compat change id reported: 184838306; UID 10127; state: DISABLED
+08-10 14:41:09.482   335  1662 D CompatibilityChangeReporter: Compat change id reported: 185004937; UID 10127; state: DISABLED
+08-10 14:41:09.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:09.659  1188  2384 W MediaProvider: isAppCloneUserPair failed. Users: 0 and 0
+08-10 14:41:09.659  1188  2384 W MediaProvider: isAppCloneUserPair for user 0: false
+08-10 14:41:09.660  1188  2384 V MediaProvider: Inserted id:1000000022 less than next row id backup:1000001000.
+08-10 14:41:09.667  2710  2710 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+08-10 14:41:09.668  1188  1339 E StorageManager: Failed to set extended attributes for /storage/emulated/0/aurora-fresh-main.png to set project id.: Operation not supported on transport endpoint
+08-10 14:41:09.668  1188  1339 W MediaProvider: Failed to update quota type for /storage/emulated/0/aurora-fresh-main.png
+08-10 14:41:09.668  1188  1339 W MediaProvider: java.io.IOException: Failed to update quota type for /storage/emulated/0/aurora-fresh-main.png
+08-10 14:41:09.668  1188  1339 W MediaProvider: 	at android.os.storage.StorageManager.updateExternalStorageFileQuotaType(StorageManager.java:2618)
+08-10 14:41:09.668  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForFileInternal(MediaProvider.java:704)
+08-10 14:41:09.668  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.lambda$onFileCreatedForFuse$17(MediaProvider.java:1712)
+08-10 14:41:09.668  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.$r8$lambda$RwX1jyw0H1CYPm6NAX9_DxGu3Co(Unknown Source:0)
+08-10 14:41:09.668  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$$ExternalSyntheticLambda7.run(Unknown Source:4)
+08-10 14:41:09.668  1188  1339 W MediaProvider: 	at android.os.Handler.handleCallback(Handler.java:942)
+08-10 14:41:09.668  1188  1339 W MediaProvider: 	at android.os.Handler.dispatchMessage(Handler.java:99)
+08-10 14:41:09.668  1188  1339 W MediaProvider: 	at android.os.Looper.loopOnce(Looper.java:201)
+08-10 14:41:09.668  1188  1339 W MediaProvider: 	at android.os.Looper.loop(Looper.java:288)
+08-10 14:41:09.668  1188  1339 W MediaProvider: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+08-10 14:41:09.670  1188  1339 E StorageManager: Failed to set extended attributes for /storage/emulated/0/aurora-fresh-main.png to set project id.: Operation not supported on transport endpoint
+08-10 14:41:09.670  1188  1339 W MediaProvider: Failed to update quota type for /storage/emulated/0/aurora-fresh-main.png
+08-10 14:41:09.670  1188  1339 W MediaProvider: java.io.IOException: Failed to update quota type for /storage/emulated/0/aurora-fresh-main.png
+08-10 14:41:09.670  1188  1339 W MediaProvider: 	at android.os.storage.StorageManager.updateExternalStorageFileQuotaType(StorageManager.java:2618)
+08-10 14:41:09.670  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForFileInternal(MediaProvider.java:704)
+08-10 14:41:09.670  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForUri(MediaProvider.java:682)
+08-10 14:41:09.670  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.-$$Nest$mupdateQuotaTypeForUri(Unknown Source:0)
+08-10 14:41:09.670  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4.lambda$onInsert$0(MediaProvider.java:735)
+08-10 14:41:09.670  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4.$r8$lambda$DnIEye5Sx8fODP4Bt_qvKpm3U-Q(Unknown Source:0)
+08-10 14:41:09.670  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4$$ExternalSyntheticLambda0.run(Unknown Source:6)
+08-10 14:41:09.670  1188  1339 W MediaProvider: 	at android.os.Handler.handleCallback(Handler.java:942)
+08-10 14:41:09.670  1188  1339 W MediaProvider: 	at android.os.Handler.dispatchMessage(Handler.java:99)
+08-10 14:41:09.670  1188  1339 W MediaProvider: 	at android.os.Looper.loopOnce(Looper.java:201)
+08-10 14:41:09.670  1188  1339 W MediaProvider: 	at android.os.Looper.loop(Looper.java:288)
+08-10 14:41:09.670  1188  1339 W MediaProvider: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+08-10 14:41:09.673    89   173 V [minigbm:gbm_mesa_internals.cpp(382)]: Allocated: 1280x768, stride: 5120, map_stride: 5120
+08-10 14:41:09.679  2710  2712 I [minigbm:gbm_mesa_internals.cpp(213)]: Using device /dev/dri/renderD128 as requested by gralloc.gbm.device
+08-10 14:41:09.794  1188  1572 I MediaProvider: Begin Intent { act=android.intent.action.MEDIA_SCANNER_SCAN_FILE dat=file:///... flg=0x1400010 cmp=com.android.providers.media.module/com.android.providers.media.MediaService }
+08-10 14:41:09.800  1188  1572 V MediaProvider: Inserted id:1000000022 less than next row id backup:1000001000.
+08-10 14:41:09.806  1188  1572 I MediaProvider: End Intent { act=android.intent.action.MEDIA_SCANNER_SCAN_FILE dat=file:///... flg=0x1400010 cmp=com.android.providers.media.module/com.android.providers.media.MediaService }
+08-10 14:41:09.806  1188  1339 E StorageManager: Failed to set extended attributes for /storage/emulated/0/aurora-fresh-main.png to set project id.: Operation not supported on transport endpoint
+08-10 14:41:09.806  1188  1339 W MediaProvider: Failed to update quota type for /storage/emulated/0/aurora-fresh-main.png
+08-10 14:41:09.806  1188  1339 W MediaProvider: java.io.IOException: Failed to update quota type for /storage/emulated/0/aurora-fresh-main.png
+08-10 14:41:09.806  1188  1339 W MediaProvider: 	at android.os.storage.StorageManager.updateExternalStorageFileQuotaType(StorageManager.java:2618)
+08-10 14:41:09.806  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForFileInternal(MediaProvider.java:704)
+08-10 14:41:09.806  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForUri(MediaProvider.java:682)
+08-10 14:41:09.806  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.-$$Nest$mupdateQuotaTypeForUri(Unknown Source:0)
+08-10 14:41:09.806  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4.lambda$onUpdate$1(MediaProvider.java:765)
+08-10 14:41:09.806  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4.$r8$lambda$3D2OHltIfecN7CvhaLyqtkV--uY(Unknown Source:0)
+08-10 14:41:09.806  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4$$ExternalSyntheticLambda1.run(Unknown Source:10)
+08-10 14:41:09.806  1188  1339 W MediaProvider: 	at android.os.Handler.handleCallback(Handler.java:942)
+08-10 14:41:09.806  1188  1339 W MediaProvider: 	at android.os.Handler.dispatchMessage(Handler.java:99)
+08-10 14:41:09.806  1188  1339 W MediaProvider: 	at android.os.Looper.loopOnce(Looper.java:201)
+08-10 14:41:09.806  1188  1339 W MediaProvider: 	at android.os.Looper.loop(Looper.java:288)
+08-10 14:41:09.806  1188  1339 W MediaProvider: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+08-10 14:41:09.925  2728  2728 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+08-10 14:41:09.928  2728  2728 I AndroidRuntime: Using default boot image
+08-10 14:41:09.929  2728  2728 I AndroidRuntime: Leaving lock profiling enabled
+08-10 14:41:09.930  2728  2728 W app_process: ART APEX data files are untrusted.
+08-10 14:41:09.930  2728  2728 I app_process: Core platform API reporting enabled, enforcing=false
+08-10 14:41:10.002  2728  2728 D app_process: Time zone APEX ICU file found: /apex/com.android.tzdata/etc/icu/icu_tzdata.dat
+08-10 14:41:10.002  2728  2728 D app_process: I18n APEX ICU file found: /apex/com.android.i18n/etc/icu/icudt70l.dat
+08-10 14:41:10.005  2728  2728 W app_process: Unexpected CPU variant for x86: x86_64.
+08-10 14:41:10.005  2728  2728 W app_process: Known variants: atom, sandybridge, silvermont, kabylake, default
+08-10 14:41:10.007  2728  2728 W app_process: ClassLoaderContext classpath size mismatch. expected=0, found=1 (PCL[] | PCL[/system/framework/android.test.runner.jar*2555718838])
+08-10 14:41:10.020  2728  2728 D AndroidRuntime: Calling main entry com.android.commands.uiautomator.Launcher
+08-10 14:41:10.023   335  1043 W WindowMagnificationMgr: requestConnection duplicated request: connect=false, mConnectionState=DISCONNECTED
+08-10 14:41:10.024   335   335 D BatterySaverPolicy: accessibility changed to true, updating policy.
+08-10 14:41:10.025   335  1662 W WindowMagnificationMgr: requestConnection duplicated request: connect=false, mConnectionState=DISCONNECTED
+08-10 14:41:11.039   335  2562 D CompatibilityChangeReporter: Compat change id reported: 161145287; UID 10127; state: DISABLED
+08-10 14:41:11.039  2570  2570 I cr_A11yState: Enabled accessibility services list updated. []
+08-10 14:41:11.040  2570  2570 I cr_A11yState: Informing listeners of changes.
+08-10 14:41:11.040  2570  2570 I cr_A11yState: New AccessibilityState: State{isComplexUserInteractionServiceEnabled=false, isTouchExplorationEnabled=false, isPerformGesturesEnabled=false, isAnyAccessibilityServiceEnabled=false, isAccessibilityToolPresent=false, isTextShowPasswordEnabled=true, isOnlyAutofillRunning=false, isOnlyPasswordManagersEnabled=false, isKnownScreenReaderEnabled=false}
+08-10 14:41:11.046  2728  2728 W AccessibilityNodeInfoDumper: Fetch time: 18ms
+08-10 14:41:11.047   335  1662 W WindowMagnificationMgr: requestConnection duplicated request: connect=false, mConnectionState=DISCONNECTED
+08-10 14:41:11.047   335   335 D BatterySaverPolicy: accessibility changed to false, updating policy.
+08-10 14:41:11.048  2728  2728 D AndroidRuntime: Shutting down VM
+08-10 14:41:11.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:11.522  2570  2754 D ProfileInstaller: Installing profile for dev.aurora.desktop
+08-10 14:41:13.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:14.835  1188  1339 D PickerSyncController: Fetching SyncRequestParams. Authority: com.android.providers.media.photopicker. LatestMediaCollectionInfo: Bundle[{last_media_sync_generation=28, media_collection_id=1307:deeb89bd-783d-42c5-b3a2-f3f5a8ac4175:external_primary}]. CachedMediaCollectionInfo: Bundle[{last_media_sync_generation=11, media_collection_id=1307:deeb89bd-783d-42c5-b3a2-f3f5a8ac4175:external_primary}]
+08-10 14:41:14.835  1188  1339 D PickerSyncController: SyncRequestParams. Authority: com.android.providers.media.photopicker. Result: SYNC_TYPE_INCREMENTAL
+08-10 14:41:14.835  1188  1339 I PickerSyncController: Executing SyncAdd. authority: com.android.providers.media.photopicker
+08-10 14:41:14.841  1188  1339 I PickerSyncController: Paged sync successful. QueryArgs: Bundle[{android.provider.extra.SYNC_GENERATION=11}]. Result count: 2. Cursor count: 2
+08-10 14:41:14.846  1188  1339 I PickerSyncController: Executing SyncRemove. authority: com.android.providers.media.photopicker
+08-10 14:41:14.848  1188  1339 I PickerSyncController: Paged sync successful. QueryArgs: Bundle[{android.provider.extra.SYNC_GENERATION=11}]. Result count: 0. Cursor count: 0
+08-10 14:41:14.849  1188  1339 D PickerSyncController: Fetching SyncRequestParams. Null cloud authority. Result: SYNC_TYPE_RESET
+08-10 14:41:14.849  1188  1339 I PickerSyncController: Executing SyncReset. authority: null
+08-10 14:41:14.849  1188  1339 I PickerSyncController: SyncReset. Authority: null. Result count: 0
+08-10 14:41:14.849  1188  1339 D PickerSyncController: Ignoring cache media info for null authority with bundle: null
+08-10 14:41:14.849  1188  1339 I PickerSyncController: Executing SyncAlbumReset. authority: com.android.providers.media.photopicker. albumId: null
+08-10 14:41:14.850  1188  1339 I PickerSyncController: Successfully executed SyncResetAlbum. authority: com.android.providers.media.photopicker. albumId: null. Result count: 0
+08-10 14:41:14.850  1188  1339 I PickerSyncController: Executing SyncAlbumReset. authority: null. albumId: null
+08-10 14:41:14.850  1188  1339 I PickerSyncController: Successfully executed SyncResetAlbum. authority: null. albumId: null. Result count: 0
+08-10 14:41:15.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:17.508  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:19.508  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:21.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:23.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:25.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:27.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:29.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:31.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:33.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:33.801  1188  1348 W MediaProvider: isAppCloneUserPair failed. Users: 0 and 0
+08-10 14:41:33.801  1188  1348 W MediaProvider: isAppCloneUserPair for user 0: false
+08-10 14:41:33.802  1188  1348 V MediaProvider: Inserted id:1000000023 less than next row id backup:1000001000.
+08-10 14:41:33.806  2766  2766 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+08-10 14:41:33.806  1188  1339 E StorageManager: Failed to set extended attributes for /storage/emulated/0/aurora-launch.png to set project id.: Operation not supported on transport endpoint
+08-10 14:41:33.806  1188  1339 W MediaProvider: Failed to update quota type for /storage/emulated/0/aurora-launch.png
+08-10 14:41:33.806  1188  1339 W MediaProvider: java.io.IOException: Failed to update quota type for /storage/emulated/0/aurora-launch.png
+08-10 14:41:33.806  1188  1339 W MediaProvider: 	at android.os.storage.StorageManager.updateExternalStorageFileQuotaType(StorageManager.java:2618)
+08-10 14:41:33.806  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForFileInternal(MediaProvider.java:704)
+08-10 14:41:33.806  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.lambda$onFileCreatedForFuse$17(MediaProvider.java:1712)
+08-10 14:41:33.806  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.$r8$lambda$RwX1jyw0H1CYPm6NAX9_DxGu3Co(Unknown Source:0)
+08-10 14:41:33.806  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$$ExternalSyntheticLambda7.run(Unknown Source:4)
+08-10 14:41:33.806  1188  1339 W MediaProvider: 	at android.os.Handler.handleCallback(Handler.java:942)
+08-10 14:41:33.806  1188  1339 W MediaProvider: 	at android.os.Handler.dispatchMessage(Handler.java:99)
+08-10 14:41:33.806  1188  1339 W MediaProvider: 	at android.os.Looper.loopOnce(Looper.java:201)
+08-10 14:41:33.806  1188  1339 W MediaProvider: 	at android.os.Looper.loop(Looper.java:288)
+08-10 14:41:33.806  1188  1339 W MediaProvider: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+08-10 14:41:33.808  1188  1339 E StorageManager: Failed to set extended attributes for /storage/emulated/0/aurora-launch.png to set project id.: Operation not supported on transport endpoint
+08-10 14:41:33.808  1188  1339 W MediaProvider: Failed to update quota type for /storage/emulated/0/aurora-launch.png
+08-10 14:41:33.808  1188  1339 W MediaProvider: java.io.IOException: Failed to update quota type for /storage/emulated/0/aurora-launch.png
+08-10 14:41:33.808  1188  1339 W MediaProvider: 	at android.os.storage.StorageManager.updateExternalStorageFileQuotaType(StorageManager.java:2618)
+08-10 14:41:33.808  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForFileInternal(MediaProvider.java:704)
+08-10 14:41:33.808  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForUri(MediaProvider.java:682)
+08-10 14:41:33.808  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.-$$Nest$mupdateQuotaTypeForUri(Unknown Source:0)
+08-10 14:41:33.808  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4.lambda$onInsert$0(MediaProvider.java:735)
+08-10 14:41:33.808  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4.$r8$lambda$DnIEye5Sx8fODP4Bt_qvKpm3U-Q(Unknown Source:0)
+08-10 14:41:33.808  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4$$ExternalSyntheticLambda0.run(Unknown Source:6)
+08-10 14:41:33.808  1188  1339 W MediaProvider: 	at android.os.Handler.handleCallback(Handler.java:942)
+08-10 14:41:33.808  1188  1339 W MediaProvider: 	at android.os.Handler.dispatchMessage(Handler.java:99)
+08-10 14:41:33.808  1188  1339 W MediaProvider: 	at android.os.Looper.loopOnce(Looper.java:201)
+08-10 14:41:33.808  1188  1339 W MediaProvider: 	at android.os.Looper.loop(Looper.java:288)
+08-10 14:41:33.808  1188  1339 W MediaProvider: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+08-10 14:41:34.156    89   173 V [minigbm:gbm_mesa_internals.cpp(382)]: Allocated: 1280x768, stride: 5120, map_stride: 5120
+08-10 14:41:34.165  2766  2768 I [minigbm:gbm_mesa_internals.cpp(213)]: Using device /dev/dri/renderD128 as requested by gralloc.gbm.device
+08-10 14:41:34.280  1188  1572 I MediaProvider: Begin Intent { act=android.intent.action.MEDIA_SCANNER_SCAN_FILE dat=file:///... flg=0x1400010 cmp=com.android.providers.media.module/com.android.providers.media.MediaService }
+08-10 14:41:34.284  1188  1572 V MediaProvider: Inserted id:1000000023 less than next row id backup:1000001000.
+08-10 14:41:34.288  1188  1572 I MediaProvider: End Intent { act=android.intent.action.MEDIA_SCANNER_SCAN_FILE dat=file:///... flg=0x1400010 cmp=com.android.providers.media.module/com.android.providers.media.MediaService }
+08-10 14:41:34.288  1188  1339 E StorageManager: Failed to set extended attributes for /storage/emulated/0/aurora-launch.png to set project id.: Operation not supported on transport endpoint
+08-10 14:41:34.289  1188  1339 W MediaProvider: Failed to update quota type for /storage/emulated/0/aurora-launch.png
+08-10 14:41:34.289  1188  1339 W MediaProvider: java.io.IOException: Failed to update quota type for /storage/emulated/0/aurora-launch.png
+08-10 14:41:34.289  1188  1339 W MediaProvider: 	at android.os.storage.StorageManager.updateExternalStorageFileQuotaType(StorageManager.java:2618)
+08-10 14:41:34.289  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForFileInternal(MediaProvider.java:704)
+08-10 14:41:34.289  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForUri(MediaProvider.java:682)
+08-10 14:41:34.289  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.-$$Nest$mupdateQuotaTypeForUri(Unknown Source:0)
+08-10 14:41:34.289  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4.lambda$onUpdate$1(MediaProvider.java:765)
+08-10 14:41:34.289  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4.$r8$lambda$3D2OHltIfecN7CvhaLyqtkV--uY(Unknown Source:0)
+08-10 14:41:34.289  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4$$ExternalSyntheticLambda1.run(Unknown Source:10)
+08-10 14:41:34.289  1188  1339 W MediaProvider: 	at android.os.Handler.handleCallback(Handler.java:942)
+08-10 14:41:34.289  1188  1339 W MediaProvider: 	at android.os.Handler.dispatchMessage(Handler.java:99)
+08-10 14:41:34.289  1188  1339 W MediaProvider: 	at android.os.Looper.loopOnce(Looper.java:201)
+08-10 14:41:34.289  1188  1339 W MediaProvider: 	at android.os.Looper.loop(Looper.java:288)
+08-10 14:41:34.289  1188  1339 W MediaProvider: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+08-10 14:41:34.420  2784  2784 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+08-10 14:41:34.424  2784  2784 I AndroidRuntime: Using default boot image
+08-10 14:41:34.424  2784  2784 I AndroidRuntime: Leaving lock profiling enabled
+08-10 14:41:34.426  2784  2784 W app_process: ART APEX data files are untrusted.
+08-10 14:41:34.426  2784  2784 I app_process: Core platform API reporting enabled, enforcing=false
+08-10 14:41:34.504  2784  2784 D app_process: Time zone APEX ICU file found: /apex/com.android.tzdata/etc/icu/icu_tzdata.dat
+08-10 14:41:34.505  2784  2784 D app_process: I18n APEX ICU file found: /apex/com.android.i18n/etc/icu/icudt70l.dat
+08-10 14:41:34.509  2784  2784 W app_process: Unexpected CPU variant for x86: x86_64.
+08-10 14:41:34.509  2784  2784 W app_process: Known variants: atom, sandybridge, silvermont, kabylake, default
+08-10 14:41:34.511  2784  2784 W app_process: ClassLoaderContext classpath size mismatch. expected=0, found=1 (PCL[] | PCL[/system/framework/android.test.runner.jar*2555718838])
+08-10 14:41:34.529  2784  2784 D AndroidRuntime: Calling main entry com.android.commands.uiautomator.Launcher
+08-10 14:41:34.532   335   349 W WindowMagnificationMgr: requestConnection duplicated request: connect=false, mConnectionState=DISCONNECTED
+08-10 14:41:34.532   335   335 D BatterySaverPolicy: accessibility changed to true, updating policy.
+08-10 14:41:34.533   335  2562 W WindowMagnificationMgr: requestConnection duplicated request: connect=false, mConnectionState=DISCONNECTED
+08-10 14:41:35.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:35.549  2784  2784 W AccessibilityNodeInfoDumper: Fetch time: 14ms
+08-10 14:41:35.550   335   348 W WindowMagnificationMgr: requestConnection duplicated request: connect=false, mConnectionState=DISCONNECTED
+08-10 14:41:35.550   335   335 D BatterySaverPolicy: accessibility changed to false, updating policy.
+08-10 14:41:35.551  2784  2784 D AndroidRuntime: Shutting down VM
+08-10 14:41:37.508  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:39.311  1188  1339 D PickerSyncController: Fetching SyncRequestParams. Authority: com.android.providers.media.photopicker. LatestMediaCollectionInfo: Bundle[{last_media_sync_generation=35, media_collection_id=1307:deeb89bd-783d-42c5-b3a2-f3f5a8ac4175:external_primary}]. CachedMediaCollectionInfo: Bundle[{last_media_sync_generation=28, media_collection_id=1307:deeb89bd-783d-42c5-b3a2-f3f5a8ac4175:external_primary}]
+08-10 14:41:39.311  1188  1339 D PickerSyncController: SyncRequestParams. Authority: com.android.providers.media.photopicker. Result: SYNC_TYPE_INCREMENTAL
+08-10 14:41:39.311  1188  1339 I PickerSyncController: Executing SyncAdd. authority: com.android.providers.media.photopicker
+08-10 14:41:39.314  1188  1339 I PickerSyncController: Paged sync successful. QueryArgs: Bundle[{android.provider.extra.SYNC_GENERATION=28}]. Result count: 1. Cursor count: 1
+08-10 14:41:39.318  1188  1339 I PickerSyncController: Executing SyncRemove. authority: com.android.providers.media.photopicker
+08-10 14:41:39.320  1188  1339 I PickerSyncController: Paged sync successful. QueryArgs: Bundle[{android.provider.extra.SYNC_GENERATION=28}]. Result count: 0. Cursor count: 0
+08-10 14:41:39.320  1188  1339 D PickerSyncController: Fetching SyncRequestParams. Null cloud authority. Result: SYNC_TYPE_RESET
+08-10 14:41:39.320  1188  1339 I PickerSyncController: Executing SyncReset. authority: null
+08-10 14:41:39.321  1188  1339 I PickerSyncController: SyncReset. Authority: null. Result count: 0
+08-10 14:41:39.321  1188  1339 D PickerSyncController: Ignoring cache media info for null authority with bundle: null
+08-10 14:41:39.321  1188  1339 I PickerSyncController: Executing SyncAlbumReset. authority: com.android.providers.media.photopicker. albumId: null
+08-10 14:41:39.321  1188  1339 I PickerSyncController: Successfully executed SyncResetAlbum. authority: com.android.providers.media.photopicker. albumId: null. Result count: 0
+08-10 14:41:39.321  1188  1339 I PickerSyncController: Executing SyncAlbumReset. authority: null. albumId: null
+08-10 14:41:39.321  1188  1339 I PickerSyncController: Successfully executed SyncResetAlbum. authority: null. albumId: null. Result count: 0
+08-10 14:41:39.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:41.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:43.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:45.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:47.508  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:49.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:51.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:53.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:55.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:57.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:59.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:41:59.960  2570  2570 W .aurora.desktop: Accessing hidden method Landroid/view/MotionEvent;->getEventTimeNano()J (unsupported, reflection, allowed)
+08-10 14:41:59.968   335   374 V DisplayPowerController[0]: Brightness [0.39763778] reason changing to: 'manual', previous reason: 'manual [ dim ]'.
+08-10 14:41:59.968   335   374 I DisplayPowerController[0]: BrightnessEvent: disp=0, physDisp=local:0, brt=0.39763778, initBrt=0.05, rcmdBrt=NaN, preBrt=NaN, lux=0.0, preLux=0.0, hbmMax=1.0, hbmMode=off, rbcStrength=50, powerFactor=1.0, thrmMax=1.0, wasShortTermModelActive=false, flags=, reason=manual, autoBrightness=false
+08-10 14:41:59.977   335   349 D CompatibilityChangeReporter: Compat change id reported: 214016041; UID 10127; state: ENABLED
+08-10 14:42:00.608   335   374 I DisplayPowerController[0]: BrightnessEvent: disp=0, physDisp=local:0, brt=0.39763778, initBrt=0.39763778, rcmdBrt=NaN, preBrt=NaN, lux=0.0, preLux=0.0, hbmMax=1.0, hbmMode=off, rbcStrength=50, powerFactor=1.0, thrmMax=1.0, wasShortTermModelActive=false, flags=, reason=manual, autoBrightness=false
+08-10 14:42:01.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:42:03.107  2816  2816 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+08-10 14:42:03.110  2816  2816 I AndroidRuntime: Using default boot image
+08-10 14:42:03.110  2816  2816 I AndroidRuntime: Leaving lock profiling enabled
+08-10 14:42:03.112  2816  2816 W app_process: ART APEX data files are untrusted.
+08-10 14:42:03.112  2816  2816 I app_process: Core platform API reporting enabled, enforcing=false
+08-10 14:42:03.189  2816  2816 D app_process: Time zone APEX ICU file found: /apex/com.android.tzdata/etc/icu/icu_tzdata.dat
+08-10 14:42:03.189  2816  2816 D app_process: I18n APEX ICU file found: /apex/com.android.i18n/etc/icu/icudt70l.dat
+08-10 14:42:03.192  2816  2816 W app_process: Unexpected CPU variant for x86: x86_64.
+08-10 14:42:03.192  2816  2816 W app_process: Known variants: atom, sandybridge, silvermont, kabylake, default
+08-10 14:42:03.194  2816  2816 W app_process: ClassLoaderContext classpath size mismatch. expected=0, found=1 (PCL[] | PCL[/system/framework/android.test.runner.jar*2555718838])
+08-10 14:42:03.207  2816  2816 D AndroidRuntime: Calling main entry com.android.commands.uiautomator.Launcher
+08-10 14:42:03.210   335   349 W WindowMagnificationMgr: requestConnection duplicated request: connect=false, mConnectionState=DISCONNECTED
+08-10 14:42:03.210   335   335 D BatterySaverPolicy: accessibility changed to true, updating policy.
+08-10 14:42:03.211   335   348 W WindowMagnificationMgr: requestConnection duplicated request: connect=false, mConnectionState=DISCONNECTED
+08-10 14:42:03.507  2570  2570 V Tauri/Plugin: Tauri plugin: pluginId: aurora-native, command: voiceForegroundServiceStatus
+08-10 14:42:04.217  1188  1347 W MediaProvider: isAppCloneUserPair failed. Users: 0 and 0
+08-10 14:42:04.217  1188  1347 W MediaProvider: isAppCloneUserPair for user 0: false
+08-10 14:42:04.217  1188  1347 V MediaProvider: Inserted id:1000000024 less than next row id backup:1000001000.
+08-10 14:42:04.220  1188  1339 E StorageManager: Failed to set extended attributes for /storage/emulated/0/aurora-after-continue.xml to set project id.: Operation not supported on transport endpoint
+08-10 14:42:04.221  1188  1339 W MediaProvider: Failed to update quota type for /storage/emulated/0/aurora-after-continue.xml
+08-10 14:42:04.221  1188  1339 W MediaProvider: java.io.IOException: Failed to update quota type for /storage/emulated/0/aurora-after-continue.xml
+08-10 14:42:04.221  1188  1339 W MediaProvider: 	at android.os.storage.StorageManager.updateExternalStorageFileQuotaType(StorageManager.java:2618)
+08-10 14:42:04.221  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForFileInternal(MediaProvider.java:708)
+08-10 14:42:04.221  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.lambda$onFileCreatedForFuse$17(MediaProvider.java:1712)
+08-10 14:42:04.221  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.$r8$lambda$RwX1jyw0H1CYPm6NAX9_DxGu3Co(Unknown Source:0)
+08-10 14:42:04.221  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$$ExternalSyntheticLambda7.run(Unknown Source:4)
+08-10 14:42:04.221  1188  1339 W MediaProvider: 	at android.os.Handler.handleCallback(Handler.java:942)
+08-10 14:42:04.221  1188  1339 W MediaProvider: 	at android.os.Handler.dispatchMessage(Handler.java:99)
+08-10 14:42:04.221  1188  1339 W MediaProvider: 	at android.os.Looper.loopOnce(Looper.java:201)
+08-10 14:42:04.221  1188  1339 W MediaProvider: 	at android.os.Looper.loop(Looper.java:288)
+08-10 14:42:04.221  1188  1339 W MediaProvider: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+08-10 14:42:04.223  1188  1339 E StorageManager: Failed to set extended attributes for /storage/emulated/0/aurora-after-continue.xml to set project id.: Operation not supported on transport endpoint
+08-10 14:42:04.223  1188  1339 W MediaProvider: Failed to update quota type for /storage/emulated/0/aurora-after-continue.xml
+08-10 14:42:04.223  1188  1339 W MediaProvider: java.io.IOException: Failed to update quota type for /storage/emulated/0/aurora-after-continue.xml
+08-10 14:42:04.223  1188  1339 W MediaProvider: 	at android.os.storage.StorageManager.updateExternalStorageFileQuotaType(StorageManager.java:2618)
+08-10 14:42:04.223  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForFileInternal(MediaProvider.java:708)
+08-10 14:42:04.223  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForUri(MediaProvider.java:682)
+08-10 14:42:04.223  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.-$$Nest$mupdateQuotaTypeForUri(Unknown Source:0)
+08-10 14:42:04.223  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4.lambda$onInsert$0(MediaProvider.java:735)
+08-10 14:42:04.223  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4.$r8$lambda$DnIEye5Sx8fODP4Bt_qvKpm3U-Q(Unknown Source:0)
+08-10 14:42:04.223  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4$$ExternalSyntheticLambda0.run(Unknown Source:6)
+08-10 14:42:04.223  1188  1339 W MediaProvider: 	at android.os.Handler.handleCallback(Handler.java:942)
+08-10 14:42:04.223  1188  1339 W MediaProvider: 	at android.os.Handler.dispatchMessage(Handler.java:99)
+08-10 14:42:04.223  1188  1339 W MediaProvider: 	at android.os.Looper.loopOnce(Looper.java:201)
+08-10 14:42:04.223  1188  1339 W MediaProvider: 	at android.os.Looper.loop(Looper.java:288)
+08-10 14:42:04.223  1188  1339 W MediaProvider: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+08-10 14:42:04.243  2816  2816 W AccessibilityNodeInfoDumper: Fetch time: 29ms
+08-10 14:42:04.244   335   348 W WindowMagnificationMgr: requestConnection duplicated request: connect=false, mConnectionState=DISCONNECTED
+08-10 14:42:04.245   335   335 D BatterySaverPolicy: accessibility changed to false, updating policy.
+08-10 14:42:04.246  2816  2816 D AndroidRuntime: Shutting down VM
+08-10 14:42:04.262    99   193 W TransactionTracing: Could not find layer handle 0x7b84dc024ab0
+08-10 14:42:05.207  1188  2384 W MediaProvider: isAppCloneUserPair failed. Users: 0 and 0
+08-10 14:42:05.207  1188  2384 W MediaProvider: isAppCloneUserPair for user 0: false
+08-10 14:42:05.208  1188  2384 V MediaProvider: Inserted id:1000000025 less than next row id backup:1000001000.
+08-10 14:42:05.218  2835  2835 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+08-10 14:42:05.218  1188  1339 E StorageManager: Failed to set extended attributes for /storage/emulated/0/aurora-after-continue.png to set project id.: Operation not supported on transport endpoint
+08-10 14:42:05.218  1188  1339 W MediaProvider: Failed to update quota type for /storage/emulated/0/aurora-after-continue.png
+08-10 14:42:05.218  1188  1339 W MediaProvider: java.io.IOException: Failed to update quota type for /storage/emulated/0/aurora-after-continue.png
+08-10 14:42:05.218  1188  1339 W MediaProvider: 	at android.os.storage.StorageManager.updateExternalStorageFileQuotaType(StorageManager.java:2618)
+08-10 14:42:05.218  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForFileInternal(MediaProvider.java:704)
+08-10 14:42:05.218  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.lambda$onFileCreatedForFuse$17(MediaProvider.java:1712)
+08-10 14:42:05.218  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.$r8$lambda$RwX1jyw0H1CYPm6NAX9_DxGu3Co(Unknown Source:0)
+08-10 14:42:05.218  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$$ExternalSyntheticLambda7.run(Unknown Source:4)
+08-10 14:42:05.218  1188  1339 W MediaProvider: 	at android.os.Handler.handleCallback(Handler.java:942)
+08-10 14:42:05.218  1188  1339 W MediaProvider: 	at android.os.Handler.dispatchMessage(Handler.java:99)
+08-10 14:42:05.218  1188  1339 W MediaProvider: 	at android.os.Looper.loopOnce(Looper.java:201)
+08-10 14:42:05.218  1188  1339 W MediaProvider: 	at android.os.Looper.loop(Looper.java:288)
+08-10 14:42:05.218  1188  1339 W MediaProvider: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+08-10 14:42:05.219  1188  1339 E StorageManager: Failed to set extended attributes for /storage/emulated/0/aurora-after-continue.png to set project id.: Operation not supported on transport endpoint
+08-10 14:42:05.219  1188  1339 W MediaProvider: Failed to update quota type for /storage/emulated/0/aurora-after-continue.png
+08-10 14:42:05.219  1188  1339 W MediaProvider: java.io.IOException: Failed to update quota type for /storage/emulated/0/aurora-after-continue.png
+08-10 14:42:05.219  1188  1339 W MediaProvider: 	at android.os.storage.StorageManager.updateExternalStorageFileQuotaType(StorageManager.java:2618)
+08-10 14:42:05.219  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForFileInternal(MediaProvider.java:704)
+08-10 14:42:05.219  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForUri(MediaProvider.java:682)
+08-10 14:42:05.219  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.-$$Nest$mupdateQuotaTypeForUri(Unknown Source:0)
+08-10 14:42:05.219  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4.lambda$onInsert$0(MediaProvider.java:735)
+08-10 14:42:05.219  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4.$r8$lambda$DnIEye5Sx8fODP4Bt_qvKpm3U-Q(Unknown Source:0)
+08-10 14:42:05.219  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4$$ExternalSyntheticLambda0.run(Unknown Source:6)
+08-10 14:42:05.219  1188  1339 W MediaProvider: 	at android.os.Handler.handleCallback(Handler.java:942)
+08-10 14:42:05.219  1188  1339 W MediaProvider: 	at android.os.Handler.dispatchMessage(Handler.java:99)
+08-10 14:42:05.219  1188  1339 W MediaProvider: 	at android.os.Looper.loopOnce(Looper.java:201)
+08-10 14:42:05.219  1188  1339 W MediaProvider: 	at android.os.Looper.loop(Looper.java:288)
+08-10 14:42:05.219  1188  1339 W MediaProvider: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+08-10 14:42:05.223    89   173 V [minigbm:gbm_mesa_internals.cpp(382)]: Allocated: 1280x768, stride: 5120, map_stride: 5120
+08-10 14:42:05.229  2835  2837 I [minigbm:gbm_mesa_internals.cpp(213)]: Using device /dev/dri/renderD128 as requested by gralloc.gbm.device
+08-10 14:42:05.343  1188  1572 I MediaProvider: Begin Intent { act=android.intent.action.MEDIA_SCANNER_SCAN_FILE dat=file:///... flg=0x1400010 cmp=com.android.providers.media.module/com.android.providers.media.MediaService }
+08-10 14:42:05.347  1188  1572 V MediaProvider: Inserted id:1000000025 less than next row id backup:1000001000.
+08-10 14:42:05.351  1188  1572 I MediaProvider: End Intent { act=android.intent.action.MEDIA_SCANNER_SCAN_FILE dat=file:///... flg=0x1400010 cmp=com.android.providers.media.module/com.android.providers.media.MediaService }
+08-10 14:42:05.351  1188  1339 E StorageManager: Failed to set extended attributes for /storage/emulated/0/aurora-after-continue.png to set project id.: Operation not supported on transport endpoint
+08-10 14:42:05.351  1188  1339 W MediaProvider: Failed to update quota type for /storage/emulated/0/aurora-after-continue.png
+08-10 14:42:05.351  1188  1339 W MediaProvider: java.io.IOException: Failed to update quota type for /storage/emulated/0/aurora-after-continue.png
+08-10 14:42:05.351  1188  1339 W MediaProvider: 	at android.os.storage.StorageManager.updateExternalStorageFileQuotaType(StorageManager.java:2618)
+08-10 14:42:05.351  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForFileInternal(MediaProvider.java:704)
+08-10 14:42:05.351  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.updateQuotaTypeForUri(MediaProvider.java:682)
+08-10 14:42:05.351  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider.-$$Nest$mupdateQuotaTypeForUri(Unknown Source:0)
+08-10 14:42:05.351  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4.lambda$onUpdate$1(MediaProvider.java:765)
+08-10 14:42:05.351  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4.$r8$lambda$3D2OHltIfecN7CvhaLyqtkV--uY(Unknown Source:0)
+08-10 14:42:05.351  1188  1339 W MediaProvider: 	at com.android.providers.media.MediaProvider$4$$ExternalSyntheticLambda1.run(Unknown Source:10)
+08-10 14:42:05.351  1188  1339 W MediaProvider: 	at android.os.Handler.handleCallback(Handler.java:942)
+08-10 14:42:05.351  1188  1339 W MediaProvider: 	at android.os.Handler.dispatchMessage(Handler.java:99)
+08-10 14:42:05.351  1188  1339 W MediaProvider: 	at android.os.Looper.loopOnce(Looper.java:201)
+08-10 14:42:05.351  1188  1339 W MediaProvider: 	at android.os.Looper.loop(Looper.java:288)
+08-10 14:42:05.351  1188  1339 W MediaProvider: 	at android.os.HandlerThread.run(HandlerThread.java:67)

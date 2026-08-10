@@ -1,0 +1,53 @@
+--------- beginning of system
+08-10 14:40:23.855   335  1664 I ActivityManager: Force stopping dev.aurora.desktop appid=10127 user=0: from pid 2298
+08-10 14:40:23.855   335  1664 I ActivityManager: Killing 2115:dev.aurora.desktop/u0a127 (adj 0): stop dev.aurora.desktop due to from pid 2298
+--------- beginning of main
+08-10 14:40:23.856   335   364 I libprocessgroup: Successfully killed process cgroup uid 10127 pid 2115 in 0ms
+08-10 14:40:23.857   335  1664 I ActivityManager: Killing 2174:com.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0/u0a127i0 (adj 0): isolated not needed
+08-10 14:40:23.857  2174  2174 I cr_ChildProcessService: Destroying ChildProcessService pid=2174
+08-10 14:40:23.857   335   364 I libprocessgroup: Successfully killed process cgroup uid 99000 pid 2174 in 0ms
+08-10 14:40:23.857   335  1664 W ActivityTaskManager: Force removing ActivityRecord{cad7c3b u0 dev.aurora.desktop/.MainActivity} t12 f}}: app died, no saved state
+08-10 14:40:23.859   335  1664 W InputManager-JNI: Input channel object 'f25a882 dev.aurora.desktop/dev.aurora.desktop.MainActivity (client)' was disposed without first being removed with the input manager!
+08-10 14:40:23.863   335   366 W libprocessgroup: Failed to open /dev/stune/top-app/cgroup.procs: No such file or directory
+08-10 14:40:23.863   335   366 W libprocessgroup: Failed to open /dev/cpuset/top-app/cgroup.procs: No such file or directory
+08-10 14:40:23.863   335   366 W libprocessgroup: Failed to open /dev/blkio//cgroup.procs: No such file or directory
+08-10 14:40:23.864   335   774 W ActivityManager: Unable to start service Intent { act=com.android.launcher3.WINDOW_OVERLAY dat=app://com.android.launcher3:10106/... pkg=com.google.android.googlequicksearchbox } U=0: not found
+08-10 14:40:23.864   779   779 D CarrierSvcBindHelper: onHandleForceStop: [dev.aurora.desktop]
+08-10 14:40:23.864   335   355 V WindowManager: Unknown focus tokens, dropping reportFocusChanged
+08-10 14:40:23.878   855  1226 E OpenGLRenderer: Unable to match the desired swap behavior.
+08-10 14:40:23.879    99    99 I BpBinder: onLastStrongRef automatically unlinking death recipients: <uncached descriptor>
+08-10 14:40:23.879    89   173 V [minigbm:gbm_mesa_internals.cpp(382)]: Allocated: 1280x768, stride: 5120, map_stride: 0
+08-10 14:40:23.881    89   173 V [minigbm:gbm_mesa_internals.cpp(382)]: Allocated: 1280x768, stride: 5120, map_stride: 0
+08-10 14:40:23.881    89  1040 V [minigbm:gbm_mesa_internals.cpp(382)]: Allocated: 1280x768, stride: 5120, map_stride: 0
+08-10 14:40:23.886   709   709 I Zygote  : Process 2174 exited due to signal 9 (Killed)
+08-10 14:40:23.889   335   368 E system_server: Cannot read thread CPU times for PID 335
+08-10 14:40:23.896   335  1664 V ActivityManager: Got obituary of 2115:dev.aurora.desktop
+08-10 14:40:23.896   335  1663 D ConnectivityService: ConnectivityService NetworkRequestInfo binderDied(uid/pid:10127/2115, [NetworkRequest [ LISTEN id=61, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&FOREGROUND&NOT_VCN_MANAGED Uid: 10127 RequestorUid: 10127 RequestorPkg: dev.aurora.desktop UnderlyingNetworks: Null] ]], android.os.BinderProxy@357e80)
+08-10 14:40:23.896   335   727 D ConnectivityService: ConnectivityService NetworkRequestInfo binderDied(uid/pid:10127/2115, [NetworkRequest [ REQUEST id=60, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10127 RequestorUid: 10127 RequestorPkg: dev.aurora.desktop UnderlyingNetworks: Null] ]], android.os.BinderProxy@7320f03)
+08-10 14:40:23.897   335   355 W ActivityManager: setHasOverlayUi called on unknown pid: 2115
+08-10 14:40:23.898    79    79 I Zygote  : Process 2115 exited due to signal 9 (Killed)
+08-10 14:40:23.899   335   468 D ConnectivityService: releasing NetworkRequest [ REQUEST id=60, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10127 RequestorUid: 10127 RequestorPkg: dev.aurora.desktop UnderlyingNetworks: Null] ] (release request)
+08-10 14:40:23.899   335   467 D EthernetNetworkFactory: eth0: onNetworkUnneeded for request: NetworkRequest [ REQUEST id=60, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED Uid: 10127 RequestorUid: 10127 RequestorPkg: dev.aurora.desktop UnderlyingNetworks: Null] ]
+08-10 14:40:23.912    99    99 E BpTransactionCompletedListener: Failed to transact (-32)
+08-10 14:40:23.962  2302  2302 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+08-10 14:40:23.966  2302  2302 I AndroidRuntime: Using default boot image
+08-10 14:40:23.966  2302  2302 I AndroidRuntime: Leaving lock profiling enabled
+08-10 14:40:23.967  2302  2302 W app_process: ART APEX data files are untrusted.
+08-10 14:40:23.967  2302  2302 I app_process: Core platform API reporting enabled, enforcing=false
+08-10 14:40:24.061  2302  2302 D app_process: Time zone APEX ICU file found: /apex/com.android.tzdata/etc/icu/icu_tzdata.dat
+08-10 14:40:24.061  2302  2302 D app_process: I18n APEX ICU file found: /apex/com.android.i18n/etc/icu/icudt70l.dat
+08-10 14:40:24.066  2302  2302 W app_process: Unexpected CPU variant for x86: x86_64.
+08-10 14:40:24.066  2302  2302 W app_process: Known variants: atom, sandybridge, silvermont, kabylake, default
+08-10 14:40:24.086  2302  2302 D AndroidRuntime: Calling main entry com.android.commands.monkey.Monkey
+08-10 14:40:24.087  2302  2302 W Monkey  : args: [-p, dev.aurora.desktop, -c, android.intent.category.LAUNCHER, 1]
+08-10 14:40:24.087  2302  2302 W Monkey  :  arg: "-p"
+08-10 14:40:24.087  2302  2302 W Monkey  :  arg: "dev.aurora.desktop"
+08-10 14:40:24.087  2302  2302 W Monkey  :  arg: "-c"
+08-10 14:40:24.087  2302  2302 W Monkey  :  arg: "android.intent.category.LAUNCHER"
+08-10 14:40:24.087  2302  2302 W Monkey  :  arg: "1"
+08-10 14:40:24.087  2302  2302 W Monkey  : data="dev.aurora.desktop"
+08-10 14:40:24.087  2302  2302 W Monkey  : data="android.intent.category.LAUNCHER"
+08-10 14:40:24.092   335   362 W BroadcastQueue: Skipping deliver [background] BroadcastRecord{a24a70a u-1 android.net.conn.CONNECTIVITY_CHANGE} to ReceiverList{83c5b7b 2302 (unknown name)/2000/u-1 remote:ab402ac}: process gone or crashing
+08-10 14:40:24.094  2302  2302 W Monkey  : ** SYS_KEYS has no physical keys but with factor 2.0%.
+08-10 14:40:24.095  2302  2302 I app_process: System.exit called, status: -5
+08-10 14:40:24.095  2302  2302 I AndroidRuntime: VM exiting with result code -5.

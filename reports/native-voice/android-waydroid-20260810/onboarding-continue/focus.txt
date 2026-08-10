@@ -1,0 +1,2 @@
+  mCurrentFocus=Window{1350643 u0 dev.aurora.desktop/dev.aurora.desktop.MainActivity}
+  mFocusedApp=ActivityRecord{3b7e1b7 u0 dev.aurora.desktop/.MainActivity} t14}

@@ -1,0 +1,7 @@
+Starting: Intent { cmp=dev.aurora.desktop/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.aurora.desktop/.MainActivity
+TotalTime: 399
+WaitTime: 399
+Complete
