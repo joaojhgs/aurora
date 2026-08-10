@@ -67,6 +67,7 @@ try {
   configRaw = readFileSync(tempConfigPath, 'utf8')
   const configSha256 = createHash('sha256').update(configRaw).digest('hex')
 
+  run('pnpm', ['tauri', 'android', 'init', '--ci', '--skip-targets-install'])
   run('pnpm', ['android:sync-native-plugin'])
   cleanAndroidBuildOutputs()
 

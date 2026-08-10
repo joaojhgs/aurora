@@ -327,16 +327,17 @@ if (argv[0] === 'build:frontend:android-client') {
     const calls = readFileSync(callsPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
     expect(calls.map((call) => call.argv.join(' '))).toEqual([
       'build:frontend:android-client',
+      'tauri android init --ci --skip-targets-install',
       'android:sync-native-plugin',
-      'tauri android build --debug --aab --config ' + calls[2].argv.at(-1),
+      'tauri android build --debug --aab --config ' + calls[3].argv.at(-1),
     ])
-    expect(calls[2].argv.at(-1)).not.toContain('src-tauri/tauri.android-client.conf.json')
-    expect(calls[2]).toMatchObject({
+    expect(calls[3].argv.at(-1)).not.toContain('src-tauri/tauri.android-client.conf.json')
+    expect(calls[3]).toMatchObject({
       javaHome: jdkHome,
       asdfJavaVersion: 'temurin-17.0.20+8',
     })
-    expect(calls[2].pathHead).toEqual([jdkBin, stubDir])
-    expect(existsSync(calls[2].argv.at(-1))).toBe(false)
+    expect(calls[3].pathHead).toEqual([jdkBin, stubDir])
+    expect(existsSync(calls[3].argv.at(-1))).toBe(false)
     expect(existsSync(context.configPath)).toBe(false)
     const provenance = JSON.parse(readFileSync(context.aabProvenancePath, 'utf8'))
     expect(provenance).toMatchObject({
@@ -650,6 +651,7 @@ if (argv[0] === 'build:frontend:android-client') {
     const buildSource = readFileSync(buildClient, 'utf8')
     expect(buildSource).toContain('AURORA_TAURI_ANDROID_CLIENT_CONFIG_PATH')
     expect(buildSource).toContain('android-client-${kind}-build-provenance.json')
+    expect(buildSource).toContain("run('pnpm', ['tauri', 'android', 'init', '--ci', '--skip-targets-install'])")
     expect(buildSource).toContain("const target = readOption('--target')")
     expect(buildSource).toContain("target: target ?? 'universal'")
     expect(buildSource).toContain("if (target) buildArgs.push('--target', target)")
