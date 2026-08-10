@@ -1,6 +1,6 @@
 # PocketTTS native/WASM voice goal capsule
 
-Updated: 2026-08-10T14:20:22Z
+Updated: 2026-08-10T14:23:06Z
 
 ## Goal identity and authority
 
@@ -43,11 +43,11 @@ This section is the authoritative resume state from the 2026-08-08 strict code-a
 
 ### 2026-08-09 current feature-branch refresh
 
-- Current canonical feature head: `a194c8d5` on `feat/ui-multi-platform-integration`; local branch is ahead of `origin/feat/ui-multi-platform-integration` with the accepted iOS start hardening, Android WebRTC harness hardening, voice-clone tombstone scrubbing, RAC-25 release-trust hardening, RAC-54 HTTP rollback role preservation, and RAC-51 fail-closed credential-storage hardening.
+- Current code evidence head before this tracker update: `a75a09ed` on `feat/ui-multi-platform-integration`; local branch is ahead of `origin/feat/ui-multi-platform-integration` with the accepted iOS start hardening, Android WebRTC harness hardening, voice-clone tombstone scrubbing, RAC-25 release-trust hardening, RAC-54 HTTP rollback role preservation, RAC-51 fail-closed credential-storage hardening, and refreshed goal state.
 - Preserved local checkout dirt: `apps/aurora-tauri/src-tauri/gen/schemas/acl-manifests.json` remains intentionally unstaged generated schema churn; do not discard it. Disposable RAC-51 target output was moved out of the checkout.
 - RAC-25 status remains partial, not pass. Integrated evidence now includes release-hash trust with caller-supplied trusted keys/hash, duplicate file-id rejection, `pnpm --filter @aurora/voice-web typecheck`, focused `browser-model-pack.test.ts` `9/9`, package build with Worker/WASM assets, and full `@aurora/voice-web` tests `110/110`. Production trust-key/hash distribution, signed release wiring, and release evidence remain open.
 - RAC-51 status remains partial. Source hardening now deletes corrupt, expired, or semantically invalid Rust/Android/iOS stored peer credentials before reuse. Primary validation passed `cargo +1.88.0 fmt --manifest-path apps/aurora-tauri/src-tauri/Cargo.toml --check`, `git diff --check`, and `pnpm dlx vitest@4.0.16 run apps/aurora-tauri/src/secure-storage-policy.test.ts apps/aurora-tauri/src/android-voice-route-policy.test.ts --environment node` (`19/19`). The focused Rust unit compile did not complete under concurrent Android/desktop build pressure, so full runtime keychain/background proof remains open.
-- RAC-54 status remains partial. The rejected role-withdrawal work is superseded: `13d45c9d` preserves the explicitly requested/persisted `mesh-node` role during WebRTC-preferred HTTP rollback and withdraws only WebRTC-dependent readiness. Focused Vitest worker startup produced no runnable test evidence, so end-to-end rollback/restore evidence remains open.
+- RAC-54 status remains partial. The rejected role-withdrawal work is superseded: `13d45c9d` preserves the explicitly requested/persisted `mesh-node` role during WebRTC-preferred HTTP rollback and withdraws only WebRTC-dependent readiness. Fresh focused UI validation on 2026-08-10 passed `pnpm --filter @aurora/ui exec vitest run tests/web-thin-runtime.test.tsx --environment jsdom` (`58/58`) and `pnpm --filter @aurora/ui exec vitest run tests/platform-surface.test.ts --environment jsdom` (`21/21`), while end-to-end rollback/restore evidence remains open.
 - RAC-27 and Android final validation remain pending. No accepted packaged desktop all-route WebDriver evidence, fresh Waydroid Mobile-MCP screenshots, navigation proof, pairing proof, or complete Gateway/UI voice turn has landed on the feature branch.
 
 ## Audited phase status
