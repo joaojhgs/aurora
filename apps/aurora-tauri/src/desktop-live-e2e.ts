@@ -855,31 +855,26 @@ export async function retryDesktopProviderReadiness<T>(
 }
 
 function isTransientProviderNotReady(error: unknown): boolean {
-  const values = collectErrorValues(error);
-  const text = values
-    .filter((value): value is string => typeof value === "string")
-    .join(" ")
-    .toLowerCase();
-  return text.includes("provider_not_ready") ||
-    text.includes("provider is not ready");
+  if (isCanonicalProviderNotReadyShape(error)) return true;
+  if (!isRecord(error)) return false;
+  const hasCanonicalStatus = error.status === 425 || error.code === 425;
+  return hasCanonicalStatus && (
+    error.reason_code === "provider_not_ready" ||
+    canonicalReasonCode(error.detail) === "provider_not_ready" ||
+    canonicalReasonCode(error.error) === "provider_not_ready"
+  );
 }
 
-function collectErrorValues(value: unknown, seen = new Set<unknown>()): unknown[] {
-  if (value === null || value === undefined || seen.has(value)) return [];
-  if (typeof value !== "object") return [value];
-  seen.add(value);
-  const record = value as Record<string, unknown>;
-  return [
-    record.code,
-    record.status,
-    record.message,
-    record.reason,
-    record.reason_code,
-    record.error_code,
-    ...collectErrorValues(record.detail, seen),
-    ...collectErrorValues(record.error, seen),
-    ...collectErrorValues(record.cause, seen),
-  ];
+function isCanonicalProviderNotReadyShape(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return (value.status === 425 || value.code === 425) &&
+    value.reason_code === "provider_not_ready";
+}
+
+function canonicalReasonCode(value: unknown): string | null {
+  return isRecord(value) && typeof value.reason_code === "string"
+    ? value.reason_code
+    : null;
 }
 
 function createAc18BrowserLocalToolProvider(

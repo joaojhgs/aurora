@@ -278,6 +278,60 @@ describe("desktop live E2E WebView hook", () => {
     expect(attempts).toBe(1);
   });
 
+  it("does not retry message-only provider readiness text", async () => {
+    let attempts = 0;
+    const failure = new Error("Provider is not ready");
+
+    await expect(retryDesktopProviderReadiness(
+      async () => {
+        attempts += 1;
+        throw failure;
+      },
+      "registry readiness test",
+      1000,
+      1,
+    )).rejects.toBe(failure);
+    expect(attempts).toBe(1);
+  });
+
+  it("does not retry conflicting 403 failures with nested provider readiness text", async () => {
+    let attempts = 0;
+    const failure = Object.assign(new Error("forbidden"), {
+      status: 403,
+      detail: { message: "Provider is not ready", reason_code: "peer_authority_revoked" },
+    });
+
+    await expect(retryDesktopProviderReadiness(
+      async () => {
+        attempts += 1;
+        throw failure;
+      },
+      "registry readiness test",
+      1000,
+      1,
+    )).rejects.toBe(failure);
+    expect(attempts).toBe(1);
+  });
+
+  it("does not retry conflicting 500 failures with nested provider readiness reason", async () => {
+    let attempts = 0;
+    const failure = Object.assign(new Error("gateway failed"), {
+      status: 500,
+      error: { reason_code: "provider_not_ready" },
+    });
+
+    await expect(retryDesktopProviderReadiness(
+      async () => {
+        attempts += 1;
+        throw failure;
+      },
+      "registry readiness test",
+      1000,
+      1,
+    )).rejects.toBe(failure);
+    expect(attempts).toBe(1);
+  });
+
   it("keeps hook implementation out of the shared Tauri app route module", async () => {
     const tauriApp = await readFile(resolve(import.meta.dirname, "tauri-app.tsx"), "utf8");
     const main = await readFile(resolve(import.meta.dirname, "main.tsx"), "utf8");
