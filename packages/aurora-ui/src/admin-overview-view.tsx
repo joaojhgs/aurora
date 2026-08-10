@@ -164,7 +164,11 @@ function PosturePanel({ manifest, posture }: { manifest: AdminOverviewManifest; 
         items={[
           { label: 'Service mode', value: manifest.serviceMode },
           { label: 'Connection', value: topology ? deploymentModeLabel(topology) : 'Service layout unavailable' },
-          { label: 'Refresh ID', value: manifest.registryDigest || 'not reported', mono: Boolean(manifest.registryDigest) },
+          {
+            label: 'Refresh ID',
+            value: manifest.registryDigest ? sanitizeAdminText(manifest.registryDigest, 'Available') : 'not reported',
+            mono: Boolean(manifest.registryDigest)
+          },
           { label: 'Services', value: String(manifest.totals.services) },
           { label: 'Actions', value: `${manifest.totals.externalMethods} available / ${manifest.totals.internalMethods} Aurora-only` },
           { label: 'Peers', value: String(manifest.totals.peers) },

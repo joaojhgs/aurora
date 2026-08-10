@@ -88,14 +88,15 @@ describe('admin product copy', () => {
 
   it('maps hostile admin source errors and dynamic counts before rendering', () => {
     const hostile = 'Config.GetSchemaMetadata backend provider schema route manifest transport proof'
+    const overviewManifest = buildAdminOverviewManifest({
+      capabilityCatalog: capabilityCatalogFixture,
+      registry: gatewayRegistryFixture,
+      deploymentTopology: deploymentTopologyFixture,
+      generatedAt: '2026-07-28T00:00:00Z',
+    })
     const overviewMarkup = renderToStaticMarkup(
       <AdminOverviewContent
-        manifest={buildAdminOverviewManifest({
-          capabilityCatalog: capabilityCatalogFixture,
-          registry: gatewayRegistryFixture,
-          deploymentTopology: deploymentTopologyFixture,
-          generatedAt: '2026-07-28T00:00:00Z',
-        })}
+        manifest={{ ...overviewManifest, registryDigest: hostile }}
         transportKind="mock"
       />
     )
@@ -110,6 +111,7 @@ describe('admin product copy', () => {
 
     expect(overviewMarkup).toContain('actions across')
     expect(overviewMarkup).toContain('feature')
+    expectSafeProductCopy(overviewMarkup)
     expectSafeProductCopy(hostileMarkup)
   })
 
