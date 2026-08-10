@@ -278,6 +278,46 @@ describe("desktop live E2E WebView hook", () => {
     expect(attempts).toBe(1);
   });
 
+  it("does not retry conflicting status 403 and code 425 provider readiness failures", async () => {
+    let attempts = 0;
+    const failure = Object.assign(new Error("forbidden"), {
+      status: 403,
+      code: 425,
+      detail: { reason_code: "provider_not_ready" },
+    });
+
+    await expect(retryDesktopProviderReadiness(
+      async () => {
+        attempts += 1;
+        throw failure;
+      },
+      "registry readiness test",
+      1000,
+      1,
+    )).rejects.toBe(failure);
+    expect(attempts).toBe(1);
+  });
+
+  it("does not retry conflicting status 425 and code 403 provider readiness failures", async () => {
+    let attempts = 0;
+    const failure = Object.assign(new Error("forbidden"), {
+      status: 425,
+      code: 403,
+      detail: { reason_code: "provider_not_ready" },
+    });
+
+    await expect(retryDesktopProviderReadiness(
+      async () => {
+        attempts += 1;
+        throw failure;
+      },
+      "registry readiness test",
+      1000,
+      1,
+    )).rejects.toBe(failure);
+    expect(attempts).toBe(1);
+  });
+
   it("does not retry message-only provider readiness text", async () => {
     let attempts = 0;
     const failure = new Error("Provider is not ready");

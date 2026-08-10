@@ -857,8 +857,7 @@ export async function retryDesktopProviderReadiness<T>(
 function isTransientProviderNotReady(error: unknown): boolean {
   if (isCanonicalProviderNotReadyShape(error)) return true;
   if (!isRecord(error)) return false;
-  const hasCanonicalStatus = error.status === 425 || error.code === 425;
-  return hasCanonicalStatus && (
+  return hasCanonicalProviderNotReadyStatus(error) && (
     error.reason_code === "provider_not_ready" ||
     canonicalReasonCode(error.detail) === "provider_not_ready" ||
     canonicalReasonCode(error.error) === "provider_not_ready"
@@ -867,8 +866,16 @@ function isTransientProviderNotReady(error: unknown): boolean {
 
 function isCanonicalProviderNotReadyShape(value: unknown): boolean {
   if (!isRecord(value)) return false;
-  return (value.status === 425 || value.code === 425) &&
+  return hasCanonicalProviderNotReadyStatus(value) &&
     value.reason_code === "provider_not_ready";
+}
+
+function hasCanonicalProviderNotReadyStatus(value: Record<string, unknown>): boolean {
+  const hasStatus = value.status !== undefined;
+  const hasCode = value.code !== undefined;
+  if (!hasStatus && !hasCode) return false;
+  return (!hasStatus || value.status === 425) &&
+    (!hasCode || value.code === 425);
 }
 
 function canonicalReasonCode(value: unknown): string | null {
