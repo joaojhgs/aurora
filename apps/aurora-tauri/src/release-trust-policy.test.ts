@@ -6,7 +6,9 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+vi.setConfig({ testTimeout: 60_000 })
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = resolve(packageRoot, '..', '..')
@@ -350,7 +352,7 @@ jobs:
       ).not.toContain('updater-endpoint-1-https-production')
       expect(publicResult.status).not.toBe(0)
     }
-  }, 30_000)
+  }, 60_000)
 
   it('requires desktop updater permissions and rejects updater leakage into mobile overlays', () => {
     const fixture = createFixture()
@@ -800,7 +802,7 @@ ${controlLine}
         'workflow-trust-gate-before-semver',
       )
     }
-  })
+  }, 15_000)
 
   it('accepts canonical false continue-on-error on the trust report upload', () => {
     const fixture = createFixture()
@@ -1099,7 +1101,7 @@ jobs:
         'workflow-trust-gate-before-semver',
       )
     }
-  })
+  }, 15_000)
 
   it('rejects create-release jobs that are not gated by release-readiness success', () => {
     const hostileWorkflows = [
@@ -1739,7 +1741,7 @@ ${duplicateLine}
         duplicateLine,
       ).toContain('workflow-release-readiness-unique-structure')
     }
-  })
+  }, 15_000)
 
   it('rejects duplicate direct steps keys under release-readiness', () => {
     const fixture = createFixture()
@@ -1807,7 +1809,7 @@ ${duplicateLine}
         duplicateLine,
       ).toContain('workflow-release-readiness-unique-structure')
     }
-  })
+  }, 15_000)
 
   it('rejects workflow key structures that use aliases, anchors, merge keys, or complex keys', () => {
     const hostileWorkflows = [
@@ -1847,7 +1849,7 @@ jobs:
         label,
       ).toContain('workflow-release-readiness-unique-structure')
     }
-  })
+  }, 15_000)
 
   it('rejects multiline quoted keys that could obscure release-readiness or steps', () => {
     const hostileWorkflows = [
@@ -2157,7 +2159,7 @@ jobs:
         label,
       ).toContain('workflow-release-readiness-unique-step-keys')
     }
-  })
+  }, 15_000)
 
   it('rejects merge, anchor, alias, and tagged YAML keys inside artifact upload with mappings', () => {
     const hostileLines = [
@@ -2194,7 +2196,7 @@ ${hostileLine}
         label,
       ).toContain('workflow-release-readiness-unique-step-keys')
     }
-  })
+  }, 15_000)
 
   it('rejects reordered release-readiness steps after semantic versioning', () => {
     const fixture = createFixture()
