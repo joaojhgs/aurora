@@ -147,6 +147,7 @@ describe('production UI copy', () => {
     expect(container.querySelector('[data-testid="home-node-panel"]')).toBeNull()
 
     await act(async () => {
+      choiceByText(container, 'Connect to Aurora').click()
       buttonByText(container, 'Continue').click()
     })
     expect(container.querySelector('[data-thin-invite-onboarding="true"]')).not.toBeNull()
@@ -194,6 +195,76 @@ describe('production UI copy', () => {
       buttonByText(container, 'Use invite instead').click()
     })
     expect(container.querySelector('#aurora-endpoint')).toBeNull()
+    root.unmount()
+    container.remove()
+  })
+
+  it('shows device setup copy without manual address for available-device setup', async () => {
+    const writes: string[] = []
+    const tiers: string[] = []
+    const store: OnboardingModePreferenceStore = {
+      evidence: 'Saved for this device',
+      readSelectedMode: async () => null,
+      readSelectedRuntimeTier: async () => null,
+      writeSelectedMode: async (modeId) => {
+        writes.push(modeId)
+        return true
+      },
+      writeSelectedRuntimeTier: async (runtimeTier) => {
+        tiers.push(runtimeTier)
+        return true
+      },
+    }
+    const onUseManualAddress = vi.fn(async () => undefined)
+    const onSaveProfile = vi.fn(async () => undefined)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <OnboardingView
+          client={client('native-mobile')}
+          snapshot={safeShellSnapshot({ nativePlatform: 'android', nativeAvailable: true })}
+          modePreferenceStore={store}
+          setupRequired
+          onUseManualAddress={onUseManualAddress}
+          renderThinConnectionPanel={(modeId) => (
+            <HomeNodeConnectionPanel
+              peer={peerController({ status: 'needs-invite', secureContext: true, hasHttpFallback: false })}
+              mode="webrtc-only"
+              transportKind="native-mobile"
+              nativePlatform="android"
+              initialInviteText={firstRunInviteText()}
+              configureOnly
+              setupIntent={modeId}
+              onSaveProfile={onSaveProfile}
+            />
+          )}
+        />,
+      )
+    })
+    await flushReactWork()
+    writes.length = 0
+    tiers.length = 0
+
+    await act(async () => {
+      choiceByText(container, 'Make this device available').click()
+    })
+    expect(writes).toEqual(['mesh-node'])
+    expect(tiers).toEqual(['lightweight-ts'])
+    expect(activeChoiceText(container)).toContain('Make this device available')
+
+    await act(async () => {
+      buttonByText(container, 'Continue').click()
+    })
+    expect(container.textContent).toContain('Choose what this device can share with approved Aurora devices.')
+    expect(container.textContent).toContain('Add setup invite')
+    expect(container.textContent).toContain('Save device setup')
+    expect(container.textContent).not.toContain('Connect with an address')
+    expect(container.querySelector('#aurora-endpoint')).toBeNull()
+    expect(findForbiddenProductionCopyTerms(container.textContent ?? '').map((term) => term.id)).toEqual([])
+
     root.unmount()
     container.remove()
   })
