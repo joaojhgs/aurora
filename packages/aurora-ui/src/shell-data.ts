@@ -30,6 +30,7 @@ import {
   type BrowserWebRtcSnapshot,
 } from './web-thin-runtime'
 import { safeErrorCopy } from './product-copy'
+import { findForbiddenProductionCopyTerms } from './product-copy-forbidden-terms'
 
 export type ShellLoadState = 'loading' | 'ready' | 'error'
 
@@ -378,10 +379,10 @@ function unsupportedVoiceRoute(item: AuroraNavItem, evidence: string): RouteAvai
   return {
     item: navItemSnapshot(item),
     state: item.fallbackState,
-    explanation: 'Voice capability state could not be loaded from Aurora services.',
-    providerLabel: `${item.expectedTask} pending`,
+    explanation: 'Voice setup could not be loaded.',
+    providerLabel: pendingFeatureLabel(item),
     blockers: ['sdk_error'],
-    repairActions: [repairAction('retry', 'Retry service request', '/', true, 'The shell needs a fresh Aurora service response.')],
+    repairActions: [repairAction('retry', 'Try again', '/', true, 'Aurora needs a fresh response.')],
     candidateProviders: [],
     evidenceSources: [evidence],
     selectorRequired: false,
@@ -425,22 +426,22 @@ function routeAvailability(
 
 function routeExplanation(state: AvailabilityState, explanation: CapabilityExplanation): string {
   if (explanation.providerCandidates.length === 0) {
-    return 'No executable capability catalog entry exists yet; the route stays visible with a repair task.'
+    return 'This feature is not available yet. Review setup to finish it.'
   }
-  if (state === 'available-local') return 'Backend catalog reports a local provider that can serve this route.'
-  if (state === 'available-remote') return 'Backend catalog reports a remote provider; target identity must remain visible.'
-  if (state === 'degraded') return 'The route is partially usable with backend-reported limitations.'
-  if (state === 'pending') return 'The route is waiting on pairing, approval, consent, or an in-flight backend correlation.'
-  if (state === 'denied') return 'Backend policy denied this route for the current principal or peer.'
-  if (state === 'stale') return 'Provider state is stale and cannot be used for execution.'
-  if (state === 'privacy-blocked') return 'A selector, consent, privacy indicator, or approval is required before use.'
-  return 'The route is unsupported in this backend or deployment mode.'
+  if (state === 'available-local') return 'This device can handle this.'
+  if (state === 'available-remote') return 'An approved Aurora device can handle this.'
+  if (state === 'degraded') return 'This is available with limited behavior.'
+  if (state === 'pending') return 'Waiting for approval or setup to finish.'
+  if (state === 'denied') return 'Access is needed before this can be used.'
+  if (state === 'stale') return 'Device information is out of date. Reconnect and try again.'
+  if (state === 'privacy-blocked') return 'Review access before using this.'
+  return 'This feature is not available here yet.'
 }
 
 function providerLabel(explanation: CapabilityExplanation, item: AuroraNavItem): string {
   const provider = explanation.selectedProvider ?? explanation.providerCandidates[0]
-  if (!provider) return `${item.expectedTask} pending`
-  return `${provider.providerIdentity} / ${provider.module}.${provider.method}`
+  if (!provider) return pendingFeatureLabel(item)
+  return safeDisplayCopy(providerSourceLabel(provider), providerFallbackLabel(provider))
 }
 
 function graphStateForExplanation(
@@ -512,18 +513,18 @@ function nativeRouteAvailability(
     item: navItemSnapshot(item),
     state,
     explanation: native
-      ? 'SDK native manifest reports platform capabilities and permission gates.'
-      : 'No native manifest was reported by the SDK for this deployment mode.',
-    providerLabel: native ? `native:${native.platform}` : `${item.expectedTask} pending`,
+      ? 'Device features and access are available from this app.'
+      : 'Device features are not available here yet.',
+    providerLabel: native ? 'This device' : pendingFeatureLabel(item),
     blockers,
     repairActions: repairActionsFor(item, base, blockers),
     candidateProviders: enabledCapabilities.map((capability) => ({
       id: `native:${native?.platform}:${capability}`,
-      label: `native:${native?.platform} / ${capability}`,
+      label: safeDisplayCopy(capability, 'This device'),
       state,
       selectable: state === 'available-local',
-      reason: missingPermissions.join(', ') || 'native-manifest',
-      requiredAction: state === 'available-local' ? null : 'grant required native permission'
+      reason: safeRouteReason(missingPermissions.join(', '), 'Review device access before using this.'),
+      requiredAction: state === 'available-local' ? null : 'Review device access'
     })),
     evidenceSources: native ? ['native-manifest'] : [],
     selectorRequired: false,
@@ -542,11 +543,11 @@ function candidateForRoute(candidate: CapabilityProviderCandidate): RouteProvide
     peerId: candidate.peerId,
     nodeName: candidate.nodeName ?? null,
     serviceInstanceId: candidate.serviceInstanceId,
-    label: `${candidate.providerIdentity} / ${candidate.module}.${candidate.method}`,
+    label: safeDisplayCopy(providerSourceLabel(candidate), providerFallbackLabel(candidate)),
     state: candidate.availability,
     selectable: candidate.selectable,
-    reason: candidate.disabledReasons.join(', ') || candidate.routeability,
-    requiredAction: candidate.requiredAction
+    reason: safeRouteReason(candidate.disabledReasons.join(', ') || candidate.routeability),
+    requiredAction: candidate.requiredAction ? safeRouteReason(candidate.requiredAction, 'Review setup') : null
   }
 }
 
@@ -567,29 +568,29 @@ function repairActionsFor(
   const repairText = (explanation.nextRepairAction ?? '').toLowerCase()
 
   if (blockerText.includes('auth') || blockerText.includes('permission') || explanation.requiredPermissions.length > 0) {
-    add(repairAction('authenticate', 'Authenticate', '/onboarding', Boolean(item.adminGated), 'Current principal or session lacks required backend permission state.'))
-    add(repairAction('grant-permission', 'Grant permission', '/admin/access', !Boolean(item.adminGated), 'Required permissions must be granted through admin access controls.'))
+    add(repairAction('authenticate', 'Sign in', '/onboarding', Boolean(item.adminGated), 'Sign in or review access for this feature.'))
+    add(repairAction('grant-permission', 'Review access', '/admin/access', !Boolean(item.adminGated), 'An administrator can update access for this feature.'))
   }
   if (blockerText.includes('peer') || blockerText.includes('pair') || blockerText.includes('stale')) {
-    add(repairAction('pair', 'Pair or reconnect peer', '/admin/pairing', false, 'Peer trust or freshness must be restored before this feature can run.'))
+    add(repairAction('pair', 'Reconnect device', '/admin/pairing', false, 'Reconnect an approved Aurora device before using this.'))
   }
   if (blockerText.includes('service') || blockerText.includes('provider') || blockerText.includes('capability_not_advertised')) {
-    add(repairAction('start-service', 'Start service', '/admin/services', Boolean(item.adminGated), 'The required service/provider is not currently advertised as executable.'))
+    add(repairAction('start-service', 'Turn on feature', '/admin/services', Boolean(item.adminGated), 'Turn on the needed Aurora feature before continuing.'))
   }
   if (explanation.selectorRequired || repairText.includes('selector') || repairText.includes('route')) {
-    add(repairAction('configure-route', 'Configure route', '/mesh', false, 'A backend-accepted selector or route policy is required.'))
+    add(repairAction('configure-route', 'Choose device', '/mesh', false, 'Choose which approved device should handle this.'))
   }
   if (blockerText.includes('native') || item.capabilityModule === 'Native') {
-    add(repairAction('grant-native', 'Grant native permission', '/settings/native', false, 'Native manifest or platform permission state is missing.'))
+    add(repairAction('grant-native', 'Review device access', '/settings/native', false, 'Review device access before using this.'))
   }
   if (item.id === 'plugins' || item.id === 'tools' || blockerText.includes('plugin')) {
-    add(repairAction('install-plugin', 'Install plugin', '/admin/plugins', Boolean(item.adminGated), 'Plugin/tool catalog support must be installed and enabled.'))
+    add(repairAction('install-plugin', 'Add tool', '/admin/plugins', Boolean(item.adminGated), 'Add or turn on the tool before using this.'))
   }
   if (actions.length === 0 && explanation.nextRepairAction) {
-    add(repairAction('inspect', 'Inspect blocker', item.href, true, explanation.nextRepairAction))
+    add(repairAction('inspect', 'Review setup', item.href, true, safeRouteReason(explanation.nextRepairAction)))
   }
   if (actions.length === 0) {
-    add(repairAction('wait', 'Await service contract', item.href, true, `${item.expectedTask} owns this production route.`))
+    add(repairAction('wait', 'Review setup', item.href, true, `${item.label} needs more setup before it can be used.`))
   }
   return actions
 }
@@ -632,4 +633,52 @@ function nullToPending(value: string | null): string {
 
 function shellErrorMessage(error: unknown): string {
   return safeErrorCopy(error).title
+}
+
+function pendingFeatureLabel(item: AuroraNavItem): string {
+  return `${item.label} needs setup`
+}
+
+function providerSourceLabel(provider: Pick<CapabilityProviderCandidate, 'providerIdentity' | 'module' | 'method'>): string {
+  return `${provider.providerIdentity} / ${provider.module}.${provider.method}`
+}
+
+function providerFallbackLabel(provider: Pick<CapabilityProviderCandidate, 'providerKind' | 'nodeName' | 'peerId' | 'providerIdentity'>): string {
+  if (provider.providerKind === 'local') return 'This device'
+  if (provider.nodeName?.trim()) return compactDisplayText(provider.nodeName)
+  if (provider.peerId) return 'Connected Aurora device'
+  return safeDisplayCopy(provider.providerIdentity, 'Aurora source')
+}
+
+function safeDisplayCopy(value: string | null | undefined, fallback: string): string {
+  const compact = compactDisplayText(value)
+  if (!compact) return fallback
+  return findForbiddenProductionCopyTerms(compact).length > 0 ? fallback : compact
+}
+
+function safeRouteReason(value: string | null | undefined, fallback = 'Review setup before continuing.'): string {
+  const compact = compactDisplayText(value)
+  if (!compact) return fallback
+  if (findForbiddenProductionCopyTerms(compact).length === 0) return compact
+  const normalized = compact.toLowerCase()
+  if (/\b(auth|permission|denied|forbidden|unauthorized)\b/u.test(normalized)) {
+    return 'Review access before using this.'
+  }
+  if (/\b(peer|pair|stale|offline|freshness)\b/u.test(normalized)) {
+    return 'Reconnect an approved Aurora device before using this.'
+  }
+  if (/\b(selector|route)\b/u.test(normalized)) {
+    return 'Choose which approved device should handle this.'
+  }
+  if (/\b(native|microphone|camera|notification|biometric)\b/u.test(normalized)) {
+    return 'Review device access before using this.'
+  }
+  if (/\b(service|provider|capability|catalog|contract)\b/u.test(normalized)) {
+    return 'Turn on the needed Aurora feature before continuing.'
+  }
+  return fallback
+}
+
+function compactDisplayText(value: string | null | undefined): string {
+  return value?.trim().replace(/\s+/gu, ' ') ?? ''
 }

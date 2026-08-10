@@ -38,6 +38,7 @@ import {
   type VoiceRuntimeEvent,
   type AuroraTransportRequest
 } from '@aurora/client'
+import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import {
   buildAdminOverviewSnapshot,
   buildAdminServicesSnapshot,
@@ -647,7 +648,7 @@ describe('Aurora production shell', () => {
     expect(scheduler.repairActions).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: 'configure-route',
-        label: 'Configure route',
+        label: 'Choose device',
         disabled: false
       })
     ]))
@@ -655,7 +656,7 @@ describe('Aurora production shell', () => {
       expect.objectContaining({
         state: 'available-local',
         selectable: true,
-        requiredAction: 'confirm the local provider selection before execution'
+        requiredAction: 'Turn on the needed Aurora feature before continuing.'
       })
     ]))
   })
@@ -690,6 +691,47 @@ describe('Aurora production shell', () => {
     expect(snapshot.loadState).toBe('error')
     expect(snapshot.routes.every((route) => route.disabled)).toBe(true)
     expect(snapshot.routes.every((route) => route.blockers.includes('sdk_error'))).toBe(true)
+  })
+
+  it('keeps internal shell task names out of user-facing route labels and reasons', () => {
+    const catalog = cloneFixture(capabilityGraphCatalogFixture)
+    catalog.providers = []
+    catalog.actions = []
+    catalog.provider_index = {}
+    catalog.action_index = {}
+    const graph = buildCapabilityGraph({
+      catalog,
+      registry: null,
+      transportKind: 'mock'
+    })
+    const snapshot = snapshotFromGraph('mock', graph, null)
+    const hostileRoutes = [
+      route(snapshot, 'assistant'),
+      route(snapshot, 'onboarding'),
+      route(snapshot, 'native'),
+      snapshot.assistantVoiceRoutes.transcription
+    ]
+
+    expect(hostileRoutes.map((candidate) => candidate.providerLabel)).toEqual([
+      'Assistant needs setup',
+      'Onboarding needs setup',
+      'Device Features needs setup',
+      'Remote transcription needs setup'
+    ])
+    for (const candidate of hostileRoutes) {
+      const userFacing = [
+        candidate.providerLabel,
+        candidate.explanation,
+        ...candidate.repairActions.flatMap((action) => [action.label, action.reason]),
+        ...candidate.candidateProviders.flatMap((provider) => [
+          provider.label,
+          provider.reason,
+          provider.requiredAction ?? ''
+        ])
+      ].join(' ')
+      expect(userFacing).not.toMatch(/service contract|first-run gate/i)
+      expect(findForbiddenProductionCopyTerms(userFacing).map((term) => term.id), userFacing).toEqual([])
+    }
   })
 
   it('builds model runtime provider state from SDK catalog, capability graph, and native status', () => {
