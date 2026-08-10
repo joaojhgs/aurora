@@ -61,19 +61,19 @@ const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
   // Assistant baselines include product-safe response status copy without
   // exposing internal event identifiers in the route sheet.
   assistant: {
-    desktop: '2526d96789e7',
-    tablet: 'eb1d2a7a68b1',
-    mobile: '0ce81a0a5104'
+    desktop: '4a0dc64e9cbb',
+    tablet: 'ad100501e10c',
+    mobile: '6b88dde570ab'
   },
   admin: {
-    desktop: '6d80c45b2304',
-    tablet: 'ecb33b74ce18',
-    mobile: 'ac1288640ea4'
+    desktop: '2e1d1591100e',
+    tablet: '7baf310b9c71',
+    mobile: '08e63897d06b'
   },
   'native-settings': {
-    desktop: '57a984b8f118',
-    tablet: '41327f05fd64',
-    mobile: 'e4c84295966e'
+    desktop: 'defd5a3ab972',
+    tablet: '14db20ba3ecb',
+    mobile: 'c2fe79db211f'
   }
 }
 

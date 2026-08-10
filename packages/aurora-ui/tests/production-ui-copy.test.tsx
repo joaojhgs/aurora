@@ -77,6 +77,24 @@ describe('production UI copy', () => {
     expect(findForbiddenProductionCopyTerms(text).map((term) => term.id)).toEqual([])
   })
 
+  it('maps internal platform identifiers to device language in the activity rail', () => {
+    const snapshot = safeShellSnapshot({
+      loadState: 'ready',
+      nativeAvailable: true,
+      nativePlatform: 'tauri-desktop',
+      transportKind: 'tauri-local',
+    })
+    const text = visibleText(renderToStaticMarkup(
+      <AppShell snapshot={snapshot} runtimeMode="desktop-local">
+        <main>Ready</main>
+      </AppShell>,
+    ))
+
+    expect(text).toContain('Device features available')
+    expect(text).not.toContain('tauri-desktop')
+    expect(text).not.toMatch(/\bnative\b/i)
+  })
+
   it('does not render hostile onboarding store evidence', async () => {
     const store: OnboardingModePreferenceStore = {
       evidence: 'thin client HTTP Gateway WebRTC invite store evidence',

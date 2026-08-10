@@ -4068,6 +4068,9 @@ function productionAnchorAliasPresent(sourceText: string, anchor: string): boole
   if (anchor === 'Welcome to Aurora') return sourceText.includes('PRODUCT_COPY.onboarding.title')
   if (anchor === 'First-run setup') return sourceText.includes('First step')
   if (anchor === 'setup modes') return sourceText.includes('Aurora setup choice')
+  if (anchor === 'Use an invite to connect this device.') {
+    return sourceText.includes('Use an invite or address to connect this device.')
+  }
   return false
 }
 

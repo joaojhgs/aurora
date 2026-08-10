@@ -761,7 +761,7 @@ function shellActivityEvents(
       id: "native",
       title: "Device profile",
       detail: snapshot.nativeAvailable
-        ? `Native ${snapshot.nativePlatform}`
+        ? "Device features available"
         : surface.usesNativeShell
           ? productSurfaceLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable)
           : `${productSurfaceLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable)}; local controls unavailable`,
