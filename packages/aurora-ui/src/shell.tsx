@@ -473,11 +473,12 @@ function MobileBottomTab({
   onNavigate?: (href: string) => void;
 }) {
   const routeState = route?.state ?? "pending";
+  const routeStateLabel = mobileTabStateLabel(routeState);
   return (
     <a
       href={tab.href}
       aria-current={active ? "page" : undefined}
-      aria-label={`${tab.mobileLabel ?? tab.label} mobile tab: ${routeState}`}
+      aria-label={`${tab.mobileLabel ?? tab.label} tab, ${routeStateLabel}`}
       data-mobile-tab={tab.id}
       onClick={(event) => handleShellNavigation(event, tab.href, onNavigate)}
       className={cn("flex flex-col items-center gap-0.5 rounded-lg px-3 py-1 text-[10.5px]", active ? "text-primary" : "text-muted-foreground")}
@@ -487,6 +488,27 @@ function MobileBottomTab({
       <span className="sr-only" aria-hidden="true" />
     </a>
   );
+}
+
+function mobileTabStateLabel(state: RouteAvailability["state"]): string {
+  switch (state) {
+    case "available-local":
+    case "available-remote":
+      return "available";
+    case "pending":
+      return "starting";
+    case "degraded":
+      return "needs attention";
+    case "stale":
+      return "refresh needed";
+    case "privacy-blocked":
+      return "permission needed";
+    case "denied":
+      return "access needed";
+    case "unsupported":
+    default:
+      return "not available";
+  }
 }
 
 export function ShellNavigation({

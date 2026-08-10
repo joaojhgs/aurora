@@ -2106,6 +2106,17 @@ describe("Aurora Tauri runtime wrapper", () => {
       await flushReactWork();
       modeWrites.length = 0;
       tierWrites.length = 0;
+      expect(mounted.container.textContent).toContain(
+        "Choose what this device can share with approved Aurora devices.",
+      );
+      expect(mounted.container.textContent).toContain("Add setup invite");
+      expect(mounted.container.textContent).toContain("Save device setup");
+      expect(mounted.container.textContent).not.toContain(
+        "Use an invite or address to connect this device.",
+      );
+      expect(mounted.container.textContent).not.toContain(
+        "Connect with an address",
+      );
 
       const invite = mounted.container.querySelector<HTMLTextAreaElement>(
         "#webthin-invite",
@@ -2121,7 +2132,7 @@ describe("Aurora Tauri runtime wrapper", () => {
         invite?.dispatchEvent(new Event("change", { bubbles: true }));
         await flushReactWork();
       });
-      await clickButtonByLabel(mounted.container, "Save invite and continue");
+      await clickButtonByLabel(mounted.container, "Save device setup");
 
       await waitUntil(() => expect(window.location.pathname).toBe("/mesh"));
       expect(modeWrites).toEqual([]);

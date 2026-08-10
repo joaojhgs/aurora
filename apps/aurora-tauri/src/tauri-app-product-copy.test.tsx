@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import {
+  AppShell,
   getAuroraSurfaceProfile,
   getAuroraNavItem,
   loadingShellSnapshot,
@@ -248,6 +249,35 @@ describe("Tauri application product copy", () => {
     ]) {
       expect(rendered).not.toContain(leaked);
     }
+    expectProductCopy(rendered);
+  });
+
+  it("renders mobile tab state labels without raw availability states", () => {
+    const routes = [
+      { ...routeFor("assistant"), state: "available-remote" as const },
+      { ...routeFor("mesh"), state: "unsupported" as const },
+      { ...routeFor("settings"), state: "degraded" as const },
+    ];
+    const markup = renderToStaticMarkup(
+      <AppShell
+        snapshot={{
+          ...loadingShellSnapshot,
+          loadState: "ready",
+          routes,
+        }}
+        currentPath="/mesh"
+        runtimeMode="mobile-native"
+      >
+        <main>Mobile shell</main>
+      </AppShell>,
+    );
+    const rendered = renderedUserCopy(markup);
+
+    expect(rendered).toContain("Assistant tab, available");
+    expect(rendered).toContain("Mesh tab, not available");
+    expect(rendered).toContain("Settings tab, needs attention");
+    expect(rendered).not.toContain("mobile tab: unsupported");
+    expect(rendered).not.toContain("mobile tab: degraded");
     expectProductCopy(rendered);
   });
 

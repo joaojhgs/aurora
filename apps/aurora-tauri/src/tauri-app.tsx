@@ -24,6 +24,7 @@ import {
   MeshPeersResource,
   ModelsView,
   type OnboardingModePreferenceStore,
+  type OnboardingProductModeId,
   OnboardingView,
   PageHeader,
   PairingQueueView,
@@ -402,17 +403,18 @@ export const tauriRouteRegistry = {
               );
               navigate("/mesh");
             },
-            thinConnectionPanel: (
+            renderThinConnectionPanel: (modeId: OnboardingProductModeId) => (
               <WebThinConnectionPanel
-                peer={nativeContext.thinPeer}
+                peer={nativeContext.thinPeer!}
                 mode={nativeContext.thinConnectionMode}
                 transportKind={client.transport.kind}
                 nativePlatform={snapshot.nativePlatform}
                 initialInviteText={initialThinInviteFromUrl()}
                 profile={nativeContext.thinProfile}
-                profiles={nativeContext.thinProfileController.document.profiles}
-                profileStoreEvidence={nativeContext.thinProfileController.evidence}
+                profiles={nativeContext.thinProfileController!.document.profiles}
+                profileStoreEvidence={nativeContext.thinProfileController!.evidence}
                 localFeatureSharing={nativeContext.localFeatureSharing}
+                setupIntent={modeId}
                 onSaveProfile={async (profile, roomSecret) => {
                   await nativeContext.saveThinProfile(profile, roomSecret);
                   navigate("/mesh");
@@ -926,9 +928,9 @@ export function AuroraTauriApp({
           );
           navigate("/mesh");
         }}
-        thinConnectionPanel={
+        renderThinConnectionPanel={(modeId: OnboardingProductModeId) => (
           <WebThinConnectionPanel
-            peer={runtime.thinPeer}
+            peer={runtime.thinPeer!}
             mode={runtime.thinConnectionMode}
             transportKind={runtime.client.transport.kind}
             nativePlatform={snapshot.nativePlatform}
@@ -936,9 +938,10 @@ export function AuroraTauriApp({
               runtime.pendingThinInviteText ?? initialThinInviteFromUrl()
             }
             profile={runtime.thinProfile}
-            profiles={runtime.thinProfileController.document.profiles}
-            profileStoreEvidence={runtime.thinProfileController.evidence}
+            profiles={runtime.thinProfileController!.document.profiles}
+            profileStoreEvidence={runtime.thinProfileController!.evidence}
             localFeatureSharing={runtime.localFeatureSharing}
+            setupIntent={modeId}
             onSaveProfile={async (profile, roomSecret) => {
               await saveThinProfile(profile, roomSecret);
               navigate("/mesh");
@@ -947,7 +950,7 @@ export function AuroraTauriApp({
             configureOnly
             {...(isMobileTauriShell() ? { onScanQr: scanMeshInviteQr } : {})}
           />
-        }
+        )}
       />
     );
   }

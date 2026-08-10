@@ -20,6 +20,7 @@ export interface OnboardingViewProps {
   onApplyModePreference?: (() => Promise<void>) | undefined
   onUseManualAddress?: ((address: string) => Promise<void>) | undefined
   thinConnectionPanel?: ReactNode
+  renderThinConnectionPanel?: ((modeId: OnboardingProductModeId) => ReactNode)
   setupRequired?: boolean | undefined
 }
 
@@ -31,7 +32,7 @@ export interface OnboardingModePreferenceStore {
   writeSelectedRuntimeTier?: ((runtimeTier: string) => Promise<boolean>) | undefined
 }
 
-type OnboardingProductModeId = 'connect-to-aurora' | 'make-this-device-available' | 'run-aurora-on-this-computer'
+export type OnboardingProductModeId = 'connect-to-aurora' | 'make-this-device-available' | 'run-aurora-on-this-computer'
 
 export interface DeploymentModeCard {
   id: string
@@ -92,6 +93,7 @@ export function OnboardingView({
   onApplyModePreference,
   onUseManualAddress,
   thinConnectionPanel,
+  renderThinConnectionPanel,
   setupRequired = false,
 }: OnboardingViewProps) {
   const [session, setSession] = useState(() => client.auth.refreshClock())
@@ -111,7 +113,8 @@ export function OnboardingView({
   const [busy, setBusy] = useState<string | null>(null)
   const [wizardStep, setWizardStep] = useState<'detect' | 'setup' | 'done'>('detect')
   const [manualAddressVisible, setManualAddressVisible] = useState(false)
-  const allowBrowserDeviceSetup = setupRequired && Boolean(modePreferenceStore && thinConnectionPanel)
+  const hasThinConnectionPanel = Boolean(thinConnectionPanel || renderThinConnectionPanel)
+  const allowBrowserDeviceSetup = setupRequired && Boolean(modePreferenceStore && hasThinConnectionPanel)
 
   const model = useMemo(
     () =>
@@ -356,10 +359,13 @@ export function OnboardingView({
     }
   }
 
+  const selectedProductModeId = model.selectedMode.id as OnboardingProductModeId
+  const activeThinConnectionPanel = renderThinConnectionPanel?.(selectedProductModeId) ?? thinConnectionPanel
+  const selectedConnectMode = selectedProductModeId === 'connect-to-aurora'
   const manualAddressAvailable = Boolean(onUseManualAddress)
-  const manualAddressGated = manualAddressAvailable && setupRequired && Boolean(thinConnectionPanel)
-  const showManualAddress = manualAddressAvailable && (!manualAddressGated || manualAddressVisible)
-  const showFirstRunInviteFlow = setupRequired && !thinConnectionPanel
+  const manualAddressGated = manualAddressAvailable && setupRequired && Boolean(activeThinConnectionPanel) && selectedConnectMode
+  const showManualAddress = manualAddressAvailable && selectedConnectMode && (!manualAddressGated || manualAddressVisible)
+  const showFirstRunInviteFlow = setupRequired && !activeThinConnectionPanel
   const showAccountAuthFlow = !setupRequired
 
   return (
@@ -370,7 +376,7 @@ export function OnboardingView({
           {PRODUCT_COPY.onboarding.title}
         </h1>
         <p className="mt-1.5 text-[13px] text-muted-foreground">
-          {setupRequired ? 'Use an invite to connect this device.' : 'Choose how you want to use Aurora on this device.'}
+          {setupRequired ? setupSubtitle(selectedProductModeId) : 'Choose how you want to use Aurora on this device.'}
         </p>
       </div>
 
@@ -427,9 +433,9 @@ export function OnboardingView({
             </button>
           </div>
 
-          {thinConnectionPanel ? (
+          {activeThinConnectionPanel ? (
             <div className="flex flex-col gap-3" data-step="home-node-connection">
-              {thinConnectionPanel}
+              {activeThinConnectionPanel}
             </div>
           ) : null}
 
@@ -536,7 +542,7 @@ export function OnboardingView({
             </>
           ) : null}
 
-          {!thinConnectionPanel ? (
+          {!activeThinConnectionPanel ? (
             <Button variant="primary" onClick={onFinishSetup} disabled={busy !== null}>
               {busy === 'mode-apply' ? 'Applying choice…' : 'Finish setup'}
             </Button>
@@ -868,6 +874,16 @@ function mode(id: OnboardingProductModeId, label: string, routeLabel: string, de
     repair,
     disabled: !['available-local', 'available-remote', 'degraded', 'pending'].includes(state),
   }
+}
+
+function setupSubtitle(modeId: OnboardingProductModeId): string {
+  if (modeId === 'make-this-device-available') {
+    return 'Choose what this device can share with approved Aurora devices.'
+  }
+  if (modeId === 'run-aurora-on-this-computer') {
+    return 'Start Aurora here and connect this computer to your devices.'
+  }
+  return 'Use an invite or address to connect this device.'
 }
 
 function setupSteps(input: { session: AuthSessionSnapshot; snapshot: AuroraShellSnapshot; selectedMode: DeploymentModeCard; authState: AvailabilityState; pairingState: AvailabilityState; setupRequired?: boolean }): OnboardingSetupStep[] {

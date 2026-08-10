@@ -24,6 +24,7 @@ import {
   selectedLocalServicePermissions,
 } from './local-feature-sharing'
 import { PermissionEditorTable } from './shared-components'
+import type { OnboardingProductModeId } from './onboarding-view'
 import { Alert, AlertDescription, AlertTitle } from '#components/ui/alert'
 import { Badge } from '#components/ui/badge'
 import { Button } from '#components/ui/button'
@@ -52,6 +53,7 @@ export interface WebThinConnectionPanelProps {
   profiles?: WebThinConnectionProfile[] | undefined
   profileStoreEvidence?: string | undefined
   localFeatureSharing?: LocalFeatureSharingPort | undefined
+  setupIntent?: OnboardingProductModeId | undefined
   onSaveProfile?: (
     profile: WebThinConnectionProfile,
     roomSecret?: WebThinRoomSecret,
@@ -74,6 +76,7 @@ export function HomeNodeConnectionPanel({
   profiles = [],
   profileStoreEvidence,
   localFeatureSharing,
+  setupIntent = 'connect-to-aurora',
   onSaveProfile,
   onSelectProfile,
 }: WebThinConnectionPanelProps) {
@@ -97,6 +100,7 @@ export function HomeNodeConnectionPanel({
     nativePlatform,
     userAgent: typeof navigator === 'undefined' ? undefined : navigator.userAgent,
   }), [mode, transportKind, nativePlatform])
+  const makingThisDeviceAvailable = setupIntent === 'make-this-device-available'
   const [draftProfile, setDraftProfile] = useState<WebThinConnectionProfile | null>(
     () => profile ?? defaultProfileForSurface(surface),
   )
@@ -370,7 +374,7 @@ export function HomeNodeConnectionPanel({
   if (configureOnly) {
     return (
       <Card
-        aria-label="Aurora invite onboarding"
+        aria-label={makingThisDeviceAvailable ? "Aurora device sharing setup" : "Aurora invite onboarding"}
         className="overflow-hidden border-border/80 bg-card/95 shadow-xl shadow-black/10"
         data-thin-invite-onboarding="true"
       >
@@ -397,10 +401,13 @@ export function HomeNodeConnectionPanel({
             </Field>
 
             <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5">
-              <p className="text-sm font-medium">{PRODUCT_COPY.onboarding.invite.title}</p>
+              <p className="text-sm font-medium">
+                {makingThisDeviceAvailable ? 'Add setup invite' : PRODUCT_COPY.onboarding.invite.title}
+              </p>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Use the invite created by the Aurora node you want to connect
-                to.
+                {makingThisDeviceAvailable
+                  ? 'Use an invite from the Aurora device that will approve what this device shares.'
+                  : 'Use the invite created by the Aurora device you want to use.'}
               </p>
               <input
                 ref={inviteFileRef}
@@ -517,10 +524,16 @@ export function HomeNodeConnectionPanel({
             disabled={connectDisabled || invitePending}
             onClick={() => void connectInvite()}
           >
-            {invitePending ? PRODUCT_COPY.onboarding.invite.saving : PRODUCT_COPY.onboarding.invite.continue}
+            {invitePending
+              ? PRODUCT_COPY.onboarding.invite.saving
+              : makingThisDeviceAvailable
+                ? 'Save device setup'
+                : PRODUCT_COPY.onboarding.invite.continue}
           </Button>
           <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
-            Connection details come from the invite. You can edit address settings later.
+            {makingThisDeviceAvailable
+              ? 'Sharing details come from the invite. You can edit device settings later.'
+              : 'Connection details come from the invite. You can edit address settings later.'}
           </p>
         </CardContent>
       </Card>
