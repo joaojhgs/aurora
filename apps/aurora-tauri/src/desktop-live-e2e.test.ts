@@ -11,6 +11,7 @@ import {
   isDesktopLiveE2eHookEnabled,
   isDesktopLiveNativeWebRtcForced,
   resolveDesktopLivePeerConnectionPrimitive,
+  retryDesktopProviderReadiness,
   validateDesktopLiveE2ePayload,
   type DesktopLiveE2ePayload,
   type DesktopLiveE2eReport,
@@ -215,6 +216,66 @@ describe("desktop live E2E WebView hook", () => {
     expect(calls).toEqual(["manifest:python-gateway-g009", "registry"]);
     expect(runtime.meshTransport.getManifest).toHaveBeenCalledOnce();
     expect(runtime.client.registry.getRegistry).toHaveBeenCalledOnce();
+  });
+
+  it("retries transient provider readiness after WebRTC authorization", async () => {
+    let attempts = 0;
+    const result = await retryDesktopProviderReadiness(
+      async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw Object.assign(new Error("Provider is not ready"), {
+            status: 425,
+            detail: { reason_code: "provider_not_ready" },
+          });
+        }
+        return { modules: [] };
+      },
+      "registry readiness test",
+      1000,
+      1,
+    );
+
+    expect(result).toEqual({ modules: [] });
+    expect(attempts).toBe(2);
+  });
+
+  it("does not retry non-transient provider failures", async () => {
+    let attempts = 0;
+    const failure = Object.assign(new Error("permission denied"), {
+      status: 403,
+      detail: { reason_code: "peer_authority_revoked" },
+    });
+
+    await expect(retryDesktopProviderReadiness(
+      async () => {
+        attempts += 1;
+        throw failure;
+      },
+      "registry readiness test",
+      1000,
+      1,
+    )).rejects.toBe(failure);
+    expect(attempts).toBe(1);
+  });
+
+  it("does not retry unrelated 425 failures without the provider readiness reason", async () => {
+    let attempts = 0;
+    const failure = Object.assign(new Error("request is already active"), {
+      status: 425,
+      detail: { reason_code: "request_in_progress" },
+    });
+
+    await expect(retryDesktopProviderReadiness(
+      async () => {
+        attempts += 1;
+        throw failure;
+      },
+      "registry readiness test",
+      1000,
+      1,
+    )).rejects.toBe(failure);
+    expect(attempts).toBe(1);
   });
 
   it("keeps hook implementation out of the shared Tauri app route module", async () => {

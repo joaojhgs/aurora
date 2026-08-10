@@ -529,10 +529,18 @@ async function runMeshInteropContract({
   try {
     await connectAndAuthorize(runtime, profile, ready.timeoutMs);
     const authorizedSnapshot = runtime.peer.snapshot();
-    const registry = await runtime.client.registry.getRegistry();
+    const registry = await retryDesktopProviderReadiness(
+      () => runtime.client.registry.getRegistry(),
+      "desktop live registry after WebRTC authorization",
+      ready.timeoutMs,
+    );
     const meshTransport = runtime.meshTransport;
     if (!meshTransport) throw new Error("Authorized desktop runtime did not expose its mesh transport");
-    const manifest = await meshTransport.getManifest(ready.expectedStablePeerId);
+    const manifest = await retryDesktopProviderReadiness(
+      () => meshTransport.getManifest(ready.expectedStablePeerId),
+      "desktop live manifest after WebRTC authorization",
+      ready.timeoutMs,
+    );
     if (!manifest) throw new Error("Python peer did not return a manifest over the DataChannel");
     const intentionalError = await runtime.client.requestResult(
       ready.errorTopic,
@@ -634,7 +642,11 @@ async function runMeshInteropContract({
     await runtime.peer.disconnect("desktop live reconnect probe").catch(() => undefined);
     await runtime.peer.connect(profile);
     await waitFor(() => runtime.peer.snapshot().state === "authorized", "authorized desktop reconnect WebRTC DataChannel", ready.timeoutMs);
-    const reconnectRegistry = await runtime.client.registry.getRegistry();
+    const reconnectRegistry = await retryDesktopProviderReadiness(
+      () => runtime.client.registry.getRegistry(),
+      "desktop live registry after WebRTC reconnect",
+      ready.timeoutMs,
+    );
     const reconnectPairingPrompts = countPendingPairing(snapshots, reconnectStart);
 
     const mutationId = `g009-${ready.lane}-${Date.now().toString(36)}`;
@@ -817,6 +829,57 @@ async function runMeshInteropContract({
     unsubscribe();
     globalThis.fetch = originalFetch;
   }
+}
+
+export async function retryDesktopProviderReadiness<T>(
+  operation: () => Promise<T>,
+  label: string,
+  timeoutMs: number,
+  intervalMs = 100,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  let lastProviderNotReady: unknown = null;
+  do {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isTransientProviderNotReady(error)) throw error;
+      lastProviderNotReady = error;
+      if (Date.now() >= deadline) break;
+      await sleep(intervalMs);
+    }
+  } while (Date.now() < deadline);
+  throw new Error(`Timed out waiting for ${label}: provider_not_ready`, {
+    cause: lastProviderNotReady,
+  });
+}
+
+function isTransientProviderNotReady(error: unknown): boolean {
+  const values = collectErrorValues(error);
+  const text = values
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+  return text.includes("provider_not_ready") ||
+    text.includes("provider is not ready");
+}
+
+function collectErrorValues(value: unknown, seen = new Set<unknown>()): unknown[] {
+  if (value === null || value === undefined || seen.has(value)) return [];
+  if (typeof value !== "object") return [value];
+  seen.add(value);
+  const record = value as Record<string, unknown>;
+  return [
+    record.code,
+    record.status,
+    record.message,
+    record.reason,
+    record.reason_code,
+    record.error_code,
+    ...collectErrorValues(record.detail, seen),
+    ...collectErrorValues(record.error, seen),
+    ...collectErrorValues(record.cause, seen),
+  ];
 }
 
 function createAc18BrowserLocalToolProvider(
