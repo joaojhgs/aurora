@@ -157,6 +157,10 @@ export function generatedPeerHostMethodDescriptor<
     >['outputSchema'],
     requiredPermissions: descriptor.required_perms,
     callableFeatureIds: descriptor.callable_feature_ids,
+    callableFeatures: descriptor.callable_features.map((feature) => ({
+      ...feature,
+      method_ids: [...feature.method_ids]
+    })),
     speechConstraints:
       options.speechConstraints === undefined
         ? descriptor.speech_constraints

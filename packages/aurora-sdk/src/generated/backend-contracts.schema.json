@@ -129,6 +129,22 @@
       "callable_feature_ids": [
         "catalog_discovery"
       ],
+      "callable_features": [
+        {
+          "feature_id": "catalog_discovery",
+          "label": "Catalog Discovery",
+          "method_ids": [
+            "Tooling.GetTools",
+            "Tooling.GetToolCatalog",
+            "Tooling.GetExportCatalog",
+            "Tooling.GetToolByName",
+            "Tooling.GetStats",
+            "Tooling.GetMCPStatus"
+          ],
+          "module": "Tooling",
+          "summary": "Read local and aggregate Tooling catalogs and status."
+        }
+      ],
       "exposure": "both",
       "input_model": "ToolingGetToolsRequest",
       "input_schema_hash": "b40b50bac773b8e49ad345b17fffb816097a6d2e15fd88bbae6fa1bb0e910def",
@@ -159,6 +175,22 @@
       "bus_topic": "Tooling.GetExportCatalog",
       "callable_feature_ids": [
         "catalog_discovery"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "catalog_discovery",
+          "label": "Catalog Discovery",
+          "method_ids": [
+            "Tooling.GetTools",
+            "Tooling.GetToolCatalog",
+            "Tooling.GetExportCatalog",
+            "Tooling.GetToolByName",
+            "Tooling.GetStats",
+            "Tooling.GetMCPStatus"
+          ],
+          "module": "Tooling",
+          "summary": "Read local and aggregate Tooling catalogs and status."
+        }
       ],
       "exposure": "both",
       "input_model": "ToolingGetExportCatalogRequest",
@@ -191,6 +223,20 @@
       "callable_feature_ids": [
         "execution"
       ],
+      "callable_features": [
+        {
+          "feature_id": "execution",
+          "label": "Execution",
+          "method_ids": [
+            "Tooling.PrepareExecution",
+            "Tooling.RequestApproval",
+            "Tooling.EvaluateApprovalGrant",
+            "Tooling.ExecuteTool"
+          ],
+          "module": "Tooling",
+          "summary": "Prepare, approve, evaluate, and execute Tooling calls."
+        }
+      ],
       "exposure": "both",
       "input_model": "ToolingPrepareExecutionRequest",
       "input_schema_hash": "f9fc82d8593ec382d85754ffd7bd43eb27c3088ab325676185e428493f6b4083",
@@ -222,6 +268,20 @@
       "callable_feature_ids": [
         "execution"
       ],
+      "callable_features": [
+        {
+          "feature_id": "execution",
+          "label": "Execution",
+          "method_ids": [
+            "Tooling.PrepareExecution",
+            "Tooling.RequestApproval",
+            "Tooling.EvaluateApprovalGrant",
+            "Tooling.ExecuteTool"
+          ],
+          "module": "Tooling",
+          "summary": "Prepare, approve, evaluate, and execute Tooling calls."
+        }
+      ],
       "exposure": "both",
       "input_model": "ToolingExecuteToolRequest",
       "input_schema_hash": "9547a17d13c96218f08f90c83258a985fc6d5aad9aef7aff3a643f784b001132",
@@ -251,6 +311,7 @@
     {
       "bus_topic": "Gateway.ExplainRoute",
       "callable_feature_ids": [],
+      "callable_features": [],
       "exposure": "external",
       "input_model": "RouteExplainRequest",
       "input_schema_hash": "d05010e28be60b0dd3ae969cef25872b43158512976806b473fe430dbe756561",
@@ -281,6 +342,18 @@
       "bus_topic": "Orchestrator.ExternalUserInput",
       "callable_feature_ids": [
         "assistant_conversation"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "assistant_conversation",
+          "label": "Assistant Conversation",
+          "method_ids": [
+            "Orchestrator.ExternalUserInput",
+            "Orchestrator.IngestContext"
+          ],
+          "module": "Orchestrator",
+          "summary": "Submit assistant user input and attachment context."
+        }
       ],
       "exposure": "external",
       "input_model": "OrchestratorProcessRequest",
@@ -313,6 +386,17 @@
       "callable_feature_ids": [
         "assistant_control"
       ],
+      "callable_features": [
+        {
+          "feature_id": "assistant_control",
+          "label": "Assistant Control",
+          "method_ids": [
+            "Orchestrator.Interrupt"
+          ],
+          "module": "Orchestrator",
+          "summary": "Interrupt active assistant work."
+        }
+      ],
       "exposure": "external",
       "input_model": "OrchestratorInterruptRequest",
       "input_schema_hash": "1c273edd72d1fe38a292f2f1abcbf4a68302c3a056358a0853e641ae14a2e095",
@@ -343,6 +427,18 @@
       "bus_topic": "TTS.GetCapabilities",
       "callable_feature_ids": [
         "speech_voice_discovery"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "speech_voice_discovery",
+          "label": "Voice Discovery",
+          "method_ids": [
+            "TTS.GetCapabilities",
+            "TTS.ListVoices"
+          ],
+          "module": "TTS",
+          "summary": "Read TTS capabilities and use-safe voice choices."
+        }
       ],
       "exposure": "both",
       "input_model": "TTSGetCapabilitiesRequest",
@@ -375,6 +471,18 @@
       "callable_feature_ids": [
         "speech_voice_discovery"
       ],
+      "callable_features": [
+        {
+          "feature_id": "speech_voice_discovery",
+          "label": "Voice Discovery",
+          "method_ids": [
+            "TTS.GetCapabilities",
+            "TTS.ListVoices"
+          ],
+          "module": "TTS",
+          "summary": "Read TTS capabilities and use-safe voice choices."
+        }
+      ],
       "exposure": "both",
       "input_model": "TTSListVoicesRequest",
       "input_schema_hash": "52a2cd8c57d91f1c49accf6ee916d477970ccef16c06fc381b7926f01300f9aa",
@@ -405,6 +513,28 @@
       "bus_topic": "TTS.ListVoiceProfiles",
       "callable_feature_ids": [
         "speech_voice_management"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "speech_voice_management",
+          "label": "Voice Profile Management",
+          "method_ids": [
+            "TTS.ListVoiceProfiles",
+            "TTS.GetVoiceProfile",
+            "TTS.UpdateVoiceProfile",
+            "TTS.InstallVoiceProfile",
+            "TTS.RemoveVoiceProfile",
+            "TTS.SetDefaultVoice",
+            "TTS.VoiceImportStart",
+            "TTS.VoiceImportChunk",
+            "TTS.VoiceImportEnd",
+            "TTS.VoiceImportAbort",
+            "TTS.CreateVoiceProfile",
+            "TTS.DeleteVoiceProfile"
+          ],
+          "module": "TTS",
+          "summary": "Administer local TTS voice profiles and bounded voice imports."
+        }
       ],
       "exposure": "both",
       "input_model": "TTSListVoiceProfilesRequest",
@@ -437,6 +567,28 @@
       "callable_feature_ids": [
         "speech_voice_management"
       ],
+      "callable_features": [
+        {
+          "feature_id": "speech_voice_management",
+          "label": "Voice Profile Management",
+          "method_ids": [
+            "TTS.ListVoiceProfiles",
+            "TTS.GetVoiceProfile",
+            "TTS.UpdateVoiceProfile",
+            "TTS.InstallVoiceProfile",
+            "TTS.RemoveVoiceProfile",
+            "TTS.SetDefaultVoice",
+            "TTS.VoiceImportStart",
+            "TTS.VoiceImportChunk",
+            "TTS.VoiceImportEnd",
+            "TTS.VoiceImportAbort",
+            "TTS.CreateVoiceProfile",
+            "TTS.DeleteVoiceProfile"
+          ],
+          "module": "TTS",
+          "summary": "Administer local TTS voice profiles and bounded voice imports."
+        }
+      ],
       "exposure": "both",
       "input_model": "TTSGetVoiceProfileRequest",
       "input_schema_hash": "a26ddd489476ef2df0813321e35e3c27052a95d9470fd6947f3bc605106aebc7",
@@ -467,6 +619,28 @@
       "bus_topic": "TTS.UpdateVoiceProfile",
       "callable_feature_ids": [
         "speech_voice_management"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "speech_voice_management",
+          "label": "Voice Profile Management",
+          "method_ids": [
+            "TTS.ListVoiceProfiles",
+            "TTS.GetVoiceProfile",
+            "TTS.UpdateVoiceProfile",
+            "TTS.InstallVoiceProfile",
+            "TTS.RemoveVoiceProfile",
+            "TTS.SetDefaultVoice",
+            "TTS.VoiceImportStart",
+            "TTS.VoiceImportChunk",
+            "TTS.VoiceImportEnd",
+            "TTS.VoiceImportAbort",
+            "TTS.CreateVoiceProfile",
+            "TTS.DeleteVoiceProfile"
+          ],
+          "module": "TTS",
+          "summary": "Administer local TTS voice profiles and bounded voice imports."
+        }
       ],
       "exposure": "both",
       "input_model": "TTSUpdateVoiceProfileRequest",
@@ -499,6 +673,28 @@
       "callable_feature_ids": [
         "speech_voice_management"
       ],
+      "callable_features": [
+        {
+          "feature_id": "speech_voice_management",
+          "label": "Voice Profile Management",
+          "method_ids": [
+            "TTS.ListVoiceProfiles",
+            "TTS.GetVoiceProfile",
+            "TTS.UpdateVoiceProfile",
+            "TTS.InstallVoiceProfile",
+            "TTS.RemoveVoiceProfile",
+            "TTS.SetDefaultVoice",
+            "TTS.VoiceImportStart",
+            "TTS.VoiceImportChunk",
+            "TTS.VoiceImportEnd",
+            "TTS.VoiceImportAbort",
+            "TTS.CreateVoiceProfile",
+            "TTS.DeleteVoiceProfile"
+          ],
+          "module": "TTS",
+          "summary": "Administer local TTS voice profiles and bounded voice imports."
+        }
+      ],
       "exposure": "both",
       "input_model": "TTSInstallVoiceProfileRequest",
       "input_schema_hash": "42978ca21ac8c27eb54a29d45617e8fe6bddcfa837c3391af6aa4823a0e797a9",
@@ -529,6 +725,28 @@
       "bus_topic": "TTS.RemoveVoiceProfile",
       "callable_feature_ids": [
         "speech_voice_management"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "speech_voice_management",
+          "label": "Voice Profile Management",
+          "method_ids": [
+            "TTS.ListVoiceProfiles",
+            "TTS.GetVoiceProfile",
+            "TTS.UpdateVoiceProfile",
+            "TTS.InstallVoiceProfile",
+            "TTS.RemoveVoiceProfile",
+            "TTS.SetDefaultVoice",
+            "TTS.VoiceImportStart",
+            "TTS.VoiceImportChunk",
+            "TTS.VoiceImportEnd",
+            "TTS.VoiceImportAbort",
+            "TTS.CreateVoiceProfile",
+            "TTS.DeleteVoiceProfile"
+          ],
+          "module": "TTS",
+          "summary": "Administer local TTS voice profiles and bounded voice imports."
+        }
       ],
       "exposure": "both",
       "input_model": "TTSRemoveVoiceProfileRequest",
@@ -561,6 +779,28 @@
       "callable_feature_ids": [
         "speech_voice_management"
       ],
+      "callable_features": [
+        {
+          "feature_id": "speech_voice_management",
+          "label": "Voice Profile Management",
+          "method_ids": [
+            "TTS.ListVoiceProfiles",
+            "TTS.GetVoiceProfile",
+            "TTS.UpdateVoiceProfile",
+            "TTS.InstallVoiceProfile",
+            "TTS.RemoveVoiceProfile",
+            "TTS.SetDefaultVoice",
+            "TTS.VoiceImportStart",
+            "TTS.VoiceImportChunk",
+            "TTS.VoiceImportEnd",
+            "TTS.VoiceImportAbort",
+            "TTS.CreateVoiceProfile",
+            "TTS.DeleteVoiceProfile"
+          ],
+          "module": "TTS",
+          "summary": "Administer local TTS voice profiles and bounded voice imports."
+        }
+      ],
       "exposure": "both",
       "input_model": "TTSSetDefaultVoiceRequest",
       "input_schema_hash": "84a64ea71948775d1c1aa4c23f0480a113799c305f5b9dfec6cd6509da292ba0",
@@ -591,6 +831,28 @@
       "bus_topic": "TTS.VoiceImportStart",
       "callable_feature_ids": [
         "speech_voice_management"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "speech_voice_management",
+          "label": "Voice Profile Management",
+          "method_ids": [
+            "TTS.ListVoiceProfiles",
+            "TTS.GetVoiceProfile",
+            "TTS.UpdateVoiceProfile",
+            "TTS.InstallVoiceProfile",
+            "TTS.RemoveVoiceProfile",
+            "TTS.SetDefaultVoice",
+            "TTS.VoiceImportStart",
+            "TTS.VoiceImportChunk",
+            "TTS.VoiceImportEnd",
+            "TTS.VoiceImportAbort",
+            "TTS.CreateVoiceProfile",
+            "TTS.DeleteVoiceProfile"
+          ],
+          "module": "TTS",
+          "summary": "Administer local TTS voice profiles and bounded voice imports."
+        }
       ],
       "exposure": "both",
       "input_model": "TTSVoiceImportStartRequest",
@@ -623,6 +885,28 @@
       "callable_feature_ids": [
         "speech_voice_management"
       ],
+      "callable_features": [
+        {
+          "feature_id": "speech_voice_management",
+          "label": "Voice Profile Management",
+          "method_ids": [
+            "TTS.ListVoiceProfiles",
+            "TTS.GetVoiceProfile",
+            "TTS.UpdateVoiceProfile",
+            "TTS.InstallVoiceProfile",
+            "TTS.RemoveVoiceProfile",
+            "TTS.SetDefaultVoice",
+            "TTS.VoiceImportStart",
+            "TTS.VoiceImportChunk",
+            "TTS.VoiceImportEnd",
+            "TTS.VoiceImportAbort",
+            "TTS.CreateVoiceProfile",
+            "TTS.DeleteVoiceProfile"
+          ],
+          "module": "TTS",
+          "summary": "Administer local TTS voice profiles and bounded voice imports."
+        }
+      ],
       "exposure": "both",
       "input_model": "TTSVoiceImportChunkRequest",
       "input_schema_hash": "813355b26dfa4064225fc3d9c7e65e7bb79accd6d36a7e2ad4c4f5a8e95d54a2",
@@ -653,6 +937,28 @@
       "bus_topic": "TTS.VoiceImportEnd",
       "callable_feature_ids": [
         "speech_voice_management"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "speech_voice_management",
+          "label": "Voice Profile Management",
+          "method_ids": [
+            "TTS.ListVoiceProfiles",
+            "TTS.GetVoiceProfile",
+            "TTS.UpdateVoiceProfile",
+            "TTS.InstallVoiceProfile",
+            "TTS.RemoveVoiceProfile",
+            "TTS.SetDefaultVoice",
+            "TTS.VoiceImportStart",
+            "TTS.VoiceImportChunk",
+            "TTS.VoiceImportEnd",
+            "TTS.VoiceImportAbort",
+            "TTS.CreateVoiceProfile",
+            "TTS.DeleteVoiceProfile"
+          ],
+          "module": "TTS",
+          "summary": "Administer local TTS voice profiles and bounded voice imports."
+        }
       ],
       "exposure": "both",
       "input_model": "TTSVoiceImportEndRequest",
@@ -685,6 +991,28 @@
       "callable_feature_ids": [
         "speech_voice_management"
       ],
+      "callable_features": [
+        {
+          "feature_id": "speech_voice_management",
+          "label": "Voice Profile Management",
+          "method_ids": [
+            "TTS.ListVoiceProfiles",
+            "TTS.GetVoiceProfile",
+            "TTS.UpdateVoiceProfile",
+            "TTS.InstallVoiceProfile",
+            "TTS.RemoveVoiceProfile",
+            "TTS.SetDefaultVoice",
+            "TTS.VoiceImportStart",
+            "TTS.VoiceImportChunk",
+            "TTS.VoiceImportEnd",
+            "TTS.VoiceImportAbort",
+            "TTS.CreateVoiceProfile",
+            "TTS.DeleteVoiceProfile"
+          ],
+          "module": "TTS",
+          "summary": "Administer local TTS voice profiles and bounded voice imports."
+        }
+      ],
       "exposure": "both",
       "input_model": "TTSVoiceImportAbortRequest",
       "input_schema_hash": "3928201a9870fb651c3185bdf9d47b07e0f984a49d0eaddad56498928f26fe42",
@@ -715,6 +1043,28 @@
       "bus_topic": "TTS.CreateVoiceProfile",
       "callable_feature_ids": [
         "speech_voice_management"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "speech_voice_management",
+          "label": "Voice Profile Management",
+          "method_ids": [
+            "TTS.ListVoiceProfiles",
+            "TTS.GetVoiceProfile",
+            "TTS.UpdateVoiceProfile",
+            "TTS.InstallVoiceProfile",
+            "TTS.RemoveVoiceProfile",
+            "TTS.SetDefaultVoice",
+            "TTS.VoiceImportStart",
+            "TTS.VoiceImportChunk",
+            "TTS.VoiceImportEnd",
+            "TTS.VoiceImportAbort",
+            "TTS.CreateVoiceProfile",
+            "TTS.DeleteVoiceProfile"
+          ],
+          "module": "TTS",
+          "summary": "Administer local TTS voice profiles and bounded voice imports."
+        }
       ],
       "exposure": "both",
       "input_model": "TTSCreateVoiceProfileRequest",
@@ -747,6 +1097,28 @@
       "callable_feature_ids": [
         "speech_voice_management"
       ],
+      "callable_features": [
+        {
+          "feature_id": "speech_voice_management",
+          "label": "Voice Profile Management",
+          "method_ids": [
+            "TTS.ListVoiceProfiles",
+            "TTS.GetVoiceProfile",
+            "TTS.UpdateVoiceProfile",
+            "TTS.InstallVoiceProfile",
+            "TTS.RemoveVoiceProfile",
+            "TTS.SetDefaultVoice",
+            "TTS.VoiceImportStart",
+            "TTS.VoiceImportChunk",
+            "TTS.VoiceImportEnd",
+            "TTS.VoiceImportAbort",
+            "TTS.CreateVoiceProfile",
+            "TTS.DeleteVoiceProfile"
+          ],
+          "module": "TTS",
+          "summary": "Administer local TTS voice profiles and bounded voice imports."
+        }
+      ],
       "exposure": "both",
       "input_model": "TTSDeleteVoiceProfileRequest",
       "input_schema_hash": "d4e21efd4b4a31a2fbc8aab099203e766c808dec5c6c5f090a32ec931338688d",
@@ -777,6 +1149,17 @@
       "bus_topic": "TTS.Request",
       "callable_feature_ids": [
         "speech_playback"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "speech_playback",
+          "label": "Speech Playback",
+          "method_ids": [
+            "TTS.Request"
+          ],
+          "module": "TTS",
+          "summary": "Play synthesized speech on the provider."
+        }
       ],
       "exposure": "both",
       "input_model": "TTSRequest",
@@ -809,6 +1192,19 @@
       "callable_feature_ids": [
         "speech_streaming"
       ],
+      "callable_features": [
+        {
+          "feature_id": "speech_streaming",
+          "label": "Speech Streaming",
+          "method_ids": [
+            "TTS.StreamStart",
+            "TTS.StreamChunk",
+            "TTS.StreamEnd"
+          ],
+          "module": "TTS",
+          "summary": "Start, stream, and end ordered text-to-speech audio streams."
+        }
+      ],
       "exposure": "both",
       "input_model": "TTSStreamStartRequest",
       "input_schema_hash": "b4d6db1532cd3519475101c2b6bf28cb6a6d144eb4b42293680f51a1768f31e6",
@@ -839,6 +1235,19 @@
       "bus_topic": "TTS.StreamChunk",
       "callable_feature_ids": [
         "speech_streaming"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "speech_streaming",
+          "label": "Speech Streaming",
+          "method_ids": [
+            "TTS.StreamStart",
+            "TTS.StreamChunk",
+            "TTS.StreamEnd"
+          ],
+          "module": "TTS",
+          "summary": "Start, stream, and end ordered text-to-speech audio streams."
+        }
       ],
       "exposure": "both",
       "input_model": "TTSStreamChunkRequest",
@@ -871,6 +1280,19 @@
       "callable_feature_ids": [
         "speech_streaming"
       ],
+      "callable_features": [
+        {
+          "feature_id": "speech_streaming",
+          "label": "Speech Streaming",
+          "method_ids": [
+            "TTS.StreamStart",
+            "TTS.StreamChunk",
+            "TTS.StreamEnd"
+          ],
+          "module": "TTS",
+          "summary": "Start, stream, and end ordered text-to-speech audio streams."
+        }
+      ],
       "exposure": "both",
       "input_model": "TTSStreamEndRequest",
       "input_schema_hash": "059faba0be794cfba1e8e30ed272273132ba9440fcf014566c097499f8d7fb61",
@@ -901,6 +1323,17 @@
       "bus_topic": "TTS.Synthesize",
       "callable_feature_ids": [
         "speech_synthesis"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "speech_synthesis",
+          "label": "Speech Synthesis",
+          "method_ids": [
+            "TTS.Synthesize"
+          ],
+          "module": "TTS",
+          "summary": "Return synthesized audio data without provider playback."
+        }
       ],
       "exposure": "both",
       "input_model": "TTSSynthesizeRequest",
@@ -933,6 +1366,21 @@
       "callable_feature_ids": [
         "listening_session_control"
       ],
+      "callable_features": [
+        {
+          "feature_id": "listening_session_control",
+          "label": "Listening Session Control",
+          "method_ids": [
+            "STTCoordinator.Listen",
+            "STTCoordinator.StopListening",
+            "STTCoordinator.CapturePrepare",
+            "STTCoordinator.CaptureRelease",
+            "STTCoordinator.CaptureStatus"
+          ],
+          "module": "STTCoordinator",
+          "summary": "Control listening sessions and exclusive native microphone ownership."
+        }
+      ],
       "exposure": "both",
       "input_model": "STTListenRequest",
       "input_schema_hash": "8130cc5cdde9469f9cb249bb59a515c018fe8c33037309f02b74a83f1194a46f",
@@ -963,6 +1411,21 @@
       "bus_topic": "STTCoordinator.StopListening",
       "callable_feature_ids": [
         "listening_session_control"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "listening_session_control",
+          "label": "Listening Session Control",
+          "method_ids": [
+            "STTCoordinator.Listen",
+            "STTCoordinator.StopListening",
+            "STTCoordinator.CapturePrepare",
+            "STTCoordinator.CaptureRelease",
+            "STTCoordinator.CaptureStatus"
+          ],
+          "module": "STTCoordinator",
+          "summary": "Control listening sessions and exclusive native microphone ownership."
+        }
       ],
       "exposure": "both",
       "input_model": "STTStopListeningRequest",
@@ -995,6 +1458,21 @@
       "callable_feature_ids": [
         "listening_session_control"
       ],
+      "callable_features": [
+        {
+          "feature_id": "listening_session_control",
+          "label": "Listening Session Control",
+          "method_ids": [
+            "STTCoordinator.Listen",
+            "STTCoordinator.StopListening",
+            "STTCoordinator.CapturePrepare",
+            "STTCoordinator.CaptureRelease",
+            "STTCoordinator.CaptureStatus"
+          ],
+          "module": "STTCoordinator",
+          "summary": "Control listening sessions and exclusive native microphone ownership."
+        }
+      ],
       "exposure": "both",
       "input_model": "STTCapturePrepareRequest",
       "input_schema_hash": "69ebc92cfe9fed08689a9ba2c622cddf99158b2c9b9fabfb0030155863269886",
@@ -1025,6 +1503,21 @@
       "bus_topic": "STTCoordinator.CaptureRelease",
       "callable_feature_ids": [
         "listening_session_control"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "listening_session_control",
+          "label": "Listening Session Control",
+          "method_ids": [
+            "STTCoordinator.Listen",
+            "STTCoordinator.StopListening",
+            "STTCoordinator.CapturePrepare",
+            "STTCoordinator.CaptureRelease",
+            "STTCoordinator.CaptureStatus"
+          ],
+          "module": "STTCoordinator",
+          "summary": "Control listening sessions and exclusive native microphone ownership."
+        }
       ],
       "exposure": "both",
       "input_model": "STTCaptureReleaseRequest",
@@ -1057,6 +1550,21 @@
       "callable_feature_ids": [
         "listening_session_control"
       ],
+      "callable_features": [
+        {
+          "feature_id": "listening_session_control",
+          "label": "Listening Session Control",
+          "method_ids": [
+            "STTCoordinator.Listen",
+            "STTCoordinator.StopListening",
+            "STTCoordinator.CapturePrepare",
+            "STTCoordinator.CaptureRelease",
+            "STTCoordinator.CaptureStatus"
+          ],
+          "module": "STTCoordinator",
+          "summary": "Control listening sessions and exclusive native microphone ownership."
+        }
+      ],
       "exposure": "both",
       "input_model": "STTCaptureStatusRequest",
       "input_schema_hash": "0e594cd836f4c80e0da3e223280b2ccfed962813acf3296c4b4a0d02f2e29f7a",
@@ -1087,6 +1595,18 @@
       "bus_topic": "WakeWord.ProcessAudio",
       "callable_feature_ids": [
         "wake_word_detection"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "wake_word_detection",
+          "label": "Wake Word Detection",
+          "method_ids": [
+            "WakeWord.ProcessAudio",
+            "WakeWord.Detect"
+          ],
+          "module": "WakeWord",
+          "summary": "Detect wake words in submitted or streamed audio."
+        }
       ],
       "exposure": "both",
       "input_model": "STTAudioChunk",
@@ -1119,6 +1639,18 @@
       "callable_feature_ids": [
         "wake_word_detection"
       ],
+      "callable_features": [
+        {
+          "feature_id": "wake_word_detection",
+          "label": "Wake Word Detection",
+          "method_ids": [
+            "WakeWord.ProcessAudio",
+            "WakeWord.Detect"
+          ],
+          "module": "WakeWord",
+          "summary": "Detect wake words in submitted or streamed audio."
+        }
+      ],
       "exposure": "both",
       "input_model": "WakeWordDetectRequest",
       "input_schema_hash": "6d84e293fe9bf90a30317d78b1e8043cb52d45e13e8fce5ceb84e63185984735",
@@ -1150,6 +1682,18 @@
       "callable_feature_ids": [
         "audio_transcription"
       ],
+      "callable_features": [
+        {
+          "feature_id": "audio_transcription",
+          "label": "Audio Transcription",
+          "method_ids": [
+            "Transcription.ProcessAudio",
+            "Transcription.Transcribe"
+          ],
+          "module": "Transcription",
+          "summary": "Transcribe submitted or streamed audio."
+        }
+      ],
       "exposure": "both",
       "input_model": "STTAudioChunk",
       "input_schema_hash": "3670479489138802e7d52d4b7d5623c52b363cd4166db2ee7916f6449a10233e",
@@ -1180,6 +1724,18 @@
       "bus_topic": "Transcription.Transcribe",
       "callable_feature_ids": [
         "audio_transcription"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "audio_transcription",
+          "label": "Audio Transcription",
+          "method_ids": [
+            "Transcription.ProcessAudio",
+            "Transcription.Transcribe"
+          ],
+          "module": "Transcription",
+          "summary": "Transcribe submitted or streamed audio."
+        }
       ],
       "exposure": "both",
       "input_model": "TranscribeAudioRequest",

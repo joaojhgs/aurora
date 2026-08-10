@@ -1,6 +1,6 @@
 import type { z } from 'zod/v4'
 
-import type { JsonObject } from '../types.js'
+import type { CallableFeatureContract, JsonObject } from '../types.js'
 import type { AuthenticatedPeerContext, PeerRevocationBroadcaster } from './authority.js'
 
 export type PeerHostMethodType = 'unary' | 'stream' | 'event'
@@ -83,6 +83,7 @@ export interface PeerHostMethodDescriptor<TInput = unknown, TOutput = unknown> {
   readonly outputSchema: z.ZodType<TOutput>
   readonly requiredPermissions: readonly string[]
   readonly callableFeatureIds?: readonly string[]
+  readonly callableFeatures?: readonly CallableFeatureContract[]
   readonly speechConstraints?: JsonObject | null
   readonly serviceCapabilities?: readonly string[]
   readonly serviceVersion?: string

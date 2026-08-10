@@ -1,5 +1,6 @@
 import { sha256 } from '@noble/hashes/sha2.js'
 
+import type { CallableFeatureContract } from '../types.js'
 import { AuroraValidationError } from '../validation/index.js'
 import { bytesToHex, canonicalJson } from '../webrtc/encoding.js'
 import type { CallFrame, SubscribeFrame } from '../webrtc/protocol.js'
@@ -941,14 +942,20 @@ function manifestService(
   const concurrencyLimits = descriptors
     .map((method) => method.maxConcurrent)
     .filter((value): value is number => typeof value === 'number' && Number.isInteger(value) && value > 0)
+  const availableFeatureIds = sortedUnique(
+    descriptors.flatMap((method) => method.callableFeatureIds ?? [])
+  )
+  const availableFeatureIdSet = new Set(availableFeatureIds)
   const service = {
     module,
     version: versions[0] ?? '0.0.0',
     capabilities,
-    callable_features: [],
-    available_feature_ids: sortedUnique(
-      descriptors.flatMap((method) => method.callableFeatureIds ?? [])
+    callable_features: canonicalCallableFeatures(
+      descriptors
+        .flatMap((method) => method.callableFeatures ?? [])
+        .filter((feature) => availableFeatureIdSet.has(feature.feature_id))
     ),
+    available_feature_ids: availableFeatureIds,
     methods,
     max_concurrent: concurrencyLimits.length > 0 ? Math.min(...concurrencyLimits) : 10
   }
@@ -958,6 +965,8 @@ function manifestService(
 function manifestMethod(method: PeerHostMethodDescriptor): Record<string, unknown> {
   const name = method.name
     ?? (method.methodId.includes('.') ? method.methodId.split('.').at(-1) ?? method.methodId : method.methodId)
+  const callableFeatureIds = sortedUnique(method.callableFeatureIds ?? [])
+  const callableFeatureIdSet = new Set(callableFeatureIds)
   return {
     name,
     summary: method.summary ?? '',
@@ -966,8 +975,10 @@ function manifestMethod(method: PeerHostMethodDescriptor): Record<string, unknow
     input_model: method.inputModel ?? schemaName(method.inputSchemaId),
     output_model: method.outputModel ?? schemaName(method.outputSchemaId),
     required_perms: sortedUnique(method.requiredPermissions),
-    callable_feature_ids: sortedUnique(method.callableFeatureIds ?? []),
-    callable_features: [],
+    callable_feature_ids: callableFeatureIds,
+    callable_features: canonicalCallableFeatures(
+      (method.callableFeatures ?? []).filter((feature) => callableFeatureIdSet.has(feature.feature_id))
+    ),
     speech_constraints: method.speechConstraints ?? null,
     public_infrastructure: false,
     method_type: projectionMethodType(method),
@@ -1006,6 +1017,25 @@ function digest(value: unknown): string {
 
 function sortedUnique(values: readonly string[]): string[] {
   return [...new Set(values)].sort()
+}
+
+function canonicalCallableFeatures(
+  features: readonly CallableFeatureContract[]
+): Array<Record<string, unknown>> {
+  const byId = new Map<string, Record<string, unknown>>()
+  for (const feature of features) {
+    if (feature.feature_id.length === 0) continue
+    byId.set(feature.feature_id, {
+      feature_id: feature.feature_id,
+      module: feature.module,
+      label: feature.label,
+      summary: feature.summary,
+      method_ids: sortedUnique(feature.method_ids)
+    })
+  }
+  return [...byId.values()].sort((left, right) =>
+    String(left.feature_id).localeCompare(String(right.feature_id))
+  )
 }
 
 function sameOrderedStrings(left: readonly string[], right: readonly string[]): boolean {

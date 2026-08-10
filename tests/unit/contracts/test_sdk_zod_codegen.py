@@ -733,6 +733,7 @@ def test_generated_vectors_capture_strip_and_reject_semantics() -> None:
     assert normalized_tool["share_group_label"] == "Memory"
     assert normalized_tool["exportable"] is True
     assert normalized_tool["source_type"] == "local"
+
     assert normalized_tool["mutating"] is True
 
     get_tools_negative = by_model["ToolingGetToolsResponse"]["vectors"]["negative"]
@@ -773,6 +774,36 @@ def test_generated_vectors_capture_strip_and_reject_semantics() -> None:
         for schema_item in schema["schemas"]
         for item in _walk_schema_objects(schema_item["schema"])
     )
+
+
+def test_sdk_method_descriptors_preserve_callable_feature_contracts() -> None:
+    schema = generate_backend_inventory.build_sdk_contract_schema()
+    descriptors = {item["method_id"]: item for item in schema["method_descriptors"]}
+
+    tooling_descriptor = descriptors["Tooling.GetTools"]
+    assert tooling_descriptor["callable_feature_ids"] == ["catalog_discovery"]
+    assert tooling_descriptor["callable_features"] == [
+        {
+            "feature_id": "catalog_discovery",
+            "module": "Tooling",
+            "label": "Catalog Discovery",
+            "summary": "Read local and aggregate Tooling catalogs and status.",
+            "method_ids": [
+                "Tooling.GetTools",
+                "Tooling.GetToolCatalog",
+                "Tooling.GetExportCatalog",
+                "Tooling.GetToolByName",
+                "Tooling.GetStats",
+                "Tooling.GetMCPStatus",
+            ],
+        }
+    ]
+
+    tts_descriptor = descriptors["TTS.UpdateVoiceProfile"]
+    assert tts_descriptor["callable_feature_ids"] == ["speech_voice_management"]
+    assert tts_descriptor["callable_features"][0]["feature_id"] == "speech_voice_management"
+    assert tts_descriptor["callable_features"][0]["module"] == "TTS"
+    assert "TTS.UpdateVoiceProfile" in tts_descriptor["callable_features"][0]["method_ids"]
 
 
 def test_authoritative_python_contracts_reject_out_of_range_integers() -> None:

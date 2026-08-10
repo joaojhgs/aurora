@@ -2230,6 +2230,14 @@ def build_sdk_contract_schema() -> dict[str, Any]:
                 if contract is not None
                 else list(metadata_source.get("callable_feature_ids", []))
             ),
+            "callable_features": (
+                [
+                    feature.model_dump(mode="json")
+                    for feature in contract.callable_features
+                ]
+                if contract is not None
+                else list(metadata_source.get("callable_features", []))
+            ),
             "input_model": _model_name(input_model),
             "output_model": _model_name(output_model),
             "streaming": _streaming_shape(method_id),

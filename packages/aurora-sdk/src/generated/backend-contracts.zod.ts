@@ -1801,6 +1801,22 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "catalog_discovery"
     ],
+    "callable_features": [
+      {
+        "feature_id": "catalog_discovery",
+        "module": "Tooling",
+        "label": "Catalog Discovery",
+        "summary": "Read local and aggregate Tooling catalogs and status.",
+        "method_ids": [
+          "Tooling.GetTools",
+          "Tooling.GetToolCatalog",
+          "Tooling.GetExportCatalog",
+          "Tooling.GetToolByName",
+          "Tooling.GetStats",
+          "Tooling.GetMCPStatus"
+        ]
+      }
+    ],
     "input_model": "ToolingGetToolsRequest",
     "output_model": "ToolingGetToolsResponse",
     "streaming": {
@@ -1831,6 +1847,22 @@ export const backendContractMethodDescriptors = [
     ],
     "callable_feature_ids": [
       "catalog_discovery"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "catalog_discovery",
+        "module": "Tooling",
+        "label": "Catalog Discovery",
+        "summary": "Read local and aggregate Tooling catalogs and status.",
+        "method_ids": [
+          "Tooling.GetTools",
+          "Tooling.GetToolCatalog",
+          "Tooling.GetExportCatalog",
+          "Tooling.GetToolByName",
+          "Tooling.GetStats",
+          "Tooling.GetMCPStatus"
+        ]
+      }
     ],
     "input_model": "ToolingGetExportCatalogRequest",
     "output_model": "ToolingGetExportCatalogResponse",
@@ -1863,6 +1895,20 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "execution"
     ],
+    "callable_features": [
+      {
+        "feature_id": "execution",
+        "module": "Tooling",
+        "label": "Execution",
+        "summary": "Prepare, approve, evaluate, and execute Tooling calls.",
+        "method_ids": [
+          "Tooling.PrepareExecution",
+          "Tooling.RequestApproval",
+          "Tooling.EvaluateApprovalGrant",
+          "Tooling.ExecuteTool"
+        ]
+      }
+    ],
     "input_model": "ToolingPrepareExecutionRequest",
     "output_model": "ToolingPrepareExecutionResponse",
     "streaming": {
@@ -1894,6 +1940,20 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "execution"
     ],
+    "callable_features": [
+      {
+        "feature_id": "execution",
+        "module": "Tooling",
+        "label": "Execution",
+        "summary": "Prepare, approve, evaluate, and execute Tooling calls.",
+        "method_ids": [
+          "Tooling.PrepareExecution",
+          "Tooling.RequestApproval",
+          "Tooling.EvaluateApprovalGrant",
+          "Tooling.ExecuteTool"
+        ]
+      }
+    ],
     "input_model": "ToolingExecuteToolRequest",
     "output_model": "ToolingExecuteToolResponse",
     "streaming": {
@@ -1923,6 +1983,7 @@ export const backendContractMethodDescriptors = [
       "Gateway.use"
     ],
     "callable_feature_ids": [],
+    "callable_features": [],
     "input_model": "RouteExplainRequest",
     "output_model": "RouteExplainResponse",
     "streaming": {
@@ -1953,6 +2014,18 @@ export const backendContractMethodDescriptors = [
     ],
     "callable_feature_ids": [
       "assistant_conversation"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "assistant_conversation",
+        "module": "Orchestrator",
+        "label": "Assistant Conversation",
+        "summary": "Submit assistant user input and attachment context.",
+        "method_ids": [
+          "Orchestrator.ExternalUserInput",
+          "Orchestrator.IngestContext"
+        ]
+      }
     ],
     "input_model": "OrchestratorProcessRequest",
     "output_model": "OrchestratorResponse",
@@ -1985,6 +2058,17 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "assistant_control"
     ],
+    "callable_features": [
+      {
+        "feature_id": "assistant_control",
+        "module": "Orchestrator",
+        "label": "Assistant Control",
+        "summary": "Interrupt active assistant work.",
+        "method_ids": [
+          "Orchestrator.Interrupt"
+        ]
+      }
+    ],
     "input_model": "OrchestratorInterruptRequest",
     "output_model": "OrchestratorInterruptResponse",
     "streaming": {
@@ -2015,6 +2099,18 @@ export const backendContractMethodDescriptors = [
     ],
     "callable_feature_ids": [
       "speech_voice_discovery"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "speech_voice_discovery",
+        "module": "TTS",
+        "label": "Voice Discovery",
+        "summary": "Read TTS capabilities and use-safe voice choices.",
+        "method_ids": [
+          "TTS.GetCapabilities",
+          "TTS.ListVoices"
+        ]
+      }
     ],
     "input_model": "TTSGetCapabilitiesRequest",
     "output_model": "TTSGetCapabilitiesResponse",
@@ -2047,6 +2143,18 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "speech_voice_discovery"
     ],
+    "callable_features": [
+      {
+        "feature_id": "speech_voice_discovery",
+        "module": "TTS",
+        "label": "Voice Discovery",
+        "summary": "Read TTS capabilities and use-safe voice choices.",
+        "method_ids": [
+          "TTS.GetCapabilities",
+          "TTS.ListVoices"
+        ]
+      }
+    ],
     "input_model": "TTSListVoicesRequest",
     "output_model": "TTSListVoicesResponse",
     "streaming": {
@@ -2077,6 +2185,28 @@ export const backendContractMethodDescriptors = [
     ],
     "callable_feature_ids": [
       "speech_voice_management"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "speech_voice_management",
+        "module": "TTS",
+        "label": "Voice Profile Management",
+        "summary": "Administer local TTS voice profiles and bounded voice imports.",
+        "method_ids": [
+          "TTS.ListVoiceProfiles",
+          "TTS.GetVoiceProfile",
+          "TTS.UpdateVoiceProfile",
+          "TTS.InstallVoiceProfile",
+          "TTS.RemoveVoiceProfile",
+          "TTS.SetDefaultVoice",
+          "TTS.VoiceImportStart",
+          "TTS.VoiceImportChunk",
+          "TTS.VoiceImportEnd",
+          "TTS.VoiceImportAbort",
+          "TTS.CreateVoiceProfile",
+          "TTS.DeleteVoiceProfile"
+        ]
+      }
     ],
     "input_model": "TTSListVoiceProfilesRequest",
     "output_model": "TTSListVoiceProfilesResponse",
@@ -2109,6 +2239,28 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "speech_voice_management"
     ],
+    "callable_features": [
+      {
+        "feature_id": "speech_voice_management",
+        "module": "TTS",
+        "label": "Voice Profile Management",
+        "summary": "Administer local TTS voice profiles and bounded voice imports.",
+        "method_ids": [
+          "TTS.ListVoiceProfiles",
+          "TTS.GetVoiceProfile",
+          "TTS.UpdateVoiceProfile",
+          "TTS.InstallVoiceProfile",
+          "TTS.RemoveVoiceProfile",
+          "TTS.SetDefaultVoice",
+          "TTS.VoiceImportStart",
+          "TTS.VoiceImportChunk",
+          "TTS.VoiceImportEnd",
+          "TTS.VoiceImportAbort",
+          "TTS.CreateVoiceProfile",
+          "TTS.DeleteVoiceProfile"
+        ]
+      }
+    ],
     "input_model": "TTSGetVoiceProfileRequest",
     "output_model": "TTSGetVoiceProfileResponse",
     "streaming": {
@@ -2139,6 +2291,28 @@ export const backendContractMethodDescriptors = [
     ],
     "callable_feature_ids": [
       "speech_voice_management"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "speech_voice_management",
+        "module": "TTS",
+        "label": "Voice Profile Management",
+        "summary": "Administer local TTS voice profiles and bounded voice imports.",
+        "method_ids": [
+          "TTS.ListVoiceProfiles",
+          "TTS.GetVoiceProfile",
+          "TTS.UpdateVoiceProfile",
+          "TTS.InstallVoiceProfile",
+          "TTS.RemoveVoiceProfile",
+          "TTS.SetDefaultVoice",
+          "TTS.VoiceImportStart",
+          "TTS.VoiceImportChunk",
+          "TTS.VoiceImportEnd",
+          "TTS.VoiceImportAbort",
+          "TTS.CreateVoiceProfile",
+          "TTS.DeleteVoiceProfile"
+        ]
+      }
     ],
     "input_model": "TTSUpdateVoiceProfileRequest",
     "output_model": "TTSUpdateVoiceProfileResponse",
@@ -2171,6 +2345,28 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "speech_voice_management"
     ],
+    "callable_features": [
+      {
+        "feature_id": "speech_voice_management",
+        "module": "TTS",
+        "label": "Voice Profile Management",
+        "summary": "Administer local TTS voice profiles and bounded voice imports.",
+        "method_ids": [
+          "TTS.ListVoiceProfiles",
+          "TTS.GetVoiceProfile",
+          "TTS.UpdateVoiceProfile",
+          "TTS.InstallVoiceProfile",
+          "TTS.RemoveVoiceProfile",
+          "TTS.SetDefaultVoice",
+          "TTS.VoiceImportStart",
+          "TTS.VoiceImportChunk",
+          "TTS.VoiceImportEnd",
+          "TTS.VoiceImportAbort",
+          "TTS.CreateVoiceProfile",
+          "TTS.DeleteVoiceProfile"
+        ]
+      }
+    ],
     "input_model": "TTSInstallVoiceProfileRequest",
     "output_model": "TTSInstallVoiceProfileResponse",
     "streaming": {
@@ -2201,6 +2397,28 @@ export const backendContractMethodDescriptors = [
     ],
     "callable_feature_ids": [
       "speech_voice_management"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "speech_voice_management",
+        "module": "TTS",
+        "label": "Voice Profile Management",
+        "summary": "Administer local TTS voice profiles and bounded voice imports.",
+        "method_ids": [
+          "TTS.ListVoiceProfiles",
+          "TTS.GetVoiceProfile",
+          "TTS.UpdateVoiceProfile",
+          "TTS.InstallVoiceProfile",
+          "TTS.RemoveVoiceProfile",
+          "TTS.SetDefaultVoice",
+          "TTS.VoiceImportStart",
+          "TTS.VoiceImportChunk",
+          "TTS.VoiceImportEnd",
+          "TTS.VoiceImportAbort",
+          "TTS.CreateVoiceProfile",
+          "TTS.DeleteVoiceProfile"
+        ]
+      }
     ],
     "input_model": "TTSRemoveVoiceProfileRequest",
     "output_model": "TTSRemoveVoiceProfileResponse",
@@ -2233,6 +2451,28 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "speech_voice_management"
     ],
+    "callable_features": [
+      {
+        "feature_id": "speech_voice_management",
+        "module": "TTS",
+        "label": "Voice Profile Management",
+        "summary": "Administer local TTS voice profiles and bounded voice imports.",
+        "method_ids": [
+          "TTS.ListVoiceProfiles",
+          "TTS.GetVoiceProfile",
+          "TTS.UpdateVoiceProfile",
+          "TTS.InstallVoiceProfile",
+          "TTS.RemoveVoiceProfile",
+          "TTS.SetDefaultVoice",
+          "TTS.VoiceImportStart",
+          "TTS.VoiceImportChunk",
+          "TTS.VoiceImportEnd",
+          "TTS.VoiceImportAbort",
+          "TTS.CreateVoiceProfile",
+          "TTS.DeleteVoiceProfile"
+        ]
+      }
+    ],
     "input_model": "TTSSetDefaultVoiceRequest",
     "output_model": "TTSSetDefaultVoiceResponse",
     "streaming": {
@@ -2263,6 +2503,28 @@ export const backendContractMethodDescriptors = [
     ],
     "callable_feature_ids": [
       "speech_voice_management"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "speech_voice_management",
+        "module": "TTS",
+        "label": "Voice Profile Management",
+        "summary": "Administer local TTS voice profiles and bounded voice imports.",
+        "method_ids": [
+          "TTS.ListVoiceProfiles",
+          "TTS.GetVoiceProfile",
+          "TTS.UpdateVoiceProfile",
+          "TTS.InstallVoiceProfile",
+          "TTS.RemoveVoiceProfile",
+          "TTS.SetDefaultVoice",
+          "TTS.VoiceImportStart",
+          "TTS.VoiceImportChunk",
+          "TTS.VoiceImportEnd",
+          "TTS.VoiceImportAbort",
+          "TTS.CreateVoiceProfile",
+          "TTS.DeleteVoiceProfile"
+        ]
+      }
     ],
     "input_model": "TTSVoiceImportStartRequest",
     "output_model": "TTSVoiceImportStartResponse",
@@ -2295,6 +2557,28 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "speech_voice_management"
     ],
+    "callable_features": [
+      {
+        "feature_id": "speech_voice_management",
+        "module": "TTS",
+        "label": "Voice Profile Management",
+        "summary": "Administer local TTS voice profiles and bounded voice imports.",
+        "method_ids": [
+          "TTS.ListVoiceProfiles",
+          "TTS.GetVoiceProfile",
+          "TTS.UpdateVoiceProfile",
+          "TTS.InstallVoiceProfile",
+          "TTS.RemoveVoiceProfile",
+          "TTS.SetDefaultVoice",
+          "TTS.VoiceImportStart",
+          "TTS.VoiceImportChunk",
+          "TTS.VoiceImportEnd",
+          "TTS.VoiceImportAbort",
+          "TTS.CreateVoiceProfile",
+          "TTS.DeleteVoiceProfile"
+        ]
+      }
+    ],
     "input_model": "TTSVoiceImportChunkRequest",
     "output_model": "TTSVoiceImportChunkResponse",
     "streaming": {
@@ -2325,6 +2609,28 @@ export const backendContractMethodDescriptors = [
     ],
     "callable_feature_ids": [
       "speech_voice_management"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "speech_voice_management",
+        "module": "TTS",
+        "label": "Voice Profile Management",
+        "summary": "Administer local TTS voice profiles and bounded voice imports.",
+        "method_ids": [
+          "TTS.ListVoiceProfiles",
+          "TTS.GetVoiceProfile",
+          "TTS.UpdateVoiceProfile",
+          "TTS.InstallVoiceProfile",
+          "TTS.RemoveVoiceProfile",
+          "TTS.SetDefaultVoice",
+          "TTS.VoiceImportStart",
+          "TTS.VoiceImportChunk",
+          "TTS.VoiceImportEnd",
+          "TTS.VoiceImportAbort",
+          "TTS.CreateVoiceProfile",
+          "TTS.DeleteVoiceProfile"
+        ]
+      }
     ],
     "input_model": "TTSVoiceImportEndRequest",
     "output_model": "TTSVoiceImportEndResponse",
@@ -2357,6 +2663,28 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "speech_voice_management"
     ],
+    "callable_features": [
+      {
+        "feature_id": "speech_voice_management",
+        "module": "TTS",
+        "label": "Voice Profile Management",
+        "summary": "Administer local TTS voice profiles and bounded voice imports.",
+        "method_ids": [
+          "TTS.ListVoiceProfiles",
+          "TTS.GetVoiceProfile",
+          "TTS.UpdateVoiceProfile",
+          "TTS.InstallVoiceProfile",
+          "TTS.RemoveVoiceProfile",
+          "TTS.SetDefaultVoice",
+          "TTS.VoiceImportStart",
+          "TTS.VoiceImportChunk",
+          "TTS.VoiceImportEnd",
+          "TTS.VoiceImportAbort",
+          "TTS.CreateVoiceProfile",
+          "TTS.DeleteVoiceProfile"
+        ]
+      }
+    ],
     "input_model": "TTSVoiceImportAbortRequest",
     "output_model": "TTSVoiceImportAbortResponse",
     "streaming": {
@@ -2387,6 +2715,28 @@ export const backendContractMethodDescriptors = [
     ],
     "callable_feature_ids": [
       "speech_voice_management"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "speech_voice_management",
+        "module": "TTS",
+        "label": "Voice Profile Management",
+        "summary": "Administer local TTS voice profiles and bounded voice imports.",
+        "method_ids": [
+          "TTS.ListVoiceProfiles",
+          "TTS.GetVoiceProfile",
+          "TTS.UpdateVoiceProfile",
+          "TTS.InstallVoiceProfile",
+          "TTS.RemoveVoiceProfile",
+          "TTS.SetDefaultVoice",
+          "TTS.VoiceImportStart",
+          "TTS.VoiceImportChunk",
+          "TTS.VoiceImportEnd",
+          "TTS.VoiceImportAbort",
+          "TTS.CreateVoiceProfile",
+          "TTS.DeleteVoiceProfile"
+        ]
+      }
     ],
     "input_model": "TTSCreateVoiceProfileRequest",
     "output_model": "TTSCreateVoiceProfileResponse",
@@ -2419,6 +2769,28 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "speech_voice_management"
     ],
+    "callable_features": [
+      {
+        "feature_id": "speech_voice_management",
+        "module": "TTS",
+        "label": "Voice Profile Management",
+        "summary": "Administer local TTS voice profiles and bounded voice imports.",
+        "method_ids": [
+          "TTS.ListVoiceProfiles",
+          "TTS.GetVoiceProfile",
+          "TTS.UpdateVoiceProfile",
+          "TTS.InstallVoiceProfile",
+          "TTS.RemoveVoiceProfile",
+          "TTS.SetDefaultVoice",
+          "TTS.VoiceImportStart",
+          "TTS.VoiceImportChunk",
+          "TTS.VoiceImportEnd",
+          "TTS.VoiceImportAbort",
+          "TTS.CreateVoiceProfile",
+          "TTS.DeleteVoiceProfile"
+        ]
+      }
+    ],
     "input_model": "TTSDeleteVoiceProfileRequest",
     "output_model": "TTSDeleteVoiceProfileResponse",
     "streaming": {
@@ -2449,6 +2821,17 @@ export const backendContractMethodDescriptors = [
     ],
     "callable_feature_ids": [
       "speech_playback"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "speech_playback",
+        "module": "TTS",
+        "label": "Speech Playback",
+        "summary": "Play synthesized speech on the provider.",
+        "method_ids": [
+          "TTS.Request"
+        ]
+      }
     ],
     "input_model": "TTSRequest",
     "output_model": "EmptyOutput",
@@ -2481,6 +2864,19 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "speech_streaming"
     ],
+    "callable_features": [
+      {
+        "feature_id": "speech_streaming",
+        "module": "TTS",
+        "label": "Speech Streaming",
+        "summary": "Start, stream, and end ordered text-to-speech audio streams.",
+        "method_ids": [
+          "TTS.StreamStart",
+          "TTS.StreamChunk",
+          "TTS.StreamEnd"
+        ]
+      }
+    ],
     "input_model": "TTSStreamStartRequest",
     "output_model": "EmptyOutput",
     "streaming": {
@@ -2511,6 +2907,19 @@ export const backendContractMethodDescriptors = [
     ],
     "callable_feature_ids": [
       "speech_streaming"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "speech_streaming",
+        "module": "TTS",
+        "label": "Speech Streaming",
+        "summary": "Start, stream, and end ordered text-to-speech audio streams.",
+        "method_ids": [
+          "TTS.StreamStart",
+          "TTS.StreamChunk",
+          "TTS.StreamEnd"
+        ]
+      }
     ],
     "input_model": "TTSStreamChunkRequest",
     "output_model": "EmptyOutput",
@@ -2543,6 +2952,19 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "speech_streaming"
     ],
+    "callable_features": [
+      {
+        "feature_id": "speech_streaming",
+        "module": "TTS",
+        "label": "Speech Streaming",
+        "summary": "Start, stream, and end ordered text-to-speech audio streams.",
+        "method_ids": [
+          "TTS.StreamStart",
+          "TTS.StreamChunk",
+          "TTS.StreamEnd"
+        ]
+      }
+    ],
     "input_model": "TTSStreamEndRequest",
     "output_model": "EmptyOutput",
     "streaming": {
@@ -2573,6 +2995,17 @@ export const backendContractMethodDescriptors = [
     ],
     "callable_feature_ids": [
       "speech_synthesis"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "speech_synthesis",
+        "module": "TTS",
+        "label": "Speech Synthesis",
+        "summary": "Return synthesized audio data without provider playback.",
+        "method_ids": [
+          "TTS.Synthesize"
+        ]
+      }
     ],
     "input_model": "TTSSynthesizeRequest",
     "output_model": "TTSSynthesizeResponse",
@@ -2605,6 +3038,21 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "listening_session_control"
     ],
+    "callable_features": [
+      {
+        "feature_id": "listening_session_control",
+        "module": "STTCoordinator",
+        "label": "Listening Session Control",
+        "summary": "Control listening sessions and exclusive native microphone ownership.",
+        "method_ids": [
+          "STTCoordinator.Listen",
+          "STTCoordinator.StopListening",
+          "STTCoordinator.CapturePrepare",
+          "STTCoordinator.CaptureRelease",
+          "STTCoordinator.CaptureStatus"
+        ]
+      }
+    ],
     "input_model": "STTListenRequest",
     "output_model": "STTListenResponse",
     "streaming": {
@@ -2635,6 +3083,21 @@ export const backendContractMethodDescriptors = [
     ],
     "callable_feature_ids": [
       "listening_session_control"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "listening_session_control",
+        "module": "STTCoordinator",
+        "label": "Listening Session Control",
+        "summary": "Control listening sessions and exclusive native microphone ownership.",
+        "method_ids": [
+          "STTCoordinator.Listen",
+          "STTCoordinator.StopListening",
+          "STTCoordinator.CapturePrepare",
+          "STTCoordinator.CaptureRelease",
+          "STTCoordinator.CaptureStatus"
+        ]
+      }
     ],
     "input_model": "STTStopListeningRequest",
     "output_model": "EmptyOutput",
@@ -2667,6 +3130,21 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "listening_session_control"
     ],
+    "callable_features": [
+      {
+        "feature_id": "listening_session_control",
+        "module": "STTCoordinator",
+        "label": "Listening Session Control",
+        "summary": "Control listening sessions and exclusive native microphone ownership.",
+        "method_ids": [
+          "STTCoordinator.Listen",
+          "STTCoordinator.StopListening",
+          "STTCoordinator.CapturePrepare",
+          "STTCoordinator.CaptureRelease",
+          "STTCoordinator.CaptureStatus"
+        ]
+      }
+    ],
     "input_model": "STTCapturePrepareRequest",
     "output_model": "STTCapturePrepareResponse",
     "streaming": {
@@ -2697,6 +3175,21 @@ export const backendContractMethodDescriptors = [
     ],
     "callable_feature_ids": [
       "listening_session_control"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "listening_session_control",
+        "module": "STTCoordinator",
+        "label": "Listening Session Control",
+        "summary": "Control listening sessions and exclusive native microphone ownership.",
+        "method_ids": [
+          "STTCoordinator.Listen",
+          "STTCoordinator.StopListening",
+          "STTCoordinator.CapturePrepare",
+          "STTCoordinator.CaptureRelease",
+          "STTCoordinator.CaptureStatus"
+        ]
+      }
     ],
     "input_model": "STTCaptureReleaseRequest",
     "output_model": "STTCaptureReleaseResponse",
@@ -2729,6 +3222,21 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "listening_session_control"
     ],
+    "callable_features": [
+      {
+        "feature_id": "listening_session_control",
+        "module": "STTCoordinator",
+        "label": "Listening Session Control",
+        "summary": "Control listening sessions and exclusive native microphone ownership.",
+        "method_ids": [
+          "STTCoordinator.Listen",
+          "STTCoordinator.StopListening",
+          "STTCoordinator.CapturePrepare",
+          "STTCoordinator.CaptureRelease",
+          "STTCoordinator.CaptureStatus"
+        ]
+      }
+    ],
     "input_model": "STTCaptureStatusRequest",
     "output_model": "STTCaptureStatusResponse",
     "streaming": {
@@ -2759,6 +3267,18 @@ export const backendContractMethodDescriptors = [
     ],
     "callable_feature_ids": [
       "wake_word_detection"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "wake_word_detection",
+        "module": "WakeWord",
+        "label": "Wake Word Detection",
+        "summary": "Detect wake words in submitted or streamed audio.",
+        "method_ids": [
+          "WakeWord.ProcessAudio",
+          "WakeWord.Detect"
+        ]
+      }
     ],
     "input_model": "STTAudioChunk",
     "output_model": "EmptyOutput",
@@ -2791,6 +3311,18 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "wake_word_detection"
     ],
+    "callable_features": [
+      {
+        "feature_id": "wake_word_detection",
+        "module": "WakeWord",
+        "label": "Wake Word Detection",
+        "summary": "Detect wake words in submitted or streamed audio.",
+        "method_ids": [
+          "WakeWord.ProcessAudio",
+          "WakeWord.Detect"
+        ]
+      }
+    ],
     "input_model": "WakeWordDetectRequest",
     "output_model": "WakeWordDetectResponse",
     "streaming": {
@@ -2821,6 +3353,18 @@ export const backendContractMethodDescriptors = [
     ],
     "callable_feature_ids": [
       "audio_transcription"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "audio_transcription",
+        "module": "Transcription",
+        "label": "Audio Transcription",
+        "summary": "Transcribe submitted or streamed audio.",
+        "method_ids": [
+          "Transcription.ProcessAudio",
+          "Transcription.Transcribe"
+        ]
+      }
     ],
     "input_model": "STTAudioChunk",
     "output_model": "EmptyOutput",
@@ -2853,6 +3397,18 @@ export const backendContractMethodDescriptors = [
     "callable_feature_ids": [
       "audio_transcription"
     ],
+    "callable_features": [
+      {
+        "feature_id": "audio_transcription",
+        "module": "Transcription",
+        "label": "Audio Transcription",
+        "summary": "Transcribe submitted or streamed audio.",
+        "method_ids": [
+          "Transcription.ProcessAudio",
+          "Transcription.Transcribe"
+        ]
+      }
+    ],
     "input_model": "TranscribeAudioRequest",
     "output_model": "TranscribeAudioResponse",
     "streaming": {
@@ -2871,41 +3427,41 @@ export const backendContractMethodDescriptors = [
 ] as const
 
 export const backendContractMethodDescriptorById = {
-  "Tooling.GetTools": {"method_id": "Tooling.GetTools", "module": "Tooling", "name": "GetTools", "topic": "Tooling.GetTools", "bus_topic": "Tooling.GetTools", "route_path": "/api/Tooling/GetTools", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Tooling.GetTools"], "callable_feature_ids": ["catalog_discovery"], "input_model": "ToolingGetToolsRequest", "output_model": "ToolingGetToolsResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Tooling.GetTools.input.ToolingGetToolsRequest", "output_schema_id": "Tooling.GetTools.output.ToolingGetToolsResponse", "input_schema_hash": "b40b50bac773b8e49ad345b17fffb816097a6d2e15fd88bbae6fa1bb0e910def", "output_schema_hash": "07afe3e44ed858f19b9cfbf8080a4a2f207b087bc4f2b6be7e431a08dd66c76c"},
-  "Tooling.GetExportCatalog": {"method_id": "Tooling.GetExportCatalog", "module": "Tooling", "name": "GetExportCatalog", "topic": "Tooling.GetExportCatalog", "bus_topic": "Tooling.GetExportCatalog", "route_path": "/api/Tooling/GetExportCatalog", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Tooling.GetTools"], "callable_feature_ids": ["catalog_discovery"], "input_model": "ToolingGetExportCatalogRequest", "output_model": "ToolingGetExportCatalogResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Tooling.GetExportCatalog.input.ToolingGetExportCatalogRequest", "output_schema_id": "Tooling.GetExportCatalog.output.ToolingGetExportCatalogResponse", "input_schema_hash": "cdeed2488d3f60ba2f6e26409c88256af3b7d5527f3a2a8e104bcf7e722726ba", "output_schema_hash": "db8352b1f39720c12988729b5da6564175e90fc9dc13a72be38f40b0d94399f8"},
-  "Tooling.PrepareExecution": {"method_id": "Tooling.PrepareExecution", "module": "Tooling", "name": "PrepareExecution", "topic": "Tooling.PrepareExecution", "bus_topic": "Tooling.PrepareExecution", "route_path": "/api/Tooling/PrepareExecution", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Tooling.ExecuteTool"], "callable_feature_ids": ["execution"], "input_model": "ToolingPrepareExecutionRequest", "output_model": "ToolingPrepareExecutionResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Tooling.PrepareExecution.input.ToolingPrepareExecutionRequest", "output_schema_id": "Tooling.PrepareExecution.output.ToolingPrepareExecutionResponse", "input_schema_hash": "f9fc82d8593ec382d85754ffd7bd43eb27c3088ab325676185e428493f6b4083", "output_schema_hash": "9985c7c5b15f4e0aa59980459a983c7f3c70fbf8e4bbcd1a065aedbdacd9928e"},
-  "Tooling.ExecuteTool": {"method_id": "Tooling.ExecuteTool", "module": "Tooling", "name": "ExecuteTool", "topic": "Tooling.ExecuteTool", "bus_topic": "Tooling.ExecuteTool", "route_path": "/api/Tooling/ExecuteTool", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Tooling.ExecuteTool"], "callable_feature_ids": ["execution"], "input_model": "ToolingExecuteToolRequest", "output_model": "ToolingExecuteToolResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Tooling.ExecuteTool.input.ToolingExecuteToolRequest", "output_schema_id": "Tooling.ExecuteTool.output.ToolingExecuteToolResponse", "input_schema_hash": "9547a17d13c96218f08f90c83258a985fc6d5aad9aef7aff3a643f784b001132", "output_schema_hash": "e248ae6d8dfc0f2e73cd4362d9c4e4f6351fba4373e94f843cf4d7465b5bb9a7"},
-  "Gateway.ExplainRoute": {"method_id": "Gateway.ExplainRoute", "module": "Gateway", "name": "ExplainRoute", "topic": "Gateway.ExplainRoute", "bus_topic": "Gateway.ExplainRoute", "route_path": "/api/Gateway/ExplainRoute", "route_kind": "dynamic", "exposure": "external", "method_type": "use", "required_perms": ["Gateway.use"], "callable_feature_ids": [], "input_model": "RouteExplainRequest", "output_model": "RouteExplainResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Gateway.ExplainRoute.input.RouteExplainRequest", "output_schema_id": "Gateway.ExplainRoute.output.RouteExplainResponse", "input_schema_hash": "d05010e28be60b0dd3ae969cef25872b43158512976806b473fe430dbe756561", "output_schema_hash": "b874d83f14fde33979ffa4db819341c4d4a91f81a4ea8e6fcd465cf2555f4a8e"},
-  "Orchestrator.ExternalUserInput": {"method_id": "Orchestrator.ExternalUserInput", "module": "Orchestrator", "name": "ExternalUserInput", "topic": "Orchestrator.ExternalUserInput", "bus_topic": "Orchestrator.ExternalUserInput", "route_path": "/api/Orchestrator/ExternalUserInput", "route_kind": "dynamic", "exposure": "external", "method_type": "use", "required_perms": ["Orchestrator.use"], "callable_feature_ids": ["assistant_conversation"], "input_model": "OrchestratorProcessRequest", "output_model": "OrchestratorResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Orchestrator.ExternalUserInput.input.OrchestratorProcessRequest", "output_schema_id": "Orchestrator.ExternalUserInput.output.OrchestratorResponse", "input_schema_hash": "c78a7ae0cdc8e9315e87ca96127e2fd2ace7d96c87cfe6a1ab4fda870e9aeeb7", "output_schema_hash": "bedd470ccb5b4f0f74d6ef38e3b8857c48c55f015dc3cc5a1496b9d35d8c76b3"},
-  "Orchestrator.Interrupt": {"method_id": "Orchestrator.Interrupt", "module": "Orchestrator", "name": "Interrupt", "topic": "Orchestrator.Interrupt", "bus_topic": "Orchestrator.Interrupt", "route_path": "/api/Orchestrator/Interrupt", "route_kind": "dynamic", "exposure": "external", "method_type": "use", "required_perms": ["Orchestrator.use"], "callable_feature_ids": ["assistant_control"], "input_model": "OrchestratorInterruptRequest", "output_model": "OrchestratorInterruptResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Orchestrator.Interrupt.input.OrchestratorInterruptRequest", "output_schema_id": "Orchestrator.Interrupt.output.OrchestratorInterruptResponse", "input_schema_hash": "1c273edd72d1fe38a292f2f1abcbf4a68302c3a056358a0853e641ae14a2e095", "output_schema_hash": "2abfb95b02edaa0a3da7d0eee783aa3899db0d079e281488c87fe41716f0beda"},
-  "TTS.GetCapabilities": {"method_id": "TTS.GetCapabilities", "module": "TTS", "name": "GetCapabilities", "topic": "TTS.GetCapabilities", "bus_topic": "TTS.GetCapabilities", "route_path": "/api/TTS/GetCapabilities", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.use"], "callable_feature_ids": ["speech_voice_discovery"], "input_model": "TTSGetCapabilitiesRequest", "output_model": "TTSGetCapabilitiesResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.GetCapabilities.input.TTSGetCapabilitiesRequest", "output_schema_id": "TTS.GetCapabilities.output.TTSGetCapabilitiesResponse", "input_schema_hash": "0adcf095a1796861de001117544967a9201061ce3ec92c2e9a7a2a5e7b29fa95", "output_schema_hash": "038cb33a1ca8eafea60a326169eb770b91032226281ade8613427e706ed8fb29"},
-  "TTS.ListVoices": {"method_id": "TTS.ListVoices", "module": "TTS", "name": "ListVoices", "topic": "TTS.ListVoices", "bus_topic": "TTS.ListVoices", "route_path": "/api/TTS/ListVoices", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.use"], "callable_feature_ids": ["speech_voice_discovery"], "input_model": "TTSListVoicesRequest", "output_model": "TTSListVoicesResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.ListVoices.input.TTSListVoicesRequest", "output_schema_id": "TTS.ListVoices.output.TTSListVoicesResponse", "input_schema_hash": "52a2cd8c57d91f1c49accf6ee916d477970ccef16c06fc381b7926f01300f9aa", "output_schema_hash": "597ea4f7521b0a313ee301a780440a01c6ea3c69ce15835fa9921fa81ebcb437"},
-  "TTS.ListVoiceProfiles": {"method_id": "TTS.ListVoiceProfiles", "module": "TTS", "name": "ListVoiceProfiles", "topic": "TTS.ListVoiceProfiles", "bus_topic": "TTS.ListVoiceProfiles", "route_path": "/api/TTS/ListVoiceProfiles", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "input_model": "TTSListVoiceProfilesRequest", "output_model": "TTSListVoiceProfilesResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.ListVoiceProfiles.input.TTSListVoiceProfilesRequest", "output_schema_id": "TTS.ListVoiceProfiles.output.TTSListVoiceProfilesResponse", "input_schema_hash": "31045e05ae45e59efe8ee19bdd3f8980e40fb864d89e7627971c00c1058e2c91", "output_schema_hash": "04b672e2dfabb6fb3cfcf578556d62017374ddce0649d11edd6809592b2a0c2f"},
-  "TTS.GetVoiceProfile": {"method_id": "TTS.GetVoiceProfile", "module": "TTS", "name": "GetVoiceProfile", "topic": "TTS.GetVoiceProfile", "bus_topic": "TTS.GetVoiceProfile", "route_path": "/api/TTS/GetVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "input_model": "TTSGetVoiceProfileRequest", "output_model": "TTSGetVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.GetVoiceProfile.input.TTSGetVoiceProfileRequest", "output_schema_id": "TTS.GetVoiceProfile.output.TTSGetVoiceProfileResponse", "input_schema_hash": "a26ddd489476ef2df0813321e35e3c27052a95d9470fd6947f3bc605106aebc7", "output_schema_hash": "fe69d7c7c5ad334b37c2b3e770e60850eaa6b7dde884da63be46a0963e9fdcff"},
-  "TTS.UpdateVoiceProfile": {"method_id": "TTS.UpdateVoiceProfile", "module": "TTS", "name": "UpdateVoiceProfile", "topic": "TTS.UpdateVoiceProfile", "bus_topic": "TTS.UpdateVoiceProfile", "route_path": "/api/TTS/UpdateVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "input_model": "TTSUpdateVoiceProfileRequest", "output_model": "TTSUpdateVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.UpdateVoiceProfile.input.TTSUpdateVoiceProfileRequest", "output_schema_id": "TTS.UpdateVoiceProfile.output.TTSUpdateVoiceProfileResponse", "input_schema_hash": "6d6f9506f805c64ab710207e85f8b5173b5733c3f2f24e2797dd6d1d33b9d322", "output_schema_hash": "99c191a2d71a227bae0fb07d810c4095d288d851ee7ecd223c3aa35b878ae123"},
-  "TTS.InstallVoiceProfile": {"method_id": "TTS.InstallVoiceProfile", "module": "TTS", "name": "InstallVoiceProfile", "topic": "TTS.InstallVoiceProfile", "bus_topic": "TTS.InstallVoiceProfile", "route_path": "/api/TTS/InstallVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "input_model": "TTSInstallVoiceProfileRequest", "output_model": "TTSInstallVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.InstallVoiceProfile.input.TTSInstallVoiceProfileRequest", "output_schema_id": "TTS.InstallVoiceProfile.output.TTSInstallVoiceProfileResponse", "input_schema_hash": "42978ca21ac8c27eb54a29d45617e8fe6bddcfa837c3391af6aa4823a0e797a9", "output_schema_hash": "8fd498e8964ed05bb825d436cec455d78b1e012679e068eef51c6064f53d8448"},
-  "TTS.RemoveVoiceProfile": {"method_id": "TTS.RemoveVoiceProfile", "module": "TTS", "name": "RemoveVoiceProfile", "topic": "TTS.RemoveVoiceProfile", "bus_topic": "TTS.RemoveVoiceProfile", "route_path": "/api/TTS/RemoveVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "input_model": "TTSRemoveVoiceProfileRequest", "output_model": "TTSRemoveVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.RemoveVoiceProfile.input.TTSRemoveVoiceProfileRequest", "output_schema_id": "TTS.RemoveVoiceProfile.output.TTSRemoveVoiceProfileResponse", "input_schema_hash": "3813fa711e9fa360947190d7d2928121cd26926492db05401ad31a5be45f5a36", "output_schema_hash": "952c43ac09fbbacf6f7e684a50a5ed5398ac530544c3d0e10fcd144f339cd277"},
-  "TTS.SetDefaultVoice": {"method_id": "TTS.SetDefaultVoice", "module": "TTS", "name": "SetDefaultVoice", "topic": "TTS.SetDefaultVoice", "bus_topic": "TTS.SetDefaultVoice", "route_path": "/api/TTS/SetDefaultVoice", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "input_model": "TTSSetDefaultVoiceRequest", "output_model": "TTSSetDefaultVoiceResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.SetDefaultVoice.input.TTSSetDefaultVoiceRequest", "output_schema_id": "TTS.SetDefaultVoice.output.TTSSetDefaultVoiceResponse", "input_schema_hash": "84a64ea71948775d1c1aa4c23f0480a113799c305f5b9dfec6cd6509da292ba0", "output_schema_hash": "bf2c58f7681e18671af70e4df7377a7608b6e07808c4440ea7f483190b550c5b"},
-  "TTS.VoiceImportStart": {"method_id": "TTS.VoiceImportStart", "module": "TTS", "name": "VoiceImportStart", "topic": "TTS.VoiceImportStart", "bus_topic": "TTS.VoiceImportStart", "route_path": "/api/TTS/VoiceImportStart", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "input_model": "TTSVoiceImportStartRequest", "output_model": "TTSVoiceImportStartResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.VoiceImportStart.input.TTSVoiceImportStartRequest", "output_schema_id": "TTS.VoiceImportStart.output.TTSVoiceImportStartResponse", "input_schema_hash": "b9c72eea8b848e4ff2dc30d93a77f06e6f44994bcbb4ce6a1ab92f1914caeb40", "output_schema_hash": "7c39813952f7454a85462d14b1e923588e3cb19bb22194f54778776e927a8030"},
-  "TTS.VoiceImportChunk": {"method_id": "TTS.VoiceImportChunk", "module": "TTS", "name": "VoiceImportChunk", "topic": "TTS.VoiceImportChunk", "bus_topic": "TTS.VoiceImportChunk", "route_path": "/api/TTS/VoiceImportChunk", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "input_model": "TTSVoiceImportChunkRequest", "output_model": "TTSVoiceImportChunkResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.VoiceImportChunk.input.TTSVoiceImportChunkRequest", "output_schema_id": "TTS.VoiceImportChunk.output.TTSVoiceImportChunkResponse", "input_schema_hash": "813355b26dfa4064225fc3d9c7e65e7bb79accd6d36a7e2ad4c4f5a8e95d54a2", "output_schema_hash": "ca95163fbd47ba84e4471f0ea9dffdcc5e151b7666f942d8d4a6a7006dce0f40"},
-  "TTS.VoiceImportEnd": {"method_id": "TTS.VoiceImportEnd", "module": "TTS", "name": "VoiceImportEnd", "topic": "TTS.VoiceImportEnd", "bus_topic": "TTS.VoiceImportEnd", "route_path": "/api/TTS/VoiceImportEnd", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "input_model": "TTSVoiceImportEndRequest", "output_model": "TTSVoiceImportEndResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.VoiceImportEnd.input.TTSVoiceImportEndRequest", "output_schema_id": "TTS.VoiceImportEnd.output.TTSVoiceImportEndResponse", "input_schema_hash": "bb326382f76c85b75383af4471633293462ae386ecbca8a820b8adb737dcf353", "output_schema_hash": "9e5f37f673a52a5b05716f0d043df4ceb6224911d2710df9d99c8e43de025cad"},
-  "TTS.VoiceImportAbort": {"method_id": "TTS.VoiceImportAbort", "module": "TTS", "name": "VoiceImportAbort", "topic": "TTS.VoiceImportAbort", "bus_topic": "TTS.VoiceImportAbort", "route_path": "/api/TTS/VoiceImportAbort", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "input_model": "TTSVoiceImportAbortRequest", "output_model": "TTSVoiceImportAbortResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.VoiceImportAbort.input.TTSVoiceImportAbortRequest", "output_schema_id": "TTS.VoiceImportAbort.output.TTSVoiceImportAbortResponse", "input_schema_hash": "3928201a9870fb651c3185bdf9d47b07e0f984a49d0eaddad56498928f26fe42", "output_schema_hash": "94423e37f4ea1801b4e2277f843c9a1b141a70cc8e9e334c142f46090d8d232c"},
-  "TTS.CreateVoiceProfile": {"method_id": "TTS.CreateVoiceProfile", "module": "TTS", "name": "CreateVoiceProfile", "topic": "TTS.CreateVoiceProfile", "bus_topic": "TTS.CreateVoiceProfile", "route_path": "/api/TTS/CreateVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "input_model": "TTSCreateVoiceProfileRequest", "output_model": "TTSCreateVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.CreateVoiceProfile.input.TTSCreateVoiceProfileRequest", "output_schema_id": "TTS.CreateVoiceProfile.output.TTSCreateVoiceProfileResponse", "input_schema_hash": "11fc8f0c64f33e9d874885cf8a0b21917fb0f22f37709191b411158d92ee5203", "output_schema_hash": "2706c7668161681b2dae334e87dbc1ff041e20e9a2af1eeed0e7deb3ceb78584"},
-  "TTS.DeleteVoiceProfile": {"method_id": "TTS.DeleteVoiceProfile", "module": "TTS", "name": "DeleteVoiceProfile", "topic": "TTS.DeleteVoiceProfile", "bus_topic": "TTS.DeleteVoiceProfile", "route_path": "/api/TTS/DeleteVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "input_model": "TTSDeleteVoiceProfileRequest", "output_model": "TTSDeleteVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.DeleteVoiceProfile.input.TTSDeleteVoiceProfileRequest", "output_schema_id": "TTS.DeleteVoiceProfile.output.TTSDeleteVoiceProfileResponse", "input_schema_hash": "d4e21efd4b4a31a2fbc8aab099203e766c808dec5c6c5f090a32ec931338688d", "output_schema_hash": "5761b20bf24e294410ea27adc1bbc3254d039ffbc4b4ad8806d0183d83b4f44b"},
-  "TTS.Request": {"method_id": "TTS.Request", "module": "TTS", "name": "Request", "topic": "TTS.Request", "bus_topic": "TTS.Request", "route_path": "/api/TTS/Request", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.Request"], "callable_feature_ids": ["speech_playback"], "input_model": "TTSRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.Request.input.TTSRequest", "output_schema_id": "TTS.Request.output.EmptyOutput", "input_schema_hash": "efaf5f938c5119a8569cbd8dfe941543adfb31bff29efcc470430420e1d2c467", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
-  "TTS.StreamStart": {"method_id": "TTS.StreamStart", "module": "TTS", "name": "StreamStart", "topic": "TTS.StreamStart", "bus_topic": "TTS.StreamStart", "route_path": "/api/TTS/StreamStart", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamStart"], "callable_feature_ids": ["speech_streaming"], "input_model": "TTSStreamStartRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": "tts_text_stream", "request_stream": false, "response_stream": false, "event_topic": "TTS.AudioChunk"}, "speech_constraints": null, "input_schema_id": "TTS.StreamStart.input.TTSStreamStartRequest", "output_schema_id": "TTS.StreamStart.output.EmptyOutput", "input_schema_hash": "b4d6db1532cd3519475101c2b6bf28cb6a6d144eb4b42293680f51a1768f31e6", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
-  "TTS.StreamChunk": {"method_id": "TTS.StreamChunk", "module": "TTS", "name": "StreamChunk", "topic": "TTS.StreamChunk", "bus_topic": "TTS.StreamChunk", "route_path": "/api/TTS/StreamChunk", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamChunk"], "callable_feature_ids": ["speech_streaming"], "input_model": "TTSStreamChunkRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": "tts_text_stream", "request_stream": false, "response_stream": false, "event_topic": "TTS.AudioChunk"}, "speech_constraints": null, "input_schema_id": "TTS.StreamChunk.input.TTSStreamChunkRequest", "output_schema_id": "TTS.StreamChunk.output.EmptyOutput", "input_schema_hash": "0c0d3bc9834efb039133fa4cc21f200ce4eee0b13727e8a39cf63697c899399d", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
-  "TTS.StreamEnd": {"method_id": "TTS.StreamEnd", "module": "TTS", "name": "StreamEnd", "topic": "TTS.StreamEnd", "bus_topic": "TTS.StreamEnd", "route_path": "/api/TTS/StreamEnd", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamEnd"], "callable_feature_ids": ["speech_streaming"], "input_model": "TTSStreamEndRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": "tts_text_stream", "request_stream": false, "response_stream": false, "event_topic": "TTS.AudioChunk"}, "speech_constraints": null, "input_schema_id": "TTS.StreamEnd.input.TTSStreamEndRequest", "output_schema_id": "TTS.StreamEnd.output.EmptyOutput", "input_schema_hash": "059faba0be794cfba1e8e30ed272273132ba9440fcf014566c097499f8d7fb61", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
-  "TTS.Synthesize": {"method_id": "TTS.Synthesize", "module": "TTS", "name": "Synthesize", "topic": "TTS.Synthesize", "bus_topic": "TTS.Synthesize", "route_path": "/api/TTS/Synthesize", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.Synthesize"], "callable_feature_ids": ["speech_synthesis"], "input_model": "TTSSynthesizeRequest", "output_model": "TTSSynthesizeResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.Synthesize.input.TTSSynthesizeRequest", "output_schema_id": "TTS.Synthesize.output.TTSSynthesizeResponse", "input_schema_hash": "d5408ff48dccb96b3ee7c1c578ce9c27b10f7a33e37fbb97430e2d8222ab8bb6", "output_schema_hash": "65e6311d9a20d865d39d56b774eedd48af949d792c84f5930a348b6ee223f793"},
-  "STTCoordinator.Listen": {"method_id": "STTCoordinator.Listen", "module": "STTCoordinator", "name": "Listen", "topic": "STTCoordinator.Listen", "bus_topic": "STTCoordinator.Listen", "route_path": "/api/STTCoordinator/Listen", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["STTCoordinator.use"], "callable_feature_ids": ["listening_session_control"], "input_model": "STTListenRequest", "output_model": "STTListenResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.Listen.input.STTListenRequest", "output_schema_id": "STTCoordinator.Listen.output.STTListenResponse", "input_schema_hash": "8130cc5cdde9469f9cb249bb59a515c018fe8c33037309f02b74a83f1194a46f", "output_schema_hash": "3b629fc8dc429740afab14c2f35a2b31317e94a8f38631ab115f14944f2aaf30"},
-  "STTCoordinator.StopListening": {"method_id": "STTCoordinator.StopListening", "module": "STTCoordinator", "name": "StopListening", "topic": "STTCoordinator.StopListening", "bus_topic": "STTCoordinator.StopListening", "route_path": "/api/STTCoordinator/StopListening", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["STTCoordinator.use"], "callable_feature_ids": ["listening_session_control"], "input_model": "STTStopListeningRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.StopListening.input.STTStopListeningRequest", "output_schema_id": "STTCoordinator.StopListening.output.EmptyOutput", "input_schema_hash": "297d48be1b7ec76f082f8d3999cb5dfa0f53b28107333fc5b887a470ce30cafd", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
-  "STTCoordinator.CapturePrepare": {"method_id": "STTCoordinator.CapturePrepare", "module": "STTCoordinator", "name": "CapturePrepare", "topic": "STTCoordinator.CapturePrepare", "bus_topic": "STTCoordinator.CapturePrepare", "route_path": "/api/STTCoordinator/CapturePrepare", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["STTCoordinator.manage"], "callable_feature_ids": ["listening_session_control"], "input_model": "STTCapturePrepareRequest", "output_model": "STTCapturePrepareResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.CapturePrepare.input.STTCapturePrepareRequest", "output_schema_id": "STTCoordinator.CapturePrepare.output.STTCapturePrepareResponse", "input_schema_hash": "69ebc92cfe9fed08689a9ba2c622cddf99158b2c9b9fabfb0030155863269886", "output_schema_hash": "36b41e14c1b1007c202c90e2c3bb9934cbc296a15168278b399b54a96b2d8cbb"},
-  "STTCoordinator.CaptureRelease": {"method_id": "STTCoordinator.CaptureRelease", "module": "STTCoordinator", "name": "CaptureRelease", "topic": "STTCoordinator.CaptureRelease", "bus_topic": "STTCoordinator.CaptureRelease", "route_path": "/api/STTCoordinator/CaptureRelease", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["STTCoordinator.manage"], "callable_feature_ids": ["listening_session_control"], "input_model": "STTCaptureReleaseRequest", "output_model": "STTCaptureReleaseResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.CaptureRelease.input.STTCaptureReleaseRequest", "output_schema_id": "STTCoordinator.CaptureRelease.output.STTCaptureReleaseResponse", "input_schema_hash": "f36c2517b38b47b7ed5a3b1366227eaa8b2f7972b5c6fd55b593bf7997cd123e", "output_schema_hash": "2134b34784696f59c4d7f179b637c533d7b4e0f33a9164a97c5c33f0713f986a"},
-  "STTCoordinator.CaptureStatus": {"method_id": "STTCoordinator.CaptureStatus", "module": "STTCoordinator", "name": "CaptureStatus", "topic": "STTCoordinator.CaptureStatus", "bus_topic": "STTCoordinator.CaptureStatus", "route_path": "/api/STTCoordinator/CaptureStatus", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["STTCoordinator.manage"], "callable_feature_ids": ["listening_session_control"], "input_model": "STTCaptureStatusRequest", "output_model": "STTCaptureStatusResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.CaptureStatus.input.STTCaptureStatusRequest", "output_schema_id": "STTCoordinator.CaptureStatus.output.STTCaptureStatusResponse", "input_schema_hash": "0e594cd836f4c80e0da3e223280b2ccfed962813acf3296c4b4a0d02f2e29f7a", "output_schema_hash": "8703ae4586bc390c5bd5aa8a53f3015333d97d4c5049fce4e49a0ce0f33a2339"},
-  "WakeWord.ProcessAudio": {"method_id": "WakeWord.ProcessAudio", "module": "WakeWord", "name": "ProcessAudio", "topic": "WakeWord.ProcessAudio", "bus_topic": "WakeWord.ProcessAudio", "route_path": "/api/WakeWord/ProcessAudio", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.ProcessAudio"], "callable_feature_ids": ["wake_word_detection"], "input_model": "STTAudioChunk", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.ProcessAudio.input.STTAudioChunk", "output_schema_id": "WakeWord.ProcessAudio.output.EmptyOutput", "input_schema_hash": "3670479489138802e7d52d4b7d5623c52b363cd4166db2ee7916f6449a10233e", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
-  "WakeWord.Detect": {"method_id": "WakeWord.Detect", "module": "WakeWord", "name": "Detect", "topic": "WakeWord.Detect", "bus_topic": "WakeWord.Detect", "route_path": "/api/WakeWord/Detect", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.Detect"], "callable_feature_ids": ["wake_word_detection"], "input_model": "WakeWordDetectRequest", "output_model": "WakeWordDetectResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.Detect.input.WakeWordDetectRequest", "output_schema_id": "WakeWord.Detect.output.WakeWordDetectResponse", "input_schema_hash": "6d84e293fe9bf90a30317d78b1e8043cb52d45e13e8fce5ceb84e63185984735", "output_schema_hash": "c9675c0beade1d9158903798837dc11ae51429775bf4368ceb4783bdfdb793cf"},
-  "Transcription.ProcessAudio": {"method_id": "Transcription.ProcessAudio", "module": "Transcription", "name": "ProcessAudio", "topic": "Transcription.ProcessAudio", "bus_topic": "Transcription.ProcessAudio", "route_path": "/api/Transcription/ProcessAudio", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.ProcessAudio"], "callable_feature_ids": ["audio_transcription"], "input_model": "STTAudioChunk", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.ProcessAudio.input.STTAudioChunk", "output_schema_id": "Transcription.ProcessAudio.output.EmptyOutput", "input_schema_hash": "3670479489138802e7d52d4b7d5623c52b363cd4166db2ee7916f6449a10233e", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
-  "Transcription.Transcribe": {"method_id": "Transcription.Transcribe", "module": "Transcription", "name": "Transcribe", "topic": "Transcription.Transcribe", "bus_topic": "Transcription.Transcribe", "route_path": "/api/Transcription/Transcribe", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.Transcribe"], "callable_feature_ids": ["audio_transcription"], "input_model": "TranscribeAudioRequest", "output_model": "TranscribeAudioResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.Transcribe.input.TranscribeAudioRequest", "output_schema_id": "Transcription.Transcribe.output.TranscribeAudioResponse", "input_schema_hash": "00a0d251f18c3afec3b2593dfe57999a7fdaae76d3b937b3bdec90bbd3a7f56f", "output_schema_hash": "b7ac3e6f267b25a27363d98499342a6364bdb49530363ed96918d544a92fce5f"},
+  "Tooling.GetTools": {"method_id": "Tooling.GetTools", "module": "Tooling", "name": "GetTools", "topic": "Tooling.GetTools", "bus_topic": "Tooling.GetTools", "route_path": "/api/Tooling/GetTools", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Tooling.GetTools"], "callable_feature_ids": ["catalog_discovery"], "callable_features": [{"feature_id": "catalog_discovery", "module": "Tooling", "label": "Catalog Discovery", "summary": "Read local and aggregate Tooling catalogs and status.", "method_ids": ["Tooling.GetTools", "Tooling.GetToolCatalog", "Tooling.GetExportCatalog", "Tooling.GetToolByName", "Tooling.GetStats", "Tooling.GetMCPStatus"]}], "input_model": "ToolingGetToolsRequest", "output_model": "ToolingGetToolsResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Tooling.GetTools.input.ToolingGetToolsRequest", "output_schema_id": "Tooling.GetTools.output.ToolingGetToolsResponse", "input_schema_hash": "b40b50bac773b8e49ad345b17fffb816097a6d2e15fd88bbae6fa1bb0e910def", "output_schema_hash": "07afe3e44ed858f19b9cfbf8080a4a2f207b087bc4f2b6be7e431a08dd66c76c"},
+  "Tooling.GetExportCatalog": {"method_id": "Tooling.GetExportCatalog", "module": "Tooling", "name": "GetExportCatalog", "topic": "Tooling.GetExportCatalog", "bus_topic": "Tooling.GetExportCatalog", "route_path": "/api/Tooling/GetExportCatalog", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Tooling.GetTools"], "callable_feature_ids": ["catalog_discovery"], "callable_features": [{"feature_id": "catalog_discovery", "module": "Tooling", "label": "Catalog Discovery", "summary": "Read local and aggregate Tooling catalogs and status.", "method_ids": ["Tooling.GetTools", "Tooling.GetToolCatalog", "Tooling.GetExportCatalog", "Tooling.GetToolByName", "Tooling.GetStats", "Tooling.GetMCPStatus"]}], "input_model": "ToolingGetExportCatalogRequest", "output_model": "ToolingGetExportCatalogResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Tooling.GetExportCatalog.input.ToolingGetExportCatalogRequest", "output_schema_id": "Tooling.GetExportCatalog.output.ToolingGetExportCatalogResponse", "input_schema_hash": "cdeed2488d3f60ba2f6e26409c88256af3b7d5527f3a2a8e104bcf7e722726ba", "output_schema_hash": "db8352b1f39720c12988729b5da6564175e90fc9dc13a72be38f40b0d94399f8"},
+  "Tooling.PrepareExecution": {"method_id": "Tooling.PrepareExecution", "module": "Tooling", "name": "PrepareExecution", "topic": "Tooling.PrepareExecution", "bus_topic": "Tooling.PrepareExecution", "route_path": "/api/Tooling/PrepareExecution", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Tooling.ExecuteTool"], "callable_feature_ids": ["execution"], "callable_features": [{"feature_id": "execution", "module": "Tooling", "label": "Execution", "summary": "Prepare, approve, evaluate, and execute Tooling calls.", "method_ids": ["Tooling.PrepareExecution", "Tooling.RequestApproval", "Tooling.EvaluateApprovalGrant", "Tooling.ExecuteTool"]}], "input_model": "ToolingPrepareExecutionRequest", "output_model": "ToolingPrepareExecutionResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Tooling.PrepareExecution.input.ToolingPrepareExecutionRequest", "output_schema_id": "Tooling.PrepareExecution.output.ToolingPrepareExecutionResponse", "input_schema_hash": "f9fc82d8593ec382d85754ffd7bd43eb27c3088ab325676185e428493f6b4083", "output_schema_hash": "9985c7c5b15f4e0aa59980459a983c7f3c70fbf8e4bbcd1a065aedbdacd9928e"},
+  "Tooling.ExecuteTool": {"method_id": "Tooling.ExecuteTool", "module": "Tooling", "name": "ExecuteTool", "topic": "Tooling.ExecuteTool", "bus_topic": "Tooling.ExecuteTool", "route_path": "/api/Tooling/ExecuteTool", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Tooling.ExecuteTool"], "callable_feature_ids": ["execution"], "callable_features": [{"feature_id": "execution", "module": "Tooling", "label": "Execution", "summary": "Prepare, approve, evaluate, and execute Tooling calls.", "method_ids": ["Tooling.PrepareExecution", "Tooling.RequestApproval", "Tooling.EvaluateApprovalGrant", "Tooling.ExecuteTool"]}], "input_model": "ToolingExecuteToolRequest", "output_model": "ToolingExecuteToolResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Tooling.ExecuteTool.input.ToolingExecuteToolRequest", "output_schema_id": "Tooling.ExecuteTool.output.ToolingExecuteToolResponse", "input_schema_hash": "9547a17d13c96218f08f90c83258a985fc6d5aad9aef7aff3a643f784b001132", "output_schema_hash": "e248ae6d8dfc0f2e73cd4362d9c4e4f6351fba4373e94f843cf4d7465b5bb9a7"},
+  "Gateway.ExplainRoute": {"method_id": "Gateway.ExplainRoute", "module": "Gateway", "name": "ExplainRoute", "topic": "Gateway.ExplainRoute", "bus_topic": "Gateway.ExplainRoute", "route_path": "/api/Gateway/ExplainRoute", "route_kind": "dynamic", "exposure": "external", "method_type": "use", "required_perms": ["Gateway.use"], "callable_feature_ids": [], "callable_features": [], "input_model": "RouteExplainRequest", "output_model": "RouteExplainResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Gateway.ExplainRoute.input.RouteExplainRequest", "output_schema_id": "Gateway.ExplainRoute.output.RouteExplainResponse", "input_schema_hash": "d05010e28be60b0dd3ae969cef25872b43158512976806b473fe430dbe756561", "output_schema_hash": "b874d83f14fde33979ffa4db819341c4d4a91f81a4ea8e6fcd465cf2555f4a8e"},
+  "Orchestrator.ExternalUserInput": {"method_id": "Orchestrator.ExternalUserInput", "module": "Orchestrator", "name": "ExternalUserInput", "topic": "Orchestrator.ExternalUserInput", "bus_topic": "Orchestrator.ExternalUserInput", "route_path": "/api/Orchestrator/ExternalUserInput", "route_kind": "dynamic", "exposure": "external", "method_type": "use", "required_perms": ["Orchestrator.use"], "callable_feature_ids": ["assistant_conversation"], "callable_features": [{"feature_id": "assistant_conversation", "module": "Orchestrator", "label": "Assistant Conversation", "summary": "Submit assistant user input and attachment context.", "method_ids": ["Orchestrator.ExternalUserInput", "Orchestrator.IngestContext"]}], "input_model": "OrchestratorProcessRequest", "output_model": "OrchestratorResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Orchestrator.ExternalUserInput.input.OrchestratorProcessRequest", "output_schema_id": "Orchestrator.ExternalUserInput.output.OrchestratorResponse", "input_schema_hash": "c78a7ae0cdc8e9315e87ca96127e2fd2ace7d96c87cfe6a1ab4fda870e9aeeb7", "output_schema_hash": "bedd470ccb5b4f0f74d6ef38e3b8857c48c55f015dc3cc5a1496b9d35d8c76b3"},
+  "Orchestrator.Interrupt": {"method_id": "Orchestrator.Interrupt", "module": "Orchestrator", "name": "Interrupt", "topic": "Orchestrator.Interrupt", "bus_topic": "Orchestrator.Interrupt", "route_path": "/api/Orchestrator/Interrupt", "route_kind": "dynamic", "exposure": "external", "method_type": "use", "required_perms": ["Orchestrator.use"], "callable_feature_ids": ["assistant_control"], "callable_features": [{"feature_id": "assistant_control", "module": "Orchestrator", "label": "Assistant Control", "summary": "Interrupt active assistant work.", "method_ids": ["Orchestrator.Interrupt"]}], "input_model": "OrchestratorInterruptRequest", "output_model": "OrchestratorInterruptResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Orchestrator.Interrupt.input.OrchestratorInterruptRequest", "output_schema_id": "Orchestrator.Interrupt.output.OrchestratorInterruptResponse", "input_schema_hash": "1c273edd72d1fe38a292f2f1abcbf4a68302c3a056358a0853e641ae14a2e095", "output_schema_hash": "2abfb95b02edaa0a3da7d0eee783aa3899db0d079e281488c87fe41716f0beda"},
+  "TTS.GetCapabilities": {"method_id": "TTS.GetCapabilities", "module": "TTS", "name": "GetCapabilities", "topic": "TTS.GetCapabilities", "bus_topic": "TTS.GetCapabilities", "route_path": "/api/TTS/GetCapabilities", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.use"], "callable_feature_ids": ["speech_voice_discovery"], "callable_features": [{"feature_id": "speech_voice_discovery", "module": "TTS", "label": "Voice Discovery", "summary": "Read TTS capabilities and use-safe voice choices.", "method_ids": ["TTS.GetCapabilities", "TTS.ListVoices"]}], "input_model": "TTSGetCapabilitiesRequest", "output_model": "TTSGetCapabilitiesResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.GetCapabilities.input.TTSGetCapabilitiesRequest", "output_schema_id": "TTS.GetCapabilities.output.TTSGetCapabilitiesResponse", "input_schema_hash": "0adcf095a1796861de001117544967a9201061ce3ec92c2e9a7a2a5e7b29fa95", "output_schema_hash": "038cb33a1ca8eafea60a326169eb770b91032226281ade8613427e706ed8fb29"},
+  "TTS.ListVoices": {"method_id": "TTS.ListVoices", "module": "TTS", "name": "ListVoices", "topic": "TTS.ListVoices", "bus_topic": "TTS.ListVoices", "route_path": "/api/TTS/ListVoices", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.use"], "callable_feature_ids": ["speech_voice_discovery"], "callable_features": [{"feature_id": "speech_voice_discovery", "module": "TTS", "label": "Voice Discovery", "summary": "Read TTS capabilities and use-safe voice choices.", "method_ids": ["TTS.GetCapabilities", "TTS.ListVoices"]}], "input_model": "TTSListVoicesRequest", "output_model": "TTSListVoicesResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.ListVoices.input.TTSListVoicesRequest", "output_schema_id": "TTS.ListVoices.output.TTSListVoicesResponse", "input_schema_hash": "52a2cd8c57d91f1c49accf6ee916d477970ccef16c06fc381b7926f01300f9aa", "output_schema_hash": "597ea4f7521b0a313ee301a780440a01c6ea3c69ce15835fa9921fa81ebcb437"},
+  "TTS.ListVoiceProfiles": {"method_id": "TTS.ListVoiceProfiles", "module": "TTS", "name": "ListVoiceProfiles", "topic": "TTS.ListVoiceProfiles", "bus_topic": "TTS.ListVoiceProfiles", "route_path": "/api/TTS/ListVoiceProfiles", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSListVoiceProfilesRequest", "output_model": "TTSListVoiceProfilesResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.ListVoiceProfiles.input.TTSListVoiceProfilesRequest", "output_schema_id": "TTS.ListVoiceProfiles.output.TTSListVoiceProfilesResponse", "input_schema_hash": "31045e05ae45e59efe8ee19bdd3f8980e40fb864d89e7627971c00c1058e2c91", "output_schema_hash": "04b672e2dfabb6fb3cfcf578556d62017374ddce0649d11edd6809592b2a0c2f"},
+  "TTS.GetVoiceProfile": {"method_id": "TTS.GetVoiceProfile", "module": "TTS", "name": "GetVoiceProfile", "topic": "TTS.GetVoiceProfile", "bus_topic": "TTS.GetVoiceProfile", "route_path": "/api/TTS/GetVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSGetVoiceProfileRequest", "output_model": "TTSGetVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.GetVoiceProfile.input.TTSGetVoiceProfileRequest", "output_schema_id": "TTS.GetVoiceProfile.output.TTSGetVoiceProfileResponse", "input_schema_hash": "a26ddd489476ef2df0813321e35e3c27052a95d9470fd6947f3bc605106aebc7", "output_schema_hash": "fe69d7c7c5ad334b37c2b3e770e60850eaa6b7dde884da63be46a0963e9fdcff"},
+  "TTS.UpdateVoiceProfile": {"method_id": "TTS.UpdateVoiceProfile", "module": "TTS", "name": "UpdateVoiceProfile", "topic": "TTS.UpdateVoiceProfile", "bus_topic": "TTS.UpdateVoiceProfile", "route_path": "/api/TTS/UpdateVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSUpdateVoiceProfileRequest", "output_model": "TTSUpdateVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.UpdateVoiceProfile.input.TTSUpdateVoiceProfileRequest", "output_schema_id": "TTS.UpdateVoiceProfile.output.TTSUpdateVoiceProfileResponse", "input_schema_hash": "6d6f9506f805c64ab710207e85f8b5173b5733c3f2f24e2797dd6d1d33b9d322", "output_schema_hash": "99c191a2d71a227bae0fb07d810c4095d288d851ee7ecd223c3aa35b878ae123"},
+  "TTS.InstallVoiceProfile": {"method_id": "TTS.InstallVoiceProfile", "module": "TTS", "name": "InstallVoiceProfile", "topic": "TTS.InstallVoiceProfile", "bus_topic": "TTS.InstallVoiceProfile", "route_path": "/api/TTS/InstallVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSInstallVoiceProfileRequest", "output_model": "TTSInstallVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.InstallVoiceProfile.input.TTSInstallVoiceProfileRequest", "output_schema_id": "TTS.InstallVoiceProfile.output.TTSInstallVoiceProfileResponse", "input_schema_hash": "42978ca21ac8c27eb54a29d45617e8fe6bddcfa837c3391af6aa4823a0e797a9", "output_schema_hash": "8fd498e8964ed05bb825d436cec455d78b1e012679e068eef51c6064f53d8448"},
+  "TTS.RemoveVoiceProfile": {"method_id": "TTS.RemoveVoiceProfile", "module": "TTS", "name": "RemoveVoiceProfile", "topic": "TTS.RemoveVoiceProfile", "bus_topic": "TTS.RemoveVoiceProfile", "route_path": "/api/TTS/RemoveVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSRemoveVoiceProfileRequest", "output_model": "TTSRemoveVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.RemoveVoiceProfile.input.TTSRemoveVoiceProfileRequest", "output_schema_id": "TTS.RemoveVoiceProfile.output.TTSRemoveVoiceProfileResponse", "input_schema_hash": "3813fa711e9fa360947190d7d2928121cd26926492db05401ad31a5be45f5a36", "output_schema_hash": "952c43ac09fbbacf6f7e684a50a5ed5398ac530544c3d0e10fcd144f339cd277"},
+  "TTS.SetDefaultVoice": {"method_id": "TTS.SetDefaultVoice", "module": "TTS", "name": "SetDefaultVoice", "topic": "TTS.SetDefaultVoice", "bus_topic": "TTS.SetDefaultVoice", "route_path": "/api/TTS/SetDefaultVoice", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSSetDefaultVoiceRequest", "output_model": "TTSSetDefaultVoiceResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.SetDefaultVoice.input.TTSSetDefaultVoiceRequest", "output_schema_id": "TTS.SetDefaultVoice.output.TTSSetDefaultVoiceResponse", "input_schema_hash": "84a64ea71948775d1c1aa4c23f0480a113799c305f5b9dfec6cd6509da292ba0", "output_schema_hash": "bf2c58f7681e18671af70e4df7377a7608b6e07808c4440ea7f483190b550c5b"},
+  "TTS.VoiceImportStart": {"method_id": "TTS.VoiceImportStart", "module": "TTS", "name": "VoiceImportStart", "topic": "TTS.VoiceImportStart", "bus_topic": "TTS.VoiceImportStart", "route_path": "/api/TTS/VoiceImportStart", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSVoiceImportStartRequest", "output_model": "TTSVoiceImportStartResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.VoiceImportStart.input.TTSVoiceImportStartRequest", "output_schema_id": "TTS.VoiceImportStart.output.TTSVoiceImportStartResponse", "input_schema_hash": "b9c72eea8b848e4ff2dc30d93a77f06e6f44994bcbb4ce6a1ab92f1914caeb40", "output_schema_hash": "7c39813952f7454a85462d14b1e923588e3cb19bb22194f54778776e927a8030"},
+  "TTS.VoiceImportChunk": {"method_id": "TTS.VoiceImportChunk", "module": "TTS", "name": "VoiceImportChunk", "topic": "TTS.VoiceImportChunk", "bus_topic": "TTS.VoiceImportChunk", "route_path": "/api/TTS/VoiceImportChunk", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSVoiceImportChunkRequest", "output_model": "TTSVoiceImportChunkResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.VoiceImportChunk.input.TTSVoiceImportChunkRequest", "output_schema_id": "TTS.VoiceImportChunk.output.TTSVoiceImportChunkResponse", "input_schema_hash": "813355b26dfa4064225fc3d9c7e65e7bb79accd6d36a7e2ad4c4f5a8e95d54a2", "output_schema_hash": "ca95163fbd47ba84e4471f0ea9dffdcc5e151b7666f942d8d4a6a7006dce0f40"},
+  "TTS.VoiceImportEnd": {"method_id": "TTS.VoiceImportEnd", "module": "TTS", "name": "VoiceImportEnd", "topic": "TTS.VoiceImportEnd", "bus_topic": "TTS.VoiceImportEnd", "route_path": "/api/TTS/VoiceImportEnd", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSVoiceImportEndRequest", "output_model": "TTSVoiceImportEndResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.VoiceImportEnd.input.TTSVoiceImportEndRequest", "output_schema_id": "TTS.VoiceImportEnd.output.TTSVoiceImportEndResponse", "input_schema_hash": "bb326382f76c85b75383af4471633293462ae386ecbca8a820b8adb737dcf353", "output_schema_hash": "9e5f37f673a52a5b05716f0d043df4ceb6224911d2710df9d99c8e43de025cad"},
+  "TTS.VoiceImportAbort": {"method_id": "TTS.VoiceImportAbort", "module": "TTS", "name": "VoiceImportAbort", "topic": "TTS.VoiceImportAbort", "bus_topic": "TTS.VoiceImportAbort", "route_path": "/api/TTS/VoiceImportAbort", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSVoiceImportAbortRequest", "output_model": "TTSVoiceImportAbortResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.VoiceImportAbort.input.TTSVoiceImportAbortRequest", "output_schema_id": "TTS.VoiceImportAbort.output.TTSVoiceImportAbortResponse", "input_schema_hash": "3928201a9870fb651c3185bdf9d47b07e0f984a49d0eaddad56498928f26fe42", "output_schema_hash": "94423e37f4ea1801b4e2277f843c9a1b141a70cc8e9e334c142f46090d8d232c"},
+  "TTS.CreateVoiceProfile": {"method_id": "TTS.CreateVoiceProfile", "module": "TTS", "name": "CreateVoiceProfile", "topic": "TTS.CreateVoiceProfile", "bus_topic": "TTS.CreateVoiceProfile", "route_path": "/api/TTS/CreateVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSCreateVoiceProfileRequest", "output_model": "TTSCreateVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.CreateVoiceProfile.input.TTSCreateVoiceProfileRequest", "output_schema_id": "TTS.CreateVoiceProfile.output.TTSCreateVoiceProfileResponse", "input_schema_hash": "11fc8f0c64f33e9d874885cf8a0b21917fb0f22f37709191b411158d92ee5203", "output_schema_hash": "2706c7668161681b2dae334e87dbc1ff041e20e9a2af1eeed0e7deb3ceb78584"},
+  "TTS.DeleteVoiceProfile": {"method_id": "TTS.DeleteVoiceProfile", "module": "TTS", "name": "DeleteVoiceProfile", "topic": "TTS.DeleteVoiceProfile", "bus_topic": "TTS.DeleteVoiceProfile", "route_path": "/api/TTS/DeleteVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSDeleteVoiceProfileRequest", "output_model": "TTSDeleteVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.DeleteVoiceProfile.input.TTSDeleteVoiceProfileRequest", "output_schema_id": "TTS.DeleteVoiceProfile.output.TTSDeleteVoiceProfileResponse", "input_schema_hash": "d4e21efd4b4a31a2fbc8aab099203e766c808dec5c6c5f090a32ec931338688d", "output_schema_hash": "5761b20bf24e294410ea27adc1bbc3254d039ffbc4b4ad8806d0183d83b4f44b"},
+  "TTS.Request": {"method_id": "TTS.Request", "module": "TTS", "name": "Request", "topic": "TTS.Request", "bus_topic": "TTS.Request", "route_path": "/api/TTS/Request", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.Request"], "callable_feature_ids": ["speech_playback"], "callable_features": [{"feature_id": "speech_playback", "module": "TTS", "label": "Speech Playback", "summary": "Play synthesized speech on the provider.", "method_ids": ["TTS.Request"]}], "input_model": "TTSRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.Request.input.TTSRequest", "output_schema_id": "TTS.Request.output.EmptyOutput", "input_schema_hash": "efaf5f938c5119a8569cbd8dfe941543adfb31bff29efcc470430420e1d2c467", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
+  "TTS.StreamStart": {"method_id": "TTS.StreamStart", "module": "TTS", "name": "StreamStart", "topic": "TTS.StreamStart", "bus_topic": "TTS.StreamStart", "route_path": "/api/TTS/StreamStart", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamStart"], "callable_feature_ids": ["speech_streaming"], "callable_features": [{"feature_id": "speech_streaming", "module": "TTS", "label": "Speech Streaming", "summary": "Start, stream, and end ordered text-to-speech audio streams.", "method_ids": ["TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd"]}], "input_model": "TTSStreamStartRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": "tts_text_stream", "request_stream": false, "response_stream": false, "event_topic": "TTS.AudioChunk"}, "speech_constraints": null, "input_schema_id": "TTS.StreamStart.input.TTSStreamStartRequest", "output_schema_id": "TTS.StreamStart.output.EmptyOutput", "input_schema_hash": "b4d6db1532cd3519475101c2b6bf28cb6a6d144eb4b42293680f51a1768f31e6", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
+  "TTS.StreamChunk": {"method_id": "TTS.StreamChunk", "module": "TTS", "name": "StreamChunk", "topic": "TTS.StreamChunk", "bus_topic": "TTS.StreamChunk", "route_path": "/api/TTS/StreamChunk", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamChunk"], "callable_feature_ids": ["speech_streaming"], "callable_features": [{"feature_id": "speech_streaming", "module": "TTS", "label": "Speech Streaming", "summary": "Start, stream, and end ordered text-to-speech audio streams.", "method_ids": ["TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd"]}], "input_model": "TTSStreamChunkRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": "tts_text_stream", "request_stream": false, "response_stream": false, "event_topic": "TTS.AudioChunk"}, "speech_constraints": null, "input_schema_id": "TTS.StreamChunk.input.TTSStreamChunkRequest", "output_schema_id": "TTS.StreamChunk.output.EmptyOutput", "input_schema_hash": "0c0d3bc9834efb039133fa4cc21f200ce4eee0b13727e8a39cf63697c899399d", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
+  "TTS.StreamEnd": {"method_id": "TTS.StreamEnd", "module": "TTS", "name": "StreamEnd", "topic": "TTS.StreamEnd", "bus_topic": "TTS.StreamEnd", "route_path": "/api/TTS/StreamEnd", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamEnd"], "callable_feature_ids": ["speech_streaming"], "callable_features": [{"feature_id": "speech_streaming", "module": "TTS", "label": "Speech Streaming", "summary": "Start, stream, and end ordered text-to-speech audio streams.", "method_ids": ["TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd"]}], "input_model": "TTSStreamEndRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": "tts_text_stream", "request_stream": false, "response_stream": false, "event_topic": "TTS.AudioChunk"}, "speech_constraints": null, "input_schema_id": "TTS.StreamEnd.input.TTSStreamEndRequest", "output_schema_id": "TTS.StreamEnd.output.EmptyOutput", "input_schema_hash": "059faba0be794cfba1e8e30ed272273132ba9440fcf014566c097499f8d7fb61", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
+  "TTS.Synthesize": {"method_id": "TTS.Synthesize", "module": "TTS", "name": "Synthesize", "topic": "TTS.Synthesize", "bus_topic": "TTS.Synthesize", "route_path": "/api/TTS/Synthesize", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.Synthesize"], "callable_feature_ids": ["speech_synthesis"], "callable_features": [{"feature_id": "speech_synthesis", "module": "TTS", "label": "Speech Synthesis", "summary": "Return synthesized audio data without provider playback.", "method_ids": ["TTS.Synthesize"]}], "input_model": "TTSSynthesizeRequest", "output_model": "TTSSynthesizeResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.Synthesize.input.TTSSynthesizeRequest", "output_schema_id": "TTS.Synthesize.output.TTSSynthesizeResponse", "input_schema_hash": "d5408ff48dccb96b3ee7c1c578ce9c27b10f7a33e37fbb97430e2d8222ab8bb6", "output_schema_hash": "65e6311d9a20d865d39d56b774eedd48af949d792c84f5930a348b6ee223f793"},
+  "STTCoordinator.Listen": {"method_id": "STTCoordinator.Listen", "module": "STTCoordinator", "name": "Listen", "topic": "STTCoordinator.Listen", "bus_topic": "STTCoordinator.Listen", "route_path": "/api/STTCoordinator/Listen", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["STTCoordinator.use"], "callable_feature_ids": ["listening_session_control"], "callable_features": [{"feature_id": "listening_session_control", "module": "STTCoordinator", "label": "Listening Session Control", "summary": "Control listening sessions and exclusive native microphone ownership.", "method_ids": ["STTCoordinator.Listen", "STTCoordinator.StopListening", "STTCoordinator.CapturePrepare", "STTCoordinator.CaptureRelease", "STTCoordinator.CaptureStatus"]}], "input_model": "STTListenRequest", "output_model": "STTListenResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.Listen.input.STTListenRequest", "output_schema_id": "STTCoordinator.Listen.output.STTListenResponse", "input_schema_hash": "8130cc5cdde9469f9cb249bb59a515c018fe8c33037309f02b74a83f1194a46f", "output_schema_hash": "3b629fc8dc429740afab14c2f35a2b31317e94a8f38631ab115f14944f2aaf30"},
+  "STTCoordinator.StopListening": {"method_id": "STTCoordinator.StopListening", "module": "STTCoordinator", "name": "StopListening", "topic": "STTCoordinator.StopListening", "bus_topic": "STTCoordinator.StopListening", "route_path": "/api/STTCoordinator/StopListening", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["STTCoordinator.use"], "callable_feature_ids": ["listening_session_control"], "callable_features": [{"feature_id": "listening_session_control", "module": "STTCoordinator", "label": "Listening Session Control", "summary": "Control listening sessions and exclusive native microphone ownership.", "method_ids": ["STTCoordinator.Listen", "STTCoordinator.StopListening", "STTCoordinator.CapturePrepare", "STTCoordinator.CaptureRelease", "STTCoordinator.CaptureStatus"]}], "input_model": "STTStopListeningRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.StopListening.input.STTStopListeningRequest", "output_schema_id": "STTCoordinator.StopListening.output.EmptyOutput", "input_schema_hash": "297d48be1b7ec76f082f8d3999cb5dfa0f53b28107333fc5b887a470ce30cafd", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
+  "STTCoordinator.CapturePrepare": {"method_id": "STTCoordinator.CapturePrepare", "module": "STTCoordinator", "name": "CapturePrepare", "topic": "STTCoordinator.CapturePrepare", "bus_topic": "STTCoordinator.CapturePrepare", "route_path": "/api/STTCoordinator/CapturePrepare", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["STTCoordinator.manage"], "callable_feature_ids": ["listening_session_control"], "callable_features": [{"feature_id": "listening_session_control", "module": "STTCoordinator", "label": "Listening Session Control", "summary": "Control listening sessions and exclusive native microphone ownership.", "method_ids": ["STTCoordinator.Listen", "STTCoordinator.StopListening", "STTCoordinator.CapturePrepare", "STTCoordinator.CaptureRelease", "STTCoordinator.CaptureStatus"]}], "input_model": "STTCapturePrepareRequest", "output_model": "STTCapturePrepareResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.CapturePrepare.input.STTCapturePrepareRequest", "output_schema_id": "STTCoordinator.CapturePrepare.output.STTCapturePrepareResponse", "input_schema_hash": "69ebc92cfe9fed08689a9ba2c622cddf99158b2c9b9fabfb0030155863269886", "output_schema_hash": "36b41e14c1b1007c202c90e2c3bb9934cbc296a15168278b399b54a96b2d8cbb"},
+  "STTCoordinator.CaptureRelease": {"method_id": "STTCoordinator.CaptureRelease", "module": "STTCoordinator", "name": "CaptureRelease", "topic": "STTCoordinator.CaptureRelease", "bus_topic": "STTCoordinator.CaptureRelease", "route_path": "/api/STTCoordinator/CaptureRelease", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["STTCoordinator.manage"], "callable_feature_ids": ["listening_session_control"], "callable_features": [{"feature_id": "listening_session_control", "module": "STTCoordinator", "label": "Listening Session Control", "summary": "Control listening sessions and exclusive native microphone ownership.", "method_ids": ["STTCoordinator.Listen", "STTCoordinator.StopListening", "STTCoordinator.CapturePrepare", "STTCoordinator.CaptureRelease", "STTCoordinator.CaptureStatus"]}], "input_model": "STTCaptureReleaseRequest", "output_model": "STTCaptureReleaseResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.CaptureRelease.input.STTCaptureReleaseRequest", "output_schema_id": "STTCoordinator.CaptureRelease.output.STTCaptureReleaseResponse", "input_schema_hash": "f36c2517b38b47b7ed5a3b1366227eaa8b2f7972b5c6fd55b593bf7997cd123e", "output_schema_hash": "2134b34784696f59c4d7f179b637c533d7b4e0f33a9164a97c5c33f0713f986a"},
+  "STTCoordinator.CaptureStatus": {"method_id": "STTCoordinator.CaptureStatus", "module": "STTCoordinator", "name": "CaptureStatus", "topic": "STTCoordinator.CaptureStatus", "bus_topic": "STTCoordinator.CaptureStatus", "route_path": "/api/STTCoordinator/CaptureStatus", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["STTCoordinator.manage"], "callable_feature_ids": ["listening_session_control"], "callable_features": [{"feature_id": "listening_session_control", "module": "STTCoordinator", "label": "Listening Session Control", "summary": "Control listening sessions and exclusive native microphone ownership.", "method_ids": ["STTCoordinator.Listen", "STTCoordinator.StopListening", "STTCoordinator.CapturePrepare", "STTCoordinator.CaptureRelease", "STTCoordinator.CaptureStatus"]}], "input_model": "STTCaptureStatusRequest", "output_model": "STTCaptureStatusResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.CaptureStatus.input.STTCaptureStatusRequest", "output_schema_id": "STTCoordinator.CaptureStatus.output.STTCaptureStatusResponse", "input_schema_hash": "0e594cd836f4c80e0da3e223280b2ccfed962813acf3296c4b4a0d02f2e29f7a", "output_schema_hash": "8703ae4586bc390c5bd5aa8a53f3015333d97d4c5049fce4e49a0ce0f33a2339"},
+  "WakeWord.ProcessAudio": {"method_id": "WakeWord.ProcessAudio", "module": "WakeWord", "name": "ProcessAudio", "topic": "WakeWord.ProcessAudio", "bus_topic": "WakeWord.ProcessAudio", "route_path": "/api/WakeWord/ProcessAudio", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.ProcessAudio"], "callable_feature_ids": ["wake_word_detection"], "callable_features": [{"feature_id": "wake_word_detection", "module": "WakeWord", "label": "Wake Word Detection", "summary": "Detect wake words in submitted or streamed audio.", "method_ids": ["WakeWord.ProcessAudio", "WakeWord.Detect"]}], "input_model": "STTAudioChunk", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.ProcessAudio.input.STTAudioChunk", "output_schema_id": "WakeWord.ProcessAudio.output.EmptyOutput", "input_schema_hash": "3670479489138802e7d52d4b7d5623c52b363cd4166db2ee7916f6449a10233e", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
+  "WakeWord.Detect": {"method_id": "WakeWord.Detect", "module": "WakeWord", "name": "Detect", "topic": "WakeWord.Detect", "bus_topic": "WakeWord.Detect", "route_path": "/api/WakeWord/Detect", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.Detect"], "callable_feature_ids": ["wake_word_detection"], "callable_features": [{"feature_id": "wake_word_detection", "module": "WakeWord", "label": "Wake Word Detection", "summary": "Detect wake words in submitted or streamed audio.", "method_ids": ["WakeWord.ProcessAudio", "WakeWord.Detect"]}], "input_model": "WakeWordDetectRequest", "output_model": "WakeWordDetectResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.Detect.input.WakeWordDetectRequest", "output_schema_id": "WakeWord.Detect.output.WakeWordDetectResponse", "input_schema_hash": "6d84e293fe9bf90a30317d78b1e8043cb52d45e13e8fce5ceb84e63185984735", "output_schema_hash": "c9675c0beade1d9158903798837dc11ae51429775bf4368ceb4783bdfdb793cf"},
+  "Transcription.ProcessAudio": {"method_id": "Transcription.ProcessAudio", "module": "Transcription", "name": "ProcessAudio", "topic": "Transcription.ProcessAudio", "bus_topic": "Transcription.ProcessAudio", "route_path": "/api/Transcription/ProcessAudio", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.ProcessAudio"], "callable_feature_ids": ["audio_transcription"], "callable_features": [{"feature_id": "audio_transcription", "module": "Transcription", "label": "Audio Transcription", "summary": "Transcribe submitted or streamed audio.", "method_ids": ["Transcription.ProcessAudio", "Transcription.Transcribe"]}], "input_model": "STTAudioChunk", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.ProcessAudio.input.STTAudioChunk", "output_schema_id": "Transcription.ProcessAudio.output.EmptyOutput", "input_schema_hash": "3670479489138802e7d52d4b7d5623c52b363cd4166db2ee7916f6449a10233e", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
+  "Transcription.Transcribe": {"method_id": "Transcription.Transcribe", "module": "Transcription", "name": "Transcribe", "topic": "Transcription.Transcribe", "bus_topic": "Transcription.Transcribe", "route_path": "/api/Transcription/Transcribe", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.Transcribe"], "callable_feature_ids": ["audio_transcription"], "callable_features": [{"feature_id": "audio_transcription", "module": "Transcription", "label": "Audio Transcription", "summary": "Transcribe submitted or streamed audio.", "method_ids": ["Transcription.ProcessAudio", "Transcription.Transcribe"]}], "input_model": "TranscribeAudioRequest", "output_model": "TranscribeAudioResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.Transcribe.input.TranscribeAudioRequest", "output_schema_id": "Transcription.Transcribe.output.TranscribeAudioResponse", "input_schema_hash": "00a0d251f18c3afec3b2593dfe57999a7fdaae76d3b937b3bdec90bbd3a7f56f", "output_schema_hash": "b7ac3e6f267b25a27363d98499342a6364bdb49530363ed96918d544a92fce5f"},
 } as const
 
 export const backendContractEventDescriptors = [

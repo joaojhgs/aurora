@@ -199,14 +199,52 @@ describe('generated peer-host registration', () => {
     const manifest = await peerHost.startEpoch('peer-a')
     const services = manifest.shared_services as Array<Record<string, unknown>>
     expect(services.map((service) => service.module)).toEqual(['TTS', 'Tooling'])
-    expect(services.find((service) => service.module === 'Tooling')).toMatchObject({
+    const toolingService = services.find((service) => service.module === 'Tooling')
+    expect(toolingService).toMatchObject({
       capabilities: ['tool_discovery', 'tool_execution'],
-      available_feature_ids: ['catalog_discovery']
+      available_feature_ids: ['catalog_discovery'],
+      callable_features: [{
+        feature_id: 'catalog_discovery',
+        module: 'Tooling',
+        label: 'Catalog Discovery',
+        summary: 'Read local and aggregate Tooling catalogs and status.',
+        method_ids: [
+          'Tooling.GetExportCatalog',
+          'Tooling.GetMCPStatus',
+          'Tooling.GetStats',
+          'Tooling.GetToolByName',
+          'Tooling.GetToolCatalog',
+          'Tooling.GetTools'
+        ]
+      }]
+    })
+    expect((toolingService?.methods as Array<Record<string, unknown>>)[0]).toMatchObject({
+      bus_topic: 'Tooling.GetTools',
+      callable_feature_ids: ['catalog_discovery'],
+      callable_features: [{
+        feature_id: 'catalog_discovery',
+        module: 'Tooling',
+        method_ids: [
+          'Tooling.GetExportCatalog',
+          'Tooling.GetMCPStatus',
+          'Tooling.GetStats',
+          'Tooling.GetToolByName',
+          'Tooling.GetToolCatalog',
+          'Tooling.GetTools'
+        ]
+      }]
     })
     const ttsService = services.find((service) => service.module === 'TTS')
     expect(ttsService).toMatchObject({
       capabilities: [],
-      available_feature_ids: ['speech_voice_management']
+      available_feature_ids: ['speech_voice_management'],
+      callable_features: [{
+        feature_id: 'speech_voice_management',
+        module: 'TTS',
+        label: 'Voice Profile Management',
+        summary: 'Administer local TTS voice profiles and bounded voice imports.',
+        method_ids: [...TTS_MANAGEMENT_METHOD_IDS].sort()
+      }]
     })
     const projectedTtsMethods = new Map(
       (ttsService?.methods as Array<Record<string, unknown>>)
@@ -219,10 +257,16 @@ describe('generated peer-host registration', () => {
         method_type: 'manage',
         required_perms: ['TTS.manage'],
         callable_feature_ids: ['speech_voice_management'],
+        callable_features: [{
+          feature_id: 'speech_voice_management',
+          module: 'TTS',
+          label: 'Voice Profile Management',
+          summary: 'Administer local TTS voice profiles and bounded voice imports.',
+          method_ids: [...TTS_MANAGEMENT_METHOD_IDS].sort()
+        }],
         speech_constraints: null
       }))
     }
-
     const evidence = manifest.recipient_projection_evidence as Record<string, unknown>
     const serviceIds = services.map((service) => String(service.module))
     const incompleteAck = {
