@@ -1894,8 +1894,8 @@ describe("Aurora Tauri runtime wrapper", () => {
       await clickButtonByLabel(mounted.container, "Use this address");
 
       await waitUntil(() => expect(window.location.pathname).toBe("/mesh"));
-      expect(modeWrites).toEqual(["remote-console"]);
-      expect(tierWrites).toEqual(["none"]);
+      expect(modeWrites).toEqual([]);
+      expect(tierWrites).toEqual([]);
       expect(savedProfile).toEqual({
         id: "saved-home",
         label: "Saved Connect to Aurora",
@@ -1912,7 +1912,7 @@ describe("Aurora Tauri runtime wrapper", () => {
     }
   });
 
-  it("keeps the device setup route on the invite-backed thin profile path", async () => {
+  it("saves an invite-backed Connect to Aurora profile without rewriting the selected role", async () => {
     const client = new Aurora({ transport: new RecordingMockAuroraTransport() });
     const document = {
       version: 1 as const,
@@ -2010,12 +2010,210 @@ describe("Aurora Tauri runtime wrapper", () => {
       });
       await clickButtonByLabel(mounted.container, "Save invite and continue");
       await waitUntil(() => expect(window.location.pathname).toBe("/mesh"));
-      expect(modeWrites).toEqual(["remote-console"]);
-      expect(tierWrites).toEqual(["none"]);
+      expect(modeWrites).toEqual([]);
+      expect(tierWrites).toEqual([]);
       expect(savedProfile).toMatchObject({
         mode: "webrtc-only",
         signalingUrl: "wss://old.example/mqtt",
         webrtcProfile: { room: "tauri-room" },
+      });
+    } finally {
+      await act(async () => mounted.root.unmount());
+      mounted.container.remove();
+    }
+  });
+
+  it("saves an invite-backed available-device profile with the explicit mesh role", async () => {
+    const client = new Aurora({ transport: new RecordingMockAuroraTransport() });
+    const document = {
+      version: 1 as const,
+      activeProfileId: "saved-home",
+      profiles: [{
+        id: "saved-home",
+        label: "Saved Connect to Aurora",
+        mode: "webrtc-only" as const,
+        gatewayUrl: "",
+        signalingUrl: "wss://old.example/mqtt",
+        nodeName: "Aurora mobile",
+        localStablePeerId: "mobile-peer-old",
+        webrtcProfile: webRtcProfileFromInvite(testMeshInviteText())!,
+      }],
+    };
+    let savedProfile: AuroraThinConnectionProfile | null = null;
+    const modeWrites: string[] = [];
+    const tierWrites: string[] = [];
+    let runtime!: AuroraTauriRuntime;
+    const controller: NonNullable<AuroraTauriRuntime["thinProfileController"]> = {
+      evidence: "test runtime profile store",
+      document,
+      saveProfile: async (profile) => {
+        savedProfile = profile;
+        return {
+          version: 1,
+          activeProfileId: profile.id,
+          profiles: [profile],
+        };
+      },
+      selectProfile: async () => document,
+      createRuntime: async () => ({
+        ...runtime,
+        nodeMode: "mesh-node",
+        runtimeTier: "lightweight-ts",
+      }),
+    };
+    runtime = {
+      ...testRuntime(client),
+      mode: "mobile-native",
+      thinConnectionMode: "webrtc-only",
+      thinPeer: fakeThinPeer({ status: "needs-invite" }),
+      thinProfileConfigured: true,
+      requiresOnboarding: false,
+      pendingThinInviteText: null,
+      thinProfile: document.profiles[0],
+      thinProfileController: controller,
+      modePreferenceStore: {
+        evidence: "test runtime-backed mode preference",
+        readSelectedMode: async () => "remote-console",
+        readSelectedRuntimeTier: async () => "none",
+        writeSelectedMode: async (modeId) => {
+          modeWrites.push(modeId);
+          return true;
+        },
+        writeSelectedRuntimeTier: async (runtimeTier) => {
+          tierWrites.push(runtimeTier);
+          return true;
+        },
+      },
+      nodeMode: "remote-console",
+      runtimeTier: "none",
+    };
+    window.history.replaceState({}, "", "/onboarding");
+
+    const mounted = await mountOutcomeApp(runtime);
+    try {
+      await waitUntil(() => {
+        const activeCard = mounted.container.querySelector<HTMLButtonElement>(
+          'button[role="radio"][aria-checked="true"]',
+        );
+        expect(activeCard?.textContent).toContain("Connect to Aurora");
+      });
+      await clickButtonByLabel(mounted.container, "Make this device available");
+      await waitUntil(() => {
+        expect(modeWrites).toEqual(["mesh-node"]);
+        expect(tierWrites).toEqual(["lightweight-ts"]);
+      });
+      await clickButtonByLabel(mounted.container, "Continue");
+      await flushReactWork();
+      modeWrites.length = 0;
+      tierWrites.length = 0;
+
+      const invite = mounted.container.querySelector<HTMLTextAreaElement>(
+        "#webthin-invite",
+      );
+      const valueSetter = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )?.set;
+      expect(invite).not.toBeNull();
+      await act(async () => {
+        valueSetter?.call(invite, testMeshInviteText());
+        invite?.dispatchEvent(new Event("input", { bubbles: true }));
+        invite?.dispatchEvent(new Event("change", { bubbles: true }));
+        await flushReactWork();
+      });
+      await clickButtonByLabel(mounted.container, "Save invite and continue");
+
+      await waitUntil(() => expect(window.location.pathname).toBe("/mesh"));
+      expect(modeWrites).toEqual([]);
+      expect(tierWrites).toEqual([]);
+      expect(savedProfile).toMatchObject({
+        mode: "webrtc-only",
+        signalingUrl: "wss://old.example/mqtt",
+        webrtcProfile: { room: "tauri-room" },
+      });
+
+      const rebuilt = await rebuildAuroraThinRuntime(runtime, (profileController) =>
+        profileController.saveProfile(document.profiles[0]),
+      );
+      expect(rebuilt.nodeMode).toBe("mesh-node");
+      expect(rebuilt.runtimeTier).toBe("lightweight-ts");
+    } finally {
+      await act(async () => mounted.root.unmount());
+      mounted.container.remove();
+    }
+  });
+
+  it("saves diagnostics profile changes without mutating the selected role", async () => {
+    const client = new Aurora({ transport: new RecordingMockAuroraTransport() });
+    const document = {
+      version: 1 as const,
+      activeProfileId: "diagnostics-home",
+      profiles: [{
+        id: "diagnostics-home",
+        label: "Diagnostics home",
+        mode: "http-only" as const,
+        gatewayUrl: "https://gateway.example.test/api",
+        signalingUrl: "",
+        nodeName: "Aurora diagnostics",
+        localStablePeerId: "diagnostics-peer",
+      }],
+    };
+    let savedProfile: AuroraThinConnectionProfile | null = null;
+    const modeWrites: string[] = [];
+    const tierWrites: string[] = [];
+    const runtime: AuroraTauriRuntime = {
+      ...testRuntime(client),
+      mode: "desktop-thin",
+      thinConnectionMode: "http-only",
+      thinPeer: fakeThinPeer({ status: "needs-invite" }),
+      thinProfile: document.profiles[0],
+      thinProfileConfigured: true,
+      thinProfileController: {
+        evidence: "test diagnostics runtime profile store",
+        document,
+        saveProfile: async (profile) => {
+          savedProfile = profile;
+          return {
+            version: 1,
+            activeProfileId: profile.id,
+            profiles: [profile],
+          };
+        },
+        selectProfile: async () => document,
+        createRuntime: async () => runtime,
+      },
+      modePreferenceStore: {
+        evidence: "test runtime-backed mode preference",
+        readSelectedMode: async () => "mesh-node",
+        readSelectedRuntimeTier: async () => "lightweight-ts",
+        writeSelectedMode: async (modeId) => {
+          modeWrites.push(modeId);
+          return true;
+        },
+        writeSelectedRuntimeTier: async (runtimeTier) => {
+          tierWrites.push(runtimeTier);
+          return true;
+        },
+      },
+      nodeMode: "mesh-node",
+      runtimeTier: "lightweight-ts",
+    };
+    window.history.replaceState({}, "", "/diagnostics");
+
+    const mounted = await mountOutcomeApp(runtime);
+    try {
+      await waitUntil(() => {
+        expect(mounted.container.textContent).toContain("Save and use profile");
+      });
+      await clickButtonByLabel(mounted.container, "Save and use profile");
+      await waitUntil(() => expect(savedProfile).not.toBeNull());
+
+      expect(modeWrites).toEqual([]);
+      expect(tierWrites).toEqual([]);
+      expect(savedProfile).toMatchObject({
+        id: "diagnostics-home",
+        mode: "http-only",
+        gatewayUrl: "https://gateway.example.test/api",
       });
     } finally {
       await act(async () => mounted.root.unmount());
@@ -2046,7 +2244,7 @@ describe("Aurora Tauri runtime wrapper", () => {
     expect(markup).toContain("Assistant");
   });
 
-  it("routes every invite-backed profile save through the Connect role guard", () => {
+  it("keeps profile saves independent of runtime role selection", () => {
     const source = readFileSync(
       join(process.cwd(), "src/tauri-app.tsx"),
       "utf8",
@@ -2055,7 +2253,9 @@ describe("Aurora Tauri runtime wrapper", () => {
     expect(source).not.toContain(
       "onSaveProfile: nativeContext.saveThinProfile",
     );
-    expect(source.match(/saveRemoteConsoleThinProfile\(/g)).toHaveLength(6);
+    expect(source).not.toContain("saveRemoteConsoleThinProfile");
+    expect(source).not.toContain('writeSelectedMode("remote-console")');
+    expect(source).not.toContain('writeSelectedRuntimeTier?.("none")');
   });
 
   it("renders the models page for the models route", () => {

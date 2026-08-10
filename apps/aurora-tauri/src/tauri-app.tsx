@@ -361,7 +361,6 @@ export const tauriRouteRegistry = {
     nativeContext,
     client,
     shutdown,
-    modePreferenceStore,
   }) => (
     <TauriDiagnosticsPage
       route={route}
@@ -369,7 +368,6 @@ export const tauriRouteRegistry = {
       nativeContext={nativeContext}
       client={client}
       shutdown={shutdown}
-      modePreferenceStore={modePreferenceStore}
     />
   ),
   data: ({ route, client }) => (
@@ -399,9 +397,7 @@ export const tauriRouteRegistry = {
         ? {
             setupRequired: true,
             onUseManualAddress: async (address: string) => {
-              await saveRemoteConsoleThinProfile(
-                modePreferenceStore,
-                nativeContext.saveThinProfile,
+              await nativeContext.saveThinProfile(
                 thinConnectionProfileWithManualAddress(nativeContext.thinProfile, address),
               );
               navigate("/mesh");
@@ -418,12 +414,7 @@ export const tauriRouteRegistry = {
                 profileStoreEvidence={nativeContext.thinProfileController.evidence}
                 localFeatureSharing={nativeContext.localFeatureSharing}
                 onSaveProfile={async (profile, roomSecret) => {
-                  await saveRemoteConsoleThinProfile(
-                    modePreferenceStore,
-                    nativeContext.saveThinProfile,
-                    profile,
-                    roomSecret,
-                  );
+                  await nativeContext.saveThinProfile(profile, roomSecret);
                   navigate("/mesh");
                 }}
                 onSelectProfile={nativeContext.selectThinProfile}
@@ -930,9 +921,7 @@ export function AuroraTauriApp({
         modePreferenceStore={runtime.modePreferenceStore}
         setupRequired
         onUseManualAddress={async (address) => {
-          await saveRemoteConsoleThinProfile(
-            runtime.modePreferenceStore,
-            saveThinProfile,
+          await saveThinProfile(
             thinConnectionProfileWithManualAddress(runtime.thinProfile, address),
           );
           navigate("/mesh");
@@ -951,12 +940,7 @@ export function AuroraTauriApp({
             profileStoreEvidence={runtime.thinProfileController.evidence}
             localFeatureSharing={runtime.localFeatureSharing}
             onSaveProfile={async (profile, roomSecret) => {
-              await saveRemoteConsoleThinProfile(
-                runtime.modePreferenceStore,
-                saveThinProfile,
-                profile,
-                roomSecret,
-              );
+              await saveThinProfile(profile, roomSecret);
               navigate("/mesh");
             }}
             onSelectProfile={selectThinProfile}
@@ -1410,19 +1394,6 @@ interface NativeContext {
   androidBaseline: TauriAndroidBaselineStatus | null;
   androidForeground: AndroidForegroundRuntimeStatus | null;
   androidMediaPolicy: AndroidMediaPolicyStatus | null;
-}
-
-async function saveRemoteConsoleThinProfile(
-  modePreferenceStore: OnboardingModePreferenceStore | undefined,
-  saveThinProfile: NativeContext["saveThinProfile"],
-  profile: AuroraThinConnectionProfile,
-  roomSecret?: WebThinRoomSecret,
-): Promise<void> {
-  await Promise.all([
-    modePreferenceStore?.writeSelectedMode("remote-console"),
-    modePreferenceStore?.writeSelectedRuntimeTier?.("none"),
-  ]);
-  await saveThinProfile(profile, roomSecret);
 }
 
 function localMeshNodeIdentity(
@@ -1963,14 +1934,12 @@ function TauriDiagnosticsPage({
   nativeContext,
   client,
   shutdown,
-  modePreferenceStore,
 }: {
   route: RouteAvailability;
   snapshot: AuroraShellSnapshot;
   nativeContext: NativeContext;
   client: AuroraTauriClient;
   shutdown: () => Promise<void>;
-  modePreferenceStore?: OnboardingModePreferenceStore | undefined;
 }) {
   return (
     <div className="ata-page-stack">
@@ -1990,13 +1959,7 @@ function TauriDiagnosticsPage({
                 onSaveProfile: (
                   profile: AuroraThinConnectionProfile,
                   roomSecret?: WebThinRoomSecret,
-                ) =>
-                  saveRemoteConsoleThinProfile(
-                    modePreferenceStore,
-                    nativeContext.saveThinProfile,
-                    profile,
-                    roomSecret,
-                  ),
+                ) => nativeContext.saveThinProfile(profile, roomSecret),
                 onSelectProfile: nativeContext.selectThinProfile,
               }
             : {})}
