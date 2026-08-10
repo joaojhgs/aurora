@@ -218,7 +218,7 @@ export function isDesktopLiveNativeWebRtcForced(
 export function resolveDesktopLivePeerConnectionPrimitive(
   env: Record<string, unknown> = import.meta.env,
   hasBrowserRtcPeerConnection = typeof globalThis.RTCPeerConnection === "function",
-  supportsNativeWebRtcBridge = desktopLiveSurfaceSupportsNativeWebRtc(env),
+  supportsNativeWebRtcBridge = desktopLiveSurfaceSupportsNativeWebRtc(),
 ): "tauri-native-webrtc" | "browser-rtcpeerconnection" {
   const nativeForced = isDesktopLiveNativeWebRtcForced(env);
   if (!supportsNativeWebRtcBridge && (nativeForced || !hasBrowserRtcPeerConnection)) {
@@ -231,13 +231,9 @@ export function resolveDesktopLivePeerConnectionPrimitive(
     : "browser-rtcpeerconnection";
 }
 
-function desktopLiveSurfaceSupportsNativeWebRtc(
-  env: Record<string, unknown>,
-): boolean {
+function desktopLiveSurfaceSupportsNativeWebRtc(): boolean {
   return getAuroraSurfaceProfile({
-    transportKind: typeof env.VITE_AURORA_CONNECTION_MODE === "string"
-      ? env.VITE_AURORA_CONNECTION_MODE
-      : undefined,
+    transportKind: "tauri-thin",
     userAgent: typeof navigator === "undefined" ? undefined : navigator.userAgent,
   }).supportsNativeWebRtcBridge;
 }

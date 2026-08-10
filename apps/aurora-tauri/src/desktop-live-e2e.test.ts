@@ -18,7 +18,6 @@ import {
 
 const liveEnv = {
   VITE_AURORA_DESKTOP_LIVE_E2E: "1",
-  VITE_AURORA_RUNTIME_MODE: "desktop-thin",
   VITE_AURORA_CONNECTION_MODE: "webrtc-only",
   VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: "1",
 };
@@ -46,17 +45,42 @@ describe("desktop live E2E WebView hook", () => {
     }, true, true)).toBe("tauri-native-webrtc");
   });
 
+  it("selects the Linux Tauri native WebRTC bridge when browser RTCPeerConnection is absent", () => {
+    const userAgent = vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue(
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 AuroraTauri/1.0",
+    );
+    try {
+      expect(resolveDesktopLivePeerConnectionPrimitive(liveEnv, false)).toBe("tauri-native-webrtc");
+      expect(resolveDesktopLivePeerConnectionPrimitive({
+        ...liveEnv,
+        VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC: "1",
+      }, true)).toBe("tauri-native-webrtc");
+    } finally {
+      userAgent.mockRestore();
+    }
+  });
+
   it("never selects the Linux native WebRTC bridge on another desktop OS", () => {
-    expect(resolveDesktopLivePeerConnectionPrimitive(liveEnv, true, false)).toBe("browser-rtcpeerconnection");
-    expect(() => resolveDesktopLivePeerConnectionPrimitive(liveEnv, false, false)).toThrow(
-      "requires browser RTCPeerConnection on non-Linux desktop platforms",
+    const userAgent = vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue(
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
     );
-    expect(() => resolveDesktopLivePeerConnectionPrimitive({
-      ...liveEnv,
-      VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC: "1",
-    }, true, false)).toThrow(
-      "requires browser RTCPeerConnection on non-Linux desktop platforms",
-    );
+    try {
+      expect(resolveDesktopLivePeerConnectionPrimitive(liveEnv, true, false)).toBe("browser-rtcpeerconnection");
+      expect(() => resolveDesktopLivePeerConnectionPrimitive(liveEnv, false, false)).toThrow(
+        "requires browser RTCPeerConnection on non-Linux desktop platforms",
+      );
+      expect(() => resolveDesktopLivePeerConnectionPrimitive({
+        ...liveEnv,
+        VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC: "1",
+      }, true, false)).toThrow(
+        "requires browser RTCPeerConnection on non-Linux desktop platforms",
+      );
+      expect(() => resolveDesktopLivePeerConnectionPrimitive(liveEnv, false)).toThrow(
+        "requires browser RTCPeerConnection on non-Linux desktop platforms",
+      );
+    } finally {
+      userAgent.mockRestore();
+    }
   });
 
   it("uses a fresh transient signaling identity after switching roles", () => {
