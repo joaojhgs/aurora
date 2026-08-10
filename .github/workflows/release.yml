@@ -67,8 +67,16 @@ jobs:
           uv run ruff check app tests scripts
           pnpm --filter @aurora/client build
           pnpm --filter @aurora/ui build
+          pnpm --filter @aurora/tauri-ui verify:static-release-rollback-policy
           pnpm --filter @aurora/tauri-ui prepare:sidecar:desktop-local-minimal
           pnpm --filter @aurora/tauri-ui build
+
+      - name: Upload static release rollback policy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-release-rollback-policy-report
+          path: apps/aurora-tauri/reports/release-rollback-plan-policy.json
 
       - name: Check next semantic version
         id: semver
