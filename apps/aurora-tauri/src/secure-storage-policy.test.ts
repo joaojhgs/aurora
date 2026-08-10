@@ -314,6 +314,21 @@ describe('Tauri secure storage policy', () => {
       /catch \(_:\s*Exception\) \{[\s\S]*securePrefs\(\)\.edit\(\)\.remove\(key\)\.apply\(\)[\s\S]*return null/,
     )
     expect(kotlinSource).not.toMatch(/Log\.[a-z]\([^)]*rawBearerToken/u)
+    expect(swiftStorage).toContain('private static func validateCredentialRecord(')
+    expect(swiftStorage).toMatch(
+      /try validateCredentialRecord\(record\)[\s\S]*try\? keychainDelete\(account: account\)[\s\S]*return nil/,
+    )
+    for (const invalidField of [
+      'tokenId: record.tokenId',
+      'claimantPeerId: record.claimantPeerId',
+      'verifierPeerId: record.verifierPeerId',
+      'claimantSignalingPeerId: record.claimantSignalingPeerId',
+      'verifierSignalingPeerId: record.verifierSignalingPeerId',
+      'roomName: record.roomName',
+      'rawBearerToken: record.rawBearerToken',
+    ]) {
+      expect(swiftStorage).toContain(invalidField)
+    }
     expect(swiftStorage).toMatch(
       /catch \{[\s\S]*try\? keychainDelete\(account: account\)[\s\S]*throw AuroraThinStorageError\.corruptCredential/,
     )

@@ -247,13 +247,15 @@ enum AuroraThinPeerStorage {
 
   static func setCredential(_ args: AuroraThinPeerCredentialSetArgs) throws -> [String: Any] {
     try validatePeerId(args.peerId)
-    try validateNonEmpty(args.tokenId, maxBytes: 128)
-    try validateNonEmpty(args.claimantPeerId, maxBytes: 256)
-    try validateNonEmpty(args.verifierPeerId, maxBytes: 256)
-    try validateNonEmpty(args.claimantSignalingPeerId, maxBytes: 256)
-    try validateNonEmpty(args.verifierSignalingPeerId, maxBytes: 256)
-    try validateNonEmpty(args.roomName, maxBytes: 512)
-    try validateNonEmpty(args.rawBearerToken, maxBytes: 4096)
+    try validateCredentialRecord(
+      tokenId: args.tokenId,
+      claimantPeerId: args.claimantPeerId,
+      verifierPeerId: args.verifierPeerId,
+      claimantSignalingPeerId: args.claimantSignalingPeerId,
+      verifierSignalingPeerId: args.verifierSignalingPeerId,
+      roomName: args.roomName,
+      rawBearerToken: args.rawBearerToken
+    )
 
     if let expiresAtMs = args.expiresAtMs, expiresAtMs <= currentUnixMs() {
       try? deleteCredential(peerId: args.peerId)
@@ -442,6 +444,14 @@ enum AuroraThinPeerStorage {
       }
       throw AuroraThinStorageError.corruptCredential
     }
+    do {
+      try validateCredentialRecord(record)
+    } catch {
+      if let account = try? credentialAccount(peerId: peerId) {
+        try? keychainDelete(account: account)
+      }
+      return nil
+    }
     if let expiresAtMs = record.expiresAtMs, expiresAtMs <= currentUnixMs() {
       try keychainDelete(account: try credentialAccount(peerId: peerId))
       return nil
@@ -516,6 +526,36 @@ enum AuroraThinPeerStorage {
       output["expiresAtMs"] = expiresAtMs
     }
     return output
+  }
+
+  private static func validateCredentialRecord(_ record: AuroraThinPeerCredentialRecord) throws {
+    try validateCredentialRecord(
+      tokenId: record.tokenId,
+      claimantPeerId: record.claimantPeerId,
+      verifierPeerId: record.verifierPeerId,
+      claimantSignalingPeerId: record.claimantSignalingPeerId,
+      verifierSignalingPeerId: record.verifierSignalingPeerId,
+      roomName: record.roomName,
+      rawBearerToken: record.rawBearerToken
+    )
+  }
+
+  private static func validateCredentialRecord(
+    tokenId: String,
+    claimantPeerId: String,
+    verifierPeerId: String,
+    claimantSignalingPeerId: String,
+    verifierSignalingPeerId: String,
+    roomName: String,
+    rawBearerToken: String
+  ) throws {
+    try validateNonEmpty(tokenId, maxBytes: 128)
+    try validateNonEmpty(claimantPeerId, maxBytes: 256)
+    try validateNonEmpty(verifierPeerId, maxBytes: 256)
+    try validateNonEmpty(claimantSignalingPeerId, maxBytes: 256)
+    try validateNonEmpty(verifierSignalingPeerId, maxBytes: 256)
+    try validateNonEmpty(roomName, maxBytes: 512)
+    try validateNonEmpty(rawBearerToken, maxBytes: 4096)
   }
 
   private static func reconnectChallengeMatches(
