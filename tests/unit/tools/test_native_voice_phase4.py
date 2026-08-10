@@ -241,7 +241,9 @@ def test_validator_requires_complete_transitive_source_inventory() -> None:
 def test_validator_rejects_cpal_manifest_drift_from_rust_lockfile(tmp_path: Path) -> None:
     validator = load_validator()
     manifest = read_manifest()
-    cpal = next(artifact for artifact in manifest["artifacts"] if artifact["id"].startswith("cpal-"))
+    cpal = next(
+        artifact for artifact in manifest["artifacts"] if artifact["id"].startswith("cpal-")
+    )
     cpal["version"] = "v0.17.3"
     cpal["sha256"] = "0" * 64
     cpal["archive_path"] = "sources/cpal-0.17.3.tar.gz"

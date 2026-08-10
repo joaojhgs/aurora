@@ -137,8 +137,7 @@ def test_every_disposition_candidate_manifest_is_release_ineligible():
         assert data["release_index_eligible"][pack_id] is False
         assert manifest["variants"]
         assert all(
-            variant["compatibility"]["interoperable"] is False
-            for variant in manifest["variants"]
+            variant["compatibility"]["interoperable"] is False for variant in manifest["variants"]
         )
 
 
