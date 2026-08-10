@@ -55,6 +55,17 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Release trust policy
+        run: pnpm --dir apps/aurora-tauri run verify:static-release-trust-policy
+
+      - name: Upload release trust policy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-trust-policy
+          path: apps/aurora-tauri/reports/release-trust-policy.json
+          if-no-files-found: error
+
       - name: Install Python release dependencies
         run: uv sync --extra dev --extra build
 
@@ -97,7 +108,7 @@ jobs:
     name: Create semantic release
     runs-on: ubuntu-latest
     needs: release-readiness
-    if: inputs.dry_run == false
+    if: success() && inputs.dry_run == false
     timeout-minutes: 20
     permissions:
       contents: write

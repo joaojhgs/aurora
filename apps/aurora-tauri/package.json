@@ -88,6 +88,7 @@
     "prepare:bundle:desktop-thin": "pnpm prepare:bundle:desktop-client",
     "verify:bundle:desktop-client": "node ./scripts/verify-desktop-client-bundle.mjs",
     "verify:static-release-rollback-policy": "node ./scripts/assert-release-rollback-plan.mjs",
+    "verify:static-release-trust-policy": "node scripts/assert-release-trust-policy.mjs",
     "verify:bundle:desktop-thin": "pnpm verify:bundle:desktop-client",
     "verify:native-voice-artifact-policy": "node ./scripts/assert-native-voice-artifact-policy.mjs",
     "build:bundle:desktop-client": "node ./scripts/prepare-client-bundle.mjs && pnpm tauri build --config src-tauri/tauri.client.conf.json --no-sign && pnpm verify:bundle:desktop-client",

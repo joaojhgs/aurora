@@ -514,10 +514,6 @@ function validateReleaseWorkflow() {
   const semverStart = findLine(lines, /^\s*-\s+name:\s+Check next semantic version\s*$/)
   const uploadStart = findLine(lines, /^\s*-\s+name:\s+Upload static release rollback policy report\s*$/)
   const commandLine = findLine(lines, /^\s*pnpm --filter @aurora\/tauri-ui verify:static-release-rollback-policy\s*$/)
-  const uploadIfLine = findLine(lines, /^\s*if:\s+always\(\)\s*$/)
-  const uploadUsesLine = findLine(lines, /^\s*uses:\s+actions\/upload-artifact@v4\s*$/)
-  const uploadPathLine = findLine(lines, /^\s*path:\s+apps\/aurora-tauri\/reports\/release-rollback-plan-policy\.json\s*$/)
-
   if (readinessStart === -1 || semverStart === -1 || uploadStart === -1) {
     addFailure('workflow-wiring', '.github/workflows/release.yml', 'release workflow must contain readiness, report upload, and semver steps')
     return
@@ -533,6 +529,14 @@ function validateReleaseWorkflow() {
     addFailure('workflow-ordering', '.github/workflows/release.yml', 'static policy report upload must be after readiness and before semantic versioning')
   }
   const nextStepAfterUpload = findNextStepLine(lines, uploadStart + 1)
+  const uploadIfLine = findLineBetween(lines, uploadStart + 1, nextStepAfterUpload, /^\s*if:\s+always\(\)\s*$/)
+  const uploadUsesLine = findLineBetween(lines, uploadStart + 1, nextStepAfterUpload, /^\s*uses:\s+actions\/upload-artifact@v4\s*$/)
+  const uploadPathLine = findLineBetween(
+    lines,
+    uploadStart + 1,
+    nextStepAfterUpload,
+    /^\s*path:\s+apps\/aurora-tauri\/reports\/release-rollback-plan-policy\.json\s*$/,
+  )
   for (const [line, label] of [
     [uploadIfLine, 'if: always()'],
     [uploadUsesLine, 'actions/upload-artifact@v4'],
@@ -600,6 +604,15 @@ function findLine(lines, pattern) {
     const trimmed = line.trim()
     return trimmed !== '' && !trimmed.startsWith('#') && pattern.test(line)
   })
+}
+
+function findLineBetween(lines, start, end, pattern) {
+  const boundedEnd = Math.min(end, lines.length)
+  for (let index = start; index < boundedEnd; index += 1) {
+    const trimmed = lines[index].trim()
+    if (trimmed !== '' && !trimmed.startsWith('#') && pattern.test(lines[index])) return index
+  }
+  return -1
 }
 
 function findNextStepLine(lines, start) {

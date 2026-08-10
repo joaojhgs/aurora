@@ -587,6 +587,37 @@ describe('RAC-54 release rollback plan policy gate', () => {
     expect(workflow).toContain('actions/upload-artifact@v4')
   })
 
+  it('accepts an unrelated earlier artifact upload before the rollback report upload', () => {
+    const context = createContext()
+    const workflowPath = join(context.root, 'release.yml')
+    writeFileSync(workflowPath, `
+name: Release
+jobs:
+  release-readiness:
+    steps:
+      - name: Upload release trust policy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-trust-policy
+          path: apps/aurora-tauri/reports/release-trust-policy.json
+      - name: Run lightweight release check
+        run: |
+          pnpm --filter @aurora/tauri-ui verify:static-release-rollback-policy
+      - name: Upload static release rollback policy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          path: apps/aurora-tauri/reports/release-rollback-plan-policy.json
+      - name: Check next semantic version
+        run: echo version
+`)
+
+    const result = runPolicyWithWorkflow(context, workflowPath)
+
+    expect(result.status, result.stderr).toBe(0)
+  })
+
   it('does not accept workflow wiring hidden in comments or after semantic versioning', () => {
     const context = createContext()
     const workflowPath = join(context.root, 'release.yml')
