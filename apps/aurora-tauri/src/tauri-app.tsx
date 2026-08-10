@@ -46,6 +46,7 @@ import {
   loadingShellSnapshot,
   navItemSnapshot,
   retainThinShellSnapshot,
+  thinConnectionProfileWithManualAddress,
   type AuroraNavItem,
   type AuroraOwlLoaderStageId,
   type AuroraShellSnapshot,
@@ -397,6 +398,14 @@ export const tauriRouteRegistry = {
       {...(nativeContext.thinPeer && nativeContext.thinProfileController
         ? {
             setupRequired: true,
+            onUseManualAddress: async (address: string) => {
+              await saveRemoteConsoleThinProfile(
+                modePreferenceStore,
+                nativeContext.saveThinProfile,
+                thinConnectionProfileWithManualAddress(nativeContext.thinProfile, address),
+              );
+              navigate("/mesh");
+            },
             thinConnectionPanel: (
               <WebThinConnectionPanel
                 peer={nativeContext.thinPeer}
@@ -920,6 +929,14 @@ export function AuroraTauriApp({
         snapshot={snapshot}
         modePreferenceStore={runtime.modePreferenceStore}
         setupRequired
+        onUseManualAddress={async (address) => {
+          await saveRemoteConsoleThinProfile(
+            runtime.modePreferenceStore,
+            saveThinProfile,
+            thinConnectionProfileWithManualAddress(runtime.thinProfile, address),
+          );
+          navigate("/mesh");
+        }}
         thinConnectionPanel={
           <WebThinConnectionPanel
             peer={runtime.thinPeer}

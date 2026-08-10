@@ -43,6 +43,36 @@ export function isThinConnectionProfileConfigured(
   return true
 }
 
+export function thinConnectionProfileWithManualAddress(
+  profile: ThinConnectionProfile | undefined,
+  address: string,
+): ThinConnectionProfile {
+  const gatewayUrl = address.trim()
+  if (profile) {
+    return {
+      id: profile.id,
+      label: profile.label,
+      mode: 'http-only',
+      gatewayUrl,
+      signalingUrl: '',
+      nodeName: profile.nodeName,
+      localStablePeerId: profile.localStablePeerId,
+    }
+  }
+  const suffix = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}`
+  return {
+    id: `profile-${suffix}`,
+    label: 'Aurora address',
+    mode: 'http-only',
+    gatewayUrl,
+    signalingUrl: '',
+    nodeName: 'Aurora device',
+    localStablePeerId: `aurora-thin-${suffix}`,
+  }
+}
+
 export function sanitizeThinConnectionProfile(
   profile: ThinConnectionProfile,
 ): ThinConnectionProfile {

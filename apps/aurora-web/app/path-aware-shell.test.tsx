@@ -244,6 +244,70 @@ describe('hosted web thin first-run shell', () => {
     expect(request).not.toHaveBeenCalled()
   })
 
+  it('saves a manual address profile and leaves hosted-web onboarding', async () => {
+    const transport = new MockAuroraTransport()
+    const request = vi.spyOn(transport, 'request')
+    mockedBrowserRuntime.runtime = {
+      client: new AuroraClient({ transport }),
+      peer: fakePeer(),
+      mode: 'http-only',
+      close: vi.fn(async () => undefined),
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <PathAwareShell
+          snapshot={{
+            ...loadingShellSnapshot,
+            loadState: 'ready',
+          }}
+        >
+          <p>configured shell content</p>
+        </PathAwareShell>,
+      )
+      await Promise.resolve()
+    })
+
+    const roleContinueButton = buttonByText(container, 'Continue')
+    await act(async () => {
+      roleContinueButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      buttonByText(container, 'Connect with an address')
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+    const endpoint = container.querySelector<HTMLInputElement>('#aurora-endpoint')
+    expect(endpoint).not.toBeNull()
+    await act(async () => {
+      setInputValue(endpoint!, 'https://gateway.example.test')
+      await Promise.resolve()
+    })
+    await act(async () => {
+      buttonByText(container, 'Use this address')
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(mockedBrowserRuntime.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: 'Aurora address',
+        mode: 'http-only',
+        gatewayUrl: 'https://gateway.example.test',
+        signalingUrl: '',
+        nodeName: 'Aurora device',
+      }),
+      'remote-console',
+    )
+    expect(mockedBrowserRuntime.routerReplace).toHaveBeenCalledWith('/mesh')
+    expect(request).not.toHaveBeenCalled()
+  })
+
   it('loads v2 node-mode context without requiring a v1 connection profile projection', async () => {
     const transport = new MockAuroraTransport()
     mockedBrowserRuntime.runtime = {
@@ -364,6 +428,23 @@ describe('hosted web thin first-run shell', () => {
     expect(container.textContent).toContain('runtime-profile:mesh-node')
   })
 })
+
+function buttonByText(container: HTMLElement, text: string): HTMLButtonElement {
+  const button = [...container.querySelectorAll<HTMLButtonElement>('button')]
+    .find((candidate) => candidate.textContent?.includes(text))
+  if (!button) throw new Error(`Button not found: ${text}`)
+  return button
+}
+
+function setInputValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    'value',
+  )?.set
+  setter?.call(input, value)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  input.dispatchEvent(new Event('change', { bubbles: true }))
+}
 
 function RuntimeProfileProbe() {
   const profile = useBrowserRuntimeProfile()

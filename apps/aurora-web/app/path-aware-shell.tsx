@@ -10,6 +10,7 @@ import {
   buildShellSnapshot,
   loadingShellSnapshot,
   runtimeProfileToThinConnectionProfile,
+  thinConnectionProfileWithManualAddress,
   retainThinShellSnapshot,
   type AuroraNodeMode,
   type ThinProfileDocument,
@@ -187,6 +188,15 @@ function ReadyPathAwareShell({
         }}
         setupRequired
         modePreferenceStore={modePreferenceStore}
+        onUseManualAddress={async (address) => {
+          await saveAuroraBrowserOnboardingProfile(
+            thinConnectionProfileWithManualAddress(profile, address),
+            'remote-console',
+          )
+          setActiveSnapshot(browserLoadingSnapshot(runtime.client.transport.kind))
+          onRefreshRuntime()
+          router.replace('/mesh')
+        }}
         thinConnectionPanel={
           <WebThinConnectionPanel
             peer={runtime.peer}

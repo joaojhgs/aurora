@@ -113,6 +113,7 @@ describe('production UI copy', () => {
     const onSaveProfile = vi.fn(async (profile: WebThinConnectionProfile) => {
       savedProfiles.push(profile)
     })
+    const onUseManualAddress = vi.fn(async () => undefined)
     const inviteText = firstRunInviteText()
     const container = document.createElement('div')
     document.body.appendChild(container)
@@ -123,6 +124,7 @@ describe('production UI copy', () => {
           client={client('native-mobile')}
           snapshot={safeShellSnapshot({ nativePlatform: 'android', nativeAvailable: true })}
           setupRequired
+          onUseManualAddress={onUseManualAddress}
           thinConnectionPanel={
             <HomeNodeConnectionPanel
               peer={peerController({ status: 'needs-invite', secureContext: true, hasHttpFallback: false })}
@@ -176,12 +178,55 @@ describe('production UI copy', () => {
     await act(async () => {
       buttonByText(container, 'Connect with an address').click()
     })
-    expect(container.querySelector('#aurora-endpoint')).not.toBeNull()
+    const endpoint = container.querySelector<HTMLInputElement>('#aurora-endpoint')
+    expect(endpoint).not.toBeNull()
+
+    await act(async () => {
+      setInputValue(endpoint!, 'https://home.example.test')
+    })
+    await act(async () => {
+      buttonByText(container, 'Use this address').click()
+    })
+    await flushReactWork()
+    expect(onUseManualAddress).toHaveBeenCalledWith('https://home.example.test')
 
     await act(async () => {
       buttonByText(container, 'Use invite instead').click()
     })
     expect(container.querySelector('#aurora-endpoint')).toBeNull()
+    root.unmount()
+    container.remove()
+  })
+
+  it('does not offer manual address setup without a save handler', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(
+        <OnboardingView
+          client={client('native-mobile')}
+          snapshot={safeShellSnapshot({ nativePlatform: 'android', nativeAvailable: true })}
+          setupRequired
+          thinConnectionPanel={
+            <HomeNodeConnectionPanel
+              peer={peerController({ status: 'needs-invite', secureContext: true, hasHttpFallback: false })}
+              mode="webrtc-only"
+              transportKind="native-mobile"
+              nativePlatform="android"
+              configureOnly
+            />
+          }
+        />,
+      )
+    })
+
+    await act(async () => {
+      buttonByText(container, 'Continue').click()
+    })
+    expect(container.textContent).not.toContain('Connect with an address')
+    expect(container.querySelector('#aurora-endpoint')).toBeNull()
+    expect(findForbiddenProductionCopyTerms(container.textContent ?? '').map((term) => term.id)).toEqual([])
     root.unmount()
     container.remove()
   })

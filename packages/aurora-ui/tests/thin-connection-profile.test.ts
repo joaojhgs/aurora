@@ -6,6 +6,7 @@ import {
   parseThinProfileDocument,
   sanitizeThinConnectionProfile,
   serializeThinProfileDocument,
+  thinConnectionProfileWithManualAddress,
   type ThinConnectionProfile,
 } from '../src/thin-connection-profile'
 
@@ -93,6 +94,25 @@ describe('thin connection profiles', () => {
         gatewayUrl: '',
       })),
     ).toThrow(/requires an HTTP or HTTPS Gateway endpoint/i)
+  })
+
+  it('converts an invite profile to an HTTP-only manual address profile', () => {
+    const manual = thinConnectionProfileWithManualAddress(
+      webRtcProfile(),
+      '  https://gateway.example.test/api  ',
+    )
+
+    expect(manual).toEqual({
+      id: 'direct',
+      label: 'Direct Aurora',
+      mode: 'http-only',
+      gatewayUrl: 'https://gateway.example.test/api',
+      signalingUrl: '',
+      nodeName: 'Aurora phone',
+      localStablePeerId: 'aurora-phone-stable',
+    })
+    expect(manual).not.toHaveProperty('webrtcProfile')
+    expect(sanitizeThinConnectionProfile(manual)).toEqual(manual)
   })
 
   it.each([

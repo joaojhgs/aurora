@@ -18,6 +18,7 @@ export interface OnboardingViewProps {
   snapshot: AuroraShellSnapshot
   modePreferenceStore?: OnboardingModePreferenceStore | undefined
   onApplyModePreference?: (() => Promise<void>) | undefined
+  onUseManualAddress?: ((address: string) => Promise<void>) | undefined
   thinConnectionPanel?: ReactNode
   setupRequired?: boolean | undefined
 }
@@ -89,6 +90,7 @@ export function OnboardingView({
   snapshot,
   modePreferenceStore,
   onApplyModePreference,
+  onUseManualAddress,
   thinConnectionPanel,
   setupRequired = false,
 }: OnboardingViewProps) {
@@ -335,8 +337,28 @@ export function OnboardingView({
     }
   }
 
-  const manualAddressGated = setupRequired && Boolean(thinConnectionPanel)
-  const showManualAddress = !manualAddressGated || manualAddressVisible
+  async function onManualAddress() {
+    const address = endpoint.trim()
+    if (!address || busy) return
+    if (!onUseManualAddress) {
+      setMessage('Aurora could not use this address. Check it and try again.')
+      return
+    }
+    setBusy('manual-address')
+    setMessage(null)
+    try {
+      await onUseManualAddress(address)
+      setMessage('Address saved for this setup session.')
+    } catch {
+      setMessage('Aurora could not use this address. Check it and try again.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const manualAddressAvailable = Boolean(onUseManualAddress)
+  const manualAddressGated = manualAddressAvailable && setupRequired && Boolean(thinConnectionPanel)
+  const showManualAddress = manualAddressAvailable && (!manualAddressGated || manualAddressVisible)
   const showFirstRunInviteFlow = setupRequired && !thinConnectionPanel
   const showAccountAuthFlow = !setupRequired
 
@@ -443,8 +465,8 @@ export function OnboardingView({
                 />
               </FormField>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" disabled={!endpoint.trim()} onClick={() => setMessage('Address saved for this setup session.')}>
-                  Use this address
+                <Button variant="outline" disabled={busy !== null || !endpoint.trim()} onClick={() => void onManualAddress()}>
+                  {busy === 'manual-address' ? 'Saving address…' : 'Use this address'}
                 </Button>
                 {manualAddressGated ? (
                   <Button variant="ghost" onClick={() => setManualAddressVisible(false)}>
