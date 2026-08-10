@@ -218,6 +218,38 @@ describe('RAC-54 release rollback plan policy gate', () => {
     expect(result.stderr).toContain('unknown-capability')
   })
 
+  it('rejects prototype-shaped capability ids without throwing and writes a failed report', () => {
+    for (const id of ['__proto__', 'toString']) {
+      const plan = readCanonicalPlan()
+      plan.capabilityGroups = [
+        ...plan.capabilityGroups,
+        {
+          id,
+          surface: 'web',
+          capabilities: ['focused-web-speech-capture'],
+          rollbackIntent: 'hostile prototype id must not resolve as a known capability',
+        },
+      ]
+      const context = createContext(plan)
+
+      const result = runPolicy(context)
+      const report = JSON.parse(readFileSync(context.reportPath, 'utf8')) as {
+        status: string
+        failures: string[]
+        secretsRedacted: boolean
+      }
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain('unknown-capability')
+      expect(result.stderr).not.toContain('TypeError')
+      expect(report).toMatchObject({
+        status: 'failed',
+        secretsRedacted: true,
+      })
+      expect(report.failures.length).toBeGreaterThan(0)
+    }
+  })
+
   it('rejects wrong surfaces and missing required capability members', () => {
     const plan = readCanonicalPlan()
     plan.capabilityGroups = plan.capabilityGroups.map((group) => {
@@ -392,6 +424,25 @@ describe('RAC-54 release rollback plan policy gate', () => {
     expect(result.stderr.match(/destructive-operation/g)?.length).toBeGreaterThanOrEqual(3)
   })
 
+  it('rejects executable rollback steps that match canonical rejected operations', () => {
+    const plan = readCanonicalPlan()
+    plan.rollbackSequence = [
+      ...plan.rollbackSequence,
+      {
+        id: 'delete-user-data',
+        operation: 'delete-user-data',
+        appliesTo: ['web-local-speech'],
+      },
+    ]
+    const context = createContext(plan)
+
+    const result = runPolicy(context)
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('rejected-operation-used')
+    expect(result.stderr).toContain('destructive-operation')
+  })
+
   it('requires the canonical rejected-operation protection set', () => {
     const plan = readCanonicalPlan()
     plan.rejectedOperations = []
@@ -463,6 +514,54 @@ describe('RAC-54 release rollback plan policy gate', () => {
     expect(report.status).toBe('failed')
     expect(report.failures.length).toBeGreaterThan(0)
     expect(report.secretsRedacted).toBe(true)
+  })
+
+  it('detects sensitive camelCase JSON keys without leaking their values', () => {
+    const plan = readCanonicalPlan() as RollbackPlan & {
+      metadata?: Record<string, unknown>
+    }
+    plan.metadata = {
+      roomSecret: 'room_secret_live_1234567890',
+      peerCredential: 'peer_credential_live_1234567890',
+      apiKey: 'api_key_live_1234567890',
+      accessToken: 'access_token_live_1234567890',
+      refreshToken: 'refresh_token_live_1234567890',
+      password: 'password_live_1234567890',
+      nested: {
+        credential: 'credential_live_1234567890',
+        token: 'token_live_1234567890',
+        secret: 'secret_live_1234567890',
+      },
+    }
+    const context = createContext(plan)
+
+    const result = runPolicy(context)
+
+    const combinedOutput = `${result.stdout}\n${result.stderr}`
+    const reportText = readFileSync(context.reportPath, 'utf8')
+    for (const leaked of [
+      'room_secret_live_1234567890',
+      'peer_credential_live_1234567890',
+      'api_key_live_1234567890',
+      'access_token_live_1234567890',
+      'refresh_token_live_1234567890',
+      'password_live_1234567890',
+      'credential_live_1234567890',
+      'token_live_1234567890',
+      'secret_live_1234567890',
+    ]) {
+      expect(combinedOutput).not.toContain(leaked)
+      expect(reportText).not.toContain(leaked)
+    }
+    const report = JSON.parse(reportText) as {
+      status: string
+      forbiddenMatches: Array<{ id: string }>
+      secretsRedacted: boolean
+    }
+    expect(result.status).not.toBe(0)
+    expect(report.status).toBe('failed')
+    expect(report.secretsRedacted).toBe(true)
+    expect(report.forbiddenMatches.some((match) => match.id === 'sensitive-json-key')).toBe(true)
   })
 
   it('is exposed as a package script for release readiness', () => {

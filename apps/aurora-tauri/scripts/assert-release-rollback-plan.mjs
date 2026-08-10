@@ -33,28 +33,28 @@ const requiredCapabilityGroups = [
   'native-provider-hosting',
 ]
 
-const expectedCapabilityGroups = {
-  'web-local-speech': {
+const expectedCapabilityGroups = new Map([
+  ['web-local-speech', {
     surface: 'web',
     capabilities: ['focused-web-speech-capture', 'focused-web-playback'],
-  },
-  'desktop-native-ptt-background': {
+  }],
+  ['desktop-native-ptt-background', {
     surface: 'desktop',
     capabilities: ['native-push-to-talk', 'background-capture', 'desktop-playback'],
-  },
-  'android-native-ptt-foreground-background-system-assistant': {
+  }],
+  ['android-native-ptt-foreground-background-system-assistant', {
     surface: 'android',
     capabilities: ['native-push-to-talk', 'foreground-capture', 'background-capture', 'system-assistant'],
-  },
-  'ios-native-ptt-background': {
+  }],
+  ['ios-native-ptt-background', {
     surface: 'ios',
     capabilities: ['native-push-to-talk', 'background-capture', 'ios-playback'],
-  },
-  'native-provider-hosting': {
+  }],
+  ['native-provider-hosting', {
     surface: 'native-provider',
     capabilities: ['local-provider-hosting', 'authorized-remote-route-hosting'],
-  },
-}
+  }],
+])
 
 const requiredOperations = [
   'withdraw-readiness',
@@ -97,6 +97,8 @@ const protectedStateTermPatterns = [
   /credentials?/i,
   /peers?/i,
   /roles?/i,
+  /user[-_ ]?data/i,
+  /user[-_ ]?state/i,
   /model[-_ ]?packs?/i,
   /embeddings?/i,
   /sources?/i,
@@ -138,6 +140,18 @@ const secretPatterns = [
   { id: 'path', pattern: /(?:[A-Za-z]:\\|\/(?:Users|home|tmp|var|etc|private)\/)[^'",\s)}]+/ },
 ]
 
+const sensitiveJsonKeyPatterns = [
+  'roomsecret',
+  'peercredential',
+  'apikey',
+  'accesstoken',
+  'refreshtoken',
+  'password',
+  'secret',
+  'token',
+  'credential',
+]
+
 const failures = []
 const report = {
   status: 'pending',
@@ -169,7 +183,14 @@ try {
   addFailure('plan-read', redactedPath(planPath), `could not read or parse rollback plan: ${errorMessage(error)}`)
 }
 
-if (plan) validatePlan(plan)
+try {
+  if (plan) {
+    checkSensitiveJsonKeys(plan)
+    validatePlan(plan)
+  }
+} catch (error) {
+  addFailure('validation-exception', 'plan', `rollback plan validation failed safely: ${errorName(error)}`)
+}
 validatePackageScript()
 validateReleaseWorkflow()
 
@@ -258,7 +279,7 @@ function validateCapabilityGroups(groups) {
     }
     if (seen.has(id)) addFailure('duplicate-capability', `capabilityGroups.${safeIdentifier(id)}`, 'capability group is duplicated')
     seen.add(id)
-    const expected = expectedCapabilityGroups[id]
+    const expected = expectedCapabilityGroups.get(id)
     if (expected) report.checkedCapabilityGroups.push(id)
     if (!expected) {
       addFailure('unknown-capability', `capabilityGroups.${safeIdentifier(id)}`, 'capability group is not part of RAC-54 voice rollback coverage')
@@ -311,6 +332,9 @@ function validateRollbackSequence(sequence, groups) {
     if (operationIndexes.has(operation)) addFailure('duplicate-operation', `rollbackSequence.${safeIdentifier(operation)}`, 'rollback operation is duplicated')
     operationIndexes.set(operation, index)
     if (requiredOperations.includes(operation) || stopOperations.has(operation)) report.checkedOperations.push(operation)
+    if (requiredRejectedOperations.includes(operation)) {
+      addFailure('rejected-operation-used', `rollbackSequence.${operation}`, 'rollback sequence cannot execute a canonical rejected operation')
+    }
     if (isProtectedDestructiveOperation(operation)) {
       addFailure('destructive-operation', `rollbackSequence.${safeIdentifier(operation)}`, 'destructive rollback operations cannot target protected state')
     }
@@ -540,6 +564,22 @@ function checkSecretText(text, location) {
   }
 }
 
+function checkSensitiveJsonKeys(value) {
+  if (Array.isArray(value)) {
+    for (const item of value) checkSensitiveJsonKeys(item)
+    return
+  }
+  if (!isRecord(value)) return
+  for (const [key, child] of Object.entries(value)) {
+    const normalizedKey = normalizeJsonKey(key)
+    if (sensitiveJsonKeyPatterns.some((pattern) => normalizedKey.includes(pattern))) {
+      report.forbiddenMatches.push({ id: 'sensitive-json-key', location: '<json-field>' })
+      addFailure('sensitive-json-key', 'plan', 'rollback plan contains a sensitive JSON field')
+    }
+    checkSensitiveJsonKeys(child)
+  }
+}
+
 function addFailure(id, location, detail) {
   failures.push(`${id} at ${redacted(location)}: ${redacted(detail)}`)
 }
@@ -584,6 +624,10 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error)
 }
 
+function errorName(error) {
+  return error instanceof Error ? error.name : 'UnknownError'
+}
+
 function redactedPath(path) {
   const relativePath = normalizePath(relative(repoRoot, path))
   if (relativePath && !relativePath.startsWith('..') && !relativePath.startsWith('/')) return relativePath
@@ -610,6 +654,10 @@ function redacted(value) {
 function reportHasNoRawSecrets(candidateReport) {
   const text = JSON.stringify(candidateReport)
   return secretPatterns.every(({ pattern }) => !pattern.test(text))
+}
+
+function normalizeJsonKey(key) {
+  return String(key).replace(/[^A-Za-z0-9]/g, '').toLowerCase()
 }
 
 function normalizePath(path) {
