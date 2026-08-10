@@ -17,6 +17,9 @@ const header = readFileSync(
   resolve(packageRoot, 'Sources', 'CAuroraIOSVoiceBridge', 'include', 'aurora_ios_voice_bridge.h'),
   'utf8',
 )
+const loadRecordBody = credentialStore.match(
+  /private static func loadRecord\(\) throws -> AuroraIOSVoiceCredentialRecord\? \{[\s\S]*?\n  private static func validateGateway/,
+)?.[0] ?? ''
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
@@ -58,6 +61,26 @@ assert(
 assert(
   credentialStore.includes('http" && !isLoopbackHost'),
   'cleartext voice gateways must be restricted to loopback',
+)
+assert(
+  credentialStore.includes('private static func discardStoredRecord()')
+    && credentialStore.includes('SecItemDelete(keychainQuery() as CFDictionary)'),
+  'invalid stored voice credentials must delete only the dedicated Keychain record',
+)
+assert(
+  /guard status == errSecSuccess, let data = result as\? Data else \{\n      throw AuroraIOSVoiceCredentialStoreError\.keychainFailure\n    \}\n    let record: AuroraIOSVoiceCredentialRecord/.test(loadRecordBody)
+    && !loadRecordBody
+      .slice(0, loadRecordBody.indexOf('let record: AuroraIOSVoiceCredentialRecord'))
+      .includes('discardStoredRecord()'),
+  'generic Keychain read failures must fail without deleting stored voice credentials',
+)
+assert(
+  /do \{\n      record = try JSONDecoder\(\)\.decode\(AuroraIOSVoiceCredentialRecord\.self, from: data\)\n    \} catch \{\n      discardStoredRecord\(\)\n      throw AuroraIOSVoiceCredentialStoreError\.corruptRecord\n    \}/.test(loadRecordBody),
+  'corrupt stored voice credentials must be deleted before failing closed',
+)
+assert(
+  /do \{\n      _ = try validateGateway\(record\.gateway\)\n      _ = try validateBearer\(record\.bearer\)\n    \} catch let error as AuroraIOSVoiceCredentialStoreError \{\n      discardStoredRecord\(\)\n      throw error\n    \}/.test(loadRecordBody),
+  'semantically invalid stored voice credentials must be deleted without weakening validation',
 )
 assert(plugin.includes('voiceCredentialSet'), 'native plugin must expose credential provisioning')
 assert(plugin.includes('voiceCredentialDelete'), 'native plugin must expose credential deletion')

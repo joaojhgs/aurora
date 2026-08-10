@@ -108,16 +108,24 @@ enum AuroraIOSVoiceCredentialStore {
     guard status == errSecSuccess, let data = result as? Data else {
       throw AuroraIOSVoiceCredentialStoreError.keychainFailure
     }
+    let record: AuroraIOSVoiceCredentialRecord
     do {
-      let record = try JSONDecoder().decode(AuroraIOSVoiceCredentialRecord.self, from: data)
-      _ = try validateGateway(record.gateway)
-      _ = try validateBearer(record.bearer)
-      return record
-    } catch let error as AuroraIOSVoiceCredentialStoreError {
-      throw error
+      record = try JSONDecoder().decode(AuroraIOSVoiceCredentialRecord.self, from: data)
     } catch {
+      discardStoredRecord()
       throw AuroraIOSVoiceCredentialStoreError.corruptRecord
     }
+    do {
+      _ = try validateGateway(record.gateway)
+      _ = try validateBearer(record.bearer)
+    } catch let error as AuroraIOSVoiceCredentialStoreError {
+      discardStoredRecord()
+      throw error
+    } catch {
+      discardStoredRecord()
+      throw AuroraIOSVoiceCredentialStoreError.corruptRecord
+    }
+    return record
   }
 
   private static func validateGateway(_ value: String) throws -> String {
@@ -166,6 +174,10 @@ enum AuroraIOSVoiceCredentialStore {
       kSecAttrAccount as String: auroraIOSVoiceCredentialAccount,
       kSecAttrSynchronizable as String: kCFBooleanFalse as Any
     ]
+  }
+
+  private static func discardStoredRecord() {
+    _ = SecItemDelete(keychainQuery() as CFDictionary)
   }
 
   private static func keychainWrite(_ value: Data) throws {
