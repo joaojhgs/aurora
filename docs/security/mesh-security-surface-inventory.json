@@ -653,7 +653,7 @@
       "handler": "_on_listen",
       "source": {
         "file": "app/services/stt_coordinator/service.py",
-        "line": 1201
+        "line": 1196
       },
       "exposure": "both",
       "method_type": "use",
@@ -674,7 +674,7 @@
       "handler": "_on_stop_listening",
       "source": {
         "file": "app/services/stt_coordinator/service.py",
-        "line": 1254
+        "line": 1249
       },
       "exposure": "both",
       "method_type": "use",
@@ -695,7 +695,7 @@
       "handler": "_on_capture_prepare",
       "source": {
         "file": "app/services/stt_coordinator/service.py",
-        "line": 1436
+        "line": 1431
       },
       "exposure": "both",
       "method_type": "manage",
@@ -716,7 +716,7 @@
       "handler": "_on_capture_release",
       "source": {
         "file": "app/services/stt_coordinator/service.py",
-        "line": 1540
+        "line": 1535
       },
       "exposure": "both",
       "method_type": "manage",
@@ -737,7 +737,7 @@
       "handler": "_on_capture_status",
       "source": {
         "file": "app/services/stt_coordinator/service.py",
-        "line": 1612
+        "line": 1607
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1961,7 +1961,7 @@
       "handler": "_on_stream_start",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1815
+        "line": 1814
       },
       "exposure": "both",
       "method_type": "use",
@@ -1981,7 +1981,7 @@
       "handler": "_on_stream_chunk",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1883
+        "line": 1882
       },
       "exposure": "both",
       "method_type": "use",
@@ -2001,7 +2001,7 @@
       "handler": "_on_stream_end",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1931
+        "line": 1930
       },
       "exposure": "both",
       "method_type": "use",
@@ -2021,7 +2021,7 @@
       "handler": "synthesize",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2355
+        "line": 2354
       },
       "exposure": "both",
       "method_type": "use",
