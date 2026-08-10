@@ -1031,7 +1031,19 @@ function shellQuote(value: string): string {
 
 function adbOutputOrEmpty(args: string[]): string {
   const result = spawnSync(adb, args, { encoding: 'utf8' })
+  if (result.error) throw result.error
   return result.status === 0 ? result.stdout : ''
+}
+
+function adbOutput(args: string[]): string {
+  const result = spawnSync(adb, args, { encoding: 'utf8' })
+  if (result.error) throw result.error
+  if (result.status !== 0) {
+    throw new Error(
+      `${adb} ${args.join(' ')} failed: ${`${result.stdout}\n${result.stderr}`.trim()}`,
+    )
+  }
+  return result.stdout
 }
 
 async function readRequestBody(
