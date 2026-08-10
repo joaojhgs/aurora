@@ -269,7 +269,7 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(runtimeModeOnlyNotes.join('\n')).not.toContain('local tool provider disabled')
     expect(runtimeModeOnlyNotes.join('\n')).not.toContain('lightweight orchestrator disabled')
     expect(explicitMeshNodeNotes).toEqual(expect.arrayContaining([
-      'mesh-node runtime disabled by rollout flag; remote-console behavior remains active',
+      'mesh-node implementation disabled by rollout flag',
       'local tool provider disabled by rollout flag',
       'lightweight orchestrator disabled by rollout flag',
     ]))
@@ -522,13 +522,13 @@ describe('browser WebRTC thin-shell runtime', () => {
       })
       expect(runtimeModeOnly.surface.nodeMode).toBe('remote-console')
       expect(runtimeModeOnly.surface.runtimeTier).toBe('none')
-      expect(runtimeOptions[3]?.nodeRole).toBe('remote-console')
+      expect(runtimeOptions[3]?.nodeRole).toBe('mesh-node')
       expect(runtimeOptions[3]).not.toHaveProperty('peerAuthorityResolver')
       expect(runtimeOptions[3]).not.toHaveProperty('peerPairingIssuer')
-      expect(runtimeOptions[3]?.localProtocolCapabilities).toContain(CAP_CONSUMER_ONLY_V1)
+      expect(runtimeOptions[3]?.localProtocolCapabilities).not.toContain(CAP_CONSUMER_ONLY_V1)
       expect(meshRuntimeDisabled.features).toEqual({
         requestedNodeRole: 'mesh-node',
-        activeNodeRole: 'remote-console',
+        activeNodeRole: 'mesh-node',
         meshNodeRuntimeEnabled: false,
         localToolProviderEnabled: false,
         lightweightOrchestratorEnabled: false,
@@ -541,6 +541,8 @@ describe('browser WebRTC thin-shell runtime', () => {
           canRunLocalTts: false,
         }),
       })
+      expect(meshRuntimeDisabled.surface.nodeMode).toBe('mesh-node')
+      expect(meshRuntimeDisabled.surface.runtimeTier).toBe('lightweight-ts')
       expect(runtimeOptions[4]?.nodeRole).toBe('mesh-node')
       expect(runtimeOptions[4]).not.toHaveProperty('peerAuthorityResolver')
       expect(runtimeOptions[4]).not.toHaveProperty('peerPairingIssuer')

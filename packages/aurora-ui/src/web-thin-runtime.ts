@@ -190,7 +190,10 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
   const rollbackHttp = webrtcDisabled && mode === 'webrtc-preferred' ? http : null
   const activeNodeRole = resolveActiveNodeRole(requestedNodeRole, rolloutFlags)
   const webrtcRuntimeAvailable = !webrtcDisabled
-  const meshNodeRuntimeEnabled = webrtcRuntimeAvailable && activeNodeRole === 'mesh-node'
+  const meshNodeRuntimeEnabled =
+    webrtcRuntimeAvailable
+    && activeNodeRole === 'mesh-node'
+    && rolloutFlags.mesh_node_runtime_v1
   const localToolProviderEnabled = meshNodeRuntimeEnabled && rolloutFlags.local_tool_provider_v1
   const surface = getAuroraSurfaceProfile({
     runtimeMode: config.runtimeMode ?? (mode === 'http-only' ? 'web' : 'web-thin'),
@@ -392,7 +395,7 @@ export function explainBrowserThinRuntime(config: BrowserThinRuntimeConfig = {})
   if (mode !== 'http-only' && !rolloutFlags.webrtc_scoped_subscriptions) notes.push('scoped WebRTC subscriptions disabled by rollout flag')
   if (mode !== 'http-only' && !rolloutFlags.webrtc_fragmentation) notes.push('WebRTC fragmentation/backpressure disabled by rollout flag')
   if (mode !== 'http-only' && !rolloutFlags.webrtc_app_layer_e2ee) notes.push('application-layer WebRTC E2EE disabled by rollout flag; profiles requiring it fail closed')
-  if (requestedNodeRole === 'mesh-node' && !rolloutFlags.mesh_node_runtime_v1) notes.push('mesh-node runtime disabled by rollout flag; remote-console behavior remains active')
+  if (requestedNodeRole === 'mesh-node' && !rolloutFlags.mesh_node_runtime_v1) notes.push('mesh-node implementation disabled by rollout flag')
   if (requestedNodeRole === 'mesh-node' && !rolloutFlags.local_tool_provider_v1) notes.push('local tool provider disabled by rollout flag')
   if (requestedNodeRole === 'mesh-node' && !rolloutFlags.lightweight_orchestrator_v1) notes.push('lightweight orchestrator disabled by rollout flag')
   if (summary) notes.push(`invite room=${summary.room}; brokers=${summary.brokerCount}; secret=${summary.includesPassword ? 'provided' : 'missing'}`)
@@ -412,11 +415,9 @@ export function explainBrowserThinRuntime(config: BrowserThinRuntimeConfig = {})
 
 function resolveActiveNodeRole(
   requestedNodeRole: BrowserThinNodeRole,
-  rolloutFlags: AuroraWebRtcRolloutFlags,
+  _rolloutFlags: AuroraWebRtcRolloutFlags,
 ): BrowserThinNodeRole {
-  return requestedNodeRole === 'mesh-node' && rolloutFlags.mesh_node_runtime_v1
-    ? 'mesh-node'
-    : 'remote-console'
+  return requestedNodeRole
 }
 
 export class BrowserWebRtcPeerController implements PeerConnectionController {
