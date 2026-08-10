@@ -542,7 +542,7 @@ describe('browser WebRTC thin-shell runtime', () => {
         }),
       })
       expect(meshRuntimeDisabled.surface.nodeMode).toBe('mesh-node')
-      expect(meshRuntimeDisabled.surface.runtimeTier).toBe('lightweight-ts')
+      expect(meshRuntimeDisabled.surface.runtimeTier).toBe('none')
       expect(runtimeOptions[4]?.nodeRole).toBe('mesh-node')
       expect(runtimeOptions[4]).not.toHaveProperty('peerAuthorityResolver')
       expect(runtimeOptions[4]).not.toHaveProperty('peerPairingIssuer')
@@ -830,7 +830,7 @@ describe('browser WebRTC thin-shell runtime', () => {
     })
     expect(runtime.surface).toMatchObject({
       nodeMode: 'mesh-node',
-      runtimeTier: 'lightweight-ts',
+      runtimeTier: 'none',
       ownsLocalNodeState: true,
       isRemoteConsole: false,
       prefersWebRtcTransport: false,

@@ -188,7 +188,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
   const http = httpOptionsFromConfig(config)
   const webrtcDisabled = mode !== 'http-only' && !rolloutFlags.webrtc_thin_client
   const rollbackHttp = webrtcDisabled && mode === 'webrtc-preferred' ? http : null
-  const activeNodeRole = resolveActiveNodeRole(requestedNodeRole, rolloutFlags)
+  const activeNodeRole = resolveActiveNodeRole(requestedNodeRole)
   const webrtcRuntimeAvailable = !webrtcDisabled
   const meshNodeRuntimeEnabled =
     webrtcRuntimeAvailable
@@ -201,7 +201,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     nativePlatform: config.nativePlatform,
     userAgent: config.userAgent ?? browserUserAgent(),
     nodeMode: activeNodeRole,
-    runtimeTier: activeNodeRole === 'mesh-node' ? 'lightweight-ts' : 'none',
+    runtimeTier: meshNodeRuntimeEnabled ? 'lightweight-ts' : 'none',
     enabledCapabilityPacks: config.enabledCapabilityPacks,
     localSpeechPackState: config.localSpeechPackState,
   })
@@ -375,14 +375,19 @@ export function explainBrowserThinRuntime(config: BrowserThinRuntimeConfig = {})
   const requestedNodeRole = config.nodeRole ?? 'remote-console'
   const webrtcDisabled = mode !== 'http-only' && !rolloutFlags.webrtc_thin_client
   const rollbackHttp = webrtcDisabled && mode === 'webrtc-preferred' ? httpOptionsFromConfig(config) : null
-  const activeNodeRole = resolveActiveNodeRole(requestedNodeRole, rolloutFlags)
+  const activeNodeRole = resolveActiveNodeRole(requestedNodeRole)
+  const webrtcRuntimeAvailable = !webrtcDisabled
+  const meshNodeRuntimeEnabled =
+    webrtcRuntimeAvailable
+    && activeNodeRole === 'mesh-node'
+    && rolloutFlags.mesh_node_runtime_v1
   const surface = getAuroraSurfaceProfile({
     runtimeMode: config.runtimeMode ?? (mode === 'http-only' ? 'web' : 'web-thin'),
     transportKind: mode === 'http-only' || rollbackHttp ? 'http' : 'mesh',
     nativePlatform: config.nativePlatform,
     userAgent: config.userAgent ?? browserUserAgent(),
     nodeMode: activeNodeRole,
-    runtimeTier: activeNodeRole === 'mesh-node' ? 'lightweight-ts' : 'none',
+    runtimeTier: meshNodeRuntimeEnabled ? 'lightweight-ts' : 'none',
     enabledCapabilityPacks: config.enabledCapabilityPacks,
     localSpeechPackState: config.localSpeechPackState,
   })
@@ -415,7 +420,6 @@ export function explainBrowserThinRuntime(config: BrowserThinRuntimeConfig = {})
 
 function resolveActiveNodeRole(
   requestedNodeRole: BrowserThinNodeRole,
-  _rolloutFlags: AuroraWebRtcRolloutFlags,
 ): BrowserThinNodeRole {
   return requestedNodeRole
 }
