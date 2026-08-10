@@ -1354,6 +1354,7 @@ class RTCClient:
     ) -> str:
         """Record a stable mesh peer_id for an active signaling session."""
         stable = stable_peer_id or session_peer_id
+        self._cancel_stale_stable_peer_session_tasks(stable, session_peer_id)
         previous_session = self._stable_peer_sessions.get(stable)
         if previous_session and previous_session != session_peer_id:
             self._cancel_provider_lease_task(stable, session_peer_id=previous_session)
@@ -1372,6 +1373,69 @@ class RTCClient:
             self._peer_names[stable] = node_name
             self._peer_names[session_peer_id] = node_name
         return stable
+
+    def _stable_peer_candidate_sessions(self, stable_peer_id: str) -> set[str]:
+        """Return session IDs that are known or claimed to belong to one stable peer."""
+
+        sessions = {
+            session_peer_id
+            for session_peer_id, known_stable_peer_id in self._peer_stable_ids.items()
+            if known_stable_peer_id == stable_peer_id
+        }
+        sessions.update(
+            session_peer_id
+            for session_peer_id, claimed_stable_peer_id in self._peer_claimed_stable_ids.items()
+            if claimed_stable_peer_id == stable_peer_id
+        )
+        previous_session = self._stable_peer_sessions.get(stable_peer_id)
+        if previous_session:
+            sessions.add(previous_session)
+        return sessions
+
+    def _cancel_stale_stable_peer_session_tasks(
+        self,
+        stable_peer_id: str,
+        active_session_peer_id: str,
+    ) -> None:
+        """Stop stale pending work once a newer session owns a stable peer."""
+
+        try:
+            current_task = asyncio.current_task()
+        except RuntimeError:
+            current_task = None
+        for stale_session_peer_id in self._stable_peer_candidate_sessions(stable_peer_id):
+            if stale_session_peer_id == active_session_peer_id:
+                continue
+
+            pc = self._pcs.get(stale_session_peer_id)
+            if pc is not None:
+                self._reconnect_suppressed_pcs.add(pc)
+                self._negotiation_retry_pcs.discard(pc)
+
+            self._offer_in_progress.discard(stale_session_peer_id)
+
+            watchdog_entry = self._negotiation_watchdogs.get(stale_session_peer_id)
+            if watchdog_entry is not None and (pc is None or watchdog_entry[0] is pc):
+                self._negotiation_watchdogs.pop(stale_session_peer_id, None)
+                watchdog_task = watchdog_entry[1]
+                if watchdog_task is not current_task and not watchdog_task.done():
+                    watchdog_task.cancel()
+
+            reconnect_proof_entry = self._reconnect_proof_tasks.get(stale_session_peer_id)
+            if reconnect_proof_entry is not None and (pc is None or reconnect_proof_entry[0] is pc):
+                self._reconnect_proof_tasks.pop(stale_session_peer_id, None)
+                reconnect_proof_task = reconnect_proof_entry[1]
+                if reconnect_proof_task is not current_task and not reconnect_proof_task.done():
+                    reconnect_proof_task.cancel()
+
+            for tasks in (
+                self._peer_timeout_tasks,
+                self._peer_reconnect_tasks,
+                self._pairing_tasks,
+            ):
+                task = tasks.pop(stale_session_peer_id, None)
+                if task is not None and task is not current_task and not task.done():
+                    task.cancel()
 
     @staticmethod
     def _saved_credential_parts(value: Any) -> tuple[str, str] | None:

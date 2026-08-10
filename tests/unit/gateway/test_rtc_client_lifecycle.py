@@ -679,6 +679,97 @@ async def test_replaced_stable_session_sends_old_session_tombstone_before_reset(
 
 
 @pytest.mark.asyncio
+async def test_remember_stable_peer_cancels_stale_claimed_session_tasks(client):
+    old_session = "100-browser-g009"
+    new_session = "100-browser-g009-mesh"
+    stable_peer = "stable-peer-a"
+    old_pc = MagicMock()
+    new_pc = MagicMock()
+
+    async def wait_forever() -> None:
+        await asyncio.Event().wait()
+
+    old_watchdog = asyncio.create_task(wait_forever())
+    old_reconnect = asyncio.create_task(wait_forever())
+    old_auth_timeout = asyncio.create_task(wait_forever())
+    old_pairing = asyncio.create_task(wait_forever())
+    new_watchdog = asyncio.create_task(wait_forever())
+    new_reconnect = asyncio.create_task(wait_forever())
+
+    try:
+        client._peer_claimed_stable_ids[old_session] = stable_peer  # noqa: SLF001
+        client._pcs[old_session] = old_pc  # noqa: SLF001
+        client._pcs[new_session] = new_pc  # noqa: SLF001
+        client._negotiation_watchdogs[old_session] = (old_pc, old_watchdog)  # noqa: SLF001
+        client._peer_reconnect_tasks[old_session] = old_reconnect  # noqa: SLF001
+        client._peer_timeout_tasks[old_session] = old_auth_timeout  # noqa: SLF001
+        client._pairing_tasks[old_session] = old_pairing  # noqa: SLF001
+        client._offer_in_progress.add(old_session)  # noqa: SLF001
+        client._negotiation_retry_pcs.add(old_pc)  # noqa: SLF001
+        client._negotiation_watchdogs[new_session] = (new_pc, new_watchdog)  # noqa: SLF001
+        client._peer_reconnect_tasks[new_session] = new_reconnect  # noqa: SLF001
+
+        client._remember_stable_peer_id(new_session, stable_peer)  # noqa: SLF001
+        await asyncio.sleep(0)
+
+        assert old_watchdog.cancelled()
+        assert old_reconnect.cancelled()
+        assert old_auth_timeout.cancelled()
+        assert old_pairing.cancelled()
+        assert old_session not in client._negotiation_watchdogs  # noqa: SLF001
+        assert old_session not in client._peer_reconnect_tasks  # noqa: SLF001
+        assert old_session not in client._peer_timeout_tasks  # noqa: SLF001
+        assert old_session not in client._pairing_tasks  # noqa: SLF001
+        assert old_session not in client._offer_in_progress  # noqa: SLF001
+        assert old_pc in client._reconnect_suppressed_pcs  # noqa: SLF001
+        assert old_pc not in client._negotiation_retry_pcs  # noqa: SLF001
+        assert client._stable_peer_sessions[stable_peer] == new_session  # noqa: SLF001
+        assert client._negotiation_watchdogs[new_session] == (new_pc, new_watchdog)  # noqa: SLF001
+        assert client._peer_reconnect_tasks[new_session] is new_reconnect  # noqa: SLF001
+        assert not new_watchdog.cancelled()
+        assert not new_reconnect.cancelled()
+    finally:
+        for task in (
+            old_watchdog,
+            old_reconnect,
+            old_auth_timeout,
+            old_pairing,
+            new_watchdog,
+            new_reconnect,
+        ):
+            task.cancel()
+        await asyncio.gather(
+            old_watchdog,
+            old_reconnect,
+            old_auth_timeout,
+            old_pairing,
+            new_watchdog,
+            new_reconnect,
+            return_exceptions=True,
+        )
+
+
+def test_remember_stable_peer_cancels_mocked_stale_tasks_without_running_loop(client):
+    old_session = "100-browser-g009"
+    new_session = "100-browser-g009-mesh"
+    stable_peer = "stable-peer-a"
+    old_pc = MagicMock()
+    stale_task = MagicMock()
+    stale_task.done.return_value = False
+
+    client._peer_claimed_stable_ids[old_session] = stable_peer  # noqa: SLF001
+    client._pcs[old_session] = old_pc  # noqa: SLF001
+    client._negotiation_watchdogs[old_session] = (old_pc, stale_task)  # noqa: SLF001
+    client._peer_reconnect_tasks[old_session] = stale_task  # noqa: SLF001
+
+    client._remember_stable_peer_id(new_session, stable_peer)  # noqa: SLF001
+
+    assert old_session not in client._negotiation_watchdogs  # noqa: SLF001
+    assert old_session not in client._peer_reconnect_tasks  # noqa: SLF001
+    assert stale_task.cancel.call_count == 2
+
+
+@pytest.mark.asyncio
 async def test_disconnect_peer_cancels_active_inbound_rpc_work(client):
     pc = AsyncMock()
     pc.connectionState = "connected"
