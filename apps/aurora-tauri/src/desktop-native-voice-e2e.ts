@@ -638,7 +638,7 @@ export function remoteConsoleProfileDocument(
     profiles: [{
       version: 2,
       id,
-      label: "RAC27 remote console",
+      label: "Home desktop",
       nodeMode: "remote-console",
       runtimeTier: "none",
       homeConnection: {

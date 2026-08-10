@@ -42,6 +42,7 @@ export type PairingAdminActionKind = 'create' | 'approve' | 'deny' | 'exchange' 
 
 const PAIRING_QUEUE_REFRESH_INTERVAL_MS = 3_000
 const PAIRING_DIAGNOSTICS_TIMEOUT_MS = 2_500
+const MOBILE_PAIRING_ASSISTANT_PERMISSION = 'Orchestrator.use'
 
 const PAIRING_ADMIN_ACTION_METHODS = new Set<string>([
   AUTH_METHODS.pairingStart,
@@ -236,7 +237,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
             action,
             {
               reason,
-              permissions: isMobileSurface ? (mobilePermissionScope === 'none' ? '' : 'Orchestrator.use') : permissions,
+              permissions: isMobileSurface ? (mobilePermissionScope === 'none' ? '' : MOBILE_PAIRING_ASSISTANT_PERMISSION) : permissions,
               grantAdmin,
               reauthConfirmed,
             },
