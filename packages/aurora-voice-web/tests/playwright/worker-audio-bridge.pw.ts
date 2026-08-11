@@ -141,7 +141,7 @@ test('production module Worker uses generated Rust/WASM facade for start frame s
     'session_stopped'
   ])
   expect(result.events.every((event) => event.redacted === true)).toBe(true)
-  expect(JSON.stringify(result.events)).not.toMatch(/321|-321|transcript|secret|pcm|pointer/i)
+  expect(redactedEventJson(result.events)).not.toMatch(/321|-321|transcript|secret|pcm|pointer/i)
 })
 
 test('production module Worker uses generated Rust/WASM facade for abandon repeat', async ({ page }, testInfo) => {
@@ -202,7 +202,7 @@ test('production snapshots keep capabilities false and payload details redacted'
     await harness.complete()
     return {
       snapshots: [before, during, stopped, harness.snapshot()],
-      eventJson: JSON.stringify(harness.events()),
+      events: harness.events(),
       captured: {
         sampleCount: audio?.sampleCount ?? null,
         redacted: audio?.redacted ?? null
@@ -217,7 +217,7 @@ test('production snapshots keep capabilities false and payload details redacted'
     expect(snapshot).not.toHaveProperty('transcript')
   }
   expect(result.captured).toEqual({ sampleCount: 2, redacted: true })
-  expect(result.eventJson).not.toMatch(/12345|-12345|transcript|secret|pcm|pointer/i)
+  expect(redactedEventJson(result.events)).not.toMatch(/12345|-12345|transcript|secret|pcm|pointer/i)
 })
 
 test('built production artifacts contain no model payloads and stay under browser weight gates', async () => {
@@ -744,6 +744,10 @@ function contentType(filePath: string): string {
     default:
       return 'application/octet-stream'
   }
+}
+
+function redactedEventJson<T extends { readonly occurredAtMs: number }>(events: readonly T[]): string {
+  return JSON.stringify(events.map(({ occurredAtMs: _occurredAtMs, ...event }) => event))
 }
 
 declare global {

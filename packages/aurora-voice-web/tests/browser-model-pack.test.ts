@@ -14,6 +14,125 @@ const TEST_PRIVATE_KEY_PKCS8_BASE64 = 'MC4CAQAwBQYDK2VwBCIEIBVNj/cSHz9pWMrteoqMM
 const TEST_PUBLIC_KEY_BASE64 = 'k1NEXA5D4H1jAs3GBxo9Cr42I6BUeYEA/HqYiTOUKhc='
 const TEST_RELEASE_KEY_ID = 'aurora-release-web-wasm-test'
 
+class AbortAfterAppendHost extends MemoryWebModelStoreHost {
+  private abortController: AbortController | null = null
+  lastAppendedStorageKey: string | null = null
+
+  abortAfterNextAppend(controller: AbortController): void {
+    this.abortController = controller
+  }
+
+  override async appendStaging(storageKey: string, offset: number, bytes: Uint8Array): Promise<void> {
+    await super.appendStaging(storageKey, offset, bytes)
+    this.lastAppendedStorageKey = storageKey
+    const controller = this.abortController
+    this.abortController = null
+    controller?.abort()
+  }
+}
+
+class CleanupFailureHost extends AbortAfterAppendHost {
+  private failCleanup = false
+
+  failNextCleanupAfterAppend(controller: AbortController): void {
+    this.failCleanup = true
+    this.abortAfterNextAppend(controller)
+  }
+
+  override async clearStaging(storageKey: string): Promise<void> {
+    if (this.failCleanup && this.lastAppendedStorageKey === storageKey) {
+      this.failCleanup = false
+      throw new Error('cleanup_failure')
+    }
+    await super.clearStaging(storageKey)
+  }
+}
+
+class PromotionFailureHost extends MemoryWebModelStoreHost {
+  private promotionsUntilFailure: number | null = null
+
+  failOnPromotion(number: number): void {
+    this.promotionsUntilFailure = number
+  }
+
+  override async promoteStagingAtomic(storageKey: string): Promise<void> {
+    if (this.promotionsUntilFailure === 1) {
+      this.promotionsUntilFailure = null
+      throw new Error('promotion_failure')
+    }
+    if (this.promotionsUntilFailure !== null) this.promotionsUntilFailure -= 1
+    await super.promoteStagingAtomic(storageKey)
+  }
+}
+
+class ActiveWriteFailureHost extends MemoryWebModelStoreHost {
+  private failActiveWrite = false
+
+  failNextActiveWrite(): void {
+    this.failActiveWrite = true
+  }
+
+  override async writeJson(key: string, value: string): Promise<void> {
+    if (this.failActiveWrite && key.startsWith('aurora.voice.web-store.v1:active:')) {
+      this.failActiveWrite = false
+      throw new Error('active_write_failure')
+    }
+    await super.writeJson(key, value)
+  }
+}
+
+class AbortAfterPromotionHost extends MemoryWebModelStoreHost {
+  constructor(private readonly controller: AbortController) {
+    super()
+  }
+
+  override async promoteStagingAtomic(storageKey: string): Promise<void> {
+    await super.promoteStagingAtomic(storageKey)
+    this.controller.abort()
+  }
+}
+
+class BrowserKeyLimitHost extends MemoryWebModelStoreHost {
+  private assertKey(key: string): void {
+    if (new TextEncoder().encode(key).byteLength > 256) throw new Error('key_limit')
+  }
+
+  override async readJson(key: string): Promise<string | null> {
+    this.assertKey(key)
+    return super.readJson(key)
+  }
+
+  override async writeJson(key: string, value: string): Promise<void> {
+    this.assertKey(key)
+    await super.writeJson(key, value)
+  }
+
+  override async deleteJson(key: string): Promise<void> {
+    this.assertKey(key)
+    await super.deleteJson(key)
+  }
+
+  override async promotedStat(storageKey: string) {
+    this.assertKey(storageKey)
+    return super.promotedStat(storageKey)
+  }
+
+  override async clearStaging(storageKey: string): Promise<void> {
+    this.assertKey(storageKey)
+    await super.clearStaging(storageKey)
+  }
+
+  override async appendStaging(storageKey: string, offset: number, bytes: Uint8Array): Promise<void> {
+    this.assertKey(storageKey)
+    await super.appendStaging(storageKey, offset, bytes)
+  }
+
+  override async promoteStagingAtomic(storageKey: string): Promise<void> {
+    this.assertKey(storageKey)
+    await super.promoteStagingAtomic(storageKey)
+  }
+}
+
 describe('browser model pack verification', () => {
   it('requires signed trust and keeps non-production trust behind an explicit option', async () => {
     const manifest = await signedManifest(new Uint8Array([1, 2, 3]))
@@ -66,6 +185,248 @@ describe('browser model pack verification', () => {
     )
     expect(reopened?.identity).toEqual(receipt.identity)
     expect(Array.from(await reopened?.files[0]?.readAll() ?? [])).toEqual([4, 5, 6, 7])
+  })
+
+  it('does not fetch or mutate storage when installation is already cancelled', async () => {
+    const bytes = new Uint8Array([14, 15, 16])
+    const manifest = await signedManifest(bytes)
+    const host = new MemoryWebModelStoreHost()
+    const controller = new AbortController()
+    let fetchCount = 0
+    controller.abort()
+
+    await expect(installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      signal: controller.signal,
+      fetchBytes: async () => {
+        fetchCount += 1
+        return bytes
+      }
+    })).rejects.toMatchObject({ code: 'aborted' })
+
+    expect(fetchCount).toBe(0)
+    expect(await host.listPromotedKeys()).toEqual([])
+    expect(await host.listJsonKeys('aurora.voice.web-store.v1:active:')).toEqual([])
+  })
+
+  it('clears staged bytes and preserves the active offline pack when cancelled before promotion', async () => {
+    const previousBytes = new Uint8Array([21, 22, 23])
+    const nextBytes = new Uint8Array([31, 32, 33])
+    const previousManifest = await signedManifest(previousBytes)
+    const nextManifest = await signedManifest(nextBytes)
+    const host = new AbortAfterAppendHost()
+
+    const previousReceipt = await installVerifiedBrowserModelPack({
+      host,
+      manifest: previousManifest,
+      allowNonProductionTestSignature: true,
+      fetchBytes: async () => previousBytes
+    })
+
+    const controller = new AbortController()
+    let forwardedSignal: AbortSignal | undefined
+    host.abortAfterNextAppend(controller)
+    await expect(installVerifiedBrowserModelPack({
+      host,
+      manifest: nextManifest,
+      allowNonProductionTestSignature: true,
+      signal: controller.signal,
+      fetchBytes: async (_url, signal) => {
+        forwardedSignal = signal
+        return nextBytes
+      }
+    })).rejects.toMatchObject({ code: 'aborted' })
+
+    expect(forwardedSignal).toBe(controller.signal)
+    expect(host.lastAppendedStorageKey).not.toBeNull()
+    expect(await host.stagingLen(host.lastAppendedStorageKey ?? '')).toBe(0)
+    expect(await host.listPromotedKeys()).toEqual(previousReceipt.files.map((file) => file.storageKey))
+    const reopened = await openActiveBrowserModelPack(
+      host,
+      { task: 'stt' },
+      { allowNonProductionTestSignature: true }
+    )
+    expect(reopened?.identity.packVersion).toBe('1.0.0')
+    expect(Array.from(await reopened?.files[0]?.readAll() ?? [])).toEqual([21, 22, 23])
+  })
+
+  it('maps fetch cancellation only when the supplied signal is actually aborted', async () => {
+    const bytes = new Uint8Array([34, 35, 36])
+    const manifest = await signedManifest(bytes)
+    const host = new MemoryWebModelStoreHost()
+    const controller = new AbortController()
+    const fetchAbort = new DOMException('cancelled', 'AbortError')
+    let forwardedSignal: AbortSignal | undefined
+
+    await expect(installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      signal: controller.signal,
+      fetchBytes: async (_url, signal) => {
+        forwardedSignal = signal
+        controller.abort()
+        throw fetchAbort
+      }
+    })).rejects.toMatchObject({ code: 'aborted' })
+
+    expect(forwardedSignal).toBe(controller.signal)
+    expect(await host.listPromotedKeys()).toEqual([])
+    expect(await host.listJsonKeys('aurora.voice.web-store.v1:active:')).toEqual([])
+
+    const unrelatedAbort = new DOMException('not caused by the install signal', 'AbortError')
+    await expect(installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      signal: new AbortController().signal,
+      fetchBytes: async () => { throw unrelatedAbort }
+    })).rejects.toBe(unrelatedAbort)
+  })
+
+  it('keeps cancellation primary while surfacing staging cleanup failure', async () => {
+    const bytes = new Uint8Array([37, 38, 39])
+    const manifest = await signedManifest(bytes)
+    const controller = new AbortController()
+    const host = new CleanupFailureHost()
+    host.failNextCleanupAfterAppend(controller)
+
+    await expect(installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      signal: controller.signal,
+      fetchBytes: async () => bytes
+    })).rejects.toMatchObject({ code: 'aborted', cleanupFailed: true })
+
+    expect(await host.listPromotedKeys()).toEqual([])
+    expect(await host.listJsonKeys('aurora.voice.web-store.v1:active:')).toEqual([])
+    expect(await host.stagingLen(host.lastAppendedStorageKey ?? '')).toBe(bytes.byteLength)
+  })
+
+  it('rolls back a failed multi-file promotion without changing the active same-version pack', async () => {
+    const previousFiles = [new Uint8Array([61, 62, 63]), new Uint8Array([71, 72, 73])] as const
+    const nextFiles = [new Uint8Array([64, 65, 66]), new Uint8Array([74, 75, 76])] as const
+    const previousManifest = await signedTwoFileManifest(...previousFiles)
+    const nextManifest = await signedTwoFileManifest(...nextFiles)
+    const host = new PromotionFailureHost()
+    const previousReceipt = await installVerifiedBrowserModelPack({
+      host,
+      manifest: previousManifest,
+      allowNonProductionTestSignature: true,
+      fetchBytes: async (url) => url.endsWith('-a.bin') ? previousFiles[0] : previousFiles[1]
+    })
+
+    host.failOnPromotion(2)
+    await expect(installVerifiedBrowserModelPack({
+      host,
+      manifest: nextManifest,
+      allowNonProductionTestSignature: true,
+      fetchBytes: async (url) => url.endsWith('-a.bin') ? nextFiles[0] : nextFiles[1]
+    })).rejects.toThrow('promotion_failure')
+
+    expect(await host.listPromotedKeys()).toEqual(previousReceipt.files.map((file) => file.storageKey).sort())
+    const reopened = await openActiveBrowserModelPack(
+      host,
+      { task: 'stt' },
+      { allowNonProductionTestSignature: true }
+    )
+    expect(await Promise.all(reopened?.files.map(async (file) => Array.from(await file.readAll())) ?? [])).toEqual([
+      Array.from(previousFiles[0]),
+      Array.from(previousFiles[1])
+    ])
+  })
+
+  it('does not delete pre-existing immutable files when an idempotent reinstall fails to commit', async () => {
+    const bytes = new Uint8Array([41, 42, 43])
+    const manifest = await signedManifest(bytes)
+    const host = new ActiveWriteFailureHost()
+    const receipt = await installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      fetchBytes: async () => bytes
+    })
+
+    host.failNextActiveWrite()
+    await expect(installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      fetchBytes: async () => bytes
+    })).rejects.toThrow('active_write_failure')
+
+    expect(await host.listPromotedKeys()).toEqual(receipt.files.map((file) => file.storageKey))
+    const reopened = await openActiveBrowserModelPack(
+      host,
+      { task: 'stt' },
+      { allowNonProductionTestSignature: true }
+    )
+    expect(Array.from(await reopened?.files[0]?.readAll() ?? [])).toEqual(Array.from(bytes))
+  })
+
+  it('keeps immutable generations grouped for pack-level cleanup', async () => {
+    const files = [new Uint8Array([47, 48, 49]), new Uint8Array([57, 58, 59])] as const
+    const manifest = await signedTwoFileManifest(...files)
+    const host = new MemoryWebModelStoreHost()
+    const receipt = await installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      fetchBytes: async (url) => url.endsWith('-a.bin') ? files[0] : files[1]
+    })
+
+    expect(receipt.files.every((file) => file.storageKey.startsWith(`${manifest.pack_id}@`))).toBe(true)
+    await host.removePackData(manifest.pack_id)
+    expect(await host.listPromotedKeys()).toEqual([])
+  })
+
+  it('keeps maximum-length pack ids within browser storage key limits', async () => {
+    const bytes = new Uint8Array([50, 51, 52])
+    const baseManifest = await signedManifest(bytes)
+    const manifest = await signedUnsignedManifest({
+      ...baseManifest,
+      pack_id: 'p'.repeat(128),
+      signature: null
+    })
+    const host = new BrowserKeyLimitHost()
+
+    const receipt = await installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      fetchBytes: async () => bytes
+    })
+
+    expect(receipt.files).toHaveLength(1)
+    expect(receipt.files[0]?.storageKey.startsWith(`${manifest.pack_id}@`)).toBe(true)
+    await host.removePackData(manifest.pack_id)
+    expect(await host.listPromotedKeys()).toEqual([])
+  })
+
+  it('finishes the commit once promotion starts even if cancellation arrives at that boundary', async () => {
+    const bytes = new Uint8Array([44, 45, 46])
+    const manifest = await signedManifest(bytes)
+    const controller = new AbortController()
+    const host = new AbortAfterPromotionHost(controller)
+
+    await expect(installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      signal: controller.signal,
+      fetchBytes: async () => bytes
+    })).resolves.toMatchObject({ identity: { packVersion: '1.0.0' } })
+
+    expect(controller.signal.aborted).toBe(true)
+    const reopened = await openActiveBrowserModelPack(
+      host,
+      { task: 'stt' },
+      { allowNonProductionTestSignature: true }
+    )
+    expect(Array.from(await reopened?.files[0]?.readAll() ?? [])).toEqual(Array.from(bytes))
   })
 
   it('requires release key, release hash, and signature for production release-hash trust', async () => {

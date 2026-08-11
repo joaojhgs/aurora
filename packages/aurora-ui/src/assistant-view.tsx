@@ -4275,7 +4275,13 @@ export function buildAssistantVoiceModel(input: {
       voiceChip('remote-processing', 'Connected speech help', transcription, 'raw-audio', input.consentGranted
         ? 'Session consent is active for speech help.'
         : 'Session consent is required before audio leaves this device.'),
-      voiceChip('wake', 'Wake and background', wakeControl.disabled ? wakeProcess : wakeControl, 'raw-audio', wakeDetail(input.nativePlatform ?? 'not available', wakeControl, wakeProcess)),
+      voiceChip(
+        'wake',
+        surfaceProfile.voiceCapture.wakewordRequiresFocus ? 'Wake while open' : 'Wake and background',
+        wakeControl.disabled ? wakeProcess : wakeControl,
+        'raw-audio',
+        wakeDetail(input.nativePlatform ?? 'not available', wakeControl, wakeProcess)
+      ),
       voiceChip('tts', 'Speech generation', ttsSynthesize, 'personal', 'Speech can be prepared before playback starts.'),
       voiceChip('playback', 'Local playback', ttsStop, 'personal', 'Playback stop/control is separate from remote synthesis.')
     ],

@@ -563,7 +563,8 @@ declare global {
         host: unknown
         manifest: unknown
         allowNonProductionTestSignature: true
-        fetchBytes: () => Promise<Uint8Array>
+        fetchBytes: (url: string, signal?: AbortSignal) => Promise<Uint8Array>
+        signal?: AbortSignal
       }): Promise<{
         identity: unknown
         manifestSha256: string

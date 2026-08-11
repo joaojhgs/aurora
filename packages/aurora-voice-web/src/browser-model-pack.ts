@@ -73,7 +73,9 @@ export interface AuroraBrowserModelPackInstallOptions extends AuroraBrowserModel
   readonly host: AuroraWebModelStoreHost
   readonly manifest: AuroraBrowserModelPackManifest
   readonly scope?: AuroraBrowserModelPackScope
-  readonly fetchBytes?: (url: string) => Promise<Uint8Array>
+  readonly fetchBytes?: (url: string, signal?: AbortSignal) => Promise<Uint8Array>
+  /** Cancels verification, download, and staging before atomic promotion begins. */
+  readonly signal?: AbortSignal
   readonly nowMs?: () => number
 }
 
@@ -156,8 +158,15 @@ export interface AuroraBrowserManifestVerificationReceipt {
 }
 
 export class AuroraBrowserModelPackError extends Error {
-  constructor(readonly code: string) {
-    super(`aurora_voice_web_model_pack:${code}`)
+  constructor(
+    readonly code: string,
+    readonly cleanupFailed = false,
+    cause?: unknown
+  ) {
+    super(
+      `aurora_voice_web_model_pack:${code}`,
+      cause === undefined ? undefined : { cause }
+    )
     this.name = 'AuroraBrowserModelPackError'
   }
 }
@@ -217,8 +226,10 @@ export async function installVerifiedBrowserModelPack({
   allowNonProductionTestSignature = false,
   trustedReleaseKeys,
   expectedReleaseManifestSha256,
+  signal,
   nowMs = Date.now
 }: AuroraBrowserModelPackInstallOptions): Promise<AuroraBrowserModelPackInstallReceipt> {
+  throwIfAborted(signal)
   const trustOptions: AuroraBrowserModelPackTrustOptions = { allowNonProductionTestSignature }
   if (trustedReleaseKeys !== undefined) {
     Object.assign(trustOptions, { trustedReleaseKeys })
@@ -227,39 +238,57 @@ export async function installVerifiedBrowserModelPack({
     Object.assign(trustOptions, { expectedReleaseManifestSha256 })
   }
   const verificationReceipt = await verifyBrowserModelPackManifest(manifest, trustOptions)
+  throwIfAborted(signal)
   const variant = selectReceiptVariant(manifest, verificationReceipt)
   const normalizedScope = normalizeScope(scope, manifest.tasks[0])
   const records: StoredFileRecord[] = []
-  for (const fileId of verificationReceipt.file_ids) {
-    const file = manifest.files.find((candidate) => candidate.file_id === fileId)
-    const verifiedFile = verificationReceipt.files.find((candidate) => candidate.file_id === fileId)
-    if (!file || !verifiedFile || verifiedFile.sha256 !== file.sha256 || verifiedFile.byte_size !== file.byte_size) {
-      throw modelPackError('receipt')
+  const stagedKeys = new Set<string>()
+  const preexistingPromotedKeys = new Set<string>()
+  try {
+    for (const [fileIndex, fileId] of verificationReceipt.file_ids.entries()) {
+      throwIfAborted(signal)
+      const file = manifest.files.find((candidate) => candidate.file_id === fileId)
+      const verifiedFile = verificationReceipt.files.find((candidate) => candidate.file_id === fileId)
+      if (!file || !verifiedFile || verifiedFile.sha256 !== file.sha256 || verifiedFile.byte_size !== file.byte_size) {
+        throw modelPackError('receipt')
+      }
+      const storageKey = fileStorageKey(manifest.pack_id, verificationReceipt.manifest_sha256, fileIndex)
+      let bytes: Uint8Array
+      try {
+        bytes = await fetchBytes(file.url, signal)
+      } catch (error) {
+        if (signal?.aborted === true) throw modelPackError('aborted', error)
+        throw error
+      }
+      throwIfAborted(signal)
+      if (bytes.byteLength !== file.byte_size) throw modelPackError('size')
+      const digest = await sha256Hex(bytes)
+      throwIfAborted(signal)
+      if (digest !== file.sha256) throw modelPackError('hash')
+      stagedKeys.add(storageKey)
+      if (await host.promotedStat(storageKey) !== null) preexistingPromotedKeys.add(storageKey)
+      throwIfAborted(signal)
+      await host.clearStaging(storageKey)
+      throwIfAborted(signal)
+      await host.appendStaging(storageKey, 0, bytes)
+      throwIfAborted(signal)
+      records.push({
+        storage_key: storageKey,
+        pack_id: manifest.pack_id,
+        pack_version: manifest.pack_version,
+        variant_id: variant.variant_id,
+        file_id: file.file_id,
+        sha256: digest,
+        byte_size: bytes.byteLength
+      })
     }
-    const storageKey = fileStorageKey(manifest.pack_id, manifest.pack_version, variant.variant_id, file.file_id)
-    const bytes = await fetchBytes(file.url)
-    if (bytes.byteLength !== file.byte_size) throw modelPackError('size')
-    const digest = await sha256Hex(bytes)
-    if (digest !== file.sha256) throw modelPackError('hash')
-    await host.clearStaging(storageKey)
-    await host.appendStaging(storageKey, 0, bytes)
-    await host.promoteStagingAtomic(storageKey)
-    const record: StoredFileRecord = {
-      storage_key: storageKey,
-      pack_id: manifest.pack_id,
-      pack_version: manifest.pack_version,
-      variant_id: variant.variant_id,
-      file_id: file.file_id,
-      sha256: digest,
-      byte_size: bytes.byteLength
-    }
-    await host.writeJson(fileKey(storageKey), JSON.stringify({
-      ...record,
-      state: 'ready',
-      stored_at: Math.max(0, Math.trunc(nowMs()))
-    }))
-    records.push(record)
+    throwIfAborted(signal)
+  } catch (error) {
+    const cleanupErrors = await clearStagedFiles(host, stagedKeys)
+    throwInstallFailure(error, signal, cleanupErrors)
   }
+
+  const installedAt = Math.max(0, Math.trunc(nowMs()))
   const active: ActiveRecord = {
     identity: {
       scope: { task: normalizedScope.task, slot_id: normalizedScope.slotId },
@@ -271,18 +300,67 @@ export async function installVerifiedBrowserModelPack({
     files: records,
     verification_receipt: verificationReceipt
   }
-  await host.writeJson(expectedSelectionKey(manifest.pack_id, manifest.pack_version, variant.variant_id), JSON.stringify({ files: records }))
-  await host.writeJson(lifecycleKey(manifest.pack_id, manifest.pack_version, variant.variant_id), JSON.stringify({
-    pack_id: manifest.pack_id,
-    pack_version: manifest.pack_version,
-    variant_id: variant.variant_id,
-    state: 'active',
-    revision: 1,
-    updated_at: Math.max(0, Math.trunc(nowMs())),
-    error_code: null
+  const jsonWrites = records.map((record) => ({
+    key: fileKey(record.storage_key),
+    value: JSON.stringify({
+      ...record,
+      state: 'ready',
+      stored_at: installedAt
+    })
   }))
-  await host.writeJson(lifecycleBackingKey(manifest.pack_id, manifest.pack_version, variant.variant_id), JSON.stringify({ files: records }))
-  await host.writeJson(activeKey(normalizedScope), JSON.stringify(active))
+  jsonWrites.push(
+    {
+      key: expectedSelectionKey(manifest.pack_id, manifest.pack_version, variant.variant_id),
+      value: JSON.stringify({ files: records })
+    },
+    {
+      key: lifecycleKey(manifest.pack_id, manifest.pack_version, variant.variant_id),
+      value: JSON.stringify({
+        pack_id: manifest.pack_id,
+        pack_version: manifest.pack_version,
+        variant_id: variant.variant_id,
+        state: 'active',
+        revision: 1,
+        updated_at: installedAt,
+        error_code: null
+      })
+    },
+    {
+      key: lifecycleBackingKey(manifest.pack_id, manifest.pack_version, variant.variant_id),
+      value: JSON.stringify({ files: records })
+    },
+    { key: activeKey(normalizedScope), value: JSON.stringify(active) }
+  )
+
+  let jsonSnapshots: readonly JsonSnapshot[]
+  try {
+    jsonSnapshots = await snapshotJson(host, jsonWrites.map(({ key }) => key))
+    throwIfAborted(signal)
+  } catch (error) {
+    const cleanupErrors = await clearStagedFiles(host, stagedKeys)
+    throwInstallFailure(error, signal, cleanupErrors)
+  }
+
+  const newlyPromotedKeys = new Set<string>()
+  try {
+    for (const record of records) {
+      if (!preexistingPromotedKeys.has(record.storage_key)) newlyPromotedKeys.add(record.storage_key)
+      await host.promoteStagingAtomic(record.storage_key)
+      stagedKeys.delete(record.storage_key)
+    }
+    for (const write of jsonWrites) await host.writeJson(write.key, write.value)
+  } catch (error) {
+    const restored = await restoreJson(host, jsonSnapshots)
+    const cleanupErrors = [
+      ...(await clearStagedFiles(host, stagedKeys)),
+      ...restored.errors
+    ]
+    // Keep promoted blobs if the active-pointer rollback failed: it may still reference this generation.
+    if (!restored.failedKeys.has(activeKey(normalizedScope))) {
+      cleanupErrors.push(...await deletePromotedFiles(host, newlyPromotedKeys))
+    }
+    throwInstallFailure(error, signal, cleanupErrors)
+  }
   return {
     identity: {
       packId: manifest.pack_id,
@@ -439,10 +517,96 @@ function selectReceiptVariant(
   return variant
 }
 
-async function defaultFetchBytes(url: string): Promise<Uint8Array> {
-  const response = await fetch(url, { cache: 'no-store' })
+async function defaultFetchBytes(url: string, signal?: AbortSignal): Promise<Uint8Array> {
+  const response = await fetch(url, {
+    cache: 'no-store',
+    ...(signal === undefined ? {} : { signal })
+  })
   if (!response.ok) throw modelPackError('network')
   return new Uint8Array(await response.arrayBuffer())
+}
+
+interface JsonSnapshot {
+  readonly key: string
+  readonly value: string | null
+}
+
+async function snapshotJson(
+  host: AuroraWebModelStoreHost,
+  keys: readonly string[]
+): Promise<readonly JsonSnapshot[]> {
+  return Promise.all(keys.map(async (key) => ({ key, value: await host.readJson(key) })))
+}
+
+async function restoreJson(
+  host: AuroraWebModelStoreHost,
+  snapshots: readonly JsonSnapshot[]
+): Promise<{ readonly errors: readonly unknown[]; readonly failedKeys: ReadonlySet<string> }> {
+  const errors: unknown[] = []
+  const failedKeys = new Set<string>()
+  for (const snapshot of [...snapshots].reverse()) {
+    try {
+      if (snapshot.value === null) {
+        await host.deleteJson(snapshot.key)
+      } else {
+        await host.writeJson(snapshot.key, snapshot.value)
+      }
+    } catch (error) {
+      errors.push(error)
+      failedKeys.add(snapshot.key)
+    }
+  }
+  return { errors, failedKeys }
+}
+
+async function clearStagedFiles(
+  host: AuroraWebModelStoreHost,
+  storageKeys: ReadonlySet<string>
+): Promise<readonly unknown[]> {
+  const errors: unknown[] = []
+  for (const storageKey of storageKeys) {
+    try {
+      await host.clearStaging(storageKey)
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  return errors
+}
+
+async function deletePromotedFiles(
+  host: AuroraWebModelStoreHost,
+  storageKeys: ReadonlySet<string>
+): Promise<readonly unknown[]> {
+  const errors: unknown[] = []
+  for (const storageKey of storageKeys) {
+    try {
+      await host.deletePromoted(storageKey)
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  return errors
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted === true) throw modelPackError('aborted')
+}
+
+function throwInstallFailure(
+  error: unknown,
+  signal: AbortSignal | undefined,
+  cleanupErrors: readonly unknown[]
+): never {
+  const primary = signal?.aborted === true && !(error instanceof AuroraBrowserModelPackError && error.code === 'aborted')
+    ? modelPackError('aborted', error)
+    : error
+  if (cleanupErrors.length === 0) throw primary
+  const cleanupFailure = new AggregateError(cleanupErrors, 'aurora_voice_web_model_pack:cleanup')
+  if (primary instanceof AuroraBrowserModelPackError) {
+    throw modelPackError(primary.code, new AggregateError([primary, cleanupFailure]), true)
+  }
+  throw new AggregateError([primary, cleanupFailure], 'aurora_voice_web_model_pack:install_and_cleanup')
 }
 
 async function hashPromotedFile(host: AuroraWebModelStoreHost, storageKey: string, byteLength: number): Promise<string> {
@@ -565,8 +729,11 @@ function lifecycleStorageKey(packId: string, packVersion: string, variantId: str
   return `aurora.voice.model-pack.v1:${encodeKey(packId)}@${encodeKey(packVersion)}:${encodeKey(variantId)}`
 }
 
-function fileStorageKey(packId: string, packVersion: string, variantId: string, fileId: string): string {
-  return `aurora.voice.model-file.v1:${encodeKey(packId)}@${encodeKey(packVersion)}:${encodeKey(variantId)}+${encodeKey(fileId)}`
+function fileStorageKey(packId: string, manifestSha256: string, fileIndex: number): string {
+  if (!safeId(packId) || !isSha256(manifestSha256) || !Number.isSafeInteger(fileIndex) || fileIndex < 0) {
+    throw modelPackError('storage_key')
+  }
+  return `${packId}@avmf2:${manifestSha256}+${fileIndex}`
 }
 
 function fileKey(storageKey: string): string {
@@ -680,6 +847,6 @@ function sameStringMultiset(left: readonly string[], right: readonly string[]): 
   return counts.size === 0
 }
 
-function modelPackError(code: string): AuroraBrowserModelPackError {
-  return new AuroraBrowserModelPackError(code)
+function modelPackError(code: string, cause?: unknown, cleanupFailed = false): AuroraBrowserModelPackError {
+  return new AuroraBrowserModelPackError(code, cleanupFailed, cause)
 }

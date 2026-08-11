@@ -124,6 +124,10 @@ describe('Assistant hosted browser voice runtime', () => {
       label: 'On-device speech',
       detail: expect.stringContaining('needs more available storage or memory'),
     })
+    expect(model.chips.find((chip) => chip.id === 'wake')?.label).toBe('Wake while open')
+    await clickButton(container, 'Open route details')
+    expect(container.textContent).toContain('Wake while open')
+    expect(container.textContent).not.toContain('Wake and background')
     expect(findForbiddenProductionCopyTerms(`${localSpeechChip?.label ?? ''} ${localSpeechChip?.detail ?? ''}`)).toEqual([])
 
     await clickButton(container, 'Push to talk')
