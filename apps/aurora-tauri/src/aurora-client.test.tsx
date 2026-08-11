@@ -3894,7 +3894,7 @@ describe("Tauri CI/E2E route gates", () => {
       const shellStatusText = container.querySelector(
         '[aria-label="Aurora shell status"]',
       )?.textContent;
-      expect(shellStatusText).toContain("Connected to local");
+      expect(shellStatusText).toContain("Connected to this device");
       expect(shellStatusText).toContain("Healthy");
       expect(shellStatusText).toContain("Member");
       expect(shellStatusText).not.toContain("Desktop Local");
