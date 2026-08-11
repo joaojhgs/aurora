@@ -80,6 +80,29 @@ function filesUnder(dir: string): string[] {
   })
 }
 
+type ProductionSourceFile = {
+  rel: string
+  text: string
+}
+
+function readProductionSourceFiles(): ProductionSourceFile[] {
+  const files = scannedRoots.flatMap((root) => filesUnder(resolve(repoRoot, root)))
+    .filter((file) => !excludedFiles.has(relative(repoRoot, file)))
+
+  return files.map((file) => ({
+    rel: relative(repoRoot, file),
+    text: readFileSync(file, 'utf8')
+  }))
+}
+
+const productionSourceFiles = readProductionSourceFiles()
+
+function productionSourceFilesUnder(roots: string[]): ProductionSourceFile[] {
+  return productionSourceFiles.filter(({ rel }) =>
+    roots.some((root) => rel === root || rel.startsWith(`${root}/`))
+  )
+}
+
 function readRepo(path: string) {
   return readFileSync(resolve(repoRoot, path), 'utf8')
 }
@@ -90,14 +113,10 @@ function scrubAllowedServiceResource(text: string) {
 
 describe('UI and Tauri service boundary contract', () => {
   it('keeps production UI, SDK, and Tauri code behind SDK/Gateway/Tauri boundaries', () => {
-    const scannedFiles = scannedRoots.flatMap((root) => filesUnder(resolve(repoRoot, root)))
-      .filter((file) => !excludedFiles.has(relative(repoRoot, file)))
+    expect(productionSourceFiles.length).toBeGreaterThan(0)
 
-    expect(scannedFiles.length).toBeGreaterThan(0)
-
-    for (const file of scannedFiles) {
-      const rel = relative(repoRoot, file)
-      const text = scrubAllowedServiceResource(readFileSync(file, 'utf8'))
+    for (const { rel, text: rawText } of productionSourceFiles) {
+      const text = scrubAllowedServiceResource(rawText)
 
       for (const { label, pattern } of forbiddenBoundaryPatterns) {
         expect(text, `${rel} must not cross the service boundary via ${label}`).not.toMatch(pattern)
@@ -106,19 +125,17 @@ describe('UI and Tauri service boundary contract', () => {
   })
 
   it('limits frontend client and transport construction to approved boundary adapters', () => {
-    const scannedFiles = [
-      ...filesUnder(resolve(repoRoot, 'apps/aurora-tauri/src')),
-      ...filesUnder(resolve(repoRoot, 'apps/aurora-web/app')),
-      ...filesUnder(resolve(repoRoot, 'packages/aurora-ui/src')),
-      ...filesUnder(resolve(repoRoot, 'packages/aurora-sdk/src'))
-    ].filter((file) => !excludedFiles.has(relative(repoRoot, file)))
+    const scannedFiles = productionSourceFilesUnder([
+      'apps/aurora-tauri/src',
+      'apps/aurora-web/app',
+      'packages/aurora-ui/src',
+      'packages/aurora-sdk/src'
+    ])
 
     expect(scannedFiles.length).toBeGreaterThan(0)
 
-    for (const file of scannedFiles) {
-      const rel = relative(repoRoot, file)
+    for (const { rel, text } of scannedFiles) {
       if (approvedClientFactoryFiles.has(rel)) continue
-      const text = readFileSync(file, 'utf8')
 
       for (const { label, pattern } of forbiddenClientFactoryPatterns) {
         expect(text, `${rel} must not bypass the app client factory via ${label}`).not.toMatch(pattern)
