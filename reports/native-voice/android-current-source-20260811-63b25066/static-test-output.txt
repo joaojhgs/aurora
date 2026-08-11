@@ -1,0 +1,24 @@
+Command: pnpm --filter @aurora/tauri-ui test:android-client-bundle
+
+> @aurora/tauri-ui@0.1.0 test:android-client-bundle /home/developer/projects/aurora/apps/aurora-tauri
+> vitest run --environment node src/android-client-bundle-proof.test.ts
+
+ RUN  v4.1.9 /home/developer/projects/aurora/apps/aurora-tauri
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  02:54:07
+   Duration  2.59s (transform 89ms, setup 55ms, import 63ms, tests 2.31s, environment 0ms)
+
+Exit code: 0
+
+Command: pnpm --filter @aurora/tauri-ui exec vitest run --environment node src/android-client-bundle-proof.test.ts src/android-emulator-smoke-runner.test.ts src/android-inbound-verifier-native-storage.test.ts src/android-voice-route-policy.test.ts src/android-webrtc-harness-utils.test.ts src/android-webrtc-interop-aggregate.test.ts src/native-android-voice.test.ts
+
+ RUN  v4.1.9 /home/developer/projects/aurora/apps/aurora-tauri
+
+ Test Files  7 passed (7)
+      Tests  53 passed (53)
+   Start at  02:53:40
+   Duration  3.99s (transform 2.11s, setup 156ms, import 4.37s, tests 2.34s, environment 1ms)
+
+Exit code: 0

@@ -1,15 +1,15 @@
-# WebView WebRTC thin-shell implementation plan
+# WebView WebRTC client implementation plan
 
 - **Created:** 2026-07-23
-- **Status:** Core implementation complete; KVM Android, macOS MobileSafari/packaged-WKWebView runtime, and physical-device certification remain open
-- **Scope:** Hosted web, desktop Tauri thin, Android Tauri thin, and iOS Tauri thin direct-peer operation through one browser/WebView WebRTC implementation
+- **Status:** Core transport implementation is present; durable Android aggregate, macOS MobileSafari/packaged-WKWebView runtime, and physical-device certification remain open
+- **Scope:** Hosted web plus desktop, Android, and iOS Tauri clients using one browser/WebView WebRTC implementation. Runtime `roles` come from persisted onboarding/profile state; they are never selected by environment or artifact flavor, and one client artifact may manage a remote server or act as a node itself.
 - **Primary decision:** Implement Aurora's peer transport in TypeScript under `packages/aurora-sdk`; do not duplicate it in Rust or embed the Python runtime
 - **Roadmap:** `docs/UI_CLIENT_SURFACE_ROADMAP.md`
 - **Current state:** `docs/UI_CLIENT_SURFACE_STATUS.md`
 
 ## 1. Outcome and stop condition
 
-Deliver a shared WebView peer runtime that lets an Aurora thin shell pair with and call an authorized Python Aurora peer over the existing MQTT-signaled WebRTC protocol while that peer's FastAPI listener is disabled. The UI must continue to call `AuroraClient`, never raw WebRTC/MQTT APIs.
+Deliver a shared WebView peer runtime that lets an Aurora client in its saved remote-management role pair with and call an authorized Python Aurora peer over the existing MQTT-signaled WebRTC protocol while that peer's FastAPI listener is disabled. The same installed artifact may later use a saved node role without being rebuilt. The UI must continue to call `AuroraClient`, never raw WebRTC/MQTT APIs.
 
 The implementation is complete only when:
 
@@ -43,7 +43,7 @@ The implementation is complete only when:
 - Production hosted pages use HTTPS; production signaling uses `wss:`. Loopback `http:`/`ws:` is development-only.
 - Encrypted signaling is mandatory for production profiles. Optional application-layer DataChannel E2EE must interoperate with Python's binary AES-GCM mode (`app/services/gateway/webrtc/rtc_client.py:1061-1119`). WebRTC DTLS remains required regardless.
 - Room discovery is not authorization. Invites pin the expected stable peer ID; pairing/auth must finish before service calls.
-- Thin shells advertise a consumer-only/minimal manifest and reject inbound service calls unless a future explicit provider mode is enabled.
+- A client with the saved `remote-console` role advertises a consumer-only/minimal manifest and rejects inbound service calls. Provider exposure requires an explicit saved node role plus its normal capability and permission gates; artifact flavor never grants it.
 - Hosted-browser reconnect and room secrets may persist only as AES-GCM ciphertext behind a non-extractable origin-scoped WebCrypto key, with validated nonsecret metadata and a fail-closed memory-only fallback. Tauri/mobile use OS credential stores; proof operations should occur in the native layer where practical.
 - Logs, errors, support bundles, analytics, and URLs must not expose long-lived tokens, room passwords, pairing nonces, raw audio, SDP, ICE credentials, or unredacted service payloads.
 - Event subscriptions are exact-topic, permission-checked, correlation-scoped where applicable, bounded, expiring, and removed on disconnect.
@@ -685,6 +685,7 @@ No diagnostic payload may include SDP, ICE candidate strings, room password, MQT
 - [x] Keep the standalone Android Chrome ↔ external Python `RTCClient` E2E in that same Android workflow without using CDP as the test-control/data path.
 - [x] Keep the iOS simulator MobileSafari ↔ external Python `RTCClient` direct-path E2E in the existing macOS iOS workflow and on the shared assertion/scanner contract.
 - [x] Keep the packaged iOS Tauri WKWebView ↔ external Python `RTCClient` direct-path E2E in that same iOS workflow, using the shared assertions and a built-app Python/sidecar scan.
+- [x] Build and statically verify the current-source four-ABI Android client APK from `63b25066`; artifact SHA-256 `c99008ea74dc6cd21996e0a0467a8c4d86ffafe819bf51e545514606700a946e` passes the forbidden-content policy, while runtime certification remains open.
 - [ ] Record a passing KVM-backed Android aggregate for both mobile peers; local software-renderer failure or a skipped host is not passing evidence.
 - [ ] Record a passing macOS iOS-simulator MobileSafari report.
 - [ ] Record a passing macOS packaged iOS Tauri WKWebView report.

@@ -17,7 +17,7 @@ pnpm test:webrtc:turn      # forced TURN relay lane in Chromium
 pnpm test:webrtc:browsers  # Chromium/Firefox/WebKit × direct/STUN/TURN; explicit skips if an engine is unavailable
 WEBRTC_INTEROP_REQUIRE_ALL_BROWSERS=1 pnpm test:webrtc:browsers  # CI/release gate: missing engines fail
 ./scripts/webrtc_interop.sh stun  # explicit STUN/reflexive lane
-pnpm --filter @aurora/tauri-ui android:webrtc:interop  # running Android emulator/device + built thin APK
+pnpm --filter @aurora/tauri-ui android:webrtc:interop  # running Android emulator/device + built client APK
 pnpm --filter @aurora/tauri-ui ios:webrtc:interop  # macOS/Xcode MobileSafari + packaged WKWebView + Homebrew Mosquitto
 ```
 

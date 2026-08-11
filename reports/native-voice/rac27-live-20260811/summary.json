@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "capturedAtUtc": "2026-08-11T00:50:50Z",
+  "capturedAtUtc": "2026-08-11T02:40:10Z",
   "browserPythonSourceCommit": "8fff7af61dc19ca6c4d00b0b26bb86d7e4206808",
-  "integratedCodeBaseline": "84a6353d3202",
+  "integratedCodeBaseline": "63b250660dd0",
   "reports": {
     "direct": {
       "file": "browser-python-direct.json",
@@ -55,6 +55,28 @@
     "desktopHarnessTests": "12 passed",
     "desktopPackageBuild": "pass",
     "aggregateLiveRun": "blocked-docker-socket-permission"
+  },
+  "currentSourceBoundaryValidation": {
+    "head": "63b250660dd07011dac6c12a92e983f9c01e2553",
+    "desktopNativeVoiceSelfTest": "passed",
+    "desktopNativeVoiceCheckOnly": "ready-to-run",
+    "desktopProfileTestsPassed": 8,
+    "serviceBoundaryTestsPassed": 5,
+    "sidecarProfileTestsPassed": 39,
+    "rustSidecarTestsPassed": 6,
+    "tauriTypecheck": "passed",
+    "environmentRoleAssignmentAbsent": true
+  },
+  "currentEnvironmentGate": {
+    "dockerSocket": "/var/run/docker.sock",
+    "dockerSocketAccessible": false,
+    "rootlessDockerSocketPresent": false,
+    "rootlessPodmanSocketPresent": false,
+    "localMosquittoPresent": false,
+    "localTurnserverPresent": false,
+    "mqttTcpPort1883Listening": true,
+    "requiredWebSocketMqttPort9001Listening": false,
+    "requiredTurnPort3478Listening": false
   },
   "disposition": {
     "rac27": "partial",
