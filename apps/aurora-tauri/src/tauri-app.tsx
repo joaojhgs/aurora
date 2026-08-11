@@ -1896,7 +1896,7 @@ function TauriSettingsPage({
         hidden={activeTab !== "voice"}
         className="aui-tab-panel"
       >
-        <VoiceSettingsView client={client} />
+        {activeTab === "voice" ? <VoiceSettingsView client={client} /> : null}
       </section>
       <section
         id="settings-panel-configuration"

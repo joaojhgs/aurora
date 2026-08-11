@@ -2443,13 +2443,67 @@ describe("Tauri CI/E2E route gates", () => {
     expect(settingsText).toContain("Voice behavior");
     expect(settingsText).toContain("Theme, accessibility, and local storage");
     expect(settingsText).toContain("Connection choices");
-    expect(settingsText).toContain("Spoken reply voices");
-    expect(settingsText).toContain("Voices available to Aurora");
+    expect(settingsText).not.toContain("Spoken reply voices");
+    expect(settingsText).not.toContain("Voices available to Aurora");
     expect(settingsText).toContain("Configuration");
     expect(settingsText).toContain("Data policy and retention");
     expect(settingsText).toContain("Device controls");
     expect(settingsText).not.toContain("Route and fallback policy");
     expect(settingsText).not.toContain("Native permission id");
+  });
+
+  it("e2e:settings reads voice details only after the Voice tab is selected", async () => {
+    const transport = memoryGatewayTransport();
+    const client = new Aurora({ transport });
+    client.auth.setAdmin({
+      principalId: "test-admin",
+      principalName: "Test admin",
+      permissions: ["*"],
+    });
+    const runtime = testRuntime(client);
+    const getCapabilities = vi.spyOn(client.speech.tts, "getCapabilities");
+    const listVoices = vi.spyOn(client.speech.tts, "listVoices");
+    const listVoiceProfiles = vi.spyOn(
+      client.speech.tts,
+      "listVoiceProfiles",
+    );
+    window.history.replaceState({}, "", "/settings");
+    const settings = await mountOutcomeApp(runtime);
+
+    try {
+      await waitUntil(() => {
+        expect(
+          settings.container.querySelector<HTMLButtonElement>(
+            "#settings-tab-voice",
+          ),
+        ).not.toBeNull();
+      });
+      expect(getCapabilities).not.toHaveBeenCalled();
+      expect(listVoices).not.toHaveBeenCalled();
+      expect(listVoiceProfiles).not.toHaveBeenCalled();
+
+      const voiceTab = settings.container.querySelector<HTMLButtonElement>(
+        "#settings-tab-voice",
+      );
+      await act(async () => {
+        voiceTab!.dispatchEvent(
+          new MouseEvent("click", { bubbles: true, cancelable: true }),
+        );
+        await flushReactWork();
+      });
+
+      await waitUntil(() => {
+        expect(getCapabilities).toHaveBeenCalledTimes(1);
+        expect(listVoices).toHaveBeenCalledTimes(1);
+        expect(listVoiceProfiles).toHaveBeenCalledTimes(1);
+        expect(settings.container.textContent).toContain(
+          "Spoken reply voices",
+        );
+      });
+    } finally {
+      await act(async () => settings.root.unmount());
+      settings.container.remove();
+    }
   });
 
   it("e2e:routes renders the memory cockpit with collections, search, conversations, and policy-safe actions", async () => {
