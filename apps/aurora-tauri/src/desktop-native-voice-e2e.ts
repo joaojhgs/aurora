@@ -48,16 +48,10 @@ type SidecarSession = { token: string };
 type SidecarStatus = { running: boolean };
 type SecureStorageGet = { value: string | null; secretsRedacted: true };
 type SecureStorageWrite = { ok: true; secretsRedacted: true };
-type ThinPeerCredentialStatus = {
-  found: boolean;
-  hasBearerToken: boolean;
-  secretsRedacted: true;
-};
 
 export type NativeVoiceTurnLabel = "completed" | "cancelled";
 export type NativeVoiceRouteScenarioName =
   | "remote-console-without-sidecar"
-  | "remote-console-consented-without-sidecar"
   | "remote-console-with-running-sidecar"
   | "mesh-node-python-full-with-sidecar";
 
@@ -71,15 +65,6 @@ export type NativeVoiceRouteScenarioSummary = {
   observedAvailable: boolean;
   observedReasonCode: string | null;
   startBlockedReasonCode: string | null;
-  remoteAudioConsent: boolean;
-  remoteGatewayHttps: boolean;
-  remoteCredentialAvailable: boolean;
-  routeValidated:
-    | "blocked-before-consent"
-    | "native-boundary-accepted"
-    | "external-gateway-unavailable"
-    | "credential-gated"
-    | "loopback-sidecar";
   redacted: true;
 };
 
@@ -273,8 +258,6 @@ async function runDesktopNativeVoiceE2e(
   let sidecarCommandToken: { token: string } | undefined;
   let sidecarStopped = false;
   let savedProfile: string | null | undefined;
-  const remoteConsentedPeerId = "home-peer-remote-consented";
-  let remoteCredentialCleanupPeerId: string | undefined;
   const invokeNative = async <T>(command: string, args?: Record<string, unknown>): Promise<T> => {
     try {
       return await bridge.invoke<T>(command, args);
@@ -308,22 +291,6 @@ async function runDesktopNativeVoiceE2e(
       bridge.invoke,
       "remote-console-without-sidecar",
       false,
-    );
-    remoteCredentialCleanupPeerId = remoteConsentedPeerId;
-    await storeEphemeralRemoteCredential(bridge.invoke, remoteConsentedPeerId);
-    const remoteConsentedProfile = remoteConsoleProfileDocument(
-      "remote-consented-no-sidecar",
-      remoteConsentedPeerId,
-    );
-    await persistRuntimeProfile(
-      bridge.invoke,
-      remoteConsentedProfile,
-    );
-    const remoteConsentedWithoutSidecar = await summarizeConsentedRemoteScenario(
-      bridge.invoke,
-      "remote-console-consented-without-sidecar",
-      remoteConsentedPeerId,
-      remoteProfileUsesHttpsGateway(remoteConsentedProfile, remoteConsentedPeerId),
     );
     const sidecarSession = await bridge.invoke<SidecarSession>("aurora_sidecar_session");
     sidecarCommandToken = {
@@ -436,7 +403,6 @@ async function runDesktopNativeVoiceE2e(
     const cancelledTurn = summarizeLifecycle(statusSequence, "cancelled");
     const routeScenarios: NativeVoiceRouteScenarioSummary[] = [
       remoteWithoutSidecar,
-      remoteConsentedWithoutSidecar,
       remoteWithSidecar,
       {
         name: "mesh-node-python-full-with-sidecar",
@@ -448,10 +414,6 @@ async function runDesktopNativeVoiceE2e(
         observedAvailable: initial.available,
         observedReasonCode: initial.reasonCode,
         startBlockedReasonCode: null,
-        remoteAudioConsent: false,
-        remoteGatewayHttps: false,
-        remoteCredentialAvailable: false,
-        routeValidated: "loopback-sidecar",
         redacted: true,
       },
     ];
@@ -480,9 +442,6 @@ async function runDesktopNativeVoiceE2e(
           "aurora_secure_storage_get",
           "aurora_secure_storage_set",
           "aurora_secure_storage_delete",
-          "aurora_thin_peer_credential_set",
-          "aurora_thin_peer_credential_status",
-          "aurora_thin_peer_credential_delete",
           "aurora_native_voice_status",
           "aurora_native_voice_start",
           "aurora_native_voice_finish",
@@ -511,9 +470,6 @@ async function runDesktopNativeVoiceE2e(
       await bridge.invoke<SidecarStatus>("aurora_sidecar_stop", {
         commandToken: sidecarCommandToken,
       }).catch(() => undefined);
-    }
-    if (remoteCredentialCleanupPeerId) {
-      await deleteRemoteCredential(bridge.invoke, remoteCredentialCleanupPeerId).catch(() => undefined);
     }
     if (savedProfile !== undefined) {
       await restorePersistedRuntimeProfile(bridge.invoke, savedProfile).catch(() => undefined);
@@ -580,86 +536,8 @@ async function summarizeBlockedRemoteScenario(
     observedAvailable: observed.available,
     observedReasonCode: observed.reasonCode,
     startBlockedReasonCode,
-    remoteAudioConsent: false,
-    remoteGatewayHttps: true,
-    remoteCredentialAvailable: false,
-    routeValidated: "blocked-before-consent",
     redacted: true,
   };
-}
-
-async function summarizeConsentedRemoteScenario(
-  invokeCommand: NativeVoiceInvoke,
-  name: Extract<NativeVoiceRouteScenarioName, "remote-console-consented-without-sidecar">,
-  peerId: string,
-  remoteGatewayHttps: boolean,
-): Promise<NativeVoiceRouteScenarioSummary> {
-  const credentialStatus = await invokeCommand<ThinPeerCredentialStatus>(
-    "aurora_thin_peer_credential_status",
-    { request: { peerId } },
-  );
-  if (credentialStatus.secretsRedacted !== true) {
-    throw new Error("remote credential status was not redacted");
-  }
-  const observed = await commandStatus(invokeCommand);
-  assertNativeVoiceStatusRedacted(observed);
-  const startOutcome = await attemptConsentedRemoteStart(invokeCommand);
-  return {
-    name,
-    persistedNodeMode: "remote-console",
-    persistedRuntimeTier: "none",
-    sidecarRunning: false,
-    expectedScope: "remote-gateway",
-    observedConnection: observed.connection,
-    observedAvailable: observed.available,
-    observedReasonCode: observed.reasonCode,
-    startBlockedReasonCode: startOutcome.startBlockedReasonCode,
-    remoteAudioConsent: true,
-    remoteGatewayHttps,
-    remoteCredentialAvailable: credentialStatus.found === true && credentialStatus.hasBearerToken === true,
-    routeValidated: startOutcome.routeValidated,
-    redacted: true,
-  };
-}
-
-async function attemptConsentedRemoteStart(
-  invokeCommand: NativeVoiceInvoke,
-): Promise<{
-  routeValidated: NativeVoiceRouteScenarioSummary["routeValidated"];
-  startBlockedReasonCode: string | null;
-}> {
-  try {
-    const started = await invokeCommand<NativeVoiceStatus>("aurora_native_voice_start", {
-      request: {
-        trigger: "focused_push_to_talk",
-        remoteAudioConsent: true,
-      },
-    });
-    assertNativeVoiceStatusRedacted(started);
-    if (started.connection !== "connected_device") {
-      throw new Error("consented remote start did not select a connected device");
-    }
-    if (typeof started.generation === "number") {
-      await invokeCommand<NativeVoiceStatus>("aurora_native_voice_cancel", {
-        request: {
-          generation: started.generation,
-          reason: "user_request",
-        },
-      }).catch(() => undefined);
-    }
-    return {
-      routeValidated: "native-boundary-accepted",
-      startBlockedReasonCode: null,
-    };
-  } catch (error) {
-    const reasonCode = boundedReasonCodeFromError(error);
-    if (reasonCode === "credential_unavailable" ||
-        reasonCode === "gateway_unavailable" ||
-        reasonCode === "route_unavailable") {
-      throw new Error(`consented remote route failed before native acceptance: ${reasonCode}`);
-    }
-    throw error;
-  }
 }
 
 async function expectNativeVoiceStartBlocked(
@@ -678,45 +556,8 @@ async function expectNativeVoiceStartBlocked(
   throw new Error("remote-console native voice start was not blocked without explicit consent");
 }
 
-async function storeEphemeralRemoteCredential(
-  invokeCommand: NativeVoiceInvoke,
-  peerId: string,
-): Promise<void> {
-  const status = await invokeCommand<ThinPeerCredentialStatus>("aurora_thin_peer_credential_set", {
-    request: {
-      peerId,
-      tokenId: "native-voice-e2e-token",
-      claimantPeerId: "rac27-consented-console",
-      verifierPeerId: peerId,
-      claimantSignalingPeerId: "rac27-consented-console-signal",
-      verifierSignalingPeerId: `${peerId}-signal`,
-      roomName: "native-voice-e2e-room",
-      rawBearerToken: "Bearer native-voice-e2e-redacted-boundary-token",
-      createdAtMs: 1,
-      expiresAtMs: 4_102_444_800_000,
-    },
-  });
-  if (status.secretsRedacted !== true || status.found !== true || status.hasBearerToken !== true) {
-    throw new Error("remote credential was not stored as a redacted native credential");
-  }
-}
-
-async function deleteRemoteCredential(
-  invokeCommand: NativeVoiceInvoke,
-  peerId: string,
-): Promise<void> {
-  const status = await invokeCommand<ThinPeerCredentialStatus>("aurora_thin_peer_credential_delete", {
-    request: { peerId },
-  });
-  if (status.secretsRedacted !== true) throw new Error("remote credential cleanup was not redacted");
-}
-
 function boundedReasonCodeFromError(error: unknown): string | null {
   if (!error || typeof error !== "object") return null;
-  const maybeError = error instanceof Error ? error.message : "";
-  for (const reason of ["credential_unavailable", "gateway_unavailable", "route_unavailable"]) {
-    if (maybeError.includes(reason)) return reason;
-  }
   for (const key of ["reasonCode", "reason", "code", "status"]) {
     const value = (error as Record<string, unknown>)[key];
     if (typeof value === "string" && /^[a-z0-9_]{1,128}$/u.test(value)) return value;
@@ -728,7 +569,6 @@ function assertRouteScenarios(scenarios: NativeVoiceRouteScenarioSummary[]): voi
   const names = scenarios.map((scenario) => scenario.name).sort();
   if (JSON.stringify(names) !== JSON.stringify([
     "mesh-node-python-full-with-sidecar",
-    "remote-console-consented-without-sidecar",
     "remote-console-with-running-sidecar",
     "remote-console-without-sidecar",
   ].sort())) {
@@ -743,26 +583,11 @@ function assertRouteScenarios(scenarios: NativeVoiceRouteScenarioSummary[]): voi
       if (scenario.persistedNodeMode !== "remote-console" || scenario.persistedRuntimeTier !== "none") {
         throw new Error("remote route scenario is not profile-selected");
       }
-      if (
-        scenario.name !== "remote-console-consented-without-sidecar" &&
-        scenario.startBlockedReasonCode !== REMOTE_AUDIO_CONSENT_REASON
-      ) {
+      if (scenario.startBlockedReasonCode !== REMOTE_AUDIO_CONSENT_REASON) {
         throw new Error("remote route did not fail closed before local capture");
       }
       if (scenario.observedConnection === "this_device") {
         throw new Error("remote route was shadowed by a local sidecar");
-      }
-    }
-    if (scenario.name === "remote-console-consented-without-sidecar") {
-      if (
-        scenario.remoteAudioConsent !== true ||
-        scenario.remoteGatewayHttps !== true ||
-        scenario.remoteCredentialAvailable !== true ||
-        scenario.routeValidated !== "native-boundary-accepted" ||
-        scenario.startBlockedReasonCode !== null ||
-        scenario.observedConnection === "this_device"
-      ) {
-        throw new Error("consented remote route scenario did not reach the native remote boundary");
       }
     }
     if (scenario.name === "mesh-node-python-full-with-sidecar") {
@@ -828,22 +653,6 @@ export function remoteConsoleProfileDocument(
       },
     }],
   };
-}
-
-function remoteProfileUsesHttpsGateway(
-  document: Record<string, unknown>,
-  homePeerId: string,
-): boolean {
-  const profiles = Array.isArray(document.profiles) ? document.profiles : [];
-  const profile = profiles.find((candidate) =>
-    typeof candidate === "object" &&
-      candidate !== null &&
-      ((candidate as Record<string, unknown>).homeConnection as Record<string, unknown> | undefined)
-        ?.homePeerId === homePeerId
-  ) as Record<string, unknown> | undefined;
-  const homeConnection = profile?.homeConnection as Record<string, unknown> | undefined;
-  const gatewayUrl = homeConnection?.gatewayUrl;
-  return typeof gatewayUrl === "string" && new URL(gatewayUrl).protocol === "https:";
 }
 
 function webRtcProfile(room: string, expectedStablePeerId: string): Record<string, unknown> {

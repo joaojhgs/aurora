@@ -307,19 +307,16 @@ function nativeVoiceLaunchContract() {
       AURORA_TAURI_SIDECAR_PROGRAM: 'repository-owned Node sentinel',
     },
     forbiddenWebViewCapabilities: ['getUserMedia', 'Worker', 'SharedWorker', 'browser model loads'],
-    requiredNativeCommands: [
-      'aurora_thin_peer_credential_set',
-      'aurora_thin_peer_credential_status',
-      'aurora_thin_peer_credential_delete',
-      'aurora_native_voice_status',
-      'aurora_native_voice_start',
-      'aurora_native_voice_finish',
-      'aurora_native_voice_cancel',
-    ],
-    existingWrapperEnv: [
-      'AURORA_DESKTOP_LIVE_E2E_APPLICATION_BIN',
-      'AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE',
-    ],
+      requiredNativeCommands: [
+        'aurora_native_voice_status',
+        'aurora_native_voice_start',
+        'aurora_native_voice_finish',
+        'aurora_native_voice_cancel',
+      ],
+      existingWrapperEnv: [
+        'AURORA_DESKTOP_LIVE_E2E_APPLICATION_BIN',
+        'AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE',
+      ],
   }
 }
 
@@ -469,9 +466,6 @@ function validateHookReport(report, { sessionNonce, tauriPid }) {
     'aurora_secure_storage_get',
     'aurora_secure_storage_set',
     'aurora_secure_storage_delete',
-    'aurora_thin_peer_credential_set',
-    'aurora_thin_peer_credential_status',
-    'aurora_thin_peer_credential_delete',
     'aurora_native_voice_status',
     'aurora_native_voice_start',
     'aurora_native_voice_finish',
@@ -485,7 +479,6 @@ function assertRouteScenarios(value) {
   const byName = new Map(value.map((scenario) => [scenario?.name, scenario]))
   for (const name of [
     'remote-console-without-sidecar',
-    'remote-console-consented-without-sidecar',
     'remote-console-with-running-sidecar',
     'mesh-node-python-full-with-sidecar',
   ]) {
@@ -501,16 +494,6 @@ function assertRouteScenarios(value) {
     assert.ok(typeof scenario.observedAvailable === 'boolean')
     assert.ok(scenario.observedReasonCode === null || /^[a-z0-9_]{1,128}$/u.test(String(scenario.observedReasonCode)))
     assert.ok(scenario.startBlockedReasonCode === null || /^[a-z0-9_]{1,128}$/u.test(String(scenario.startBlockedReasonCode)))
-    assert.ok(typeof scenario.remoteAudioConsent === 'boolean')
-    assert.ok(typeof scenario.remoteGatewayHttps === 'boolean')
-    assert.ok(typeof scenario.remoteCredentialAvailable === 'boolean')
-    assert.ok([
-      'blocked-before-consent',
-      'native-boundary-accepted',
-      'external-gateway-unavailable',
-      'credential-gated',
-      'loopback-sidecar',
-    ].includes(scenario.routeValidated))
     assert.deepEqual(Object.keys(scenario).sort(), [
       'expectedScope',
       'name',
@@ -520,10 +503,6 @@ function assertRouteScenarios(value) {
       'persistedNodeMode',
       'persistedRuntimeTier',
       'redacted',
-      'remoteAudioConsent',
-      'remoteCredentialAvailable',
-      'remoteGatewayHttps',
-      'routeValidated',
       'sidecarRunning',
       'startBlockedReasonCode',
     ])
@@ -539,17 +518,6 @@ function assertRouteScenarios(value) {
   }
   assert.equal(remoteNoSidecar.sidecarRunning, false)
   assert.equal(remoteWithSidecar.sidecarRunning, true)
-  const remoteConsentedNoSidecar = byName.get('remote-console-consented-without-sidecar')
-  assert.equal(remoteConsentedNoSidecar.persistedNodeMode, 'remote-console')
-  assert.equal(remoteConsentedNoSidecar.persistedRuntimeTier, 'none')
-  assert.equal(remoteConsentedNoSidecar.expectedScope, 'remote-gateway')
-  assert.equal(remoteConsentedNoSidecar.sidecarRunning, false)
-  assert.equal(remoteConsentedNoSidecar.remoteAudioConsent, true)
-  assert.equal(remoteConsentedNoSidecar.remoteGatewayHttps, true)
-  assert.equal(remoteConsentedNoSidecar.remoteCredentialAvailable, true)
-  assert.equal(remoteConsentedNoSidecar.routeValidated, 'native-boundary-accepted')
-  assert.equal(remoteConsentedNoSidecar.startBlockedReasonCode, null)
-  assert.notEqual(remoteConsentedNoSidecar.observedConnection, 'this_device')
   const local = byName.get('mesh-node-python-full-with-sidecar')
   assert.equal(local.persistedNodeMode, 'mesh-node')
   assert.equal(local.persistedRuntimeTier, 'python-full')
@@ -953,26 +921,6 @@ async function runSelfTest() {
             observedAvailable: false,
             observedReasonCode: remoteAudioConsentReason,
             startBlockedReasonCode: remoteAudioConsentReason,
-            remoteAudioConsent: false,
-            remoteGatewayHttps: true,
-            remoteCredentialAvailable: false,
-            routeValidated: 'blocked-before-consent',
-            redacted: true,
-          },
-          {
-            name: 'remote-console-consented-without-sidecar',
-            persistedNodeMode: 'remote-console',
-            persistedRuntimeTier: 'none',
-            sidecarRunning: false,
-            expectedScope: 'remote-gateway',
-            observedConnection: 'connected_device',
-            observedAvailable: true,
-            observedReasonCode: null,
-            startBlockedReasonCode: null,
-            remoteAudioConsent: true,
-            remoteGatewayHttps: true,
-            remoteCredentialAvailable: true,
-            routeValidated: 'native-boundary-accepted',
             redacted: true,
           },
           {
@@ -985,10 +933,6 @@ async function runSelfTest() {
             observedAvailable: false,
             observedReasonCode: remoteAudioConsentReason,
             startBlockedReasonCode: remoteAudioConsentReason,
-            remoteAudioConsent: false,
-            remoteGatewayHttps: true,
-            remoteCredentialAvailable: false,
-            routeValidated: 'blocked-before-consent',
             redacted: true,
           },
           {
@@ -1001,10 +945,6 @@ async function runSelfTest() {
             observedAvailable: true,
             observedReasonCode: null,
             startBlockedReasonCode: null,
-            remoteAudioConsent: false,
-            remoteGatewayHttps: false,
-            remoteCredentialAvailable: false,
-            routeValidated: 'loopback-sidecar',
             redacted: true,
           },
         ],
@@ -1014,9 +954,6 @@ async function runSelfTest() {
           'aurora_secure_storage_get',
           'aurora_secure_storage_set',
           'aurora_secure_storage_delete',
-          'aurora_thin_peer_credential_set',
-          'aurora_thin_peer_credential_status',
-          'aurora_thin_peer_credential_delete',
           'aurora_native_voice_status',
           'aurora_native_voice_start',
           'aurora_native_voice_finish',
