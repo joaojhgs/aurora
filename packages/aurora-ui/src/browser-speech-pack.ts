@@ -55,11 +55,11 @@ export async function openHostedBrowserSttSpeechPack(
     })
   }
 
-  let host: AuroraWebModelStoreHost
+  let host: AuroraWebModelStoreHost | null
   try {
     host = options.createHost
       ? await options.createHost()
-      : await AuroraBrowserModelStoreHost.create(options.globalObject)
+      : await AuroraBrowserModelStoreHost.openExisting(options.globalObject)
   } catch (error) {
     return Object.freeze({
       state: 'storage-unavailable',
@@ -67,6 +67,7 @@ export async function openHostedBrowserSttSpeechPack(
       pack: null,
     })
   }
+  if (host === null) return Object.freeze({ state: 'absent', pack: null })
 
   try {
     const pack = await openActiveBrowserModelPack(host, { task: 'stt' }, {

@@ -9,6 +9,7 @@ const voiceWeb = vi.hoisted(() => ({
 vi.mock('@aurora/voice-web/browser', () => ({
   AuroraBrowserModelStoreHost: {
     create: voiceWeb.createHost,
+    openExisting: voiceWeb.createHost,
   },
   openActiveBrowserModelPack: voiceWeb.openActive,
 }))
@@ -66,6 +67,18 @@ describe('openHostedBrowserSttSpeechPack', () => {
       expectedReleaseManifestSha256: RELEASE_MANIFEST_SHA256,
     })
     expect(voiceWeb.openActive.mock.calls[0]?.[2]).not.toHaveProperty('allowNonProductionTestSignature')
+  })
+
+  it('returns absent for complete trust with no existing browser store without verifying a pack', async () => {
+    voiceWeb.createHost.mockResolvedValueOnce(null)
+
+    const result = await openHostedBrowserSttSpeechPack({
+      trust: releaseTrust(),
+    })
+
+    expect(result).toEqual({ state: 'absent', pack: null })
+    expect(voiceWeb.createHost).toHaveBeenCalledTimes(1)
+    expect(voiceWeb.openActive).not.toHaveBeenCalled()
   })
 
   it('returns an immutable handle only for a verified preinstalled pack', async () => {

@@ -4,6 +4,7 @@ import {
   AuroraBrowserModelStoreHost,
   IndexedDbBrowserModelStorePort,
   createBrowserModelStorePort,
+  openExistingBrowserModelStorePort,
   type AuroraBrowserModelStorePort,
   type AuroraBrowserModelStoreSnapshot,
   type AuroraBrowserStoreBackendKind,
@@ -130,6 +131,104 @@ describe('AuroraBrowserModelStoreHost', () => {
       crypto
     })
     expect(port.kind).toBe('indexeddb')
+  })
+
+  it('opens no browser store when OPFS and IndexedDB entries are absent', async () => {
+    const root = new FakeOpfsDirectory()
+    const indexedDB = new FakeIndexedDb()
+    const port = await openExistingBrowserModelStorePort({
+      isSecureContext: true,
+      navigator: {
+        storage: {
+          getDirectory: async () => root
+        }
+      },
+      indexedDB: indexedDB.factory(),
+      crypto
+    })
+
+    expect(port).toBeNull()
+    expect(root.files.size).toBe(0)
+    expect(root.directories.size).toBe(0)
+    expect(indexedDB.openCalls).toBe(0)
+    expect(indexedDB.databaseNames.size).toBe(0)
+  })
+
+  it('reopens an existing OPFS store without creating missing entries', async () => {
+    const root = new FakeOpfsDirectory()
+    const created = await createBrowserModelStorePort({
+      isSecureContext: true,
+      navigator: {
+        storage: {
+          getDirectory: async () => root,
+          estimate: async () => ({ quota: 10_000, usage: 0 })
+        }
+      },
+      crypto
+    })
+    await new AuroraBrowserModelStoreHost(created).writeJson('pack@meta', '{"ok":true}')
+
+    const reopened = await openExistingBrowserModelStorePort({
+      isSecureContext: true,
+      navigator: {
+        storage: {
+          getDirectory: async () => root,
+          estimate: async () => ({ quota: 10_000, usage: 0 })
+        }
+      },
+      crypto
+    })
+
+    expect(reopened?.kind).toBe('opfs')
+    await expect(new AuroraBrowserModelStoreHost(reopened!).readJson('pack@meta')).resolves.toBe('{"ok":true}')
+  })
+
+  it('falls through to an existing IndexedDB store when OPFS has no store', async () => {
+    const root = new FakeOpfsDirectory()
+    const indexedDB = new FakeIndexedDb()
+    const created = new IndexedDbBrowserModelStorePort({ indexedDB: indexedDB.factory() })
+    await new AuroraBrowserModelStoreHost(created).writeJson('pack@meta', '{"idb":true}')
+
+    const reopened = await openExistingBrowserModelStorePort({
+      isSecureContext: true,
+      navigator: {
+        storage: {
+          getDirectory: async () => root
+        }
+      },
+      indexedDB: indexedDB.factory(),
+      crypto
+    })
+
+    expect(reopened?.kind).toBe('indexeddb')
+    await expect(new AuroraBrowserModelStoreHost(reopened!).readJson('pack@meta')).resolves.toBe('{"idb":true}')
+    expect(root.files.size).toBe(0)
+    expect(root.directories.size).toBe(0)
+  })
+
+  it('fails closed without opening IndexedDB when databases() cannot prove existence', async () => {
+    const indexedDB = new FakeIndexedDb()
+    const factory = indexedDB.factory({ exposeDatabases: false })
+
+    await expect(openExistingBrowserModelStorePort({
+      isSecureContext: false,
+      indexedDB: factory
+    })).rejects.toMatchObject({ code: 'unavailable' })
+    expect(indexedDB.openCalls).toBe(0)
+    expect(indexedDB.databaseNames.size).toBe(0)
+  })
+
+  it('aborts IndexedDB open-existing races instead of creating an empty database', async () => {
+    const indexedDB = new FakeIndexedDb()
+    indexedDB.databaseNames.add('aurora-voice-web-model-store-v1')
+    indexedDB.deleteBeforeNextOpen = true
+
+    await expect(openExistingBrowserModelStorePort({
+      isSecureContext: false,
+      indexedDB: indexedDB.factory()
+    })).rejects.toMatchObject({ code: 'unavailable' })
+    expect(indexedDB.databaseNames.size).toBe(0)
+    expect(indexedDB.stores.size).toBe(0)
   })
 
   it('propagates OPFS transient reads instead of treating them as missing files', async () => {
@@ -509,10 +608,19 @@ function chunkedRecordForPromoted(indexedDB: FakeIndexedDb): { chunks: [string, 
 
 class FakeIndexedDb {
   readonly stores = new Map<string, Map<string, unknown>>()
+  readonly databaseNames = new Set<string>()
+  openCalls = 0
+  deleteBeforeNextOpen = false
 
-  factory(): IDBFactory {
+  factory(options: { exposeDatabases?: boolean } = {}): IDBFactory {
+    const exposeDatabases = options.exposeDatabases ?? true
     return {
-      open: (_name: string, _version?: number) => this.open()
+      open: (name: string, version?: number) => this.open(String(name), version),
+      ...(exposeDatabases
+        ? {
+            databases: async () => [...this.databaseNames].map((name) => ({ name }))
+          }
+        : {})
     } as unknown as IDBFactory
   }
 
@@ -525,13 +633,33 @@ class FakeIndexedDb {
     return store
   }
 
-  private open(): IDBOpenDBRequest {
+  private open(name: string, _version?: number): IDBOpenDBRequest {
+    this.openCalls += 1
     const request: Partial<IDBOpenDBRequest> = {}
+    if (this.deleteBeforeNextOpen) {
+      this.deleteBeforeNextOpen = false
+      this.databaseNames.delete(name)
+    }
+    let exists = this.databaseNames.has(name)
+    let aborted = false
     const db = new FakeIdbDatabase(this)
     Object.defineProperty(request, 'result', { value: db })
+    Object.defineProperty(request, 'transaction', {
+      value: {
+        abort: () => {
+          aborted = true
+          if (!exists) this.databaseNames.delete(name)
+          request.onerror?.call(request as IDBOpenDBRequest, {} as Event)
+        }
+      }
+    })
     queueMicrotask(() => {
-      request.onupgradeneeded?.call(request as IDBOpenDBRequest, {} as IDBVersionChangeEvent)
-      request.onsuccess?.call(request as IDBOpenDBRequest, {} as Event)
+      if (!exists) {
+        this.databaseNames.add(name)
+        request.onupgradeneeded?.call(request as IDBOpenDBRequest, {} as IDBVersionChangeEvent)
+        exists = true
+      }
+      if (!aborted) request.onsuccess?.call(request as IDBOpenDBRequest, {} as Event)
     })
     return request as IDBOpenDBRequest
   }
@@ -547,6 +675,8 @@ class FakeIdbDatabase {
   createObjectStore(name: string): void {
     this.owner.store(name)
   }
+
+  close(): void {}
 
   transaction(storeName: string): IDBTransaction {
     return new FakeIdbTransaction(this.owner.store(storeName)) as unknown as IDBTransaction
@@ -617,10 +747,11 @@ class FakeOpfsDirectory {
   readonly directoryCalls: string[] = []
   transientReadFailure = false
 
-  async getDirectoryHandle(name: string, _options?: { create?: boolean }): Promise<FakeOpfsDirectory> {
+  async getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<FakeOpfsDirectory> {
     this.directoryCalls.push(name)
     let directory = this.directories.get(name)
     if (!directory) {
+      if (options?.create !== true) throw new DOMException('not found', 'NotFoundError')
       directory = new FakeOpfsDirectory()
       this.directories.set(name, directory)
     }

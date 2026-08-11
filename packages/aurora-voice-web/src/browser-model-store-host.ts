@@ -132,6 +132,14 @@ export class AuroraBrowserModelStoreHost implements AuroraWebModelStoreHost {
     return new AuroraBrowserModelStoreHost(port, limits)
   }
 
+  static async openExisting(
+    globalObject: BrowserRuntimeGlobal = globalThis as BrowserRuntimeGlobal,
+    limits?: AuroraBrowserModelStoreLimits
+  ): Promise<AuroraBrowserModelStoreHost | null> {
+    const port = await openExistingBrowserModelStorePort(globalObject)
+    return port === null ? null : new AuroraBrowserModelStoreHost(port, limits)
+  }
+
   backendKind(): AuroraBrowserStoreBackendKind {
     return this.port.kind
   }
@@ -479,21 +487,57 @@ export async function createBrowserModelStorePort(
   throw redactedError('unavailable')
 }
 
+export async function openExistingBrowserModelStorePort(
+  globalObject: BrowserRuntimeGlobal = globalThis as BrowserRuntimeGlobal
+): Promise<AuroraBrowserModelStorePort | null> {
+  if (globalObject.isSecureContext === true && typeof globalObject.navigator?.storage?.getDirectory === 'function') {
+    try {
+      const opfsPort = await OpfsBrowserModelStorePort.openExisting(globalObject)
+      if (opfsPort !== null || !globalObject.indexedDB) return opfsPort
+    } catch (error) {
+      if (!isNotFoundError(error)) {
+        if (!globalObject.indexedDB) throw error
+      }
+    }
+  }
+  if (globalObject.indexedDB) return IndexedDbBrowserModelStorePort.openExisting(globalObject)
+  throw redactedError('unavailable')
+}
+
 export class OpfsBrowserModelStorePort implements AuroraBrowserModelStorePort {
   readonly kind = 'opfs' as const
   private readonly blobsPromise: Promise<OpfsDirectoryHandle>
 
   private constructor(
     private readonly globalObject: BrowserRuntimeGlobal,
-    private readonly root: OpfsDirectoryHandle
+    private readonly root: OpfsDirectoryHandle,
+    createBlobs = true
   ) {
-    this.blobsPromise = root.getDirectoryHandle(BLOB_STORE, { create: true })
+    this.blobsPromise = root.getDirectoryHandle(BLOB_STORE, { create: createBlobs })
   }
 
   static async create(globalObject: BrowserRuntimeGlobal): Promise<OpfsBrowserModelStorePort> {
     const root = await globalObject.navigator?.storage?.getDirectory?.()
     if (!root) throw redactedError('unavailable')
     return new OpfsBrowserModelStorePort(globalObject, root)
+  }
+
+  static async openExisting(globalObject: BrowserRuntimeGlobal): Promise<OpfsBrowserModelStorePort | null> {
+    const root = await globalObject.navigator?.storage?.getDirectory?.()
+    if (!root) throw redactedError('unavailable')
+    try {
+      await root.getFileHandle(SNAPSHOT_KEY, { create: false })
+    } catch (error) {
+      if (isNotFoundError(error)) return null
+      throw error
+    }
+    try {
+      await root.getDirectoryHandle(BLOB_STORE, { create: false })
+      return new OpfsBrowserModelStorePort(globalObject, root, false)
+    } catch (error) {
+      if (isNotFoundError(error)) throw redactedError('storage')
+      throw error
+    }
   }
 
   async storageEstimate(): Promise<AuroraBrowserStorageEstimate> {
@@ -633,8 +677,22 @@ export class IndexedDbBrowserModelStorePort implements AuroraBrowserModelStorePo
   constructor(
     private readonly globalObject: BrowserRuntimeGlobal = globalThis as BrowserRuntimeGlobal,
     readonly kind: AuroraBrowserStoreBackendKind = 'indexeddb',
-    private readonly databaseName = 'aurora-voice-web-model-store-v1'
+    private readonly databaseName = 'aurora-voice-web-model-store-v1',
+    private readonly createStores = true
   ) {}
+
+  static async openExisting(
+    globalObject: BrowserRuntimeGlobal = globalThis as BrowserRuntimeGlobal,
+    kind: AuroraBrowserStoreBackendKind = 'indexeddb',
+    databaseName = 'aurora-voice-web-model-store-v1'
+  ): Promise<IndexedDbBrowserModelStorePort | null> {
+    const indexedDB = globalObject.indexedDB
+    if (!indexedDB) throw redactedError('unavailable')
+    if (!await indexedDbDatabaseExists(indexedDB, databaseName)) return null
+    const port = new IndexedDbBrowserModelStorePort(globalObject, kind, databaseName, false)
+    await port.db()
+    return port
+  }
 
   async storageEstimate(): Promise<AuroraBrowserStorageEstimate> {
     return browserStorageEstimate(this.globalObject)
@@ -850,14 +908,34 @@ export class IndexedDbBrowserModelStorePort implements AuroraBrowserModelStorePo
       const request = indexedDB.open(this.databaseName, 1)
       request.onerror = () => reject(redactedError('unavailable'))
       request.onupgradeneeded = () => {
+        if (!this.createStores) {
+          request.transaction?.abort()
+          reject(redactedError('unavailable'))
+          return
+        }
         const db = request.result
         if (!db.objectStoreNames.contains(META_STORE)) db.createObjectStore(META_STORE)
         if (!db.objectStoreNames.contains(BLOB_STORE)) db.createObjectStore(BLOB_STORE)
       }
-      request.onsuccess = () => resolve(request.result)
+      request.onsuccess = () => {
+        const db = request.result
+        if (!db.objectStoreNames.contains(META_STORE) || !db.objectStoreNames.contains(BLOB_STORE)) {
+          db.close()
+          reject(redactedError('unavailable'))
+          return
+        }
+        resolve(db)
+      }
     })
     return this.dbPromise
   }
+}
+
+async function indexedDbDatabaseExists(indexedDB: IDBFactory, databaseName: string): Promise<boolean> {
+  const databases = (indexedDB as unknown as { databases?: unknown }).databases
+  if (typeof databases !== 'function') throw redactedError('unavailable')
+  const entries = await databases.call(indexedDB) as Array<{ name?: string }>
+  return entries.some((entry) => entry.name === databaseName)
 }
 
 function validateSnapshot(snapshot: AuroraBrowserModelStoreSnapshot | null): AuroraBrowserModelStoreSnapshot {

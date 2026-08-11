@@ -166,6 +166,65 @@ test('falls back to IndexedDB when OPFS open is unavailable', async ({ page }, t
   })
 })
 
+test('does not create browser storage while probing an absent existing store', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Scoped to Chromium for real IndexedDB databases() and OPFS namespace inspection.')
+  await installNamespacedStore(page, testInfo.project.name)
+
+  const result = await page.evaluate(async () => {
+    const host = await window.__auroraBrowserStore.openExisting()
+    const databaseName = window.__auroraVoiceWebBrowserStoreTest.databaseName
+    const opfsPrefix = window.__auroraVoiceWebBrowserStoreTest.opfsPrefix
+    const databases = typeof indexedDB.databases === 'function'
+      ? await indexedDB.databases()
+      : []
+    const rootKeys: string[] = []
+    if (navigator.storage?.getDirectory) {
+      const root = await navigator.storage.getDirectory()
+      if (typeof root.keys === 'function') {
+        for await (const key of root.keys()) {
+          const value = String(key)
+          if (value.startsWith(opfsPrefix)) rootKeys.push(value)
+        }
+      }
+    }
+    return {
+      absent: host === null,
+      databaseCreated: databases.some((database) => database.name === databaseName),
+      rootKeys
+    }
+  })
+
+  expect(result).toEqual({
+    absent: true,
+    databaseCreated: false,
+    rootKeys: []
+  })
+})
+
+test('openExisting reopens browser storage without reinstalling bytes', async ({ page }, testInfo) => {
+  await installNamespacedStore(page, testInfo.project.name)
+  await requireBrowserStoreWriteSupport(page, testInfo.project.name)
+
+  await page.evaluate(async () => {
+    const host = await window.__auroraBrowserStore.create()
+    await host.writeJson('pack@meta', '{"existing":true}')
+  })
+
+  await page.reload()
+  await installNamespacedStore(page, testInfo.project.name)
+
+  const reopened = await page.evaluate(async () => {
+    const host = await window.__auroraBrowserStore.openExisting()
+    return {
+      backend: host?.backendKind() ?? null,
+      value: await host?.readJson('pack@meta')
+    }
+  })
+
+  expect(reopened.backend).not.toBeNull()
+  expect(reopened.value).toBe('{"existing":true}')
+})
+
 test('persists JSON and promoted bytes across reloads', async ({ page }, testInfo) => {
   await installNamespacedStore(page, testInfo.project.name)
   await requireBrowserStoreWriteSupport(page, testInfo.project.name)
@@ -426,6 +485,7 @@ function browserHarnessModule(): string {
     import {
       AuroraBrowserModelStoreHost,
       createBrowserModelStorePort,
+      openExistingBrowserModelStorePort,
       IndexedDbBrowserModelStorePort,
       OpfsBrowserModelStorePort
     } from '/dist/browser-model-store-host.js';
@@ -506,8 +566,37 @@ function browserHarnessModule(): string {
         return new NamespacedIndexedDbBrowserModelStorePort(globalThis);
       }
 
+      async function openExistingNamespacedPort() {
+        if (globalThis.isSecureContext === true && typeof navigator.storage?.getDirectory === 'function') {
+          const root = new NamespacedOpfsDirectoryHandle(
+            await navigator.storage.getDirectory(),
+            namespace.opfsPrefix
+          );
+          const storage = {
+            getDirectory: async () => root
+          };
+          if (typeof navigator.storage.estimate === 'function') {
+            storage.estimate = () => navigator.storage.estimate();
+          }
+          if (typeof navigator.storage.persisted === 'function') {
+            storage.persisted = () => navigator.storage.persisted();
+          }
+          const port = await openExistingBrowserModelStorePort({
+            isSecureContext: globalThis.isSecureContext,
+            crypto: globalThis.crypto,
+            navigator: { storage }
+          });
+          if (port !== null) return port;
+        }
+        return IndexedDbBrowserModelStorePort.openExisting(globalThis, 'indexeddb', namespace.databaseName);
+      }
+
       window.__auroraBrowserStore = {
         create: async () => new AuroraBrowserModelStoreHost(await createNamespacedPort()),
+        openExisting: async () => {
+          const port = await openExistingNamespacedPort();
+          return port === null ? null : new AuroraBrowserModelStoreHost(port);
+        },
         createDefault: async () => new AuroraBrowserModelStoreHost(await createBrowserModelStorePort())
       };
       window.__auroraBrowserModelPack = {
@@ -660,6 +749,10 @@ declare global {
           deleteBlob(physicalKey: string): Promise<void>
         }
       }>
+      openExisting: () => Promise<{
+        backendKind(): 'opfs' | 'indexeddb'
+        readJson(key: string): Promise<string | null>
+      } | null>
     }
     __auroraBrowserModelPack: {
       signedManifest(bytes: Uint8Array): Promise<unknown>
