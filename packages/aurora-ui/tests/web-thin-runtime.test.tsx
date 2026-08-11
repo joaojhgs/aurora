@@ -363,6 +363,7 @@ describe('browser WebRTC thin-shell runtime', () => {
       fetchImpl: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
     })
     const demo = createBrowserWebThinRuntime({
+      bearerToken: () => 'unused-before-onboarding',
       createClient: createClientFromRuntimeTransport,
       createDemoClient: createDemoClientOnly,
       mode: 'http-only',
@@ -408,6 +409,29 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(demo.client.transport.kind).toBe('http')
 
     await demo.close()
+  })
+
+  it('fails closed instead of replacing an invalid configured HTTP endpoint with demo data', async () => {
+    const createClientFromRuntimeTransport = vi.fn(createClient)
+    const createDemoClientOnly = vi.fn(createDemoClient)
+
+    const runtime = createBrowserWebThinRuntime({
+      createClient: createClientFromRuntimeTransport,
+      createDemoClient: createDemoClientOnly,
+      demoMode: true,
+      gatewayUrl: '   ',
+      mode: 'http-only',
+    })
+
+    expect(createClientFromRuntimeTransport).toHaveBeenCalledTimes(1)
+    expect(createDemoClientOnly).not.toHaveBeenCalled()
+    expect(runtime.client.transport.kind).toBe('mesh')
+    expect(runtime.peer.snapshot().status).toBe('failed')
+    await expect(runtime.client.capabilities.listCatalog()).rejects.toThrow(
+      'Could not connect to this Aurora device',
+    )
+
+    await runtime.close()
   })
 
   it('forwards durable peer authority services while keeping remote-console consumer-only defaults', async () => {

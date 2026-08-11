@@ -260,6 +260,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     config.credentialStore ?? new MemoryOnlyWebRtcCredentialStore()
   const parsedInvite = config.profile ? null : parseWebRtcInvite(config.inviteText, config)
   const activeProfile = config.profile ?? parsedInvite?.profile ?? credentialStore.loadConnectionProfile?.() ?? null
+  const hasConfiguredConnection = hasConfiguredConnectionAttempt(config, activeProfile)
   if (parsedInvite) {
     if (credentialStore.setRoomSecret) credentialStore.setRoomSecret(parsedInvite.profile.roomSecretRef, parsedInvite.roomSecret)
     else if (!credentialStore.getRoomSecret) throw new AuroraError({ code: 'validation', message: INVITE_INCOMPLETE_COPY })
@@ -301,14 +302,22 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
       ...(config.createClient ? { createClient: config.createClient } : {}),
     })
   } catch (error) {
-    if (mode === 'http-only' && config.demoMode) {
+    if (mode === 'http-only' && config.demoMode && !hasConfiguredConnection) {
       const unavailable = new BrowserWebRtcPeerController(null, mode, {
         httpFallback: false,
         creationError: error,
+        credentialStore,
         config: securityContext,
         visibilityDocument: config.visibilityDocument,
       })
-      return { client: demoClientFromFactory(config), peer: unavailable, surface, mode, features, close: () => unavailable.disconnect('runtime closed') }
+      return {
+        client: demoClientFromFactory(config),
+        peer: unavailable,
+        surface,
+        mode,
+        features,
+        close: () => unavailable.disconnect('runtime closed'),
+      }
     }
     const unavailable = new BrowserWebRtcPeerController(null, mode, {
       httpFallback: false,
@@ -781,6 +790,18 @@ function httpOptionsFromConfig(config: BrowserThinRuntimeConfig): HttpTransportO
   if (config.eventSourceFactory !== undefined) options.eventSourceFactory = config.eventSourceFactory
   if (config.webSocketFactory !== undefined) options.webSocketFactory = config.webSocketFactory
   return options
+}
+
+function hasConfiguredConnectionAttempt(
+  config: BrowserThinRuntimeConfig,
+  activeProfile: WebRtcPeerConnectionProfile | null,
+): boolean {
+  // The hosted shell always supplies a lazy bearer-token reader, including
+  // before onboarding, so credentials alone do not identify a saved route.
+  return activeProfile !== null
+    || config.gatewayUrl !== undefined && config.gatewayUrl !== null
+    || config.signalingUrl !== undefined && config.signalingUrl !== null
+    || Boolean(config.inviteText?.trim())
 }
 
 function normalizeConnectionMode(value: string | null | undefined): AuroraThinConnectionMode {
