@@ -6319,8 +6319,8 @@ describe('AuroraClient assistant namespace', () => {
       expect.objectContaining({
         kind: 'fallback',
         sessionId: 'mock-assistant-session',
-        text: 'Mock Aurora response to "fallback please"',
-        modelLabel: 'mock-local',
+        text: 'Sample reply: I heard “fallback please”.',
+        modelLabel: 'Aurora',
         metadata: expect.objectContaining({
           assistant_stream_contract: 'single_response_fallback',
           assistant_stream_transport: 'mock',

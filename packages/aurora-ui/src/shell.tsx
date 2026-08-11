@@ -722,6 +722,7 @@ function shellActivityEvents(
   const healthy = !shellRuntimeStateIsOffline(snapshot, runtimeMode, nodeMode)
     && !localNodeNeedsAttention(snapshot, runtimeMode, nodeMode, localNodeAvailable);
   const surface = shellSurfaceProfile(snapshot, runtimeMode, nodeMode);
+  const nodeLabel = shellNodeLabel(snapshot);
   return [
     {
       id: "routes",
@@ -751,21 +752,21 @@ function shellActivityEvents(
     },
     {
       id: "peer",
-      title: "Peer identity",
-      detail: snapshot.localPeerId ?? shellNodeLabel(snapshot),
-      when: snapshot.generatedAt ? "synced" : "ready",
+      title: "Device connection",
+      detail: nodeLabel === "this device" ? "This device is connected" : `${nodeLabel} is connected`,
+      when: "ready",
       icon: Network,
       tone: "info",
     },
     {
       id: "native",
-      title: "Device profile",
+      title: "Device features",
       detail: snapshot.nativeAvailable
         ? "Device features available"
         : surface.usesNativeShell
           ? productSurfaceLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable)
           : `${productSurfaceLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable)}; local controls unavailable`,
-      when: "policy",
+      when: snapshot.nativeAvailable ? "ready" : "limited",
       icon: snapshot.nativeAvailable ? CheckCircle2 : Clock3,
       tone: snapshot.nativeAvailable ? "good" : "info",
     },
@@ -794,7 +795,9 @@ function shellHealthLabel(
 }
 
 function shellNodeLabel(snapshot: AuroraShellSnapshot): string {
-  return snapshot.nodeName.trim() || "This device";
+  const label = snapshot.nodeName.trim();
+  if (/^(?:local|local-peer|localhost|aurora web thin client)$/i.test(label)) return "this device";
+  return label || "This device";
 }
 
 function shellAvatarLabel(sessionIsAdmin: boolean): string {

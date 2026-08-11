@@ -430,7 +430,7 @@ describe('unified Assistant execution controls', () => {
     await waitUntil(() => container.textContent?.includes('Local setup response.') === true)
     const localConversationId = (await localData.conversations.listConversations())[0]?.id
     expect(localConversationId).toBeTruthy()
-    await chooseModelSelectorItem('Executing locally', 'Dispatch to Home Aurora')
+    await chooseModelSelectorItem('Using this device', 'Home Aurora')
     expect(container.textContent).toContain('Local setup response.')
     await enterPrompt(container, 'answer on the connected device')
     await waitUntil(() => backendCalls.length >= 1 && streamCalls.length >= 1)
@@ -462,7 +462,7 @@ describe('unified Assistant execution controls', () => {
       ['assistant', 'complete'],
     ])
 
-    await chooseModelSelectorItem('Executing by dispatch to Home Aurora', 'Locally')
+    await chooseModelSelectorItem('Using Home Aurora', 'This device')
     expect(container.textContent).toContain('Local setup response.')
     expect(container.textContent).toContain('Answered by Home Aurora.')
     await enterPrompt(container, 'continue locally after dispatch')
@@ -554,7 +554,7 @@ describe('unified Assistant execution controls', () => {
       })
     const container = await renderUnifiedAssistant(new AuroraClient({ transport }), provider)
 
-    await chooseModelSelectorItem('Executing locally', 'Dispatch to Home Aurora')
+    await chooseModelSelectorItem('Using this device', 'Home Aurora')
     await enterPrompt(container, 'show this answer as it arrives')
     await waitUntil(() => container.textContent?.includes('Hel') === true)
     expect(container.textContent).not.toContain('Hello from the connected device.')
@@ -657,7 +657,7 @@ describe('unified Assistant execution controls', () => {
       })
     const container = await renderUnifiedAssistant(new AuroraClient({ transport }), provider)
 
-    await chooseModelSelectorItem('Executing locally', 'Dispatch to Home Aurora')
+    await chooseModelSelectorItem('Using this device', 'Home Aurora')
     await enterPrompt(container, 'play the targeted response')
     await waitUntil(() => playedSources.length === 1)
     await waitUntil(() => container.querySelector('.aui-chat-assistant.aui-chat-sent') !== null)
@@ -735,7 +735,7 @@ describe('unified Assistant execution controls', () => {
     const localData = await new MemoryLocalDataBackend().open(scope.profileId, scope.localNodeId)
     const container = await renderUnifiedAssistant(new AuroraClient({ transport }), provider, { localData })
 
-    await chooseModelSelectorItem('Executing locally', 'Dispatch to Home Aurora')
+    await chooseModelSelectorItem('Using this device', 'Home Aurora')
     await enterPrompt(container, 'check the connected device')
     await waitUntil(() => container.textContent?.includes('The connected device is online.') === true)
     await waitUntil(async () => {

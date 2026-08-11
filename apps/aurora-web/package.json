@@ -9,7 +9,8 @@
     "dev:web-thin": "pnpm dev:web",
     "build": "next build",
     "typecheck": "tsc --noEmit --incremental false",
-    "test": "vitest run --environment node"
+    "test": "vitest run --environment node",
+    "test:browser:voice": "pnpm --dir ../.. --filter @aurora/voice-web run build && pnpm exec playwright test --config tests/playwright/assistant-browser-voice.playwright.config.ts"
   },
   "dependencies": {
     "@aurora/client": "workspace:*",

@@ -5,6 +5,49 @@ import { MockAuroraTransport } from '../src/mock.js'
 import type { AuroraTransportRequest } from '../src/transport.js'
 
 describe('generated speech client', () => {
+  it('provides the explicit demo transport with a redacted focused-transcription route', async () => {
+    const privateAudio = 'cHJpdmF0ZS1kZW1vLWF1ZGlv'
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+
+    const catalog = await client.capabilities.listCatalog({ include_unavailable: true })
+    const result = await client.assistant.transcribeVoiceAudio({
+      audio_data: privateAudio,
+      channels: 1,
+      format: 'raw',
+      model: 'accurate',
+      sample_rate: 16_000
+    })
+
+    expect(catalog.action_index['Transcription.Transcribe']).toEqual([
+      'transcription-demo-focused'
+    ])
+    expect(catalog.action_index['Tooling.ExecuteTool'] ?? []).not.toContain(
+      'transcription-demo-focused'
+    )
+    expect(catalog.actions).toContainEqual(
+      expect.objectContaining({
+        action_id: 'transcription-demo-focused',
+        module: 'Transcription',
+        method: 'Transcribe',
+        provider_kind: 'remote',
+        provider_id: 'remote:demo-home:Transcription',
+        policy: expect.objectContaining({ resource_scope: 'raw-audio' }),
+        topic: 'Transcription.Transcribe'
+      })
+    )
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        confidence: null,
+        duration_ms: 500,
+        language: 'en',
+        model_used: 'demo-focused',
+        text: 'hello Aurora'
+      }
+    })
+    expect(JSON.stringify(result)).not.toContain(privateAudio)
+  })
+
   it('normalizes generated input and uses generated route metadata', async () => {
     let observed: AuroraTransportRequest | undefined
     const transport = MockAuroraTransport.empty().register(

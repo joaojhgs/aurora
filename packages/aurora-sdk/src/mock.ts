@@ -241,12 +241,19 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Auth.MeshUpdatePeerPermissions', () => ({ success: true, message: 'permissions updated' }))
       .register('Auth.MeshRemovePeer', () => ({ success: true, message: 'peer removed' }))
       .register('Orchestrator.ListPendingToolApprovals', () => cloneFixture(fixtures.pendingToolApprovals))
+      .register('Transcription.Transcribe', () => ({
+        text: 'hello Aurora',
+        confidence: null,
+        language: 'en',
+        duration_ms: 500,
+        model_used: 'demo-focused'
+      }))
       .register('Orchestrator.ExternalUserInput', (request) => ({
-        text: `Mock Aurora response to "${mockPromptText(request.payload)}"`,
+        text: `Sample reply: I heard “${mockPromptText(request.payload)}”.`,
         session_id: mockSessionId(request.payload),
         metadata: {
-          model: 'mock-local',
-          provider: 'mock-orchestrator'
+          model: 'Aurora',
+          provider: 'sample-data'
         }
       }))
   }

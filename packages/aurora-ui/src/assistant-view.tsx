@@ -3779,7 +3779,6 @@ export function AssistantView({
       <div className="aui-assistant-grid">
         <ConversationRail
           rows={conversationRows}
-          route={route}
           loading={sessionIndexLoading}
           error={sessionIndexError}
           disabled={assistantBusy || voiceBusy}
@@ -3851,7 +3850,7 @@ export function AssistantView({
                     const optionLabel = safeAssistantRuntimeValue(option.label, 'Connected Aurora device') ?? 'Connected Aurora device'
                     return {
                       id: option.id,
-                      name: option.mode === 'local' ? 'Locally' : `Dispatch to ${optionLabel}`,
+                      name: option.mode === 'local' ? 'This device' : optionLabel,
                       description: option.description,
                       icon: option.mode === 'local' ? <Laptop aria-hidden /> : <Network aria-hidden />
                     }
@@ -3868,20 +3867,20 @@ export function AssistantView({
                     variant="ghost"
                     size="sm"
                     className="aui-execution-selector-trigger"
-                    aria-label={`Executing ${selectedExecution.mode === 'local' ? 'locally' : `by dispatch to ${safeAssistantRuntimeValue(selectedExecution.label, 'Connected Aurora device') ?? 'Connected Aurora device'}`}`}
+                    aria-label={`Using ${selectedExecution.mode === 'local' ? 'this device' : safeAssistantRuntimeValue(selectedExecution.label, 'Connected Aurora device') ?? 'Connected Aurora device'}`}
                   >
                     {selectedExecution.mode === 'local' ? <Laptop aria-hidden /> : <Network aria-hidden />}
-                    <span className="aui-selector-prefix">Executing</span>
-                    <strong>{selectedExecution.mode === 'local' ? 'locally' : `dispatch to ${safeAssistantRuntimeValue(selectedExecution.label, 'Connected Aurora device') ?? 'Connected Aurora device'}`}</strong>
+                    <span className="aui-selector-prefix">Using</span>
+                    <strong>{selectedExecution.mode === 'local' ? 'this device' : safeAssistantRuntimeValue(selectedExecution.label, 'Connected Aurora device') ?? 'Connected Aurora device'}</strong>
                   </ModelSelector.Trigger>
                   <ModelSelector.Content side="top" searchable={false} className="aui-execution-selector-content">
                     <ModelSelector.List>
-                      <ModelSelector.Group heading="Execution">
+                      <ModelSelector.Group heading="Device">
                         {executionOptions.map((option) => {
                           const optionLabel = safeAssistantRuntimeValue(option.label, 'Connected Aurora device') ?? 'Connected Aurora device'
                           const model = {
                             id: option.id,
-                            name: option.mode === 'local' ? 'Locally' : `Dispatch to ${optionLabel}`,
+                            name: option.mode === 'local' ? 'This device' : optionLabel,
                             description: option.description,
                             icon: option.mode === 'local' ? <Laptop aria-hidden /> : <Network aria-hidden />
                           }
@@ -4049,7 +4048,7 @@ export function AssistantView({
               </button>
             </div>
             <p className="aui-mobile-composer-note">
-              Aurora executes locally by default. Dispatch routes appear before any data leaves this device.
+              Aurora uses this device by default. You can review another device before anything is sent.
             </p>
           </form>
         </div>
@@ -4145,9 +4144,13 @@ export function buildAssistantRuntimeStrip(
   route: RouteAvailability,
   transportKind: string
 ): AssistantRuntimeHealth {
+  const routeLabel = safeAssistantRuntimeValue(
+    runtimeHealth?.routeLabel,
+    route.state === 'available-remote' ? 'Connected Aurora device' : 'This device'
+  ) ?? 'This device'
   return {
     selectedModel: safeAssistantRuntimeValue(runtimeHealth?.selectedModel ?? modelLabel, null),
-    routeLabel: safeAssistantRuntimeValue(runtimeHealth?.routeLabel, route.state === 'available-remote' ? 'Connected Aurora device' : 'This device') ?? 'This device',
+    routeLabel: /^local$/i.test(routeLabel) ? 'This device' : routeLabel,
     sidecarHealth: safeAssistantRuntimeValue(runtimeHealth?.sidecarHealth, transportKind === 'mock' ? 'Preview ready' : 'Status pending') ?? 'Status pending',
     gatewayHealth: safeAssistantRuntimeValue(runtimeHealth?.gatewayHealth, productConnectionCopy(transportKind)) ?? 'Connection status ready'
   }
@@ -4915,7 +4918,7 @@ export function assistantModelChoices(
       id: 'automatic',
       name: execution.mode === 'local'
         ? 'Configured default'
-        : 'Connected device default',
+        : 'Automatic',
       description: execution.mode === 'local'
         ? configuredProvider
           ? 'Aurora uses the configured model for this device.'
@@ -5016,7 +5019,7 @@ export function assistantModelChoiceGroups(
   const groups: AssistantModelChoiceGroup[] = automatic.length > 0
     ? [{
         id: 'configured-default',
-        heading: execution.mode === 'local' ? 'Configured default' : 'Connected device default',
+        heading: execution.mode === 'local' ? 'Configured default' : 'Automatic',
         choices: automatic,
         scope: 'default'
       }]
@@ -5352,7 +5355,8 @@ function serviceInstanceFromProviderIdentity(providerId: string): string | null 
 function executionPeerLabel(label: string, peerId: string | null): string {
   const providerLabel = label.split(' / ')[0]?.trim() ?? ''
   const readable = providerLabel.replace(/^(?:remote|mesh):/i, '').replace(/[:/_-]+Orchestrator.*$/i, '')
-  return readable || peerId || 'Peer'
+  if (/^(?:local|local-peer)$/i.test(readable)) return 'This device'
+  return readable || peerId || 'Connected device'
 }
 
 function AssistantPrivacyBadge({ privacy }: { privacy: string }) {
@@ -6399,7 +6403,6 @@ function formatBytes(bytes: number): string {
 
 function ConversationRail({
   rows,
-  route,
   loading,
   error,
   disabled,
@@ -6408,7 +6411,6 @@ function ConversationRail({
   onNewConversation
 }: {
   rows: AssistantConversationRow[]
-  route: RouteAvailability
   loading: boolean
   error: string | null
   disabled: boolean
@@ -6417,8 +6419,9 @@ function ConversationRail({
   onNewConversation: () => void
 }) {
   return (
+    /* Conversation rail */
     <aside className="aui-conversation-rail" aria-labelledby="assistant-recent-chats-title">
-      <h2 id="assistant-recent-chats-title" className="aui-sr-only">Recent chats</h2><span className="aui-sr-only">Conversation rail</span><div className="aui-sr-only" aria-label="Assistant local remote mesh route chips"><span>Search recent conversations</span><span>Local {assistantRouteProviderCopy(route)}</span><span>Remote route pending</span><span>Mesh route pending</span></div>
+      <h2 id="assistant-recent-chats-title" className="aui-sr-only">Recent chats</h2>
       <header>
         <Button type="button" variant="ghost" size="sm" onClick={onNewConversation} disabled={disabled || loading || newConversationDisabled} aria-label="New conversation" className="aui-thread-new-button">
           <MessageSquarePlus aria-hidden />
@@ -6544,10 +6547,10 @@ function ConversationList({
 function assistantConversationRows(session: AssistantSessionSnapshot, sessions: DBSessionRecord[], transportKind: string): AssistantConversationRow[] {
   if (transportKind === 'mock') {
     return [
-      { id: 'draft-launch', title: 'Draft launch announcement', route: 'Local', updated: '2m ago', active: true },
-      { id: 'quarterly', title: 'Summarize quarterly metrics', route: 'Remote', updated: '1h ago', active: false },
-      { id: 'mesh-notes', title: 'Refactor mesh routing notes', route: 'Mesh Peer', updated: '5h ago', active: false },
-      { id: 'journal', title: 'Personal journal reflection', route: 'Local', updated: 'yesterday', active: false }
+      { id: 'draft-launch', title: 'Plan a weekend trip', route: 'This device', updated: '2m ago', active: true },
+      { id: 'quarterly', title: 'Summarize a reading list', route: 'Connected device', updated: '1h ago', active: false },
+      { id: 'mesh-notes', title: 'Prepare a grocery list', route: 'Connected device', updated: '5h ago', active: false },
+      { id: 'journal', title: 'Personal journal reflection', route: 'This device', updated: 'yesterday', active: false }
     ]
   }
   return sessions.map((record) => ({
@@ -7326,7 +7329,7 @@ function safeAssistantRuntimeValue(value: string | null | undefined, fallback: s
 }
 
 function isInternalAssistantLabel(value: string): boolean {
-  return /\b(?:transport|fallback|runtime|provider|consumer|hybrid|manifest|schema|protocol|sidecar|thin|signaling|datachannel|gateway|orchestrator|tooling|stt|tts|db)\b/i.test(value)
+  return /\b(?:mock|transport|fallback|runtime|provider|consumer|hybrid|manifest|schema|protocol|sidecar|thin|signaling|datachannel|gateway|orchestrator|tooling|stt|tts|db)\b/i.test(value)
     || /[a-z]+:\/\/|[A-Z][A-Za-z]+\.[A-Z][A-Za-z]+|[{"]|secret|token/i.test(value)
 }
 

@@ -451,6 +451,7 @@ export function auroraBrowserRuntimeProfile(): AuroraRuntimeProfileV2 | undefine
 }
 
 export function auroraBrowserRequiresOnboarding(): boolean {
+  if (truthy(process.env.NEXT_PUBLIC_AURORA_WEB_DEMO_MODE)) return false
   const runtimeProfile = auroraBrowserRuntimeProfile()
   if (runtimeProfile) return !isRuntimeProfileConfigured(runtimeProfile)
   return !isThinConnectionProfileConfigured(auroraBrowserThinProfile())

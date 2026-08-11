@@ -175,6 +175,17 @@ describe('createAuroraBrowserClient', () => {
     expect(runtime.peer.snapshot().diagnostic ?? '').not.toContain('do-not-read')
   })
 
+  it('opens sample data without a saved connection only after explicit browser opt-in', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_WEB_DEMO_MODE', '1')
+    installBrowserStorage()
+
+    const runtime = createAuroraBrowserRuntime()
+
+    expect(auroraBrowserRequiresOnboarding()).toBe(false)
+    expect(runtime.client.transport.kind).toBe('mock')
+  })
+
   it('uses the WebRTC rollout kill switch to keep hosted preferred mode on HTTP', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('NEXT_PUBLIC_AURORA_WEBRTC_THIN_CLIENT', '0')

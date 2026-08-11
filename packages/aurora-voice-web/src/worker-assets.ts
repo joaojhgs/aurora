@@ -1,9 +1,22 @@
 export const AURORA_VOICE_WORKER_ASSET_NAME = 'voice-worker.js'
 export const AURORA_VOICE_WASM_CORE_ASSET_NAME = 'aurora_voice_wasm_bg.wasm'
 
-export function buildAuroraVoiceWorkerUrl(workerUrl: URL, wasmUrl: URL): URL {
-  const url = new URL(workerUrl.href)
-  url.searchParams.set('wasm', wasmUrl.href)
+function currentPageUrl(): string | undefined {
+  return typeof globalThis.location === 'undefined'
+    ? undefined
+    : globalThis.location.href
+}
+
+export function buildAuroraVoiceWorkerUrl(
+  workerUrl: Pick<URL, 'href'>,
+  wasmUrl: Pick<URL, 'href'>,
+  baseUrl: string | URL | undefined = currentPageUrl()
+): URL {
+  const url = baseUrl === undefined
+    ? new URL(workerUrl.href)
+    : new URL(workerUrl.href, baseUrl)
+  const resolvedWasmUrl = new URL(wasmUrl.href, url)
+  url.searchParams.set('wasm', resolvedWasmUrl.href)
   return url
 }
 

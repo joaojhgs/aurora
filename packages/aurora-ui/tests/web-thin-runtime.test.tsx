@@ -391,6 +391,25 @@ describe('browser WebRTC thin-shell runtime', () => {
     await demo.close()
   })
 
+  it('keeps configured browser profiles on their HTTP transport when demo mode is also enabled', async () => {
+    const createClientFromRuntimeTransport = vi.fn(createClient)
+    const createDemoClientOnly = vi.fn(createDemoClient)
+
+    const demo = createBrowserWebThinRuntime({
+      createClient: createClientFromRuntimeTransport,
+      createDemoClient: createDemoClientOnly,
+      demoMode: true,
+      gatewayUrl: 'https://configured-aurora.example',
+      mode: 'http-only',
+    })
+
+    expect(createClientFromRuntimeTransport).toHaveBeenCalledTimes(1)
+    expect(createDemoClientOnly).not.toHaveBeenCalled()
+    expect(demo.client.transport.kind).toBe('http')
+
+    await demo.close()
+  })
+
   it('forwards durable peer authority services while keeping remote-console consumer-only defaults', async () => {
     vi.resetModules()
     const runtimeOptions: BrowserWebRtcRuntimeOptions<AuroraClient>[] = []

@@ -960,6 +960,22 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       service_instance_id: 'auth-local',
       reason: 'Local Auth service exposes RBAC management contracts.',
       policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin', safety_class: 'admin' }
+    }),
+    provider({
+      provider_id: 'remote:demo-home:Transcription',
+      peer_id: 'demo-home',
+      provider_kind: 'remote',
+      node_name: 'Sample Aurora',
+      module: 'Transcription',
+      service_instance_id: 'transcription-demo',
+      reason: 'Bounded sample transcription is available through the explicit demo transport.',
+      policy: {
+        ...basePolicy,
+        required_permissions: ['Transcription.Transcribe'],
+        trust_tier: 'paired',
+        mesh_visible: true,
+        resource_scope: 'raw-audio'
+      }
     })
   ],
   actions: [
@@ -1420,6 +1436,30 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       selector: { peer_id: 'local-peer', module: 'Auth' },
       policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin', safety_class: 'read-only' },
       summary: 'Read RBAC audit events from Auth.'
+    }),
+    action({
+      action_id: 'transcription-demo-focused',
+      module: 'Transcription',
+      method: 'Transcribe',
+      topic: 'Transcription.Transcribe',
+      provider_id: 'remote:demo-home:Transcription',
+      peer_id: 'demo-home',
+      provider_kind: 'remote',
+      service_instance_id: 'transcription-demo',
+      selector: {
+        peer_id: 'demo-home',
+        module: 'Transcription',
+        provider_id: 'remote:demo-home:Transcription'
+      },
+      callable_feature_ids: ['audio_transcription'],
+      policy: {
+        ...basePolicy,
+        required_permissions: ['Transcription.Transcribe'],
+        trust_tier: 'paired',
+        mesh_visible: true,
+        resource_scope: 'raw-audio'
+      },
+      summary: 'Bounded sample transcription for focused push-to-talk in explicit demo mode.'
     })
   ],
   resources: [],
@@ -1435,7 +1475,8 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
     ],
     Auth: ['local:Auth'],
     Backup: ['local:Backup'],
-    Scheduler: ['local:Scheduler', 'mesh:studio-gpu:Scheduler']
+    Scheduler: ['local:Scheduler', 'mesh:studio-gpu:Scheduler'],
+    Transcription: ['remote:demo-home:Transcription']
   },
   action_index: {
     'Gateway.GetMeshStatus': ['gateway-mesh-status-local'],
@@ -1448,6 +1489,7 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       'tool-stale-camera'
     ],
     'Orchestrator.ExternalUserInput': ['assistant-local-external-user-input'],
+    'Transcription.Transcribe': ['transcription-demo-focused'],
     'Orchestrator.GetModelCatalog': [
       'model-runtime-local-catalog',
       'model-runtime-mesh-catalog',

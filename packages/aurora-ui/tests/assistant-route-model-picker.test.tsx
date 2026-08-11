@@ -50,7 +50,7 @@ describe('assistant execution and model pickers', () => {
     expect(execution[1]?.description).toBe('Send this turn to Home Aurora; that device handles the request.')
     expect(markup).not.toContain('Choose how Aurora answers')
     expect(markup.match(/aria-label="Prompt composer"/g)).toHaveLength(1)
-    expect(markup).toContain('aria-label="Executing locally"')
+    expect(markup).toContain('aria-label="Using this device"')
     expect(markup).toContain('aui-execution-selector-trigger')
     expect(markup).not.toContain('aui-execution-segment')
   })
@@ -81,7 +81,7 @@ describe('assistant execution and model pickers', () => {
       'Qwen 32B'
     ])
     expect(dispatchChoices.map((choice) => choice.model.name)).toEqual([
-      'Connected device default',
+      'Automatic',
       'Qwen 32B'
     ])
 
@@ -97,7 +97,7 @@ describe('assistant execution and model pickers', () => {
       { heading: 'Studio OpenAI · 1 model', models: ['Qwen 32B'] }
     ])
     expect(dispatchGroups.map((group) => group.heading)).toEqual([
-      'Connected device default',
+      'Automatic',
       'Studio OpenAI · 1 model'
     ])
     expect(assistantModelSourceGroups(localGroups, execution[0]!, execution).map((source) => ({
