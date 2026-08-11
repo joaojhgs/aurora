@@ -246,6 +246,11 @@ describe('createAuroraBrowserClient', () => {
 
     const runtime = createAuroraBrowserRuntime()
 
+    expect(auroraBrowserRuntimeProfile()).toMatchObject({
+      id: 'mesh-rollout',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+    })
     expect(runtime.features).toEqual({
       requestedNodeRole: 'remote-console',
       activeNodeRole: 'remote-console',
@@ -580,6 +585,11 @@ describe('createAuroraBrowserClient', () => {
 
     const runtime = await createAuroraBrowserRuntimeAsync()
 
+    expect(auroraBrowserRuntimeProfile()).toMatchObject({
+      id: 'mesh-owned-elsewhere',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+    })
     expect(runtime.features).toMatchObject({
       requestedNodeRole: 'remote-console',
       activeNodeRole: 'remote-console',
