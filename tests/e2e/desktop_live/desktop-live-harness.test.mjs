@@ -134,6 +134,42 @@ test('maintained desktop live scripts support official and embedded WebDriver pr
   assert.match(wrapperSource, /exec "\$AURORA_DESKTOP_LIVE_E2E_APPLICATION_BIN"/)
 })
 
+test('live runner retries under Xvfb when inherited DISPLAY is unusable', async () => {
+  const fakeBinDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aurora-desktop-live-bin.'))
+  const artifactDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aurora-desktop-live-xvfb.'))
+  const markerPath = path.join(artifactDir, 'xvfb-marker.txt')
+  await fs.writeFile(path.join(fakeBinDir, 'xdpyinfo'), '#!/usr/bin/env bash\nexit 1\n')
+  await fs.writeFile(
+    path.join(fakeBinDir, 'xvfb-run'),
+    `#!/usr/bin/env bash
+printf 'under=%s\\n' "$AURORA_DESKTOP_LIVE_E2E_UNDER_XVFB" > "${markerPath}"
+printf 'args=%s\\n' "$*" >> "${markerPath}"
+exit 73
+`,
+  )
+  await Promise.all([
+    fs.chmod(path.join(fakeBinDir, 'xdpyinfo'), 0o755),
+    fs.chmod(path.join(fakeBinDir, 'xvfb-run'), 0o755),
+  ])
+
+  await assert.rejects(
+    execFilePromise('bash', [liveRunner], {
+      AURORA_DESKTOP_LIVE_E2E_ARTIFACT_DIR: artifactDir,
+      AURORA_DESKTOP_LIVE_E2E_SKIP_BUILD: '1',
+      DISPLAY: ':99',
+      PATH: `${fakeBinDir}:${process.env.PATH}`,
+    }),
+    (error) => {
+      assert.equal(error.code, 73)
+      assert.match(error.stderr, /DISPLAY is not usable/)
+      return true
+    },
+  )
+  const marker = await fs.readFile(markerPath, 'utf8')
+  assert.match(marker, /under=1/)
+  assert.match(marker, /args=-a /)
+})
+
 test('macOS live lane uses the embedded WebDriver and does not install unsupported tauri-driver', async () => {
   const source = await fs.readFile(desktopWorkflow, 'utf8')
   const macosJob = source
@@ -197,15 +233,26 @@ function execNode(args, extraEnv = {}) {
   })
 }
 
-function execFilePromise(command, args) {
+function execFilePromise(command, args, extraEnv = {}) {
   return new Promise((resolve, reject) => {
-    execFile(command, args, { cwd: repoRoot, timeout: 30_000 }, (error, stdout, stderr) => {
-      if (error) {
-        error.message += `\nstdout:\n${stdout}\nstderr:\n${stderr}`
-        reject(error)
-        return
-      }
-      resolve({ stdout, stderr })
-    })
+    execFile(
+      command,
+      args,
+      {
+        cwd: repoRoot,
+        env: { ...process.env, ...extraEnv },
+        timeout: 30_000,
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          error.stdout = stdout
+          error.stderr = stderr
+          error.message += `\nstdout:\n${stdout}\nstderr:\n${stderr}`
+          reject(error)
+          return
+        }
+        resolve({ stdout, stderr })
+      },
+    )
   })
 }

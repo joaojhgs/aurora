@@ -61,12 +61,29 @@ cleanup_desktop_driver() {
 }
 trap cleanup_desktop_driver EXIT INT TERM
 
-if [[ "$desktop_platform" == "Linux" && -z "${DISPLAY:-}" && "${AURORA_DESKTOP_LIVE_E2E_UNDER_XVFB:-0}" != "1" ]]; then
+rerun_desktop_live_under_xvfb() {
   if ! command -v xvfb-run >/dev/null 2>&1; then
     echo "desktop live E2E requires xvfb-run when DISPLAY is unavailable" >&2
     exit 2
   fi
   exec env AURORA_DESKTOP_LIVE_E2E_UNDER_XVFB=1 xvfb-run -a "$0" "$@"
+}
+
+if [[ "$desktop_platform" == "Linux" && "${AURORA_DESKTOP_LIVE_E2E_UNDER_XVFB:-0}" != "1" ]]; then
+  if [[ "${AURORA_DESKTOP_LIVE_E2E_FORCE_XVFB:-0}" == "1" ]]; then
+    rerun_desktop_live_under_xvfb "$@"
+  elif [[ -z "${DISPLAY:-}" ]]; then
+    rerun_desktop_live_under_xvfb "$@"
+  elif command -v xdpyinfo >/dev/null 2>&1; then
+    desktop_x_display_probe=(xdpyinfo)
+    if command -v timeout >/dev/null 2>&1; then
+      desktop_x_display_probe=(timeout 3 xdpyinfo)
+    fi
+    if ! "${desktop_x_display_probe[@]}" >/dev/null 2>&1; then
+      echo "desktop live E2E DISPLAY is not usable; retrying under xvfb-run" >&2
+      rerun_desktop_live_under_xvfb "$@"
+    fi
+  fi
 fi
 
 if [[ "$desktop_webdriver_provider" == "official" ]]; then
