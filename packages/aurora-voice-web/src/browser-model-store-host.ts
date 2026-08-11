@@ -495,9 +495,13 @@ export async function openExistingBrowserModelStorePort(
       const opfsPort = await OpfsBrowserModelStorePort.openExisting(globalObject)
       if (opfsPort !== null || !globalObject.indexedDB) return opfsPort
     } catch (error) {
-      if (!isNotFoundError(error)) {
-        if (!globalObject.indexedDB) throw error
-      }
+      if (
+        !globalObject.indexedDB ||
+        (
+          !isNotFoundError(error) &&
+          !isStorageAvailabilityError(error)
+        )
+      ) throw error
     }
   }
   if (globalObject.indexedDB) return IndexedDbBrowserModelStorePort.openExisting(globalObject)
@@ -534,9 +538,8 @@ export class OpfsBrowserModelStorePort implements AuroraBrowserModelStorePort {
     try {
       await root.getDirectoryHandle(BLOB_STORE, { create: false })
       return new OpfsBrowserModelStorePort(globalObject, root, false)
-    } catch (error) {
-      if (isNotFoundError(error)) throw redactedError('storage')
-      throw error
+    } catch {
+      throw redactedError('storage')
     }
   }
 
@@ -688,9 +691,14 @@ export class IndexedDbBrowserModelStorePort implements AuroraBrowserModelStorePo
   ): Promise<IndexedDbBrowserModelStorePort | null> {
     const indexedDB = globalObject.indexedDB
     if (!indexedDB) throw redactedError('unavailable')
-    if (!await indexedDbDatabaseExists(indexedDB, databaseName)) return null
+    if (!await indexedDbDatabaseMayExist(indexedDB, databaseName)) return null
     const port = new IndexedDbBrowserModelStorePort(globalObject, kind, databaseName, false)
-    await port.db()
+    try {
+      await port.db()
+    } catch (error) {
+      if (isStoreErrorCode(error, 'absent')) return null
+      throw error
+    }
     return port
   }
 
@@ -909,8 +917,8 @@ export class IndexedDbBrowserModelStorePort implements AuroraBrowserModelStorePo
       request.onerror = () => reject(redactedError('unavailable'))
       request.onupgradeneeded = () => {
         if (!this.createStores) {
+          reject(redactedError('absent'))
           request.transaction?.abort()
-          reject(redactedError('unavailable'))
           return
         }
         const db = request.result
@@ -931,10 +939,15 @@ export class IndexedDbBrowserModelStorePort implements AuroraBrowserModelStorePo
   }
 }
 
-async function indexedDbDatabaseExists(indexedDB: IDBFactory, databaseName: string): Promise<boolean> {
+async function indexedDbDatabaseMayExist(indexedDB: IDBFactory, databaseName: string): Promise<boolean> {
   const databases = (indexedDB as unknown as { databases?: unknown }).databases
-  if (typeof databases !== 'function') throw redactedError('unavailable')
-  const entries = await databases.call(indexedDB) as Array<{ name?: string }>
+  if (typeof databases !== 'function') return true
+  let entries: Array<{ name?: string }>
+  try {
+    entries = await databases.call(indexedDB) as Array<{ name?: string }>
+  } catch {
+    return true
+  }
   return entries.some((entry) => entry.name === databaseName)
 }
 
@@ -1127,6 +1140,19 @@ function byteLength(value: string): number {
 
 function redactedError(code: string): AuroraBrowserModelStoreError {
   return new AuroraBrowserModelStoreError(code)
+}
+
+function isStoreErrorCode(error: unknown, code: string): boolean {
+  return error instanceof AuroraBrowserModelStoreError && error.code === code
+}
+
+function isStorageAvailabilityError(error: unknown): boolean {
+  if (isStoreErrorCode(error, 'unavailable')) return true
+  return error instanceof DOMException && (
+    error.name === 'InvalidStateError' ||
+    error.name === 'NotAllowedError' ||
+    error.name === 'SecurityError'
+  )
 }
 
 function isNotFoundError(error: unknown): boolean {

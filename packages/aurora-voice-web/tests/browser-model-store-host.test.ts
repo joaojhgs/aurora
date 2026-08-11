@@ -206,15 +206,80 @@ describe('AuroraBrowserModelStoreHost', () => {
     expect(root.directories.size).toBe(0)
   })
 
-  it('fails closed without opening IndexedDB when databases() cannot prove existence', async () => {
+  it('preserves OPFS corruption instead of falling through to IndexedDB', async () => {
+    const root = new FakeOpfsDirectory()
+    const indexedDB = new FakeIndexedDb()
+    const idb = new IndexedDbBrowserModelStorePort({ indexedDB: indexedDB.factory() })
+    await new AuroraBrowserModelStoreHost(idb).writeJson('pack@meta', '{"idb":true}')
+    root.files.set('aurora.voice.web.model-store.snapshot.v1', new TextEncoder().encode(JSON.stringify({
+      schemaVersion: 1,
+      json: [],
+      staging: [],
+      promoted: [],
+      journal: null
+    } satisfies AuroraBrowserModelStoreSnapshot)))
+
+    await expect(openExistingBrowserModelStorePort({
+      isSecureContext: true,
+      navigator: {
+        storage: {
+          getDirectory: async () => root
+        }
+      },
+      indexedDB: indexedDB.factory(),
+      crypto
+    })).rejects.toMatchObject({ code: 'storage' })
+    expect(indexedDB.openCalls).toBe(1)
+  })
+
+  it('preserves post-marker OPFS storage errors instead of treating them as availability', async () => {
+    const root = new FakeOpfsDirectory()
+    const indexedDB = new FakeIndexedDb()
+    const idb = new IndexedDbBrowserModelStorePort({ indexedDB: indexedDB.factory() })
+    await new AuroraBrowserModelStoreHost(idb).writeJson('pack@meta', '{"idb":true}')
+    root.files.set('aurora.voice.web.model-store.snapshot.v1', new TextEncoder().encode(JSON.stringify({
+      schemaVersion: 1,
+      json: [],
+      staging: [],
+      promoted: [],
+      journal: null
+    } satisfies AuroraBrowserModelStoreSnapshot)))
+    root.directoryFailures.set('blobs', new DOMException('blocked after marker', 'SecurityError'))
+
+    await expect(openExistingBrowserModelStorePort({
+      isSecureContext: true,
+      navigator: {
+        storage: {
+          getDirectory: async () => root
+        }
+      },
+      indexedDB: indexedDB.factory(),
+      crypto
+    })).rejects.toMatchObject({ code: 'storage' })
+    expect(indexedDB.openCalls).toBe(1)
+  })
+
+  it('probes absent IndexedDB safely when databases() is unavailable', async () => {
     const indexedDB = new FakeIndexedDb()
     const factory = indexedDB.factory({ exposeDatabases: false })
 
     await expect(openExistingBrowserModelStorePort({
       isSecureContext: false,
       indexedDB: factory
-    })).rejects.toMatchObject({ code: 'unavailable' })
-    expect(indexedDB.openCalls).toBe(0)
+    })).resolves.toBeNull()
+    expect(indexedDB.openCalls).toBe(1)
+    expect(indexedDB.databaseNames.size).toBe(0)
+  })
+
+  it('uses the no-create IndexedDB probe when databases() rejects', async () => {
+    const indexedDB = new FakeIndexedDb()
+    const factory = indexedDB.factory({ databasesRejects: true })
+
+    await expect(openExistingBrowserModelStorePort({
+      isSecureContext: false,
+      indexedDB: factory
+    })).resolves.toBeNull()
+    expect(indexedDB.openCalls).toBe(1)
     expect(indexedDB.databaseNames.size).toBe(0)
   })
 
@@ -226,7 +291,7 @@ describe('AuroraBrowserModelStoreHost', () => {
     await expect(openExistingBrowserModelStorePort({
       isSecureContext: false,
       indexedDB: indexedDB.factory()
-    })).rejects.toMatchObject({ code: 'unavailable' })
+    })).resolves.toBeNull()
     expect(indexedDB.databaseNames.size).toBe(0)
     expect(indexedDB.stores.size).toBe(0)
   })
@@ -612,13 +677,16 @@ class FakeIndexedDb {
   openCalls = 0
   deleteBeforeNextOpen = false
 
-  factory(options: { exposeDatabases?: boolean } = {}): IDBFactory {
+  factory(options: { exposeDatabases?: boolean; databasesRejects?: boolean } = {}): IDBFactory {
     const exposeDatabases = options.exposeDatabases ?? true
     return {
       open: (name: string, version?: number) => this.open(String(name), version),
       ...(exposeDatabases
         ? {
-            databases: async () => [...this.databaseNames].map((name) => ({ name }))
+            databases: async () => {
+              if (options.databasesRejects) throw new Error('database enumeration unavailable')
+              return [...this.databaseNames].map((name) => ({ name }))
+            }
           }
         : {})
     } as unknown as IDBFactory
@@ -743,12 +811,15 @@ class FlakyRecoveryPort extends FakeBrowserPort {
 class FakeOpfsDirectory {
   readonly files = new Map<string, Uint8Array>()
   readonly directories = new Map<string, FakeOpfsDirectory>()
+  readonly directoryFailures = new Map<string, Error>()
   readonly fileCalls: string[] = []
   readonly directoryCalls: string[] = []
   transientReadFailure = false
 
   async getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<FakeOpfsDirectory> {
     this.directoryCalls.push(name)
+    const failure = this.directoryFailures.get(name)
+    if (failure) throw failure
     let directory = this.directories.get(name)
     if (!directory) {
       if (options?.create !== true) throw new DOMException('not found', 'NotFoundError')

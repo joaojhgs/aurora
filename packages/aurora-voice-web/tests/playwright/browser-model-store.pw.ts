@@ -225,6 +225,44 @@ test('openExisting reopens browser storage without reinstalling bytes', async ({
   expect(reopened.value).toBe('{"existing":true}')
 })
 
+test('production hosted STT pack opener does not create storage when pack is absent', async ({ page }) => {
+  await clearDefaultBrowserStore(page)
+  await page.addScriptTag({ type: 'module', content: browserHarnessModule() })
+  await page.waitForFunction(() => window.__auroraHostedBrowserSpeechPack !== undefined)
+
+  const result = await page.evaluate(async () => {
+    const trust = {
+      releaseKeyId: window.__auroraBrowserModelPack.nonProductionTestKeyId,
+      releasePublicKeyBase64: window.__auroraBrowserModelPack.nonProductionTestPublicKeyBase64,
+      expectedManifestSha256: 'a'.repeat(64)
+    }
+    const opened = await window.__auroraHostedBrowserSpeechPack.openHostedBrowserSttSpeechPack({ trust })
+    const databases = typeof indexedDB.databases === 'function'
+      ? await indexedDB.databases()
+      : []
+    const rootKeys: string[] = []
+    if (navigator.storage?.getDirectory) {
+      const root = await navigator.storage.getDirectory()
+      if (typeof root.keys === 'function') {
+        for await (const key of root.keys()) rootKeys.push(String(key))
+      }
+    }
+    return {
+      opened,
+      databaseCreated: databases.some((database) => database.name === 'aurora-voice-web-model-store-v1'),
+      rootKeys: rootKeys.filter((key) => key === 'aurora.voice.web.model-store.snapshot.v1' || key === 'blobs'),
+      openCalls: window.__auroraHostedSpeechPackOpenCalls ?? []
+    }
+  })
+
+  expect(result).toEqual({
+    opened: { state: 'absent', pack: null },
+    databaseCreated: false,
+    rootKeys: [],
+    openCalls: []
+  })
+})
+
 test('persists JSON and promoted bytes across reloads', async ({ page }, testInfo) => {
   await installNamespacedStore(page, testInfo.project.name)
   await requireBrowserStoreWriteSupport(page, testInfo.project.name)
@@ -272,12 +310,15 @@ test('persists JSON and promoted bytes across reloads', async ({ page }, testInf
   expect(reopened.chunk.complete).toBe(true)
 })
 
-test('reopens a hosted STT pack across reload and offline using exact release trust', async ({ page }, testInfo) => {
-  await installNamespacedStore(page, testInfo.project.name)
-  await requireBrowserStoreWriteSupport(page, testInfo.project.name)
+test('reopens a hosted STT pack with the production default opener across reload and offline', async ({ page }) => {
+  await clearDefaultBrowserStore(page)
+  await page.addScriptTag({ type: 'module', content: browserHarnessModule() })
+  await page.waitForFunction(() => window.__auroraBrowserStore !== undefined)
+  await page.waitForFunction(() => window.__auroraHostedBrowserSpeechPack !== undefined)
 
   const first = await page.evaluate(async () => {
-    const host = await window.__auroraBrowserStore.create()
+    const host = await window.__auroraBrowserStore.createDefault()
+    await host.removePackData('pockettts-web-test')
     const bytes = new Uint8Array([21, 22, 23, 24])
     const manifest = await window.__auroraBrowserModelPack.signedManifest(bytes)
     const setupVerification = await window.__auroraBrowserModelPack.verifyBrowserModelPackManifest(
@@ -320,7 +361,8 @@ test('reopens a hosted STT pack across reload and offline using exact release tr
   expect(first.receipt.verificationKeyId).toBe(windowTestKeyId())
 
   await page.reload()
-  await installNamespacedStore(page, testInfo.project.name)
+  await page.addScriptTag({ type: 'module', content: browserHarnessModule() })
+  await page.waitForFunction(() => window.__auroraHostedBrowserSpeechPack !== undefined)
   const unexpectedNetwork: string[] = []
   await page.route('**/*', (route) => {
     unexpectedNetwork.push(route.request().url())
@@ -333,8 +375,7 @@ test('reopens a hosted STT pack across reload and offline using exact release tr
         releaseKeyId: window.__auroraBrowserModelPack.nonProductionTestKeyId,
         releasePublicKeyBase64: window.__auroraBrowserModelPack.nonProductionTestPublicKeyBase64,
         expectedManifestSha256
-      },
-      createHost: window.__auroraBrowserStore.create
+      }
     })
     if (result.state !== 'verified' || result.pack === null) {
       throw new Error(`expected verified hosted STT pack, got ${result.state}:${'reason' in result ? result.reason : 'none'}`)
@@ -472,6 +513,28 @@ async function browserStoreWriteSupport(page: Page): Promise<BrowserStoreWriteSu
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       return { supported: false, backend, hasOpfs, message }
+    }
+  })
+}
+
+async function clearDefaultBrowserStore(page: Page): Promise<void> {
+  await page.goto(baseUrl)
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase('aurora-voice-web-model-store-v1')
+      request.onerror = () => reject(new Error('failed to clear default IndexedDB test database'))
+      request.onsuccess = () => resolve()
+      request.onblocked = () => reject(new Error('blocked clearing default IndexedDB test database'))
+    })
+    if (navigator.storage?.getDirectory) {
+      const root = await navigator.storage.getDirectory()
+      for (const key of ['aurora.voice.web.model-store.snapshot.v1', 'blobs']) {
+        try {
+          await root.removeEntry(key, { recursive: true })
+        } catch (error) {
+          if (!(error instanceof DOMException) || error.name !== 'NotFoundError') throw error
+        }
+      }
     }
   })
 }
@@ -748,6 +811,11 @@ declare global {
           readSnapshot(): Promise<{ json: readonly { physicalKey: string }[] }>
           deleteBlob(physicalKey: string): Promise<void>
         }
+        removePackData(packId: string): Promise<void>
+      }>
+      createDefault: () => Promise<{
+        listPromotedKeys(): Promise<readonly string[]>
+        removePackData(packId: string): Promise<void>
       }>
       openExisting: () => Promise<{
         backendKind(): 'opfs' | 'indexeddb'
@@ -790,7 +858,7 @@ declare global {
           releasePublicKeyBase64: string
           expectedManifestSha256: string
         }
-        createHost: () => Promise<unknown>
+        createHost?: () => Promise<unknown>
       }): Promise<{
         state: 'not-configured' | 'absent' | 'verified' | 'rejected' | 'storage-unavailable'
         pack: null | {
