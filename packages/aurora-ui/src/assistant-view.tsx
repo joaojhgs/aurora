@@ -661,6 +661,23 @@ export function AssistantView({
     return null
   }
 
+  function defaultVoiceRoutePolicy(route: RouteAvailability): AssistantRoutePolicy | null {
+    const routePolicy = routePolicyFromRoute(route)
+    if (
+      route.selectorRequired
+      && !routePolicy.providerId
+      && !routePolicy.peerId
+      && !routePolicy.serviceInstanceId
+    ) {
+      const message = 'Choose a connected voice device before starting speech.'
+      setLastError(message)
+      setVoiceCaptureStatus('idle')
+      setStreamState((current) => ({ ...current, status: 'lost', message }))
+      return null
+    }
+    return routePolicy
+  }
+
   async function toggleRemoteAudioConsent() {
     if (voiceConsentGrantedRef.current && voiceConsentRouteKeyRef.current === voiceConsentRouteKey) {
       await stopActiveRemoteAudioForConsentRevoke()
@@ -2306,6 +2323,8 @@ export function AssistantView({
       await stopReadAloud('user_interrupt')
       return
     }
+    const routePolicy = defaultVoiceRoutePolicy(voiceModel.speechRoute)
+    if (!routePolicy) return
     setLastError(null)
     setSpeakingMessageId(message.id)
     lastAssistantMessageIdRef.current = message.id
@@ -2314,7 +2333,7 @@ export function AssistantView({
         const result = await client.assistant.requestReadAloud({
           text: speakableText,
           interrupt: true,
-          routePolicy: routePolicyFromRoute(voiceModel.speechRoute)
+          routePolicy
         })
         if (!result.ok) throw result.error
         setStreamState((current) => ({ ...current, message: 'Reading assistant response through Aurora TTS.' }))
@@ -2325,7 +2344,7 @@ export function AssistantView({
         voice: null,
         speed: 1,
         format: 'wav',
-        routePolicy: routePolicyFromRoute(voiceModel.speechRoute)
+        routePolicy
       })
       if (!result.ok) throw result.error
       if (!enqueueTtsAudio(result.data.audio_data, result.data.format)) {
@@ -3313,15 +3332,6 @@ export function AssistantView({
     const sessionId = `voice-${Date.now()}`
     voiceTranscriptPreviewRef.current = ''
     setLastError(null)
-    if (usesNativeDesktopVoice) {
-      await startNativeDesktopVoice()
-      return
-    }
-    if (usesNativeMobileVoice) {
-      await interruptTtsForVoiceCapture()
-      await startNativeMobileVoice()
-      return
-    }
     if (
       (surfaceProfile.kind === 'android' || surfaceProfile.kind === 'ios')
       && surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'unavailable'
@@ -3331,6 +3341,16 @@ export function AssistantView({
       return
     }
     if (remoteAudioConsentForCurrentRoute(voiceModel.transcriptionRoute) === null) return
+    if (!defaultVoiceRoutePolicy(voiceModel.transcriptionRoute)) return
+    if (usesNativeDesktopVoice) {
+      await startNativeDesktopVoice()
+      return
+    }
+    if (usesNativeMobileVoice) {
+      await interruptTtsForVoiceCapture()
+      await startNativeMobileVoice()
+      return
+    }
     void interruptTtsForVoiceCapture()
     if (!surfaceProfile.voiceCapture.avoidCoordinatorPushToTalk) {
       await startCoordinatorPushToTalk(sessionId)
@@ -4790,19 +4810,30 @@ export function persistAssistantSession(storageKey: string, session: AssistantSe
 
 export function routePolicyFromRoute(
   route: RouteAvailability,
-  provider = route.candidateProviders.find((candidate) => candidate.selectable && !isRemoteRouteCandidate(candidate))
-    ?? route.candidateProviders.find((candidate) => !isRemoteRouteCandidate(candidate))
+  provider = selectedRoutePolicyProvider(route)
 ): AssistantRoutePolicy {
+  const providerId = provider?.providerId ?? provider?.id ?? null
+  const remoteProvider = provider && isRemoteRouteCandidate(provider) ? provider : null
   return {
-    providerId: provider?.providerId ?? provider?.id ?? null,
-    peerId: null,
-    serviceInstanceId: null,
+    providerId,
+    peerId: remoteProvider ? remoteProvider.peerId ?? (providerId ? peerIdFromProviderIdentity(providerId) : null) : null,
+    serviceInstanceId: remoteProvider ? remoteProvider.serviceInstanceId ?? (providerId ? serviceInstanceFromProviderIdentity(providerId) : null) : null,
     routeState: route.state,
     fallbackBehavior: route.state === 'degraded' ? 'backend-reported degraded route' : null,
     privacyClass: route.item.privacyClass,
     selectorRequired: route.selectorRequired,
     approvalRequired: route.approvalRequired
   }
+}
+
+function selectedRoutePolicyProvider(route: RouteAvailability): RouteAvailability['candidateProviders'][number] | undefined {
+  if (route.selectorRequired) return undefined
+  const local = route.candidateProviders.find((candidate) => candidate.selectable && !isRemoteRouteCandidate(candidate))
+    ?? route.candidateProviders.find((candidate) => !isRemoteRouteCandidate(candidate))
+  if (local && route.state !== 'available-remote') return local
+  const remote = route.candidateProviders.find((candidate) => candidate.selectable && isRemoteRouteCandidate(candidate))
+    ?? route.candidateProviders.find(isRemoteRouteCandidate)
+  return remote ?? local ?? route.candidateProviders.find((candidate) => candidate.selectable) ?? route.candidateProviders[0]
 }
 
 export interface AssistantExecutionContext {
@@ -6002,6 +6033,16 @@ function voiceAction(
       state: 'privacy-blocked',
       enabled: false,
       reason: 'Grant session consent before sharing microphone audio with a connected device.',
+      route
+    }
+  }
+  if (route.selectorRequired) {
+    return {
+      id,
+      label,
+      state: 'privacy-blocked',
+      enabled: false,
+      reason: 'Choose a connected voice device before starting speech.',
       route
     }
   }
@@ -7458,6 +7499,7 @@ function voiceChipStatusCopy(chip: VoiceCapabilityChip): string {
 
 function voiceControlReasonCopy(control: VoiceControlModel): string {
   if (control.enabled) return 'Ready'
+  if (control.reason === 'Choose a connected voice device before starting speech.') return control.reason
   if (control.state === 'privacy-blocked') return 'Grant session consent before sharing audio with another device.'
   if (control.state === 'denied') return 'Permission is needed before continuing.'
   if (control.state === 'pending') return 'Start local capture before creating an audio session.'

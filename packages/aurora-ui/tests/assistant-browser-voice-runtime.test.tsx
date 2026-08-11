@@ -2,8 +2,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AuroraClient, MockAuroraTransport, ORCHESTRATOR_METHODS, type AssistantStreamUpdate } from '@aurora/client'
-import { AssistantView, buildAssistantVoiceModel } from '../src/assistant-view'
+import { AuroraClient, MockAuroraTransport, ORCHESTRATOR_METHODS, type AssistantRoutePolicy, type AssistantStreamUpdate } from '@aurora/client'
+import { AssistantView, buildAssistantVoiceModel, routePolicyFromRoute } from '../src/assistant-view'
 import { auroraNavSections, navItemSnapshot } from '../src/nav'
 import {
   AURORA_RELEASE_FOCUSED_MEDIA_EVENT,
@@ -687,11 +687,17 @@ describe('Assistant hosted browser voice runtime', () => {
   it('keeps local focused voice local when a connected transcription alternative is available', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const nativeVoice = createNativeDesktopVoicePort()
+    const voiceRoutes = localVoiceRoutesWithRemoteAlternative('studio')
+    expect(routePolicyFromRoute(voiceRoutes.transcription)).toEqual(expect.objectContaining({
+      providerId: 'local:Transcription',
+      peerId: null,
+      serviceInstanceId: null
+    }))
     const container = renderAssistant(client, getAuroraSurfaceProfile({
       runtimeMode: 'desktop-local',
       transportKind: 'tauri-local',
       nativePlatform: 'linux'
-    }), nativeVoice, { voiceRoutes: localVoiceRoutesWithRemoteAlternative('studio') })
+    }), nativeVoice, { voiceRoutes })
 
     await clickButton(container, 'Push to talk')
     await vi.waitFor(() => expect(nativeVoice.start).toHaveBeenCalledTimes(1), { timeout: 5_000 })
@@ -749,6 +755,28 @@ describe('Assistant hosted browser voice runtime', () => {
       trigger: 'focused_push_to_talk',
       remoteAudioConsent: true
     })
+  })
+
+  it('blocks selector-required connected speech before desktop native start after consent', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const startVoiceListen = vi.spyOn(client.assistant, 'startVoiceListen')
+    const transcribeVoiceAudio = vi.spyOn(client.assistant, 'transcribeVoiceAudio')
+    const nativeVoice = createNativeDesktopVoicePort()
+    const container = renderAssistant(client, getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-thin',
+      transportKind: 'tauri-thin',
+      nativePlatform: 'linux'
+    }), nativeVoice, { voiceRoutes: selectorRequiredRemoteVoiceRoutes('studio', 'booth') })
+
+    await clickButton(container, 'Allow connected voice')
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(container.textContent).toContain('Choose a connected voice device before starting speech.'))
+
+    expect(nativeVoice.start).not.toHaveBeenCalled()
+    expect(startVoiceListen).not.toHaveBeenCalled()
+    expect(transcribeVoiceAudio).not.toHaveBeenCalled()
+    expect(voiceRuntimeMock.create).not.toHaveBeenCalled()
+    expect(findButtonOrNull(container, 'Stop listening')).toBeNull()
   })
 
   it('stops active connected speech capture when connected voice access is revoked', async () => {
@@ -836,6 +864,29 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(grantedMobileVoice.start).toHaveBeenCalledWith({ remoteAudioConsent: true })
   })
 
+  it('blocks selector-required connected speech before native mobile start after consent', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const startVoiceListen = vi.spyOn(client.assistant, 'startVoiceListen')
+    const transcribeVoiceAudio = vi.spyOn(client.assistant, 'transcribeVoiceAudio')
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    const container = renderAssistant(client, nativeMobileSurface(), undefined, {
+      nativeMobileVoice,
+      nativeAvailable: true,
+      nativePlatform: 'android',
+      voiceRoutes: selectorRequiredRemoteVoiceRoutes('studio', 'booth')
+    })
+
+    await clickButton(container, 'Allow connected voice')
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(container.textContent).toContain('Choose a connected voice device before starting speech.'))
+
+    expect(nativeMobileVoice.start).not.toHaveBeenCalled()
+    expect(startVoiceListen).not.toHaveBeenCalled()
+    expect(transcribeVoiceAudio).not.toHaveBeenCalled()
+    expect(voiceRuntimeMock.create).not.toHaveBeenCalled()
+    expect(findButtonOrNull(container, 'Stop listening')).toBeNull()
+  })
+
   it('invalidates connected voice access when the connected speech target changes', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const nativeVoice = createNativeDesktopVoicePort()
@@ -898,6 +949,169 @@ describe('Assistant hosted browser voice runtime', () => {
       .filter((value): value is string => Boolean(value))
       .join(' ')
     expect(findForbiddenProductionCopyTerms(`${visible} ${attributes}`)).toEqual([])
+  })
+
+  it('preserves remote voice route selectors for hosted STT dispatch and read-aloud', async () => {
+    const runtime = createRuntimeMock({ capturedPcm: new Int16Array([11, 12, 13]) })
+    voiceRuntimeMock.create.mockReturnValue(runtime)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:remote-read-aloud') })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined)
+    const transcriptionPayloads: unknown[] = []
+    const synthesisPayloads: unknown[] = []
+    const transport = MockAuroraTransport.empty()
+      .register('Transcription.Transcribe', (request) => {
+        transcriptionPayloads.push(request.payload)
+        return {
+          text: 'hello aurora',
+          confidence: null,
+          language: null,
+          duration_ms: 1_000,
+          model_used: 'test',
+        }
+      })
+      .register('TTS.Synthesize', (request) => {
+        synthesisPayloads.push(request.payload)
+        return {
+          audio_data: 'UklGRg==',
+          format: 'wav',
+          sample_rate: 22_050,
+          channels: 1,
+          duration_ms: 120,
+          text: 'Remote response ready.',
+        }
+      })
+    const client = new AuroraClient({ transport })
+    const transcribeVoiceAudio = vi.spyOn(client.assistant, 'transcribeVoiceAudio')
+    const synthesizeReadAloud = vi.spyOn(client.assistant, 'synthesizeReadAloud')
+    vi.spyOn(client.assistant, 'streamMessage').mockImplementation(async function* () {
+      yield completedUpdate('Remote response ready.')
+    })
+    const container = renderAssistant(client, hostedSurface(), undefined, { voiceRoutes: remoteVoiceRoutes('studio') })
+
+    await clickButton(container, 'Allow connected voice')
+    await clickButton(container, 'Push to talk')
+    await clickButton(container, 'Stop listening')
+    await vi.waitFor(() => expect(container.textContent).toContain('Remote response ready.'))
+    const readAloud = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Read aloud')
+    if (!readAloud) throw new Error('missing read-aloud action')
+    await act(async () => {
+      readAloud.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await vi.waitFor(() => expect(play).toHaveBeenCalledTimes(1))
+
+    expect(transcriptionPayloads).toHaveLength(1)
+    expectRemoteVoicePolicy(transcribeVoiceAudio.mock.calls[0]?.[0].routePolicy ?? undefined, 'Transcription')
+    expectRemoteVoiceSelector((transcriptionPayloads[0] as { selector?: unknown }).selector, 'Transcription')
+    expectRemoteVoiceSelector((transcriptionPayloads[0] as { mesh_selector?: unknown }).mesh_selector, 'Transcription')
+    expect(synthesisPayloads).toHaveLength(1)
+    expectRemoteVoicePolicy(synthesizeReadAloud.mock.calls[0]?.[0].routePolicy ?? undefined, 'TTS')
+    expectRemoteVoiceSelector((synthesisPayloads[0] as { selector?: unknown }).selector, 'TTS')
+    expectRemoteVoiceSelector((synthesisPayloads[0] as { mesh_selector?: unknown }).mesh_selector, 'TTS')
+    expect(JSON.stringify({
+      stt: transcriptionPayloads,
+      tts: synthesisPayloads,
+    })).not.toContain('Tooling.ExecuteTool')
+  })
+
+  it('fails closed when a connected voice route requires explicit device selection', async () => {
+    const runtime = createRuntimeMock({ capturedPcm: new Int16Array([11, 12, 13]) })
+    voiceRuntimeMock.create.mockReturnValue(runtime)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+    const routes = selectorRequiredRemoteVoiceRoutes('studio', 'booth')
+    expect(routePolicyFromRoute(routes.transcription)).toEqual(expect.objectContaining({
+      providerId: null,
+      peerId: null,
+      serviceInstanceId: null,
+      selectorRequired: true,
+    }))
+    expect(routePolicyFromRoute(routes.ttsSynthesize)).toEqual(expect.objectContaining({
+      providerId: null,
+      peerId: null,
+      serviceInstanceId: null,
+      selectorRequired: true,
+    }))
+    expect(routePolicyFromRoute(routes.transcription, routes.transcription.candidateProviders[0])).toEqual(expect.objectContaining({
+      providerId: 'remote:studio:Transcription',
+      peerId: 'studio',
+      serviceInstanceId: 'remote:studio:Transcription',
+      selectorRequired: true,
+    }))
+    const transcriptionPayloads: unknown[] = []
+    const transport = MockAuroraTransport.empty().register('Transcription.Transcribe', (request) => {
+      transcriptionPayloads.push(request.payload)
+      return {
+        text: 'should not dispatch',
+        confidence: null,
+        language: null,
+        duration_ms: 1_000,
+        model_used: 'test',
+      }
+    })
+    const client = new AuroraClient({ transport })
+    const transcribeVoiceAudio = vi.spyOn(client.assistant, 'transcribeVoiceAudio')
+    const container = renderAssistant(client, hostedSurface(), undefined, { voiceRoutes: routes })
+
+    await clickButton(container, 'Allow connected voice')
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(container.textContent).toContain('Choose a connected voice device before starting speech.'))
+
+    expect(runtime.start).not.toHaveBeenCalled()
+    expect(transcribeVoiceAudio).not.toHaveBeenCalled()
+    expect(transcriptionPayloads).toEqual([])
+    expect(findButtonOrNull(container, 'Stop listening')).toBeNull()
+  })
+
+  it('blocks selector-required read-aloud without dispatching or sticking in speaking state', async () => {
+    const routes = selectorRequiredRemoteVoiceRoutes('studio', 'booth')
+    const synthesisPayloads: unknown[] = []
+    const transport = MockAuroraTransport.empty().register('TTS.Synthesize', (request) => {
+      synthesisPayloads.push(request.payload)
+      return {
+        audio_data: 'UklGRg==',
+        format: 'wav',
+        sample_rate: 22_050,
+        channels: 1,
+        duration_ms: 120,
+        text: 'Selector required.',
+      }
+    })
+    const client = new AuroraClient({ transport })
+    const synthesizeReadAloud = vi.spyOn(client.assistant, 'synthesizeReadAloud')
+    const container = renderAssistant(client, hostedSurface(), undefined, {
+      voiceRoutes: routes,
+      initialSession: {
+        sessionId: 'selector-required-read-aloud',
+        messages: [{
+          id: 'assistant-selector-required',
+          role: 'assistant',
+          text: 'Connected speech needs an explicit device choice.',
+          createdAt: '2026-08-11T00:00:00Z',
+          status: 'sent',
+        }]
+      }
+    })
+    const readAloud = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Read aloud')
+    if (!readAloud) throw new Error('missing read-aloud action')
+
+    await act(async () => {
+      readAloud.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await vi.waitFor(() => expect(container.textContent).toContain('Choose a connected voice device before starting speech.'))
+
+    expect(synthesizeReadAloud).not.toHaveBeenCalled()
+    expect(synthesisPayloads).toEqual([])
+    expect(readAloud.getAttribute('data-speaking')).toBeNull()
+    expect(readAloud.textContent?.trim()).toBe('Read aloud')
   })
 
   it('shows microphone recovery guidance next to the composer controls', async () => {
@@ -1326,6 +1540,30 @@ function remoteVoiceRoutes(peerId: string): AssistantVoiceRoutes {
   }
 }
 
+function expectRemoteVoicePolicy(
+  routePolicy: AssistantRoutePolicy | undefined,
+  service: 'Transcription' | 'TTS'
+) {
+  expect(routePolicy).toEqual({
+    providerId: `remote:studio:${service}`,
+    peerId: 'studio',
+    serviceInstanceId: `remote:studio:${service}`,
+    routeState: 'available-remote',
+    fallbackBehavior: null,
+    privacyClass: service === 'Transcription' ? 'raw-audio' : 'personal',
+    selectorRequired: false,
+    approvalRequired: false,
+  })
+}
+
+function expectRemoteVoiceSelector(selector: unknown, service: 'Transcription' | 'TTS') {
+  expect(selector).toEqual({
+    provider_id: `remote:studio:${service}`,
+    service_instance_id: `remote:studio:${service}`,
+    peer_id: 'studio',
+  })
+}
+
 function localVoiceRoutesWithRemoteAlternative(peerId: string): AssistantVoiceRoutes {
   const routes = remoteVoiceRoutes(peerId)
   const remoteCandidate = routes.transcription.candidateProviders[0]!
@@ -1356,6 +1594,37 @@ function localVoiceRoutesWithRemoteAlternative(peerId: string): AssistantVoiceRo
   }
 }
 
+function selectorRequiredRemoteVoiceRoutes(primaryPeerId: string, alternatePeerId: string): AssistantVoiceRoutes {
+  const routes = remoteVoiceRoutes(primaryPeerId)
+  return {
+    ...routes,
+    transcription: selectorRequiredRemoteRoute(routes.transcription, alternatePeerId),
+    ttsSynthesize: selectorRequiredRemoteRoute(routes.ttsSynthesize, alternatePeerId)
+  }
+}
+
+function selectorRequiredRemoteRoute(route: RouteAvailability, alternatePeerId: string): RouteAvailability {
+  const primary = route.candidateProviders[0]!
+  const service = route.item.capabilityModule
+  return {
+    ...route,
+    selectorRequired: true,
+    candidateProviders: [
+      primary,
+      {
+        ...primary,
+        id: `remote:${alternatePeerId}:${service}`,
+        providerId: `remote:${alternatePeerId}:${service}`,
+        peerId: alternatePeerId,
+        nodeName: alternatePeerId,
+        serviceInstanceId: `remote:${alternatePeerId}:${service}`,
+        label: `Connected device ${alternatePeerId}`,
+        selectable: true
+      }
+    ]
+  }
+}
+
 function remoteAudioRoute(
   peerId: string,
   id = 'voice-transcription',
@@ -1363,14 +1632,15 @@ function remoteAudioRoute(
   privacyClass: RouteAvailability['item']['privacyClass'] = 'raw-audio'
 ): RouteAvailability {
   const base = assistantRoute()
+  const service = id.includes('tts') ? 'TTS' : 'Transcription'
   return {
     ...base,
     item: {
       ...base.item,
       id,
       label,
-      capabilityModule: id.includes('tts') ? 'TTS' : 'Transcription',
-      capabilityMethod: id.includes('tts') ? 'Synthesize' : 'Transcribe',
+      capabilityModule: service,
+      capabilityMethod: service === 'TTS' ? 'Synthesize' : 'Transcribe',
       privacyClass
     },
     state: 'available-remote',
@@ -1378,12 +1648,12 @@ function remoteAudioRoute(
     providerLabel: `Connected device ${peerId}`,
     candidateProviders: [
       {
-        id: `remote:${peerId}:Transcription`,
-        providerId: `remote:${peerId}:Transcription`,
+        id: `remote:${peerId}:${service}`,
+        providerId: `remote:${peerId}:${service}`,
         providerKind: 'remote',
         peerId,
         nodeName: peerId,
-        serviceInstanceId: `remote:${peerId}:Transcription`,
+        serviceInstanceId: `remote:${peerId}:${service}`,
         label: `Connected device ${peerId}`,
         state: 'available-remote',
         selectable: true,
@@ -1391,7 +1661,7 @@ function remoteAudioRoute(
         requiredAction: null
       }
     ],
-    evidenceSources: ['Transcription.Transcribe'],
+    evidenceSources: [service === 'TTS' ? 'TTS.Synthesize' : 'Transcription.Transcribe'],
     selectorRequired: false,
     disabled: false
   }

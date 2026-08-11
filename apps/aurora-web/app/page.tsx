@@ -7,7 +7,13 @@ export default async function Page() {
   const route = snapshot.routes.find((candidate) => candidate.item.id === 'assistant')
   return (
     <>
-      {route ? <AssistantClientPage route={route} cancellationRoute={snapshot.assistantCancellationRoute ?? undefined} /> : null}
+      {route ? (
+        <AssistantClientPage
+          route={route}
+          cancellationRoute={snapshot.assistantCancellationRoute ?? undefined}
+          voiceRoutes={snapshot.assistantVoiceRoutes}
+        />
+      ) : null}
       {!route ? (
         <AuroraRoutePage
           routeId="assistant"

@@ -17,10 +17,11 @@ import {
   type LightweightToolClientDelegate,
   type LightweightToolExecutionResponse,
 } from '@aurora/client/lightweight-orchestrator'
-import { AssistantView, type RouteAvailability } from '@aurora/ui'
+import { AssistantView, type AssistantVoiceRoutes, type RouteAvailability } from '@aurora/ui'
 import type { LightweightAssistantDependencies } from '@aurora/ui/local-assistant'
 import {
   useBrowserCancellationRoute,
+  useBrowserAssistantVoiceRoutes,
   useBrowserRoute,
   useBrowserShellRuntime,
 } from './browser-shell-runtime'
@@ -28,20 +29,24 @@ import type { AuroraBrowserRuntime } from './aurora-client'
 
 export function AssistantClientPage({
   route,
-  cancellationRoute
+  cancellationRoute,
+  voiceRoutes,
 }: {
   route: RouteAvailability
   cancellationRoute?: RouteAvailability | undefined
+  voiceRoutes?: AssistantVoiceRoutes | undefined
 }) {
   const runtime = useBrowserShellRuntime()
   const activeRoute = useBrowserRoute(route)
   const activeCancellationRoute = useBrowserCancellationRoute(cancellationRoute)
+  const activeVoiceRoutes = useBrowserAssistantVoiceRoutes(voiceRoutes)
   const localAssistant = useMemo(() => browserLocalAssistant(runtime), [runtime])
   return (
     <AssistantView
       client={runtime.client}
       route={activeRoute}
       cancellationRoute={activeCancellationRoute}
+      voiceRoutes={activeVoiceRoutes}
       executionHost="connected-device"
       localAssistant={localAssistant}
       surfaceProfile={runtime.surface}

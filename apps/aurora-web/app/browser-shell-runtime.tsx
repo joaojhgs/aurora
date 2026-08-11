@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, type ReactNode } from 'react'
-import type { AuroraRuntimeProfileV2, AuroraShellSnapshot, RouteAvailability } from '@aurora/ui'
+import type { AssistantVoiceRoutes, AuroraRuntimeProfileV2, AuroraShellSnapshot, RouteAvailability } from '@aurora/ui'
 import type { AuroraBrowserRuntime } from './aurora-client'
 
 const BrowserShellSnapshotContext = createContext<AuroraShellSnapshot | null>(null)
@@ -54,4 +54,12 @@ export function useBrowserCancellationRoute(
 ): RouteAvailability | undefined {
   const snapshot = useContext(BrowserShellSnapshotContext)
   return snapshot?.assistantCancellationRoute ?? fallback
+}
+
+export function useBrowserAssistantVoiceRoutes(
+  fallback: AssistantVoiceRoutes | undefined,
+): AssistantVoiceRoutes | undefined {
+  const snapshot = useContext(BrowserShellSnapshotContext)
+  if (!snapshot || snapshot.loadState === 'loading') return fallback
+  return snapshot?.assistantVoiceRoutes ?? fallback
 }
