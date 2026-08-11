@@ -187,6 +187,250 @@ describe('browser model pack verification', () => {
     expect(Array.from(await reopened?.files[0]?.readAll() ?? [])).toEqual([4, 5, 6, 7])
   })
 
+  it('rejects a selected file whose task does not match the requested scope before fetching', async () => {
+    const bytes = new Uint8Array([8, 9, 10])
+    const manifest = await signedUnsignedManifest({
+      schema_version: 1,
+      pack_id: 'cross-task-web-test',
+      pack_version: '1.0.0',
+      display_name: 'Cross-task Web Test',
+      tasks: ['stt', 'tts'],
+      files: [{
+        file_id: 'tts-model',
+        asset_id: 'tts-model',
+        task: 'tts',
+        url: '/fixtures/cross-task-web-test.bin',
+        sha256: await sha256Hex(bytes),
+        byte_size: bytes.byteLength,
+        installed_size: bytes.byteLength,
+        compression: 'none'
+      }],
+      variants: [{
+        variant_id: 'web-wasm32-test',
+        file_ids: ['tts-model'],
+        target: 'web',
+        os: 'web',
+        arch: 'wasm32'
+      }],
+      revocation: null,
+      signature: null
+    })
+    const host = new MemoryWebModelStoreHost()
+    let fetchCount = 0
+
+    await expect(installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      scope: { task: 'stt' },
+      allowNonProductionTestSignature: true,
+      fetchBytes: async () => {
+        fetchCount += 1
+        return bytes
+      }
+    })).rejects.toMatchObject({ code: 'scope' })
+
+    expect(fetchCount).toBe(0)
+    expect(await host.listPromotedKeys()).toEqual([])
+    expect(await host.listJsonKeys('aurora.voice.web-store.v1:active:')).toEqual([])
+  })
+
+  it('installs a shared mixed-task variant under each matching task scope', async () => {
+    const sttBytes = new Uint8Array([11, 12])
+    const ttsBytes = new Uint8Array([13, 14])
+    const manifest = await signedUnsignedManifest({
+      schema_version: 1,
+      pack_id: 'mixed-task-web-test',
+      pack_version: '1.0.0',
+      display_name: 'Mixed-task Web Test',
+      tasks: ['stt', 'tts'],
+      files: [{
+        file_id: 'stt-model',
+        asset_id: 'stt-model',
+        task: 'stt',
+        url: '/fixtures/mixed-task-stt.bin',
+        sha256: await sha256Hex(sttBytes),
+        byte_size: sttBytes.byteLength,
+        installed_size: sttBytes.byteLength,
+        compression: 'none'
+      }, {
+        file_id: 'tts-model',
+        asset_id: 'tts-model',
+        task: 'tts',
+        url: '/fixtures/mixed-task-tts.bin',
+        sha256: await sha256Hex(ttsBytes),
+        byte_size: ttsBytes.byteLength,
+        installed_size: ttsBytes.byteLength,
+        compression: 'none'
+      }],
+      variants: [{
+        variant_id: 'web-wasm32-test',
+        file_ids: ['stt-model', 'tts-model'],
+        target: 'web',
+        os: 'web',
+        arch: 'wasm32'
+      }],
+      revocation: null,
+      signature: null
+    })
+
+    const host = new MemoryWebModelStoreHost()
+    for (const task of ['stt', 'tts']) {
+      const receipt = await installVerifiedBrowserModelPack({
+        host,
+        manifest,
+        scope: { task },
+        allowNonProductionTestSignature: true,
+        fetchBytes: async (url) => url.endsWith('-stt.bin') ? sttBytes : ttsBytes
+      })
+      const reopened = await openActiveBrowserModelPack(
+        host,
+        { task },
+        { allowNonProductionTestSignature: true }
+      )
+
+      expect(receipt.identity.scope.task).toBe(task)
+      expect(reopened?.identity).toEqual(receipt.identity)
+      expect(reopened?.files).toHaveLength(2)
+    }
+  })
+
+  it('installs and reopens a task-specific pack under its matching scope', async () => {
+    const bytes = new Uint8Array([15, 16, 17])
+    const manifest = await signedUnsignedManifest({
+      schema_version: 1,
+      pack_id: 'tts-web-test',
+      pack_version: '1.0.0',
+      display_name: 'TTS Web Test',
+      tasks: ['tts'],
+      files: [{
+        file_id: 'tts-model',
+        asset_id: 'tts-model',
+        task: 'tts',
+        url: '/fixtures/tts-web-test.bin',
+        sha256: await sha256Hex(bytes),
+        byte_size: bytes.byteLength,
+        installed_size: bytes.byteLength,
+        compression: 'none'
+      }],
+      variants: [{
+        variant_id: 'web-wasm32-test',
+        file_ids: ['tts-model'],
+        target: 'web',
+        os: 'web',
+        arch: 'wasm32'
+      }],
+      revocation: null,
+      signature: null
+    })
+    const host = new MemoryWebModelStoreHost()
+
+    const receipt = await installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      scope: { task: 'tts' },
+      allowNonProductionTestSignature: true,
+      fetchBytes: async () => bytes
+    })
+    const reopened = await openActiveBrowserModelPack(
+      host,
+      { task: 'tts' },
+      { allowNonProductionTestSignature: true }
+    )
+
+    expect(receipt.identity.scope).toEqual({ task: 'tts', slotId: 'default' })
+    expect(reopened?.identity).toEqual(receipt.identity)
+    expect(Array.from(await reopened?.files[0]?.readAll() ?? [])).toEqual(Array.from(bytes))
+  })
+
+  it('rejects an unsafe legacy active record whose signed files do not match its stored scope', async () => {
+    const bytes = new Uint8Array([18, 19, 20])
+    const manifest = await signedManifest(bytes)
+    const host = new MemoryWebModelStoreHost()
+    await installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      scope: { task: 'stt' },
+      allowNonProductionTestSignature: true,
+      fetchBytes: async () => bytes
+    })
+    const [sttActiveKey] = await host.listJsonKeys('aurora.voice.web-store.v1:active:')
+    const active = JSON.parse(await host.readJson(sttActiveKey ?? '') ?? '{}') as {
+      identity: { scope: { task: string } }
+    }
+    active.identity.scope.task = 'tts'
+    const ttsActiveKey = (sttActiveKey ?? '').replace(':active:stt:', ':active:tts:')
+    await host.writeJson(ttsActiveKey, JSON.stringify(active))
+
+    await expect(openActiveBrowserModelPack(
+      host,
+      { task: 'tts' },
+      { allowNonProductionTestSignature: true }
+    )).rejects.toMatchObject({ code: 'scope' })
+  })
+
+  it('keeps colon-bearing task and slot scopes isolated', async () => {
+    const firstBytes = new Uint8Array([21, 22, 23])
+    const secondBytes = new Uint8Array([24, 25, 26])
+    const firstManifest = await signedTaskManifest('scope-a-web-test', 'a:b', firstBytes)
+    const secondManifest = await signedTaskManifest('scope-b-web-test', 'a', secondBytes)
+    const host = new MemoryWebModelStoreHost()
+
+    const firstReceipt = await installVerifiedBrowserModelPack({
+      host,
+      manifest: firstManifest,
+      scope: { task: 'a:b', slotId: 'c' },
+      allowNonProductionTestSignature: true,
+      fetchBytes: async () => firstBytes
+    })
+    const secondReceipt = await installVerifiedBrowserModelPack({
+      host,
+      manifest: secondManifest,
+      scope: { task: 'a', slotId: 'b:c' },
+      allowNonProductionTestSignature: true,
+      fetchBytes: async () => secondBytes
+    })
+
+    const firstReopened = await openActiveBrowserModelPack(
+      host,
+      firstReceipt.identity.scope,
+      { allowNonProductionTestSignature: true }
+    )
+    const secondReopened = await openActiveBrowserModelPack(
+      host,
+      secondReceipt.identity.scope,
+      { allowNonProductionTestSignature: true }
+    )
+
+    expect(firstReopened?.identity).toEqual(firstReceipt.identity)
+    expect(Array.from(await firstReopened?.files[0]?.readAll() ?? [])).toEqual(Array.from(firstBytes))
+    expect(secondReopened?.identity).toEqual(secondReceipt.identity)
+    expect(Array.from(await secondReopened?.files[0]?.readAll() ?? [])).toEqual(Array.from(secondBytes))
+  })
+
+  it('maps a malformed legacy active identity to the package error contract', async () => {
+    const bytes = new Uint8Array([27, 28, 29])
+    const manifest = await signedManifest(bytes)
+    const host = new MemoryWebModelStoreHost()
+    await installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      fetchBytes: async () => bytes
+    })
+    const [activeKey] = await host.listJsonKeys('aurora.voice.web-store.v1:active:')
+    const active = JSON.parse(await host.readJson(activeKey ?? '') ?? '{}') as {
+      identity: Record<string, unknown>
+    }
+    delete active.identity.scope
+    await host.writeJson(activeKey ?? '', JSON.stringify(active))
+
+    await expect(openActiveBrowserModelPack(
+      host,
+      { task: 'stt' },
+      { allowNonProductionTestSignature: true }
+    )).rejects.toMatchObject({ code: 'active' })
+  })
+
   it('does not fetch or mutate storage when installation is already cancelled', async () => {
     const bytes = new Uint8Array([14, 15, 16])
     const manifest = await signedManifest(bytes)
@@ -719,6 +963,39 @@ async function signedManifest(
       value: signature
     }
   }
+}
+
+async function signedTaskManifest(
+  packId: string,
+  task: string,
+  bytes: Uint8Array
+): Promise<AuroraBrowserModelPackManifest> {
+  return signedUnsignedManifest({
+    schema_version: 1,
+    pack_id: packId,
+    pack_version: '1.0.0',
+    display_name: 'Scoped Web Test',
+    tasks: [task],
+    files: [{
+      file_id: 'model',
+      asset_id: 'model',
+      task,
+      url: `/fixtures/${packId}.bin`,
+      sha256: await sha256Hex(bytes),
+      byte_size: bytes.byteLength,
+      installed_size: bytes.byteLength,
+      compression: 'none'
+    }],
+    variants: [{
+      variant_id: 'web-wasm32-test',
+      file_ids: ['model'],
+      target: 'web',
+      os: 'web',
+      arch: 'wasm32'
+    }],
+    revocation: null,
+    signature: null
+  })
 }
 
 async function signedTwoFileManifest(

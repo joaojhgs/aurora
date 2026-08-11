@@ -241,6 +241,7 @@ export async function installVerifiedBrowserModelPack({
   throwIfAborted(signal)
   const variant = selectReceiptVariant(manifest, verificationReceipt)
   const normalizedScope = normalizeScope(scope, manifest.tasks[0])
+  validateVariantTaskScope(manifest, variant, normalizedScope.task)
   const records: StoredFileRecord[] = []
   const stagedKeys = new Set<string>()
   const preexistingPromotedKeys = new Set<string>()
@@ -397,6 +398,8 @@ export async function openActiveBrowserModelPack(
   }
   const manifest = parseManifestJson(active.manifest_json)
   const freshReceipt = await verifyBrowserModelPackManifest(manifest, options)
+  const variant = selectReceiptVariant(manifest, freshReceipt)
+  validateVariantTaskScope(manifest, variant, normalizedScope.task)
   validateActiveReceipt(active, freshReceipt)
   const files: AuroraBrowserImmutableModelFile[] = []
   for (const record of active.files) {
@@ -515,6 +518,18 @@ function selectReceiptVariant(
   if (variant.target !== 'web' || variant.os !== 'web' || variant.arch !== 'wasm32') throw modelPackError('target')
   if (!sameStringMultiset(variant.file_ids, receipt.file_ids)) throw modelPackError('target')
   return variant
+}
+
+function validateVariantTaskScope(
+  manifest: AuroraBrowserModelPackManifest,
+  variant: AuroraBrowserModelPackVariant,
+  task: string
+): void {
+  const hasTaskFile = variant.file_ids.some((fileId) => {
+    const file = manifest.files.find((candidate) => candidate.file_id === fileId)
+    return file?.task === task
+  })
+  if (!hasTaskFile) throw modelPackError('scope')
 }
 
 async function defaultFetchBytes(url: string, signal?: AbortSignal): Promise<Uint8Array> {
@@ -637,20 +652,50 @@ async function readPromotedExact(
 
 function parseActiveRecord(raw: string): ActiveRecord {
   try {
-    const value = JSON.parse(raw) as ActiveRecord
+    const value = JSON.parse(raw) as unknown
+    if (!isObjectRecord(value)) throw new Error('shape')
+    const identity = value.identity
+    const scope = isObjectRecord(identity) ? identity.scope : null
+    const files = value.files
     if (
-      !value.identity ||
+      !isObjectRecord(identity) ||
+      !isObjectRecord(scope) ||
+      !safeId(scope.task) ||
+      !safeId(scope.slot_id) ||
+      !safeId(identity.pack_id) ||
+      !safeId(identity.pack_version) ||
+      !safeId(identity.variant_id) ||
       typeof value.manifest_json !== 'string' ||
-      !Array.isArray(value.files) ||
-      value.files.length === 0 ||
-      !value.verification_receipt
+      !Array.isArray(files) ||
+      files.length === 0 ||
+      !files.every(isStoredFileRecord) ||
+      !isObjectRecord(value.verification_receipt)
     ) {
       throw new Error('shape')
     }
-    return value
+    return value as unknown as ActiveRecord
   } catch {
     throw modelPackError('active')
   }
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isStoredFileRecord(value: unknown): value is StoredFileRecord {
+  return (
+    isObjectRecord(value) &&
+    typeof value.storage_key === 'string' &&
+    value.storage_key.length > 0 &&
+    safeId(value.pack_id) &&
+    safeId(value.pack_version) &&
+    safeId(value.variant_id) &&
+    safeId(value.file_id) &&
+    isSha256(value.sha256) &&
+    Number.isSafeInteger(value.byte_size) &&
+    (value.byte_size as number) > 0
+  )
 }
 
 function parseManifestJson(raw: string): AuroraBrowserModelPackManifest {
@@ -710,6 +755,9 @@ function normalizeScope(scope: AuroraBrowserModelPackScope | undefined, fallback
 }
 
 function activeKey(scope: Required<AuroraBrowserModelPackScope>): string {
+  if (scope.task.includes(':') || scope.slotId.includes(':')) {
+    return `${ACTIVE_PREFIX}${scope.task.length}:${scope.task}:${scope.slotId}`
+  }
   return `${ACTIVE_PREFIX}${scope.task}:${scope.slotId}`
 }
 
