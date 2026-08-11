@@ -34,6 +34,9 @@ from app.services.tts.voice_registry import VoiceStateArtifactHandle
 _CONFIG_BYTES = b"language: english\nmodel: pockettts-model.safetensors\nrevision: test\n"
 _DEFAULT_VOICE_ID = "standard:starter_en:alba"
 _BOUNDED_STOP_SUBPROCESS_TIMEOUT_S = 20
+_BOUNDED_STOP_ALLOWED_SLACK_S = 1.0
+_STOP_ELAPSED_STDOUT_PREFIX = "stop-elapsed-s="
+_STOP_BOUND_STDOUT_PREFIX = "stop-bound-s="
 
 
 class FakeTensor:
@@ -279,6 +282,20 @@ def _run_bounded_stop_subprocess(code: str) -> subprocess.CompletedProcess[str]:
             f"stdout:\n{stdout}\n"
             f"stderr:\n{stderr}"
         )
+
+
+def _assert_bounded_stop_elapsed(stdout: str) -> None:
+    values: dict[str, float] = {}
+    for line in stdout.splitlines():
+        for prefix in (_STOP_ELAPSED_STDOUT_PREFIX, _STOP_BOUND_STDOUT_PREFIX):
+            if line.startswith(prefix):
+                values[prefix] = float(line.removeprefix(prefix))
+
+    elapsed_s = values.get(_STOP_ELAPSED_STDOUT_PREFIX)
+    bound_s = values.get(_STOP_BOUND_STDOUT_PREFIX)
+    assert elapsed_s is not None, stdout
+    assert bound_s is not None, stdout
+    assert elapsed_s <= bound_s + _BOUNDED_STOP_ALLOWED_SLACK_S, stdout
 
 
 def _pockettts_worker_threads() -> list[threading.Thread]:
@@ -1154,14 +1171,18 @@ async def main():
     stream = provider.stream(TTSSynthesisRequest(text="hola", request_id="forever"))
     first = await stream.__anext__()
     assert first.audio
+    stop_started_s = time.monotonic()
     try:
         await provider.stop()
     except TTSProviderError as exc:
+        stop_elapsed_s = time.monotonic() - stop_started_s
         assert exc.code == "resource_exhausted"
     else:
         raise AssertionError("stop should fail for non-cooperative stream")
     health = await provider.health()
     assert health.ready is False
+    print(f"stop-bound-s={base.request_timeout_s:.6f}")
+    print(f"stop-elapsed-s={stop_elapsed_s:.6f}")
     print("clean-exit")
 
 asyncio.run(main())
@@ -1170,6 +1191,7 @@ asyncio.run(main())
 
     assert result.returncode == 0, result.stderr
     assert "clean-exit" in result.stdout
+    _assert_bounded_stop_elapsed(result.stdout)
 
 
 def test_pockettts_forever_synthesis_subprocess_exits_after_bounded_stop_failure() -> None:
@@ -1267,9 +1289,11 @@ async def main():
         if asyncio.get_running_loop().time() > deadline:
             raise AssertionError("synthesis did not enter")
         await asyncio.sleep(0.01)
+    stop_started_s = time.monotonic()
     try:
         await provider.stop()
     except TTSProviderError as exc:
+        stop_elapsed_s = time.monotonic() - stop_started_s
         assert exc.code == "resource_exhausted"
     else:
         raise AssertionError("stop should fail for non-cooperative synthesis")
@@ -1281,17 +1305,17 @@ async def main():
         await asyncio.wait_for(task, timeout=0.1)
     except (asyncio.CancelledError, TimeoutError, TTSProviderError):
         pass
+    print(f"stop-bound-s={base.request_timeout_s:.6f}")
+    print(f"stop-elapsed-s={stop_elapsed_s:.6f}")
     print("clean-exit")
 
 asyncio.run(main())
 """
-    started_at = time.monotonic()
     result = _run_bounded_stop_subprocess(code)
-    elapsed_s = time.monotonic() - started_at
 
     assert result.returncode == 0, result.stderr
     assert "clean-exit" in result.stdout
-    assert elapsed_s < _BOUNDED_STOP_SUBPROCESS_TIMEOUT_S
+    _assert_bounded_stop_elapsed(result.stdout)
 
 
 @pytest.mark.asyncio
