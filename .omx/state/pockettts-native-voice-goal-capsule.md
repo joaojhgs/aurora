@@ -1,6 +1,6 @@
 # PocketTTS native/WASM voice goal capsule
 
-Updated: 2026-08-11T22:56:04Z
+Updated: 2026-08-11T23:27:50Z
 
 ## Authority and workflow
 
@@ -26,9 +26,9 @@ Updated: 2026-08-11T22:56:04Z
 
 ## Overall verdict
 
-The revised goal is **incomplete**. Preserved Phases 0-3 remain implementation-complete, and the bounded Phase 4 architecture/portability gate is now independently reverified from the reconstructed 24-artifact root. Phases 0-3 still have only partial current-head verification, and no revised Phase 5-13 exit gate is yet fully reverified.
+The revised goal is **incomplete**. Preserved Phases 0-3 remain implementation-complete, the bounded Phase 4 architecture/portability gate is independently reverified, and the bounded Phase 5 shared-foundation gate is independently reverified. Phases 0-3 still have only partial current-head verification, and no revised Phase 6-13 exit gate is yet fully reverified.
 
-The old estimate that work should resume at Phase 8 was an overclaim. Phase 4 is now closed only for its explicit architecture/portability scope. Resume at the earliest unresolved dependency: **Phase 5 generator/WASM/property/model-store/detached-turn exit evidence**, then reconcile Phase 6 before advancing.
+The old estimate that work should resume at Phase 8 was an overclaim. Phases 4 and 5 are now closed only for their explicit architecture/portability and shared-foundation scopes. Resume at the earliest unresolved dependency: **Phase 6 candidate-pack disposition and resource evidence**, while keeping every production speech capability false.
 
 RAC totals remain criterion-scoped: **22 pass / 24 partial / 6 withheld / 4 blocked**. A passing RAC does not make its containing phase complete.
 
@@ -41,7 +41,7 @@ RAC totals remain criterion-scoped: **22 pass / 24 partial / 6 withheld / 4 bloc
 | 2 | Complete, preserved baseline | Partial fresh audit | Official Python PocketTTS provider exists with lifecycle/cancel/stream tests; live Redis/process proof was not rerun. |
 | 3 | Complete, preserved baseline | Strong partial fresh audit | Typed speech contracts, topic constants, routing/security, and generated SDK tests exist; 46 focused SDK cases passed. |
 | 4 | Complete architecture freeze | Pass, fresh local with external exclusions | The complete 24-artifact root validates with `verified_local: true`; pinned source identity, Linux native C/Rust probes, Android arm64/x86_64 source builds and `0x4000` alignment, iOS device/simulator slices, split WASM builds, three-browser Worker execution, and native/browser VAD parity all pass. Live desktop CPAL, Apple runtime/signing, physical devices, release packaging, and PocketTTS/Piper activation remain outside this bounded gate and are explicitly withheld or blocked. Durable receipt: `reports/native-voice/phase4-reverify-20260811/`. |
-| 5 | Strong partial implementation | Partial | Rust workspace, core, testkit, model store, transport, state/ownership tests exist; fresh Rust fmt/clippy/tests pass. Contract-generation second-run cleanliness, wasm-target execution, and the complete Phase 5 exit bundle were not re-proven. |
+| 5 | Complete shared foundation | Pass, fresh local with later-phase exclusions | Rust 1.88 fmt/clippy and 313 all-target tests pass; 31 wasm32 core tests pass; the 73-file contract generator surface is byte-identical after a second run; eight focused ownership/model-store/detached-turn tests pass; and the production Worker/WASM browser matrix passes 35 cases across five profiles. Live audio, physical platforms, release packaging, and production speech packs remain later gates. Durable receipt: `reports/native-voice/phase5-reverify-20260811/`. |
 | 6 | Partial; production capabilities withheld | Partial / policy-safe | Candidate adapters and dispositions exist. No release-eligible VAD/KWS/STT/TTS pack is selected; production capability flags correctly remain false. |
 | 7 | Partial | Partial | Rust/WASM Worker, AudioWorklet, browser store, lifecycle, and fake-media/emulation gates pass. Real microphone/acoustic/OS-permission, hosted Firefox/WebKit PTT, actual mobile devices, approved packs, installer, and release evidence are missing. |
 | 8 | Partial | Partial | Desktop native source, IPC, CPAL/Gateway boundaries, consent/ownership tests, and bounded transport evidence exist. No promoted full UI-closed background turn, complete local-sidecar plus remote-no-sidecar proof, all-route exact-source aggregate, or Windows/macOS/Linux release matrix. |
@@ -74,7 +74,11 @@ See the RAC matrix for criterion-level evidence and exact gaps. Do not promote a
 | Phase 4 browser and parity | Chromium, Firefox, and WebKit Worker VAD/ASR/KWS passed; native plus all three browsers passed the six-case VAD parity matrix below the 32 ms p95 ceiling |
 | Rust 1.88 workspace fmt | passed |
 | Rust 1.88 workspace clippy with warnings denied | passed |
-| Rust 1.88 workspace tests | passed; approximately 313 tests; live CPAL ignored and native sherpa smoke did not execute without artifacts/features |
+| Rust 1.88 workspace tests | 313 passed; one opt-in live CPAL test ignored; native sherpa smoke binaries remained feature-gated |
+| Phase 5 wasm32 core | 31 passed on `wasm32-unknown-unknown` |
+| Phase 5 contract generation | `make check-sdk-backend-contracts` passed; second explicit run left 73 scoped files hash-identical |
+| Phase 5 focused foundation | eight ownership, interruption, corruption, revocation, detached PTT/wake, and background-lease tests passed |
+| Phase 5 production Worker/WASM | 35 Playwright cases passed across Chromium, Firefox, WebKit, Android Chrome emulation, and Mobile Safari emulation; two real-browser-API cases and 83 focused web cases also passed |
 | Phase 4/6 focused Python tests | 62 passed |
 | Voice-web typecheck and unit suite | passed; 151 tests |
 | Desktop/Android focused Tauri tests | 16 passed, 13 skipped |
@@ -89,9 +93,9 @@ See the RAC matrix for criterion-level evidence and exact gaps. Do not promote a
 1. Create a fresh normal Codex Goal using the revised plan and fresh-session handoff.
 2. Record the actual branch HEAD and verify the hashes above.
 3. Treat Phase 4 as closed only for its bounded architecture/portability scope using `reports/native-voice/phase4-reverify-20260811/`; do not extend that pass to live CPAL, Apple runtime/signing, physical devices, releases, or TTS activation.
-4. Close the missing Phase 5 contract-generator second-run, WASM execution, property/model-store, and fake detached-turn exit gates.
-5. Reconcile Phase 6 shippable-pack disposition. Keep VAD/KWS/STT/TTS false until approved assets and release evidence exist.
-6. Continue Phases 7-13 in dependency order. Phase 8 RAC-27 is locally actionable later, but it is not the first resume gate.
+4. Treat Phase 5 as closed only for its shared-foundation scope using `reports/native-voice/phase5-reverify-20260811/`; do not extend that pass to hardware, release, or production-pack claims.
+5. Reconcile Phase 6 shippable-pack disposition and resource evidence. Keep VAD/KWS/STT/TTS false until approved assets and release evidence exist.
+6. Continue Phases 7-13 in dependency order. Phase 8 RAC-27 is locally actionable later, but Phase 6 remains the next dependency gate.
 
 ## Non-negotiable product and architecture rules
 

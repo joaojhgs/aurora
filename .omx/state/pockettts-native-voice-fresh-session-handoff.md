@@ -1,6 +1,6 @@
 # PocketTTS native/WASM voice fresh-session handoff
 
-Updated: 2026-08-11T22:56:04Z
+Updated: 2026-08-11T23:27:50Z
 
 ## Start exactly here
 
@@ -12,7 +12,7 @@ Updated: 2026-08-11T22:56:04Z
    - `reports/native-voice/native-voice-rac-matrix.json`
 4. Verify the plan SHA-256 is `50181a35cd42e12a33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6`.
 5. Treat `851f1591be6a4b9e73948fe85dfc43b607d868c1` as the audited implementation baseline. Subsequent handoff-only commits do not advance implementation.
-6. Resume at the earliest unresolved dependency: **Phase 5 exit-gate verification**, not Phase 8. Phase 4 is closed only for its bounded architecture/portability scope by `reports/native-voice/phase4-reverify-20260811/`.
+6. Resume at the earliest unresolved dependency: **Phase 6 candidate-pack disposition and resource verification**, not Phase 8. Phase 4 and Phase 5 are closed only for their bounded scopes by `reports/native-voice/phase4-reverify-20260811/` and `reports/native-voice/phase5-reverify-20260811/`.
 
 The old normal Goal thread `019fd073-38a1-7801-8d62-31ae70d46580` is paused and superseded for execution. Its stale metadata repeatedly routed work back into the cancelled plan.
 
@@ -27,21 +27,20 @@ The old normal Goal thread `019fd073-38a1-7801-8d62-31ae70d46580` is paused and 
 ## Truth snapshot
 
 - Overall: incomplete.
-- Implementation-complete phases: preserved Phases 0-3 only.
-- Fully reverified revised phases: Phase 4 for its bounded architecture/portability scope only.
+- Implementation-complete phases: preserved Phases 0-3 plus the bounded Phase 4 architecture freeze and Phase 5 shared foundation.
+- Fully reverified revised phases: Phase 4 for its bounded architecture/portability scope and Phase 5 for its bounded shared-foundation scope.
 - Phase 4: complete architecture freeze; the reconstructed 24-artifact root validates with `verified_local: true`, Linux/Android/WASM builds and C/Rust cancellation pass, iOS device/simulator slices are present, and Chromium/Firefox/WebKit plus native VAD parity pass. Live CPAL, Apple runtime/signing, physical-device, release, and TTS activation claims remain excluded.
-- Phase 5: strong partial implementation; Rust tests pass, but generator second-run, wasm-target, and complete exit evidence were not re-proven.
+- Phase 5: complete shared foundation; Rust fmt/clippy plus 313 tests, 31 wasm32 tests, second-run-clean generation across 73 scoped files, eight focused foundation tests, and 35 production Worker/WASM browser cases pass. Hardware, release, and production-pack claims remain excluded.
 - Phase 6: partial and deliberately withheld; no production speech pack is shippable and all local VAD/KWS/STT/TTS flags stay false.
 - Phases 7-13: partial, withheld, or blocked; see the capsule table.
 - RAC totals: 22 pass, 24 partial, 6 withheld, 4 blocked. These are criterion-level results and do not imply phase completion.
 
 ## First work in the new Goal
 
-1. Verify the Phase 4 receipt at `reports/native-voice/phase4-reverify-20260811/` and keep its external exclusions intact.
-2. Close Phase 5 contract-generation second-run cleanliness, wasm-target execution, ownership/property, model-store interruption/corruption/revocation, and fake UI-detached PTT/wake gates in one fresh evidence bundle.
-3. Obtain an independent Phase 5 exit verdict before promoting its phase inventory row.
-4. Reconcile Phase 6. Keep capabilities withheld unless approved packs pass license, provenance, parity, resource, and release gates.
-5. Then proceed in dependency order. RAC-27 desktop transport work is locally actionable later; `Tooling.ExecuteTool` remains only a shared transport canary.
+1. Verify the Phase 4 and Phase 5 receipts and keep their external exclusions intact.
+2. Reconcile Phase 6 candidate-pack disposition, provenance, native resource evidence, and release ineligibility. Keep capabilities withheld unless approved packs pass every gate.
+3. Obtain an independent Phase 6 disposition verdict before changing its phase inventory row.
+4. Then proceed in dependency order. RAC-27 desktop transport work is locally actionable later; `Tooling.ExecuteTool` remains only a shared transport canary.
 
 ## Fresh audit evidence already gathered
 
@@ -50,7 +49,9 @@ The old normal Goal thread `019fd073-38a1-7801-8d62-31ae70d46580` is paused and 
 - Phase 4 manifest: valid against the complete root, 24 artifacts, three explicit denials, `verified_local: true`, no errors.
 - Phase 4 source/build matrix: pinned 5,424-entry sherpa source identity; Linux C/Rust STT/VAD/KWS and evidence-only TTS cancellation; Android arm64/x86_64 source builds with all inspected LOAD segments `0x4000` aligned; iOS device/simulator slices; split WASM builds.
 - Phase 4 browser/parity: Chromium, Firefox, and WebKit Worker VAD/ASR/KWS passed; native plus all three browsers passed exact six-case VAD parity below the 32 ms p95 ceiling.
-- Rust 1.88 fmt/clippy/tests: passed; roughly 313 tests, with live CPAL ignored and sherpa smoke not executed without artifacts/features.
+- Phase 5 Rust foundation: fmt/clippy passed; 313 all-target tests passed with one live CPAL test ignored; 31 wasm32 tests passed.
+- Phase 5 generation/behavior: the full SDK/backend check passed, a second run kept 73 scoped files hash-identical, and eight focused ownership/store/detached-turn tests passed.
+- Phase 5 web execution: 35 production Worker/WASM browser cases passed across five profiles, plus two real-browser-API and 83 focused web cases.
 - Phase 4/6 focused Python tests: 62 passed.
 - Voice-web typecheck/tests: passed, 151 tests.
 - Focused desktop/Android Tauri slice: 16 passed, 13 skipped.

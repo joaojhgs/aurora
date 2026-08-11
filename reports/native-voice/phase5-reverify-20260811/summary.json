@@ -1,0 +1,123 @@
+{
+  "$schema": "aurora.native_voice.phase5_reverification.v1",
+  "recordedAtUtc": "2026-08-11T23:27:50Z",
+  "branch": "feat/ui-multi-platform-integration",
+  "repositoryHeadAtCompletion": "bdb9107accbc36acab56914e2e4457fafc8487e7",
+  "planSha256": "50181a35cd42e12a33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6",
+  "secretsRedacted": true,
+  "verdict": {
+    "status": "pass",
+    "scope": "shared_core_generated_contract_model_store_and_detached_turn_foundation",
+    "implementation": "complete_foundation",
+    "verification": "pass_fresh_local_with_later_phase_exclusions",
+    "independentVerifier": true
+  },
+  "toolchains": {
+    "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+    "cargo": "1.88.0 (873a06493 2025-05-10)",
+    "rustTarget": "wasm32-unknown-unknown",
+    "playwright": "1.61.1",
+    "browserRevisions": {
+      "chromium": 1228,
+      "firefox": 1532,
+      "webkit": 2311
+    }
+  },
+  "rustWorkspace": {
+    "format": "pass",
+    "clippyWarningsDenied": "pass",
+    "lockedAllTargetTests": {
+      "status": "pass",
+      "passed": 313,
+      "failed": 0,
+      "ignored": 1,
+      "ignoredTest": "live_linux_cpal_default_capture_playback_and_cancel"
+    }
+  },
+  "wasmCore": {
+    "status": "pass",
+    "passed": 31,
+    "failed": 0
+  },
+  "contractGeneration": {
+    "makeCheckSdkBackendContracts": "pass",
+    "secondRunClean": true,
+    "scopedTrackedFileCount": 73,
+    "beforeAfterHashManifestSha256": "1459c5680734ad50ed4011b3c7876df84d95073a9c96773b82f6def29e6d03e0"
+  },
+  "focusedBehavior": {
+    "status": "pass",
+    "passed": 8,
+    "failed": 0,
+    "tests": [
+      "capture_lease_prevents_overlapping_owner_and_filters_generation",
+      "interrupted_write_keeps_reservation_and_resumes_metadata",
+      "startup_recovery_withdraws_active_when_blob_content_is_corrupt",
+      "revocation_and_startup_corruption_preserve_unaffected_scopes",
+      "corruption_and_revocation_fail_closed",
+      "fake_ptt_turn_completes_without_ui_attachment",
+      "fake_wake_turn_uses_same_runtime_path",
+      "fake_background_turn_preserves_background_capture_lease"
+    ]
+  },
+  "webRuntime": {
+    "focusedRuntimeModelStoreWorkerTests": {
+      "status": "pass",
+      "passed": 83
+    },
+    "productionWorkerWasmPlaywright": {
+      "status": "pass",
+      "passed": 35,
+      "profiles": [
+        "chromium",
+        "firefox",
+        "webkit",
+        "chrome-android-emulated",
+        "mobile-safari-emulated"
+      ]
+    },
+    "foregroundRealBrowserApi": {
+      "status": "pass",
+      "passed": 2
+    },
+    "observedFlake": {
+      "scope": "broader browser model-store matrix",
+      "browser": "webkit",
+      "failure": "setup timeout",
+      "exactFailedCaseIsolatedRerun": "pass",
+      "phase5ExitImpact": "none"
+    }
+  },
+  "builtWebArtifacts": {
+    "worker": {
+      "path": "packages/aurora-voice-web/dist/voice-worker.js",
+      "bytes": 43202,
+      "sha256": "ae13625dfc93ccbc81267f18f7958f3575c5bef39221c40a71f354588bdaa820"
+    },
+    "loader": {
+      "path": "packages/aurora-voice-web/dist/wasm/aurora_voice_wasm.js",
+      "bytes": 21606,
+      "sha256": "01d5875f0d9934c3a83cd4e1beab5606da54a84e53d32032188f17d6819ff4f1"
+    },
+    "wasm": {
+      "path": "packages/aurora-voice-web/dist/wasm/aurora_voice_wasm_bg.wasm",
+      "bytes": 144904,
+      "sha256": "7a8ff15c6f17460eff15e5ba8951ce51a729a97613bbbbd0f7792185af58a251"
+    }
+  },
+  "productionCapabilitiesEnabled": {
+    "vad": false,
+    "kws": false,
+    "stt": false,
+    "tts": false
+  },
+  "externalExclusions": [
+    "live desktop CPAL capture and playback",
+    "Android and iOS physical-device behavior",
+    "Apple compilation, runtime linking, and signing",
+    "signed desktop and mobile release packaging",
+    "production VAD, KWS, STT, or TTS pack selection",
+    "PocketTTS production activation",
+    "Piper/espeak production activation"
+  ]
+}
