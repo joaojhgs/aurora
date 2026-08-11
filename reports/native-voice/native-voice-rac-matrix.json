@@ -2,16 +2,16 @@
   "$schema": "aurora.native_voice_rac_matrix.v1",
   "planSha256": "50181a35cd42e12a33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6",
   "replacementAttachmentSha256": "70b1b5ebb32c6df0e52c119b2bd73adad79c2611433bd33da7391d6e273fe196",
-  "freshSessionHandoffSha256": "f579b4c472b6201f29504a03e0a68daa7d611ba9f7d971b244c40f4042d74f9c",
+  "freshSessionHandoffSha256": "06510a857900e7623b68be5a3310c7275f3bb461288e6fc20bb6880452bc2b3e",
   "codeEvidenceBaselineHead": "851f1591be6a4b9e73948fe85dfc43b607d868c1",
   "reportCommit": "resolve-with-git-log-for-this-file",
   "audit": {
-    "auditedAtUtc": "2026-08-11T23:27:50Z",
+    "auditedAtUtc": "2026-08-11T23:48:49Z",
     "resumedAtUtc": "2026-08-08T22:15:10Z",
     "supersededGoalThreadId": "019fd073-38a1-7801-8d62-31ae70d46580",
     "normalGoalAction": "start_fresh",
-    "verdict": "in_progress_reaudit_phase5_closed",
-    "resumeGate": "Continue the fresh normal Codex Goal on feat/ui-multi-platform-integration. Do not use OMX Ultragoal. Preserved Phases 0-3 remain implementation-complete with partial current-head verification. Revised Phase 4 is independently closed only for its bounded architecture/portability scope by reports/native-voice/phase4-reverify-20260811/. Revised Phase 5 is independently closed only for its shared-core/generated-contract/model-store/WASM/detached-turn foundation by reports/native-voice/phase5-reverify-20260811/: Rust fmt/clippy and 313 all-target tests pass, 31 wasm32 tests pass, contract generation is second-run clean across 73 scoped files, eight focused foundation tests pass, and 35 production Worker/WASM browser cases pass. Live audio, physical devices, Apple runtime/signing, release packaging, and production speech packs remain explicitly excluded. Reconcile the withheld Phase 6 candidate-pack disposition and resource evidence next. Phase 8 RAC-27 is locally actionable later, not the next dependency gate. Keep production VAD/KWS/STT/TTS false. Tooling.ExecuteTool is only a shared DataChannel regression canary, never foreground voice behavior. Runtime roles remain dynamic persisted profile state and must never derive from environment, APK/build flavor, platform, transport, sidecar, or runtime tier.",
+    "verdict": "in_progress_reaudit_phase6_disposition_verified_partial_withheld",
+    "resumeGate": "Continue the fresh normal Codex Goal on feat/ui-multi-platform-integration. Do not use OMX Ultragoal. Preserved Phases 0-3 remain implementation-complete with partial current-head verification. Revised Phase 4 is independently closed only for its bounded architecture/portability scope by reports/native-voice/phase4-reverify-20260811/. Revised Phase 5 is independently closed only for its shared-core/generated-contract/model-store/WASM/detached-turn foundation by reports/native-voice/phase5-reverify-20260811/. Phase 6 has an independent PARTIAL disposition verdict recorded by reports/native-voice/phase6-disposition-20260811/: candidate trust, provenance, bounded parity/cancellation, and corrected Linux resource diagnostics pass, but no release-eligible interoperable VAD/KWS/STT/TTS pack exists and TTS is unavailable. Phase 6 is not complete. Resume with a current-head Phase 7 bounded re-verification, then continue Phases 8-13 in dependency order. Keep production VAD/KWS/STT/TTS false. Tooling.ExecuteTool is only a shared DataChannel regression canary, never foreground voice behavior. Runtime roles remain dynamic persisted profile state and must never derive from environment, APK/build flavor, platform, transport, sidecar, or runtime tier.",
     "statusCounts": {
       "pass": 22,
       "partial": 24,
@@ -25,7 +25,7 @@
       "3": {"implementation": "complete_preserved", "verification": "strong_partial_fresh"},
       "4": {"implementation": "complete_architecture_freeze", "verification": "pass_fresh_local_with_external_exclusions"},
       "5": {"implementation": "complete_foundation", "verification": "pass_fresh_local_with_later_phase_exclusions"},
-      "6": {"implementation": "partial_withheld", "verification": "partial_no_release_eligible_packs"},
+      "6": {"implementation": "partial_withheld", "verification": "pass_disposition_only_exit_gate_partial"},
       "7": {"implementation": "partial", "verification": "partial"},
       "8": {"implementation": "partial", "verification": "partial"},
       "9": {"implementation": "partial", "verification": "partial_blocked"},
@@ -43,6 +43,8 @@
       {"scope": "Phase 5 Rust and wasm32 foundation", "result": "Rust 1.88 fmt/clippy passed; 313 locked all-target workspace tests passed with one opt-in live CPAL test ignored; 31 wasm32 core tests passed"},
       {"scope": "Phase 5 generation and focused behavior", "result": "make check-sdk-backend-contracts passed; a second run left 73 scoped files hash-identical; eight ownership, model-store, and detached-turn tests passed"},
       {"scope": "Phase 5 production Worker/WASM", "result": "35 Playwright cases passed across Chromium, Firefox, WebKit, Android Chrome emulation, and Mobile Safari emulation; two real-browser-API and 83 focused web cases passed; durable summary SHA-256 1b86ab1538f0bd25e72f66d2b3182d797f3b0a4caf816aa12988e3bafb459726"},
+      {"scope": "Phase 6 candidate disposition", "result": "independent verdict PARTIAL; signatures, immutable inventories, bounded parity/cancellation, and fail-closed release policy pass; no release-eligible interoperable pack; TTS unavailable; production VAD/KWS/STT/TTS false; durable summary SHA-256 bd71dfd00089947ed8fa4ed6fa2d63bfeeb1583dc6819e777abec9b4e357066a"},
+      {"scope": "Phase 6 native Linux resources", "result": "corrected harness builds outside the timed interval; three repetitions each passed: VAD max RSS 40902656 and RTF 12.056, KWS 57057280 and 200.702, STT 149811200 and 114.432; raw report SHA-256 f9a8222e898a40e930107656d858392a10baf16952f2d3de02beef2214e4d3f2; physical-device claim false"},
       {"scope": "Rust 1.88 fmt/clippy/workspace tests", "result": "passed; live CPAL ignored and sherpa smoke not executed without artifacts/features"},
       {"scope": "Phase 4/6 focused Python", "result": "62 passed"},
       {"scope": "voice-web typecheck/unit", "result": "passed, 151 tests"},
@@ -219,12 +221,12 @@
     {
       "id": "RAC-11",
       "status": "partial",
-      "evidence": "selected VAD/ASR/KWS native/WASM compatibility is proven; TTS remains withheld"
+      "evidence": "VAD/KWS/STT candidate compatibility passes only in bounded Linux x86_64 and browser validation; every candidate remains release-ineligible and non-interoperable, and TTS is unavailable"
     },
     {
       "id": "RAC-12",
       "status": "partial",
-      "evidence": "VAD/KWS/STT parity passes in browser/native probes; TTS dynamic parity is not shippable"
+      "evidence": "VAD/KWS/STT bounded browser/native parity and cancellation probes pass; no production or physical-device parity claim exists and TTS has no selectable pack"
     },
     {
       "id": "RAC-13",
@@ -239,7 +241,7 @@
     {
       "id": "RAC-15",
       "status": "withheld",
-      "evidence": "PocketTTS local capability remains disabled pending redistributable multilingual packs"
+      "evidence": "PocketTTS, Piper/espeak, and Supertonic 3 remain blocked; there is no selectable TTS pack or fallback and production TTS stays false"
     },
     {
       "id": "RAC-16",
@@ -264,7 +266,7 @@
     {
       "id": "RAC-20",
       "status": "partial",
-      "evidence": "declared bounds and residency tests pass; physical thermal/battery budgets remain unmeasured"
+      "evidence": "Corrected executable-only Linux diagnostics pass declared VAD/KWS/STT RSS and RTF ceilings; mobile physical thermal, battery, endurance, and production-pack budgets remain unmeasured"
     },
     {
       "id": "RAC-21",
