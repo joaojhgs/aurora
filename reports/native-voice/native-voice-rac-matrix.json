@@ -1,22 +1,53 @@
 {
   "$schema": "aurora.native_voice_rac_matrix.v1",
   "planSha256": "50181a35cd42e12a33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6",
-  "handoffSha256": "70b1b5ebb32c6df0e52c119b2bd73adad79c2611433bd33da7391d6e273fe196",
-  "codeEvidenceBaselineHead": "59a7d0b6",
-  "reportCommit": "current-checkpoint-see-git-history",
+  "replacementAttachmentSha256": "70b1b5ebb32c6df0e52c119b2bd73adad79c2611433bd33da7391d6e273fe196",
+  "freshSessionHandoffSha256": "50f82b74d8e0435966fd19afae0f6501933dbbb533da21dea9ff7eb6ee85f1c2",
+  "codeEvidenceBaselineHead": "851f1591be6a4b9e73948fe85dfc43b607d868c1",
+  "reportCommit": "resolve-with-git-log-for-this-file",
   "audit": {
-    "auditedAtUtc": "2026-08-11T20:57:05Z",
+    "auditedAtUtc": "2026-08-11T21:06:01Z",
     "resumedAtUtc": "2026-08-08T22:15:10Z",
-    "goalThreadId": "019fd073-38a1-7801-8d62-31ae70d46580",
-    "verdict": "active_remediation",
-    "resumeGate": "Start a fresh normal Codex Goal from local feat/ui-multi-platform-integration after archive checkpoint 59a7d0b6 and the follow-on handoff-state commit. Do not use OMX Ultragoal: the superseded .omx/ultragoal runtime artifact has been moved to .omx/archive/ultragoal-ui-integration-20260725/ and is provenance only. Commit 411736b3 reverts the two stale old-plan desktop Phase 8 commits 28e5fca8 and d92f9b85; do not treat that reverted work as revised-plan progress. The dynamic-role invariant is preserved: roles are persisted runtime profile state and never derive from environment, APK/build flavor, platform, transport, sidecar presence, runtime tier, demo mode, or disabled rollout capability. Counts remain 22 pass, 24 partial, 6 withheld, and 4 blocked; the inventory estimate remains approximately 60-65% implemented and 40-45% fully verified. Phase 7 is bounded partial/external-gates-only for the implemented hosted-browser scope, not complete: production hosted-web reopen uses exact release trust and a non-mutating existing-store path, signed-fixture offline reuse passes across Chromium/Firefox/WebKit, stale profile races retry safely, absent storage is not created, OPFS corruption cannot be masked by IndexedDB fallback, and older IndexedDB implementations use an abort-on-upgrade no-create probe. Final Phase 7 source verification at 16c21a9e passed 151 voice-web tests, 720 UI tests, 77 web tests, all three typechecks/builds, 25 browser-storage cases with 2 expected skips, 35/35 Worker/WASM cases, 2/2 real-browser API cases, and hosted Assistant 2/2 across desktop Chromium and Pixel 5 emulation; independent code and security reviews approved with zero findings. RAC-22 and RAC-25 remain partial because real microphone/permission/acoustic/hosted Firefox-WebKit PTT, approved production speech assets/source/release, a production installer, actual devices, and release/distribution evidence remain open. Keep production VAD/KWS/STT/TTS capability flags false. Next locally actionable work is the revised plan's incomplete Phase 8 desktop-native gate, beginning with RAC-27 post-revocation observation-window repair and exact-source direct/STUN/TURN evidence consolidation; keep reverse Tooling.ExecuteTool only as a shared-DataChannel regression canary, never as foreground voice behavior. Current-source Android rendered UI remains environment-blocked: direct ADB to 192.168.240.112:5555 returns No route to host, ADB lists no devices, waydroid0 is DOWN/NO-CARRIER, and no MobileMCP tool is callable.",
+    "supersededGoalThreadId": "019fd073-38a1-7801-8d62-31ae70d46580",
+    "normalGoalAction": "start_fresh",
+    "verdict": "incomplete_reaudit",
+    "resumeGate": "Start a fresh normal Codex Goal on feat/ui-multi-platform-integration. Do not use OMX Ultragoal. The only implementation-complete phases are preserved Phases 0-3, and their current-head verification is partial. Re-open revised Phase 4 first: its structural manifest is valid for 24 artifacts, but the complete artifact root is absent and verified_local is false, so the real native/WASM/cross-target build evidence is not freshly reproducible. After independent Phase 4 closure, finish the missing Phase 5 generator/WASM/exit evidence, then reconcile the withheld Phase 6 pack disposition before advancing. Phase 8 RAC-27 is locally actionable later, not the first resume gate. Keep production VAD/KWS/STT/TTS false. Tooling.ExecuteTool is only a shared DataChannel regression canary, never foreground voice behavior. Runtime roles remain dynamic persisted profile state and must never derive from environment, APK/build flavor, platform, transport, sidecar, or runtime tier.",
     "statusCounts": {
       "pass": 22,
       "partial": 24,
       "withheld": 6,
       "blocked": 4
     },
-    "freshVerification": {
+    "phaseInventory": {
+      "0": {"implementation": "complete_preserved", "verification": "partial_fresh"},
+      "1": {"implementation": "complete_preserved", "verification": "partial_fresh"},
+      "2": {"implementation": "complete_preserved", "verification": "partial_fresh"},
+      "3": {"implementation": "complete_preserved", "verification": "strong_partial_fresh"},
+      "4": {"implementation": "substantial_partial", "verification": "partial_missing_artifact_root"},
+      "5": {"implementation": "strong_partial", "verification": "partial_missing_generator_wasm_exit_bundle"},
+      "6": {"implementation": "partial_withheld", "verification": "partial_no_release_eligible_packs"},
+      "7": {"implementation": "partial", "verification": "partial"},
+      "8": {"implementation": "partial", "verification": "partial"},
+      "9": {"implementation": "partial", "verification": "partial_blocked"},
+      "10": {"implementation": "partial_withheld", "verification": "partial_blocked"},
+      "11": {"implementation": "partial", "verification": "blocked_platform_runtime"},
+      "12": {"implementation": "partial", "verification": "partial"},
+      "13": {"implementation": "partial", "verification": "partial_blocked"}
+    },
+    "cleanRoomVerification": [
+      {"scope": "preserved Python speech/config/provider/contracts", "result": "147 passed, 28 skipped"},
+      {"scope": "generated SDK contract/conformance", "result": "46 passed"},
+      {"scope": "Phase 4 manifest", "result": "valid structure, 24 artifacts, verified_local false"},
+      {"scope": "Rust 1.88 fmt/clippy/workspace tests", "result": "passed; live CPAL ignored and sherpa smoke not executed without artifacts/features"},
+      {"scope": "Phase 4/6 focused Python", "result": "62 passed"},
+      {"scope": "voice-web typecheck/unit", "result": "passed, 151 tests"},
+      {"scope": "focused desktop/Android Tauri", "result": "16 passed, 13 skipped"},
+      {"scope": "iOS/Android/rollback/artifact static Tauri", "result": "48 passed"},
+      {"scope": "full Tauri UI after Node 24 storage setup", "result": "434 passed, 14 skipped"},
+      {"scope": "release trust", "result": "blocked by placeholder updater configuration, missing mobile hashes, and absent SBOM/license tooling"},
+      {"scope": "static rollback", "result": "passed with runtimeProof false"}
+    ],
+    "historicalPhase7Verification": {
       "verifiedAtUtc": "2026-08-11T18:06:44Z",
       "commands": [
         {
