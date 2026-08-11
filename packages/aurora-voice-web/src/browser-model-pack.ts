@@ -69,10 +69,23 @@ export interface AuroraBrowserModelPackTrustOptions {
   readonly expectedReleaseManifestSha256?: string
 }
 
-export interface AuroraBrowserModelPackInstallOptions extends AuroraBrowserModelPackTrustOptions {
+export interface AuroraBrowserModelPackSourceOptions {
+  readonly allowNonProductionLoopbackHttpAssetUrls?: boolean
+  readonly trustedAssetBaseUrl?: string
+  readonly trustedAssetOrigins?: readonly string[]
+}
+
+export interface AuroraBrowserModelPackInstallOptions extends AuroraBrowserModelPackTrustOptions, AuroraBrowserModelPackSourceOptions {
   readonly host: AuroraWebModelStoreHost
   readonly manifest: AuroraBrowserModelPackManifest
   readonly scope?: AuroraBrowserModelPackScope
+  /**
+   * Trusted transport override for tests or a caller-owned downloader.
+   *
+   * The installer prevalidates and normalizes the asset URL before invoking this
+   * callback. Custom implementations must fetch exactly that URL, preserve the
+   * supplied abort signal, and fail closed instead of following redirects.
+   */
   readonly fetchBytes?: (url: string, signal?: AbortSignal) => Promise<Uint8Array>
   /** Cancels verification, download, and staging before atomic promotion begins. */
   readonly signal?: AbortSignal
@@ -224,8 +237,11 @@ export async function installVerifiedBrowserModelPack({
   scope,
   fetchBytes = defaultFetchBytes,
   allowNonProductionTestSignature = false,
+  allowNonProductionLoopbackHttpAssetUrls = false,
   trustedReleaseKeys,
   expectedReleaseManifestSha256,
+  trustedAssetBaseUrl,
+  trustedAssetOrigins,
   signal,
   nowMs = Date.now
 }: AuroraBrowserModelPackInstallOptions): Promise<AuroraBrowserModelPackInstallReceipt> {
@@ -242,6 +258,10 @@ export async function installVerifiedBrowserModelPack({
   const variant = selectReceiptVariant(manifest, verificationReceipt)
   const normalizedScope = normalizeScope(scope, manifest.tasks[0])
   validateVariantTaskScope(manifest, variant, normalizedScope.task)
+  const assetSourceOptions: AuroraBrowserModelPackSourceOptions = { allowNonProductionLoopbackHttpAssetUrls }
+  if (trustedAssetBaseUrl !== undefined) Object.assign(assetSourceOptions, { trustedAssetBaseUrl })
+  if (trustedAssetOrigins !== undefined) Object.assign(assetSourceOptions, { trustedAssetOrigins })
+  const assetPolicy = buildAssetSourcePolicy(assetSourceOptions)
   const records: StoredFileRecord[] = []
   const stagedKeys = new Set<string>()
   const preexistingPromotedKeys = new Set<string>()
@@ -253,10 +273,11 @@ export async function installVerifiedBrowserModelPack({
       if (!file || !verifiedFile || verifiedFile.sha256 !== file.sha256 || verifiedFile.byte_size !== file.byte_size) {
         throw modelPackError('receipt')
       }
+      const assetUrl = resolveTrustedAssetUrl(file.url, assetPolicy)
       const storageKey = fileStorageKey(manifest.pack_id, verificationReceipt.manifest_sha256, fileIndex)
       let bytes: Uint8Array
       try {
-        bytes = await fetchBytes(file.url, signal)
+        bytes = await fetchBytes(assetUrl, signal)
       } catch (error) {
         if (signal?.aborted === true) throw modelPackError('aborted', error)
         throw error
@@ -479,6 +500,7 @@ function validateManifestShape(manifest: AuroraBrowserModelPackManifest): void {
   if (!hasUniqueStrings(manifest.files.map((file) => file.file_id))) throw modelPackError('duplicate_id')
   for (const file of manifest.files) {
     if (!safeId(file.file_id) || !safeId(file.asset_id) || !safeId(file.task)) throw modelPackError('invalid_id')
+    validateAssetUrlText(file.url)
     if (!isSha256(file.sha256) || !Number.isSafeInteger(file.byte_size) || file.byte_size <= 0) {
       throw modelPackError('size')
     }
@@ -535,10 +557,109 @@ function validateVariantTaskScope(
 async function defaultFetchBytes(url: string, signal?: AbortSignal): Promise<Uint8Array> {
   const response = await fetch(url, {
     cache: 'no-store',
+    redirect: 'error',
     ...(signal === undefined ? {} : { signal })
   })
   if (!response.ok) throw modelPackError('network')
   return new Uint8Array(await response.arrayBuffer())
+}
+
+function resolveTrustedAssetUrl(
+  assetUrl: string,
+  options: AssetSourcePolicyOptions
+): string {
+  const { resolved, baseOrigin } = parseAssetUrl(assetUrl, options.trustedAssetBaseUrl)
+  if (
+    resolved.protocol === 'https:' &&
+    isTrustedHttpsAssetOrigin(resolved, options.trustedAssetOrigins, baseOrigin)
+  ) {
+    return resolved.href
+  }
+  if (
+    resolved.protocol === 'http:' &&
+    options.allowNonProductionLoopbackHttpAssetUrls === true &&
+    isLoopbackHostname(resolved.hostname)
+  ) {
+    return resolved.href
+  }
+  throw modelPackError('asset_url')
+}
+
+interface AssetSourcePolicyOptions extends Required<Pick<AuroraBrowserModelPackSourceOptions, 'allowNonProductionLoopbackHttpAssetUrls'>> {
+  readonly trustedAssetBaseUrl?: string
+  readonly trustedAssetOrigins?: readonly string[]
+}
+
+function buildAssetSourcePolicy(options: AuroraBrowserModelPackSourceOptions): AssetSourcePolicyOptions {
+  const policy: AssetSourcePolicyOptions = {
+    allowNonProductionLoopbackHttpAssetUrls: options.allowNonProductionLoopbackHttpAssetUrls === true
+  }
+  if (options.trustedAssetBaseUrl !== undefined) Object.assign(policy, { trustedAssetBaseUrl: options.trustedAssetBaseUrl })
+  if (options.trustedAssetOrigins !== undefined) Object.assign(policy, { trustedAssetOrigins: options.trustedAssetOrigins })
+  return policy
+}
+
+function parseAssetUrl(
+  assetUrl: string,
+  trustedAssetBaseUrl: string | undefined
+): { readonly resolved: URL; readonly baseOrigin?: string } {
+  validateAssetUrlText(assetUrl)
+  if (assetUrl.startsWith('//')) throw modelPackError('asset_url')
+  try {
+    if (trustedAssetBaseUrl === undefined) return { resolved: new URL(assetUrl) }
+    const baseUrl = new URL(trustedAssetBaseUrl)
+    if (baseUrl.protocol !== 'https:' && !(baseUrl.protocol === 'http:' && isLoopbackHostname(baseUrl.hostname))) {
+      throw modelPackError('asset_url')
+    }
+    return { resolved: new URL(assetUrl, baseUrl), baseOrigin: baseUrl.origin }
+  } catch (error) {
+    if (error instanceof AuroraBrowserModelPackError) throw error
+    throw modelPackError('asset_url', error)
+  }
+}
+
+function isTrustedHttpsAssetOrigin(
+  assetUrl: URL,
+  trustedAssetOrigins: readonly string[] | undefined,
+  baseOrigin: string | undefined
+): boolean {
+  if (baseOrigin !== undefined && assetUrl.origin === baseOrigin) return true
+  const currentLocation = globalThis.location
+  if (currentLocation?.protocol === 'https:' && assetUrl.origin === currentLocation.origin) return true
+  return normalizeTrustedAssetOrigins(trustedAssetOrigins).has(assetUrl.origin)
+}
+
+function normalizeTrustedAssetOrigins(trustedAssetOrigins: readonly string[] | undefined): ReadonlySet<string> {
+  const origins = new Set<string>()
+  for (const origin of trustedAssetOrigins ?? []) {
+    validateAssetUrlText(origin)
+    try {
+      const parsed = new URL(origin)
+      if (parsed.protocol !== 'https:' || parsed.pathname !== '/' || parsed.search !== '' || parsed.hash !== '') {
+        throw modelPackError('asset_url')
+      }
+      origins.add(parsed.origin)
+    } catch (error) {
+      if (error instanceof AuroraBrowserModelPackError) throw error
+      throw modelPackError('asset_url', error)
+    }
+  }
+  return origins
+}
+
+function validateAssetUrlText(value: unknown): asserts value is string {
+  if (typeof value !== 'string' || value.trim() !== value || value === '' || /\s/.test(value)) {
+    throw modelPackError('asset_url')
+  }
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase()
+  if (normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '[::1]') return true
+  if (/^127(?:\.\d{1,3}){3}$/.test(normalized)) {
+    return normalized.split('.').every((part) => Number(part) <= 255)
+  }
+  return false
 }
 
 interface JsonSnapshot {

@@ -188,8 +188,13 @@ test('reopens a verified signed pack across reload without fetching model bytes 
       host,
       manifest,
       allowNonProductionTestSignature: true,
-      fetchBytes: async () => {
+      allowNonProductionLoopbackHttpAssetUrls: true,
+      trustedAssetBaseUrl: window.location.href,
+      fetchBytes: async (url) => {
         fetchCount += 1
+        if (url !== `${window.location.origin}/fixtures/pockettts-web-test.bin`) {
+          throw new Error(`unexpected model asset url: ${url}`)
+        }
         return bytes
       }
     })
@@ -563,6 +568,8 @@ declare global {
         host: unknown
         manifest: unknown
         allowNonProductionTestSignature: true
+        allowNonProductionLoopbackHttpAssetUrls?: true
+        trustedAssetBaseUrl?: string
         fetchBytes: (url: string, signal?: AbortSignal) => Promise<Uint8Array>
         signal?: AbortSignal
       }): Promise<{

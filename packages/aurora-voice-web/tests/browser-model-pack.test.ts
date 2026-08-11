@@ -13,6 +13,8 @@ import { MemoryWebModelStoreHost } from '../src/test-doubles/index.js'
 const TEST_PRIVATE_KEY_PKCS8_BASE64 = 'MC4CAQAwBQYDK2VwBCIEIBVNj/cSHz9pWMrteoqMMTyDd+p51OEdgbIRQJDEHiBP'
 const TEST_PUBLIC_KEY_BASE64 = 'k1NEXA5D4H1jAs3GBxo9Cr42I6BUeYEA/HqYiTOUKhc='
 const TEST_RELEASE_KEY_ID = 'aurora-release-web-wasm-test'
+const TEST_ASSET_BASE_URL = 'https://models.aurora.test'
+const TEST_ASSET_POLICY = { trustedAssetOrigins: [TEST_ASSET_BASE_URL] } as const
 
 class AbortAfterAppendHost extends MemoryWebModelStoreHost {
   private abortController: AbortController | null = null
@@ -147,6 +149,24 @@ describe('browser model pack verification', () => {
     })
   })
 
+  it('rejects structurally invalid manifest file URLs during verification', async () => {
+    const bytes = new Uint8Array([111, 112, 113])
+    const manifest = await signedManifestWithUrl(bytes, ' https://models.aurora.test/model.bin')
+    await expect(verifyBrowserModelPackManifest(manifest, { allowNonProductionTestSignature: true }))
+      .rejects.toMatchObject({ code: 'asset_url' })
+
+    const nonStringUrlManifest = await signedUnsignedManifest({
+      ...manifest,
+      files: [{
+        ...manifest.files[0]!,
+        url: null as unknown as string
+      }],
+      signature: null
+    })
+    await expect(verifyBrowserModelPackManifest(nonStringUrlManifest, { allowNonProductionTestSignature: true }))
+      .rejects.toMatchObject({ code: 'asset_url' })
+  })
+
   it('installs a verified pack and reopens promoted bytes offline after reload', async () => {
     const bytes = new Uint8Array([4, 5, 6, 7])
     const manifest = await signedManifest(bytes)
@@ -157,9 +177,10 @@ describe('browser model pack verification', () => {
       host,
       manifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async (url) => {
         fetchCount += 1
-        expect(url).toBe('/fixtures/pockettts-web-test.bin')
+        expect(url).toBe(`${TEST_ASSET_BASE_URL}/fixtures/pockettts-web-test.bin`)
         return bytes
       },
       nowMs: () => 42
@@ -187,6 +208,158 @@ describe('browser model pack verification', () => {
     expect(Array.from(await reopened?.files[0]?.readAll() ?? [])).toEqual([4, 5, 6, 7])
   })
 
+  it('rejects unsafe asset source URLs before fetching or mutating storage', async () => {
+    const bytes = new Uint8Array([101, 102, 103])
+    const unsafeUrls = [
+      'not a url',
+      '//cdn.example.test/model.bin',
+      'data:application/octet-stream;base64,AQID',
+      'blob:https://models.aurora.test/model',
+      'file:///tmp/model.bin',
+      'https://cdn.example.test/model.bin',
+      'http://models.aurora.test/model.bin'
+    ]
+
+    for (const url of unsafeUrls) {
+      const host = new MemoryWebModelStoreHost()
+      let fetchCount = 0
+
+      await expect(installVerifiedBrowserModelPack({
+        host,
+        manifest: await signedManifestWithUrl(bytes, url),
+        allowNonProductionTestSignature: true,
+        ...TEST_ASSET_POLICY,
+        trustedAssetBaseUrl: TEST_ASSET_BASE_URL,
+        fetchBytes: async () => {
+          fetchCount += 1
+          return bytes
+        }
+      })).rejects.toMatchObject({ code: 'asset_url' })
+
+      expect(fetchCount).toBe(0)
+      expect(await host.listPromotedKeys()).toEqual([])
+      expect(await host.listJsonKeys('aurora.voice.web-store.v1:active:')).toEqual([])
+    }
+  })
+
+  it('allows relative assets only when they resolve against an explicit trusted origin', async () => {
+    const bytes = new Uint8Array([104, 105, 106])
+    const manifest = await signedManifestWithUrl(bytes, 'fixtures/pockettts-web-test.bin')
+    const host = new MemoryWebModelStoreHost()
+    const fetchedUrls: string[] = []
+
+    await expect(installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
+      fetchBytes: async () => bytes
+    })).rejects.toMatchObject({ code: 'asset_url' })
+
+    const receipt = await installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
+      trustedAssetBaseUrl: `${TEST_ASSET_BASE_URL}/releases/`,
+      fetchBytes: async (url) => {
+        fetchedUrls.push(url)
+        return bytes
+      }
+    })
+
+    expect(receipt.files).toHaveLength(1)
+    expect(fetchedUrls).toEqual([`${TEST_ASSET_BASE_URL}/releases/fixtures/pockettts-web-test.bin`])
+  })
+
+  it('allows same-origin HTTPS assets without an extra origin allowlist', async () => {
+    const bytes = new Uint8Array([114, 115, 116])
+    const manifest = await signedManifestWithUrl(bytes, `${TEST_ASSET_BASE_URL}/fixtures/same-origin.bin`)
+    const host = new MemoryWebModelStoreHost()
+    const previousLocation = Object.getOwnPropertyDescriptor(globalThis, 'location')
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: new URL(`${TEST_ASSET_BASE_URL}/app/`)
+    })
+    try {
+      const receipt = await installVerifiedBrowserModelPack({
+        host,
+        manifest,
+        allowNonProductionTestSignature: true,
+        fetchBytes: async (url) => {
+          expect(url).toBe(`${TEST_ASSET_BASE_URL}/fixtures/same-origin.bin`)
+          return bytes
+        }
+      })
+      expect(receipt.files).toHaveLength(1)
+    } finally {
+      if (previousLocation) {
+        Object.defineProperty(globalThis, 'location', previousLocation)
+      } else {
+        delete (globalThis as { location?: Location }).location
+      }
+    }
+  })
+
+  it('allows loopback HTTP asset URLs only through the explicit non-production option', async () => {
+    const bytes = new Uint8Array([107, 108, 109])
+    const manifest = await signedManifestWithUrl(bytes, 'http://127.0.0.1:8787/model.bin')
+    const host = new MemoryWebModelStoreHost()
+    let fetchCount = 0
+
+    await expect(installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
+      fetchBytes: async () => {
+        fetchCount += 1
+        return bytes
+      }
+    })).rejects.toMatchObject({ code: 'asset_url' })
+
+    expect(fetchCount).toBe(0)
+
+    const receipt = await installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
+      allowNonProductionLoopbackHttpAssetUrls: true,
+      fetchBytes: async (url) => {
+        fetchCount += 1
+        expect(url).toBe('http://127.0.0.1:8787/model.bin')
+        return bytes
+      }
+    })
+
+    expect(fetchCount).toBe(1)
+    expect(receipt.files).toHaveLength(1)
+  })
+
+  it('uses no-store fetches that reject redirects for trusted default downloads', async () => {
+    const bytes = new Uint8Array([117, 118, 119])
+    const manifest = await signedManifestWithUrl(bytes, `${TEST_ASSET_BASE_URL}/fixtures/default-fetch.bin`)
+    const host = new MemoryWebModelStoreHost()
+    const previousFetch = globalThis.fetch
+    globalThis.fetch = async (url, init) => {
+      expect(url).toBe(`${TEST_ASSET_BASE_URL}/fixtures/default-fetch.bin`)
+      expect(init).toMatchObject({ cache: 'no-store', redirect: 'error' })
+      return new Response(bytes)
+    }
+    try {
+      const receipt = await installVerifiedBrowserModelPack({
+        host,
+        manifest,
+        allowNonProductionTestSignature: true,
+        ...TEST_ASSET_POLICY
+      })
+      expect(receipt.files).toHaveLength(1)
+    } finally {
+      globalThis.fetch = previousFetch
+    }
+  })
+
   it('rejects a selected file whose task does not match the requested scope before fetching', async () => {
     const bytes = new Uint8Array([8, 9, 10])
     const manifest = await signedUnsignedManifest({
@@ -199,7 +372,7 @@ describe('browser model pack verification', () => {
         file_id: 'tts-model',
         asset_id: 'tts-model',
         task: 'tts',
-        url: '/fixtures/cross-task-web-test.bin',
+        url: `${TEST_ASSET_BASE_URL}/fixtures/cross-task-web-test.bin`,
         sha256: await sha256Hex(bytes),
         byte_size: bytes.byteLength,
         installed_size: bytes.byteLength,
@@ -223,6 +396,7 @@ describe('browser model pack verification', () => {
       manifest,
       scope: { task: 'stt' },
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async () => {
         fetchCount += 1
         return bytes
@@ -247,7 +421,7 @@ describe('browser model pack verification', () => {
         file_id: 'stt-model',
         asset_id: 'stt-model',
         task: 'stt',
-        url: '/fixtures/mixed-task-stt.bin',
+        url: `${TEST_ASSET_BASE_URL}/fixtures/mixed-task-stt.bin`,
         sha256: await sha256Hex(sttBytes),
         byte_size: sttBytes.byteLength,
         installed_size: sttBytes.byteLength,
@@ -256,7 +430,7 @@ describe('browser model pack verification', () => {
         file_id: 'tts-model',
         asset_id: 'tts-model',
         task: 'tts',
-        url: '/fixtures/mixed-task-tts.bin',
+        url: `${TEST_ASSET_BASE_URL}/fixtures/mixed-task-tts.bin`,
         sha256: await sha256Hex(ttsBytes),
         byte_size: ttsBytes.byteLength,
         installed_size: ttsBytes.byteLength,
@@ -280,6 +454,7 @@ describe('browser model pack verification', () => {
         manifest,
         scope: { task },
         allowNonProductionTestSignature: true,
+        ...TEST_ASSET_POLICY,
         fetchBytes: async (url) => url.endsWith('-stt.bin') ? sttBytes : ttsBytes
       })
       const reopened = await openActiveBrowserModelPack(
@@ -306,7 +481,7 @@ describe('browser model pack verification', () => {
         file_id: 'tts-model',
         asset_id: 'tts-model',
         task: 'tts',
-        url: '/fixtures/tts-web-test.bin',
+        url: `${TEST_ASSET_BASE_URL}/fixtures/tts-web-test.bin`,
         sha256: await sha256Hex(bytes),
         byte_size: bytes.byteLength,
         installed_size: bytes.byteLength,
@@ -329,6 +504,7 @@ describe('browser model pack verification', () => {
       manifest,
       scope: { task: 'tts' },
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async () => bytes
     })
     const reopened = await openActiveBrowserModelPack(
@@ -351,6 +527,7 @@ describe('browser model pack verification', () => {
       manifest,
       scope: { task: 'stt' },
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async () => bytes
     })
     const [sttActiveKey] = await host.listJsonKeys('aurora.voice.web-store.v1:active:')
@@ -380,6 +557,7 @@ describe('browser model pack verification', () => {
       manifest: firstManifest,
       scope: { task: 'a:b', slotId: 'c' },
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async () => firstBytes
     })
     const secondReceipt = await installVerifiedBrowserModelPack({
@@ -387,6 +565,7 @@ describe('browser model pack verification', () => {
       manifest: secondManifest,
       scope: { task: 'a', slotId: 'b:c' },
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async () => secondBytes
     })
 
@@ -415,6 +594,7 @@ describe('browser model pack verification', () => {
       host,
       manifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async () => bytes
     })
     const [activeKey] = await host.listJsonKeys('aurora.voice.web-store.v1:active:')
@@ -443,6 +623,7 @@ describe('browser model pack verification', () => {
       host,
       manifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       signal: controller.signal,
       fetchBytes: async () => {
         fetchCount += 1
@@ -466,6 +647,7 @@ describe('browser model pack verification', () => {
       host,
       manifest: previousManifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async () => previousBytes
     })
 
@@ -476,6 +658,7 @@ describe('browser model pack verification', () => {
       host,
       manifest: nextManifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       signal: controller.signal,
       fetchBytes: async (_url, signal) => {
         forwardedSignal = signal
@@ -508,6 +691,7 @@ describe('browser model pack verification', () => {
       host,
       manifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       signal: controller.signal,
       fetchBytes: async (_url, signal) => {
         forwardedSignal = signal
@@ -525,6 +709,7 @@ describe('browser model pack verification', () => {
       host,
       manifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       signal: new AbortController().signal,
       fetchBytes: async () => { throw unrelatedAbort }
     })).rejects.toBe(unrelatedAbort)
@@ -541,6 +726,7 @@ describe('browser model pack verification', () => {
       host,
       manifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       signal: controller.signal,
       fetchBytes: async () => bytes
     })).rejects.toMatchObject({ code: 'aborted', cleanupFailed: true })
@@ -560,6 +746,7 @@ describe('browser model pack verification', () => {
       host,
       manifest: previousManifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async (url) => url.endsWith('-a.bin') ? previousFiles[0] : previousFiles[1]
     })
 
@@ -568,6 +755,7 @@ describe('browser model pack verification', () => {
       host,
       manifest: nextManifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async (url) => url.endsWith('-a.bin') ? nextFiles[0] : nextFiles[1]
     })).rejects.toThrow('promotion_failure')
 
@@ -591,6 +779,7 @@ describe('browser model pack verification', () => {
       host,
       manifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async () => bytes
     })
 
@@ -599,6 +788,7 @@ describe('browser model pack verification', () => {
       host,
       manifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async () => bytes
     })).rejects.toThrow('active_write_failure')
 
@@ -619,6 +809,7 @@ describe('browser model pack verification', () => {
       host,
       manifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async (url) => url.endsWith('-a.bin') ? files[0] : files[1]
     })
 
@@ -641,6 +832,7 @@ describe('browser model pack verification', () => {
       host,
       manifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async () => bytes
     })
 
@@ -660,6 +852,7 @@ describe('browser model pack verification', () => {
       host,
       manifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       signal: controller.signal,
       fetchBytes: async () => bytes
     })).resolves.toMatchObject({ identity: { packVersion: '1.0.0' } })
@@ -723,7 +916,8 @@ describe('browser model pack verification', () => {
     const manifest = await signedManifest(bytes, {}, TEST_RELEASE_KEY_ID)
     const releaseTrust = {
       trustedReleaseKeys: [{ keyId: TEST_RELEASE_KEY_ID, publicKeyBase64: TEST_PUBLIC_KEY_BASE64 }],
-      expectedReleaseManifestSha256: await manifestSha256(manifest)
+      expectedReleaseManifestSha256: await manifestSha256(manifest),
+      ...TEST_ASSET_POLICY
     }
     const host = new MemoryWebModelStoreHost()
     let fetchCount = 0
@@ -762,9 +956,10 @@ describe('browser model pack verification', () => {
       host,
       manifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async (url) => {
-        if (url === '/fixtures/pockettts-web-test-a.bin') return firstBytes
-        if (url === '/fixtures/pockettts-web-test-b.bin') return secondBytes
+        if (url === `${TEST_ASSET_BASE_URL}/fixtures/pockettts-web-test-a.bin`) return firstBytes
+        if (url === `${TEST_ASSET_BASE_URL}/fixtures/pockettts-web-test-b.bin`) return secondBytes
         throw new Error(`unexpected fixture url: ${url}`)
       }
     })
@@ -815,6 +1010,7 @@ describe('browser model pack verification', () => {
       host,
       manifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async (url) => url.endsWith('-a.bin') ? firstBytes : secondBytes
     })
     const [activeKey] = await host.listJsonKeys('aurora.voice.web-store.v1:active:')
@@ -854,6 +1050,7 @@ describe('browser model pack verification', () => {
       host,
       manifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async () => bytes
     })
 
@@ -881,6 +1078,7 @@ describe('browser model pack verification', () => {
       host,
       manifest,
       allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
       fetchBytes: async () => bytes
     })
 
@@ -938,7 +1136,7 @@ async function signedManifest(
       file_id: 'model',
       asset_id: 'model',
       task: 'stt',
-      url: '/fixtures/pockettts-web-test.bin',
+      url: `${TEST_ASSET_BASE_URL}/fixtures/pockettts-web-test.bin`,
       sha256: await sha256Hex(bytes),
       byte_size: bytes.byteLength,
       installed_size: bytes.byteLength,
@@ -965,6 +1163,22 @@ async function signedManifest(
   }
 }
 
+async function signedManifestWithUrl(
+  bytes: Uint8Array,
+  url: string,
+  keyId = AURORA_NON_PRODUCTION_MODEL_PACK_KEY_ID
+): Promise<AuroraBrowserModelPackManifest> {
+  const manifest = await signedManifest(bytes, {}, keyId)
+  return signedUnsignedManifest({
+    ...manifest,
+    files: [{
+      ...manifest.files[0]!,
+      url
+    }],
+    signature: null
+  }, keyId)
+}
+
 async function signedTaskManifest(
   packId: string,
   task: string,
@@ -980,7 +1194,7 @@ async function signedTaskManifest(
       file_id: 'model',
       asset_id: 'model',
       task,
-      url: `/fixtures/${packId}.bin`,
+      url: `${TEST_ASSET_BASE_URL}/fixtures/${packId}.bin`,
       sha256: await sha256Hex(bytes),
       byte_size: bytes.byteLength,
       installed_size: bytes.byteLength,
@@ -1012,7 +1226,7 @@ async function signedTwoFileManifest(
       file_id: 'model-a',
       asset_id: 'model-a',
       task: 'stt',
-      url: '/fixtures/pockettts-web-test-a.bin',
+      url: `${TEST_ASSET_BASE_URL}/fixtures/pockettts-web-test-a.bin`,
       sha256: await sha256Hex(firstBytes),
       byte_size: firstBytes.byteLength,
       installed_size: firstBytes.byteLength,
@@ -1021,7 +1235,7 @@ async function signedTwoFileManifest(
       file_id: 'model-b',
       asset_id: 'model-b',
       task: 'stt',
-      url: '/fixtures/pockettts-web-test-b.bin',
+      url: `${TEST_ASSET_BASE_URL}/fixtures/pockettts-web-test-b.bin`,
       sha256: await sha256Hex(secondBytes),
       byte_size: secondBytes.byteLength,
       installed_size: secondBytes.byteLength,
