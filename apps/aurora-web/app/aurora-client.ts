@@ -253,6 +253,11 @@ export async function createAuroraBrowserRuntimeAsync({
   }
   const runtime = createAuroraBrowserRuntimeFromStore(meshNodeServices, localAssistant)
   const hostedBrowserSpeechPack = await resolveHostedBrowserSpeechPack(runtimeProfile)
+  if (profileRevision !== browserRuntimeProfileRevision) {
+    await runtime.close().catch(() => undefined)
+    if (browserRuntimeProfileTransition) await browserRuntimeProfileTransition
+    return await createAuroraBrowserRuntimeAsync({ localAssistant })
+  }
   return Object.assign(runtime, { hostedBrowserSpeechPack }) as AuroraBrowserRuntime
 }
 

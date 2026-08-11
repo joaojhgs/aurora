@@ -694,6 +694,75 @@ describe('createAuroraBrowserClient', () => {
     await runtime.close()
   })
 
+  it('retries hosted speech pack attachment when profile saving races an in-flight runtime build', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    stubCompleteSpeechPackEnv()
+    const storage = installBrowserStorage()
+    await saveVoiceMeshOnboardingProfile('mesh-speech-race-a')
+    const closeFirstServices = vi.fn(async () => undefined)
+    const closeSecondServices = vi.fn(async () => undefined)
+    const firstServices = fakeMeshNodeServices(closeFirstServices)
+    const secondServices = fakeMeshNodeServices(closeSecondServices)
+    const factory = vi
+      .fn<() => Promise<BrowserMeshNodeServices>>()
+      .mockResolvedValueOnce(firstServices)
+      .mockResolvedValueOnce(secondServices)
+    setAuroraBrowserMeshNodeServicesFactoryForTests(factory)
+    const stalePack = {
+      identity: {
+        packId: 'aurora-stt-stale',
+        packVersion: '1.0.0',
+        variantId: 'web-wasm',
+        scope: { task: 'stt' as const, slotId: 'default' },
+      },
+      files: [],
+    }
+    const currentPack = {
+      identity: {
+        packId: 'aurora-stt-current',
+        packVersion: '1.0.0',
+        variantId: 'web-wasm',
+        scope: { task: 'stt' as const, slotId: 'default' },
+      },
+      files: [],
+    }
+    let resolveFirstOpener!: () => void
+    const opener = vi
+      .fn<() => Promise<{ state: 'verified'; pack: typeof stalePack } | { state: 'verified'; pack: typeof currentPack }>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirstOpener = () => resolve({ state: 'verified', pack: stalePack })
+          }),
+      )
+      .mockResolvedValueOnce({ state: 'verified', pack: currentPack })
+    setAuroraBrowserSpeechPackOpenerForTests(opener)
+
+    const runtimePromise = createAuroraBrowserRuntimeAsync()
+    await vi.waitFor(() => expect(opener).toHaveBeenCalledTimes(1))
+    const savePromise = saveVoiceMeshOnboardingProfile('mesh-speech-race-b')
+    await savePromise
+    resolveFirstOpener()
+    const runtime = await runtimePromise
+
+    expect(factory).toHaveBeenCalledTimes(2)
+    expect(opener).toHaveBeenCalledTimes(2)
+    expect(closeFirstServices).toHaveBeenCalledOnce()
+    expect(auroraBrowserRuntimeProfile()?.id).toBe('mesh-speech-race-b')
+    expect(runtime.localData?.session).toBe(secondServices.session)
+    expect(runtime.hostedBrowserSpeechPack).toEqual({
+      state: 'verified',
+      pack: currentPack,
+    })
+    expect(runtime.hostedBrowserSpeechPack).not.toEqual({
+      state: 'verified',
+      pack: stalePack,
+    })
+    expect(JSON.stringify(storage.dump())).not.toContain('mesh-speech-race-b-secret')
+    await runtime.close()
+    expect(closeSecondServices).toHaveBeenCalledOnce()
+  })
+
   it('keeps a second tab out of provider mode when another tab owns local data', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     installBrowserStorage()
@@ -903,6 +972,11 @@ async function enableForegroundVoiceOnSavedProfile(): Promise<void> {
       ],
     },
   })
+}
+
+async function saveVoiceMeshOnboardingProfile(id: string): Promise<void> {
+  await saveMeshOnboardingProfile(id)
+  await enableForegroundVoiceOnSavedProfile()
 }
 
 function stubCompleteSpeechPackEnv(): void {
