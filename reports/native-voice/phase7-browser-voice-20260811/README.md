@@ -2,7 +2,7 @@
 
 **Status:** Current bounded check
 
-Implementation checkpoint `779ce7d8` includes the earlier Phase 7 browser model-pack, Worker/WASM, focused push-to-talk, connected-client speech playback, responsive composer, and end-user-copy hardening. It additionally preserves sanitized microphone-start classifications and propagates hosted speech routes without inventing a device target. It does not complete Phase 7 or promote any RAC status.
+Implementation checkpoint `671605b3` includes the earlier Phase 7 browser model-pack, Worker/WASM, focused push-to-talk, connected-client speech playback, responsive composer, and end-user-copy hardening through `779ce7d8`. It additionally preserves sanitized microphone-start classifications, propagates hosted speech routes without inventing a device target, and fails closed on untrusted browser model-pack asset sources before any fetch or storage mutation. It does not complete Phase 7 or promote any RAC status.
 
 ## Accepted evidence
 
@@ -11,6 +11,7 @@ Implementation checkpoint `779ce7d8` includes the earlier Phase 7 browser model-
 - Immutable manifest-generation keys prevent a failed same-version reinstall from corrupting an already active pack.
 - Promotion snapshots active, installed, and manifest metadata; a failed commit restores the prior JSON state and removes only newly promoted blobs.
 - Cleanup failures are surfaced while retaining the primary failure classification. Maximum-length pack IDs remain within the browser host key limit, and `removePackData(packId)` still groups every generation correctly.
+- Browser model-pack manifests reject invalid asset URL fields. Install accepts same-origin HTTPS, explicitly trusted HTTPS origins, and relative URLs resolved against an explicit trusted base; cleartext loopback is nonproduction opt-in only, unsafe schemes fail before fetch, and the default downloader rejects redirects. Custom fetch injection is documented as a trusted caller-owned/test transport override.
 - Focus-limited browser surfaces render `Wake while open`; `Wake and background` remains reserved for a future surface that can actually sustain background wake behavior.
 - Browser privacy assertions exclude non-sensitive timestamps before checking that PCM/transcript markers are absent. An initial Firefox run hit the timestamp false positive; the corrected exact-source five-engine rerun passed.
 - Bundler-generated relative Worker and WASM URLs resolve against the current browser page while the Worker continues to reject cross-origin WASM.
@@ -28,8 +29,8 @@ Implementation checkpoint `779ce7d8` includes the earlier Phase 7 browser model-
 
 - `pnpm --dir packages/aurora-voice-web typecheck` — passed.
 - `pnpm --filter @aurora/voice-web run build` — passed, including Rust/WASM and Worker artifacts.
-- Focused model/storage Vitest — 3 files, 42/42 passed.
-- Full `@aurora/voice-web` Vitest — 12 files, 133/133 passed.
+- Focused model/storage Vitest — 3 files, 54/54 passed.
+- Full `@aurora/voice-web` Vitest — 12 files, 139/139 passed.
 - Browser model storage Playwright — 18/18 across Chromium, Firefox, and WebKit.
 - Production Worker/WASM voice Playwright — 35/35 across Chromium, Firefox, WebKit, Android Chrome emulation, and Mobile Safari emulation.
 - Real-browser API Playwright — 2/2 across desktop Chromium and mobile Chromium emulation.
@@ -41,7 +42,8 @@ Implementation checkpoint `779ce7d8` includes the earlier Phase 7 browser model-
 - Hosted Next Assistant browser-voice Playwright — 1/1 passed in `chromium-hosted-assistant` at `2026-08-11T13:38:30.584Z` after `next build` and `next start`. It uses Chromium fake media through native `getUserMedia`, `AudioContext`, and `AudioWorklet`, with built `@aurora/voice-web` Worker/WASM assets and explicit demo transport. Fresh desktop and 390x844 screenshots passed direct alignment, clipping, wording, and overflow inspection. This is not a physical-microphone, OS permission-prompt, Android-device, acoustic-recognition, or local-browser-STT check.
 - `git diff --check` and staged diff checks — passed.
 - Two independent reviews of the final route commit found no blocker after rejecting and repairing three fail-open/loading defects. Both fresh screenshots show a completed turn with no internal tool-execution/debug wording, clipping, wrapping, or horizontal overflow.
-- GitNexus reindexed the repository at `779ce7d8` to 24,165 nodes, 85,558 edges, and 300 flows. Staged detection for the seven-file route slice reported 15 indexed changed symbols, four affected hosted page/client flows, and medium risk; all four flows passed targeted and full tests.
+- The browser asset-source policy was independently rejected once after it broke the real-browser offline-reopen flow, repaired, then approved. Fresh integrated verification passes focused 30/30, full package 139/139, typecheck/build, and browser storage 18/18 across Chromium, Firefox, and WebKit.
+- GitNexus reindexed the repository before the source-policy slice to 52,077 nodes, 124,517 edges, and 300 flows. Staged detection for the three-file source-policy slice reported medium risk across four expected install/verification flows; all affected flows pass targeted, full-package, and real-browser storage tests. The earlier seven-file route slice also reported medium risk across four hosted page/client flows, all covered by targeted and full tests.
 
 ## Bounded scope and remaining gates
 

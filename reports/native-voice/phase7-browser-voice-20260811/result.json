@@ -1,8 +1,8 @@
 {
   "$schema": "aurora.native_voice_phase7_checkpoint.v1",
-  "checkedAtUtc": "2026-08-11T13:54:55Z",
+  "checkedAtUtc": "2026-08-11T14:39:35Z",
   "branch": "feat/ui-multi-platform-integration",
-  "implementationCommit": "779ce7d8",
+  "implementationCommit": "671605b3",
   "verdict": "partial",
   "racCountsChanged": false,
   "racStatus": {
@@ -15,9 +15,9 @@
   },
   "verification": {
     "sdkUnit": { "passed": 687, "failed": 0, "files": 60 },
-    "voiceWebUnit": { "passed": 133, "failed": 0, "files": 12 },
-    "focusedModelStorage": { "passed": 42, "failed": 0 },
-    "browserStorage": { "passed": 18, "failed": 0, "profiles": ["chromium", "firefox", "webkit"], "sourceReport": "/tmp/aurora-voice-web-browser-model-store/report.json", "sourceReportSha256": "5d3a751afc04a85361a4eb1d16b53fe9f8793298e00ff2ee6294d221e9ba7206" },
+    "voiceWebUnit": { "passed": 139, "failed": 0, "files": 12 },
+    "focusedModelStorage": { "passed": 54, "failed": 0 },
+    "browserStorage": { "passed": 18, "failed": 0, "profiles": ["chromium", "firefox", "webkit"], "sourceReport": "/tmp/aurora-voice-web-browser-model-store/report.json", "sourceReportSha256": "b64de3f12a35e20f0c6f34e5c891043f95ff9973cca2ea9ca4a62d5cbf6738d5" },
     "browserWorkerVoice": { "passed": 35, "failed": 0, "profiles": ["chromium", "firefox", "webkit", "android-chrome-emulation", "mobile-safari-emulation"], "sourceReport": "/tmp/aurora-voice-web-worker-audio-bridge/report.json", "sourceReportSha256": "44192033260fd3fffae621d5c127608a9bfb5c74b9f549f7470fe78902b16d10" },
     "browserVoiceRealApi": { "passed": 2, "failed": 0, "profiles": ["desktop-chromium", "mobile-chromium-emulation"], "sourceReport": "/tmp/aurora-voice-web-real-audio/report.json", "sourceReportSha256": "4f6449d81652c3616ee7b1be78ce0e9143d6f372bafb21efe02b5b96a6cbe444" },
     "webUnit": { "passed": 68, "failed": 0, "files": 17 },
@@ -50,7 +50,18 @@
     "gitNexusChangedFiles": 7,
     "gitNexusChangedSymbols": 15,
     "affectedProcesses": 4,
-    "gitNexusIndex": "fresh-24165-nodes-85558-edges-300-flows"
+    "gitNexusIndex": "fresh-at-c7bc7d1a-52077-nodes-124517-edges-300-flows",
+    "modelPackSourcePolicy": {
+      "implementationCommit": "671605b3",
+      "focusedTestsPassed": 30,
+      "fullPackageTestsPassed": 139,
+      "browserStorageTestsPassed": 18,
+      "typecheck": "passed",
+      "build": "passed",
+      "gitNexusRisk": "medium",
+      "affectedInstallFlows": 4,
+      "independentReview": "approved"
+    }
   },
   "knownCorrectedFailure": {
     "scope": "initial Firefox Worker redaction assertion",
