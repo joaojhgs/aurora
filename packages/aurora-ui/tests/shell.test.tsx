@@ -2584,9 +2584,25 @@ describe('Aurora production shell', () => {
       new Aurora({ transport: new MockAuroraTransport() }),
       meshRoute(),
     )
+    const unnamedMeshStatus = cloneFixture(meshStatusFixture)
+    unnamedMeshStatus.local.node_name = ''
+    const unnamedDiagnostics = cloneFixture(webrtcDiagnosticsFixture)
+    unnamedDiagnostics.local_node_name = ''
+    const unnamedCatalog = cloneFixture(capabilityCatalogFixture)
+    unnamedCatalog.local_node_name = ''
+    const unnamedSnapshot = await buildMeshPeersSnapshot(
+      new Aurora({
+        transport: new MockAuroraTransport()
+          .register('Gateway.GetMeshStatus', () => unnamedMeshStatus)
+          .register('Gateway.GetWebRTCDiagnostics', () => unnamedDiagnostics)
+          .register('Gateway.GetCapabilityCatalog', () => unnamedCatalog),
+      }),
+      meshRoute(),
+    )
     const connectingSnapshot: BrowserWebRtcSnapshot = {
       state: 'reconnecting',
       connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-host',
       icePathCategory: 'unknown',
       protocolCapabilities: [],
       reconnectCount: 1,
@@ -2611,6 +2627,9 @@ describe('Aurora production shell', () => {
     document.body.appendChild(container)
     const root = createRoot(container)
     try {
+      expect(unnamedSnapshot.localNodeName).toBe('This device')
+      expect(unnamedSnapshot.localNodeName).not.toContain('Aurora node')
+
       await act(async () => root.render(
         <MeshPeersView
           snapshot={snapshot}
@@ -2621,6 +2640,26 @@ describe('Aurora production shell', () => {
       expect(container.textContent).toContain('Connecting to the invited Aurora device')
       expect(container.textContent).not.toContain('Aurora node')
       expect(container.textContent).not.toContain('Aurora peer')
+      expect(container.textContent).not.toContain('peer-host')
+
+      await act(async () => root.render(
+        <MeshPeersView
+          snapshot={snapshot}
+          route={meshRoute()}
+          thinPeerSnapshot={{
+            ...connectingSnapshot,
+            state: 'awaiting-sas-confirmation',
+            status: 'pairing',
+            pairingSessionId: 'pairing-session',
+            pairingVerificationCode: '48271935',
+          }}
+        />,
+      ))
+      expect(container.textContent).toContain('Invited Aurora device')
+      expect(container.textContent).toContain('4827 1935')
+      expect(container.textContent).not.toContain('Aurora node')
+      expect(container.textContent).not.toContain('Aurora peer')
+      expect(container.textContent).not.toContain('peer-host')
 
       await act(async () => root.render(
         <MeshPeersView
@@ -2636,6 +2675,7 @@ describe('Aurora production shell', () => {
       expect(container.textContent).toContain('Invited Aurora device is offline')
       expect(container.textContent).not.toContain('Aurora node')
       expect(container.textContent).not.toContain('Aurora peer')
+      expect(container.textContent).not.toContain('peer-host')
     } finally {
       await act(async () => root.unmount())
       container.remove()

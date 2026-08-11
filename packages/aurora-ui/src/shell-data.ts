@@ -173,7 +173,7 @@ export function snapshotFromGraph(
   const assistantVoiceRoutes = assistantVoiceRoutesFromGraph(graph, native)
   return {
     loadState: 'ready',
-    nodeName: graph.localNodeName || 'Aurora node',
+    nodeName: graph.localNodeName || 'This device',
     localPeerId: graph.localPeerId,
     transportKind,
     evidenceSource: transportKind === 'mock' ? 'Local transport' : 'Aurora service response',

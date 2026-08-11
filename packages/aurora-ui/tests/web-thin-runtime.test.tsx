@@ -1863,6 +1863,35 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(container.querySelector('[role="alert"]')).toBeNull()
   })
 
+  it('does not expose a stored peer id when an offline device has no display name', async () => {
+    const peer = new FakeBrowserPeer({
+      status: 'failed',
+      state: 'failed',
+      expectedStablePeerId: 'peer-host',
+      secretsPersisted: true,
+      persistenceBackend: 'platform-keychain',
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <WebThinConnectionPanel
+          peer={peer as unknown as BrowserWebRtcPeerController}
+          mode="webrtc-only"
+          transportKind="mesh"
+        />,
+      )
+    })
+
+    expect(container.textContent).toContain('Invited Aurora device is offline')
+    expect(container.textContent).not.toContain('peer-host')
+    expect(container.textContent).not.toContain('Aurora peer')
+    expect(container.textContent).not.toContain('Aurora node')
+  })
+
   it('imports an invite into secure storage before leaving configure-only onboarding', async () => {
     const peer = new FakeBrowserPeer({ status: 'needs-invite' })
     const container = document.createElement('div')

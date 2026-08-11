@@ -1035,7 +1035,7 @@ export async function buildMeshPeersSnapshot(
     loadState,
     generatedAt: catalog?.generated_at ?? null,
     localPeerId: statusResponse?.local.peer_id ?? diagnostics?.local_mesh_peer_id ?? catalog?.local_peer_id ?? null,
-    localNodeName: statusResponse?.local.node_name || diagnostics?.local_node_name || catalog?.local_node_name || 'Aurora node',
+    localNodeName: statusResponse?.local.node_name || diagnostics?.local_node_name || catalog?.local_node_name || 'This device',
     meshEnabled: statusResponse?.local.mesh_enabled ?? diagnostics?.mesh_enabled ?? false,
     meshStarted: statusResponse?.local.mesh_started ?? false,
     webrtcStarted: statusResponse?.local.webrtc_started ?? diagnostics?.started ?? false,
@@ -1709,7 +1709,6 @@ function ThinPeerConnectionStatus({
   ) {
     const peerName =
       snapshot.nodeName
-      || snapshot.expectedStablePeerId
       || 'Invited Aurora device'
     return (
       <Alert role="status">

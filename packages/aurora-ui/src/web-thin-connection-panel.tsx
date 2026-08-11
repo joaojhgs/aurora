@@ -118,8 +118,7 @@ export function HomeNodeConnectionPanel({
     && (snapshot.status === 'closed' || snapshot.status === 'failed')
   const peerLabel =
     snapshot.nodeName?.trim()
-    || snapshot.expectedStablePeerId
-    || 'Invited Aurora peer'
+    || 'Invited Aurora device'
   const visibleDiagnostic =
     snapshot.diagnostic
     && (!configuredPeerOffline || !isExpectedOfflineDiagnostic(snapshot.diagnostic))

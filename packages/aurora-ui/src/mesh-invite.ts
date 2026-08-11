@@ -74,7 +74,7 @@ export function meshInviteSummary(payload: JsonObject): MeshInviteSummary {
   const pairing = asObject(payload.pairing)
   const brokers = Array.isArray(signaling.mqtt_brokers) ? signaling.mqtt_brokers : []
   return {
-    nodeName: asString(node.node_name) || 'Aurora node',
+    nodeName: asString(node.node_name) || 'Invited Aurora device',
     peerId: asString(node.peer_id) || null,
     room: asString(signaling.room) || 'not shared',
     signalingProvider: asString(signaling.provider) || 'mqtt',

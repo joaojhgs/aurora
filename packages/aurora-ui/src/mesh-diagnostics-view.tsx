@@ -436,7 +436,7 @@ export function meshDiagnosticsSnapshotFromResults(input: {
   return {
     loadState,
     generatedAt: input.catalog.data?.generated_at ?? null,
-    localNodeName: webRtc?.local_node_name ?? mesh?.local.node_name ?? input.catalog.data?.local_node_name ?? 'Aurora node',
+    localNodeName: webRtc?.local_node_name ?? mesh?.local.node_name ?? input.catalog.data?.local_node_name ?? 'This device',
     localMeshPeerId: webRtc?.local_mesh_peer_id ?? mesh?.local.peer_id ?? input.catalog.data?.local_peer_id ?? null,
     localSignalingPeerId: webRtc?.local_signaling_peer_id ?? null,
     started: Boolean(webRtc?.started ?? mesh?.local.webrtc_started),
@@ -510,7 +510,7 @@ export function reconcileMeshDiagnosticsWithThinPeer(
     ? previous!
     : next
   const peerId = thinPeer.expectedStablePeerId!
-  const nodeName = thinPeer.nodeName?.trim() || 'Invited Aurora peer'
+  const nodeName = thinPeer.nodeName?.trim() || 'Invited Aurora device'
   const state: AvailabilityState = connected
     ? 'available-remote'
     : thinPeer.status === 'pairing'
@@ -585,7 +585,7 @@ export function reconcileMeshDiagnosticsWithThinPeer(
       : connected && !remoteUnavailable
         ? base.loadState
         : 'degraded',
-    localNodeName: base.localNodeName === 'Aurora node'
+    localNodeName: base.localNodeName === 'This device'
       ? nodeName
       : base.localNodeName,
     started: true,

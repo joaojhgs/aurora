@@ -794,7 +794,7 @@ function shellHealthLabel(
 }
 
 function shellNodeLabel(snapshot: AuroraShellSnapshot): string {
-  return snapshot.nodeName.trim() || "Aurora node";
+  return snapshot.nodeName.trim() || "This device";
 }
 
 function shellAvatarLabel(sessionIsAdmin: boolean): string {
