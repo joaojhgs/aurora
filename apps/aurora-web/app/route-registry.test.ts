@@ -45,7 +45,7 @@ const WEB_ROUTE_PRODUCTION_MOUNTS: Record<string, readonly string[]> = {
   models: ['ModelsClientPage'],
   diagnostics: ['Health Checks', 'DiagnosticsExportIsland'],
   onboarding: ['OnboardingClientPage'],
-  settings: ['SettingsPermissionsView'],
+  settings: ['SettingsClientPage'],
   data: ['DataPolicyClientPage'],
   native: ['SettingsPermissionsView', 'surface="native"'],
 }

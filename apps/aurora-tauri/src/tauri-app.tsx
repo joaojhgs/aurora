@@ -33,6 +33,7 @@ import {
   LocalServiceRoutingResource,
   ServiceRoutingResource,
   SettingsPermissionsView,
+  VoiceSettingsView,
   StateSurface,
   LightweightToolApprovalPanel,
   ToolApprovalPanel,
@@ -1779,7 +1780,7 @@ function TauriSettingsPage({
   const configRoute = embeddedRoute("config", snapshot) ?? route;
   const dataRoute = embeddedRoute("data", snapshot) ?? route;
   const [activeTab, setActiveTab] = useState<
-    "general" | "configuration" | "advanced"
+    "general" | "voice" | "configuration" | "advanced"
   >("general");
   return (
     <div className="ata-page-stack">
@@ -1842,6 +1843,17 @@ function TauriSettingsPage({
         </button>
         <button
           type="button"
+          id="settings-tab-voice"
+          role="tab"
+          aria-selected={activeTab === "voice"}
+          aria-controls="settings-panel-voice"
+          data-active={activeTab === "voice"}
+          onClick={() => setActiveTab("voice")}
+        >
+          Voice
+        </button>
+        <button
+          type="button"
           id="settings-tab-configuration"
           role="tab"
           aria-selected={activeTab === "configuration"}
@@ -1876,6 +1888,15 @@ function TauriSettingsPage({
           currentPath="/settings"
           hideTabs
         />
+      </section>
+      <section
+        id="settings-panel-voice"
+        role="tabpanel"
+        aria-labelledby="settings-tab-voice"
+        hidden={activeTab !== "voice"}
+        className="aui-tab-panel"
+      >
+        <VoiceSettingsView client={client} />
       </section>
       <section
         id="settings-panel-configuration"

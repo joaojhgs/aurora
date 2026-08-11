@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AuroraClient, ConfigFieldMetadata } from '@aurora/client'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
 import { SettingsPermissionsView } from './settings-permissions-view'
+import { VoiceSettingsView } from './voice-settings-view'
 import { ConfigEditorView, parseFieldValue, stringifyValue } from './config-editor-view'
 import { DataPolicyResource } from './data-policy-view'
 import { PageTabs, type PageTabItem } from './shared-components'
@@ -13,7 +14,7 @@ import { ToneBadge } from './status-badges'
 import { Badge } from '#components/ui/badge'
 import { Input } from '#components/ui/input'
 
-export type SettingsViewTab = 'general' | 'configuration' | 'advanced'
+export type SettingsViewTab = 'general' | 'voice' | 'configuration' | 'advanced'
 
 export interface SettingsViewProps {
   client: AuroraClient
@@ -31,6 +32,11 @@ export function SettingsView({ client, snapshot, configRoute, dataRoute, initial
       value: 'general',
       label: 'General',
       content: <SettingsPermissionsView snapshot={snapshot} surface="settings" currentPath="/settings" hideTabs />
+    },
+    {
+      value: 'voice',
+      label: 'Voice',
+      content: <VoiceSettingsView client={client} />
     },
     {
       value: 'configuration',
