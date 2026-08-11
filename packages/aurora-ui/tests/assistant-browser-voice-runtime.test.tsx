@@ -88,6 +88,41 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(runtime.cancel).not.toHaveBeenCalled()
   })
 
+  it('updates the hosted visualizer from redacted browser audio levels', async () => {
+    const fillRect = vi.fn()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      clearRect: vi.fn(),
+      fillRect,
+    } as unknown as CanvasRenderingContext2D)
+    const runtime = createRuntimeMock({
+      capturedPcm: new Int16Array([1, 2, 3, 4])
+    })
+    voiceRuntimeMock.create.mockReturnValue(runtime)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const container = renderAssistant(client, hostedSurface())
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(runtime.start).toHaveBeenCalledTimes(1))
+    const options = voiceRuntimeMock.create.mock.calls[0]?.[0] as {
+      audio?: { onAudioLevel?: (level: number, peak: number) => void }
+    } | undefined
+    expect(options?.audio?.onAudioLevel).toEqual(expect.any(Function))
+
+    fillRect.mockClear()
+    await act(async () => {
+      options?.audio?.onAudioLevel?.(0.42, 0.9)
+      await Promise.resolve()
+    })
+
+    await vi.waitFor(() => expect(fillRect).toHaveBeenCalled())
+    const renderedBarHeights = fillRect.mock.calls.slice(1).map((call) => Number(call[3]))
+    expect(Math.max(...renderedBarHeights)).toBeGreaterThan(3)
+    expect(findForbiddenProductionCopyTerms(container.textContent ?? '').map((term) => term.id)).toEqual([])
+  })
+
   it.each([
     ['Android WebView', getAuroraSurfaceProfile({
       runtimeMode: 'android-node',
@@ -665,6 +700,49 @@ describe('Assistant hosted browser voice runtime', () => {
     roots.splice(roots.indexOf(root), 1)
 
     expect(runtime.dispose).toHaveBeenCalledTimes(1)
+    expect(runtime.unsubscribeEvent).toHaveBeenCalledTimes(1)
+    const renderedAfterUnmount = container.textContent
+    await act(async () => {
+      runtime.emitEvent({ kind: 'error', reason: '/private/device/path after unmount' })
+      await Promise.resolve()
+    })
+    expect(container.textContent).toBe(renderedAfterUnmount)
+  })
+
+  it('releases Android WebView browser capture on the native focused-media signal', async () => {
+    const runtime = createRuntimeMock({ capturedPcm: new Int16Array([1, 2, 3, 4, 5]) })
+    voiceRuntimeMock.create.mockReturnValue(runtime)
+    const getUserMedia = vi.fn()
+    const mediaRecorder = vi.fn()
+    const audioContext = vi.fn()
+    vi.stubGlobal('navigator', { ...navigator, mediaDevices: { getUserMedia } })
+    vi.stubGlobal('MediaRecorder', mediaRecorder)
+    vi.stubGlobal('AudioContext', audioContext)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+    const surfaceProfile = getAuroraSurfaceProfile({
+      runtimeMode: 'android-node',
+      transportKind: 'mesh',
+      nativePlatform: 'android',
+      userAgent: 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Mobile Safari/537.36'
+    })
+    expect(surfaceProfile.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const container = renderAssistant(client, surfaceProfile)
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(runtime.start).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      window.dispatchEvent(new Event(AURORA_RELEASE_FOCUSED_MEDIA_EVENT))
+      await Promise.resolve()
+    })
+
+    await vi.waitFor(() => expect(runtime.cancel).toHaveBeenCalledWith('lifecycle_lost'))
+    expect(findButton(container, 'Push to talk')).toBeTruthy()
+    expect(getUserMedia).not.toHaveBeenCalled()
+    expect(mediaRecorder).not.toHaveBeenCalled()
+    expect(audioContext).not.toHaveBeenCalled()
   })
 
   it('applies redacted browser runtime events without rendering runtime details', async () => {
@@ -1561,6 +1639,7 @@ function createRuntimeMock({ capturedPcm }: { capturedPcm: Int16Array }) {
     foregroundOnly: true as const
   }
   const listeners = new Set<(event: BrowserVoiceRuntimeEvent) => void>()
+  const unsubscribeEvent = vi.fn()
   const emitEvent = (overrides: Partial<BrowserVoiceRuntimeEvent> = {}) => {
     const event: BrowserVoiceRuntimeEvent = {
       kind: 'session_started',
@@ -1599,8 +1678,12 @@ function createRuntimeMock({ capturedPcm }: { capturedPcm: Int16Array }) {
     dispose: vi.fn(async () => undefined),
     onEvent: vi.fn((listener: (event: BrowserVoiceRuntimeEvent) => void) => {
       listeners.add(listener)
-      return () => listeners.delete(listener)
+      return () => {
+        listeners.delete(listener)
+        unsubscribeEvent()
+      }
     }),
+    unsubscribeEvent,
     emitEvent,
   }
 }
