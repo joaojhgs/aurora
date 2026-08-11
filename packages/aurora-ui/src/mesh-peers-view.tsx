@@ -1666,7 +1666,7 @@ function ThinPeerConnectionStatus({
         <div className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">
-              {snapshot.nodeName || 'Invited Aurora node'}
+              {snapshot.nodeName || 'Invited Aurora device'}
             </p>
             <p className="text-[11px] text-muted-foreground">
               Compare this code on both Auroras
@@ -1694,7 +1694,7 @@ function ThinPeerConnectionStatus({
     return (
       <Alert role="status">
         <RadioTower />
-        <AlertTitle>Connecting to the invited Aurora node</AlertTitle>
+        <AlertTitle>Connecting to the invited Aurora device</AlertTitle>
         <AlertDescription>
           Aurora is preparing a direct connection. The verification request
           will appear here when both devices are ready.
@@ -1710,7 +1710,7 @@ function ThinPeerConnectionStatus({
     const peerName =
       snapshot.nodeName
       || snapshot.expectedStablePeerId
-      || 'Invited Aurora peer'
+      || 'Invited Aurora device'
     return (
       <Alert role="status">
         <Wifi />

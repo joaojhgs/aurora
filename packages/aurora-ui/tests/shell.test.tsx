@@ -2579,6 +2579,69 @@ describe('Aurora production shell', () => {
     }
   })
 
+  it('uses product-safe device wording for invited connection states', async () => {
+    const snapshot = await buildMeshPeersSnapshot(
+      new Aurora({ transport: new MockAuroraTransport() }),
+      meshRoute(),
+    )
+    const connectingSnapshot: BrowserWebRtcSnapshot = {
+      state: 'reconnecting',
+      connectionMode: 'webrtc-only',
+      icePathCategory: 'unknown',
+      protocolCapabilities: [],
+      reconnectCount: 1,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-08-11T00:00:00Z',
+      status: 'connecting',
+      secureContext: true,
+      visible: true,
+      focused: true,
+      hasHttpFallback: false,
+      secretsPersisted: true,
+      persistenceBackend: 'platform-keychain',
+    }
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    try {
+      await act(async () => root.render(
+        <MeshPeersView
+          snapshot={snapshot}
+          route={meshRoute()}
+          thinPeerSnapshot={connectingSnapshot}
+        />,
+      ))
+      expect(container.textContent).toContain('Connecting to the invited Aurora device')
+      expect(container.textContent).not.toContain('Aurora node')
+      expect(container.textContent).not.toContain('Aurora peer')
+
+      await act(async () => root.render(
+        <MeshPeersView
+          snapshot={snapshot}
+          route={meshRoute()}
+          thinPeerSnapshot={{
+            ...connectingSnapshot,
+            state: 'failed',
+            status: 'failed',
+          }}
+        />,
+      ))
+      expect(container.textContent).toContain('Invited Aurora device is offline')
+      expect(container.textContent).not.toContain('Aurora node')
+      expect(container.textContent).not.toContain('Aurora peer')
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
   it('keeps a configured thin peer visible as offline instead of calling WebRTC disabled', async () => {
     const unavailable = await buildMeshPeersSnapshot(
       new Aurora({

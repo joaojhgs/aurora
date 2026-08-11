@@ -740,7 +740,7 @@ async function expectRevokedBrowserPeerRequiresApproval(page: Page): Promise<voi
   })
   await expect(meshRoot).not.toHaveAttribute('data-thin-peer-status', 'fallback-http')
   await expect(page.locator('body')).toContainText(
-    /offline|approval|connecting to the invited Aurora node|Review & approve|Reconnect/i,
+    /offline|approval|connecting to the invited Aurora device|Review & approve|Reconnect/i,
     { timeout: 30_000 },
   )
   await expect(page.locator('body')).not.toContainText(
