@@ -8,6 +8,18 @@ const reportRoot =
     ? join(tmpdir(), 'aurora-web-browser-voice')
     : resolve(process.cwd(), process.env.AURORA_WEB_BROWSER_VOICE_REPORT_ROOT)
 
+const chromiumFakeMediaArgs = [
+  '--use-fake-device-for-media-stream',
+  '--use-fake-ui-for-media-stream',
+  '--autoplay-policy=no-user-gesture-required',
+]
+
+const commonUse = {
+  baseURL: 'http://127.0.0.1:3427',
+  screenshot: 'only-on-failure' as const,
+  trace: 'retain-on-failure' as const,
+}
+
 export default defineConfig({
   testDir: '.',
   testMatch: 'assistant-browser-voice.pw.ts',
@@ -37,17 +49,22 @@ export default defineConfig({
       name: 'chromium-hosted-assistant',
       use: {
         ...devices['Desktop Chrome'],
-        baseURL: 'http://127.0.0.1:3427',
+        ...commonUse,
         permissions: ['microphone'],
         launchOptions: {
-          args: [
-            '--use-fake-device-for-media-stream',
-            '--use-fake-ui-for-media-stream',
-            '--autoplay-policy=no-user-gesture-required',
-          ],
+          args: chromiumFakeMediaArgs,
         },
-        screenshot: 'only-on-failure',
-        trace: 'retain-on-failure',
+      },
+    },
+    {
+      name: 'chrome-android-emulated-hosted-assistant',
+      use: {
+        ...devices['Pixel 5'],
+        ...commonUse,
+        permissions: ['microphone'],
+        launchOptions: {
+          args: chromiumFakeMediaArgs,
+        },
       },
     },
   ],

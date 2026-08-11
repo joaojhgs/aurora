@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 test('hosted Assistant push-to-talk completes a bounded demo turn through native browser capture', async ({ page }, testInfo) => {
   testInfo.annotations.push({
     type: 'evidence-boundary',
-    description: 'Uses Chromium fake media through native getUserMedia, AudioContext, AudioWorklet, and the production-built hosted Next Assistant path with built @aurora/voice-web Worker/WASM assets. The explicit demo transport returns a deterministic transcript. This is not a physical-microphone, OS permission-prompt, Android-device, acoustic-recognition, or local-browser-STT check.',
+    description: `Uses bounded ${testInfo.project.name} fake media through native getUserMedia, AudioContext, AudioWorklet, and the production-built hosted Next Assistant path with built @aurora/voice-web Worker/WASM assets. The explicit demo transport returns a deterministic transcript. Mobile projects are browser emulation, not physical devices. This is not a physical-microphone, OS permission-prompt, acoustic-recognition, or local-browser-STT check.`,
   })
 
   const consoleErrors: string[] = []
@@ -115,8 +115,17 @@ test('hosted Assistant push-to-talk completes a bounded demo turn through native
   await expect(page.getByRole('heading', { name: 'Text chat with Aurora' })).toBeAttached()
   await expect(page.getByRole('form', { name: 'Prompt composer' })).toBeVisible()
   await expect(page.getByText('Continue', { exact: true })).toHaveCount(0)
-  await page.getByRole('button', { name: 'New conversation' }).click()
-  await expect(page.getByText('Start with a prompt', { exact: true })).toBeVisible()
+  const mobileConversationTrigger = page.getByRole('button', { name: 'Open conversations' })
+  if (await mobileConversationTrigger.isVisible()) {
+    await mobileConversationTrigger.click()
+    const conversationDialog = page.getByRole('dialog', { name: 'Conversations' })
+    await expect(conversationDialog).toBeVisible()
+    await conversationDialog.getByRole('button', { name: 'New conversation' }).click()
+    await expect(conversationDialog).toBeHidden()
+  } else {
+    await page.getByRole('button', { name: 'New conversation' }).click()
+  }
+  await expect(page.getByText('Start with a prompt', { exact: true })).toBeAttached()
 
   const consentButton = page.getByRole('button', { name: 'Allow connected voice' })
   await expect(consentButton).toBeVisible()
