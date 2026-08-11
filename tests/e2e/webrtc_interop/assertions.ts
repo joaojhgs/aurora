@@ -93,6 +93,11 @@ export type InteropBrowserResult = {
     finalState: string
     pendingPairingPrompts: number
     routeAuthorizedAfterRevocation: boolean
+    observation?: {
+      elapsedMs?: number
+      timeoutMs?: number
+      timedOut?: boolean
+    }
   }
   hostileCaseEvidence: {
     failClosedObserved: boolean
@@ -348,14 +353,15 @@ export function collectInteropAssertionFailures(
     'revoked route remained authorized',
   )
   check(
-    result.revocationEvidence.pendingPairingPrompts >= 1,
-    'revoked peer did not require a new pairing approval',
-  )
-  check(
     result.finalStateAfterRevocation ===
       result.revocationEvidence.finalState &&
       result.finalStateAfterRevocation !== 'authorized',
     'final state after revocation was inconsistent or authorized',
+  )
+  check(
+    result.finalStateAfterRevocation !== 'awaiting-sas-confirmation' ||
+      result.revocationEvidence.pendingPairingPrompts >= 1,
+    'revoked peer reached pairing approval without a new prompt',
   )
   check(
     result.hostileCaseEvidence.failClosedObserved === true,

@@ -170,6 +170,26 @@ type MeshInteropContractReport = Record<string, unknown> & {
   httpFetchCalls: string[];
   noHttpFetchTransportUsed: boolean;
 };
+export type DesktopLiveRevocationSnapshot = {
+  readonly state: string;
+  readonly pendingPairing?: unknown;
+};
+
+export type DesktopLiveRevocationObservation = {
+  readonly snapshot: DesktopLiveRevocationSnapshot;
+  readonly pendingPairingPrompts: number;
+  readonly elapsedMs: number;
+  readonly timeoutMs: number;
+  readonly timedOut: boolean;
+};
+
+export type DesktopLiveRevocationObservationOptions = {
+  readonly snapshot: () => DesktopLiveRevocationSnapshot;
+  readonly snapshots: DesktopLiveRevocationSnapshot[];
+  readonly startIndex: number;
+  readonly timeoutMs: number;
+  readonly intervalMs?: number;
+};
 
 type DesktopLiveNodeRole = "remote-console" | "mesh-node";
 
@@ -711,14 +731,19 @@ async function runMeshInteropContract({
     autoConfirmPairing = false;
     await runtime.peer.disconnect("desktop live revoked credential reconnect probe").catch(() => undefined);
     await runtime.peer.connect(profile);
-    await sleep(Math.min(2500, Math.max(1200, ready.timeoutMs / 8)));
-    const revokedSnapshot = runtime.peer.snapshot();
-    const revokedPendingPairing = countPendingPairing(snapshots, revokedStart);
+    const revocationObservation = await waitForPostRevocationPairingObservation({
+      snapshot: () => runtime.peer.snapshot(),
+      snapshots,
+      startIndex: revokedStart,
+      timeoutMs: ready.timeoutMs,
+    });
+    const revokedSnapshot = revocationObservation.snapshot;
+    const revokedPendingPairing = revocationObservation.pendingPairingPrompts;
 
     const snapshot = runtime.peer.snapshot();
     return {
       lane: ready.lane,
-      authorized: snapshot.state === "authorized" || revokedSnapshot.state === "awaiting-sas-confirmation",
+      authorized: authorizedSnapshot.state === "authorized",
       finalStateAfterRevocation: revokedSnapshot.state,
       icePathCategory: [...snapshots].reverse().find((item) => item.icePathCategory !== "unknown")?.icePathCategory ?? snapshot.icePathCategory,
       selectedCandidatePair,
@@ -814,6 +839,11 @@ async function runMeshInteropContract({
         finalState: revokedSnapshot.state,
         pendingPairingPrompts: revokedPendingPairing,
         routeAuthorizedAfterRevocation: revokedSnapshot.state === "authorized",
+        observation: {
+          elapsedMs: revocationObservation.elapsedMs,
+          timeoutMs: revocationObservation.timeoutMs,
+          timedOut: revocationObservation.timedOut,
+        },
       },
       hostileCaseEvidence: {
         liveMalformedFrames: "not injected in desktop live lane to avoid destabilizing shared DataChannel; see unitVectorTests in aggregate report",
@@ -1359,6 +1389,52 @@ async function optionalFirstEvent<T>(iterable: AsyncIterable<T>, timeoutMs: numb
 
 function countPendingPairing(snapshots: Snapshot[], startIndex = 0): number {
   return snapshots.slice(startIndex).filter((item) => Boolean(item.pendingPairing)).length;
+}
+
+export async function waitForPostRevocationPairingObservation(
+  options: DesktopLiveRevocationObservationOptions,
+): Promise<DesktopLiveRevocationObservation> {
+  const intervalMs = options.intervalMs ?? 100;
+  const startedAt = Date.now();
+  const deadline = startedAt + options.timeoutMs;
+  let lastSnapshot = options.snapshot();
+  while (true) {
+    lastSnapshot = options.snapshot();
+    const pendingPairingPrompts = countRevocationPendingPairingPrompts(
+      options.snapshots,
+      options.startIndex,
+      lastSnapshot,
+    );
+    if (lastSnapshot.state === "authorized" || (lastSnapshot.state === "awaiting-sas-confirmation" && pendingPairingPrompts > 0)) {
+      return {
+        snapshot: lastSnapshot,
+        pendingPairingPrompts,
+        elapsedMs: Date.now() - startedAt,
+        timeoutMs: options.timeoutMs,
+        timedOut: false,
+      };
+    }
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      return {
+        snapshot: lastSnapshot,
+        pendingPairingPrompts,
+        elapsedMs: Date.now() - startedAt,
+        timeoutMs: options.timeoutMs,
+        timedOut: true,
+      };
+    }
+    await sleep(Math.min(intervalMs, remainingMs));
+  }
+}
+
+function countRevocationPendingPairingPrompts(
+  snapshots: DesktopLiveRevocationSnapshot[],
+  startIndex: number,
+  current: DesktopLiveRevocationSnapshot,
+): number {
+  const observed = snapshots.slice(startIndex).filter((item) => Boolean(item.pendingPairing)).length;
+  return observed > 0 || !current.pendingPairing ? observed : 1;
 }
 
 function signalingIdFactory(signalingId: string): () => string {

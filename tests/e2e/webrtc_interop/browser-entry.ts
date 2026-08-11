@@ -67,6 +67,14 @@ export type InteropBrowserConfig = {
 
 type Snapshot = ReturnType<ReturnType<typeof createBrowserWebRtcAuroraRuntime>['peer']['snapshot']>
 
+type RevocationObservation = {
+  snapshot: Snapshot
+  pendingPairingPrompts: number
+  elapsedMs: number
+  timeoutMs: number
+  timedOut: boolean
+}
+
 type PeerConnectionDiagnostic = {
   at: string
   connectionId: number
@@ -308,6 +316,48 @@ async function optionalFirstEvent<T>(iterable: AsyncIterable<T>, timeoutMs: numb
 
 function countPendingPairing(snapshots: Snapshot[], startIndex = 0): number {
   return snapshots.slice(startIndex).filter((item) => Boolean(item.pendingPairing)).length
+}
+
+async function waitForPostRevocationObservation(
+  snapshot: () => Snapshot,
+  snapshots: Snapshot[],
+  startIndex: number,
+  timeoutMs: number,
+  intervalMs = 100
+): Promise<RevocationObservation> {
+  const startedAt = Date.now()
+  const deadline = startedAt + timeoutMs
+  let lastSnapshot = snapshot()
+  while (true) {
+    lastSnapshot = snapshot()
+    const observedPrompts = countPendingPairing(snapshots, startIndex)
+    const pendingPairingPrompts = observedPrompts > 0 || !lastSnapshot.pendingPairing
+      ? observedPrompts
+      : 1
+    if (
+      lastSnapshot.state === 'authorized' ||
+      (lastSnapshot.state === 'awaiting-sas-confirmation' && pendingPairingPrompts > 0)
+    ) {
+      return {
+        snapshot: lastSnapshot,
+        pendingPairingPrompts,
+        elapsedMs: Date.now() - startedAt,
+        timeoutMs,
+        timedOut: false
+      }
+    }
+    const remainingMs = deadline - Date.now()
+    if (remainingMs <= 0) {
+      return {
+        snapshot: lastSnapshot,
+        pendingPairingPrompts,
+        elapsedMs: Date.now() - startedAt,
+        timeoutMs,
+        timedOut: true
+      }
+    }
+    await sleep(Math.min(intervalMs, remainingMs))
+  }
 }
 
 function signalingIdFactory(signalingId: string): () => string {
@@ -825,15 +875,20 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
     autoConfirmPairing = false
     await runtime.peer.disconnect('g009 revoked credential reconnect probe').catch(() => undefined)
     await runtime.peer.connect(profile)
-    await sleep(Math.min(2500, Math.max(1200, config.timeoutMs / 8)))
-    const revokedSnapshot = runtime.peer.snapshot()
-    const revokedPendingPairing = countPendingPairing(snapshots, revokedStart)
+    const revocationObservation = await waitForPostRevocationObservation(
+      () => runtime.peer.snapshot(),
+      snapshots,
+      revokedStart,
+      config.timeoutMs
+    )
+    const revokedSnapshot = revocationObservation.snapshot
+    const revokedPendingPairing = revocationObservation.pendingPairingPrompts
     recordInteropProgress('revocation-complete', revokedSnapshot)
 
     const snapshot = runtime.peer.snapshot()
     return {
       lane: config.lane,
-      authorized: snapshot.state === 'authorized' || revokedSnapshot.state === 'awaiting-sas-confirmation',
+      authorized: authorizedSnapshot.state === 'authorized',
       finalStateAfterRevocation: revokedSnapshot.state,
       icePathCategory: [...snapshots].reverse().find((item) => item.icePathCategory !== 'unknown')?.icePathCategory ?? snapshot.icePathCategory,
       selectedCandidatePair,
@@ -924,7 +979,12 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
         revokeResult,
         finalState: revokedSnapshot.state,
         pendingPairingPrompts: revokedPendingPairing,
-        routeAuthorizedAfterRevocation: revokedSnapshot.state === 'authorized'
+        routeAuthorizedAfterRevocation: revokedSnapshot.state === 'authorized',
+        observation: {
+          elapsedMs: revocationObservation.elapsedMs,
+          timeoutMs: revocationObservation.timeoutMs,
+          timedOut: revocationObservation.timedOut
+        }
       },
       hostileCaseEvidence: {
         liveMalformedFrames: 'not injected in browser live lane to avoid destabilizing shared DataChannel; see unitVectorTests in aggregate report',

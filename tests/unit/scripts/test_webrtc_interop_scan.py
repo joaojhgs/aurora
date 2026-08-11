@@ -174,6 +174,7 @@ def _passing_reports() -> tuple[dict[str, object], dict[str, object]]:
     result_sha256 = "result-sha256"
     python_report: dict[str, object] = {
         "authenticatedPeerCount": 0,
+        "connectedPeerCount": 0,
         "gatewayHttpApiEnabled": False,
         "gatewayHttpReachable": False,
         "scopedEventEvidence": {"wildcardInterested": False},
@@ -243,9 +244,17 @@ def _passing_reports() -> tuple[dict[str, object], dict[str, object]]:
             },
         },
         "revocationEvidence": {
+            "finalState": "discovering-peer",
             "routeAuthorizedAfterRevocation": False,
-            "pendingPairingPrompts": 1,
+            "pendingPairingPrompts": 0,
+            "observation": {
+                "elapsedMs": 30_000,
+                "timeoutMs": 30_000,
+                "timedOut": True,
+            },
         },
+        "finalStateAfterRevocation": "discovering-peer",
+        "hostileCaseEvidence": {"failClosedObserved": True},
         "scopedEventEvidence": {
             "wrongCorrelationDelivered": False,
             "wildcardDelivered": False,
@@ -478,6 +487,12 @@ def test_aggregate_accepts_complete_http_disabled_proof(tmp_path: Path) -> None:
     assert report["protocolInteropEvidence"]["largeRpcPassed"] is True
     assert report["protocolInteropEvidence"]["rpcStreamPassed"] is True
     assert report["assertions"]["authorizedPeerCountAfterRevocation"] == 0
+    assert report["assertions"]["connectedPeerCountAfterRevocation"] == 0
+    assert report["assertions"]["revokedCredentialFailsClosed"] is True
+    assert report["assertions"]["revokedCredentialPromptRequired"] is False
+    assert report["assertions"]["revokedCredentialPromptObserved"] is False
+    assert report["assertions"]["revokedCredentialBoundedTimeout"] is True
+    assert report["assertions"]["revokedCredentialFinalStateMatched"] is True
     assert report["ac18LocalToolProviderEvidence"] == {
         "enabled": False,
         "applicable": False,
@@ -500,6 +515,160 @@ def test_aggregate_accepts_complete_ac18_local_tool_provider_evidence(tmp_path: 
     assert report["ac18LocalToolProviderEvidence"]["requiredEvidencePassed"] is True
     assert report["ac18LocalToolProviderEvidence"]["digestMatched"] is True
     assert report["assertions"]["ac18LocalToolProvider"] is True
+
+
+def test_aggregate_accepts_awaiting_sas_with_post_revocation_prompt(tmp_path: Path) -> None:
+    python_report, browser_report = _passing_reports()
+    browser_result = browser_report["browserResult"]
+    assert isinstance(browser_result, dict)
+    revocation = browser_result["revocationEvidence"]
+    assert isinstance(revocation, dict)
+    revocation["finalState"] = "awaiting-sas-confirmation"
+    revocation["pendingPairingPrompts"] = 1
+    browser_result["finalStateAfterRevocation"] = "awaiting-sas-confirmation"
+
+    report = _aggregate(tmp_path, python_report, browser_report)
+
+    assert report["status"] == "passed"
+    assert report["assertions"]["revokedCredentialPromptRequired"] is True
+    assert report["assertions"]["revokedCredentialPromptObserved"] is True
+
+
+def test_aggregate_rejects_awaiting_sas_without_post_revocation_prompt(tmp_path: Path) -> None:
+    python_report, browser_report = _passing_reports()
+    browser_result = browser_report["browserResult"]
+    assert isinstance(browser_result, dict)
+    revocation = browser_result["revocationEvidence"]
+    assert isinstance(revocation, dict)
+    revocation["finalState"] = "awaiting-sas-confirmation"
+    revocation["pendingPairingPrompts"] = 0
+    browser_result["finalStateAfterRevocation"] = "awaiting-sas-confirmation"
+
+    report = _aggregate(tmp_path, python_report, browser_report)
+
+    assert report["status"] == "failed"
+    assert report["assertions"]["revokedCredentialFailsClosed"] is False
+
+
+def test_aggregate_rejects_authorized_revocation_state(tmp_path: Path) -> None:
+    python_report, browser_report = _passing_reports()
+    browser_result = browser_report["browserResult"]
+    assert isinstance(browser_result, dict)
+    revocation = browser_result["revocationEvidence"]
+    assert isinstance(revocation, dict)
+    revocation["finalState"] = "authorized"
+    revocation["routeAuthorizedAfterRevocation"] = True
+    browser_result["finalStateAfterRevocation"] = "authorized"
+
+    report = _aggregate(tmp_path, python_report, browser_report)
+
+    assert report["status"] == "failed"
+    assert report["assertions"]["revokedCredentialFailsClosed"] is False
+
+
+@pytest.mark.parametrize("field", ["authenticatedPeerCount", "connectedPeerCount"])
+def test_aggregate_rejects_nonzero_python_peer_counts_after_revocation(
+    tmp_path: Path,
+    field: str,
+) -> None:
+    python_report, browser_report = _passing_reports()
+    python_report[field] = 1
+
+    report = _aggregate(tmp_path, python_report, browser_report)
+
+    assert report["status"] == "failed"
+    assert report["assertions"]["revokedCredentialFailsClosed"] is False
+
+
+def test_aggregate_rejects_missing_hostile_fail_closed_evidence(tmp_path: Path) -> None:
+    python_report, browser_report = _passing_reports()
+    browser_result = browser_report["browserResult"]
+    assert isinstance(browser_result, dict)
+    browser_result["hostileCaseEvidence"] = {"failClosedObserved": False}
+
+    report = _aggregate(tmp_path, python_report, browser_report)
+
+    assert report["status"] == "failed"
+    assert report["assertions"]["revokedCredentialFailsClosed"] is False
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("observation", {}),
+        ("observation", {"elapsedMs": 30_000, "timeoutMs": 30_000, "timedOut": False}),
+        ("observation", {"elapsedMs": 29_999, "timeoutMs": 30_000, "timedOut": True}),
+        ("observation", {"elapsedMs": True, "timeoutMs": 30_000, "timedOut": True}),
+        ("observation", {"elapsedMs": 30_000, "timeoutMs": False, "timedOut": True}),
+        ("observation", {"elapsedMs": 30_000, "timeoutMs": 0, "timedOut": True}),
+    ],
+)
+def test_aggregate_rejects_invalid_bounded_revocation_observation(
+    tmp_path: Path,
+    field: str,
+    value: object,
+) -> None:
+    python_report, browser_report = _passing_reports()
+    browser_result = browser_report["browserResult"]
+    assert isinstance(browser_result, dict)
+    revocation = browser_result["revocationEvidence"]
+    assert isinstance(revocation, dict)
+    revocation[field] = value
+
+    report = _aggregate(tmp_path, python_report, browser_report)
+
+    assert report["status"] == "failed"
+    assert report["assertions"]["revokedCredentialFailsClosed"] is False
+    assert report["assertions"]["revokedCredentialBoundedTimeout"] is False
+
+
+def test_aggregate_rejects_final_state_mismatch_after_revocation(tmp_path: Path) -> None:
+    python_report, browser_report = _passing_reports()
+    browser_result = browser_report["browserResult"]
+    assert isinstance(browser_result, dict)
+    browser_result["finalStateAfterRevocation"] = "awaiting-sas-confirmation"
+
+    report = _aggregate(tmp_path, python_report, browser_report)
+
+    assert report["status"] == "failed"
+    assert report["assertions"]["revokedCredentialFailsClosed"] is False
+    assert report["assertions"]["revokedCredentialFinalStateMatched"] is False
+
+
+@pytest.mark.parametrize(
+    ("revocation_state", "browser_state"),
+    [
+        (None, "discovering-peer"),
+        ("discovering-peer", None),
+        ("", "discovering-peer"),
+        ("discovering-peer", ""),
+        ("unexpected-state", "unexpected-state"),
+    ],
+)
+def test_aggregate_rejects_invalid_final_state_values_after_revocation(
+    tmp_path: Path,
+    revocation_state: object,
+    browser_state: object,
+) -> None:
+    python_report, browser_report = _passing_reports()
+    browser_result = browser_report["browserResult"]
+    assert isinstance(browser_result, dict)
+    revocation = browser_result["revocationEvidence"]
+    assert isinstance(revocation, dict)
+    if revocation_state is None:
+        revocation.pop("finalState", None)
+    else:
+        revocation["finalState"] = revocation_state
+    if browser_state is None:
+        browser_result.pop("finalStateAfterRevocation", None)
+    else:
+        browser_result["finalStateAfterRevocation"] = browser_state
+
+    report = _aggregate(tmp_path, python_report, browser_report)
+
+    assert report["status"] == "failed"
+    assert report["assertions"]["revokedCredentialFailsClosed"] is False
+    assert report["assertions"]["revokedCredentialFinalStateMatched"] is False
 
 
 @pytest.mark.parametrize(

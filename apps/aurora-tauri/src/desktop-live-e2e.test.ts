@@ -13,6 +13,8 @@ import {
   resolveDesktopLivePeerConnectionPrimitive,
   retryDesktopProviderReadiness,
   validateDesktopLiveE2ePayload,
+  waitForPostRevocationPairingObservation,
+  type DesktopLiveRevocationSnapshot,
   type DesktopLiveE2ePayload,
   type DesktopLiveE2eReport,
 } from "./desktop-live-e2e";
@@ -401,6 +403,86 @@ describe("desktop live E2E WebView hook", () => {
       1,
     )).rejects.toBe(failure);
     expect(attempts).toBe(1);
+  });
+
+  it("waits past the old fixed revocation window until a new pairing prompt is observed", async () => {
+    vi.useFakeTimers();
+    try {
+      const snapshots: DesktopLiveRevocationSnapshot[] = [];
+      let current: DesktopLiveRevocationSnapshot = { state: "discovering-peer" };
+      setTimeout(() => {
+        current = { state: "awaiting-sas-confirmation", pendingPairing: { peerId: "python-gateway-g009" } };
+        snapshots.push(current);
+      }, 3_000);
+
+      const observing = waitForPostRevocationPairingObservation({
+        snapshot: () => current,
+        snapshots,
+        startIndex: 0,
+        timeoutMs: 5_000,
+        intervalMs: 100,
+      });
+      await vi.advanceTimersByTimeAsync(2_500);
+      await vi.advanceTimersByTimeAsync(600);
+
+      await expect(observing).resolves.toMatchObject({
+        snapshot: { state: "awaiting-sas-confirmation" },
+        pendingPairingPrompts: 1,
+        timedOut: false,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns immediately if a revoked credential becomes authorized", async () => {
+    vi.useFakeTimers();
+    try {
+      let current: DesktopLiveRevocationSnapshot = { state: "discovering-peer" };
+      setTimeout(() => {
+        current = { state: "authorized" };
+      }, 300);
+
+      const observing = waitForPostRevocationPairingObservation({
+        snapshot: () => current,
+        snapshots: [],
+        startIndex: 0,
+        timeoutMs: 5_000,
+        intervalMs: 100,
+      });
+      await vi.advanceTimersByTimeAsync(400);
+
+      await expect(observing).resolves.toMatchObject({
+        snapshot: { state: "authorized" },
+        timedOut: false,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("observes a full bounded window when revocation remains fail-closed while discovering", async () => {
+    vi.useFakeTimers();
+    try {
+      const observing = waitForPostRevocationPairingObservation({
+        snapshot: () => ({ state: "discovering-peer" }),
+        snapshots: [],
+        startIndex: 0,
+        timeoutMs: 1_000,
+        intervalMs: 100,
+      });
+      await vi.advanceTimersByTimeAsync(1_100);
+
+      await expect(observing).resolves.toMatchObject({
+        snapshot: { state: "discovering-peer" },
+        pendingPairingPrompts: 0,
+        elapsedMs: 1_000,
+        timeoutMs: 1_000,
+        timedOut: true,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not retry conflicting 403 failures with nested provider readiness text", async () => {

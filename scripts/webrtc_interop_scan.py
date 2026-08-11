@@ -18,6 +18,22 @@ SECRET_PATTERNS = {
     "raw_audio_hint": re.compile(r"(?i)(audio/(wav|mpeg|ogg)|base64audio|raw_audio|pcm16)"),
 }
 
+PEER_SESSION_STATES = {
+    "idle",
+    "deriving-keys",
+    "signaling-connecting",
+    "discovering-peer",
+    "negotiating",
+    "channel-open",
+    "pairing-required",
+    "reconnect-authenticating",
+    "awaiting-sas-confirmation",
+    "authorized",
+    "reconnecting",
+    "closed",
+    "failed",
+}
+
 
 def load(path: Path) -> Any:
     return json.loads(path.read_text()) if path.exists() else {}
@@ -420,6 +436,47 @@ def build_interop_report(
         and python_report.get("gatewayHttpReachable") is False
     )
     authorized_peer_count_after_revocation = python_report.get("authenticatedPeerCount")
+    connected_peer_count_after_revocation = python_report.get("connectedPeerCount")
+    revocation_final_state = revocation.get("finalState")
+    browser_final_state_after_revocation = br.get("finalStateAfterRevocation")
+    revocation_final_state_valid = (
+        isinstance(revocation_final_state, str)
+        and revocation_final_state in PEER_SESSION_STATES
+        and isinstance(browser_final_state_after_revocation, str)
+        and browser_final_state_after_revocation in PEER_SESSION_STATES
+        and browser_final_state_after_revocation == revocation_final_state
+    )
+    revocation_observation = revocation.get("observation") or {}
+    revocation_prompt_required = revocation_final_state == "awaiting-sas-confirmation"
+    revocation_prompt_ok = (
+        not revocation_prompt_required or revocation.get("pendingPairingPrompts", 0) >= 1
+    )
+    revocation_timeout_elapsed_ms = revocation_observation.get("elapsedMs")
+    revocation_timeout_ms = revocation_observation.get("timeoutMs")
+    revocation_bounded_timeout_ok = (
+        isinstance(revocation_timeout_elapsed_ms, (int, float))
+        and not isinstance(revocation_timeout_elapsed_ms, bool)
+        and isinstance(revocation_timeout_ms, (int, float))
+        and not isinstance(revocation_timeout_ms, bool)
+        and revocation_observation.get("timedOut") is True
+        and revocation_timeout_ms > 0
+        and revocation_timeout_elapsed_ms >= revocation_timeout_ms
+    )
+    if revocation_final_state == "authorized":
+        revocation_terminal_ok = False
+    elif revocation_prompt_required:
+        revocation_terminal_ok = revocation_prompt_ok
+    else:
+        revocation_terminal_ok = revocation_bounded_timeout_ok
+    revoked_credential_fail_closed = (
+        revocation.get("routeAuthorizedAfterRevocation") is False
+        and revocation_final_state_valid
+        and revocation_final_state != "authorized"
+        and (br.get("hostileCaseEvidence") or {}).get("failClosedObserved") is True
+        and authorized_peer_count_after_revocation == 0
+        and connected_peer_count_after_revocation == 0
+        and revocation_terminal_ok
+    )
     required_ok = (
         browser_report.get("status") == "passed"
         and scan["passed"]
@@ -436,9 +493,7 @@ def build_interop_report(
         and (mutation.get("uncertainLossWindow") or {}).get("startedAckBeforeDisconnect") is True
         and (mutation.get("uncertainLossWindow") or {}).get("disconnectBeforeResponseSettled")
         is True
-        and revocation.get("routeAuthorizedAfterRevocation") is False
-        and revocation.get("pendingPairingPrompts", 0) >= 1
-        and authorized_peer_count_after_revocation == 0
+        and revoked_credential_fail_closed
         and scoped.get("wrongCorrelationDelivered") is False
         and scoped.get("wildcardDelivered") is False
         and (python_report.get("scopedEventEvidence") or {}).get("wildcardInterested") is False
@@ -513,6 +568,7 @@ def build_interop_report(
         "assertions": {
             "rtcStarted": python_report.get("rtcStarted"),
             "authorizedPeerCountAfterRevocation": authorized_peer_count_after_revocation,
+            "connectedPeerCountAfterRevocation": connected_peer_count_after_revocation,
             "registryReadOverDataChannel": (browser_report.get("browserResult") or {}).get(
                 "registryModuleCount", 0
             )
@@ -527,9 +583,11 @@ def build_interop_report(
             "ttsEventOverDataChannel": bool(tts_event),
             "ttsEventSentByPython": python_report.get("ttsEventSent"),
             "reconnectWithoutSas": reconnect.get("authorizedWithoutSas"),
-            "revokedCredentialFailsClosed": revocation.get("routeAuthorizedAfterRevocation")
-            is False
-            and revocation.get("pendingPairingPrompts", 0) >= 1,
+            "revokedCredentialFailsClosed": revoked_credential_fail_closed,
+            "revokedCredentialPromptRequired": revocation_prompt_required,
+            "revokedCredentialPromptObserved": revocation.get("pendingPairingPrompts", 0) >= 1,
+            "revokedCredentialBoundedTimeout": revocation_bounded_timeout_ok,
+            "revokedCredentialFinalStateMatched": revocation_final_state_valid,
             "mutationAtMostOnce": mutation.get("executionCountAtMostOnce"),
             "mutationUncertainLossWindow": (mutation.get("uncertainLossWindow") or {}).get(
                 "disconnectBeforeResponseSettled"
