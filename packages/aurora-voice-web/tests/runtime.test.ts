@@ -126,6 +126,43 @@ describe('AuroraVoiceWebRuntime', () => {
     await next.cancel()
   })
 
+  it('keeps cancellation authoritative while the browser audio source is still starting', async () => {
+    const worker = new RecordingVoiceWorkerHost()
+    const source = new DeferredStartSource()
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker, pcmSource: source })
+
+    const starting = runtime.start()
+    await source.waitUntilStarting()
+    await runtime.cancel('user_cancelled')
+    source.finishStarting()
+
+    await expect(starting).rejects.toMatchObject({ code: 'start_failed' })
+    expect(source.calls.filter((call) => call === 'cancel')).not.toHaveLength(0)
+    expect(worker.commandsOf('cancel').length).toBeGreaterThanOrEqual(1)
+    expect(runtime.snapshot()).toMatchObject({ state: 'cancelled', sessionId: null, queuedBytes: 0 })
+
+    const next = new AuroraVoiceWebRuntime({ ownerId: 'owner-b', worker: new RecordingVoiceWorkerHost() })
+    await expect(next.start()).resolves.toMatchObject({ ownerId: 'owner-b' })
+    await next.cancel()
+  })
+
+  it('does not let a cancelled stale start clear a newer session', async () => {
+    const worker = new RecordingVoiceWorkerHost()
+    const source = new DeferredFirstStartSource()
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker, pcmSource: source })
+
+    const staleStart = runtime.start()
+    await source.waitUntilStarting()
+    await runtime.cancel('user_cancelled')
+
+    await expect(runtime.start()).resolves.toMatchObject({ ownerId: 'owner-a', generation: 2 })
+    source.finishStarting()
+
+    await expect(staleStart).rejects.toMatchObject({ code: 'start_failed' })
+    expect(runtime.snapshot()).toMatchObject({ state: 'active', generation: 2, sessionId: 'owner-a:2' })
+    await runtime.cancel()
+  })
+
   it('attempts both host cleanup paths and clears state when stop or cancel fails', async () => {
     const stopSource = new FailingSource('stop')
     const stopWorker = new FailingWorkerHost(['stop'])
@@ -516,6 +553,49 @@ class FailingSource {
   async cancel(_sessionId: string): Promise<void> {
     this.calls.push('cancel')
     if (this.failMethod === 'cancel') throw new Error('cancel')
+  }
+}
+
+class DeferredStartSource {
+  readonly calls: string[] = []
+  private started: (() => void) | null = null
+  private release: (() => void) | null = null
+  private readonly startedPromise = new Promise<void>((resolve) => {
+    this.started = resolve
+  })
+  private readonly releasePromise = new Promise<void>((resolve) => {
+    this.release = resolve
+  })
+
+  async start(): Promise<void> {
+    this.calls.push('start')
+    this.started?.()
+    await this.releasePromise
+  }
+
+  async stop(): Promise<void> {
+    this.calls.push('stop')
+  }
+
+  async cancel(): Promise<void> {
+    this.calls.push('cancel')
+  }
+
+  waitUntilStarting(): Promise<void> {
+    return this.startedPromise
+  }
+
+  finishStarting(): void {
+    this.release?.()
+  }
+}
+
+class DeferredFirstStartSource extends DeferredStartSource {
+  private startCount = 0
+
+  override async start(): Promise<void> {
+    this.startCount += 1
+    if (this.startCount === 1) await super.start()
   }
 }
 

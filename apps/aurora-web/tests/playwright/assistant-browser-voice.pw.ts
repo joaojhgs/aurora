@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 test('hosted Assistant push-to-talk completes a bounded demo turn through native browser capture', async ({ page }, testInfo) => {
   testInfo.annotations.push({
     type: 'evidence-boundary',
-    description: 'Uses Chromium fake media through native getUserMedia, AudioContext, AudioWorklet, and the hosted Next Assistant browser path with built @aurora/voice-web Worker/WASM assets. The explicit demo transport returns a deterministic transcript. This is not a production-server, physical-microphone, OS permission-prompt, Android-device, acoustic-recognition, or local-browser-STT check.',
+    description: 'Uses Chromium fake media through native getUserMedia, AudioContext, AudioWorklet, and the production-built hosted Next Assistant path with built @aurora/voice-web Worker/WASM assets. The explicit demo transport returns a deterministic transcript. This is not a physical-microphone, OS permission-prompt, Android-device, acoustic-recognition, or local-browser-STT check.',
   })
 
   const consoleErrors: string[] = []
@@ -236,6 +236,38 @@ test('hosted Assistant push-to-talk completes a bounded demo turn through native
   await page.screenshot({ path: screenshot, fullPage: true })
   await testInfo.attach('hosted-browser-voice-complete', {
     path: screenshot,
+    contentType: 'image/png',
+  })
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.getByRole('form', { name: 'Prompt composer' })).toBeVisible()
+  const mobileComposerLayout = await page.locator('.aui-composer-control-row').evaluate((row) => {
+    const selectors = [
+      '[aria-label="Attach context"]',
+      '[data-voice-access]',
+      '.aui-composer-input-shell',
+      '[aria-label="Push to talk"]',
+      '.aui-composer-send',
+    ]
+    const rects = selectors.map((selector) => row.querySelector(selector)?.getBoundingClientRect() ?? null)
+    const tops = rects.flatMap((rect) => rect === null ? [] : [rect.top])
+    return {
+      controlsPresent: rects.every((rect) => rect !== null),
+      maximumTopDifference: tops.length === 0 ? Number.POSITIVE_INFINITY : Math.max(...tops) - Math.min(...tops),
+      rowFits: row.scrollWidth <= row.clientWidth,
+      documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    }
+  })
+  expect(mobileComposerLayout).toMatchObject({
+    controlsPresent: true,
+    rowFits: true,
+    documentFits: true,
+  })
+  expect(mobileComposerLayout.maximumTopDifference).toBeLessThanOrEqual(2)
+  const mobileScreenshot = testInfo.outputPath('assistant-browser-voice-mobile.png')
+  await page.screenshot({ path: mobileScreenshot, fullPage: true })
+  await testInfo.attach('hosted-browser-voice-mobile-viewport', {
+    path: mobileScreenshot,
     contentType: 'image/png',
   })
 })

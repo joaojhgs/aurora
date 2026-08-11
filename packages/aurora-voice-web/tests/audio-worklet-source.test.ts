@@ -183,6 +183,35 @@ describe('BrowserAudioWorkletPcmSource', () => {
     expect(lateStream.track.stopped).toBe(true)
   })
 
+  it('cancels a pending start before a late microphone stream can become active', async () => {
+    const lateStream = new FakeMediaStream()
+    let resolveStream!: (stream: MediaStream) => void
+    let contextCreated = false
+    const source = new BrowserAudioWorkletPcmSource({
+      mediaDevices: {
+        getUserMedia: async () => await new Promise<MediaStream>((resolve) => {
+          resolveStream = resolve
+        })
+      },
+      audioContextFactory: () => {
+        contextCreated = true
+        return new FakeBrowserPorts().context
+      },
+      workletNodeFactory: () => new FakeBrowserPorts().workletNode,
+      processorUrl: 'processor.js',
+      startTimeoutMs: 1_000
+    })
+
+    const starting = source.start(session(), new RecordingSink())
+    await nextTurn()
+    await source.cancel('session-a')
+    resolveStream(lateStream as unknown as MediaStream)
+
+    await expect(starting).rejects.toMatchObject({ code: 'audio_source_start_failed' })
+    expect(lateStream.track.stopped).toBe(true)
+    expect(contextCreated).toBe(false)
+  })
+
   it('cancels idempotently and erases queued tail without flushing', async () => {
     const ports = new FakeBrowserPorts()
     const sink = new RecordingSink()

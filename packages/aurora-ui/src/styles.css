@@ -11336,7 +11336,7 @@ body { font-size:14px;line-height:1.45 }
 }
 .aui-composer-control-row {
   display:grid;
-  grid-template-columns:2.65rem minmax(0,1fr) 2.65rem 2.65rem;
+  grid-template-columns:2.65rem 2.65rem minmax(0,1fr) 2.65rem 2.65rem;
   align-items:center;
   min-height:3.4rem;
   overflow:hidden;
@@ -11366,10 +11366,11 @@ body { font-size:14px;line-height:1.45 }
   transition:background-color 140ms ease,color 140ms ease,transform 100ms ease;
 }
 .aui-composer-control-row>.aui-composer-icon:first-child { grid-column:1;grid-row:1 }
-.aui-composer-control-row>.aui-composer-input-shell { grid-column:2;grid-row:1 }
+.aui-composer-control-row>.aui-composer-icon[data-voice-access] { grid-column:2;grid-row:1 }
+.aui-composer-control-row>.aui-composer-input-shell { grid-column:3;grid-row:1 }
 .aui-composer-control-row>.aui-composer-icon[aria-label="Push to talk"],
-.aui-composer-control-row>.aui-composer-icon[aria-label="Stop listening"] { grid-column:3;grid-row:1 }
-.aui-composer-control-row>.aui-composer-send { grid-column:4;grid-row:1 }
+.aui-composer-control-row>.aui-composer-icon[aria-label="Stop listening"] { grid-column:4;grid-row:1 }
+.aui-composer-control-row>.aui-composer-send { grid-column:5;grid-row:1 }
 .aui-composer-control-row>.aui-composer-icon { background:transparent;color:var(--aui-muted) }
 .aui-composer-control-row>.aui-composer-icon:not(:disabled):hover { background:rgb(255 255 255 / 0.055);color:var(--aui-ink) }
 .aui-composer-control-row>.aui-composer-icon[data-voice-state="listening"] { background:color-mix(in srgb,var(--aui-primary) 18%,transparent);color:var(--aui-primary) }
@@ -11408,12 +11409,13 @@ body { font-size:14px;line-height:1.45 }
 }
 .aui-assistant-form>.aui-composer-attachment-preview,
 .aui-assistant-form>.aui-composer-recorder-row { width:100%;max-width:var(--aui-chat-width);margin-inline:auto }
+.aui-composer-voice-recovery { width:100%;max-width:var(--aui-chat-width);margin:0.45rem auto 0;color:var(--aui-danger,#ef4444);font-size:0.78rem;line-height:1.4 }
 .aui-mobile-composer-note { width:100%;max-width:var(--aui-chat-width);margin-inline:auto }
 @media (max-width: 720px) {
   .aui-chat-workspace { --aui-chat-width:calc(100% - 2rem) }
   .aui-chat-scroller-content[data-slot="message-scroller-content"] { padding-inline:1rem }
   .aui-assistant-form { padding-inline:1rem }
-  .aui-composer-control-row { grid-template-columns:2.5rem minmax(0,1fr) 2.5rem 2.5rem;padding:0.25rem }
+  .aui-composer-control-row { grid-template-columns:2.5rem 2.5rem minmax(0,1fr) 2.5rem 2.5rem;padding:0.25rem }
   .aui-composer-control-row>.aui-composer-icon,.aui-composer-control-row>.aui-composer-send { width:2.5rem;height:2.5rem;min-height:2.5rem }
   .aui-chat-user .aui-chat-message-content { max-width:92% }
 }

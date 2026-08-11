@@ -21,12 +21,13 @@ export default defineConfig({
   retries: 0,
   reporter: [['list'], ['json', { outputFile: join(reportRoot, 'report.json') }]],
   webServer: {
-    command: 'pnpm exec next dev --hostname 127.0.0.1 --port 3427',
+    command: 'pnpm exec next build && pnpm exec next start --hostname 127.0.0.1 --port 3427',
     url: 'http://127.0.0.1:3427',
     reuseExistingServer: false,
     timeout: 120_000,
     env: {
       AURORA_WEB_DEMO_MODE: '1',
+      NEXT_TELEMETRY_DISABLED: '1',
       NEXT_PUBLIC_AURORA_WEB_DEMO_MODE: '1',
       NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: '1',
     },

@@ -75,6 +75,11 @@ interface ActiveBrowserAudioSession {
   closed: boolean
 }
 
+interface PendingBrowserAudioStart {
+  readonly sessionId: string
+  cancelled: boolean
+}
+
 export type AuroraBrowserAudioLifecycleLostReason = 'track_ended' | 'context_suspended'
 
 export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource {
@@ -90,6 +95,7 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
   private readonly maxTailMs: number
   private readonly onLifecycleLost: ((reason: AuroraBrowserAudioLifecycleLostReason) => void) | undefined
   private active: ActiveBrowserAudioSession | null = null
+  private pendingStart: PendingBrowserAudioStart | null = null
   private pendingStopAck: PendingAck | null = null
 
   constructor(options: AuroraBrowserAudioWorkletSourceOptions = {}) {
@@ -112,7 +118,7 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
   }
 
   async start(session: AuroraVoiceWebSession, sink: AuroraAudioWorkletPcmSink): Promise<void> {
-    if (this.active !== null) {
+    if (this.active !== null || this.pendingStart !== null) {
       throw new AuroraVoiceWebRuntimeError('audio_source_active', 'Voice capture is already active')
     }
     if (this.mediaDevices?.getUserMedia === undefined) {
@@ -123,6 +129,8 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
     let context: AuroraAudioContextLike | null = null
     let sourceNode: AuroraMediaStreamAudioSourceNodeLike | null = null
     let workletNode: AuroraAudioWorkletNodeLike | null = null
+    const pendingStart: PendingBrowserAudioStart = { sessionId: session.sessionId, cancelled: false }
+    this.pendingStart = pendingStart
 
     try {
       mediaStream = await getUserMediaWithLateStop(
@@ -130,9 +138,12 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
         this.startTimeoutMs,
         'audio_source_start_timeout'
       )
+      this.assertPendingStart(pendingStart)
       context = this.audioContextFactory({ latencyHint: 'interactive' })
       await withTimeout(context.audioWorklet.addModule(this.processorUrl), this.startTimeoutMs, 'audio_source_start_timeout')
+      this.assertPendingStart(pendingStart)
       await this.resumeContextIfSuspended(context)
+      this.assertPendingStart(pendingStart)
       sourceNode = context.createMediaStreamSource(mediaStream)
       workletNode = this.workletNodeFactory(context, AURORA_AUDIO_WORKLET_PROCESSOR_NAME, {
         numberOfInputs: 1,
@@ -165,6 +176,7 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
       }
       this.bindLifecycleLoss(active)
       sourceNode.connect(workletNode)
+      this.assertPendingStart(pendingStart)
       this.active = active
     } catch {
       safeDisconnect(sourceNode)
@@ -173,10 +185,13 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
       stopTracks(mediaStream)
       await safeCloseContext(context)
       throw new AuroraVoiceWebRuntimeError('audio_source_start_failed', 'Voice capture could not start')
+    } finally {
+      if (this.pendingStart === pendingStart) this.pendingStart = null
     }
   }
 
   async stop(sessionId: string): Promise<void> {
+    this.cancelPendingStart(sessionId)
     const active = this.active
     if (active === null || active.session.sessionId !== sessionId) return
     if (active.closed) return
@@ -196,6 +211,7 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
   }
 
   async cancel(sessionId: string): Promise<void> {
+    this.cancelPendingStart(sessionId)
     const active = this.active
     if (active === null || active.session.sessionId !== sessionId) return
     if (active.closed) return
@@ -203,6 +219,16 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
     active.assembler.cancel()
     this.bestEffortPostProcessorCancel(active, 'cancel')
     await this.cleanup(active)
+  }
+
+  private cancelPendingStart(sessionId: string): void {
+    if (this.pendingStart?.sessionId === sessionId) this.pendingStart.cancelled = true
+  }
+
+  private assertPendingStart(pendingStart: PendingBrowserAudioStart): void {
+    if (this.pendingStart !== pendingStart || pendingStart.cancelled) {
+      throw new AuroraVoiceWebRuntimeError('audio_source_start_cancelled', 'Voice capture start was cancelled')
+    }
   }
 
   private async handleWorkletMessage(active: ActiveBrowserAudioSession, data: unknown): Promise<void> {

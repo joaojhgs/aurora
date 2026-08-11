@@ -163,6 +163,8 @@ describe('Accessibility, responsive, and visual regression suite', () => {
     expect(css).toContain('.aui-shell-status')
     expect(css).toContain('.aui-chat-workspace')
     expect(css).toContain(':focus-visible')
+    expect(css).toContain('grid-template-columns:2.65rem 2.65rem minmax(0,1fr) 2.65rem 2.65rem')
+    expect(css).toContain('>.aui-composer-icon[data-voice-access] { grid-column:2;grid-row:1 }')
 
     writeJsonReport('responsive.json', {
       command: 'pnpm --filter @aurora/ui test:accessibility',

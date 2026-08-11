@@ -127,17 +127,21 @@ export class AuroraVoiceWebRuntime {
       ) {
         throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker is not available')
       }
-      const started = await this.worker.request({ type: 'start', session: this.session, capabilities: this.capabilities }, { timeoutMs: this.workerTimeoutMs })
-      validateAck(started, this.session.sessionId, this.session.generation, null)
+      this.assertStartStillCurrent(nextSession)
+      const started = await this.worker.request({ type: 'start', session: nextSession, capabilities: this.capabilities }, { timeoutMs: this.workerTimeoutMs })
+      this.assertStartStillCurrent(nextSession)
+      validateAck(started, nextSession.sessionId, nextSession.generation, null)
       workerStarted = true
-      await this.pcmSource?.start(this.session, { pushFrame: (frame) => this.pushFrame(frame) })
+      await this.pcmSource?.start(nextSession, { pushFrame: (frame) => this.pushFrame(frame) })
+      this.assertStartStillCurrent(nextSession)
       this.emit('session_started', null, null, 0, 0, 0, null)
-      return this.session
+      return nextSession
     } catch {
-      const failedSession = this.session
-      await this.bestEffortCancelHosts(failedSession, workerStarted, 'start_failed')
-      this.emit('error', null, this.generation, 0, 0, 0, 'start_failed')
-      this.clearSession('cancelled')
+      await this.bestEffortCancelHosts(nextSession, workerStarted, 'start_failed')
+      if (this.session === nextSession) {
+        this.emit('error', null, nextSession.generation, 0, 0, 0, 'start_failed')
+        this.clearSession('cancelled')
+      }
       throw new AuroraVoiceWebRuntimeError('start_failed', 'Voice session could not start')
     }
   }
@@ -384,6 +388,17 @@ export class AuroraVoiceWebRuntime {
       if (session !== null) validateAck(cancelled, session.sessionId, session.generation, null)
     } catch {
       // Best-effort cleanup; callers report the sanitized outer failure.
+    }
+  }
+
+  private assertStartStillCurrent(session: AuroraVoiceWebSession): void {
+    if (
+      this.session !== session ||
+      this.state !== 'active' ||
+      activeVoiceLock?.ownerId !== this.ownerId ||
+      activeVoiceLock.token !== this.lockToken
+    ) {
+      throw new AuroraVoiceWebRuntimeError('start_cancelled', 'Voice session start was cancelled')
     }
   }
 

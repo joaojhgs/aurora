@@ -128,6 +128,11 @@ describe('Assistant hosted browser voice runtime', () => {
     await clickButton(container, 'Open route details')
     expect(container.textContent).toContain('Wake while open')
     expect(container.textContent).not.toContain('Wake and background')
+    expect(container.textContent).toContain('Audio storage')
+    expect(container.textContent).toContain('Access duration')
+    expect(container.textContent).not.toContain('Session TTL')
+    expect(container.textContent).not.toContain('transient unless backend retention policy says otherwise')
+    expect(container.textContent).not.toContain('Audio route and consent')
     expect(findForbiddenProductionCopyTerms(`${localSpeechChip?.label ?? ''} ${localSpeechChip?.detail ?? ''}`)).toEqual([])
 
     await clickButton(container, 'Push to talk')
@@ -893,6 +898,24 @@ describe('Assistant hosted browser voice runtime', () => {
       .filter((value): value is string => Boolean(value))
       .join(' ')
     expect(findForbiddenProductionCopyTerms(`${visible} ${attributes}`)).toEqual([])
+  })
+
+  it('shows microphone recovery guidance next to the composer controls', async () => {
+    const runtime = createRuntimeMock({ capturedPcm: new Int16Array() })
+    runtime.start.mockRejectedValueOnce(new Error('/private/device/path'))
+    voiceRuntimeMock.create.mockReturnValue(runtime)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const container = renderAssistant(client, hostedSurface())
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-voice-recovery="true"]')?.textContent)
+        .toBe('Microphone capture failed. Try again.')
+    })
+    expect(container.textContent).not.toContain('/private/device/path')
   })
 
   it('routes desktop-thin focused voice only through the native desktop port', async () => {

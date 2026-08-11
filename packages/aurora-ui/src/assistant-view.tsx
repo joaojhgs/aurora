@@ -328,6 +328,12 @@ export interface AssistantVoiceModel {
   waveformBars: number[]
 }
 
+interface StreamedTtsAudioPlayback {
+  readonly audio: HTMLAudioElement
+  readonly url: string
+  released: boolean
+}
+
 const defaultStorageKey = 'aurora.assistant.session.v1'
 const emptyNativePermissionList: Array<{ name: string; granted: boolean }> = []
 const emptyNativeCapabilityList: Array<{ name: string; enabled: boolean }> = []
@@ -461,7 +467,7 @@ export function AssistantView({
   const speakingMessageIdRef = useRef<string | null>(null)
   const lastAssistantMessageIdRef = useRef<string | null>(null)
   const streamedTtsQueueRef = useRef<string[]>([])
-  const streamedTtsAudioRef = useRef<HTMLAudioElement | null>(null)
+  const streamedTtsAudioRef = useRef<StreamedTtsAudioPlayback | null>(null)
   function setSpeakingMessageId(next: string | null) {
     speakingMessageIdRef.current = next
     setSpeakingMessageIdState(next)
@@ -728,10 +734,13 @@ export function AssistantView({
       return
     }
     const audio = new Audio(nextUrl)
-    streamedTtsAudioRef.current = audio
+    const playback: StreamedTtsAudioPlayback = { audio, url: nextUrl, released: false }
+    streamedTtsAudioRef.current = playback
     const cleanup = () => {
-      if (streamedTtsAudioRef.current === audio) streamedTtsAudioRef.current = null
-      window.URL.revokeObjectURL(nextUrl)
+      if (playback.released) return
+      playback.released = true
+      if (streamedTtsAudioRef.current === playback) streamedTtsAudioRef.current = null
+      window.URL.revokeObjectURL(playback.url)
       void drainStreamedTtsAudioQueue()
     }
     audio.onended = cleanup
@@ -744,9 +753,17 @@ export function AssistantView({
   }
 
   function stopStreamedTtsPlayback() {
-    const activeAudio = streamedTtsAudioRef.current
+    const activePlayback = streamedTtsAudioRef.current
     streamedTtsAudioRef.current = null
-    activeAudio?.pause()
+    if (activePlayback && !activePlayback.released) {
+      activePlayback.released = true
+      activePlayback.audio.onended = null
+      activePlayback.audio.onerror = null
+      activePlayback.audio.pause()
+      activePlayback.audio.removeAttribute('src')
+      activePlayback.audio.load()
+      window.URL.revokeObjectURL(activePlayback.url)
+    }
     for (const url of streamedTtsQueueRef.current) {
       window.URL.revokeObjectURL(url)
     }
@@ -4047,6 +4064,9 @@ export function AssistantView({
                 <span className="aui-button-label">{primaryComposerLabel}</span>
               </button>
             </div>
+            {lastError && (voiceCaptureStatus === 'permission-denied' || voiceCaptureStatus === 'no-device' || voiceCaptureStatus === 'error') ? (
+              <p className="aui-composer-voice-recovery" data-voice-recovery="true" role="alert">{lastError}</p>
+            ) : null}
             <p className="aui-mobile-composer-note">
               Aurora uses this device by default. You can review another device before anything is sent.
             </p>
@@ -4247,8 +4267,10 @@ export function buildAssistantVoiceModel(input: {
     captureStatus: input.captureStatus,
     consentGranted: input.consentGranted,
     privacyClass: 'raw-audio',
-    retentionPolicy: remoteAudioRoute.disabled ? 'not retained: route unavailable' : 'transient unless backend retention policy says otherwise',
-    sessionTtl: input.consentGranted ? 'current UI session' : 'consent not granted',
+    retentionPolicy: remoteAudioRoute.disabled
+      ? 'Not stored because speech help is unavailable.'
+      : 'The connected device controls whether audio is saved.',
+    sessionTtl: input.consentGranted ? 'Until you leave or turn off access.' : 'Not allowed.',
     transport: input.client.transport.kind,
     platformTruth: 'This device microphone is used while Aurora is open.',
     visualizerSourceLabel: 'This device microphone',
@@ -4409,19 +4431,19 @@ function VoiceModePanel({
           </ul>
         </section>
 
-        <aside className="aui-voice-privacy" aria-label="Audio route privacy details">
-          <h3>Audio privacy</h3><span className="aui-sr-only">Route sheet</span>
+        <aside className="aui-voice-privacy" aria-label="Audio sharing details">
+          <h3>Audio privacy</h3><span className="aui-sr-only">Connection details</span>
           <dl>
-            <div><dt>Privacy class</dt><dd>{assistantPrivacyClassCopy(model.privacyClass)}</dd></div>
+            <div><dt>Audio type</dt><dd>{assistantPrivacyClassCopy(model.privacyClass)}</dd></div>
             <div><dt>Destination</dt><dd>{voiceDestinationCopy(model.targetLabel)}</dd></div>
             <div><dt>Connection</dt><dd>{productConnectionCopy(model.transport)}</dd></div>
-            <div><dt>Retention</dt><dd>{model.retentionPolicy}</dd></div>
-            <div><dt>Session TTL</dt><dd>{model.sessionTtl}</dd></div>
+            <div><dt>Audio storage</dt><dd>{model.retentionPolicy}</dd></div>
+            <div><dt>Access duration</dt><dd>{model.sessionTtl}</dd></div>
           </dl>
           <RouteSheet
             client={client}
-            title="Audio route and consent"
-            description="Microphone audio leaves this device only when the selected destination, consent, privacy indicator, and policy allow it."
+            title="Review audio sharing"
+            description="Aurora shares microphone audio only after you allow it and the selected device is available."
             payload={{
               audio_privacy_class: model.privacyClass,
               capture_state: model.captureStatus,

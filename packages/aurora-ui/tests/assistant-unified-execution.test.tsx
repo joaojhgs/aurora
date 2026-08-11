@@ -130,13 +130,15 @@ describe('unified Assistant execution controls', () => {
   it('plays read-aloud audio returned by Aurora on connected client surfaces', async () => {
     const synthesisPayloads: unknown[] = []
     const playedSources: string[] = []
+    const pausedSources: string[] = []
+    const revokedUrls = vi.fn()
     Object.defineProperty(window.URL, 'createObjectURL', {
       configurable: true,
       value: vi.fn(() => 'blob:aurora-read-aloud'),
     })
     Object.defineProperty(window.URL, 'revokeObjectURL', {
       configurable: true,
-      value: vi.fn(),
+      value: revokedUrls,
     })
     vi.stubGlobal('Audio', class {
       onended: (() => void) | null = null
@@ -145,7 +147,11 @@ describe('unified Assistant execution controls', () => {
       async play() {
         playedSources.push(this.src)
       }
-      pause() {}
+      pause() {
+        pausedSources.push(this.src)
+      }
+      removeAttribute() {}
+      load() {}
     })
     const provider: LightweightAssistantProvider = {
       async complete() {
@@ -186,6 +192,18 @@ describe('unified Assistant execution controls', () => {
       format: 'wav',
     }])
     expect(playedSources).toEqual(['blob:aurora-read-aloud'])
+
+    const stop = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.trim() === 'Stop')
+    if (!stop) throw new Error('missing stop read-aloud action')
+    await act(async () => {
+      stop.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+
+    expect(pausedSources).toEqual(['blob:aurora-read-aloud'])
+    expect(revokedUrls).toHaveBeenCalledWith('blob:aurora-read-aloud')
+    expect(revokedUrls).toHaveBeenCalledTimes(1)
   })
 
   it('keeps desktop-local read-aloud on the Python-owned speaker path', async () => {

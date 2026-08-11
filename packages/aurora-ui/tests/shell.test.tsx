@@ -1491,7 +1491,7 @@ describe('Aurora production shell', () => {
       captureStatus: 'listening',
       consentGranted: true
     })
-    expect(granted.sessionTtl).toBe('current UI session')
+    expect(granted.sessionTtl).toBe('Until you leave or turn off access.')
 
     const revoked = buildAssistantVoiceModel({
       client,
@@ -1500,7 +1500,7 @@ describe('Aurora production shell', () => {
       captureStatus: 'listening',
       consentGranted: false
     })
-    expect(revoked.sessionTtl).toBe('consent not granted')
+    expect(revoked.sessionTtl).toBe('Not allowed.')
 
     const deniedTransport = new MockAuroraTransport()
     deniedTransport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog('remote-denied'))
