@@ -260,27 +260,6 @@ export interface AssistantAttachmentDraft {
 
 export type VoiceCaptureStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'permission-denied' | 'no-device' | 'error'
 
-interface VoiceMediaRecorderCapture {
-  recorder: MediaRecorder
-  chunks: Blob[]
-  mimeType: string
-  acceptingData: boolean
-  stopped: Promise<void>
-  finish: () => void
-}
-
-interface VoiceRecordingSnapshot {
-  pcmChunks: Float32Array[]
-  pcmSampleRate: number
-  mediaChunks: Blob[]
-  mediaMimeType: string
-}
-
-interface VoiceWaveformStartResult {
-  visualizerStarted: boolean
-  pcmCaptureStarted: boolean
-}
-
 export interface VoiceCapabilityChip {
   id: string
   label: string
@@ -421,19 +400,6 @@ export function AssistantView({
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
   const attachmentInputRef = useRef<HTMLInputElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
-  const voiceStreamRef = useRef<MediaStream | null>(null)
-  const voiceAudioContextRef = useRef<AudioContext | null>(null)
-  const voiceAnalyserRef = useRef<AnalyserNode | null>(null)
-  const voiceMediaSourceRef = useRef<MediaStreamAudioSourceNode | null>(null)
-  const voiceScriptProcessorRef = useRef<ScriptProcessorNode | null>(null)
-  const voiceMediaRecorderCaptureRef = useRef<VoiceMediaRecorderCapture | null>(null)
-  const voicePcmChunksRef = useRef<Float32Array[]>([])
-  const voicePcmSampleRateRef = useRef(16_000)
-  const voicePartialTranscribeTimerRef = useRef<number | null>(null)
-  const voicePartialTranscribeInFlightRef = useRef(false)
-  const voiceRecordingGenerationRef = useRef(0)
-  const voiceFinalizeOnStopRef = useRef(false)
-  const voiceAnalyserFrameRef = useRef<number | null>(null)
   const activeVoiceSessionRef = useRef<string | null>(null)
   const ownedVoiceSessionIdsRef = useRef<Set<string>>(new Set())
   const coordinatorVoiceSessionIdsRef = useRef<Set<string>>(new Set())
@@ -598,6 +564,7 @@ export function AssistantView({
   }), [client.transport.kind, nativePlatform, providedSurfaceProfile])
   const usesNativeDesktopVoice = surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'native-desktop'
   const usesNativeMobileVoice = surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'mobile-native'
+  const usesFocusedBrowserVoiceRuntime = surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'webview-focused'
   const receivesCoordinatorVoiceEvents = surfaceProfile.voiceCapture.wakewordOwner === 'coordinator-daemon'
   const remotePrivacyWarning = assistantRemotePrivacyWarning(route)
   const voiceModel = useMemo(
@@ -695,7 +662,7 @@ export function AssistantView({
       await cancelNativeDesktopVoice('user_request')
     } else if (usesNativeMobileVoice) {
       await cancelNativeMobileVoice()
-    } else if (surfaceProfile.voiceCapture.usesBrowserVoiceRuntime) {
+    } else if (usesFocusedBrowserVoiceRuntime) {
       await cancelBrowserVoiceCaptureForReason('consent_revoked')
     } else {
       const sessionId = activeVoiceSessionRef.current
@@ -707,7 +674,6 @@ export function AssistantView({
         })
         if (!stopped.ok) setLastError(productAssistantErrorCopy(stopped.error))
       }
-      stopLocalCapture({ finalizeTranscription: false })
     }
     setVoiceCaptureStatus('idle')
     activeVoiceSessionRef.current = null
@@ -930,7 +896,6 @@ export function AssistantView({
     localConfirmationOrchestratorsRef.current.clear()
     clearVoiceResponseTimeout()
     stopStreamedTtsPlayback()
-    stopLocalCapture()
     void cancelNativeDesktopVoice('shutdown')
     nativeMobileVoiceOperationTokenRef.current += 1
     if (nativeMobileVoiceStartInFlightRef.current || voiceCaptureStatusRef.current === 'listening' || voiceCaptureStatusRef.current === 'processing') {
@@ -1134,8 +1099,7 @@ export function AssistantView({
         void cancelNativeMobileVoice()
         return
       }
-      if (!voiceStreamRef.current && !browserVoiceRuntimeRef.current) return
-      stopLocalCapture({ finalizeTranscription: false })
+      if (!browserVoiceRuntimeRef.current) return
       releaseBrowserVoiceCaptureForLifecycle()
     }
     document.addEventListener('visibilitychange', releaseFocusedCapture)
@@ -1225,7 +1189,6 @@ export function AssistantView({
 
   function resetConversationUi(nextSession: AssistantSessionSnapshot) {
     abortRef.current?.abort()
-    stopLocalCapture()
     releaseBrowserVoiceCaptureForReason('conversation_reset')
     activeVoiceSessionRef.current = null
     ownedVoiceSessionIdsRef.current.clear()
@@ -1924,11 +1887,6 @@ export function AssistantView({
       setText('')
       setVoiceCaptureStatus('listening')
       setStreamState((current) => ({ ...current, status: 'streaming', message: event.text ? `Wake word heard: ${event.text}` : 'Aurora is listening.' }))
-      if (surfaceProfile.voiceCapture.canUseWebViewVisualizer) {
-        void startLocalAudioCapture({ recordForTranscription: false, optionalVisualizer: true }).catch((error: unknown) => {
-          setLastError(productAudioCaptureErrorCopy(error))
-        })
-      }
       return
     }
     if (event.kind === 'transcription_partial') {
@@ -1958,7 +1916,6 @@ export function AssistantView({
         activeVoiceSessionRef.current = event.sessionId
       }
       const transcript = mergeTranscriptText(voiceTranscriptPreviewRef.current, event.text ?? '', { appendOnMiss: false }).trim()
-      stopLocalCapture({ finalizeTranscription: false })
       setVoiceCaptureStatus('idle')
       setStreamState((current) => ({ ...current, status: 'streaming', message: 'Voice captured. Aurora is processing the request.' }))
       if (!transcript) {
@@ -2004,7 +1961,6 @@ export function AssistantView({
     }
     if (event.kind === 'session_ended') {
       if (!shouldApplyVoiceSessionEndEvent(event, activeVoiceSessionRef.current, voiceCaptureStatusRef.current)) return
-      stopLocalCapture({ finalizeTranscription: false })
       setSpeakingMessageId(null)
       setVoiceCaptureStatus('idle')
       activeVoiceSessionRef.current = null
@@ -2017,7 +1973,6 @@ export function AssistantView({
       settleSubstantiveStreamingAssistantMessages('tts_started')
       // TTS playback must not keep the composer or push-to-talk controls in a stop state.
       if (voiceCaptureStatusRef.current !== 'listening') {
-        stopLocalCapture({ finalizeTranscription: false })
         setVoiceCaptureStatus('idle')
       }
       if (!speakingMessageIdRef.current && lastAssistantMessageIdRef.current) {
@@ -2580,7 +2535,7 @@ export function AssistantView({
       setStreamState((current) => ({ ...current, status: 'cancelled', message: 'Aurora stopped listening.' }))
       return
     }
-    if (surfaceProfile.voiceCapture.usesBrowserVoiceRuntime && voiceCaptureStatus === 'processing') {
+    if (usesFocusedBrowserVoiceRuntime && voiceCaptureStatus === 'processing') {
       const token = browserVoiceOperationTokenRef.current
       browserVoiceOperationTokenRef.current = token + 1
       const pendingId = activePendingIdRef.current
@@ -2669,7 +2624,7 @@ export function AssistantView({
   }
 
   function requestVoiceToggle() {
-    const waitingForHostedSettlement = surfaceProfile.voiceCapture.usesBrowserVoiceRuntime
+    const waitingForHostedSettlement = usesFocusedBrowserVoiceRuntime
       && voiceCaptureStatusRef.current === 'idle'
       && browserVoiceTurnSettlementRef.current?.state === 'settling'
     if (voiceToggleInFlightRef.current && !waitingForHostedSettlement) return
@@ -2720,9 +2675,6 @@ export function AssistantView({
           ? 'Aurora is listening on this computer.'
           : 'Aurora is listening on this computer.'
       }))
-      void startLocalAudioCapture({ recordForTranscription: false, optionalVisualizer: true }).catch(() => {
-        setStreamState((current) => ({ ...current, status: 'streaming', message: 'Aurora is listening on this computer; live microphone levels are unavailable.' }))
-      })
       return true
     } catch (error) {
       activeVoiceSessionRef.current = null
@@ -3035,6 +2987,11 @@ export function AssistantView({
       browserVoiceRuntimeRef.current = createAuroraBrowserVoiceRuntime({
         ownerId: 'aurora-assistant-view',
         lifecycle: browserVoiceLifecycleEligibility,
+        audio: {
+          onAudioLevel: (level, peak) => {
+            setVoiceWaveformBars(waveformBarsFromLevel(level * 100, peak * 100))
+          }
+        },
         onAudioLifecycleLost: releaseBrowserVoiceCaptureForLifecycle,
         onPageLifecycleLost: releaseBrowserVoiceCaptureForLifecycle
       })
@@ -3302,7 +3259,7 @@ export function AssistantView({
         return
       }
       const sessionId = activeVoiceSessionRef.current
-      if (surfaceProfile.voiceCapture.usesBrowserVoiceRuntime) {
+      if (usesFocusedBrowserVoiceRuntime) {
         await stopBrowserVoiceCapture()
         coordinatorVoiceSessionIdsRef.current.clear()
         voicePendingAssistantIdRef.current = null
@@ -3320,7 +3277,6 @@ export function AssistantView({
         })
         if (!stopped.ok) setLastError(productAssistantErrorCopy(stopped.error))
       }
-      stopLocalCapture({ finalizeTranscription: !coordinatorOwnsCapture })
       setVoiceCaptureStatus('idle')
       activeVoiceSessionRef.current = null
       ownedVoiceSessionIdsRef.current.clear()
@@ -3332,10 +3288,7 @@ export function AssistantView({
     const sessionId = `voice-${Date.now()}`
     voiceTranscriptPreviewRef.current = ''
     setLastError(null)
-    if (
-      (surfaceProfile.kind === 'android' || surfaceProfile.kind === 'ios')
-      && surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'unavailable'
-    ) {
+    if (surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'unavailable') {
       setVoiceCaptureStatus('no-device')
       setLastError('Voice is unavailable on this device right now.')
       return
@@ -3357,424 +3310,13 @@ export function AssistantView({
       return
     }
 
-    if (surfaceProfile.voiceCapture.usesBrowserVoiceRuntime) {
+    if (usesFocusedBrowserVoiceRuntime) {
       await startBrowserVoiceCapture(sessionId)
       return
     }
 
-    activeVoiceSessionRef.current = sessionId
-    ownedVoiceSessionIdsRef.current.add(sessionId)
-    try {
-      setVoiceCaptureStatus('listening')
-      setStreamState((current) => ({
-        ...current,
-        status: 'streaming',
-        message: 'Requesting focused microphone access for push-to-talk…'
-      }))
-      await startLocalAudioCapture({ recordForTranscription: true })
-      setStreamState((current) => ({
-        ...current,
-        status: 'streaming',
-        message: surfaceProfile.kind === 'desktop-local'
-          ? 'Focused push-to-talk is using this window. Background wake listening remains separate.'
-          : 'Focused browser microphone capture is active.'
-      }))
-      return
-    } catch (error) {
-      stopLocalCapture({ finalizeTranscription: false })
-      activeVoiceSessionRef.current = null
-      ownedVoiceSessionIdsRef.current.clear()
-      coordinatorVoiceSessionIdsRef.current.clear()
-      if (surfaceProfile.kind === 'desktop-local' && surfaceProfile.usesLocalSidecar) {
-        setLastError(null)
-        const fallbackStarted = await startCoordinatorPushToTalk(sessionId, { fallback: true })
-        if (fallbackStarted) return
-      }
-      const name = browserErrorName(error)
-      setLastError(productAudioCaptureErrorCopy(error))
-      setVoiceCaptureStatus(name === 'NotAllowedError' || name === 'SecurityError' ? 'permission-denied' : 'no-device')
-    }
-  }
-
-  async function startLocalAudioCapture({ recordForTranscription, optionalVisualizer = false }: { recordForTranscription: boolean; optionalVisualizer?: boolean }) {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      throw new Error('This platform did not expose a browser microphone API to the Aurora UI.')
-    }
-    const preparedAudioContext = createVoiceAudioContext()
-    const audioContextReady = resumeVoiceAudioContext(preparedAudioContext)
-    let stream: MediaStream
-    try {
-      stream = await withTimeout(
-        navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          }
-        }),
-        8_000,
-        new Error('Timed out waiting for microphone permission or device samples.')
-      )
-      await audioContextReady
-    } catch (error) {
-      if (preparedAudioContext && preparedAudioContext.state !== 'closed') {
-        void preparedAudioContext.close().catch(() => undefined)
-      }
-      throw error
-    }
-    voiceStreamRef.current = stream
-    if (recordForTranscription) {
-      voicePcmChunksRef.current = []
-      stopVoiceMediaRecorderCapture({ discard: true })
-    }
-    const mediaRecorderStarted = recordForTranscription && startVoiceMediaRecorder(stream)
-    const waveform = startVoiceWaveform(
-      stream,
-      { recordForTranscription: recordForTranscription && !mediaRecorderStarted },
-      preparedAudioContext
-    )
-    const transcriptionCaptureStarted = mediaRecorderStarted || waveform.pcmCaptureStarted
-    if (recordForTranscription && !transcriptionCaptureStarted) {
-      stopLocalCapture({ finalizeTranscription: false })
-      throw new Error('This platform allowed microphone access but did not expose audio samples for transcription.')
-    }
-    if (recordForTranscription) {
-      const generation = voiceRecordingGenerationRef.current + 1
-      voiceRecordingGenerationRef.current = generation
-      voiceFinalizeOnStopRef.current = true
-      voiceTranscriptPreviewRef.current = ''
-      scheduleRealtimeTranscriptionPreview(generation)
-    } else if (!waveform.visualizerStarted && !optionalVisualizer) {
-      throw new Error('This platform did not expose Web Audio microphone levels to the Aurora UI.')
-    }
-  }
-
-  function stopLocalCapture({ finalizeTranscription = false }: { finalizeTranscription?: boolean } = {}) {
-    const generation = voiceRecordingGenerationRef.current
-    const pcmChunks = [...voicePcmChunksRef.current]
-    const pcmSampleRate = voicePcmSampleRateRef.current
-    const mediaCapture = stopVoiceMediaRecorderCapture({ discard: !finalizeTranscription })
-    const shouldFinalize = finalizeTranscription && (pcmChunks.length > 0 || mediaCapture !== null)
-    voiceFinalizeOnStopRef.current = finalizeTranscription
-    clearPartialTranscriptionTimer()
-    voiceStreamRef.current?.getTracks().forEach((track) => track.stop())
-    voiceStreamRef.current = null
-    stopVoiceWaveform()
-    setVoiceWaveformBars(idleWaveformBars())
-    voicePcmChunksRef.current = []
-    if (shouldFinalize) {
-      void (async () => {
-        if (mediaCapture) await mediaCapture.stopped
-        await transcribeRecordedBrowserAudio({
-          final: true,
-          generation,
-          recording: voiceRecordingSnapshot({ pcmChunks, pcmSampleRate, mediaCapture })
-        })
-      })()
-    } else if (finalizeTranscription) {
-      setLastError('No microphone audio was captured. Check microphone permission and try push-to-talk again.')
-      setVoiceCaptureStatus('idle')
-    }
-  }
-
-  function clearPartialTranscriptionTimer() {
-    if (voicePartialTranscribeTimerRef.current !== null && typeof window !== 'undefined') {
-      window.clearTimeout(voicePartialTranscribeTimerRef.current)
-    }
-    voicePartialTranscribeTimerRef.current = null
-  }
-
-  function scheduleRealtimeTranscriptionPreview(generation: number) {
-    if (typeof window === 'undefined') return
-    if (voicePartialTranscribeTimerRef.current !== null) return
-    voicePartialTranscribeTimerRef.current = window.setTimeout(() => {
-      voicePartialTranscribeTimerRef.current = null
-      if (voicePartialTranscribeInFlightRef.current) return
-      if (voiceRecordingGenerationRef.current !== generation) return
-      if (!hasRecordedVoiceAudio()) {
-        scheduleRealtimeTranscriptionPreview(generation)
-        return
-      }
-      voicePartialTranscribeInFlightRef.current = true
-      void transcribeRecordedBrowserAudio({ final: false, generation })
-        .finally(() => {
-          voicePartialTranscribeInFlightRef.current = false
-          if (voiceCaptureStatusRef.current === 'listening' && voiceRecordingGenerationRef.current === generation) {
-            scheduleRealtimeTranscriptionPreview(generation)
-          }
-        })
-    }, 900)
-  }
-
-  function createVoiceAudioContext(): AudioContext | null {
-    if (typeof window === 'undefined') return null
-    const AudioContextCtor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-    if (!AudioContextCtor) return null
-    try {
-      return new AudioContextCtor()
-    } catch {
-      return null
-    }
-  }
-
-  function resumeVoiceAudioContext(context: AudioContext | null): Promise<boolean> {
-    if (!context) return Promise.resolve(false)
-    if (context.state !== 'suspended') return Promise.resolve(true)
-    return context.resume()
-      .then(() => context.state !== 'suspended')
-      .catch(() => false)
-  }
-
-  function startVoiceMediaRecorder(stream: MediaStream): boolean {
-    if (typeof MediaRecorder === 'undefined') return false
-    const mimeType = preferredVoiceMediaRecorderMimeType(MediaRecorder)
-    let recorder: MediaRecorder
-    try {
-      recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream)
-    } catch {
-      return false
-    }
-    let finished = false
-    let resolveStopped: (() => void) | null = null
-    const stopped = new Promise<void>((resolve) => {
-      resolveStopped = resolve
-    })
-    const capture: VoiceMediaRecorderCapture = {
-      recorder,
-      chunks: [],
-      mimeType: recorder.mimeType || mimeType || '',
-      acceptingData: true,
-      stopped,
-      finish: () => {
-        if (finished) return
-        finished = true
-        resolveStopped?.()
-      }
-    }
-    recorder.ondataavailable = (event) => {
-      if (!capture.acceptingData || event.data.size === 0) return
-      capture.chunks.push(event.data)
-    }
-    recorder.onstop = capture.finish
-    recorder.onerror = capture.finish
-    try {
-      recorder.start(250)
-    } catch {
-      recorder.ondataavailable = null
-      recorder.onstop = null
-      recorder.onerror = null
-      capture.finish()
-      return false
-    }
-    voiceMediaRecorderCaptureRef.current = capture
-    return true
-  }
-
-  function stopVoiceMediaRecorderCapture({ discard }: { discard: boolean }): VoiceMediaRecorderCapture | null {
-    const capture = voiceMediaRecorderCaptureRef.current
-    if (!capture) return null
-    if (voiceMediaRecorderCaptureRef.current === capture) voiceMediaRecorderCaptureRef.current = null
-    if (discard) {
-      capture.acceptingData = false
-      capture.chunks.length = 0
-    }
-    if (capture.recorder.state === 'inactive') {
-      capture.finish()
-      return capture
-    }
-    try {
-      capture.recorder.stop()
-    } catch {
-      capture.finish()
-    }
-    return capture
-  }
-
-  function hasRecordedVoiceAudio(): boolean {
-    if (voicePcmChunksRef.current.length > 0) return true
-    return Boolean(voiceMediaRecorderCaptureRef.current?.chunks.some((chunk) => chunk.size > 0))
-  }
-
-  function startVoiceWaveform(
-    stream: MediaStream,
-    options: { recordForTranscription?: boolean } = {},
-    preparedAudioContext: AudioContext | null = null
-  ): VoiceWaveformStartResult {
-    stopVoiceWaveform()
-    const context = preparedAudioContext ?? createVoiceAudioContext()
-    if (!context || context.state === 'suspended') {
-      if (context && context.state !== 'closed') void context.close().catch(() => undefined)
-      return { visualizerStarted: false, pcmCaptureStarted: false }
-    }
-    let source: MediaStreamAudioSourceNode
-    let analyser: AnalyserNode
-    try {
-      source = context.createMediaStreamSource(stream)
-      analyser = context.createAnalyser()
-    } catch {
-      if (context.state !== 'closed') void context.close().catch(() => undefined)
-      return { visualizerStarted: false, pcmCaptureStarted: false }
-    }
-    analyser.fftSize = 1024
-    analyser.smoothingTimeConstant = 0.35
-    source.connect(analyser)
-    voiceAudioContextRef.current = context
-    voiceMediaSourceRef.current = source
-    voiceAnalyserRef.current = analyser
-    voicePcmSampleRateRef.current = context.sampleRate
-    let pcmCaptureStarted = false
-    if (options.recordForTranscription) {
-      try {
-        const processor = context.createScriptProcessor(4096, 1, 1)
-        processor.onaudioprocess = (event) => {
-          const channel = event.inputBuffer.getChannelData(0)
-          voicePcmChunksRef.current.push(new Float32Array(channel))
-        }
-        source.connect(processor)
-        processor.connect(context.destination)
-        voiceScriptProcessorRef.current = processor
-        pcmCaptureStarted = true
-      } catch {
-        pcmCaptureStarted = false
-      }
-    }
-    const samples = new Uint8Array(analyser.fftSize)
-    const tick = () => {
-      analyser.getByteTimeDomainData(samples)
-      setVoiceWaveformBars(waveformBarsFromTimeDomain(samples, 24))
-      voiceAnalyserFrameRef.current = window.requestAnimationFrame(tick)
-    }
-    tick()
-    return { visualizerStarted: true, pcmCaptureStarted }
-  }
-
-  function stopVoiceWaveform() {
-    if (voiceAnalyserFrameRef.current !== null && typeof window !== 'undefined') {
-      window.cancelAnimationFrame(voiceAnalyserFrameRef.current)
-    }
-    voiceAnalyserFrameRef.current = null
-    const processor = voiceScriptProcessorRef.current
-    voiceScriptProcessorRef.current = null
-    if (processor) {
-      processor.onaudioprocess = null
-      withIgnoredAudioDisconnect(() => processor.disconnect())
-    }
-    const source = voiceMediaSourceRef.current
-    voiceMediaSourceRef.current = null
-    if (source) withIgnoredAudioDisconnect(() => source.disconnect())
-    voiceAnalyserRef.current = null
-    const context = voiceAudioContextRef.current
-    voiceAudioContextRef.current = null
-    if (context && context.state !== 'closed') void context.close()
-  }
-
-  function voiceRecordingSnapshot({
-    pcmChunks = voicePcmChunksRef.current,
-    pcmSampleRate = voicePcmSampleRateRef.current,
-    mediaCapture = voiceMediaRecorderCaptureRef.current
-  }: {
-    pcmChunks?: Float32Array[]
-    pcmSampleRate?: number
-    mediaCapture?: VoiceMediaRecorderCapture | null
-  } = {}): VoiceRecordingSnapshot {
-    return {
-      pcmChunks: [...pcmChunks],
-      pcmSampleRate: pcmSampleRate || 16_000,
-      mediaChunks: mediaCapture ? [...mediaCapture.chunks] : [],
-      mediaMimeType: mediaCapture?.mimeType ?? ''
-    }
-  }
-
-  async function recordedPcmBase64(recording: VoiceRecordingSnapshot, recentSeconds?: number): Promise<string | null> {
-    if (recording.pcmChunks.length > 0) {
-      const sourceRate = recording.pcmSampleRate || 16_000
-      const samples = flattenPcmChunks(recording.pcmChunks, recentSeconds ? Math.ceil(sourceRate * recentSeconds) : undefined)
-      if (samples.length < sourceRate * 0.35) return null
-      return floatPcmToBase64(samples, sourceRate, 16_000)
-    }
-    if (recording.mediaChunks.length === 0) return null
-    const context = createVoiceAudioContext()
-    if (!context) return null
-    try {
-      const encoded = await blobToArrayBuffer(new Blob(recording.mediaChunks, {
-        type: recording.mediaMimeType || recording.mediaChunks[0]?.type || ''
-      }))
-      if (encoded.byteLength === 0) return null
-      const decoded = await context.decodeAudioData(encoded.slice(0))
-      const sourceRate = decoded.sampleRate || 16_000
-      const samples = monoSamplesFromAudioBuffer(
-        decoded,
-        recentSeconds ? Math.ceil(sourceRate * recentSeconds) : undefined
-      )
-      if (samples.length < sourceRate * 0.35) return null
-      return floatPcmToBase64(samples, sourceRate, 16_000)
-    } finally {
-      if (context.state !== 'closed') await context.close().catch(() => undefined)
-    }
-  }
-
-  async function transcribeRecordedBrowserAudio({
-    final,
-    generation,
-    recording = voiceRecordingSnapshot()
-  }: {
-    final: boolean
-    generation: number
-    recording?: VoiceRecordingSnapshot
-  }) {
-    if (final) setVoiceCaptureStatus('processing')
-    try {
-      const audioData = await recordedPcmBase64(recording, final ? undefined : 12)
-      if (!audioData) {
-        if (final) {
-          setLastError('No microphone audio was captured. Check microphone permission and try push-to-talk again.')
-          setVoiceCaptureStatus('idle')
-        }
-        return
-      }
-      const result = await client.assistant.transcribeVoiceAudio({
-        audio_data: audioData,
-        format: 'raw',
-        sample_rate: 16000,
-        channels: 1,
-        model: final ? 'accurate' : 'realtime',
-        routePolicy: routePolicyFromRoute(voiceModel.transcriptionRoute)
-      })
-      if (voiceRecordingGenerationRef.current !== generation) return
-      if (!result.ok) {
-        if (final) {
-          setLastError(productAssistantErrorCopy(result.error))
-          setVoiceCaptureStatus('error')
-        }
-        return
-      }
-      const transcript = result.data.text.trim()
-      if (!transcript) {
-        if (final) {
-          setLastError('No speech was transcribed from the recorded audio.')
-          setVoiceCaptureStatus('idle')
-        }
-        return
-      }
-      if (!final) {
-        if (voiceCaptureStatusRef.current !== 'listening') return
-        const preview = mergeTranscriptText(voiceTranscriptPreviewRef.current, transcript, { appendOnMiss: false })
-        voiceTranscriptPreviewRef.current = preview
-        setText(preview)
-        return
-      }
-      const finalTranscript = mergeTranscriptText(voiceTranscriptPreviewRef.current, transcript, { appendOnMiss: false }).trim()
-      voiceTranscriptPreviewRef.current = ''
-      await startAssistantTurn(finalTranscript || transcript)
-      setVoiceCaptureStatus('idle')
-    } catch (error) {
-      if (final && voiceRecordingGenerationRef.current === generation) {
-        setLastError(productAudioCaptureErrorCopy(error))
-        setVoiceCaptureStatus('error')
-      }
-    }
+    setVoiceCaptureStatus('no-device')
+    setLastError('Voice is unavailable on this device right now.')
   }
 
   async function startNewConversation() {
@@ -6268,107 +5810,6 @@ function waveformBarsFromLevel(level: number, peak: number): number[] {
   })
 }
 
-function withIgnoredAudioDisconnect(disconnect: () => void) {
-  try {
-    disconnect()
-  } catch {
-    // Web Audio nodes may already be disconnected during rapid stop/retry.
-  }
-}
-
-const voiceMediaRecorderMimeTypes = [
-  'audio/webm;codecs=opus',
-  'audio/webm',
-  'audio/mp4',
-  'audio/ogg;codecs=opus'
-] as const
-
-function preferredVoiceMediaRecorderMimeType(recorder: typeof MediaRecorder): string {
-  if (typeof recorder.isTypeSupported !== 'function') return ''
-  return voiceMediaRecorderMimeTypes.find((mimeType) => recorder.isTypeSupported(mimeType)) ?? ''
-}
-
-function blobToArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
-  const compatibleBlob = blob as Blob & { arrayBuffer?: () => Promise<ArrayBuffer> }
-  if (typeof compatibleBlob.arrayBuffer === 'function') return compatibleBlob.arrayBuffer()
-  return new Promise<ArrayBuffer>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(reader.error ?? new Error('Unable to read captured microphone audio.'))
-    reader.onload = () => {
-      if (reader.result instanceof ArrayBuffer) resolve(reader.result)
-      else reject(new Error('Unable to read captured microphone audio.'))
-    }
-    reader.readAsArrayBuffer(blob)
-  })
-}
-
-function monoSamplesFromAudioBuffer(buffer: AudioBuffer, maxSamples?: number): Float32Array {
-  if (buffer.numberOfChannels <= 0 || buffer.length <= 0) return new Float32Array()
-  const wanted = maxSamples === undefined ? buffer.length : Math.min(buffer.length, maxSamples)
-  const start = buffer.length - wanted
-  if (buffer.numberOfChannels === 1) {
-    return new Float32Array(buffer.getChannelData(0).subarray(start))
-  }
-  const output = new Float32Array(wanted)
-  for (let channelIndex = 0; channelIndex < buffer.numberOfChannels; channelIndex += 1) {
-    const channel = buffer.getChannelData(channelIndex)
-    for (let sampleIndex = 0; sampleIndex < wanted; sampleIndex += 1) {
-      output[sampleIndex] = (output[sampleIndex] ?? 0) + (channel[start + sampleIndex] ?? 0) / buffer.numberOfChannels
-    }
-  }
-  return output
-}
-
-function flattenPcmChunks(chunks: Float32Array[], maxSamples?: number): Float32Array {
-  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
-  const wanted = maxSamples === undefined ? total : Math.min(total, maxSamples)
-  const output = new Float32Array(wanted)
-  let writeOffset = wanted
-  let remaining = wanted
-  for (let index = chunks.length - 1; index >= 0 && remaining > 0; index -= 1) {
-    const chunk = chunks[index]
-    if (!chunk) continue
-    const take = Math.min(chunk.length, remaining)
-    writeOffset -= take
-    output.set(chunk.subarray(chunk.length - take), writeOffset)
-    remaining -= take
-  }
-  return output
-}
-
-function floatPcmToBase64(samples: Float32Array, sourceRate: number, targetRate: number): string {
-  const resampled = resampleFloat32(samples, sourceRate, targetRate)
-  const buffer = new ArrayBuffer(resampled.length * 2)
-  const view = new DataView(buffer)
-  let offset = 0
-  for (const sample of resampled) {
-    const clamped = Math.max(-1, Math.min(1, sample))
-    view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true)
-    offset += 2
-  }
-  return arrayBufferToBase64(buffer)
-}
-
-function waveformBarsFromTimeDomain(samples: Uint8Array, barCount: number): number[] {
-  if (samples.length === 0 || barCount <= 0) return idleWaveformBars()
-  const bars: number[] = []
-  const segmentSize = Math.max(1, Math.floor(samples.length / barCount))
-  for (let bar = 0; bar < barCount; bar += 1) {
-    const start = bar * segmentSize
-    const end = bar === barCount - 1 ? samples.length : Math.min(samples.length, start + segmentSize)
-    let sumSquares = 0
-    let count = 0
-    for (let index = start; index < end; index += 1) {
-      const centered = ((samples[index] ?? 128) - 128) / 128
-      sumSquares += centered * centered
-      count += 1
-    }
-    const rms = count > 0 ? Math.sqrt(sumSquares / count) : 0
-    bars.push(Math.max(8, Math.min(96, Math.round(8 + rms * 220))))
-  }
-  return bars
-}
-
 function productAudioCaptureErrorCopy(error: unknown): string {
   const code = voiceCaptureErrorCode(error)
   if (code === 'audio_source_permission_denied') {
@@ -6423,24 +5864,6 @@ function browserErrorName(error: unknown): string {
   if (typeof error !== 'object' || error === null || !('name' in error)) return ''
   const name = (error as { name?: unknown }).name
   return typeof name === 'string' ? name : ''
-}
-
-function resampleFloat32(input: Float32Array, sourceRate: number, targetRate: number): Float32Array {
-  if (sourceRate === targetRate) return input
-  const ratio = sourceRate / targetRate
-  const output = new Float32Array(Math.max(1, Math.round(input.length / ratio)))
-  for (let index = 0; index < output.length; index += 1) {
-    const sourceIndex = index * ratio
-    const left = Math.floor(sourceIndex)
-    const right = Math.min(input.length - 1, left + 1)
-    const weight = sourceIndex - left
-    output[index] = (input[left] ?? 0) * (1 - weight) + (input[right] ?? 0) * weight
-  }
-  return output
-}
-
-function writeAscii(view: DataView, offset: number, value: string): void {
-  for (let index = 0; index < value.length; index += 1) view.setUint8(offset + index, value.charCodeAt(index))
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {

@@ -149,6 +149,92 @@ describe('BrowserAudioWorkletPcmSource', () => {
     expect(sink.frames.every((frame) => frame.pcm.length === 320)).toBe(true)
   })
 
+  it('reports redacted normalized audio levels without duplicating frames', async () => {
+    const ports = new FakeBrowserPorts()
+    const sink = new RecordingSink()
+    const levels: Array<{ level: number; peak: number }> = []
+    const source = new BrowserAudioWorkletPcmSource(ports.options({
+      frameMs: 20,
+      onAudioLevel: (level, peak) => levels.push({ level, peak })
+    }))
+
+    await source.start(session(), sink)
+    ports.postFromWorklet({
+      type: 'audio',
+      sessionId: 'session-a',
+      sampleRateHz: 48_000,
+      samples: new Float32Array([0, 0.5, -0.5, 1])
+    })
+    ports.postFromWorklet({
+      type: 'audio',
+      sessionId: 'session-a',
+      sampleRateHz: 48_000,
+      samples: constant(956, 0)
+    })
+    await source.stop('session-a')
+
+    expect(levels).toHaveLength(2)
+    expect(levels[0]?.level).toBeCloseTo(Math.sqrt(1.5 / 4), 6)
+    expect(levels[0]?.peak).toBe(1)
+    expect(levels[1]).toEqual({ level: 0, peak: 0 })
+    expect(sink.frames).toHaveLength(1)
+  })
+
+  it('clamps audio levels and treats non-finite samples as silence', async () => {
+    const ports = new FakeBrowserPorts()
+    const levels: Array<{ level: number; peak: number }> = []
+    const source = new BrowserAudioWorkletPcmSource(ports.options({
+      onAudioLevel: (level, peak) => levels.push({ level, peak })
+    }))
+
+    await source.start(session(), new RecordingSink())
+    ports.postFromWorklet({
+      type: 'audio',
+      sessionId: 'session-a',
+      sampleRateHz: 48_000,
+      samples: new Float32Array([2, -3, Number.NaN, Number.POSITIVE_INFINITY])
+    })
+    await nextTurn()
+    await source.cancel('session-a')
+
+    expect(levels).toHaveLength(1)
+    expect(levels[0]?.level).toBeCloseTo(Math.sqrt(2 / 4), 6)
+    expect(levels[0]?.peak).toBe(1)
+  })
+
+  it('keeps capture and frame delivery alive when the audio-level observer throws', async () => {
+    const ports = new FakeBrowserPorts()
+    const sink = new RecordingSink()
+    const source = new BrowserAudioWorkletPcmSource(ports.options({
+      frameMs: 20,
+      onAudioLevel: () => {
+        throw new Error('/private/device/path')
+      }
+    }))
+
+    await source.start(session(), sink)
+    ports.postFromWorklet({ type: 'audio', sessionId: 'session-a', sampleRateHz: 48_000, samples: constant(960, 0.5) })
+    await source.stop('session-a')
+
+    expect(sink.frames).toHaveLength(1)
+    expect(ports.trackStopped).toBe(true)
+    expect(ports.contextClosed).toBe(true)
+  })
+
+  it('does not report audio levels for stale sessions', async () => {
+    const ports = new FakeBrowserPorts()
+    const levels: Array<{ level: number; peak: number }> = []
+    const source = new BrowserAudioWorkletPcmSource(ports.options({
+      onAudioLevel: (level, peak) => levels.push({ level, peak })
+    }))
+
+    await source.start(session(), new RecordingSink())
+    ports.postFromWorklet({ type: 'audio', sessionId: 'old-session', sampleRateHz: 48_000, samples: constant(960, 0.75) })
+    await source.cancel('session-a')
+
+    expect(levels).toHaveLength(0)
+  })
+
   it('cleans resources after permission/start failure without exposing device data', async () => {
     const ports = new FakeBrowserPorts({ failAddModule: true })
     const source = new BrowserAudioWorkletPcmSource(ports.options())

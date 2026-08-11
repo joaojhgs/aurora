@@ -88,6 +88,33 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(runtime.cancel).not.toHaveBeenCalled()
   })
 
+  it('passes redacted browser microphone levels into the hosted runtime visualizer callback', async () => {
+    const runtime = createRuntimeMock({
+      capturedPcm: new Int16Array([1, 2, 3, 4])
+    })
+    voiceRuntimeMock.create.mockReturnValue(runtime)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const container = renderAssistant(client, hostedSurface())
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(runtime.start).toHaveBeenCalledTimes(1))
+
+    const options = voiceRuntimeMock.create.mock.calls[0]?.[0] as {
+      audio?: { onAudioLevel?: (level: number, peak: number) => void }
+    } | undefined
+    expect(options?.audio?.onAudioLevel).toEqual(expect.any(Function))
+
+    await act(async () => {
+      options?.audio?.onAudioLevel?.(0.42, 0.9)
+      await Promise.resolve()
+    })
+
+    expect(findButton(container, 'Stop listening')).toBeTruthy()
+  })
+
   it('shows on-device speech state while hosted capture still uses connected transcription', async () => {
     const runtime = createRuntimeMock({
       capturedPcm: new Int16Array([7, 8, 9])

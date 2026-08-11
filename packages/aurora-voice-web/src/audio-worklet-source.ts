@@ -33,6 +33,7 @@ export interface AuroraBrowserAudioWorkletSourceOptions {
   readonly frameMs?: number
   readonly maxPendingFrames?: number
   readonly maxTailMs?: number
+  readonly onAudioLevel?: (level: number, peak: number) => void
   readonly onLifecycleLost?: (reason: AuroraBrowserAudioLifecycleLostReason) => void
 }
 
@@ -93,6 +94,7 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
   private readonly frameMs: number
   private readonly maxPendingFrames: number
   private readonly maxTailMs: number
+  private readonly onAudioLevel: ((level: number, peak: number) => void) | undefined
   private readonly onLifecycleLost: ((reason: AuroraBrowserAudioLifecycleLostReason) => void) | undefined
   private active: ActiveBrowserAudioSession | null = null
   private pendingStart: PendingBrowserAudioStart | null = null
@@ -114,6 +116,7 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
     this.frameMs = boundedInteger(options.frameMs ?? AURORA_AUDIO_WORKLET_DEFAULT_FRAME_MS, 'frameMs', MIN_FRAME_MS, MAX_FRAME_MS)
     this.maxPendingFrames = boundedInteger(options.maxPendingFrames ?? DEFAULT_MAX_PENDING_FRAMES, 'maxPendingFrames', 1, 32)
     this.maxTailMs = boundedInteger(options.maxTailMs ?? DEFAULT_MAX_TAIL_MS, 'maxTailMs', this.frameMs, 1_000)
+    this.onAudioLevel = options.onAudioLevel
     this.onLifecycleLost = options.onLifecycleLost
   }
 
@@ -237,6 +240,7 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
     if (message === null) return
     if (message.type === 'audio') {
       if (active.stopping || message.sessionId !== active.session.sessionId) return
+      this.emitAudioLevel(message.samples)
       await active.assembler.pushFloat32(message.sessionId, message.sampleRateHz, message.samples)
       return
     }
@@ -254,6 +258,16 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
     await withTimeout(context.resume(), this.startTimeoutMs, 'audio_source_start_timeout')
     if (context.state === 'suspended') {
       throw new AuroraVoiceWebRuntimeError('audio_source_suspended', 'Voice capture is not available')
+    }
+  }
+
+  private emitAudioLevel(samples: Float32Array): void {
+    if (this.onAudioLevel === undefined || samples.length === 0) return
+    const { level, peak } = normalizedAudioLevel(samples)
+    try {
+      this.onAudioLevel(level, peak)
+    } catch {
+      // UI observers must not break capture or expose browser audio internals.
     }
   }
 
@@ -587,6 +601,20 @@ function boundedInteger(value: number, field: string, min: number, max: number):
 function floatToPcm16(value: number): number {
   const clipped = Math.max(-1, Math.min(1, Number.isFinite(value) ? value : 0))
   return clipped < 0 ? Math.round(clipped * 32768) : Math.round(clipped * 32767)
+}
+
+function normalizedAudioLevel(samples: Float32Array): { level: number; peak: number } {
+  let peak = 0
+  let squareSum = 0
+  for (const sample of samples) {
+    const amplitude = Math.min(1, Math.abs(Number.isFinite(sample) ? sample : 0))
+    peak = Math.max(peak, amplitude)
+    squareSum += amplitude * amplitude
+  }
+  return {
+    level: Math.sqrt(squareSum / samples.length),
+    peak
+  }
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, code: string): Promise<T> {
