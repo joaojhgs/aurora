@@ -1,6 +1,6 @@
 # PocketTTS native/WASM voice goal capsule
 
-Updated: 2026-08-11T21:06:01Z
+Updated: 2026-08-11T22:56:04Z
 
 ## Authority and workflow
 
@@ -26,9 +26,9 @@ Updated: 2026-08-11T21:06:01Z
 
 ## Overall verdict
 
-The revised goal is **incomplete**. Phases 0-3 are the only implementation-complete phases because the plan explicitly preserves them. Their current-head verification is partial, not a fresh end-to-end recertification. No revised Phase 4-13 exit gate is fully reverified at the audited baseline.
+The revised goal is **incomplete**. Preserved Phases 0-3 remain implementation-complete, and the bounded Phase 4 architecture/portability gate is now independently reverified from the reconstructed 24-artifact root. Phases 0-3 still have only partial current-head verification, and no revised Phase 5-13 exit gate is yet fully reverified.
 
-The old estimate that work should resume at Phase 8 was an overclaim. Resume at the earliest unresolved dependency: **Phase 4 artifact/build re-verification**, then close Phase 5 before advancing.
+The old estimate that work should resume at Phase 8 was an overclaim. Phase 4 is now closed only for its explicit architecture/portability scope. Resume at the earliest unresolved dependency: **Phase 5 generator/WASM/property/model-store/detached-turn exit evidence**, then reconcile Phase 6 before advancing.
 
 RAC totals remain criterion-scoped: **22 pass / 24 partial / 6 withheld / 4 blocked**. A passing RAC does not make its containing phase complete.
 
@@ -40,7 +40,7 @@ RAC totals remain criterion-scoped: **22 pass / 24 partial / 6 withheld / 4 bloc
 | 1 | Complete, preserved baseline | Partial fresh audit | Provider-neutral configuration and provider lifecycle boundaries exist; Redis process-mode cases skipped. |
 | 2 | Complete, preserved baseline | Partial fresh audit | Official Python PocketTTS provider exists with lifecycle/cancel/stream tests; live Redis/process proof was not rerun. |
 | 3 | Complete, preserved baseline | Strong partial fresh audit | Typed speech contracts, topic constants, routing/security, and generated SDK tests exist; 46 focused SDK cases passed. |
-| 4 | Substantially implemented, **not closed** | Partial | ADR/manifest/source decisions exist and structural validation reports 24 artifacts, but `verified_local` is false because the complete artifact root is absent. Native/WASM/cross-target real build evidence cannot be freshly reproduced from this checkout. |
+| 4 | Complete architecture freeze | Pass, fresh local with external exclusions | The complete 24-artifact root validates with `verified_local: true`; pinned source identity, Linux native C/Rust probes, Android arm64/x86_64 source builds and `0x4000` alignment, iOS device/simulator slices, split WASM builds, three-browser Worker execution, and native/browser VAD parity all pass. Live desktop CPAL, Apple runtime/signing, physical devices, release packaging, and PocketTTS/Piper activation remain outside this bounded gate and are explicitly withheld or blocked. Durable receipt: `reports/native-voice/phase4-reverify-20260811/`. |
 | 5 | Strong partial implementation | Partial | Rust workspace, core, testkit, model store, transport, state/ownership tests exist; fresh Rust fmt/clippy/tests pass. Contract-generation second-run cleanliness, wasm-target execution, and the complete Phase 5 exit bundle were not re-proven. |
 | 6 | Partial; production capabilities withheld | Partial / policy-safe | Candidate adapters and dispositions exist. No release-eligible VAD/KWS/STT/TTS pack is selected; production capability flags correctly remain false. |
 | 7 | Partial | Partial | Rust/WASM Worker, AudioWorklet, browser store, lifecycle, and fake-media/emulation gates pass. Real microphone/acoustic/OS-permission, hosted Firefox/WebKit PTT, actual mobile devices, approved packs, installer, and release evidence are missing. |
@@ -66,7 +66,12 @@ See the RAC matrix for criterion-level evidence and exact gaps. Do not promote a
 | --- | --- |
 | Preserved Python speech/config/provider/contract slice | 147 passed, 28 skipped; skips were Redis/asset/environment dependent |
 | Generated SDK contract/conformance slice | 46 passed |
-| Phase 4 manifest structural validator | valid; 24 artifacts; `verified_local: false` |
+| Phase 4 artifact manifest | valid; 24 artifacts; three explicit denials; `verified_local: true`; no errors |
+| Phase 4 source identity | pinned sherpa archive and commit verified; 5,424-entry source tree SHA-256 `1ec160e660f428bab1c45319893540553dfd26675090c461ce6da1d817754017`; enclosing Git identity suppressed |
+| Phase 4 Linux C/Rust probes | STT, VAD, KWS, evidence-only TTS, and one-callback TTS cancellation passed; TTS remains withheld |
+| Phase 4 Android cross-build | `arm64-v8a` and `x86_64` source builds passed; every inspected ONNX Runtime/sherpa C/C++/JNI LOAD segment is `0x4000` aligned |
+| Phase 4 iOS package slices | device `arm64` and simulator `arm64`+`x86_64` slices present; Xcode/runtime/signing claims remain blocked on Linux |
+| Phase 4 browser and parity | Chromium, Firefox, and WebKit Worker VAD/ASR/KWS passed; native plus all three browsers passed the six-case VAD parity matrix below the 32 ms p95 ceiling |
 | Rust 1.88 workspace fmt | passed |
 | Rust 1.88 workspace clippy with warnings denied | passed |
 | Rust 1.88 workspace tests | passed; approximately 313 tests; live CPAL ignored and native sherpa smoke did not execute without artifacts/features |
@@ -83,8 +88,8 @@ See the RAC matrix for criterion-level evidence and exact gaps. Do not promote a
 
 1. Create a fresh normal Codex Goal using the revised plan and fresh-session handoff.
 2. Record the actual branch HEAD and verify the hashes above.
-3. Re-open Phase 4. Restore or recreate the complete artifact root, run `validate_phase4_manifest.py --artifact-root ...`, and reproduce the claimed desktop/Android/iOS/WASM builds and parity evidence. If required Apple/device assets are unavailable, record the exact external block; do not call Phase 4 complete.
-4. Re-audit Phase 4 independently. Only after it passes, close the missing Phase 5 generator/WASM/exit gates.
+3. Treat Phase 4 as closed only for its bounded architecture/portability scope using `reports/native-voice/phase4-reverify-20260811/`; do not extend that pass to live CPAL, Apple runtime/signing, physical devices, releases, or TTS activation.
+4. Close the missing Phase 5 contract-generator second-run, WASM execution, property/model-store, and fake detached-turn exit gates.
 5. Reconcile Phase 6 shippable-pack disposition. Keep VAD/KWS/STT/TTS false until approved assets and release evidence exist.
 6. Continue Phases 7-13 in dependency order. Phase 8 RAC-27 is locally actionable later, but it is not the first resume gate.
 

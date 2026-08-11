@@ -1,0 +1,184 @@
+{
+  "$schema": "aurora.native_voice.phase4_reverification.v1",
+  "recordedAtUtc": "2026-08-11T22:56:04Z",
+  "branch": "feat/ui-multi-platform-integration",
+  "repositoryHeadAtCompletion": "7a6395d123bbde09db71c999b0adfc72a575f782",
+  "planSha256": "50181a35cd42e12a33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6",
+  "secretsRedacted": true,
+  "verdict": {
+    "status": "pass",
+    "scope": "bounded_architecture_and_portability",
+    "implementation": "complete_architecture_freeze",
+    "verification": "pass_fresh_local_with_external_exclusions",
+    "independentVerifier": true
+  },
+  "artifactRoot": {
+    "path": ".artifacts/pockettts/p4-native-voice",
+    "tracked": false,
+    "artifactCount": 24,
+    "policyDenialCount": 3,
+    "verifiedLocal": true,
+    "errors": []
+  },
+  "sourceIdentity": {
+    "archiveSha256": "3243cb386d3a4ac87596adf7d2c89fddf23e2948b154942b987b4d91c1fee295",
+    "expectedCommit": "142807252687d81b40d6315f23470a1512a00de3",
+    "sourceTreeSha256": "1ec160e660f428bab1c45319893540553dfd26675090c461ce6da1d817754017",
+    "sourceEntryCount": 5424,
+    "sourceHasOwnGit": false,
+    "inheritedGitRootSuppressed": true,
+    "status": "verified"
+  },
+  "toolchains": {
+    "rust": "1.88.0",
+    "emscripten": "4.0.23",
+    "androidNdk": "27.2.12479018 (r27c)",
+    "androidApi": 21
+  },
+  "nativeCapi": {
+    "ok": true,
+    "stt": {
+      "ok": true,
+      "text": "Ask not what your country can do for you. Ask what you can do for your country."
+    },
+    "vad": {
+      "ok": true,
+      "segments": 1,
+      "segmentSamples": 93696
+    },
+    "kws": {
+      "ok": true,
+      "detections": 2,
+      "lastKeyword": "FOREVER"
+    },
+    "ttsEvidenceOnly": {
+      "ok": true,
+      "sampleRate": 22050,
+      "audioSamples": 35584,
+      "activation": "withheld"
+    },
+    "ttsCancellationEvidenceOnly": {
+      "ok": true,
+      "callbackCalls": 1,
+      "cancelRequested": true,
+      "activation": "withheld"
+    },
+    "rustWrapper": {
+      "ok": true,
+      "modes": ["rust_stt", "rust_tts_cancel"],
+      "callbackCalls": 1
+    }
+  },
+  "android": {
+    "status": "pass_static_source_build",
+    "abis": ["arm64-v8a", "x86_64"],
+    "sourceBuiltSherpa": true,
+    "stagedPinnedOnnxRuntime": true,
+    "flexiblePageSizes": true,
+    "requiredLoadAlignment": "0x4000",
+    "allInspectedLoadSegmentsAligned": true,
+    "deviceRuntimeClaim": false
+  },
+  "ios": {
+    "status": "pass_slice_inspection",
+    "onnxRuntimeDeviceArchitectures": ["arm64"],
+    "onnxRuntimeSimulatorArchitectures": ["arm64", "x86_64"],
+    "sherpaDeviceArchitectures": ["arm64"],
+    "sherpaSimulatorArchitectures": ["arm64", "x86_64"],
+    "xcodeBuildClaim": false,
+    "runtimeClaim": false,
+    "signingClaim": false
+  },
+  "wasm": {
+    "status": "pass",
+    "linkingShape": "combined_vad_asr_plus_separate_kws",
+    "vadAsr": {
+      "dataBytes": 46051848,
+      "javascriptBytes": 159943,
+      "wasmBytes": 19273528
+    },
+    "kws": {
+      "dataBytes": 13886660,
+      "javascriptBytes": 155756,
+      "wasmBytes": 17999810
+    }
+  },
+  "browserProbe": {
+    "ok": true,
+    "allRequestedOk": true,
+    "browsers": [
+      {
+        "browser": "chromium",
+        "ok": true,
+        "workerScope": true,
+        "crossOriginIsolated": true,
+        "sharedArrayBuffer": true,
+        "maxIntervalLagMs": 328.3299999833107,
+        "asrNormalizedText": "ask not what your country can do for you ask what you can do for your country",
+        "kwsDetections": ["LOVELY CHILD", "FOREVER"]
+      },
+      {
+        "browser": "firefox",
+        "ok": true,
+        "workerScope": true,
+        "crossOriginIsolated": true,
+        "sharedArrayBuffer": true,
+        "maxIntervalLagMs": 27.239999999997963,
+        "asrNormalizedText": "ask not what your country can do for you ask what you can do for your country",
+        "kwsDetections": ["LOVELY CHILD", "FOREVER"]
+      },
+      {
+        "browser": "webkit",
+        "ok": true,
+        "workerScope": true,
+        "crossOriginIsolated": true,
+        "sharedArrayBuffer": true,
+        "maxIntervalLagMs": 1001.0,
+        "asrNormalizedText": "ask not what your country can do for you ask what you can do for your country",
+        "kwsDetections": ["LOVELY CHILD", "FOREVER"]
+      }
+    ]
+  },
+  "vadParity": {
+    "ok": true,
+    "fullMatrixGate": true,
+    "partialDiagnostics": false,
+    "physicalDeviceClaim": false,
+    "modelSha256": "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28",
+    "wavSha256": "6bc58a4efdf20daac252b6b1502632601a71efe0308f6757dc1eda34891a7e4f",
+    "acceptP95LimitMs": 32.0,
+    "cases": [
+      "cancellation_reset_during_feed",
+      "discontinuity_reset",
+      "full_flush",
+      "long_silence_rolling_buffer",
+      "reset_replay",
+      "second_flush_idempotent"
+    ],
+    "engines": ["native", "chromium", "firefox", "webkit"],
+    "allComparisonsExact": true,
+    "maxObservedAcceptP95Ms": 7.279999999999973
+  },
+  "packDisposition": {
+    "vad": "validation_candidate_only",
+    "kws": "validation_candidate_only",
+    "stt": "validation_candidate_only",
+    "pocketTts": "blocked_noncommercial_pack",
+    "piperTts": "withheld_evidence_only_espeak_license_and_safety_block",
+    "productionCapabilitiesEnabled": false
+  },
+  "externalExclusions": [
+    "live desktop CPAL capture and playback",
+    "Android physical-device microphone, background, thermal, battery, and endurance behavior",
+    "iOS Xcode compilation, runtime linking, simulator and physical-device execution, signing, and App Store review",
+    "signed desktop and mobile release packaging",
+    "integrated production background voice runtime",
+    "PocketTTS production activation",
+    "Piper/espeak production activation"
+  ],
+  "rawReportSha256": {
+    "browserProbe": "bd00e6b1654d99eac74f8a1167304d8b66b592495799112dace7222d1007a0fa",
+    "vadParity": "993000637d42665073345b0289419427a1fc5e26951d20b8aa8386419178f521",
+    "cApiTtsEvidence": "6bfbd5b37ce395cc7ef8686f423af8bcc7af0148e550ef2c8a1402d4d9fa85e7"
+  }
+}

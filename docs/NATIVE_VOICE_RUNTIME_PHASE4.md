@@ -1,7 +1,7 @@
 # Native voice runtime Phase 4 decision record
 
 **Status:** Current bounded check — Phase 4 architecture frozen
-**Snapshot date:** 2026-08-08
+**Snapshot date:** 2026-08-11
 **Audience:** contributors integrating the cross-surface local voice runtime
 
 This page freezes the Phase 4 native voice runtime engine, audio, linking,
@@ -116,7 +116,7 @@ Moonshine extracted file hashes already recorded for integration:
 | Native C API parity and TTS cancellation | Validated locally for evidence only | ASR, VAD, KWS, TTS generation, and TTS callback cancellation probes pass against the local validation/evidence packs. A Rust `1.88.0` wrapper validates header-backed C ABI ownership, STT, and callback cancellation without mirroring sherpa config structs in Rust. The TTS pass does not override the Piper/espeak activation block. |
 | Native HTTP/SSE transport | Validated for a bounded live loopback server | Rust `1.88.0` tests validate ordered event parsing, cancellation, redaction, and bounded non-success bodies, including multibyte input. A live Aurora Gateway process, authentication lifecycle, reconnect, and end-to-end turn remain Phase 5+ work. |
 | WASM linking | Validated locally with the Phase 4 split | One combined VAD+Moonshine STT module and one separate KWS module run behind narrow Worker host boundaries; evidence-only TTS remains separate and blocked. The combined module embeds the exact Phase 4 validation upstream Silero file. |
-| WASM parity and browser nonblocking behavior | Validated locally in Chromium, Firefox, and WebKit | All three browsers decoded the Moonshine test WAV to the same JFK phrase and detected `LOVELY CHILD` plus `FOREVER` with the Phase 4 validation full GigaSpeech BPE pack. The modules ran in dedicated Workers with cross-origin isolation and `SharedArrayBuffer`; page timers continued throughout the final fail-closed matrix with measured maximum lag of about `11.30 ms`, `7.32 ms`, and `339.36 ms`, respectively. Final served KWS artifacts are pinned as JavaScript `75c1bac71f4ce8de73bb24c27f3f4d2f7382861447c5f15ccf0a1d1994b9d883`, WASM `950fc0a780d71ebd098fea9f901b06cec23aec8ad422377dc11424b3c967e011`, and data `c2cd5f08b7cecc883b1d592ef79dfd8eb2cc9e88c3f2612ea3b6c07b6cd66cdc`. The smaller mobile KWS archive remains rejected by the ONNX Runtime reshape abort. |
+| WASM parity and browser nonblocking behavior | Validated locally in Chromium, Firefox, and WebKit | All three browsers decoded the Moonshine test WAV to the same JFK phrase and detected `LOVELY CHILD` plus `FOREVER` with the Phase 4 validation full GigaSpeech BPE pack. The modules ran in dedicated Workers with cross-origin isolation and `SharedArrayBuffer`; page timers continued throughout the fresh matrix with measured maximum lag of about `328.33 ms`, `27.24 ms`, and `1001.00 ms`, respectively. The fresh source-built VAD+ASR and KWS artifact hashes and the full raw-report hashes are recorded in `reports/native-voice/phase4-reverify-20260811/`. The smaller mobile KWS archive remains rejected by the ONNX Runtime reshape abort. |
 | iOS runtime evidence | Pending external platform work | Linux source/host tests establish the typed native session boundary but do not validate Swift compilation, simulator, device, microphone, signing, or App Store readiness. The public iOS native voice capability remains disabled until those gates pass. |
 
 ## Comparison candidates
@@ -154,6 +154,13 @@ cancellation, browser parity/nonblocking matrix, Rust `1.88.0` pin, Android
 emulator capture ingress, and bounded iOS source/host-Rust spike satisfy the
 Phase 4 architecture and portability gate. Phase 5 production-foundation work
 is authorized.
+
+The fresh 2026-08-11 artifact reconstruction and independent adjudication are
+recorded in `reports/native-voice/phase4-reverify-20260811/`. That receipt binds
+the 24-artifact validation, source identity, Linux/Android/WASM outputs, iOS
+slice inspection, C/Rust cancellation probes, and native/browser VAD parity to
+their exact hashes while keeping external platform and activation exclusions
+explicit.
 
 This exit does not activate TTS or PocketTTS, advertise multilingual support,
 or claim Android/iOS physical-device, background, distribution, or policy
