@@ -972,8 +972,41 @@ fn should_suppress_overlay_for_main_focus(main_window_focused: bool) -> bool {
     main_window_focused
 }
 
+trait ManagedSidecarChild: Send {
+    fn id(&self) -> u32;
+    fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>>;
+    fn kill(&mut self) -> std::io::Result<()>;
+    fn wait(&mut self) -> std::io::Result<std::process::ExitStatus>;
+}
+
+impl ManagedSidecarChild for Child {
+    fn id(&self) -> u32 {
+        Child::id(self)
+    }
+
+    fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        Child::try_wait(self)
+    }
+
+    fn kill(&mut self) -> std::io::Result<()> {
+        Child::kill(self)
+    }
+
+    fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
+        Child::wait(self)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SidecarProcessState {
+    NotStarted,
+    Running,
+    Exited,
+    Unknown,
+}
+
 struct SidecarState {
-    child: Option<Child>,
+    child: Option<Box<dyn ManagedSidecarChild>>,
     started_at: Option<Instant>,
     token: String,
     last_error: Option<String>,
@@ -991,23 +1024,54 @@ impl SidecarState {
         }
     }
 
-    fn is_running(&mut self) -> bool {
+    fn process_state(&mut self) -> SidecarProcessState {
         if let Some(child) = self.child.as_mut() {
             match child.try_wait() {
                 Ok(Some(status)) => {
                     self.last_error = Some(format!("sidecar exited with status {status}"));
                     self.child = None;
                     self.started_at = None;
-                    false
+                    SidecarProcessState::Exited
                 }
-                Ok(None) => true,
+                Ok(None) => SidecarProcessState::Running,
                 Err(error) => {
-                    self.last_error = Some(format!("sidecar status check failed: {error}"));
-                    false
+                    self.last_error = Some(redact_sensitive_text(&format!(
+                        "sidecar status check failed: {error}"
+                    )));
+                    SidecarProcessState::Unknown
                 }
             }
         } else {
-            false
+            SidecarProcessState::NotStarted
+        }
+    }
+
+    fn is_running(&mut self) -> bool {
+        self.process_state() == SidecarProcessState::Running
+    }
+}
+
+fn start_sidecar_if_needed<F>(
+    sidecar: &mut SidecarState,
+    spawn: F,
+) -> Result<(), AuroraCommandError>
+where
+    F: FnOnce(&str) -> Result<Box<dyn ManagedSidecarChild>, AuroraCommandError>,
+{
+    match sidecar.process_state() {
+        SidecarProcessState::NotStarted | SidecarProcessState::Exited => {
+            let child = spawn(&sidecar.token)?;
+            sidecar.started_at = Some(Instant::now());
+            sidecar.child = Some(child);
+            sidecar.last_error = None;
+            Ok(())
+        }
+        SidecarProcessState::Running => Ok(()),
+        SidecarProcessState::Unknown => {
+            let error = sidecar.last_error.clone().unwrap_or_else(|| {
+                "sidecar process state is unknown; stop it before restarting".to_string()
+            });
+            Err(AuroraCommandError::SidecarProcess(error))
         }
     }
 }
@@ -1330,12 +1394,7 @@ async fn aurora_sidecar_start(
 
     {
         let mut sidecar = state.lock().map_err(|_| AuroraCommandError::SidecarState)?;
-        if !sidecar.is_running() {
-            let child = spawn_sidecar(&app, &gateway, &sidecar.token)?;
-            sidecar.started_at = Some(Instant::now());
-            sidecar.child = Some(child);
-            sidecar.last_error = None;
-        }
+        start_sidecar_if_needed(&mut sidecar, |token| spawn_sidecar(&app, &gateway, token))?;
     }
 
     aurora_sidecar_status(state).await
@@ -1371,11 +1430,12 @@ async fn aurora_sidecar_status(
     state: State<'_, SharedSidecarState>,
 ) -> Result<SidecarStatus, AuroraCommandError> {
     let gateway = gateway_url()?;
-    let (running, pid, last_error, started_at_ms, token_issued) = {
+    let (process_state, pid, last_error, started_at_ms, token_issued) = {
         let mut sidecar = state.lock().map_err(|_| AuroraCommandError::SidecarState)?;
+        let process_state = sidecar.process_state();
         (
-            sidecar.is_running(),
-            sidecar.child.as_ref().map(std::process::Child::id),
+            process_state,
+            sidecar.child.as_ref().map(|child| child.id()),
             sidecar.last_error.clone(),
             sidecar
                 .started_at
@@ -1383,6 +1443,7 @@ async fn aurora_sidecar_status(
             !sidecar.token.is_empty(),
         )
     };
+    let running = process_state == SidecarProcessState::Running;
 
     let health = check_gateway_health(&gateway).await;
     let mut details = BTreeMap::new();
@@ -1412,6 +1473,15 @@ async fn aurora_sidecar_status(
         json!("automatic-build-and-bundle-with-env-override"),
     );
     details.insert("updaterArtifactsEnabled".to_string(), json!(true));
+    details.insert(
+        "sidecarProcessState".to_string(),
+        json!(match process_state {
+            SidecarProcessState::NotStarted => "not-started",
+            SidecarProcessState::Running => "running",
+            SidecarProcessState::Exited => "exited",
+            SidecarProcessState::Unknown => "unknown",
+        }),
+    );
     if let Some(ms) = started_at_ms {
         details.insert("uptimeMs".to_string(), json!(ms));
     }
@@ -1434,6 +1504,8 @@ async fn aurora_sidecar_status(
             "thin".to_string()
         } else if running {
             "sidecar".to_string()
+        } else if process_state == SidecarProcessState::Unknown {
+            "desktop-local-unknown".to_string()
         } else {
             "desktop-local-stopped".to_string()
         },
@@ -4755,10 +4827,16 @@ fn thin_profile_storage_entry() -> Result<keyring::Entry, AuroraCommandError> {
 
 #[cfg(desktop)]
 fn peer_credential_storage_entry(key: &str) -> Result<keyring::Entry, AuroraCommandError> {
-    if !is_peer_proof_storage_key(key) && !is_room_secret_storage_key(key) {
-        return Err(AuroraCommandError::SecureStorageKeyInvalid(key.to_string()));
-    }
+    validate_peer_credential_storage_key(key)?;
     raw_secure_storage_entry(key)
+}
+
+fn validate_peer_credential_storage_key(key: &str) -> Result<(), AuroraCommandError> {
+    if is_peer_proof_storage_key(key) || is_room_secret_storage_key(key) {
+        Ok(())
+    } else {
+        Err(AuroraCommandError::SecureStorageKeyInvalid(key.to_string()))
+    }
 }
 
 #[cfg(any(desktop, test))]
@@ -6245,6 +6323,11 @@ fn delete_thin_peer_credential_record(peer_id: &str) -> Result<(), AuroraCommand
 
 fn is_peer_proof_storage_key(key: &str) -> bool {
     key.starts_with("aurora.mesh.peer-proof.")
+        && key
+            .strip_prefix("aurora.mesh.peer-proof.")
+            .is_some_and(|suffix| {
+                suffix.len() == 64 && suffix.bytes().all(|byte| byte.is_ascii_hexdigit())
+            })
 }
 
 fn is_inbound_verifier_storage_key(key: &str) -> bool {
@@ -6566,7 +6649,11 @@ fn verify_sidecar_command_token(
     }
 }
 
-fn spawn_sidecar(app: &AppHandle, gateway: &Url, token: &str) -> Result<Child, AuroraCommandError> {
+fn spawn_sidecar(
+    app: &AppHandle,
+    gateway: &Url,
+    token: &str,
+) -> Result<Box<dyn ManagedSidecarChild>, AuroraCommandError> {
     let launch = sidecar_launch(app)?;
     let mut command = Command::new(&launch.program);
     command.args(&launch.args);
@@ -6616,7 +6703,7 @@ fn spawn_sidecar(app: &AppHandle, gateway: &Url, token: &str) -> Result<Child, A
     if let Some(stderr) = child.stderr.take() {
         spawn_sidecar_log_forwarder("stderr", stderr, true);
     }
-    Ok(child)
+    Ok(Box::new(child))
 }
 
 fn spawn_sidecar_log_forwarder<R>(stream: &'static str, reader: R, stderr: bool)
@@ -7744,11 +7831,76 @@ fn install_tray(app: &AppHandle) -> tauri::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::VecDeque;
     use std::io::Write;
     use std::net::TcpListener;
     use std::sync::mpsc;
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[derive(Default)]
+    struct FakeSidecarLog {
+        try_waits: usize,
+        kills: usize,
+        waits: usize,
+    }
+
+    enum FakeSidecarTryWait {
+        Running,
+        Error(&'static str),
+    }
+
+    struct FakeSidecarChild {
+        id: u32,
+        outcomes: VecDeque<FakeSidecarTryWait>,
+        log: Arc<Mutex<FakeSidecarLog>>,
+    }
+
+    impl FakeSidecarChild {
+        fn new(
+            id: u32,
+            outcomes: impl IntoIterator<Item = FakeSidecarTryWait>,
+            log: Arc<Mutex<FakeSidecarLog>>,
+        ) -> Self {
+            Self {
+                id,
+                outcomes: outcomes.into_iter().collect(),
+                log,
+            }
+        }
+    }
+
+    impl ManagedSidecarChild for FakeSidecarChild {
+        fn id(&self) -> u32 {
+            self.id
+        }
+
+        fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+            self.log.lock().unwrap().try_waits += 1;
+            match self
+                .outcomes
+                .pop_front()
+                .unwrap_or(FakeSidecarTryWait::Running)
+            {
+                FakeSidecarTryWait::Running => Ok(None),
+                FakeSidecarTryWait::Error(message) => {
+                    Err(std::io::Error::other(message.to_string()))
+                }
+            }
+        }
+
+        fn kill(&mut self) -> std::io::Result<()> {
+            self.log.lock().unwrap().kills += 1;
+            Ok(())
+        }
+
+        fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
+            self.log.lock().unwrap().waits += 1;
+            Err(std::io::Error::other(
+                "fake child does not provide an exit status",
+            ))
+        }
+    }
 
     struct LoopbackFixture {
         base_url: Url,
@@ -8600,6 +8752,82 @@ mod tests {
     }
 
     #[test]
+    fn sidecar_unknown_status_preserves_handle_and_started_at() {
+        let log = Arc::new(Mutex::new(FakeSidecarLog::default()));
+        let started_at = Instant::now();
+        let mut sidecar = SidecarState::new();
+        sidecar.started_at = Some(started_at);
+        sidecar.child = Some(Box::new(FakeSidecarChild::new(
+            42,
+            [FakeSidecarTryWait::Error(
+                "token=sidecar-secret unavailable",
+            )],
+            Arc::clone(&log),
+        )));
+
+        assert_eq!(sidecar.process_state(), SidecarProcessState::Unknown);
+        assert_eq!(sidecar.child.as_ref().map(|child| child.id()), Some(42));
+        assert_eq!(sidecar.started_at, Some(started_at));
+        assert!(sidecar
+            .last_error
+            .as_deref()
+            .is_some_and(|error| error.contains("[redacted]")));
+        assert!(!sidecar
+            .last_error
+            .as_deref()
+            .unwrap_or_default()
+            .contains("sidecar-secret"));
+        assert_eq!(log.lock().unwrap().try_waits, 1);
+    }
+
+    #[test]
+    fn sidecar_restart_is_refused_when_process_state_is_unknown() {
+        let log = Arc::new(Mutex::new(FakeSidecarLog::default()));
+        let started_at = Instant::now();
+        let mut sidecar = SidecarState::new();
+        sidecar.started_at = Some(started_at);
+        sidecar.child = Some(Box::new(FakeSidecarChild::new(
+            43,
+            [FakeSidecarTryWait::Error(
+                "process table temporarily unavailable",
+            )],
+            Arc::clone(&log),
+        )));
+
+        let result = start_sidecar_if_needed(&mut sidecar, |_| {
+            panic!("unknown sidecar state must not spawn a replacement")
+        });
+
+        assert!(matches!(result, Err(AuroraCommandError::SidecarProcess(_))));
+        assert_eq!(sidecar.child.as_ref().map(|child| child.id()), Some(43));
+        assert_eq!(sidecar.started_at, Some(started_at));
+        assert_eq!(log.lock().unwrap().try_waits, 1);
+    }
+
+    #[test]
+    fn sidecar_explicit_stop_cleans_unknown_child() {
+        let log = Arc::new(Mutex::new(FakeSidecarLog::default()));
+        let mut sidecar = SidecarState::new();
+        sidecar.started_at = Some(Instant::now());
+        sidecar.child = Some(Box::new(FakeSidecarChild::new(
+            44,
+            [FakeSidecarTryWait::Error(
+                "process table temporarily unavailable",
+            )],
+            Arc::clone(&log),
+        )));
+
+        stop_sidecar(&mut sidecar).unwrap();
+
+        assert!(sidecar.child.is_none());
+        assert!(sidecar.started_at.is_none());
+        let log = log.lock().unwrap();
+        assert_eq!(log.try_waits, 1);
+        assert_eq!(log.kills, 1);
+        assert_eq!(log.waits, 1);
+    }
+
+    #[test]
     fn command_error_serialization_redacts_gateway_payloads() {
         let error = AuroraCommandError::Gateway(
             "HTTP 500: {\"token\":\"gateway-token\",\"rawAudio\":\"pcm-secret\"}".to_string(),
@@ -8910,9 +9138,29 @@ mod tests {
         assert!(key.starts_with("aurora.mesh.peer-proof."));
         assert_eq!(key.len(), "aurora.mesh.peer-proof.".len() + 64);
         assert!(validate_secure_storage_key(&key).is_err());
-        #[cfg(desktop)]
-        assert!(peer_credential_storage_entry(&key).is_ok());
+        assert!(validate_peer_credential_storage_key(&key).is_ok());
         assert!(thin_peer_credential_key("").is_err());
+    }
+
+    #[test]
+    fn peer_credential_storage_key_validator_is_limited_to_peer_namespaces() {
+        let peer_key = thin_peer_credential_key("stable-peer").unwrap();
+        let room_key = thin_room_secret_key("stable-room").unwrap();
+
+        assert!(validate_peer_credential_storage_key(&peer_key).is_ok());
+        assert!(validate_secure_storage_key(&peer_key).is_err());
+        assert!(validate_peer_credential_storage_key(&room_key).is_ok());
+
+        for key in [
+            "aurora.session",
+            "aurora.mesh.peer",
+            "aurora.mesh.peer-proof",
+            "aurora.mesh.peer-proof.not-a-generated-key",
+            "aurora.mesh.room-secret",
+            "aurora.mesh.room-secret.not-a-generated-key",
+        ] {
+            assert!(validate_peer_credential_storage_key(key).is_err(), "{key}");
+        }
     }
 
     #[derive(Default)]
