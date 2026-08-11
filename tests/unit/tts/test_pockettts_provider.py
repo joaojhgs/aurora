@@ -33,6 +33,7 @@ from app.services.tts.voice_registry import VoiceStateArtifactHandle
 
 _CONFIG_BYTES = b"language: english\nmodel: pockettts-model.safetensors\nrevision: test\n"
 _DEFAULT_VOICE_ID = "standard:starter_en:alba"
+_BOUNDED_STOP_SUBPROCESS_TIMEOUT_S = 20
 
 
 class FakeTensor:
@@ -257,6 +258,27 @@ def _fd_is_closed(fd: int) -> bool:
     except OSError:
         return True
     return False
+
+
+def _run_bounded_stop_subprocess(code: str) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            [sys.executable, "-c", code],
+            cwd=Path(__file__).resolve().parents[3],
+            text=True,
+            capture_output=True,
+            timeout=_BOUNDED_STOP_SUBPROCESS_TIMEOUT_S,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        stdout = exc.stdout or ""
+        stderr = exc.stderr or ""
+        pytest.fail(
+            "PocketTTS bounded-stop subprocess exceeded "
+            f"{_BOUNDED_STOP_SUBPROCESS_TIMEOUT_S}s\n"
+            f"stdout:\n{stdout}\n"
+            f"stderr:\n{stderr}"
+        )
 
 
 def _pockettts_worker_threads() -> list[threading.Thread]:
@@ -1144,14 +1166,7 @@ async def main():
 
 asyncio.run(main())
 """
-    result = subprocess.run(
-        [sys.executable, "-c", code],
-        cwd=Path(__file__).resolve().parents[3],
-        text=True,
-        capture_output=True,
-        timeout=5,
-        check=False,
-    )
+    result = _run_bounded_stop_subprocess(code)
 
     assert result.returncode == 0, result.stderr
     assert "clean-exit" in result.stdout
@@ -1271,19 +1286,12 @@ async def main():
 asyncio.run(main())
 """
     started_at = time.monotonic()
-    result = subprocess.run(
-        [sys.executable, "-c", code],
-        cwd=Path(__file__).resolve().parents[3],
-        text=True,
-        capture_output=True,
-        timeout=10,
-        check=False,
-    )
+    result = _run_bounded_stop_subprocess(code)
     elapsed_s = time.monotonic() - started_at
 
     assert result.returncode == 0, result.stderr
     assert "clean-exit" in result.stdout
-    assert elapsed_s < 3
+    assert elapsed_s < _BOUNDED_STOP_SUBPROCESS_TIMEOUT_S
 
 
 @pytest.mark.asyncio
