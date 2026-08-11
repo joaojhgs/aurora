@@ -118,6 +118,7 @@ const DEFAULT_TIMEOUT_MS = 30_000
 const DEFAULT_STREAM_QUEUE_LIMIT = 128
 const DEFAULT_FRAGMENT_THRESHOLD = 16 * 1024
 const MAX_INLINE_LOGICAL_BYTES = 64 * 1024
+const FRAGMENT_SEND_YIELD_INTERVAL = 8
 const SUBSCRIBE_TTL_SECONDS = 60
 const TOPIC_RE = /^[A-Za-z0-9_.:/-]+$/
 
@@ -1071,8 +1072,13 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       if (!this.remoteProtocol?.capabilities.has(CAP_FRAGMENTATION_V1)) throw new Error('WebRTC mesh peer did not negotiate fragmentation_v1')
       const fragments = fragmentMessage(json, { messageId: this.randomId(), limits })
       this.sentFragmentCount += fragments.length
-      for (const fragment of fragments) {
+      for (const [index, fragment] of fragments.entries()) {
         await this.session.sendFrame(fragment, signal)
+        const sentCount = index + 1
+        if (
+          sentCount < fragments.length &&
+          (sentCount === 1 || sentCount % FRAGMENT_SEND_YIELD_INTERVAL === 0)
+        ) await yieldToEventLoop()
       }
       return
     }
@@ -1296,6 +1302,10 @@ function sameStringSet(left: string[], right: string[]): boolean {
 
 function utf8Bytes(value: string): number {
   return new TextEncoder().encode(value).length
+}
+
+async function yieldToEventLoop(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
 }
 
 function abortError(): DOMException {

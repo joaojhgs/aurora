@@ -696,10 +696,14 @@ async function runMeshInteropContract({
     await runtime.peer.connect(profile);
     await waitFor(() => runtime.peer.snapshot().state === "authorized", "post-mutation reconnect WebRTC DataChannel", ready.timeoutMs);
     const mutationReconnectPairingPrompts = countPendingPairing(snapshots, mutationStart);
-    const mutationCount = await runtime.client.request(
-      ready.mutationCountTopic,
-      { mutation_id: mutationId },
-      { busTopic: ready.mutationCountTopic, timeoutMs: 5000 },
+    const mutationCount = await retryDesktopProviderReadiness(
+      () => runtime.client.request(
+        ready.mutationCountTopic,
+        { mutation_id: mutationId },
+        { busTopic: ready.mutationCountTopic, timeoutMs: 5000 },
+      ),
+      "desktop live mutation count after WebRTC reconnect",
+      ready.timeoutMs,
     );
 
     const revokeResult = await runtime.client.request(ready.revokeTopic, {}, { busTopic: ready.revokeTopic, timeoutMs: 5000 });
@@ -857,11 +861,14 @@ export async function retryDesktopProviderReadiness<T>(
 function isTransientProviderNotReady(error: unknown): boolean {
   if (isCanonicalProviderNotReadyShape(error)) return true;
   if (!isRecord(error)) return false;
-  return hasCanonicalProviderNotReadyStatus(error) && (
+  if (hasConflictingProviderReadinessEnvelope(error)) return false;
+  if (hasCanonicalProviderNotReadyStatus(error) && (
     error.reason_code === "provider_not_ready" ||
     canonicalReasonCode(error.detail) === "provider_not_ready" ||
     canonicalReasonCode(error.error) === "provider_not_ready"
-  );
+  )) return true;
+  return isCanonicalProviderNotReadyShape(error.detail) ||
+    isCanonicalProviderNotReadyShape(error.error);
 }
 
 function isCanonicalProviderNotReadyShape(value: unknown): boolean {
@@ -871,11 +878,24 @@ function isCanonicalProviderNotReadyShape(value: unknown): boolean {
 }
 
 function hasCanonicalProviderNotReadyStatus(value: Record<string, unknown>): boolean {
-  const hasStatus = value.status !== undefined;
-  const hasCode = value.code !== undefined;
-  if (!hasStatus && !hasCode) return false;
-  return (!hasStatus || value.status === 425) &&
-    (!hasCode || value.code === 425);
+  const status = typeof value.status === "number" ? value.status : null;
+  const numericCode = typeof value.code === "number" ? value.code : null;
+  const semanticCode = typeof value.code === "string" ? value.code : null;
+  if (semanticCode !== null && semanticCode !== "unavailable_service") return false;
+  if (status === null && numericCode === null) return false;
+  return (status === null || status === 425) &&
+    (numericCode === null || numericCode === 425);
+}
+
+function hasConflictingProviderReadinessEnvelope(value: Record<string, unknown>): boolean {
+  const numericStatus = typeof value.status === "number" ? value.status : null;
+  const numericCode = typeof value.code === "number" ? value.code : null;
+  const semanticCode = typeof value.code === "string" ? value.code : null;
+  return (numericStatus !== null && numericStatus !== 425) ||
+    (numericCode !== null && numericCode !== 425) ||
+    (semanticCode !== null &&
+      semanticCode !== "unknown" &&
+      semanticCode !== "unavailable_service");
 }
 
 function canonicalReasonCode(value: unknown): string | null {

@@ -240,6 +240,55 @@ describe("desktop live E2E WebView hook", () => {
     expect(attempts).toBe(2);
   });
 
+  it("retries normalized mesh provider readiness errors with a semantic SDK code", async () => {
+    let attempts = 0;
+    const result = await retryDesktopProviderReadiness(
+      async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw Object.assign(new Error("Provider is not ready"), {
+            code: "unavailable_service",
+            status: 425,
+            detail: { reason_code: "provider_not_ready" },
+          });
+        }
+        return { modules: [] };
+      },
+      "registry readiness test",
+      1000,
+      1,
+    );
+
+    expect(result).toEqual({ modules: [] });
+    expect(attempts).toBe(2);
+  });
+
+  it("retries provider readiness errors nested by mesh normalization", async () => {
+    let attempts = 0;
+    const result = await retryDesktopProviderReadiness(
+      async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw Object.assign(new Error("Provider is not ready"), {
+            code: "unknown",
+            detail: {
+              code: 425,
+              message: "Provider is not ready",
+              reason_code: "provider_not_ready",
+            },
+          });
+        }
+        return { modules: [] };
+      },
+      "registry readiness test",
+      1000,
+      1,
+    );
+
+    expect(result).toEqual({ modules: [] });
+    expect(attempts).toBe(2);
+  });
+
   it("does not retry non-transient provider failures", async () => {
     let attempts = 0;
     const failure = Object.assign(new Error("permission denied"), {
@@ -303,6 +352,26 @@ describe("desktop live E2E WebView hook", () => {
     const failure = Object.assign(new Error("forbidden"), {
       status: 425,
       code: 403,
+      detail: { reason_code: "provider_not_ready" },
+    });
+
+    await expect(retryDesktopProviderReadiness(
+      async () => {
+        attempts += 1;
+        throw failure;
+      },
+      "registry readiness test",
+      1000,
+      1,
+    )).rejects.toBe(failure);
+    expect(attempts).toBe(1);
+  });
+
+  it("does not retry provider readiness reasons normalized to a non-transient SDK code", async () => {
+    let attempts = 0;
+    const failure = Object.assign(new Error("permission denied"), {
+      code: "permission",
+      status: 425,
       detail: { reason_code: "provider_not_ready" },
     });
 

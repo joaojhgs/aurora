@@ -2124,7 +2124,13 @@ class RPCHandler:
             principal_id=principal_id,
             details=audit_details,
         )
-        self._send_error(req_id, code, message, correlation_id=correlation_id)
+        self._send_error(
+            req_id,
+            code,
+            message,
+            correlation_id=correlation_id,
+            reason_code=reason,
+        )
 
     async def _audit_rpc_event(
         self,
@@ -2161,6 +2167,7 @@ class RPCHandler:
         message: str,
         *,
         correlation_id: str | None = None,
+        reason_code: str | None = None,
     ) -> bool:
         """Send an RPC error when the transport is still available.
 
@@ -2169,12 +2176,15 @@ class RPCHandler:
         the response must not escape as an unhandled task exception.
         """
 
+        error: dict[str, Any] = {"code": code, "message": message}
+        if reason_code is not None:
+            error["reason_code"] = reason_code
         frame = json.dumps(
             {
                 "type": "error",
                 "id": req_id,
                 "correlation_id": correlation_id,
-                "error": {"code": code, "message": message},
+                "error": error,
             }
         )
         try:

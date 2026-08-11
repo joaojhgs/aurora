@@ -156,7 +156,11 @@ describe('WebRTC web thin protocol vectors', () => {
 
     const consumerError = peerProtocol.consumer_only.error
     expect(JSON.parse(consumerError.json)).toEqual(consumerError.frame)
-    expect(consumerError.frame.error).toEqual({ code: 405, message: 'Local peer is consumer-only' })
+    expect(consumerError.frame.error).toEqual({
+      code: 405,
+      message: 'Local peer is consumer-only',
+      reason_code: 'consumer_only_peer'
+    })
   })
 
   it('enforces shared provider lease safe-integer semantics from raw JSON', () => {

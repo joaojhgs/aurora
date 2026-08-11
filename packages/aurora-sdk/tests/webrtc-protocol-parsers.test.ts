@@ -111,6 +111,24 @@ describe('WebRTC actual-G002 protocol parsers', () => {
     })
   })
 
+  it('preserves bounded machine-readable reasons on RPC error frames', () => {
+    const frame = {
+      type: 'error',
+      id: 'provider-readiness',
+      error: {
+        code: 425,
+        message: 'Provider is not ready',
+        reason_code: 'provider_not_ready'
+      }
+    }
+
+    expect(parseWebRtcFrame(frame)).toEqual(frame)
+    expect(() => parseWebRtcFrame({
+      ...frame,
+      error: { ...frame.error, reason_code: 'x'.repeat(129) }
+    })).toThrow(/error.reason_code/)
+  })
+
   it('enforces top-level frame size by UTF-8 bytes', () => {
     const json = JSON.stringify({ type: 'result', id: 'emoji', result: { value: '🙂' } })
     const byteLength = utf8Bytes(json)

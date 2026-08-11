@@ -22,7 +22,12 @@ export interface CallFrame {
   identity?: unknown
 }
 export interface ResultFrame { type: 'result'; id: string; result?: unknown }
-export interface ErrorFrame { type: 'error'; id: string; error: { code: number; message: string }; correlation_id?: string }
+export interface ErrorFrame {
+  type: 'error'
+  id: string
+  error: { code: number; message: string; reason_code?: string }
+  correlation_id?: string
+}
 export interface ChunkFrame { type: 'chunk'; id: string; data?: unknown }
 export interface EofFrame { type: 'eof'; id: string; cancelled?: boolean }
 export interface CancelFrame { type: 'cancel'; id: string }
@@ -227,6 +232,9 @@ function parseErrorFrame(object: Record<string, unknown>): ErrorFrame {
       code: requireInteger(error.code, 'error.code', 0, 9999),
       message: requireString(error.message, 'error.message', 4096)
     }
+  }
+  if (error.reason_code !== undefined) {
+    frame.error.reason_code = requireString(error.reason_code, 'error.reason_code', 128)
   }
   if (object.correlation_id !== undefined) frame.correlation_id = requireId(object.correlation_id) as string
   return frame

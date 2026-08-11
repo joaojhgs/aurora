@@ -392,7 +392,7 @@ mod linux {
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Arc;
     use tauri::{AppHandle, Emitter};
-    use tokio::sync::RwLock;
+    use tokio::sync::{Mutex, RwLock};
     use webrtc::api::APIBuilder;
     use webrtc::data_channel::data_channel_init::RTCDataChannelInit;
     use webrtc::data_channel::data_channel_state::RTCDataChannelState;
@@ -411,6 +411,7 @@ mod linux {
         next_data_channel_id: AtomicU64,
         peer_connections: RwLock<HashMap<u64, Arc<RTCPeerConnection>>>,
         data_channels: RwLock<HashMap<u64, StoredDataChannel>>,
+        data_channel_send_locks: RwLock<HashMap<u64, Arc<Mutex<()>>>>,
     }
 
     struct StoredDataChannel {
@@ -566,29 +567,46 @@ mod linux {
         store: &Arc<NativeWebRtcStore>,
         request: NativeDataChannelSendRequest,
     ) -> Result<(), String> {
-        let (peer_connection_id, channel) = data_channel(store, request.data_channel_id).await?;
-        if request.binary {
-            let bytes = BASE64
-                .decode(request.payload.as_bytes())
-                .map_err(|_| "native WebRTC binary payload is not valid base64".to_string())?;
-            channel
-                .send(&Bytes::from(bytes))
-                .await
-                .map_err(redact_error)?;
+        let (peer_connection_id, channel, send_lock) =
+            data_channel_with_send_lock(store, request.data_channel_id).await?;
+        let payload = if request.binary {
+            NativeSendPayload::Binary(
+                BASE64
+                    .decode(request.payload.as_bytes())
+                    .map_err(|_| "native WebRTC binary payload is not valid base64".to_string())?,
+            )
         } else {
-            channel
-                .send_text(request.payload)
-                .await
-                .map_err(redact_error)?;
-        }
-        emit_to_main(
-            &app,
-            NativeWebRtcEventPayload::DataChannelBufferedAmount {
-                peer_connection_id,
-                data_channel_id: request.data_channel_id,
-                buffered_amount: channel.buffered_amount().await,
-            },
-        );
+            NativeSendPayload::Text(request.payload)
+        };
+        let data_channel_id = request.data_channel_id;
+        tauri::async_runtime::spawn(async move {
+            let _send_guard = send_lock.lock().await;
+            let send_result = match payload {
+                NativeSendPayload::Binary(bytes) => channel.send(&Bytes::from(bytes)).await,
+                NativeSendPayload::Text(text) => channel.send_text(text).await,
+            };
+            match send_result {
+                Ok(_) => {
+                    emit_to_main(
+                        &app,
+                        NativeWebRtcEventPayload::DataChannelBufferedAmount {
+                            peer_connection_id,
+                            data_channel_id,
+                            buffered_amount: channel.buffered_amount().await,
+                        },
+                    );
+                }
+                Err(error) => {
+                    emit_error(
+                        &app,
+                        peer_connection_id,
+                        Some(data_channel_id),
+                        "data-channel",
+                        error,
+                    );
+                }
+            }
+        });
         Ok(())
     }
 
@@ -602,6 +620,11 @@ mod linux {
             .await
             .remove(&data_channel_id)
             .ok_or_else(|| "native WebRTC data channel is unavailable".to_string())?;
+        store
+            .data_channel_send_locks
+            .write()
+            .await
+            .remove(&data_channel_id);
         stored.channel.close().await.map_err(redact_error)
     }
 
@@ -652,6 +675,12 @@ mod linux {
                 .filter_map(|id| stored.remove(id).map(|item| item.channel))
                 .collect::<Vec<_>>()
         };
+        {
+            let mut send_locks = store.data_channel_send_locks.write().await;
+            for id in &channel_ids {
+                send_locks.remove(id);
+            }
+        }
         for channel in channels {
             let _ = channel.close().await;
         }
@@ -744,6 +773,11 @@ mod linux {
                 channel: Arc::clone(&channel),
             },
         );
+        store
+            .data_channel_send_locks
+            .write()
+            .await
+            .insert(data_channel_id, Arc::new(Mutex::new(())));
 
         let message_app = app.clone();
         channel.on_message(Box::new(move |message| {
@@ -773,6 +807,11 @@ mod linux {
             let store = Arc::clone(&close_store);
             Box::pin(async move {
                 store.data_channels.write().await.remove(&data_channel_id);
+                store
+                    .data_channel_send_locks
+                    .write()
+                    .await
+                    .remove(&data_channel_id);
                 emit_to_main(
                     &app,
                     NativeWebRtcEventPayload::DataChannelClose {
@@ -884,6 +923,26 @@ mod linux {
             .get(&data_channel_id)
             .map(|stored| (stored.peer_connection_id, Arc::clone(&stored.channel)))
             .ok_or_else(|| "native WebRTC data channel is unavailable".to_string())
+    }
+
+    async fn data_channel_with_send_lock(
+        store: &Arc<NativeWebRtcStore>,
+        data_channel_id: u64,
+    ) -> Result<(u64, Arc<RTCDataChannel>, Arc<Mutex<()>>), String> {
+        let (peer_connection_id, channel) = data_channel(store, data_channel_id).await?;
+        let send_lock = store
+            .data_channel_send_locks
+            .read()
+            .await
+            .get(&data_channel_id)
+            .cloned()
+            .ok_or_else(|| "native WebRTC data channel is unavailable".to_string())?;
+        Ok((peer_connection_id, channel, send_lock))
+    }
+
+    enum NativeSendPayload {
+        Binary(Vec<u8>),
+        Text(String),
     }
 
     fn rtc_description(

@@ -392,6 +392,7 @@ async def test_mesh_gate_blocks_provider_rpc_until_manifest_ack_readiness(
     assert response["type"] == "error"
     assert response["error"]["code"] == 425
     assert response["error"]["message"] == "Provider is not ready"
+    assert response["error"]["reason_code"] == "provider_not_ready"
     mock_bus.request.assert_not_called()
 
     mock_send_fn.reset_mock()

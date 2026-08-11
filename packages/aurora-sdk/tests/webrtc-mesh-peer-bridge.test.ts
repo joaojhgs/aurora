@@ -195,7 +195,11 @@ describe('WebRtcMeshPeerBridge', () => {
     session.emit(hello())
     const payload = { blob: 'x'.repeat(512 * 1024) }
     const promise = bridge.call({ peerId: 'peer-a', method: 'Large', busTopic: 'Large', payload, timeoutMs: 1000, candidates: [] })
-    await flush()
+    await vi.waitFor(() => {
+      const firstFragment = session.sent[0] as any
+      expect(firstFragment?.type).toBe('fragment')
+      expect(session.sent).toHaveLength(firstFragment.total)
+    })
     expect(session.sent.length).toBeGreaterThan(1)
     expect((session.sent[0] as any).type).toBe('fragment')
 
@@ -204,6 +208,153 @@ describe('WebRtcMeshPeerBridge', () => {
     for (const fragment of fragments) session.emit(fragment)
     for (const fragment of fragments) session.emit(fragment)
     await expect(promise).resolves.toMatchObject({ data: { blob: 'y'.repeat(512 * 1024) } })
+  })
+
+  it('lets reverse control frames interleave with a large fragmented send', async () => {
+    const session = new FakeSession()
+    let reversePingScheduled = false
+    session.sendFrameGate = (frame) => {
+      if (reversePingScheduled || (frame as any).type !== 'fragment') return
+      reversePingScheduled = true
+      setTimeout(() => session.emit({ type: 'ping', id: 'reverse-during-large-send' }), 0)
+    }
+    const bridge = new WebRtcMeshPeerBridge({
+      session,
+      remotePeerId: 'peer-a',
+      randomId: () => 'fragment-fairness',
+      fragmentationThresholdBytes: 1024
+    })
+    session.emit(hello())
+
+    const request = bridge.call({
+      peerId: 'peer-a',
+      method: 'Large',
+      busTopic: 'Large',
+      payload: { blob: 'x'.repeat(512 * 1024) },
+      correlationId: 'large-with-reverse-control',
+      timeoutMs: 1000,
+      candidates: []
+    })
+
+    await vi.waitFor(() => {
+      expect(session.sent.some((frame) => (frame as any).type === 'pong')).toBe(true)
+      const firstFragment = session.sent.find((frame) => (frame as any).type === 'fragment') as any
+      const fragments = session.sent.filter((frame) => (frame as any).type === 'fragment')
+      expect(fragments).toHaveLength(firstFragment.total)
+    })
+
+    const pongIndex = session.sent.findIndex((frame) => (frame as any).type === 'pong')
+    const lastFragmentIndex = session.sent.reduce(
+      (last: number, frame, index) => (frame as any).type === 'fragment' ? index : last,
+      -1
+    )
+    expect(pongIndex).toBeGreaterThan(0)
+    expect(pongIndex).toBeLessThan(lastFragmentIndex)
+
+    session.emit({ type: 'result', id: 'large-with-reverse-control', result: { ok: true } })
+    await expect(request).resolves.toMatchObject({ data: { ok: true } })
+    bridge.close()
+  })
+
+  it('dispatches reverse Tooling.ExecuteTool calls during a large fragmented send', async () => {
+    const session = new FakeSession()
+    const executeTool = vi.fn(async () => ({
+      ok: true,
+      data: { handled: true },
+      status: 'success' as const
+    }))
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry: createToolingPeerHostRegistry({
+        getTools: async () => ({ count: 0, tools: [] }),
+        getExportCatalog: async () => { throw new Error('not implemented') },
+        prepareExecution: async () => { throw new Error('not implemented') },
+        executeTool
+      }),
+      authorizationStore: new SessionPeerHostAuthorizationStore([
+        localGrant({ allowedMethodIds: ['Tooling.GetTools', 'Tooling.ExecuteTool'] })
+      ]),
+      clock: () => 1000,
+      randomId: (() => { let i = 0; return () => `execute-epoch-${++i}` })()
+    })
+    const bridge = new WebRtcMeshPeerBridge({
+      session,
+      remotePeerId: 'peer-a',
+      localPeerRole: 'hybrid',
+      peerHost,
+      randomId: () => 'fragmented-execute-fairness',
+      fragmentationThresholdBytes: 16 * 1024,
+      localProtocolHello: buildProtocolHello({
+        role: 'hybrid',
+        capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1]
+      })
+    })
+    session.emit(buildProtocolHello({
+      role: 'hybrid',
+      capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1]
+    }))
+    await flush()
+    await flush()
+    await vi.waitFor(() => {
+      expect(session.sent.some((frame) => (frame as any).type === 'manifest')).toBe(true)
+    })
+    session.emit(ackFromSentManifest(session))
+    await flush()
+    session.sent = []
+
+    let reverseCallScheduled = false
+    session.sendFrameGate = (frame) => {
+      if (reverseCallScheduled || (frame as any).type !== 'fragment') return
+      reverseCallScheduled = true
+      setTimeout(() => session.emit({
+        type: 'call',
+        id: 'reverse-execute-during-large-send',
+        method: 'Tooling.ExecuteTool',
+        params: {
+          tool_name: 'interop.browser.echo',
+          arguments: { message: 'hello' }
+        },
+        identity: {
+          caller_peer_id: 'peer-a',
+          effective_perms: ['Tooling.ExecuteTool']
+        }
+      }), 0)
+    }
+
+    const request = bridge.call({
+      peerId: 'peer-a',
+      method: 'Large',
+      busTopic: 'Large',
+      payload: { blob: 'x'.repeat(512 * 1024) },
+      correlationId: 'large-with-reverse-execute',
+      timeoutMs: 5000,
+      candidates: []
+    })
+
+    await vi.waitFor(() => {
+      expect(executeTool).toHaveBeenCalledTimes(1)
+      const result = session.sent.find((frame) => (frame as any).type === 'result' && (frame as any).id === 'reverse-execute-during-large-send')
+      expect(result).toMatchObject({ result: { ok: true, data: { handled: true }, status: 'success' } })
+      const firstFragment = session.sent.find((frame) => (frame as any).type === 'fragment') as any
+      const fragments = session.sent.filter((frame) => (frame as any).type === 'fragment')
+      expect(fragments).toHaveLength(firstFragment.total)
+    })
+
+    const executeResultIndex = session.sent.findIndex(
+      (frame) => (frame as any).type === 'result' && (frame as any).id === 'reverse-execute-during-large-send'
+    )
+    const lastFragmentIndex = session.sent.reduce(
+      (last: number, frame, index) => (frame as any).type === 'fragment' ? index : last,
+      -1
+    )
+    expect(executeResultIndex).toBeGreaterThan(0)
+    expect(executeResultIndex).toBeLessThan(lastFragmentIndex)
+    expect(await isSettled(request)).toBe(false)
+
+    session.emit({ type: 'result', id: 'large-with-reverse-execute', result: { ok: true } })
+    await expect(request).resolves.toMatchObject({ data: { ok: true } })
+    bridge.close()
   })
 
   it('streams scoped events with correlation isolation and rejects wildcard subscriptions', async () => {
@@ -1475,7 +1626,11 @@ describe('WebRtcMeshPeerBridge', () => {
     const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: (() => { let i = 0; return () => i++ === 0 ? 'call-8k' : `frag-${i}` })(), fragmentationThresholdBytes: 64 * 1024 })
     session.emit(buildProtocolHello({ role: 'provider', capabilities: [CAP_FRAGMENTATION_V1], limits }))
     void bridge.call({ peerId: 'peer-a', method: 'LargeUtf8', busTopic: 'LargeUtf8', payload: { blob: 'é'.repeat(4096) }, timeoutMs: 1000, candidates: [] }).catch(() => undefined)
-    await flush()
+    await vi.waitFor(() => {
+      const firstFragment = session.sent[0] as any
+      expect(firstFragment?.type).toBe('fragment')
+      expect(session.sent).toHaveLength(firstFragment.total)
+    })
     expect(session.sent.length).toBeGreaterThan(1)
     expect(session.sent.every((frame) => (frame as any).type === 'fragment')).toBe(true)
     expect((session.sent[0] as any).payload_b64.length).toBeGreaterThan(0)

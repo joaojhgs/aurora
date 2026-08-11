@@ -494,7 +494,11 @@ def _peer_protocol_vectors() -> dict[str, Any]:
         "type": "error",
         "id": "provider-call-001",
         "correlation_id": "provider-call-001",
-        "error": {"code": 405, "message": "Local peer is consumer-only"},
+        "error": {
+            "code": 405,
+            "message": "Local peer is consumer-only",
+            "reason_code": "consumer_only_peer",
+        },
     }
     return {
         "capability_names": [
