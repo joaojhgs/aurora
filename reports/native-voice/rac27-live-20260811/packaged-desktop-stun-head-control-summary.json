@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "capturedAtUtc": "2026-08-11T08:29:00Z",
+  "sourceCommit": "33a023756b2862392a981fc74ac0566f13a72d78",
+  "binary": {
+    "path": "apps/aurora-tauri/src-tauri/target/debug/aurora-tauri",
+    "sha256": "ee24c44e4332d0cb30516ce9e84c3c8b80d25aa8135cd208312e4596fe2c5c7a",
+    "builtAtUtc": "2026-08-11T08:21:45Z"
+  },
+  "lane": "stun",
+  "runs": [
+    {
+      "artifactPath": "/tmp/aurora-desktop-rac27-head-control-20260811-stun-0823/report.json",
+      "reportSha256": "cb13cc0b2e77fbbc46e13d06b2bdbead47c98bd8d254144da7598aa8edf99dbd",
+      "aggregateStatus": "failed"
+    },
+    {
+      "artifactPath": "/tmp/aurora-desktop-rac27-head-control-20260811-stun-rerun-0827/report.json",
+      "reportSha256": "b544773dc5f00bec1ad62d737258afd0a56d5e4e145e1f1651ecb8f666f175e2",
+      "aggregateStatus": "failed"
+    }
+  ],
+  "repeatablePassedSubclaims": {
+    "selectedCandidateCategory": "srflx",
+    "configuredStunServerCount": 1,
+    "publicReverseRpcCanary": true,
+    "httpFallbackUsed": false,
+    "fragmentedRpcBytes": 524288,
+    "sentFragmentCount": 33,
+    "receivedFragmentCount": 33,
+    "requestSha256": "ec8bb338811bbf800a8b5e507d06e08a1d9d05bde74294f6f7388f3bbfba82e5",
+    "resultSha256": "ada7d34299a07770b1d2499502a9458b37bc5da01a577d93a2f0e884734af4cc",
+    "secretsRedacted": true,
+    "authenticatedPeerCountAfterRevocation": 0,
+    "routeAuthorizedAfterRevocation": false
+  },
+  "repeatableFailedAssertion": {
+    "name": "revokedCredentialFailsClosed",
+    "observedFinalState": "discovering-peer",
+    "observedPendingPairingPrompts": 0,
+    "requiredPendingPairingPrompts": 1,
+    "classification": "harness-observation-window",
+    "reason": "The aggregate scanner additionally requires a new pairing prompt, but both exact-HEAD runs sampled the STUN reconnect after a fixed 2.5-second wait while it was still discovering the peer. Revocation itself succeeded and both sides reported zero authorized or connected peers."
+  },
+  "focusedVerification": {
+    "nativeWebrtcVitest": "4 passed",
+    "cargoCheckDesktopLiveWebdriver": "passed"
+  },
+  "disposition": {
+    "rac27": "partial",
+    "countsChanged": false,
+    "nextAction": "Repair the bounded post-revocation harness wait, rerun the STUN aggregate once, then consolidate exact-source direct/STUN/TURN evidence."
+  },
+  "secretsRedacted": true
+}

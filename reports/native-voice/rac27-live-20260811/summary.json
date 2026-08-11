@@ -31,6 +31,17 @@
       "status": "passed",
       "candidateCategory": "host",
       "secretsRedacted": true
+    },
+    "packagedDesktopStunHeadControl": {
+      "file": "packaged-desktop-stun-head-control-summary.json",
+      "sourceCommit": "33a023756b2862392a981fc74ac0566f13a72d78",
+      "binarySha256": "ee24c44e4332d0cb30516ce9e84c3c8b80d25aa8135cd208312e4596fe2c5c7a",
+      "status": "failed",
+      "candidateCategory": "srflx",
+      "transportSubclaimsPassed": true,
+      "repeatableFailedAssertion": "revokedCredentialFailsClosed",
+      "failureClassification": "harness-observation-window",
+      "secretsRedacted": true
     }
   },
   "turnRecovery": {
@@ -82,9 +93,9 @@
     "rac27": "partial",
     "countsChanged": false,
     "remaining": [
-      "persisted successful integrated TURN report",
-      "packaged desktop STUN and TURN lanes",
-      "fresh aggregate live run from the integrated branch"
+      "bounded post-revocation STUN harness repair and passing aggregate",
+      "exact-source packaged direct/STUN/TURN retained aggregate",
+      "remaining Android, physical-device, signing, rollback, and endurance gates"
     ]
   },
   "secretsRedacted": true
