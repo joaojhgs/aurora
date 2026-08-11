@@ -178,13 +178,13 @@ export class BrowserAudioWorkletPcmSource implements AuroraAudioWorkletPcmSource
       sourceNode.connect(workletNode)
       this.assertPendingStart(pendingStart)
       this.active = active
-    } catch {
+    } catch (error) {
       safeDisconnect(sourceNode)
       safeDisconnect(workletNode)
       safeClosePort(workletNode?.port)
       stopTracks(mediaStream)
       await safeCloseContext(context)
-      throw new AuroraVoiceWebRuntimeError('audio_source_start_failed', 'Voice capture could not start')
+      throw classifyAudioSourceStartError(error)
     } finally {
       if (this.pendingStart === pendingStart) this.pendingStart = null
     }
@@ -619,6 +619,39 @@ async function getUserMediaWithLateStop(promise: Promise<MediaStream>, timeoutMs
     timedOut = true
     throw error
   }
+}
+
+function classifyAudioSourceStartError(error: unknown): AuroraVoiceWebRuntimeError {
+  if (error instanceof AuroraVoiceWebRuntimeError) {
+    if (
+      error.code === 'audio_source_start_cancelled' ||
+      error.code === 'audio_source_start_timeout' ||
+      error.code === 'audio_source_suspended' ||
+      error.code === 'audio_source_unavailable'
+    ) {
+      return error
+    }
+    return new AuroraVoiceWebRuntimeError('audio_source_start_failed', 'Voice capture could not start')
+  }
+  const name = browserErrorName(error)
+  if (name) {
+    if (name === 'NotAllowedError' || name === 'SecurityError') {
+      return new AuroraVoiceWebRuntimeError('audio_source_permission_denied', 'Microphone permission was denied')
+    }
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+      return new AuroraVoiceWebRuntimeError('audio_source_no_input_device', 'No microphone was found')
+    }
+    if (name === 'NotReadableError' || name === 'AbortError') {
+      return new AuroraVoiceWebRuntimeError('audio_source_unavailable', 'Voice capture is not available')
+    }
+  }
+  return new AuroraVoiceWebRuntimeError('audio_source_start_failed', 'Voice capture could not start')
+}
+
+function browserErrorName(error: unknown): string {
+  if (typeof error !== 'object' || error === null || !('name' in error)) return ''
+  const name = (error as { name?: unknown }).name
+  return typeof name === 'string' ? name : ''
 }
 
 async function delay(ms: number): Promise<void> {

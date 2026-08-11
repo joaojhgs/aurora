@@ -918,6 +918,78 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(container.textContent).not.toContain('/private/device/path')
   })
 
+  it.each([
+    ['audio_source_permission_denied', 'Microphone permission was denied.', 'permission-denied'],
+    ['audio_source_no_input_device', 'No microphone was found on this device.', 'no-device'],
+    ['audio_source_unavailable', 'Microphone capture failed. Try again.', 'error'],
+    ['audio_source_start_failed', 'Microphone capture failed. Try again.', 'error']
+  ] as const)('maps hosted voice startup code %s to sanitized recovery state', async (code, copy, expectedStatus) => {
+    const runtime = createRuntimeMock({ capturedPcm: new Int16Array() })
+    runtime.start.mockRejectedValueOnce(Object.assign(new Error('/private/device/path'), { code }))
+    voiceRuntimeMock.create.mockReturnValue(runtime)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const container = renderAssistant(client, hostedSurface())
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-voice-recovery="true"]')?.textContent).toBe(copy)
+    })
+
+    expect(container.textContent).not.toContain('/private/device/path')
+    expect(buildAssistantVoiceModel({
+      client,
+      route: assistantRoute(),
+      surfaceProfile: hostedSurface(),
+      captureStatus: expectedStatus,
+      consentGranted: false,
+    }).captureStatus).toBe(expectedStatus)
+  })
+
+  it('maps name-shaped hosted voice startup errors when DOMException is unavailable', async () => {
+    vi.stubGlobal('DOMException', undefined)
+    const runtime = createRuntimeMock({ capturedPcm: new Int16Array() })
+    runtime.start.mockRejectedValueOnce({ name: 'NotAllowedError', message: '/private/device/path' })
+    voiceRuntimeMock.create.mockReturnValue(runtime)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const container = renderAssistant(client, hostedSurface())
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-voice-recovery="true"]')?.textContent)
+        .toBe('Microphone permission was denied.')
+    })
+
+    expect(container.textContent).not.toContain('/private/device/path')
+    expect(container.querySelector('[data-voice-recovery="true"]')).toBeTruthy()
+  })
+
+  it.each(['start_cancelled', 'audio_source_start_cancelled'] as const)('keeps hosted voice startup cancellation silent for code %s', async (code) => {
+    const runtime = createRuntimeMock({ capturedPcm: new Int16Array() })
+    runtime.start.mockRejectedValueOnce(Object.assign(new Error('/private/device/path'), { code }))
+    voiceRuntimeMock.create.mockReturnValue(runtime)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const container = renderAssistant(client, hostedSurface())
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-voice-recovery="true"]')).toBeNull()
+      expect(findButton(container, 'Push to talk')).toBeTruthy()
+    })
+
+    expect(container.textContent).not.toContain('/private/device/path')
+    expect(container.textContent).not.toContain('Microphone capture failed')
+    expect(container.textContent).not.toContain('No microphone was found')
+  })
+
   it('routes desktop-thin focused voice only through the native desktop port', async () => {
     const getUserMedia = vi.fn()
     const mediaRecorder = vi.fn()

@@ -136,13 +136,14 @@ export class AuroraVoiceWebRuntime {
       this.assertStartStillCurrent(nextSession)
       this.emit('session_started', null, null, 0, 0, 0, null)
       return nextSession
-    } catch {
-      await this.bestEffortCancelHosts(nextSession, workerStarted, 'start_failed')
+    } catch (error) {
+      const failure = classifyRuntimeStartError(error)
+      await this.bestEffortCancelHosts(nextSession, workerStarted, failure.code)
       if (this.session === nextSession) {
-        this.emit('error', null, nextSession.generation, 0, 0, 0, 'start_failed')
+        this.emit('error', null, nextSession.generation, 0, 0, 0, failure.code)
         this.clearSession('cancelled')
       }
-      throw new AuroraVoiceWebRuntimeError('start_failed', 'Voice session could not start')
+      throw failure
     }
   }
 
@@ -466,6 +467,26 @@ function boundedIntegerInRange(value: number, label: string, min: number, max: n
     throw new AuroraVoiceWebRuntimeError('invalid_option', `${label} is out of range`)
   }
   return value
+}
+
+function classifyRuntimeStartError(error: unknown): AuroraVoiceWebRuntimeError {
+  if (!(error instanceof AuroraVoiceWebRuntimeError)) {
+    return new AuroraVoiceWebRuntimeError('start_failed', 'Voice session could not start')
+  }
+  if (error.code === 'start_cancelled' || error.code === 'audio_source_start_cancelled') {
+    return new AuroraVoiceWebRuntimeError('start_cancelled', 'Voice session start was cancelled')
+  }
+  if (
+    error.code === 'audio_source_permission_denied' ||
+    error.code === 'audio_source_no_input_device' ||
+    error.code === 'audio_source_unavailable' ||
+    error.code === 'audio_source_start_timeout' ||
+    error.code === 'audio_source_suspended' ||
+    error.code === 'audio_source_start_failed'
+  ) {
+    return error
+  }
+  return new AuroraVoiceWebRuntimeError('start_failed', 'Voice session could not start')
 }
 
 function requireNonEmpty(value: string, label: string): string {

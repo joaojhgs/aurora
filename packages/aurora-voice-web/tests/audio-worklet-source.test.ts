@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   AURORA_AUDIO_WORKLET_OUTPUT_SAMPLE_RATE_HZ,
@@ -161,6 +161,58 @@ describe('BrowserAudioWorkletPcmSource', () => {
     expect(ports.contextClosed).toBe(true)
   })
 
+  it('classifies browser microphone startup errors without exposing device details', async () => {
+    const cases = [
+      ['NotAllowedError', 'audio_source_permission_denied', 'Microphone permission was denied'],
+      ['SecurityError', 'audio_source_permission_denied', 'Microphone permission was denied'],
+      ['NotFoundError', 'audio_source_no_input_device', 'No microphone was found'],
+      ['DevicesNotFoundError', 'audio_source_no_input_device', 'No microphone was found'],
+      ['NotReadableError', 'audio_source_unavailable', 'Voice capture is not available'],
+      ['AbortError', 'audio_source_unavailable', 'Voice capture is not available']
+    ] as const
+
+    for (const [name, code, message] of cases) {
+      const source = new BrowserAudioWorkletPcmSource({
+        mediaDevices: {
+          getUserMedia: async () => {
+            throw new DOMException('/private/device/path', name)
+          }
+        },
+        audioContextFactory: () => new FakeBrowserPorts().context,
+        workletNodeFactory: () => new FakeBrowserPorts().workletNode,
+        processorUrl: 'processor.js'
+      })
+
+      await expect(source.start(session(), new RecordingSink())).rejects.toMatchObject({ code, message })
+      await expect(source.start(session(), new RecordingSink())).rejects.not.toThrow('/private/device/path')
+    }
+  })
+
+  it('classifies name-shaped microphone startup errors when DOMException is unavailable', async () => {
+    const originalDomException = globalThis.DOMException
+    vi.stubGlobal('DOMException', undefined)
+    try {
+      const source = new BrowserAudioWorkletPcmSource({
+        mediaDevices: {
+          getUserMedia: async () => {
+            throw { name: 'NotAllowedError', message: '/private/device/path' }
+          }
+        },
+        audioContextFactory: () => new FakeBrowserPorts().context,
+        workletNodeFactory: () => new FakeBrowserPorts().workletNode,
+        processorUrl: 'processor.js'
+      })
+
+      await expect(source.start(session(), new RecordingSink())).rejects.toMatchObject({
+        code: 'audio_source_permission_denied',
+        message: 'Microphone permission was denied'
+      })
+      await expect(source.start(session(), new RecordingSink())).rejects.not.toThrow('/private/device/path')
+    } finally {
+      vi.stubGlobal('DOMException', originalDomException)
+    }
+  })
+
   it('stops a late getUserMedia stream after start timeout', async () => {
     const lateStream = new FakeMediaStream()
     let resolveStream!: (stream: MediaStream) => void
@@ -176,7 +228,7 @@ describe('BrowserAudioWorkletPcmSource', () => {
       startTimeoutMs: 100
     })
 
-    await expect(source.start(session(), new RecordingSink())).rejects.toMatchObject({ code: 'audio_source_start_failed' })
+    await expect(source.start(session(), new RecordingSink())).rejects.toMatchObject({ code: 'audio_source_start_timeout' })
     resolveStream(lateStream as unknown as MediaStream)
     await nextTurn()
 
@@ -207,7 +259,7 @@ describe('BrowserAudioWorkletPcmSource', () => {
     await source.cancel('session-a')
     resolveStream(lateStream as unknown as MediaStream)
 
-    await expect(starting).rejects.toMatchObject({ code: 'audio_source_start_failed' })
+    await expect(starting).rejects.toMatchObject({ code: 'audio_source_start_cancelled' })
     expect(lateStream.track.stopped).toBe(true)
     expect(contextCreated).toBe(false)
   })

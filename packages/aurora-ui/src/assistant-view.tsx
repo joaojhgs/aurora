@@ -2622,7 +2622,7 @@ export function AssistantView({
       const files = await Promise.all(handles.map((handle) => handle.getFile()))
       await stageAttachmentFiles(files)
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return
+      if (browserErrorName(error) === 'AbortError') return
       attachmentInputRef.current?.click()
     }
   }
@@ -3151,9 +3151,9 @@ export function AssistantView({
       await cancelBrowserVoiceRuntime('start_failed')
       activeVoiceSessionRef.current = null
       ownedVoiceSessionIdsRef.current.clear()
-      const name = error instanceof DOMException ? error.name : ''
-      setLastError(productAudioCaptureErrorCopy(error))
-      setVoiceCaptureStatus(name === 'NotAllowedError' || name === 'SecurityError' ? 'permission-denied' : 'no-device')
+      const nextStatus = voiceCaptureStatusForStartError(error)
+      setLastError(nextStatus === 'idle' ? null : productAudioCaptureErrorCopy(error))
+      setVoiceCaptureStatus(nextStatus)
       return false
     }
   }
@@ -3370,7 +3370,7 @@ export function AssistantView({
         const fallbackStarted = await startCoordinatorPushToTalk(sessionId, { fallback: true })
         if (fallbackStarted) return
       }
-      const name = error instanceof DOMException ? error.name : ''
+      const name = browserErrorName(error)
       setLastError(productAudioCaptureErrorCopy(error))
       setVoiceCaptureStatus(name === 'NotAllowedError' || name === 'SecurityError' ? 'permission-denied' : 'no-device')
     }
@@ -6329,16 +6329,59 @@ function waveformBarsFromTimeDomain(samples: Uint8Array, barCount: number): numb
 }
 
 function productAudioCaptureErrorCopy(error: unknown): string {
-  if (error instanceof DOMException) {
-    if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
+  const code = voiceCaptureErrorCode(error)
+  if (code === 'audio_source_permission_denied') {
+    return 'Microphone permission was denied.'
+  }
+  if (code === 'audio_source_no_input_device') {
+    return 'No microphone was found on this device.'
+  }
+  if (code === 'start_cancelled' || code === 'audio_source_start_cancelled') {
+    return 'Microphone start was cancelled. Try again.'
+  }
+  if (
+    code === 'audio_source_unavailable' ||
+    code === 'audio_source_start_timeout' ||
+    code === 'audio_source_suspended' ||
+    code === 'audio_source_start_failed' ||
+    code === 'start_failed'
+  ) {
+    return 'Microphone capture failed. Try again.'
+  }
+  const name = browserErrorName(error)
+  if (name) {
+    if (name === 'NotAllowedError' || name === 'SecurityError') {
       return 'Microphone permission was denied.'
     }
-    if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
       return 'No microphone was found on this device.'
     }
     return 'Microphone capture failed. Try again.'
   }
   return 'Microphone capture failed. Try again.'
+}
+
+function voiceCaptureStatusForStartError(error: unknown): VoiceCaptureStatus {
+  const code = voiceCaptureErrorCode(error)
+  if (code === 'audio_source_permission_denied') return 'permission-denied'
+  if (code === 'audio_source_no_input_device') return 'no-device'
+  if (code === 'start_cancelled' || code === 'audio_source_start_cancelled') return 'idle'
+  const name = browserErrorName(error)
+  if (name === 'NotAllowedError' || name === 'SecurityError') return 'permission-denied'
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') return 'no-device'
+  return 'error'
+}
+
+function voiceCaptureErrorCode(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return null
+  const code = (error as { code?: unknown }).code
+  return typeof code === 'string' ? code : null
+}
+
+function browserErrorName(error: unknown): string {
+  if (typeof error !== 'object' || error === null || !('name' in error)) return ''
+  const name = (error as { name?: unknown }).name
+  return typeof name === 'string' ? name : ''
 }
 
 function resampleFloat32(input: Float32Array, sourceRate: number, targetRate: number): Float32Array {

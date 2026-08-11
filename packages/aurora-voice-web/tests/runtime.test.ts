@@ -136,7 +136,7 @@ describe('AuroraVoiceWebRuntime', () => {
     await runtime.cancel('user_cancelled')
     source.finishStarting()
 
-    await expect(starting).rejects.toMatchObject({ code: 'start_failed' })
+    await expect(starting).rejects.toMatchObject({ code: 'start_cancelled' })
     expect(source.calls.filter((call) => call === 'cancel')).not.toHaveLength(0)
     expect(worker.commandsOf('cancel').length).toBeGreaterThanOrEqual(1)
     expect(runtime.snapshot()).toMatchObject({ state: 'cancelled', sessionId: null, queuedBytes: 0 })
@@ -158,9 +158,33 @@ describe('AuroraVoiceWebRuntime', () => {
     await expect(runtime.start()).resolves.toMatchObject({ ownerId: 'owner-a', generation: 2 })
     source.finishStarting()
 
-    await expect(staleStart).rejects.toMatchObject({ code: 'start_failed' })
+    await expect(staleStart).rejects.toMatchObject({ code: 'start_cancelled' })
     expect(runtime.snapshot()).toMatchObject({ state: 'active', generation: 2, sessionId: 'owner-a:2' })
     await runtime.cancel()
+  })
+
+  it('preserves sanitized browser audio source startup classifications', async () => {
+    const cases = [
+      'audio_source_permission_denied',
+      'audio_source_no_input_device',
+      'audio_source_unavailable',
+      'audio_source_start_timeout',
+      'audio_source_suspended',
+      'audio_source_start_failed'
+    ] as const
+
+    for (const code of cases) {
+      const worker = new RecordingVoiceWorkerHost()
+      const source = new CodedFailingSource(code)
+      const runtime = new AuroraVoiceWebRuntime({ ownerId: `owner-${code}`, worker, pcmSource: source })
+      const events: AuroraVoiceWebEvent[] = []
+      runtime.onEvent((event) => events.push(event))
+
+      await expect(runtime.start()).rejects.toMatchObject({ code })
+      expect(events.find((event) => event.kind === 'error')).toMatchObject({ reason: code, redacted: true })
+      expect(worker.commandsOf('cancel').at(-1)?.reason).toBe(code)
+      expect(runtime.snapshot()).toMatchObject({ state: 'cancelled', sessionId: null, queuedBytes: 0 })
+    }
   })
 
   it('attempts both host cleanup paths and clears state when stop or cancel fails', async () => {
@@ -554,6 +578,18 @@ class FailingSource {
     this.calls.push('cancel')
     if (this.failMethod === 'cancel') throw new Error('cancel')
   }
+}
+
+class CodedFailingSource {
+  constructor(private readonly code: string) {}
+
+  async start(): Promise<void> {
+    throw new AuroraVoiceWebRuntimeError(this.code, 'sanitized startup failure')
+  }
+
+  async stop(): Promise<void> {}
+
+  async cancel(): Promise<void> {}
 }
 
 class DeferredStartSource {
