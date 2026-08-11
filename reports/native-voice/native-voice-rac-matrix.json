@@ -5,7 +5,7 @@
   "codeEvidenceBaselineHead": "671605b3",
   "reportCommit": "current-checkpoint-see-git-history",
   "audit": {
-    "auditedAtUtc": "2026-08-11T14:39:35Z",
+    "auditedAtUtc": "2026-08-11T15:09:00Z",
     "resumedAtUtc": "2026-08-08T22:15:10Z",
     "goalThreadId": "019fd073-38a1-7801-8d62-31ae70d46580",
     "verdict": "active_remediation",
@@ -15,6 +15,28 @@
       "partial": 24,
       "withheld": 6,
       "blocked": 4
+    },
+    "freshVerification": {
+      "verifiedAtUtc": "2026-08-11T15:09:00Z",
+      "commands": [
+        {
+          "command": "pnpm --filter @aurora/voice-web test",
+          "result": "passed 12 files / 139 tests"
+        },
+        {
+          "command": "pnpm --filter @aurora/voice-web typecheck",
+          "result": "passed"
+        },
+        {
+          "command": "pnpm --filter @aurora/ui exec vitest run --environment node tests/assistant-browser-voice-runtime.test.tsx tests/assistant-hidden-mic-release.test.tsx tests/platform-surface.test.ts",
+          "result": "passed 3 files / 88 tests; jsdom emitted expected canvas/media not-implemented warnings"
+        },
+        {
+          "command": "adb connect 192.168.240.112:5555; adb devices -l; ip addr show waydroid0",
+          "result": "Waydroid unavailable from this runtime: No route to host, no ADB devices, waydroid0 NO-CARRIER/state DOWN"
+        }
+      ],
+      "verdict": "Counts unchanged. RAC-21, RAC-23, RAC-24, and RAC-26 remain pass; RAC-22 and RAC-25 remain partial; current-source Waydroid UI proof remains blocked."
     }
   },
   "statusVocabulary": {
