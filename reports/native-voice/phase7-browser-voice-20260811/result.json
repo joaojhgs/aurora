@@ -1,0 +1,51 @@
+{
+  "$schema": "aurora.native_voice_phase7_checkpoint.v1",
+  "checkedAtUtc": "2026-08-11T09:21:32Z",
+  "branch": "feat/ui-multi-platform-integration",
+  "implementationCommit": "a28aa5fc",
+  "verdict": "partial",
+  "racCountsChanged": false,
+  "racStatus": {
+    "RAC-21": "pass",
+    "RAC-22": "partial",
+    "RAC-23": "pass",
+    "RAC-24": "pass",
+    "RAC-25": "partial",
+    "RAC-26": "pass"
+  },
+  "verification": {
+    "voiceWebUnit": { "passed": 119, "failed": 0 },
+    "focusedModelStorage": { "passed": 42, "failed": 0 },
+    "browserStorage": { "passed": 18, "failed": 0, "profiles": ["chromium", "firefox", "webkit"] },
+    "browserWorkerVoice": { "passed": 35, "failed": 0, "profiles": ["chromium", "firefox", "webkit", "android-chrome-emulation", "mobile-safari-emulation"] },
+    "hostedBrowserVoiceUi": { "passed": 39, "failed": 0 },
+    "uiUnit": { "passed": 700, "failed": 0 },
+    "voiceWebTypecheck": "passed",
+    "voiceWebBuild": "passed",
+    "uiTypecheck": "passed",
+    "uiBuild": "passed",
+    "gitNexusRisk": "low",
+    "affectedProcesses": 0
+  },
+  "knownCorrectedFailure": {
+    "scope": "initial Firefox Worker redaction assertion",
+    "classification": "test false positive",
+    "cause": "non-sensitive occurredAtMs happened to contain a PCM sentinel digit sequence",
+    "resolution": "redaction assertions serialize payload-bearing event fields without timestamps",
+    "exactRerun": "35/35 passed"
+  },
+  "deviceValidation": {
+    "waydroidEndpoint": "192.168.240.112:5555",
+    "adbConnect": "No route to host",
+    "adbDevicePresent": false,
+    "mobileMcpAvailable": false,
+    "currentSourceDeviceClaim": false
+  },
+  "openGates": [
+    "real-microphone browser PTT matrix",
+    "actual-device mobile browser and OS lifecycle proof",
+    "production pack integration and verified offline reuse",
+    "physical ARM64 and iOS evidence",
+    "signing, final artifacts, SBOM, license, store, rollback, and endurance evidence"
+  ]
+}
