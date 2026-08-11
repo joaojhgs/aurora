@@ -2,14 +2,14 @@
   "$schema": "aurora.native_voice_rac_matrix.v1",
   "planSha256": "50181a35cd42e12a33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6",
   "handoffSha256": "70b1b5ebb32c6df0e52c119b2bd73adad79c2611433bd33da7391d6e273fe196",
-  "codeEvidenceBaselineHead": "18e3fb6f",
+  "codeEvidenceBaselineHead": "16c21a9e",
   "reportCommit": "current-checkpoint-see-git-history",
   "audit": {
-    "auditedAtUtc": "2026-08-11T16:18:32Z",
+    "auditedAtUtc": "2026-08-11T18:06:44Z",
     "resumedAtUtc": "2026-08-08T22:15:10Z",
     "goalThreadId": "019fd073-38a1-7801-8d62-31ae70d46580",
     "verdict": "active_remediation",
-    "resumeGate": "Resume from local feat/ui-multi-platform-integration after Phase 7 browser-voice implementation checkpoint 18e3fb6f. The dynamic-role invariant is preserved: roles are persisted runtime profile state and never derive from environment, APK/build flavor, platform, transport, sidecar presence, runtime tier, demo mode, or disabled rollout capability. The inventory estimate remains approximately 60-65% implemented and 40-45% fully verified. Six of fourteen phases (0-5) are complete for their scoped claims; Phase 6 is decision-complete only as withheld, and Phases 7-13 remain incomplete, partial, withheld, or blocked. Counts remain 22 pass, 24 partial, 6 withheld, and 4 blocked. Continue the earliest incomplete voice phase: Phase 7 now has transactional cancellable browser model-pack installation, fail-closed asset-source policy, authoritative and sanitized microphone-start failure handling, stale-session isolation, exact active-TTS Blob release, hosted loading-to-live voice-route propagation, exact remote identity, selector-required fail-closed behavior across hosted, desktop-thin native, and native-mobile starts, removal of AssistantView direct browser microphone transcription, redacted AudioWorklet level propagation into the hosted UI visualizer, sanitized browser runtime event rendering, accepted-frame event-noise suppression, focused visualizer/unsubscribe/Android WebView release coverage, and a production-built hosted Assistant fake-media gate passing 2/2 across desktop Chromium and Pixel 5 Chromium emulation. The hosted gate validates native getUserMedia/AudioContext/AudioWorklet use, exact same-origin Worker/WASM/worklet assets, ended tracks, redaction, deterministic demo transcript, and reviewed desktop/mobile-emulated screenshots. It is Chromium-only automation: Firefox fake media delivered no AudioWorklet frames in this environment, Linux Playwright WebKit has no supported fake-microphone path, and no real-microphone, OS permission-prompt, acoustic, local-browser-STT, actual-device, or physical-device claim follows. RAC-25 remains partial because no approved production pack or production installer caller exists, verified-pack offline reuse is not proven end to end, and signing, final artifact, SBOM/license, and external release evidence remain open. Keep the RAC-27 reverse Tooling.ExecuteTool probe only as a bounded shared-transport regression canary, not foreground voice implementation. Current-source Android rendered UI remains blocked: direct ADB to 192.168.240.112:5555 returns No route to host, ADB lists no devices, waydroid0 is DOWN/NO-CARRIER, and this runtime exposes no MobileMCP tool. Physical ARM64/iOS, OS suspension, signing/store evidence, rollback, and endurance remain open.",
+    "resumeGate": "Resume from local feat/ui-multi-platform-integration after Phase 7 browser-voice implementation checkpoint 16c21a9e. The dynamic-role invariant is preserved: roles are persisted runtime profile state and never derive from environment, APK/build flavor, platform, transport, sidecar presence, runtime tier, demo mode, or disabled rollout capability. Counts remain 22 pass, 24 partial, 6 withheld, and 4 blocked; the inventory estimate remains approximately 60-65% implemented and 40-45% fully verified. Phase 7 is now bounded partial/external-gates-only for the implemented hosted-browser scope, not complete: production hosted-web reopen uses exact release trust and a non-mutating existing-store path, signed-fixture offline reuse passes across Chromium/Firefox/WebKit, stale profile races retry safely, absent storage is not created, OPFS corruption cannot be masked by IndexedDB fallback, and older IndexedDB implementations use an abort-on-upgrade no-create probe. Final source verification passes 151 voice-web tests, 720 UI tests, 77 web tests, all three typechecks/builds, 25 browser-storage cases with 2 expected skips, 35/35 Worker/WASM cases, 2/2 real-browser API cases, and hosted Assistant 2/2 across desktop Chromium and Pixel 5 emulation; independent code and security reviews approve with zero findings. RAC-22 and RAC-25 remain partial because real microphone/permission/acoustic/hosted Firefox-WebKit PTT, approved production speech assets/source/release, a production installer, actual devices, and release/distribution evidence remain open. Keep production VAD/KWS/STT/TTS capability flags false. Continue with the next locally actionable Phase 8 desktop-native gate while retaining those Phase 7 external gaps. Keep the RAC-27 Tooling.ExecuteTool probe only as a shared-transport regression canary, never as foreground voice behavior. Current-source Android rendered UI remains environment-blocked: direct ADB to 192.168.240.112:5555 returns No route to host, ADB lists no devices, waydroid0 is DOWN/NO-CARRIER, and no MobileMCP tool is callable.",
     "statusCounts": {
       "pass": 22,
       "partial": 24,
@@ -17,11 +17,11 @@
       "blocked": 4
     },
     "freshVerification": {
-      "verifiedAtUtc": "2026-08-11T16:18:32Z",
+      "verifiedAtUtc": "2026-08-11T18:06:44Z",
       "commands": [
         {
           "command": "pnpm --filter @aurora/voice-web test",
-          "result": "passed 12 files / 143 tests"
+          "result": "passed 12 files / 151 tests"
         },
         {
           "command": "pnpm --filter @aurora/voice-web typecheck",
@@ -32,12 +32,32 @@
           "result": "passed"
         },
         {
+          "command": "pnpm --dir packages/aurora-voice-web exec vitest run tests/browser-model-pack.test.ts tests/browser-model-store-host.test.ts tests/model-store-host.test.ts --environment node",
+          "result": "passed 3 files / 62 tests; JSON report SHA-256 4580338788e2f1d8ffed26751f95b259d8590712048cca7aa03315bd2b39961f"
+        },
+        {
+          "command": "pnpm --dir packages/aurora-voice-web exec playwright test --config tests/playwright/browser-model-store.playwright.config.ts",
+          "result": "passed 25 / skipped 2 across Chromium, Firefox, and WebKit; production default opener proves empty-origin no-mutation and exact-trust offline reopen"
+        },
+        {
           "command": "pnpm --filter @aurora/ui typecheck",
-          "result": "passed twice after the UI follow-up"
+          "result": "passed"
         },
         {
           "command": "pnpm --filter @aurora/ui test",
-          "result": "passed 67 files / 714 tests; jsdom emitted expected canvas/media not-implemented warnings"
+          "result": "passed 68 files / 720 tests after hosted STT reopen regression reinforcement; jsdom emitted expected canvas/media not-implemented warnings"
+        },
+        {
+          "command": "pnpm --dir packages/aurora-ui exec vitest run tests/browser-speech-pack.test.ts --environment node --exclude 'dist/**'",
+          "result": "passed 1 file / 6 tests; asserts hosted reopen uses openExisting and never AuroraBrowserModelStoreHost.create for absent or verified preinstalled pack paths; JSON report SHA-256 78eb375aa325dd74b05193f32559965df9c36ef6fd8933ddd1b93675128a6121"
+        },
+        {
+          "command": "pnpm --dir apps/aurora-web exec vitest run app/browser-speech-pack-policy.test.ts --environment node",
+          "result": "passed 1 file / 4 tests; JSON report SHA-256 57f5b86dec79c6aa1d37a3dcad4433a3b0cf3236abe5e6a31d4b44aebe1be4d0"
+        },
+        {
+          "command": "pnpm --dir packages/aurora-ui exec vitest run tests/accessibility-responsive-visual.test.tsx --environment jsdom",
+          "result": "passed 1 file / 12 tests; JSON report SHA-256 23fbda8a59fe96fdca72e415539ee5499e7539a857a8cbdb9fb1dd63ecd09dda"
         },
         {
           "command": "pnpm --filter @aurora/ui exec vitest run --environment node tests/assistant-browser-voice-runtime.test.tsx tests/assistant-hidden-mic-release.test.tsx tests/platform-surface.test.ts",
@@ -52,12 +72,20 @@
           "result": "passed 2/2 across desktop Chromium and Pixel 5 Chromium emulation; fake media only"
         },
         {
+          "command": "pnpm --filter @aurora/web test",
+          "result": "passed 18 files / 77 tests"
+        },
+        {
           "command": "pnpm --filter @aurora/web typecheck",
-          "result": "passed after hosted mobile-flow adaptation"
+          "result": "passed"
+        },
+        {
+          "command": "pnpm --filter @aurora/voice-web build; pnpm --filter @aurora/ui build; pnpm --filter @aurora/web build",
+          "result": "all three passed sequentially; generated Next next-env.d.ts drift was restored"
         },
         {
           "command": "pnpm test:web-voice",
-          "result": "sequential rerun passed 35/35 across Chromium, Firefox, WebKit, Android Chrome emulation, and Mobile Safari emulation after an earlier concurrent-build artifact miss"
+          "result": "sequential rerun passed 35/35 across Chromium, Firefox, WebKit, Android Chrome emulation, and Mobile Safari emulation; the previously failing exact WebKit case also passed 1/1"
         },
         {
           "command": "pnpm --filter @aurora/voice-web test:browser:voice:real-api",
@@ -81,10 +109,18 @@
         },
         {
           "command": "GitNexus MCP detect_changes",
-          "result": "staged detect before 18e3fb6f reported 2 changed harness files, 5 changed symbols, zero affected processes, and low risk"
+          "result": "impact checks through 16c21a9e were low/advisory with no HIGH/CRITICAL result; the installed GitNexus CLI did not expose detect_changes, so no new detector claim is made"
+        },
+        {
+          "command": "independent code and security review of bf93b460..16c21a9e",
+          "result": "approved with zero findings after the initial OPFS corruption-masking and older-browser IndexedDB gaps were repaired"
+        },
+        {
+          "command": "sha256sum /tmp/aurora-p7-16c-final/evidence-sha256-final.txt",
+          "result": "9e22b584746b2d6619f5c2c1cde3c0867e1acd57b3f76d62a63fd03bfd2982fc"
         }
       ],
-      "verdict": "Counts unchanged. RAC-21, RAC-23, RAC-24, and RAC-26 remain pass; RAC-22 and RAC-25 remain partial; current-source Waydroid UI proof remains blocked."
+      "verdict": "Counts unchanged. RAC-21, RAC-23, RAC-24, and RAC-26 remain pass; RAC-22 and RAC-25 remain partial. Phase 7 is bounded partial/external-gates-only for the implemented hosted-browser scope; current-source Waydroid UI proof remains environment-blocked."
     }
   },
   "statusVocabulary": {
@@ -207,7 +243,7 @@
     {
       "id": "RAC-23",
       "status": "pass",
-      "evidence": "Browser worker/nonblocking matrix with measured timer lag, plus authoritative pending-capture cancellation before audio-context activation, stale-session isolation, and redacted audio-level observer isolation; full voice-web unit coverage at checkpoint b519d6a8 passes 143/143."
+      "evidence": "Browser worker/nonblocking matrix with measured timer lag, plus authoritative pending-capture cancellation before audio-context activation, stale-session isolation, and redacted audio-level observer isolation; full voice-web unit coverage at checkpoint 16c21a9e passes 151/151."
     },
     {
       "id": "RAC-24",
@@ -217,12 +253,12 @@
     {
       "id": "RAC-25",
       "status": "partial",
-      "evidence": "Browser storage quota, interruption, eviction, recovery, reload persistence, WebCrypto Ed25519 signatures, release-hash trust, duplicate file-id rejection, and local release-trust policy pass. Checkpoint a28aa5fc adds AbortSignal-aware staging, immutable manifest-generation keys, all-files-before-promotion validation, JSON rollback, cleanup-failure surfacing, idempotent reinstall preservation, pack cleanup grouping, and maximum-key-bound coverage. Checkpoint 671605b3 rejects invalid, unsafe, or untrusted browser asset sources before fetch/storage mutation, requires explicit trust for relative/cross-origin sources, keeps loopback HTTP nonproduction-only, and makes the default fetch reject redirects. Fresh integrated evidence passes 143 package tests, 54 focused model/storage tests, typecheck/build, and 18 Playwright storage cases across Chromium/Firefox/WebKit after independent review rejected and repaired an initial browser-reopen regression. No approved signed/licensed production VAD/KWS/STT/TTS pack, approved manifest/source field in the runtime profile, or production installer/open caller exists; verified-pack offline reuse is not proven end to end, the Android APK is debug-signed, and final Android/iOS hashes, SBOM/license tooling, and external release evidence remain open."
+      "evidence": "Browser storage quota, interruption, eviction, recovery, reload persistence, WebCrypto Ed25519 signatures, release-hash trust, duplicate file-id rejection, and local release-trust policy pass. Checkpoint a28aa5fc adds AbortSignal-aware staging, immutable manifest-generation keys, all-files-before-promotion validation, JSON rollback, cleanup-failure surfacing, idempotent reinstall preservation, pack cleanup grouping, and maximum-key-bound coverage. Checkpoint 671605b3 rejects invalid, unsafe, or untrusted browser asset sources before fetch/storage mutation, requires explicit trust for relative/cross-origin sources, keeps loopback HTTP nonproduction-only, and makes the default fetch reject redirects. Checkpoints 031e234e through 16c21a9e add hosted-web reopen of an existing STT pack under exact public release-key and manifest-hash trust, retry stale profile races without adopting stale runtimes, prove signed-fixture offline reuse in real browsers, avoid creating storage when a trusted pack is absent, require the production opener to use openExisting rather than the mutating create path, keep corrupt or inaccessible OPFS state fail-closed instead of masking it with IndexedDB, and support older IndexedDB implementations with an abort-on-upgrade no-create probe. Fresh integrated evidence passes 151 package tests, 62 focused model/storage tests, typecheck/build, 25 Playwright storage cases with 2 expected skips across Chromium/Firefox/WebKit, focused browser-speech-pack 6/6, full UI 720/720, full web 77/77, and independent code/security reviews with zero findings. No approved signed/licensed production VAD/KWS/STT/TTS pack, approved production pack source/release, or production installer caller exists; production pack activation/quality, the Android APK signing gate, final Android/iOS hashes, SBOM/license tooling, and external release evidence remain open."
     },
     {
       "id": "RAC-26",
       "status": "pass",
-      "evidence": "All five sanitized non-ready local speech states persist and restore through the hosted runtime; UI/runtime tests keep VAD/KWS/STT/TTS false, preserve authorized remote STT/TTS route selection, and keep connected-audio consent fail-closed. Checkpoint b519d6a8 truthfully renders focus-limited browser wake behavior, retains dynamic profile roles independent of environment/platform/transport, releases connected-client read-aloud Blob URLs exactly once, preserves sanitized microphone recovery, propagates exact hosted speech targets, fails closed rather than auto-selecting a device when explicit selection is required, routes focused hosted browser push-to-talk through the shared voice runtime, maps redacted browser runtime events into product-safe UI state, suppresses accepted-frame event noise from rendered activity, and covers visualizer and event-unsubscribe behavior. It passes 87 focused hosted/native browser-voice tests plus the complete 714-test UI suite; independent code review approved the cutover with zero findings, while prior desktop/mobile screenshot inspection remains bounded evidence."
+      "evidence": "All five sanitized non-ready local speech states persist and restore through the hosted runtime; UI/runtime tests keep VAD/KWS/STT/TTS false, preserve authorized remote STT/TTS route selection, and keep connected-audio consent fail-closed. Checkpoints b519d6a8 through 16c21a9e truthfully render focus-limited browser wake behavior, retain dynamic profile roles independent of environment/platform/transport, release connected-client read-aloud Blob URLs exactly once, preserve sanitized microphone recovery, propagate exact hosted speech targets, fail closed rather than auto-selecting a device when explicit selection is required, route focused hosted browser push-to-talk through the shared voice runtime, map redacted browser runtime events into product-safe UI state, suppress accepted-frame event noise from rendered activity, and cover visualizer and event-unsubscribe behavior. The current gate passes 87 focused hosted/native browser-voice tests plus the complete 68-file/720-test UI suite; independent reviews approved the cutover and storage hardening with zero findings, while prior desktop/mobile screenshot inspection remains bounded evidence."
     },
     {
       "id": "RAC-27",
@@ -357,7 +393,7 @@
     {
       "id": "RAC-53",
       "status": "partial",
-      "evidence": "Centralized surface, production-copy, and accessibility tests pass. Shell/admin copy remediation removed visible native/platform/test wording from rendered AppShell/Admin artifacts; focused UI suites passed 154/154 and 19/19, full @aurora/ui passed 698/698, typecheck/build passed, and rendered visible-text scan over 9 artifacts found zero forbidden terms. Prior checkpoint b3b76826 comprehensively replaces unnamed and invited node/peer fallbacks with device-safe wording and suppresses raw stable-peer IDs in rendered offline labels. Current checkpoint 18e3fb6f passes all @aurora/ui tests (67 files, 714/714), 87/87 focused browser-voice UI cases, hosted Assistant Playwright 2/2 across desktop Chromium plus Pixel 5 Chromium emulation with reviewed screenshots, UI/web typechecks and builds, the 12/12 accessibility/responsive/visual gate, focused rendered regressions, and independent review with no blocker. Model/download/voice-management states are not fully implemented."
+      "evidence": "Centralized surface, production-copy, and accessibility tests pass. Shell/admin copy remediation removed visible native/platform/test wording from rendered AppShell/Admin artifacts; focused UI suites passed 154/154 and 19/19, full @aurora/ui passed 698/698, typecheck/build passed, and rendered visible-text scan over 9 artifacts found zero forbidden terms. Prior checkpoint b3b76826 comprehensively replaces unnamed and invited node/peer fallbacks with device-safe wording and suppresses raw stable-peer IDs in rendered offline labels. Current checkpoint 16c21a9e passes all @aurora/ui tests (68 files, 720/720), 87/87 focused browser-voice UI cases, hosted Assistant Playwright 2/2 across desktop Chromium plus Pixel 5 Chromium emulation with reviewed screenshots, UI/web typechecks and builds, the 12/12 accessibility/responsive/visual gate, focused rendered regressions, and independent review with no blocker. Model/download/voice-management states are not fully implemented."
     },
     {
       "id": "RAC-54",
@@ -377,9 +413,9 @@
   ],
   "globalGaps": [
     "The dynamic-role invariant is preserved at checkpoint baseline 5c27b72f: role is runtime profile state, not environment, APK/build flavor, platform, transport, sidecar, runtime tier, demo mode, or disabled rollout capability.",
-    "UI production-copy and responsive gates improved through 18e3fb6f: the current 67-file/714-test suite, UI/web typechecks and builds, the 12/12 accessibility/responsive/visual gate, 87 focused browser-voice UI cases, and hosted Assistant Playwright 2/2 with reviewed desktop Chromium plus Pixel 5 Chromium-emulation screenshots pass. RAC-53 remains partial because model/download/voice-management states are incomplete.",
+    "UI production-copy and responsive gates improved through 16c21a9e: the current 68-file/720-test suite, UI/web typechecks and builds, the 12/12 accessibility/responsive/visual gate, 87 focused browser-voice UI cases, focused browser-speech-pack 6/6, and hosted Assistant Playwright 2/2 with reviewed desktop Chromium plus Pixel 5 Chromium-emulation screenshots pass. RAC-53 remains partial because model/download/voice-management states are incomplete.",
     "PocketTTS bounded-stop failure is no longer treated as production provider failure: it was a cold-import/test timeout issue fixed in tests only at d3f45b1a, then tightened at 1cb2b4f7 to parse child-measured provider.stop() elapsed time against request_timeout_s plus slack; integrated current-head focused pair passed 2/2 and full PocketTTS file passed 59/59.",
-    "Waydroid APK evidence remains bound to SHA-256 83256515b81e87f3fd28e9a5122c0d6a5dd20d7b7507591daff475bc6de0f24c from 8fff7af6; MobileMCP plus visual audit proved dynamic role picker, Connect-to-Aurora invite/manual-address navigation, and honest Offline state for that artifact. Universal APK c99008ea74dc6cd21996e0a0467a8c4d86ffafe819bf51e545514606700a946e from prior checkpoint 63b25066 passes build and static policy, clearing that checkpoint's stale artifact/source-build gap, but Waydroid remains unreachable and no rendered UI claim exists for checkpoint 5c27b72f. At 2026-08-11T11:38:39Z, waydroid0 was link-down and ADB to 192.168.240.112:5555 returned No route to host. Make-device-available continuation, clean restart persistence, pairing, and Gateway voice remain blocked/not run.",
+    "Waydroid APK evidence remains bound to SHA-256 83256515b81e87f3fd28e9a5122c0d6a5dd20d7b7507591daff475bc6de0f24c from 8fff7af6; MobileMCP plus visual audit proved dynamic role picker, Connect-to-Aurora invite/manual-address navigation, and honest Offline state for that artifact. Universal APK c99008ea74dc6cd21996e0a0467a8c4d86ffafe819bf51e545514606700a946e from prior checkpoint 63b25066 passes build and static policy, clearing that checkpoint's stale artifact/source-build gap, but Waydroid remains unreachable and no rendered UI claim exists for current source. At 2026-08-11T17:32:26Z, direct ADB to 192.168.240.112:5555 returned No route to host, ADB listed no device, waydroid0 was DOWN/NO-CARRIER, and no MobileMCP tool was callable. Make-device-available continuation, clean restart persistence, pairing, and Gateway voice remain blocked/not run.",
     "Prior API35 QEMU runtime validation remains blocked: the maintained smoke ran under software TCG against the checkpoint 63b25066 APK after ADB/package-manager readiness at 232 seconds; the APK push passed, then Android system_server was killed by its watchdog during pm install, yielding Broken pipe and DeadSystemException before Aurora launched. Cleanup passed. /dev/kvm remains inaccessible, so CI-equivalent validation is unavailable. Durable historical evidence is reports/native-voice/android-current-source-20260811-63b25066/.",
     "RAC-27 source-browser direct/STUN and packaged direct/TURN evidence passes the shared transport subclaims. Two exact-HEAD packaged STUN controls now also pass accepted srflx routing, public reverse RPC, no HTTP fallback, redaction, events/TTS/stream/reconnect, and 512 KiB 33/33 fragmentation, but both aggregates fail the same fixed-window prompt-observation assertion after successful revocation. This is a harness timing/state mismatch, not evidence of an authorized revoked peer. RAC-27 remains partial until the bounded wait is repaired, STUN passes as an aggregate, exact-source all-route evidence is retained, and remaining non-desktop/release gates close.",
     "GitNexus staged detection for b3b76826 reports CRITICAL through file-level over-attribution (155 changed symbols and 43 affected flows despite a 10-line production copy delta). Direct symbol context, the actual diff, all 700 UI tests, three consumer typechecks, copy lint, and independent review constrain the real change to display labels and raw-ID suppression; the detector result is retained as a limitation, not ignored or treated as unrelated-flow proof.",
