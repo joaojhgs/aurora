@@ -78,6 +78,7 @@ export function MeshDiagnosticsResource({ client, route, thinPeer }: MeshDiagnos
         reauthConfirmed,
         affectedResources: ['diagnostics.support_bundle', 'diagnostics.redaction_preview', 'diagnostics.audit_receipt']
       })
+      assertSupportBundleRedacted(result.data)
       downloadSupportBundle(result.data)
       setExportState({
         status: 'success',
@@ -107,6 +108,12 @@ export function MeshDiagnosticsResource({ client, route, thinPeer }: MeshDiagnos
       onReauthConfirmedChange={setReauthConfirmed}
     />
   )
+}
+
+function assertSupportBundleRedacted(bundle: GatewaySupportBundleResponse) {
+  if (bundle.secrets_redacted !== true || bundle.redaction?.secrets_redacted !== true) {
+    throw new Error('Support data export failed. Try again.')
+  }
 }
 
 function downloadSupportBundle(bundle: GatewaySupportBundleResponse) {

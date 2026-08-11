@@ -10,6 +10,7 @@ import {
   supportBundleFixture,
   webrtcDiagnosticsFixture,
   type AuroraClient,
+  type GatewaySupportBundleResponse,
 } from '@aurora/client'
 import {
   MeshDiagnosticsResource,
@@ -244,6 +245,57 @@ describe('mesh diagnostics product copy', () => {
     root.unmount()
     container.remove()
   })
+
+  it.each([
+    ['top-level redaction flag is false', (bundle: MutableSupportBundle) => { bundle.secrets_redacted = false }],
+    ['top-level redaction flag is missing', (bundle: MutableSupportBundle) => { delete bundle.secrets_redacted }],
+    ['nested redaction flag is false', (bundle: MutableSupportBundle) => { bundle.redaction = { ...bundle.redaction, secrets_redacted: false } }],
+    ['nested redaction flag is missing', (bundle: MutableSupportBundle) => {
+      bundle.redaction = { ...bundle.redaction }
+      delete bundle.redaction.secrets_redacted
+    }],
+  ])('blocks support-data download when %s', async (_case, mutateBundle) => {
+    const unsafeBundle = cloneFixture(supportBundleFixture) as MutableSupportBundle
+    mutateBundle(unsafeBundle)
+    const exportSupportBundle = vi.fn().mockResolvedValue({
+      draft: {},
+      confirmation: { audit_receipt: 'receipt-unsafe' },
+      data: unsafeBundle,
+    })
+    const client = diagnosticsClient({ exportSupportBundle })
+    const createObjectURL = vi.fn(() => 'blob:unexpected')
+    const revokeObjectURL = vi.fn()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL })
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<MeshDiagnosticsResource client={client} route={hostileRoute()} />)
+      await flushPromises()
+    })
+    await act(async () => {
+      checkbox(container).click()
+    })
+    await act(async () => {
+      buttonByText(container, 'Export support data').click()
+      await flushPromises()
+    })
+
+    expect(exportSupportBundle).toHaveBeenCalledTimes(1)
+    expect(createObjectURL).not.toHaveBeenCalled()
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+    expect(click).not.toHaveBeenCalled()
+    expect(container.textContent).not.toContain('Support data exported.')
+    expect(container.textContent).toContain('Could not connect to this Aurora device. Try again or reconnect the device.')
+
+    root.unmount()
+    container.remove()
+  })
 })
 
 const HOSTILE_BACKEND_STRINGS = [
@@ -262,6 +314,11 @@ const HOSTILE_BACKEND_STRINGS = [
 ] as const
 
 const HOSTILE_RENDER_TERMS = /\b(?:AdminAction|DataChannel|fallback|Gateway\.[A-Za-z0-9_.]+|ICE|manifest|protocol|provider|route|sidecar|signaling|transport|WebRTC)\b/u
+
+type MutableSupportBundle = Omit<GatewaySupportBundleResponse, 'redaction' | 'secrets_redacted'> & {
+  redaction?: Partial<GatewaySupportBundleResponse['redaction']>
+  secrets_redacted?: boolean
+}
 
 function hostileSnapshot(): MeshDiagnosticsSnapshot {
   const webrtc = cloneFixture(webrtcDiagnosticsFixture)
