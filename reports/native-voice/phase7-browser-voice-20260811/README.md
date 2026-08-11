@@ -2,7 +2,7 @@
 
 **Status:** Current bounded check
 
-Implementation commits `a28aa5fc`, `e1e92f22`, and `5c27b72f` harden the Phase 7 browser model-pack transaction, browser Worker/WASM asset resolution, focused push-to-talk lifecycle, connected-client speech playback, responsive composer, and end-user copy. They do not complete Phase 7 or promote any RAC status.
+Implementation checkpoint `779ce7d8` includes the earlier Phase 7 browser model-pack, Worker/WASM, focused push-to-talk, connected-client speech playback, responsive composer, and end-user-copy hardening. It additionally preserves sanitized microphone-start classifications and propagates hosted speech routes without inventing a device target. It does not complete Phase 7 or promote any RAC status.
 
 ## Accepted evidence
 
@@ -20,6 +20,8 @@ Implementation commits `a28aa5fc`, `e1e92f22`, and `5c27b72f` harden the Phase 7
 - Stopping connected-client read-aloud pauses playback, detaches handlers, clears the active source, and revokes each Blob URL exactly once. Desktop-local server-owned playback remains separate.
 - The composer gives attach, connected-voice access, prompt, microphone, and send controls explicit columns; the production-hosted check proves they remain on one row without horizontal overflow at desktop and a 390x844 viewport.
 - Microphone failures render sanitized recovery guidance beside the composer, and voice privacy copy no longer exposes backend, retention-policy, or TTL wording.
+- Hosted startup retains server-provided speech routes while the live shell is loading, then switches to the live snapshot. Remote STT/TTS policies preserve exact provider, peer, and service identity.
+- Routes that require an explicit device selection do not silently choose the first connected device. Hosted browser, desktop-thin native, native-mobile, and read-aloud entry points fail closed with product-facing guidance before capture or synthesis starts; explicitly selected provider identity remains supported.
 - Runtime role remains persisted dynamic profile state. No environment variable, APK/build flavor, platform, transport, or demo flag selects a role, and local browser speech-pack execution flags remain disabled.
 
 ## Fresh verification
@@ -27,26 +29,26 @@ Implementation commits `a28aa5fc`, `e1e92f22`, and `5c27b72f` harden the Phase 7
 - `pnpm --dir packages/aurora-voice-web typecheck` — passed.
 - `pnpm --filter @aurora/voice-web run build` — passed, including Rust/WASM and Worker artifacts.
 - Focused model/storage Vitest — 3 files, 42/42 passed.
-- Full `@aurora/voice-web` Vitest — 12 files, 130/130 passed.
+- Full `@aurora/voice-web` Vitest — 12 files, 133/133 passed.
 - Browser model storage Playwright — 18/18 across Chromium, Firefox, and WebKit.
 - Production Worker/WASM voice Playwright — 35/35 across Chromium, Firefox, WebKit, Android Chrome emulation, and Mobile Safari emulation.
 - Real-browser API Playwright — 2/2 across desktop Chromium and mobile Chromium emulation.
-- Full `@aurora/client` Vitest — 60 files, 687/687 passed; the focused generated-speech client rerun passed 6/6 after adding the negative `Tooling.ExecuteTool` separation assertion.
-- Full `@aurora/web` Vitest — 15 files, 66/66 passed; typecheck and Next production build passed with 24/24 static pages.
+- Full `@aurora/client` Vitest — 60 files, 687/687 passed; the focused selector boundary passed 4/4 and emits identity-only selector fields.
+- Full `@aurora/web` Vitest — 17 files, 68/68 passed; typecheck and Next production build passed with 24/24 static pages.
 - `pnpm --filter @aurora/ui typecheck` and `pnpm --filter @aurora/ui run build` — passed.
-- Hosted browser-voice UI Vitest through the normal package configuration — 40/40 passed.
-- Full `@aurora/ui` Vitest — 67 files, 702/702 passed; the deterministic accessibility/responsive/visual gate passed 12/12 across Assistant, Admin, and Settings viewports.
-- Hosted Next Assistant browser-voice Playwright — 1/1 passed in `chromium-hosted-assistant` at `2026-08-11T11:50:53.841Z` after `next build` and `next start`. It uses Chromium fake media through native `getUserMedia`, `AudioContext`, and `AudioWorklet`, with built `@aurora/voice-web` Worker/WASM assets and explicit demo transport. Desktop and 390x844 screenshots passed alignment and overflow review. This is not a physical-microphone, OS permission-prompt, Android-device, acoustic-recognition, or local-browser-STT check.
+- Focused browser-voice UI Vitest — 52/52 passed, including hosted, desktop-thin native, native-mobile, read-aloud, sanitized microphone-start failures, exact route identity, consent invalidation, and selector-required fail-closed cases.
+- Full `@aurora/ui` Vitest — 67 files, 715/715 passed; the deterministic accessibility/responsive/visual cases remain included and passing.
+- Hosted Next Assistant browser-voice Playwright — 1/1 passed in `chromium-hosted-assistant` at `2026-08-11T13:38:30.584Z` after `next build` and `next start`. It uses Chromium fake media through native `getUserMedia`, `AudioContext`, and `AudioWorklet`, with built `@aurora/voice-web` Worker/WASM assets and explicit demo transport. Fresh desktop and 390x844 screenshots passed direct alignment, clipping, wording, and overflow inspection. This is not a physical-microphone, OS permission-prompt, Android-device, acoustic-recognition, or local-browser-STT check.
 - `git diff --check` and staged diff checks — passed.
-- Independent code and visual reviews found no blocker. Both screenshots show a completed turn with no internal tool-execution/debug wording, clipping, wrapping, or horizontal overflow.
-- GitNexus staged change detection for `5c27b72f` reported 12 files, 29 indexed changed symbols, zero affected processes, and low risk.
+- Two independent reviews of the final route commit found no blocker after rejecting and repairing three fail-open/loading defects. Both fresh screenshots show a completed turn with no internal tool-execution/debug wording, clipping, wrapping, or horizontal overflow.
+- GitNexus reindexed the repository at `779ce7d8` to 24,165 nodes, 85,558 edges, and 300 flows. Staged detection for the seven-file route slice reported 15 indexed changed symbols, four affected hosted page/client flows, and medium risk; all four flows passed targeted and full tests.
 
 ## Bounded scope and remaining gates
 
 - RAC-21 and RAC-23 remain `pass`; RAC-24 and RAC-26 retain their existing `pass` verdicts.
-- RAC-22 remains `partial`: browser automation now includes deterministic Worker/WASM PCM plus one production-built hosted Assistant Chromium fake-media `getUserMedia`/AudioWorklet demo turn and responsive viewport proof; it does not prove real microphone capture, acoustic behavior, actual mobile browsers, OS permission prompts, local browser recognition, or physical devices.
-- RAC-25 remains `partial`: no production caller currently invokes `installVerifiedBrowserModelPack`; an approved production pack, end-to-end verified-pack offline reuse, signing, final Android/iOS artifact hashes, SBOM/license tooling, and external release evidence remain open.
-- At `2026-08-11T11:38:39Z`, ADB to the requested Waydroid endpoint `192.168.240.112:5555` still returned `No route to host`; `waydroid0` was link-down, with no connected ADB device or MobileMCP surface. No current-source Waydroid UI, microphone, navigation, or screenshot claim is made.
+- RAC-22 remains `partial`: browser automation includes deterministic Worker/WASM PCM, real browser capture APIs with fake media, route/consent behavior across hosted and native-owner adapters, and one production-built hosted Assistant turn; it does not prove a real microphone, acoustic behavior, actual mobile browsers, OS permission prompts, local browser recognition, or physical devices.
+- RAC-25 remains `partial`: no approved signed/licensed production VAD/KWS/STT/TTS pack exists and no production caller invokes `installVerifiedBrowserModelPack`; end-to-end verified-pack offline reuse, signing, final Android/iOS artifact hashes, SBOM/license tooling, and external release evidence remain open. Production local-engine booleans correctly remain false.
+- At `2026-08-11T13:40:05Z`, `waydroid0` was link-down and ADB listed no device, so no MobileMCP surface was available. A separate API 35 QEMU software-TCG attempt reached partial ADB and stopped boot animation, but never set `sys.boot_completed`, disappeared before package readiness/tests, and was cleaned up. These are environment/device blocks, not Aurora application failures; no current-source Waydroid UI, microphone, navigation, or screenshot claim is made.
 - OS suspension/background behavior, physical ARM64/iOS evidence, endurance, battery, thermal, and store/distribution gates remain open.
 
-The earlier `Tooling.ExecuteTool` work belongs to RAC-27 only. It is a bounded reverse-RPC/backpressure/authentication canary for the shared WebRTC DataChannel used by voice traffic; it is not a TTS/STT/VAD/KWS dependency and is not part of this Phase 7 implementation checkpoint. The current demo speech test explicitly proves the focused transcription action is indexed under `Transcription.Transcribe`, not `Tooling.ExecuteTool`.
+The earlier `Tooling.ExecuteTool` work belongs to RAC-27 only. The previous goal run had advanced into that later shared-transport gate before the full inventory reset the active work to the earliest incomplete phase. It is a bounded reverse-RPC/backpressure/authentication canary for the shared WebRTC DataChannel, not a speech implementation dependency or a remnant production bug. Browser speech targets `Transcription.Transcribe`, `WakeWord.*`, and `TTS.*`; the current tests explicitly prove the focused transcription action does not route through `Tooling.ExecuteTool`.

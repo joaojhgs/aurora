@@ -1,8 +1,8 @@
 {
   "$schema": "aurora.native_voice_phase7_checkpoint.v1",
-  "checkedAtUtc": "2026-08-11T11:55:10Z",
+  "checkedAtUtc": "2026-08-11T13:54:55Z",
   "branch": "feat/ui-multi-platform-integration",
-  "implementationCommit": "5c27b72f",
+  "implementationCommit": "779ce7d8",
   "verdict": "partial",
   "racCountsChanged": false,
   "racStatus": {
@@ -15,26 +15,26 @@
   },
   "verification": {
     "sdkUnit": { "passed": 687, "failed": 0, "files": 60 },
-    "voiceWebUnit": { "passed": 130, "failed": 0, "files": 12 },
+    "voiceWebUnit": { "passed": 133, "failed": 0, "files": 12 },
     "focusedModelStorage": { "passed": 42, "failed": 0 },
-    "browserStorage": { "passed": 18, "failed": 0, "profiles": ["chromium", "firefox", "webkit"] },
-    "browserWorkerVoice": { "passed": 35, "failed": 0, "profiles": ["chromium", "firefox", "webkit", "android-chrome-emulation", "mobile-safari-emulation"] },
-    "browserVoiceRealApi": { "passed": 2, "failed": 0, "profiles": ["desktop-chromium", "mobile-chromium-emulation"] },
-    "webUnit": { "passed": 66, "failed": 0, "files": 15 },
-    "hostedBrowserVoiceUi": { "passed": 40, "failed": 0 },
-    "uiUnit": { "passed": 702, "failed": 0, "files": 67 },
+    "browserStorage": { "passed": 18, "failed": 0, "profiles": ["chromium", "firefox", "webkit"], "sourceReport": "/tmp/aurora-voice-web-browser-model-store/report.json", "sourceReportSha256": "5d3a751afc04a85361a4eb1d16b53fe9f8793298e00ff2ee6294d221e9ba7206" },
+    "browserWorkerVoice": { "passed": 35, "failed": 0, "profiles": ["chromium", "firefox", "webkit", "android-chrome-emulation", "mobile-safari-emulation"], "sourceReport": "/tmp/aurora-voice-web-worker-audio-bridge/report.json", "sourceReportSha256": "44192033260fd3fffae621d5c127608a9bfb5c74b9f549f7470fe78902b16d10" },
+    "browserVoiceRealApi": { "passed": 2, "failed": 0, "profiles": ["desktop-chromium", "mobile-chromium-emulation"], "sourceReport": "/tmp/aurora-voice-web-real-audio/report.json", "sourceReportSha256": "4f6449d81652c3616ee7b1be78ce0e9143d6f372bafb21efe02b5b96a6cbe444" },
+    "webUnit": { "passed": 68, "failed": 0, "files": 17 },
+    "focusedBrowserVoiceUi": { "passed": 52, "failed": 0 },
+    "uiUnit": { "passed": 715, "failed": 0, "files": 67 },
     "uiAccessibilityVisual": { "passed": 12, "failed": 0 },
     "hostedAssistantBrowserVoicePlaywright": {
       "passed": 1,
       "failed": 0,
       "profile": "chromium-hosted-assistant",
-      "startedAtUtc": "2026-08-11T11:50:53.841Z",
+      "startedAtUtc": "2026-08-11T13:38:30.584Z",
       "sourceReport": "/tmp/aurora-web-browser-voice/report.json",
-      "sourceReportSha256": "4cc9467874a055afcd3b9dc472d5e8825e79ef9f66a03c23dd12696f0dab09ff",
+      "sourceReportSha256": "071cda29749f1aa9b9df92afddaf79b8c79e98768ddccb016cfd426a82cd003a",
       "screenshot": "hosted-browser-voice-complete.png",
       "screenshotSha256": "4484deba429c08c883652db79630055aedfe5024b80324ce9d2db2626ac1c7a6",
       "mobileViewportScreenshot": "hosted-browser-voice-mobile.png",
-      "mobileViewportScreenshotSha256": "0aaec7480ce604cf3ab1c3c633c796edad32e04c83b07a5e07510f896b18dbfd",
+      "mobileViewportScreenshotSha256": "206af320394b22779026336cb5fd117bc93fd4806ef6fd11a9820ca50b164168",
       "assetProof": "A local next build/next start server delivered same-origin Worker, WASM, and AudioWorklet URLs; exact HTTP probes passed JavaScript/WASM MIME and content-signature checks; at least one AudioWorklet audio frame was delivered; captured tracks ended; desktop and 390x844 composer layouts fit without wrapping or horizontal overflow.",
       "boundary": "Chromium fake media through native getUserMedia, AudioContext, AudioWorklet, and the production-built hosted Next Assistant path with built @aurora/voice-web Worker/WASM assets and deterministic demo transcript; the 390x844 check is viewport emulation, not a physical-microphone, OS permission-prompt, Android-device, acoustic-recognition, or local-browser-STT check."
     },
@@ -46,10 +46,11 @@
     "webBuild": "passed-24-of-24-static-pages",
     "uiTypecheck": "passed",
     "uiBuild": "passed",
-    "gitNexusRisk": "low",
-    "gitNexusChangedFiles": 12,
-    "gitNexusChangedSymbols": 29,
-    "affectedProcesses": 0
+    "gitNexusRisk": "medium",
+    "gitNexusChangedFiles": 7,
+    "gitNexusChangedSymbols": 15,
+    "affectedProcesses": 4,
+    "gitNexusIndex": "fresh-24165-nodes-85558-edges-300-flows"
   },
   "knownCorrectedFailure": {
     "scope": "initial Firefox Worker redaction assertion",
@@ -64,8 +65,16 @@
     "adbDevicePresent": false,
     "mobileMcpAvailable": false,
     "currentSourceDeviceClaim": false,
-    "checkedAtUtc": "2026-08-11T11:38:39Z",
-    "waydroidInterface": "link-down"
+    "checkedAtUtc": "2026-08-11T13:54:55Z",
+    "waydroidInterface": "link-down",
+    "headlessEmulator": {
+      "target": "API 35 QEMU software TCG",
+      "adbReached": true,
+      "systemBootCompleted": false,
+      "testsRan": false,
+      "cleanedUp": true,
+      "classification": "environment-blocked"
+    }
   },
   "runtimeRoleInvariant": "Role is persisted dynamic runtime profile state and is not selected by environment, build flavor, platform, transport, or demo mode.",
   "toolingExecuteToolRelation": "RAC-27 shared-WebRTC reverse-RPC canary only; current focused demo transcription uses Transcription.Transcribe and does not depend on Tooling.ExecuteTool.",
