@@ -335,6 +335,18 @@ type BrowserOpenFilePicker = (options?: {
 type AuroraBrowserVoiceRuntimeInstance = ReturnType<typeof createAuroraBrowserVoiceRuntime>
 type AuroraBrowserCapturedAudio = Awaited<ReturnType<AuroraBrowserVoiceRuntimeInstance['stop']>>
 type BrowserVoiceTurnSettlementOutcome = 'complete' | 'abandon' | 'cancel'
+interface BrowserVoiceRuntimeEventSnapshot {
+  readonly kind: string
+  readonly sessionId: string | null
+  readonly generation: number
+  readonly sequence: number | null
+  readonly sampleCount: number
+  readonly byteLength: number
+  readonly queuedBytes: number
+  readonly reason: string | null
+  readonly redacted: true
+  readonly occurredAtMs: number
+}
 interface BrowserVoiceTurnSettlement {
   token: number
   state: 'open' | 'settling' | 'settled'
@@ -411,6 +423,7 @@ export function AssistantView({
   const voiceConsentGrantedRef = useRef(false)
   const voiceConsentRouteKeyRef = useRef<string | null>(null)
   const browserVoiceRuntimeRef = useRef<AuroraBrowserVoiceRuntimeInstance | null>(null)
+  const browserVoiceRuntimeEventUnsubscribeRef = useRef<(() => void) | null>(null)
   const browserVoiceOperationTokenRef = useRef(0)
   const browserVoiceTurnSettlementRef = useRef<BrowserVoiceTurnSettlement | null>(null)
   const nativeVoiceStatusRef = useRef<NativeDesktopVoiceStatus | null>(null)
@@ -2984,7 +2997,7 @@ export function AssistantView({
 
   function browserVoiceRuntime(): AuroraBrowserVoiceRuntimeInstance {
     if (!browserVoiceRuntimeRef.current) {
-      browserVoiceRuntimeRef.current = createAuroraBrowserVoiceRuntime({
+      const runtime = createAuroraBrowserVoiceRuntime({
         ownerId: 'aurora-assistant-view',
         lifecycle: browserVoiceLifecycleEligibility,
         audio: {
@@ -2995,8 +3008,46 @@ export function AssistantView({
         onAudioLifecycleLost: releaseBrowserVoiceCaptureForLifecycle,
         onPageLifecycleLost: releaseBrowserVoiceCaptureForLifecycle
       })
+      browserVoiceRuntimeEventUnsubscribeRef.current = runtime.onEvent(handleBrowserVoiceRuntimeEvent)
+      browserVoiceRuntimeRef.current = runtime
     }
     return browserVoiceRuntimeRef.current
+  }
+
+  function handleBrowserVoiceRuntimeEvent(event: BrowserVoiceRuntimeEventSnapshot) {
+    setVoiceEvents((current) => mergeVoiceRuntimeEvents([
+      browserVoiceRuntimeEventToVoiceEvent(event)
+    ], current).slice(0, 12))
+    if (event.sessionId) {
+      ownedVoiceSessionIdsRef.current.add(event.sessionId)
+      activeVoiceSessionRef.current = event.sessionId
+    }
+    if (event.kind === 'session_started') {
+      setVoiceCaptureStatus('listening')
+      return
+    }
+    if (event.kind === 'frame_dropped') {
+      setLastError('Microphone capture is continuing with reduced quality.')
+      setStreamState((current) => ({
+        ...current,
+        status: 'streaming',
+        message: 'Microphone capture is continuing with reduced quality.'
+      }))
+      return
+    }
+    if (event.kind === 'lifecycle_lost') {
+      releaseBrowserVoiceCaptureForLifecycle()
+      return
+    }
+    if (event.kind === 'error') {
+      setLastError('Microphone capture failed. Try again.')
+      setVoiceCaptureStatus('error')
+    }
+  }
+
+  function clearBrowserVoiceRuntimeEventSubscription() {
+    browserVoiceRuntimeEventUnsubscribeRef.current?.()
+    browserVoiceRuntimeEventUnsubscribeRef.current = null
   }
 
   async function cancelBrowserVoiceRuntime(reason: string) {
@@ -3011,6 +3062,7 @@ export function AssistantView({
 
   async function forceDisposeBrowserVoiceRuntime(runtime: AuroraBrowserVoiceRuntimeInstance) {
     if (browserVoiceRuntimeRef.current === runtime) browserVoiceRuntimeRef.current = null
+    clearBrowserVoiceRuntimeEventSubscription()
     try {
       await runtime.dispose()
     } catch {
@@ -3081,6 +3133,7 @@ export function AssistantView({
   async function disposeBrowserVoiceRuntime() {
     const runtime = browserVoiceRuntimeRef.current
     browserVoiceRuntimeRef.current = null
+    clearBrowserVoiceRuntimeEventSubscription()
     if (!runtime) return
     try {
       await runtime.dispose()
@@ -5798,6 +5851,80 @@ function mergeVoiceRuntimeEvents(...groups: VoiceRuntimeEvent[][]): VoiceRuntime
     merged.push(event)
   }
   return merged
+}
+
+function browserVoiceRuntimeEventToVoiceEvent(event: BrowserVoiceRuntimeEventSnapshot): VoiceRuntimeEvent {
+  const kind = browserVoiceRuntimeEventKind(event.kind)
+  return {
+    id: `browser-${event.kind}-${event.generation}-${event.sequence ?? 'session'}-${event.occurredAtMs}`,
+    kind,
+    topic: null,
+    sessionId: event.sessionId,
+    correlationId: null,
+    sourcePeerId: null,
+    targetPeerId: null,
+    targetDeviceId: null,
+    consentDecision: null,
+    policyDecisionId: null,
+    privacyClass: 'microphone',
+    state: browserVoiceRuntimeEventState(event.kind),
+    text: null,
+    level: null,
+    peak: null,
+    bars: null,
+    reason: event.reason,
+    redacted: event.redacted,
+    occurredAt: new Date(event.occurredAtMs).toISOString(),
+    audit: browserVoiceRuntimeEventAudit(event.kind),
+    raw: {
+      kind: event.kind,
+      sequence: event.sequence,
+      generation: event.generation,
+      sampleCount: event.sampleCount,
+      byteLength: event.byteLength,
+      queuedBytes: event.queuedBytes,
+      redacted: event.redacted
+    }
+  }
+}
+
+function browserVoiceRuntimeEventKind(kind: string): VoiceRuntimeEvent['kind'] {
+  if (kind === 'session_started') return 'session_started'
+  if (kind === 'session_stopped' || kind === 'session_cancelled') return 'audio_cancelled'
+  if (kind === 'lifecycle_lost') return 'audio_disconnected'
+  if (kind === 'frame_dropped' || kind === 'error') return 'stt_error'
+  return 'audio_started'
+}
+
+function browserVoiceRuntimeEventState(kind: string): VoiceRuntimeEvent['state'] {
+  if (kind === 'session_started' || kind === 'frame_accepted' || kind === 'frame_dropped') return 'listening'
+  if (kind === 'session_stopped') return 'processing'
+  if (kind === 'session_cancelled') return 'cancelled'
+  if (kind === 'lifecycle_lost') return 'disconnected'
+  if (kind === 'error') return 'error'
+  return 'idle'
+}
+
+function browserVoiceRuntimeEventAudit(kind: string): VoiceRuntimeEvent['audit'] {
+  return {
+    correlationId: null,
+    eventKind: kind,
+    peerId: null,
+    principalId: null,
+    targetPeerId: null,
+    method: null,
+    busTopic: null,
+    toolId: null,
+    resourceId: null,
+    status: null,
+    transport: 'browser',
+    redaction: {
+      secretsRedacted: true,
+      redactedFields: [],
+      source: 'sdk',
+      warnings: []
+    }
+  }
 }
 
 function waveformBarsFromLevel(level: number, peak: number): number[] {

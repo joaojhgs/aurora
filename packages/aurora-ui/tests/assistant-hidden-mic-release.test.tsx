@@ -6,6 +6,7 @@ import { AuroraClient, MockAuroraTransport, ORCHESTRATOR_METHODS } from '@aurora
 import { AssistantView } from '../src/assistant-view'
 import { auroraNavSections, navItemSnapshot } from '../src/nav'
 import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from '../src/platform-surface'
+import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import type { NativeDesktopVoicePort, NativeDesktopVoiceStatus } from '../src/native-desktop-voice'
 import type { NativeMobileVoicePort, NativeMobileVoiceStatus } from '../src/native-mobile-voice'
 import type { RouteAvailability } from '../src/shell-data'
@@ -171,12 +172,13 @@ describe('Assistant focused WebView microphone policy', () => {
   it('cancels desktop native focused voice on release without WebView or coordinator fallback', async () => {
     const getUserMedia = vi.fn()
     const mediaRecorder = vi.fn()
+    const audioContext = vi.fn()
     vi.stubGlobal('navigator', {
       ...navigator,
       mediaDevices: { getUserMedia }
     })
     vi.stubGlobal('MediaRecorder', mediaRecorder)
-    vi.stubGlobal('AudioContext', FakeAudioContext)
+    vi.stubGlobal('AudioContext', audioContext)
     vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
 
@@ -219,6 +221,7 @@ describe('Assistant focused WebView microphone policy', () => {
     expect(nativeVoice.cancel).toHaveBeenCalledWith({ generation: 1, reason: 'window_hidden' })
     expect(getUserMedia).not.toHaveBeenCalled()
     expect(mediaRecorder).not.toHaveBeenCalled()
+    expect(audioContext).not.toHaveBeenCalled()
     expect(startVoiceListen).not.toHaveBeenCalled()
     expect(stopVoiceListen).not.toHaveBeenCalled()
     expect(transcribe).not.toHaveBeenCalled()
@@ -309,60 +312,48 @@ describe('Assistant focused WebView microphone policy', () => {
     expect(nativeMobileVoice.cancel).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps profileless focused voice closed instead of opening a direct browser microphone path', async () => {
-    const getUserMedia = vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] }) as unknown as MediaStream)
+  it.each([
+    ['unknown', getAuroraSurfaceProfile({ runtimeMode: 'unknown', transportKind: 'unknown' })],
+    ['mock', getAuroraSurfaceProfile({ runtimeMode: 'mock', transportKind: 'mock' })],
+  ] as const)('fails closed for %s focused push-to-talk without direct WebView microphone capture', async (_label, surfaceProfile) => {
+    const getUserMedia = vi.fn()
     const mediaRecorder = vi.fn()
-    const transcribe = vi.fn()
-    vi.stubGlobal('navigator', {
-      ...navigator,
-      mediaDevices: { getUserMedia }
-    })
+    const audioContext = vi.fn()
+    vi.stubGlobal('navigator', { ...navigator, mediaDevices: { getUserMedia } })
     vi.stubGlobal('MediaRecorder', mediaRecorder)
-    vi.stubGlobal('AudioContext', FakeAudioContext)
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
-    vi.stubGlobal('cancelAnimationFrame', vi.fn())
-    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
-    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+    vi.stubGlobal('AudioContext', audioContext)
 
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
-    vi.spyOn(client.assistant, 'transcribeVoiceAudio').mockImplementation(transcribe)
+    const startVoiceListen = vi.spyOn(client.assistant, 'startVoiceListen')
+    const transcribe = vi.spyOn(client.assistant, 'transcribeVoiceAudio')
+    const cancel = vi.spyOn(client.assistant, 'cancel')
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
     roots.push(root)
 
     await act(async () => {
-      root.render(<AssistantView client={client} route={assistantRoute()} />)
+      root.render(<AssistantView client={client} route={assistantRoute()} surfaceProfile={surfaceProfile} />)
       await Promise.resolve()
     })
 
-    const mic = findButton(container, 'Push to talk')
     await act(async () => {
-      mic.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      findButton(container, 'Push to talk').click()
       await Promise.resolve()
       await Promise.resolve()
     })
 
     const rendered = renderedElementCopy(container)
+    expect(rendered).toContain('Voice is unavailable on this device right now.')
     expect(getUserMedia).not.toHaveBeenCalled()
     expect(mediaRecorder).not.toHaveBeenCalled()
+    expect(audioContext).not.toHaveBeenCalled()
+    expect(startVoiceListen).not.toHaveBeenCalled()
     expect(transcribe).not.toHaveBeenCalled()
-    expect(findButton(container, 'Push to talk')).toBeTruthy()
-    expect(rendered).toContain('Voice is unavailable on this device right now.')
-    expect(rendered).not.toContain('No microphone audio was captured')
+    expect(cancel).not.toHaveBeenCalled()
+    expect(findForbiddenProductionCopyTerms(rendered).map((term) => term.id), rendered).toEqual([])
   })
 })
-
-class FakeAudioContext {
-  state = 'running'
-  sampleRate = 16_000
-  destination = {}
-  resume = vi.fn(async () => undefined)
-  close = vi.fn(async () => undefined)
-  createMediaStreamSource = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn() }))
-  createAnalyser = vi.fn(() => ({ fftSize: 1024, smoothingTimeConstant: 0.35, getByteTimeDomainData: vi.fn() }))
-  createScriptProcessor = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn(), onaudioprocess: null as unknown }))
-}
 
 function createNativeDesktopVoicePort(): NativeDesktopVoicePort & {
   status: ReturnType<typeof vi.fn>

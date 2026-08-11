@@ -88,31 +88,50 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(runtime.cancel).not.toHaveBeenCalled()
   })
 
-  it('passes redacted browser microphone levels into the hosted runtime visualizer callback', async () => {
+  it.each([
+    ['Android WebView', getAuroraSurfaceProfile({
+      runtimeMode: 'android-node',
+      transportKind: 'mesh',
+      nativePlatform: 'android',
+      userAgent: 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Mobile Safari/537.36'
+    })],
+    ['mobile WebView', getAuroraSurfaceProfile({
+      runtimeMode: 'mobile',
+      transportKind: 'http',
+      userAgent: 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Mobile Safari/537.36'
+    })],
+  ] as const)('routes %s focused push-to-talk through the browser runtime without direct UI microphone capture', async (_label, surfaceProfile) => {
     const runtime = createRuntimeMock({
-      capturedPcm: new Int16Array([1, 2, 3, 4])
+      capturedPcm: new Int16Array([0x21, 0x22])
     })
     voiceRuntimeMock.create.mockReturnValue(runtime)
+    const getUserMedia = vi.fn(async () => { throw new Error('unexpected direct microphone access') })
+    const mediaRecorder = vi.fn()
+    const audioContext = vi.fn()
+    vi.stubGlobal('navigator', { ...navigator, mediaDevices: { getUserMedia } })
+    vi.stubGlobal('MediaRecorder', mediaRecorder)
+    vi.stubGlobal('AudioContext', audioContext)
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
     Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
 
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
-    const container = renderAssistant(client, hostedSurface())
+    const transcribe = vi.spyOn(client.assistant, 'transcribeVoiceAudio').mockResolvedValue(successfulTranscription('mobile speech'))
+    vi.spyOn(client.assistant, 'streamMessage').mockImplementation(async function* () {
+      yield completedUpdate('done')
+    })
+    const container = renderAssistant(client, surfaceProfile)
 
+    expect(surfaceProfile.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
     await clickButton(container, 'Push to talk')
     await vi.waitFor(() => expect(runtime.start).toHaveBeenCalledTimes(1))
+    await clickButton(container, 'Stop listening')
+    await vi.waitFor(() => expect(transcribe).toHaveBeenCalledTimes(1))
 
-    const options = voiceRuntimeMock.create.mock.calls[0]?.[0] as {
-      audio?: { onAudioLevel?: (level: number, peak: number) => void }
-    } | undefined
-    expect(options?.audio?.onAudioLevel).toEqual(expect.any(Function))
-
-    await act(async () => {
-      options?.audio?.onAudioLevel?.(0.42, 0.9)
-      await Promise.resolve()
-    })
-
-    expect(findButton(container, 'Stop listening')).toBeTruthy()
+    expect(voiceRuntimeMock.create).toHaveBeenCalledTimes(1)
+    expect(getUserMedia).not.toHaveBeenCalled()
+    expect(mediaRecorder).not.toHaveBeenCalled()
+    expect(audioContext).not.toHaveBeenCalled()
+    expect(runtime.completeTurn).toHaveBeenCalledTimes(1)
   })
 
   it('shows on-device speech state while hosted capture still uses connected transcription', async () => {
@@ -646,6 +665,36 @@ describe('Assistant hosted browser voice runtime', () => {
     roots.splice(roots.indexOf(root), 1)
 
     expect(runtime.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('applies redacted browser runtime events without rendering runtime details', async () => {
+    const runtime = createRuntimeMock({ capturedPcm: new Int16Array([1, 2, 3]) })
+    voiceRuntimeMock.create.mockReturnValue(runtime)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const container = renderAssistant(client, hostedSurface())
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(runtime.onEvent).toHaveBeenCalledTimes(1))
+    await act(async () => {
+      runtime.emitEvent({ kind: 'frame_dropped', reason: 'queue_limit_internal' })
+      await Promise.resolve()
+    })
+    expect(container.textContent).toContain('Microphone capture is continuing with reduced quality.')
+    expect(container.textContent).not.toContain('queue_limit_internal')
+
+    await act(async () => {
+      runtime.emitEvent({ kind: 'error', reason: '/private/device/path runtime failure' })
+      await Promise.resolve()
+    })
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-voice-recovery="true"]')?.textContent)
+        .toBe('Microphone capture failed. Try again.')
+    })
+    expect(container.textContent).not.toContain('/private/device/path')
+    expect(container.textContent).not.toMatch(/\b(runtime|frame_dropped|queue_limit_internal)\b/i)
   })
 
   it('routes desktop-local focused voice only through the native desktop port', async () => {
@@ -1511,8 +1560,29 @@ function createRuntimeMock({ capturedPcm }: { capturedPcm: Int16Array }) {
     startedAtMs: 1,
     foregroundOnly: true as const
   }
+  const listeners = new Set<(event: BrowserVoiceRuntimeEvent) => void>()
+  const emitEvent = (overrides: Partial<BrowserVoiceRuntimeEvent> = {}) => {
+    const event: BrowserVoiceRuntimeEvent = {
+      kind: 'session_started',
+      ownerId: session.ownerId,
+      sessionId: session.sessionId,
+      generation: session.generation,
+      sequence: null,
+      sampleCount: 0,
+      byteLength: 0,
+      queuedBytes: 0,
+      reason: null,
+      redacted: true,
+      occurredAtMs: 1_700_000_000_000,
+      ...overrides,
+    }
+    for (const listener of listeners) listener(event)
+  }
   return {
-    start: vi.fn(async () => session),
+    start: vi.fn(async () => {
+      emitEvent({ kind: 'session_started' })
+      return session
+    }),
     stop: vi.fn(async () => ({
       sessionId: session.sessionId,
       generation: session.generation,
@@ -1526,8 +1596,27 @@ function createRuntimeMock({ capturedPcm }: { capturedPcm: Int16Array }) {
     completeTurn: vi.fn(async () => undefined),
     abandonTurn: vi.fn(async () => undefined),
     cancel: vi.fn(async () => undefined),
-    dispose: vi.fn(async () => undefined)
+    dispose: vi.fn(async () => undefined),
+    onEvent: vi.fn((listener: (event: BrowserVoiceRuntimeEvent) => void) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    }),
+    emitEvent,
   }
+}
+
+interface BrowserVoiceRuntimeEvent {
+  kind: string
+  ownerId: string
+  sessionId: string | null
+  generation: number
+  sequence: number | null
+  sampleCount: number
+  byteLength: number
+  queuedBytes: number
+  reason: string | null
+  redacted: true
+  occurredAtMs: number
 }
 
 function deferred<T>() {
