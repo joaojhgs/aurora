@@ -85,6 +85,7 @@ describe("desktop native voice E2E hook", () => {
     const payload = samplePayload();
     const listeners: Array<(event: { payload: NativeVoiceEvent }) => void> = [];
     const commands: string[] = [];
+    const credentialWrites: Record<string, unknown>[] = [];
     let nextSequence = 1;
     let activeGeneration: number | null = null;
     let startCount = 0;
@@ -110,6 +111,18 @@ describe("desktop native voice E2E hook", () => {
         persistedProfile = "";
         return { ok: true, secretsRedacted: true };
       }
+      if (command === "aurora_thin_peer_credential_set") {
+        credentialWrites.push((args?.request as Record<string, unknown> | undefined) ?? {});
+        return { found: true, hasBearerToken: true, secretsRedacted: true };
+      }
+      if (command === "aurora_thin_peer_credential_status") {
+        expect(args).toEqual({ request: { peerId: "home-peer-remote-consented" } });
+        return { found: true, hasBearerToken: true, secretsRedacted: true };
+      }
+      if (command === "aurora_thin_peer_credential_delete") {
+        expect(args).toEqual({ request: { peerId: "home-peer-remote-consented" } });
+        return { found: false, hasBearerToken: false, secretsRedacted: true };
+      }
       if (command === "aurora_sidecar_session") return { token: "sidecar-session-token" };
       if (command === "aurora_sidecar_start") return { running: true };
       if (command === "aurora_sidecar_stop") return { running: false };
@@ -124,6 +137,10 @@ describe("desktop native voice E2E hook", () => {
       }
       if (command === "aurora_native_voice_start") {
         if (activeProfile().nodeMode === "remote-console") {
+          const request = args?.request as { remoteAudioConsent?: unknown } | undefined;
+          if (request?.remoteAudioConsent === true) {
+            return status("starting", 3, { connection: "connected_device" });
+          }
           throw { reasonCode: REMOTE_AUDIO_CONSENT_REASON };
         }
         startCount += 1;
@@ -194,6 +211,24 @@ describe("desktop native voice E2E hook", () => {
         sidecarRunning: false,
         expectedScope: "remote-gateway",
         startBlockedReasonCode: REMOTE_AUDIO_CONSENT_REASON,
+        remoteAudioConsent: false,
+        remoteGatewayHttps: true,
+        remoteCredentialAvailable: false,
+        routeValidated: "blocked-before-consent",
+        redacted: true,
+      }),
+      expect.objectContaining({
+        name: "remote-console-consented-without-sidecar",
+        persistedNodeMode: "remote-console",
+        persistedRuntimeTier: "none",
+        sidecarRunning: false,
+        expectedScope: "remote-gateway",
+        observedConnection: "unavailable",
+        startBlockedReasonCode: null,
+        remoteAudioConsent: true,
+        remoteGatewayHttps: true,
+        remoteCredentialAvailable: true,
+        routeValidated: "native-boundary-accepted",
         redacted: true,
       }),
       expect.objectContaining({
@@ -203,6 +238,10 @@ describe("desktop native voice E2E hook", () => {
         sidecarRunning: true,
         expectedScope: "remote-gateway",
         startBlockedReasonCode: REMOTE_AUDIO_CONSENT_REASON,
+        remoteAudioConsent: false,
+        remoteGatewayHttps: true,
+        remoteCredentialAvailable: false,
+        routeValidated: "blocked-before-consent",
         redacted: true,
       }),
       expect.objectContaining({
@@ -213,6 +252,10 @@ describe("desktop native voice E2E hook", () => {
         expectedScope: "loopback-sidecar",
         observedConnection: "this_device",
         startBlockedReasonCode: null,
+        remoteAudioConsent: false,
+        remoteGatewayHttps: false,
+        remoteCredentialAvailable: false,
+        routeValidated: "loopback-sidecar",
         redacted: true,
       }),
     ]);
@@ -233,11 +276,21 @@ describe("desktop native voice E2E hook", () => {
       "aurora_secure_storage_get",
       "aurora_secure_storage_set",
       "aurora_secure_storage_delete",
+      "aurora_thin_peer_credential_set",
+      "aurora_thin_peer_credential_status",
+      "aurora_thin_peer_credential_delete",
       "aurora_native_voice_status",
       "aurora_native_voice_start",
       "aurora_native_voice_finish",
       "aurora_native_voice_cancel",
     ]);
+    expect(credentialWrites).toHaveLength(1);
+    expect(credentialWrites[0]).toMatchObject({
+      peerId: "home-peer-remote-consented",
+      rawBearerToken: "Bearer native-voice-e2e-redacted-boundary-token",
+    });
+    expect(JSON.stringify(report)).not.toContain("native-voice-e2e-redacted-boundary-token");
+    expect(JSON.stringify(report)).not.toMatch(/\b(?:bearer|token|gatewayUrl|endpoint)\b/iu);
     expect(commands).toContain("aurora_native_voice_finish");
     expect(commands).toContain("aurora_native_voice_cancel");
     expect(commands).toContain("aurora_sidecar_start");
@@ -290,6 +343,15 @@ describe("desktop native voice E2E hook", () => {
         persistedProfile = "";
         return { ok: true, secretsRedacted: true };
       }
+      if (command === "aurora_thin_peer_credential_set") {
+        return { found: true, hasBearerToken: true, secretsRedacted: true };
+      }
+      if (command === "aurora_thin_peer_credential_status") {
+        return { found: true, hasBearerToken: true, secretsRedacted: true };
+      }
+      if (command === "aurora_thin_peer_credential_delete") {
+        return { found: false, hasBearerToken: false, secretsRedacted: true };
+      }
       if (command === "aurora_sidecar_session") return { token: "sidecar-session-token" };
       if (command === "aurora_sidecar_start") return { running: true };
       if (command === "aurora_sidecar_stop") return { running: false };
@@ -299,7 +361,13 @@ describe("desktop native voice E2E hook", () => {
           : status("idle", null);
       }
       if (command === "aurora_native_voice_start") {
-        if (activeProfile().nodeMode === "remote-console") throw { reasonCode: REMOTE_AUDIO_CONSENT_REASON };
+        if (activeProfile().nodeMode === "remote-console") {
+          const request = args?.request as { remoteAudioConsent?: unknown } | undefined;
+          if (request?.remoteAudioConsent === true) {
+            return status("starting", 3, { connection: "connected_device" });
+          }
+          throw { reasonCode: REMOTE_AUDIO_CONSENT_REASON };
+        }
         return status("starting", 7);
       }
       if (command === "aurora_native_voice_finish") return status("stopping", 7);
@@ -328,6 +396,111 @@ describe("desktop native voice E2E hook", () => {
     await expect(windowHook(target)(payload)).rejects.toThrow(/event did not reach|events are required/u);
   });
 
+  it("cleans up an attempted remote credential when the native set response is malformed", async () => {
+    const payload = { ...samplePayload(), timeoutMs: 1_000 };
+    const commands: string[] = [];
+    let persistedProfile = "";
+    const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      commands.push(command);
+      if (command === "aurora_secure_storage_get") return { value: null, secretsRedacted: true };
+      if (command === "aurora_secure_storage_set") {
+        persistedProfile = String(args?.value ?? "");
+        return { ok: true, secretsRedacted: true };
+      }
+      if (command === "aurora_secure_storage_delete") {
+        persistedProfile = "";
+        return { ok: true, secretsRedacted: true };
+      }
+      if (command === "aurora_thin_peer_credential_set") {
+        expect(args).toMatchObject({
+          request: {
+            peerId: "home-peer-remote-consented",
+            rawBearerToken: "Bearer native-voice-e2e-redacted-boundary-token",
+          },
+        });
+        return { found: true, hasBearerToken: true, secretsRedacted: false };
+      }
+      if (command === "aurora_thin_peer_credential_delete") {
+        expect(args).toEqual({ request: { peerId: "home-peer-remote-consented" } });
+        return { found: false, hasBearerToken: false, secretsRedacted: true };
+      }
+      if (command === "aurora_native_voice_status") {
+        return status("unavailable", null, {
+          connection: "unavailable",
+          reasonCode: REMOTE_AUDIO_CONSENT_REASON,
+        });
+      }
+      if (command === "aurora_native_voice_start") throw { reasonCode: REMOTE_AUDIO_CONSENT_REASON };
+      throw new Error(`unexpected command ${command}`);
+    });
+    const target = guardedTarget();
+    installDesktopNativeVoiceE2eHook({
+      target,
+      env: liveEnv,
+      bridge: testBridge(invoke),
+    });
+
+    await expect(windowHook(target)(payload)).rejects.toThrow(/remote credential was not stored/u);
+    expect(commands).toContain("aurora_thin_peer_credential_set");
+    expect(commands).toContain("aurora_thin_peer_credential_delete");
+    expect(persistedProfile).toBe("");
+  });
+
+  it("fails the hook instead of passing when a consented remote route cannot reach the gateway", async () => {
+    const payload = { ...samplePayload(), timeoutMs: 1_000 };
+    const commands: string[] = [];
+    let persistedProfile = "";
+    const activeProfile = () => JSON.parse(persistedProfile).profiles[0] as {
+      nodeMode: "remote-console" | "mesh-node";
+    };
+    const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      commands.push(command);
+      if (command === "aurora_secure_storage_get") return { value: null, secretsRedacted: true };
+      if (command === "aurora_secure_storage_set") {
+        persistedProfile = String(args?.value ?? "");
+        return { ok: true, secretsRedacted: true };
+      }
+      if (command === "aurora_secure_storage_delete") {
+        persistedProfile = "";
+        return { ok: true, secretsRedacted: true };
+      }
+      if (command === "aurora_thin_peer_credential_set") {
+        expect(args).toHaveProperty("request.peerId", "home-peer-remote-consented");
+        return { found: true, hasBearerToken: true, secretsRedacted: true };
+      }
+      if (command === "aurora_thin_peer_credential_status") {
+        expect(args).toEqual({ request: { peerId: "home-peer-remote-consented" } });
+        return { found: true, hasBearerToken: true, secretsRedacted: true };
+      }
+      if (command === "aurora_thin_peer_credential_delete") {
+        expect(args).toEqual({ request: { peerId: "home-peer-remote-consented" } });
+        return { found: false, hasBearerToken: false, secretsRedacted: true };
+      }
+      if (command === "aurora_native_voice_status") {
+        return activeProfile().nodeMode === "remote-console"
+          ? status("idle", null, { connection: "connected_device" })
+          : status("idle", null);
+      }
+      if (command === "aurora_native_voice_start") {
+        const request = args?.request as { remoteAudioConsent?: unknown } | undefined;
+        if (request?.remoteAudioConsent === true) throw { reasonCode: "gateway_unavailable" };
+        throw { reasonCode: REMOTE_AUDIO_CONSENT_REASON };
+      }
+      throw new Error(`unexpected command ${command}`);
+    });
+    const target = guardedTarget();
+    installDesktopNativeVoiceE2eHook({
+      target,
+      env: liveEnv,
+      bridge: testBridge(invoke),
+    });
+
+    await expect(windowHook(target)(payload)).rejects.toThrow(/gateway_unavailable/u);
+    expect(commands).toContain("aurora_thin_peer_credential_delete");
+    expect(commands).not.toContain("aurora_sidecar_start");
+    expect(JSON.stringify(commands)).not.toMatch(/native-voice-e2e-redacted-boundary-token/u);
+  });
+
   it("does not install outside the gated environment", () => {
     const target = {} as Window;
     expect(installDesktopNativeVoiceE2eHook({
@@ -347,6 +520,28 @@ function samplePayload(): DesktopNativeVoiceE2ePayload {
     reportPath: "/tmp/native-report.json",
     donePath: "/tmp/native-done.json",
     timeoutMs: 30_000,
+  };
+}
+
+function guardedTarget(): Window {
+  return {
+    navigator: {},
+    Worker: vi.fn(),
+    SharedWorker: vi.fn(),
+  } as unknown as Window;
+}
+
+function testBridge(invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>) {
+  let clock = 0;
+  return {
+    invoke: invoke as never,
+    listen: (async () => () => undefined) as never,
+    hideWindow: vi.fn(async () => undefined),
+    now: () => {
+      clock += 250;
+      return clock;
+    },
+    hash: async () => "0".repeat(64),
   };
 }
 
