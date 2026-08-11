@@ -22,8 +22,13 @@ import {
   saveAuroraBrowserRuntimeProfile,
   saveAuroraBrowserThinProfile,
   setAuroraBrowserMeshNodeServicesFactoryForTests,
+  setAuroraBrowserSpeechPackOpenerForTests,
 } from './aurora-client'
 import { consumeFragmentInviteFromUrl } from './mesh/mesh-client'
+
+const RELEASE_KEY_ID = 'aurora-release-web-stt'
+const RELEASE_PUBLIC_KEY_BASE64 = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+const RELEASE_MANIFEST_SHA256 = 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789'
 
 describe('createAuroraWebClient', () => {
   afterEach(() => {
@@ -486,6 +491,126 @@ describe('createAuroraBrowserClient', () => {
     await runtime.close()
   })
 
+  it('does not probe hosted browser speech storage when foreground voice is not selected', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    stubCompleteSpeechPackEnv()
+    installBrowserStorage()
+    await saveMeshOnboardingProfile('mesh-speech-disabled')
+    setAuroraBrowserMeshNodeServicesFactoryForTests(vi.fn(async () => fakeMeshNodeServices(vi.fn(async () => undefined))))
+    const opener = vi.fn(async () => ({ state: 'absent' as const, pack: null }))
+    setAuroraBrowserSpeechPackOpenerForTests(opener)
+
+    const runtime = await createAuroraBrowserRuntimeAsync()
+
+    expect(opener).not.toHaveBeenCalled()
+    expect(runtime.hostedBrowserSpeechPack).toEqual({ state: 'disabled', pack: null })
+    expect(runtime.features.localSpeechPack).toMatchObject({
+      canRunLocalVad: false,
+      canRunLocalKws: false,
+      canRunLocalStt: false,
+      canRunLocalTts: false,
+    })
+    await runtime.close()
+  })
+
+  it('does not probe hosted browser speech storage when release trust is absent or partial', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    installBrowserStorage()
+    await saveMeshOnboardingProfile('mesh-speech-policy')
+    await enableForegroundVoiceOnSavedProfile()
+    setAuroraBrowserMeshNodeServicesFactoryForTests(vi.fn(async () => fakeMeshNodeServices(vi.fn(async () => undefined))))
+    const opener = vi.fn(async () => ({ state: 'absent' as const, pack: null }))
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+    setAuroraBrowserSpeechPackOpenerForTests(opener)
+
+    const noConfigRuntime = await createAuroraBrowserRuntimeAsync()
+    expect(noConfigRuntime.hostedBrowserSpeechPack).toEqual({ state: 'not-configured', pack: null })
+    await noConfigRuntime.close()
+
+    vi.stubEnv('NEXT_PUBLIC_AURORA_BROWSER_STT_PACK_KEY_ID', RELEASE_KEY_ID)
+    const partialRuntime = await createAuroraBrowserRuntimeAsync()
+
+    expect(partialRuntime.hostedBrowserSpeechPack).toEqual({
+      state: 'rejected',
+      reason: 'partial',
+      pack: null,
+    })
+    expect(opener).not.toHaveBeenCalled()
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(partialRuntime.features.localSpeechPack).toMatchObject({
+      canRunLocalVad: false,
+      canRunLocalKws: false,
+      canRunLocalStt: false,
+      canRunLocalTts: false,
+    })
+    await partialRuntime.close()
+  })
+
+  it('attaches verified preinstalled hosted browser speech status without promoting local capabilities', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    stubCompleteSpeechPackEnv()
+    installBrowserStorage()
+    await saveMeshOnboardingProfile('mesh-speech-verified')
+    await enableForegroundVoiceOnSavedProfile()
+    setAuroraBrowserMeshNodeServicesFactoryForTests(vi.fn(async () => fakeMeshNodeServices(vi.fn(async () => undefined))))
+    const pack = {
+      identity: {
+        packId: 'aurora-stt',
+        packVersion: '1.0.0',
+        variantId: 'web-wasm',
+        scope: { task: 'stt', slotId: 'default' },
+      },
+      files: [],
+    }
+    const opener = vi.fn(async () => ({ state: 'verified' as const, pack }))
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+    setAuroraBrowserSpeechPackOpenerForTests(opener)
+
+    const runtime = await createAuroraBrowserRuntimeAsync()
+
+    expect(opener).toHaveBeenCalledWith({
+      state: 'configured',
+      trust: {
+        releaseKeyId: RELEASE_KEY_ID,
+        releasePublicKeyBase64: RELEASE_PUBLIC_KEY_BASE64,
+        expectedManifestSha256: RELEASE_MANIFEST_SHA256,
+      },
+    })
+    expect(runtime.hostedBrowserSpeechPack).toEqual({ state: 'verified', pack })
+    expect(runtime.features.localSpeechPack).toMatchObject({
+      canRunLocalVad: false,
+      canRunLocalKws: false,
+      canRunLocalStt: false,
+      canRunLocalTts: false,
+    })
+    expect(fetchSpy).not.toHaveBeenCalled()
+    await runtime.close()
+  })
+
+  it('keeps the sync browser runtime path out of hosted speech pack probing', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    stubCompleteSpeechPackEnv()
+    installBrowserStorage()
+    await saveMeshOnboardingProfile('mesh-speech-sync')
+    await enableForegroundVoiceOnSavedProfile()
+    const opener = vi.fn(async () => ({ state: 'absent' as const, pack: null }))
+    setAuroraBrowserSpeechPackOpenerForTests(opener)
+
+    const runtime = createAuroraBrowserRuntime()
+
+    expect(opener).not.toHaveBeenCalled()
+    expect(runtime.hostedBrowserSpeechPack).toBeUndefined()
+    expect(runtime.features.localSpeechPack).toMatchObject({
+      canRunLocalVad: false,
+      canRunLocalKws: false,
+      canRunLocalStt: false,
+      canRunLocalTts: false,
+    })
+    await runtime.close()
+  })
+
   it('attaches an explicitly injected on-device provider only while the rollout is enabled', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     installBrowserStorage()
@@ -763,6 +888,27 @@ async function saveMeshOnboardingProfile(id: string): Promise<void> {
     roomSecretRef: `ref:browser:${id}`,
     roomSecret: `${id}-secret`,
   })
+}
+
+async function enableForegroundVoiceOnSavedProfile(): Promise<void> {
+  const savedProfile = auroraBrowserRuntimeProfile()
+  if (!savedProfile) throw new Error('missing saved runtime profile')
+  await saveAuroraBrowserRuntimeProfile({
+    ...savedProfile,
+    localNode: {
+      ...savedProfile.localNode,
+      enabledCapabilityPacks: [
+        ...savedProfile.localNode.enabledCapabilityPacks,
+        'foreground-voice',
+      ],
+    },
+  })
+}
+
+function stubCompleteSpeechPackEnv(): void {
+  vi.stubEnv('NEXT_PUBLIC_AURORA_BROWSER_STT_PACK_KEY_ID', RELEASE_KEY_ID)
+  vi.stubEnv('NEXT_PUBLIC_AURORA_BROWSER_STT_PACK_PUBLIC_KEY_BASE64', RELEASE_PUBLIC_KEY_BASE64)
+  vi.stubEnv('NEXT_PUBLIC_AURORA_BROWSER_STT_PACK_MANIFEST_SHA256', RELEASE_MANIFEST_SHA256)
 }
 
 function fakeMeshNodeServices(close: () => Promise<void>): BrowserMeshNodeServices {

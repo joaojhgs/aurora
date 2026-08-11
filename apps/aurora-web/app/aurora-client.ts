@@ -29,11 +29,13 @@ import {
   explainBrowserThinRuntime,
   isRuntimeProfileConfigured,
   isThinConnectionProfileConfigured,
+  openHostedBrowserSttSpeechPack,
   runtimeProfileDocumentToThinDocument,
   runtimeProfileToThinConnectionProfile,
   sanitizeThinConnectionProfile,
   sanitizeRuntimeProfile,
   sanitizeRuntimeProfileDocument,
+  type AuroraHostedBrowserSpeechPackStatus,
   type AuroraRuntimeProfileDocumentV2,
   type AuroraRuntimeProfileV2,
   type AuroraNodeMode,
@@ -54,6 +56,10 @@ import {
   type BrowserMeshNodeCompositionStatus,
   type BrowserMeshNodeServices,
 } from './browser-mesh-node-services'
+import {
+  browserSpeechPackPolicyFromEnv,
+  type BrowserSpeechPackPolicy,
+} from './browser-speech-pack-policy'
 
 type BrowserRuntimeCache = {
   baseKey: string
@@ -89,6 +95,7 @@ export interface AuroraBrowserRuntime extends BrowserWebThinRuntime {
   readonly localToolProvider?: BrowserMeshNodeServices['provider'] | undefined
   readonly localAssistant?: AuroraBrowserLightweightAssistantConfig | undefined
   readonly localNodeProviderStatus: AuroraBrowserLocalNodeProviderStatus
+  readonly hostedBrowserSpeechPack?: AuroraBrowserHostedSpeechPackRuntimeStatus | undefined
 }
 
 export interface AuroraBrowserLightweightAssistantConfig {
@@ -112,10 +119,22 @@ let browserMeshNodeCompositionStatus: BrowserMeshNodeCompositionStatus = {
   productMessage: 'This device is not set up for sharing.',
 }
 let browserMeshNodeServicesFactoryForTests: BrowserMeshNodeServicesFactory | null = null
+let browserSpeechPackOpenerForTests: BrowserSpeechPackOpener | null = null
 
 type BrowserMeshNodeServicesFactory = (
   options: BrowserMeshNodeServicesOptions,
 ) => Promise<BrowserMeshNodeServices>
+
+type BrowserSpeechPackOpener = (
+  policy: Extract<BrowserSpeechPackPolicy, { readonly state: 'configured' }>,
+) => Promise<AuroraHostedBrowserSpeechPackStatus>
+
+export type AuroraBrowserHostedSpeechPackRuntimeStatus =
+  | AuroraHostedBrowserSpeechPackStatus
+  | {
+      readonly state: 'disabled'
+      readonly pack: null
+    }
 
 class MissingGatewayTransport implements AuroraTransport {
   readonly kind = 'http'
@@ -232,7 +251,32 @@ export async function createAuroraBrowserRuntimeAsync({
     if (browserRuntimeProfileTransition) await browserRuntimeProfileTransition
     return await createAuroraBrowserRuntimeAsync({ localAssistant })
   }
-  return createAuroraBrowserRuntimeFromStore(meshNodeServices, localAssistant)
+  const runtime = createAuroraBrowserRuntimeFromStore(meshNodeServices, localAssistant)
+  const hostedBrowserSpeechPack = await resolveHostedBrowserSpeechPack(runtimeProfile)
+  return Object.assign(runtime, { hostedBrowserSpeechPack }) as AuroraBrowserRuntime
+}
+
+async function resolveHostedBrowserSpeechPack(
+  runtimeProfile: AuroraRuntimeProfileV2 | undefined,
+): Promise<AuroraBrowserHostedSpeechPackRuntimeStatus> {
+  if (runtimeProfile?.localNode.enabledCapabilityPacks.includes('foreground-voice') !== true) {
+    return Object.freeze({ state: 'disabled', pack: null })
+  }
+  const policy = browserSpeechPackPolicyFromEnv()
+  if (policy.state === 'not-configured') {
+    return Object.freeze({ state: 'not-configured', pack: null })
+  }
+  if (policy.state === 'invalid') {
+    return Object.freeze({
+      state: 'rejected',
+      reason: policy.reason,
+      pack: null,
+    })
+  }
+  const opener = browserSpeechPackOpenerForTests ?? ((configuredPolicy) => openHostedBrowserSttSpeechPack({
+    trust: configuredPolicy.trust,
+  }))
+  return await opener(policy)
 }
 
 async function resolveBrowserMeshNodeServices(
@@ -381,6 +425,7 @@ export function resetAuroraBrowserClientForTests(): void {
   browserCredentialStore = null
   browserRuntimeProfileRevision += 1
   browserMeshNodeServicesFactoryForTests = null
+  browserSpeechPackOpenerForTests = null
 }
 
 export function auroraBrowserMeshNodeCompositionStatus(): BrowserMeshNodeCompositionStatus {
@@ -426,6 +471,12 @@ export function setAuroraBrowserMeshNodeServicesFactoryForTests(
   factory: BrowserMeshNodeServicesFactory | null,
 ): void {
   browserMeshNodeServicesFactoryForTests = factory
+}
+
+export function setAuroraBrowserSpeechPackOpenerForTests(
+  opener: BrowserSpeechPackOpener | null,
+): void {
+  browserSpeechPackOpenerForTests = opener
 }
 
 export function auroraBrowserThinProfileDocument(): ThinProfileDocument {
