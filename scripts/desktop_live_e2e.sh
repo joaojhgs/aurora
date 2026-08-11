@@ -83,6 +83,9 @@ if [[ "$desktop_platform" == "Linux" && "${AURORA_DESKTOP_LIVE_E2E_UNDER_XVFB:-0
       echo "desktop live E2E DISPLAY is not usable; retrying under xvfb-run" >&2
       rerun_desktop_live_under_xvfb "$@"
     fi
+  else
+    echo "desktop live E2E DISPLAY cannot be verified; retrying under xvfb-run" >&2
+    rerun_desktop_live_under_xvfb "$@"
   fi
 fi
 

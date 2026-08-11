@@ -170,6 +170,44 @@ exit 73
   assert.match(marker, /args=-a /)
 })
 
+test('live runner retries under Xvfb when DISPLAY cannot be verified', async () => {
+  const fakeBinDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aurora-desktop-live-bin.'))
+  const artifactDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aurora-desktop-live-xvfb.'))
+  const markerPath = path.join(artifactDir, 'xvfb-marker.txt')
+  await fs.symlink('/usr/bin/env', path.join(fakeBinDir, 'env'))
+  await fs.symlink('/usr/bin/dirname', path.join(fakeBinDir, 'dirname'))
+  await fs.writeFile(path.join(fakeBinDir, 'uname'), '#!/bin/sh\nprintf Linux\n')
+  await fs.writeFile(
+    path.join(fakeBinDir, 'xvfb-run'),
+    `#!/bin/sh
+printf 'under=%s\\n' "$AURORA_DESKTOP_LIVE_E2E_UNDER_XVFB" > "${markerPath}"
+printf 'args=%s\\n' "$*" >> "${markerPath}"
+exit 73
+`,
+  )
+  await Promise.all([
+    fs.chmod(path.join(fakeBinDir, 'uname'), 0o755),
+    fs.chmod(path.join(fakeBinDir, 'xvfb-run'), 0o755),
+  ])
+
+  await assert.rejects(
+    execFilePromise('/usr/bin/bash', [liveRunner], {
+      AURORA_DESKTOP_LIVE_E2E_ARTIFACT_DIR: artifactDir,
+      AURORA_DESKTOP_LIVE_E2E_SKIP_BUILD: '1',
+      DISPLAY: ':99',
+      PATH: fakeBinDir,
+    }),
+    (error) => {
+      assert.equal(error.code, 73)
+      assert.match(error.stderr, /DISPLAY cannot be verified/)
+      return true
+    },
+  )
+  const marker = await fs.readFile(markerPath, 'utf8')
+  assert.match(marker, /under=1/)
+  assert.match(marker, /args=-a /)
+})
+
 test('macOS live lane uses the embedded WebDriver and does not install unsupported tauri-driver', async () => {
   const source = await fs.readFile(desktopWorkflow, 'utf8')
   const macosJob = source
