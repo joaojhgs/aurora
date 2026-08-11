@@ -2,6 +2,7 @@
 set -euo pipefail
 
 desktop_repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+desktop_live_runner="$desktop_repo_root/scripts/desktop_live_e2e.sh"
 cd "$desktop_repo_root"
 
 desktop_artifact_dir="${AURORA_DESKTOP_LIVE_E2E_ARTIFACT_DIR:-$desktop_repo_root/reports/desktop-live-e2e}"
@@ -66,7 +67,7 @@ rerun_desktop_live_under_xvfb() {
     echo "desktop live E2E requires xvfb-run when DISPLAY is unavailable" >&2
     exit 2
   fi
-  exec env AURORA_DESKTOP_LIVE_E2E_UNDER_XVFB=1 xvfb-run -a "$0" "$@"
+  exec env AURORA_DESKTOP_LIVE_E2E_UNDER_XVFB=1 xvfb-run -a "$desktop_live_runner" "$@"
 }
 
 if [[ "$desktop_platform" == "Linux" && "${AURORA_DESKTOP_LIVE_E2E_UNDER_XVFB:-0}" != "1" ]]; then

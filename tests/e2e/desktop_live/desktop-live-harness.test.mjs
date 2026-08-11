@@ -208,6 +208,38 @@ exit 73
   assert.match(marker, /args=-a /)
 })
 
+test('live runner re-enters Xvfb with absolute script path from package cwd', async () => {
+  const fakeBinDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aurora-desktop-live-bin.'))
+  const artifactDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aurora-desktop-live-xvfb.'))
+  const markerPath = path.join(artifactDir, 'xvfb-marker.txt')
+  await fs.writeFile(
+    path.join(fakeBinDir, 'xvfb-run'),
+    `#!/bin/sh
+printf 'under=%s\\n' "$AURORA_DESKTOP_LIVE_E2E_UNDER_XVFB" > "${markerPath}"
+printf 'script=%s\\n' "$2" >> "${markerPath}"
+test -f "$2" || exit 74
+exit 73
+`,
+  )
+  await fs.chmod(path.join(fakeBinDir, 'xvfb-run'), 0o755)
+
+  await assert.rejects(
+    execFilePromise('/usr/bin/bash', ['../../scripts/desktop_live_e2e.sh'], {
+      AURORA_DESKTOP_LIVE_E2E_ARTIFACT_DIR: artifactDir,
+      AURORA_DESKTOP_LIVE_E2E_FORCE_XVFB: '1',
+      AURORA_DESKTOP_LIVE_E2E_SKIP_BUILD: '1',
+      PATH: `${fakeBinDir}:${process.env.PATH}`,
+    }, path.join(repoRoot, 'apps/aurora-tauri')),
+    (error) => {
+      assert.equal(error.code, 73)
+      return true
+    },
+  )
+  const marker = await fs.readFile(markerPath, 'utf8')
+  assert.match(marker, /under=1/)
+  assert.match(marker, new RegExp(`script=${escapeRegExp(liveRunner)}\\n`))
+})
+
 test('macOS live lane uses the embedded WebDriver and does not install unsupported tauri-driver', async () => {
   const source = await fs.readFile(desktopWorkflow, 'utf8')
   const macosJob = source
@@ -271,13 +303,13 @@ function execNode(args, extraEnv = {}) {
   })
 }
 
-function execFilePromise(command, args, extraEnv = {}) {
+function execFilePromise(command, args, extraEnv = {}, cwd = repoRoot) {
   return new Promise((resolve, reject) => {
     execFile(
       command,
       args,
       {
-        cwd: repoRoot,
+        cwd,
         env: { ...process.env, ...extraEnv },
         timeout: 30_000,
       },
@@ -293,4 +325,8 @@ function execFilePromise(command, args, extraEnv = {}) {
       },
     )
   })
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
