@@ -435,6 +435,65 @@ describe("desktop live E2E WebView hook", () => {
     }
   });
 
+  it("keeps a transient post-revocation pairing prompt sticky until SAS confirmation is observed", async () => {
+    vi.useFakeTimers();
+    try {
+      let current: DesktopLiveRevocationSnapshot = { state: "discovering-peer" };
+      setTimeout(() => {
+        current = { state: "discovering-peer", pendingPairing: { peerId: "python-gateway-g009" } };
+      }, 100);
+      setTimeout(() => {
+        current = { state: "awaiting-sas-confirmation" };
+      }, 200);
+
+      const observing = waitForPostRevocationPairingObservation({
+        snapshot: () => current,
+        snapshots: [],
+        startIndex: 0,
+        timeoutMs: 1_000,
+        intervalMs: 50,
+      });
+      await vi.advanceTimersByTimeAsync(250);
+
+      await expect(observing).resolves.toMatchObject({
+        snapshot: { state: "awaiting-sas-confirmation" },
+        pendingPairingPrompts: 1,
+        timedOut: false,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not treat awaiting SAS confirmation as success without an observed post-revocation prompt", async () => {
+    vi.useFakeTimers();
+    try {
+      let current: DesktopLiveRevocationSnapshot = { state: "discovering-peer" };
+      setTimeout(() => {
+        current = { state: "awaiting-sas-confirmation" };
+      }, 100);
+
+      const observing = waitForPostRevocationPairingObservation({
+        snapshot: () => current,
+        snapshots: [],
+        startIndex: 0,
+        timeoutMs: 500,
+        intervalMs: 50,
+      });
+      await vi.advanceTimersByTimeAsync(600);
+
+      await expect(observing).resolves.toMatchObject({
+        snapshot: { state: "awaiting-sas-confirmation" },
+        pendingPairingPrompts: 0,
+        elapsedMs: 500,
+        timeoutMs: 500,
+        timedOut: true,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("returns immediately if a revoked credential becomes authorized", async () => {
     vi.useFakeTimers();
     try {

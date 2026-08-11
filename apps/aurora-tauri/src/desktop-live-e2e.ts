@@ -1398,6 +1398,11 @@ export async function waitForPostRevocationPairingObservation(
   const startedAt = Date.now();
   const deadline = startedAt + options.timeoutMs;
   let lastSnapshot = options.snapshot();
+  let observedPendingPairingPrompts = countRevocationPendingPairingPrompts(
+    options.snapshots,
+    options.startIndex,
+    lastSnapshot,
+  );
   while (true) {
     lastSnapshot = options.snapshot();
     const pendingPairingPrompts = countRevocationPendingPairingPrompts(
@@ -1405,10 +1410,14 @@ export async function waitForPostRevocationPairingObservation(
       options.startIndex,
       lastSnapshot,
     );
-    if (lastSnapshot.state === "authorized" || (lastSnapshot.state === "awaiting-sas-confirmation" && pendingPairingPrompts > 0)) {
+    observedPendingPairingPrompts = Math.max(observedPendingPairingPrompts, pendingPairingPrompts);
+    if (
+      lastSnapshot.state === "authorized" ||
+      (lastSnapshot.state === "awaiting-sas-confirmation" && observedPendingPairingPrompts > 0)
+    ) {
       return {
         snapshot: lastSnapshot,
-        pendingPairingPrompts,
+        pendingPairingPrompts: observedPendingPairingPrompts,
         elapsedMs: Date.now() - startedAt,
         timeoutMs: options.timeoutMs,
         timedOut: false,
@@ -1418,7 +1427,7 @@ export async function waitForPostRevocationPairingObservation(
     if (remainingMs <= 0) {
       return {
         snapshot: lastSnapshot,
-        pendingPairingPrompts,
+        pendingPairingPrompts: observedPendingPairingPrompts,
         elapsedMs: Date.now() - startedAt,
         timeoutMs: options.timeoutMs,
         timedOut: true,
