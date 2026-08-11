@@ -1,10 +1,12 @@
 import { expect, test, type Page } from '@playwright/test'
+import { transform } from 'esbuild'
 import { createServer, type Server } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, join, normalize, relative, sep } from 'node:path'
 
 const repoRoot = normalize(join(import.meta.dirname, '..', '..', '..', '..'))
 const packageRoot = join(repoRoot, 'packages', 'aurora-voice-web')
+const uiPackageRoot = join(repoRoot, 'packages', 'aurora-ui')
 
 let server: Server
 let baseUrl: string
@@ -19,12 +21,35 @@ test.beforeAll(async () => {
         'content-type': 'text/html; charset=utf-8',
         'cache-control': 'no-store'
       })
-      response.end('<!doctype html><meta charset="utf-8"><title>Aurora voice web browser store</title>')
+      response.end(`<!doctype html>
+        <meta charset="utf-8">
+        <script type="importmap">
+          {
+            "imports": {
+              "@aurora/voice-web": "/dist/index.js",
+              "@aurora/voice-web/browser": "/harness/voice-web-browser-shim.js"
+            }
+          }
+        </script>
+        <title>Aurora voice web browser store</title>`)
       return
     }
 
-    const filePath = normalize(join(packageRoot, pathname))
-    const rel = relative(packageRoot, filePath)
+    if (pathname === '/harness/voice-web-browser-shim.js') {
+      response.writeHead(200, {
+        'content-type': 'text/javascript; charset=utf-8',
+        'cache-control': 'no-store'
+      })
+      response.end(browserShimModule())
+      return
+    }
+
+    const root = pathname.startsWith('/aurora-ui/') ? uiPackageRoot : packageRoot
+    const normalizedPathname = pathname.startsWith('/aurora-ui/')
+      ? pathname.slice('/aurora-ui'.length)
+      : pathname
+    const filePath = normalize(join(root, normalizedPathname))
+    const rel = relative(root, filePath)
     if (rel.startsWith('..') || rel.includes(`..${sep}`)) {
       response.writeHead(403)
       response.end()
@@ -33,6 +58,19 @@ test.beforeAll(async () => {
 
     try {
       const body = await readFile(filePath)
+      if (filePath.endsWith('.ts') || filePath.endsWith('.tsx')) {
+        const transpiled = await transform(body.toString(), {
+          format: 'esm',
+          loader: filePath.endsWith('.tsx') ? 'tsx' : 'ts',
+          target: 'es2022'
+        })
+        response.writeHead(200, {
+          'content-type': 'text/javascript; charset=utf-8',
+          'cache-control': 'no-store'
+        })
+        response.end(transpiled.code)
+        return
+      }
       response.writeHead(200, {
         'content-type': contentType(filePath),
         'cache-control': 'no-store'
@@ -175,7 +213,7 @@ test('persists JSON and promoted bytes across reloads', async ({ page }, testInf
   expect(reopened.chunk.complete).toBe(true)
 })
 
-test('reopens a verified signed pack across reload without fetching model bytes again', async ({ page }, testInfo) => {
+test('reopens a hosted STT pack across reload and offline using exact release trust', async ({ page }, testInfo) => {
   await installNamespacedStore(page, testInfo.project.name)
   await requireBrowserStoreWriteSupport(page, testInfo.project.name)
 
@@ -183,11 +221,19 @@ test('reopens a verified signed pack across reload without fetching model bytes 
     const host = await window.__auroraBrowserStore.create()
     const bytes = new Uint8Array([21, 22, 23, 24])
     const manifest = await window.__auroraBrowserModelPack.signedManifest(bytes)
+    const setupVerification = await window.__auroraBrowserModelPack.verifyBrowserModelPackManifest(
+      manifest,
+      { allowNonProductionTestSignature: true }
+    )
     let fetchCount = 0
     const receipt = await window.__auroraBrowserModelPack.installVerifiedBrowserModelPack({
       host,
       manifest,
-      allowNonProductionTestSignature: true,
+      trustedReleaseKeys: [{
+        keyId: setupVerification.key_id,
+        publicKeyBase64: window.__auroraBrowserModelPack.nonProductionTestPublicKeyBase64
+      }],
+      expectedReleaseManifestSha256: setupVerification.manifest_sha256,
       allowNonProductionLoopbackHttpAssetUrls: true,
       trustedAssetBaseUrl: window.location.href,
       fetchBytes: async (url) => {
@@ -201,6 +247,7 @@ test('reopens a verified signed pack across reload without fetching model bytes 
     return {
       fetchCount,
       receipt,
+      setupVerification,
       keys: await host.listPromotedKeys()
     }
   })
@@ -208,6 +255,10 @@ test('reopens a verified signed pack across reload without fetching model bytes 
   expect(first.fetchCount).toBe(1)
   expect(first.keys).toHaveLength(1)
   expect(first.receipt.manifestSha256).toMatch(/^[a-f0-9]{64}$/)
+  expect(first.setupVerification.verification_mode).toBe('signature')
+  expect(first.receipt.manifestSha256).toBe(first.setupVerification.manifest_sha256)
+  expect(first.receipt.verificationMode).toBe('release-hash')
+  expect(first.receipt.verificationKeyId).toBe(windowTestKeyId())
 
   await page.reload()
   await installNamespacedStore(page, testInfo.project.name)
@@ -217,21 +268,39 @@ test('reopens a verified signed pack across reload without fetching model bytes 
     return route.abort('blockedbyclient')
   })
 
-  const reopened = await page.evaluate(async () => {
-    const host = await window.__auroraBrowserStore.create()
-    const active = await window.__auroraBrowserModelPack.openActiveBrowserModelPack(
-      host,
-      { task: 'stt' },
-      { allowNonProductionTestSignature: true }
-    )
-    return {
-      identity: active?.identity ?? null,
-      bytes: active?.files[0] ? Array.from(await active.files[0].readAll()) : []
+  const reopened = await page.evaluate(async ({ expectedManifestSha256 }) => {
+    const result = await window.__auroraHostedBrowserSpeechPack.openHostedBrowserSttSpeechPack({
+      trust: {
+        releaseKeyId: window.__auroraBrowserModelPack.nonProductionTestKeyId,
+        releasePublicKeyBase64: window.__auroraBrowserModelPack.nonProductionTestPublicKeyBase64,
+        expectedManifestSha256
+      },
+      createHost: window.__auroraBrowserStore.create
+    })
+    if (result.state !== 'verified' || result.pack === null) {
+      throw new Error(`expected verified hosted STT pack, got ${result.state}:${'reason' in result ? result.reason : 'none'}`)
     }
-  })
+    const active = result.pack
+    return {
+      identity: active.identity,
+      bytes: active.files[0] ? Array.from(await active.files[0].readAll()) : [],
+      openCalls: window.__auroraHostedSpeechPackOpenCalls
+    }
+  }, { expectedManifestSha256: first.receipt.manifestSha256 })
 
   expect(reopened.identity).toEqual(first.receipt.identity)
   expect(reopened.bytes).toEqual([21, 22, 23, 24])
+  expect(reopened.openCalls).toEqual([{
+    scope: { task: 'stt' },
+    options: {
+      trustedReleaseKeys: [{
+        keyId: first.receipt.verificationKeyId,
+        publicKeyBase64: windowTestPublicKeyBase64()
+      }],
+      expectedReleaseManifestSha256: first.receipt.manifestSha256
+    }
+  }])
+  expect(JSON.stringify(reopened.openCalls)).not.toContain('allowNonProductionTestSignature')
   expect(unexpectedNetwork).toEqual([])
 })
 
@@ -309,6 +378,7 @@ async function installNamespacedStore(page: Page, projectName: string): Promise<
   await page.reload()
   await page.addScriptTag({ type: 'module', content: browserHarnessModule() })
   await page.waitForFunction(() => window.__auroraBrowserStore !== undefined)
+  await page.waitForFunction(() => window.__auroraHostedBrowserSpeechPack !== undefined)
 }
 
 async function requireBrowserStoreWriteSupport(page: Page, projectName: string): Promise<void> {
@@ -363,7 +433,8 @@ function browserHarnessModule(): string {
       AURORA_MODEL_PACK_SIGNATURE_ALGORITHM,
       AURORA_NON_PRODUCTION_MODEL_PACK_KEY_ID,
       installVerifiedBrowserModelPack,
-      openActiveBrowserModelPack
+      openActiveBrowserModelPack,
+      verifyBrowserModelPackManifest
     } from '/dist/browser-model-pack.js';
 
     try {
@@ -440,8 +511,11 @@ function browserHarnessModule(): string {
         createDefault: async () => new AuroraBrowserModelStoreHost(await createBrowserModelStorePort())
       };
       window.__auroraBrowserModelPack = {
+        nonProductionTestKeyId: AURORA_NON_PRODUCTION_MODEL_PACK_KEY_ID,
+        nonProductionTestPublicKeyBase64: 'k1NEXA5D4H1jAs3GBxo9Cr42I6BUeYEA/HqYiTOUKhc=',
         installVerifiedBrowserModelPack,
         openActiveBrowserModelPack,
+        verifyBrowserModelPackManifest,
         signedManifest: async (bytes) => {
           const unsigned = {
             schema_version: 1,
@@ -488,6 +562,7 @@ function browserHarnessModule(): string {
           };
         }
       };
+      window.__auroraHostedBrowserSpeechPack = await import('/aurora-ui/src/browser-speech-pack.ts');
     } catch (error) {
       window.__auroraBrowserStoreInstallError = String(error?.stack ?? error);
       throw error;
@@ -525,6 +600,30 @@ function browserHarnessModule(): string {
       return btoa(binary);
     }
   `
+}
+
+function browserShimModule(): string {
+  return `
+    import * as browser from '/dist/browser.js';
+    export * from '/dist/browser.js';
+
+    export async function openActiveBrowserModelPack(host, scope, options) {
+      globalThis.__auroraHostedSpeechPackOpenCalls ??= [];
+      globalThis.__auroraHostedSpeechPackOpenCalls.push({
+        scope: JSON.parse(JSON.stringify(scope ?? null)),
+        options: JSON.parse(JSON.stringify(options ?? null))
+      });
+      return browser.openActiveBrowserModelPack(host, scope, options);
+    }
+  `
+}
+
+function windowTestKeyId(): string {
+  return 'aurora-nonproduction-web-wasm-test'
+}
+
+function windowTestPublicKeyBase64(): string {
+  return 'k1NEXA5D4H1jAs3GBxo9Cr42I6BUeYEA/HqYiTOUKhc='
 }
 
 function contentType(filePath: string): string {
@@ -567,7 +666,9 @@ declare global {
       installVerifiedBrowserModelPack(options: {
         host: unknown
         manifest: unknown
-        allowNonProductionTestSignature: true
+        allowNonProductionTestSignature?: true
+        trustedReleaseKeys?: readonly { keyId: string; publicKeyBase64: string }[]
+        expectedReleaseManifestSha256?: string
         allowNonProductionLoopbackHttpAssetUrls?: true
         trustedAssetBaseUrl?: string
         fetchBytes: (url: string, signal?: AbortSignal) => Promise<Uint8Array>
@@ -575,15 +676,36 @@ declare global {
       }): Promise<{
         identity: unknown
         manifestSha256: string
+        verificationMode: string
+        verificationKeyId: string
       }>
-      openActiveBrowserModelPack(
-        host: unknown,
-        scope: { task: string },
+      nonProductionTestKeyId: string
+      nonProductionTestPublicKeyBase64: string
+      verifyBrowserModelPackManifest(
+        manifest: unknown,
         options: { allowNonProductionTestSignature: true }
       ): Promise<{
-        identity: unknown
-        files: readonly [{ readAll(): Promise<Uint8Array> }]
-      } | null>
+        manifest_sha256: string
+        verification_mode: string
+        key_id: string
+      }>
     }
+    __auroraHostedBrowserSpeechPack: {
+      openHostedBrowserSttSpeechPack(options: {
+        trust: {
+          releaseKeyId: string
+          releasePublicKeyBase64: string
+          expectedManifestSha256: string
+        }
+        createHost: () => Promise<unknown>
+      }): Promise<{
+        state: 'not-configured' | 'absent' | 'verified' | 'rejected' | 'storage-unavailable'
+        pack: null | {
+          identity: unknown
+          files: readonly [{ readAll(): Promise<Uint8Array> }]
+        }
+      }>
+    }
+    __auroraHostedSpeechPackOpenCalls: readonly unknown[]
   }
 }
