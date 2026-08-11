@@ -44,7 +44,9 @@ class ResourceMetricError(RuntimeError):
 class TaskSpec:
     task: str
     candidate_id: str
-    command: tuple[str, ...]
+    build_command: tuple[str, ...]
+    integration_test_name: str
+    test_args: tuple[str, ...]
     env: dict[str, str]
     workload_duration_ms: float | None
     temp_dir: tempfile.TemporaryDirectory[str] | None = None
@@ -193,7 +195,7 @@ def build_task_spec(task: str, *, repo_root: Path, artifact_root: Path) -> TaskS
             "AURORA_SHERPA_ONNX_MODEL": str(model),
             "AURORA_SHERPA_ONNX_TEST_WAV": str(wav),
         }
-        command = (
+        build_command = (
             "cargo",
             "+1.88.0",
             "test",
@@ -206,15 +208,19 @@ def build_task_spec(task: str, *, repo_root: Path, artifact_root: Path) -> TaskS
             "native-vad",
             "--test",
             "native_vad_smoke",
-            "--",
-            "silero_vad_matches_phase4_kws_pcm16_fixture",
-            "--exact",
-            "--nocapture",
+            "--no-run",
+            "--message-format=json",
         )
         return TaskSpec(
             task="vad",
             candidate_id="silero-vad-v4",
-            command=command,
+            build_command=build_command,
+            integration_test_name="native_vad_smoke",
+            test_args=(
+                "silero_vad_matches_phase4_kws_pcm16_fixture",
+                "--exact",
+                "--nocapture",
+            ),
             env=env,
             workload_duration_ms=vad_workload_duration_ms(wav),
         )
@@ -233,7 +239,7 @@ def build_task_spec(task: str, *, repo_root: Path, artifact_root: Path) -> TaskS
                 "AURORA_SHERPA_ONNX_KWS_DIR": str(smoke_dir),
                 "AURORA_SHERPA_ONNX_TEST_WAV": str(wav),
             }
-            command = (
+            build_command = (
                 "cargo",
                 "+1.88.0",
                 "test",
@@ -246,15 +252,19 @@ def build_task_spec(task: str, *, repo_root: Path, artifact_root: Path) -> TaskS
                 "native-kws",
                 "--test",
                 "native_kws_smoke",
-                "--",
-                "light_up_detection_matches_phase4_wav_with_inline_keywords",
-                "--exact",
-                "--nocapture",
+                "--no-run",
+                "--message-format=json",
             )
             return TaskSpec(
                 task="kws",
                 candidate_id="sherpa-gigaspeech-kws-en",
-                command=command,
+                build_command=build_command,
+                integration_test_name="native_kws_smoke",
+                test_args=(
+                    "light_up_detection_matches_phase4_wav_with_inline_keywords",
+                    "--exact",
+                    "--nocapture",
+                ),
                 env=env,
                 workload_duration_ms=kws_workload_duration_ms(input_duration_ms),
                 temp_dir=temp_dir,
@@ -272,7 +282,7 @@ def build_task_spec(task: str, *, repo_root: Path, artifact_root: Path) -> TaskS
         "AURORA_SHERPA_ONNX_STT_MODEL_DIR": str(stt_dir),
         "AURORA_SHERPA_ONNX_STT_TEST_WAV": str(wav),
     }
-    command = (
+    build_command = (
         "cargo",
         "+1.88.0",
         "test",
@@ -285,15 +295,19 @@ def build_task_spec(task: str, *, repo_root: Path, artifact_root: Path) -> TaskS
         "native-stt",
         "--test",
         "native_stt_smoke",
-        "--",
-        "moonshine_stt_matches_phase4_wav_exactly_and_reuses_new_streams",
-        "--exact",
-        "--nocapture",
+        "--no-run",
+        "--message-format=json",
     )
     return TaskSpec(
         task="stt",
         candidate_id="moonshine-tiny-en-stt",
-        command=command,
+        build_command=build_command,
+        integration_test_name="native_stt_smoke",
+        test_args=(
+            "moonshine_stt_matches_phase4_wav_exactly_and_reuses_new_streams",
+            "--exact",
+            "--nocapture",
+        ),
         env=env,
         workload_duration_ms=stt_workload_duration_ms(wav),
     )
@@ -348,19 +362,54 @@ def run_task(
     surface: str,
 ) -> dict[str, Any]:
     repetitions_payload: list[dict[str, Any]] = []
+    try:
+        executable = build_task_executable(
+            spec,
+            repo_root=repo_root,
+            timeout_seconds=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        repetitions_payload.append(failed_repetition_to_json(1, "build_timeout"))
+        return task_result_payload(
+            spec,
+            surface=surface,
+            repetitions_payload=repetitions_payload,
+        )
+    except ResourceMetricError:
+        repetitions_payload.append(failed_repetition_to_json(1, "build_failed"))
+        return task_result_payload(
+            spec,
+            surface=surface,
+            repetitions_payload=repetitions_payload,
+        )
+
     for index in range(repetitions):
         result = run_one_repetition(
             spec,
+            executable=executable,
             repo_root=repo_root,
             time_bin=time_bin,
             timeout_seconds=timeout_seconds,
         )
         repetitions_payload.append(repetition_to_json(index + 1, result))
 
+    return task_result_payload(
+        spec,
+        surface=surface,
+        repetitions_payload=repetitions_payload,
+    )
+
+
+def task_result_payload(
+    spec: TaskSpec,
+    *,
+    surface: str,
+    repetitions_payload: list[dict[str, Any]],
+) -> dict[str, Any]:
     ok_repetitions = [
         item for item in repetitions_payload if item["status"] == "ok" and item.get("metrics")
     ]
-    status = "ok" if len(ok_repetitions) == repetitions else "failed"
+    status = "ok" if len(ok_repetitions) == len(repetitions_payload) else "failed"
     return {
         "task": spec.task,
         "candidate_id": spec.candidate_id,
@@ -382,15 +431,94 @@ def run_task(
     }
 
 
+def build_task_executable(
+    spec: TaskSpec,
+    *,
+    repo_root: Path,
+    timeout_seconds: float,
+) -> Path:
+    completed = run_build_command(
+        list(spec.build_command),
+        cwd=repo_root,
+        env=build_child_env(spec.env),
+        timeout=timeout_seconds,
+    )
+    if completed.returncode != 0:
+        raise ResourceMetricError("native test executable build failed")
+    return parse_cargo_test_executable(completed.stdout, spec.integration_test_name)
+
+
+def run_build_command(
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    timeout: float,
+) -> subprocess.CompletedProcess[str]:
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        terminate_process_group(process.pid, signal.SIGTERM)
+        try:
+            process.communicate(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            terminate_process_group(process.pid, signal.SIGKILL)
+            process.communicate()
+        raise subprocess.TimeoutExpired(command, timeout) from exc
+    return subprocess.CompletedProcess(
+        args=command,
+        returncode=process.returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
+def parse_cargo_test_executable(stdout: str, integration_test_name: str) -> Path:
+    executables: list[Path] = []
+    for line in stdout.splitlines():
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if item.get("reason") != "compiler-artifact":
+            continue
+        target = item.get("target")
+        if not isinstance(target, dict) or target.get("name") != integration_test_name:
+            continue
+        kind = target.get("kind")
+        if not isinstance(kind, list) or "test" not in kind:
+            continue
+        executable = item.get("executable")
+        if isinstance(executable, str) and executable:
+            executables.append(Path(executable).resolve())
+
+    if len(executables) != 1:
+        raise ResourceMetricError("native test executable artifact was not uniquely identified")
+    executable = executables[0]
+    if not executable.is_file() or not os.access(executable, os.X_OK):
+        raise ResourceMetricError("native test executable artifact is unavailable")
+    return executable
+
+
 def run_one_repetition(
     spec: TaskSpec,
     *,
+    executable: Path,
     repo_root: Path,
     time_bin: Path,
     timeout_seconds: float,
 ) -> RepetitionResult:
     env = build_child_env(spec.env)
-    command = [str(time_bin), "-v", *spec.command]
+    command = [str(time_bin), "-v", str(executable), *spec.test_args]
     try:
         completed = run_timed_command(
             command,
@@ -436,6 +564,16 @@ def run_one_repetition(
         metrics=metrics,
         rtf_ms_per_second=rtf(metrics.wall_ms, spec.workload_duration_ms),
     )
+
+
+def failed_repetition_to_json(index: int, failure_bucket: str) -> dict[str, Any]:
+    return {
+        "index": index,
+        "status": "failed",
+        "failure_bucket": failure_bucket,
+        "rtf_ms_per_second": None,
+        "metrics": None,
+    }
 
 
 def run_timed_command(

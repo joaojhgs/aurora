@@ -77,10 +77,13 @@ def test_percentile_math_is_interpolated_and_bounded():
 
 
 def test_run_one_repetition_redacts_child_output_and_reports_success(tmp_path):
+    executable = make_executable(tmp_path / "native_vad_smoke")
     spec = metrics.TaskSpec(
         task="vad",
         candidate_id="silero-vad-v4",
-        command=("fake",),
+        build_command=("cargo",),
+        integration_test_name="native_vad_smoke",
+        test_args=("silero_vad_matches_phase4_kws_pcm16_fixture", "--exact", "--nocapture"),
         env={},
         workload_duration_ms=1000.0,
     )
@@ -93,6 +96,7 @@ def test_run_one_repetition_redacts_child_output_and_reports_success(tmp_path):
     with patch.object(metrics, "run_timed_command", return_value=completed):
         result = metrics.run_one_repetition(
             spec,
+            executable=executable,
             repo_root=tmp_path,
             time_bin=Path("/usr/bin/time"),
             timeout_seconds=1.0,
@@ -106,10 +110,13 @@ def test_run_one_repetition_redacts_child_output_and_reports_success(tmp_path):
 
 
 def test_run_one_repetition_timeout_and_child_failure_are_redacted(tmp_path):
+    executable = make_executable(tmp_path / "native_kws_smoke")
     spec = metrics.TaskSpec(
         task="kws",
         candidate_id="sherpa-gigaspeech-kws-en",
-        command=("fake",),
+        build_command=("cargo",),
+        integration_test_name="native_kws_smoke",
+        test_args=("light_up_detection_matches_phase4_wav_with_inline_keywords", "--exact"),
         env={},
         workload_duration_ms=1000.0,
     )
@@ -118,6 +125,7 @@ def test_run_one_repetition_timeout_and_child_failure_are_redacted(tmp_path):
     ):
         timeout = metrics.run_one_repetition(
             spec,
+            executable=executable,
             repo_root=tmp_path,
             time_bin=Path("/usr/bin/time"),
             timeout_seconds=1.0,
@@ -133,6 +141,7 @@ def test_run_one_repetition_timeout_and_child_failure_are_redacted(tmp_path):
     with patch.object(metrics, "run_timed_command", return_value=completed):
         failed = metrics.run_one_repetition(
             spec,
+            executable=executable,
             repo_root=tmp_path,
             time_bin=Path("/usr/bin/time"),
             timeout_seconds=1.0,
@@ -140,6 +149,129 @@ def test_run_one_repetition_timeout_and_child_failure_are_redacted(tmp_path):
     assert failed.status == "failed"
     assert failed.failure_bucket == "child_failed"
     assert failed.metrics is not None
+
+
+def test_run_one_repetition_times_native_test_executable_directly(tmp_path):
+    executable = make_executable(tmp_path / "target" / "debug" / "deps" / "native_vad_smoke-abc")
+    spec = metrics.TaskSpec(
+        task="vad",
+        candidate_id="silero-vad-v4",
+        build_command=("cargo",),
+        integration_test_name="native_vad_smoke",
+        test_args=("silero_vad_matches_phase4_kws_pcm16_fixture", "--exact", "--nocapture"),
+        env={},
+        workload_duration_ms=1000.0,
+    )
+    completed = subprocess.CompletedProcess(args=["fake"], returncode=0, stdout="", stderr=TIME_OUTPUT)
+
+    with patch.object(metrics, "run_timed_command", return_value=completed) as timed:
+        result = metrics.run_one_repetition(
+            spec,
+            executable=executable,
+            repo_root=tmp_path,
+            time_bin=Path("/usr/bin/time"),
+            timeout_seconds=1.0,
+        )
+
+    assert result.status == "ok"
+    timed.assert_called_once()
+    command = timed.call_args.args[0]
+    assert command == [
+        "/usr/bin/time",
+        "-v",
+        str(executable),
+        "silero_vad_matches_phase4_kws_pcm16_fixture",
+        "--exact",
+        "--nocapture",
+    ]
+    assert "cargo" not in command
+
+
+def test_parse_cargo_test_executable_uses_matching_compiler_artifact(tmp_path):
+    ignored = make_executable(tmp_path / "ignored")
+    executable = make_executable(tmp_path / "native_kws_smoke-123")
+    stdout = "\n".join(
+        [
+            "Compiling aurora",
+            json.dumps(
+                {
+                    "reason": "compiler-artifact",
+                    "target": {"name": "other_test", "kind": ["test"]},
+                    "executable": str(ignored),
+                }
+            ),
+            json.dumps(
+                {
+                    "reason": "compiler-artifact",
+                    "target": {"name": "native_kws_smoke", "kind": ["test"]},
+                    "executable": str(executable),
+                }
+            ),
+            json.dumps({"reason": "build-finished", "success": True}),
+        ]
+    )
+
+    assert metrics.parse_cargo_test_executable(stdout, "native_kws_smoke") == executable.resolve()
+
+
+def test_parse_cargo_test_executable_rejects_missing_or_ambiguous_artifacts(tmp_path):
+    first = make_executable(tmp_path / "native_stt_smoke-1")
+    second = make_executable(tmp_path / "native_stt_smoke-2")
+    ambiguous = "\n".join(
+        json.dumps(
+            {
+                "reason": "compiler-artifact",
+                "target": {"name": "native_stt_smoke", "kind": ["test"]},
+                "executable": str(path),
+            }
+        )
+        for path in (first, second)
+    )
+
+    with pytest.raises(metrics.ResourceMetricError):
+        metrics.parse_cargo_test_executable("", "native_stt_smoke")
+    with pytest.raises(metrics.ResourceMetricError):
+        metrics.parse_cargo_test_executable(ambiguous, "native_stt_smoke")
+
+
+def test_run_task_builds_outside_time_and_redacts_build_failures(tmp_path):
+    spec = metrics.TaskSpec(
+        task="stt",
+        candidate_id="moonshine-tiny-en-stt",
+        build_command=("cargo",),
+        integration_test_name="native_stt_smoke",
+        test_args=("moonshine_stt_matches_phase4_wav_exactly_and_reuses_new_streams", "--exact"),
+        env={},
+        workload_duration_ms=1000.0,
+    )
+    completed = subprocess.CompletedProcess(
+        args=["cargo"],
+        returncode=101,
+        stdout="/home/private/target/native_stt_smoke",
+        stderr="linker RSS 999999 /tmp/private",
+    )
+
+    with (
+        patch.object(metrics, "run_build_command", return_value=completed) as build,
+        patch.object(metrics, "run_timed_command") as timed,
+    ):
+        payload = metrics.run_task(
+            spec,
+            repo_root=tmp_path,
+            time_bin=Path("/usr/bin/time"),
+            repetitions=2,
+            timeout_seconds=1.0,
+            surface="linux-x86_64",
+        )
+
+    build.assert_called_once()
+    timed.assert_not_called()
+    rendered = json.dumps(payload, sort_keys=True)
+    assert payload["status"] == "failed"
+    assert payload["failure_buckets"] == ["build_failed"]
+    assert "/home/private" not in rendered
+    assert "/tmp/private" not in rendered
+    assert "999999" not in rendered
 
 
 def test_invalid_cli_ranges_identifiers_paths_and_physical_claim(tmp_path):
@@ -259,12 +391,12 @@ def test_wav_duration_uses_private_path_without_reporting_it(tmp_path):
     assert metrics.wav_duration_ms(wav_path) == 1000.0
 
 
-def test_vad_task_spec_runs_exact_native_evidence_test_and_counts_replayed_workload(tmp_path):
+def test_vad_task_spec_builds_exact_native_test_and_counts_replayed_workload(tmp_path):
     repo_root, artifact_root = create_resource_fixture(tmp_path)
 
     spec = metrics.build_task_spec("vad", repo_root=repo_root, artifact_root=artifact_root)
 
-    assert spec.command == (
+    assert spec.build_command == (
         "cargo",
         "+1.88.0",
         "test",
@@ -277,7 +409,11 @@ def test_vad_task_spec_runs_exact_native_evidence_test_and_counts_replayed_workl
         "native-vad",
         "--test",
         "native_vad_smoke",
-        "--",
+        "--no-run",
+        "--message-format=json",
+    )
+    assert spec.integration_test_name == "native_vad_smoke"
+    assert spec.test_args == (
         "silero_vad_matches_phase4_kws_pcm16_fixture",
         "--exact",
         "--nocapture",
@@ -285,12 +421,19 @@ def test_vad_task_spec_runs_exact_native_evidence_test_and_counts_replayed_workl
     assert spec.workload_duration_ms == pytest.approx(3032.0)
 
 
-def test_kws_task_spec_runs_exact_native_evidence_test_and_counts_tail_padding(tmp_path):
+def test_kws_task_spec_builds_exact_native_test_and_counts_tail_padding(tmp_path):
     repo_root, artifact_root = create_resource_fixture(tmp_path)
 
     spec = metrics.build_task_spec("kws", repo_root=repo_root, artifact_root=artifact_root)
     try:
-        assert spec.command[-3:] == (
+        assert spec.build_command[-4:] == (
+            "--test",
+            "native_kws_smoke",
+            "--no-run",
+            "--message-format=json",
+        )
+        assert spec.integration_test_name == "native_kws_smoke"
+        assert spec.test_args == (
             "light_up_detection_matches_phase4_wav_with_inline_keywords",
             "--exact",
             "--nocapture",
@@ -300,12 +443,19 @@ def test_kws_task_spec_runs_exact_native_evidence_test_and_counts_tail_padding(t
         metrics.cleanup_specs([spec])
 
 
-def test_stt_task_spec_runs_exact_native_evidence_test_and_counts_two_decodes(tmp_path):
+def test_stt_task_spec_builds_exact_native_test_and_counts_two_decodes(tmp_path):
     repo_root, artifact_root = create_resource_fixture(tmp_path)
 
     spec = metrics.build_task_spec("stt", repo_root=repo_root, artifact_root=artifact_root)
 
-    assert spec.command[-3:] == (
+    assert spec.build_command[-4:] == (
+        "--test",
+        "native_stt_smoke",
+        "--no-run",
+        "--message-format=json",
+    )
+    assert spec.integration_test_name == "native_stt_smoke"
+    assert spec.test_args == (
         "moonshine_stt_matches_phase4_wav_exactly_and_reuses_new_streams",
         "--exact",
         "--nocapture",
@@ -350,7 +500,9 @@ def test_kws_smoke_dir_maps_expected_encoder_name_to_int8_source_and_cleans_up(t
             metrics.TaskSpec(
                 task="kws",
                 candidate_id="sherpa-gigaspeech-kws-en",
-                command=("fake",),
+                build_command=("cargo",),
+                integration_test_name="native_kws_smoke",
+                test_args=("fake",),
                 env={},
                 workload_duration_ms=1.0,
                 temp_dir=temp_dir,
@@ -495,3 +647,10 @@ def write_pcm16_wav(path: Path, *, sample_rate: int, frames: int) -> None:
         sink.setsampwidth(2)
         sink.setframerate(sample_rate)
         sink.writeframes(b"\x00\x00" * frames)
+
+
+def make_executable(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    path.chmod(0o755)
+    return path
