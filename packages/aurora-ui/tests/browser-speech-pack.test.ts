@@ -3,13 +3,14 @@ import type { AuroraWebModelStoreHost } from '@aurora/voice-web'
 
 const voiceWeb = vi.hoisted(() => ({
   createHost: vi.fn(),
+  openExistingHost: vi.fn(),
   openActive: vi.fn(),
 }))
 
 vi.mock('@aurora/voice-web/browser', () => ({
   AuroraBrowserModelStoreHost: {
     create: voiceWeb.createHost,
-    openExisting: voiceWeb.createHost,
+    openExisting: voiceWeb.openExistingHost,
   },
   openActiveBrowserModelPack: voiceWeb.openActive,
 }))
@@ -30,6 +31,7 @@ describe('openHostedBrowserSttSpeechPack', () => {
 
     expect(result).toEqual({ state: 'not-configured', pack: null })
     expect(voiceWeb.createHost).not.toHaveBeenCalled()
+    expect(voiceWeb.openExistingHost).not.toHaveBeenCalled()
     expect(voiceWeb.openActive).not.toHaveBeenCalled()
   })
 
@@ -44,6 +46,7 @@ describe('openHostedBrowserSttSpeechPack', () => {
 
     expect(result).toEqual({ state: 'rejected', reason: 'public-key', pack: null })
     expect(voiceWeb.createHost).not.toHaveBeenCalled()
+    expect(voiceWeb.openExistingHost).not.toHaveBeenCalled()
     expect(voiceWeb.openActive).not.toHaveBeenCalled()
   })
 
@@ -70,14 +73,15 @@ describe('openHostedBrowserSttSpeechPack', () => {
   })
 
   it('returns absent for complete trust with no existing browser store without verifying a pack', async () => {
-    voiceWeb.createHost.mockResolvedValueOnce(null)
+    voiceWeb.openExistingHost.mockResolvedValueOnce(null)
 
     const result = await openHostedBrowserSttSpeechPack({
       trust: releaseTrust(),
     })
 
     expect(result).toEqual({ state: 'absent', pack: null })
-    expect(voiceWeb.createHost).toHaveBeenCalledTimes(1)
+    expect(voiceWeb.createHost).not.toHaveBeenCalled()
+    expect(voiceWeb.openExistingHost).toHaveBeenCalledTimes(1)
     expect(voiceWeb.openActive).not.toHaveBeenCalled()
   })
 
@@ -98,15 +102,17 @@ describe('openHostedBrowserSttSpeechPack', () => {
         readChunk: async () => new Uint8Array([1]),
       }],
     }
+    voiceWeb.openExistingHost.mockResolvedValueOnce(fakeModelStoreHost())
     voiceWeb.openActive.mockResolvedValueOnce(pack)
 
     const result = await openHostedBrowserSttSpeechPack({
       trust: releaseTrust(),
-      createHost: vi.fn(async () => fakeModelStoreHost()),
     })
 
     expect(result.state).toBe('verified')
     if (result.state !== 'verified') throw new Error('expected verified')
+    expect(voiceWeb.createHost).not.toHaveBeenCalled()
+    expect(voiceWeb.openExistingHost).toHaveBeenCalledTimes(1)
     expect(result.pack).toMatchObject({
       identity: {
         packId: 'aurora-stt',
