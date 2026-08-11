@@ -62,6 +62,8 @@ const initialVoiceSettingsState: VoiceSettingsState = {
   message: null
 }
 
+let fallbackInstallOperationSequence = 0
+
 export interface VoiceSettingsViewProps {
   client: AuroraClient
 }
@@ -130,7 +132,7 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
       const result = await client.speech.tts.installVoiceProfile({
         voice_id: profile.voiceId,
         expected_revision: profile.revision,
-        operation_id: `voice-install-${Date.now().toString(36)}`
+        operation_id: createInstallOperationId()
       })
       if (!result.ok) {
         setInstallMessage(productVoiceSettingsErrorCopy(result.error, 'Voice was not added. Try again.'))
@@ -153,7 +155,7 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
           {
             label: 'Readiness',
             value: readinessLabel(state.capabilities),
-            caption: state.capabilities?.ready ? 'Spoken replies can use saved voices.' : 'Spoken replies need attention.',
+            caption: state.capabilities?.ready ? 'Spoken replies can use available voices.' : 'Spoken replies need attention.',
             tone: state.capabilities?.ready ? 'success' : 'warning'
           },
           {
@@ -198,11 +200,11 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
         </div>
       </Card>
 
-      <Card title="Saved voices" description="Voices kept on this device.">
+      <Card title="Voices available to Aurora" description="Voices Aurora can use or add for spoken replies.">
         <div className="flex flex-col gap-3">
-          {state.managementState === 'loading' ? <p className="text-sm text-muted-foreground">Loading saved voices.</p> : null}
+          {state.managementState === 'loading' ? <p className="text-sm text-muted-foreground">Loading available voices.</p> : null}
           {state.managementState === 'limited' ? (
-            <p className="text-sm text-muted-foreground">Saved voices could not be loaded. Review access and try again.</p>
+            <p className="text-sm text-muted-foreground">Available voices could not be loaded. Review access and try again.</p>
           ) : null}
           {managedProfiles.map((profile) => (
             <div key={profile.voiceId} className="flex flex-col gap-2 border-b border-border/60 pb-3 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
@@ -226,7 +228,7 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
             </div>
           ))}
           {managedProfiles.length === 0 && state.managementState === 'ready' ? (
-            <p className="text-sm text-muted-foreground">No saved voices are available yet.</p>
+            <p className="text-sm text-muted-foreground">No additional voices are available yet.</p>
           ) : null}
         </div>
       </Card>
@@ -264,7 +266,7 @@ function toManagedVoice(profile: TtsVoiceProfile, index: number, capabilities: T
   return {
     voiceId: profile.voice_id,
     revision: profile.revision,
-    label: safeVoiceText(profile.display_name, `Saved voice ${index + 1}`),
+    label: safeVoiceText(profile.display_name, `Available voice ${index + 1}`),
     detail: managedVoiceDetail(installed, ready, languages),
     ready,
     installable: canInstallProfile(profile, capabilities),
@@ -285,8 +287,8 @@ function canInstallProfile(profile: TtsVoiceProfile, capabilities: TtsCapabiliti
 function managedVoiceDetail(installed: boolean, ready: boolean, languages: string[]): string {
   const languageCopy = languages.length > 0 ? ` ${languages.join(', ')}.` : ''
   if (ready) return `Ready for spoken replies.${languageCopy}`
-  if (installed) return `Saved but not ready yet.${languageCopy}`
-  return `Can be added to this device.${languageCopy}`
+  if (installed) return `Available but not ready yet.${languageCopy}`
+  return `Can be added for spoken replies.${languageCopy}`
 }
 
 function readinessLabel(capabilities: TtsCapabilities | null): string {
@@ -340,16 +342,23 @@ function productVoiceSettingsErrorCopy(error: unknown, backup = 'Voice settings 
 
 function voiceSettingsManagementCopy(error: unknown): string {
   const copy = safeErrorCopy(error)
-  if (copy.title.includes('Permission')) return 'Saved voices need access before they can be shown.'
-  if (copy.title.includes('cannot use')) return 'Saved voices are not available on this Aurora version.'
-  return 'Saved voices could not be loaded. Review access and try again.'
+  if (copy.title.includes('Permission')) return 'Available voices need access before they can be shown.'
+  if (copy.title.includes('cannot use')) return 'Available voices are not shown on this Aurora version.'
+  return 'Available voices could not be loaded. Review access and try again.'
 }
 
 function installOutcomeCopy(status: InstallStatus): string {
   if (status === 'installed') return 'Voice added.'
   if (status === 'queued') return 'Voice will be added soon.'
-  if (status === 'unchanged') return 'Voice is already saved.'
+  if (status === 'unchanged') return 'Voice is already available.'
   if (status === 'revision_conflict') return 'Voice changed before it could be added. Try again.'
   if (status === 'not_found') return 'Voice is no longer available.'
   return 'Voice was not added. Try again.'
+}
+
+function createInstallOperationId(): string {
+  const randomId = globalThis.crypto?.randomUUID?.()
+  if (randomId) return `voice-install-${randomId}`
+  fallbackInstallOperationSequence = (fallbackInstallOperationSequence + 1) % Number.MAX_SAFE_INTEGER
+  return `voice-install-${Date.now().toString(36)}-${fallbackInstallOperationSequence.toString(36)}`
 }

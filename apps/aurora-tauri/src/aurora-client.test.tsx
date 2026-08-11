@@ -2444,7 +2444,7 @@ describe("Tauri CI/E2E route gates", () => {
     expect(settingsText).toContain("Theme, accessibility, and local storage");
     expect(settingsText).toContain("Connection choices");
     expect(settingsText).toContain("Spoken reply voices");
-    expect(settingsText).toContain("Saved voices");
+    expect(settingsText).toContain("Voices available to Aurora");
     expect(settingsText).toContain("Configuration");
     expect(settingsText).toContain("Data policy and retention");
     expect(settingsText).toContain("Device controls");

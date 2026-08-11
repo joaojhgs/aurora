@@ -70,7 +70,7 @@ interface InstallOutput {
 }
 
 describe('VoiceSettingsView', () => {
-  it('loads voice discovery without mutating and maps unavailable saved voices to product copy', async () => {
+  it('loads voice discovery without mutating and maps unavailable voice inventory to product copy', async () => {
     const installVoiceProfile = vi.fn()
     const client = voiceClient({
       installVoiceProfile,
@@ -86,7 +86,7 @@ describe('VoiceSettingsView', () => {
     const text = visibleText(container)
     expect(text).toContain('English')
     expect(text).toContain('Ava')
-    expect(text).toContain('Saved voices could not be loaded. Review access and try again.')
+    expect(text).toContain('Available voices could not be loaded. Review access and try again.')
     expect(text).not.toContain('standard:en_pack:ava')
     expect(text).not.toContain('en_pack')
     assertNoForbiddenCopy(text)
@@ -116,6 +116,49 @@ describe('VoiceSettingsView', () => {
     expect(visibleText(container)).toContain('Voice added.')
     assertNoForbiddenCopy(visibleText(container))
     await unmount()
+  })
+
+  it('uses distinct fallback operation IDs for two installs at the same time', async () => {
+    const originalCryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto')
+    Object.defineProperty(globalThis, 'crypto', { value: {}, configurable: true })
+    const dateNow = vi.spyOn(Date, 'now').mockReturnValue(123456)
+    const operationIds: string[] = []
+    const installVoiceProfile = vi.fn(async (input: { operation_id: string }) => {
+      operationIds.push(input.operation_id)
+      return { ok: true, data: installResult('installed') }
+    })
+    const client = voiceClient({
+      installVoiceProfile,
+      profiles: [profile({ installed: false, ready: false })]
+    })
+    let unmount: (() => Promise<void>) | null = null
+
+    try {
+      const rendered = await renderVoiceSettings(client)
+      unmount = rendered.unmount
+      const { container } = rendered
+      await act(async () => {
+        buttonByText(container, 'Add voice').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      })
+      await flushReactWork()
+      await act(async () => {
+        buttonByText(container, 'Add voice').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      })
+      await flushReactWork()
+
+      expect(operationIds).toHaveLength(2)
+      expect(operationIds[0]).toMatch(/^voice-install-2n9c-[a-z0-9]+$/u)
+      expect(operationIds[1]).toMatch(/^voice-install-2n9c-[a-z0-9]+$/u)
+      expect(operationIds[0]).not.toBe(operationIds[1])
+    } finally {
+      await unmount?.()
+      dateNow.mockRestore()
+      if (originalCryptoDescriptor) {
+        Object.defineProperty(globalThis, 'crypto', originalCryptoDescriptor)
+      } else {
+        Reflect.deleteProperty(globalThis, 'crypto')
+      }
+    }
   })
 
   it('maps install outcomes without exposing returned identifiers', async () => {
@@ -177,7 +220,7 @@ describe('VoiceSettingsView', () => {
     const text = visibleText(container)
 
     expect(text).toContain('Voice option 1')
-    expect(text).toContain('Saved voice 1')
+    expect(text).toContain('Available voice 1')
     expect(text).not.toContain('standard:en_pack:ava')
     expect(text).not.toContain('en_pack')
     expect(text).not.toContain('provider')
@@ -202,6 +245,20 @@ describe('VoiceSettingsView', () => {
     expect(markup).toContain('General')
     expect(markup).toContain('Configuration')
     expect(markup).toContain('Advanced')
+  })
+
+  it('keeps shared web and client copy neutral about where voices are kept', async () => {
+    const client = voiceClient({
+      profiles: [profile({ installed: false, ready: false })]
+    })
+    const { container, unmount } = await renderVoiceSettings(client)
+    const text = visibleText(container)
+
+    expect(text).toContain('Voices available to Aurora')
+    expect(text).toContain('Can be added for spoken replies.')
+    expect(text).not.toMatch(/\b(?:this device|on this device|kept on|stored|local storage|saved voices|saved voice)\b/iu)
+    assertNoForbiddenCopy(text)
+    await unmount()
   })
 })
 
