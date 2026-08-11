@@ -2,15 +2,17 @@
 import { act, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   capabilityCatalogFixture,
   cloneFixture,
   meshStatusFixture,
   supportBundleFixture,
   webrtcDiagnosticsFixture,
+  type AuroraClient,
 } from '@aurora/client'
 import {
+  MeshDiagnosticsResource,
   MeshDiagnosticsView,
   meshDiagnosticsSnapshotFromResults,
   type MeshDiagnosticsSnapshot,
@@ -18,6 +20,10 @@ import {
   type SupportBundleExportState,
 } from '../src/index'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('mesh diagnostics product copy', () => {
   it('maps hostile backend strings before headings, cards, tables, alerts, and attributes render', () => {
@@ -138,6 +144,103 @@ describe('mesh diagnostics product copy', () => {
     })
     expect(onExport).toHaveBeenCalledTimes(1)
 
+    root.unmount()
+    container.remove()
+  })
+
+  it('downloads the redacted support data after protected export succeeds', async () => {
+    const exportedBundle = cloneFixture(supportBundleFixture)
+    exportedBundle.generated_at = '2026-06-19T00:05:00Z'
+    exportedBundle.correlation_id = 'support-ref-001'
+    const exportSupportBundle = vi.fn().mockResolvedValue({
+      draft: {},
+      confirmation: { audit_receipt: 'receipt-001' },
+      data: exportedBundle,
+    })
+    const client = diagnosticsClient({ exportSupportBundle })
+    const createdBlobs: Blob[] = []
+    const createObjectURL = vi.fn((blob: Blob) => {
+      createdBlobs.push(blob)
+      return 'blob:aurora-support-data'
+    })
+    const revokeObjectURL = vi.fn()
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function clickAnchor(this: HTMLAnchorElement) {
+      clickedDownload = this.download
+      clickedHref = this.href
+    })
+    let clickedDownload = ''
+    let clickedHref = ''
+
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL })
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<MeshDiagnosticsResource client={client} route={hostileRoute()} />)
+      await flushPromises()
+    })
+    await act(async () => {
+      checkbox(container).click()
+    })
+    await act(async () => {
+      buttonByText(container, 'Export support data').click()
+      await flushPromises()
+    })
+
+    expect(exportSupportBundle).toHaveBeenCalledWith(expect.objectContaining({
+      request: { event_limit: 10, audit_limit: 10, include_capability_catalog: true },
+      reauthConfirmed: true,
+    }))
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    const blob = createdBlobs[0]
+    expect(blob).toBeInstanceOf(Blob)
+    await expect(blobText(blob)).resolves.toBe(JSON.stringify(exportedBundle, null, 2))
+    expect(clickedDownload).toBe('aurora-support-data-2026-06-19T00-05-00Z-support-ref-001.json')
+    expect(clickedHref).toBe('blob:aurora-support-data')
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:aurora-support-data')
+    expect(container.textContent).toContain('Support data exported.')
+
+    root.unmount()
+    container.remove()
+  })
+
+  it('shows a safe failure message and skips download side effects when protected export fails', async () => {
+    const exportSupportBundle = vi.fn().mockRejectedValue(new Error('Gateway.GetSupportBundle WebRTC transport failed'))
+    const client = diagnosticsClient({ exportSupportBundle })
+    const createObjectURL = vi.fn(() => 'blob:unexpected')
+    const revokeObjectURL = vi.fn()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL })
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<MeshDiagnosticsResource client={client} route={hostileRoute()} />)
+      await flushPromises()
+    })
+    await act(async () => {
+      checkbox(container).click()
+    })
+    await act(async () => {
+      buttonByText(container, 'Export support data').click()
+      await flushPromises()
+    })
+
+    expect(exportSupportBundle).toHaveBeenCalledTimes(1)
+    expect(createObjectURL).not.toHaveBeenCalled()
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+    expect(click).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Could not connect to this Aurora device. Try again or reconnect the device.')
+    expect(container.textContent).not.toContain('Gateway.GetSupportBundle')
+
+    click.mockRestore()
     root.unmount()
     container.remove()
   })
@@ -296,4 +399,38 @@ function buttonByText(container: HTMLElement, text: string): HTMLButtonElement {
   const button = Array.from(container.querySelectorAll('button')).find((candidate) => candidate.textContent?.includes(text))
   if (!(button instanceof HTMLButtonElement)) throw new Error(`button not found: ${text}`)
   return button
+}
+
+function diagnosticsClient({ exportSupportBundle }: { exportSupportBundle: ReturnType<typeof vi.fn> }): AuroraClient {
+  return {
+    registry: {
+      getWebRTCDiagnostics: vi.fn().mockResolvedValue(cloneFixture(webrtcDiagnosticsFixture)),
+    },
+    mesh: {
+      getStatus: vi.fn().mockResolvedValue({ ok: true, data: cloneFixture(meshStatusFixture) }),
+    },
+    capabilities: {
+      listCatalog: vi.fn().mockResolvedValue(cloneFixture(capabilityCatalogFixture)),
+    },
+    diagnostics: {
+      getSupportBundle: vi.fn().mockResolvedValue({ ok: true, data: cloneFixture(supportBundleFixture) }),
+      exportSupportBundle,
+    },
+  } as unknown as AuroraClient
+}
+
+async function flushPromises() {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
+async function blobText(blob: Blob | undefined): Promise<string> {
+  if (!blob) throw new Error('download blob missing')
+  if (typeof blob.text === 'function') return blob.text()
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(reader.error ?? new Error('blob read failed'))
+    reader.onload = () => resolve(String(reader.result ?? ''))
+    reader.readAsText(blob)
+  })
 }
