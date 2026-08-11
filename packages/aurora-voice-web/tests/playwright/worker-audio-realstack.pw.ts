@@ -158,7 +158,7 @@ function realAudioHarnessModule(): string {
           ? 'unavailable'
           : (await navigator.permissions.query({ name: 'microphone' })).state;
         const first = await runTurn(runtime, streams, events, 2);
-        const second = await runTurn(runtime, streams, events, 4);
+        const second = await runTurn(runtime, streams, events, 2);
         const finalSnapshot = runtime.snapshot();
         await runtime.dispose();
         return {
@@ -180,9 +180,10 @@ function realAudioHarnessModule(): string {
       }
     }
 
-    async function runTurn(runtime, streams, events, acceptedTarget) {
+    async function runTurn(runtime, streams, events, acceptedFrames) {
+      const acceptedBefore = events.filter((event) => event.kind === 'frame_accepted').length;
       const session = await runtime.start();
-      await waitFor(() => events.filter((event) => event.kind === 'frame_accepted').length >= acceptedTarget);
+      await waitFor(() => events.filter((event) => event.kind === 'frame_accepted').length >= acceptedBefore + acceptedFrames);
       const activeSnapshot = runtime.snapshot();
       const stream = streams.at(-1);
       const trackStatesBeforeStop = stream?.getAudioTracks().map((track) => track.readyState) ?? [];

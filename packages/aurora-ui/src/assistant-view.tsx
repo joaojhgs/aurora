@@ -3015,6 +3015,7 @@ export function AssistantView({
   }
 
   function handleBrowserVoiceRuntimeEvent(event: BrowserVoiceRuntimeEventSnapshot) {
+    if (event.kind === 'frame_accepted') return
     setVoiceEvents((current) => mergeVoiceRuntimeEvents([
       browserVoiceRuntimeEventToVoiceEvent(event)
     ], current).slice(0, 12))
