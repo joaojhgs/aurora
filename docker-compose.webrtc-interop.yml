@@ -27,6 +27,8 @@ services:
         lt-cred-mech
         user=interop:interop
         realm=aurora-interop.test
+        allow-loopback-peers
+        cli-password=interop-cli
         no-tls
         no-dtls
         verbose
