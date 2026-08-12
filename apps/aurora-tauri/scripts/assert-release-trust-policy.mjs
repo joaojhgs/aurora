@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { isIP } from 'node:net'
-import { dirname, join, relative, resolve } from 'node:path'
+import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -21,6 +22,7 @@ const expectedPackageScriptName = 'verify:static-release-trust-policy'
 const expectedPackageScriptCommand = 'node scripts/assert-release-trust-policy.mjs'
 const expectedTrustReportArtifactName = 'release-trust-policy'
 const expectedTrustReportPath = 'apps/aurora-tauri/reports/release-trust-policy.json'
+const sourceCommit = readOption('--source-commit') ?? readSourceCommit()
 const nonPublicOrSpecialPurposeIPv4Ranges = [
   ['0.0.0.0', 8],
   ['10.0.0.0', 8],
@@ -97,18 +99,6 @@ const blockers = []
 const checks = []
 const unsupportedChecks = [
   {
-    id: 'android-artifact-hash',
-    status: 'unsupported',
-    releaseBlocking: true,
-    detail: 'Android artifact byte-hash evidence is not proven by the current static policy gate.',
-  },
-  {
-    id: 'ios-artifact-hash',
-    status: 'unsupported',
-    releaseBlocking: true,
-    detail: 'iOS artifact byte-hash evidence is not proven by the current static policy gate.',
-  },
-  {
     id: 'sbom-license-tooling',
     status: 'unsupported',
     releaseBlocking: true,
@@ -116,6 +106,25 @@ const unsupportedChecks = [
   },
 ]
 const checkedRefs = []
+
+unsupportedChecks.unshift(
+  validateReleaseArtifacts({
+    id: 'android-artifact-hash',
+    label: 'Android',
+    artifactClass: 'android-mobile-release',
+    paths: readListOption('--android-artifact', []),
+    expectedSha256: readListOption('--android-artifact-sha256', []),
+    allowedExtensions: ['.apk', '.aab'],
+  }),
+  validateReleaseArtifacts({
+    id: 'ios-artifact-hash',
+    label: 'iOS',
+    artifactClass: 'ios-mobile-release',
+    paths: readListOption('--ios-artifact', []),
+    expectedSha256: readListOption('--ios-artifact-sha256', []),
+    allowedExtensions: ['.ipa'],
+  }),
+)
 
 const config = readJson(paths.tauriConfig, 'tauri-config')
 if (config.value) {
@@ -192,7 +201,7 @@ writeAtomicJson(reportPath, report)
 if (releaseBlocked) {
   console.error(`Release trust static policy blocked. Report: ${safeDisplayPath(reportPath)}`)
   for (const blocker of blockers) console.error(`- ${blocker.id}: ${blocker.detail}`)
-  for (const unsupported of unsupportedChecks.filter((item) => item.releaseBlocking)) {
+  for (const unsupported of unsupportedChecks.filter((item) => item.releaseBlocking && item.status !== 'passed')) {
     console.error(`- ${unsupported.id}: ${unsupported.detail}`)
   }
   process.exit(1)
@@ -289,6 +298,161 @@ function validateIosReleasePolicy() {
   checkSource('ios-config-hash', [build.text], [/createHash\(['"]sha256['"]\)/, /configSha256/], 'iOS provenance must hash generated config snapshots.')
   checkSource('ios-redaction', [build.text, evidence.text, preflight.text], [/secretsRedacted\s*[:=]\s*true/, /redacted\(/], 'iOS release scripts must record redacted evidence only.')
   checkSource('ios-strict-signing-policy', [preflight.text], [/--require-signing-env|requireSigningEnv/, /APPLE_API_KEY_ID|APPLE_API_ISSUER|APPLE_API_KEY_PATH|APPLE_API_PRIVATE_KEY/], 'iOS release policy must have a strict credential-gated signing surface.')
+}
+
+function validateReleaseArtifacts({ id, label, artifactClass, paths, expectedSha256, allowedExtensions }) {
+  const uniquePaths = normalizedUniqueList(paths)
+  const expectedHashes = normalizedUniqueList(expectedSha256).map((value) => value.toLowerCase())
+  const evidence = []
+  const failures = []
+
+  if (!uniquePaths.length) {
+    return {
+      id,
+      status: 'unsupported',
+      releaseBlocking: true,
+      detail: `${label} release artifact byte-hash evidence is absent from this static policy gate run.`,
+      artifacts: [],
+    }
+  }
+
+  if (uniquePaths.length !== paths.length) failures.push(`${label} release artifact inputs must not contain duplicates.`)
+  if (expectedHashes.length && expectedHashes.length !== uniquePaths.length) {
+    failures.push(`${label} expected SHA-256 inputs must be absent or match the artifact input count.`)
+  }
+  if (expectedHashes.length !== new Set(expectedHashes).size) {
+    failures.push(`${label} expected SHA-256 inputs must not contain duplicates.`)
+  }
+  if (!isGitCommitLike(sourceCommit)) {
+    failures.push(`${label} release artifact evidence must record a source commit.`)
+  }
+
+  uniquePaths
+    .map((path, index) => inspectReleaseArtifact({
+      path,
+      expectedSha256: expectedHashes[index] ?? null,
+      artifactClass,
+      allowedExtensions,
+      label,
+    }))
+    .sort(compareArtifactEvidence)
+    .forEach((result) => {
+      if (result.failure) failures.push(result.failure)
+      if (result.evidence) evidence.push(result.evidence)
+    })
+
+  const duplicateHashes = duplicateValues(evidence.map((item) => item.sha256))
+  if (duplicateHashes.length) {
+    failures.push(`${label} release artifact inputs must not duplicate artifact bytes.`)
+  }
+
+  const passed = failures.length === 0 && evidence.length === uniquePaths.length
+  if (!passed) {
+    blockers.push({
+      id,
+      detail: failures.join(' '),
+      severity: 'release-blocking',
+    })
+  }
+
+  return {
+    id,
+    status: passed ? 'passed' : 'blocked',
+    releaseBlocking: true,
+    detail: passed
+      ? `${label} release artifact byte hashes were computed from supplied artifact inputs.`
+      : failures.join(' '),
+    artifacts: evidence,
+  }
+}
+
+function inspectReleaseArtifact({ path, expectedSha256, artifactClass, allowedExtensions, label }) {
+  const resolved = resolve(path)
+  const extension = extname(resolved).toLowerCase()
+  if (!allowedExtensions.includes(extension)) {
+    return { failure: `${label} artifact ${safeArtifactName(path)} must use one of: ${allowedExtensions.join(', ')}.` }
+  }
+
+  let bytes
+  try {
+    bytes = readFileSync(resolved)
+  } catch {
+    return { failure: `${label} artifact ${safeArtifactName(path)} must exist and be readable.` }
+  }
+
+  if (!bytes.length) {
+    return { failure: `${label} artifact ${safeArtifactName(path)} must not be empty.` }
+  }
+
+  const sha256 = createHash('sha256').update(bytes).digest('hex')
+  if (expectedSha256 && !/^[a-f0-9]{64}$/i.test(expectedSha256)) {
+    return { failure: `${label} artifact ${safeArtifactName(path)} expected SHA-256 must be 64 hex characters.` }
+  }
+  if (expectedSha256 && sha256 !== expectedSha256.toLowerCase()) {
+    return { failure: `${label} artifact ${safeArtifactName(path)} SHA-256 does not match its expected value.` }
+  }
+
+  return {
+    evidence: {
+      artifactClass,
+      artifactName: safeArtifactName(path),
+      ref: safeDisplayPath(resolved),
+      sourceCommit,
+      sizeBytes: bytes.length,
+      sha256,
+    },
+  }
+}
+
+function readSourceCommit() {
+  try {
+    return execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+  } catch {
+    return 'unknown'
+  }
+}
+
+function isGitCommitLike(value) {
+  return /^[a-f0-9]{7,40}$/i.test(String(value))
+}
+
+function normalizedUniqueList(values) {
+  const result = []
+  const seen = new Set()
+  for (const value of values.map((item) => String(item).trim()).filter(Boolean)) {
+    const key = resolve(value)
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(value)
+  }
+  return result
+}
+
+function duplicateValues(values) {
+  const seen = new Set()
+  const duplicates = new Set()
+  for (const value of values) {
+    if (seen.has(value)) duplicates.add(value)
+    seen.add(value)
+  }
+  return [...duplicates]
+}
+
+function compareArtifactEvidence(left, right) {
+  const leftEvidence = left.evidence ?? {}
+  const rightEvidence = right.evidence ?? {}
+  return String(leftEvidence.artifactClass ?? '').localeCompare(String(rightEvidence.artifactClass ?? '')) ||
+    String(leftEvidence.artifactName ?? '').localeCompare(String(rightEvidence.artifactName ?? '')) ||
+    String(leftEvidence.sha256 ?? '').localeCompare(String(rightEvidence.sha256 ?? '')) ||
+    String(left.failure ?? '').localeCompare(String(right.failure ?? ''))
+}
+
+function safeArtifactName(path) {
+  return safeId(basename(path))
 }
 
 function validateWorkflowPlacement() {

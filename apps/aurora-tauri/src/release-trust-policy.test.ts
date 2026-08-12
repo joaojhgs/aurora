@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { Buffer } from 'node:buffer'
+import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -96,7 +97,7 @@ function createFixture(): Fixture {
   return fixture
 }
 
-function runPolicy(fixture: Fixture) {
+function runPolicy(fixture: Fixture, extraArgs: string[] = []) {
   return spawnSync(process.execPath, [
     script,
     '--package-json', fixture.packageJson,
@@ -112,6 +113,7 @@ function runPolicy(fixture: Fixture) {
     '--ios-evidence-script', fixture.iosEvidence,
     '--ios-preflight-script', fixture.iosPreflight,
     '--report', fixture.report,
+    ...extraArgs,
   ], {
     cwd: packageRoot,
     encoding: 'utf8',
@@ -120,6 +122,11 @@ function runPolicy(fixture: Fixture) {
 
 function readReport(fixture: Fixture) {
   return JSON.parse(readFileSync(fixture.report, 'utf8'))
+}
+
+function writeArtifact(path: string, content: string) {
+  writeFileSync(path, content)
+  return createHash('sha256').update(content).digest('hex')
 }
 
 describe('release trust static policy guard', () => {
@@ -184,6 +191,155 @@ describe('release trust static policy guard', () => {
       ]),
     )
     expect(report.checkedRefs.length).toBeGreaterThan(8)
+  })
+
+  it('records supplied Android and iOS release artifact hashes without absolute paths', () => {
+    const fixture = createFixture()
+    const androidAab = join(fixture.root, 'aurora-unsigned-release.aab')
+    const androidApk = join(fixture.root, 'aurora-signed-release.apk')
+    const iosIpa = join(fixture.root, 'aurora-release.ipa')
+    const androidAabSha = writeArtifact(androidAab, 'android aab bytes')
+    const androidApkSha = writeArtifact(androidApk, 'android apk bytes')
+    const iosSha = writeArtifact(iosIpa, 'ios ipa bytes')
+    const result = runPolicy(fixture, [
+      '--source-commit', '2c0c861',
+      '--android-artifact', [androidApk, androidAab].join(','),
+      '--android-artifact-sha256', [androidApkSha, androidAabSha].join(','),
+      '--ios-artifact', iosIpa,
+      '--ios-artifact-sha256', iosSha,
+    ])
+
+    expect(result.status).not.toBe(0)
+    const report = readReport(fixture)
+    expect(report.blockers).toEqual([])
+    expect(report.releaseBlocked).toBe(true)
+    expect(report.unsupportedChecks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'android-artifact-hash', status: 'passed', releaseBlocking: true }),
+      expect.objectContaining({ id: 'ios-artifact-hash', status: 'passed', releaseBlocking: true }),
+      expect.objectContaining({ id: 'sbom-license-tooling', status: 'unsupported', releaseBlocking: true }),
+    ]))
+    const android = report.unsupportedChecks.find((item: { id: string }) => item.id === 'android-artifact-hash')
+    const ios = report.unsupportedChecks.find((item: { id: string }) => item.id === 'ios-artifact-hash')
+    expect(android.artifacts.map((item: { artifactName: string }) => item.artifactName)).toEqual([
+      'aurora-signed-release-apk',
+      'aurora-unsigned-release-aab',
+    ])
+    expect(android.artifacts).toEqual([
+      expect.objectContaining({
+        artifactClass: 'android-mobile-release',
+        sourceCommit: '2c0c861',
+        sizeBytes: 'android apk bytes'.length,
+        sha256: androidApkSha,
+      }),
+      expect.objectContaining({
+        artifactClass: 'android-mobile-release',
+        sourceCommit: '2c0c861',
+        sizeBytes: 'android aab bytes'.length,
+        sha256: androidAabSha,
+      }),
+    ])
+    expect(ios.artifacts).toEqual([
+      expect.objectContaining({
+        artifactClass: 'ios-mobile-release',
+        artifactName: 'aurora-release-ipa',
+        sourceCommit: '2c0c861',
+        sizeBytes: 'ios ipa bytes'.length,
+        sha256: iosSha,
+      }),
+    ])
+    const serialized = JSON.stringify(report)
+    expect(serialized).not.toContain(fixture.root)
+    expect(serialized).not.toContain(tmpdir())
+  })
+
+  it('keeps Android and iOS artifact evidence release-blocking when artifacts are absent', () => {
+    const fixture = createFixture()
+    const result = runPolicy(fixture)
+
+    expect(result.status).not.toBe(0)
+    expect(readReport(fixture).blockers).toEqual([])
+    expect(readReport(fixture).unsupportedChecks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'android-artifact-hash',
+        status: 'unsupported',
+        releaseBlocking: true,
+        artifacts: [],
+      }),
+      expect.objectContaining({
+        id: 'ios-artifact-hash',
+        status: 'unsupported',
+        releaseBlocking: true,
+        artifacts: [],
+      }),
+    ]))
+  })
+
+  it('rejects wrong, missing, empty, uninspectable, tampered, and duplicate mobile artifact inputs', () => {
+    const cases: Array<[string, (fixture: Fixture) => string[]]> = [
+      ['wrong extension', (fixture) => {
+        const android = join(fixture.root, 'aurora-release.zip')
+        const ios = join(fixture.root, 'aurora-release.ipa')
+        writeArtifact(android, 'not an apk')
+        const iosSha = writeArtifact(ios, 'ios bytes')
+        return ['--android-artifact', android, '--ios-artifact', ios, '--ios-artifact-sha256', iosSha]
+      }],
+      ['missing path', (fixture) => {
+        const ios = join(fixture.root, 'aurora-release.ipa')
+        const iosSha = writeArtifact(ios, 'ios bytes')
+        return ['--android-artifact', join(fixture.root, 'missing.apk'), '--ios-artifact', ios, '--ios-artifact-sha256', iosSha]
+      }],
+      ['empty file', (fixture) => {
+        const android = join(fixture.root, 'empty.apk')
+        const ios = join(fixture.root, 'aurora-release.ipa')
+        writeFileSync(android, '')
+        const iosSha = writeArtifact(ios, 'ios bytes')
+        return ['--android-artifact', android, '--ios-artifact', ios, '--ios-artifact-sha256', iosSha]
+      }],
+      ['directory input', (fixture) => {
+        const android = join(fixture.root, 'directory.apk')
+        const ios = join(fixture.root, 'aurora-release.ipa')
+        mkdirSync(android)
+        const iosSha = writeArtifact(ios, 'ios bytes')
+        return ['--android-artifact', android, '--ios-artifact', ios, '--ios-artifact-sha256', iosSha]
+      }],
+      ['tampered hash', (fixture) => {
+        const android = join(fixture.root, 'aurora-release.apk')
+        const ios = join(fixture.root, 'aurora-release.ipa')
+        const androidSha = writeArtifact(android, 'original android bytes')
+        writeArtifact(android, 'tampered android bytes')
+        const iosSha = writeArtifact(ios, 'ios bytes')
+        return ['--android-artifact', android, '--android-artifact-sha256', androidSha, '--ios-artifact', ios, '--ios-artifact-sha256', iosSha]
+      }],
+      ['duplicate path', (fixture) => {
+        const android = join(fixture.root, 'aurora-release.apk')
+        const ios = join(fixture.root, 'aurora-release.ipa')
+        const androidSha = writeArtifact(android, 'android bytes')
+        const iosSha = writeArtifact(ios, 'ios bytes')
+        return ['--android-artifact', [android, android].join(','), '--android-artifact-sha256', [androidSha, androidSha].join(','), '--ios-artifact', ios, '--ios-artifact-sha256', iosSha]
+      }],
+      ['duplicate bytes', (fixture) => {
+        const androidApk = join(fixture.root, 'aurora-release.apk')
+        const androidAab = join(fixture.root, 'aurora-release.aab')
+        const ios = join(fixture.root, 'aurora-release.ipa')
+        const androidApkSha = writeArtifact(androidApk, 'same android bytes')
+        const androidAabSha = writeArtifact(androidAab, 'same android bytes')
+        const iosSha = writeArtifact(ios, 'ios bytes')
+        return ['--android-artifact', [androidApk, androidAab].join(','), '--android-artifact-sha256', [androidApkSha, androidAabSha].join(','), '--ios-artifact', ios, '--ios-artifact-sha256', iosSha]
+      }],
+    ]
+
+    for (const [label, extraArgsFor] of cases) {
+      const fixture = createFixture()
+      const result = runPolicy(fixture, ['--source-commit', '2c0c861', ...extraArgsFor(fixture)])
+
+      expect(result.status, label).not.toBe(0)
+      expect(readReport(fixture).blockers.map((item: { id: string }) => item.id), label).toContain(
+        'android-artifact-hash',
+      )
+      expect(readReport(fixture).unsupportedChecks).toContainEqual(
+        expect.objectContaining({ id: 'android-artifact-hash', status: 'blocked', releaseBlocking: true }),
+      )
+    }
   })
 
   it('requires the exact package script and workflow command', () => {
