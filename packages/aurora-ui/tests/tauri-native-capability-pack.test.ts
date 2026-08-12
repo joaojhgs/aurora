@@ -262,6 +262,25 @@ describe('tauri native capability pack adapter', () => {
       AURORA_NATIVE_TOOL_IDS.getDeviceStatus
     ])
 
+    const foregroundOnlyRegistry = new LocalToolRegistry({ stablePeerId: 'android-foreground-only' })
+    await registerTauriNativeCapabilityPack({
+      registry: foregroundOnlyRegistry,
+      transport: transportFor({
+        manifest: readyAndroidManifest(readyVoiceStatus()),
+        foregroundStatus: {
+          ...readyVoiceStatus(),
+          running: true,
+          startable: false,
+          state: 'degraded',
+          reason: 'native_voice_route_missing',
+          backendAudioEvidenceRequired: true
+        }
+      })
+    })
+    expect(foregroundOnlyRegistry.publicTools().map((tool) => tool.tool_contract_id)).toEqual([
+      AURORA_NATIVE_TOOL_IDS.getDeviceStatus
+    ])
+
     const deniedManifestRegistry = new LocalToolRegistry({ stablePeerId: 'android-denied-manifest' })
     await registerTauriNativeCapabilityPack({
       registry: deniedManifestRegistry,

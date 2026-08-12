@@ -102,6 +102,68 @@ describe('Android native voice route policy', () => {
     )
   })
 
+  it('releases foreground microphone access on Android focus or foreground loss', () => {
+    const plugin = repoText(kotlinPath)
+    const runtime = repoText('apps/aurora-tauri/src/aurora-client.ts')
+
+    const onPauseBody = plugin.slice(
+      plugin.indexOf('override fun onPause()'),
+      plugin.indexOf('override fun onStop()', plugin.indexOf('override fun onPause()')),
+    )
+    const onStopBody = plugin.slice(
+      plugin.indexOf('override fun onStop()'),
+      plugin.indexOf('override fun onDestroy', plugin.indexOf('override fun onStop()')),
+    )
+    const lifecycleBody = plugin.slice(
+      plugin.indexOf('private fun lifecycleStatusObject'),
+      plugin.indexOf('private fun emitLifecycle', plugin.indexOf('private fun lifecycleStatusObject')),
+    )
+    const listenerBody = runtime.slice(
+      runtime.indexOf('export function installAndroidLifecyclePolicy'),
+      runtime.indexOf('interface AndroidLifecyclePluginPayload', runtime.indexOf('export function installAndroidLifecyclePolicy')),
+    )
+
+    expect(onPauseBody).toContain('focused = false')
+    expect(onPauseBody).toContain('denyPendingMicRequests()')
+    expect(onPauseBody).toContain('emitLifecycle("pause")')
+    expect(onStopBody).toContain('foreground = false')
+    expect(onStopBody).toContain('focused = false')
+    expect(onStopBody).toContain('denyPendingMicRequests()')
+    expect(onStopBody).toContain('emitLifecycle("stop")')
+    expect(lifecycleBody).toContain('ret.put("mustReleaseMicrophone", !foreground || !focused)')
+    expect(lifecycleBody).toContain('ret.put("backgroundWakeword", false)')
+    expect(lifecycleBody).toContain('release_mic_until_explicit_resume')
+    expect(listenerBody).toContain('payload.mustReleaseMicrophone === true')
+    expect(listenerBody).toContain('payload.foreground === false || payload.focused === false')
+    expect(listenerBody).toContain('AURORA_RELEASE_FOCUSED_MEDIA_EVENT')
+  })
+
+  it('keeps assistant role selection behind the explicit request command', () => {
+    const plugin = repoText(kotlinPath)
+    const manifestBody = plugin.slice(
+      plugin.indexOf('fun nativeCapabilityManifest(invoke: Invoke)'),
+      plugin.indexOf('@Command\n    fun assistantRoleStatus', plugin.indexOf('fun nativeCapabilityManifest(invoke: Invoke)')),
+    )
+    const requestBody = plugin.slice(
+      plugin.indexOf('fun requestAssistantRole(invoke: Invoke)'),
+      plugin.indexOf('@Command\n    fun recordAssistantRoleResult', plugin.indexOf('fun requestAssistantRole(invoke: Invoke)')),
+    )
+    const startVoiceBody = plugin.slice(
+      plugin.indexOf('fun startVoiceForegroundService(invoke: Invoke)'),
+      plugin.indexOf('@Command\n    fun stopVoiceForegroundService', plugin.indexOf('fun startVoiceForegroundService(invoke: Invoke)')),
+    )
+
+    expect(manifestBody).toContain('assistantRoleStatusObject()')
+    expect(manifestBody).toContain('permissions.put("aurora.android.assistantRoleRequest", assistantRoleRequestable)')
+    expect(manifestBody).not.toContain('createRequestRoleIntent')
+    expect(manifestBody).not.toContain('startActivityForResult')
+    expect(requestBody).toContain('if (!status.getBoolean("requestable"))')
+    expect(requestBody).toContain('roleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT)')
+    expect(requestBody).toContain('activity.startActivityForResult')
+    expect(startVoiceBody).not.toContain('createRequestRoleIntent')
+    expect(startVoiceBody).not.toContain('ACTION_START_ASSISTANT')
+  })
+
   it('keeps the thin APK on narrow profile/peer-storage permissions', () => {
     const permission = repoText(permissionPath)
     const capability = repoText(capabilityPath)
@@ -152,6 +214,9 @@ describe('Android native voice route policy', () => {
     expect(loadBody).toMatch(/securePrefs\(\)\.edit\(\)\.remove\(key\)\.apply\(\)[\s\S]*return null/)
     expect(syncBody).toContain('?.let(::loadUnexpiredThinPeerCredential)')
     expect(syncBody).toContain('AuroraVoiceNativeConfigStore.clearRoute(activity)')
+    expect(syncBody).toMatch(/if \(candidate == null\) \{[\s\S]*AuroraVoiceNativeConfigStore\.clearRoute\(activity\)[\s\S]*voice_route_profile_missing/)
+    expect(syncBody).toMatch(/if \(!loopback && bearer\.isBlank\(\)\) \{[\s\S]*AuroraVoiceNativeConfigStore\.clearRoute\(activity\)[\s\S]*voice_route_credential_missing/)
+    expect(syncBody).toMatch(/catch \(_:\s*Exception\) \{[\s\S]*AuroraVoiceNativeConfigStore\.clearRoute\(activity\)[\s\S]*voice_route_invalid/)
     expect(syncBody).not.toContain('rawBearerToken", record.getString')
   })
 

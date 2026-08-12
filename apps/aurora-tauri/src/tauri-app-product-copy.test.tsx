@@ -118,6 +118,62 @@ describe("Tauri application product copy", () => {
     expectProductCopy(...values);
   });
 
+  it("keeps Android assistant role labels truthful for unavailable request paths", () => {
+    const baseStatus = {
+      available: true,
+      state: "available",
+      feature: "android-assistant-role",
+      fallbackEntrypoints: {},
+      evidenceSource: "android-rolemanager-package-manager",
+      platform: "android",
+      secretsRedacted: true,
+    };
+    const values = [
+      assistantRoleProbeLabel({
+        ...baseStatus,
+        assistantRole: {
+          probeImplemented: true,
+          roleHeld: false,
+          roleAvailable: false,
+          requestable: false,
+          packageQualified: false,
+          denied: true,
+          oemUnavailable: false,
+          reason: "request_denied",
+        },
+      }),
+      assistantRoleProbeLabel({
+        ...baseStatus,
+        assistantRole: {
+          probeImplemented: true,
+          roleHeld: false,
+          roleAvailable: false,
+          requestable: false,
+          packageQualified: false,
+          denied: false,
+          oemUnavailable: true,
+          reason: "oem_unavailable",
+        },
+      }),
+      assistantRoleProbeLabel({
+        ...baseStatus,
+        assistantRole: {
+          probeImplemented: true,
+          roleHeld: false,
+          roleAvailable: false,
+          requestable: false,
+          packageQualified: false,
+          denied: false,
+          oemUnavailable: false,
+          reason: "package_not_qualified",
+        },
+      }),
+    ];
+
+    expect(values).toEqual(["Permission needed", "Not available", "Not available"]);
+    expectProductCopy(...values);
+  });
+
   it("renders hostile Tauri route states without echoing command or diagnostic metadata", () => {
     const hostileFeature = {
       available: false,

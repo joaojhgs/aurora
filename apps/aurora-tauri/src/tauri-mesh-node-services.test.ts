@@ -56,6 +56,10 @@ const selector: PeerRelationshipSelector = {
 
 describe("Tauri mesh node services", () => {
   it("returns disabled composition with no host or authority for disabled gates", async () => {
+    const missingProfileTransport = nativeTransport({ manifest: readyDesktopShareManifest() });
+
+    await expect(disabledReason(null, { nativeTransport: missingProfileTransport })).resolves.toBe("profile_missing");
+    expect(missingProfileTransport.getNativeCapabilityManifest).not.toHaveBeenCalled();
     await expect(disabledReason(profile({ nodeMode: "remote-console", runtimeTier: "none" }))).resolves.toBe("profile_not_mesh_node");
     await expect(disabledReason(profile({ runtimeTier: "python-full" }))).resolves.toBe("runtime_tier_not_lightweight_ts");
     await expect(disabledReason(profile(), { rolloutFlags: { ...rolloutFlags, local_tool_provider_v1: false } })).resolves.toBe("rollout_disabled");
@@ -216,6 +220,9 @@ describe("Tauri mesh node services", () => {
       revokedGrantIds: [grant.grantId],
       redacted: true,
     });
+    await expect(services.grantManager.listActiveGrants(selector)).resolves.toEqual([
+      expect.objectContaining({ grantId: grant.grantId, revokedAtMs: 2_000 }),
+    ]);
     nowMs = 2_001;
     await expect(services.grantManager.listActiveGrants(selector)).resolves.toEqual([]);
     await services.close();
