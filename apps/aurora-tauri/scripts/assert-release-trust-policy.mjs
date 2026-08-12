@@ -1,7 +1,18 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { isIP } from 'node:net'
 import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,7 +33,7 @@ const expectedPackageScriptName = 'verify:static-release-trust-policy'
 const expectedPackageScriptCommand = 'node scripts/assert-release-trust-policy.mjs'
 const expectedTrustReportArtifactName = 'release-trust-policy'
 const expectedTrustReportPath = 'apps/aurora-tauri/reports/release-trust-policy.json'
-const sourceCommit = readOption('--source-commit') ?? readSourceCommit()
+const sourceCommit = resolveReleaseSourceCommit(readOption('--source-commit') ?? 'HEAD')
 const nonPublicOrSpecialPurposeIPv4Ranges = [
   ['0.0.0.0', 8],
   ['10.0.0.0', 8],
@@ -112,16 +123,16 @@ unsupportedChecks.unshift(
     id: 'android-artifact-hash',
     label: 'Android',
     artifactClass: 'android-mobile-release',
-    paths: readListOption('--android-artifact', []),
-    expectedSha256: readListOption('--android-artifact-sha256', []),
+    paths: readRawListOption('--android-artifact'),
+    expectedSha256: readRawListOption('--android-artifact-sha256'),
     allowedExtensions: ['.apk', '.aab'],
   }),
   validateReleaseArtifacts({
     id: 'ios-artifact-hash',
     label: 'iOS',
     artifactClass: 'ios-mobile-release',
-    paths: readListOption('--ios-artifact', []),
-    expectedSha256: readListOption('--ios-artifact-sha256', []),
+    paths: readRawListOption('--ios-artifact'),
+    expectedSha256: readRawListOption('--ios-artifact-sha256'),
     allowedExtensions: ['.ipa'],
   }),
 )
@@ -301,12 +312,12 @@ function validateIosReleasePolicy() {
 }
 
 function validateReleaseArtifacts({ id, label, artifactClass, paths, expectedSha256, allowedExtensions }) {
-  const uniquePaths = normalizedUniqueList(paths)
-  const expectedHashes = normalizedUniqueList(expectedSha256).map((value) => value.toLowerCase())
+  const artifactPaths = normalizedNonEmptyList(paths)
+  const expectedHashes = normalizedNonEmptyList(expectedSha256).map((value) => value.toLowerCase())
   const evidence = []
   const failures = []
 
-  if (!uniquePaths.length) {
+  if (!artifactPaths.length) {
     return {
       id,
       status: 'unsupported',
@@ -316,18 +327,24 @@ function validateReleaseArtifacts({ id, label, artifactClass, paths, expectedSha
     }
   }
 
-  if (uniquePaths.length !== paths.length) failures.push(`${label} release artifact inputs must not contain duplicates.`)
-  if (expectedHashes.length && expectedHashes.length !== uniquePaths.length) {
+  if (artifactPaths.length !== paths.length) failures.push(`${label} release artifact inputs must not contain empty values.`)
+  if (expectedHashes.length !== expectedSha256.length) {
+    failures.push(`${label} expected SHA-256 inputs must not contain empty values.`)
+  }
+  if (artifactPaths.length !== new Set(artifactPaths.map((value) => resolve(value))).size) {
+    failures.push(`${label} release artifact inputs must not contain duplicates.`)
+  }
+  if (expectedHashes.length && expectedHashes.length !== artifactPaths.length) {
     failures.push(`${label} expected SHA-256 inputs must be absent or match the artifact input count.`)
   }
   if (expectedHashes.length !== new Set(expectedHashes).size) {
     failures.push(`${label} expected SHA-256 inputs must not contain duplicates.`)
   }
-  if (!isGitCommitLike(sourceCommit)) {
-    failures.push(`${label} release artifact evidence must record a source commit.`)
+  if (sourceCommit.failure) {
+    failures.push(`${label} release artifact evidence must record the current release HEAD commit. ${sourceCommit.failure}`)
   }
 
-  uniquePaths
+  artifactPaths
     .map((path, index) => inspectReleaseArtifact({
       path,
       expectedSha256: expectedHashes[index] ?? null,
@@ -346,7 +363,7 @@ function validateReleaseArtifacts({ id, label, artifactClass, paths, expectedSha
     failures.push(`${label} release artifact inputs must not duplicate artifact bytes.`)
   }
 
-  const passed = failures.length === 0 && evidence.length === uniquePaths.length
+  const passed = failures.length === 0 && evidence.length === artifactPaths.length
   if (!passed) {
     blockers.push({
       id,
@@ -373,22 +390,23 @@ function inspectReleaseArtifact({ path, expectedSha256, artifactClass, allowedEx
     return { failure: `${label} artifact ${safeArtifactName(path)} must use one of: ${allowedExtensions.join(', ')}.` }
   }
 
-  let bytes
+  const inspected = inspectRegularFile(resolved, label)
+  if (inspected.failure) return { failure: inspected.failure }
+
+  let hashed
   try {
-    bytes = readFileSync(resolved)
+    hashed = hashFile(resolved)
   } catch {
-    return { failure: `${label} artifact ${safeArtifactName(path)} must exist and be readable.` }
+    return { failure: `${label} artifact ${safeArtifactName(path)} must be readable as a regular file.` }
   }
 
-  if (!bytes.length) {
-    return { failure: `${label} artifact ${safeArtifactName(path)} must not be empty.` }
+  if (hashed.sizeBytes !== inspected.sizeBytes) {
+    return { failure: `${label} artifact ${safeArtifactName(path)} size changed while it was inspected.` }
   }
-
-  const sha256 = createHash('sha256').update(bytes).digest('hex')
   if (expectedSha256 && !/^[a-f0-9]{64}$/i.test(expectedSha256)) {
     return { failure: `${label} artifact ${safeArtifactName(path)} expected SHA-256 must be 64 hex characters.` }
   }
-  if (expectedSha256 && sha256 !== expectedSha256.toLowerCase()) {
+  if (expectedSha256 && hashed.sha256 !== expectedSha256.toLowerCase()) {
     return { failure: `${label} artifact ${safeArtifactName(path)} SHA-256 does not match its expected value.` }
   }
 
@@ -397,39 +415,92 @@ function inspectReleaseArtifact({ path, expectedSha256, artifactClass, allowedEx
       artifactClass,
       artifactName: safeArtifactName(path),
       ref: safeDisplayPath(resolved),
-      sourceCommit,
-      sizeBytes: bytes.length,
-      sha256,
+      sourceCommit: sourceCommit.sha,
+      sizeBytes: hashed.sizeBytes,
+      sha256: hashed.sha256,
     },
   }
 }
 
-function readSourceCommit() {
+function inspectRegularFile(path, label) {
+  let linkStat
   try {
-    return execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim()
+    linkStat = lstatSync(path)
   } catch {
-    return 'unknown'
+    return { failure: `${label} artifact ${safeArtifactName(path)} must exist and be readable.` }
+  }
+  if (linkStat.isSymbolicLink()) {
+    return { failure: `${label} artifact ${safeArtifactName(path)} must not be a symbolic link.` }
+  }
+
+  let fileStat
+  try {
+    fileStat = statSync(path)
+  } catch {
+    return { failure: `${label} artifact ${safeArtifactName(path)} must be inspectable.` }
+  }
+  if (!fileStat.isFile()) {
+    return { failure: `${label} artifact ${safeArtifactName(path)} must be a regular file.` }
+  }
+  if (fileStat.size <= 0) {
+    return { failure: `${label} artifact ${safeArtifactName(path)} must not be empty.` }
+  }
+  return { sizeBytes: fileStat.size }
+}
+
+function hashFile(path) {
+  const hash = createHash('sha256')
+  const buffer = Buffer.allocUnsafe(1024 * 1024)
+  let sizeBytes = 0
+  let fd = null
+  try {
+    fd = openSync(path, 'r')
+    while (true) {
+      const bytesRead = readSync(fd, buffer, 0, buffer.length, null)
+      if (bytesRead === 0) break
+      sizeBytes += bytesRead
+      hash.update(buffer.subarray(0, bytesRead))
+    }
+    return { sha256: hash.digest('hex'), sizeBytes }
+  } finally {
+    if (fd !== null) closeSync(fd)
   }
 }
 
-function isGitCommitLike(value) {
-  return /^[a-f0-9]{7,40}$/i.test(String(value))
+function resolveReleaseSourceCommit(value) {
+  const raw = String(value).trim()
+  if (!raw) return { sha: '', failure: 'Source commit input must not be empty.' }
+  if (!/^(?:HEAD|[a-f0-9]{7,40})$/i.test(raw)) {
+    return { sha: '', failure: 'Source commit input must be HEAD or a hex commit identifier.' }
+  }
+  let candidate
+  let head
+  try {
+    execFileSync('git', ['cat-file', '-e', `${raw}^{commit}`], {
+      cwd: repoRoot,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    })
+    candidate = gitRevParse(`${raw}^{commit}`)
+    head = gitRevParse('HEAD^{commit}')
+  } catch {
+    return { sha: '', failure: 'Source commit must resolve to an existing commit.' }
+  }
+  if (candidate !== head) {
+    return { sha: candidate, failure: 'Source commit must resolve exactly to the current release HEAD.' }
+  }
+  return { sha: candidate, failure: '' }
 }
 
-function normalizedUniqueList(values) {
-  const result = []
-  const seen = new Set()
-  for (const value of values.map((item) => String(item).trim()).filter(Boolean)) {
-    const key = resolve(value)
-    if (seen.has(key)) continue
-    seen.add(key)
-    result.push(value)
-  }
-  return result
+function gitRevParse(value) {
+  return execFileSync('git', ['rev-parse', value], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  }).trim()
+}
+
+function normalizedNonEmptyList(values) {
+  return values.map((item) => String(item).trim()).filter(Boolean)
 }
 
 function duplicateValues(values) {
@@ -745,6 +816,14 @@ function readListOption(name, defaults) {
     if (args[index] === name && args[index + 1]) values.push(...args[index + 1].split(','))
   }
   return (values.length ? values : defaults).filter(Boolean)
+}
+
+function readRawListOption(name) {
+  const values = []
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === name) values.push(...String(args[index + 1] ?? '').split(','))
+  }
+  return values
 }
 
 function flattenCapabilityRefs(value) {
