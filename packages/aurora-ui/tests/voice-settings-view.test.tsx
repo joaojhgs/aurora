@@ -83,16 +83,33 @@ interface MutationOutput<TStatus extends string> {
 describe('VoiceSettingsView', () => {
   it('loads voice discovery without mutating and maps unavailable voice inventory to product copy', async () => {
     const installVoiceProfile = vi.fn()
+    const listVoiceProfiles = vi.fn()
+    const adminExecute = vi.fn(async (_input: { methodId: string }) => {
+      throw { code: 'permission_denied', message: 'TTS.manage denied raw provider manifest' }
+    })
     const client = voiceClient({
       installVoiceProfile,
-      listVoiceProfiles: vi.fn(async () => ({ ok: false, error: { code: 'permission_denied', message: 'TTS.manage denied raw provider manifest' } }))
+      listVoiceProfiles,
+      adminExecute
     })
     const { container, unmount } = await renderVoiceSettings(client)
 
     expect(client.speech.tts.getCapabilities).toHaveBeenCalledTimes(1)
     expect(client.speech.tts.listVoices).toHaveBeenCalledTimes(1)
-    expect(client.speech.tts.listVoiceProfiles).toHaveBeenCalledTimes(1)
+    expect(client.speech.tts.listVoiceProfiles).not.toHaveBeenCalled()
+    expect(adminExecute).not.toHaveBeenCalled()
     expect(installVoiceProfile).not.toHaveBeenCalled()
+
+    await loadManagedVoices(container)
+    expect(adminExecute.mock.calls[0]?.[0]).not.toHaveProperty('phrase')
+    expect(adminExecute).toHaveBeenCalledWith(expect.objectContaining({
+      methodId: 'TTS.ListVoiceProfiles',
+      payload: { include_unavailable: true },
+      reason: 'Load available voice settings: Manage spoken reply voices',
+      reauthConfirmed: true,
+      affectedResources: ['voice-profiles'],
+      path: '/api/TTS/ListVoiceProfiles'
+    }))
 
     const text = visibleText(container)
     expect(text).toContain('English')
@@ -104,26 +121,57 @@ describe('VoiceSettingsView', () => {
     await unmount()
   })
 
+  it('does not load protected voice inventory before the user confirms access', async () => {
+    const adminExecute = vi.fn(async () => adminResult({ profiles: [profile()] }))
+    const client = voiceClient({ adminExecute })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    const showButton = buttonByText(container, 'Show available voices')
+    expect(showButton.disabled).toBe(true)
+    await act(async () => {
+      showButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+
+    expect(adminExecute).not.toHaveBeenCalled()
+    await unmount()
+  })
+
   it('adds a voice only after an explicit click', async () => {
-    const installVoiceProfile = vi.fn(async () => ({ ok: true, data: installResult('installed') }))
+    const installVoiceProfile = vi.fn()
+    const adminExecute = vi.fn(async (input: { methodId: string }) => (
+      input.methodId === 'TTS.ListVoiceProfiles'
+        ? adminResult({ profiles: [profile({ installed: false, ready: false })] })
+        : adminResult(installResult('installed'))
+    ))
     const client = voiceClient({
       installVoiceProfile,
-      profiles: [profile({ installed: false, ready: false })]
+      adminExecute
     })
     const { container, unmount } = await renderVoiceSettings(client)
 
     expect(installVoiceProfile).not.toHaveBeenCalled()
+    await loadManagedVoices(container)
     const button = buttonByText(container, 'Add voice')
     await act(async () => {
       button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await flushReactWork()
 
-    expect(installVoiceProfile).toHaveBeenCalledTimes(1)
-    expect(installVoiceProfile).toHaveBeenCalledWith(expect.objectContaining({
-      voice_id: 'standard:en_pack:ava',
-      expected_revision: 'rev-1'
+    expect(installVoiceProfile).not.toHaveBeenCalled()
+    expect(adminExecute).toHaveBeenCalledWith(expect.objectContaining({
+      methodId: 'TTS.InstallVoiceProfile',
+      payload: expect.objectContaining({
+        voice_id: 'standard:en_pack:ava',
+        expected_revision: 'rev-1',
+        operation_id: expect.stringMatching(/^voice-install-/u)
+      }),
+      reason: 'Add spoken reply voice: Manage spoken reply voices',
+      reauthConfirmed: true,
+      affectedResources: ['voice-profile:standard:en_pack:ava'],
+      path: '/api/TTS/InstallVoiceProfile'
     }))
+    expect(adminExecute.mock.calls.find(([input]) => input.methodId === 'TTS.InstallVoiceProfile')?.[0]).not.toHaveProperty('phrase')
     expect(visibleText(container)).toContain('Voice added.')
     assertNoForbiddenCopy(visibleText(container))
     await unmount()
@@ -134,13 +182,13 @@ describe('VoiceSettingsView', () => {
     Object.defineProperty(globalThis, 'crypto', { value: {}, configurable: true })
     const dateNow = vi.spyOn(Date, 'now').mockReturnValue(123456)
     const operationIds: string[] = []
-    const installVoiceProfile = vi.fn(async (input: { operation_id: string }) => {
-      operationIds.push(input.operation_id)
-      return { ok: true, data: installResult('installed') }
+    const adminExecute = vi.fn(async (input: { methodId: string, payload?: { operation_id?: string } }) => {
+      if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: [profile({ installed: false, ready: false })] })
+      operationIds.push(input.payload?.operation_id ?? '')
+      return adminResult(installResult('installed'))
     })
     const client = voiceClient({
-      installVoiceProfile,
-      profiles: [profile({ installed: false, ready: false })]
+      adminExecute
     })
     let unmount: (() => Promise<void>) | null = null
 
@@ -148,6 +196,7 @@ describe('VoiceSettingsView', () => {
       const rendered = await renderVoiceSettings(client)
       unmount = rendered.unmount
       const { container } = rendered
+      await loadManagedVoices(container)
       await act(async () => {
         buttonByText(container, 'Add voice').dispatchEvent(new MouseEvent('click', { bubbles: true }))
       })
@@ -173,14 +222,17 @@ describe('VoiceSettingsView', () => {
   })
 
   it('prevents a second install submit while one is pending', async () => {
-    const pendingInstall = deferred<{ ok: true, data: InstallOutput }>()
-    const installVoiceProfile = vi.fn(() => pendingInstall.promise)
+    const pendingInstall = deferred<unknown>()
+    const adminExecute = vi.fn((input: { methodId: string }) => {
+      if (input.methodId === 'TTS.ListVoiceProfiles') return Promise.resolve(adminResult({ profiles: [profile({ installed: false, ready: false })] }))
+      return pendingInstall.promise
+    })
     const client = voiceClient({
-      installVoiceProfile,
-      profiles: [profile({ installed: false, ready: false })]
+      adminExecute
     })
     const { container, unmount } = await renderVoiceSettings(client)
 
+    await loadManagedVoices(container)
     await act(async () => {
       buttonByText(container, 'Add voice').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -189,20 +241,24 @@ describe('VoiceSettingsView', () => {
       buttonByText(container, 'Adding').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(installVoiceProfile).toHaveBeenCalledTimes(1)
-    pendingInstall.resolve({ ok: true, data: installResult('installed') })
+    expect(adminExecute.mock.calls.filter(([input]) => input.methodId === 'TTS.InstallVoiceProfile')).toHaveLength(1)
+    pendingInstall.resolve(adminResult(installResult('installed')))
     await flushReactWork()
     await unmount()
   })
 
   it('maps install outcomes without exposing returned identifiers', async () => {
-    const installVoiceProfile = vi.fn(async () => ({ ok: true, data: installResult('rejected') }))
+    const adminExecute = vi.fn(async (input: { methodId: string }) => (
+      input.methodId === 'TTS.ListVoiceProfiles'
+        ? adminResult({ profiles: [profile({ installed: false, ready: false })] })
+        : adminResult(installResult('rejected'))
+    ))
     const client = voiceClient({
-      installVoiceProfile,
-      profiles: [profile({ installed: false, ready: false })]
+      adminExecute
     })
     const { container, unmount } = await renderVoiceSettings(client)
 
+    await loadManagedVoices(container)
     await act(async () => {
       buttonByText(container, 'Add voice').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -224,6 +280,7 @@ describe('VoiceSettingsView', () => {
     })
     const { container, unmount } = await renderVoiceSettings(client)
 
+    await loadManagedVoices(container)
     expect(container.textContent).not.toContain('Add voice')
     expect(container.textContent).not.toContain('Clone')
     expect(container.textContent).not.toContain('Import')
@@ -243,6 +300,7 @@ describe('VoiceSettingsView', () => {
       ]
     })
     const { container, unmount } = await renderVoiceSettings(client)
+    await loadManagedVoices(container)
     const text = visibleText(container)
 
     expect(text).toContain('Ava')
@@ -259,38 +317,56 @@ describe('VoiceSettingsView', () => {
   })
 
   it('sets the default voice with the expected SDK payload and refreshes on success', async () => {
-    const setDefaultVoice = vi.fn(async () => ({ ok: true, data: mutationResult<DefaultStatus>('activated') }))
-    const listVoiceProfiles = vi.fn()
-      .mockResolvedValueOnce({ ok: true, data: { profiles: [profile({ default: false, ready: true, installed: true })] } })
-      .mockResolvedValue({ ok: true, data: { profiles: [profile({ default: true, active: true, ready: true, installed: true })] } })
-    const client = voiceClient({ setDefaultVoice, listVoiceProfiles })
+    const setDefaultVoice = vi.fn()
+    const adminExecute = vi.fn(async (input: { methodId: string }) => {
+      if (input.methodId === 'TTS.ListVoiceProfiles') {
+        const listCalls = adminExecute.mock.calls.filter(([call]) => call.methodId === 'TTS.ListVoiceProfiles').length
+        return adminResult({
+          profiles: listCalls === 1
+            ? [profile({ default: false, ready: true, installed: true })]
+            : [profile({ default: true, active: true, ready: true, installed: true })]
+        })
+      }
+      return adminResult(mutationResult<DefaultStatus>('activated'))
+    })
+    const client = voiceClient({ setDefaultVoice, adminExecute })
     const { container, unmount } = await renderVoiceSettings(client)
 
+    await loadManagedVoices(container)
     await act(async () => {
       buttonByText(container, 'Use by default').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await flushReactWork()
 
-    expect(setDefaultVoice).toHaveBeenCalledTimes(1)
-    expect(setDefaultVoice).toHaveBeenCalledWith(expect.objectContaining({
-      voice_id: 'standard:en_pack:ava',
-      expected_revision: 'rev-1',
-      operation_id: expect.stringMatching(/^voice-default-/u)
+    expect(setDefaultVoice).not.toHaveBeenCalled()
+    expect(adminExecute).toHaveBeenCalledWith(expect.objectContaining({
+      methodId: 'TTS.SetDefaultVoice',
+      payload: expect.objectContaining({
+        voice_id: 'standard:en_pack:ava',
+        expected_revision: 'rev-1',
+        operation_id: expect.stringMatching(/^voice-default-/u)
+      }),
+      reason: 'Update spoken reply voice choice: Manage spoken reply voices',
+      reauthConfirmed: true,
+      affectedResources: ['voice-profile:standard:en_pack:ava'],
+      path: '/api/TTS/SetDefaultVoice'
     }))
-    expect(listVoiceProfiles).toHaveBeenCalledTimes(2)
+    expect(adminExecute.mock.calls.find(([input]) => input.methodId === 'TTS.SetDefaultVoice')?.[0]).not.toHaveProperty('phrase')
+    expect(adminExecute.mock.calls.filter(([input]) => input.methodId === 'TTS.ListVoiceProfiles')).toHaveLength(2)
     expect(visibleText(container)).toContain('Voice choice updated.')
     assertNoForbiddenCopy(visibleText(container))
     await unmount()
   })
 
   it('does not render operation identifiers from failed default changes', async () => {
-    const setDefaultVoice = vi.fn(async () => ({
-      ok: false,
-      error: { code: 'transport_loss', message: 'operation_id voice-default-secret correlation_id OP-123 failed' }
-    }))
-    const client = voiceClient({ setDefaultVoice, profiles: [profile({ default: false, ready: true, installed: true })] })
+    const adminExecute = vi.fn(async (input: { methodId: string }) => {
+      if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: [profile({ default: false, ready: true, installed: true })] })
+      throw { code: 'transport_loss', message: 'operation_id voice-default-secret correlation_id OP-123 failed' }
+    })
+    const client = voiceClient({ adminExecute })
     const { container, unmount } = await renderVoiceSettings(client)
 
+    await loadManagedVoices(container)
     await act(async () => {
       buttonByText(container, 'Use by default').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -305,10 +381,16 @@ describe('VoiceSettingsView', () => {
   })
 
   it('requires confirmation before removing a standard voice and honors cancel', async () => {
-    const removeVoiceProfile = vi.fn(async () => ({ ok: true, data: mutationResult<RemoveStatus>('removed') }))
-    const client = voiceClient({ removeVoiceProfile, profiles: [profile({ installed: true, ready: true, default: false, active: false })] })
+    const removeVoiceProfile = vi.fn()
+    const adminExecute = vi.fn(async (input: { methodId: string }) => (
+      input.methodId === 'TTS.ListVoiceProfiles'
+        ? adminResult({ profiles: [profile({ installed: true, ready: true, default: false, active: false })] })
+        : adminResult(mutationResult<RemoveStatus>('removed'))
+    ))
+    const client = voiceClient({ removeVoiceProfile, adminExecute })
     const { container, unmount } = await renderVoiceSettings(client)
 
+    await loadManagedVoices(container)
     await act(async () => {
       buttonByText(container, 'Remove').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -318,6 +400,7 @@ describe('VoiceSettingsView', () => {
     })
     await flushReactWork()
     expect(removeVoiceProfile).not.toHaveBeenCalled()
+    expect(adminExecute.mock.calls.filter(([input]) => input.methodId === 'TTS.RemoveVoiceProfile')).toHaveLength(0)
 
     await act(async () => {
       buttonByText(container, 'Remove').dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -327,23 +410,35 @@ describe('VoiceSettingsView', () => {
     })
     await flushReactWork()
 
-    expect(removeVoiceProfile).toHaveBeenCalledTimes(1)
-    expect(removeVoiceProfile).toHaveBeenCalledWith(expect.objectContaining({
-      voice_id: 'standard:en_pack:ava',
-      expected_revision: 'rev-1',
-      operation_id: expect.stringMatching(/^voice-remove-/u)
+    expect(removeVoiceProfile).not.toHaveBeenCalled()
+    expect(adminExecute).toHaveBeenCalledWith(expect.objectContaining({
+      methodId: 'TTS.RemoveVoiceProfile',
+      payload: expect.objectContaining({
+        voice_id: 'standard:en_pack:ava',
+        expected_revision: 'rev-1',
+        operation_id: expect.stringMatching(/^voice-remove-/u)
+      }),
+      reason: 'Remove spoken reply voice: Manage spoken reply voices',
+      reauthConfirmed: true,
+      affectedResources: ['voice-profile:standard:en_pack:ava'],
+      path: '/api/TTS/RemoveVoiceProfile'
     }))
+    expect(adminExecute.mock.calls.find(([input]) => input.methodId === 'TTS.RemoveVoiceProfile')?.[0]).not.toHaveProperty('phrase')
     expect(visibleText(container)).toContain('Voice removed.')
     assertNoForbiddenCopy(visibleText(container))
     await unmount()
   })
 
   it('prevents duplicate confirmed removal while the request is pending', async () => {
-    const pendingRemove = deferred<{ ok: true, data: MutationOutput<RemoveStatus> }>()
-    const removeVoiceProfile = vi.fn(() => pendingRemove.promise)
-    const client = voiceClient({ removeVoiceProfile, profiles: [profile({ installed: true, ready: true, default: false, active: false })] })
+    const pendingRemove = deferred<unknown>()
+    const adminExecute = vi.fn((input: { methodId: string }) => {
+      if (input.methodId === 'TTS.ListVoiceProfiles') return Promise.resolve(adminResult({ profiles: [profile({ installed: true, ready: true, default: false, active: false })] }))
+      return pendingRemove.promise
+    })
+    const client = voiceClient({ adminExecute })
     const { container, unmount } = await renderVoiceSettings(client)
 
+    await loadManagedVoices(container)
     await act(async () => {
       buttonByText(container, 'Remove').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -355,28 +450,32 @@ describe('VoiceSettingsView', () => {
       buttonByText(document.body, 'Removing').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(removeVoiceProfile).toHaveBeenCalledTimes(1)
-    pendingRemove.resolve({ ok: true, data: mutationResult('removed') })
+    expect(adminExecute.mock.calls.filter(([input]) => input.methodId === 'TTS.RemoveVoiceProfile')).toHaveLength(1)
+    pendingRemove.resolve(adminResult(mutationResult('removed')))
     await flushReactWork()
     await unmount()
   })
 
   it('deletes only allowed cloned profiles after confirmation and refreshes', async () => {
-    const deleteVoiceProfile = vi.fn(async () => ({ ok: true, data: mutationResult<DeleteStatus>('deleted', 'clone:11111111-1111-4111-8111-111111111111') }))
-    const listVoiceProfiles = vi.fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        data: {
-          profiles: [
-            profile({ display_name: 'Dina', voice_id: 'clone:11111111-1111-4111-8111-111111111111', kind: 'cloned', installed: true, ready: true, default: false, active: false, retained_source: true }),
-            profile({ display_name: 'Eli', voice_id: 'clone:22222222-2222-4222-8222-222222222222', kind: 'cloned', installed: true, ready: true, default: true, active: true, retained_source: true })
-          ]
-        }
-      })
-      .mockResolvedValue({ ok: true, data: { profiles: [] } })
-    const client = voiceClient({ deleteVoiceProfile, listVoiceProfiles })
+    const deleteVoiceProfile = vi.fn()
+    const adminExecute = vi.fn(async (input: { methodId: string }) => {
+      if (input.methodId === 'TTS.ListVoiceProfiles') {
+        const listCalls = adminExecute.mock.calls.filter(([call]) => call.methodId === 'TTS.ListVoiceProfiles').length
+        return adminResult({
+          profiles: listCalls === 1
+            ? [
+              profile({ display_name: 'Dina', voice_id: 'clone:11111111-1111-4111-8111-111111111111', kind: 'cloned', installed: true, ready: true, default: false, active: false, retained_source: true }),
+              profile({ display_name: 'Eli', voice_id: 'clone:22222222-2222-4222-8222-222222222222', kind: 'cloned', installed: true, ready: true, default: true, active: true, retained_source: true })
+            ]
+            : []
+        })
+      }
+      return adminResult(mutationResult<DeleteStatus>('deleted', 'clone:11111111-1111-4111-8111-111111111111'))
+    })
+    const client = voiceClient({ deleteVoiceProfile, adminExecute })
     const { container, unmount } = await renderVoiceSettings(client)
 
+    await loadManagedVoices(container)
     expect(buttonsByText(container, 'Delete')).toHaveLength(1)
     await act(async () => {
       buttonByText(container, 'Delete').dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -387,13 +486,21 @@ describe('VoiceSettingsView', () => {
     })
     await flushReactWork()
 
-    expect(deleteVoiceProfile).toHaveBeenCalledTimes(1)
-    expect(deleteVoiceProfile).toHaveBeenCalledWith(expect.objectContaining({
-      voice_id: 'clone:11111111-1111-4111-8111-111111111111',
-      expected_revision: 'rev-1',
-      operation_id: expect.stringMatching(/^voice-delete-/u)
+    expect(deleteVoiceProfile).not.toHaveBeenCalled()
+    expect(adminExecute).toHaveBeenCalledWith(expect.objectContaining({
+      methodId: 'TTS.DeleteVoiceProfile',
+      payload: expect.objectContaining({
+        voice_id: 'clone:11111111-1111-4111-8111-111111111111',
+        expected_revision: 'rev-1',
+        operation_id: expect.stringMatching(/^voice-delete-/u)
+      }),
+      reason: 'Delete spoken reply voice: Manage spoken reply voices',
+      reauthConfirmed: true,
+      affectedResources: ['voice-profile:clone:11111111-1111-4111-8111-111111111111'],
+      path: '/api/TTS/DeleteVoiceProfile'
     }))
-    expect(listVoiceProfiles).toHaveBeenCalledTimes(2)
+    expect(adminExecute.mock.calls.find(([input]) => input.methodId === 'TTS.DeleteVoiceProfile')?.[0]).not.toHaveProperty('phrase')
+    expect(adminExecute.mock.calls.filter(([input]) => input.methodId === 'TTS.ListVoiceProfiles')).toHaveLength(2)
     expect(visibleText(container)).toContain('Voice deleted.')
     expect(visibleText(container)).not.toContain('11111111-1111-4111-8111-111111111111')
     assertNoForbiddenCopy(visibleText(container))
@@ -401,18 +508,24 @@ describe('VoiceSettingsView', () => {
   })
 
   it('keeps failure copy clean for remove and delete results', async () => {
-    const removeVoiceProfile = vi.fn(async () => ({ ok: true, data: mutationResult<RemoveStatus>('rejected') }))
-    const deleteVoiceProfile = vi.fn(async () => ({ ok: true, data: mutationResult<DeleteStatus>('rejected', 'clone:11111111-1111-4111-8111-111111111111') }))
+    const adminExecute = vi.fn(async (input: { methodId: string }) => {
+      if (input.methodId === 'TTS.ListVoiceProfiles') {
+        return adminResult({
+          profiles: [
+            profile({ display_name: 'Ava', voice_id: 'standard:en_pack:ava', installed: true, ready: true, default: false, active: false }),
+            profile({ display_name: 'Dina', voice_id: 'clone:11111111-1111-4111-8111-111111111111', kind: 'cloned', installed: true, ready: true, default: false, active: false, retained_source: true })
+          ]
+        })
+      }
+      if (input.methodId === 'TTS.RemoveVoiceProfile') return adminResult(mutationResult<RemoveStatus>('rejected'))
+      return adminResult(mutationResult<DeleteStatus>('rejected', 'clone:11111111-1111-4111-8111-111111111111'))
+    })
     const client = voiceClient({
-      removeVoiceProfile,
-      deleteVoiceProfile,
-      profiles: [
-        profile({ display_name: 'Ava', voice_id: 'standard:en_pack:ava', installed: true, ready: true, default: false, active: false }),
-        profile({ display_name: 'Dina', voice_id: 'clone:11111111-1111-4111-8111-111111111111', kind: 'cloned', installed: true, ready: true, default: false, active: false, retained_source: true })
-      ]
+      adminExecute
     })
     const { container, unmount } = await renderVoiceSettings(client)
 
+    await loadManagedVoices(container)
     await act(async () => {
       buttonByText(container, 'Remove').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -457,6 +570,7 @@ describe('VoiceSettingsView', () => {
       ]
     })
     const { container, unmount } = await renderVoiceSettings(client)
+    await loadManagedVoices(container)
     const text = visibleText(container)
 
     expect(text).toContain('Voice option 1')
@@ -492,6 +606,7 @@ describe('VoiceSettingsView', () => {
       profiles: [profile({ installed: false, ready: false })]
     })
     const { container, unmount } = await renderVoiceSettings(client)
+    await loadManagedVoices(container)
     const text = visibleText(container)
 
     expect(text).toContain('Voices available to Aurora')
@@ -509,6 +624,7 @@ function voiceClient(overrides: {
   getCapabilities?: ReturnType<typeof vi.fn>
   listVoices?: ReturnType<typeof vi.fn>
   listVoiceProfiles?: ReturnType<typeof vi.fn>
+  adminExecute?: ReturnType<typeof vi.fn>
   installVoiceProfile?: ReturnType<typeof vi.fn>
   removeVoiceProfile?: ReturnType<typeof vi.fn>
   setDefaultVoice?: ReturnType<typeof vi.fn>
@@ -516,11 +632,22 @@ function voiceClient(overrides: {
 } = {}): AuroraClient {
   const getCapabilities = overrides.getCapabilities ?? vi.fn(async () => ({ ok: true, data: { capabilities: overrides.capabilities ?? capabilities() } }))
   const listVoices = overrides.listVoices ?? vi.fn(async () => ({ ok: true, data: { voices: overrides.voices ?? [voice()] } }))
-  const listVoiceProfiles = overrides.listVoiceProfiles ?? vi.fn(async () => ({ ok: true, data: { profiles: overrides.profiles ?? [] } }))
-  const installVoiceProfile = overrides.installVoiceProfile ?? vi.fn(async () => ({ ok: true, data: installResult('installed') }))
-  const removeVoiceProfile = overrides.removeVoiceProfile ?? vi.fn(async () => ({ ok: true, data: mutationResult<RemoveStatus>('removed') }))
-  const setDefaultVoice = overrides.setDefaultVoice ?? vi.fn(async () => ({ ok: true, data: mutationResult<DefaultStatus>('activated') }))
-  const deleteVoiceProfile = overrides.deleteVoiceProfile ?? vi.fn(async () => ({ ok: true, data: mutationResult<DeleteStatus>('deleted', 'clone:11111111-1111-4111-8111-111111111111') }))
+  const directVoiceManageCall = vi.fn(async () => {
+    throw new Error('Direct voice management call bypassed review')
+  })
+  const listVoiceProfiles = overrides.listVoiceProfiles ?? directVoiceManageCall
+  const installVoiceProfile = overrides.installVoiceProfile ?? directVoiceManageCall
+  const removeVoiceProfile = overrides.removeVoiceProfile ?? directVoiceManageCall
+  const setDefaultVoice = overrides.setDefaultVoice ?? directVoiceManageCall
+  const deleteVoiceProfile = overrides.deleteVoiceProfile ?? directVoiceManageCall
+  const adminExecute = overrides.adminExecute ?? vi.fn(async (input: { methodId: string }) => {
+    if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: overrides.profiles ?? [] })
+    if (input.methodId === 'TTS.InstallVoiceProfile') return adminResult(installResult('installed'))
+    if (input.methodId === 'TTS.RemoveVoiceProfile') return adminResult(mutationResult<RemoveStatus>('removed'))
+    if (input.methodId === 'TTS.SetDefaultVoice') return adminResult(mutationResult<DefaultStatus>('activated'))
+    if (input.methodId === 'TTS.DeleteVoiceProfile') return adminResult(mutationResult<DeleteStatus>('deleted', 'clone:11111111-1111-4111-8111-111111111111'))
+    throw new Error(`Unexpected action: ${input.methodId}`)
+  })
   return {
     speech: {
       tts: {
@@ -532,6 +659,9 @@ function voiceClient(overrides: {
         setDefaultVoice,
         deleteVoiceProfile
       }
+    },
+    admin: {
+      execute: adminExecute
     },
     config: {
       getSchemaMetadata: async () => ({ ok: true, data: { fields: [], secrets_redacted: true } }),
@@ -623,6 +753,42 @@ function mutationResult<TStatus extends string>(status: TStatus, voiceId = 'stan
   }
 }
 
+function adminResult<TData>(data: TData) {
+  return {
+    draft: {
+      action_id: 'admin-action-1',
+      nonce: 'nonce-1',
+      digest: 'digest-1',
+      method_id: 'TTS.ListVoiceProfiles',
+      affected_resources: [],
+      required_phrase: 'CONFIRM',
+      required_reason: true,
+      required_reauth: true,
+      expires_at: '2026-08-12T00:00:00.000Z',
+      expires_in_seconds: 120,
+      confirmation_headers: {
+        action_id: 'X-Aurora-AdminAction-Id',
+        confirmation_token: 'X-Aurora-AdminAction-Token',
+        digest: 'X-Aurora-AdminAction-Digest'
+      }
+    },
+    confirmation: {
+      action_id: 'admin-action-1',
+      confirmation_token: 'token-1',
+      digest: 'digest-1',
+      confirmed: true,
+      expires_at: '2026-08-12T00:00:00.000Z',
+      audit_receipt: 'receipt-1',
+      confirmation_headers: {
+        action_id: 'X-Aurora-AdminAction-Id',
+        confirmation_token: 'X-Aurora-AdminAction-Token',
+        digest: 'X-Aurora-AdminAction-Digest'
+      }
+    },
+    data
+  }
+}
+
 async function renderVoiceSettings(client: AuroraClient) {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -638,6 +804,23 @@ async function renderVoiceSettings(client: AuroraClient) {
       container.remove()
     }
   }
+}
+
+async function loadManagedVoices(container: HTMLElement): Promise<void> {
+  await unlockVoiceManagement(container)
+  await act(async () => {
+    buttonByText(container, 'Show available voices').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+  await flushReactWork()
+}
+
+async function unlockVoiceManagement(container: HTMLElement): Promise<void> {
+  const checkbox = container.querySelector('input[type="checkbox"]')
+  if (!(checkbox instanceof HTMLInputElement)) throw new Error('Missing voice change confirmation')
+  await act(async () => {
+    checkbox.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+  await flushReactWork()
 }
 
 function webSnapshot(): AuroraShellSnapshot {

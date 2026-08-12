@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { AuroraClient } from '@aurora/client'
+import { routePath, type AuroraClient, type JsonObject } from '@aurora/client'
 import { Button, Card, StatStrip } from './primitives'
 import { safeErrorCopy } from './product-copy'
 import { findForbiddenProductionCopyTerms } from './product-copy-forbidden-terms'
@@ -66,7 +66,7 @@ interface VoiceSettingsState {
   voices: TtsVoice[]
   profiles: TtsVoiceProfile[]
   loadState: 'loading' | 'ready' | 'error'
-  managementState: 'loading' | 'ready' | 'limited'
+  managementState: 'locked' | 'loading' | 'ready' | 'limited'
   message: string | null
 }
 
@@ -75,12 +75,20 @@ const initialVoiceSettingsState: VoiceSettingsState = {
   voices: [],
   profiles: [],
   loadState: 'loading',
-  managementState: 'loading',
+  managementState: 'locked',
   message: null
 }
 
 let fallbackInstallOperationSequence = 0
 let fallbackVoiceOperationSequence = 0
+
+const TTS_MANAGE_METHODS = {
+  install: 'TTS.InstallVoiceProfile',
+  listProfiles: 'TTS.ListVoiceProfiles',
+  remove: 'TTS.RemoveVoiceProfile',
+  setDefault: 'TTS.SetDefaultVoice',
+  delete: 'TTS.DeleteVoiceProfile'
+} as const
 
 export interface VoiceSettingsViewProps {
   client: AuroraClient
@@ -93,44 +101,52 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
   const [pendingActionKey, setPendingActionKey] = useState<string | null>(null)
   const [mutationMessage, setMutationMessage] = useState<string | null>(null)
   const [confirmAction, setConfirmAction] = useState<VoiceConfirmation | null>(null)
+  const [adminReason, setAdminReason] = useState('Manage spoken reply voices')
+  const [adminReviewConfirmed, setAdminReviewConfirmed] = useState(false)
+  const adminReasonValue = adminReason.trim()
+  const adminActionReady = adminReviewConfirmed && adminReasonValue.length > 0
 
   const refresh = useCallback(() => {
     let active = true
-    setState(initialVoiceSettingsState)
+    setState((current) => ({
+      ...current,
+      capabilities: null,
+      voices: [],
+      loadState: 'loading',
+      message: current.managementState === 'limited' ? current.message : null
+    }))
 
     void Promise.all([
       client.speech.tts.getCapabilities(),
-      client.speech.tts.listVoices(),
-      client.speech.tts.listVoiceProfiles({ include_unavailable: true })
-    ]).then(([capabilitiesResult, voicesResult, profilesResult]) => {
+      client.speech.tts.listVoices()
+    ]).then(([capabilitiesResult, voicesResult]) => {
       if (!active) return
       const capabilities = capabilitiesResult.ok ? capabilitiesResult.data.capabilities as TtsCapabilities : null
       const voices = voicesResult.ok ? (voicesResult.data.voices as TtsVoice[] | undefined) ?? [] : []
-      const profiles = profilesResult.ok ? (profilesResult.data.profiles as TtsVoiceProfile[] | undefined) ?? [] : []
       const readError = !capabilitiesResult.ok || !voicesResult.ok
       const readProblem = capabilitiesResult.ok
         ? voicesResult.ok ? null : voicesResult.error
         : capabilitiesResult.error
-      setState({
+      setState((current) => ({
+        ...current,
         capabilities,
         voices,
-        profiles,
         loadState: readError ? 'error' : 'ready',
-        managementState: profilesResult.ok ? 'ready' : 'limited',
         message: readError
           ? productVoiceSettingsErrorCopy(readProblem)
-          : profilesResult.ok
-            ? null
-            : voiceSettingsManagementCopy(profilesResult.error)
-      })
+          : current.managementState === 'limited'
+            ? current.message
+            : null
+      }))
     }, (error: unknown) => {
       if (!active) return
-      setState({
-        ...initialVoiceSettingsState,
+      setState((current) => ({
+        ...current,
+        capabilities: null,
+        voices: [],
         loadState: 'error',
-        managementState: 'limited',
         message: productVoiceSettingsErrorCopy(error)
-      })
+      }))
     })
 
     return () => {
@@ -138,32 +154,67 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
     }
   }, [client])
 
+  const loadManagedProfiles = useCallback(async (reason = 'Load available voice settings') => {
+    if (!adminActionReady) return
+    setState((current) => ({
+      ...current,
+      managementState: 'loading',
+      message: null
+    }))
+    try {
+      const result = await client.admin.execute<{ profiles?: TtsVoiceProfile[] }>({
+        methodId: TTS_MANAGE_METHODS.listProfiles,
+        payload: { include_unavailable: true },
+        reason: adminReasonFor(reason, adminReasonValue),
+        reauthConfirmed: adminReviewConfirmed,
+        affectedResources: ['voice-profiles'],
+        path: routePath('TTS', 'ListVoiceProfiles')
+      })
+      setState((current) => ({
+        ...current,
+        profiles: result.data.profiles ?? [],
+        managementState: 'ready',
+        message: null
+      }))
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        profiles: [],
+        managementState: 'limited',
+        message: voiceSettingsManagementCopy(error)
+      }))
+    }
+  }, [adminActionReady, adminReasonValue, adminReviewConfirmed, client.admin])
+
   useEffect(() => refresh(), [refresh])
 
   const managedProfiles = useMemo(() => state.profiles.map((profile, index) => toManagedVoice(profile, index, state.capabilities)), [state.profiles, state.capabilities])
   const voiceRows = useMemo(() => state.voices.map((voice, index) => toVoiceRow(voice, index, state.capabilities)), [state.voices, state.capabilities])
   const readyLanguages = useMemo(() => languageList(state.capabilities?.ready_languages), [state.capabilities])
   const canShowInstall = state.managementState === 'ready'
-  const actionPending = pendingActionKey !== null
+  const actionPending = pendingActionKey !== null || state.managementState === 'loading'
 
   async function installProfile(profile: ManagedVoice) {
-    if (!profile.installable || actionPending) return
+    if (!profile.installable || actionPending || !adminActionReady) return
     const actionKey = actionKeyFor('install', profile.voiceId)
     setInstallingVoiceId(profile.voiceId)
     setPendingActionKey(actionKey)
     setInstallMessage(null)
     try {
-      const result = await client.speech.tts.installVoiceProfile({
-        voice_id: profile.voiceId,
-        expected_revision: profile.revision,
-        operation_id: createInstallOperationId()
+      const result = await runVoiceAdminMutation<InstallStatus>(client, {
+        methodId: TTS_MANAGE_METHODS.install,
+        payload: {
+          voice_id: profile.voiceId,
+          expected_revision: profile.revision,
+          operation_id: createInstallOperationId()
+        },
+        reason: adminReasonFor('Add spoken reply voice', adminReasonValue),
+        reauthConfirmed: adminReviewConfirmed,
+        affectedResources: affectedVoiceResources(profile),
+        path: routePath('TTS', 'InstallVoiceProfile')
       })
-      if (!result.ok) {
-        setInstallMessage(productVoiceSettingsErrorCopy(result.error, 'Voice was not added. Try again.'))
-        return
-      }
-      setInstallMessage(installOutcomeCopy(result.data.status))
-      refresh()
+      setInstallMessage(installOutcomeCopy(result.status))
+      if (isInstallSuccess(result.status)) await loadManagedProfiles('Refresh available voice settings')
     } catch (error) {
       setInstallMessage(productVoiceSettingsErrorCopy(error, 'Voice was not added. Try again.'))
     } finally {
@@ -173,22 +224,25 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
   }
 
   async function setDefaultProfile(profile: ManagedVoice) {
-    if (!profile.canSetDefault || actionPending) return
+    if (!profile.canSetDefault || actionPending || !adminActionReady) return
     const actionKey = actionKeyFor('default', profile.voiceId)
     setPendingActionKey(actionKey)
     setMutationMessage('Updating voice choice.')
     try {
-      const result = await client.speech.tts.setDefaultVoice({
-        voice_id: profile.voiceId,
-        expected_revision: profile.revision,
-        operation_id: createVoiceOperationId('default')
+      const result = await runVoiceAdminMutation<DefaultStatus>(client, {
+        methodId: TTS_MANAGE_METHODS.setDefault,
+        payload: {
+          voice_id: profile.voiceId,
+          expected_revision: profile.revision,
+          operation_id: createVoiceOperationId('default')
+        },
+        reason: adminReasonFor('Update spoken reply voice choice', adminReasonValue),
+        reauthConfirmed: adminReviewConfirmed,
+        affectedResources: affectedVoiceResources(profile),
+        path: routePath('TTS', 'SetDefaultVoice')
       })
-      if (!result.ok) {
-        setMutationMessage(productVoiceSettingsErrorCopy(result.error, 'Voice choice was not changed. Try again.'))
-        return
-      }
-      setMutationMessage(defaultOutcomeCopy(result.data.status as DefaultStatus))
-      if (isDefaultSuccess(result.data.status as DefaultStatus)) refresh()
+      setMutationMessage(defaultOutcomeCopy(result.status))
+      if (isDefaultSuccess(result.status)) await loadManagedProfiles('Refresh available voice settings')
     } catch (error) {
       setMutationMessage(productVoiceSettingsErrorCopy(error, 'Voice choice was not changed. Try again.'))
     } finally {
@@ -197,31 +251,31 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
   }
 
   async function runConfirmedAction(action: VoiceConfirmation) {
-    if (actionPending) return
+    if (actionPending || !adminActionReady) return
     const actionKey = actionKeyFor(action.kind, action.profile.voiceId)
     setPendingActionKey(actionKey)
     setMutationMessage(action.kind === 'remove' ? 'Removing voice.' : 'Deleting voice.')
     try {
-      const input = {
-        voice_id: action.profile.voiceId,
-        expected_revision: action.profile.revision,
-        operation_id: createVoiceOperationId(action.kind)
-      }
-      const result = action.kind === 'remove'
-        ? await client.speech.tts.removeVoiceProfile(input)
-        : await client.speech.tts.deleteVoiceProfile(input)
-      if (!result.ok) {
-        setMutationMessage(productVoiceSettingsErrorCopy(result.error, action.kind === 'remove' ? 'Voice was not removed. Try again.' : 'Voice was not deleted. Try again.'))
-        return
-      }
+      const result = await runVoiceAdminMutation<RemoveStatus | DeleteStatus>(client, {
+        methodId: action.kind === 'remove' ? TTS_MANAGE_METHODS.remove : TTS_MANAGE_METHODS.delete,
+        payload: {
+          voice_id: action.profile.voiceId,
+          expected_revision: action.profile.revision,
+          operation_id: createVoiceOperationId(action.kind)
+        },
+        reason: adminReasonFor(action.kind === 'remove' ? 'Remove spoken reply voice' : 'Delete spoken reply voice', adminReasonValue),
+        reauthConfirmed: adminReviewConfirmed,
+        affectedResources: affectedVoiceResources(action.profile),
+        path: routePath('TTS', action.kind === 'remove' ? 'RemoveVoiceProfile' : 'DeleteVoiceProfile')
+      })
       if (action.kind === 'remove') {
-        const status = result.data.status as RemoveStatus
+        const status = result.status as RemoveStatus
         setMutationMessage(removeOutcomeCopy(status))
-        if (isRemoveSuccess(status)) refresh()
+        if (isRemoveSuccess(status)) await loadManagedProfiles('Refresh available voice settings')
       } else {
-        const status = result.data.status as DeleteStatus
+        const status = result.status as DeleteStatus
         setMutationMessage(deleteOutcomeCopy(status))
-        if (isDeleteSuccess(status)) refresh()
+        if (isDeleteSuccess(status)) await loadManagedProfiles('Refresh available voice settings')
       }
       setConfirmAction(null)
     } catch (error) {
@@ -291,9 +345,53 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
 
       <Card title="Voices available to Aurora" description="Voices Aurora can use or add for spoken replies.">
         <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2 rounded-md border border-border/70 p-3">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">Reason</span>
+              <input
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                value={adminReason}
+                onChange={(event) => setAdminReason(event.currentTarget.value)}
+                aria-label="Voice change reason"
+                disabled={actionPending}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={adminReviewConfirmed}
+                onChange={(event) => setAdminReviewConfirmed(event.currentTarget.checked)}
+                disabled={actionPending || adminReasonValue.length === 0}
+              />
+              <span>I confirm these voice changes are allowed.</span>
+            </label>
+          </div>
+          {state.managementState === 'locked' ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">Show available voices before adding or changing spoken reply voices.</p>
+              <Button
+                variant="outline"
+                className="h-8 px-3 text-xs"
+                onClick={() => void loadManagedProfiles()}
+                disabled={actionPending || !adminActionReady}
+              >
+                Show available voices
+              </Button>
+            </div>
+          ) : null}
           {state.managementState === 'loading' ? <p className="text-sm text-muted-foreground">Loading available voices.</p> : null}
           {state.managementState === 'limited' ? (
-            <p className="text-sm text-muted-foreground">Available voices could not be loaded. Review access and try again.</p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">Available voices could not be loaded. Review access and try again.</p>
+              <Button
+                variant="outline"
+                className="h-8 px-3 text-xs"
+                onClick={() => void loadManagedProfiles()}
+                disabled={actionPending || !adminActionReady}
+              >
+                Try again
+              </Button>
+            </div>
           ) : null}
           {managedProfiles.map((profile) => (
             <div key={profile.voiceId} className="flex flex-col gap-2 border-b border-border/60 pb-3 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
@@ -308,7 +406,7 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
                     variant="outline"
                     className="h-8 px-3 text-xs"
                     onClick={() => void setDefaultProfile(profile)}
-                    disabled={actionPending}
+                    disabled={actionPending || !adminActionReady}
                   >
                     {pendingActionKey === actionKeyFor('default', profile.voiceId) ? 'Updating' : 'Use by default'}
                   </Button>
@@ -318,7 +416,7 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
                     variant="outline"
                     className="h-8 px-3 text-xs"
                     onClick={() => void installProfile(profile)}
-                    disabled={actionPending}
+                    disabled={actionPending || !adminActionReady}
                   >
                     {installingVoiceId === profile.voiceId ? 'Adding' : 'Add voice'}
                   </Button>
@@ -328,7 +426,7 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
                     variant="outline"
                     className="h-8 px-3 text-xs"
                     onClick={() => setConfirmAction({ kind: 'remove', profile })}
-                    disabled={actionPending}
+                    disabled={actionPending || !adminActionReady}
                   >
                     Remove
                   </Button>
@@ -338,7 +436,7 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
                     variant="danger"
                     className="h-8 px-3 text-xs"
                     onClick={() => setConfirmAction({ kind: 'delete', profile })}
-                    disabled={actionPending}
+                    disabled={actionPending || !adminActionReady}
                   >
                     Delete
                   </Button>
@@ -368,7 +466,7 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
             <AlertDialogCancel disabled={actionPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant={confirmAction?.kind === 'delete' ? 'destructive' : 'default'}
-              disabled={actionPending || confirmAction === null}
+              disabled={actionPending || confirmAction === null || !adminActionReady}
               onClick={() => {
                 if (confirmAction) void runConfirmedAction(confirmAction)
               }}
@@ -380,6 +478,56 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
       </AlertDialog>
     </div>
   )
+}
+
+interface VoiceManagePayload extends JsonObject {
+  voice_id: string
+  expected_revision: string
+  operation_id: string
+}
+
+type VoiceManageMutationMethodId =
+  | typeof TTS_MANAGE_METHODS.install
+  | typeof TTS_MANAGE_METHODS.remove
+  | typeof TTS_MANAGE_METHODS.setDefault
+  | typeof TTS_MANAGE_METHODS.delete
+
+interface MutationOutput<TStatus extends string> {
+  status: TStatus
+  voice_id: string
+  revision: string | null
+  idempotent: boolean
+  correlation_id?: string | null
+}
+
+async function runVoiceAdminMutation<TStatus extends string>(
+  client: AuroraClient,
+  input: {
+    methodId: VoiceManageMutationMethodId
+    payload: VoiceManagePayload
+    reason: string
+    reauthConfirmed: boolean
+    affectedResources: string[]
+    path: string
+  }
+): Promise<MutationOutput<TStatus>> {
+  const result = await client.admin.execute<MutationOutput<TStatus>>({
+    methodId: input.methodId,
+    payload: input.payload,
+    reason: input.reason,
+    reauthConfirmed: input.reauthConfirmed,
+    affectedResources: input.affectedResources,
+    path: input.path
+  })
+  return result.data
+}
+
+function affectedVoiceResources(profile: Pick<ManagedVoice, 'voiceId'>): string[] {
+  return [`voice-profile:${profile.voiceId}`]
+}
+
+function adminReasonFor(action: string, userReason: string): string {
+  return `${action}: ${userReason}`
 }
 
 interface VoiceRow {
@@ -549,6 +697,10 @@ function deleteOutcomeCopy(status: DeleteStatus): string {
   if (status === 'revision_conflict') return 'Voice changed before it could be deleted. Try again.'
   if (status === 'not_found') return 'Voice is no longer available.'
   return 'Voice was not deleted. Try again.'
+}
+
+function isInstallSuccess(status: InstallStatus): boolean {
+  return status === 'installed' || status === 'queued' || status === 'unchanged'
 }
 
 function isDefaultSuccess(status: DefaultStatus): boolean {
