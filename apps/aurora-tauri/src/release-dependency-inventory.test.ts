@@ -180,6 +180,22 @@ checksum = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         license: 'GPL-3.0-only',
       },
     ],
+    GPLv2: [
+      {
+        name: 'blocked-gplv2-package',
+        versions: ['2.0.0'],
+        paths: [join(fixture.root, 'node_modules/.pnpm/blocked-gplv2-package@2.0.0/node_modules/blocked-gplv2-package')],
+        license: 'GPLv2',
+      },
+    ],
+    'Dual License': [
+      {
+        name: 'unreviewed-license-package',
+        versions: ['1.0.0'],
+        paths: [join(fixture.root, 'node_modules/.pnpm/unreviewed-license-package@1.0.0/node_modules/unreviewed-license-package')],
+        license: 'Dual License',
+      },
+    ],
   })
   writeJson(fixture.uvCyclonedx, {
     bomFormat: 'CycloneDX',
@@ -334,6 +350,18 @@ describe('release dependency inventory gate', () => {
         disposition: 'blocked',
       }),
       expect.objectContaining({
+        ecosystem: 'npm',
+        name: 'blocked-gplv2-package',
+        license: expect.objectContaining({ id: 'GPLv2' }),
+        disposition: 'blocked',
+      }),
+      expect.objectContaining({
+        ecosystem: 'npm',
+        name: 'unreviewed-license-package',
+        license: expect.objectContaining({ id: 'UNREVIEWED' }),
+        disposition: 'blocked',
+      }),
+      expect.objectContaining({
         ecosystem: 'python',
         scope: 'all-extras-all-groups',
         name: 'transitive-python',
@@ -350,6 +378,7 @@ describe('release dependency inventory gate', () => {
         ecosystem: 'cargo',
         name: 'serde',
         license: expect.objectContaining({ id: 'MIT OR Apache-2.0' }),
+        hash: `sha256:${'b'.repeat(64)}`,
         disposition: 'allowed',
       }),
       expect.objectContaining({
@@ -363,18 +392,43 @@ describe('release dependency inventory gate', () => {
     expect(serialized).not.toContain(tmpdir())
   })
 
-  it('rejects explicit symlink and source commit mismatch inputs', () => {
+  it('rejects symlink and source commit mismatch inputs', () => {
     const fixture = createFixture()
     const symlink = join(fixture.root, 'pnpm-lock-link.yaml')
     symlinkSync(fixture.pnpmLock, symlink)
 
     const symlinkResult = runInventory(fixture, ['--pnpm-lock', symlink])
     expect(symlinkResult.status).not.toBe(0)
-    expect(readReport(fixture).blockers[0].detail).toContain('explicit input must not be a symlink')
+    expect(readReport(fixture).blockers[0].detail).toContain('required input must not be a symlink')
 
     const mismatchResult = runInventory(fixture, ['--source-commit', '0000000'])
     expect(mismatchResult.status).not.toBe(0)
     expect(readReport(fixture).blockers[0].detail).toContain('source commit mismatch')
+  })
+
+  it('redacts token-shaped dependency metadata before writing an always-uploaded report', () => {
+    const fixture = createFixture()
+    const secrets = [
+      `sk-${'a'.repeat(24)}`,
+      `github_pat_${'b'.repeat(24)}`,
+      `AKIA${'C'.repeat(16)}`,
+    ]
+    const pnpmLicenses = JSON.parse(readFileSync(fixture.pnpmLicenses, 'utf8'))
+    pnpmLicenses.MIT.push({
+      name: `secret-probe-${secrets.join('-')}`,
+      versions: ['1.0.0'],
+      paths: [],
+      license: 'MIT',
+    })
+    writeJson(fixture.pnpmLicenses, pnpmLicenses)
+
+    const result = runInventory(fixture)
+    expect(result.status).not.toBe(0)
+    const report = readReport(fixture)
+    const serialized = JSON.stringify(report)
+    for (const secret of secrets) expect(serialized).not.toContain(secret)
+    expect(serialized).toContain('<redacted-token>')
+    expect(report.secretsRedacted).toBe(true)
   })
 
   it('accepts a short source commit prefix but records the full HEAD and creates no dash artifact', () => {

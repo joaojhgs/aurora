@@ -6,7 +6,6 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
-  statSync,
   writeFileSync,
 } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
@@ -20,9 +19,51 @@ const args = process.argv.slice(2)
 const reportPath = resolve(readOption('--report') ?? join(packageRoot, 'reports', 'release-dependency-inventory.json'))
 const actualHead = readGit(['rev-parse', 'HEAD'])
 const sourceCommit = readOption('--source-commit') ?? actualHead
-const explicitPaths = new Set()
 const blockers = []
 const inputs = []
+const allowedLicenseIds = new Map([
+  ['0bsd', '0BSD'],
+  ['afl-2.1', 'AFL-2.1'],
+  ['apache-2.0', 'Apache-2.0'],
+  ['blueoak-1.0.0', 'BlueOak-1.0.0'],
+  ['bsd-1-clause', 'BSD-1-Clause'],
+  ['bsd-2-clause', 'BSD-2-Clause'],
+  ['bsd-3-clause', 'BSD-3-Clause'],
+  ['bsl-1.0', 'BSL-1.0'],
+  ['cc0-1.0', 'CC0-1.0'],
+  ['cdla-permissive-2.0', 'CDLA-Permissive-2.0'],
+  ['isc', 'ISC'],
+  ['mit', 'MIT'],
+  ['mit-0', 'MIT-0'],
+  ['psf-2.0', 'PSF-2.0'],
+  ['python-2.0', 'Python-2.0'],
+  ['unicode-3.0', 'Unicode-3.0'],
+  ['unlicense', 'Unlicense'],
+  ['zlib', 'Zlib'],
+])
+const licenseAliases = new Map([
+  ['3-clause bsd license', 'BSD-3-Clause'],
+  ['apache 2.0', 'Apache-2.0'],
+  ['apache license 2.0', 'Apache-2.0'],
+  ['apache license, version 2.0', 'Apache-2.0'],
+  ['apache software license', 'Apache-2.0'],
+  ['bsd 2-clause license', 'BSD-2-Clause'],
+  ['bsd 3-clause license', 'BSD-3-Clause'],
+  ['license :: osi approved :: apache software license', 'Apache-2.0'],
+  ['license :: osi approved :: mit license', 'MIT'],
+  ['mit license', 'MIT'],
+  ['modified bsd license', 'BSD-3-Clause'],
+])
+const allowedLicenseExceptions = new Map([
+  ['llvm-exception', 'LLVM-exception'],
+])
+const secretTokenPatterns = [
+  /ghp_[A-Za-z0-9_]{20,}/gu,
+  /github_pat_[A-Za-z0-9_]{20,}/gu,
+  /sk-[A-Za-z0-9_-]{20,}/gu,
+  /xoxb-[A-Za-z0-9-]{20,}/gu,
+  /AKIA[A-Z0-9]{16}/gu,
+]
 
 const paths = {
   packageJson: inputPath('--package-json', join(packageRoot, 'package.json')),
@@ -68,10 +109,10 @@ try {
   }
 
   const dispositionCounts = countBy(inventory, (item) => item.disposition)
-  const unknownLicenses = inventory.filter((item) => item.license.id === 'UNKNOWN')
-  const blockedLicenses = inventory.filter((item) => item.disposition === 'blocked')
+  const unknownLicenses = inventory.filter((item) => ['UNKNOWN', 'UNREVIEWED'].includes(item.license.id))
+  const blockedLicenses = inventory.filter((item) => item.disposition !== 'allowed')
   if (unknownLicenses.length > 0) {
-    blockers.push(blocker('unknown-license-metadata', `${unknownLicenses.length} inventory entries have unknown license metadata.`, {
+    blockers.push(blocker('unknown-license-metadata', `${unknownLicenses.length} inventory entries have unresolved license metadata.`, {
       severity: 'high',
       count: unknownLicenses.length,
     }))
@@ -245,6 +286,12 @@ function collectCargoDependencies() {
         const licenseId = normalizeLicense(pkg.license)
         const source = pkg.source ? String(pkg.source).startsWith('path+') ? 'cargo-path' : 'cargo-registry' : 'cargo-workspace'
         const metadataRawHash = inputHash(cargoMetadataJson ?? paths.cargoLock)
+        const packageChecksum = source === 'cargo-registry' ? cargoHashFor(pkg.name, pkg.version) : null
+        if (source === 'cargo-registry' && !packageChecksum) {
+          blockers.push(blocker('cargo-package-checksum-missing', `Cargo registry checksum is missing for ${pkg.name}@${pkg.version}.`, {
+            severity: 'high',
+          }))
+        }
         return inventoryItem({
           ecosystem: 'cargo',
           scope: pkg.source ? 'locked' : 'workspace',
@@ -252,7 +299,7 @@ function collectCargoDependencies() {
           version: pkg.version,
           source,
           sourceRef: safeCargoManifestPath(pkg.manifest_path),
-          hash: cargoHashFor(pkg.name, pkg.version) ?? inputHash(paths.cargoLock),
+          hash: packageChecksum ?? metadataRawHash,
           license: licenseEvidence(licenseId, 'cargo metadata package.license', metadataRawHash),
           disposition: dispositionForLicense(licenseId),
         })
@@ -278,6 +325,7 @@ function collectPhase4Artifacts() {
   return artifacts.map((artifact) => {
     const license = artifact.license && typeof artifact.license === 'object' ? artifact.license : {}
     const licenseId = normalizeLicense(license.spdx)
+    const staticLicenseDisposition = dispositionForLicense(licenseId)
     return inventoryItem({
       ecosystem: 'phase4-native-voice',
       scope: String(artifact.status ?? 'unknown'),
@@ -291,7 +339,7 @@ function collectPhase4Artifacts() {
         String(license.evidence ?? 'tools/voice-runtime/phase4_manifest.json'),
         String(license.evidence_sha256 ?? inputHash(paths.phase4Manifest)),
       ),
-      disposition: String(license.disposition ?? artifact.status ?? dispositionForLicense(licenseId)),
+      disposition: license.disposition === 'allowed' && staticLicenseDisposition === 'allowed' ? 'allowed' : 'blocked',
       role: artifact.role ? String(artifact.role) : undefined,
     })
   })
@@ -494,12 +542,9 @@ function parseCargoLockPackages(text) {
 }
 
 function cargoHashFor(name, version) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
-  const versionEscaped = version.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
-  const lock = readText(paths.cargoLock)
-  const pattern = new RegExp(`\\[\\[package\\]\\][\\s\\S]*?name = "${escaped}"[\\s\\S]*?version = "${versionEscaped}"[\\s\\S]*?(?:checksum = "([a-f0-9]{64})")?`, 'u')
-  const match = lock.match(pattern)
-  return match?.[1] ? `sha256:${match[1]}` : null
+  const pkg = parseCargoLockPackages(readText(paths.cargoLock))
+    .find((item) => item.name === name && item.version === version)
+  return pkg?.checksum ?? null
 }
 
 function inventoryItem({
@@ -524,7 +569,7 @@ function inventoryItem({
     sourceRef: redactPath(sourceRef),
     hash: normalizeHash(hash),
     license,
-    disposition,
+    disposition: disposition === 'allowed' ? 'allowed' : 'blocked',
   }
   if (role) base.role = role
   return base
@@ -540,9 +585,7 @@ function licenseEvidence(id, evidence, evidenceHash) {
 
 function dispositionForLicense(id) {
   const normalized = normalizeLicense(id)
-  if (normalized === 'UNKNOWN') return 'blocked'
-  if (/\b(?:GPL|AGPL|LGPL|SSPL|BUSL|NONCOMMERCIAL|CC-BY-NC)\b/iu.test(normalized)) return 'blocked'
-  return 'allowed'
+  return parseLicenseExpression(normalized)?.allowed === true ? 'allowed' : 'blocked'
 }
 
 function validateSourceCommit() {
@@ -559,9 +602,7 @@ function validateSourceCommit() {
 
 function inputPath(flag, fallback) {
   const supplied = readOption(flag)
-  const resolved = resolve(supplied ?? fallback)
-  if (supplied) explicitPaths.add(resolved)
-  return resolved
+  return resolve(supplied ?? fallback)
 }
 
 function recordInput(path) {
@@ -579,14 +620,10 @@ function validateInputPath(path) {
   } catch {
     throw new Error(`required input is missing: ${safeRel(path)}`)
   }
-  if (explicitPaths.has(path) && linkStats.isSymbolicLink()) {
-    throw new Error(`explicit input must not be a symlink: ${safeRel(path)}`)
+  if (linkStats.isSymbolicLink()) {
+    throw new Error(`required input must not be a symlink: ${safeRel(path)}`)
   }
-  const stats = statSync(path)
-  if (explicitPaths.has(path) && !stats.isFile()) {
-    throw new Error(`explicit input must be a regular file: ${safeRel(path)}`)
-  }
-  if (!stats.isFile()) {
+  if (!linkStats.isFile()) {
     throw new Error(`required input must be a regular file: ${safeRel(path)}`)
   }
 }
@@ -651,7 +688,75 @@ function normalizeVersion(value) {
 
 function normalizeLicense(value) {
   const text = typeof value === 'string' ? value.trim() : ''
-  return text.length > 0 ? text : 'UNKNOWN'
+  if (!text) return 'UNKNOWN'
+  if (text.toUpperCase() === 'UNKNOWN') return 'UNKNOWN'
+  if (text.toUpperCase() === 'UNREVIEWED') return 'UNREVIEWED'
+  const alias = licenseAliases.get(text.toLowerCase())
+  if (alias) return alias
+  if (text.length > 256 || /[\r\n]/u.test(text)) return 'UNREVIEWED'
+  return parseLicenseExpression(text)?.canonical ?? 'UNREVIEWED'
+}
+
+function parseLicenseExpression(value) {
+  if (!value || ['UNKNOWN', 'UNREVIEWED'].includes(value)) return null
+  const prepared = String(value).replaceAll('/', ' OR ').trim()
+  if (!prepared || !/^[A-Za-z0-9.+()\s-]+$/u.test(prepared)) return null
+  const tokens = prepared.match(/\(|\)|[A-Za-z0-9][A-Za-z0-9.+-]*/gu) ?? []
+  if (tokens.join('') !== prepared.replace(/\s+/gu, '')) return null
+
+  let cursor = 0
+  const parsePrimary = () => {
+    if (tokens[cursor] === '(') {
+      cursor += 1
+      const nested = parseExpression()
+      if (!nested || tokens[cursor] !== ')') return null
+      cursor += 1
+      return { canonical: `(${nested.canonical})`, allowed: nested.allowed }
+    }
+
+    const term = canonicalLicenseTerm(tokens[cursor])
+    if (!term) return null
+    cursor += 1
+    if (String(tokens[cursor] ?? '').toUpperCase() !== 'WITH') return term
+    cursor += 1
+    const exception = allowedLicenseExceptions.get(String(tokens[cursor] ?? '').toLowerCase())
+    if (!exception) return null
+    cursor += 1
+    return {
+      canonical: `${term.canonical} WITH ${exception}`,
+      allowed: term.allowed,
+    }
+  }
+
+  const parseExpression = () => {
+    let left = parsePrimary()
+    if (!left) return null
+    while (['AND', 'OR'].includes(String(tokens[cursor] ?? '').toUpperCase())) {
+      const operator = String(tokens[cursor]).toUpperCase()
+      cursor += 1
+      const right = parsePrimary()
+      if (!right) return null
+      left = {
+        canonical: `${left.canonical} ${operator} ${right.canonical}`,
+        allowed: left.allowed && right.allowed,
+      }
+    }
+    return left
+  }
+
+  const parsed = parseExpression()
+  return parsed && cursor === tokens.length ? parsed : null
+}
+
+function canonicalLicenseTerm(value) {
+  if (!value || ['AND', 'OR', 'WITH'].includes(String(value).toUpperCase())) return null
+  const allowed = allowedLicenseIds.get(String(value).toLowerCase())
+  if (allowed) return { canonical: allowed, allowed: true }
+  const text = String(value)
+  if (/^(?:(?:A?GPL|LGPL)(?:[-v]?\d.*)?|(?:MPL|EPL|SSPL|BUSL)-\d.*|CC-BY-NC(?:-.*)?|NONCOMMERCIAL|PROPRIETARY)$/iu.test(text)) {
+    return { canonical: text, allowed: false }
+  }
+  return null
 }
 
 function normalizeHash(value) {
@@ -722,10 +827,12 @@ function redact(value) {
     return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, redact(entry)]))
   }
   if (typeof value !== 'string') return value
-  return value
+  let redacted = value
     .replaceAll(repoRoot, '<repo>')
     .replaceAll(process.cwd(), '<cwd>')
     .replaceAll(process.env.HOME ?? '<no-home>', '<home>')
+  for (const pattern of secretTokenPatterns) redacted = redacted.replace(pattern, '<redacted-token>')
+  return redacted
 }
 
 function findRedactionFailures(report) {
