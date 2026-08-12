@@ -1,0 +1,152 @@
+{
+  "$schema": "aurora.native_voice.phase13_reverify.v1",
+  "recordedAtUtc": "2026-08-12T03:56:15Z",
+  "branch": "feat/ui-multi-platform-integration",
+  "repositoryHeadAtEvidence": "e07612f0208a3ae22705d32b90a4cabfc0c18318",
+  "releaseGateCommit": "5040419e7b0bfcb086c599b8a04f704dcfafa10f",
+  "planSha256": "50181a35cd42e12a33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6",
+  "previousPhase12SummarySha256": "6f3fda17c144a76d0f6d7f593f91ec41ffc84ef8c5750b4f0e7b9d57a85a682f",
+  "secretsRedacted": true,
+  "verdict": {
+    "status": "partial_blocked",
+    "phaseComplete": false,
+    "verification": "pass_static_release_gates_fail_closed",
+    "releaseReady": false,
+    "runtimeRollbackProof": false,
+    "physicalDeviceProof": false,
+    "signedArtifactProof": false,
+    "storeApprovalProof": false
+  },
+  "productionCapabilitiesEnabled": {
+    "vad": false,
+    "kws": false,
+    "stt": false,
+    "tts": false
+  },
+  "racStatus": {
+    "RAC-54": "partial",
+    "RAC-56": "partial"
+  },
+  "verification": {
+    "releasePolicyTests": {
+      "status": "pass",
+      "files": 4,
+      "passed": 120,
+      "failed": 0,
+      "testFiles": [
+        "apps/aurora-tauri/src/release-trust-policy.test.ts",
+        "apps/aurora-tauri/src/release-dependency-inventory.test.ts",
+        "apps/aurora-tauri/src/native-voice-artifact-policy.test.ts",
+        "apps/aurora-tauri/src/release-rollback-plan.test.ts"
+      ]
+    },
+    "staticRollback": {
+      "status": "pass",
+      "groups": 5,
+      "operations": 23,
+      "references": 38,
+      "failures": 0,
+      "runtimeProof": false
+    },
+    "artifactScannerFixture": {
+      "status": "pass",
+      "filesScanned": 2,
+      "forbiddenFindings": 0,
+      "releaseArtifactProof": false
+    },
+    "documentation": {
+      "status": "pass",
+      "command": "make check-docs",
+      "markdownFiles": 71
+    },
+    "pythonContracts": {
+      "status": "pass",
+      "passed": 285,
+      "failed": 0,
+      "sdkBackendConformance": "pass",
+      "backendMethods": 268,
+      "fatalIssues": 0,
+      "generatedArtifactIssues": 0,
+      "sdkTypeIssues": 0,
+      "nonfatalBudgetUsed": 242,
+      "nonfatalBudgetLimit": 260
+    },
+    "rustWorkspace": {
+      "status": "pass",
+      "toolchain": "1.88.0",
+      "passed": 314,
+      "failed": 0,
+      "ignored": 1,
+      "ignoredBoundary": "opt-in live CPAL test requires an eligible device and environment"
+    },
+    "scopedIndependentReview": {
+      "status": "pass",
+      "scope": "release trust and dependency inventory hardening",
+      "findingsAfterRepair": 0,
+      "overallSecurityApproval": false
+    }
+  },
+  "liveDependencyInventory": {
+    "reportSha256": "6c4c31ac435226f1bee2524a7e22b87f1953f6378726678339c6d4154a2e537a",
+    "sourceCommit": "e07612f0208a3ae22705d32b90a4cabfc0c18318",
+    "status": "blocked",
+    "releaseBlocked": true,
+    "dirtyTreeIncluded": true,
+    "dirtyTrackedInputs": [
+      "package.json"
+    ],
+    "entries": {
+      "total": 1845,
+      "cargo": 758,
+      "npm": 676,
+      "phase4": 24,
+      "python": 387,
+      "allowed": 1603,
+      "blocked": 242
+    },
+    "npmIntegrity": {
+      "entries": 676,
+      "exactSha512Digests": 676
+    },
+    "openBlockers": {
+      "unresolvedLicenses": 224,
+      "blockedDispositions": 242,
+      "dirtyTrackedInputs": 1
+    }
+  },
+  "liveReleaseTrust": {
+    "reportSha256": "0f3e28e4b0581aa753fe2fbf40c6cca5109d66a941e8e2a32d22da871dc68b56",
+    "status": "blocked",
+    "releaseBlocked": true,
+    "externalEvidenceRequired": true,
+    "signatureProof": false,
+    "storeProof": false,
+    "claimProof": {
+      "legal": false,
+      "binary": false,
+      "signing": false,
+      "store": false,
+      "runtime": false,
+      "modelQuality": false,
+      "physicalDevice": false
+    },
+    "openBlockers": [
+      "updater public-key placeholder",
+      "updater endpoint placeholder",
+      "Android release artifact absent",
+      "iOS release artifact absent",
+      "dependency inventory blocked",
+      "signing and store evidence absent"
+    ]
+  },
+  "openGates": [
+    "run the dependency inventory from a clean committed source tree after unrelated user work is complete",
+    "resolve 224 unknown licenses and 242 blocked dependency dispositions",
+    "produce exact Android and iOS release artifacts and hashes",
+    "configure the production updater and prove signing and store distribution",
+    "complete legal and independent security review",
+    "prove runtime rollback and staged rollout",
+    "complete physical Android and iOS lifecycle, endurance, battery, thermal, and acoustic gates",
+    "approve a release-eligible interoperable speech pack"
+  ]
+}
