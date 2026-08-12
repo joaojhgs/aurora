@@ -98,7 +98,7 @@ type NormalizedTrustInput =
     }
   | {
       readonly state: 'invalid'
-      readonly reason: 'key-id' | 'public-key' | 'manifest-sha256'
+      readonly reason: 'key-id' | 'public-key' | 'expected-digest'
     }
   | {
       readonly state: 'valid'
@@ -114,7 +114,7 @@ function normalizeTrustInput(
   const publicKeyBase64 = input.releasePublicKeyBase64.trim()
   const expectedManifestSha256 = input.expectedManifestSha256.trim().toLowerCase()
   if (!SAFE_ID_RE.test(keyId)) return { state: 'invalid', reason: 'key-id' }
-  if (!isSha256(expectedManifestSha256)) return { state: 'invalid', reason: 'manifest-sha256' }
+  if (!isSha256(expectedManifestSha256)) return { state: 'invalid', reason: 'expected-digest' }
   if (!isBase64ByteLength(publicKeyBase64, 32)) return { state: 'invalid', reason: 'public-key' }
   return {
     state: 'valid',

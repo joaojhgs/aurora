@@ -7,7 +7,7 @@ export type BrowserSpeechPackPolicy =
     }
   | {
       readonly state: 'invalid'
-      readonly reason: 'partial' | 'key-id' | 'public-key' | 'manifest-sha256'
+      readonly reason: 'partial' | 'key-id' | 'public-key' | 'expected-digest'
       readonly trust: null
     }
   | {
@@ -44,7 +44,7 @@ export function parseBrowserSpeechPackPolicy(input: {
     return Object.freeze({ state: 'invalid', reason: 'public-key', trust: null })
   }
   if (!expectedManifestSha256 || !SHA256_RE.test(expectedManifestSha256)) {
-    return Object.freeze({ state: 'invalid', reason: 'manifest-sha256', trust: null })
+    return Object.freeze({ state: 'invalid', reason: 'expected-digest', trust: null })
   }
   return Object.freeze({
     state: 'configured',

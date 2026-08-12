@@ -45,7 +45,7 @@ describe('browserSpeechPackPolicyFromEnv', () => {
       releaseKeyId: RELEASE_KEY_ID,
       releasePublicKeyBase64: RELEASE_PUBLIC_KEY_BASE64,
       expectedManifestSha256: 'not-a-hash',
-    })).toEqual({ state: 'invalid', reason: 'manifest-sha256', trust: null })
+    })).toEqual({ state: 'invalid', reason: 'expected-digest', trust: null })
   })
 
   it('normalizes complete public build-time trust anchors from direct NEXT_PUBLIC env references', () => {
