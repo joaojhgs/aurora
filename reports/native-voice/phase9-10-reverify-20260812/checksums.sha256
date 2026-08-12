@@ -1,0 +1,9 @@
+7b53ce9f332ce539af6f030ee56c820cb51036ee66e4e8e0c5fc7f72c6236e09  reports/native-voice/phase9-10-reverify-20260812/README.md
+d91b27bf595f48f704827140e80ed11b37d87c898a3c9e5f1429e50d394bf36a  reports/native-voice/phase9-10-reverify-20260812/summary.json
+50181a35cd42e12a33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6  .omx/plans/pockettts-cross-surface-local-voice-plan.md
+a272dc97e823f8e70ae8dbb168fbbf790b12e9f92aadba8f2179afcadbd8ee1a  reports/native-voice/phase8-reverify-20260812/summary.json
+59957674d596497ac86179e1014e64218754708d8965e7a4a4badad98fd7ef2f  apps/aurora-tauri/src/native-android-voice.test.ts
+e8768a714e872b99f16fd75b184807ed45ddd2962347718fb2ccb7cfea7b497e  apps/aurora-tauri/src/android-voice-route-policy.test.ts
+af19071f0f8c02ad0f9389acbec2f1c62240d85e05e33359bd631c80bbec4d62  apps/aurora-tauri/src/secure-storage-policy.test.ts
+563e9adc8168cfaeb0781c5bf8d5d57b141a9fa6c0e7c31acb98fa6b4c89eae7  apps/aurora-tauri/src/android-inbound-verifier-native-storage.test.ts
+52f7fd3726d071b8f62cede705d5f48fa3f419d96320d0b7d7bb1558d969e5cd  apps/aurora-tauri/src/android-client-bundle-proof.test.ts

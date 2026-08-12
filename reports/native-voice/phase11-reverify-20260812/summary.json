@@ -1,0 +1,72 @@
+{
+  "$schema": "aurora.native_voice.phase11_reverify.v1",
+  "recordedAtUtc": "2026-08-12T03:49:25Z",
+  "branch": "feat/ui-multi-platform-integration",
+  "repositoryHeadAtEvidence": "5040419e7b0bfcb086c599b8a04f704dcfafa10f",
+  "planSha256": "50181a35cd42e12a33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6",
+  "secretsRedacted": true,
+  "verdict": {
+    "status": "partial_blocked_platform_runtime",
+    "phaseComplete": false,
+    "verification": "pass_linux_source_policy_only",
+    "xcodeRuntimeProof": false,
+    "physicalDeviceProof": false
+  },
+  "productionCapabilitiesEnabled": {
+    "vad": false,
+    "kws": false,
+    "stt": false,
+    "tts": false,
+    "iosBackgroundVoice": false,
+    "iosSiriReplacement": false
+  },
+  "racStatus": {
+    "RAC-41": "blocked",
+    "RAC-42": "pass",
+    "RAC-43": "withheld",
+    "RAC-44": "withheld",
+    "RAC-45": "partial",
+    "RAC-46": "pass",
+    "RAC-47": "pass"
+  },
+  "verification": {
+    "sourcePolicyScripts": {
+      "status": "pass",
+      "passed": 3,
+      "failed": 0,
+      "scripts": [
+        "apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Tests/SourcePolicyTests/ios-native-voice-session-policy.mjs",
+        "apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Tests/SourcePolicyTests/ios-native-action-policy.mjs",
+        "apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Tests/SourcePolicyTests/ios-inbound-verifier-storage-policy.mjs"
+      ]
+    },
+    "tauriTests": {
+      "status": "pass",
+      "files": 2,
+      "passed": 8,
+      "failed": 0,
+      "testFiles": [
+        "apps/aurora-tauri/src/native-ios-voice.test.ts",
+        "apps/aurora-tauri/src/ios-thin-bundle-proof.test.ts"
+      ]
+    },
+    "iosPolicy": {
+      "status": "pass",
+      "command": "pnpm --filter @aurora/tauri-ui ios:policy"
+    },
+    "sourceContract": {
+      "foregroundOnly": true,
+      "supportsBackgroundListening": false,
+      "supportsSiriReplacement": false,
+      "runtimeRoleCompiledIntoBundle": false,
+      "installedWebviewDurableBackgroundOwner": false
+    }
+  },
+  "openGates": [
+    "macOS/Xcode build and simulator integration",
+    "packaged WKWebView and iOS WebRTC runtime",
+    "physical-device foreground push-to-talk",
+    "user-started physical background endurance and lifecycle matrix",
+    "signing, distribution, privacy artifact, and App Review approval"
+  ]
+}
