@@ -31,6 +31,12 @@ const expectedWorkflowCommand =
   'pnpm --dir apps/aurora-tauri run verify:static-release-trust-policy'
 const expectedPackageScriptName = 'verify:static-release-trust-policy'
 const expectedPackageScriptCommand = 'node scripts/assert-release-trust-policy.mjs'
+const expectedDependencyInventoryPackageScriptName = 'verify:release-dependency-inventory'
+const expectedDependencyInventoryPackageScriptCommand = 'node ../../scripts/generate_release_dependency_inventory.mjs'
+const expectedDependencyInventoryWorkflowCommand =
+  'pnpm --dir apps/aurora-tauri run verify:release-dependency-inventory'
+const expectedDependencyInventoryArtifactName = 'release-dependency-inventory'
+const expectedDependencyInventoryReportPath = 'apps/aurora-tauri/reports/release-dependency-inventory.json'
 const expectedTrustReportArtifactName = 'release-trust-policy'
 const expectedTrustReportPath = 'apps/aurora-tauri/reports/release-trust-policy.json'
 const sourceCommit = resolveReleaseSourceCommit(readOption('--source-commit') ?? 'HEAD')
@@ -76,6 +82,10 @@ const paths = {
   tauriConfig: resolve(readOption('--config') ?? join(srcTauriRoot, 'tauri.conf.json')),
   capabilitiesDir: resolve(readOption('--capabilities-dir') ?? join(srcTauriRoot, 'capabilities')),
   workflow: resolve(readOption('--workflow') ?? join(repoRoot, '.github', 'workflows', 'release.yml')),
+  dependencyInventoryReport: resolve(
+    readOption('--dependency-inventory-report') ??
+      join(packageRoot, 'reports', 'release-dependency-inventory.json'),
+  ),
   androidBuildScript: resolve(
     readOption('--android-build-script') ?? join(packageRoot, 'scripts', 'build-android-client-bundle.mjs'),
   ),
@@ -108,14 +118,7 @@ const mobileOverlayPaths = readListOption('--mobile-overlay', [
 
 const blockers = []
 const checks = []
-const unsupportedChecks = [
-  {
-    id: 'sbom-license-tooling',
-    status: 'unsupported',
-    releaseBlocking: true,
-    detail: 'Release SBOM and license inventory tooling is not wired into this static policy gate.',
-  },
-]
+const unsupportedChecks = []
 const checkedRefs = []
 
 unsupportedChecks.unshift(
@@ -136,6 +139,7 @@ unsupportedChecks.unshift(
     allowedExtensions: ['.ipa'],
   }),
 )
+unsupportedChecks.push(validateDependencyInventory())
 
 const config = readJson(paths.tauriConfig, 'tauri-config')
 if (config.value) {
@@ -383,6 +387,182 @@ function validateReleaseArtifacts({ id, label, artifactClass, paths, expectedSha
   }
 }
 
+function validateDependencyInventory() {
+  const id = 'sbom-license-tooling'
+  const failures = []
+  let raw = ''
+  let report = null
+  let fileStat = null
+  let dispositionEvidence = { allowed: 0, blocked: 0 }
+
+  try {
+    fileStat = lstatSync(paths.dependencyInventoryReport)
+  } catch {
+    failures.push('Release dependency inventory report must exist.')
+  }
+  if (fileStat?.isSymbolicLink()) {
+    failures.push('Release dependency inventory report must not be a symbolic link.')
+  } else if (fileStat && !fileStat.isFile()) {
+    failures.push('Release dependency inventory report must be a regular file.')
+  } else if (fileStat?.size === 0) {
+    failures.push('Release dependency inventory report must not be empty.')
+  } else if (fileStat && fileStat.size > 50 * 1024 * 1024) {
+    failures.push('Release dependency inventory report must not exceed 50 MiB.')
+  }
+
+  if (failures.length === 0) {
+    try {
+      raw = readFileSync(paths.dependencyInventoryReport, 'utf8')
+      report = JSON.parse(raw)
+      checkedRefs.push(checkedRef(id, paths.dependencyInventoryReport, raw))
+    } catch {
+      failures.push('Release dependency inventory report must be readable JSON.')
+    }
+  }
+
+  const inventory = Array.isArray(report?.inventory) ? report.inventory : []
+  const reportBlockers = Array.isArray(report?.blockers) ? report.blockers : []
+  const reportInputs = Array.isArray(report?.inputs) ? report.inputs : []
+  const reportTools = Array.isArray(report?.tools) ? report.tools : []
+  const requiredEcosystems = ['cargo', 'npm', 'phase4-native-voice', 'python']
+  const requiredTools = ['cargo', 'pnpm', 'uv']
+  const proofFields = [
+    'legalApproval',
+    'binaryCompleteness',
+    'signingProof',
+    'storeProof',
+    'runtimeProof',
+    'modelQualityProof',
+    'physicalDeviceProof',
+  ]
+
+  if (report) {
+    if (report.schema !== 'aurora.release-dependency-inventory.v1') {
+      failures.push('Release dependency inventory schema must be version 1.')
+    }
+    if (sourceCommit.failure || report.source?.commit !== sourceCommit.sha) {
+      failures.push('Release dependency inventory must be bound to the current release HEAD commit.')
+    }
+    if (report.source?.repository !== 'aurora' || report.source?.dirtyTreeIncluded !== false) {
+      failures.push('Release dependency inventory source metadata must identify a clean committed Aurora source tree.')
+    }
+    if (report.claimBoundary?.kind !== 'static-metadata-only' ||
+      proofFields.some((field) => report.claimBoundary?.[field] !== false)) {
+      failures.push('Release dependency inventory must remain bounded to static metadata with every proof claim false.')
+    }
+    if (report.secretsRedacted !== true) {
+      failures.push('Release dependency inventory must confirm redacted output.')
+    }
+    if (inventory.length === 0) {
+      failures.push('Release dependency inventory must contain at least one entry.')
+    }
+    if (reportInputs.length === 0 || reportInputs.some((item) =>
+      !item || typeof item.path !== 'string' || !/^[a-f0-9]{64}$/u.test(String(item.sha256)))) {
+      failures.push('Release dependency inventory inputs must carry redacted references and SHA-256 evidence.')
+    }
+    if (reportTools.length !== requiredTools.length ||
+      reportTools.some((item) =>
+        !item || typeof item.name !== 'string' || typeof item.available !== 'boolean') ||
+      !exactKeySet(reportTools.map((item) => item.name), requiredTools)) {
+      failures.push('Release dependency inventory must record exactly the canonical static tooling set.')
+    }
+
+    const inventoryIds = inventory.map((item) => String(item?.id ?? ''))
+    if (inventoryIds.some((value) => !value) || duplicateValues(inventoryIds).length > 0) {
+      failures.push('Release dependency inventory entry identifiers must be non-empty and unique.')
+    }
+    if (inventory.some((item) =>
+      !item ||
+      typeof item.ecosystem !== 'string' ||
+      typeof item.name !== 'string' ||
+      typeof item.version !== 'string' ||
+      typeof item.sourceRef !== 'string' ||
+      !/^(?:sha256:[a-f0-9]{64}|sha512:[a-f0-9]{128})$/u.test(String(item.hash)) ||
+      !['allowed', 'blocked'].includes(item.disposition) ||
+      typeof item.license?.id !== 'string' ||
+      item.license.id.length === 0 ||
+      item.license.id.length > 256 ||
+      typeof item.license?.evidence !== 'string' ||
+      !/^sha256:[a-f0-9]{64}$/u.test(String(item.license?.evidenceHash)))) {
+      failures.push('Release dependency inventory entries must contain bounded license evidence and SHA-256 or SHA-512 integrity metadata.')
+    }
+
+    const expectedEcosystems = countInventoryValues(inventory, 'ecosystem')
+    const expectedDispositions = countInventoryValues(inventory, 'disposition')
+    dispositionEvidence = {
+      allowed: expectedDispositions.allowed ?? 0,
+      blocked: expectedDispositions.blocked ?? 0,
+    }
+    if (report.summary?.totalEntries !== inventory.length ||
+      !sameCountMap(report.summary?.ecosystems, expectedEcosystems) ||
+      !sameCountMap(report.summary?.dispositions, expectedDispositions)) {
+      failures.push('Release dependency inventory summary must match its entries exactly.')
+    }
+    if (!exactKeySet(Object.keys(expectedEcosystems), requiredEcosystems)) {
+      failures.push('Release dependency inventory must cover npm, Python, Cargo, and Phase 4 native voice artifacts.')
+    }
+    const serializedInventory = JSON.stringify(report)
+    if (/(?:ghp_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|xoxb-[A-Za-z0-9-]{20,}|AKIA[A-Z0-9]{16})/u.test(serializedInventory) ||
+      /(?:\/(?:home|Users)\/[^"\\]+|[A-Za-z]:\\Users\\[^"\\]+)/u.test(serializedInventory)) {
+      failures.push('Release dependency inventory must not contain token-shaped secrets or absolute user paths.')
+    }
+
+    const claimsPassed = report.status === 'passed' && report.releaseBlocked === false
+    const claimsBlocked = report.status === 'blocked' && report.releaseBlocked === true
+    if (!claimsPassed && !claimsBlocked) {
+      failures.push('Release dependency inventory status and releaseBlocked fields must be consistent.')
+    }
+    if (claimsPassed && (reportBlockers.length > 0 ||
+      inventory.some((item) => item.disposition !== 'allowed' || ['UNKNOWN', 'UNREVIEWED'].includes(item.license?.id)) ||
+      reportTools.some((item) => item.available !== true))) {
+      failures.push('A passing release dependency inventory must have no blockers, unresolved licenses, unavailable tools, or blocked entries.')
+    }
+    if (claimsBlocked && reportBlockers.length === 0) {
+      failures.push('A blocked release dependency inventory must explain at least one blocker.')
+    }
+  }
+
+  const passed = failures.length === 0 && report?.status === 'passed' && report.releaseBlocked === false
+  const reportSha256 = raw ? createHash('sha256').update(raw).digest('hex') : null
+  return {
+    id,
+    status: passed ? 'passed' : 'blocked',
+    releaseBlocking: true,
+    detail: passed
+      ? 'Static dependency and license inventory is complete and contains only allowed dispositions.'
+      : failures.length > 0
+        ? `${failures.join(' ')}${reportBlockers.length > 0
+          ? ` Inventory also reports ${reportBlockers.length} release-blocking issue(s).`
+          : ''}`
+        : `Static dependency and license inventory remains release-blocking with ${reportBlockers.length} reported blocker(s).`,
+    evidence: report ? {
+      sourceCommit: report.source?.commit ?? null,
+      reportSha256,
+      totalEntries: inventory.length,
+      dispositions: dispositionEvidence,
+      legalApproval: false,
+      runtimeProof: false,
+    } : null,
+  }
+}
+
+function countInventoryValues(inventory, field) {
+  const counts = {}
+  for (const item of inventory) {
+    const value = String(item?.[field] ?? '')
+    if (!value) continue
+    counts[value] = (counts[value] ?? 0) + 1
+  }
+  return Object.fromEntries(Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)))
+}
+
+function sameCountMap(actual, expected) {
+  if (!actual || typeof actual !== 'object' || Array.isArray(actual)) return false
+  const actualEntries = Object.entries(actual).sort(([left], [right]) => left.localeCompare(right))
+  const expectedEntries = Object.entries(expected)
+  return JSON.stringify(actualEntries) === JSON.stringify(expectedEntries)
+}
+
 function inspectReleaseArtifact({ path, expectedSha256, artifactClass, allowedExtensions, label }) {
   const resolved = resolve(path)
   const extension = extname(resolved).toLowerCase()
@@ -558,6 +738,14 @@ function validateWorkflowPlacement() {
     'Release workflow steps must not contain duplicate direct fields or duplicate artifact upload fields.',
   )
   const commandStepIndex = steps.findIndex((step) => isCanonicalTrustGateStep(step))
+  const dependencyInventoryCommandIndexes = steps
+    .map((step, index) => isCanonicalDependencyInventoryStep(step) ? index : -1)
+    .filter((index) => index >= 0)
+  const dependencyInventoryUploadIndexes = steps
+    .map((step, index) => isDependencyInventoryReportUploadCandidate(step) ? index : -1)
+    .filter((index) => index >= 0)
+  const dependencyInventoryCommandStepIndex = dependencyInventoryCommandIndexes[0] ?? -1
+  const dependencyInventoryUploadStepIndex = dependencyInventoryUploadIndexes[0] ?? -1
   const trustUploadIndexes = steps
     .map((step, index) => isTrustReportUploadCandidate(step) ? index : -1)
     .filter((index) => index >= 0)
@@ -570,7 +758,18 @@ function validateWorkflowPlacement() {
     'workflow-trust-gate-first-run',
     commandStepIndex >= 0 &&
       hasCanonicalPregateSetupSequence(steps.slice(0, commandStepIndex)),
-    'Release workflow must make the trust gate the first run step after the exact canonical setup sequence.',
+    'Release workflow must run the trust gate after the exact canonical setup, dependency installation, inventory, and inventory-upload sequence.',
+  )
+  check(
+    'workflow-dependency-inventory-report-upload-always',
+    dependencyInventoryCommandIndexes.length === 1 &&
+      dependencyInventoryUploadIndexes.length === 1 &&
+      isDependencyInventoryReportUploadStep(steps[dependencyInventoryUploadStepIndex]) &&
+      dependencyInventoryUploadStepIndex === dependencyInventoryCommandStepIndex + 1 &&
+      commandStepIndex === dependencyInventoryUploadStepIndex + 1 &&
+      !steps.some((step, index) =>
+        index !== dependencyInventoryCommandStepIndex && stepMutatesDependencyInventoryReport(step)),
+    'Release workflow must generate and always upload exactly one canonical dependency inventory immediately before the trust gate.',
   )
   check(
     'workflow-trust-gate-before-semver',
@@ -600,6 +799,12 @@ function validatePackageScript() {
     'package-static-release-trust-policy-script',
     packageJson.value.scripts?.[expectedPackageScriptName] === expectedPackageScriptCommand,
     `Package script ${expectedPackageScriptName} must run the static release trust policy guard.`,
+  )
+  check(
+    'package-release-dependency-inventory-script',
+    packageJson.value.scripts?.[expectedDependencyInventoryPackageScriptName] ===
+      expectedDependencyInventoryPackageScriptCommand,
+    `Package script ${expectedDependencyInventoryPackageScriptName} must run the release dependency inventory guard.`,
   )
 }
 
@@ -865,19 +1070,23 @@ function redactSensitiveValues(value, parentKey = '') {
   if (value && typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value).map(([key, item]) => [
-        key,
+        redactSensitiveString(key, '<redacted-key>'),
         isSensitiveKey(key) ? '<redacted>' : redactSensitiveValues(item, key),
       ]),
     )
   }
   if (typeof value === 'string') {
     if (isSensitiveKey(parentKey)) return '<redacted>'
-    return value
-      .replace(/-----BEGIN [^-]+-----[\s\S]*?-----END [^-]+-----/g, '<redacted>')
-      .replace(/\b(?:sk|pk|ghp|gho|github_pat|AKIA)[A-Za-z0-9_:-]{12,}\b/g, '<redacted>')
-      .replace(/\b[A-Za-z0-9+/]{80,}={0,2}\b/g, '<redacted>')
+    return redactSensitiveString(value, '<redacted>')
   }
   return value
+}
+
+function redactSensitiveString(value, replacement) {
+  return String(value)
+    .replace(/-----BEGIN [^-]+-----[\s\S]*?-----END [^-]+-----/g, replacement)
+    .replace(/\b(?:sk|pk|ghp|gho|github_pat|AKIA)[A-Za-z0-9_:-]{12,}\b/g, replacement)
+    .replace(/\b[A-Za-z0-9+/]{80,}={0,2}\b/g, replacement)
 }
 
 function isSensitiveKey(key) {
@@ -1547,16 +1756,61 @@ function isTrustReportUploadCandidate(step) {
 }
 
 function isCanonicalTrustGateStep(step) {
-  return isExactRunStep(step, expectedWorkflowCommand, { name: 'Release trust policy' })
+  return step.runCommands.length === 1 &&
+    step.runCommands[0] === expectedWorkflowCommand &&
+    step.name === 'Release trust policy' &&
+    step.if === 'always()' &&
+    !step.uses &&
+    step.duplicateErrors.length === 0 &&
+    exactKeySet(step.keys, ['name', 'if', 'run']) &&
+    exactObject(step.with, {}) &&
+    exactKeySet(step.withKeys, []) &&
+    exactObject(step.env, {}) &&
+    exactKeySet(step.envKeys, []) &&
+    isAbsentOrCanonicalFalse(step.continueOnError) &&
+    !step.shell
+}
+
+function isCanonicalDependencyInventoryStep(step) {
+  return isExactRunStep(step, expectedDependencyInventoryWorkflowCommand, {
+    name: 'Release dependency inventory',
+  })
+}
+
+function isDependencyInventoryReportUploadStep(step) {
+  return step.uses === 'actions/upload-artifact@v4' &&
+    step.name === 'Upload release dependency inventory report' &&
+    step.if === 'always()' &&
+    isAbsentOrCanonicalFalse(step.continueOnError) &&
+    step.runCommands.length === 0 &&
+    step.duplicateErrors.length === 0 &&
+    exactKeySet(step.keys, ['name', 'if', 'uses', 'with']) &&
+    exactObject(step.env, {}) &&
+    exactKeySet(step.envKeys, []) &&
+    exactObject(step.with, {
+      name: expectedDependencyInventoryArtifactName,
+      path: expectedDependencyInventoryReportPath,
+      'if-no-files-found': 'error',
+    }) &&
+    exactKeySet(step.withKeys, ['name', 'path', 'if-no-files-found'])
+}
+
+function isDependencyInventoryReportUploadCandidate(step) {
+  return step.with.name === expectedDependencyInventoryArtifactName ||
+    step.with.path === expectedDependencyInventoryReportPath
 }
 
 function hasCanonicalPregateSetupSequence(steps) {
-  return steps.length === 5 &&
+  return steps.length === 9 &&
     isExactUsesStep(steps[0], 'actions/checkout@v4', { 'fetch-depth': '0' }, { name: '' }) &&
     isExactUsesStep(steps[1], 'actions/setup-python@v5', { 'python-version': '3.11.11' }, { name: 'Set up Python' }) &&
     isExactUsesStep(steps[2], 'astral-sh/setup-uv@v5', {}, { name: 'Install uv' }) &&
     isExactUsesStep(steps[3], 'pnpm/action-setup@v4', {}, { name: 'Set up pnpm' }) &&
-    isExactUsesStep(steps[4], 'actions/setup-node@v4', { 'node-version': '24', cache: 'pnpm' }, { name: 'Set up Node' })
+    isExactUsesStep(steps[4], 'actions/setup-node@v4', { 'node-version': '24', cache: 'pnpm' }, { name: 'Set up Node' }) &&
+    isExactRunStep(steps[5], 'uv sync --extra dev --extra build', { name: 'Install Python release dependencies' }) &&
+    isExactRunStep(steps[6], 'pnpm install --frozen-lockfile', { name: 'Install workspace dependencies' }) &&
+    isCanonicalDependencyInventoryStep(steps[7]) &&
+    isDependencyInventoryReportUploadStep(steps[8])
 }
 
 function hasCanonicalCreateReleaseSteps(steps) {
@@ -1694,6 +1948,10 @@ function exactKeySet(actual, expected) {
 
 function stepMutatesTrustReport(step) {
   return step.runCommands.some((command) => command.includes(expectedTrustReportPath))
+}
+
+function stepMutatesDependencyInventoryReport(step) {
+  return step.runCommands.some((command) => command.includes(expectedDependencyInventoryReportPath))
 }
 
 function findBlockEnd(lines, start, end, blockIndent) {

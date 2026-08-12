@@ -90,6 +90,7 @@ const pythonMetadataJson = readOption('--python-metadata-json')
 
 try {
   validateSourceCommit()
+  recordInput(scriptPath)
   for (const path of Object.values(paths)) recordInput(path)
   if (cargoMetadataJson) recordInput(cargoMetadataJson)
   if (pnpmLicensesJson) recordInput(pnpmLicensesJson)
@@ -130,7 +131,7 @@ try {
     source: {
       commit: actualHead,
       repository: 'aurora',
-      dirtyTreeIncluded: false,
+      dirtyTreeIncluded: hasDirtySourceInputs(),
     },
     claimBoundary: {
       kind: 'static-metadata-only',
@@ -182,7 +183,7 @@ try {
     source: {
       commit: actualHead ?? 'unknown',
       repository: 'aurora',
-      dirtyTreeIncluded: false,
+      dirtyTreeIncluded: hasDirtySourceInputs(),
     },
     claimBoundary: {
       kind: 'static-metadata-only',
@@ -215,23 +216,31 @@ try {
 
 function collectPnpmDependencies() {
   const { value, raw, sourceRef } = readPnpmLicensesJson()
+  const packageIntegrities = readPnpmPackageIntegrities()
   const entries = []
+  const packagesMissingIntegrity = []
   for (const [licenseGroup, packages] of Object.entries(value)) {
     if (!Array.isArray(packages)) continue
     for (const pkg of packages) {
       const versions = Array.isArray(pkg.versions) && pkg.versions.length > 0 ? pkg.versions : [pkg.version ?? 'UNKNOWN']
       for (const version of versions) {
+        const name = String(pkg.name ?? 'unknown-package')
+        const normalizedVersion = normalizeVersion(String(version))
+        const packageKey = `${name}@${normalizedVersion}`
+        const packageIntegrity = packageIntegrities.get(packageKey) ?? null
         const licenseId = normalizeLicense(pkg.license ?? licenseGroup)
+        const licenseDisposition = dispositionForLicense(licenseId)
+        if (!packageIntegrity) packagesMissingIntegrity.push(packageKey)
         entries.push(inventoryItem({
           ecosystem: 'npm',
           scope: 'production-transitive',
-          name: String(pkg.name ?? 'unknown-package'),
-          version: normalizeVersion(String(version)),
+          name,
+          version: normalizedVersion,
           source: 'pnpm-licenses',
           sourceRef,
-          hash: normalizeHash(raw),
+          hash: packageIntegrity ?? `missing-pnpm-integrity:${packageKey}`,
           license: licenseEvidence(licenseId, sourceRef, sha256(Buffer.from(raw, 'utf8'))),
-          disposition: dispositionForLicense(licenseId),
+          disposition: packageIntegrity && licenseDisposition === 'allowed' ? 'allowed' : 'blocked',
         }))
       }
     }
@@ -241,7 +250,68 @@ function collectPnpmDependencies() {
       severity: 'high',
     }))
   }
+  if (packagesMissingIntegrity.length > 0) {
+    blockers.push(blocker(
+      'pnpm-package-integrity-missing',
+      `${packagesMissingIntegrity.length} production npm package(s) do not have an exact SHA-512 integrity in pnpm-lock.yaml.`,
+      { severity: 'high', count: packagesMissingIntegrity.length },
+    ))
+  }
   return entries
+}
+
+function readPnpmPackageIntegrities() {
+  const lines = readText(paths.pnpmLock).split(/\r?\n/u)
+  const integrities = new Map()
+  let inPackages = false
+  let packageKey = null
+
+  for (const line of lines) {
+    if (line === 'packages:') {
+      inPackages = true
+      packageKey = null
+      continue
+    }
+    if (!inPackages) continue
+    if (/^\S/u.test(line)) break
+
+    const packageMatch = line.match(/^ {2}(.+):$/u)
+    if (packageMatch) {
+      packageKey = parseYamlScalar(packageMatch[1])
+      continue
+    }
+    if (!packageKey) continue
+
+    const integrityMatch = line.match(/^ {4}resolution:\s*\{[^}]*\bintegrity:\s*([^,}]+)[^}]*\}\s*$/u)
+    if (!integrityMatch) continue
+    const integrity = normalizePnpmIntegrity(parseYamlScalar(integrityMatch[1].trim()))
+    if (integrity) integrities.set(packageKey, integrity)
+  }
+
+  return integrities
+}
+
+function parseYamlScalar(value) {
+  const text = String(value).trim()
+  if (text.startsWith("'") && text.endsWith("'")) {
+    return text.slice(1, -1).replaceAll("''", "'")
+  }
+  if (text.startsWith('"') && text.endsWith('"')) {
+    try {
+      return JSON.parse(text)
+    } catch {
+      return text
+    }
+  }
+  return text
+}
+
+function normalizePnpmIntegrity(value) {
+  const match = String(value).match(/^sha512-([A-Za-z0-9+/]+={0,2})$/u)
+  if (!match) return null
+  const digest = Buffer.from(match[1], 'base64')
+  if (digest.length !== 64 || digest.toString('base64') !== match[1]) return null
+  return `sha512:${digest.toString('hex')}`
 }
 
 function collectUvDependencies() {
@@ -322,6 +392,11 @@ function collectCargoDependencies() {
 function collectPhase4Artifacts() {
   const manifest = readJson(paths.phase4Manifest)
   const artifacts = Array.isArray(manifest.artifacts) ? manifest.artifacts : []
+  if (artifacts.length === 0) {
+    blockers.push(blocker('phase4-native-voice-inventory-empty', 'Phase 4 native voice inventory did not contain any runtime or model artifacts.', {
+      severity: 'high',
+    }))
+  }
   return artifacts.map((artifact) => {
     const license = artifact.license && typeof artifact.license === 'object' ? artifact.license : {}
     const licenseId = normalizeLicense(license.spdx)
@@ -607,10 +682,42 @@ function inputPath(flag, fallback) {
 
 function recordInput(path) {
   validateInputPath(path)
+  const sourceState = trackedSourceState(path)
+  if (sourceState === 'dirty') {
+    blockers.push(blocker('dirty-source-input', `Tracked inventory input differs from source commit: ${safeRel(path)}.`, {
+      severity: 'high',
+    }))
+  } else if (sourceState === 'untracked') {
+    blockers.push(blocker('untracked-source-input', `Repository inventory input is not tracked at source commit: ${safeRel(path)}.`, {
+      severity: 'high',
+    }))
+  }
   inputs.push({
     path: safeRel(path),
     sha256: sha256(readFileSync(path)),
   })
+}
+
+function trackedSourceState(path) {
+  const rel = relative(repoRoot, resolve(path))
+  if (!rel || rel.startsWith('..') || rel.startsWith('/')) return 'external'
+  try {
+    execFileSync('git', ['ls-files', '--error-unmatch', '--', rel], {
+      cwd: repoRoot,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    })
+  } catch {
+    return 'untracked'
+  }
+  try {
+    execFileSync('git', ['diff', '--quiet', 'HEAD', '--', rel], {
+      cwd: repoRoot,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    })
+    return 'clean'
+  } catch {
+    return 'dirty'
+  }
 }
 
 function validateInputPath(path) {
@@ -762,6 +869,7 @@ function canonicalLicenseTerm(value) {
 function normalizeHash(value) {
   const text = String(value ?? '')
   if (/^sha256:[a-f0-9]{64}$/u.test(text)) return text
+  if (/^sha512:[a-f0-9]{128}$/u.test(text)) return text
   if (/^[a-f0-9]{64}$/u.test(text)) return `sha256:${text}`
   return `sha256:${sha256(Buffer.from(text || 'unknown', 'utf8'))}`
 }
@@ -777,6 +885,10 @@ function blocker(id, detail, extra = {}) {
     severity: extra.severity ?? 'medium',
     ...Object.fromEntries(Object.entries(extra).filter(([key]) => key !== 'severity')),
   }
+}
+
+function hasDirtySourceInputs() {
+  return blockers.some((item) => ['dirty-source-input', 'untracked-source-input'].includes(item.id))
 }
 
 function countBy(items, keyFn) {

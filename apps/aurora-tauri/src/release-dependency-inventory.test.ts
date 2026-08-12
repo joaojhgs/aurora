@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { Buffer } from 'node:buffer'
 import { spawnSync } from 'node:child_process'
 import {
   mkdirSync,
@@ -21,6 +22,7 @@ const expectedPackageScriptName = 'verify:release-dependency-inventory'
 const expectedPackageScriptCommand = 'node ../../scripts/generate_release_dependency_inventory.mjs'
 const expectedWorkflowCommand = 'pnpm --dir apps/aurora-tauri run verify:release-dependency-inventory'
 const expectedReportPath = 'apps/aurora-tauri/reports/release-dependency-inventory.json'
+const expectedTrustCommand = 'pnpm --dir apps/aurora-tauri run verify:static-release-trust-policy'
 
 interface Fixture {
   root: string
@@ -101,6 +103,25 @@ importers:
       vitest:
         specifier: ^4.0.16
         version: 4.1.9(@types/node@24.13.2)
+
+packages:
+
+  '@tauri-apps/api@2.11.1':
+    resolution: {integrity: sha512-${Buffer.alloc(64, 1).toString('base64')}}
+
+  react-transitive-helper@1.2.3:
+    resolution: {integrity: sha512-${Buffer.alloc(64, 2).toString('base64')}}
+
+  blocked-npm-package@9.9.9:
+    resolution: {integrity: sha512-${Buffer.alloc(64, 3).toString('base64')}}
+
+  blocked-gplv2-package@2.0.0:
+    resolution: {integrity: sha512-${Buffer.alloc(64, 4).toString('base64')}}
+
+  unreviewed-license-package@1.0.0:
+    resolution: {integrity: sha512-${Buffer.alloc(64, 5).toString('base64')}}
+
+snapshots:
 `, 'utf8')
   writeFileSync(fixture.pyproject, `
 [project]
@@ -333,6 +354,7 @@ describe('release dependency inventory gate', () => {
         ecosystem: 'npm',
         scope: 'production-transitive',
         name: '@tauri-apps/api',
+        hash: `sha512:${'01'.repeat(64)}`,
         license: expect.objectContaining({ id: 'MIT' }),
         disposition: 'allowed',
       }),
@@ -387,6 +409,10 @@ describe('release dependency inventory gate', () => {
         disposition: 'blocked',
       }),
     ]))
+    const npmHashes = report.inventory
+      .filter((item: { ecosystem: string }) => item.ecosystem === 'npm')
+      .map((item: { hash: string }) => item.hash)
+    expect(new Set(npmHashes).size).toBe(npmHashes.length)
     const serialized = JSON.stringify(report)
     expect(serialized).not.toContain(fixture.root)
     expect(serialized).not.toContain(tmpdir())
@@ -431,6 +457,38 @@ describe('release dependency inventory gate', () => {
     expect(report.secretsRedacted).toBe(true)
   })
 
+  it('fails closed when a production npm package lacks exact lockfile integrity', () => {
+    const fixture = createFixture()
+    const pnpmLicenses = JSON.parse(readFileSync(fixture.pnpmLicenses, 'utf8'))
+    pnpmLicenses.MIT.push({
+      name: 'missing-integrity-package',
+      versions: ['1.0.0'],
+      paths: [],
+      license: 'MIT',
+    })
+    writeJson(fixture.pnpmLicenses, pnpmLicenses)
+
+    const result = runInventory(fixture)
+    expect(result.status).not.toBe(0)
+    expect(readReport(fixture).blockers).toContainEqual(expect.objectContaining({
+      id: 'pnpm-package-integrity-missing',
+      severity: 'high',
+      count: 1,
+    }))
+  })
+
+  it('fails closed when the Phase 4 native voice artifact inventory is empty', () => {
+    const fixture = createFixture()
+    writeJson(fixture.phase4Manifest, { schema_version: 1, artifacts: [] })
+
+    const result = runInventory(fixture)
+    expect(result.status).not.toBe(0)
+    expect(readReport(fixture).blockers).toContainEqual(expect.objectContaining({
+      id: 'phase4-native-voice-inventory-empty',
+      severity: 'high',
+    }))
+  })
+
   it('accepts a short source commit prefix but records the full HEAD and creates no dash artifact', () => {
     const fixture = createFixture()
     const dashArtifact = join(repoRoot, '-')
@@ -448,10 +506,12 @@ describe('release dependency inventory gate', () => {
     const workflow = readFileSync(join(repoRoot, '.github', 'workflows', 'release.yml'), 'utf8')
     const inventoryStep = workflow.indexOf(expectedWorkflowCommand)
     const uploadStep = workflow.indexOf(expectedReportPath)
+    const trustStep = workflow.indexOf(expectedTrustCommand)
     const releaseCheckStep = workflow.indexOf('Run lightweight release check')
     expect(inventoryStep).toBeGreaterThan(-1)
     expect(uploadStep).toBeGreaterThan(inventoryStep)
-    expect(releaseCheckStep).toBeGreaterThan(uploadStep)
+    expect(trustStep).toBeGreaterThan(uploadStep)
+    expect(releaseCheckStep).toBeGreaterThan(trustStep)
   })
 })
 

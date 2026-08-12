@@ -3,7 +3,7 @@
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -17,6 +17,10 @@ const script = join(packageRoot, 'scripts', 'assert-release-trust-policy.mjs')
 const expectedTrustCommand = 'pnpm --dir apps/aurora-tauri run verify:static-release-trust-policy'
 const expectedPackageScriptName = 'verify:static-release-trust-policy'
 const expectedPackageScriptCommand = 'node scripts/assert-release-trust-policy.mjs'
+const expectedDependencyInventoryPackageScriptName = 'verify:release-dependency-inventory'
+const expectedDependencyInventoryPackageScriptCommand = 'node ../../scripts/generate_release_dependency_inventory.mjs'
+const expectedDependencyInventoryCommand = 'pnpm --dir apps/aurora-tauri run verify:release-dependency-inventory'
+const expectedDependencyInventoryReportPath = 'apps/aurora-tauri/reports/release-dependency-inventory.json'
 const expectedTrustReportPath = 'apps/aurora-tauri/reports/release-trust-policy.json'
 const expectedSemanticReleaseCommand = 'uv run semantic-release version --print --no-commit --no-tag --no-push --no-vcs-release'
 const currentSourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], {
@@ -46,6 +50,7 @@ interface Fixture {
   iosBuild: string
   iosEvidence: string
   iosPreflight: string
+  dependencyInventoryReport: string
   report: string
 }
 
@@ -70,9 +75,13 @@ function createFixture(): Fixture {
     iosBuild: join(root, 'build-ios-client-bundle.mjs'),
     iosEvidence: join(root, 'assert-ios-ci-evidence.mjs'),
     iosPreflight: join(root, 'ios-preflight.mjs'),
+    dependencyInventoryReport: join(root, 'release-dependency-inventory.json'),
     report: join(root, 'release-trust-policy.json'),
   }
-  writeJson(fixture.packageJson, { scripts: { [expectedPackageScriptName]: expectedPackageScriptCommand } })
+  writeJson(fixture.packageJson, { scripts: {
+    [expectedPackageScriptName]: expectedPackageScriptCommand,
+    [expectedDependencyInventoryPackageScriptName]: expectedDependencyInventoryPackageScriptCommand,
+  } })
   writeJson(fixture.config, productionTauriConfig())
   writeJson(join(capabilities, 'aurora-desktop-updater.json'), {
     identifier: 'aurora-desktop-updater',
@@ -98,6 +107,7 @@ function createFixture(): Fixture {
   writeFileSync(fixture.iosBuild, sourceWith('createHash("sha256")\nconfigSha256\nappSha256\nsecretsRedacted: true\nredacted(path)\n'))
   writeFileSync(fixture.iosEvidence, sourceWith('const appBytes = readFileSync(appPath)\nconst appSha256 = createHash("sha256").update(appBytes).digest("hex")\nevidence.appSha256 = appSha256\nsecretsRedacted === true\nredacted(path)\n'))
   writeFileSync(fixture.iosPreflight, sourceWith('const requireSigningEnv = args.has("--require-signing-env")\nAPPLE_API_KEY_ID\nAPPLE_API_ISSUER\nAPPLE_API_KEY_PATH\nAPPLE_API_PRIVATE_KEY\nsecretsRedacted: true\n'))
+  writeJson(fixture.dependencyInventoryReport, validDependencyInventoryReport())
   return fixture
 }
 
@@ -116,6 +126,7 @@ function runPolicy(fixture: Fixture, extraArgs: string[] = []) {
     '--ios-build-script', fixture.iosBuild,
     '--ios-evidence-script', fixture.iosEvidence,
     '--ios-preflight-script', fixture.iosPreflight,
+    '--dependency-inventory-report', fixture.dependencyInventoryReport,
     '--report', fixture.report,
     ...extraArgs,
   ], {
@@ -161,7 +172,7 @@ describe('release trust static policy guard', () => {
     expect(report.unsupportedChecks).toContainEqual(
       expect.objectContaining({
         id: 'sbom-license-tooling',
-        status: 'unsupported',
+        status: 'blocked',
         releaseBlocking: true,
       }),
     )
@@ -183,18 +194,118 @@ describe('release trust static policy guard', () => {
     expect(report.unsupportedChecks).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'android-artifact-hash', releaseBlocking: true }),
       expect.objectContaining({ id: 'ios-artifact-hash', releaseBlocking: true }),
-      expect.objectContaining({ id: 'sbom-license-tooling', releaseBlocking: true }),
+      expect.objectContaining({ id: 'sbom-license-tooling', status: 'passed', releaseBlocking: true }),
     ]))
     expect(report.checks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'workflow-trust-gate-before-semver', status: 'passed' }),
         expect.objectContaining({ id: 'workflow-trust-report-upload-always', status: 'passed' }),
+        expect.objectContaining({ id: 'workflow-dependency-inventory-report-upload-always', status: 'passed' }),
         expect.objectContaining({ id: 'workflow-release-readiness-unique-structure', status: 'passed' }),
         expect.objectContaining({ id: 'workflow-release-readiness-unique-step-keys', status: 'passed' }),
         expect.objectContaining({ id: 'package-static-release-trust-policy-script', status: 'passed' }),
+        expect.objectContaining({ id: 'package-release-dependency-inventory-script', status: 'passed' }),
       ]),
     )
     expect(report.checkedRefs.length).toBeGreaterThan(8)
+  })
+
+  it('fails closed for missing, invalid, stale, blocked, symlinked, or internally inconsistent dependency inventory reports', () => {
+    const cases: Array<[string, (fixture: Fixture) => void]> = [
+      ['missing', (fixture) => rmSync(fixture.dependencyInventoryReport)],
+      ['invalid JSON', (fixture) => writeFileSync(fixture.dependencyInventoryReport, '{invalid')],
+      ['stale commit', (fixture) => {
+        const report = validDependencyInventoryReport()
+        report.source.commit = '0'.repeat(40)
+        writeJson(fixture.dependencyInventoryReport, report)
+      }],
+      ['blocked', (fixture) => {
+        const report = validDependencyInventoryReport()
+        report.status = 'blocked'
+        report.releaseBlocked = true
+        report.inventory[0].disposition = 'blocked'
+        report.summary.dispositions = { allowed: report.inventory.length - 1, blocked: 1 }
+        report.blockers = [{ id: 'blocked-license-disposition', severity: 'high', detail: 'blocked fixture' }]
+        writeJson(fixture.dependencyInventoryReport, report)
+      }],
+      ['false proof claim', (fixture) => {
+        const report = validDependencyInventoryReport()
+        report.claimBoundary.runtimeProof = true
+        writeJson(fixture.dependencyInventoryReport, report)
+      }],
+      ['tampered summary', (fixture) => {
+        const report = validDependencyInventoryReport()
+        report.summary.totalEntries += 1
+        writeJson(fixture.dependencyInventoryReport, report)
+      }],
+      ['missing ecosystem', (fixture) => {
+        const report = validDependencyInventoryReport()
+        report.inventory = report.inventory.filter((item: { ecosystem: string }) =>
+          item.ecosystem !== 'phase4-native-voice')
+        report.summary.totalEntries = report.inventory.length
+        delete report.summary.ecosystems['phase4-native-voice']
+        report.summary.dispositions.allowed = report.inventory.length
+        writeJson(fixture.dependencyInventoryReport, report)
+      }],
+      ['secret-shaped metadata', (fixture) => {
+        const report = validDependencyInventoryReport()
+        report.inventory[0].name = `sk-${'a'.repeat(24)}`
+        writeJson(fixture.dependencyInventoryReport, report)
+      }],
+      ['symlink', (fixture) => {
+        const target = join(fixture.root, 'inventory-target.json')
+        writeJson(target, validDependencyInventoryReport())
+        rmSync(fixture.dependencyInventoryReport)
+        symlinkSync(target, fixture.dependencyInventoryReport)
+      }],
+    ]
+
+    for (const [label, mutate] of cases) {
+      const fixture = createFixture()
+      mutate(fixture)
+      const result = runPolicy(fixture, [
+        '--android-artifact', join(fixture.root, 'missing.apk'),
+        '--ios-artifact', join(fixture.root, 'missing.ipa'),
+      ])
+
+      expect(result.status, label).not.toBe(0)
+      expect(
+        readReport(fixture).unsupportedChecks,
+        label,
+      ).toContainEqual(expect.objectContaining({
+        id: 'sbom-license-tooling',
+        status: 'blocked',
+        releaseBlocking: true,
+      }))
+    }
+  })
+
+  it('redacts secret-shaped object keys from a tampered dependency inventory', () => {
+    const fixture = createFixture()
+    const secret = `sk-${'a'.repeat(24)}`
+    const inventoryReport = validDependencyInventoryReport()
+    inventoryReport.summary.dispositions = {
+      allowed: inventoryReport.inventory.length,
+      [secret]: 1,
+    }
+    writeJson(fixture.dependencyInventoryReport, inventoryReport)
+
+    const result = runPolicy(fixture)
+    expect(result.status).not.toBe(0)
+    const rawReport = readFileSync(fixture.report, 'utf8')
+    expect(rawReport).not.toContain(secret)
+    expect(rawReport).not.toContain('"<redacted-key>"')
+    const trustReport = JSON.parse(rawReport)
+    expect(trustReport.unsupportedChecks).toContainEqual(expect.objectContaining({
+      id: 'sbom-license-tooling',
+      status: 'blocked',
+      evidence: expect.objectContaining({
+        dispositions: {
+          allowed: inventoryReport.inventory.length,
+          blocked: 0,
+        },
+      }),
+    }))
   })
 
   it('records supplied Android and iOS release artifact hashes without absolute paths', () => {
@@ -213,14 +324,15 @@ describe('release trust static policy guard', () => {
       '--ios-artifact-sha256', iosSha,
     ])
 
-    expect(result.status).not.toBe(0)
+    expect(result.status).toBe(0)
     const report = readReport(fixture)
     expect(report.blockers).toEqual([])
-    expect(report.releaseBlocked).toBe(true)
+    expect(report.releaseBlocked).toBe(false)
+    expect(report.status).toBe('passed')
     expect(report.unsupportedChecks).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'android-artifact-hash', status: 'passed', releaseBlocking: true }),
       expect.objectContaining({ id: 'ios-artifact-hash', status: 'passed', releaseBlocking: true }),
-      expect.objectContaining({ id: 'sbom-license-tooling', status: 'unsupported', releaseBlocking: true }),
+      expect.objectContaining({ id: 'sbom-license-tooling', status: 'passed', releaseBlocking: true }),
     ]))
     const android = report.unsupportedChecks.find((item: { id: string }) => item.id === 'android-artifact-hash')
     const ios = report.unsupportedChecks.find((item: { id: string }) => item.id === 'ios-artifact-hash')
@@ -271,7 +383,7 @@ describe('release trust static policy guard', () => {
       '--ios-artifact-sha256', iosSha,
     ])
 
-    expect(result.status).not.toBe(0)
+    expect(result.status).toBe(0)
     const report = readReport(fixture)
     const androidCheck = report.unsupportedChecks.find((item: { id: string }) => item.id === 'android-artifact-hash')
     expect(androidCheck.artifacts).toEqual([
@@ -982,6 +1094,39 @@ jobs:
     )
   })
 
+  it('requires canonical dependency inventory generation and always-upload immediately before the trust gate', () => {
+    const cases = [
+      ['missing inventory command', validWorkflow().replace(
+        `      - name: Release dependency inventory\n        run: ${expectedDependencyInventoryCommand}\n`,
+        '',
+      )],
+      ['inventory upload not always', validWorkflow().replace(
+        `      - name: Upload release dependency inventory report\n        if: always()`,
+        '      - name: Upload release dependency inventory report',
+      )],
+      ['extra step before trust', validWorkflow().replace(
+        '      - name: Release trust policy\n',
+        '      - name: Unexpected inventory mutation\n        run: echo tamper\n      - name: Release trust policy\n',
+      )],
+      ['inventory command drift', validWorkflow().replace(
+        expectedDependencyInventoryCommand,
+        `${expectedDependencyInventoryCommand} --report /tmp/spoof.json`,
+      )],
+    ]
+
+    for (const [label, workflow] of cases) {
+      const fixture = createFixture()
+      writeFileSync(fixture.workflow, workflow)
+      const result = runPolicy(fixture)
+
+      expect(result.status, label).not.toBe(0)
+      expect(
+        readReport(fixture).blockers.map((item: { id: string }) => item.id),
+        label,
+      ).toContain('workflow-dependency-inventory-report-upload-always')
+    }
+  })
+
   it('rejects altered canonical setup inputs before the trust gate', () => {
     const cases = [
       ['checkout repository', validWorkflow().replace('          fetch-depth: 0', `          fetch-depth: 0
@@ -1142,7 +1287,10 @@ jobs:
     const fixture = createFixture()
     writeFileSync(
       fixture.workflow,
-      validWorkflow().replace('          if-no-files-found: error\n', ''),
+      validWorkflow().replace(
+        `          path: ${expectedTrustReportPath}\n          if-no-files-found: error\n`,
+        `          path: ${expectedTrustReportPath}\n`,
+      ),
     )
     const result = runPolicy(fixture)
 
@@ -2658,7 +2806,21 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Install Python release dependencies
+        run: uv sync --extra dev --extra build
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Release dependency inventory
+        run: ${expectedDependencyInventoryCommand}
+      - name: Upload release dependency inventory report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dependency-inventory
+          path: ${expectedDependencyInventoryReportPath}
+          if-no-files-found: error
       - name: Release trust policy
+        if: always()
         run: |
           ${expectedTrustCommand}
       - name: Upload trust policy report
@@ -2701,6 +2863,65 @@ jobs:
           prerelease: \${{ inputs.prerelease == true }}
           prerelease_token: rc
 `
+}
+
+function validDependencyInventoryReport(): any {
+  const ecosystems = ['cargo', 'npm', 'phase4-native-voice', 'python']
+  const inventory = ecosystems.map((ecosystem, index) => ({
+    id: `${ecosystem}:fixture:${index + 1}.0.0`,
+    ecosystem,
+    scope: 'release-static',
+    name: `${ecosystem}-fixture`,
+    version: `${index + 1}.0.0`,
+    source: 'fixture-metadata',
+    sourceRef: 'release fixture metadata',
+    hash: ecosystem === 'npm'
+      ? `sha512:${String(index + 1).repeat(128)}`
+      : `sha256:${String(index + 1).repeat(64)}`,
+    license: {
+      id: 'MIT',
+      evidence: 'release fixture metadata',
+      evidenceHash: `sha256:${String(index + 5).repeat(64)}`,
+    },
+    disposition: 'allowed',
+  }))
+  return {
+    schema: 'aurora.release-dependency-inventory.v1',
+    generatedAt: '2026-08-12T00:00:00.000Z',
+    source: {
+      commit: currentSourceCommit,
+      repository: 'aurora',
+      dirtyTreeIncluded: false,
+    },
+    claimBoundary: {
+      kind: 'static-metadata-only',
+      legalApproval: false,
+      binaryCompleteness: false,
+      signingProof: false,
+      storeProof: false,
+      runtimeProof: false,
+      modelQualityProof: false,
+      physicalDeviceProof: false,
+    },
+    status: 'passed',
+    releaseBlocked: false,
+    secretsRedacted: true,
+    tools: [
+      { name: 'cargo', available: true, version: 'cargo 1.88.0' },
+      { name: 'pnpm', available: true, version: '10.25.0' },
+      { name: 'uv', available: true, version: 'uv 0.8.0' },
+    ],
+    inputs: [
+      { path: 'pnpm-lock.yaml', sha256: 'a'.repeat(64) },
+    ],
+    summary: {
+      totalEntries: inventory.length,
+      ecosystems: Object.fromEntries(ecosystems.map((ecosystem) => [ecosystem, 1])),
+      dispositions: { allowed: inventory.length },
+    },
+    blockers: [],
+    inventory,
+  }
 }
 
 function sourceWith(content: string) {
