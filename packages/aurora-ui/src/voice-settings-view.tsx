@@ -5,12 +5,26 @@ import type { AuroraClient } from '@aurora/client'
 import { Button, Card, StatStrip } from './primitives'
 import { safeErrorCopy } from './product-copy'
 import { findForbiddenProductionCopyTerms } from './product-copy-forbidden-terms'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '#components/ui/alert-dialog'
 import { Badge } from '#components/ui/badge'
 
 type SpeechLanguage = 'de' | 'en' | 'es' | 'fr' | 'it' | 'ja' | 'ko' | 'pt' | 'zh'
 type TtsModelStatus = 'degraded' | 'error' | 'loading' | 'ready' | 'unavailable'
 type TtsVoiceKind = 'cloned' | 'standard'
 type InstallStatus = 'installed' | 'not_found' | 'queued' | 'rejected' | 'revision_conflict' | 'unchanged'
+type RemoveStatus = 'drained' | 'not_found' | 'rejected' | 'removed' | 'revision_conflict' | 'unchanged'
+type DefaultStatus = 'activated' | 'drained' | 'not_found' | 'rejected' | 'revision_conflict'
+type DeleteStatus = 'deleted' | 'not_found' | 'rejected' | 'revision_conflict'
+type VoiceMutationKind = 'default' | 'delete' | 'install' | 'remove'
 
 interface TtsResidentLanguagePack {
   pack_id: string
@@ -38,9 +52,12 @@ interface TtsVoiceProfile {
   display_name: string
   revision: string
   kind: TtsVoiceKind
+  active?: boolean | undefined
+  default?: boolean | undefined
   enabled?: boolean | undefined
   installed?: boolean | undefined
   ready?: boolean | undefined
+  retained_source?: boolean | undefined
   compatible_language_pack_ids?: string[] | undefined
 }
 
@@ -63,6 +80,7 @@ const initialVoiceSettingsState: VoiceSettingsState = {
 }
 
 let fallbackInstallOperationSequence = 0
+let fallbackVoiceOperationSequence = 0
 
 export interface VoiceSettingsViewProps {
   client: AuroraClient
@@ -72,6 +90,9 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
   const [state, setState] = useState<VoiceSettingsState>(initialVoiceSettingsState)
   const [installingVoiceId, setInstallingVoiceId] = useState<string | null>(null)
   const [installMessage, setInstallMessage] = useState<string | null>(null)
+  const [pendingActionKey, setPendingActionKey] = useState<string | null>(null)
+  const [mutationMessage, setMutationMessage] = useState<string | null>(null)
+  const [confirmAction, setConfirmAction] = useState<VoiceConfirmation | null>(null)
 
   const refresh = useCallback(() => {
     let active = true
@@ -123,10 +144,13 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
   const voiceRows = useMemo(() => state.voices.map((voice, index) => toVoiceRow(voice, index, state.capabilities)), [state.voices, state.capabilities])
   const readyLanguages = useMemo(() => languageList(state.capabilities?.ready_languages), [state.capabilities])
   const canShowInstall = state.managementState === 'ready'
+  const actionPending = pendingActionKey !== null
 
   async function installProfile(profile: ManagedVoice) {
-    if (!profile.installable) return
+    if (!profile.installable || actionPending) return
+    const actionKey = actionKeyFor('install', profile.voiceId)
     setInstallingVoiceId(profile.voiceId)
+    setPendingActionKey(actionKey)
     setInstallMessage(null)
     try {
       const result = await client.speech.tts.installVoiceProfile({
@@ -144,6 +168,66 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
       setInstallMessage(productVoiceSettingsErrorCopy(error, 'Voice was not added. Try again.'))
     } finally {
       setInstallingVoiceId(null)
+      setPendingActionKey(null)
+    }
+  }
+
+  async function setDefaultProfile(profile: ManagedVoice) {
+    if (!profile.canSetDefault || actionPending) return
+    const actionKey = actionKeyFor('default', profile.voiceId)
+    setPendingActionKey(actionKey)
+    setMutationMessage('Updating voice choice.')
+    try {
+      const result = await client.speech.tts.setDefaultVoice({
+        voice_id: profile.voiceId,
+        expected_revision: profile.revision,
+        operation_id: createVoiceOperationId('default')
+      })
+      if (!result.ok) {
+        setMutationMessage(productVoiceSettingsErrorCopy(result.error, 'Voice choice was not changed. Try again.'))
+        return
+      }
+      setMutationMessage(defaultOutcomeCopy(result.data.status as DefaultStatus))
+      if (isDefaultSuccess(result.data.status as DefaultStatus)) refresh()
+    } catch (error) {
+      setMutationMessage(productVoiceSettingsErrorCopy(error, 'Voice choice was not changed. Try again.'))
+    } finally {
+      setPendingActionKey(null)
+    }
+  }
+
+  async function runConfirmedAction(action: VoiceConfirmation) {
+    if (actionPending) return
+    const actionKey = actionKeyFor(action.kind, action.profile.voiceId)
+    setPendingActionKey(actionKey)
+    setMutationMessage(action.kind === 'remove' ? 'Removing voice.' : 'Deleting voice.')
+    try {
+      const input = {
+        voice_id: action.profile.voiceId,
+        expected_revision: action.profile.revision,
+        operation_id: createVoiceOperationId(action.kind)
+      }
+      const result = action.kind === 'remove'
+        ? await client.speech.tts.removeVoiceProfile(input)
+        : await client.speech.tts.deleteVoiceProfile(input)
+      if (!result.ok) {
+        setMutationMessage(productVoiceSettingsErrorCopy(result.error, action.kind === 'remove' ? 'Voice was not removed. Try again.' : 'Voice was not deleted. Try again.'))
+        return
+      }
+      if (action.kind === 'remove') {
+        const status = result.data.status as RemoveStatus
+        setMutationMessage(removeOutcomeCopy(status))
+        if (isRemoveSuccess(status)) refresh()
+      } else {
+        const status = result.data.status as DeleteStatus
+        setMutationMessage(deleteOutcomeCopy(status))
+        if (isDeleteSuccess(status)) refresh()
+      }
+      setConfirmAction(null)
+    } catch (error) {
+      setMutationMessage(productVoiceSettingsErrorCopy(error, action.kind === 'remove' ? 'Voice was not removed. Try again.' : 'Voice was not deleted. Try again.'))
+    } finally {
+      setPendingActionKey(null)
     }
   }
 
@@ -181,6 +265,11 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
           {installMessage}
         </p>
       ) : null}
+      {mutationMessage ? (
+        <p role="status" className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+          {mutationMessage}
+        </p>
+      ) : null}
 
       <Card title="Spoken reply voices" description="Voices Aurora can use for spoken replies.">
         <div className="flex flex-col gap-3">
@@ -214,14 +303,44 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={profile.ready ? 'default' : 'secondary'}>{profile.badge}</Badge>
+                {canShowInstall && profile.canSetDefault ? (
+                  <Button
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => void setDefaultProfile(profile)}
+                    disabled={actionPending}
+                  >
+                    {pendingActionKey === actionKeyFor('default', profile.voiceId) ? 'Updating' : 'Use by default'}
+                  </Button>
+                ) : null}
                 {canShowInstall && profile.installable ? (
                   <Button
                     variant="outline"
                     className="h-8 px-3 text-xs"
                     onClick={() => void installProfile(profile)}
-                    disabled={installingVoiceId === profile.voiceId}
+                    disabled={actionPending}
                   >
                     {installingVoiceId === profile.voiceId ? 'Adding' : 'Add voice'}
+                  </Button>
+                ) : null}
+                {canShowInstall && profile.canRemove ? (
+                  <Button
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => setConfirmAction({ kind: 'remove', profile })}
+                    disabled={actionPending}
+                  >
+                    Remove
+                  </Button>
+                ) : null}
+                {canShowInstall && profile.canDelete ? (
+                  <Button
+                    variant="danger"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => setConfirmAction({ kind: 'delete', profile })}
+                    disabled={actionPending}
+                  >
+                    Delete
                   </Button>
                 ) : null}
               </div>
@@ -232,6 +351,33 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
           ) : null}
         </div>
       </Card>
+
+      <AlertDialog open={confirmAction !== null} onOpenChange={(open) => {
+        if (!open && !actionPending) setConfirmAction(null)
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmAction?.kind === 'delete' ? 'Delete voice?' : 'Remove voice?'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmAction?.kind === 'delete'
+                ? 'This voice will no longer be available in Aurora.'
+                : 'Aurora will stop using this added voice until it is added again.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant={confirmAction?.kind === 'delete' ? 'destructive' : 'default'}
+              disabled={actionPending || confirmAction === null}
+              onClick={() => {
+                if (confirmAction) void runConfirmedAction(confirmAction)
+              }}
+            >
+              {pendingActionKey && confirmAction ? (confirmAction.kind === 'delete' ? 'Deleting' : 'Removing') : 'Confirm'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -246,7 +392,15 @@ interface VoiceRow {
 interface ManagedVoice extends VoiceRow {
   revision: string
   installable: boolean
+  canDelete: boolean
+  canRemove: boolean
+  canSetDefault: boolean
   badge: string
+}
+
+interface VoiceConfirmation {
+  kind: 'delete' | 'remove'
+  profile: ManagedVoice
 }
 
 function toVoiceRow(voice: TtsVoice, index: number, capabilities: TtsCapabilities | null): VoiceRow {
@@ -263,14 +417,18 @@ function toManagedVoice(profile: TtsVoiceProfile, index: number, capabilities: T
   const languages = languageListForPacks(capabilities, profile.compatible_language_pack_ids)
   const installed = profile.installed === true
   const ready = profile.ready === true
+  const isDefault = profile.default === true
   return {
     voiceId: profile.voice_id,
     revision: profile.revision,
     label: safeVoiceText(profile.display_name, `Available voice ${index + 1}`),
-    detail: managedVoiceDetail(installed, ready, languages),
+    detail: managedVoiceDetail(installed, ready, isDefault, languages),
     ready,
     installable: canInstallProfile(profile, capabilities),
-    badge: ready ? 'Ready' : installed ? 'Needs setup' : 'Available to add'
+    canDelete: canDeleteProfile(profile),
+    canRemove: canRemoveProfile(profile),
+    canSetDefault: canSetDefaultProfile(profile),
+    badge: isDefault ? 'Default' : ready ? 'Ready' : installed ? 'Needs setup' : 'Available to add'
   }
 }
 
@@ -284,8 +442,21 @@ function canInstallProfile(profile: TtsVoiceProfile, capabilities: TtsCapabiliti
   return compatible.length === 0 || compatible.some((packId) => supportedPacks.has(packId))
 }
 
-function managedVoiceDetail(installed: boolean, ready: boolean, languages: string[]): string {
+function canSetDefaultProfile(profile: TtsVoiceProfile): boolean {
+  return profile.enabled !== false && profile.installed === true && profile.ready === true && profile.default !== true
+}
+
+function canRemoveProfile(profile: TtsVoiceProfile): boolean {
+  return profile.enabled !== false && profile.kind === 'standard' && profile.installed === true && profile.default !== true && profile.active !== true
+}
+
+function canDeleteProfile(profile: TtsVoiceProfile): boolean {
+  return profile.enabled !== false && profile.kind === 'cloned' && profile.default !== true && profile.active !== true
+}
+
+function managedVoiceDetail(installed: boolean, ready: boolean, isDefault: boolean, languages: string[]): string {
   const languageCopy = languages.length > 0 ? ` ${languages.join(', ')}.` : ''
+  if (isDefault) return `Used by default for spoken replies.${languageCopy}`
   if (ready) return `Ready for spoken replies.${languageCopy}`
   if (installed) return `Available but not ready yet.${languageCopy}`
   return `Can be added for spoken replies.${languageCopy}`
@@ -356,9 +527,57 @@ function installOutcomeCopy(status: InstallStatus): string {
   return 'Voice was not added. Try again.'
 }
 
+function defaultOutcomeCopy(status: DefaultStatus): string {
+  if (status === 'activated') return 'Voice choice updated.'
+  if (status === 'drained') return 'Voice choice will update after current speech finishes.'
+  if (status === 'revision_conflict') return 'Voice changed before it could be selected. Try again.'
+  if (status === 'not_found') return 'Voice is no longer available.'
+  return 'Voice choice was not changed. Try again.'
+}
+
+function removeOutcomeCopy(status: RemoveStatus): string {
+  if (status === 'removed') return 'Voice removed.'
+  if (status === 'drained') return 'Voice will be removed after current speech finishes.'
+  if (status === 'unchanged') return 'Voice was already removed.'
+  if (status === 'revision_conflict') return 'Voice changed before it could be removed. Try again.'
+  if (status === 'not_found') return 'Voice is no longer available.'
+  return 'Voice was not removed. Try again.'
+}
+
+function deleteOutcomeCopy(status: DeleteStatus): string {
+  if (status === 'deleted') return 'Voice deleted.'
+  if (status === 'revision_conflict') return 'Voice changed before it could be deleted. Try again.'
+  if (status === 'not_found') return 'Voice is no longer available.'
+  return 'Voice was not deleted. Try again.'
+}
+
+function isDefaultSuccess(status: DefaultStatus): boolean {
+  return status === 'activated' || status === 'drained'
+}
+
+function isRemoveSuccess(status: RemoveStatus): boolean {
+  return status === 'removed' || status === 'drained' || status === 'unchanged' || status === 'not_found'
+}
+
+function isDeleteSuccess(status: DeleteStatus): boolean {
+  return status === 'deleted' || status === 'not_found'
+}
+
 function createInstallOperationId(): string {
+  return createVoiceOperationId('install')
+}
+
+function createVoiceOperationId(kind: VoiceMutationKind): string {
   const randomId = globalThis.crypto?.randomUUID?.()
-  if (randomId) return `voice-install-${randomId}`
-  fallbackInstallOperationSequence = (fallbackInstallOperationSequence + 1) % Number.MAX_SAFE_INTEGER
-  return `voice-install-${Date.now().toString(36)}-${fallbackInstallOperationSequence.toString(36)}`
+  if (randomId) return `voice-${kind}-${randomId}`
+  if (kind === 'install') {
+    fallbackInstallOperationSequence = (fallbackInstallOperationSequence + 1) % Number.MAX_SAFE_INTEGER
+    return `voice-install-${Date.now().toString(36)}-${fallbackInstallOperationSequence.toString(36)}`
+  }
+  fallbackVoiceOperationSequence = (fallbackVoiceOperationSequence + 1) % Number.MAX_SAFE_INTEGER
+  return `voice-${kind}-${Date.now().toString(36)}-${fallbackVoiceOperationSequence.toString(36)}`
+}
+
+function actionKeyFor(kind: VoiceMutationKind, voiceId: string): string {
+  return `${kind}:${voiceId}`
 }

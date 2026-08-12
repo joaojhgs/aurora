@@ -15,6 +15,9 @@ import { snapshotFromGraph } from '../src/shell-data'
 
 type SpeechLanguage = 'de' | 'en' | 'es' | 'fr' | 'it' | 'ja' | 'ko' | 'pt' | 'zh'
 type InstallStatus = 'installed' | 'not_found' | 'queued' | 'rejected' | 'revision_conflict' | 'unchanged'
+type RemoveStatus = 'drained' | 'not_found' | 'rejected' | 'removed' | 'revision_conflict' | 'unchanged'
+type DefaultStatus = 'activated' | 'drained' | 'not_found' | 'rejected' | 'revision_conflict'
+type DeleteStatus = 'deleted' | 'not_found' | 'rejected' | 'revision_conflict'
 
 interface Capabilities {
   contract_revision: 'aurora-tts-capabilities-v1'
@@ -69,6 +72,14 @@ interface InstallOutput {
   idempotent: boolean
 }
 
+interface MutationOutput<TStatus extends string> {
+  status: TStatus
+  voice_id: string
+  revision: string | null
+  idempotent: boolean
+  correlation_id?: string | null
+}
+
 describe('VoiceSettingsView', () => {
   it('loads voice discovery without mutating and maps unavailable voice inventory to product copy', async () => {
     const installVoiceProfile = vi.fn()
@@ -118,7 +129,7 @@ describe('VoiceSettingsView', () => {
     await unmount()
   })
 
-  it('uses distinct fallback operation IDs for two installs at the same time', async () => {
+  it('uses distinct fallback operation IDs for sequential installs', async () => {
     const originalCryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto')
     Object.defineProperty(globalThis, 'crypto', { value: {}, configurable: true })
     const dateNow = vi.spyOn(Date, 'now').mockReturnValue(123456)
@@ -161,6 +172,29 @@ describe('VoiceSettingsView', () => {
     }
   })
 
+  it('prevents a second install submit while one is pending', async () => {
+    const pendingInstall = deferred<{ ok: true, data: InstallOutput }>()
+    const installVoiceProfile = vi.fn(() => pendingInstall.promise)
+    const client = voiceClient({
+      installVoiceProfile,
+      profiles: [profile({ installed: false, ready: false })]
+    })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    await act(async () => {
+      buttonByText(container, 'Add voice').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(buttonByText(container, 'Adding').disabled).toBe(true)
+    await act(async () => {
+      buttonByText(container, 'Adding').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(installVoiceProfile).toHaveBeenCalledTimes(1)
+    pendingInstall.resolve({ ok: true, data: installResult('installed') })
+    await flushReactWork()
+    await unmount()
+  })
+
   it('maps install outcomes without exposing returned identifiers', async () => {
     const installVoiceProfile = vi.fn(async () => ({ ok: true, data: installResult('rejected') }))
     const client = voiceClient({
@@ -195,6 +229,212 @@ describe('VoiceSettingsView', () => {
     expect(container.textContent).not.toContain('Import')
     expect(installVoiceProfile).not.toHaveBeenCalled()
     assertNoForbiddenCopy(visibleText(container))
+    await unmount()
+  })
+
+  it('shows management actions only for profiles that can use them', async () => {
+    const client = voiceClient({
+      profiles: [
+        profile({ display_name: 'Ava', voice_id: 'standard:en_pack:ava', installed: true, ready: true, default: false, active: false }),
+        profile({ display_name: 'Bree', voice_id: 'standard:en_pack:bree', installed: true, ready: true, default: true, active: true }),
+        profile({ display_name: 'Cora', voice_id: 'standard:en_pack:cora', installed: false, ready: false }),
+        profile({ display_name: 'Dina', voice_id: 'clone:11111111-1111-4111-8111-111111111111', kind: 'cloned', installed: true, ready: true, default: false, active: false, retained_source: true }),
+        profile({ display_name: 'Eli', voice_id: 'clone:22222222-2222-4222-8222-222222222222', kind: 'cloned', installed: true, ready: true, default: true, active: true, retained_source: true })
+      ]
+    })
+    const { container, unmount } = await renderVoiceSettings(client)
+    const text = visibleText(container)
+
+    expect(text).toContain('Ava')
+    expect(text).toContain('Bree')
+    expect(text).toContain('Cora')
+    expect(text).toContain('Dina')
+    expect(text).toContain('Eli')
+    expect(buttonsByText(container, 'Use by default')).toHaveLength(2)
+    expect(buttonsByText(container, 'Remove')).toHaveLength(1)
+    expect(buttonsByText(container, 'Add voice')).toHaveLength(1)
+    expect(buttonsByText(container, 'Delete')).toHaveLength(1)
+    assertNoForbiddenCopy(text)
+    await unmount()
+  })
+
+  it('sets the default voice with the expected SDK payload and refreshes on success', async () => {
+    const setDefaultVoice = vi.fn(async () => ({ ok: true, data: mutationResult<DefaultStatus>('activated') }))
+    const listVoiceProfiles = vi.fn()
+      .mockResolvedValueOnce({ ok: true, data: { profiles: [profile({ default: false, ready: true, installed: true })] } })
+      .mockResolvedValue({ ok: true, data: { profiles: [profile({ default: true, active: true, ready: true, installed: true })] } })
+    const client = voiceClient({ setDefaultVoice, listVoiceProfiles })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    await act(async () => {
+      buttonByText(container, 'Use by default').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+
+    expect(setDefaultVoice).toHaveBeenCalledTimes(1)
+    expect(setDefaultVoice).toHaveBeenCalledWith(expect.objectContaining({
+      voice_id: 'standard:en_pack:ava',
+      expected_revision: 'rev-1',
+      operation_id: expect.stringMatching(/^voice-default-/u)
+    }))
+    expect(listVoiceProfiles).toHaveBeenCalledTimes(2)
+    expect(visibleText(container)).toContain('Voice choice updated.')
+    assertNoForbiddenCopy(visibleText(container))
+    await unmount()
+  })
+
+  it('does not render operation identifiers from failed default changes', async () => {
+    const setDefaultVoice = vi.fn(async () => ({
+      ok: false,
+      error: { code: 'transport_loss', message: 'operation_id voice-default-secret correlation_id OP-123 failed' }
+    }))
+    const client = voiceClient({ setDefaultVoice, profiles: [profile({ default: false, ready: true, installed: true })] })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    await act(async () => {
+      buttonByText(container, 'Use by default').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+
+    const text = visibleText(container)
+    expect(text).toContain('Connection lost')
+    expect(text).not.toContain('voice-default-secret')
+    expect(text).not.toContain('OP-123')
+    assertNoForbiddenCopy(text)
+    await unmount()
+  })
+
+  it('requires confirmation before removing a standard voice and honors cancel', async () => {
+    const removeVoiceProfile = vi.fn(async () => ({ ok: true, data: mutationResult<RemoveStatus>('removed') }))
+    const client = voiceClient({ removeVoiceProfile, profiles: [profile({ installed: true, ready: true, default: false, active: false })] })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    await act(async () => {
+      buttonByText(container, 'Remove').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(visibleText(document.body)).toContain('Remove voice?')
+    await act(async () => {
+      buttonByText(document.body, 'Cancel').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+    expect(removeVoiceProfile).not.toHaveBeenCalled()
+
+    await act(async () => {
+      buttonByText(container, 'Remove').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      buttonByText(document.body, 'Confirm').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+
+    expect(removeVoiceProfile).toHaveBeenCalledTimes(1)
+    expect(removeVoiceProfile).toHaveBeenCalledWith(expect.objectContaining({
+      voice_id: 'standard:en_pack:ava',
+      expected_revision: 'rev-1',
+      operation_id: expect.stringMatching(/^voice-remove-/u)
+    }))
+    expect(visibleText(container)).toContain('Voice removed.')
+    assertNoForbiddenCopy(visibleText(container))
+    await unmount()
+  })
+
+  it('prevents duplicate confirmed removal while the request is pending', async () => {
+    const pendingRemove = deferred<{ ok: true, data: MutationOutput<RemoveStatus> }>()
+    const removeVoiceProfile = vi.fn(() => pendingRemove.promise)
+    const client = voiceClient({ removeVoiceProfile, profiles: [profile({ installed: true, ready: true, default: false, active: false })] })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    await act(async () => {
+      buttonByText(container, 'Remove').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      buttonByText(document.body, 'Confirm').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(buttonByText(document.body, 'Removing').disabled).toBe(true)
+    await act(async () => {
+      buttonByText(document.body, 'Removing').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(removeVoiceProfile).toHaveBeenCalledTimes(1)
+    pendingRemove.resolve({ ok: true, data: mutationResult('removed') })
+    await flushReactWork()
+    await unmount()
+  })
+
+  it('deletes only allowed cloned profiles after confirmation and refreshes', async () => {
+    const deleteVoiceProfile = vi.fn(async () => ({ ok: true, data: mutationResult<DeleteStatus>('deleted', 'clone:11111111-1111-4111-8111-111111111111') }))
+    const listVoiceProfiles = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          profiles: [
+            profile({ display_name: 'Dina', voice_id: 'clone:11111111-1111-4111-8111-111111111111', kind: 'cloned', installed: true, ready: true, default: false, active: false, retained_source: true }),
+            profile({ display_name: 'Eli', voice_id: 'clone:22222222-2222-4222-8222-222222222222', kind: 'cloned', installed: true, ready: true, default: true, active: true, retained_source: true })
+          ]
+        }
+      })
+      .mockResolvedValue({ ok: true, data: { profiles: [] } })
+    const client = voiceClient({ deleteVoiceProfile, listVoiceProfiles })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    expect(buttonsByText(container, 'Delete')).toHaveLength(1)
+    await act(async () => {
+      buttonByText(container, 'Delete').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(visibleText(document.body)).toContain('Delete voice?')
+    await act(async () => {
+      buttonByText(document.body, 'Confirm').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+
+    expect(deleteVoiceProfile).toHaveBeenCalledTimes(1)
+    expect(deleteVoiceProfile).toHaveBeenCalledWith(expect.objectContaining({
+      voice_id: 'clone:11111111-1111-4111-8111-111111111111',
+      expected_revision: 'rev-1',
+      operation_id: expect.stringMatching(/^voice-delete-/u)
+    }))
+    expect(listVoiceProfiles).toHaveBeenCalledTimes(2)
+    expect(visibleText(container)).toContain('Voice deleted.')
+    expect(visibleText(container)).not.toContain('11111111-1111-4111-8111-111111111111')
+    assertNoForbiddenCopy(visibleText(container))
+    await unmount()
+  })
+
+  it('keeps failure copy clean for remove and delete results', async () => {
+    const removeVoiceProfile = vi.fn(async () => ({ ok: true, data: mutationResult<RemoveStatus>('rejected') }))
+    const deleteVoiceProfile = vi.fn(async () => ({ ok: true, data: mutationResult<DeleteStatus>('rejected', 'clone:11111111-1111-4111-8111-111111111111') }))
+    const client = voiceClient({
+      removeVoiceProfile,
+      deleteVoiceProfile,
+      profiles: [
+        profile({ display_name: 'Ava', voice_id: 'standard:en_pack:ava', installed: true, ready: true, default: false, active: false }),
+        profile({ display_name: 'Dina', voice_id: 'clone:11111111-1111-4111-8111-111111111111', kind: 'cloned', installed: true, ready: true, default: false, active: false, retained_source: true })
+      ]
+    })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    await act(async () => {
+      buttonByText(container, 'Remove').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      buttonByText(document.body, 'Confirm').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+    expect(visibleText(container)).toContain('Voice was not removed. Try again.')
+
+    await act(async () => {
+      buttonByText(container, 'Delete').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      buttonByText(document.body, 'Confirm').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+
+    const text = visibleText(container)
+    expect(text).toContain('Voice was not deleted. Try again.')
+    expect(text).not.toContain('standard:en_pack:ava')
+    expect(text).not.toContain('11111111-1111-4111-8111-111111111111')
+    assertNoForbiddenCopy(text)
     await unmount()
   })
 
@@ -270,18 +510,27 @@ function voiceClient(overrides: {
   listVoices?: ReturnType<typeof vi.fn>
   listVoiceProfiles?: ReturnType<typeof vi.fn>
   installVoiceProfile?: ReturnType<typeof vi.fn>
+  removeVoiceProfile?: ReturnType<typeof vi.fn>
+  setDefaultVoice?: ReturnType<typeof vi.fn>
+  deleteVoiceProfile?: ReturnType<typeof vi.fn>
 } = {}): AuroraClient {
   const getCapabilities = overrides.getCapabilities ?? vi.fn(async () => ({ ok: true, data: { capabilities: overrides.capabilities ?? capabilities() } }))
   const listVoices = overrides.listVoices ?? vi.fn(async () => ({ ok: true, data: { voices: overrides.voices ?? [voice()] } }))
   const listVoiceProfiles = overrides.listVoiceProfiles ?? vi.fn(async () => ({ ok: true, data: { profiles: overrides.profiles ?? [] } }))
   const installVoiceProfile = overrides.installVoiceProfile ?? vi.fn(async () => ({ ok: true, data: installResult('installed') }))
+  const removeVoiceProfile = overrides.removeVoiceProfile ?? vi.fn(async () => ({ ok: true, data: mutationResult<RemoveStatus>('removed') }))
+  const setDefaultVoice = overrides.setDefaultVoice ?? vi.fn(async () => ({ ok: true, data: mutationResult<DefaultStatus>('activated') }))
+  const deleteVoiceProfile = overrides.deleteVoiceProfile ?? vi.fn(async () => ({ ok: true, data: mutationResult<DeleteStatus>('deleted', 'clone:11111111-1111-4111-8111-111111111111') }))
   return {
     speech: {
       tts: {
         getCapabilities,
         listVoices,
         listVoiceProfiles,
-        installVoiceProfile
+        installVoiceProfile,
+        removeVoiceProfile,
+        setDefaultVoice,
+        deleteVoiceProfile
       }
     },
     config: {
@@ -364,6 +613,16 @@ function installResult(status: InstallStatus): InstallOutput {
   }
 }
 
+function mutationResult<TStatus extends string>(status: TStatus, voiceId = 'standard:en_pack:ava'): MutationOutput<TStatus> {
+  return {
+    status,
+    voice_id: voiceId,
+    revision: status === 'rejected' || status === 'not_found' ? null : 'rev-2',
+    idempotent: false,
+    correlation_id: 'OP-123'
+  }
+}
+
 async function renderVoiceSettings(client: AuroraClient) {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -407,6 +666,10 @@ function buttonByText(container: HTMLElement, label: string): HTMLButtonElement 
   return button
 }
 
+function buttonsByText(container: HTMLElement, label: string): HTMLButtonElement[] {
+  return Array.from(container.querySelectorAll('button')).filter((candidate) => candidate.textContent?.trim() === label)
+}
+
 function visibleText(container: HTMLElement): string {
   return (container.textContent ?? '').replace(/\s+/gu, ' ').trim()
 }
@@ -419,4 +682,14 @@ async function flushReactWork(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+  return { promise, resolve, reject }
 }
