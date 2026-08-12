@@ -6,16 +6,16 @@
   "codeEvidenceBaselineHead": "851f1591be6a4b9e73948fe85dfc43b607d868c1",
   "reportCommit": "resolve-with-git-log-for-this-file",
   "audit": {
-    "auditedAtUtc": "2026-08-12T00:11:00Z",
+    "auditedAtUtc": "2026-08-12T01:59:05Z",
     "resumedAtUtc": "2026-08-08T22:15:10Z",
     "supersededGoalThreadId": "019fd073-38a1-7801-8d62-31ae70d46580",
     "normalGoalAction": "start_fresh",
-    "verdict": "in_progress_reaudit_phase7_disposition_verified_partial",
-    "resumeGate": "Continue the fresh normal Codex Goal on feat/ui-multi-platform-integration. Do not use OMX Ultragoal. Preserved Phases 0-3 remain implementation-complete with partial current-head verification. Revised Phase 4 and Phase 5 are independently closed only for their bounded scopes. Phase 6 remains disposition-verified PARTIAL-WITHHELD with no release-eligible interoperable VAD/KWS/STT/TTS pack and no selectable TTS pack. Phase 7 has a current-head bounded PARTIAL disposition recorded by reports/native-voice/phase7-reverify-20260812/: foreground Rust/WASM browser runtime, lifecycle, route ownership, bundle, and production-copy gates pass, while physical microphone/device, actual mobile, real hosted Firefox/Safari microphone, acoustic, approved-pack, and release gates remain open. Continue at Phase 8 / RAC-27, then Phases 9-13 in dependency order. Keep production VAD/KWS/STT/TTS false. Tooling.ExecuteTool is only a shared DataChannel regression canary, never foreground voice behavior. Runtime roles remain dynamic persisted profile state and must never derive from environment, APK/build flavor, platform, transport, sidecar, or runtime tier.",
+    "verdict": "in_progress_reaudit_phase8_disposition_verified_partial",
+    "resumeGate": "Continue the fresh normal Codex Goal on feat/ui-multi-platform-integration. Do not use OMX Ultragoal. Preserved Phases 0-3 remain implementation-complete with partial current-head verification. Revised Phases 4 and 5 are independently closed only for their bounded scopes. Phase 6 remains disposition-verified PARTIAL-WITHHELD with no release-eligible interoperable VAD/KWS/STT/TTS pack and no selectable TTS pack. Phase 7 has a current-head bounded PARTIAL disposition in reports/native-voice/phase7-reverify-20260812/. Phase 8 now has a current-source bounded PARTIAL disposition in reports/native-voice/phase8-reverify-20260812/: a real Linux Tauri binary and CPAL path pass completed, hidden-window tray, and cancelled turns against paced virtual PCM and a loopback fake Gateway; persisted runtime role remains authoritative across sidecar state; WebView mic/model/Worker counts remain zero; debug E2E permissions and helpers stay excluded from production defaults. Continue at Phases 9-13 in dependency order. Keep production VAD/KWS/STT/TTS false. Do not promote physical microphone, acoustic quality, fully closed-UI residency, real sidecar/remote peer, cross-OS signed release, mobile background, SBOM, rollback, security, or rollout claims without their explicit gates. Tooling.ExecuteTool is only a shared DataChannel regression canary, never foreground voice behavior. Runtime roles remain dynamic persisted profile state and must never derive from environment, APK/build flavor, platform, transport, sidecar, or runtime tier.",
     "statusCounts": {
       "pass": 22,
-      "partial": 24,
-      "withheld": 6,
+      "partial": 25,
+      "withheld": 5,
       "blocked": 4
     },
     "phaseInventory": {
@@ -27,7 +27,7 @@
       "5": {"implementation": "complete_foundation", "verification": "pass_fresh_local_with_later_phase_exclusions"},
       "6": {"implementation": "partial_withheld", "verification": "pass_disposition_only_exit_gate_partial"},
       "7": {"implementation": "partial", "verification": "pass_current_head_bounded_reverification_exit_gate_partial"},
-      "8": {"implementation": "partial", "verification": "partial"},
+      "8": {"implementation": "partial", "verification": "pass_current_source_bounded_reverification_exit_gate_partial"},
       "9": {"implementation": "partial", "verification": "partial_blocked"},
       "10": {"implementation": "partial_withheld", "verification": "partial_blocked"},
       "11": {"implementation": "partial", "verification": "blocked_platform_runtime"},
@@ -47,6 +47,8 @@
       {"scope": "Phase 6 native Linux resources", "result": "corrected harness builds outside the timed interval; three repetitions each passed: VAD max RSS 40902656 and RTF 12.056, KWS 57057280 and 200.702, STT 149811200 and 114.432; raw report SHA-256 f9a8222e898a40e930107656d858392a10baf16952f2d3de02beef2214e4d3f2; physical-device claim false"},
       {"scope": "Phase 7 bounded browser disposition", "result": "independent verdict PARTIAL; 151 voice-web unit tests, 35 five-profile Worker/WASM cases, 25 browser-store cases with two expected skips, two browser-API fake-media cases, 77 clean hosted-web tests, two hosted Chromium fake-media cases, 129 focused UI route/lifecycle cases, 734 full UI cases, UI/web typechecks, bundle ceilings, and broad production-copy scan passed; durable summary SHA-256 d3ac6e787c62f65665e64b775b5b54d4fa8e2c76d5ed56b5592ab696be40e16a"},
       {"scope": "Phase 7 external environment", "result": "Waydroid unreachable with no ADB device or host audio input; real microphone/acoustic, physical/actual-mobile, real hosted Firefox/Safari microphone, approved-pack, and release claims remain open; production VAD/KWS/STT/TTS false"},
+      {"scope": "Phase 8 bounded Linux desktop disposition", "result": "independent verdict PARTIAL with zero review findings; Rust desktop capture 24/24, Tauri native voice 22/22, desktop E2E UI 8/8, typecheck, frontend production build, harness self-test/check-only, and Tauri release-profile check passed; a current-source Tauri binary used the real CPAL path with paced virtual ALSA PCM and a fake loopback Gateway to pass completed, hidden-window tray, and cancelled turns, exact required route counts, monotonic redacted status, persisted-role sidecar independence, and zero WebView microphone/model/Worker use; durable summary is reports/native-voice/phase8-reverify-20260812/summary.json"},
+      {"scope": "Phase 8 claim boundary", "result": "virtual PCM is not physical microphone/acoustic evidence; fake Gateway is not a real Python sidecar or remote peer; hidden window is not fully closed-UI residency; cross-OS signed builds, operating-system lifecycle matrix, approved packs, installer/SBOM/license/rollback/security/rollout gates remain open; production VAD/KWS/STT/TTS false"},
       {"scope": "Rust 1.88 fmt/clippy/workspace tests", "result": "passed; live CPAL ignored and sherpa smoke not executed without artifacts/features"},
       {"scope": "Phase 4/6 focused Python", "result": "62 passed"},
       {"scope": "voice-web typecheck/unit", "result": "passed, 151 tests"},
@@ -326,12 +328,12 @@
     {
       "id": "RAC-27",
       "status": "partial",
-      "evidence": "Dynamic runtime role no longer derives from environment, APK/build flavor, sidecar, platform, transport, tier, or disabled rollout capability. Current-source revalidation at 63b25066 passes the desktop native-voice self-test/check-only gate, 8 desktop profile tests, 5 service-boundary tests, 39 Python sidecar-profile tests, 6 Rust sidecar tests, and Tauri typecheck for remote-console with and without sidecar plus mesh-node/python-full with sidecar. Exact-source browser/Python direct and STUN lanes pass with HTTP fallback disabled, accepted host/srflx pairs, configured-STUN proof, protocol assertions, and redaction. Committed checkpoint 01ce0eca adds SDK WebRTC targeted Vitest 55/55 plus prior full @aurora/client Vitest 686/686 and a shared-transport regression proving reverse Tooling.ExecuteTool interleaves during a 512 KiB fragmented send. Packaged direct and TURN reports at `/tmp/aurora-desktop-current-sendack-direct-0811d/report.json` and `/tmp/aurora-desktop-current-sendack-turn-0811a/report.json` report aggregate passes. A clean debug binary rebuilt from exact HEAD 33a02375 with SHA-256 ee24c44e4332d0cb30516ce9e84c3c8b80d25aa8135cd208312e4596fe2c5c7a then ran two sequential STUN controls. Both accepted an srflx route and passed public reverse RPC, identity override, no HTTP fallback, redaction, events/TTS/stream/reconnect, and matching 512 KiB request/result hashes with 33 sent and 33 received fragments. Both aggregate reports failed only revokedCredentialFailsClosed because the fixed 2.5-second post-revocation observation ended in discovering-peer with zero pending prompts; revocation succeeded, route authorization was false, and Python reported zero authenticated/connected peers. Durable redacted evidence is reports/native-voice/rac27-live-20260811/packaged-desktop-stun-head-control-summary.json. RAC-27 stays partial until the harness wait is repaired, STUN passes as an aggregate, exact-source all-route proof is consolidated, and the remaining Android, physical-device, signing, rollback, and endurance gates close."
+      "evidence": "Dynamic runtime role does not derive from environment, APK/build flavor, sidecar, platform, transport, tier, or disabled rollout capability. Historical exact-source browser/Python direct/STUN/TURN evidence, reverse RPC fragmentation, redaction, and fail-closed revocation remain bounded in reports/native-voice/rac27-live-20260811/. The Phase 8 current-source Linux run adds a real Tauri binary and CPAL path with three typed Gateway lifecycles: remote-console remains remote with and without a running sidecar and fails closed on connected-audio consent, while mesh-node/python-full with a running sidecar selects loopback-sidecar. CapturePrepare, CaptureRelease, Transcribe, and ExternalUserInput each ran three times; Interrupt ran once; TTS Synthesize twice; event stream seven times. Status was redacted and monotonic, and independent review found zero issues. RAC-27 remains partial because virtual PCM/fake Gateway do not prove physical/acoustic input, real sidecar or authorized remote peer full turns, consolidated exact-source all-route transport, mobile, signing, rollback, or endurance gates. Durable evidence is reports/native-voice/phase8-reverify-20260812/."
     },
     {
       "id": "RAC-28",
-      "status": "withheld",
-      "evidence": "no full UI-detached desktop background turn is promoted"
+      "status": "partial",
+      "evidence": "A current-source Linux Tauri binary passes a full tray-triggered native turn while the application window is hidden, with real CPAL capture plumbing, typed Gateway lifecycle, native TTS route, terminal cleanup, redacted monotonic status, and zero WebView microphone/model/Worker use. This advances RAC-28 from withheld to partial only: paced virtual PCM and a fake loopback Gateway are bounded harness inputs, the UI process remains resident, and fully closed-UI residency, physical microphone/acoustic behavior, sleep/wake/logout/reboot, cross-OS signed release, and real sidecar/remote peer gates remain open."
     },
     {
       "id": "RAC-29",
@@ -341,7 +343,7 @@
     {
       "id": "RAC-30",
       "status": "partial",
-      "evidence": "Focused installed-desktop native ownership plus browser microphone/model suppression regressions pass, but the complete installed-desktop cutover is not proven while native background turns remain disabled and RAC-27/RAC-28 are incomplete"
+      "evidence": "Focused installed-desktop native ownership plus browser microphone/model/Worker suppression regressions pass. The current-source hidden-window completed/tray/cancel harness reports no forbidden WebView calls and persisted role selection remains independent of sidecar state. Complete installed-desktop cutover is not proven until physical/acoustic, fully closed-UI residency, real sidecar/remote peer, approved pack, signed installer, rollback, and cross-OS gates close."
     },
     {
       "id": "RAC-31",

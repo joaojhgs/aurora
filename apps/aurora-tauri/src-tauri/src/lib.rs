@@ -34,6 +34,8 @@ use url::Url;
 
 #[cfg(target_os = "android")]
 mod android_audio;
+#[cfg(all(desktop, debug_assertions, feature = "desktop-native-voice-e2e"))]
+mod desktop_native_voice_e2e_keyring;
 #[cfg(target_os = "ios")]
 mod ios_voice;
 #[cfg(target_os = "ios")]
@@ -65,7 +67,7 @@ use local_data_native::{
 };
 use native_voice::{
     aurora_native_voice_cancel, aurora_native_voice_finish, aurora_native_voice_start,
-    aurora_native_voice_status, NativeVoiceState,
+    aurora_native_voice_status, aurora_native_voice_tray_toggle_e2e, NativeVoiceState,
 };
 
 const DEFAULT_GATEWAY_URL: &str = "http://127.0.0.1:8000";
@@ -7422,6 +7424,12 @@ fn register_overlay_shortcut(app: &AppHandle, shortcut: Shortcut) -> Result<(), 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(all(desktop, debug_assertions, feature = "desktop-native-voice-e2e"))]
+    if std::env::var("AURORA_DESKTOP_NATIVE_VOICE_E2E").as_deref() == Ok("1") {
+        keyring::set_default_credential_builder(
+            desktop_native_voice_e2e_keyring::credential_builder(),
+        );
+    }
     let sidecar_state: SharedSidecarState = Arc::new(Mutex::new(SidecarState::new()));
     let subscription_state: SharedSubscriptionState =
         Arc::new(Mutex::new(SubscriptionState::new()));
@@ -7550,6 +7558,7 @@ pub fn run() {
             aurora_native_voice_start,
             aurora_native_voice_finish,
             aurora_native_voice_cancel,
+            aurora_native_voice_tray_toggle_e2e,
             aurora_android_baseline_status,
             aurora_android_native_plugin_payload,
             aurora_android_lifecycle_status,

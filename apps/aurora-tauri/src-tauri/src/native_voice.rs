@@ -36,6 +36,7 @@ use {
 
 const STATUS_EVENT: &str = "aurora://native-voice-status";
 const UNAVAILABLE_REASON: &str = "unavailable";
+const E2E_UNAVAILABLE_REASON: &str = "desktop_native_voice_e2e_unavailable";
 #[cfg(not(desktop))]
 const UNSUPPORTED_REASON: &str = "unsupported_platform";
 const ACTIVE_REASON: &str = "already_active";
@@ -174,7 +175,7 @@ impl NativeVoiceCommandError {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct NativeVoiceState {
     #[cfg(desktop)]
     inner: Arc<Mutex<Option<NativeVoiceHandle>>>,
@@ -263,6 +264,26 @@ pub async fn aurora_native_voice_cancel(
     }
 }
 
+#[tauri::command]
+pub async fn aurora_native_voice_tray_toggle_e2e(
+    state: State<'_, NativeVoiceState>,
+) -> Result<NativeVoiceStatus, NativeVoiceCommandError> {
+    if !cfg!(all(debug_assertions, feature = "desktop-native-voice-e2e"))
+        || std::env::var("AURORA_DESKTOP_NATIVE_VOICE_E2E").as_deref() != Ok("1")
+    {
+        return Err(NativeVoiceCommandError::unavailable(E2E_UNAVAILABLE_REASON));
+    }
+    #[cfg(desktop)]
+    {
+        tray_toggle_status(&state).await
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = state;
+        Ok(NativeVoiceStatus::unavailable(UNSUPPORTED_REASON))
+    }
+}
+
 pub async fn request_status(
     state: &NativeVoiceState,
 ) -> Result<NativeVoiceStatus, NativeVoiceCommandError> {
@@ -278,49 +299,42 @@ pub async fn request_status(
 }
 
 #[cfg(desktop)]
+async fn tray_toggle_status(
+    state: &NativeVoiceState,
+) -> Result<NativeVoiceStatus, NativeVoiceCommandError> {
+    let status = request_status(state).await?;
+    if matches!(status.phase, NativeVoicePhase::Listening) {
+        if let Some(generation) = status.generation {
+            return send_actor(state, |reply| ActorCommand::Finish {
+                request: NativeVoiceControlRequest {
+                    generation,
+                    reason: NativeVoiceStopReason::UserRequest,
+                },
+                reply,
+            })
+            .await;
+        }
+    } else if matches!(status.phase, NativeVoicePhase::Idle) {
+        return send_actor(state, |reply| ActorCommand::Start {
+            request: NativeVoiceStartRequest {
+                trigger: NativeVoiceTrigger::TrayPushToTalk,
+                remote_audio_consent: false,
+            },
+            reply,
+        })
+        .await;
+    }
+    Ok(status)
+}
+
+#[cfg(desktop)]
 pub fn tray_toggle(app: &AppHandle) {
     let Some(state) = app.try_state::<NativeVoiceState>() else {
         return;
     };
-    let tx = state
-        .inner()
-        .inner
-        .lock()
-        .ok()
-        .and_then(|guard| guard.as_ref().map(|handle| handle.tx.clone()));
+    let state = state.inner().clone();
     tauri::async_runtime::spawn(async move {
-        let Some(tx) = tx else {
-            return;
-        };
-        let (reply, rx) = oneshot::channel();
-        let _ = tx.send(ActorCommand::Status { reply });
-        let status = match rx.await {
-            Ok(Ok(status)) => status,
-            _ => return,
-        };
-        if matches!(status.phase, NativeVoicePhase::Listening) {
-            if let Some(generation) = status.generation {
-                let (reply, rx) = oneshot::channel();
-                let _ = tx.send(ActorCommand::Finish {
-                    request: NativeVoiceControlRequest {
-                        generation,
-                        reason: NativeVoiceStopReason::UserRequest,
-                    },
-                    reply,
-                });
-                let _ = rx.await;
-            }
-        } else if matches!(status.phase, NativeVoicePhase::Idle) {
-            let (reply, rx) = oneshot::channel();
-            let _ = tx.send(ActorCommand::Start {
-                request: NativeVoiceStartRequest {
-                    trigger: NativeVoiceTrigger::TrayPushToTalk,
-                    remote_audio_consent: false,
-                },
-                reply,
-            });
-            let _ = rx.await;
-        }
+        let _ = tray_toggle_status(&state).await;
     });
 }
 
@@ -2085,11 +2099,19 @@ mod tests {
         let overlay = include_str!("../capabilities/aurora-overlay.json");
         let android = include_str!("../capabilities/aurora-android-thin.json");
         let ios = include_str!("../capabilities/aurora-ios-thin.json");
+        let e2e_permission = include_str!("../permissions/aurora-native-voice-e2e.toml");
+        let e2e_config = include_str!("../tauri.desktop-native-voice-e2e.conf.json");
+        let build_manifest = include_str!("../build.rs");
         assert!(main.contains("aurora-native-voice"));
         assert!(thin.contains("aurora-native-voice"));
         assert!(!overlay.contains("aurora-native-voice"));
         assert!(!android.contains("aurora-native-voice"));
         assert!(!ios.contains("aurora-native-voice"));
+        assert!(e2e_permission.contains("aurora_native_voice_tray_toggle_e2e"));
+        assert!(e2e_config.contains("aurora-native-voice-e2e"));
+        assert!(build_manifest.contains("aurora_native_voice_tray_toggle_e2e"));
+        assert!(!main.contains("aurora-native-voice-e2e"));
+        assert!(!thin.contains("aurora-native-voice-e2e"));
     }
 }
 

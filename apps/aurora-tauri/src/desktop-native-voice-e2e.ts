@@ -49,7 +49,7 @@ type SidecarStatus = { running: boolean };
 type SecureStorageGet = { value: string | null; secretsRedacted: true };
 type SecureStorageWrite = { ok: true; secretsRedacted: true };
 
-export type NativeVoiceTurnLabel = "completed" | "cancelled";
+export type NativeVoiceTurnLabel = "completed" | "tray" | "cancelled";
 export type NativeVoiceRouteScenarioName =
   | "remote-console-without-sidecar"
   | "remote-console-with-running-sidecar"
@@ -105,6 +105,7 @@ export type DesktopNativeVoiceE2eReport = {
   noBrowserWorkers: true;
   desktopResult: {
     completedTurn: NativeVoiceLifecycleSummary;
+    trayTurn: NativeVoiceLifecycleSummary;
     cancelledTurn: NativeVoiceLifecycleSummary;
     statusSequence: NativeVoiceEventSummary[];
     monotonicStatuses: true;
@@ -272,7 +273,13 @@ async function runDesktopNativeVoiceE2e(
           }),
         ))
         : String(error);
-      throw new Error(`native voice command ${command} failed: ${detail}`);
+      const recentEvents = events.slice(-8).map((event) => ({
+        sequence: event.sequence,
+        phase: event.status.phase,
+        generation: event.status.generation,
+        reasonCode: event.status.reasonCode,
+      }));
+      throw new Error(`native voice command ${command} failed: ${detail}; recentEvents=${JSON.stringify(recentEvents)}`);
     }
   };
   try {
@@ -340,6 +347,26 @@ async function runDesktopNativeVoiceE2e(
     await waitForEvent(events, completedStart.generation, ["stopping"], stepTimeoutMs, bridge.now);
     await waitForIdle(bridge.invoke, stepTimeoutMs, bridge.now);
 
+    const trayStart = await invokeNative<NativeVoiceStatus>(
+      "aurora_native_voice_tray_toggle_e2e",
+    );
+    assertNativeVoiceStatusRedacted(trayStart);
+    if (typeof trayStart.generation !== "number") {
+      throw new Error("tray native voice start did not return a generation");
+    }
+    if (trayStart.generation === completedStart.generation) {
+      throw new Error("tray native voice lifecycle did not use a distinct generation");
+    }
+    await waitForEvent(events, trayStart.generation, ["starting"], stepTimeoutMs, bridge.now);
+    await waitForEvent(events, trayStart.generation, ["listening"], stepTimeoutMs, bridge.now);
+    await sleep(750);
+    const trayTerminal = await invokeNative<NativeVoiceStatus>(
+      "aurora_native_voice_tray_toggle_e2e",
+    );
+    assertNativeVoiceStatusRedacted(trayTerminal);
+    await waitForEvent(events, trayStart.generation, ["stopping"], stepTimeoutMs, bridge.now);
+    await waitForIdle(bridge.invoke, stepTimeoutMs, bridge.now);
+
     const cancelledStart = await invokeNative<NativeVoiceStatus>("aurora_native_voice_start", {
       request: {
         trigger: "focused_push_to_talk",
@@ -350,7 +377,10 @@ async function runDesktopNativeVoiceE2e(
     if (typeof cancelledStart.generation !== "number") {
       throw new Error("cancelled native voice start did not return a generation");
     }
-    if (cancelledStart.generation === completedStart.generation) {
+    if (
+      cancelledStart.generation === completedStart.generation ||
+      cancelledStart.generation === trayStart.generation
+    ) {
       throw new Error("native voice cancel lifecycle did not use a distinct generation");
     }
     await waitForEvent(events, cancelledStart.generation, ["starting"], stepTimeoutMs, bridge.now);
@@ -396,10 +426,12 @@ async function runDesktopNativeVoiceE2e(
     if (guards.calls.length > 0) throw new Error("WebView voice/model path was used");
     const generationLabels = new Map<number, NativeVoiceTurnLabel>([
       [completedStart.generation, "completed"],
+      [trayStart.generation, "tray"],
       [cancelledStart.generation, "cancelled"],
     ]);
     const statusSequence = summarizeNativeVoiceEvents(events, generationLabels);
     const completedTurn = summarizeLifecycle(statusSequence, "completed");
+    const trayTurn = summarizeLifecycle(statusSequence, "tray");
     const cancelledTurn = summarizeLifecycle(statusSequence, "cancelled");
     const routeScenarios: NativeVoiceRouteScenarioSummary[] = [
       remoteWithoutSidecar,
@@ -434,6 +466,7 @@ async function runDesktopNativeVoiceE2e(
       durationMs: Math.max(0, bridge.now() - startedAt),
       desktopResult: {
         completedTurn,
+        trayTurn,
         cancelledTurn,
         statusSequence,
         monotonicStatuses: true as const,
@@ -446,6 +479,7 @@ async function runDesktopNativeVoiceE2e(
           "aurora_native_voice_start",
           "aurora_native_voice_finish",
           "aurora_native_voice_cancel",
+          "aurora_native_voice_tray_toggle_e2e",
         ],
         windowHidden: true,
         sidecarLoopback: true,

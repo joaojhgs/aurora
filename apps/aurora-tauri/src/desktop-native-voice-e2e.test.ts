@@ -81,7 +81,7 @@ describe("desktop native voice E2E hook", () => {
     expect(() => summarizeNativeVoiceEvents([])).toThrow(/required/u);
   });
 
-  it("installs a hook that hides the WebView and proves completed plus cancelled native turns", async () => {
+  it("installs a hook that hides the WebView and proves focused, tray, and cancelled native turns", async () => {
     const payload = samplePayload();
     const listeners: Array<(event: { payload: NativeVoiceEvent }) => void> = [];
     const commands: string[] = [];
@@ -127,7 +127,7 @@ describe("desktop native voice E2E hook", () => {
           throw { reasonCode: REMOTE_AUDIO_CONSENT_REASON };
         }
         startCount += 1;
-        activeGeneration = startCount === 1 ? 7 : 8;
+        activeGeneration = 6 + startCount;
         emit("starting", activeGeneration);
         emit("listening", activeGeneration);
         return status("starting", activeGeneration);
@@ -135,11 +135,24 @@ describe("desktop native voice E2E hook", () => {
       if (command === "aurora_native_voice_finish") {
         const generation = activeGeneration;
         emit("stopping", generation);
-        if (generation === 8) {
+        if (generation === 9) {
           emit("processing", generation);
         } else {
           activeGeneration = null;
         }
+        return status("stopping", generation);
+      }
+      if (command === "aurora_native_voice_tray_toggle_e2e") {
+        if (activeGeneration === null) {
+          startCount += 1;
+          activeGeneration = 6 + startCount;
+          emit("starting", activeGeneration);
+          emit("listening", activeGeneration);
+          return status("starting", activeGeneration);
+        }
+        const generation = activeGeneration;
+        emit("stopping", generation);
+        activeGeneration = null;
         return status("stopping", generation);
       }
       if (command === "aurora_native_voice_cancel") {
@@ -222,12 +235,18 @@ describe("desktop native voice E2E hook", () => {
       startObserved: true,
       terminalObserved: true,
     });
+    expect(report.desktopResult.trayTurn).toMatchObject({
+      turn: "tray",
+      startObserved: true,
+      terminalObserved: true,
+    });
     expect(report.desktopResult.cancelledTurn).toMatchObject({
       turn: "cancelled",
       startObserved: true,
       terminalObserved: true,
     });
     expect(report.desktopResult.statusSequence.map((event) => event.turn)).toContain("completed");
+    expect(report.desktopResult.statusSequence.map((event) => event.turn)).toContain("tray");
     expect(report.desktopResult.statusSequence.map((event) => event.turn)).toContain("cancelled");
     expect(report.desktopResult.commands).toEqual([
       "aurora_secure_storage_get",
@@ -237,9 +256,12 @@ describe("desktop native voice E2E hook", () => {
       "aurora_native_voice_start",
       "aurora_native_voice_finish",
       "aurora_native_voice_cancel",
+      "aurora_native_voice_tray_toggle_e2e",
     ]);
     expect(commands).toContain("aurora_native_voice_finish");
     expect(commands).toContain("aurora_native_voice_cancel");
+    expect(commands.filter((command) => command === "aurora_native_voice_tray_toggle_e2e"))
+      .toHaveLength(2);
     expect(commands).toContain("aurora_sidecar_start");
     expect(commands).toContain("aurora_sidecar_stop");
     expect(persistedProfile).toBe("");

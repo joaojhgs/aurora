@@ -399,6 +399,12 @@
           "markdownDescription": "Enables the aurora_native_voice_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_native_voice_tray_toggle_e2e command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-native-voice-tray-toggle-e2e",
+          "markdownDescription": "Enables the aurora_native_voice_tray_toggle_e2e command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_remote_origin_policy command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-remote-origin-policy",
@@ -619,6 +625,12 @@
           "type": "string",
           "const": "aurora-native-voice",
           "markdownDescription": "Allow desktop Aurora surfaces to control the redacted native voice host."
+        },
+        {
+          "description": "Allow the maintained debug-only desktop native voice test to exercise the tray voice control path.",
+          "type": "string",
+          "const": "aurora-native-voice-e2e",
+          "markdownDescription": "Allow the maintained debug-only desktop native voice test to exercise the tray voice control path."
         },
         {
           "description": "Allow the Python-free desktop thin shell to use the Linux native RTCPeerConnection/DataChannel fallback when the packaged WebKitGTK runtime omits the browser WebRTC API. Signaling, pairing, encryption, reconnect, and Aurora RPC remain in the shared TypeScript runtime.",
@@ -931,6 +943,12 @@
           "type": "string",
           "const": "deny-aurora-native-voice-status",
           "markdownDescription": "Denies the aurora_native_voice_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_native_voice_tray_toggle_e2e command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-native-voice-tray-toggle-e2e",
+          "markdownDescription": "Denies the aurora_native_voice_tray_toggle_e2e command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_remote_origin_policy command without any pre-configured scope.",

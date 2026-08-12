@@ -312,6 +312,7 @@ function nativeVoiceLaunchContract() {
         'aurora_native_voice_start',
         'aurora_native_voice_finish',
         'aurora_native_voice_cancel',
+        'aurora_native_voice_tray_toggle_e2e',
       ],
       existingWrapperEnv: [
         'AURORA_DESKTOP_LIVE_E2E_APPLICATION_BIN',
@@ -448,16 +449,17 @@ function validateHookReport(report, { sessionNonce, tauriPid }) {
   assert.deepEqual(report.desktopResult?.forbiddenWebViewCalls, [])
   assert.match(String(report.desktopResult?.reportHash), /^[0-9a-f]{64}$/u)
   assertLifecycle(report.desktopResult?.completedTurn, 'completed')
+  assertLifecycle(report.desktopResult?.trayTurn, 'tray')
   assertLifecycle(report.desktopResult?.cancelledTurn, 'cancelled')
   assert.ok(
     Array.isArray(report.desktopResult?.statusSequence) &&
-      report.desktopResult.statusSequence.length >= 4,
+      report.desktopResult.statusSequence.length >= 6,
     'status sequence must include real native events',
   )
   for (const event of report.desktopResult.statusSequence) {
     assert.match(String(event.sequence), /^[1-9]\d{0,19}$/u)
     assert.ok(['starting', 'listening', 'processing', 'speaking', 'stopping', 'idle'].includes(event.phase))
-    assert.ok(['completed', 'cancelled', 'unknown'].includes(event.turn))
+    assert.ok(['completed', 'tray', 'cancelled', 'unknown'].includes(event.turn))
     assert.equal(event.redacted, true)
     assert.ok(event.reasonCode === null || /^[a-z0-9_]{1,64}$/u.test(String(event.reasonCode)))
     assert.deepEqual(Object.keys(event).sort(), ['phase', 'reasonCode', 'redacted', 'sequence', 'turn'])
@@ -470,6 +472,7 @@ function validateHookReport(report, { sessionNonce, tauriPid }) {
     'aurora_native_voice_start',
     'aurora_native_voice_finish',
     'aurora_native_voice_cancel',
+    'aurora_native_voice_tray_toggle_e2e',
   ])
   assertNoSensitiveMaterial(report, 'desktop native voice hook report')
 }
@@ -875,6 +878,7 @@ async function runSelfTest() {
   assert.match(script, /AURORA_DESKTOP_LIVE_E2E_APPLICATION_BIN/u)
   assert.match(script, /AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE/u)
   assert.match(script, /desktop_native_voice_application\.sh/u)
+  assert.match(script, /--features desktop-native-voice-e2e/u)
   assert.match(script, /AURORA_DESKTOP_NATIVE_VOICE_E2E_SIDECAR_PID_FILE/u)
   assert.match(script, /tauri\.desktop-native-voice-e2e\.conf\.json/u)
   assert.doesNotMatch(script, /VITE_AURORA_RUNTIME_MODE/u)
@@ -892,6 +896,10 @@ async function runSelfTest() {
   ))
   assert.equal(
     liveConfig.app.security.capabilities[2].permissions.includes('core:window:allow-hide'),
+    true,
+  )
+  assert.equal(
+    liveConfig.app.security.capabilities[2].permissions.includes('aurora-native-voice-e2e'),
     true,
   )
   assert.throws(() =>
@@ -958,14 +966,18 @@ async function runSelfTest() {
           'aurora_native_voice_start',
           'aurora_native_voice_finish',
           'aurora_native_voice_cancel',
+          'aurora_native_voice_tray_toggle_e2e',
         ],
         completedTurn: { turn: 'completed', startObserved: true, terminalObserved: true, eventCount: 1, phases: ['starting', 'stopping'] },
+        trayTurn: { turn: 'tray', startObserved: true, terminalObserved: true, eventCount: 1, phases: ['starting', 'stopping'] },
         cancelledTurn: { turn: 'cancelled', startObserved: true, terminalObserved: true, eventCount: 1, phases: ['starting', 'stopping'] },
         statusSequence: [
           { sequence: 1, phase: 'starting', turn: 'completed', redacted: true },
           { sequence: 2, phase: 'stopping', turn: 'completed', redacted: true },
-          { sequence: 3, phase: 'starting', turn: 'cancelled', redacted: true },
-          { sequence: 4, phase: 'stopping', turn: 'cancelled', redacted: true },
+          { sequence: 3, phase: 'starting', turn: 'tray', redacted: true },
+          { sequence: 4, phase: 'stopping', turn: 'tray', redacted: true },
+          { sequence: 5, phase: 'starting', turn: 'cancelled', redacted: true },
+          { sequence: 6, phase: 'stopping', turn: 'cancelled', redacted: true },
         ],
       },
     }, { sessionNonce: 'nonce', tauriPid: '123' }),

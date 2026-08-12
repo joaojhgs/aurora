@@ -117,7 +117,7 @@ if [[ "${AURORA_DESKTOP_NATIVE_VOICE_E2E_SKIP_BUILD:-0}" != "1" ]]; then
   AURORA_TAURI_DEV_AUTOSIDECAR=0 \
     VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E=1 \
     VITE_AURORA_TAURI_DEV_AUTOSIDECAR=0 \
-    pnpm --filter @aurora/tauri-ui tauri build --config src-tauri/tauri.desktop-native-voice-e2e.conf.json --debug --no-bundle
+    pnpm --filter @aurora/tauri-ui tauri build --config src-tauri/tauri.desktop-native-voice-e2e.conf.json --debug --no-bundle --features desktop-native-voice-e2e
 fi
 
 if [[ ! -x "$application_bin" ]]; then

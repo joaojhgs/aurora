@@ -10,7 +10,7 @@ use aurora_voice_core::{
     TransitionReason, VoiceCaptureLease, VoiceCoreError,
 };
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{SampleFormat, StreamConfig};
+use cpal::{BufferSize, SampleFormat, StreamConfig};
 use crossbeam_queue::ArrayQueue;
 use sha2::{Digest, Sha256};
 use tokio::sync::Notify;
@@ -260,10 +260,11 @@ impl AudioInput for CpalAudioInput {
             .default_input_config()
             .map_err(|_| capture_fault("input-config-unavailable"))?;
         let sample_format = supported.sample_format();
-        let config: StreamConfig = supported.into();
+        let mut config: StreamConfig = supported.into();
         if config.channels == 0 || config.sample_rate == 0 {
             return Err(capture_fault("invalid-input-config"));
         }
+        configure_debug_e2e_buffer(&mut config, desktop_native_voice_e2e_enabled());
 
         self.shared.reset_for_start(lease.generation);
         let generation = lease.generation;
@@ -878,6 +879,16 @@ fn capture_fault(code: &'static str) -> VoiceCoreError {
     }
 }
 
+fn desktop_native_voice_e2e_enabled() -> bool {
+    cfg!(debug_assertions) && std::env::var("AURORA_DESKTOP_NATIVE_VOICE_E2E").as_deref() == Ok("1")
+}
+
+fn configure_debug_e2e_buffer(config: &mut StreamConfig, enabled: bool) {
+    if enabled {
+        config.buffer_size = BufferSize::Fixed((config.sample_rate / 100).max(1));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -921,6 +932,25 @@ mod tests {
         assert_eq!(u16_to_f32(0), -1.0);
         assert_eq!(u16_to_f32(32768), 0.0);
         assert!(u16_to_f32(u16::MAX) <= 1.0);
+    }
+
+    #[test]
+    fn debug_e2e_buffer_uses_ten_millisecond_period_without_changing_production_default() {
+        let mut production = StreamConfig {
+            channels: 2,
+            sample_rate: 48_000,
+            buffer_size: BufferSize::Default,
+        };
+        configure_debug_e2e_buffer(&mut production, false);
+        assert_eq!(production.buffer_size, BufferSize::Default);
+
+        let mut e2e = production;
+        configure_debug_e2e_buffer(&mut e2e, true);
+        assert_eq!(e2e.buffer_size, BufferSize::Fixed(480));
+
+        e2e.sample_rate = 44_100;
+        configure_debug_e2e_buffer(&mut e2e, true);
+        assert_eq!(e2e.buffer_size, BufferSize::Fixed(441));
     }
 
     #[test]

@@ -18,6 +18,7 @@ fn main() {
             "aurora_native_voice_start",
             "aurora_native_voice_finish",
             "aurora_native_voice_cancel",
+            "aurora_native_voice_tray_toggle_e2e",
             "aurora_native_capability_manifest",
             "native_capabilities",
             "aurora_android_baseline_status",
