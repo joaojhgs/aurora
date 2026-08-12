@@ -14,7 +14,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { isIP } from 'node:net'
-import { basename, dirname, extname, join, relative, resolve } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -843,9 +843,14 @@ function safeId(value) {
 
 function safeDisplayPath(path) {
   const resolved = resolve(path)
-  if (resolved.startsWith(repoRoot)) return `<repo-root>/${relative(repoRoot, resolved).replace(/\\/g, '/')}`
-  if (resolved.startsWith(packageRoot)) return `<package-root>/${relative(packageRoot, resolved).replace(/\\/g, '/')}`
-  return `<external>/${safeId(resolved).slice(-32)}`
+  if (isPathInside(resolved, repoRoot)) return `<repo-root>/${relative(repoRoot, resolved).replace(/\\/g, '/')}`
+  if (isPathInside(resolved, packageRoot)) return `<package-root>/${relative(packageRoot, resolved).replace(/\\/g, '/')}`
+  return `<external>/${safeId(basename(resolved))}`
+}
+
+function isPathInside(path, root) {
+  const rel = relative(root, path)
+  return rel === '' || (!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`))
 }
 
 function writeAtomicJson(path, value) {

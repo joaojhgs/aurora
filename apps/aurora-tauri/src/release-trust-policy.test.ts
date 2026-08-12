@@ -256,6 +256,37 @@ describe('release trust static policy guard', () => {
     expect(serialized).not.toContain(tmpdir())
   })
 
+  it('redacts external sibling-prefix artifact paths without parent directory names', () => {
+    const fixture = createFixture()
+    const siblingRoot = mkdtempSync(`${repoRoot}-secret-`)
+    const android = join(siblingRoot, 'aurora-sibling-release.apk')
+    const ios = join(fixture.root, 'aurora-release.ipa')
+    const androidSha = writeArtifact(android, 'android sibling bytes')
+    const iosSha = writeArtifact(ios, 'ios bytes')
+    const result = runPolicy(fixture, [
+      '--source-commit', 'HEAD',
+      '--android-artifact', android,
+      '--android-artifact-sha256', androidSha,
+      '--ios-artifact', ios,
+      '--ios-artifact-sha256', iosSha,
+    ])
+
+    expect(result.status).not.toBe(0)
+    const report = readReport(fixture)
+    const androidCheck = report.unsupportedChecks.find((item: { id: string }) => item.id === 'android-artifact-hash')
+    expect(androidCheck.artifacts).toEqual([
+      expect.objectContaining({
+        artifactName: 'aurora-sibling-release-apk',
+        ref: '<external>/aurora-sibling-release-apk',
+        sha256: androidSha,
+      }),
+    ])
+    const serialized = JSON.stringify(report)
+    expect(serialized).not.toContain(siblingRoot)
+    expect(serialized).not.toContain('<repo-root>/../')
+    expect(serialized).not.toContain('phase13-release-secret')
+  })
+
   it('keeps Android and iOS artifact evidence release-blocking when artifacts are absent', () => {
     const fixture = createFixture()
     const result = runPolicy(fixture)
