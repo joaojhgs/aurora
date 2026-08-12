@@ -72,6 +72,17 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Release dependency inventory
+        run: pnpm --dir apps/aurora-tauri run verify:release-dependency-inventory
+
+      - name: Upload release dependency inventory report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dependency-inventory
+          path: apps/aurora-tauri/reports/release-dependency-inventory.json
+          if-no-files-found: error
+
       - name: Run lightweight release check
         run: |
           uv run make check-config-generated
