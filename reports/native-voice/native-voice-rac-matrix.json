@@ -2,16 +2,16 @@
   "$schema": "aurora.native_voice_rac_matrix.v1",
   "planSha256": "50181a35cd42e12a33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6",
   "replacementAttachmentSha256": "70b1b5ebb32c6df0e52c119b2bd73adad79c2611433bd33da7391d6e273fe196",
-  "freshSessionHandoffSha256": "06510a857900e7623b68be5a3310c7275f3bb461288e6fc20bb6880452bc2b3e",
+  "freshSessionHandoffSha256": "c001cf097530875c07393c1993ad69dd339c12c0977d61ef2a64c03693e4cf45",
   "codeEvidenceBaselineHead": "851f1591be6a4b9e73948fe85dfc43b607d868c1",
   "reportCommit": "resolve-with-git-log-for-this-file",
   "audit": {
-    "auditedAtUtc": "2026-08-11T23:48:49Z",
+    "auditedAtUtc": "2026-08-12T00:11:00Z",
     "resumedAtUtc": "2026-08-08T22:15:10Z",
     "supersededGoalThreadId": "019fd073-38a1-7801-8d62-31ae70d46580",
     "normalGoalAction": "start_fresh",
-    "verdict": "in_progress_reaudit_phase6_disposition_verified_partial_withheld",
-    "resumeGate": "Continue the fresh normal Codex Goal on feat/ui-multi-platform-integration. Do not use OMX Ultragoal. Preserved Phases 0-3 remain implementation-complete with partial current-head verification. Revised Phase 4 is independently closed only for its bounded architecture/portability scope by reports/native-voice/phase4-reverify-20260811/. Revised Phase 5 is independently closed only for its shared-core/generated-contract/model-store/WASM/detached-turn foundation by reports/native-voice/phase5-reverify-20260811/. Phase 6 has an independent PARTIAL disposition verdict recorded by reports/native-voice/phase6-disposition-20260811/: candidate trust, provenance, bounded parity/cancellation, and corrected Linux resource diagnostics pass, but no release-eligible interoperable VAD/KWS/STT/TTS pack exists and TTS is unavailable. Phase 6 is not complete. Resume with a current-head Phase 7 bounded re-verification, then continue Phases 8-13 in dependency order. Keep production VAD/KWS/STT/TTS false. Tooling.ExecuteTool is only a shared DataChannel regression canary, never foreground voice behavior. Runtime roles remain dynamic persisted profile state and must never derive from environment, APK/build flavor, platform, transport, sidecar, or runtime tier.",
+    "verdict": "in_progress_reaudit_phase7_disposition_verified_partial",
+    "resumeGate": "Continue the fresh normal Codex Goal on feat/ui-multi-platform-integration. Do not use OMX Ultragoal. Preserved Phases 0-3 remain implementation-complete with partial current-head verification. Revised Phase 4 and Phase 5 are independently closed only for their bounded scopes. Phase 6 remains disposition-verified PARTIAL-WITHHELD with no release-eligible interoperable VAD/KWS/STT/TTS pack and no selectable TTS pack. Phase 7 has a current-head bounded PARTIAL disposition recorded by reports/native-voice/phase7-reverify-20260812/: foreground Rust/WASM browser runtime, lifecycle, route ownership, bundle, and production-copy gates pass, while physical microphone/device, actual mobile, real hosted Firefox/Safari microphone, acoustic, approved-pack, and release gates remain open. Continue at Phase 8 / RAC-27, then Phases 9-13 in dependency order. Keep production VAD/KWS/STT/TTS false. Tooling.ExecuteTool is only a shared DataChannel regression canary, never foreground voice behavior. Runtime roles remain dynamic persisted profile state and must never derive from environment, APK/build flavor, platform, transport, sidecar, or runtime tier.",
     "statusCounts": {
       "pass": 22,
       "partial": 24,
@@ -26,7 +26,7 @@
       "4": {"implementation": "complete_architecture_freeze", "verification": "pass_fresh_local_with_external_exclusions"},
       "5": {"implementation": "complete_foundation", "verification": "pass_fresh_local_with_later_phase_exclusions"},
       "6": {"implementation": "partial_withheld", "verification": "pass_disposition_only_exit_gate_partial"},
-      "7": {"implementation": "partial", "verification": "partial"},
+      "7": {"implementation": "partial", "verification": "pass_current_head_bounded_reverification_exit_gate_partial"},
       "8": {"implementation": "partial", "verification": "partial"},
       "9": {"implementation": "partial", "verification": "partial_blocked"},
       "10": {"implementation": "partial_withheld", "verification": "partial_blocked"},
@@ -45,6 +45,8 @@
       {"scope": "Phase 5 production Worker/WASM", "result": "35 Playwright cases passed across Chromium, Firefox, WebKit, Android Chrome emulation, and Mobile Safari emulation; two real-browser-API and 83 focused web cases passed; durable summary SHA-256 1b86ab1538f0bd25e72f66d2b3182d797f3b0a4caf816aa12988e3bafb459726"},
       {"scope": "Phase 6 candidate disposition", "result": "independent verdict PARTIAL; signatures, immutable inventories, bounded parity/cancellation, and fail-closed release policy pass; no release-eligible interoperable pack; TTS unavailable; production VAD/KWS/STT/TTS false; durable summary SHA-256 bd71dfd00089947ed8fa4ed6fa2d63bfeeb1583dc6819e777abec9b4e357066a"},
       {"scope": "Phase 6 native Linux resources", "result": "corrected harness builds outside the timed interval; three repetitions each passed: VAD max RSS 40902656 and RTF 12.056, KWS 57057280 and 200.702, STT 149811200 and 114.432; raw report SHA-256 f9a8222e898a40e930107656d858392a10baf16952f2d3de02beef2214e4d3f2; physical-device claim false"},
+      {"scope": "Phase 7 bounded browser disposition", "result": "independent verdict PARTIAL; 151 voice-web unit tests, 35 five-profile Worker/WASM cases, 25 browser-store cases with two expected skips, two browser-API fake-media cases, 77 clean hosted-web tests, two hosted Chromium fake-media cases, 129 focused UI route/lifecycle cases, 734 full UI cases, UI/web typechecks, bundle ceilings, and broad production-copy scan passed; durable summary SHA-256 d3ac6e787c62f65665e64b775b5b54d4fa8e2c76d5ed56b5592ab696be40e16a"},
+      {"scope": "Phase 7 external environment", "result": "Waydroid unreachable with no ADB device or host audio input; real microphone/acoustic, physical/actual-mobile, real hosted Firefox/Safari microphone, approved-pack, and release claims remain open; production VAD/KWS/STT/TTS false"},
       {"scope": "Rust 1.88 fmt/clippy/workspace tests", "result": "passed; live CPAL ignored and sherpa smoke not executed without artifacts/features"},
       {"scope": "Phase 4/6 focused Python", "result": "62 passed"},
       {"scope": "voice-web typecheck/unit", "result": "passed, 151 tests"},
@@ -159,6 +161,29 @@
         }
       ],
       "verdict": "Counts unchanged. RAC-21, RAC-23, RAC-24, and RAC-26 remain pass; RAC-22 and RAC-25 remain partial. Phase 7 is bounded partial/external-gates-only for the implemented hosted-browser scope; current-source Waydroid UI proof remains environment-blocked."
+    },
+    "phase7DispositionVerification": {
+      "verifiedAtUtc": "2026-08-12T00:11:00Z",
+      "evidenceHead": "e2f87d24d5913932504ea5e5bda43271f308c472",
+      "receipt": "reports/native-voice/phase7-reverify-20260812/",
+      "summarySha256": "d3ac6e787c62f65665e64b775b5b54d4fa8e2c76d5ed56b5592ab696be40e16a",
+      "verification": "pass_current_head_bounded_reverification_exit_gate_partial",
+      "productionCapabilitiesEnabled": {
+        "vad": false,
+        "kws": false,
+        "stt": false,
+        "tts": false
+      },
+      "racStatus": {
+        "RAC-21": "pass",
+        "RAC-22": "partial",
+        "RAC-23": "pass",
+        "RAC-24": "pass",
+        "RAC-25": "partial",
+        "RAC-26": "pass"
+      },
+      "externalBoundary": "No real microphone, acoustic recognition, operating-system permission prompt, physical device, actual mobile browser, real hosted Firefox/Safari microphone, approved production pack, installer, or release claim.",
+      "dependencyDisposition": "advance_to_phase8_with_all_production_speech_capabilities_false"
     }
   },
   "statusVocabulary": {
@@ -451,7 +476,8 @@
   ],
   "globalGaps": [
     "The dynamic-role invariant is preserved at checkpoint baseline 5c27b72f: role is runtime profile state, not environment, APK/build flavor, platform, transport, sidecar, runtime tier, demo mode, or disabled rollout capability.",
-    "UI production-copy and responsive gates improved through 16c21a9e: the current 68-file/720-test suite, UI/web typechecks and builds, the 12/12 accessibility/responsive/visual gate, 87 focused browser-voice UI cases, focused browser-speech-pack 6/6, and hosted Assistant Playwright 2/2 with reviewed desktop Chromium plus Pixel 5 Chromium-emulation screenshots pass. RAC-53 remains partial because model/download/voice-management states are incomplete.",
+    "Phase 7 has a current-head bounded PARTIAL disposition in reports/native-voice/phase7-reverify-20260812/. Foreground Rust/WASM browser runtime, lifecycle, route ownership, bundle, and production-copy gates pass. Physical microphone/device, actual mobile, real hosted Firefox/Safari microphone, acoustic, approved-pack, and release gates remain open; production VAD/KWS/STT/TTS remain false.",
+    "UI production-copy and responsive gates improved through e2f87d24: the current 69-file/734-test suite, UI/web typechecks and builds, 129 focused browser-voice/route/copy cases, focused browser-speech-pack 6/6, and hosted Assistant Playwright 2/2 with desktop Chromium plus Pixel 5 Chromium emulation pass. The broad production-copy source scan has zero findings after the internal digest-reason remediation. RAC-53 remains partial because broader model/download/voice-management states are incomplete.",
     "PocketTTS bounded-stop failure is no longer treated as production provider failure: it was a cold-import/test timeout issue fixed in tests only at d3f45b1a, then tightened at 1cb2b4f7 to parse child-measured provider.stop() elapsed time against request_timeout_s plus slack; integrated current-head focused pair passed 2/2 and full PocketTTS file passed 59/59.",
     "Waydroid APK evidence remains bound to SHA-256 83256515b81e87f3fd28e9a5122c0d6a5dd20d7b7507591daff475bc6de0f24c from 8fff7af6; MobileMCP plus visual audit proved dynamic role picker, Connect-to-Aurora invite/manual-address navigation, and honest Offline state for that artifact. Universal APK c99008ea74dc6cd21996e0a0467a8c4d86ffafe819bf51e545514606700a946e from prior checkpoint 63b25066 passes build and static policy, clearing that checkpoint's stale artifact/source-build gap, but Waydroid remains unreachable and no rendered UI claim exists for current source. At 2026-08-11T17:32:26Z, direct ADB to 192.168.240.112:5555 returned No route to host, ADB listed no device, waydroid0 was DOWN/NO-CARRIER, and no MobileMCP tool was callable. Make-device-available continuation, clean restart persistence, pairing, and Gateway voice remain blocked/not run.",
     "Prior API35 QEMU runtime validation remains blocked: the maintained smoke ran under software TCG against the checkpoint 63b25066 APK after ADB/package-manager readiness at 232 seconds; the APK push passed, then Android system_server was killed by its watchdog during pm install, yielding Broken pipe and DeadSystemException before Aurora launched. Cleanup passed. /dev/kvm remains inaccessible, so CI-equivalent validation is unavailable. Durable historical evidence is reports/native-voice/android-current-source-20260811-63b25066/.",
