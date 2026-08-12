@@ -1137,8 +1137,8 @@ function providerModel(
     ...(!provider.enabled ? [modelStatusCopy(provider.health_reason, 'This model source is currently unavailable.')] : []),
     ...(!provider.secrets_redacted ? ['Sensitive details are hidden until Aurora can verify this source.'] : [])
   ])
-  const importActive = provider.import_progress.status !== 'idle'
-  const downloadActive = provider.download_progress.status !== 'idle'
+  const importActive = isActiveModelOperationProgress(provider.import_progress)
+  const downloadActive = isActiveModelOperationProgress(provider.download_progress)
   return {
     id: provider.provider_id,
     name: modelSourceDisplayName(provider.display_name),
@@ -1208,7 +1208,7 @@ function modelSourceDisplayName(name: string): string {
 }
 
 function modelOperationStatus(provider: ModelRuntimeProviderInfo): string {
-  const active = [provider.import_progress, provider.download_progress].filter((progress) => progress.status !== 'idle' && progress.status !== 'not_started')
+  const active = [provider.import_progress, provider.download_progress].filter(isActiveModelOperationProgress)
   if (active.length === 0) return 'no operation active'
   return active
     .map((progress) => {
@@ -1216,6 +1216,12 @@ function modelOperationStatus(provider: ModelRuntimeProviderInfo): string {
       return `${label} ${progress.progress_percent}% complete (${modelStatusCopy(progress.message, 'Model task is updating.')})`
     })
     .join(', ')
+}
+
+function isActiveModelOperationProgress(
+  progress: ModelRuntimeProviderInfo['import_progress'] | ModelRuntimeProviderInfo['download_progress']
+): boolean {
+  return progress.status !== 'idle' && progress.status !== 'not_started'
 }
 
 function connectedSourceRouteLabel(providerType: string): string {

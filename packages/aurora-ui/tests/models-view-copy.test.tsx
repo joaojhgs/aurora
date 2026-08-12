@@ -281,6 +281,76 @@ describe('models view product copy', () => {
       root.unmount()
     })
   })
+
+  it('treats not-started catalog model tasks as inactive', async () => {
+    const catalog = selectableModelCatalog()
+    catalog.providers = catalog.providers.map((provider) => provider.provider_id === 'local:Orchestrator:llama-cpp'
+      ? {
+          ...provider,
+          import_progress: {
+            ...provider.import_progress,
+            status: 'not_started',
+            progress_percent: 0,
+            message: 'Model import is in progress.',
+          },
+          download_progress: {
+            ...provider.download_progress,
+            status: 'not_started',
+            progress_percent: 0,
+            message: 'Model download is in progress.',
+          },
+        }
+      : provider)
+    const downloadModel = vi.fn()
+    const importModel = vi.fn()
+    const rootNode = document.createElement('div')
+    document.body.append(rootNode)
+    const root = createRoot(rootNode)
+
+    await act(async () => {
+      root.render(
+        <ModelsView
+          client={client(vi.fn(), {
+            downloadModel,
+            importModel,
+            listCatalog: vi.fn().mockResolvedValue(catalog),
+          })}
+          initialCatalog={catalog}
+          initialGraph={buildCapabilityGraph({
+            catalog: capabilityGraphCatalogFixture,
+            registry: gatewayRegistryFixture,
+            transportKind: 'mock',
+          })}
+        />
+      )
+    })
+
+    const model = buildModelsViewModel({
+      catalog,
+      graph: buildCapabilityGraph({
+        catalog: capabilityGraphCatalogFixture,
+        registry: gatewayRegistryFixture,
+        transportKind: 'mock',
+      }),
+      nativeManifest: null,
+      loadState: 'ready',
+    })
+    const provider = model.providers.find((item) => item.id === 'local:Orchestrator:llama-cpp')
+    expect(provider?.operationStatus).toBe('no operation active')
+    expect(provider?.importReason).toContain('administrator approval')
+    expect(provider?.downloadReason).toContain('administrator approval')
+
+    const copy = copySurface(document.body)
+    expect(copy).not.toContain('Model import is in progress.')
+    expect(copy).not.toContain('Model download is in progress.')
+    expect(importModel).not.toHaveBeenCalled()
+    expect(downloadModel).not.toHaveBeenCalled()
+    expect(copy).not.toMatch(MODEL_FORBIDDEN_PRODUCT_TERMS)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
 })
 
 function client(getSchemaMetadata: ReturnType<typeof vi.fn>, modelOverrides: Record<string, unknown> = {}) {
