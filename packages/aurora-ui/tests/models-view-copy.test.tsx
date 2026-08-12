@@ -184,13 +184,115 @@ describe('models view product copy', () => {
       root.unmount()
     })
   })
+
+  it('keeps unsupported local model tasks disabled without calling SDK mutations', async () => {
+    const catalog = selectableModelCatalog()
+    catalog.providers = catalog.providers.map((provider) => provider.provider_id === 'local:Orchestrator:llama-cpp'
+      ? {
+          ...provider,
+          model_files: provider.model_files.map((file) => ({ ...file, exists: false })),
+        }
+      : provider)
+    const downloadModel = vi.fn()
+    const rootNode = document.createElement('div')
+    document.body.append(rootNode)
+    const root = createRoot(rootNode)
+
+    await act(async () => {
+      root.render(
+        <ModelsView
+          client={client(vi.fn(), {
+            downloadModel,
+            listCatalog: vi.fn().mockResolvedValue(catalog),
+          })}
+          initialCatalog={catalog}
+          initialGraph={buildCapabilityGraph({
+            catalog: capabilityGraphCatalogFixture,
+            registry: gatewayRegistryFixture,
+            transportKind: 'mock',
+          })}
+        />
+      )
+    })
+
+    const download = [...document.querySelectorAll('button')]
+      .find((button) => button.textContent?.trim() === 'Download')
+    expect(download).toBeTruthy()
+    expect(download!.disabled).toBe(true)
+    expect(download!.title).toContain('administrator approval')
+    expect(downloadModel).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('Remove')
+    expect(copySurface(document.body)).not.toMatch(MODEL_FORBIDDEN_PRODUCT_TERMS)
+    expect(findForbiddenProductionCopyTerms(copySurface(document.body)).map((term) => term.id)).toEqual([])
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('renders catalog model task progress without starting duplicate work', async () => {
+    const catalog = selectableModelCatalog()
+    catalog.providers = catalog.providers.map((provider) => provider.provider_id === 'local:Orchestrator:llama-cpp'
+      ? {
+          ...provider,
+          model_files: provider.model_files.map((file) => ({ ...file, exists: false })),
+          download_progress: {
+            ...provider.download_progress,
+            operation_id: 'model-download-active',
+            operation_type: 'download',
+            status: 'running',
+            progress_percent: 42,
+            message: 'Download is 42% complete.',
+          },
+        }
+      : provider)
+    const downloadModel = vi.fn()
+    const rootNode = document.createElement('div')
+    document.body.append(rootNode)
+    const root = createRoot(rootNode)
+
+    await act(async () => {
+      root.render(
+        <ModelsView
+          client={client(vi.fn(), {
+            downloadModel,
+            listCatalog: vi.fn().mockResolvedValue(catalog),
+          })}
+          initialCatalog={catalog}
+          initialGraph={buildCapabilityGraph({
+            catalog: capabilityGraphCatalogFixture,
+            registry: gatewayRegistryFixture,
+            transportKind: 'mock',
+          })}
+        />
+      )
+    })
+
+    const download = [...document.querySelectorAll('button')]
+      .find((button) => button.textContent?.trim() === 'Download')
+    expect(download).toBeTruthy()
+    expect(download!.disabled).toBe(true)
+    expect(download!.title).toContain('Download is 42% complete.')
+    expect(copySurface(document.body)).toContain('Download is 42% complete.')
+    expect(downloadModel).not.toHaveBeenCalled()
+    expect(copySurface(document.body)).not.toMatch(MODEL_FORBIDDEN_PRODUCT_TERMS)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
 })
 
-function client(getSchemaMetadata: ReturnType<typeof vi.fn>) {
+function client(getSchemaMetadata: ReturnType<typeof vi.fn>, modelOverrides: Record<string, unknown> = {}) {
   return {
     transport: { kind: 'http' },
     models: {
       listCatalog: vi.fn().mockResolvedValue(modelRuntimeCatalogFixture),
+      getOperation: vi.fn(),
+      importModel: vi.fn(),
+      downloadModel: vi.fn(),
+      benchmarkModel: vi.fn(),
+      ...modelOverrides,
     },
     capabilities: {
       getGraph: vi.fn(),

@@ -63,6 +63,8 @@ export interface ModelProviderViewModel {
   downloadReason: string
   canBenchmark: boolean
   benchmarkReason: string
+  canRemove: boolean
+  removeReason: string
 }
 
 export interface ModelBenchmarkSnapshotRow {
@@ -367,7 +369,6 @@ export function ModelsView({
           <span>{selectionMessage}</span>
         </p>
       ) : null}
-
       {model.providers.length > 0 ? (
         <PageTabs
           value={activeTab}
@@ -659,9 +660,30 @@ function ModelProviderCard({
         </div>
 
         <div className="flex flex-wrap gap-1.5">
-          <ModelAction icon="download" label="Import" enabled={provider.canImport} reason={provider.importReason} />
-          <ModelAction icon="download" label="Download" enabled={provider.canDownload} reason={provider.downloadReason} />
-          <ModelAction icon="benchmark" label="Benchmark" enabled={provider.canBenchmark} reason={provider.benchmarkReason} />
+          <ModelAction
+            icon="download"
+            label="Import"
+            enabled={provider.canImport}
+            reason={provider.importReason}
+          />
+          <ModelAction
+            icon="download"
+            label="Download"
+            enabled={provider.canDownload}
+            reason={provider.downloadReason}
+          />
+          <ModelAction
+            icon="download"
+            label="Remove"
+            enabled={provider.canRemove}
+            reason={provider.removeReason}
+          />
+          <ModelAction
+            icon="benchmark"
+            label="Benchmark"
+            enabled={provider.canBenchmark}
+            reason={provider.benchmarkReason}
+          />
         </div>
       </div>
     </Card>
@@ -1140,14 +1162,16 @@ function providerModel(
     canSelect: canSelectProvider(provider, candidate, availability, provider.provider_id === selectedProviderId || provider.selected, blockers),
     selectReason: selectReason(provider.provider_id === selectedProviderId || provider.selected, provider, candidate, availability),
     selectConfigValue: modelProviderConfigValue(provider),
-    canImport: importActive,
-    importReason: importActive ? modelStatusCopy(provider.import_progress.message, 'Model import is in progress.') : 'Model import is not ready yet.',
-    canDownload: downloadActive,
-    downloadReason: downloadActive ? modelStatusCopy(provider.download_progress.message, 'Model download is in progress.') : 'Model download is not ready yet.',
-    canBenchmark: provider.benchmark.status === 'running',
+    canImport: false,
+    importReason: importActive ? modelStatusCopy(provider.import_progress.message, 'Model import is in progress.') : 'Model import needs administrator approval before it can start.',
+    canDownload: false,
+    downloadReason: downloadActive ? modelStatusCopy(provider.download_progress.message, 'Model download is in progress.') : 'Model download needs administrator approval before it can start.',
+    canBenchmark: false,
     benchmarkReason: provider.benchmark.status === 'running'
       ? modelStatusCopy(provider.benchmark.reason, 'Benchmark is running through Aurora.')
-      : 'Benchmark is not ready yet.'
+      : 'Benchmark needs administrator approval before it can start.',
+    canRemove: false,
+    removeReason: 'Removing model files is not available from Aurora yet.'
   }
 }
 
@@ -1184,12 +1208,12 @@ function modelSourceDisplayName(name: string): string {
 }
 
 function modelOperationStatus(provider: ModelRuntimeProviderInfo): string {
-  const active = [provider.import_progress, provider.download_progress].filter((progress) => progress.status !== 'idle')
+  const active = [provider.import_progress, provider.download_progress].filter((progress) => progress.status !== 'idle' && progress.status !== 'not_started')
   if (active.length === 0) return 'no operation active'
   return active
     .map((progress) => {
       const label = progress.operation_type === 'download' ? 'Download' : 'Import'
-      return `${label} ${progress.progress_percent}% complete`
+      return `${label} ${progress.progress_percent}% complete (${modelStatusCopy(progress.message, 'Model task is updating.')})`
     })
     .join(', ')
 }
@@ -1398,7 +1422,7 @@ function modelCategoryRows(
   const installedLocal = providers.filter((provider) =>
     provider.providerType === 'local' && provider.files !== 'no local files reported'
   )
-  const activeImportDownload = providers.filter((provider) => provider.canImport || provider.canDownload)
+  const activeImportDownload = providers.filter((provider) => provider.operationStatus !== 'no operation active')
   const benchmarkable = providers.filter(hasBenchmarkEvidence)
   const meshRemote = providers.filter(isMeshOrRemoteProvider)
 
