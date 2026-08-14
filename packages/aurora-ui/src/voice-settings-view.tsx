@@ -26,11 +26,7 @@ type InstallStatus = 'installed' | 'not_found' | 'queued' | 'rejected' | 'revisi
 type RemoveStatus = 'drained' | 'not_found' | 'rejected' | 'removed' | 'revision_conflict' | 'unchanged'
 type DefaultStatus = 'activated' | 'drained' | 'not_found' | 'rejected' | 'revision_conflict'
 type DeleteStatus = 'deleted' | 'not_found' | 'rejected' | 'revision_conflict'
-type PackInstallStatus = 'installed' | 'not_found' | 'queued' | 'rejected' | 'revision_conflict' | 'unchanged'
-type PackRemoveStatus = 'not_found' | 'rejected' | 'removed' | 'revision_conflict' | 'unchanged'
-type PackDefaultStatus = 'activated' | 'not_found' | 'rejected' | 'revision_conflict'
 type VoiceMutationKind = 'default' | 'delete' | 'install' | 'remove'
-type PackMutationKind = 'default-pack' | 'install-pack' | 'remove-pack'
 
 interface TtsResidentLanguagePack {
   pack_id: string
@@ -118,12 +114,9 @@ let fallbackVoiceOperationSequence = 0
 
 const TTS_MANAGE_METHODS = {
   install: 'TTS.InstallVoiceProfile',
-  installLanguagePack: 'TTS.InstallLanguagePack',
   listLanguagePacks: 'TTS.ListLanguagePacks',
   listProfiles: 'TTS.ListVoiceProfiles',
-  removeLanguagePack: 'TTS.RemoveLanguagePack',
   remove: 'TTS.RemoveVoiceProfile',
-  setDefaultLanguagePack: 'TTS.SetDefaultLanguagePack',
   setDefault: 'TTS.SetDefaultVoice',
   delete: 'TTS.DeleteVoiceProfile'
 } as const
@@ -137,7 +130,6 @@ export interface VoiceSettingsViewProps {
 export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfile: providedSurfaceProfile = null }: VoiceSettingsViewProps) {
   const [state, setState] = useState<VoiceSettingsState>(initialVoiceSettingsState)
   const [installingVoiceId, setInstallingVoiceId] = useState<string | null>(null)
-  const [pendingPackId, setPendingPackId] = useState<string | null>(null)
   const [installMessage, setInstallMessage] = useState<string | null>(null)
   const [pendingActionKey, setPendingActionKey] = useState<string | null>(null)
   const [mutationMessage, setMutationMessage] = useState<string | null>(null)
@@ -256,7 +248,6 @@ export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfil
   const packRows = useMemo(() => toPackRows(state.capabilities, state.packs), [state.capabilities, state.packs])
   const readyLanguages = useMemo(() => languageList(state.capabilities?.ready_languages), [state.capabilities])
   const canShowInstall = state.managementState === 'ready'
-  const canShowPackActions = canShowInstall && state.languageCatalogState === 'ready'
   const actionPending = pendingActionKey !== null || state.managementState === 'loading'
   const transportKind = client.transport?.kind ?? 'http'
   const surfaceProfile = useMemo(() => providedSurfaceProfile ?? voiceSettingsSurfaceProfile({
@@ -265,7 +256,7 @@ export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfil
     engineCapabilities: state.capabilities?.engine_capabilities,
   }), [providedSurfaceProfile, transportKind, runtimeProfile, state.capabilities?.engine_capabilities])
   const languageCatalogMessage = state.languageCatalogState === 'limited'
-    ? 'Language downloads could not be loaded. Review access and try again.'
+    ? 'Language options could not be loaded. Review access and try again.'
     : null
 
   async function installProfile(profile: ManagedVoice) {
@@ -293,93 +284,6 @@ export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfil
       setInstallMessage(productVoiceSettingsErrorCopy(error, 'Voice was not added. Try again.'))
     } finally {
       setInstallingVoiceId(null)
-      setPendingActionKey(null)
-    }
-  }
-
-  async function installLanguagePack(pack: ManagedLanguagePack) {
-    if (!pack.installable || actionPending || !adminActionReady) return
-    const actionKey = actionKeyFor('install-pack', pack.packId)
-    setPendingPackId(pack.packId)
-    setPendingActionKey(actionKey)
-    setMutationMessage('Adding language.')
-    try {
-      const result = await runPackAdminMutation<PackInstallStatus>(client, {
-        methodId: TTS_MANAGE_METHODS.installLanguagePack,
-        payload: {
-          pack_id: pack.packId,
-          ...(pack.revision ? { expected_revision: pack.revision } : {}),
-          operation_id: createPackOperationId('install-pack')
-        },
-        reason: adminReasonFor('Add spoken reply language', adminReasonValue),
-        reauthConfirmed: adminReviewConfirmed,
-        affectedResources: affectedPackResources(pack),
-        path: routePath('TTS', 'InstallLanguagePack')
-      })
-      setMutationMessage(packInstallOutcomeCopy(result.status))
-      if (isPackInstallSuccess(result.status)) await Promise.all([loadManagedProfiles('Refresh available voice settings'), refreshNow()])
-    } catch (error) {
-      setMutationMessage(productVoiceSettingsErrorCopy(error, 'Language was not added. Try again.'))
-    } finally {
-      setPendingPackId(null)
-      setPendingActionKey(null)
-    }
-  }
-
-  async function setDefaultLanguagePack(pack: ManagedLanguagePack) {
-    if (!pack.canSetDefault || actionPending || !adminActionReady) return
-    const actionKey = actionKeyFor('default-pack', pack.packId)
-    setPendingPackId(pack.packId)
-    setPendingActionKey(actionKey)
-    setMutationMessage('Updating language choice.')
-    try {
-      const result = await runPackAdminMutation<PackDefaultStatus>(client, {
-        methodId: TTS_MANAGE_METHODS.setDefaultLanguagePack,
-        payload: {
-          pack_id: pack.packId,
-          ...(pack.revision ? { expected_revision: pack.revision } : {}),
-          operation_id: createPackOperationId('default-pack')
-        },
-        reason: adminReasonFor('Update spoken reply language choice', adminReasonValue),
-        reauthConfirmed: adminReviewConfirmed,
-        affectedResources: affectedPackResources(pack),
-        path: routePath('TTS', 'SetDefaultLanguagePack')
-      })
-      setMutationMessage(packDefaultOutcomeCopy(result.status))
-      if (isPackDefaultSuccess(result.status)) await Promise.all([loadManagedProfiles('Refresh available voice settings'), refreshNow()])
-    } catch (error) {
-      setMutationMessage(productVoiceSettingsErrorCopy(error, 'Language choice was not changed. Try again.'))
-    } finally {
-      setPendingPackId(null)
-      setPendingActionKey(null)
-    }
-  }
-
-  async function removeLanguagePack(pack: ManagedLanguagePack) {
-    if (!pack.canRemove || actionPending || !adminActionReady) return
-    const actionKey = actionKeyFor('remove-pack', pack.packId)
-    setPendingPackId(pack.packId)
-    setPendingActionKey(actionKey)
-    setMutationMessage('Removing language.')
-    try {
-      const result = await runPackAdminMutation<PackRemoveStatus>(client, {
-        methodId: TTS_MANAGE_METHODS.removeLanguagePack,
-        payload: {
-          pack_id: pack.packId,
-          ...(pack.revision ? { expected_revision: pack.revision } : {}),
-          operation_id: createPackOperationId('remove-pack')
-        },
-        reason: adminReasonFor('Remove spoken reply language', adminReasonValue),
-        reauthConfirmed: adminReviewConfirmed,
-        affectedResources: affectedPackResources(pack),
-        path: routePath('TTS', 'RemoveLanguagePack')
-      })
-      setMutationMessage(packRemoveOutcomeCopy(result.status))
-      if (isPackRemoveSuccess(result.status)) await Promise.all([loadManagedProfiles('Refresh available voice settings'), refreshNow()])
-    } catch (error) {
-      setMutationMessage(productVoiceSettingsErrorCopy(error, 'Language was not removed. Try again.'))
-    } finally {
-      setPendingPackId(null)
       setPendingActionKey(null)
     }
   }
@@ -468,9 +372,9 @@ export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfil
         ariaLabel="Spoken reply summary"
         items={[
           {
-            label: 'Readiness',
+            label: 'Spoken replies',
             value: readinessLabel(state.capabilities),
-            caption: surfaceProfile.localSpeechPack.canRunLocalTts ? 'Spoken replies can use available voices.' : 'Spoken replies need attention.',
+            caption: spokenReplyReadinessCaption(state.capabilities, surfaceProfile),
             tone: state.capabilities?.ready ? 'success' : 'warning'
           },
           {
@@ -520,10 +424,10 @@ export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfil
         </div>
       </Card>
 
-      <Card title="Language downloads" description="Languages Aurora can add when selected.">
+      <Card title="Language options" description="Languages available through voices Aurora can add.">
         <div className="flex flex-col gap-3">
           {state.managementState === 'locked' ? (
-            <p className="text-sm text-muted-foreground">Show available voices to manage language downloads.</p>
+            <p className="text-sm text-muted-foreground">Show available voices to view language options.</p>
           ) : null}
           {languageCatalogMessage ? (
             <p role="status" className="text-sm text-muted-foreground">{languageCatalogMessage}</p>
@@ -536,41 +440,11 @@ export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfil
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={pack.ready ? 'default' : 'secondary'}>{pack.badge}</Badge>
-                {canShowPackActions && pack.installable ? (
-                  <Button
-                    variant="outline"
-                    className="h-8 px-3 text-xs"
-                    onClick={() => void installLanguagePack(pack)}
-                    disabled={actionPending || !adminActionReady}
-                  >
-                    {pendingPackId === pack.packId ? 'Adding' : 'Add and use'}
-                  </Button>
-                ) : null}
-                {canShowPackActions && pack.canSetDefault ? (
-                  <Button
-                    variant="outline"
-                    className="h-8 px-3 text-xs"
-                    onClick={() => void setDefaultLanguagePack(pack)}
-                    disabled={actionPending || !adminActionReady}
-                  >
-                    {pendingPackId === pack.packId ? 'Updating' : 'Use by default'}
-                  </Button>
-                ) : null}
-                {canShowPackActions && pack.canRemove ? (
-                  <Button
-                    variant="outline"
-                    className="h-8 px-3 text-xs"
-                    onClick={() => void removeLanguagePack(pack)}
-                    disabled={actionPending || !adminActionReady}
-                  >
-                    {pendingPackId === pack.packId ? 'Removing' : 'Remove'}
-                  </Button>
-                ) : null}
               </div>
             </div>
           ))}
           {packRows.length === 0 && state.managementState === 'ready' && state.languageCatalogState === 'ready' ? (
-            <p className="text-sm text-muted-foreground">No language downloads are available yet.</p>
+            <p className="text-sm text-muted-foreground">No language options are available yet.</p>
           ) : null}
         </div>
       </Card>
@@ -718,22 +592,11 @@ interface VoiceManagePayload extends JsonObject {
   operation_id: string
 }
 
-interface PackManagePayload extends JsonObject {
-  pack_id: string
-  expected_revision?: string
-  operation_id: string
-}
-
 type VoiceManageMutationMethodId =
   | typeof TTS_MANAGE_METHODS.install
   | typeof TTS_MANAGE_METHODS.remove
   | typeof TTS_MANAGE_METHODS.setDefault
   | typeof TTS_MANAGE_METHODS.delete
-
-type PackManageMutationMethodId =
-  | typeof TTS_MANAGE_METHODS.installLanguagePack
-  | typeof TTS_MANAGE_METHODS.removeLanguagePack
-  | typeof TTS_MANAGE_METHODS.setDefaultLanguagePack
 
 interface MutationOutput<TStatus extends string> {
   status: TStatus
@@ -765,34 +628,8 @@ async function runVoiceAdminMutation<TStatus extends string>(
   return result.data
 }
 
-async function runPackAdminMutation<TStatus extends string>(
-  client: AuroraClient,
-  input: {
-    methodId: PackManageMutationMethodId
-    payload: PackManagePayload
-    reason: string
-    reauthConfirmed: boolean
-    affectedResources: string[]
-    path: string
-  }
-): Promise<MutationOutput<TStatus>> {
-  const result = await client.admin.execute<MutationOutput<TStatus>>({
-    methodId: input.methodId,
-    payload: input.payload,
-    reason: input.reason,
-    reauthConfirmed: input.reauthConfirmed,
-    affectedResources: input.affectedResources,
-    path: input.path
-  })
-  return result.data
-}
-
 function affectedVoiceResources(profile: Pick<ManagedVoice, 'voiceId'>): string[] {
   return [`voice-profile:${profile.voiceId}`]
-}
-
-function affectedPackResources(pack: Pick<ManagedLanguagePack, 'packId'>): string[] {
-  return [`voice-language:${pack.packId}`]
 }
 
 function voiceSettingsSurfaceProfile(input: {
@@ -840,9 +677,6 @@ interface ManagedLanguagePack {
   label: string
   detail: string
   ready: boolean
-  installable: boolean
-  canSetDefault: boolean
-  canRemove: boolean
   badge: string
 }
 
@@ -929,10 +763,7 @@ function toManagedLanguagePack(
     label: safeVoiceText(pack.display_name, languages.length > 0 ? languages.join(', ') : `Language option ${index + 1}`),
     detail: languagePackDetail({ installed, ready, isDefault, active, engineCompatible, downloadProgress, languages }),
     ready,
-    installable: !installed && pack.downloadable !== false && engineCompatible,
-    canSetDefault: installed && ready && !isDefault && engineCompatible,
-    canRemove: installed && !isDefault && !active,
-    badge: isDefault ? 'Default' : ready ? 'Ready' : installed ? 'Needs setup' : downloadProgress !== null ? 'Adding' : 'Available to add'
+    badge: isDefault ? 'Default' : ready ? 'Ready' : installed ? 'Needs setup' : downloadProgress !== null ? 'Adding' : 'Available'
   }
 }
 
@@ -982,7 +813,7 @@ function languagePackDetail(input: {
   if (input.active) return `Currently used for spoken replies.${languageCopy}`
   if (input.ready) return `Ready for spoken replies.${languageCopy}`
   if (input.installed) return `Available but not ready yet.${languageCopy}`
-  return `Can be added when selected.${languageCopy}`
+  return `Available with supported voices.${languageCopy}`
 }
 
 function readinessLabel(capabilities: TtsCapabilities | null): string {
@@ -990,6 +821,13 @@ function readinessLabel(capabilities: TtsCapabilities | null): string {
   if (capabilities.ready) return 'Ready'
   if (capabilities.model_status === 'loading') return 'Starting'
   return 'Needs setup'
+}
+
+function spokenReplyReadinessCaption(capabilities: TtsCapabilities | null, surfaceProfile: AuroraSurfaceProfile): string {
+  if (capabilities?.ready !== true) return 'Choose an available voice to start.'
+  if (surfaceProfile.localSpeechPack.canRunLocalTts) return 'This device can speak without a remote connection.'
+  if (surfaceProfile.isRemoteConsole) return 'Spoken replies come from the connected Aurora device.'
+  return 'This device needs attention before it can speak on its own.'
 }
 
 function languageList(values: readonly string[] | null | undefined): string[] {
@@ -1077,7 +915,7 @@ function voiceSettingsManagementCopy(error: unknown): string {
 }
 
 function languageCatalogUnavailableCopy(): string {
-  return 'Language downloads could not be loaded. Review access and try again.'
+  return 'Language options could not be loaded. Review access and try again.'
 }
 
 function installOutcomeCopy(status: InstallStatus): string {
@@ -1113,30 +951,6 @@ function deleteOutcomeCopy(status: DeleteStatus): string {
   return 'Voice was not deleted. Try again.'
 }
 
-function packInstallOutcomeCopy(status: PackInstallStatus): string {
-  if (status === 'installed') return 'Language added and selected.'
-  if (status === 'queued') return 'Language will be added soon.'
-  if (status === 'unchanged') return 'Language is already available.'
-  if (status === 'revision_conflict') return 'Language changed before it could be added. Try again.'
-  if (status === 'not_found') return 'Language is no longer available.'
-  return 'Language was not added. Try again.'
-}
-
-function packDefaultOutcomeCopy(status: PackDefaultStatus): string {
-  if (status === 'activated') return 'Language choice updated.'
-  if (status === 'revision_conflict') return 'Language changed before it could be selected. Try again.'
-  if (status === 'not_found') return 'Language is no longer available.'
-  return 'Language choice was not changed. Try again.'
-}
-
-function packRemoveOutcomeCopy(status: PackRemoveStatus): string {
-  if (status === 'removed') return 'Language removed.'
-  if (status === 'unchanged') return 'Language was already removed.'
-  if (status === 'revision_conflict') return 'Language changed before it could be removed. Try again.'
-  if (status === 'not_found') return 'Language is no longer available.'
-  return 'Language was not removed. Try again.'
-}
-
 function isInstallSuccess(status: InstallStatus): boolean {
   return status === 'installed' || status === 'queued' || status === 'unchanged'
 }
@@ -1151,18 +965,6 @@ function isRemoveSuccess(status: RemoveStatus): boolean {
 
 function isDeleteSuccess(status: DeleteStatus): boolean {
   return status === 'deleted' || status === 'not_found'
-}
-
-function isPackInstallSuccess(status: PackInstallStatus): boolean {
-  return status === 'installed' || status === 'queued' || status === 'unchanged'
-}
-
-function isPackDefaultSuccess(status: PackDefaultStatus): boolean {
-  return status === 'activated'
-}
-
-function isPackRemoveSuccess(status: PackRemoveStatus): boolean {
-  return status === 'removed' || status === 'unchanged' || status === 'not_found'
 }
 
 function createInstallOperationId(): string {
@@ -1180,13 +982,6 @@ function createVoiceOperationId(kind: VoiceMutationKind): string {
   return `voice-${kind}-${Date.now().toString(36)}-${fallbackVoiceOperationSequence.toString(36)}`
 }
 
-function createPackOperationId(kind: PackMutationKind): string {
-  const randomId = globalThis.crypto?.randomUUID?.()
-  if (randomId) return `voice-${kind}-${randomId}`
-  fallbackVoiceOperationSequence = (fallbackVoiceOperationSequence + 1) % Number.MAX_SAFE_INTEGER
-  return `voice-${kind}-${Date.now().toString(36)}-${fallbackVoiceOperationSequence.toString(36)}`
-}
-
-function actionKeyFor(kind: VoiceMutationKind | PackMutationKind, voiceId: string): string {
+function actionKeyFor(kind: VoiceMutationKind, voiceId: string): string {
   return `${kind}:${voiceId}`
 }

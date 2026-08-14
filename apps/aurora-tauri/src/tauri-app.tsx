@@ -1896,7 +1896,13 @@ function TauriSettingsPage({
         hidden={activeTab !== "voice"}
         className="aui-tab-panel"
       >
-        {activeTab === "voice" ? <VoiceSettingsView client={client} /> : null}
+        {activeTab === "voice" ? (
+          <VoiceSettingsView
+            client={client}
+            runtimeProfile={nativeContext.runtimeProfile ?? null}
+            surfaceProfile={nativeContext.surfaceProfile}
+          />
+        ) : null}
       </section>
       <section
         id="settings-panel-configuration"

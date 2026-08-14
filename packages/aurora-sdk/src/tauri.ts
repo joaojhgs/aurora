@@ -63,11 +63,6 @@ export interface TauriCommandNames {
   iosVoiceForegroundCaptureStop: string
   iosVoiceForegroundCaptureFinish: string
   iosVoiceForegroundCaptureStatus: string
-  nativeSpeechPackStatus: string
-  nativeSpeechPackCatalog: string
-  nativeSpeechPackInstall: string
-  nativeSpeechPackRemove: string
-  nativeSpeechPackSetDefault: string
   iosBackgroundStatus: string
   dialogStatus: string
   audioBridgeStatus: string
@@ -179,52 +174,6 @@ export interface IosVoiceCaptureStatus {
   rawAudioLogged: false
   backgroundListening: false
   siriReplacement: false
-  secretsRedacted: true
-}
-
-export interface TauriNativeSpeechEngineCapabilities {
-  vad?: boolean
-  kws?: boolean
-  stt?: boolean
-  tts?: boolean
-}
-
-export interface TauriNativeSpeechPackCatalogEntry {
-  packId: string
-  displayName?: string | null
-  languages: string[]
-  installed: boolean
-  ready: boolean
-  active?: boolean
-  default?: boolean
-  downloadable: boolean
-  compatibleEngine: boolean
-  progress?: number | null
-  revision?: string | null
-}
-
-export interface TauriNativeSpeechPackStatus {
-  available: boolean
-  state: 'ready' | 'downloading' | 'unavailable' | 'incompatible' | 'over-budget' | 'disabled' | string
-  activePackId?: string | null
-  defaultPackId?: string | null
-  languages: string[]
-  engineCapabilities: TauriNativeSpeechEngineCapabilities
-  catalog: TauriNativeSpeechPackCatalogEntry[]
-  secretsRedacted: true
-}
-
-export interface TauriNativeSpeechPackRequest {
-  packId: string
-  expectedRevision?: string | null
-  operationId?: string | null
-}
-
-export interface TauriNativeSpeechPackMutationResult {
-  status: 'installed' | 'removed' | 'activated' | 'queued' | 'unchanged' | 'not_found' | 'rejected' | 'revision_conflict' | string
-  packId: string
-  revision?: string | null
-  idempotent?: boolean
   secretsRedacted: true
 }
 
@@ -414,11 +363,6 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   iosVoiceForegroundCaptureStop: 'aurora_ios_voice_foreground_capture_stop',
   iosVoiceForegroundCaptureFinish: 'aurora_ios_voice_foreground_capture_finish',
   iosVoiceForegroundCaptureStatus: 'aurora_ios_voice_foreground_capture_status',
-  nativeSpeechPackStatus: 'aurora_native_speech_pack_status',
-  nativeSpeechPackCatalog: 'aurora_native_speech_pack_catalog',
-  nativeSpeechPackInstall: 'aurora_native_speech_pack_install',
-  nativeSpeechPackRemove: 'aurora_native_speech_pack_remove',
-  nativeSpeechPackSetDefault: 'aurora_native_speech_pack_set_default',
   iosBackgroundStatus: 'aurora_ios_background_status',
   dialogStatus: 'aurora_dialog_status',
   audioBridgeStatus: 'aurora_audio_bridge_status',
@@ -596,26 +540,6 @@ export class TauriLocalTransport implements AuroraTransport {
 
   getIosVoiceForegroundCaptureStatus(): Promise<IosVoiceCaptureStatus> {
     return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceForegroundCaptureStatus)
-  }
-
-  getNativeSpeechPackStatus(): Promise<TauriNativeSpeechPackStatus> {
-    return this.invokeCommand<TauriNativeSpeechPackStatus>(this.commands.nativeSpeechPackStatus)
-  }
-
-  getNativeSpeechPackCatalog(): Promise<TauriNativeSpeechPackCatalogEntry[]> {
-    return this.invokeCommand<TauriNativeSpeechPackCatalogEntry[]>(this.commands.nativeSpeechPackCatalog)
-  }
-
-  installNativeSpeechPack(request: TauriNativeSpeechPackRequest): Promise<TauriNativeSpeechPackMutationResult> {
-    return this.invokeCommand<TauriNativeSpeechPackMutationResult>(this.commands.nativeSpeechPackInstall, { request })
-  }
-
-  removeNativeSpeechPack(request: TauriNativeSpeechPackRequest): Promise<TauriNativeSpeechPackMutationResult> {
-    return this.invokeCommand<TauriNativeSpeechPackMutationResult>(this.commands.nativeSpeechPackRemove, { request })
-  }
-
-  setDefaultNativeSpeechPack(request: TauriNativeSpeechPackRequest): Promise<TauriNativeSpeechPackMutationResult> {
-    return this.invokeCommand<TauriNativeSpeechPackMutationResult>(this.commands.nativeSpeechPackSetDefault, { request })
   }
 
   getIosBackgroundStatus(): Promise<TauriNativeFeatureStatus> {

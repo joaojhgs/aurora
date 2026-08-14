@@ -19,9 +19,6 @@ type InstallStatus = 'installed' | 'not_found' | 'queued' | 'rejected' | 'revisi
 type RemoveStatus = 'drained' | 'not_found' | 'rejected' | 'removed' | 'revision_conflict' | 'unchanged'
 type DefaultStatus = 'activated' | 'drained' | 'not_found' | 'rejected' | 'revision_conflict'
 type DeleteStatus = 'deleted' | 'not_found' | 'rejected' | 'revision_conflict'
-type PackInstallStatus = 'installed' | 'not_found' | 'queued' | 'rejected' | 'revision_conflict' | 'unchanged'
-type PackRemoveStatus = 'not_found' | 'rejected' | 'removed' | 'revision_conflict' | 'unchanged'
-type PackDefaultStatus = 'activated' | 'not_found' | 'rejected' | 'revision_conflict'
 
 interface Capabilities {
   contract_revision: 'aurora-tts-capabilities-v1'
@@ -647,7 +644,7 @@ describe('VoiceSettingsView', () => {
     await unmount()
   })
 
-  it('shows open catalog languages and downloads a selected absent language before use', async () => {
+  it('shows language catalog metadata but downloads only the selected voice', async () => {
     const adminExecute = vi.fn(async (input: { methodId: string }) => {
       if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: [profile({ installed: false, ready: false, compatible_language_pack_ids: ['pt-BR-local'] })] })
       if (input.methodId === 'TTS.ListLanguagePacks') {
@@ -667,7 +664,7 @@ describe('VoiceSettingsView', () => {
           ],
         })
       }
-      if (input.methodId === 'TTS.InstallLanguagePack') return adminResult(mutationResult<PackInstallStatus>('installed'))
+      if (input.methodId === 'TTS.InstallVoiceProfile') return adminResult(installResult('installed'))
       throw new Error(`Unexpected action: ${input.methodId}`)
     })
     const client = voiceClient({
@@ -689,31 +686,38 @@ describe('VoiceSettingsView', () => {
     await loadManagedVoices(container)
     const text = visibleText(container)
     expect(text).toContain('Brazilian Portuguese')
-    expect(text).toContain('Can be added when selected.')
+    expect(text).toContain('Available with supported voices.')
     expect(text).not.toContain('pt-BR-local')
+    expect(buttonsByText(container, 'Add and use')).toHaveLength(0)
 
     await act(async () => {
-      buttonByText(container, 'Add and use').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      buttonByText(container, 'Add voice').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await flushReactWork()
 
     expect(adminExecute).toHaveBeenCalledWith(expect.objectContaining({
-      methodId: 'TTS.InstallLanguagePack',
+      methodId: 'TTS.InstallVoiceProfile',
       payload: expect.objectContaining({
-        pack_id: 'pt-BR-local',
-        operation_id: expect.stringMatching(/^voice-install-pack-/u)
+        voice_id: 'standard:en_pack:ava',
+        expected_revision: 'rev-1',
+        operation_id: expect.stringMatching(/^voice-install-/u)
       }),
-      reason: 'Add spoken reply language: Manage spoken reply voices',
+      reason: 'Add spoken reply voice: Manage spoken reply voices',
       reauthConfirmed: true,
-      affectedResources: ['voice-language:pt-BR-local'],
-      path: '/api/TTS/InstallLanguagePack'
+      affectedResources: ['voice-profile:standard:en_pack:ava'],
+      path: '/api/TTS/InstallVoiceProfile'
     }))
-    expect(visibleText(container)).toContain('Language added and selected.')
+    expect(new Set(adminExecute.mock.calls.map(([input]) => input.methodId))).toEqual(new Set([
+      'TTS.ListVoiceProfiles',
+      'TTS.ListLanguagePacks',
+      'TTS.InstallVoiceProfile',
+    ]))
+    expect(visibleText(container)).toContain('Voice added.')
     assertNoForbiddenCopy(visibleText(container))
     await unmount()
   })
 
-  it('shows a limited state instead of treating missing language downloads as an empty catalog', async () => {
+  it('shows a limited state instead of treating missing language options as an empty catalog', async () => {
     const adminExecute = vi.fn(async (input: { methodId: string }) => {
       if (input.methodId === 'TTS.ListVoiceProfiles') {
         return adminResult({
@@ -747,8 +751,8 @@ describe('VoiceSettingsView', () => {
     await loadManagedVoices(container)
 
     const text = visibleText(container)
-    expect(text).toContain('Language downloads could not be loaded. Review access and try again.')
-    expect(text).not.toContain('No language downloads are available yet.')
+    expect(text).toContain('Language options could not be loaded. Review access and try again.')
+    expect(text).not.toContain('No language options are available yet.')
     expect(text).not.toContain('pt-BR-local')
     expect(buttonsByText(container, 'Add and use')).toHaveLength(0)
     assertNoForbiddenCopy(text)
@@ -785,7 +789,8 @@ describe('VoiceSettingsView', () => {
 
     const text = visibleText(container)
     expect(text).toContain('Chinese')
-    expect(text).toContain('Spoken replies need attention.')
+    expect(text).toContain('Spoken replies come from the connected Aurora device.')
+    expect(text).not.toContain('This device can speak without a remote connection.')
     expect(text).toContain('Used by default for spoken replies.')
     expect(text).not.toContain('zh-Hant-TW-local')
     assertNoForbiddenCopy(text)
@@ -819,7 +824,7 @@ describe('VoiceSettingsView', () => {
     await loadManagedVoices(readyRendered.container)
 
     const readyText = visibleText(readyRendered.container)
-    expect(readyText).toContain('Spoken replies can use available voices.')
+    expect(readyText).toContain('This device can speak without a remote connection.')
     expect(readyText).toContain('Used by default for spoken replies.')
     expect(readyText).not.toContain('zh-Hant-TW-local')
     assertNoForbiddenCopy(readyText)
@@ -854,9 +859,6 @@ function voiceClient(overrides: {
   const adminExecute = overrides.adminExecute ?? vi.fn(async (input: { methodId: string }) => {
     if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: overrides.profiles ?? [] })
     if (input.methodId === 'TTS.ListLanguagePacks') return adminResult({ language_packs: overrides.languagePacks ?? [] })
-    if (input.methodId === 'TTS.InstallLanguagePack') return adminResult(mutationResult<PackInstallStatus>('installed'))
-    if (input.methodId === 'TTS.RemoveLanguagePack') return adminResult(mutationResult<PackRemoveStatus>('removed'))
-    if (input.methodId === 'TTS.SetDefaultLanguagePack') return adminResult(mutationResult<PackDefaultStatus>('activated'))
     if (input.methodId === 'TTS.InstallVoiceProfile') return adminResult(installResult('installed'))
     if (input.methodId === 'TTS.RemoveVoiceProfile') return adminResult(mutationResult<RemoveStatus>('removed'))
     if (input.methodId === 'TTS.SetDefaultVoice') return adminResult(mutationResult<DefaultStatus>('activated'))
