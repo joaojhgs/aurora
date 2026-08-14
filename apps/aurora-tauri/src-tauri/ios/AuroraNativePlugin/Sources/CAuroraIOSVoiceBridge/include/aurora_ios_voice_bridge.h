@@ -40,6 +40,20 @@ typedef struct AuroraIosVoiceTaskPackBinding {
   uint32_t sample_rate_hz;
   // Required provider frame size selected from the catalog.
   uint32_t frame_size;
+  // Required catalog model family, for example vits_piper or pockettts.
+  const char *model_family;
+  // Optional private PocketTTS reference-audio file selected by the user.
+  const char *reference_audio_path;
+  // Optional lowercase SHA-256 for the private reference-audio file.
+  const char *reference_audio_sha256;
+  // Optional exact byte size for the private reference-audio file.
+  uint64_t reference_audio_size_bytes;
+  // Optional reference-audio sample rate.
+  uint32_t reference_audio_sample_rate_hz;
+  // Optional user-provided reference text paired with the audio.
+  const char *reference_text;
+  // Optional user-managed revision for the reference profile.
+  const char *reference_revision;
 } AuroraIosVoiceTaskPackBinding;
 
 enum {
@@ -148,6 +162,7 @@ char *aurora_ios_voice_pack_resolve_json(
     const char *root,
     const char *pack_id,
     int32_t task);
+char *aurora_ios_voice_pack_embedded_catalog_json(void);
 int32_t aurora_ios_voice_pack_remove(
     const char *root,
     const char *pack_id,

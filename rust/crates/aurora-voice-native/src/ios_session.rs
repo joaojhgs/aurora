@@ -38,8 +38,9 @@ use aurora_voice_ios_bridge::{
 #[cfg(feature = "ios-sherpa")]
 use aurora_voice_sherpa::{
     NativeKwsBackend, NativeKwsModelFiles, NativeSttBackend, NativeSttModelFiles, NativeTtsBackend,
-    NativeTtsVitsPiperModelFiles, NativeVadBackend, SherpaFiniteSttEngine, SherpaKwsPhrase,
-    SherpaKwsPhraseSet, SherpaKwsProvider, SherpaTtsProvider, SherpaVadProvider,
+    NativeTtsPocketModelFiles, NativeTtsReferenceAudio, NativeTtsVitsPiperModelFiles,
+    NativeVadBackend, SherpaFiniteSttEngine, SherpaKwsPhrase, SherpaKwsPhraseSet,
+    SherpaKwsProvider, SherpaTtsProvider, SherpaVadProvider,
 };
 use sha2::{Digest, Sha256};
 #[cfg(feature = "ios-sherpa")]
@@ -71,6 +72,10 @@ const DEFAULT_INPUT_MAX_CHUNK_SAMPLES: usize = 4_096;
 const DEFAULT_OUTPUT_CAPACITY_CHUNKS: usize = 16;
 pub const MAX_IOS_PACK_BINDINGS: usize = 16;
 const MAX_IOS_PACK_PATH_BYTES: usize = 4096;
+const MAX_IOS_REFERENCE_TEXT_BYTES: usize = 1024;
+const MAX_IOS_REFERENCE_AUDIO_BYTES: u64 = 16 * 1024 * 1024;
+#[cfg(feature = "ios-sherpa")]
+const MAX_IOS_REFERENCE_AUDIO_SAMPLES: usize = 48_000 * 30;
 
 #[cfg(not(feature = "ios-sherpa"))]
 type IosFiniteSttProvider = NativeGatewayFiniteStt;
@@ -149,6 +154,8 @@ pub struct IosVoicePackBinding {
     language: String,
     sample_rate_hz: u32,
     frame_size: u32,
+    model_family: String,
+    tts_reference: Option<IosTtsReferenceBinding>,
     files: Vec<IosVoicePackFileBinding>,
 }
 
@@ -165,6 +172,8 @@ impl IosVoicePackBinding {
         language: impl Into<String>,
         sample_rate_hz: u32,
         frame_size: u32,
+        model_family: impl Into<String>,
+        tts_reference: Option<IosTtsReferenceBinding>,
         files: Vec<IosVoicePackFileBinding>,
     ) -> Result<Self, ModelPackError> {
         let slot_id = slot_id.into();
@@ -174,6 +183,7 @@ impl IosVoicePackBinding {
         let expected_sha256 = expected_sha256.into();
         let runtime_revision = runtime_revision.into();
         let language = language.into();
+        let model_family = model_family.into();
         if pack_id.is_empty()
             || pack_path.as_os_str().is_empty()
             || pack_path.as_os_str().len() > MAX_IOS_PACK_PATH_BYTES
@@ -183,6 +193,7 @@ impl IosVoicePackBinding {
             || language.is_empty()
             || sample_rate_hz == 0
             || frame_size == 0
+            || model_family.is_empty()
             || files.is_empty()
             || !matches!(
                 task,
@@ -208,6 +219,8 @@ impl IosVoicePackBinding {
             language,
             sample_rate_hz,
             frame_size,
+            model_family,
+            tts_reference,
             files,
         })
     }
@@ -252,6 +265,14 @@ impl IosVoicePackBinding {
         self.frame_size
     }
 
+    pub fn model_family(&self) -> &str {
+        &self.model_family
+    }
+
+    pub fn tts_reference(&self) -> Option<&IosTtsReferenceBinding> {
+        self.tts_reference.as_ref()
+    }
+
     pub fn files(&self) -> &[IosVoicePackFileBinding] {
         &self.files
     }
@@ -271,7 +292,94 @@ impl fmt::Debug for IosVoicePackBinding {
             .field("language_bytes", &self.language.len())
             .field("sample_rate_hz", &self.sample_rate_hz)
             .field("frame_size", &self.frame_size)
+            .field("model_family", &self.model_family)
+            .field("tts_reference_present", &self.tts_reference.is_some())
             .field("file_count", &self.files.len())
+            .finish()
+    }
+}
+
+/// User-selected PocketTTS reference profile stored outside the app bundle.
+#[derive(Clone, PartialEq, Eq)]
+pub struct IosTtsReferenceBinding {
+    audio_path: PathBuf,
+    expected_sha256: String,
+    expected_size_bytes: u64,
+    sample_rate_hz: u32,
+    reference_text: String,
+    revision: String,
+}
+
+impl IosTtsReferenceBinding {
+    pub fn new(
+        audio_path: impl Into<PathBuf>,
+        expected_sha256: impl Into<String>,
+        expected_size_bytes: u64,
+        sample_rate_hz: u32,
+        reference_text: impl Into<String>,
+        revision: impl Into<String>,
+    ) -> Result<Self, ModelPackError> {
+        let audio_path = audio_path.into();
+        let expected_sha256 = expected_sha256.into();
+        let reference_text = reference_text.into();
+        let revision = revision.into();
+        if audio_path.as_os_str().is_empty()
+            || audio_path.as_os_str().len() > MAX_IOS_PACK_PATH_BYTES
+            || !is_hex_sha256(&expected_sha256)
+            || expected_size_bytes == 0
+            || expected_size_bytes > MAX_IOS_REFERENCE_AUDIO_BYTES
+            || sample_rate_hz == 0
+            || reference_text.trim().is_empty()
+            || reference_text.len() > MAX_IOS_REFERENCE_TEXT_BYTES
+            || revision.is_empty()
+        {
+            return Err(ModelPackError::Store { code: "reference" });
+        }
+        Ok(Self {
+            audio_path,
+            expected_sha256,
+            expected_size_bytes,
+            sample_rate_hz,
+            reference_text,
+            revision,
+        })
+    }
+
+    pub fn audio_path(&self) -> &PathBuf {
+        &self.audio_path
+    }
+
+    pub fn expected_sha256(&self) -> &str {
+        &self.expected_sha256
+    }
+
+    pub fn expected_size_bytes(&self) -> u64 {
+        self.expected_size_bytes
+    }
+
+    pub fn sample_rate_hz(&self) -> u32 {
+        self.sample_rate_hz
+    }
+
+    pub fn reference_text(&self) -> &str {
+        &self.reference_text
+    }
+
+    pub fn revision(&self) -> &str {
+        &self.revision
+    }
+}
+
+impl fmt::Debug for IosTtsReferenceBinding {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("IosTtsReferenceBinding")
+            .field("audio_path", &"<redacted>")
+            .field("expected_sha256_bytes", &self.expected_sha256.len())
+            .field("expected_size_bytes", &self.expected_size_bytes)
+            .field("sample_rate_hz", &self.sample_rate_hz)
+            .field("reference_text_bytes", &self.reference_text.len())
+            .field("revision_bytes", &self.revision.len())
             .finish()
     }
 }
@@ -727,19 +835,51 @@ fn build_local_ios_runtime(
     let stt = SherpaFiniteSttEngine::new(stt_task, stt_backend)
         .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
 
-    let tts_files = NativeTtsVitsPiperModelFiles {
-        model_file_id: "model".to_owned(),
-        model_path: required_file(tts_binding, "model")?.path().clone(),
-        tokens_file_id: "tokens".to_owned(),
-        tokens_path: required_file(tts_binding, "tokens")?.path().clone(),
-        espeak_data_file_id: "espeak-ng-data".to_owned(),
-        espeak_data_dir: required_file(tts_binding, "espeak-ng-data")?.path().clone(),
-        lexicon_file_id: optional_file(tts_binding, "lexicon")
-            .map(|file| file.file_id().to_owned()),
-        lexicon_path: optional_file(tts_binding, "lexicon").map(|file| file.path().clone()),
-    };
-    let tts_backend = NativeTtsBackend::from_selected_vits_piper_model(&tts_task, tts_files)
-        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    let tts_backend = match tts_task.catalog_model_family() {
+        Some("vits_piper") => {
+            let tts_files = NativeTtsVitsPiperModelFiles {
+                model_file_id: "model".to_owned(),
+                model_path: required_file(tts_binding, "model")?.path().clone(),
+                tokens_file_id: "tokens".to_owned(),
+                tokens_path: required_file(tts_binding, "tokens")?.path().clone(),
+                espeak_data_file_id: "espeak-ng-data".to_owned(),
+                espeak_data_dir: required_file(tts_binding, "espeak-ng-data")?.path().clone(),
+                lexicon_file_id: optional_file(tts_binding, "lexicon")
+                    .map(|file| file.file_id().to_owned()),
+                lexicon_path: optional_file(tts_binding, "lexicon").map(|file| file.path().clone()),
+            };
+            NativeTtsBackend::from_catalog_vits_piper_model(&tts_task, tts_files)
+        }
+        Some("pockettts") => {
+            let reference = tts_binding
+                .tts_reference()
+                .ok_or(IosVoiceSessionCommandError::Unavailable)?;
+            let reference_audio = load_ios_tts_reference_audio(reference)?;
+            let tts_files = NativeTtsPocketModelFiles {
+                lm_flow_file_id: "lm-flow".to_owned(),
+                lm_flow_path: required_file(tts_binding, "lm-flow")?.path().clone(),
+                lm_main_file_id: "lm-main".to_owned(),
+                lm_main_path: required_file(tts_binding, "lm-main")?.path().clone(),
+                encoder_file_id: "encoder".to_owned(),
+                encoder_path: required_file(tts_binding, "encoder")?.path().clone(),
+                decoder_file_id: "decoder".to_owned(),
+                decoder_path: required_file(tts_binding, "decoder")?.path().clone(),
+                text_conditioner_file_id: "text-conditioner".to_owned(),
+                text_conditioner_path: required_file(tts_binding, "text-conditioner")?
+                    .path()
+                    .clone(),
+                vocab_file_id: "vocab".to_owned(),
+                vocab_path: required_file(tts_binding, "vocab")?.path().clone(),
+                token_scores_file_id: "token-scores".to_owned(),
+                token_scores_path: required_file(tts_binding, "token-scores")?.path().clone(),
+                reference_audio: Some(reference_audio),
+                reference_text: Some(reference.reference_text().to_owned()),
+            };
+            NativeTtsBackend::from_catalog_pockettts_model(&tts_task, tts_files)
+        }
+        _ => Err(aurora_voice_engine::EngineError::InvalidRequest),
+    }
+    .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
     let tts = SherpaTtsProvider::new(tts_task, tts_backend)
         .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
 
@@ -1219,6 +1359,15 @@ fn verify_ios_pack_binding(
     if digest != binding.expected_sha256() {
         return Err(IosVoiceSessionCommandError::Unavailable);
     }
+    if binding.model_family() == "pockettts" {
+        verify_ios_tts_reference_binding(
+            binding
+                .tts_reference()
+                .ok_or(IosVoiceSessionCommandError::Unavailable)?,
+        )?;
+    } else if binding.tts_reference().is_some() {
+        return Err(IosVoiceSessionCommandError::Unavailable);
+    }
     Ok(())
 }
 
@@ -1318,7 +1467,7 @@ fn task_pack_binding(
         binding.pack_id().to_owned(),
         binding.runtime_revision().to_owned(),
         binding.expected_sha256().to_owned(),
-        binding.runtime_revision().to_owned(),
+        binding.model_family().to_owned(),
         binding
             .files()
             .iter()
@@ -1330,6 +1479,137 @@ fn task_pack_binding(
         installed_bytes,
     )
     .map_err(|_| IosVoiceSessionCommandError::Unavailable)
+}
+
+#[cfg(feature = "ios-sherpa")]
+fn load_ios_tts_reference_audio(
+    binding: &IosTtsReferenceBinding,
+) -> Result<NativeTtsReferenceAudio, IosVoiceSessionCommandError> {
+    verify_ios_tts_reference_binding(binding)?;
+    let bytes =
+        fs::read(binding.audio_path()).map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    let samples = parse_pcm16_mono_reference_wav(
+        &bytes,
+        binding.sample_rate_hz(),
+        MAX_IOS_REFERENCE_AUDIO_SAMPLES,
+    )?;
+    NativeTtsReferenceAudio::new(binding.sample_rate_hz() as i32, samples)
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)
+}
+
+fn verify_ios_tts_reference_binding(
+    binding: &IosTtsReferenceBinding,
+) -> Result<(), IosVoiceSessionCommandError> {
+    let metadata = fs::symlink_metadata(binding.audio_path())
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    if metadata.file_type().is_symlink()
+        || !metadata.file_type().is_file()
+        || metadata.len() != binding.expected_size_bytes()
+        || metadata.len() > MAX_IOS_REFERENCE_AUDIO_BYTES
+        || binding.revision().is_empty()
+    {
+        return Err(IosVoiceSessionCommandError::Unavailable);
+    }
+    let digest =
+        sha256_path(binding.audio_path()).map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    if digest != binding.expected_sha256() {
+        return Err(IosVoiceSessionCommandError::Unavailable);
+    }
+    Ok(())
+}
+
+#[cfg(feature = "ios-sherpa")]
+fn parse_pcm16_mono_reference_wav(
+    bytes: &[u8],
+    sample_rate_hz: u32,
+    max_samples: usize,
+) -> Result<Vec<f32>, IosVoiceSessionCommandError> {
+    if bytes.len() < 44 || bytes.get(0..4) != Some(b"RIFF") || bytes.get(8..12) != Some(b"WAVE") {
+        return Err(IosVoiceSessionCommandError::Unavailable);
+    }
+    let declared_len = read_u32_le(bytes, 4)? as usize;
+    if declared_len.checked_add(8) != Some(bytes.len()) {
+        return Err(IosVoiceSessionCommandError::Unavailable);
+    }
+    let mut cursor = 12_usize;
+    let mut format: Option<(u16, u16, u32, u16)> = None;
+    let mut data_range = None;
+    while cursor.checked_add(8).is_some_and(|end| end <= bytes.len()) {
+        let chunk_id = &bytes[cursor..cursor + 4];
+        let chunk_len = read_u32_le(bytes, cursor + 4)? as usize;
+        let data_start = cursor
+            .checked_add(8)
+            .ok_or(IosVoiceSessionCommandError::Unavailable)?;
+        let data_end = data_start
+            .checked_add(chunk_len)
+            .ok_or(IosVoiceSessionCommandError::Unavailable)?;
+        if data_end > bytes.len() {
+            return Err(IosVoiceSessionCommandError::Unavailable);
+        }
+        match chunk_id {
+            b"fmt " => {
+                if chunk_len < 16 || format.is_some() {
+                    return Err(IosVoiceSessionCommandError::Unavailable);
+                }
+                format = Some((
+                    read_u16_le(bytes, data_start)?,
+                    read_u16_le(bytes, data_start + 2)?,
+                    read_u32_le(bytes, data_start + 4)?,
+                    read_u16_le(bytes, data_start + 14)?,
+                ));
+            }
+            b"data" => {
+                if data_range.is_some() || chunk_len == 0 || !chunk_len.is_multiple_of(2) {
+                    return Err(IosVoiceSessionCommandError::Unavailable);
+                }
+                data_range = Some(data_start..data_end);
+            }
+            _ => {}
+        }
+        let padded_len = chunk_len
+            .checked_add(chunk_len % 2)
+            .ok_or(IosVoiceSessionCommandError::Unavailable)?;
+        cursor = data_start
+            .checked_add(padded_len)
+            .ok_or(IosVoiceSessionCommandError::Unavailable)?;
+    }
+    let Some((format_tag, channels, declared_sample_rate, bits_per_sample)) = format else {
+        return Err(IosVoiceSessionCommandError::Unavailable);
+    };
+    if format_tag != 1
+        || channels != 1
+        || declared_sample_rate != sample_rate_hz
+        || bits_per_sample != 16
+    {
+        return Err(IosVoiceSessionCommandError::Unavailable);
+    }
+    let Some(range) = data_range else {
+        return Err(IosVoiceSessionCommandError::Unavailable);
+    };
+    let sample_count = range.len() / 2;
+    if sample_count == 0 || sample_count > max_samples {
+        return Err(IosVoiceSessionCommandError::Unavailable);
+    }
+    Ok(bytes[range]
+        .chunks_exact(2)
+        .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / i16::MAX as f32)
+        .collect())
+}
+
+#[cfg(feature = "ios-sherpa")]
+fn read_u16_le(bytes: &[u8], offset: usize) -> Result<u16, IosVoiceSessionCommandError> {
+    let slice = bytes
+        .get(offset..offset + 2)
+        .ok_or(IosVoiceSessionCommandError::Unavailable)?;
+    Ok(u16::from_le_bytes([slice[0], slice[1]]))
+}
+
+#[cfg(feature = "ios-sherpa")]
+fn read_u32_le(bytes: &[u8], offset: usize) -> Result<u32, IosVoiceSessionCommandError> {
+    let slice = bytes
+        .get(offset..offset + 4)
+        .ok_or(IosVoiceSessionCommandError::Unavailable)?;
+    Ok(u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]))
 }
 
 fn sha256_path(path: &PathBuf) -> Result<String, std::io::Error> {
@@ -1697,6 +1977,8 @@ mod tests {
             "en-US",
             16_000,
             512,
+            "whisper",
+            None,
             vec![file.clone()],
         )
         .expect("binding");
@@ -1726,6 +2008,8 @@ mod tests {
             "en-US",
             16_000,
             512,
+            "whisper",
+            None,
             vec![file.clone(), file]
         )
         .is_err());
@@ -1766,6 +2050,51 @@ mod tests {
         assert!(verified.contains_key(&PackTask::Kws));
         assert!(verified.contains_key(&PackTask::Stt));
         assert!(verified.contains_key(&PackTask::Tts));
+    }
+
+    #[test]
+    fn ios_session_rejects_pockettts_binding_without_reference_profile() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let binding = test_pack_binding_with_family(
+            dir.path(),
+            PackTask::Tts,
+            "tts",
+            &["model", "tokens", "espeak-ng-data"],
+            "pockettts",
+            None,
+        );
+
+        assert!(matches!(
+            verify_ios_pack_binding(&binding),
+            Err(IosVoiceSessionCommandError::Unavailable)
+        ));
+    }
+
+    #[test]
+    fn ios_session_rejects_reference_profile_for_piper_binding() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let reference = IosTtsReferenceBinding::new(
+            dir.path().join("reference.wav"),
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            12,
+            16_000,
+            "Reference voice.",
+            "rev-1",
+        )
+        .expect("reference binding");
+        let binding = test_pack_binding_with_family(
+            dir.path(),
+            PackTask::Tts,
+            "tts",
+            &["model", "tokens", "espeak-ng-data"],
+            "vits_piper",
+            Some(reference),
+        );
+
+        assert!(matches!(
+            verify_ios_pack_binding(&binding),
+            Err(IosVoiceSessionCommandError::Unavailable)
+        ));
     }
 
     #[test]
@@ -1848,6 +2177,8 @@ mod tests {
             "en-US",
             16_000,
             512,
+            "whisper",
+            None,
             vec![IosVoicePackFileBinding::new(
                 "encoder",
                 target.clone(),
@@ -1868,6 +2199,30 @@ mod tests {
         task: PackTask,
         slot: &str,
         file_ids: &[&str],
+    ) -> IosVoicePackBinding {
+        test_pack_binding_with_family(
+            root,
+            task,
+            slot,
+            file_ids,
+            match task {
+                PackTask::Vad => "silero_vad",
+                PackTask::Kws | PackTask::Wakeword => "zipformer",
+                PackTask::Stt => "whisper",
+                PackTask::Tts => "vits_piper",
+                _ => "unknown",
+            },
+            None,
+        )
+    }
+
+    fn test_pack_binding_with_family(
+        root: &std::path::Path,
+        task: PackTask,
+        slot: &str,
+        file_ids: &[&str],
+        model_family: &str,
+        tts_reference: Option<IosTtsReferenceBinding>,
     ) -> IosVoicePackBinding {
         let pack = root.join(format!("{slot}.pack"));
         std::fs::write(&pack, format!("cached {slot} pack")).expect("write pack");
@@ -1900,6 +2255,8 @@ mod tests {
             "en-US",
             16_000,
             512,
+            model_family,
+            tts_reference,
             files,
         )
         .expect("binding")

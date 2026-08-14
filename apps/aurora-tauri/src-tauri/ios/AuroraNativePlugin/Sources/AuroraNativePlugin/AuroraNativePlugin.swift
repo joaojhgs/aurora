@@ -309,6 +309,7 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.iosThinProfile": true,
         "aurora.iosBiometricUnlock": true,
         "aurora.iosVoicePackCatalog": true,
+        "aurora.iosVoiceTTSReference": true,
         "aurora.iosVoiceStatus": true,
         "aurora.iosBackgroundStatus": true,
         "aurora.iosMicrophoneCapture": true,
@@ -340,6 +341,7 @@ public final class AuroraNativePlugin: Plugin {
         "ios.biometric.adminUnlock": true,
         "ios.voiceForegroundCapture": true,
         "ios.voicePackCatalog": true,
+        "ios.voiceTTSReference": true,
         "ios.notifications": notificationReady,
         "ios.backgroundVoice": true,
         "ios.appOwnedInvocation": true,
@@ -368,6 +370,7 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.iosThinProfile": "available",
         "aurora.iosBiometricUnlock": "available",
         "aurora.iosVoicePackCatalog": "available",
+        "aurora.iosVoiceTTSReference": "available",
         "aurora.iosMicrophoneCapture": voiceState,
         "aurora.iosBackgroundAudio": voiceState,
         "aurora.iosSiriReplacement": "unsupported_platform"
@@ -395,6 +398,7 @@ public final class AuroraNativePlugin: Plugin {
         "ios.biometric.adminUnlock": "available",
         "ios.voiceForegroundCapture": voiceState,
         "ios.voicePackCatalog": "available",
+        "ios.voiceTTSReference": "available",
         "ios.notifications": notificationState,
         "ios.backgroundVoice": voiceState,
         "ios.appOwnedInvocation": "available",
@@ -495,8 +499,9 @@ public final class AuroraNativePlugin: Plugin {
         "recordPermission": AuroraNativePlugin.recordPermissionLabel(permission),
         "privacyClass": "raw-audio",
         "foregroundOnly": false,
-        "supportsBackgroundListening": true,
+        "supportsBackgroundListening": false,
         "supportsUserStartedBackgroundSession": true,
+        "backgroundSessionEndsWithSystemLimits": true,
         "alwaysOnWake": false,
         "nativeTurnTransportAvailable": transportReady.available,
         "nativeTurnTransportReason": transportReady.reason ?? NSNull(),
@@ -603,6 +608,7 @@ public final class AuroraNativePlugin: Plugin {
     do {
       try session.finish(generation: generation)
       voiceSessionBackground = false
+      voiceSessionGeneration = nil
       let stats = session.captureStats() ?? voiceCapture.stats()
       invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats, background: false))
     } catch {
@@ -671,6 +677,15 @@ public final class AuroraNativePlugin: Plugin {
       invoke.resolve(payload)
     } catch {
       invoke.reject("voice_pack_activate_failed")
+    }
+  }
+
+  @objc public func voiceTTSReferenceSet(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraIOSVoiceTTSReferenceSetArgs.self)
+      invoke.resolve(try packManager.setTTSReference(args))
+    } catch {
+      invoke.reject("voice_tts_reference_set_failed")
     }
   }
 
@@ -841,6 +856,7 @@ public final class AuroraNativePlugin: Plugin {
         "platform": "ios",
         "recordPermission": AuroraNativePlugin.recordPermissionLabel(permission),
         "supportsUserStartedBackgroundSession": true,
+        "backgroundSessionEndsWithSystemLimits": true,
         "requiresExplicitStartInApp": true,
         "alwaysOnWake": false,
         "wakeAfterForceTermination": false,
@@ -1246,24 +1262,70 @@ public final class AuroraNativePlugin: Plugin {
   }
 
   private static func localLightInferenceStatusPayload() -> [String: Any] {
+    let voicePackStatus = AuroraIOSVoicePackManager.status()
+    let catalogVisible = localVoiceCatalogVisible(voicePackStatus)
+    let activeModelId = readyLocalVoiceModelId(voicePackStatus)
+    let modelPresent = activeModelId != nil
+    let requestable = modelPresent
+    let available = catalogVisible || requestable
+    let state = requestable ? "available" : (catalogVisible ? "needs_model" : "degraded")
+    let reason = requestable
+      ? "ios_voice_packs_installed_and_active"
+      : (
+        catalogVisible
+          ? "ios_voice_catalog_ready_but_required_packs_missing"
+          : "backend_model_catalog_and_device_model_proof_required"
+      )
     [
       "platform": "ios",
       "providerId": "native:mobile-local-light",
-      "available": false,
-      "requestable": false,
-      "modelRuntimeProvider": false,
+      "available": available,
+      "requestable": requestable,
+      "modelRuntimeProvider": requestable,
       "backendModelCatalogRequired": true,
       "hardwareAcceleration": "unknown",
-      "modelId": NSNull(),
-      "modelPresent": false,
-      "permissionGranted": false,
-      "state": "degraded",
+      "modelId": activeModelId ?? NSNull(),
+      "modelPresent": modelPresent,
+      "permissionGranted": true,
+      "state": state,
       "fallbackAvailable": true,
       "fallbackProviderId": "local:Orchestrator:llama-cpp",
-      "reason": "backend_model_catalog_and_device_model_proof_required",
+      "reason": reason,
       "evidenceSource": "ios-native-local-light-adapter",
       "secretsRedacted": true
     ]
+  }
+
+  private static func localVoiceCatalogVisible(_ status: [String: Any]) -> Bool {
+    if let count = status["count"] as? Int, count > 0 {
+      return true
+    }
+    if let count = status["count"] as? NSNumber, count.intValue > 0 {
+      return true
+    }
+    return (status["packs"] as? [[String: Any]])?.isEmpty == false
+  }
+
+  private static func readyLocalVoiceModelId(_ status: [String: Any]) -> String? {
+    guard let activeSlots = status["activeSlots"] as? [String: String],
+          let packs = status["packs"] as? [[String: Any]] else {
+      return nil
+    }
+    var sttPackId: String?
+    for requiredSlot in ["vad", "kws", "stt", "tts"] {
+      guard let packId = activeSlots[requiredSlot], packId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+            let pack = packs.first(where: { ($0["packId"] as? String) == packId }),
+            let installed = pack["installed"] as? Bool,
+            let acknowledged = pack["acknowledged"] as? Bool,
+            installed,
+            acknowledged else {
+        return nil
+      }
+      if requiredSlot == "stt" {
+        sttPackId = packId
+      }
+    }
+    return sttPackId
   }
 
   private static func voiceCapturePayload(_ stats: AuroraIOSVoiceCaptureStats, background: Bool) -> [String: Any] {

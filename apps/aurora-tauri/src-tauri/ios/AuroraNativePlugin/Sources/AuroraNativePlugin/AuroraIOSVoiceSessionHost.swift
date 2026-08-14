@@ -24,6 +24,13 @@ private struct AuroraIOSVoiceTaskPackPathBinding {
   let packId: String
   let sampleRateHz: UInt32
   let frameSize: UInt32
+  let modelFamily: String
+  let referenceAudioPath: String?
+  let referenceAudioSha256: String?
+  let referenceAudioSizeBytes: UInt64
+  let referenceAudioSampleRateHz: UInt32
+  let referenceText: String?
+  let referenceRevision: String?
 }
 
 /// Swift-owned lifecycle host for a Rust-owned native voice session.
@@ -171,7 +178,14 @@ public final class AuroraIOSVoiceSessionHost {
         language: pack.language,
         packId: pack.packId,
         sampleRateHz: pack.sampleRateHz,
-        frameSize: pack.frameSize
+        frameSize: pack.frameSize,
+        modelFamily: pack.modelFamily,
+        referenceAudioPath: pack.referenceAudioPath,
+        referenceAudioSha256: pack.referenceAudioSha256,
+        referenceAudioSizeBytes: pack.referenceAudioSizeBytes,
+        referenceAudioSampleRateHz: pack.referenceAudioSampleRateHz,
+        referenceText: pack.referenceText,
+        referenceRevision: pack.referenceRevision
       )
     }
   }
@@ -212,7 +226,14 @@ public final class AuroraIOSVoiceSessionHost {
         files_json: nil,
         language: nil,
         sample_rate_hz: 0,
-        frame_size: 0
+        frame_size: 0,
+        model_family: nil,
+        reference_audio_path: nil,
+        reference_audio_sha256: nil,
+        reference_audio_size_bytes: 0,
+        reference_audio_sample_rate_hz: 0,
+        reference_text: nil,
+        reference_revision: nil
       ),
       count: bindings.count
     )
@@ -231,20 +252,37 @@ public final class AuroraIOSVoiceSessionHost {
               binding.runtimeRevision.withCString { revisionPointer in
                 binding.filesJson.withCString { filesPointer in
                   binding.language.withCString { languagePointer in
-                    nativeBindings[index] = AuroraIosVoiceTaskPackBinding(
-                      task: binding.task,
-                      slot_id: slotPointer,
-                      pack_id: packIdPointer,
-                      pack_path: packPathPointer,
-                      expected_sha256: shaPointer,
-                      expected_size_bytes: binding.fileSize,
-                      runtime_revision: revisionPointer,
-                      files_json: filesPointer,
-                      language: languagePointer,
-                      sample_rate_hz: binding.sampleRateHz,
-                      frame_size: binding.frameSize
-                    )
-                    return bind(index + 1)
+                    binding.modelFamily.withCString { familyPointer in
+                      withOptionalCString(binding.referenceAudioPath) { referenceAudioPathPointer in
+                        withOptionalCString(binding.referenceAudioSha256) { referenceAudioShaPointer in
+                          withOptionalCString(binding.referenceText) { referenceTextPointer in
+                            withOptionalCString(binding.referenceRevision) { referenceRevisionPointer in
+                              nativeBindings[index] = AuroraIosVoiceTaskPackBinding(
+                                task: binding.task,
+                                slot_id: slotPointer,
+                                pack_id: packIdPointer,
+                                pack_path: packPathPointer,
+                                expected_sha256: shaPointer,
+                                expected_size_bytes: binding.fileSize,
+                                runtime_revision: revisionPointer,
+                                files_json: filesPointer,
+                                language: languagePointer,
+                                sample_rate_hz: binding.sampleRateHz,
+                                frame_size: binding.frameSize,
+                                model_family: familyPointer,
+                                reference_audio_path: referenceAudioPathPointer,
+                                reference_audio_sha256: referenceAudioShaPointer,
+                                reference_audio_size_bytes: binding.referenceAudioSizeBytes,
+                                reference_audio_sample_rate_hz: binding.referenceAudioSampleRateHz,
+                                reference_text: referenceTextPointer,
+                                reference_revision: referenceRevisionPointer
+                              )
+                              return bind(index + 1)
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -255,6 +293,16 @@ public final class AuroraIOSVoiceSessionHost {
     }
 
     return bind(0)
+  }
+
+  private static func withOptionalCString<T>(
+    _ value: String?,
+    _ body: (UnsafePointer<CChar>?) -> T
+  ) -> T {
+    guard let value, !value.isEmpty else {
+      return body(nil)
+    }
+    return value.withCString(body)
   }
 
   deinit {
@@ -322,6 +370,8 @@ public final class AuroraIOSVoiceSessionHost {
     guard code == AURORA_IOS_VOICE_OK else {
       throw AuroraIOSVoiceSessionHostError.commandFailed(code)
     }
+    backgroundSessionActive = false
+    activeGeneration = nil
   }
 
   public func cancel(generation: UInt64) throws {

@@ -9,10 +9,10 @@ use aurora_voice_engine::{
 };
 use aurora_voice_ios_bridge::{AuroraIosAudioOutput, AuroraIosAudioState};
 use aurora_voice_native::{
-    GatewayAuth, IosVoicePackBinding, IosVoicePackBindings, IosVoicePackFileBinding,
-    IosVoiceSession, IosVoiceSessionCommandError, IosVoiceSessionConfig, IosVoiceSessionStatus,
-    SpeechModelBindings, SpeechPackBindings, SpeechPackManager, SpeechPackManagerConfig,
-    MAX_IOS_PACK_BINDINGS,
+    GatewayAuth, IosTtsReferenceBinding, IosVoicePackBinding, IosVoicePackBindings,
+    IosVoicePackFileBinding, IosVoiceSession, IosVoiceSessionCommandError, IosVoiceSessionConfig,
+    IosVoiceSessionStatus, SpeechModelBindings, SpeechPackBindings, SpeechPackManager,
+    SpeechPackManagerConfig, MAX_IOS_PACK_BINDINGS,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -68,6 +68,20 @@ pub struct AuroraIosVoiceTaskPackBinding {
     pub sample_rate_hz: u32,
     /// Required provider frame size selected from the catalog.
     pub frame_size: u32,
+    /// Required catalog model family selected from the catalog.
+    pub model_family: *const c_char,
+    /// Optional private PocketTTS reference-audio file selected by the user.
+    pub reference_audio_path: *const c_char,
+    /// Optional lowercase SHA-256 for the private reference-audio file.
+    pub reference_audio_sha256: *const c_char,
+    /// Optional exact byte size for the private reference-audio file.
+    pub reference_audio_size_bytes: u64,
+    /// Optional reference-audio sample rate.
+    pub reference_audio_sample_rate_hz: u32,
+    /// Optional user-provided reference text paired with the audio.
+    pub reference_text: *const c_char,
+    /// Optional user-managed reference profile revision.
+    pub reference_revision: *const c_char,
 }
 
 #[derive(Debug, Deserialize)]
@@ -91,6 +105,40 @@ struct AuroraIosResolvedVoicePack {
     language: Option<String>,
     sample_rate_hz: u32,
     frame_size: u32,
+    model_family: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuroraIosEmbeddedCatalogEntry {
+    pack_id: String,
+    display_name: String,
+    language: String,
+    task: String,
+    download_url: String,
+    sha256: String,
+    file_size: u64,
+    file_name: String,
+    runtime_revision: String,
+    license: String,
+    attribution: String,
+    acknowledged: bool,
+    version: Option<String>,
+    compatible_platforms: Vec<String>,
+    compatible_architectures: Vec<String>,
+    model_family: String,
+    model_files: Vec<AuroraIosEmbeddedCatalogModelFile>,
+    sample_rate_hz: u32,
+    frame_size: u32,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuroraIosEmbeddedCatalogModelFile {
+    file_id: String,
+    relative_path: String,
+    sha256: Option<String>,
+    file_size: Option<u64>,
 }
 
 /// # Safety
@@ -173,10 +221,11 @@ fn resolved_voice_pack_payload(
 ) -> AuroraIosResolvedVoicePack {
     let catalog = TtsVoiceCatalog::embedded().ok();
     let entry = catalog.and_then(|catalog| catalog.voice(&bindings.voice_id));
-    let mut files = BTreeMap::new();
-    files.insert("model".to_owned(), bindings.model.display().to_string());
-    files.insert("config".to_owned(), bindings.config.display().to_string());
-    files.insert("tokens".to_owned(), bindings.tokens.display().to_string());
+    let files = bindings
+        .files
+        .into_iter()
+        .map(|(file_id, path)| (file_id, path.display().to_string()))
+        .collect();
     AuroraIosResolvedVoicePack {
         pack_id: bindings.voice_id,
         task: "tts".to_owned(),
@@ -192,6 +241,11 @@ fn resolved_voice_pack_payload(
         language: entry.map(|entry| entry.language.clone()),
         sample_rate_hz: bindings.task_binding.sample_rate_hz(),
         frame_size: bindings.task_binding.frame_size().max(1),
+        model_family: bindings
+            .task_binding
+            .catalog_model_family()
+            .unwrap_or("unknown")
+            .to_owned(),
     }
 }
 
@@ -216,7 +270,74 @@ fn resolved_model_pack_payload(
         languages: bindings.languages,
         sample_rate_hz: bindings.task_binding.sample_rate_hz(),
         frame_size: bindings.task_binding.frame_size().max(1),
+        model_family: bindings
+            .task_binding
+            .catalog_model_family()
+            .unwrap_or("unknown")
+            .to_owned(),
     }
+}
+
+fn embedded_catalog_json() -> Option<String> {
+    let mut entries = Vec::new();
+    let speech_catalog = SpeechModelCatalog::embedded().ok()?;
+    for entry in &speech_catalog.entries {
+        entries.push(AuroraIosEmbeddedCatalogEntry {
+            pack_id: entry.model_id.clone(),
+            display_name: entry.display_name.clone(),
+            language: entry
+                .languages
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "und".to_owned()),
+            task: voice_task_to_pack_id(match entry.task {
+                SpeechCatalogTask::KeywordSpotting => VoiceTask::KeywordSpotting,
+                SpeechCatalogTask::VoiceActivityDetection => VoiceTask::VoiceActivityDetection,
+                SpeechCatalogTask::SpeechToText => VoiceTask::SpeechToText,
+            })
+            .to_owned(),
+            download_url: entry.archive.url.clone(),
+            sha256: entry.archive.sha256.clone(),
+            file_size: entry.archive.byte_size,
+            file_name: entry.archive.filename.clone(),
+            runtime_revision: speech_catalog.revision().to_owned(),
+            license: entry.terms.source.clone(),
+            attribution: entry.terms.source.clone(),
+            acknowledged: true,
+            version: Some(speech_catalog.revision().to_owned()),
+            compatible_platforms: vec!["ios".to_owned()],
+            compatible_architectures: vec!["arm64".to_owned(), "x86_64".to_owned()],
+            model_family: entry.model_family.clone(),
+            model_files: Vec::new(),
+            sample_rate_hz: 16_000,
+            frame_size: 512,
+        });
+    }
+    let tts_catalog = TtsVoiceCatalog::embedded().ok()?;
+    for entry in &tts_catalog.entries {
+        entries.push(AuroraIosEmbeddedCatalogEntry {
+            pack_id: entry.voice_id.clone(),
+            display_name: entry.display_name.clone(),
+            language: entry.language.clone(),
+            task: "tts".to_owned(),
+            download_url: entry.archive.url.clone(),
+            sha256: entry.archive.sha256.clone(),
+            file_size: entry.archive.byte_size,
+            file_name: entry.archive.filename.clone(),
+            runtime_revision: tts_catalog.revision().to_owned(),
+            license: entry.terms.source.clone(),
+            attribution: entry.terms.source.clone(),
+            acknowledged: true,
+            version: Some(tts_catalog.revision().to_owned()),
+            compatible_platforms: vec!["ios".to_owned()],
+            compatible_architectures: vec!["arm64".to_owned(), "x86_64".to_owned()],
+            model_family: entry.model_family.clone(),
+            model_files: Vec::new(),
+            sample_rate_hz: entry.sample_rate_hz.unwrap_or(16_000),
+            frame_size: 512,
+        });
+    }
+    serde_json::to_string(&entries).ok()
 }
 
 fn install_pack_blocking(root: String, pack_id: String, task: PackTask) -> bool {
@@ -316,6 +437,37 @@ unsafe fn parse_pack_bindings(
         let runtime_revision = unsafe { bounded_string(binding.runtime_revision, 128) }?;
         let language = unsafe { bounded_string(binding.language, 64) }?;
         let files_json = unsafe { bounded_string(binding.files_json, 65_536) }?;
+        let model_family = unsafe { bounded_string(binding.model_family, 64) }?;
+        let reference_audio_path = unsafe { bounded_string(binding.reference_audio_path, 4096) };
+        let reference_audio_sha256 = unsafe { bounded_string(binding.reference_audio_sha256, 64) };
+        let reference_text = unsafe { bounded_string(binding.reference_text, 1024) };
+        let reference_revision = unsafe { bounded_string(binding.reference_revision, 128) };
+        let tts_reference = match (
+            reference_audio_path,
+            reference_audio_sha256,
+            binding.reference_audio_size_bytes,
+            binding.reference_audio_sample_rate_hz,
+            reference_text,
+            reference_revision,
+        ) {
+            (Some(path), Some(sha256), size_bytes, sample_rate, Some(text), Some(revision))
+                if size_bytes > 0 && sample_rate > 0 =>
+            {
+                Some(
+                    IosTtsReferenceBinding::new(
+                        path,
+                        sha256,
+                        size_bytes,
+                        sample_rate,
+                        text,
+                        revision,
+                    )
+                    .ok()?,
+                )
+            }
+            (None, None, 0, 0, None, None) => None,
+            _ => return None,
+        };
         let files: Vec<AuroraIosVoiceTaskPackFileJson> = serde_json::from_str(&files_json).ok()?;
         let files = files
             .into_iter()
@@ -336,6 +488,8 @@ unsafe fn parse_pack_bindings(
                 language,
                 binding.sample_rate_hz,
                 binding.frame_size,
+                model_family,
+                tts_reference,
                 files,
             )
             .ok()?,
@@ -418,6 +572,18 @@ pub unsafe extern "C" fn aurora_ios_voice_pack_resolve_json(
         return std::ptr::null_mut();
     };
     let Some(payload) = resolve_pack_json(root, pack_id, task) else {
+        return std::ptr::null_mut();
+    };
+    CString::new(payload)
+        .map(CString::into_raw)
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// # Safety
+/// The returned string must be freed with `aurora_ios_voice_pack_string_free`.
+#[no_mangle]
+pub unsafe extern "C" fn aurora_ios_voice_pack_embedded_catalog_json() -> *mut c_char {
+    let Some(payload) = embedded_catalog_json() else {
         return std::ptr::null_mut();
     };
     CString::new(payload)

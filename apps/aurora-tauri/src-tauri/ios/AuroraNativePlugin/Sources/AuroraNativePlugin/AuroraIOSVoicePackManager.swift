@@ -25,6 +25,7 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
   let modelFiles: [AuroraIOSVoicePackModelFile]
   let sampleRateHz: UInt32
   let frameSize: UInt32
+  let modelFamily: String
 
   init(
     packId: String,
@@ -44,7 +45,8 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
     compatibleArchitectures: [String] = ["arm64"],
     modelFiles: [AuroraIOSVoicePackModelFile] = [],
     sampleRateHz: UInt32 = 16_000,
-    frameSize: UInt32 = 512
+    frameSize: UInt32 = 512,
+    modelFamily: String = "vits_piper"
   ) {
     self.packId = packId
     self.displayName = displayName
@@ -64,6 +66,7 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
     self.modelFiles = modelFiles
     self.sampleRateHz = sampleRateHz
     self.frameSize = frameSize
+    self.modelFamily = modelFamily
   }
 
   init(from decoder: Decoder) throws {
@@ -132,6 +135,10 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
       container,
       keys: ["frame_size", "frameSize"]
     ) ?? 512
+    self.modelFamily = try Self.decodeStringIfPresent(
+      container,
+      keys: ["model_family", "modelFamily"]
+    ) ?? Self.defaultModelFamily(task: task, packId: packId)
   }
 
   func encode(to encoder: Encoder) throws {
@@ -154,6 +161,7 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
     try container.encode(modelFiles, forKey: .modelFiles)
     try container.encode(sampleRateHz, forKey: .sampleRateHz)
     try container.encode(frameSize, forKey: .frameSize)
+    try container.encode(modelFamily, forKey: .modelFamily)
   }
 
   fileprivate static func decodeString(
@@ -215,6 +223,28 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
     return nil
   }
 
+  fileprivate static func decodeStringIfPresent(
+    _ container: KeyedDecodingContainer<CodingKeys>,
+    keys: [String]
+  ) throws -> String? {
+    for key in keys {
+      if let codingKey = CodingKeys(rawValue: key),
+         let value = try? container.decodeIfPresent(String.self, forKey: codingKey), !value.isEmpty {
+        return value
+      }
+    }
+    return nil
+  }
+
+  fileprivate static func defaultModelFamily(task: String, packId: String) -> String {
+    if task.lowercased() == "tts" {
+      return packId.lowercased().contains("pockettts") ? "pockettts" : "vits_piper"
+    }
+    if task.lowercased() == "vad" { return "silero_vad" }
+    if task.lowercased() == "kws" || task.lowercased() == "wakeword" { return "zipformer" }
+    return "whisper"
+  }
+
   enum CodingKeys: String, CodingKey {
     case packId
     case pack_id
@@ -254,6 +284,8 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
     case sample_rate_hz
     case frameSize
     case frame_size
+    case modelFamily
+    case model_family
   }
 }
 
@@ -365,6 +397,14 @@ struct AuroraIOSVoicePackDownloadArgs: Decodable {
   let packId: String
 }
 
+struct AuroraIOSVoiceTTSReferenceSetArgs: Decodable {
+  let packId: String
+  let audioBase64: String
+  let referenceText: String
+  let sampleRateHz: UInt32
+  let revision: String
+}
+
 struct AuroraIOSVoicePackRemoveArgs: Decodable {
   let packId: String
 }
@@ -385,6 +425,7 @@ private struct AuroraIOSRustVoicePackResolution: Decodable {
   let language: String?
   let sampleRateHz: UInt32
   let frameSize: UInt32
+  let modelFamily: String
 }
 
 struct AuroraIOSVoicePackPathBinding: Equatable {
@@ -399,6 +440,13 @@ struct AuroraIOSVoicePackPathBinding: Equatable {
   let packId: String
   let sampleRateHz: UInt32
   let frameSize: UInt32
+  let modelFamily: String
+  let referenceAudioPath: String?
+  let referenceAudioSha256: String?
+  let referenceAudioSizeBytes: UInt64
+  let referenceAudioSampleRateHz: UInt32
+  let referenceText: String?
+  let referenceRevision: String?
 }
 
 private struct AuroraIOSVoicePackActiveSelection: Codable {
@@ -419,6 +467,22 @@ private struct AuroraIOSVoicePackActiveSelection: Codable {
   }
 }
 
+private struct AuroraIOSVoiceTTSReferenceRecord: Codable {
+  let packId: String
+  let audioPath: String
+  let audioSha256: String
+  let audioSizeBytes: UInt64
+  let sampleRateHz: UInt32
+  let referenceText: String
+  let revision: String
+}
+
+private struct AuroraIOSVoicePackMetadataReceipt: Codable {
+  let pack: AuroraIOSVoicePackCatalogEntry
+  let bytesDownloaded: UInt64
+  let localSha256: String
+}
+
 enum AuroraIOSVoicePackManagerError: Error {
   case catalogMissing
   case packNotFound
@@ -433,13 +497,17 @@ enum AuroraIOSVoicePackManagerError: Error {
 
 enum AuroraIOSVoicePackManager {
   static let catalogFileName = "catalog.json"
+  static let metadataFileName = "metadata.json"
   static let trustedHostsFileName = "trusted-hosts.json"
   static let activeFileName = "active.json"
   static let catalogDirectoryName = "voice-packs"
+  static let referenceDirectoryName = "tts-references"
 
-  private static let catalogEntryLimit = 200
   private static let maxPackBytes = 1024 * 1024 * 1024
   private static let maxPackDownloadBytes = 1024 * 1024 * 1024
+  private static let maxReferenceBytes = 16 * 1024 * 1024
+  private static let maxReferenceTextBytes = 1024
+  private static let stagingPrefix = "aurora-ios-voice-staging"
   private static let runtimeProbeTimeout: TimeInterval = 6
   private static let operationQueue = DispatchQueue(label: "aurora.ios.voicepack.manager")
 
@@ -471,8 +539,6 @@ enum AuroraIOSVoicePackManager {
         }
         return entry
       }
-      guard sanitized.count <= catalogEntryLimit else { throw AuroraIOSVoicePackManagerError.invalidPack }
-
       let entriesToStore: [AuroraIOSVoicePackCatalogEntry]
       if replaceExisting {
         entriesToStore = sanitized
@@ -544,6 +610,51 @@ enum AuroraIOSVoicePackManager {
     }
   }
 
+  static func setTTSReference(_ args: AuroraIOSVoiceTTSReferenceSetArgs) throws -> [String: Any] {
+    try withSerializedState {
+      let safePackId = try sanitizePackId(args.packId)
+      let text = try sanitizeReferenceText(args.referenceText)
+      let revision = try sanitizeReferenceRevision(args.revision)
+      guard args.sampleRateHz > 0 else { throw AuroraIOSVoicePackManagerError.invalidPack }
+      let catalog = try loadCatalog()
+      guard let entry = catalog.first(where: { $0.packId == safePackId }),
+            entry.task.lowercased() == "tts",
+            entry.modelFamily.lowercased() == "pockettts" else {
+        throw AuroraIOSVoicePackManagerError.packNotFound
+      }
+      guard let audio = Data(base64Encoded: args.audioBase64, options: []) else {
+        throw AuroraIOSVoicePackManagerError.invalidPack
+      }
+      guard !audio.isEmpty, audio.count <= maxReferenceBytes else {
+        throw AuroraIOSVoicePackManagerError.invalidPack
+      }
+      let root = try referenceRoot()
+      try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+      try excludeFromBackup(root)
+      let audioURL = root.appendingPathComponent("\(safePackId).wav", isDirectory: false)
+      try writeAtomically(data: audio, to: audioURL)
+      let record = AuroraIOSVoiceTTSReferenceRecord(
+        packId: safePackId,
+        audioPath: audioURL.path,
+        audioSha256: sha256Data(audio),
+        audioSizeBytes: UInt64(audio.count),
+        sampleRateHz: args.sampleRateHz,
+        referenceText: text,
+        revision: revision
+      )
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.withoutEscapingSlashes, .sortedKeys]
+      try writeAtomically(data: try encoder.encode(record), to: referenceRecordURL(packId: safePackId))
+      return [
+        "available": true,
+        "packId": safePackId,
+        "sampleRateHz": args.sampleRateHz,
+        "revision": revision,
+        "secretsRedacted": true
+      ]
+    }
+  }
+
   static func list() throws -> [[String: Any]] {
     try withSerializedState {
       let active = try? activeSelection()
@@ -557,6 +668,7 @@ enum AuroraIOSVoicePackManager {
           "task": entry.task,
           "version": entry.version ?? NSNull(),
           "runtimeRevision": entry.runtimeRevision,
+          "modelFamily": entry.modelFamily,
           "license": entry.license,
           "attribution": entry.attribution,
           "acknowledged": entry.acknowledged,
@@ -702,6 +814,7 @@ enum AuroraIOSVoicePackManager {
         "compatiblePlatforms": entry.compatiblePlatforms,
         "compatibleArchitectures": entry.compatibleArchitectures,
         "runtimeRevision": entry.runtimeRevision,
+        "modelFamily": entry.modelFamily,
         "license": entry.license,
         "attribution": entry.attribution,
         "acknowledged": entry.acknowledged,
@@ -738,7 +851,8 @@ enum AuroraIOSVoicePackManager {
     guard ["stt", "tts", "vad", "kws", "wakeword"].contains(task) else {
       return false
     }
-    guard !entry.runtimeRevision.isEmpty else { return false }
+    guard !entry.runtimeRevision.isEmpty,
+          ["silero_vad", "zipformer", "whisper", "vits_piper", "pockettts"].contains(entry.modelFamily.lowercased()) else { return false }
     guard isValidSha(entry.sha256), entry.license.count > 0, entry.attribution.count > 0 else {
       return false
     }
@@ -777,6 +891,24 @@ enum AuroraIOSVoicePackManager {
     return trimmed
   }
 
+  private static func sanitizeReferenceText(_ value: String) throws -> String {
+    let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty,
+          text.utf8.count <= maxReferenceTextBytes,
+          !text.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
+      throw AuroraIOSVoicePackManagerError.invalidPack
+    }
+    return text
+  }
+
+  private static func sanitizeReferenceRevision(_ value: String) throws -> String {
+    let revision = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard isSafeToken(revision), revision.count <= 128 else {
+      throw AuroraIOSVoicePackManagerError.invalidPack
+    }
+    return revision
+  }
+
   private static func sanitizedFilename(_ value: String) -> Bool {
     let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
     if trimmed.contains("/") || trimmed.contains("\\") || trimmed.contains("..") {
@@ -790,6 +922,14 @@ enum AuroraIOSVoicePackManager {
   private static func isSafeToken(_ value: String) -> Bool {
     let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
     return !value.isEmpty && value.rangeOfCharacter(from: allowed.inverted) == nil
+  }
+
+  private static func isValidSlot(_ value: String) -> Bool {
+    isSafeToken(value) && value.count <= 64
+  }
+
+  private static func isValidSha256(_ value: String) -> Bool {
+    isValidSha(value)
   }
 
   private static func isValidEntry(
@@ -850,6 +990,18 @@ enum AuroraIOSVoicePackManager {
       return false
     }
     return url.fragment == nil
+  }
+
+  private static func willPerformHTTPRedirection() -> Bool {
+    false
+  }
+
+  private static func validateContentLength(_ headers: [AnyHashable: Any], expectedBytes: UInt64) -> Bool {
+    guard let raw = headers["Content-Length"] as? String,
+          let contentLength = UInt64(raw) else {
+      return false
+    }
+    return contentLength == expectedBytes && contentLength <= maxPackDownloadBytes
   }
 
   private static func parseDownloadUrl(_ value: String) throws -> URL {
@@ -1081,6 +1233,7 @@ enum AuroraIOSVoicePackManager {
       }
       if FileManager.default.fileExists(atPath: resolution.archivePath),
          let filesJson = modelFilesJson(paths: resolution.files, files: catalogEntry.modelFiles) {
+        let reference = try referenceBindingIfRequired(for: catalogEntry)
         bindings.append(AuroraIOSVoicePackPathBinding(
           slot: slot,
           task: catalogEntry.task.lowercased(),
@@ -1092,7 +1245,14 @@ enum AuroraIOSVoicePackManager {
           filesJson: filesJson,
           packId: catalogEntry.packId,
           sampleRateHz: catalogEntry.sampleRateHz,
-          frameSize: catalogEntry.frameSize
+          frameSize: catalogEntry.frameSize,
+          modelFamily: catalogEntry.modelFamily.lowercased(),
+          referenceAudioPath: reference?.audioPath,
+          referenceAudioSha256: reference?.audioSha256,
+          referenceAudioSizeBytes: reference?.audioSizeBytes ?? 0,
+          referenceAudioSampleRateHz: reference?.sampleRateHz ?? 0,
+          referenceText: reference?.referenceText,
+          referenceRevision: reference?.revision
         ))
       }
     }
@@ -1171,9 +1331,10 @@ enum AuroraIOSVoicePackManager {
   }
 
   private static func modelFilesJson(paths: [String: String], files: [AuroraIOSVoicePackModelFile]) -> String? {
-    guard !files.isEmpty else { return nil }
+    let effectiveFiles = files.isEmpty ? modelFilesFromResolvedPaths(paths) : files
+    guard !effectiveFiles.isEmpty else { return nil }
     do {
-      let payload = try files.map { file -> [String: Any] in
+      let payload = try effectiveFiles.map { file -> [String: Any] in
         guard let path = paths[file.fileId], FileManager.default.fileExists(atPath: path) else {
           throw AuroraIOSVoicePackManagerError.invalidPack
         }
@@ -1191,9 +1352,112 @@ enum AuroraIOSVoicePackManager {
     }
   }
 
+  private static func modelFilesFromResolvedPaths(_ paths: [String: String]) -> [AuroraIOSVoicePackModelFile] {
+    paths.compactMap { fileId, path in
+      guard isValidSlot(fileId) else { return nil }
+      let url = URL(fileURLWithPath: path)
+      guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
+            values.isRegularFile == true,
+            let fileSize = values.fileSize,
+            fileSize > 0,
+            let sha = try? sha256File(url) else {
+        return nil
+      }
+      return AuroraIOSVoicePackModelFile(
+        fileId: fileId,
+        relativePath: fileId,
+        sha256: sha,
+        fileSize: UInt64(fileSize)
+      )
+    }
+  }
+
+  private static func referenceBindingIfRequired(
+    for entry: AuroraIOSVoicePackCatalogEntry
+  ) throws -> AuroraIOSVoiceTTSReferenceRecord? {
+    guard entry.task.lowercased() == "tts",
+          entry.modelFamily.lowercased() == "pockettts" else {
+      return nil
+    }
+    let recordURL = referenceRecordURL(packId: entry.packId)
+    guard FileManager.default.fileExists(atPath: recordURL.path) else {
+      throw AuroraIOSVoicePackManagerError.invalidPack
+    }
+    let record = try JSONDecoder().decode(
+      AuroraIOSVoiceTTSReferenceRecord.self,
+      from: Data(contentsOf: recordURL)
+    )
+    guard record.packId == entry.packId,
+          isValidSha(record.audioSha256),
+          record.audioSizeBytes > 0,
+          record.audioSizeBytes <= maxReferenceBytes,
+          record.sampleRateHz > 0,
+          !record.referenceText.isEmpty,
+          !record.revision.isEmpty else {
+      throw AuroraIOSVoicePackManagerError.invalidPack
+    }
+    let audioURL = URL(fileURLWithPath: record.audioPath)
+    let values = try audioURL.resourceValues(forKeys: [
+      .isRegularFileKey,
+      .isSymbolicLinkKey,
+      .fileSizeKey
+    ])
+    guard let fileSize = values.fileSize,
+          fileSize > 0,
+          values.isRegularFile == true,
+          values.isSymbolicLink != true,
+          UInt64(fileSize) == record.audioSizeBytes,
+          try sha256File(audioURL) == record.audioSha256 else {
+      throw AuroraIOSVoicePackManagerError.invalidPack
+    }
+    return record
+  }
+
+  private static func isSafeCachedPackFile(
+    _ file: URL,
+    metadata: AuroraIOSVoicePackMetadataReceipt,
+    catalogEntry: AuroraIOSVoicePackCatalogEntry
+  ) -> Bool {
+    do {
+      let values = try file.resourceValues(forKeys: [
+        .isRegularFileKey,
+        .isSymbolicLinkKey,
+        .fileSizeKey
+      ])
+      let localSha256 = try sha256File(file)
+      return values.isRegularFile == true
+        && values.isSymbolicLink != true
+        && localSha256 == catalogEntry.sha256
+        && metadata.bytesDownloaded == catalogEntry.fileSize
+        && metadata.pack.runtimeRevision == catalogEntry.runtimeRevision
+    } catch {
+      return false
+    }
+  }
+
+  private static func embeddedCatalog() throws -> [AuroraIOSVoicePackCatalogEntry] {
+    guard let pointer = aurora_ios_voice_pack_embedded_catalog_json() else {
+      return []
+    }
+    defer { aurora_ios_voice_pack_string_free(pointer) }
+    let payload = String(cString: pointer)
+    guard let data = payload.data(using: .utf8) else {
+      throw AuroraIOSVoicePackManagerError.invalidPack
+    }
+    let entries = try JSONDecoder().decode([AuroraIOSVoicePackCatalogEntry].self, from: data)
+    let hosts = try normalizeTrustedHosts([], entries: entries)
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.withoutEscapingSlashes, .sortedKeys]
+    try writeAtomically(data: data, to: catalogFileURL())
+    try writeAtomically(data: try encoder.encode(Array(hosts).sorted()), to: trustedHostsFileURL())
+    return entries
+  }
+
   private static func loadCatalog() throws -> [AuroraIOSVoicePackCatalogEntry] {
     let file = catalogFileURL()
-    guard FileManager.default.fileExists(atPath: file.path) else { return [] }
+    guard FileManager.default.fileExists(atPath: file.path) else {
+      return try embeddedCatalog()
+    }
     let data = try Data(contentsOf: file)
     return try JSONDecoder().decode([AuroraIOSVoicePackCatalogEntry].self, from: data)
   }
@@ -1241,6 +1505,23 @@ enum AuroraIOSVoicePackManager {
         .urls(for: .applicationSupportDirectory, in: .userDomainMask)
         .first!
         .appendingPathComponent(activeFileName)
+  }
+
+  private static func referenceRoot() throws -> URL {
+    let root = try cacheRoot().appendingPathComponent(referenceDirectoryName, isDirectory: true)
+    if !FileManager.default.fileExists(atPath: root.path) {
+      try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+      try? excludeFromBackup(root)
+    }
+    return root
+  }
+
+  private static func referenceRecordURL(packId: String) -> URL {
+    ((try? referenceRoot()) ?? FileManager.default.urls(
+      for: .applicationSupportDirectory,
+      in: .userDomainMask
+    ).first!)
+      .appendingPathComponent("\(packId).json", isDirectory: false)
   }
 
   private static func writeAtomically(data: Data, to destination: URL) throws {
@@ -1312,6 +1593,10 @@ enum AuroraIOSVoicePackManager {
       hasher.update(data: data)
     }
     return hasher.finalize().compactMap { String(format: "%02x", $0) }.joined()
+  }
+
+  private static func sha256Data(_ data: Data) -> String {
+    SHA256.hash(data: data).compactMap { String(format: "%02x", $0) }.joined()
   }
 
   private static func excludeFromBackup(_ url: URL) throws {

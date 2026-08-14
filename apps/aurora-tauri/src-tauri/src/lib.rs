@@ -2622,7 +2622,12 @@ async fn aurora_ios_local_light_inference_status(
 ) -> Result<Value, AuroraCommandError> {
     #[cfg(target_os = "ios")]
     {
-        let payload = run_ios_plugin_command(native, "localLightInferenceStatus", json!({}))?;
+        let voice_pack_status = run_ios_plugin_command(native, "voicePackStatus", json!({})).ok();
+        let payload = serde_json::to_value(ios_local_light_inference_status_from_voice_packs(
+            true,
+            voice_pack_status.as_ref(),
+        ))
+        .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
         log_ios_native_plugin_payload("localLightInferenceStatus", &payload);
         Ok(payload)
     }
@@ -4952,32 +4957,107 @@ fn ios_mobile_integrations(available: bool) -> Vec<NativeMobileIntegration> {
 }
 
 fn ios_local_light_inference_status(available: bool) -> LocalLightInferenceStatus {
+    ios_local_light_inference_status_from_voice_packs(available, None)
+}
+
+fn ios_local_light_inference_status_from_voice_packs(
+    platform_available: bool,
+    voice_pack_status: Option<&Value>,
+) -> LocalLightInferenceStatus {
+    let catalog_visible = voice_pack_status
+        .map(ios_voice_pack_catalog_visible)
+        .unwrap_or(false);
+    let active_model_id = voice_pack_status.and_then(ios_ready_local_voice_model_id);
+    let model_present = active_model_id.is_some();
+    let provider_available = platform_available && (catalog_visible || model_present);
+    let requestable = platform_available && model_present;
+    let state = if !platform_available {
+        "needs_native_permission"
+    } else if requestable {
+        "available"
+    } else if catalog_visible {
+        "needs_model"
+    } else {
+        "degraded"
+    };
+    let reason = if !platform_available {
+        "ios_native_local_light_adapter_unavailable"
+    } else if requestable {
+        "ios_voice_packs_installed_and_active"
+    } else if catalog_visible {
+        "ios_voice_catalog_ready_but_required_packs_missing"
+    } else {
+        "backend_model_catalog_and_device_model_proof_required"
+    };
+
     LocalLightInferenceStatus {
         platform: "ios".to_string(),
         provider_id: "native:mobile-local-light".to_string(),
-        available: false,
-        requestable: false,
-        model_runtime_provider: false,
+        available: provider_available,
+        requestable,
+        model_runtime_provider: requestable,
         backend_model_catalog_required: true,
         hardware_acceleration: "unknown".to_string(),
-        model_id: None,
-        model_present: false,
-        permission_granted: false,
-        state: if available {
-            "degraded".to_string()
-        } else {
-            "needs_native_permission".to_string()
-        },
-        fallback_available: available,
-        fallback_provider_id: if available {
+        model_id: active_model_id,
+        model_present,
+        permission_granted: platform_available,
+        state: state.to_string(),
+        fallback_available: platform_available,
+        fallback_provider_id: if platform_available {
             Some("local:Orchestrator:llama-cpp".to_string())
         } else {
             None
         },
-        reason: "backend_model_catalog_and_device_model_proof_required".to_string(),
+        reason: reason.to_string(),
         evidence_source: "ios-native-local-light-adapter".to_string(),
         secrets_redacted: true,
     }
+}
+
+fn ios_voice_pack_catalog_visible(status: &Value) -> bool {
+    status
+        .get("count")
+        .and_then(Value::as_u64)
+        .is_some_and(|count| count > 0)
+        || status
+            .get("packs")
+            .and_then(Value::as_array)
+            .is_some_and(|packs| !packs.is_empty())
+}
+
+fn ios_ready_local_voice_model_id(status: &Value) -> Option<String> {
+    let active_slots = status.get("activeSlots")?.as_object()?;
+    let packs = status.get("packs")?.as_array()?;
+    let mut active_model_id = None;
+
+    for required_slot in ["vad", "kws", "stt", "tts"] {
+        let pack_id = active_slots
+            .get(required_slot)
+            .and_then(Value::as_str)
+            .filter(|pack_id| !pack_id.trim().is_empty())?;
+        let pack = packs.iter().find(|candidate| {
+            candidate
+                .get("packId")
+                .and_then(Value::as_str)
+                .is_some_and(|candidate_id| candidate_id == pack_id)
+        })?;
+        let installed = pack
+            .get("installed")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let acknowledged = pack
+            .get("acknowledged")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if !installed || !acknowledged {
+            return None;
+        }
+        if required_slot == "stt" {
+            active_model_id = Some(pack_id.to_string());
+        }
+    }
+
+    active_model_id
 }
 
 fn ios_invocation_status(available: bool) -> IosInvocationStatus {
@@ -9659,6 +9739,56 @@ mod tests {
         assert!(build_script.contains(".with_package(\"AuroraNativePlugin\""));
         assert!(build_script.contains("emit_ios_swift_package_link_search_hints"));
         assert!(build_script.contains("apple-ios-simulator"));
+    }
+
+    #[test]
+    fn ios_local_light_status_is_requestable_for_installed_active_voice_packs() {
+        let status = json!({
+            "available": false,
+            "activeSlots": {
+                "vad": "ios-vad",
+                "kws": "ios-kws",
+                "stt": "ios-stt",
+                "tts": "ios-tts"
+            },
+            "count": 4,
+            "packs": [
+                {"packId": "ios-vad", "task": "vad", "installed": true, "acknowledged": true},
+                {"packId": "ios-kws", "task": "kws", "installed": true, "acknowledged": true},
+                {"packId": "ios-stt", "task": "stt", "installed": true, "acknowledged": true},
+                {"packId": "ios-tts", "task": "tts", "installed": true, "acknowledged": true}
+            ],
+            "secretsRedacted": true
+        });
+        let derived = ios_local_light_inference_status_from_voice_packs(true, Some(&status));
+
+        assert!(derived.available);
+        assert!(derived.requestable);
+        assert!(derived.model_runtime_provider);
+        assert!(derived.model_present);
+        assert_eq!(derived.model_id.as_deref(), Some("ios-stt"));
+        assert_eq!(derived.state, "available");
+    }
+
+    #[test]
+    fn ios_local_light_status_exposes_catalog_without_claiming_runtime_readiness() {
+        let status = json!({
+            "available": false,
+            "activeSlots": {},
+            "count": 558,
+            "packs": [
+                {"packId": "ios-vad", "task": "vad", "installed": false, "acknowledged": true}
+            ],
+            "secretsRedacted": true
+        });
+        let derived = ios_local_light_inference_status_from_voice_packs(true, Some(&status));
+
+        assert!(derived.available);
+        assert!(!derived.requestable);
+        assert!(!derived.model_runtime_provider);
+        assert!(!derived.model_present);
+        assert_eq!(derived.model_id, None);
+        assert_eq!(derived.state, "needs_model");
     }
 
     #[test]

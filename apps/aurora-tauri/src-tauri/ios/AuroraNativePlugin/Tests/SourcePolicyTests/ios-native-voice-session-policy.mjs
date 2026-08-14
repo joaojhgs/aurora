@@ -19,6 +19,7 @@ const header = readFileSync(
   'utf8',
 )
 const nativeAbi = readFileSync(resolve(packageRoot, '..', '..', 'src', 'ios_voice.rs'), 'utf8')
+const tauriLib = readFileSync(resolve(packageRoot, '..', '..', 'src', 'lib.rs'), 'utf8')
 const nativeSession = readFileSync(
   resolve(packageRoot, '..', '..', '..', '..', '..', 'rust', 'crates', 'aurora-voice-native', 'src', 'ios_session.rs'),
   'utf8',
@@ -80,6 +81,13 @@ for (const exactBindingField of [
   'expected_sha256',
   'expected_size_bytes',
   'runtime_revision',
+  'model_family',
+  'reference_audio_path',
+  'reference_audio_sha256',
+  'reference_audio_size_bytes',
+  'reference_audio_sample_rate_hz',
+  'reference_text',
+  'reference_revision',
   'files_json',
   'language',
   'sample_rate_hz',
@@ -104,6 +112,10 @@ assertIncludesAll(
     'NativeSttBackend',
     'NativeTtsBackend',
     'TaskPackBinding::from_ios_cached_sherpa',
+    'catalog_model_family()',
+    'from_catalog_pockettts_model',
+    'verify_ios_tts_reference_binding',
+    'tts_reference()',
     'required_file(vad_binding, "model")',
     'required_file(kws_binding, "encoder-int8")',
     'stt_decoder_file(stt_binding)',
@@ -151,6 +163,10 @@ assert(plugin.includes('voiceCredentialStatus'), 'native plugin must expose reda
 assert(plugin.includes('AuroraIOSVoiceSessionHost('), 'foreground start must construct the Rust session host')
 assert(plugin.includes('voiceSession?.cancel'), 'foreground stop must cancel the Rust session generation')
 assert(plugin.includes('voiceForegroundCaptureFinish'), 'foreground PTT must expose a finish command')
+assert(
+  plugin.includes('voiceSessionGeneration = nil'),
+  'successful foreground finish must clear generation identity before a later stop can cancel stale work',
+)
 assert(plugin.includes('voiceBackgroundCaptureStart'), 'explicit background voice must expose a separate start command')
 assert(plugin.includes('startBackground()'), 'background start must use the Rust background-session ABI')
 assert(plugin.includes('session.finish(generation: generation)'), 'finish must complete the Rust generation')
@@ -162,6 +178,7 @@ for (const command of [
   'voicePackStatus',
   'voicePackDownload',
   'voicePackRemove',
+  'voiceTTSReferenceSet',
 ]) {
   assert(plugin.includes(command), `native plugin must expose ${command}`)
 }
@@ -170,6 +187,22 @@ assert(
     && plugin.includes('nativeTurnTransportReady()')
     && plugin.includes('packCatalogReady'),
   'public iOS voice capture readiness must not be hardcoded off after pack/native bridge wiring',
+)
+assertIncludesAll(
+  tauriLib,
+  [
+    'ios_local_light_inference_status_from_voice_packs',
+    'ios_voice_pack_catalog_visible',
+    'ios_ready_local_voice_model_id',
+    'run_ios_plugin_command(native, "voicePackStatus", json!({}))',
+    '"count": 558',
+    'ios_voice_catalog_ready_but_required_packs_missing',
+  ],
+  'Rust iOS local-light bridge status must be derived from voice-pack catalog and active packs',
+)
+assert(
+  !/available: false,\s*requestable: false,\s*model_runtime_provider: false/.test(tauriLib),
+  'Rust iOS local-light status must not hardcode provider/requestability/model fields false',
 )
 for (const snippet of [
   'operationQueue.sync',
@@ -183,6 +216,10 @@ for (const snippet of [
   'willPerformHTTPRedirection',
   'Content-Length',
   'SHA256',
+  'setTTSReference',
+  'AuroraIOSVoiceTTSReferenceRecord',
+  'maxReferenceBytes',
+  'referenceDirectoryName',
   'writeAtomically',
   'replaceItemAt',
   'stagingPrefix',
@@ -196,6 +233,8 @@ for (const snippet of [
   'metadata.pack.runtimeRevision == catalogEntry.runtimeRevision',
   'modelFilesJson',
   'modelFiles',
+  'modelFamily',
+  'pockettts',
   'isSafeCachedModelFile',
   'sanitizeRelativePath',
   'catalogEntry.sampleRateHz > 0',
@@ -203,9 +242,12 @@ for (const snippet of [
   'isSafeCachedPackFile',
   'isSymbolicLink',
   'entry.acknowledged',
+  'embeddedCatalog',
+  'aurora_ios_voice_pack_embedded_catalog_json',
 ]) {
   assert(packManager.includes(snippet), `voice pack manager must preserve safety policy: ${snippet}`)
 }
+assert(!packManager.includes('catalogEntryLimit'), 'iOS catalog fallback must not retain a 200-entry cap')
 assert(
   packManager.includes('let sanitized = try entries.map')
     && !packManager.includes('compactMap { entry -> AuroraIOSVoicePackCatalogEntry?'),
