@@ -196,6 +196,7 @@ describe('runtime profile document', () => {
     'downloading',
     'incompatible',
     'over-budget',
+    'ready',
   ] as const)('sanitizes the persisted %s local speech state', (localSpeechPackState) => {
     const profile: AuroraRuntimeProfileV2 = {
       version: 2,
@@ -227,7 +228,7 @@ describe('runtime profile document', () => {
       ...migrated,
       localNode: {
         ...migrated.localNode,
-        localSpeechPackState: 'ready',
+        localSpeechPackState: 'unknown',
       },
     } as unknown as AuroraRuntimeProfileV2)).toThrow(/local speech state/u)
   })

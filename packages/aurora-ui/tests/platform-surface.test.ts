@@ -174,6 +174,7 @@ describe('Aurora surface profile regression coverage', () => {
     ['downloading', ['foreground-voice'], 'pending'],
     ['incompatible', ['foreground-voice'], 'unsupported'],
     ['over-budget', ['foreground-voice'], 'degraded'],
+    ['ready', ['foreground-voice'], 'ready'],
   ] as const)('models %s local speech without enabling unapproved local engines', (
     localSpeechPackState,
     enabledCapabilityPacks,
@@ -197,6 +198,59 @@ describe('Aurora surface profile regression coverage', () => {
       canRunLocalTts: false,
     })
     expect(findForbiddenProductionCopyTerms(profile.localSpeechPack.detail)).toEqual([])
+  })
+
+  it('enables local speech engines only with a ready selected download and engine evidence', () => {
+    const ready = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'mesh',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      enabledCapabilityPacks: ['foreground-voice'],
+      localSpeechPackState: 'ready',
+      localSpeechEngineCapabilities: { vad: true, kws: true, stt: true, tts: true },
+    })
+    const missingEngine = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'mesh',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      enabledCapabilityPacks: ['foreground-voice'],
+      localSpeechPackState: 'ready',
+      localSpeechEngineCapabilities: { vad: true, stt: true, tts: false },
+    })
+    const absentDownload = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'mesh',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      enabledCapabilityPacks: ['foreground-voice'],
+      localSpeechPackState: 'unavailable',
+      localSpeechEngineCapabilities: { vad: true, kws: true, stt: true, tts: true },
+    })
+
+    expect(ready.localSpeechPack).toMatchObject({
+      state: 'ready',
+      availabilityState: 'ready',
+      canRunLocalVad: true,
+      canRunLocalKws: true,
+      canRunLocalStt: true,
+      canRunLocalTts: true,
+    })
+    expect(missingEngine.localSpeechPack).toMatchObject({
+      state: 'ready',
+      canRunLocalVad: true,
+      canRunLocalKws: false,
+      canRunLocalStt: true,
+      canRunLocalTts: false,
+    })
+    expect(absentDownload.localSpeechPack).toMatchObject({
+      state: 'unavailable',
+      canRunLocalVad: false,
+      canRunLocalKws: false,
+      canRunLocalStt: false,
+      canRunLocalTts: false,
+    })
   })
 
   it('derives disabled, incompatible, and unavailable defaults from the persisted capability selection', () => {

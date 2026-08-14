@@ -3905,7 +3905,7 @@ export function buildAssistantVoiceModel(input: {
       {
         id: 'local-speech-pack',
         label: localSpeechPack.label,
-        state: localSpeechPack.availabilityState,
+        state: localSpeechPack.availabilityState === 'ready' ? 'available-local' : localSpeechPack.availabilityState,
         privacyClass: 'raw-audio',
         providerLabel: 'This device',
         detail: localSpeechPack.detail,

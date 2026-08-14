@@ -13,11 +13,14 @@ import { snapshotFromGraph } from '../src/shell-data'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-type SpeechLanguage = 'de' | 'en' | 'es' | 'fr' | 'it' | 'ja' | 'ko' | 'pt' | 'zh'
+type SpeechLanguage = string
 type InstallStatus = 'installed' | 'not_found' | 'queued' | 'rejected' | 'revision_conflict' | 'unchanged'
 type RemoveStatus = 'drained' | 'not_found' | 'rejected' | 'removed' | 'revision_conflict' | 'unchanged'
 type DefaultStatus = 'activated' | 'drained' | 'not_found' | 'rejected' | 'revision_conflict'
 type DeleteStatus = 'deleted' | 'not_found' | 'rejected' | 'revision_conflict'
+type PackInstallStatus = 'installed' | 'not_found' | 'queued' | 'rejected' | 'revision_conflict' | 'unchanged'
+type PackRemoveStatus = 'not_found' | 'rejected' | 'removed' | 'revision_conflict' | 'unchanged'
+type PackDefaultStatus = 'activated' | 'not_found' | 'rejected' | 'revision_conflict'
 
 interface Capabilities {
   contract_revision: 'aurora-tts-capabilities-v1'
@@ -26,6 +29,9 @@ interface Capabilities {
   ready_languages: SpeechLanguage[]
   supported_language_pack_ids: string[]
   installed_language_pack_ids: string[]
+  active_language_pack_id?: string | null
+  default_language_pack_id?: string | null
+  language_packs?: LanguagePack[]
   resident_language_pack_ids: string[]
   resident_language_packs: Array<{ pack_id: string; ready_languages: SpeechLanguage[] }>
   resident_base_model_count: number
@@ -35,6 +41,27 @@ interface Capabilities {
   streaming: boolean
   cancellation: boolean
   cloning: boolean
+  engine_capabilities?: {
+    vad?: boolean
+    kws?: boolean
+    stt?: boolean
+    tts?: boolean
+  }
+}
+
+interface LanguagePack {
+  pack_id: string
+  display_name?: string | null
+  revision?: string | null
+  languages?: SpeechLanguage[]
+  ready_languages?: SpeechLanguage[]
+  installed?: boolean
+  ready?: boolean
+  active?: boolean
+  default?: boolean
+  downloadable?: boolean
+  download_progress?: number | null
+  compatible_engine?: boolean
 }
 
 interface Voice {
@@ -184,7 +211,8 @@ describe('VoiceSettingsView', () => {
     const operationIds: string[] = []
     const adminExecute = vi.fn(async (input: { methodId: string, payload?: { operation_id?: string } }) => {
       if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: [profile({ installed: false, ready: false })] })
-      operationIds.push(input.payload?.operation_id ?? '')
+      if (input.methodId === 'TTS.ListLanguagePacks') return adminResult({ language_packs: [] })
+      if (input.methodId === 'TTS.InstallVoiceProfile') operationIds.push(input.payload?.operation_id ?? '')
       return adminResult(installResult('installed'))
     })
     const client = voiceClient({
@@ -225,6 +253,7 @@ describe('VoiceSettingsView', () => {
     const pendingInstall = deferred<unknown>()
     const adminExecute = vi.fn((input: { methodId: string }) => {
       if (input.methodId === 'TTS.ListVoiceProfiles') return Promise.resolve(adminResult({ profiles: [profile({ installed: false, ready: false })] }))
+      if (input.methodId === 'TTS.ListLanguagePacks') return Promise.resolve(adminResult({ language_packs: [] }))
       return pendingInstall.promise
     })
     const client = voiceClient({
@@ -433,6 +462,7 @@ describe('VoiceSettingsView', () => {
     const pendingRemove = deferred<unknown>()
     const adminExecute = vi.fn((input: { methodId: string }) => {
       if (input.methodId === 'TTS.ListVoiceProfiles') return Promise.resolve(adminResult({ profiles: [profile({ installed: true, ready: true, default: false, active: false })] }))
+      if (input.methodId === 'TTS.ListLanguagePacks') return Promise.resolve(adminResult({ language_packs: [] }))
       return pendingRemove.promise
     })
     const client = voiceClient({ adminExecute })
@@ -615,12 +645,116 @@ describe('VoiceSettingsView', () => {
     assertNoForbiddenCopy(text)
     await unmount()
   })
+
+  it('shows open catalog languages and downloads a selected absent language before use', async () => {
+    const adminExecute = vi.fn(async (input: { methodId: string }) => {
+      if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: [profile({ installed: false, ready: false, compatible_language_pack_ids: ['pt-BR-local'] })] })
+      if (input.methodId === 'TTS.ListLanguagePacks') {
+        return adminResult({
+          language_packs: [
+            languagePack({
+              pack_id: 'pt-BR-local',
+              display_name: 'Brazilian Portuguese',
+              languages: ['pt-BR'],
+              ready_languages: ['pt-BR'],
+              installed: false,
+              ready: false,
+              active: false,
+              default: false,
+              downloadable: true,
+            }),
+          ],
+        })
+      }
+      if (input.methodId === 'TTS.InstallLanguagePack') return adminResult(mutationResult<PackInstallStatus>('installed'))
+      throw new Error(`Unexpected action: ${input.methodId}`)
+    })
+    const client = voiceClient({
+      adminExecute,
+      capabilities: capabilities({
+        ready: false,
+        ready_languages: [],
+        supported_language_pack_ids: ['pt-BR-local'],
+        installed_language_pack_ids: [],
+        resident_language_pack_ids: [],
+        resident_language_packs: [],
+        language_packs: [languagePack({ pack_id: 'pt-BR-local', languages: ['pt-BR'], ready_languages: ['pt-BR'], installed: false, ready: false, active: false, default: false })],
+        engine_capabilities: { vad: true, kws: true, stt: true, tts: true },
+      }),
+      voices: [voice({ compatible_language_pack_ids: ['pt-BR-local'], ready: false })],
+    })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    await loadManagedVoices(container)
+    const text = visibleText(container)
+    expect(text).toContain('Brazilian Portuguese')
+    expect(text).toContain('Can be added when selected.')
+    expect(text).not.toContain('pt-BR-local')
+
+    await act(async () => {
+      buttonByText(container, 'Add and use').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+
+    expect(adminExecute).toHaveBeenCalledWith(expect.objectContaining({
+      methodId: 'TTS.InstallLanguagePack',
+      payload: expect.objectContaining({
+        pack_id: 'pt-BR-local',
+        operation_id: expect.stringMatching(/^voice-install-pack-/u)
+      }),
+      reason: 'Add spoken reply language: Manage spoken reply voices',
+      reauthConfirmed: true,
+      affectedResources: ['voice-language:pt-BR-local'],
+      path: '/api/TTS/InstallLanguagePack'
+    }))
+    expect(visibleText(container)).toContain('Language added and selected.')
+    assertNoForbiddenCopy(visibleText(container))
+    await unmount()
+  })
+
+  it('does not mark speech downloads ready unless the engine and selected language are ready', async () => {
+    const client = voiceClient({
+      capabilities: capabilities({
+        ready: true,
+        ready_languages: ['zh-Hant-TW'],
+        supported_language_pack_ids: ['zh-Hant-TW-local'],
+        installed_language_pack_ids: ['zh-Hant-TW-local'],
+        resident_language_pack_ids: ['zh-Hant-TW-local'],
+        resident_language_packs: [{ pack_id: 'zh-Hant-TW-local', ready_languages: ['zh-Hant-TW'] }],
+        active_language_pack_id: 'zh-Hant-TW-local',
+        default_language_pack_id: 'zh-Hant-TW-local',
+        engine_capabilities: { vad: true, kws: true, stt: true, tts: false },
+      }),
+      languagePacks: [
+        languagePack({
+          pack_id: 'zh-Hant-TW-local',
+          languages: ['zh-Hant-TW'],
+          ready_languages: ['zh-Hant-TW'],
+          installed: true,
+          ready: true,
+          active: true,
+          default: true,
+        }),
+      ],
+    })
+    const { container, unmount } = await renderVoiceSettings(client)
+    await loadManagedVoices(container)
+
+    const text = visibleText(container)
+    expect(text).toContain('Chinese')
+    expect(text).toContain('Spoken replies need attention.')
+    expect(text).toContain('Used by default for spoken replies.')
+    expect(text).not.toContain('zh-Hant-TW-local')
+    assertNoForbiddenCopy(text)
+    await unmount()
+  })
 })
 
 function voiceClient(overrides: {
   capabilities?: Capabilities
   voices?: Voice[]
   profiles?: Profile[]
+  languagePacks?: LanguagePack[]
   getCapabilities?: ReturnType<typeof vi.fn>
   listVoices?: ReturnType<typeof vi.fn>
   listVoiceProfiles?: ReturnType<typeof vi.fn>
@@ -642,6 +776,10 @@ function voiceClient(overrides: {
   const deleteVoiceProfile = overrides.deleteVoiceProfile ?? directVoiceManageCall
   const adminExecute = overrides.adminExecute ?? vi.fn(async (input: { methodId: string }) => {
     if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: overrides.profiles ?? [] })
+    if (input.methodId === 'TTS.ListLanguagePacks') return adminResult({ language_packs: overrides.languagePacks ?? [] })
+    if (input.methodId === 'TTS.InstallLanguagePack') return adminResult(mutationResult<PackInstallStatus>('installed'))
+    if (input.methodId === 'TTS.RemoveLanguagePack') return adminResult(mutationResult<PackRemoveStatus>('removed'))
+    if (input.methodId === 'TTS.SetDefaultLanguagePack') return adminResult(mutationResult<PackDefaultStatus>('activated'))
     if (input.methodId === 'TTS.InstallVoiceProfile') return adminResult(installResult('installed'))
     if (input.methodId === 'TTS.RemoveVoiceProfile') return adminResult(mutationResult<RemoveStatus>('removed'))
     if (input.methodId === 'TTS.SetDefaultVoice') return adminResult(mutationResult<DefaultStatus>('activated'))
@@ -688,6 +826,9 @@ function capabilities(overrides: Partial<Capabilities> = {}): Capabilities {
     ready_languages: ['en'],
     supported_language_pack_ids: ['en_pack'],
     installed_language_pack_ids: ['en_pack'],
+    active_language_pack_id: 'en_pack',
+    default_language_pack_id: 'en_pack',
+    language_packs: [languagePack()],
     resident_language_pack_ids: ['en_pack'],
     resident_language_packs: [{ pack_id: 'en_pack', ready_languages: ['en'] }],
     resident_base_model_count: 1,
@@ -697,6 +838,24 @@ function capabilities(overrides: Partial<Capabilities> = {}): Capabilities {
     streaming: true,
     cancellation: true,
     cloning: false,
+    engine_capabilities: { vad: true, kws: true, stt: true, tts: true },
+    ...overrides
+  }
+}
+
+function languagePack(overrides: Partial<LanguagePack> = {}): LanguagePack {
+  return {
+    pack_id: 'en_pack',
+    display_name: 'English',
+    revision: 'pack-rev-1',
+    languages: ['en'],
+    ready_languages: ['en'],
+    installed: true,
+    ready: true,
+    active: false,
+    default: false,
+    downloadable: true,
+    compatible_engine: true,
     ...overrides
   }
 }

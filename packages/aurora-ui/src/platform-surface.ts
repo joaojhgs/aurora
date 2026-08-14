@@ -26,9 +26,17 @@ export interface AuroraSurfaceProfileInput {
   runtimeTier?: AuroraRuntimeTier | null | undefined
   enabledCapabilityPacks?: readonly AuroraCapabilityPack[] | null | undefined
   localSpeechPackState?: AuroraLocalSpeechPackState | null | undefined
+  localSpeechEngineCapabilities?: AuroraLocalSpeechEngineCapabilities | null | undefined
   /** The native voice adapter exists, but its route may still be unavailable. */
   nativeVoicePresent?: boolean | undefined
   nativeVoiceAvailable?: boolean | undefined
+}
+
+export interface AuroraLocalSpeechEngineCapabilities {
+  vad?: boolean | undefined
+  kws?: boolean | undefined
+  stt?: boolean | undefined
+  tts?: boolean | undefined
 }
 
 export interface AuroraSurfaceProfile {
@@ -88,7 +96,7 @@ export type AuroraVoiceCaptureOwner = 'coordinator-daemon' | 'webview-focused' |
 
 export interface AuroraLocalSpeechPackStatus {
   state: AuroraLocalSpeechPackState
-  availabilityState: 'pending' | 'degraded' | 'unsupported'
+  availabilityState: 'ready' | 'pending' | 'degraded' | 'unsupported'
   label: string
   detail: string
   blockers: string[]
@@ -184,6 +192,7 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
     requestedState: input.localSpeechPackState ?? undefined,
     runtimeTier,
     enabledCapabilityPacks,
+    engineCapabilities: input.localSpeechEngineCapabilities ?? undefined,
   })
   return {
     physicalKind,
@@ -224,6 +233,7 @@ export function resolveAuroraLocalSpeechPack(input: {
   requestedState?: AuroraLocalSpeechPackState | undefined
   runtimeTier: AuroraRuntimeTier
   enabledCapabilityPacks?: readonly AuroraCapabilityPack[] | null | undefined
+  engineCapabilities?: AuroraLocalSpeechEngineCapabilities | null | undefined
 }): AuroraLocalSpeechPackStatus {
   const requestedState = input.requestedState && isAuroraLocalSpeechPackState(input.requestedState)
     ? input.requestedState
@@ -234,16 +244,18 @@ export function resolveAuroraLocalSpeechPack(input: {
     : requestedState
       ?? (input.runtimeTier === 'none' ? 'incompatible' : 'unavailable')
   const availabilityState = localSpeechAvailabilityState(state)
+  const canRunLocalEngine = foregroundVoiceEnabled && input.runtimeTier !== 'none' && state === 'ready'
+  const engines = input.engineCapabilities ?? {}
   return {
     state,
     availabilityState,
     label: 'On-device speech',
     detail: localSpeechPackDetail(state),
     blockers: localSpeechPackBlockers(state),
-    canRunLocalVad: false,
-    canRunLocalKws: false,
-    canRunLocalStt: false,
-    canRunLocalTts: false,
+    canRunLocalVad: canRunLocalEngine && engines.vad === true,
+    canRunLocalKws: canRunLocalEngine && engines.kws === true,
+    canRunLocalStt: canRunLocalEngine && engines.stt === true,
+    canRunLocalTts: canRunLocalEngine && engines.tts === true,
   }
 }
 
@@ -252,10 +264,12 @@ function isAuroraLocalSpeechPackState(value: string): value is AuroraLocalSpeech
     || value === 'downloading'
     || value === 'incompatible'
     || value === 'over-budget'
+    || value === 'ready'
     || value === 'unavailable'
 }
 
 function localSpeechAvailabilityState(state: AuroraLocalSpeechPackState): AuroraLocalSpeechPackStatus['availabilityState'] {
+  if (state === 'ready') return 'ready'
   if (state === 'downloading') return 'pending'
   if (state === 'over-budget') return 'degraded'
   return 'unsupported'
@@ -269,6 +283,8 @@ function localSpeechPackDetail(state: AuroraLocalSpeechPackState): string {
       return 'On-device speech is not compatible with this device.'
     case 'over-budget':
       return 'On-device speech needs more available storage or memory before it can run.'
+    case 'ready':
+      return 'On-device speech is ready.'
     case 'unavailable':
       return 'On-device speech is unavailable on this device right now.'
     case 'disabled':
@@ -284,6 +300,8 @@ function localSpeechPackBlockers(state: AuroraLocalSpeechPackState): string[] {
       return ['local_speech_incompatible']
     case 'over-budget':
       return ['local_speech_over_budget']
+    case 'ready':
+      return []
     case 'unavailable':
       return ['local_speech_unavailable']
     case 'disabled':

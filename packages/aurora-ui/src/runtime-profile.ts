@@ -52,6 +52,7 @@ export type AuroraLocalSpeechPackState =
   | 'downloading'
   | 'incompatible'
   | 'over-budget'
+  | 'ready'
   | 'unavailable'
 
 export interface AuroraHomeConnectionProfile {
@@ -407,6 +408,7 @@ function sanitizeLocalSpeechPackState(value: unknown): AuroraLocalSpeechPackStat
     || value === 'downloading'
     || value === 'incompatible'
     || value === 'over-budget'
+    || value === 'ready'
     || value === 'unavailable'
   ) return value
   throw new Error('Runtime profile local speech state is invalid')

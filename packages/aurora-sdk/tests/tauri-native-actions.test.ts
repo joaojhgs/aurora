@@ -63,4 +63,54 @@ describe('Tauri bounded native action transport', () => {
       code: 'native_permission_missing'
     } satisfies Partial<AuroraError>)
   })
+
+  it('routes native speech download status and mutations through exact commands', async () => {
+    const calls: Array<{ command: string, args: unknown }> = []
+    const status = {
+      available: true,
+      state: 'ready',
+      activePackId: 'pt-BR-local',
+      defaultPackId: 'pt-BR-local',
+      languages: ['pt-BR'],
+      engineCapabilities: { vad: true, kws: true, stt: true, tts: true },
+      catalog: [{
+        packId: 'pt-BR-local',
+        displayName: 'Brazilian Portuguese',
+        languages: ['pt-BR'],
+        installed: true,
+        ready: true,
+        active: true,
+        default: true,
+        downloadable: true,
+        compatibleEngine: true,
+        revision: 'rev-1',
+      }],
+      secretsRedacted: true as const,
+    }
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        if (command === 'aurora_native_speech_pack_status') return status
+        if (command === 'aurora_native_speech_pack_catalog') return status.catalog
+        if (command === 'aurora_native_speech_pack_install') return { status: 'installed', packId: 'pt-BR-local', revision: 'rev-2', idempotent: false, secretsRedacted: true }
+        if (command === 'aurora_native_speech_pack_set_default') return { status: 'activated', packId: 'pt-BR-local', revision: 'rev-2', idempotent: false, secretsRedacted: true }
+        if (command === 'aurora_native_speech_pack_remove') return { status: 'removed', packId: 'pt-BR-local', revision: null, idempotent: false, secretsRedacted: true }
+        throw new Error(`unexpected command: ${command}`)
+      }
+    })
+
+    await expect(transport.getNativeSpeechPackStatus()).resolves.toEqual(status)
+    await expect(transport.getNativeSpeechPackCatalog()).resolves.toEqual(status.catalog)
+    await expect(transport.installNativeSpeechPack({ packId: 'pt-BR-local', expectedRevision: 'rev-1', operationId: 'op-1' })).resolves.toMatchObject({ status: 'installed' })
+    await expect(transport.setDefaultNativeSpeechPack({ packId: 'pt-BR-local', operationId: 'op-2' })).resolves.toMatchObject({ status: 'activated' })
+    await expect(transport.removeNativeSpeechPack({ packId: 'pt-BR-local', operationId: 'op-3' })).resolves.toMatchObject({ status: 'removed' })
+
+    expect(calls).toEqual([
+      { command: 'aurora_native_speech_pack_status', args: undefined },
+      { command: 'aurora_native_speech_pack_catalog', args: undefined },
+      { command: 'aurora_native_speech_pack_install', args: { request: { packId: 'pt-BR-local', expectedRevision: 'rev-1', operationId: 'op-1' } } },
+      { command: 'aurora_native_speech_pack_set_default', args: { request: { packId: 'pt-BR-local', operationId: 'op-2' } } },
+      { command: 'aurora_native_speech_pack_remove', args: { request: { packId: 'pt-BR-local', operationId: 'op-3' } } },
+    ])
+  })
 })

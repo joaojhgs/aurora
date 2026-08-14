@@ -16,15 +16,20 @@ import {
   AlertDialogTitle
 } from '#components/ui/alert-dialog'
 import { Badge } from '#components/ui/badge'
+import { getAuroraSurfaceProfile } from './platform-surface'
 
-type SpeechLanguage = 'de' | 'en' | 'es' | 'fr' | 'it' | 'ja' | 'ko' | 'pt' | 'zh'
+type SpeechLanguage = string
 type TtsModelStatus = 'degraded' | 'error' | 'loading' | 'ready' | 'unavailable'
 type TtsVoiceKind = 'cloned' | 'standard'
 type InstallStatus = 'installed' | 'not_found' | 'queued' | 'rejected' | 'revision_conflict' | 'unchanged'
 type RemoveStatus = 'drained' | 'not_found' | 'rejected' | 'removed' | 'revision_conflict' | 'unchanged'
 type DefaultStatus = 'activated' | 'drained' | 'not_found' | 'rejected' | 'revision_conflict'
 type DeleteStatus = 'deleted' | 'not_found' | 'rejected' | 'revision_conflict'
+type PackInstallStatus = 'installed' | 'not_found' | 'queued' | 'rejected' | 'revision_conflict' | 'unchanged'
+type PackRemoveStatus = 'not_found' | 'rejected' | 'removed' | 'revision_conflict' | 'unchanged'
+type PackDefaultStatus = 'activated' | 'not_found' | 'rejected' | 'revision_conflict'
 type VoiceMutationKind = 'default' | 'delete' | 'install' | 'remove'
+type PackMutationKind = 'default-pack' | 'install-pack' | 'remove-pack'
 
 interface TtsResidentLanguagePack {
   pack_id: string
@@ -37,7 +42,16 @@ interface TtsCapabilities {
   ready_languages?: SpeechLanguage[] | undefined
   supported_language_pack_ids?: string[] | undefined
   installed_language_pack_ids?: string[] | undefined
+  active_language_pack_id?: string | null | undefined
+  default_language_pack_id?: string | null | undefined
+  language_packs?: TtsLanguagePack[] | undefined
   resident_language_packs?: TtsResidentLanguagePack[] | undefined
+  engine_capabilities?: {
+    vad?: boolean | undefined
+    kws?: boolean | undefined
+    stt?: boolean | undefined
+    tts?: boolean | undefined
+  } | undefined
 }
 
 interface TtsVoice {
@@ -61,10 +75,26 @@ interface TtsVoiceProfile {
   compatible_language_pack_ids?: string[] | undefined
 }
 
+interface TtsLanguagePack {
+  pack_id: string
+  display_name?: string | null | undefined
+  revision?: string | null | undefined
+  languages?: SpeechLanguage[] | undefined
+  ready_languages?: SpeechLanguage[] | undefined
+  installed?: boolean | undefined
+  ready?: boolean | undefined
+  active?: boolean | undefined
+  default?: boolean | undefined
+  downloadable?: boolean | undefined
+  download_progress?: number | null | undefined
+  compatible_engine?: boolean | undefined
+}
+
 interface VoiceSettingsState {
   capabilities: TtsCapabilities | null
   voices: TtsVoice[]
   profiles: TtsVoiceProfile[]
+  packs: TtsLanguagePack[]
   loadState: 'loading' | 'ready' | 'error'
   managementState: 'locked' | 'loading' | 'ready' | 'limited'
   message: string | null
@@ -74,6 +104,7 @@ const initialVoiceSettingsState: VoiceSettingsState = {
   capabilities: null,
   voices: [],
   profiles: [],
+  packs: [],
   loadState: 'loading',
   managementState: 'locked',
   message: null
@@ -84,8 +115,12 @@ let fallbackVoiceOperationSequence = 0
 
 const TTS_MANAGE_METHODS = {
   install: 'TTS.InstallVoiceProfile',
+  installLanguagePack: 'TTS.InstallLanguagePack',
+  listLanguagePacks: 'TTS.ListLanguagePacks',
   listProfiles: 'TTS.ListVoiceProfiles',
+  removeLanguagePack: 'TTS.RemoveLanguagePack',
   remove: 'TTS.RemoveVoiceProfile',
+  setDefaultLanguagePack: 'TTS.SetDefaultLanguagePack',
   setDefault: 'TTS.SetDefaultVoice',
   delete: 'TTS.DeleteVoiceProfile'
 } as const
@@ -97,6 +132,7 @@ export interface VoiceSettingsViewProps {
 export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
   const [state, setState] = useState<VoiceSettingsState>(initialVoiceSettingsState)
   const [installingVoiceId, setInstallingVoiceId] = useState<string | null>(null)
+  const [pendingPackId, setPendingPackId] = useState<string | null>(null)
   const [installMessage, setInstallMessage] = useState<string | null>(null)
   const [pendingActionKey, setPendingActionKey] = useState<string | null>(null)
   const [mutationMessage, setMutationMessage] = useState<string | null>(null)
@@ -170,9 +206,18 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
         affectedResources: ['voice-profiles'],
         path: routePath('TTS', 'ListVoiceProfiles')
       })
+      const packsResult = await client.admin.execute<{ language_packs?: TtsLanguagePack[] }>({
+        methodId: TTS_MANAGE_METHODS.listLanguagePacks,
+        payload: { include_unavailable: true },
+        reason: adminReasonFor(reason, adminReasonValue),
+        reauthConfirmed: adminReviewConfirmed,
+        affectedResources: ['voice-language-downloads'],
+        path: routePath('TTS', 'ListLanguagePacks')
+      }).catch(() => null)
       setState((current) => ({
         ...current,
         profiles: result.data.profiles ?? [],
+        packs: packsResult?.data.language_packs ?? [],
         managementState: 'ready',
         message: null
       }))
@@ -190,9 +235,20 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
 
   const managedProfiles = useMemo(() => state.profiles.map((profile, index) => toManagedVoice(profile, index, state.capabilities)), [state.profiles, state.capabilities])
   const voiceRows = useMemo(() => state.voices.map((voice, index) => toVoiceRow(voice, index, state.capabilities)), [state.voices, state.capabilities])
+  const packRows = useMemo(() => toPackRows(state.capabilities, state.packs, state.profiles), [state.capabilities, state.packs, state.profiles])
   const readyLanguages = useMemo(() => languageList(state.capabilities?.ready_languages), [state.capabilities])
   const canShowInstall = state.managementState === 'ready'
   const actionPending = pendingActionKey !== null || state.managementState === 'loading'
+  const transportKind = client.transport?.kind ?? 'http'
+  const surfaceProfile = useMemo(() => getAuroraSurfaceProfile({
+    transportKind,
+    userAgent: typeof navigator === 'undefined' ? null : navigator.userAgent,
+    nodeMode: 'mesh-node',
+    runtimeTier: state.capabilities?.ready ? 'lightweight-ts' : 'none',
+    enabledCapabilityPacks: ['foreground-voice'],
+    localSpeechPackState: state.capabilities?.ready ? 'ready' : state.capabilities?.model_status === 'loading' ? 'downloading' : 'unavailable',
+    localSpeechEngineCapabilities: state.capabilities?.engine_capabilities,
+  }), [transportKind, state.capabilities])
 
   async function installProfile(profile: ManagedVoice) {
     if (!profile.installable || actionPending || !adminActionReady) return
@@ -221,6 +277,109 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
       setInstallingVoiceId(null)
       setPendingActionKey(null)
     }
+  }
+
+  async function installLanguagePack(pack: ManagedLanguagePack) {
+    if (!pack.installable || actionPending || !adminActionReady) return
+    const actionKey = actionKeyFor('install-pack', pack.packId)
+    setPendingPackId(pack.packId)
+    setPendingActionKey(actionKey)
+    setMutationMessage('Adding language.')
+    try {
+      const result = await runPackAdminMutation<PackInstallStatus>(client, {
+        methodId: TTS_MANAGE_METHODS.installLanguagePack,
+        payload: {
+          pack_id: pack.packId,
+          ...(pack.revision ? { expected_revision: pack.revision } : {}),
+          operation_id: createPackOperationId('install-pack')
+        },
+        reason: adminReasonFor('Add spoken reply language', adminReasonValue),
+        reauthConfirmed: adminReviewConfirmed,
+        affectedResources: affectedPackResources(pack),
+        path: routePath('TTS', 'InstallLanguagePack')
+      })
+      setMutationMessage(packInstallOutcomeCopy(result.status))
+      if (isPackInstallSuccess(result.status)) await Promise.all([loadManagedProfiles('Refresh available voice settings'), refreshNow()])
+    } catch (error) {
+      setMutationMessage(productVoiceSettingsErrorCopy(error, 'Language was not added. Try again.'))
+    } finally {
+      setPendingPackId(null)
+      setPendingActionKey(null)
+    }
+  }
+
+  async function setDefaultLanguagePack(pack: ManagedLanguagePack) {
+    if (!pack.canSetDefault || actionPending || !adminActionReady) return
+    const actionKey = actionKeyFor('default-pack', pack.packId)
+    setPendingPackId(pack.packId)
+    setPendingActionKey(actionKey)
+    setMutationMessage('Updating language choice.')
+    try {
+      const result = await runPackAdminMutation<PackDefaultStatus>(client, {
+        methodId: TTS_MANAGE_METHODS.setDefaultLanguagePack,
+        payload: {
+          pack_id: pack.packId,
+          ...(pack.revision ? { expected_revision: pack.revision } : {}),
+          operation_id: createPackOperationId('default-pack')
+        },
+        reason: adminReasonFor('Update spoken reply language choice', adminReasonValue),
+        reauthConfirmed: adminReviewConfirmed,
+        affectedResources: affectedPackResources(pack),
+        path: routePath('TTS', 'SetDefaultLanguagePack')
+      })
+      setMutationMessage(packDefaultOutcomeCopy(result.status))
+      if (isPackDefaultSuccess(result.status)) await Promise.all([loadManagedProfiles('Refresh available voice settings'), refreshNow()])
+    } catch (error) {
+      setMutationMessage(productVoiceSettingsErrorCopy(error, 'Language choice was not changed. Try again.'))
+    } finally {
+      setPendingPackId(null)
+      setPendingActionKey(null)
+    }
+  }
+
+  async function removeLanguagePack(pack: ManagedLanguagePack) {
+    if (!pack.canRemove || actionPending || !adminActionReady) return
+    const actionKey = actionKeyFor('remove-pack', pack.packId)
+    setPendingPackId(pack.packId)
+    setPendingActionKey(actionKey)
+    setMutationMessage('Removing language.')
+    try {
+      const result = await runPackAdminMutation<PackRemoveStatus>(client, {
+        methodId: TTS_MANAGE_METHODS.removeLanguagePack,
+        payload: {
+          pack_id: pack.packId,
+          ...(pack.revision ? { expected_revision: pack.revision } : {}),
+          operation_id: createPackOperationId('remove-pack')
+        },
+        reason: adminReasonFor('Remove spoken reply language', adminReasonValue),
+        reauthConfirmed: adminReviewConfirmed,
+        affectedResources: affectedPackResources(pack),
+        path: routePath('TTS', 'RemoveLanguagePack')
+      })
+      setMutationMessage(packRemoveOutcomeCopy(result.status))
+      if (isPackRemoveSuccess(result.status)) await Promise.all([loadManagedProfiles('Refresh available voice settings'), refreshNow()])
+    } catch (error) {
+      setMutationMessage(productVoiceSettingsErrorCopy(error, 'Language was not removed. Try again.'))
+    } finally {
+      setPendingPackId(null)
+      setPendingActionKey(null)
+    }
+  }
+
+  function refreshNow(): Promise<void> {
+    return Promise.all([
+      client.speech.tts.getCapabilities(),
+      client.speech.tts.listVoices()
+    ]).then(([capabilitiesResult, voicesResult]) => {
+      const capabilities = capabilitiesResult.ok ? capabilitiesResult.data.capabilities as TtsCapabilities : null
+      const voices = voicesResult.ok ? (voicesResult.data.voices as TtsVoice[] | undefined) ?? [] : []
+      setState((current) => ({
+        ...current,
+        capabilities,
+        voices,
+        loadState: capabilitiesResult.ok && voicesResult.ok ? 'ready' : 'error'
+      }))
+    })
   }
 
   async function setDefaultProfile(profile: ManagedVoice) {
@@ -293,7 +452,7 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
           {
             label: 'Readiness',
             value: readinessLabel(state.capabilities),
-            caption: state.capabilities?.ready ? 'Spoken replies can use available voices.' : 'Spoken replies need attention.',
+            caption: surfaceProfile.localSpeechPack.canRunLocalTts ? 'Spoken replies can use available voices.' : 'Spoken replies need attention.',
             tone: state.capabilities?.ready ? 'success' : 'warning'
           },
           {
@@ -339,6 +498,58 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
           ))}
           {voiceRows.length === 0 && state.loadState !== 'loading' ? (
             <p className="text-sm text-muted-foreground">No voice choices are available yet.</p>
+          ) : null}
+        </div>
+      </Card>
+
+      <Card title="Language downloads" description="Languages Aurora can add when selected.">
+        <div className="flex flex-col gap-3">
+          {state.managementState === 'locked' ? (
+            <p className="text-sm text-muted-foreground">Show available voices to manage language downloads.</p>
+          ) : null}
+          {packRows.map((pack) => (
+            <div key={pack.packId} className="flex flex-col gap-2 border-b border-border/60 pb-3 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{pack.label}</p>
+                <p className="text-xs text-muted-foreground">{pack.detail}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={pack.ready ? 'default' : 'secondary'}>{pack.badge}</Badge>
+                {canShowInstall && pack.installable ? (
+                  <Button
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => void installLanguagePack(pack)}
+                    disabled={actionPending || !adminActionReady}
+                  >
+                    {pendingPackId === pack.packId ? 'Adding' : 'Add and use'}
+                  </Button>
+                ) : null}
+                {canShowInstall && pack.canSetDefault ? (
+                  <Button
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => void setDefaultLanguagePack(pack)}
+                    disabled={actionPending || !adminActionReady}
+                  >
+                    {pendingPackId === pack.packId ? 'Updating' : 'Use by default'}
+                  </Button>
+                ) : null}
+                {canShowInstall && pack.canRemove ? (
+                  <Button
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => void removeLanguagePack(pack)}
+                    disabled={actionPending || !adminActionReady}
+                  >
+                    {pendingPackId === pack.packId ? 'Removing' : 'Remove'}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+          {packRows.length === 0 && state.managementState === 'ready' ? (
+            <p className="text-sm text-muted-foreground">No language downloads are available yet.</p>
           ) : null}
         </div>
       </Card>
@@ -486,11 +697,22 @@ interface VoiceManagePayload extends JsonObject {
   operation_id: string
 }
 
+interface PackManagePayload extends JsonObject {
+  pack_id: string
+  expected_revision?: string
+  operation_id: string
+}
+
 type VoiceManageMutationMethodId =
   | typeof TTS_MANAGE_METHODS.install
   | typeof TTS_MANAGE_METHODS.remove
   | typeof TTS_MANAGE_METHODS.setDefault
   | typeof TTS_MANAGE_METHODS.delete
+
+type PackManageMutationMethodId =
+  | typeof TTS_MANAGE_METHODS.installLanguagePack
+  | typeof TTS_MANAGE_METHODS.removeLanguagePack
+  | typeof TTS_MANAGE_METHODS.setDefaultLanguagePack
 
 interface MutationOutput<TStatus extends string> {
   status: TStatus
@@ -522,8 +744,34 @@ async function runVoiceAdminMutation<TStatus extends string>(
   return result.data
 }
 
+async function runPackAdminMutation<TStatus extends string>(
+  client: AuroraClient,
+  input: {
+    methodId: PackManageMutationMethodId
+    payload: PackManagePayload
+    reason: string
+    reauthConfirmed: boolean
+    affectedResources: string[]
+    path: string
+  }
+): Promise<MutationOutput<TStatus>> {
+  const result = await client.admin.execute<MutationOutput<TStatus>>({
+    methodId: input.methodId,
+    payload: input.payload,
+    reason: input.reason,
+    reauthConfirmed: input.reauthConfirmed,
+    affectedResources: input.affectedResources,
+    path: input.path
+  })
+  return result.data
+}
+
 function affectedVoiceResources(profile: Pick<ManagedVoice, 'voiceId'>): string[] {
   return [`voice-profile:${profile.voiceId}`]
+}
+
+function affectedPackResources(pack: Pick<ManagedLanguagePack, 'packId'>): string[] {
+  return [`voice-language:${pack.packId}`]
 }
 
 function adminReasonFor(action: string, userReason: string): string {
@@ -543,6 +791,18 @@ interface ManagedVoice extends VoiceRow {
   canDelete: boolean
   canRemove: boolean
   canSetDefault: boolean
+  badge: string
+}
+
+interface ManagedLanguagePack {
+  packId: string
+  revision: string | null
+  label: string
+  detail: string
+  ready: boolean
+  installable: boolean
+  canSetDefault: boolean
+  canRemove: boolean
   badge: string
 }
 
@@ -580,6 +840,69 @@ function toManagedVoice(profile: TtsVoiceProfile, index: number, capabilities: T
   }
 }
 
+function toPackRows(
+  capabilities: TtsCapabilities | null,
+  catalogPacks: readonly TtsLanguagePack[],
+  profiles: readonly TtsVoiceProfile[],
+): ManagedLanguagePack[] {
+  const rows = new Map<string, TtsLanguagePack>()
+  for (const pack of capabilities?.language_packs ?? []) rows.set(pack.pack_id, pack)
+  for (const pack of catalogPacks) rows.set(pack.pack_id, { ...rows.get(pack.pack_id), ...pack })
+  for (const pack of capabilities?.resident_language_packs ?? []) {
+    rows.set(pack.pack_id, {
+      ...rows.get(pack.pack_id),
+      pack_id: pack.pack_id,
+      installed: true,
+      ready: true,
+      ready_languages: pack.ready_languages,
+    })
+  }
+  for (const packId of capabilities?.supported_language_pack_ids ?? []) {
+    rows.set(packId, { ...rows.get(packId), pack_id: packId, downloadable: true })
+  }
+  for (const packId of capabilities?.installed_language_pack_ids ?? []) {
+    rows.set(packId, { ...rows.get(packId), pack_id: packId, installed: true })
+  }
+  for (const profile of profiles) {
+    for (const packId of profile.compatible_language_pack_ids ?? []) {
+      rows.set(packId, { ...rows.get(packId), pack_id: packId })
+    }
+  }
+
+  return Array.from(rows.values())
+    .filter((pack) => safePackId(pack.pack_id) !== null)
+    .sort((left, right) => packSortLabel(left).localeCompare(packSortLabel(right)))
+    .map((pack, index) => toManagedLanguagePack(pack, index, capabilities))
+}
+
+function toManagedLanguagePack(
+  pack: TtsLanguagePack,
+  index: number,
+  capabilities: TtsCapabilities | null,
+): ManagedLanguagePack {
+  const packId = safePackId(pack.pack_id) ?? `voice-language-${index + 1}`
+  const languages = languageList(pack.ready_languages ?? pack.languages)
+  const installed = pack.installed === true || capabilities?.installed_language_pack_ids?.includes(packId) === true
+  const ready = pack.ready === true || capabilities?.resident_language_packs?.some((resident) => resident.pack_id === packId) === true
+  const isDefault = pack.default === true || capabilities?.default_language_pack_id === packId
+  const active = pack.active === true || capabilities?.active_language_pack_id === packId
+  const engineCompatible = pack.compatible_engine !== false
+  const downloadProgress = typeof pack.download_progress === 'number' && Number.isFinite(pack.download_progress)
+    ? Math.max(0, Math.min(100, pack.download_progress))
+    : null
+  return {
+    packId,
+    revision: typeof pack.revision === 'string' && pack.revision.trim() ? pack.revision : null,
+    label: safeVoiceText(pack.display_name, languages.length > 0 ? languages.join(', ') : `Language option ${index + 1}`),
+    detail: languagePackDetail({ installed, ready, isDefault, active, engineCompatible, downloadProgress, languages }),
+    ready,
+    installable: !installed && pack.downloadable !== false && engineCompatible,
+    canSetDefault: installed && ready && !isDefault && engineCompatible,
+    canRemove: installed && !isDefault && !active,
+    badge: isDefault ? 'Default' : ready ? 'Ready' : installed ? 'Needs setup' : downloadProgress !== null ? 'Adding' : 'Available to add'
+  }
+}
+
 function canInstallProfile(profile: TtsVoiceProfile, capabilities: TtsCapabilities | null): boolean {
   if (profile.installed === true) return false
   if (profile.enabled === false) return false
@@ -610,6 +933,25 @@ function managedVoiceDetail(installed: boolean, ready: boolean, isDefault: boole
   return `Can be added for spoken replies.${languageCopy}`
 }
 
+function languagePackDetail(input: {
+  installed: boolean
+  ready: boolean
+  isDefault: boolean
+  active: boolean
+  engineCompatible: boolean
+  downloadProgress: number | null
+  languages: string[]
+}): string {
+  const languageCopy = input.languages.length > 0 ? ` ${input.languages.join(', ')}.` : ''
+  if (!input.engineCompatible) return `This language cannot run on this device right now.${languageCopy}`
+  if (input.downloadProgress !== null && !input.ready) return `Adding language. ${Math.round(input.downloadProgress)} percent complete.${languageCopy}`
+  if (input.isDefault) return `Used by default for spoken replies.${languageCopy}`
+  if (input.active) return `Currently used for spoken replies.${languageCopy}`
+  if (input.ready) return `Ready for spoken replies.${languageCopy}`
+  if (input.installed) return `Available but not ready yet.${languageCopy}`
+  return `Can be added when selected.${languageCopy}`
+}
+
 function readinessLabel(capabilities: TtsCapabilities | null): string {
   if (!capabilities) return 'Checking'
   if (capabilities.ready) return 'Ready'
@@ -618,18 +960,9 @@ function readinessLabel(capabilities: TtsCapabilities | null): string {
 }
 
 function languageList(values: readonly string[] | null | undefined): string[] {
-  const labels: Record<string, string> = {
-    de: 'German',
-    en: 'English',
-    es: 'Spanish',
-    fr: 'French',
-    it: 'Italian',
-    ja: 'Japanese',
-    ko: 'Korean',
-    pt: 'Portuguese',
-    zh: 'Chinese'
-  }
-  return [...new Set(values ?? [])].map((value) => labels[value] ?? null).filter((value): value is string => Boolean(value))
+  return [...new Set(values ?? [])]
+    .map((value) => languageLabel(value))
+    .filter((value): value is string => Boolean(value))
 }
 
 function languageListForPacks(capabilities: TtsCapabilities | null, packIds: readonly string[] | null | undefined): string[] {
@@ -650,6 +983,50 @@ function safeVoiceText(value: unknown, fallback: string): string {
   if (/^(?:standard|clone):/iu.test(compact)) return fallback
   if (/[a-z0-9]+(?:[._:-][a-z0-9]+){2,}/iu.test(compact)) return fallback
   return compact
+}
+
+function safePackId(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const compact = value.trim()
+  if (!compact || compact.length > 256) return null
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/u.test(compact)) return null
+  return compact
+}
+
+function packSortLabel(pack: TtsLanguagePack): string {
+  return safeVoiceText(pack.display_name, '') || languageList(pack.ready_languages ?? pack.languages).join(', ') || pack.pack_id
+}
+
+function languageLabel(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = normalizeLanguageTag(value)
+  if (!normalized) return null
+  try {
+    const displayNames = typeof Intl !== 'undefined' && 'DisplayNames' in Intl
+      ? new Intl.DisplayNames(undefined, { type: 'language' })
+      : null
+    const label = displayNames?.of(normalized)
+    if (label && label !== normalized) return titleCaseLanguage(label)
+  } catch {
+    // Ignore browser language-display gaps; the normalized tag is still useful.
+  }
+  return normalized
+}
+
+function normalizeLanguageTag(value: string): string | null {
+  const compact = value.trim().replaceAll('_', '-')
+  if (!/^(?:[a-zA-Z]{2,3}|und)(?:-[a-zA-Z0-9]{2,8}){0,6}$/u.test(compact)) return null
+  const parts = compact.split('-')
+  return parts.map((part, index) => {
+    if (index === 0) return part.toLowerCase()
+    if (/^[a-zA-Z]{4}$/u.test(part)) return part[0]!.toUpperCase() + part.slice(1).toLowerCase()
+    if (/^[a-zA-Z]{2}$|^\d{3}$/u.test(part)) return part.toUpperCase()
+    return part.toLowerCase()
+  }).join('-')
+}
+
+function titleCaseLanguage(value: string): string {
+  return value.replace(/\b[\p{L}]/gu, (match) => match.toLocaleUpperCase())
 }
 
 function productVoiceSettingsErrorCopy(error: unknown, backup = 'Voice settings could not be loaded. Try again.'): string {
@@ -699,6 +1076,30 @@ function deleteOutcomeCopy(status: DeleteStatus): string {
   return 'Voice was not deleted. Try again.'
 }
 
+function packInstallOutcomeCopy(status: PackInstallStatus): string {
+  if (status === 'installed') return 'Language added and selected.'
+  if (status === 'queued') return 'Language will be added soon.'
+  if (status === 'unchanged') return 'Language is already available.'
+  if (status === 'revision_conflict') return 'Language changed before it could be added. Try again.'
+  if (status === 'not_found') return 'Language is no longer available.'
+  return 'Language was not added. Try again.'
+}
+
+function packDefaultOutcomeCopy(status: PackDefaultStatus): string {
+  if (status === 'activated') return 'Language choice updated.'
+  if (status === 'revision_conflict') return 'Language changed before it could be selected. Try again.'
+  if (status === 'not_found') return 'Language is no longer available.'
+  return 'Language choice was not changed. Try again.'
+}
+
+function packRemoveOutcomeCopy(status: PackRemoveStatus): string {
+  if (status === 'removed') return 'Language removed.'
+  if (status === 'unchanged') return 'Language was already removed.'
+  if (status === 'revision_conflict') return 'Language changed before it could be removed. Try again.'
+  if (status === 'not_found') return 'Language is no longer available.'
+  return 'Language was not removed. Try again.'
+}
+
 function isInstallSuccess(status: InstallStatus): boolean {
   return status === 'installed' || status === 'queued' || status === 'unchanged'
 }
@@ -713,6 +1114,18 @@ function isRemoveSuccess(status: RemoveStatus): boolean {
 
 function isDeleteSuccess(status: DeleteStatus): boolean {
   return status === 'deleted' || status === 'not_found'
+}
+
+function isPackInstallSuccess(status: PackInstallStatus): boolean {
+  return status === 'installed' || status === 'queued' || status === 'unchanged'
+}
+
+function isPackDefaultSuccess(status: PackDefaultStatus): boolean {
+  return status === 'activated'
+}
+
+function isPackRemoveSuccess(status: PackRemoveStatus): boolean {
+  return status === 'removed' || status === 'unchanged' || status === 'not_found'
 }
 
 function createInstallOperationId(): string {
@@ -730,6 +1143,13 @@ function createVoiceOperationId(kind: VoiceMutationKind): string {
   return `voice-${kind}-${Date.now().toString(36)}-${fallbackVoiceOperationSequence.toString(36)}`
 }
 
-function actionKeyFor(kind: VoiceMutationKind, voiceId: string): string {
+function createPackOperationId(kind: PackMutationKind): string {
+  const randomId = globalThis.crypto?.randomUUID?.()
+  if (randomId) return `voice-${kind}-${randomId}`
+  fallbackVoiceOperationSequence = (fallbackVoiceOperationSequence + 1) % Number.MAX_SAFE_INTEGER
+  return `voice-${kind}-${Date.now().toString(36)}-${fallbackVoiceOperationSequence.toString(36)}`
+}
+
+function actionKeyFor(kind: VoiceMutationKind | PackMutationKind, voiceId: string): string {
   return `${kind}:${voiceId}`
 }

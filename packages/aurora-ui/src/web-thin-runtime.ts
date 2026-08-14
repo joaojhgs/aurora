@@ -26,7 +26,7 @@ import {
 } from '@aurora/client/webrtc'
 import { decodeMeshInvite, meshInviteSummary } from './mesh-invite'
 import { LocalNodeLifecycleController } from './local-node-lifecycle'
-import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from './platform-surface'
+import { getAuroraSurfaceProfile, type AuroraLocalSpeechEngineCapabilities, type AuroraSurfaceProfile } from './platform-surface'
 import type { AuroraCapabilityPack } from './runtime-profile'
 import type { BrowserPeerPersistenceStatus, BrowserWebRtcCredentialStore } from './browser-peer-persistence'
 export type { AuroraThinConnectionMode } from './connection-mode'
@@ -75,6 +75,7 @@ export interface BrowserThinRuntimeConfig {
   nodeRole?: 'remote-console' | 'mesh-node' | null | undefined
   enabledCapabilityPacks?: readonly AuroraCapabilityPack[] | null | undefined
   localSpeechPackState?: AuroraSurfaceProfile['localSpeechPack']['state'] | null | undefined
+  localSpeechEngineCapabilities?: AuroraLocalSpeechEngineCapabilities | null | undefined
   peerHost?: WebRtcPeerHost | undefined
   peerAuthorityResolver?: BrowserWebRtcRuntimeOptions['peerAuthorityResolver'] | undefined
   peerPairingIssuer?: BrowserWebRtcRuntimeOptions['peerPairingIssuer'] | undefined
@@ -204,6 +205,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     runtimeTier: meshNodeRuntimeEnabled ? 'lightweight-ts' : 'none',
     enabledCapabilityPacks: config.enabledCapabilityPacks,
     localSpeechPackState: config.localSpeechPackState,
+    localSpeechEngineCapabilities: config.localSpeechEngineCapabilities,
   })
   const features: BrowserRuntimeFeatureState = Object.freeze({
     requestedNodeRole,
