@@ -10,11 +10,13 @@ import {
   type AuroraVoiceWebEvent,
   type AuroraVoiceWebEventKind,
   type AuroraVoiceWebEventListener,
+  type AuroraVoiceWebModelBindings,
   type AuroraVoiceWebRuntimeOptions,
   type AuroraVoiceWebRuntimeSnapshot,
   type AuroraVoiceWebSession,
   type AuroraVoiceWebState
 } from './types.js'
+import { cloneModelBindingsForWorker } from './sherpa-engine.js'
 
 const DEFAULT_MAX_FRAME_SAMPLES = 4_800
 const DEFAULT_MAX_QUEUED_BYTES = 16_000 * 2 * 10
@@ -37,10 +39,11 @@ export class AuroraVoiceWebRuntime {
   private readonly maxFrameSamples: number
   private readonly maxQueuedBytes: number
   private readonly workerTimeoutMs: number
+  private readonly modelBindings: AuroraVoiceWebModelBindings | undefined
   private readonly nowMs: () => number
   private readonly sessionIdFactory: (ownerId: string, generation: number) => string
   private readonly listeners = new Set<AuroraVoiceWebEventListener>()
-  private readonly capabilities: AuroraVoiceWebCapabilities
+  private capabilities: AuroraVoiceWebCapabilities
   private state: AuroraVoiceWebState = 'idle'
   private session: AuroraVoiceWebSession | null = null
   private pendingStoppedSession: AuroraVoiceWebSession | null = null
@@ -57,6 +60,7 @@ export class AuroraVoiceWebRuntime {
     this.maxFrameSamples = boundedIntegerInRange(options.maxFrameSamples ?? DEFAULT_MAX_FRAME_SAMPLES, 'maxFrameSamples', 1, DEFAULT_MAX_FRAME_SAMPLES)
     this.maxQueuedBytes = boundedIntegerInRange(options.maxQueuedBytes ?? DEFAULT_MAX_QUEUED_BYTES, 'maxQueuedBytes', 2, DEFAULT_MAX_QUEUED_BYTES)
     this.workerTimeoutMs = boundedIntegerInRange(options.workerTimeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS, 'workerTimeoutMs', 1, 60_000)
+    this.modelBindings = options.modelBindings
     this.nowMs = options.nowMs ?? Date.now
     this.sessionIdFactory = options.sessionIdFactory ?? defaultSessionId
     this.capabilities = AURORA_VOICE_WEB_DEFAULT_CAPABILITIES
@@ -112,21 +116,24 @@ export class AuroraVoiceWebRuntime {
     this.session = nextSession
     let workerStarted = false
     try {
+      const workerBindings = cloneModelBindingsForWorker(this.modelBindings)
       const ready = await this.worker.request({
         type: 'init',
         protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
         maxFrameSamples: this.maxFrameSamples,
-        maxQueuedBytes: this.maxQueuedBytes
-      }, { timeoutMs: this.workerTimeoutMs })
+        maxQueuedBytes: this.maxQueuedBytes,
+        ...(workerBindings.bindings !== undefined ? { modelBindings: workerBindings.bindings } : {})
+      }, { timeoutMs: this.workerTimeoutMs, transfer: workerBindings.transfer })
       if (
         ready.type !== 'ready' ||
         ready.protocolVersion !== AURORA_VOICE_WORKER_PROTOCOL_VERSION ||
-        !capabilitiesAreUnavailable(ready.capabilities) ||
+        !validReadyCapabilities(ready.capabilities) ||
         ready.maxFrameSamples > this.maxFrameSamples ||
         ready.maxQueuedBytes > this.maxQueuedBytes
       ) {
         throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker is not available')
       }
+      this.capabilities = ready.capabilities
       this.assertStartStillCurrent(nextSession)
       const started = await this.worker.request({ type: 'start', session: nextSession, capabilities: this.capabilities }, { timeoutMs: this.workerTimeoutMs })
       this.assertStartStillCurrent(nextSession)
@@ -512,8 +519,11 @@ function normalizeReason(reason: string): string {
   return 'cancelled'
 }
 
-function capabilitiesAreUnavailable(capabilities: AuroraVoiceWebCapabilities): boolean {
-  return capabilities.vad === false && capabilities.kws === false && capabilities.stt === false && capabilities.tts === false
+function validReadyCapabilities(capabilities: AuroraVoiceWebCapabilities): boolean {
+  return typeof capabilities.vad === 'boolean' &&
+    typeof capabilities.kws === 'boolean' &&
+    typeof capabilities.stt === 'boolean' &&
+    capabilities.tts === false
 }
 
 function validateAck(response: unknown, sessionId: string, generation: number, sequence: number | null): void {

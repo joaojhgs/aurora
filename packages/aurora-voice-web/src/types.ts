@@ -77,6 +77,30 @@ export interface AuroraCapturedAudio {
   readonly redacted: true
 }
 
+export type AuroraVoiceWebModelTask = 'vad' | 'kws' | 'stt'
+
+export interface AuroraVoiceWebModelFileBinding {
+  readonly task: AuroraVoiceWebModelTask
+  readonly fileId: string
+  readonly virtualPath: string
+  readonly sha256: string
+  readonly byteLength: number
+  readonly bytes: Uint8Array
+}
+
+export interface AuroraVoiceWebSherpaAssets {
+  readonly vadAsrModuleUrl?: string
+  readonly vadHelperUrl?: string
+  readonly asrHelperUrl?: string
+  readonly kwsModuleUrl?: string
+  readonly kwsHelperUrl?: string
+}
+
+export interface AuroraVoiceWebModelBindings {
+  readonly files: readonly AuroraVoiceWebModelFileBinding[]
+  readonly sherpaAssets?: AuroraVoiceWebSherpaAssets
+}
+
 export type AuroraVoiceWebEventKind =
   | 'session_started'
   | 'session_stopped'
@@ -121,6 +145,7 @@ export type AuroraVoiceWorkerCommand =
       readonly protocolVersion: typeof AURORA_VOICE_WORKER_PROTOCOL_VERSION
       readonly maxFrameSamples: number
       readonly maxQueuedBytes: number
+      readonly modelBindings?: AuroraVoiceWebModelBindings
     }
   | {
       readonly type: 'start'
@@ -213,6 +238,7 @@ export interface AuroraVoiceWebRuntimeOptions {
   readonly maxFrameSamples?: number
   readonly maxQueuedBytes?: number
   readonly workerTimeoutMs?: number
+  readonly modelBindings?: AuroraVoiceWebModelBindings
   readonly nowMs?: () => number
   readonly sessionIdFactory?: (ownerId: string, generation: number) => string
 }

@@ -39,6 +39,35 @@ describe('AuroraVoiceWorkerDispatcher', () => {
     expect(port.transfers[3]).toHaveLength(1)
   })
 
+  it('advertises VAD KWS and STT only after bridge initialization accepts selected bindings', async () => {
+    const bridge = new FakeBridge({ capabilities: { vad: true, kws: true, stt: true, tts: false } })
+    const port = new RecordingPort()
+    const dispatcher = new AuroraVoiceWorkerDispatcher(bridge, port)
+
+    await dispatcher.handleMessage(request(1, {
+      type: 'init',
+      protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+      maxFrameSamples: 4_800,
+      maxQueuedBytes: 320_000,
+      modelBindings: {
+        files: [{
+          task: 'vad',
+          fileId: 'silero',
+          virtualPath: '/silero.onnx',
+          sha256: 'c'.repeat(64),
+          byteLength: 1,
+          bytes: Uint8Array.from([1])
+        }]
+      }
+    }))
+
+    expect(port.messages[0]?.response).toMatchObject({
+      type: 'ready',
+      capabilities: { vad: true, kws: true, stt: true, tts: false }
+    })
+    expect(bridge.initializeCalls).toBe(1)
+  })
+
   it('rejects stale and duplicate frames without leaking payloads', async () => {
     const bridge = new FakeBridge()
     const port = new RecordingPort()
@@ -227,10 +256,18 @@ class FakeBridge implements AuroraVoiceWasmBridge {
   readonly cancelCalls: { readonly sessionId: string | null; readonly generation: number; readonly reason: string }[] = []
   readonly finishCalls: { readonly sessionId: string; readonly generation: number; readonly outcome: 'completed' | 'abandoned' }[] = []
   private readonly rejectNullShutdown: boolean
+  private readonly capabilities
   startCalls = 0
+  initializeCalls = 0
 
-  constructor(options: { readonly rejectNullShutdown?: boolean } = {}) {
+  constructor(options: { readonly rejectNullShutdown?: boolean; readonly capabilities?: { readonly vad: boolean; readonly kws: boolean; readonly stt: boolean; readonly tts: false } } = {}) {
     this.rejectNullShutdown = options.rejectNullShutdown === true
+    this.capabilities = options.capabilities ?? { vad: false, kws: false, stt: false, tts: false }
+  }
+
+  async initialize(): Promise<{ readonly capabilities?: { readonly vad: boolean; readonly kws: boolean; readonly stt: boolean; readonly tts: false } }> {
+    this.initializeCalls += 1
+    return { capabilities: this.capabilities }
   }
 
   async startSession(_session: AuroraVoiceWebSession): Promise<void> {

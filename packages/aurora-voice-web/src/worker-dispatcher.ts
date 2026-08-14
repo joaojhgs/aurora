@@ -5,6 +5,7 @@ import {
   type AuroraPcmFrameEnvelope,
   type AuroraVoiceTurnFinishOutcome,
   type AuroraVoiceWebCapabilities,
+  type AuroraVoiceWebModelBindings,
   type AuroraVoiceWebSession,
   type AuroraVoiceWorkerCommand,
   type AuroraVoiceWorkerRequestEnvelope,
@@ -15,6 +16,7 @@ import {
 const MAX_CAPTURED_AUDIO_SAMPLES = 16_000 * 60
 
 export interface AuroraVoiceWasmBridge {
+  initialize?(modelBindings: AuroraVoiceWebModelBindings | undefined): Promise<{ readonly capabilities?: AuroraVoiceWebCapabilities }>
   startSession(session: AuroraVoiceWebSession): Promise<void>
   pushPcmI16(frame: AuroraPcmFrameEnvelope, pcm: Int16Array): Promise<void>
   stopSession(sessionId: string, generation: number): Promise<AuroraCapturedAudio>
@@ -70,14 +72,20 @@ export class AuroraVoiceWorkerDispatcher {
     switch (command.type) {
       case 'init':
         if (command.protocolVersion !== AURORA_VOICE_WORKER_PROTOCOL_VERSION) throw new Error('version')
-        await this.bridge.snapshot()
-        this.initialized = true
-        return {
-          type: 'ready',
-          protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
-          capabilities: AURORA_VOICE_WEB_DEFAULT_CAPABILITIES,
-          maxFrameSamples: command.maxFrameSamples,
-          maxQueuedBytes: command.maxQueuedBytes
+        {
+          const snapshot = this.bridge.initialize === undefined
+            ? await this.bridge.snapshot()
+            : await this.bridge.initialize(command.modelBindings)
+          const capabilities = snapshot.capabilities ?? AURORA_VOICE_WEB_DEFAULT_CAPABILITIES
+          assertCapabilities(capabilities)
+          this.initialized = true
+          return {
+            type: 'ready',
+            protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+            capabilities,
+            maxFrameSamples: command.maxFrameSamples,
+            maxQueuedBytes: command.maxQueuedBytes
+          }
         }
       case 'start':
         this.requireInitialized()
@@ -214,13 +222,14 @@ function assertValidCommand(command: unknown): asserts command is AuroraVoiceWor
       if (
         init.protocolVersion !== AURORA_VOICE_WORKER_PROTOCOL_VERSION ||
         !safePositiveInteger(init.maxFrameSamples) ||
-        !safePositiveInteger(init.maxQueuedBytes)
+        !safePositiveInteger(init.maxQueuedBytes) ||
+        !validModelBindings(init.modelBindings)
       ) throw new Error('command')
       return
     }
     case 'start': {
       const start = command as Partial<Extract<AuroraVoiceWorkerCommand, { type: 'start' }>>
-      if (!validSession(start.session) || !capabilitiesUnavailable(start.capabilities)) throw new Error('command')
+      if (!validSession(start.session) || !validCapabilities(start.capabilities)) throw new Error('command')
       return
     }
     case 'audio_frame': {
@@ -281,10 +290,45 @@ function validFrame(frame: unknown): frame is AuroraPcmFrameEnvelope {
     safePositiveInteger(candidate.queuedBytes)
 }
 
-function capabilitiesUnavailable(capabilities: unknown): capabilities is AuroraVoiceWebCapabilities {
+function assertCapabilities(capabilities: unknown): asserts capabilities is AuroraVoiceWebCapabilities {
+  if (!validCapabilities(capabilities)) throw new Error('capabilities')
+}
+
+function validCapabilities(capabilities: unknown): capabilities is AuroraVoiceWebCapabilities {
   if (typeof capabilities !== 'object' || capabilities === null) return false
   const candidate = capabilities as Partial<AuroraVoiceWebCapabilities>
-  return candidate.vad === false && candidate.kws === false && candidate.stt === false && candidate.tts === false
+  return typeof candidate.vad === 'boolean' &&
+    typeof candidate.kws === 'boolean' &&
+    typeof candidate.stt === 'boolean' &&
+    candidate.tts === false
+}
+
+function validModelBindings(bindings: unknown): bindings is AuroraVoiceWebModelBindings | undefined {
+  if (bindings === undefined) return true
+  if (typeof bindings !== 'object' || bindings === null) return false
+  const files = (bindings as Partial<AuroraVoiceWebModelBindings>).files
+  if (!Array.isArray(files) || files.length === 0 || files.length > 64) return false
+  return files.every((file) => {
+    if (typeof file !== 'object' || file === null) return false
+    const candidate = file as Record<string, unknown>
+    return (candidate.task === 'vad' || candidate.task === 'kws' || candidate.task === 'stt') &&
+      safeString(candidate.fileId) &&
+      safeVirtualPath(candidate.virtualPath) &&
+      typeof candidate.sha256 === 'string' &&
+      /^[a-f0-9]{64}$/.test(candidate.sha256) &&
+      candidate.bytes instanceof Uint8Array &&
+      safePositiveInteger(candidate.byteLength) &&
+      candidate.byteLength === candidate.bytes.byteLength
+  })
+}
+
+function safeVirtualPath(value: unknown): value is string {
+  return typeof value === 'string' &&
+    value.startsWith('/') &&
+    value.length <= 256 &&
+    !value.includes('..') &&
+    !value.includes('//') &&
+    /^[A-Za-z0-9_./:-]+$/.test(value)
 }
 
 function safeSessionIdFor(command: unknown): string | null {

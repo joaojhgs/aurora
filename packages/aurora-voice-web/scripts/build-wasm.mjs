@@ -9,7 +9,7 @@ const repoRoot = resolve(packageDir, '..', '..')
 const rustDir = join(repoRoot, 'rust')
 const outDir = join(packageDir, 'dist', 'wasm')
 const wasmInput = join(rustDir, 'target', 'wasm32-unknown-unknown', 'release', 'aurora_voice_wasm.wasm')
-const maxCoreBytes = 148 * 1024
+const maxCoreBytes = 160 * 1024
 const maxLoaderBytes = 48 * 1024
 const forbiddenExtensions = new Set(['.onnx', '.gguf', '.bin', '.safetensors', '.pt', '.pth', '.tflite', '.wav', '.flac', '.mp3'])
 

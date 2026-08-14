@@ -1,5 +1,5 @@
 import { AuroraWasmVoiceBridge } from './wasm-bridge.js'
-import { resolveSameOriginWasmUrl } from './worker-assets.js'
+import { resolveSameOriginSherpaAssetUrls, resolveSameOriginWasmUrl } from './worker-assets.js'
 import { AuroraVoiceWorkerDispatcher } from './worker-dispatcher.js'
 
 type AuroraVoiceWorkerScope = {
@@ -10,7 +10,8 @@ type AuroraVoiceWorkerScope = {
 
 const workerScope = self as unknown as AuroraVoiceWorkerScope
 const dispatcher = new AuroraVoiceWorkerDispatcher(new AuroraWasmVoiceBridge({
-  wasmUrl: resolveSameOriginWasmUrl(workerScope.location).href
+  wasmUrl: resolveSameOriginWasmUrl(workerScope.location).href,
+  sherpaAssets: resolveSameOriginSherpaAssetUrls(workerScope.location)
 }), workerScope)
 
 workerScope.addEventListener('message', (event: MessageEvent<unknown>) => {
