@@ -24,6 +24,9 @@ import android.os.Looper
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import androidx.core.app.NotificationManagerCompat
+import java.io.File
+import java.io.FileInputStream
 import org.json.JSONObject
 import java.security.KeyStore
 import java.util.concurrent.atomic.AtomicBoolean
@@ -49,6 +52,32 @@ private const val VOICE_BEARER_KEY = "aurora.voice.bearer"
 private const val VOICE_GENERIC_GATEWAY_KEY = "aurora.gateway"
 private const val VOICE_GENERIC_BEARER_KEY = "aurora.auth"
 private const val VOICE_REMOTE_AUDIO_CONSENT_KEY = "aurora.voice.remote_audio_consent"
+private const val VOICE_PACK_PREFS = "aurora_voice_pack_cache"
+private const val VOICE_PACK_CATALOG_KEY = "catalog"
+private const val VOICE_PACK_ACTIVE_ID_KEY = "active_voice_pack_id"
+private const val VOICE_PACK_CACHE_DIR = "aurora_voice_packs"
+private val voicePackCatalogFileNameRegex = Regex("[A-Za-z0-9._-]+")
+private const val VOICE_PACK_MIN_BYTES = 4L * 1024L
+private const val VOICE_PACK_MAX_BYTES = 1L * 1024L * 1024L * 1024L
+private const val VOICE_PACK_SHA256_HEX_LENGTH = 64
+private val voicePackNativeSupportedTasks = setOf("stt", "asr", "transcription", "vad", "tts", "wakeword", "wake-word", "local-inference", "local_inference", "inference")
+
+private data class VoicePackCatalogEntry(
+    val packId: String,
+    val packName: String,
+    val uri: String,
+    val provider: String,
+    val language: String,
+    val sha256: String,
+    val sizeBytes: Long,
+    val tasks: List<String>,
+    val engineRuntimeRevision: String,
+    val supportedOperatingSystems: List<String>,
+    val supportedAbis: List<String>,
+    val license: String,
+    val attributionRequired: Boolean,
+    val attributionText: String,
+)
 
 data class AuroraVoiceNativeConfig(
     val gateway: String,
@@ -612,6 +641,11 @@ class AuroraVoiceForegroundService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        if (backgroundSession && !isBackgroundVoiceSessionAvailable()) {
+            captureError = "background_voice_unavailable"
+            stopSelf()
+            return START_NOT_STICKY
+        }
         running = true
         startForeground(AURORA_VOICE_NOTIFICATION_ID, foregroundNotification("Starting microphone…"))
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -647,6 +681,127 @@ class AuroraVoiceForegroundService : Service() {
             if (capture?.start() != true) stopSelf()
         }
         return START_NOT_STICKY
+    }
+
+    private fun isBackgroundVoiceSessionAvailable(): Boolean {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+            checkSelfPermission(Manifest.permission.FOREGROUND_SERVICE_MICROPHONE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return false
+        }
+        if (!hasPostNotificationsPermission() || !canPostNotifications()) return false
+        return AuroraVoiceNativeConfigStore.isConfigured(this) && isActiveCompatiblePackReady()
+    }
+
+    private fun hasPostNotificationsPermission(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+    private fun canPostNotifications(): Boolean = hasPostNotificationsPermission() && NotificationManagerCompat.from(this).areNotificationsEnabled()
+
+    private fun isActiveCompatiblePackReady(): Boolean {
+        val active = getActivePackId() ?: return false
+        val catalog = runCatching { readCatalogEntries() }.getOrElse { emptyList() }
+        val entry = catalog.firstOrNull { it.packId == active } ?: return false
+        return isPackMetadataRuntimeCompatible(entry) && isPackDownloaded(entry.packId, entry.sha256)
+    }
+
+    private fun getActivePackId(): String? =
+        getSharedPreferences(VOICE_PACK_PREFS, Context.MODE_PRIVATE).getString(VOICE_PACK_ACTIVE_ID_KEY, null)
+
+    private fun readCatalogEntries(): List<VoicePackCatalogEntry> {
+        val raw = getSharedPreferences(VOICE_PACK_PREFS, Context.MODE_PRIVATE).getString(VOICE_PACK_CATALOG_KEY, "[]") ?: "[]"
+        val parsed = runCatching { org.json.JSONArray(raw) }.getOrElse { org.json.JSONArray() }
+        val entries = ArrayList<VoicePackCatalogEntry>(parsed.length())
+        for (index in 0 until parsed.length()) {
+            val item = parsed.optJSONObject(index) ?: continue
+            val packId = item.optString("packId", "").trim()
+            val sizeBytes = item.optLong("sizeBytes", -1L)
+            val tasks = readJsonStringList(item, "tasks")
+            val supportedOperatingSystems = readJsonStringList(item, "supportedOperatingSystems")
+            val supportedAbis = readJsonStringList(item, "supportedAbis")
+            if (!voicePackCatalogFileNameRegex.matches(packId)) continue
+            if (sizeBytes !in VOICE_PACK_MIN_BYTES..VOICE_PACK_MAX_BYTES) continue
+            if (tasks.isEmpty() || supportedOperatingSystems.isEmpty() || supportedAbis.isEmpty()) continue
+            val uri = item.optString("uri", "").trim()
+            if (uri.isBlank()) continue
+            val sha256 = item.optString("sha256", "").trim()
+            if (!isValidHexSha256(sha256)) continue
+            entries.add(
+                VoicePackCatalogEntry(
+                    packId = packId,
+                    packName = item.optString("packName", packId),
+                    uri = uri,
+                    provider = item.optString("provider", "unknown"),
+                    language = item.optString("language", "und"),
+                    sha256 = sha256.lowercase(),
+                    sizeBytes = sizeBytes,
+                    tasks = tasks,
+                    engineRuntimeRevision = item.optString("engineRuntimeRevision", ""),
+                    supportedOperatingSystems = supportedOperatingSystems,
+                    supportedAbis = supportedAbis,
+                    license = item.optString("license", ""),
+                    attributionRequired = item.optBoolean("attributionRequired", false),
+                    attributionText = item.optString("attributionText", ""),
+                ),
+            )
+        }
+        return entries
+    }
+
+    private fun isPackMetadataRuntimeCompatible(entry: VoicePackCatalogEntry): Boolean {
+        val taskSupported = entry.tasks.any { task ->
+            voicePackNativeSupportedTasks.any { token -> task.lowercase().contains(token) }
+        }
+        if (!taskSupported) return false
+        val osOk = entry.supportedOperatingSystems.any { os ->
+            val normalized = os.lowercase()
+            normalized == "android" || normalized == "android-native"
+        }
+        if (!osOk) return false
+        return entry.supportedAbis.any { abi ->
+            val normalized = abi.lowercase()
+            normalized == "*" || normalized == "all" || Build.SUPPORTED_ABIS.any { device -> device.lowercase() == normalized }
+        }
+    }
+
+    private fun readJsonStringList(source: org.json.JSONObject, key: String): List<String> {
+        val entries = source.optJSONArray(key) ?: return emptyList()
+        val out = ArrayList<String>(entries.length())
+        for (index in 0 until entries.length()) {
+            val value = entries.optString(index, "").trim()
+            if (value.isNotBlank()) out.add(value.lowercase())
+        }
+        return out
+    }
+
+    private fun isValidHexSha256(value: String): Boolean =
+        value.length == VOICE_PACK_SHA256_HEX_LENGTH && value.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }
+
+    private fun safePackFileName(packId: String): String =
+        packId.lowercase().filter { it.isLetterOrDigit() || it in "._-" }.ifBlank { "pack.bin" }
+
+    private fun isPackDownloaded(packId: String, expectedSha256: String?): Boolean {
+        if (!voicePackCatalogFileNameRegex.matches(packId)) return false
+        val file = File(filesDir, "$VOICE_PACK_CACHE_DIR/${safePackFileName(packId)}")
+        if (!file.exists() || !file.isFile) return false
+        val expected = expectedSha256?.trim()?.lowercase().orEmpty()
+        if (expected.isBlank()) return true
+        val actual = try {
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            FileInputStream(file).use { fis ->
+                val buffer = ByteArray(256 * 1024)
+                while (true) {
+                    val count = fis.read(buffer)
+                    if (count <= 0) break
+                    digest.update(buffer, 0, count)
+                }
+            }
+            digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        } catch (_: Exception) {
+            return false
+        }
+        return expected == actual
     }
 
     private fun initializeNativeVoiceSession() {

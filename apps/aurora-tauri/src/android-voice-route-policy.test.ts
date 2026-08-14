@@ -102,6 +102,87 @@ describe('Android native voice route policy', () => {
     )
   })
 
+  it('caches selected Android voice packs without advertising the local engine as ready', () => {
+    const plugin = repoText(kotlinPath)
+    const foregroundService = repoText(voiceStorePath)
+    const permission = repoText(permissionPath)
+    const aclManifest = repoText('apps/aurora-tauri/src-tauri/gen/schemas/acl-manifests.json')
+    const localLightBody = plugin.slice(
+      plugin.indexOf('private fun localLightInferenceStatusObject()'),
+      plugin.indexOf('private fun packageHandlesAssist', plugin.indexOf('private fun localLightInferenceStatusObject()')),
+    )
+    const catalogBody = plugin.slice(
+      plugin.indexOf('private fun normalizeVoicePackCatalog(raw: String)'),
+      plugin.indexOf('private fun findCatalogEntry', plugin.indexOf('private fun normalizeVoicePackCatalog(raw: String)')),
+    )
+    const downloadBody = plugin.slice(
+      plugin.indexOf('private fun downloadPackToCache('),
+      plugin.indexOf('private fun isPackDownloaded', plugin.indexOf('private fun downloadPackToCache(')),
+    )
+    const foregroundStatusBody = plugin.slice(
+      plugin.indexOf('private fun voiceForegroundServiceStatusObject'),
+      plugin.indexOf('private fun nativeCapabilitySnapshot', plugin.indexOf('private fun voiceForegroundServiceStatusObject')),
+    )
+
+    for (const command of [
+      'fun voicePackCatalogStatus',
+      'fun voicePackCatalog',
+      'fun downloadVoicePack',
+      'fun voicePackDownloadStatus',
+      'fun setActiveVoicePack',
+      'fun removeVoicePack',
+    ]) {
+      expect(plugin).toContain(command)
+    }
+    for (const command of [
+      'aurora_android_voice_pack_catalog_status',
+      'aurora_android_voice_pack_catalog_set',
+      'aurora_android_voice_pack_download',
+      'aurora_android_voice_pack_download_status',
+      'aurora_android_voice_pack_activate',
+      'aurora_android_voice_pack_remove',
+    ]) {
+      expect(permission).toContain(command)
+      expect(repoText('apps/aurora-tauri/src-tauri/src/lib.rs')).toContain(command)
+      expect(aclManifest).toContain(command)
+    }
+
+    expect(catalogBody).toContain('validateAndParseVoicePackUri(uri)')
+    expect(catalogBody).toContain('isValidHexSha256(sha)')
+    expect(catalogBody).toContain('engineRuntimeRevision.isBlank()')
+    expect(catalogBody).toContain('supportedOperatingSystems.isEmpty()')
+    expect(catalogBody).toContain('supportedAbis.isEmpty()')
+    expect(catalogBody).toContain('tasks.isEmpty()')
+
+    expect(downloadBody).toContain('validateAndParseVoicePackUri(source)')
+    expect(downloadBody).toContain('resolvePackDownloadUri(uri, expectedSize)')
+    expect(downloadBody).toContain('total > expectedSize')
+    expect(downloadBody).toContain('total != expectedSize')
+    expect(downloadBody).toContain('sha256 != actualHash')
+    expect(downloadBody).toContain('replaceFileAtomically(temp, destination)')
+    expect(plugin).toContain('connection.instanceFollowRedirects = false')
+    expect(plugin).toContain('VOICE_PACK_DOWNLOAD_REDIRECT_LIMIT')
+    expect(plugin).toContain('InetAddress.getAllByName(host)')
+    expect(plugin).toContain('isPrivateOrLocalHostAddress')
+    expect(plugin).toContain('uri.scheme?.lowercase(Locale.getDefault()) != "https"')
+
+    expect(localLightBody).toContain('ret.put("available", false)')
+    expect(localLightBody).toContain('ret.put("modelRuntimeProvider", false)')
+    expect(localLightBody).toContain('ret.put("engineReady", false)')
+    expect(localLightBody).toContain('ret.put("rustCatalogBridgeReady", false)')
+    expect(localLightBody).toContain('ret.put("activePackReadyForRuntime", false)')
+    expect(localLightBody).toContain('ret.put("activePackCacheReady", activeCacheReady)')
+    expect(localLightBody).toContain('"rust_catalog_bridge_pending"')
+    expect(plugin).toContain('item.put("readyForRuntime", false)')
+    expect(plugin).toContain('item.put("readyForInstall", isPackReadyForRuntime(entry))')
+
+    expect(foregroundStatusBody).toContain('val backgroundRuntimeReady = false')
+    expect(foregroundStatusBody).toContain('val startable = microphoneGranted && foregroundServiceReady && manifestReady && notificationReady && nativeSessionReady')
+    expect(foregroundStatusBody).not.toContain('background_pack_runtime_unavailable')
+    expect(foregroundService).toContain('BACKGROUND_VOICE_AVAILABLE = false')
+    expect(foregroundService).toContain('backgroundSession && !BACKGROUND_VOICE_AVAILABLE')
+  })
+
   it('releases foreground microphone access on Android focus or foreground loss', () => {
     const plugin = repoText(kotlinPath)
     const runtime = repoText('apps/aurora-tauri/src/aurora-client.ts')

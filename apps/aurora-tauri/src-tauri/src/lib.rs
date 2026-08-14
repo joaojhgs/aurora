@@ -253,6 +253,34 @@ struct AndroidVoiceForegroundServiceStartRequest {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct AndroidVoicePackCatalogSetRequest {
+    catalog_json: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AndroidVoicePackDownloadRequest {
+    pack_id: String,
+    #[serde(default)]
+    force_download: bool,
+    #[serde(default)]
+    activate: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AndroidVoicePackDownloadStatusRequest {
+    job_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AndroidVoicePackIdRequest {
+    pack_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ThinPeerCredentialSetRequest {
     peer_id: String,
     token_id: String,
@@ -1980,6 +2008,148 @@ async fn aurora_android_voice_foreground_service_cancel(
         Err(AuroraCommandError::UnsupportedFeature(
             "Android voice foreground service cancel is only available in the Android Tauri shell"
                 .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_android_voice_pack_catalog_status(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(native, "voicePackCatalogStatus", json!({}))
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android voice pack catalog status is only available in the Android Tauri shell"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_android_voice_pack_catalog_set(
+    request: AndroidVoicePackCatalogSetRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(
+            native,
+            "voicePackCatalog",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        )
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (request, native);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android voice pack catalog update is only available in the Android Tauri shell"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_android_voice_pack_download(
+    request: AndroidVoicePackDownloadRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(
+            native,
+            "downloadVoicePack",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        )
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (request, native);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android voice pack download is only available in the Android Tauri shell".to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_android_voice_pack_download_status(
+    request: AndroidVoicePackDownloadStatusRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(
+            native,
+            "voicePackDownloadStatus",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        )
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (request, native);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android voice pack download status is only available in the Android Tauri shell"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_android_voice_pack_activate(
+    request: AndroidVoicePackIdRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(
+            native,
+            "setActiveVoicePack",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        )
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (request, native);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android voice pack activation is only available in the Android Tauri shell"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_android_voice_pack_remove(
+    request: AndroidVoicePackIdRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(
+            native,
+            "removeVoicePack",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        )
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (request, native);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android voice pack removal is only available in the Android Tauri shell".to_string(),
         ))
     }
 }
@@ -7567,6 +7737,12 @@ pub fn run() {
             aurora_android_voice_foreground_service_start,
             aurora_android_voice_foreground_service_finish,
             aurora_android_voice_foreground_service_cancel,
+            aurora_android_voice_pack_catalog_status,
+            aurora_android_voice_pack_catalog_set,
+            aurora_android_voice_pack_download,
+            aurora_android_voice_pack_download_status,
+            aurora_android_voice_pack_activate,
+            aurora_android_voice_pack_remove,
             aurora_ios_native_plugin_manifest,
             aurora_ios_invocation_status,
             aurora_ios_local_light_inference_status,
@@ -9943,11 +10119,21 @@ mod tests {
         assert!(plugin.contains("backgroundSession"));
         assert!(plugin.contains("ACTION_START_BACKGROUND"));
         assert!(rust_source.contains("AndroidVoiceForegroundServiceStartRequest"));
+        assert!(rust_source.contains("AndroidVoicePackCatalogSetRequest"));
+        assert!(rust_source.contains("AndroidVoicePackDownloadRequest"));
+        assert!(rust_source.contains("AndroidVoicePackDownloadStatusRequest"));
+        assert!(rust_source.contains("AndroidVoicePackIdRequest"));
         assert!(rust_source.contains("serde_json::to_value(&request)"));
         for command in [
             "aurora_android_voice_foreground_service_start",
             "aurora_android_voice_foreground_service_finish",
             "aurora_android_voice_foreground_service_cancel",
+            "aurora_android_voice_pack_catalog_status",
+            "aurora_android_voice_pack_catalog_set",
+            "aurora_android_voice_pack_download",
+            "aurora_android_voice_pack_download_status",
+            "aurora_android_voice_pack_activate",
+            "aurora_android_voice_pack_remove",
         ] {
             assert!(rust_source.contains(command), "{command}");
         }

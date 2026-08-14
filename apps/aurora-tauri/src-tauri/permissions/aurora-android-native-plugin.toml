@@ -10,6 +10,12 @@ commands.allow = [
   "aurora_android_voice_foreground_service_start",
   "aurora_android_voice_foreground_service_finish",
   "aurora_android_voice_foreground_service_cancel",
+  "aurora_android_voice_pack_catalog_status",
+  "aurora_android_voice_pack_catalog_set",
+  "aurora_android_voice_pack_download",
+  "aurora_android_voice_pack_download_status",
+  "aurora_android_voice_pack_activate",
+  "aurora_android_voice_pack_remove",
   "aurora_inbound_verifier_get",
   "aurora_inbound_verifier_set",
   "aurora_inbound_verifier_delete"
