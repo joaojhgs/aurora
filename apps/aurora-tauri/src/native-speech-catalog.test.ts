@@ -46,6 +46,9 @@ describe("createTauriNativeSpeechCatalogPort", () => {
           fileSize: 123,
           installed: false,
           activeSlot: null,
+          revision: "speech-catalog-2026.08",
+          runtimeRevision: "sherpa-onnx-1.13.4",
+          modelFamily: "whisper",
         }],
       })),
     });
@@ -56,7 +59,7 @@ describe("createTauriNativeSpeechCatalogPort", () => {
       items: [{
         task: "stt",
         packId: "whisper.tiny.en",
-        packVersion: "native",
+        packVersion: "speech-catalog-2026.08",
         displayName: "English tiny",
         language: "en",
         cached: false,
@@ -65,6 +68,55 @@ describe("createTauriNativeSpeechCatalogPort", () => {
     });
     expect(mock.installNativeSpeechPack).not.toHaveBeenCalled();
     expect(mock.activateNativeSpeechPack).not.toHaveBeenCalled();
+  });
+
+  it("keeps the native TTS archive identity separate from the persisted language selection", async () => {
+    const mock = transport({
+      getNativeSpeechPackCatalog: vi.fn(async () => ({
+        available: false,
+        count: 1,
+        languages: ["en"],
+        secretsRedacted: true,
+        packs: [{
+          packId: "pockettts.en.voice-1",
+          displayName: "Pocket English",
+          task: "tts" as const,
+          languages: ["en"],
+          language: "en",
+          sha256: "a".repeat(64),
+          fileSize: 123,
+          installed: false,
+          activeSlot: null,
+          revision: "tts-catalog-2026.08",
+          runtimeRevision: "sherpa-onnx-1.13.4",
+          modelFamily: "pockettts",
+          requiresReferenceAudio: true,
+          voiceId: "pockettts.en.voice-1",
+          voiceRevision: "tts-catalog-2026.08",
+          referenceProfileId: null,
+        }],
+      })),
+    });
+    const port = createTauriNativeSpeechCatalogPort({ platform: "desktop", transport: mock });
+
+    await expect(port.listCatalog()).resolves.toEqual({
+      state: "ready",
+      items: [{
+        task: "tts",
+        packId: "pockettts.en.voice-1",
+        packVersion: "tts-catalog-2026.08",
+        profilePackId: "en",
+        profilePackRevision: "tts-catalog-2026.08",
+        displayName: "Pocket English",
+        language: "en",
+        cached: false,
+        active: false,
+        voiceId: "pockettts.en.voice-1",
+        voiceRevision: "tts-catalog-2026.08",
+        requiresReferenceProfile: true,
+        referenceProfileSelected: false,
+      }],
+    });
   });
 
   it("uses explicit desktop selection for install and activation", async () => {

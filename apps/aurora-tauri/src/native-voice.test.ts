@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  createMemoryRuntimeProfileStore,
   createAuroraTauriRuntime,
   type AuroraRuntimeProfileDocument,
   type AuroraThinConnectionProfile,
@@ -355,6 +356,7 @@ describe("Tauri native desktop voice port", () => {
 
   it("exposes native voice only for real desktop Tauri surfaces", () => {
     expect(createAuroraTauriRuntime().nativeVoice).toBeUndefined();
+    expect(createAuroraTauriRuntime().localSpeechCatalog).toBeUndefined();
 
     Object.defineProperty(window, "__TAURI__", {
       value: {},
@@ -363,12 +365,14 @@ describe("Tauri native desktop voice port", () => {
     const desktopLocal = createAuroraTauriRuntime();
     expect(desktopLocal.mode).toBe("desktop-local");
     expect(desktopLocal.nativeVoice).toBeDefined();
+    expect(desktopLocal.localSpeechCatalog).toBeDefined();
 
     const desktopThin = createAuroraTauriRuntime({
       thinProfileDocument: thinDocument,
     });
     expect(desktopThin.mode).toBe("desktop-thin");
     expect(desktopThin.nativeVoice).toBeDefined();
+    expect(desktopThin.localSpeechCatalog).toBeDefined();
 
     Object.defineProperty(window.navigator, "userAgent", {
       value: "Mozilla/5.0 (Linux; Android 15; Aurora)",
@@ -379,6 +383,131 @@ describe("Tauri native desktop voice port", () => {
     });
     expect(mobile.mode).toBe("mobile-native");
     expect(mobile.nativeVoice).toBeUndefined();
+    expect(mobile.localSpeechCatalog).toBeDefined();
+  });
+
+  it("reactivates persisted desktop TTS identity through the native catalog", async () => {
+    Object.defineProperty(window.navigator, "userAgent", {
+      value: "Mozilla/5.0 (X11; Linux x86_64; Aurora)",
+      configurable: true,
+    });
+    Object.defineProperty(window, "__TAURI__", {
+      value: {},
+      configurable: true,
+    });
+    const runtimeProfile: AuroraRuntimeProfileDocument["profiles"][number] = {
+      version: 2,
+      id: "desktop-local",
+      label: "Desktop local",
+      nodeMode: "mesh-node",
+      runtimeTier: "python-full",
+      localNode: {
+        nodeName: "Aurora desktop",
+        stablePeerId: "desktop-local-01",
+        enabledCapabilityPacks: ["foreground-voice", "local-inference"],
+        meshMembership: {
+          signalingUrl: "wss://signaling.example.invalid",
+          webrtcProfile: {
+            mode: "webrtc-only",
+            appId: "aurora",
+            room: "desktop-local",
+            roomSecretRef: "ref:test:desktop-local",
+            signalingBrokers: ["wss://signaling.example.invalid"],
+            nodeName: "Aurora desktop",
+          },
+        },
+      },
+    };
+    const store = createMemoryRuntimeProfileStore({
+      version: 2,
+      activeProfileId: runtimeProfile.id,
+      profiles: [runtimeProfile],
+    });
+    tauriCoreMock.invoke.mockImplementation(async (command) => {
+      if (command === "aurora_native_speech_pack_catalog") {
+        return {
+          available: false,
+          count: 1,
+          languages: ["en_US"],
+          secretsRedacted: true,
+          packs: [{
+            packId: "piper.en_US.ava-high",
+            displayName: "Ava",
+            task: "tts",
+            languages: ["en_US"],
+            language: "en_US",
+            sha256: "a".repeat(64),
+            fileSize: 123,
+            installed: true,
+            activeSlot: null,
+            revision: "tts-catalog-2026.08",
+            runtimeRevision: "sherpa-onnx-1.13.4",
+            modelFamily: "vits_piper",
+            requiresReferenceAudio: false,
+            voiceId: "piper.en_US.ava-high",
+            voiceRevision: "tts-catalog-2026.08",
+            referenceProfileId: null,
+          }],
+        };
+      }
+      if (
+        command === "aurora_native_speech_pack_install"
+        || command === "aurora_native_speech_pack_activate"
+      ) {
+        return {
+          available: true,
+          activeSlots: { tts: "piper.en_US.ava-high" },
+          count: 1,
+          packs: [],
+          secretsRedacted: true,
+        };
+      }
+      return validStatus;
+    });
+    const runtime = createAuroraTauriRuntime({
+      runtimeProfileStore: store,
+      runtimeProfileDocument: await store.load(),
+      packageCapabilities: {
+        pythonFullRuntime: true,
+        pythonFullRuntimeProof: { source: "test", includesPython: true },
+      },
+    });
+    expect(runtime.mode).toBe("desktop-local");
+    expect(runtime.runtimeProfile?.nodeMode).toBe("mesh-node");
+    expect(runtime.localSpeechCatalog).toBeDefined();
+    expect(runtime.thinProfileController?.updateActiveLocalSpeechSelection).toBeTypeOf("function");
+
+    await runtime.thinProfileController?.updateActiveLocalSpeechSelection?.({
+      tts: {
+        packId: "en_US",
+        packRevision: "tts-catalog-2026.08",
+        voiceId: "piper.en_US.ava-high",
+        voiceRevision: "tts-catalog-2026.08",
+      },
+    });
+
+    expect(tauriCoreMock.invoke).toHaveBeenCalledWith(
+      "aurora_native_speech_pack_install",
+      { request: { task: "tts", packId: "piper.en_US.ava-high" } },
+    );
+    expect(tauriCoreMock.invoke).toHaveBeenCalledWith(
+      "aurora_native_speech_pack_activate",
+      {
+        request: {
+          task: "tts",
+          packId: "piper.en_US.ava-high",
+          slot: "tts",
+        },
+      },
+    );
+    const saved = await store.load();
+    expect(saved.profiles[0]?.localNode.localSpeechSelection?.tts).toEqual({
+      packId: "en_US",
+      packRevision: "tts-catalog-2026.08",
+      voiceId: "piper.en_US.ava-high",
+      voiceRevision: "tts-catalog-2026.08",
+    });
+    await runtime.dispose();
   });
 
   it("carries native voice through NativeContext and into the assistant route", () => {
@@ -392,6 +521,8 @@ describe("Tauri native desktop voice port", () => {
       "nativeVoice?: AuroraTauriRuntime[\"nativeVoice\"]",
     );
     expect(source).toContain("nativeVoice={nativeContext.nativeVoice}");
+    expect(source).toContain("localSpeechCatalog: runtime.localSpeechCatalog");
+    expect(source).toContain("localSpeechCatalog={nativeContext.localSpeechCatalog}");
   });
 
   it("keeps native voice behind the aurora-client bridge injection boundary", () => {

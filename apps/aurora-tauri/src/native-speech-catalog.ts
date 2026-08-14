@@ -11,12 +11,20 @@ import type {
   NativeSpeechPackTask,
   TauriLocalTransport,
 } from "@aurora/client";
+import {
+  decodeAuroraPocketReferenceWav,
+  deleteAuroraBrowserPocketReferenceProfile,
+  listAuroraBrowserPocketReferenceProfiles,
+  readAuroraBrowserPocketReferenceProfile,
+  saveAuroraBrowserPocketReferenceProfile,
+} from "@aurora/ui";
 import type {
   AuroraBrowserSpeechPackCatalogResult,
   AuroraBrowserSpeechPackCatalogSelection,
   AuroraBrowserSpeechPackInstallProgress,
   AuroraBrowserSpeechPackInstallReceipt,
   AuroraBrowserSpeechPackInstallRequest,
+  AuroraBrowserPocketReferenceProfileInput,
   AuroraLocalSpeechCatalogPort,
 } from "@aurora/ui";
 
@@ -118,6 +126,9 @@ export function createTauriNativeSpeechCatalogPort(
       await removePlatformCatalogEntry(options, selection);
       return readinessForPlatform(options);
     },
+    listReferenceProfiles: () => listAuroraBrowserPocketReferenceProfiles(),
+    saveReferenceProfile: (input: AuroraBrowserPocketReferenceProfileInput) => saveAuroraBrowserPocketReferenceProfile(input),
+    deleteReferenceProfile: (profileId: string) => deleteAuroraBrowserPocketReferenceProfile(profileId),
   });
 }
 
@@ -308,6 +319,8 @@ function normalizeDesktopEntry(entry: NativeSpeechPackCatalogResponse["packs"][n
     cached: entry.installed,
     active: Boolean(entry.activeSlot),
     ...(entry.task === "tts" ? {
+      profilePackId: entry.language ?? entry.languages[0] ?? entry.packId,
+      profilePackRevision: stringField(record, "revision") ?? packVersion,
       voiceId: stringField(record, "voiceId") ?? entry.packId,
       voiceRevision: stringField(record, "voiceRevision") ?? packVersion,
     } : {}),
@@ -416,7 +429,9 @@ async function referencePayloadForSelection(
 ): Promise<NativeReferenceCommandPayload> {
   if (selection.requiresReferenceProfile !== true) return {};
   if (!selection.referenceProfileId) throw new Error("voice_reference_required");
-  const profile = await options.loadReferenceProfile?.(selection.referenceProfileId);
+  const profile = options.loadReferenceProfile
+    ? await options.loadReferenceProfile(selection.referenceProfileId)
+    : await loadStoredReferenceProfile(selection.referenceProfileId);
   if (!profile) throw new Error("voice_reference_required");
   const referenceSamples = profile.referenceSamples ? Array.from(profile.referenceSamples) : undefined;
   if (!profile.referenceAudioUri && (!referenceSamples || referenceSamples.length === 0)) {
@@ -430,6 +445,21 @@ async function referencePayloadForSelection(
     ...(profile.referenceSampleRateHz ? { referenceSampleRateHz: profile.referenceSampleRateHz } : {}),
     ...(referenceSamples ? { referenceSamples } : {}),
   };
+}
+
+async function loadStoredReferenceProfile(
+  profileId: string,
+): Promise<TauriNativeSpeechReferenceProfile | null> {
+  const stored = await readAuroraBrowserPocketReferenceProfile(profileId);
+  if (!stored) return null;
+  const decoded = decodeAuroraPocketReferenceWav(stored.audioBytes);
+  return Object.freeze({
+    referenceId: stored.id,
+    referenceText: stored.transcript,
+    referenceRevision: stored.sha256,
+    referenceSampleRateHz: decoded.sampleRateHz,
+    referenceSamples: Object.freeze(Array.from(decoded.samples)),
+  });
 }
 
 type NativeReferenceCommandPayload = {

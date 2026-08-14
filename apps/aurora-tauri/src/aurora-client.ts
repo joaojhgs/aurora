@@ -52,6 +52,7 @@ import {
   type BrowserWebThinRuntime,
   type NativeDesktopVoicePort,
   type NativeMobileVoicePort,
+  type AuroraBrowserSpeechPackCatalogSelection,
 } from "@aurora/ui";
 import {
   NativePeerCredentialStore,
@@ -84,6 +85,10 @@ import {
 import { createTauriNativeDesktopVoicePort } from "./native-voice";
 import { createTauriNativeAndroidVoicePort } from "./native-android-voice";
 import { createTauriNativeIosVoicePort } from "./native-ios-voice";
+import {
+  createTauriNativeSpeechCatalogPort,
+  type TauriNativeSpeechCatalogPort,
+} from "./native-speech-catalog";
 
 export const TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS = 90_000;
 
@@ -108,6 +113,7 @@ export interface AuroraTauriRuntime {
   localData?: AuroraTauriLocalDataRuntime | undefined;
   nativeVoice?: NativeDesktopVoicePort | undefined;
   nativeMobileVoice?: NativeMobileVoicePort | undefined;
+  localSpeechCatalog?: TauriNativeSpeechCatalogPort | undefined;
   thinProfileConfigured: boolean;
   requiresOnboarding: boolean;
   pendingThinInviteText: string | null;
@@ -249,23 +255,51 @@ type AuroraLocalSpeechPackActivator = (
 ) => Promise<void>;
 
 function createTauriLocalSpeechPackActivator(
-  transport: TauriLocalTransport,
+  catalog: TauriNativeSpeechCatalogPort,
 ): AuroraLocalSpeechPackActivator {
   return async (selection) => {
-    const selectedPacks: Array<{ task: NativeSpeechPackTask; packId: string }> = [];
-    if (selection.vad?.packId) selectedPacks.push({ task: "vad", packId: selection.vad.packId });
-    if (selection.kws?.packId) selectedPacks.push({ task: "kws", packId: selection.kws.packId });
-    if (selection.stt?.packId) selectedPacks.push({ task: "stt", packId: selection.stt.packId });
-    if (selection.tts?.packId) selectedPacks.push({ task: "tts", packId: selection.tts.packId });
-
-    for (const selected of selectedPacks) {
-      await transport.installNativeSpeechPack(selected);
-      await transport.activateNativeSpeechPack({
-        ...selected,
-        slot: selected.task,
+    const available = await catalog.listCatalog();
+    if (available.state !== "ready") throw new Error("voice_download_unavailable");
+    for (const task of ["vad", "kws", "stt", "tts"] as const) {
+      const selected = selection[task];
+      if (!selected) continue;
+      const catalogSelection = findRuntimeSpeechCatalogSelection(
+        available.items,
+        task,
+        selected,
+      );
+      if (!catalogSelection) throw new Error("voice_download_unavailable");
+      await catalog.select({
+        selection: {
+          ...catalogSelection,
+          ...(selected.referenceProfileId
+            ? {
+                referenceProfileId: selected.referenceProfileId,
+                referenceProfileSelected: true,
+              }
+            : {}),
+        },
       });
     }
   };
+}
+
+function findRuntimeSpeechCatalogSelection(
+  catalog: readonly AuroraBrowserSpeechPackCatalogSelection[],
+  task: NativeSpeechPackTask,
+  selected: NonNullable<AuroraLocalSpeechSelectionProfile[NativeSpeechPackTask]>,
+): AuroraBrowserSpeechPackCatalogSelection | undefined {
+  return catalog.find((item) => {
+    if (item.task !== task) return false;
+    if (task !== "tts") {
+      return item.packId === selected.packId
+        && item.packVersion === selected.packRevision;
+    }
+    return item.voiceId === selected.voiceId
+      && item.voiceRevision === selected.voiceRevision
+      && (item.profilePackId ?? item.packId) === selected.packId
+      && (item.profilePackRevision ?? item.packVersion) === selected.packRevision;
+  });
 }
 
 export function isThinProfileConfigured(
@@ -517,10 +551,23 @@ export function createAuroraTauriRuntime({
   const thinInviteText =
     explicitThinInviteText ??
     (consumeThinInvite ? consumeFragmentInviteFromRuntime() : null);
+  const nativeTransport = isTauriRuntime()
+    ? new TauriLocalTransport({ invoke, listen })
+    : undefined;
+  const localSpeechCatalog = nativeTransport
+    ? createTauriNativeSpeechCatalogPort({
+        platform: isAndroidTauriRuntime()
+          ? "android"
+          : isIosTauriRuntime()
+            ? "ios"
+            : "desktop",
+        transport: nativeTransport,
+      })
+    : undefined;
   const resolvedLocalSpeechPackActivator =
     localSpeechPackActivator ??
-    (isTauriRuntime()
-      ? createTauriLocalSpeechPackActivator(new TauriLocalTransport({ invoke, listen }))
+    (localSpeechCatalog
+      ? createTauriLocalSpeechPackActivator(localSpeechCatalog)
       : undefined);
   const thinProfileController =
     runtimeProfileStore
@@ -542,7 +589,9 @@ export function createAuroraTauriRuntime({
   const runtimeTier = configuredRuntimeProfile?.runtimeTier ?? "none";
 
   if (isTauriRuntime()) {
-    const nativeTransport = new TauriLocalTransport({ invoke, listen });
+    if (!nativeTransport || !localSpeechCatalog) {
+      throw new Error("Native speech transport is unavailable");
+    }
     const nativeVoice = isDesktopTauriRuntime()
       ? createTauriNativeDesktopVoicePort({ invoke, listen })
       : undefined;
@@ -613,6 +662,7 @@ export function createAuroraTauriRuntime({
             : undefined,
           localData: localDataRuntime(meshNodeServices),
           nativeMobileVoice,
+          localSpeechCatalog,
           thinProfileConfigured: runtimeProfileConfigured,
           requiresOnboarding: !runtimeProfileConfigured,
           pendingThinInviteText: thinInviteText,
@@ -667,6 +717,7 @@ export function createAuroraTauriRuntime({
           nativeTransport,
           "Tauri secure storage for mobile native mode preference",
         ),
+        localSpeechCatalog,
         sidecarStatus: async () => null,
         startSidecar: async () => null,
         stopSidecar: async () => null,
@@ -758,6 +809,7 @@ export function createAuroraTauriRuntime({
           : undefined,
         localData: localDataRuntime(meshNodeServices),
         nativeVoice,
+        localSpeechCatalog,
         thinProfileConfigured: runtimeProfileConfigured,
         requiresOnboarding: !runtimeProfileConfigured,
         pendingThinInviteText: thinInviteText,
@@ -807,6 +859,8 @@ export function createAuroraTauriRuntime({
       nodeMode: runtimeNodeMode,
       runtimeTier,
       nativeVoice,
+      localSpeechCatalog,
+      thinProfileController,
       requiresOnboarding: !runtimeProfileConfigured,
       pendingThinInviteText: null,
       modePreferenceStore: secureModePreferenceStore(

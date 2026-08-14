@@ -536,17 +536,13 @@ export function VoiceSettingsView({
             : `Adding ${row.copy.noun.toLowerCase()}.`)
           }
         })
-        setMutationMessage(`${row.copy.noun} choice updated.`)
+        const ok = await persistConfirmedLocalSpeechSelection(localSpeechSelectionForRow(row))
+        setMutationMessage(ok
+          ? `${row.copy.noun} choice updated.`
+          : `${row.copy.noun} choice was not changed. Try again.`)
         return
       }
-      const ok = await persistConfirmedLocalSpeechSelection({
-        [row.task]: {
-          packId: row.packId,
-          packRevision: row.revision,
-          ...(row.voiceId ? { voiceId: row.voiceId } : {}),
-          ...(row.voiceRevision ? { voiceRevision: row.voiceRevision } : {}),
-        },
-      })
+      const ok = await persistConfirmedLocalSpeechSelection(localSpeechSelectionForRow(row))
       setMutationMessage(ok
         ? `${row.copy.noun} choice updated.`
         : `${row.copy.noun} choice was not changed. Try again.`)
@@ -585,19 +581,20 @@ export function VoiceSettingsView({
         mimeType: file.type || undefined,
       })
       setReferenceProfiles((current) => Object.freeze([profile, ...current.filter((item) => item.id !== profile.id)]))
-      await localSpeechCatalog.select({
-        selection: {
-          ...(row.selection ?? {
+      const selection = {
+        ...(row.selection ?? {
             task: row.task,
             packId: row.packId,
             packVersion: row.revision,
             displayName: row.label,
             voiceId: row.voiceId,
             voiceRevision: row.voiceRevision,
-          }),
-          referenceProfileId: profile.id,
-          referenceProfileSelected: true,
-        },
+        }),
+        referenceProfileId: profile.id,
+        referenceProfileSelected: true,
+      }
+      await localSpeechCatalog.select({
+        selection,
         onProgress: (progress) => {
           if (progress.state === 'downloading') {
             const pct = progress.totalBytes && progress.totalBytes > 0
@@ -609,6 +606,13 @@ export function VoiceSettingsView({
           setMutationMessage(progress.state === 'ready' ? 'Voice sample saved.' : 'Adding voice.')
         },
       })
+      const persisted = await persistConfirmedLocalSpeechSelection(
+        localSpeechSelectionForRow(row, profile.id),
+      )
+      if (!persisted) {
+        setMutationMessage('Voice sample was saved, but the voice choice was not changed. Try again.')
+        return
+      }
       setReferenceEditor(null)
       setReferenceTranscript('')
       setReferenceFile(null)
@@ -628,14 +632,7 @@ export function VoiceSettingsView({
     try {
       await localSpeechCatalog.deleteReferenceProfile(profileId)
       setReferenceProfiles((current) => Object.freeze(current.filter((profile) => profile.id !== profileId)))
-      await persistConfirmedLocalSpeechSelection({
-        [row.task]: {
-          packId: row.packId,
-          packRevision: row.revision,
-          ...(row.voiceId ? { voiceId: row.voiceId } : {}),
-          ...(row.voiceRevision ? { voiceRevision: row.voiceRevision } : {}),
-        },
-      })
+      await persistConfirmedLocalSpeechSelection(localSpeechSelectionForRow(row))
       setMutationMessage('Voice sample removed.')
     } catch {
       setMutationMessage('Voice sample was not removed. Try again.')
@@ -1184,6 +1181,8 @@ interface LocalSpeechAssetRow {
   task: AuroraLocalSpeechTask
   packId: string
   revision: string
+  profilePackId?: string | undefined
+  profilePackRevision?: string | undefined
   label: string
   ready: boolean
   needsReferenceProfile?: boolean | undefined
@@ -1316,6 +1315,8 @@ function toBrowserSpeechAssetRows(
       task: item.task,
       packId,
       revision,
+      ...(item.profilePackId ? { profilePackId: item.profilePackId } : {}),
+      ...(item.profilePackRevision ? { profilePackRevision: item.profilePackRevision } : {}),
       label: safeVoiceText(item.displayName, `${copy.noun} option ${rows.length + 1}`),
       ready: referenceProfileReady && (item.active === true || item.cached === true || selected),
       needsReferenceProfile: item.requiresReferenceProfile === true && !referenceProfileReady,
@@ -1421,13 +1422,31 @@ function localSpeechSelectionMatches(
   referenceProfiles: readonly AuroraBrowserPocketReferenceProfileSummary[],
 ): boolean {
   if (!current) return false
-  if (current.packId !== item.packId || current.packRevision !== item.packVersion) return false
+  if (
+    current.packId !== (item.profilePackId ?? item.packId)
+    || current.packRevision !== (item.profilePackRevision ?? item.packVersion)
+  ) return false
   if (item.task !== 'tts') return true
   const referenceReady = current.referenceProfileId
     ? referenceProfiles.some((profile) => profile.id === current.referenceProfileId)
     : false
   return current.voiceId === item.voiceId && current.voiceRevision === item.voiceRevision
     && (item.requiresReferenceProfile !== true || referenceReady)
+}
+
+function localSpeechSelectionForRow(
+  row: LocalSpeechAssetRow,
+  referenceProfileId?: string,
+): AuroraLocalSpeechSelectionProfile {
+  return {
+    [row.task]: {
+      packId: row.profilePackId ?? row.packId,
+      packRevision: row.profilePackRevision ?? row.revision,
+      ...(row.voiceId ? { voiceId: row.voiceId } : {}),
+      ...(row.voiceRevision ? { voiceRevision: row.voiceRevision } : {}),
+      ...(referenceProfileId ? { referenceProfileId } : {}),
+    },
+  }
 }
 
 function localSpeechActionKey(row: Pick<LocalSpeechAssetRow, 'packId' | 'task' | 'voiceId'>): string {

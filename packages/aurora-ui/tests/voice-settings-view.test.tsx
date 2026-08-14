@@ -1098,6 +1098,8 @@ describe('VoiceSettingsView', () => {
             task: 'tts' as const,
             packId: 'piper.en',
             packVersion: 'tts-pack-rev-1',
+            profilePackId: 'en',
+            profilePackRevision: 'tts-catalog-rev-1',
             displayName: 'Ava',
             language: 'English',
             voiceId: 'ava.en',
@@ -1106,6 +1108,8 @@ describe('VoiceSettingsView', () => {
             task: 'tts' as const,
             packId: 'pocket.en',
             packVersion: 'pocket-pack-rev-1',
+            profilePackId: 'en',
+            profilePackRevision: 'tts-catalog-rev-1',
             displayName: 'Pocket voice',
             language: 'English',
             voiceId: 'pocket.en',
@@ -1193,7 +1197,30 @@ describe('VoiceSettingsView', () => {
       }),
     }))
     expect(select).toHaveBeenCalledTimes(3)
-    expect(onLocalSpeechSelectionConfirmed).not.toHaveBeenCalled()
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenNthCalledWith(1, {
+      stt: {
+        packId: 'whisper.tiny.en',
+        packRevision: 'stt-rev-1',
+      },
+    })
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenNthCalledWith(2, {
+      tts: {
+        packId: 'en',
+        packRevision: 'tts-catalog-rev-1',
+        voiceId: 'ava.en',
+        voiceRevision: 'voice-rev-1',
+      },
+    })
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenNthCalledWith(3, {
+      tts: {
+        packId: 'en',
+        packRevision: 'tts-catalog-rev-1',
+        voiceId: 'pocket.en',
+        voiceRevision: 'pocket-voice-rev-1',
+        referenceProfileId: 'voice-ref-1',
+      },
+    })
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenCalledTimes(3)
     const text = visibleText(container)
     expect(text).toContain('On-device speech')
     expect(text).toContain('On-device voices')

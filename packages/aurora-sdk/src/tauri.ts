@@ -228,10 +228,6 @@ export interface NativeSpeechPackIdRequest {
   task: NativeSpeechPackTask
 }
 
-export interface NativeSpeechPackActivateRequest extends NativeSpeechPackIdRequest {
-  slot?: string | null
-}
-
 export interface NativeSpeechReferenceProfileRequest {
   referenceId?: string | null
   referenceAudioUri?: string | null
@@ -241,12 +237,16 @@ export interface NativeSpeechReferenceProfileRequest {
   referenceSamples?: number[] | null
 }
 
+export interface NativeSpeechPackActivateRequest extends NativeSpeechPackIdRequest, NativeSpeechReferenceProfileRequest {
+  slot?: string | null
+}
+
 export interface NativeMobileSpeechPackDownloadRequest extends NativeSpeechPackIdRequest, NativeSpeechReferenceProfileRequest {
   forceDownload?: boolean
   activate?: boolean
 }
 
-export interface NativeMobileSpeechPackActivateRequest extends NativeSpeechPackActivateRequest, NativeSpeechReferenceProfileRequest {}
+export interface NativeMobileSpeechPackActivateRequest extends NativeSpeechPackActivateRequest {}
 
 export interface AndroidVoicePackCatalogEntry {
   packId: string
@@ -308,6 +308,13 @@ export interface NativeSpeechPackCatalogEntry {
   fileSize: number
   installed: boolean
   activeSlot?: string | null
+  revision?: string | null
+  runtimeRevision?: string | null
+  modelFamily?: string | null
+  requiresReferenceAudio?: boolean
+  voiceId?: string | null
+  voiceRevision?: string | null
+  referenceProfileId?: string | null
 }
 
 export interface NativeSpeechPackCatalogResponse {

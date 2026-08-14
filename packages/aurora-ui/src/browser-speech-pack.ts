@@ -72,6 +72,8 @@ export interface AuroraBrowserSpeechPackCatalogSelection {
   readonly task: AuroraBrowserSpeechPackTask
   readonly packId: string
   readonly packVersion: string
+  readonly profilePackId?: string | undefined
+  readonly profilePackRevision?: string | undefined
   readonly displayName: string
   readonly language?: string | undefined
   readonly voiceId?: string | undefined

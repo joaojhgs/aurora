@@ -62,8 +62,8 @@ pub use gateway_capture_handoff::{
 pub use gateway_stt::{NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig};
 pub use gateway_tts::{NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer};
 pub use ios_session::{
-    IosVoicePackBinding, IosVoicePackBindings, IosVoicePackFileBinding, IosVoiceSession,
-    IosVoiceSessionCommandError, IosVoiceSessionConfig, IosVoiceSessionPhase,
+    IosTtsReferenceBinding, IosVoicePackBinding, IosVoicePackBindings, IosVoicePackFileBinding,
+    IosVoiceSession, IosVoiceSessionCommandError, IosVoiceSessionConfig, IosVoiceSessionPhase,
     IosVoiceSessionStatus, IosVoiceStartMode, MAX_IOS_PACK_BINDINGS,
 };
 pub use model_store::{NativeImmutableModelFile, NativeModelStore, NativeModelStoreConfig};
