@@ -987,8 +987,12 @@ impl WakeRuntime {
     }
 
     async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
-        self.vad.cancel_generation(generation).await?;
-        self.kws.cancel_generation(generation).await
+        let vad_result = self.vad.cancel_generation(generation).await;
+        let kws_result = self.kws.cancel_generation(generation).await;
+        match (vad_result, kws_result) {
+            (Err(error), _) | (Ok(()), Err(error)) => Err(error),
+            (Ok(()), Ok(())) => Ok(()),
+        }
     }
 }
 
@@ -1304,13 +1308,14 @@ where
                 continue;
             }
             if frame.route_revision() != lease.route_revision || frame.discontinuity() {
-                Self::reset_wake_sessions(
+                Self::finish_wake_sessions(
                     wake,
                     &vad_session,
                     &kws_session,
+                    lease.generation,
                     StreamResetReason::RouteChanged,
                 )
-                .await;
+                .await?;
                 self.route_revision = RouteRevision(self.route_revision.0.saturating_add(1));
                 return Err(VoiceCoreError::InvalidTransition);
             }
@@ -1325,13 +1330,14 @@ where
             if !wake_detected {
                 wake_frames = wake_frames.saturating_add(1);
                 if wake_frames > wake.config.max_wake_frames {
-                    Self::reset_wake_sessions(
+                    Self::finish_wake_sessions(
                         wake,
                         &vad_session,
                         &kws_session,
+                        lease.generation,
                         StreamResetReason::Manual,
                     )
-                    .await;
+                    .await?;
                     return Err(VoiceCoreError::WakeNotDetected);
                 }
                 let kws_result = wake
@@ -1364,13 +1370,14 @@ where
                     .flush_vad_session(&vad_session, &|| cancellation.is_cancelled())
                     .await?;
                 Self::push_segments(&mut segmented_samples, &flushed);
-                Self::reset_wake_sessions(
+                Self::finish_wake_sessions(
                     wake,
                     &vad_session,
                     &kws_session,
+                    lease.generation,
                     StreamResetReason::Manual,
                 )
-                .await;
+                .await?;
                 if segmented_samples.is_empty() {
                     return Err(VoiceCoreError::SpeechTimeout);
                 }
@@ -1409,8 +1416,14 @@ where
                 .await?;
             Self::push_segments(&mut segmented_samples, &flushed);
         }
-        Self::reset_wake_sessions(wake, &vad_session, &kws_session, StreamResetReason::Manual)
-            .await;
+        Self::finish_wake_sessions(
+            wake,
+            &vad_session,
+            &kws_session,
+            lease.generation,
+            StreamResetReason::Manual,
+        )
+        .await?;
         if !wake_detected {
             return Err(VoiceCoreError::WakeNotDetected);
         }
@@ -1429,14 +1442,33 @@ where
         );
     }
 
+    async fn finish_wake_sessions(
+        wake: &mut WakeRuntime,
+        vad_session: &BoundStreamSession,
+        kws_session: &BoundStreamSession,
+        generation: Generation,
+        reason: StreamResetReason,
+    ) -> Result<(), VoiceCoreError> {
+        let reset_result = Self::reset_wake_sessions(wake, vad_session, kws_session, reason).await;
+        let cancel_result = wake.cancel_generation(generation.0).await;
+        match (reset_result, cancel_result) {
+            (Err(error), _) | (Ok(()), Err(error)) => Err(Self::wake_cleanup_failed(error)),
+            (Ok(()), Ok(())) => Ok(()),
+        }
+    }
+
     async fn reset_wake_sessions(
         wake: &mut WakeRuntime,
         vad_session: &BoundStreamSession,
         kws_session: &BoundStreamSession,
         reason: StreamResetReason,
-    ) {
-        let _ = wake.vad.reset_vad_session(vad_session, reason).await;
-        let _ = wake.kws.reset_kws_session(kws_session, reason).await;
+    ) -> Result<(), EngineError> {
+        let vad_result = wake.vad.reset_vad_session(vad_session, reason).await;
+        let kws_result = wake.kws.reset_kws_session(kws_session, reason).await;
+        match (vad_result, kws_result) {
+            (Err(error), _) | (Ok(()), Err(error)) => Err(error),
+            (Ok(()), Ok(())) => Ok(()),
+        }
     }
 
     async fn ensure_idle(
@@ -1870,11 +1902,11 @@ mod tests {
     use async_trait::async_trait;
     use aurora_voice_engine::{
         select_verified_variant, verify_manifest, AbiRequirements, BrowserFeature, CapabilityFlags,
-        Compatibility, CompressionKind, DeviceClass, EngineKind, KwsCooldownState, LanguageSupport,
-        LicenseGrant, LicenseInfo, ManifestSignature, ModelPackError, ModelPackFile,
-        ModelPackManifest, ModelPackVariant, PackTask, Provenance, ResourceBudget, RuntimeGates,
-        RuntimeSelection, RuntimeTarget, SelectedVariant, ShapeMetadata, SignatureVerifier,
-        TargetArch, TargetOs, TrustPolicy, TtsAudioChunk, VerifiedManifest,
+        Compatibility, CompressionKind, DeviceClass, EngineFaultCode, EngineKind, KwsCooldownState,
+        LanguageSupport, LicenseGrant, LicenseInfo, ManifestSignature, ModelPackError,
+        ModelPackFile, ModelPackManifest, ModelPackVariant, PackTask, Provenance, ResourceBudget,
+        RuntimeGates, RuntimeSelection, RuntimeTarget, SelectedVariant, ShapeMetadata,
+        SignatureVerifier, TargetArch, TargetOs, TrustPolicy, TtsAudioChunk, VerifiedManifest,
         VAD_WINDOW_SIZE_SAMPLES,
     };
     use proptest::prelude::*;
@@ -2092,6 +2124,10 @@ mod tests {
 
         fn stopped(&self) -> Vec<TransitionReason> {
             self.stopped.borrow().clone()
+        }
+
+        fn push_frame(&self, frame: PcmFrame) {
+            self.frames.borrow_mut().push_back(frame);
         }
     }
 
@@ -2322,20 +2358,50 @@ mod tests {
         }
     }
 
+    #[derive(Clone, Default)]
+    struct FakeWakeProviderHandles {
+        vad_cancelled: Rc<RefCell<Vec<u64>>>,
+        kws_cancelled: Rc<RefCell<Vec<u64>>>,
+        vad_resets: Rc<RefCell<Vec<StreamResetReason>>>,
+        kws_resets: Rc<RefCell<Vec<StreamResetReason>>>,
+        fail_vad_cancel: Rc<RefCell<bool>>,
+        fail_kws_cancel: Rc<RefCell<bool>>,
+        fail_vad_reset: Rc<RefCell<bool>>,
+        fail_kws_reset: Rc<RefCell<bool>>,
+    }
+
+    impl FakeWakeProviderHandles {
+        fn vad_cancelled(&self) -> Vec<u64> {
+            self.vad_cancelled.borrow().clone()
+        }
+
+        fn kws_cancelled(&self) -> Vec<u64> {
+            self.kws_cancelled.borrow().clone()
+        }
+
+        fn fail_vad_cancel(&self) {
+            *self.fail_vad_cancel.borrow_mut() = true;
+        }
+    }
+
     struct FakeKwsProvider {
         binding: TaskPackBinding,
         match_sequences: BTreeSet<u64>,
         ready: bool,
-        cancelled: Rc<RefCell<Vec<u64>>>,
+        handles: FakeWakeProviderHandles,
     }
 
     impl FakeKwsProvider {
-        fn new(binding: TaskPackBinding, match_sequences: impl IntoIterator<Item = u64>) -> Self {
+        fn new(
+            binding: TaskPackBinding,
+            match_sequences: impl IntoIterator<Item = u64>,
+            handles: FakeWakeProviderHandles,
+        ) -> Self {
             Self {
                 binding,
                 match_sequences: match_sequences.into_iter().collect(),
                 ready: true,
-                cancelled: Rc::new(RefCell::new(Vec::new())),
+                handles,
             }
         }
     }
@@ -2372,7 +2438,12 @@ mod tests {
         }
 
         async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
-            self.cancelled.borrow_mut().push(generation);
+            self.handles.kws_cancelled.borrow_mut().push(generation);
+            if *self.handles.fail_kws_cancel.borrow() {
+                return Err(EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                });
+            }
             Ok(())
         }
     }
@@ -2409,8 +2480,14 @@ mod tests {
         async fn reset_kws_session(
             &mut self,
             _session: &BoundStreamSession,
-            _reason: StreamResetReason,
+            reason: StreamResetReason,
         ) -> Result<(), EngineError> {
+            self.handles.kws_resets.borrow_mut().push(reason);
+            if *self.handles.fail_kws_reset.borrow() {
+                return Err(EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                });
+            }
             Ok(())
         }
     }
@@ -2420,7 +2497,7 @@ mod tests {
         speech_sequences: BTreeSet<u64>,
         segment_sequences: BTreeSet<u64>,
         ready: bool,
-        cancelled: Rc<RefCell<Vec<u64>>>,
+        handles: FakeWakeProviderHandles,
     }
 
     impl FakeVadProvider {
@@ -2428,13 +2505,14 @@ mod tests {
             binding: TaskPackBinding,
             speech_sequences: impl IntoIterator<Item = u64>,
             segment_sequences: impl IntoIterator<Item = u64>,
+            handles: FakeWakeProviderHandles,
         ) -> Self {
             Self {
                 binding,
                 speech_sequences: speech_sequences.into_iter().collect(),
                 segment_sequences: segment_sequences.into_iter().collect(),
                 ready: true,
-                cancelled: Rc::new(RefCell::new(Vec::new())),
+                handles,
             }
         }
     }
@@ -2471,7 +2549,12 @@ mod tests {
         }
 
         async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
-            self.cancelled.borrow_mut().push(generation);
+            self.handles.vad_cancelled.borrow_mut().push(generation);
+            if *self.handles.fail_vad_cancel.borrow() {
+                return Err(EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                });
+            }
             Ok(())
         }
     }
@@ -2519,8 +2602,14 @@ mod tests {
         async fn reset_vad_session(
             &mut self,
             _session: &BoundStreamSession,
-            _reason: StreamResetReason,
+            reason: StreamResetReason,
         ) -> Result<(), EngineError> {
+            self.handles.vad_resets.borrow_mut().push(reason);
+            if *self.handles.fail_vad_reset.borrow() {
+                return Err(EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                });
+            }
             Ok(())
         }
     }
@@ -2800,11 +2889,49 @@ mod tests {
         max_wake_frames: u64,
         max_utterance_frames: u64,
     ) -> Result<(TestRuntime, FakeEngine), VoiceCoreError> {
+        let (runtime, engine, _handles) = runtime_with_wake_handles(
+            frames,
+            kws_matches,
+            vad_speech,
+            vad_segments,
+            max_wake_frames,
+            max_utterance_frames,
+        )?;
+        Ok((runtime, engine))
+    }
+
+    fn runtime_with_wake_handles(
+        frames: Vec<PcmFrame>,
+        kws_matches: impl IntoIterator<Item = u64>,
+        vad_speech: impl IntoIterator<Item = u64>,
+        vad_segments: impl IntoIterator<Item = u64>,
+        max_wake_frames: u64,
+        max_utterance_frames: u64,
+    ) -> Result<(TestRuntime, FakeEngine, FakeWakeProviderHandles), VoiceCoreError> {
+        runtime_with_wake_audio(
+            FakeAudioInput::new(frames),
+            kws_matches,
+            vad_speech,
+            vad_segments,
+            max_wake_frames,
+            max_utterance_frames,
+        )
+    }
+
+    fn runtime_with_wake_audio(
+        audio: FakeAudioInput,
+        kws_matches: impl IntoIterator<Item = u64>,
+        vad_speech: impl IntoIterator<Item = u64>,
+        vad_segments: impl IntoIterator<Item = u64>,
+        max_wake_frames: u64,
+        max_utterance_frames: u64,
+    ) -> Result<(TestRuntime, FakeEngine, FakeWakeProviderHandles), VoiceCoreError> {
         let vad_binding = test_task_binding(VoiceTask::VoiceActivityDetection, PackTask::Vad);
         let kws_binding = test_task_binding(VoiceTask::KeywordSpotting, PackTask::Kws);
         let engine = FakeEngine::new("wake transcript");
+        let handles = FakeWakeProviderHandles::default();
         let runtime = VoiceRuntime::new(
-            FakeAudioInput::new(frames),
+            audio,
             engine.clone(),
             engine.clone(),
             FakeTransport::new("wake answer"),
@@ -2818,8 +2945,13 @@ mod tests {
                 vad_binding.clone(),
                 vad_speech,
                 vad_segments,
+                handles.clone(),
             )),
-            Box::new(FakeKwsProvider::new(kws_binding.clone(), kws_matches)),
+            Box::new(FakeKwsProvider::new(
+                kws_binding.clone(),
+                kws_matches,
+                handles.clone(),
+            )),
             wake_config(
                 vad_binding,
                 kws_binding,
@@ -2827,7 +2959,7 @@ mod tests {
                 max_utterance_frames,
             ),
         )?;
-        Ok((runtime, engine))
+        Ok((runtime, engine, handles))
     }
 
     #[tokio::test]
@@ -2953,6 +3085,78 @@ mod tests {
         assert!(transitions.contains(&VoiceState::WakeDetected));
         assert!(transitions.contains(&VoiceState::CapturingUtterance));
         assert!(transitions.contains(&VoiceState::Transcribing));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn wake_turn_closes_successful_wake_generation_for_next_turn(
+    ) -> Result<(), VoiceCoreError> {
+        let audio = FakeAudioInput::new(vec![
+            frame_with_samples(1, Generation(1), vec![0.1])?,
+            frame_with_samples(2, Generation(1), vec![0.2])?,
+        ]);
+        let audio_feed = audio.clone();
+        let (mut runtime, engine, handles) = runtime_with_wake_audio(audio, [1], [2], [2], 4, 4)?;
+
+        let first = runtime
+            .run_wake_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(45)),
+                TimestampMicros(45),
+                CancellationToken::new(),
+            )
+            .await?;
+        audio_feed.push_frame(frame_with_samples(1, Generation(2), vec![0.3])?);
+        audio_feed.push_frame(frame_with_samples(2, Generation(2), vec![0.4])?);
+
+        let second = runtime
+            .run_wake_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(46)),
+                TimestampMicros(46),
+                CancellationToken::new(),
+            )
+            .await?;
+
+        assert_eq!(first, "wake answer");
+        assert_eq!(second, "wake answer");
+        assert_eq!(engine.transcribed_audio(), vec![vec![0.2], vec![0.4]]);
+        assert_eq!(handles.vad_cancelled(), vec![1, 2]);
+        assert_eq!(handles.kws_cancelled(), vec![1, 2]);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn wake_turn_vad_cleanup_failure_still_cleans_kws() -> Result<(), VoiceCoreError> {
+        let frames = vec![
+            frame_with_samples(1, Generation(1), vec![0.1])?,
+            frame_with_samples(2, Generation(1), vec![0.2])?,
+        ];
+        let (mut runtime, engine, handles) =
+            runtime_with_wake_handles(frames, [1], [2], [2], 4, 4)?;
+        handles.fail_vad_cancel();
+
+        let result = runtime
+            .run_wake_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(47)),
+                TimestampMicros(47),
+                CancellationToken::new(),
+            )
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(VoiceCoreError::TransportFault { code }) if code == "wake_cleanup_provider_fault"
+        ));
+        assert!(handles
+            .vad_cancelled()
+            .iter()
+            .all(|generation| *generation == 1));
+        assert!(!handles.vad_cancelled().is_empty());
+        assert!(handles
+            .kws_cancelled()
+            .iter()
+            .all(|generation| *generation == 1));
+        assert!(!handles.kws_cancelled().is_empty());
+        assert!(engine.transcribed_audio().is_empty());
         Ok(())
     }
 
