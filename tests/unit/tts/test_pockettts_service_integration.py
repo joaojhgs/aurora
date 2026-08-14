@@ -79,6 +79,8 @@ def mock_bus():
     FakeVoiceRegistry.cancel_resolve_for = None
     FakeVoiceRegistry.installed = []
     FakeVoiceRegistry.deleted = []
+    FakeVoiceRegistry.created = []
+    FakeVoiceRegistry.updated = []
     FakeVoiceRegistry.install_calls = 0
     FakeVoiceCatalogInstaller.items = ()
     FakeVoiceCatalogInstaller.fail_list = False
@@ -278,6 +280,8 @@ class FakeVoiceRegistry:
     cancel_resolve_for: str | None = None
     installed = []
     deleted: list[str] = []
+    created = []
+    updated = []
     install_calls = 0
 
     def __init__(self, root) -> None:
@@ -294,6 +298,54 @@ class FakeVoiceRegistry:
         del manifest_path, artifact_root
         self.__class__.install_calls += 1
         return tuple(self.installed)
+
+    async def create_clone_profile(self, **kwargs):
+        self.created.append(kwargs)
+        voice_id = "clone:00000000-0000-4000-8000-000000000123"
+        entry = types.SimpleNamespace(
+            profile_key="clone-profile",
+            voice_id=voice_id,
+            display_name=kwargs["display_name"],
+            kind="clone",
+            visibility=kwargs["visibility"],
+            ready_state="ready",
+            runtime_target=kwargs["runtime_target"],
+            language_bundle=kwargs["language_bundle"],
+            compatibility_group=kwargs["compatibility_group"],
+            artifact_revision=kwargs["artifact_revision"],
+            metadata_revision=kwargs["artifact_revision"],
+            artifact_refs=("artifacts/clone-profile/voice-state.safetensors",),
+            enabled=True,
+            source_retained=False,
+            allowed_peer_ids=(),
+        )
+        self.installed.append(entry)
+        return entry
+
+    async def update_voice_metadata(self, voice_id: str, **kwargs):
+        self.updated.append((voice_id, kwargs))
+        for index, entry in enumerate(self.installed):
+            if entry.voice_id != voice_id:
+                continue
+            changed = False
+            values = entry.__dict__.copy()
+            for source, target in (
+                ("display_name", "display_name"),
+                ("enabled", "enabled"),
+                ("visibility", "visibility"),
+                ("allowed_peer_ids", "allowed_peer_ids"),
+            ):
+                if kwargs.get(source) is not None and values.get(target) != kwargs[source]:
+                    values[target] = kwargs[source]
+                    changed = True
+            if values.get("visibility") == "private":
+                values["allowed_peer_ids"] = ()
+            if changed:
+                values["metadata_revision"] = kwargs["metadata_revision"]
+            updated = types.SimpleNamespace(**values)
+            self.installed[index] = updated
+            return updated, changed
+        return None
 
     async def delete_voice(self, voice_id: str):
         self.deleted.append(voice_id)
@@ -521,9 +573,7 @@ def _assert_outcome_audit(mock_bus, *, method: str, status: str) -> None:
     assert details["status"] == status
 
 
-def _assert_last_two_management_audits(
-    mock_bus, *, method: str, outcome_status: str
-) -> None:
+def _assert_last_two_management_audits(mock_bus, *, method: str, outcome_status: str) -> None:
     intent_call, outcome_call = mock_bus.request.await_args_list[-2:]
     assert intent_call.args[0] == AuthMethods.STORE_AUDIT_EVENT
     assert outcome_call.args[0] == AuthMethods.STORE_AUDIT_EVENT
@@ -1415,11 +1465,23 @@ async def test_voice_import_audit_is_redacted_and_idempotency_is_payload_bound(
 @pytest.mark.asyncio
 async def test_voice_management_replay_is_audited_once_and_payload_bound(
     mock_bus,
+    monkeypatch,
     method_name,
     mutation_request,
     mismatched_request,
 ) -> None:
     mock_bus.request = AsyncMock()
+    FakeVoiceRegistry.installed = []
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            default_voice_id="standard:starter_en:alba",
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
     service = TTSService()
     envelope = Envelope(
         type=getattr(TTSMethods, method_name.upper()),
@@ -2066,7 +2128,7 @@ async def test_voice_import_owner_and_create_profile_require_same_peer(mock_bus)
         ),
         owner,
     )
-    assert reused.status == "rejected"
+    assert reused.status == "unavailable"
 
 
 @pytest.mark.asyncio
@@ -2091,7 +2153,7 @@ async def test_concurrent_create_profile_consumes_sealed_ref_once(mock_bus) -> N
         )
     )
 
-    assert sorted(result.status for result in results) == ["rejected", "unavailable"]
+    assert sorted(result.status for result in results) == ["unavailable", "unavailable"]
 
 
 @pytest.mark.asyncio
@@ -2913,6 +2975,206 @@ async def test_delete_voice_profile_rejects_active_clone(monkeypatch, mock_bus) 
 
     assert response.status == "rejected"
     assert FakeVoiceRegistry.deleted == []
+
+
+@pytest.mark.asyncio
+async def test_update_voice_profile_persists_registry_metadata(monkeypatch, mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    voice_id = "clone:00000000-0000-4000-8000-000000000001"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=voice_id,
+            display_name="Clone",
+            kind="clone",
+            visibility="private",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            metadata_revision="rev1",
+            artifact_refs=("artifacts/clone/voice-state.safetensors",),
+            enabled=True,
+            source_retained=False,
+            allowed_peer_ids=(),
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    service = TTSService()
+
+    response = await service.update_voice_profile(
+        TTSUpdateVoiceProfileRequest(
+            operation_id="update-clone",
+            voice_id=voice_id,
+            expected_revision="rev1",
+            display_name="Updated Clone",
+            visibility="allowed_peers",
+            allowed_peer_ids=["peer-b", "peer-a"],
+        )
+    )
+
+    assert response.status == "updated"
+    assert response.revision == "voice-rev-1"
+    assert FakeVoiceRegistry.updated[-1][0] == voice_id
+    assert FakeVoiceRegistry.installed[0].display_name == "Updated Clone"
+    assert FakeVoiceRegistry.installed[0].visibility == "allowed_peers"
+    assert FakeVoiceRegistry.installed[0].allowed_peer_ids == ("peer-a", "peer-b")
+    _assert_outcome_audit(mock_bus, method="update_voice_profile", status="updated")
+
+
+@pytest.mark.asyncio
+async def test_update_voice_profile_rejects_disabling_default_voice(monkeypatch, mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    voice_id = "clone:00000000-0000-4000-8000-000000000001"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=voice_id,
+            display_name="Clone",
+            kind="clone",
+            visibility="private",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            metadata_revision="rev1",
+            artifact_refs=("artifacts/clone/voice-state.safetensors",),
+            enabled=True,
+            source_retained=False,
+            allowed_peer_ids=(),
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            default_voice_id=voice_id,
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    service = TTSService()
+
+    response = await service.update_voice_profile(
+        TTSUpdateVoiceProfileRequest(
+            operation_id="disable-default",
+            voice_id=voice_id,
+            expected_revision="rev1",
+            enabled=False,
+        )
+    )
+
+    assert response.status == "rejected"
+    assert FakeVoiceRegistry.updated == []
+
+
+@pytest.mark.asyncio
+async def test_create_voice_profile_derives_and_persists_clone(monkeypatch, mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    service = TTSService()
+    envelope = Envelope(
+        type=TTSMethods.VOICE_IMPORT_START,
+        payload={},
+        principal_id="principal-a",
+        caller_peer_id="peer-a",
+    )
+    _started, sealed = await _sealed_voice_upload(service, envelope)
+
+    async def fake_derive(config, audio_bytes: bytes, *, audio_suffix: str):
+        del config, audio_suffix
+        assert audio_bytes
+        return (
+            b"\x68\x00\x00\x00\x00\x00\x00\x00"
+            b'{"__metadata__":{"format":"aurora-test"},'
+            b'"speaker.offset":{"dtype":"U8","shape":[1],"data_offsets":[0,1]}}'
+            b"\x01",
+            types.SimpleNamespace(
+                runtime_target="pockettts-python",
+                language_bundle="en",
+                compatibility_group="base",
+            ),
+        )
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr(
+        "app.services.tts.service.derive_pockettts_voice_state_artifact", fake_derive
+    )
+
+    response = await service.create_voice_profile(
+        TTSCreateVoiceProfileRequest(
+            operation_id="create-clone",
+            display_name="My Clone",
+            sealed_audio_ref=sealed.sealed_audio_ref,
+            consent=True,
+        ),
+        envelope,
+    )
+
+    assert response.status == "ready"
+    assert response.voice_id == "clone:00000000-0000-4000-8000-000000000123"
+    assert response.accepted_duration_ms is not None
+    assert FakeVoiceRegistry.created[-1]["display_name"] == "My Clone"
+    assert sealed.sealed_audio_ref not in {
+        session.sealed_ref for session in service._voice_import_sessions.values()
+    }
+    _assert_outcome_audit(mock_bus, method="create_voice_profile", status="ready")
+
+
+@pytest.mark.asyncio
+async def test_create_voice_profile_keeps_sealed_upload_when_provider_unavailable(
+    monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    service = TTSService()
+    envelope = Envelope(
+        type=TTSMethods.VOICE_IMPORT_START,
+        payload={},
+        principal_id="principal-a",
+        caller_peer_id="peer-a",
+    )
+    _started, sealed = await _sealed_voice_upload(service, envelope)
+
+    async def fail_derive(config, audio_bytes: bytes, *, audio_suffix: str):
+        del config, audio_bytes, audio_suffix
+        raise TTSProviderError("unavailable", "PocketTTS is unavailable")
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr(
+        "app.services.tts.service.derive_pockettts_voice_state_artifact", fail_derive
+    )
+
+    response = await service.create_voice_profile(
+        TTSCreateVoiceProfileRequest(
+            operation_id="create-unavailable",
+            display_name="My Clone",
+            sealed_audio_ref=sealed.sealed_audio_ref,
+            consent=True,
+        ),
+        envelope,
+    )
+
+    assert response.status == "unavailable"
+    assert any(
+        session.sealed_ref == sealed.sealed_audio_ref
+        for session in service._voice_import_sessions.values()
+    )
+    assert FakeVoiceRegistry.created == []
 
 
 @pytest.mark.asyncio

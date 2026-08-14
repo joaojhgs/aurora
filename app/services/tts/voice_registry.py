@@ -39,7 +39,7 @@ except ImportError:  # pragma: no cover - platform dependent
 
 LogicalVoiceKind = Literal["standard", "clone"]
 ProfileKind = Literal["standard", "clone"]
-ProfileVisibility = Literal["public", "private"]
+ProfileVisibility = Literal["public", "private", "allowed_peers"]
 ReadyState = Literal["ready", "installing", "failed", "deleted"]
 LicenseRedistribution = Literal["approved"]
 VoiceStateArtifactFormat = Literal["safetensors"]
@@ -130,10 +130,13 @@ class VoiceProfileInventoryEntry:
     language_bundle: str
     compatibility_group: str
     artifact_revision: str
+    metadata_revision: str
     artifact_refs: tuple[str, ...]
+    enabled: bool
     source_retained: bool
     license_name: str | None
     attribution: str | None
+    allowed_peer_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -293,10 +296,13 @@ class _PersistedProfile(BaseModel):
     language_bundle: str
     compatibility_group: str
     artifact_revision: str
+    metadata_revision: str | None = None
     artifacts: tuple[_PersistedArtifact, ...]
+    enabled: bool = True
     source_retained: bool = False
     license_name: str | None = None
     attribution: str | None = None
+    allowed_peer_ids: tuple[str, ...] = ()
 
     @property
     def artifact_refs(self) -> tuple[str, ...]:
@@ -460,6 +466,29 @@ class VoiceRegistry:
         """Return administrative profile metadata without artifact payload bytes."""
         async with self._lock:
             return await asyncio.to_thread(self._with_fs_lock, self._inventory_locked)
+
+    async def update_voice_metadata(
+        self,
+        voice_id: str,
+        *,
+        display_name: str | None = None,
+        enabled: bool | None = None,
+        visibility: ProfileVisibility | None = None,
+        allowed_peer_ids: tuple[str, ...] | None = None,
+        metadata_revision: str,
+    ) -> tuple[VoiceProfileInventoryEntry, bool] | None:
+        """Atomically update durable redacted profile metadata for a logical voice."""
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._with_fs_lock,
+                self._update_voice_metadata_locked,
+                voice_id,
+                display_name,
+                enabled,
+                visibility,
+                allowed_peer_ids,
+                metadata_revision,
+            )
 
     async def select_voice(
         self, voice_id: str, resident_base_identity: VoiceBaseIdentity
@@ -715,7 +744,11 @@ class VoiceRegistry:
         state = self._read_state()
         entries: list[VoiceCatalogEntry] = []
         for profile in state.profiles.values():
+            if not profile.enabled:
+                continue
             if profile.visibility == "private" and not include_private:
+                continue
+            if profile.visibility == "allowed_peers" and not include_private:
                 continue
             if resident_base_identity is not None and not _profile_matches(
                 profile, resident_base_identity
@@ -741,6 +774,66 @@ class VoiceRegistry:
             )
         )
 
+    def _update_voice_metadata_locked(
+        self,
+        voice_id: str,
+        display_name: str | None,
+        enabled: bool | None,
+        visibility: ProfileVisibility | None,
+        allowed_peer_ids: tuple[str, ...] | None,
+        metadata_revision: str,
+    ) -> tuple[VoiceProfileInventoryEntry, bool] | None:
+        validate_logical_voice_id(voice_id)
+        if display_name is not None and (len(display_name.strip()) < 1 or len(display_name) > 96):
+            raise VoiceArtifactError("invalid voice display name")
+        if visibility is not None and visibility not in ("public", "private", "allowed_peers"):
+            raise VoiceArtifactError("invalid voice visibility")
+        if visibility == "private" and allowed_peer_ids:
+            raise VoiceArtifactError("private voice cannot expose allowed peers")
+        for peer_id in allowed_peer_ids or ():
+            if not isinstance(peer_id, str) or not peer_id.strip() or len(peer_id) > 256:
+                raise VoiceArtifactError("invalid voice peer id")
+        if not _COMPONENT_RE.fullmatch(metadata_revision):
+            raise VoiceArtifactError("invalid voice metadata revision")
+
+        state = self._read_state()
+        updated_profiles = dict(state.profiles)
+        touched: list[_PersistedProfile] = []
+        changed = False
+        for key, profile in state.profiles.items():
+            if profile.voice_id != voice_id:
+                continue
+            next_visibility = visibility or profile.visibility
+            next_allowed_peer_ids = (
+                tuple(sorted(set(allowed_peer_ids)))
+                if allowed_peer_ids is not None
+                else profile.allowed_peer_ids
+            )
+            if next_visibility == "private":
+                next_allowed_peer_ids = ()
+            patch: dict[str, object] = {
+                "display_name": display_name.strip()
+                if display_name is not None
+                else profile.display_name,
+                "enabled": enabled if enabled is not None else profile.enabled,
+                "visibility": next_visibility,
+                "allowed_peer_ids": next_allowed_peer_ids,
+            }
+            profile_changed = any(getattr(profile, name) != value for name, value in patch.items())
+            if profile_changed:
+                patch["metadata_revision"] = metadata_revision
+                changed = True
+            updated = profile.model_copy(update=patch)
+            updated_profiles[key] = updated
+            touched.append(updated)
+
+        if not touched:
+            return None
+        if changed:
+            self._write_state(state.model_copy(update={"profiles": updated_profiles}))
+        selected = sorted(touched, key=lambda profile: profile.profile_key)[0]
+        return _inventory_entry(selected), changed
+
     def _select_voice_locked(
         self, voice_id: str, resident_base_identity: VoiceBaseIdentity
     ) -> VoiceProfileInventoryEntry:
@@ -750,6 +843,7 @@ class VoiceRegistry:
             for profile in self._read_state().profiles.values()
             if profile.voice_id == voice_id
             and profile.ready_state == "ready"
+            and profile.enabled
             and _profile_matches(profile, resident_base_identity)
         ]
         if not matches:
@@ -808,6 +902,7 @@ class VoiceRegistry:
             for profile in self._read_state().profiles.values()
             if profile.voice_id == voice_id
             and profile.ready_state == "ready"
+            and profile.enabled
             and _profile_matches(profile, resident_base_identity)
         ]
         if not matches:
@@ -943,6 +1038,17 @@ class VoiceRegistry:
             ):
                 if not _COMPONENT_RE.fullmatch(value):
                     raise VoiceArtifactError("registry state profile component is invalid")
+            if profile.metadata_revision is not None and not _COMPONENT_RE.fullmatch(
+                profile.metadata_revision
+            ):
+                raise VoiceArtifactError("registry state metadata revision is invalid")
+            if not isinstance(profile.enabled, bool):
+                raise VoiceArtifactError("registry state profile enabled flag is invalid")
+            if profile.visibility == "private" and profile.allowed_peer_ids:
+                raise VoiceArtifactError("private registry profile cannot expose peers")
+            for peer_id in profile.allowed_peer_ids:
+                if not isinstance(peer_id, str) or not peer_id.strip() or len(peer_id) > 256:
+                    raise VoiceArtifactError("registry state peer id is invalid")
             _validate_supported_voice_state_runtime(profile.runtime_target)
             if not profile.artifacts:
                 raise VoiceArtifactError("registry state profile has no artifacts")
@@ -1503,10 +1609,13 @@ def _inventory_entry(profile: _PersistedProfile) -> VoiceProfileInventoryEntry:
         language_bundle=profile.language_bundle,
         compatibility_group=profile.compatibility_group,
         artifact_revision=profile.artifact_revision,
+        metadata_revision=profile.metadata_revision or profile.artifact_revision,
         artifact_refs=profile.artifact_refs,
+        enabled=profile.enabled,
         source_retained=profile.source_retained,
         license_name=profile.license_name,
         attribution=profile.attribution,
+        allowed_peer_ids=profile.allowed_peer_ids,
     )
 
 

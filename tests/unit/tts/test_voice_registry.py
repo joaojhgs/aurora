@@ -460,6 +460,74 @@ async def test_clone_profiles_are_private_by_default_and_do_not_retain_source(
 
 
 @pytest.mark.asyncio
+async def test_clone_metadata_update_persists_after_restart(tmp_path: Path) -> None:
+    registry_root = tmp_path / "registry"
+    registry = VoiceRegistry(registry_root)
+    clone = await registry.create_clone_profile(
+        display_name="Original",
+        runtime_target="pockettts-python",
+        language_bundle="en-us-compact",
+        compatibility_group="pockettts-en-compact-v1",
+        artifact_revision="clone-rev-a",
+        artifact_bytes=_safetensors_bytes(),
+        clone_uuid=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+    )
+
+    updated = await registry.update_voice_metadata(
+        clone.voice_id,
+        display_name="Renamed",
+        visibility="allowed_peers",
+        allowed_peer_ids=("peer-b", "peer-a"),
+        metadata_revision="voice-rev-2",
+    )
+
+    assert updated is not None
+    entry, changed = updated
+    assert changed is True
+    assert entry.display_name == "Renamed"
+    assert entry.metadata_revision == "voice-rev-2"
+    assert entry.visibility == "allowed_peers"
+    assert entry.allowed_peer_ids == ("peer-a", "peer-b")
+
+    restarted = VoiceRegistry(registry_root)
+    inventory = await restarted.inventory()
+    assert inventory[0].display_name == "Renamed"
+    assert inventory[0].metadata_revision == "voice-rev-2"
+    assert inventory[0].allowed_peer_ids == ("peer-a", "peer-b")
+    state_json = (registry_root / "voice_registry.json").read_text(encoding="utf-8")
+    assert "speaker.embedding" not in state_json
+
+
+@pytest.mark.asyncio
+async def test_disabled_clone_is_listed_but_not_selectable(tmp_path: Path) -> None:
+    registry_root = tmp_path / "registry"
+    registry = VoiceRegistry(registry_root)
+    clone = await registry.create_clone_profile(
+        display_name="Disabled",
+        runtime_target="pockettts-python",
+        language_bundle="en-us-compact",
+        compatibility_group="pockettts-en-compact-v1",
+        artifact_revision="clone-rev-a",
+        artifact_bytes=_safetensors_bytes(),
+        clone_uuid=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+    )
+    identity = VoiceBaseIdentity("pockettts-python", "en-us-compact", "pockettts-en-compact-v1")
+
+    updated = await registry.update_voice_metadata(
+        clone.voice_id,
+        enabled=False,
+        metadata_revision="voice-rev-2",
+    )
+
+    assert updated is not None
+    assert updated[0].enabled is False
+    assert (await registry.inventory())[0].enabled is False
+    assert await registry.catalog(identity, include_private=True) == ()
+    with pytest.raises(VoiceSelectionError):
+        await registry.select_voice(clone.voice_id, identity)
+
+
+@pytest.mark.asyncio
 async def test_clone_source_retention_is_rejected_until_encrypted_storage_exists(
     tmp_path: Path,
 ) -> None:

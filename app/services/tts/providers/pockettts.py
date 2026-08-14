@@ -727,6 +727,105 @@ def _validate_voice_state_semantics(state: Any) -> None:
         raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
 
 
+def _flatten_voice_state_tensors(state: Mapping[str, Any]) -> dict[str, Any]:
+    tensors: dict[str, Any] = {}
+
+    def visit(value: Any, key_path: tuple[str, ...]) -> None:
+        shape = getattr(value, "shape", None)
+        if shape is not None:
+            tensor_name = ".".join(key_path)
+            if not tensor_name:
+                raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+            tensors[tensor_name] = value
+            return
+        if isinstance(value, Mapping):
+            for key, child in value.items():
+                if not isinstance(key, str) or not key.strip():
+                    raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+                visit(child, (*key_path, key.strip()))
+
+    visit(state, ())
+    if not tensors:
+        raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable")
+    return tensors
+
+
+def _serialize_voice_state(state: Any) -> bytes:
+    _validate_voice_state_semantics(state)
+    try:
+        from safetensors.torch import save as save_safetensors
+    except Exception as exc:  # pragma: no cover - depends on optional local runtime package
+        raise TTSProviderError("unavailable", "PocketTTS voice creation is unavailable") from exc
+    try:
+        payload = save_safetensors(
+            _flatten_voice_state_tensors(state),
+            metadata={"format": "aurora-pockettts-voice-state"},
+        )
+    except Exception as exc:
+        raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable") from exc
+    if not payload or len(payload) > _MAX_VOICE_STATE_BYTES:
+        raise TTSProviderError("resource_exhausted", "PocketTTS voice is too large")
+    return payload
+
+
+async def derive_pockettts_voice_state_artifact(
+    config: PocketTTSProviderConfig,
+    audio_bytes: bytes,
+    *,
+    audio_suffix: str = ".wav",
+) -> tuple[bytes, VoiceBaseIdentity]:
+    """Derive a bounded safetensors voice-state artifact from an explicit audio prompt."""
+    if not audio_bytes:
+        raise TTSProviderError("invalid_audio", "PocketTTS voice prompt is unavailable")
+    _validate_provider_config(config)
+    config_info = resolve_pockettts_config(
+        config.effective_language,
+        config.quality_tier,
+        config_id=config.config_id,
+    )
+    identity = resolve_pockettts_base_identity_spec(config).voice_base_identity
+    suffix = audio_suffix if audio_suffix in (".wav", ".pcm") else ".wav"
+
+    def derive() -> tuple[bytes, VoiceBaseIdentity]:
+        model_class = _load_pockettts_model_class()
+        model = model_class.load_model(
+            language=config_info.config_id,
+            quantize=config.quantize,
+            **_load_model_kwargs(config),
+        )
+        _validate_loaded_model_device(model)
+        _validate_loaded_model_identity(model, config_info)
+        raw_sample_rate = getattr(model, "sample_rate", None)
+        if raw_sample_rate != config.expected_sample_rate:
+            raise TTSProviderError("invalid_audio", "PocketTTS sample rate is unavailable")
+        tmp_dir = Path(tempfile.mkdtemp(prefix="aurora-pockettts-clone-"))
+        try:
+            os.chmod(tmp_dir, 0o700)
+            prompt_path = tmp_dir / f"prompt{suffix}"
+            out_fd = os.open(prompt_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            try:
+                _write_all(out_fd, audio_bytes)
+                os.fsync(out_fd)
+            finally:
+                os.close(out_fd)
+            state = model.get_state_for_audio_prompt(prompt_path)
+            return _serialize_voice_state(state), identity
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    executor = _DaemonSingleWorkerExecutor(thread_name_prefix="pockettts-clone")
+    try:
+        loop = asyncio.get_running_loop()
+        return await asyncio.wait_for(
+            loop.run_in_executor(executor, derive),
+            timeout=config.init_timeout_s + config.queue_timeout_s,
+        )
+    except TimeoutError as exc:
+        raise TTSProviderError("resource_exhausted", "PocketTTS voice creation timed out") from exc
+    finally:
+        await asyncio.to_thread(executor.shutdown, True, cancel_futures=True)
+
+
 def _flatten_audio_values(audio: Any) -> list[float]:
     """Convert common tensor/array/list audio shapes to a flat float list."""
     value = audio
