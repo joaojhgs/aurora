@@ -287,6 +287,14 @@ export function VoiceSettingsView({
     runtimeProfile,
     engineCapabilities: state.capabilities?.engine_capabilities,
   }), [providedSurfaceProfile, transportKind, runtimeProfile, state.capabilities?.engine_capabilities])
+  const canManageLocalSpeechAssets = useMemo(() => (
+    Boolean(onLocalSpeechSelectionConfirmed)
+    && localSpeechSurfaceCanManageAssets(surfaceProfile)
+  ), [onLocalSpeechSelectionConfirmed, surfaceProfile])
+  const localSpeechRows = useMemo(
+    () => canManageLocalSpeechAssets ? toLocalSpeechAssetRows(state.capabilities, surfaceProfile.localSpeechPack) : [],
+    [canManageLocalSpeechAssets, state.capabilities, surfaceProfile.localSpeechPack],
+  )
   const languageCatalogMessage = state.languageCatalogState === 'limited'
     ? 'Language options could not be loaded. Review access and try again.'
     : null
@@ -768,6 +776,18 @@ function voiceSettingsSurfaceProfile(input: {
   })
 }
 
+function localSpeechSurfaceCanManageAssets(
+  surfaceProfile: AuroraSurfaceProfile,
+): boolean {
+  const localSpeechPack = surfaceProfile.localSpeechPack
+  const hasTaskCapability = localSpeechPack.canRunLocalVad
+    || localSpeechPack.canRunLocalKws
+    || localSpeechPack.canRunLocalStt
+    || localSpeechPack.canRunLocalTts
+  if (!hasTaskCapability) return false
+  return surfaceProfile.usesNativeShell || surfaceProfile.usesBrowserVoiceRuntime || surfaceProfile.supportsMobileNative || surfaceProfile.legacyKind === 'mock'
+}
+
 function adminReasonFor(action: string, userReason: string): string {
   return `${action}: ${userReason}`
 }
@@ -873,6 +893,102 @@ function toPackRows(
     .filter((pack) => safePackId(pack.pack_id) !== null)
     .sort((left, right) => packSortLabel(left).localeCompare(packSortLabel(right)))
     .map((pack, index) => toManagedLanguagePack(pack, index, capabilities))
+}
+
+function toLocalSpeechAssetRows(
+  capabilities: TtsCapabilities | null,
+  localSpeechPack: AuroraSurfaceProfile['localSpeechPack'],
+): LocalSpeechAssetRow[] {
+  if (!capabilities) return []
+  const rows: LocalSpeechAssetRow[] = []
+  const seen = new Set<string>()
+  for (const task of ['vad', 'kws', 'stt'] as const) {
+    if (!localSpeechTaskCanRun(task, localSpeechPack)) continue
+    const assets = localSpeechCatalogAssets(capabilities, task)
+    for (const asset of assets) {
+      const row = toLocalSpeechAssetRow(task, asset, rows.length)
+      if (!row) continue
+      const key = `${row.task}:${row.packId}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      rows.push(row)
+    }
+  }
+  return rows
+}
+
+function localSpeechTaskCanRun(
+  task: LocalSpeechCatalogTask,
+  localSpeechPack: AuroraSurfaceProfile['localSpeechPack'],
+): boolean {
+  if (task === 'vad') return localSpeechPack.canRunLocalVad
+  if (task === 'kws') return localSpeechPack.canRunLocalKws
+  return localSpeechPack.canRunLocalStt
+}
+
+function localSpeechCatalogAssets(
+  capabilities: TtsCapabilities,
+  task: LocalSpeechCatalogTask,
+): LocalSpeechCatalogAsset[] {
+  const grouped = capabilities.local_speech_assets ?? {}
+  const groupedAssets = [
+    ...(grouped[task] ?? []),
+    ...(task === 'kws' ? [...(grouped.wakeword ?? []), ...(grouped.wkw ?? [])] : []),
+  ]
+  const flatAssets = (capabilities.local_speech_packs ?? []).filter((asset) => normalizeLocalSpeechTask(asset.task) === task)
+  return [...groupedAssets, ...flatAssets]
+}
+
+function toLocalSpeechAssetRow(
+  task: LocalSpeechCatalogTask,
+  asset: LocalSpeechCatalogAsset,
+  index: number,
+): LocalSpeechAssetRow | null {
+  if (asset.enabled === false || asset.compatible_engine === false) return null
+  const packId = safePackId(asset.pack_id ?? asset.packId)
+  const revision = safePackId(asset.revision ?? asset.pack_revision)
+  if (!packId || !revision) return null
+  const copy = localSpeechTaskCopy(task)
+  return {
+    task,
+    packId,
+    revision,
+    label: safeVoiceText(asset.display_name ?? asset.label, `${copy.noun} option ${index + 1}`),
+    ready: asset.ready === true || asset.installed === true,
+    copy,
+  }
+}
+
+function normalizeLocalSpeechTask(task: unknown): LocalSpeechCatalogTask | null {
+  if (task === 'vad' || task === 'stt') return task
+  if (task === 'kws' || task === 'wakeword' || task === 'wkw') return 'kws'
+  return null
+}
+
+function localSpeechTaskCopy(task: LocalSpeechCatalogTask): LocalSpeechAssetRow['copy'] {
+  if (task === 'vad') {
+    return {
+      action: 'Use listening start',
+      detail: 'Helps Aurora notice when speech begins.',
+      noun: 'Listening start',
+    }
+  }
+  if (task === 'kws') {
+    return {
+      action: 'Use wake phrase',
+      detail: 'Lets Aurora listen for its wake phrase on this device.',
+      noun: 'Wake phrase',
+    }
+  }
+  return {
+    action: 'Use transcription',
+    detail: 'Turns your speech into text on this device.',
+    noun: 'Transcription',
+  }
+}
+
+function localSpeechActionKey(row: Pick<LocalSpeechAssetRow, 'packId' | 'task'>): string {
+  return `local:${row.task}:${row.packId}`
 }
 
 function mergeCatalogProfiles(

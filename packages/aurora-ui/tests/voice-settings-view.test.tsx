@@ -950,6 +950,242 @@ describe('VoiceSettingsView', () => {
     await unmount()
   })
 
+  it('persists catalog-backed on-device speech choices with exact pack revisions', async () => {
+    const onLocalSpeechSelectionConfirmed = vi.fn()
+    const client = voiceClient({
+      capabilities: capabilities({
+        local_speech_assets: {
+          vad: [{
+            pack_id: 'vad.webrtc',
+            revision: 'vad-rev-1',
+            display_name: 'Speech start',
+            installed: true,
+            ready: true,
+          }],
+          wakeword: [{
+            pack_id: 'wake.aurora',
+            revision: 'wake-rev-1',
+            display_name: 'Aurora wake phrase',
+            installed: true,
+            ready: true,
+          }],
+          stt: [{
+            pack_id: 'whisper.tiny.en',
+            revision: 'stt-rev-1',
+            display_name: 'English transcription',
+            installed: true,
+            ready: true,
+          }],
+        },
+      }),
+    })
+    const { container, unmount } = await renderVoiceSettings(client, {
+      onLocalSpeechSelectionConfirmed,
+      runtimeProfile: meshVoiceRuntimeProfile(),
+    })
+
+    await act(async () => {
+      buttonByText(container, 'Use listening start').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+    await act(async () => {
+      buttonByText(container, 'Use wake phrase').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+    await act(async () => {
+      buttonByText(container, 'Use transcription').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenNthCalledWith(1, {
+      vad: {
+        packId: 'vad.webrtc',
+        packRevision: 'vad-rev-1',
+      },
+    })
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenNthCalledWith(2, {
+      kws: {
+        packId: 'wake.aurora',
+        packRevision: 'wake-rev-1',
+      },
+    })
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenNthCalledWith(3, {
+      stt: {
+        packId: 'whisper.tiny.en',
+        packRevision: 'stt-rev-1',
+      },
+    })
+    const text = visibleText(container)
+    expect(text).toContain('On-device speech')
+    expect(text).not.toContain('vad.webrtc')
+    expect(text).not.toContain('wake.aurora')
+    expect(text).not.toContain('whisper.tiny.en')
+    assertNoForbiddenCopy(text)
+    await unmount()
+  })
+
+  it('allows local speech choice persistence for capable remote-console profiles', async () => {
+    const onLocalSpeechSelectionConfirmed = vi.fn()
+    const client = voiceClient({
+      capabilities: capabilities({
+        local_speech_packs: [{
+          task: 'vad',
+          pack_id: 'vad.webrtc',
+          revision: 'vad-rev-1',
+          display_name: 'Speech start',
+          installed: true,
+          ready: true,
+        }, {
+          task: 'wakeword',
+          pack_id: 'wake.aurora',
+          revision: 'wake-rev-1',
+          display_name: 'Aurora wake phrase',
+          installed: true,
+          ready: true,
+        }, {
+          task: 'stt',
+          pack_id: 'whisper.tiny.en',
+          revision: 'stt-rev-1',
+          display_name: 'English transcription',
+          installed: true,
+          ready: true,
+        }],
+      }),
+    })
+    const { container, unmount } = await renderVoiceSettings(client, {
+      onLocalSpeechSelectionConfirmed,
+      runtimeProfile: remoteVoiceRuntimeProfile(),
+    })
+
+    await act(async () => {
+      buttonByText(container, 'Use listening start').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+    await act(async () => {
+      buttonByText(container, 'Use wake phrase').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+    await act(async () => {
+      buttonByText(container, 'Use transcription').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenNthCalledWith(1, {
+      vad: {
+        packId: 'vad.webrtc',
+        packRevision: 'vad-rev-1',
+      },
+    })
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenNthCalledWith(2, {
+      kws: {
+        packId: 'wake.aurora',
+        packRevision: 'wake-rev-1',
+      },
+    })
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenNthCalledWith(3, {
+      stt: {
+        packId: 'whisper.tiny.en',
+        packRevision: 'stt-rev-1',
+      },
+    })
+    const text = visibleText(container)
+    expect(text).toContain('On-device speech')
+    expect(text).not.toContain('vad.webrtc')
+    expect(text).not.toContain('wake.aurora')
+    expect(text).not.toContain('whisper.tiny.en')
+    assertNoForbiddenCopy(text)
+    await unmount()
+  })
+
+  it('hides local speech choice persistence when the surface has no local engine evidence', async () => {
+    const onLocalSpeechSelectionConfirmed = vi.fn()
+    const client = voiceClient({
+      capabilities: capabilities({
+        engine_capabilities: { vad: false, kws: false, stt: false, tts: false },
+        local_speech_packs: [{
+          task: 'vad',
+          pack_id: 'vad.webrtc',
+          revision: 'vad-rev-1',
+          display_name: 'Speech start',
+          installed: true,
+          ready: true,
+        }, {
+          task: 'wakeword',
+          pack_id: 'wake.aurora',
+          revision: 'wake-rev-1',
+          display_name: 'Aurora wake phrase',
+          installed: true,
+          ready: true,
+        }, {
+          task: 'stt',
+          pack_id: 'whisper.tiny.en',
+          revision: 'stt-rev-1',
+          display_name: 'English transcription',
+          installed: true,
+          ready: true,
+        }],
+      }),
+    })
+    const { container, unmount } = await renderVoiceSettings(client, {
+      onLocalSpeechSelectionConfirmed,
+      runtimeProfile: remoteVoiceRuntimeProfile(),
+    })
+
+    const text = visibleText(container)
+    expect(text).not.toContain('On-device speech')
+    expect(buttonsByText(container, 'Use listening start')).toHaveLength(0)
+    expect(buttonsByText(container, 'Use wake phrase')).toHaveLength(0)
+    expect(buttonsByText(container, 'Use transcription')).toHaveLength(0)
+    expect(onLocalSpeechSelectionConfirmed).not.toHaveBeenCalled()
+    assertNoForbiddenCopy(text)
+    await unmount()
+  })
+
+  it('does not render or persist VAD, wake phrase, or transcription choices on TTS-only devices', async () => {
+    const onLocalSpeechSelectionConfirmed = vi.fn()
+    const client = voiceClient({
+      capabilities: capabilities({
+        engine_capabilities: { vad: false, kws: false, stt: false, tts: true },
+        local_speech_assets: {
+          vad: [{
+            pack_id: 'vad.webrtc',
+            revision: 'vad-rev-1',
+            display_name: 'Speech start',
+            installed: true,
+            ready: true,
+          }],
+          wakeword: [{
+            pack_id: 'wake.aurora',
+            revision: 'wake-rev-1',
+            display_name: 'Aurora wake phrase',
+            installed: true,
+            ready: true,
+          }],
+          stt: [{
+            pack_id: 'whisper.tiny.en',
+            revision: 'stt-rev-1',
+            display_name: 'English transcription',
+            installed: true,
+            ready: true,
+          }],
+        },
+      }),
+    })
+    const { container, unmount } = await renderVoiceSettings(client, {
+      onLocalSpeechSelectionConfirmed,
+      runtimeProfile: meshVoiceRuntimeProfile(),
+    })
+
+    const text = visibleText(container)
+    expect(text).not.toContain('On-device speech')
+    expect(buttonsByText(container, 'Use listening start')).toHaveLength(0)
+    expect(buttonsByText(container, 'Use wake phrase')).toHaveLength(0)
+    expect(buttonsByText(container, 'Use transcription')).toHaveLength(0)
+    expect(onLocalSpeechSelectionConfirmed).not.toHaveBeenCalled()
+    assertNoForbiddenCopy(text)
+    await unmount()
+  })
+
   it('shows a limited state instead of treating missing language options as an empty catalog', async () => {
     const adminExecute = vi.fn(async (input: { methodId: string }) => {
       if (input.methodId === 'TTS.ListVoiceProfiles') {
@@ -1369,6 +1605,27 @@ function meshVoiceRuntimeProfile(): AuroraRuntimeProfileV2 {
           signalingBrokers: ['wss://signal.example.test/mqtt'],
         },
       },
+    },
+  }
+}
+
+function remoteVoiceRuntimeProfile(): AuroraRuntimeProfileV2 {
+  return {
+    version: 2,
+    id: 'remote-voice-runtime',
+    label: 'Home Aurora',
+    nodeMode: 'remote-console',
+    runtimeTier: 'none',
+    homeConnection: {
+      mode: 'webrtc-preferred',
+      gatewayUrl: 'https://home.example.test',
+      signalingUrl: 'wss://signal.example.test/mqtt',
+    },
+    localNode: {
+      nodeName: 'This browser',
+      stablePeerId: 'remote-peer',
+      enabledCapabilityPacks: [],
+      localSpeechPackState: 'ready',
     },
   }
 }

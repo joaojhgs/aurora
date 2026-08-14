@@ -1369,6 +1369,68 @@ describe("Aurora Tauri runtime wrapper", () => {
     await runtime.dispose();
   });
 
+  it("preserves remote-console local speech choices when a thin profile is saved again", async () => {
+    const thin = thinRuntimeProfile("webrtc-preferred");
+    const profile: AuroraRuntimeProfileV2 = {
+      version: 2,
+      id: thin.id,
+      label: thin.label,
+      nodeMode: "remote-console",
+      runtimeTier: "none",
+      homeConnection: {
+        mode: thin.mode,
+        gatewayUrl: thin.gatewayUrl,
+        signalingUrl: thin.signalingUrl,
+        webrtcProfile: thin.webrtcProfile,
+      },
+      localNode: {
+        nodeName: thin.nodeName,
+        stablePeerId: thin.localStablePeerId,
+        enabledCapabilityPacks: [],
+        localSpeechPackState: "ready",
+        localSpeechSelection: {
+          vad: {
+            packId: "vad.webrtc",
+            packRevision: "vad-rev-1",
+          },
+          kws: {
+            packId: "wake.aurora",
+            packRevision: "wake-rev-1",
+          },
+          stt: {
+            packId: "whisper.tiny.en",
+            packRevision: "stt-rev-1",
+          },
+          tts: {
+            packId: "piper.en",
+            packRevision: "pack-rev-1",
+            voiceId: "standard:piper.en:ava",
+            voiceRevision: "voice-rev-1",
+          },
+        },
+      },
+    };
+    const store = createMemoryRuntimeProfileStore({
+      version: 2,
+      activeProfileId: profile.id,
+      profiles: [profile],
+    });
+    const runtime = createAuroraTauriRuntime({
+      runtimeProfileStore: store,
+      runtimeProfileDocument: await store.load(),
+    });
+
+    await runtime.thinProfileController?.saveProfile(thin);
+
+    const saved = await store.load();
+    expect(saved.profiles[0]?.nodeMode).toBe("remote-console");
+    expect(saved.profiles[0]?.runtimeTier).toBe("none");
+    expect(saved.profiles[0]?.localNode.enabledCapabilityPacks).toEqual([]);
+    expect(saved.profiles[0]?.localNode.localSpeechPackState).toBe("ready");
+    expect(saved.profiles[0]?.localNode.localSpeechSelection).toEqual(profile.localNode.localSpeechSelection);
+    await runtime.dispose();
+  });
+
   it("uses the SDK mock transport when no Tauri shell or Gateway URL is present", async () => {
     vi.stubEnv("VITE_AURORA_GATEWAY_URL", "");
 

@@ -1712,7 +1712,22 @@ function runtimeProfileFromThinProfile({
   const nodeMode = selectedMode === "mesh-node" || selectedMode === "remote-console"
     ? selectedMode
     : existingProfile?.nodeMode ?? "remote-console";
-  if (nodeMode === "remote-console") return remoteProfile;
+  const localSpeechFields = preservedLocalSpeechFields(
+    existingProfile,
+    packageCapabilities,
+  );
+  if (nodeMode === "remote-console") {
+    return sanitizeRuntimeProfile({
+      ...remoteProfile,
+      localNode: {
+        ...remoteProfile.localNode,
+        enabledCapabilityPacks: [],
+        ...localSpeechFields,
+      },
+    }, {
+      allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
+    });
+  }
 
   const runtimeTier = selectedRuntimeTier === "python-full"
     || selectedRuntimeTier === "lightweight-ts"
@@ -1746,12 +1761,7 @@ function runtimeProfileFromThinProfile({
         existingProfile?.nodeMode === "mesh-node"
           ? existingProfile.localNode.enabledCapabilityPacks
           : ["native-actions"],
-      ...(existingProfile?.nodeMode === "mesh-node" && existingProfile.localNode.localSpeechPackState
-        ? { localSpeechPackState: existingProfile.localNode.localSpeechPackState }
-        : {}),
-      ...(existingProfile?.nodeMode === "mesh-node" && existingProfile.localNode.localSpeechSelection
-        ? { localSpeechSelection: existingProfile.localNode.localSpeechSelection }
-        : {}),
+      ...localSpeechFields,
       meshMembership: {
         signalingUrl,
         webrtcProfile,
@@ -1760,6 +1770,24 @@ function runtimeProfileFromThinProfile({
   }, {
     allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
   });
+}
+
+function preservedLocalSpeechFields(
+  existingProfile: AuroraRuntimeProfileV2 | undefined,
+  packageCapabilities: AuroraTauriPackageCapabilities,
+): Pick<AuroraRuntimeProfileV2["localNode"], "localSpeechPackState" | "localSpeechSelection"> {
+  if (!existingProfile) return {};
+  const sanitized = sanitizeRuntimeProfile(existingProfile, {
+    allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
+  });
+  return {
+    ...(sanitized.localNode.localSpeechPackState
+      ? { localSpeechPackState: sanitized.localNode.localSpeechPackState }
+      : {}),
+    ...(sanitized.localNode.localSpeechSelection
+      ? { localSpeechSelection: sanitized.localNode.localSpeechSelection }
+      : {}),
+  };
 }
 
 export function serializeThinProfileDocument(
