@@ -80,8 +80,8 @@ type RuntimeCore = VoiceRuntime<
 
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 enum AndroidFiniteSttProvider {
-    Local(SherpaFiniteSttEngine<NativeSttBackend>),
-    Gateway(NativeGatewayFiniteStt),
+    Local(Box<SherpaFiniteSttEngine<NativeSttBackend>>),
+    Gateway(Box<NativeGatewayFiniteStt>),
 }
 
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
@@ -134,9 +134,16 @@ impl FiniteSttPort for AndroidFiniteSttProvider {
 
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 enum AndroidTtsProvider {
-    Local(SherpaTtsProvider<NativeTtsBackend>),
-    Gateway(NativeGatewayTtsSynthesizer),
+    Local(Box<SherpaTtsProvider<NativeTtsBackend>>),
+    Gateway(Box<NativeGatewayTtsSynthesizer>),
 }
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+type AndroidWakeRuntimeParts = (
+    SherpaVadProvider<NativeVadBackend>,
+    SherpaKwsProvider<NativeKwsBackend>,
+    WakeOrchestrationConfig,
+);
 
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 #[async_trait(?Send)]
@@ -586,8 +593,8 @@ fn build_local_runtime(
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
     let mut runtime = VoiceRuntime::new(
         input,
-        AndroidFiniteSttProvider::Local(stt),
-        AndroidTtsProvider::Local(tts),
+        AndroidFiniteSttProvider::Local(Box::new(stt)),
+        AndroidTtsProvider::Local(Box::new(tts)),
         transport_for_assistant,
         output,
         sink,
@@ -607,14 +614,7 @@ fn build_local_runtime(
 fn build_wake_runtime_parts(
     manager: &SpeechPackManager,
     config: &AndroidVoiceSessionConfig,
-) -> Result<
-    Option<(
-        SherpaVadProvider<NativeVadBackend>,
-        SherpaKwsProvider<NativeKwsBackend>,
-        WakeOrchestrationConfig,
-    )>,
-    AndroidVoiceSessionCommandError,
-> {
+) -> Result<Option<AndroidWakeRuntimeParts>, AndroidVoiceSessionCommandError> {
     let Some(vad_model_id) = config
         .vad_model_id
         .as_deref()
@@ -730,9 +730,9 @@ fn build_gateway_runtime(
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
     );
     #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
-    let stt = AndroidFiniteSttProvider::Gateway(stt);
+    let stt = AndroidFiniteSttProvider::Gateway(Box::new(stt));
     #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
-    let tts = AndroidTtsProvider::Gateway(tts);
+    let tts = AndroidTtsProvider::Gateway(Box::new(tts));
     VoiceRuntime::new(
         input,
         stt,

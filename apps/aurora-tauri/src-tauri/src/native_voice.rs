@@ -1349,15 +1349,6 @@ struct DesktopWakeVad(SherpaVadProvider<NativeVadBackend>);
 #[cfg(desktop)]
 struct DesktopWakeKws(SherpaKwsProvider<NativeKwsBackend>);
 
-// The Tauri native voice actor constructs and drives wake providers on its
-// dedicated local runtime thread. These wrappers satisfy the shared native
-// provider alias without marking the underlying sherpa backend as Send.
-#[cfg(desktop)]
-unsafe impl Send for DesktopWakeVad {}
-
-#[cfg(desktop)]
-unsafe impl Send for DesktopWakeKws {}
-
 #[cfg(desktop)]
 #[async_trait(?Send)]
 impl TaskProvider for DesktopWakeVad {

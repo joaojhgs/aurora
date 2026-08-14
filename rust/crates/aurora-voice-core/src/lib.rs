@@ -967,12 +967,13 @@ impl WakeOrchestrationConfig {
 
 /// Type-erased VAD provider accepted by the shared wake runtime.
 ///
-/// Native Sherpa handles are owned and used on a single runtime thread. The
-/// provider wrapper may be moved to that thread before the session starts.
-pub type WakeVadProvider = Box<dyn VadStreamProvider + Send>;
+/// Native wake providers are constructed and driven on one local runtime
+/// thread. The wake runtime must not require their thread-affine inference
+/// handles to implement `Send`.
+pub type WakeVadProvider = Box<dyn VadStreamProvider>;
 
 /// Type-erased KWS provider accepted by the shared wake runtime.
-pub type WakeKwsProvider = Box<dyn KwsStreamProvider + Send>;
+pub type WakeKwsProvider = Box<dyn KwsStreamProvider>;
 
 struct WakeRuntime {
     vad: WakeVadProvider,
@@ -2472,6 +2473,7 @@ mod tests {
         match_sequences: BTreeSet<u64>,
         ready: bool,
         handles: FakeWakeProviderHandles,
+        _not_send: Rc<()>,
     }
 
     impl FakeKwsProvider {
@@ -2485,6 +2487,7 @@ mod tests {
                 match_sequences: match_sequences.into_iter().collect(),
                 ready: true,
                 handles,
+                _not_send: Rc::new(()),
             }
         }
     }
@@ -2607,6 +2610,7 @@ mod tests {
         segment_sequences: BTreeSet<u64>,
         ready: bool,
         handles: FakeWakeProviderHandles,
+        _not_send: Rc<()>,
     }
 
     impl FakeVadProvider {
@@ -2622,6 +2626,7 @@ mod tests {
                 segment_sequences: segment_sequences.into_iter().collect(),
                 ready: true,
                 handles,
+                _not_send: Rc::new(()),
             }
         }
     }
@@ -2749,12 +2754,13 @@ mod tests {
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[test]
-    fn native_wake_runtime_can_move_to_a_session_thread() {
-        fn assert_send<T: Send>() {}
+    fn wake_runtime_accepts_thread_affine_providers() -> Result<(), VoiceCoreError> {
+        let (runtime, _engine, _handles) =
+            runtime_with_wake_handles(Vec::new(), [1], [1], [1], 10, 10)?;
 
-        assert_send::<WakeRuntime>();
+        assert!(runtime.wake_background_ready());
+        Ok(())
     }
 
     #[test]
