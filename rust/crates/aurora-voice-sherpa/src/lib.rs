@@ -35,6 +35,7 @@ const MAX_PHRASE_REVISION_BYTES: usize = 128;
 const MAX_KWS_PHRASE_TEXT_BYTES: usize = 128;
 #[cfg(feature = "kws-sentencepiece")]
 const MAX_KWS_SENTENCEPIECE_MODEL_BYTES: u64 = 2 * 1024 * 1024;
+#[cfg(any(feature = "kws-sentencepiece", feature = "kws-pinyin"))]
 const MAX_COMPILED_KWS_TOKENS: usize = 64;
 #[cfg(feature = "kws-pinyin")]
 const MAX_KWS_TOKEN_TABLE_BYTES: u64 = 1024 * 1024;
@@ -1799,6 +1800,7 @@ fn valid_kws_phrase_text_input(value: &str) -> bool {
         && value.chars().any(|ch| !ch.is_whitespace())
 }
 
+#[cfg(any(feature = "kws-sentencepiece", test))]
 fn normalize_gigaspeech_phrase(value: &str) -> Result<String, SherpaKwsPhraseCompileError> {
     if value.len() > MAX_KWS_PHRASE_TEXT_BYTES
         || value

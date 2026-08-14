@@ -967,12 +967,12 @@ impl WakeOrchestrationConfig {
 
 /// Type-erased VAD provider accepted by the shared wake runtime.
 ///
-/// Native Sherpa handles are owned and used on a single runtime thread; the
-/// runtime itself is not required to be moved after provider construction.
-pub type WakeVadProvider = Box<dyn VadStreamProvider>;
+/// Native Sherpa handles are owned and used on a single runtime thread. The
+/// provider wrapper may be moved to that thread before the session starts.
+pub type WakeVadProvider = Box<dyn VadStreamProvider + Send>;
 
 /// Type-erased KWS provider accepted by the shared wake runtime.
-pub type WakeKwsProvider = Box<dyn KwsStreamProvider>;
+pub type WakeKwsProvider = Box<dyn KwsStreamProvider + Send>;
 
 struct WakeRuntime {
     vad: WakeVadProvider,
