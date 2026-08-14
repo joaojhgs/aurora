@@ -135,9 +135,10 @@ async def test_failed_reload_retains_previous_language_and_models() -> None:
         await service._load_models()
 
         service._language = "pt"
-        with pytest.raises(RuntimeError, match="load failed"):
-            await service.reload("services.stt")
+        await service.reload("services.stt")
 
         assert service._language == "pt"
         assert service._realtime_model is old_realtime
         assert service._accurate_model is old_accurate
+        assert service._model_status["realtime"] == "ready"
+        assert service._model_status_message["realtime"] == "previous_model_retained"

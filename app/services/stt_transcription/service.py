@@ -118,6 +118,15 @@ class TranscriptionService(BaseService):
         self._realtime_model: Any | None = None
         self._accurate_model: Any | None = None
         self._model_lock = threading.Lock()
+        self._model_cache_dir = ""
+        self._model_status: dict[str, str] = {
+            "realtime": "unavailable",
+            "accurate": "unavailable",
+        }
+        self._model_status_message: dict[str, str] = {
+            "realtime": "not_loaded",
+            "accurate": "not_loaded",
+        }
 
         # Audio buffering
         self._audio_buffer: deque[tuple[bytes, str, str]] = deque(
@@ -183,7 +192,8 @@ class TranscriptionService(BaseService):
         # Initialize VAD
         self._initialize_vad()
 
-        # Load models
+        # Load models. Missing optional model packages, offline first-run
+        # downloads, or unavailable devices must not kill the service process.
         await self._load_models()
 
         # Subscribe to audio stream
@@ -259,6 +269,20 @@ class TranscriptionService(BaseService):
                 accurate_enabled=accurate_enabled,
             )
             old_realtime, old_accurate = self._realtime_model, self._accurate_model
+            reload_failed = (
+                realtime_enabled and new_realtime is None and old_realtime is not None
+            ) or (accurate_enabled and new_accurate is None and old_accurate is not None)
+            if reload_failed:
+                if new_realtime:
+                    del new_realtime
+                if new_accurate:
+                    del new_accurate
+                self._set_model_status("realtime", "ready", "previous_model_retained")
+                self._set_model_status("accurate", "ready", "previous_model_retained")
+                log_warning(
+                    "Transcription model reload did not activate; retaining previous models"
+                )
+                return
             self._language = language
             self._language_policy = policy
             self._realtime_enabled = realtime_enabled
@@ -338,6 +362,15 @@ class TranscriptionService(BaseService):
         self._realtime_model = new_realtime
         self._accurate_model = new_accurate
 
+    def _set_model_status(self, model_role: str, status: str, message: str) -> None:
+        """Record model readiness without exposing local paths in status messages."""
+        self._model_status[model_role] = status
+        self._model_status_message[model_role] = message
+
+    def _model_ready(self, model_role: str) -> bool:
+        """Return whether a realtime or accurate model is loaded and ready."""
+        return self._model_status.get(model_role) == "ready"
+
     async def _create_models(
         self,
         transcription_cfg: Transcription,
@@ -347,60 +380,84 @@ class TranscriptionService(BaseService):
     ) -> tuple[Any | None, Any | None]:
         """Create Faster Whisper models without mutating live service state."""
 
+        raw_realtime = transcription_cfg.realtime_model
+        realtime_model_cfg = raw_realtime or RealtimeModel()
+        accurate_model_cfg = transcription_cfg.accurate_model or AccurateModel()
+
+        accurate_model_size = accurate_model_cfg.model_size or "base"
+        realtime_model_size = realtime_model_cfg.model_size or "tiny"
+        realtime_device = realtime_model_cfg.device
+        accurate_device = accurate_model_cfg.device
+        accurate_compute_type = accurate_model_cfg.compute_type or "int8"
+        realtime_compute_type = realtime_model_cfg.compute_type or "int8"
+
+        # Fallback to legacy hardware_acceleration when realtime_model block exists (matches dict truthiness)
+        if raw_realtime is not None:
+            legacy_device = get_use_hardware_acceleration("stt")
+            realtime_device = realtime_device or legacy_device
+            accurate_device = accurate_device or legacy_device
+        # Never use cwd-relative paths: Tilt sets working_dir to /app/host (often not writable).
+        from app.shared.path_utils import ensure_path_writable_or_tmp
+
+        _hf = os.environ.get("HF_HOME", "/app/data/huggingface")
+        _preferred = os.environ.get("AURORA_STT_WHISPER_DOWNLOAD_ROOT") or os.path.join(
+            _hf, "whisper"
+        )
+        download_root = ensure_path_writable_or_tmp(_preferred, tmp_leaf="faster-whisper")
+        self._model_cache_dir = download_root
+
+        realtime_model = self._load_one_model(
+            role="realtime",
+            enabled=realtime_enabled,
+            model_size=realtime_model_size,
+            device=realtime_device,
+            compute_type=realtime_compute_type,
+            download_root=download_root,
+        )
+        accurate_model = self._load_one_model(
+            role="accurate",
+            enabled=accurate_enabled,
+            model_size=accurate_model_size,
+            device=accurate_device,
+            compute_type=accurate_compute_type,
+            download_root=download_root,
+        )
+        return realtime_model, accurate_model
+
+    def _load_one_model(
+        self,
+        *,
+        role: str,
+        enabled: bool,
+        model_size: str,
+        device: str | None,
+        compute_type: str,
+        download_root: str,
+    ) -> Any | None:
+        """Load one Faster Whisper model, downloading to cache when needed."""
+        if not enabled:
+            self._set_model_status(role, "unavailable", "disabled")
+            return None
         try:
-            raw_realtime = transcription_cfg.realtime_model
-            realtime_model_cfg = raw_realtime or RealtimeModel()
-            accurate_model_cfg = transcription_cfg.accurate_model or AccurateModel()
-
-            accurate_model_size = accurate_model_cfg.model_size or "base"
-            realtime_model_size = realtime_model_cfg.model_size or "tiny"
-            realtime_device = realtime_model_cfg.device
-            accurate_device = accurate_model_cfg.device
-            accurate_compute_type = accurate_model_cfg.compute_type or "int8"
-            realtime_compute_type = realtime_model_cfg.compute_type or "int8"
-
-            # Fallback to legacy hardware_acceleration when realtime_model block exists (matches dict truthiness)
-            if raw_realtime is not None:
-                legacy_device = get_use_hardware_acceleration("stt")
-                realtime_device = realtime_device or legacy_device
-                accurate_device = accurate_device or legacy_device
-            # Never use cwd-relative paths: Tilt sets working_dir to /app/host (often not writable).
-            from app.shared.path_utils import ensure_path_writable_or_tmp
-
-            _hf = os.environ.get("HF_HOME", "/app/data/huggingface")
-            _preferred = os.environ.get("AURORA_STT_WHISPER_DOWNLOAD_ROOT") or os.path.join(
-                _hf, "whisper"
+            self._set_model_status(role, "downloading", f"preparing_{model_size}")
+            log_info(f"Loading {role} model ({model_size}) on {device}...")
+            model = _create_whisper_model(
+                model_size,
+                device=device,
+                compute_type=compute_type,
+                download_root=download_root,
             )
-            download_root = ensure_path_writable_or_tmp(_preferred, tmp_leaf="faster-whisper")
-
-            # Load realtime model (fast, lower accuracy)
-            realtime_model = None
-            if realtime_enabled:
-                log_info(f"Loading realtime model ({realtime_model_size}) on {realtime_device}...")
-                realtime_model = _create_whisper_model(
-                    realtime_model_size,
-                    device=realtime_device,
-                    compute_type=realtime_compute_type,
-                    download_root=download_root,
-                )
-                log_info(f"Realtime model loaded ({realtime_model_size})")
-
-            # Load accurate model (slower, higher accuracy)
-            accurate_model = None
-            if accurate_enabled:
-                log_info(f"Loading accurate model ({accurate_model_size}) on {accurate_device}...")
-                accurate_model = _create_whisper_model(
-                    accurate_model_size,
-                    device=accurate_device,
-                    compute_type=accurate_compute_type,
-                    download_root=download_root,
-                )
-                log_info(f"Accurate model loaded ({accurate_model_size})")
-            return realtime_model, accurate_model
-
+            self._set_model_status(role, "ready", model_size)
+            log_info(f"{role.capitalize()} model ready ({model_size})")
+            return model
         except Exception as e:
-            log_error(f"Failed to load models: {e}", exc_info=True)
-            raise
+            self._set_model_status(role, "unavailable", type(e).__name__)
+            log_warning(
+                "%s transcription model unavailable; service remains active: %s",
+                role.capitalize(),
+                e,
+            )
+            return None
 
     def _start_processing_thread(self) -> None:
         """Start the audio processing thread."""
@@ -1158,12 +1215,18 @@ class TranscriptionService(BaseService):
             # Select model
             if request.model == "accurate":
                 if self._accurate_model is None:
-                    raise RuntimeError("Accurate model not loaded")
+                    raise RuntimeError(
+                        "Accurate model unavailable: "
+                        f"{self._model_status_message.get('accurate', 'not_loaded')}"
+                    )
                 model = self._accurate_model
                 beam_size = 5
             else:
                 if self._realtime_model is None:
-                    raise RuntimeError("Realtime model not loaded")
+                    raise RuntimeError(
+                        "Realtime model unavailable: "
+                        f"{self._model_status_message.get('realtime', 'not_loaded')}"
+                    )
                 model = self._realtime_model
                 beam_size = 1
 

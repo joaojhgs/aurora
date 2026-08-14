@@ -92,10 +92,11 @@ async def test_failed_reload_retains_previous_backend_and_paths() -> None:
         service._wake_words = ["old"]
         service._sensitivity = 0.4
 
-        with pytest.raises(RuntimeError, match="backend failed"):
-            await service.reload("services.stt")
+        await service.reload("services.stt")
 
         assert service._backend is old_backend
         assert service._model_paths == ["voice_models/old.onnx"]
         assert service._wake_words == ["old"]
         old_backend.cleanup.assert_not_awaited()
+        assert service._readiness_status == "unavailable"
+        assert service._readiness_message == "models_missing"

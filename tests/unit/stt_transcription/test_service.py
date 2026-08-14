@@ -289,12 +289,42 @@ class TestModelLoading:
         await service.stop()
 
     @pytest.mark.asyncio
-    async def test_model_loading_error_propagates(self, service, mock_whisper_model, mock_vad):
-        """Test model loading error is propagated."""
+    async def test_model_loading_error_marks_unavailable(
+        self, service, mock_whisper_model, mock_vad
+    ):
+        """Model loading failures keep the service active but unavailable."""
         mock_whisper_model.side_effect = Exception("Model load failed")
 
-        with pytest.raises(Exception, match="Model load failed"):
-            await service.start()
+        await service.start()
+
+        assert service._running is True
+        assert service._realtime_model is None
+        assert service._accurate_model is None
+        assert service._model_status["realtime"] == "unavailable"
+        assert service._model_status["accurate"] == "unavailable"
+        assert service._model_status_message["realtime"] == "Exception"
+        assert service._model_status_message["accurate"] == "Exception"
+
+        await service.stop()
+
+    @pytest.mark.asyncio
+    async def test_cached_model_load_records_ready_status(
+        self, service, mock_whisper_model, mock_vad
+    ):
+        """Successful provider construction records cache-backed readiness."""
+        await service.start()
+
+        assert service._model_ready("realtime") is True
+        assert service._model_ready("accurate") is True
+        assert service._model_cache_dir
+        mock_whisper_model.assert_any_call(
+            "tiny",
+            device="cpu",
+            compute_type="int8",
+            download_root=ANY,
+        )
+
+        await service.stop()
 
 
 # ============================================================================

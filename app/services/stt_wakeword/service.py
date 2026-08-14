@@ -15,6 +15,11 @@ Features:
 from __future__ import annotations
 
 import base64
+import hashlib
+import os
+from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlparse, urlunparse
+from urllib.request import urlretrieve
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import (
@@ -62,6 +67,45 @@ from app.shared.speech_language_policy import (
 config_api = ConfigAPI()
 
 
+def _is_remote_model_path(value: str) -> bool:
+    """Return true for HTTP(S) model selections that should be cached."""
+    return urlparse(value).scheme in {"http", "https"}
+
+
+def _split_remote_model_hash(selected_path: str) -> tuple[str, str | None]:
+    """Return download URL and optional SHA-256 from query or fragment metadata."""
+    parsed = urlparse(selected_path)
+    sha_values = []
+    for raw_params in (parsed.query, parsed.fragment):
+        params = parse_qs(raw_params, keep_blank_values=False)
+        sha_values.extend(params.get("sha256", []))
+        sha_values.extend(params.get("sha256sum", []))
+    clean_url = urlunparse(parsed._replace(fragment=""))
+    expected = sha_values[0].lower() if sha_values else None
+    return clean_url, expected
+
+
+def _hash_matches(path: Path, expected_sha256: str | None) -> bool:
+    """Return true when no hash was supplied or the cached file matches it."""
+    if not expected_sha256:
+        return True
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest().lower() == expected_sha256.lower()
+
+
+async def _download_url_to_path(url: str, destination: Path) -> None:
+    """Download one selected model URL to an atomic cache path."""
+    import asyncio
+
+    tmp_path = destination.with_suffix(destination.suffix + ".part")
+    tmp_path.unlink(missing_ok=True)
+    await asyncio.to_thread(urlretrieve, url, tmp_path)
+    tmp_path.replace(destination)
+
+
 class WakeWordService(BaseService):
     """Wake Word Detection service.
 
@@ -91,6 +135,9 @@ class WakeWordService(BaseService):
         self._sensitivity = 0.5
         self._model_paths: list[str] = []
         self._language_policy = resolve_speech_language_policy("en", "auto")
+        self._readiness_status = "unavailable"
+        self._readiness_message = "not_loaded"
+        self._model_cache_dir = ""
 
         # State tracking
         self._current_stream_id: str | None = None
@@ -106,16 +153,21 @@ class WakeWordService(BaseService):
         # Load configuration
         await self._load_config()
 
-        # Initialize wake word backend
+        # Initialize wake word backend. Missing optional assets must not stop
+        # the service from staying alive for later model selection/reload.
         await self._initialize_backend()
 
         # Subscribe to audio stream
         await self.bus.subscribe_event(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
 
         self._running = True
-        self._enabled = True
+        self._enabled = self._backend is not None
 
-        log_info(f"WakeWordService started (backend: {self._backend_type.value})")
+        log_info(
+            "WakeWordService started "
+            f"(backend: {self._backend_type.value if self._backend_type else 'none'}, "
+            f"status: {self._readiness_status})"
+        )
 
     async def on_stop(self) -> None:
         """Stop the wake word service."""
@@ -156,14 +208,26 @@ class WakeWordService(BaseService):
                 wake_words=wake_words,
             )
             old_backend = self._backend
-            self._backend_type = backend_type
-            self._sensitivity = sensitivity
-            self._model_paths = model_paths
-            self._wake_words = wake_words
-            self._language_policy = language_policy
-            self._backend = new_backend
-            if old_backend:
-                await old_backend.cleanup()
+            if new_backend is not None:
+                self._backend_type = backend_type
+                self._sensitivity = sensitivity
+                self._model_paths = model_paths
+                self._wake_words = wake_words
+                self._language_policy = language_policy
+                self._backend = new_backend
+                self._enabled = True
+                if old_backend and old_backend is not self._backend:
+                    await old_backend.cleanup()
+            elif self._backend is not None:
+                log_warning("Wake word backend reload did not activate; retaining previous backend")
+            elif old_backend is None:
+                self._backend_type = backend_type
+                self._sensitivity = sensitivity
+                self._model_paths = model_paths
+                self._wake_words = wake_words
+                self._language_policy = language_policy
+                self._backend = None
+                self._enabled = False
         log_info("WakeWordService configuration reloaded")
 
     async def _load_config(self) -> None:
@@ -215,8 +279,13 @@ class WakeWordService(BaseService):
         else:
             raw_paths = model_path
 
-        # Resolve all paths relative to project root
-        model_paths = [str(resolve_path(path)) for path in raw_paths]
+        # Resolve local paths relative to project root and URL selections into cache.
+        model_paths = []
+        for path in raw_paths:
+            if isinstance(path, str) and _is_remote_model_path(path):
+                model_paths.append(await self._download_model_to_cache(path))
+            else:
+                model_paths.append(str(resolve_path(path)))
 
         # Extract wake word names from model paths (use original path for name extraction)
         wake_words = []
@@ -249,10 +318,16 @@ class WakeWordService(BaseService):
         model_paths: list[str],
         sensitivity: float,
         wake_words: list[str],
-    ) -> WakeWordBackend:
+    ) -> WakeWordBackend | None:
         """Create and initialize a backend before making it live."""
 
         log_info(f"Initializing wake word backend: {backend_type.value if backend_type else None}")
+        missing_paths = [path for path in model_paths if not Path(path).is_file()]
+        if missing_paths:
+            self._readiness_status = "unavailable"
+            self._readiness_message = "models_missing"
+            log_warning("Wake word backend unavailable; selected model files are not cached yet")
+            return None
 
         if backend_type == WakeWordBackendType.OPENWAKEWORD:
             backend = OpenWakeWordBackend(
@@ -269,8 +344,50 @@ class WakeWordService(BaseService):
         else:
             raise ValueError(f"Unknown wake word backend: {backend_type}")
 
-        await backend.initialize()
-        return backend
+        try:
+            self._readiness_status = "downloading"
+            self._readiness_message = "preparing_backend"
+            await backend.initialize()
+            self._readiness_status = "ready"
+            self._readiness_message = backend_type.value if backend_type else "ready"
+            return backend
+        except Exception as e:
+            self._readiness_status = "unavailable"
+            self._readiness_message = type(e).__name__
+            log_warning("Wake word backend unavailable; service remains active: %s", e)
+            return None
+
+    def _wakeword_cache_dir(self) -> str:
+        """Return writable cache directory for user-selected wakeword models."""
+        if self._model_cache_dir:
+            return self._model_cache_dir
+        from app.shared.path_utils import ensure_path_writable_or_tmp
+
+        preferred = os.environ.get("AURORA_WAKEWORD_MODEL_CACHE_DIR") or "voice_models/wakeword"
+        self._model_cache_dir = ensure_path_writable_or_tmp(preferred, tmp_leaf="wakeword-models")
+        return self._model_cache_dir
+
+    async def _download_model_to_cache(self, selected_path: str) -> str:
+        """Download a selected wakeword model URL into cache and verify optional SHA-256."""
+        cache_dir = Path(self._wakeword_cache_dir())
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        url, expected_sha256 = _split_remote_model_hash(selected_path)
+        parsed = urlparse(url)
+        filename = Path(unquote(parsed.path)).name or "wakeword-model"
+        destination = cache_dir / filename
+        self._readiness_status = "downloading"
+        self._readiness_message = "downloading_model"
+
+        if destination.is_file() and _hash_matches(destination, expected_sha256):
+            log_info("Wake word model cache hit: %s", destination.name)
+            return str(destination)
+
+        await _download_url_to_path(url, destination)
+        if not _hash_matches(destination, expected_sha256):
+            destination.unlink(missing_ok=True)
+            raise ValueError("downloaded wake word model failed checksum verification")
+        log_info("Wake word model cached: %s", destination.name)
+        return str(destination)
 
     async def _process_audio_data(
         self,
@@ -561,7 +678,7 @@ class WakeWordService(BaseService):
         """
         try:
             if not self._backend:
-                raise RuntimeError("Wake word backend not initialized")
+                raise RuntimeError(f"Wake word backend unavailable: {self._readiness_message}")
 
             # Decode base64 audio
             try:

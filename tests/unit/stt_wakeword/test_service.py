@@ -10,6 +10,7 @@ Tests cover:
 - Error handling
 """
 
+import hashlib
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
@@ -154,10 +155,12 @@ async def test_load_config_with_none_model_path(mock_bus):
 
 
 @pytest.mark.asyncio
-async def test_initialize_openwakeword_backend(service):
+async def test_initialize_openwakeword_backend(service, tmp_path):
     """Test initialization of OpenWakeWord backend."""
     service._backend_type = WakeWordBackendType.OPENWAKEWORD
-    service._model_paths = ["voice_models/jarvis.onnx"]
+    model_path = tmp_path / "jarvis.onnx"
+    model_path.write_bytes(b"model")
+    service._model_paths = [str(model_path)]
     service._sensitivity = 0.5
     service._wake_words = ["jarvis"]
 
@@ -169,17 +172,20 @@ async def test_initialize_openwakeword_backend(service):
         await service._initialize_backend()
 
         mock_oww_class.assert_called_once_with(
-            model_paths=["voice_models/jarvis.onnx"], sensitivity=0.5, wake_words=["jarvis"]
+            model_paths=[str(model_path)], sensitivity=0.5, wake_words=["jarvis"]
         )
         mock_backend.initialize.assert_called_once()
         assert service._backend == mock_backend
+        assert service._readiness_status == "ready"
 
 
 @pytest.mark.asyncio
-async def test_initialize_porcupine_backend(service):
+async def test_initialize_porcupine_backend(service, tmp_path):
     """Test initialization of Porcupine backend."""
     service._backend_type = WakeWordBackendType.PORCUPINE
-    service._model_paths = ["voice_models/aurora.ppn"]
+    model_path = tmp_path / "aurora.ppn"
+    model_path.write_bytes(b"model")
+    service._model_paths = [str(model_path)]
     service._sensitivity = 0.7
     service._wake_words = ["aurora"]
 
@@ -191,10 +197,70 @@ async def test_initialize_porcupine_backend(service):
         await service._initialize_backend()
 
         mock_porcupine_class.assert_called_once_with(
-            model_paths=["voice_models/aurora.ppn"], sensitivity=0.7, wake_words=["aurora"]
+            model_paths=[str(model_path)], sensitivity=0.7, wake_words=["aurora"]
         )
         mock_backend.initialize.assert_called_once()
         assert service._backend == mock_backend
+
+
+@pytest.mark.asyncio
+async def test_missing_wakeword_model_keeps_service_unavailable(service, tmp_path):
+    """Absent selected model files do not crash service startup."""
+    service._backend_type = WakeWordBackendType.OPENWAKEWORD
+    missing_model = tmp_path / "missing.onnx"
+
+    backend = await service._build_backend(
+        backend_type=service._backend_type,
+        model_paths=[str(missing_model)],
+        sensitivity=0.5,
+        wake_words=["missing"],
+    )
+
+    assert backend is None
+    assert service._readiness_status == "unavailable"
+    assert service._readiness_message == "models_missing"
+
+
+@pytest.mark.asyncio
+async def test_wakeword_model_url_downloads_and_reuses_cache(service, tmp_path, monkeypatch):
+    """URL-selected wakeword models download on demand and reuse the cached file."""
+    model_bytes = b"wakeword model bytes"
+    expected_sha = hashlib.sha256(model_bytes).hexdigest()
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setenv("AURORA_WAKEWORD_MODEL_CACHE_DIR", str(cache_dir))
+    calls = []
+
+    def fake_urlretrieve(url, destination):
+        calls.append(url)
+        Path(destination).write_bytes(model_bytes)
+
+    monkeypatch.setattr("app.services.stt_wakeword.service.urlretrieve", fake_urlretrieve)
+
+    selected = f"https://example.invalid/aurora.onnx#sha256={expected_sha}"
+    first_path = await service._download_model_to_cache(selected)
+    second_path = await service._download_model_to_cache(selected)
+
+    assert first_path == second_path
+    assert Path(first_path).read_bytes() == model_bytes
+    assert calls == ["https://example.invalid/aurora.onnx"]
+
+
+@pytest.mark.asyncio
+async def test_wakeword_model_download_rejects_bad_checksum(service, tmp_path, monkeypatch):
+    """Hash metadata from a catalog entry is enforced before activation."""
+    monkeypatch.setenv("AURORA_WAKEWORD_MODEL_CACHE_DIR", str(tmp_path / "cache"))
+
+    def fake_urlretrieve(url, destination):
+        del url
+        Path(destination).write_bytes(b"wrong bytes")
+
+    monkeypatch.setattr("app.services.stt_wakeword.service.urlretrieve", fake_urlretrieve)
+
+    with pytest.raises(ValueError, match="checksum"):
+        await service._download_model_to_cache(
+            "https://example.invalid/aurora.onnx#sha256="
+            "0000000000000000000000000000000000000000000000000000000000000000"
+        )
 
 
 @pytest.mark.asyncio
@@ -224,6 +290,7 @@ async def test_start_service(service, mock_bus):
         patch.object(service, "_load_config", new=load_config),
         patch.object(service, "_initialize_backend", new=initialize_backend),
     ):
+        initialize_backend.side_effect = lambda: setattr(service, "_backend", Mock())
         await service.start()
 
         assert service._running is True
