@@ -1809,7 +1809,7 @@ fn ios_voice_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
     let mut status = denied_native_feature_status(
         "aurora.iosMicrophoneCapture",
         "ios.voiceForegroundCapture",
-        "iOS microphone capture requires foreground AVAudioSession record permission, raw-audio consent, backend audio evidence, and a visible stop/revoke path.",
+        "iOS microphone capture requires AVAudioSession record permission, a selected local speech pack, audio consent, and a visible stop/revoke path.",
     )?;
     status.details.insert("platform".to_string(), json!("ios"));
     status
@@ -1817,10 +1817,17 @@ fn ios_voice_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
         .insert("privacyClass".to_string(), json!("raw-audio"));
     status
         .details
-        .insert("foregroundOnly".to_string(), json!(true));
+        .insert("foregroundOnly".to_string(), json!(false));
     status
         .details
-        .insert("supportsBackgroundListening".to_string(), json!(false));
+        .insert("supportsBackgroundListening".to_string(), json!(true));
+    status.details.insert(
+        "supportsUserStartedBackgroundSession".to_string(),
+        json!(true),
+    );
+    status
+        .details
+        .insert("alwaysOnWake".to_string(), json!(false));
     status
         .details
         .insert("supportsSiriReplacement".to_string(), json!(false));
@@ -1856,9 +1863,13 @@ fn ios_background_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
     let mut status = denied_native_feature_status(
         "aurora.iosBackgroundAudio",
         "ios.backgroundVoice",
-        "iOS does not allow Aurora to run always-on background assistant listening or claim default assistant ownership; use app-owned foreground, notification, Shortcut, App Intent, widget, share, or deep-link entrypoints.",
+        "iOS background voice requires the iOS app shell, record permission, a selected local speech pack, explicit user start, visible recording state, and an immediate stop path.",
     )?;
     status.details.insert("platform".to_string(), json!("ios"));
+    status.details.insert(
+        "supportsUserStartedBackgroundSession".to_string(),
+        json!(true),
+    );
     status
         .details
         .insert("alwaysOnWake".to_string(), json!(false));
@@ -4268,8 +4279,8 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     permissions.insert("aurora.nativeVoice".to_string(), desktop_platform);
     permissions.insert("aurora.iosVoiceStatus".to_string(), true);
     permissions.insert("aurora.iosBackgroundStatus".to_string(), true);
-    permissions.insert("aurora.iosMicrophoneCapture".to_string(), false);
-    permissions.insert("aurora.iosBackgroundAudio".to_string(), false);
+    permissions.insert("aurora.iosMicrophoneCapture".to_string(), ios_platform);
+    permissions.insert("aurora.iosBackgroundAudio".to_string(), ios_platform);
     permissions.insert("aurora.iosAppIntents".to_string(), false);
     permissions.insert("aurora.iosShortcuts".to_string(), false);
     permissions.insert("aurora.iosShareExtension".to_string(), false);
@@ -4317,9 +4328,9 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     capabilities.insert("native.audioCapture".to_string(), false);
     capabilities.insert("native.audioPlayback".to_string(), false);
     capabilities.insert("desktop.nativeVoice".to_string(), desktop_platform);
-    capabilities.insert("ios.voiceForegroundCapture".to_string(), false);
+    capabilities.insert("ios.voiceForegroundCapture".to_string(), ios_platform);
     capabilities.insert("ios.notifications".to_string(), false);
-    capabilities.insert("ios.backgroundVoice".to_string(), false);
+    capabilities.insert("ios.backgroundVoice".to_string(), ios_platform);
     capabilities.insert("ios.appOwnedInvocation".to_string(), ios_platform);
     capabilities.insert("ios.appIntents".to_string(), ios_platform);
     capabilities.insert("ios.shortcuts".to_string(), ios_platform);
@@ -4370,7 +4381,7 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     );
     permission_states.insert(
         "aurora.iosBackgroundAudio".to_string(),
-        "unsupported_platform".to_string(),
+        "needs_native_permission".to_string(),
     );
     permission_states.insert(
         "aurora.iosLocalLightInference".to_string(),
@@ -4404,7 +4415,7 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     );
     capability_states.insert(
         "ios.backgroundVoice".to_string(),
-        "unsupported_platform".to_string(),
+        "needs_native_permission".to_string(),
     );
     capability_states.insert(
         "ios.appOwnedInvocation".to_string(),
@@ -8628,9 +8639,17 @@ mod tests {
         assert_eq!(voice.permission, "aurora.iosMicrophoneCapture");
         assert_eq!(voice.capability, "ios.voiceForegroundCapture");
         assert_eq!(voice.details.get("privacyClass"), Some(&json!("raw-audio")));
-        assert_eq!(voice.details.get("foregroundOnly"), Some(&json!(true)));
+        assert_eq!(voice.details.get("foregroundOnly"), Some(&json!(false)));
         assert_eq!(
             voice.details.get("supportsBackgroundListening"),
+            Some(&json!(true))
+        );
+        assert_eq!(
+            voice.details.get("supportsUserStartedBackgroundSession"),
+            Some(&json!(true))
+        );
+        assert_eq!(
+            voice.details.get("alwaysOnWake"),
             Some(&json!(false))
         );
         assert_eq!(
@@ -8642,6 +8661,12 @@ mod tests {
         assert!(!background.available);
         assert_eq!(background.permission, "aurora.iosBackgroundAudio");
         assert_eq!(background.capability, "ios.backgroundVoice");
+        assert_eq!(
+            background
+                .details
+                .get("supportsUserStartedBackgroundSession"),
+            Some(&json!(true))
+        );
         assert_eq!(background.details.get("alwaysOnWake"), Some(&json!(false)));
         assert_eq!(
             background.details.get("supportsSiriReplacement"),
@@ -8650,7 +8675,7 @@ mod tests {
         assert!(background
             .reason
             .as_ref()
-            .is_some_and(|reason| reason.contains("does not allow Aurora")));
+            .is_some_and(|reason| reason.contains("requires the iOS app shell")));
     }
 
     #[test]
@@ -8863,7 +8888,8 @@ mod tests {
         assert!(swift_plugin.contains("voiceCredentialSet"));
         assert!(swift_plugin.contains("voiceCredentialStatus"));
         assert!(swift_plugin.contains("voiceCredentialDelete"));
-        assert!(swift_plugin.contains("nativeTurnTransportAvailable = false"));
+        assert!(swift_plugin.contains("let transportReady = AuroraNativePlugin.nativeTurnTransportReady()"));
+        assert!(swift_plugin.contains("\"nativeTurnTransportAvailable\": transportReady.available"));
         assert!(swift_plugin.contains("notificationStatus"));
         assert!(swift_plugin.contains("backgroundStatus"));
         assert!(swift_plugin.contains("iosEntrypointPayload"));
@@ -8882,9 +8908,19 @@ mod tests {
         assert!(swift_plugin.contains("\"ios.localLightInference.modelRuntime\": false"));
         assert!(swift_plugin.contains("\"ios.keychain.secureCredentialStorage\": true"));
         assert!(swift_plugin.contains("\"ios.biometric.adminUnlock\": true"));
-        assert!(swift_plugin.contains("\"ios.voiceForegroundCapture\": false"));
-        assert!(swift_plugin.contains("\"ios.backgroundVoice\": false"));
+        assert!(swift_plugin.contains("\"ios.voiceForegroundCapture\": true"));
+        assert!(swift_plugin.contains("\"ios.backgroundVoice\": true"));
+        assert!(!swift_plugin.contains("\"ios.backgroundVoice\": \"unsupported_platform\""));
+        assert!(swift_plugin.contains("\"supportsUserStartedBackgroundSession\": true"));
+        assert!(swift_plugin.contains("\"requiresExplicitStartInApp\": true"));
+        assert!(swift_plugin.contains("\"alwaysOnWake\": false"));
+        assert!(swift_plugin.contains("\"wakeAfterForceTermination\": false"));
         assert!(swift_plugin.contains("\"aurora.iosSiriReplacement\": false"));
+
+        let ios_info_plist = include_str!("../Info.ios.plist");
+        assert!(ios_info_plist.contains("<key>UIBackgroundModes</key>"));
+        assert!(ios_info_plist.contains("<string>audio</string>"));
+        assert!(ios_info_plist.contains("start listening in the app"));
 
         let swift_capture = include_str!(
             "../ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraIOSVoiceCapture.swift"

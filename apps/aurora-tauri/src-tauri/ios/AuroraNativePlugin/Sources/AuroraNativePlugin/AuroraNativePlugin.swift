@@ -56,6 +56,7 @@ public final class AuroraNativePlugin: Plugin {
   private let voiceCapture = AuroraIOSVoiceCapture()
   private var voiceSession: AuroraIOSVoiceSessionHost?
   private var voiceSessionGeneration: UInt64?
+  private var voiceSessionBackground = false
   private let packManager = AuroraIOSVoicePackManager.self
 
   private let mobileIntegrations: [[String: Any]] = [
@@ -281,6 +282,10 @@ public final class AuroraNativePlugin: Plugin {
         settings.authorizationStatus
       )
       let notificationState = notificationReady ? "available" : "needs_native_permission"
+      let recordPermission = AVAudioSession.sharedInstance().recordPermission
+      let transportReady = AuroraNativePlugin.nativeTurnTransportReady()
+      let voiceReady = transportReady.available && recordPermission == .granted
+      let voiceState = voiceReady ? "available" : "needs_native_permission"
       invoke.resolve([
       "platform": "ios",
       "permissions": [
@@ -306,8 +311,8 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.iosVoicePackCatalog": true,
         "aurora.iosVoiceStatus": true,
         "aurora.iosBackgroundStatus": true,
-        "aurora.iosMicrophoneCapture": false,
-        "aurora.iosBackgroundAudio": false,
+        "aurora.iosMicrophoneCapture": true,
+        "aurora.iosBackgroundAudio": true,
         "aurora.iosSiriReplacement": false,
         "aurora.audioCapture": false,
         "aurora.audioPlayback": false
@@ -333,10 +338,10 @@ public final class AuroraNativePlugin: Plugin {
         "ios.thinPeerProof": true,
         "ios.thinProfile": true,
         "ios.biometric.adminUnlock": true,
-        "ios.voiceForegroundCapture": false,
+        "ios.voiceForegroundCapture": true,
         "ios.voicePackCatalog": true,
         "ios.notifications": notificationReady,
-        "ios.backgroundVoice": false,
+        "ios.backgroundVoice": true,
         "ios.appOwnedInvocation": true,
         "ios.siriReplacement": false,
         "native.audioCapture": false,
@@ -363,8 +368,8 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.iosThinProfile": "available",
         "aurora.iosBiometricUnlock": "available",
         "aurora.iosVoicePackCatalog": "available",
-        "aurora.iosMicrophoneCapture": "needs_native_permission",
-        "aurora.iosBackgroundAudio": "unsupported_platform",
+        "aurora.iosMicrophoneCapture": voiceState,
+        "aurora.iosBackgroundAudio": voiceState,
         "aurora.iosSiriReplacement": "unsupported_platform"
       ],
       "capabilityStates": [
@@ -388,10 +393,10 @@ public final class AuroraNativePlugin: Plugin {
         "ios.thinPeerProof": "available",
         "ios.thinProfile": "available",
         "ios.biometric.adminUnlock": "available",
-        "ios.voiceForegroundCapture": "needs_native_permission",
+        "ios.voiceForegroundCapture": voiceState,
         "ios.voicePackCatalog": "available",
         "ios.notifications": notificationState,
-        "ios.backgroundVoice": "unsupported_platform",
+        "ios.backgroundVoice": voiceState,
         "ios.appOwnedInvocation": "available",
         "ios.siriReplacement": "unsupported_platform"
       ],
@@ -477,7 +482,7 @@ public final class AuroraNativePlugin: Plugin {
       ? NSNull()
       : (
         transportReady.reason
-          ?? "iOS microphone capture requires foreground microphone permission, audio consent, and a visible stop control."
+          ?? "iOS microphone capture requires microphone permission, a selected speech pack, audio consent, and a visible stop control."
       )
     invoke.resolve([
       "available": transportReady.available && permission == .granted,
@@ -489,8 +494,10 @@ public final class AuroraNativePlugin: Plugin {
         "platform": "ios",
         "recordPermission": AuroraNativePlugin.recordPermissionLabel(permission),
         "privacyClass": "raw-audio",
-        "foregroundOnly": true,
-        "supportsBackgroundListening": false,
+        "foregroundOnly": false,
+        "supportsBackgroundListening": true,
+        "supportsUserStartedBackgroundSession": true,
+        "alwaysOnWake": false,
         "nativeTurnTransportAvailable": transportReady.available,
         "nativeTurnTransportReason": transportReady.reason ?? NSNull(),
         "activePackId": transportReady.activePackId,
@@ -536,6 +543,7 @@ public final class AuroraNativePlugin: Plugin {
         if let existing = self.voiceSession, existing.status()?.active == false {
           self.voiceSession = nil
           self.voiceSessionGeneration = nil
+          self.voiceSessionBackground = false
         }
         if self.voiceSession == nil {
           self.voiceSession = try AuroraIOSVoiceSessionHost(
@@ -548,9 +556,11 @@ public final class AuroraNativePlugin: Plugin {
         } else {
           self.voiceSessionGeneration = try self.voiceSession?.start()
         }
+        self.voiceSessionBackground = background
         let stats = self.voiceSession?.captureStats() ?? self.voiceCapture.stats()
-        invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats))
+        invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats, background: background))
       } catch {
+        self.voiceSessionBackground = false
         invoke.reject("capture_unavailable")
       }
     }
@@ -579,9 +589,10 @@ public final class AuroraNativePlugin: Plugin {
       try? voiceSession?.cancel(generation: generation)
       voiceSessionGeneration = nil
     }
+    voiceSessionBackground = false
     voiceSession = nil
     voiceCapture.stop()
-    invoke.resolve(AuroraNativePlugin.voiceCapturePayload(voiceCapture.stats()))
+    invoke.resolve(AuroraNativePlugin.voiceCapturePayload(voiceCapture.stats(), background: false))
   }
 
   @objc public func voiceForegroundCaptureFinish(_ invoke: Invoke) {
@@ -591,8 +602,9 @@ public final class AuroraNativePlugin: Plugin {
     }
     do {
       try session.finish(generation: generation)
+      voiceSessionBackground = false
       let stats = session.captureStats() ?? voiceCapture.stats()
-      invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats))
+      invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats, background: false))
     } catch {
       invoke.reject("capture_finish_failed")
     }
@@ -600,7 +612,7 @@ public final class AuroraNativePlugin: Plugin {
 
   @objc public func voiceForegroundCaptureStatus(_ invoke: Invoke) {
     let stats = voiceSession?.captureStats() ?? voiceCapture.stats()
-    invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats))
+    invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats, background: voiceSessionBackground))
   }
 
   @objc public func voicePackCatalogSet(_ invoke: Invoke) {
@@ -798,15 +810,37 @@ public final class AuroraNativePlugin: Plugin {
   }
 
   @objc public func backgroundStatus(_ invoke: Invoke) throws {
+    let permission = AVAudioSession.sharedInstance().recordPermission
+    let transportReady = AuroraNativePlugin.nativeTurnTransportReady()
+    let capture = voiceSession?.captureStats() ?? voiceCapture.stats()
+    let ready = transportReady.available && permission == .granted
+    let reason: Any = ready
+      ? NSNull()
+      : (
+        transportReady.reason
+          ?? "iOS background voice requires microphone permission, a selected speech pack, explicit start in Aurora, and a visible stop control."
+      )
     invoke.resolve([
-      "available": false,
+      "available": ready,
       "permission": "aurora.iosBackgroundAudio",
       "capability": "ios.backgroundVoice",
       "source": "tauri-ios-native-plugin",
-      "reason": "iOS does not allow Aurora to run always-on background assistant listening or claim default assistant ownership; use app-owned foreground, notification, Shortcut, App Intent, widget, share, or deep-link entrypoints.",
+      "reason": reason,
       "details": [
         "platform": "ios",
+        "recordPermission": AuroraNativePlugin.recordPermissionLabel(permission),
+        "supportsUserStartedBackgroundSession": true,
+        "requiresExplicitStartInApp": true,
         "alwaysOnWake": false,
+        "wakeAfterForceTermination": false,
+        "nativeTurnTransportAvailable": transportReady.available,
+        "nativeTurnTransportReason": transportReady.reason ?? NSNull(),
+        "activePackId": transportReady.activePackId,
+        "packCatalogCount": transportReady.packCatalogCount,
+        "packCatalogReady": transportReady.packCatalogReady,
+        "captureRunning": capture.running,
+        "backgroundSessionActive": voiceSessionBackground && capture.running,
+        "stopRevokeRequired": true,
         "supportsSiriReplacement": false,
         "allowedFallbackSurfaces": [
           "foreground microphone permission",
@@ -1221,17 +1255,19 @@ public final class AuroraNativePlugin: Plugin {
     ]
   }
 
-  private static func voiceCapturePayload(_ stats: AuroraIOSVoiceCaptureStats) -> [String: Any] {
+  private static func voiceCapturePayload(_ stats: AuroraIOSVoiceCaptureStats, background: Bool) -> [String: Any] {
     [
       "available": true,
-      "foregroundOnly": true,
+      "foregroundOnly": false,
       "running": stats.running,
       "queuedChunks": stats.queuedChunks,
       "acceptedChunks": stats.acceptedChunks,
       "droppedChunks": stats.droppedChunks,
       "discontinuities": stats.discontinuities,
       "rawAudioLogged": false,
-      "backgroundListening": false,
+      "backgroundListening": background,
+      "alwaysOnWake": false,
+      "wakeAfterForceTermination": false,
       "siriReplacement": false,
       "secretsRedacted": true
     ]
