@@ -15,6 +15,7 @@ import {
 } from '../src/webrtc/index.js'
 
 const TTS_MANAGEMENT_METHOD_IDS = [
+  'TTS.ListLanguagePacks',
   'TTS.ListVoiceProfiles',
   'TTS.GetVoiceProfile',
   'TTS.UpdateVoiceProfile',

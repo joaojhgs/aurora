@@ -501,7 +501,7 @@ describe('generated backend contracts', () => {
 
     expect(parsed.speech?.language_requirement?.auto_language_candidates).toEqual([])
     expect(parsed.speech?.language_requirement?.digest).toBe(
-      'a3214d460e738357e872cdb92c328bd9c44b282acf6e2ca1d0104184528d0037'
+      '53982d21495e6e88c3da9cc1781bdcc895e532648476bde0115506277f89cf81'
     )
   })
 
@@ -541,8 +541,8 @@ describe('generated backend contracts', () => {
     expect(ttsSchema.parse({ text: 'hello', language: ' EN ' })).toMatchObject({ language: 'en' })
     expect(ttsSchema.parse({ text: 'hello', language: '   ' })).toMatchObject({ language: null })
     expect(ttsSchema.safeParse({ text: 'hello', language: 'auto' }).success).toBe(false)
-    expect(ttsSchema.safeParse({ text: 'hello', language: 'pt-BR' }).success).toBe(false)
-    expect(ttsSchema.safeParse({ text: 'hello', language: 'pt_BR' }).success).toBe(false)
+    expect(ttsSchema.parse({ text: 'hello', language: 'pt-BR' })).toMatchObject({ language: 'pt-br' })
+    expect(ttsSchema.parse({ text: 'hello', language: 'pt_BR' })).toMatchObject({ language: 'pt-br' })
 
     const sttSchema = backendContractSchemaById['Transcription.Transcribe.input.TranscribeAudioRequest']
     expect(

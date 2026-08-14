@@ -61,6 +61,9 @@ try:
         TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
         TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
         TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
+        TTS_LANGUAGE_PACK_DESCRIPTOR_INVARIANT_MARKER,
+        TTS_LANGUAGE_PACK_LIST_INVARIANT_MARKER,
+        TTS_LANGUAGE_PACK_VOICE_INVARIANT_MARKER,
         TTS_OPERATION_ID_MARKER,
         TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER,
         TTS_PROFILE_LIST_INVARIANT_MARKER,
@@ -104,6 +107,9 @@ except ModuleNotFoundError:  # pragma: no cover - direct script execution
         TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
         TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
         TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
+        TTS_LANGUAGE_PACK_DESCRIPTOR_INVARIANT_MARKER,
+        TTS_LANGUAGE_PACK_LIST_INVARIANT_MARKER,
+        TTS_LANGUAGE_PACK_VOICE_INVARIANT_MARKER,
         TTS_OPERATION_ID_MARKER,
         TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER,
         TTS_PROFILE_LIST_INVARIANT_MARKER,
@@ -146,6 +152,7 @@ SDK_CONTRACT_ALLOWLIST: tuple[str, ...] = (
     "Orchestrator.Interrupt",
     "TTS.GetCapabilities",
     "TTS.ListVoices",
+    "TTS.ListLanguagePacks",
     "TTS.ListVoiceProfiles",
     "TTS.GetVoiceProfile",
     "TTS.UpdateVoiceProfile",
@@ -644,6 +651,8 @@ for _model, _validator in (
     ("TTSSynthesizeRequest", "_normalize_language"),
     ("TTSStreamStartRequest", "_normalize_language"),
     ("TTSListVoicesRequest", "_normalize_language"),
+    ("TTSLanguagePackDescriptor", "_normalize_language"),
+    ("TTSListLanguagePacksRequest", "_normalize_language"),
     ("TTSCreateVoiceProfileRequest", "_normalize_language"),
     ("TranscribeAudioRequest", "_normalize_language"),
 ):
@@ -670,6 +679,7 @@ for _model, _validator in (
     ("TTSSynthesizeRequest", "_validate_voice_id"),
     ("TTSStreamStartRequest", "_validate_voice_id"),
     ("TTSVoiceDescriptor", "_validate_voice_id"),
+    ("TTSLanguagePackVoice", "_validate_voice_id"),
     ("TTSVoiceProfileDescriptor", "_validate_voice_id"),
     ("TTSGetVoiceProfileRequest", "_validate_voice_id"),
     ("TTSUpdateVoiceProfileRequest", "_validate_voice_id"),
@@ -719,6 +729,9 @@ for _model, _validator in (
     ("TTSCreateVoiceProfileRequest", "_validate_nonblank"),
     ("TTSUpdateVoiceProfileRequest", "_validate_label"),
     ("TTSVoiceDescriptor", "_validate_nonblank"),
+    ("TTSLanguagePackDescriptor", "_validate_nonblank"),
+    ("TTSLanguagePackDescriptor", "_validate_pack_id"),
+    ("TTSLanguagePackVoice", "_validate_nonblank"),
     ("TTSVoiceProfileDescriptor", "_validate_nonblank"),
     ("TTSVoiceImportAbortRequest", "_validate_upload_id"),
     ("TTSVoiceImportChunkRequest", "_validate_upload_id"),
@@ -759,6 +772,15 @@ _MODEL_INVARIANT_VERIFIERS = {
     ("TTSCapabilities", "_validate_capabilities"): TTS_CAPABILITIES_INVARIANT_MARKER,
     ("TTSCapabilities", "_validate_sample_rates"): TTS_CAPABILITIES_INVARIANT_MARKER,
     ("TTSVoiceDescriptor", "_validate_ready_voice"): TTS_VOICE_DESCRIPTOR_INVARIANT_MARKER,
+    ("TTSLanguagePackVoice", "_validate_voice_state"): (
+        TTS_LANGUAGE_PACK_VOICE_INVARIANT_MARKER
+    ),
+    ("TTSLanguagePackDescriptor", "_validate_pack_state"): (
+        TTS_LANGUAGE_PACK_DESCRIPTOR_INVARIANT_MARKER
+    ),
+    ("TTSListLanguagePacksResponse", "_validate_unique_packs"): (
+        TTS_LANGUAGE_PACK_LIST_INVARIANT_MARKER
+    ),
     ("TTSListVoicesResponse", "_validate_use_safe_voices"): TTS_VOICE_LIST_INVARIANT_MARKER,
     ("TTSVoiceProfileDescriptor", "_validate_profile_state"): (
         TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER
@@ -1413,6 +1435,9 @@ def _annotate_tts_validator_fields(title: str, schema: dict[str, Any]) -> None:
     invariant_markers = {
         "TTSCapabilities": TTS_CAPABILITIES_INVARIANT_MARKER,
         "TTSVoiceDescriptor": TTS_VOICE_DESCRIPTOR_INVARIANT_MARKER,
+        "TTSLanguagePackVoice": TTS_LANGUAGE_PACK_VOICE_INVARIANT_MARKER,
+        "TTSLanguagePackDescriptor": TTS_LANGUAGE_PACK_DESCRIPTOR_INVARIANT_MARKER,
+        "TTSListLanguagePacksResponse": TTS_LANGUAGE_PACK_LIST_INVARIANT_MARKER,
         "TTSListVoicesResponse": TTS_VOICE_LIST_INVARIANT_MARKER,
         "TTSVoiceProfileDescriptor": TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER,
         "TTSListVoiceProfilesResponse": TTS_PROFILE_LIST_INVARIANT_MARKER,
@@ -1452,6 +1477,8 @@ def _annotate_tts_validator_fields(title: str, schema: dict[str, Any]) -> None:
     nonblank_fields_by_title = {
         "TTSResidentLanguagePack": ("pack_id",),
         "TTSVoiceDescriptor": ("display_name", "revision"),
+        "TTSLanguagePackDescriptor": ("pack_id", "display_name", "revision"),
+        "TTSLanguagePackVoice": ("display_name", "revision"),
         "TTSVoiceProfileDescriptor": ("display_name", "revision"),
         "TTSUpdateVoiceProfileRequest": ("expected_revision", "display_name"),
         "TTSInstallVoiceProfileRequest": ("expected_revision",),
