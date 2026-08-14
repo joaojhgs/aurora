@@ -15,10 +15,14 @@ use aurora_voice_engine::{
     InstallState, LifecycleSnapshot, ModelPackError, ModelPackFile, ModelStore, ModelStoreScope,
     PackTask, RuntimeSelection, SelectedVariant, StoreStatus, StoredFile, VerifiedManifest,
 };
+use bzip2::read::BzDecoder;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
+use std::io::{Cursor, Read};
+use std::path::{Component, Path, PathBuf};
+use tar::EntryType;
 use thiserror::Error;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -44,6 +48,7 @@ const WASM_MAX_ID_BYTES: usize = 96;
 const WASM_MAX_SURFACE_BYTES: usize = 64;
 const JS_MAX_SAFE_INTEGER_MICROS: f64 = 9_007_199_254_740_991.0;
 const WASM_DEFAULT_ROUTE_REVISION: RouteRevision = RouteRevision(1);
+const ARCHIVE_COPY_CHUNK_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -201,6 +206,45 @@ pub struct WebLoadedModelArtifact {
     pub sha256: String,
     pub byte_size: u64,
     pub bytes: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WasmArchiveExtractRequest {
+    pub expected_root: String,
+    pub expected_paths: Vec<String>,
+    #[serde(default = "default_archive_max_entries")]
+    pub max_entries: usize,
+    #[serde(default = "default_archive_max_file_bytes")]
+    pub max_file_bytes: u64,
+    #[serde(default = "default_archive_max_total_bytes")]
+    pub max_total_bytes: u64,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WasmArchiveExtractedFile {
+    pub path: String,
+    pub byte_size: u64,
+    pub sha256: String,
+    pub bytes: Vec<u8>,
+}
+
+impl std::fmt::Debug for WasmArchiveExtractedFile {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("WasmArchiveExtractedFile")
+            .field("path", &self.path)
+            .field("byte_size", &self.byte_size)
+            .field("sha256", &"<redacted>")
+            .field("byte_len", &self.bytes.len())
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WasmArchiveExtractReceipt {
+    pub files: Vec<WasmArchiveExtractedFile>,
+    pub entry_count: usize,
+    pub total_bytes: u64,
 }
 
 impl std::fmt::Debug for WebLoadedModelArtifact {
@@ -925,12 +969,219 @@ impl AuroraVoiceWasmRuntime {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn aurora_extract_tar_bzip2_archive(
+    archive_bytes: &[u8],
+    request: JsValue,
+) -> Result<JsValue, JsValue> {
+    let request: WasmArchiveExtractRequest =
+        serde_wasm_bindgen::from_value(request).map_err(|_| js_error("archive_request"))?;
+    serde_wasm_bindgen::to_value(
+        &extract_tar_bzip2_archive(archive_bytes, request).map_err(js_facade_error)?,
+    )
+    .map_err(|_| js_error("serialize"))
+}
+
 fn default_wasm_max_frames() -> usize {
     WASM_MAX_FRAMES
 }
 
 fn default_wasm_max_samples() -> usize {
     WASM_MAX_SAMPLES
+}
+
+fn default_archive_max_entries() -> usize {
+    2048
+}
+
+fn default_archive_max_file_bytes() -> u64 {
+    256 * 1024 * 1024
+}
+
+fn default_archive_max_total_bytes() -> u64 {
+    1024 * 1024 * 1024
+}
+
+pub fn extract_tar_bzip2_archive(
+    archive_bytes: &[u8],
+    request: WasmArchiveExtractRequest,
+) -> Result<WasmArchiveExtractReceipt, WasmFacadeError> {
+    let expected_root = safe_archive_path_text(&request.expected_root)?;
+    if request.expected_paths.is_empty()
+        || request.expected_paths.len() > request.max_entries
+        || request.max_entries == 0
+        || request.max_file_bytes == 0
+        || request.max_total_bytes == 0
+    {
+        return Err(WasmFacadeError::new("archive_bounds"));
+    }
+    let mut expected_paths = BTreeSet::new();
+    for path in &request.expected_paths {
+        let normalized = safe_archive_path_text(path)?;
+        if !archive_path_starts_with(&normalized, &expected_root) {
+            return Err(WasmFacadeError::new("archive_root"));
+        }
+        if !expected_paths.insert(pathbuf_to_slash_path(&normalized)) {
+            return Err(WasmFacadeError::new("archive_duplicate"));
+        }
+    }
+
+    let decoder = BzDecoder::new(Cursor::new(archive_bytes));
+    let mut archive = tar::Archive::new(decoder);
+    let mut seen = BTreeSet::new();
+    let mut files = BTreeMap::new();
+    let mut entry_count = 0_usize;
+    let mut total_bytes = 0_u64;
+
+    for entry in archive
+        .entries()
+        .map_err(|_| WasmFacadeError::new("archive_invalid"))?
+    {
+        entry_count = entry_count
+            .checked_add(1)
+            .ok_or_else(|| WasmFacadeError::new("archive_bounds"))?;
+        if entry_count > request.max_entries {
+            return Err(WasmFacadeError::new("archive_bounds"));
+        }
+        let mut entry = entry.map_err(|_| WasmFacadeError::new("archive_invalid"))?;
+        let entry_type = entry.header().entry_type();
+        if !(entry_type == EntryType::Regular || entry_type == EntryType::Directory) {
+            return Err(WasmFacadeError::new("archive_entry"));
+        }
+        let path = safe_archive_path(
+            entry
+                .path()
+                .map_err(|_| WasmFacadeError::new("archive_invalid"))?
+                .as_ref(),
+        )?;
+        if !archive_path_starts_with(&path, &expected_root) {
+            return Err(WasmFacadeError::new("archive_root"));
+        }
+        let path_key = pathbuf_to_slash_path(&path);
+        if !seen.insert(path_key.clone()) {
+            return Err(WasmFacadeError::new("archive_duplicate"));
+        }
+        if entry_type == EntryType::Directory {
+            continue;
+        }
+        let declared = entry
+            .header()
+            .size()
+            .map_err(|_| WasmFacadeError::new("archive_invalid"))?;
+        if declared > request.max_file_bytes {
+            return Err(WasmFacadeError::new("archive_bounds"));
+        }
+        total_bytes = total_bytes
+            .checked_add(declared)
+            .ok_or_else(|| WasmFacadeError::new("archive_bounds"))?;
+        if total_bytes > request.max_total_bytes {
+            return Err(WasmFacadeError::new("archive_bounds"));
+        }
+        if !expected_paths.contains(&path_key) {
+            return Err(WasmFacadeError::new("archive_unexpected"));
+        }
+        let bytes = read_tar_entry_exact(&mut entry, declared)?;
+        let sha256 = encode_hex(&Sha256::digest(&bytes));
+        files.insert(
+            path_key.clone(),
+            WasmArchiveExtractedFile {
+                path: path_key,
+                byte_size: declared,
+                sha256,
+                bytes,
+            },
+        );
+    }
+    if files.len() != expected_paths.len() {
+        return Err(WasmFacadeError::new("archive_missing"));
+    }
+    Ok(WasmArchiveExtractReceipt {
+        files: expected_paths
+            .iter()
+            .filter_map(|path| files.remove(path))
+            .collect(),
+        entry_count,
+        total_bytes,
+    })
+}
+
+fn read_tar_entry_exact<R: Read>(
+    reader: &mut R,
+    expected: u64,
+) -> Result<Vec<u8>, WasmFacadeError> {
+    let capacity = usize::try_from(expected).map_err(|_| WasmFacadeError::new("archive_bounds"))?;
+    let mut bytes = Vec::with_capacity(capacity);
+    let mut remaining = expected;
+    let mut buffer = [0_u8; ARCHIVE_COPY_CHUNK_BYTES];
+    while remaining > 0 {
+        let max_read = usize::try_from(remaining.min(buffer.len() as u64))
+            .map_err(|_| WasmFacadeError::new("archive_bounds"))?;
+        let read = reader
+            .read(&mut buffer[..max_read])
+            .map_err(|_| WasmFacadeError::new("archive_invalid"))?;
+        if read == 0 {
+            return Err(WasmFacadeError::new("archive_invalid"));
+        }
+        bytes.extend_from_slice(&buffer[..read]);
+        remaining -= u64::try_from(read).map_err(|_| WasmFacadeError::new("archive_bounds"))?;
+    }
+    Ok(bytes)
+}
+
+fn safe_archive_path(path: &Path) -> Result<PathBuf, WasmFacadeError> {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::Normal(segment) => {
+                let segment = segment.to_string_lossy();
+                if segment.is_empty()
+                    || segment == "."
+                    || segment == ".."
+                    || segment.contains('\\')
+                    || segment.contains(':')
+                    || !segment
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+                {
+                    return Err(WasmFacadeError::new("archive_path"));
+                }
+                normalized.push(segment.as_ref());
+            }
+            _ => return Err(WasmFacadeError::new("archive_path")),
+        }
+    }
+    if normalized.components().next().is_none() {
+        return Err(WasmFacadeError::new("archive_path"));
+    }
+    Ok(normalized)
+}
+
+fn safe_archive_path_text(value: &str) -> Result<PathBuf, WasmFacadeError> {
+    if value.trim() != value || value.is_empty() || value.starts_with("//") {
+        return Err(WasmFacadeError::new("archive_path"));
+    }
+    safe_archive_path(Path::new(value))
+}
+
+fn archive_path_starts_with(path: &Path, root: &Path) -> bool {
+    let mut path_components = path.components();
+    for root_component in root.components() {
+        if path_components.next() != Some(root_component) {
+            return false;
+        }
+    }
+    true
+}
+
+fn pathbuf_to_slash_path(path: &Path) -> String {
+    path.components()
+        .filter_map(|component| match component {
+            Component::Normal(segment) => Some(segment.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 fn validate_ascii_id(value: &str, max_bytes: usize) -> Result<(), WasmFacadeError> {
@@ -3307,6 +3558,9 @@ mod wasm_facade_tests {
         RuntimeGates, RuntimeTarget, ShapeMetadata, SignatureVerifier, TargetArch, TargetOs,
         TrustPolicy,
     };
+    use bzip2::write::BzEncoder;
+    use bzip2::Compression;
+    use tar::{Builder, Header};
 
     fn runtime() -> AuroraVoiceWasmSessionCore {
         AuroraVoiceWasmSessionCore::new(WasmRuntimeConfig {
@@ -3338,6 +3592,111 @@ mod wasm_facade_tests {
             channels: WASM_CHANNELS,
             samples,
         }
+    }
+
+    #[test]
+    fn extracts_declared_tar_bzip2_files_with_hashes() {
+        let archive = test_tar_bzip2(&[
+            ("voice-root/", None, EntryType::Directory),
+            (
+                "voice-root/model.onnx",
+                Some(b"model-bytes".as_slice()),
+                EntryType::Regular,
+            ),
+            (
+                "voice-root/tokens.txt",
+                Some(b"tokens".as_slice()),
+                EntryType::Regular,
+            ),
+        ]);
+
+        let receipt = extract_tar_bzip2_archive(
+            &archive,
+            WasmArchiveExtractRequest {
+                expected_root: "voice-root".to_owned(),
+                expected_paths: vec![
+                    "voice-root/model.onnx".to_owned(),
+                    "voice-root/tokens.txt".to_owned(),
+                ],
+                max_entries: 8,
+                max_file_bytes: 64,
+                max_total_bytes: 128,
+            },
+        )
+        .expect("extract");
+
+        assert_eq!(receipt.entry_count, 3);
+        assert_eq!(receipt.total_bytes, 17);
+        assert_eq!(receipt.files[0].path, "voice-root/model.onnx");
+        assert_eq!(receipt.files[0].bytes, b"model-bytes");
+        assert_eq!(receipt.files[0].sha256, sha256_bytes(b"model-bytes"));
+        assert_eq!(receipt.files[1].path, "voice-root/tokens.txt");
+    }
+
+    #[test]
+    fn rejects_unsafe_archive_entries() {
+        for path in [
+            "../model.onnx",
+            "/voice-root/model.onnx",
+            "voice-root/../model.onnx",
+            "voice-root\\model.onnx",
+            "C:/model.onnx",
+        ] {
+            assert_eq!(
+                safe_archive_path_text(path)
+                    .expect_err("unsafe path")
+                    .code(),
+                "archive_path"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_links_unexpected_paths_and_resource_limits() {
+        let link_archive = test_tar_bzip2(&[("voice-root/model.onnx", None, EntryType::Symlink)]);
+        assert_eq!(
+            extract_tar_bzip2_archive(&link_archive, archive_request())
+                .expect_err("link")
+                .code(),
+            "archive_entry"
+        );
+
+        let unexpected = test_tar_bzip2(&[
+            (
+                "voice-root/model.onnx",
+                Some(b"ok".as_slice()),
+                EntryType::Regular,
+            ),
+            (
+                "voice-root/extra.onnx",
+                Some(b"extra".as_slice()),
+                EntryType::Regular,
+            ),
+        ]);
+        assert_eq!(
+            extract_tar_bzip2_archive(&unexpected, archive_request())
+                .expect_err("unexpected")
+                .code(),
+            "archive_unexpected"
+        );
+
+        let large = test_tar_bzip2(&[(
+            "voice-root/model.onnx",
+            Some(b"too-large".as_slice()),
+            EntryType::Regular,
+        )]);
+        assert_eq!(
+            extract_tar_bzip2_archive(
+                &large,
+                WasmArchiveExtractRequest {
+                    max_file_bytes: 4,
+                    ..archive_request()
+                }
+            )
+            .expect_err("file limit")
+            .code(),
+            "archive_bounds"
+        );
     }
 
     struct AcceptingVerifier;
@@ -3984,6 +4343,51 @@ mod wasm_facade_tests {
                 .code(),
             "audio_bounds"
         );
+    }
+
+    fn archive_request() -> WasmArchiveExtractRequest {
+        WasmArchiveExtractRequest {
+            expected_root: "voice-root".to_owned(),
+            expected_paths: vec!["voice-root/model.onnx".to_owned()],
+            max_entries: 8,
+            max_file_bytes: 64,
+            max_total_bytes: 128,
+        }
+    }
+
+    fn test_tar_bzip2(entries: &[(&str, Option<&[u8]>, EntryType)]) -> Vec<u8> {
+        let encoder = BzEncoder::new(Vec::new(), Compression::best());
+        let mut builder = Builder::new(encoder);
+        for (path, bytes, entry_type) in entries {
+            let mut header = Header::new_gnu();
+            header.set_entry_type(*entry_type);
+            header.set_mode(0o644);
+            match bytes {
+                Some(bytes) => {
+                    header.set_size(bytes.len() as u64);
+                    header.set_cksum();
+                    builder
+                        .append_data(&mut header, *path, *bytes)
+                        .expect("append file");
+                }
+                None => {
+                    header.set_size(0);
+                    header.set_cksum();
+                    builder
+                        .append_data(&mut header, *path, std::io::empty())
+                        .expect("append entry");
+                }
+            }
+        }
+        builder
+            .into_inner()
+            .expect("finish tar")
+            .finish()
+            .expect("finish bzip2")
+    }
+
+    fn sha256_bytes(bytes: &[u8]) -> String {
+        encode_hex(&Sha256::digest(bytes))
     }
 
     #[test]

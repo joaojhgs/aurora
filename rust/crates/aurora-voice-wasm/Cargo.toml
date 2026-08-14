@@ -14,9 +14,11 @@ async-trait.workspace = true
 aurora-contracts = { path = "../aurora-contracts" }
 aurora-voice-core = { path = "../aurora-voice-core" }
 aurora-voice-engine = { path = "../aurora-voice-engine" }
+bzip2.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+tar.workspace = true
 thiserror.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

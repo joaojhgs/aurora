@@ -14,3 +14,5 @@ export class AuroraVoiceWasmRuntime {
   capabilities(): unknown
   resource_report(atMicros: number): unknown
 }
+
+export function aurora_extract_tar_bzip2_archive(archiveBytes: Uint8Array, request: unknown): unknown

@@ -1,5 +1,6 @@
 import type { AuroraWebModelStoreHost } from './model-store-host.js'
 import type { AuroraVoiceWebModelDescriptor } from './types.js'
+import type * as AuroraVoiceWasmModule from './wasm/aurora_voice_wasm.js'
 
 export const AURORA_NON_PRODUCTION_MODEL_PACK_KEY_ID = 'aurora-nonproduction-web-wasm-test'
 export const AURORA_MODEL_PACK_SIGNATURE_ALGORITHM = 'ed25519'
@@ -27,8 +28,18 @@ export interface AuroraBrowserModelPackFile {
   readonly sha256: string
   readonly byte_size: number
   readonly installed_size: number
-  readonly compression: string
+  readonly compression: 'none' | 'tar_bzip2'
+  readonly archive_root?: string
+  readonly archive_entries?: readonly AuroraBrowserModelPackArchiveEntry[]
   readonly dependencies?: readonly string[]
+}
+
+export interface AuroraBrowserModelPackArchiveEntry {
+  readonly file_id: string
+  readonly task: string
+  readonly path: string
+  readonly sha256?: string
+  readonly byte_size?: number
 }
 
 export interface AuroraBrowserModelPackVariant {
@@ -89,10 +100,36 @@ export interface AuroraBrowserModelPackInstallOptions extends AuroraBrowserModel
    * supplied abort signal, and fail closed instead of following redirects.
    */
   readonly fetchBytes?: (url: string, signal?: AbortSignal) => Promise<Uint8Array>
+  readonly extractTarBzip2Archive?: AuroraBrowserTarBzip2Extractor
+  readonly archiveLimits?: AuroraBrowserArchiveInstallLimits
   /** Cancels verification, download, and staging before atomic promotion begins. */
   readonly signal?: AbortSignal
   readonly nowMs?: () => number
 }
+
+export interface AuroraBrowserArchiveInstallLimits {
+  readonly maxEntries?: number
+  readonly maxFileBytes?: number
+  readonly maxTotalBytes?: number
+}
+
+export interface AuroraBrowserExtractedArchiveFile {
+  readonly path: string
+  readonly byteSize: number
+  readonly sha256: string
+  readonly bytes: Uint8Array
+}
+
+export type AuroraBrowserTarBzip2Extractor = (
+  archiveBytes: Uint8Array,
+  request: {
+    readonly expectedRoot: string
+    readonly expectedPaths: readonly string[]
+    readonly maxEntries: number
+    readonly maxFileBytes: number
+    readonly maxTotalBytes: number
+  }
+) => Promise<readonly AuroraBrowserExtractedArchiveFile[]>
 
 export interface AuroraBrowserModelPackIdentity {
   readonly packId: string
@@ -153,6 +190,19 @@ interface StoredFileRecord {
   readonly byte_size: number
 }
 
+interface InstallRecordPlan {
+  readonly fileId: string
+  readonly sha256: string
+  readonly byteLength: number
+  readonly bytes: Uint8Array
+}
+
+interface ExpectedInstalledRecord {
+  readonly fileId: string
+  readonly sha256?: string
+  readonly byteLength?: number
+}
+
 export interface AuroraBrowserManifestFileReceipt {
   readonly file_id: string
   readonly sha256: string
@@ -192,6 +242,12 @@ interface ResolvedManifestTrust {
   readonly verificationMode: AuroraBrowserModelPackVerificationMode
   readonly expectedManifestSha256?: string
 }
+
+const DEFAULT_ARCHIVE_LIMITS: Required<AuroraBrowserArchiveInstallLimits> = Object.freeze({
+  maxEntries: 2048,
+  maxFileBytes: 256 * 1024 * 1024,
+  maxTotalBytes: 1024 * 1024 * 1024
+})
 
 export async function verifyBrowserModelPackManifest(
   manifest: AuroraBrowserModelPackManifest,
@@ -246,7 +302,9 @@ export async function installVerifiedBrowserModelPack({
   trustedAssetBaseUrl,
   trustedAssetOrigins,
   signal,
-  nowMs = Date.now
+  nowMs = Date.now,
+  extractTarBzip2Archive = defaultExtractTarBzip2Archive,
+  archiveLimits
 }: AuroraBrowserModelPackInstallOptions): Promise<AuroraBrowserModelPackInstallReceipt> {
   throwIfAborted(signal)
   const trustOptions: AuroraBrowserModelPackTrustOptions = { allowNonProductionTestSignature }
@@ -269,7 +327,8 @@ export async function installVerifiedBrowserModelPack({
   const stagedKeys = new Set<string>()
   const preexistingPromotedKeys = new Set<string>()
   try {
-    for (const [fileIndex, fileId] of verificationReceipt.file_ids.entries()) {
+    const recordPlans: InstallRecordPlan[] = []
+    for (const fileId of verificationReceipt.file_ids) {
       throwIfAborted(signal)
       const file = manifest.files.find((candidate) => candidate.file_id === fileId)
       const verifiedFile = verificationReceipt.files.find((candidate) => candidate.file_id === fileId)
@@ -277,7 +336,6 @@ export async function installVerifiedBrowserModelPack({
         throw modelPackError('receipt')
       }
       const assetUrl = resolveTrustedAssetUrl(file.url, assetPolicy)
-      const storageKey = fileStorageKey(manifest.pack_id, verificationReceipt.manifest_sha256, fileIndex)
       let bytes: Uint8Array
       try {
         bytes = await fetchBytes(assetUrl, signal)
@@ -290,21 +348,26 @@ export async function installVerifiedBrowserModelPack({
       const digest = await sha256Hex(bytes)
       throwIfAborted(signal)
       if (digest !== file.sha256) throw modelPackError('hash')
+      recordPlans.push(...await createInstallRecordPlans(file, bytes, extractTarBzip2Archive, archiveLimits, signal))
+    }
+    for (const [recordIndex, plan] of recordPlans.entries()) {
+      throwIfAborted(signal)
+      const storageKey = fileStorageKey(manifest.pack_id, verificationReceipt.manifest_sha256, recordIndex)
       stagedKeys.add(storageKey)
       if (await host.promotedStat(storageKey) !== null) preexistingPromotedKeys.add(storageKey)
       throwIfAborted(signal)
       await host.clearStaging(storageKey)
       throwIfAborted(signal)
-      await host.appendStaging(storageKey, 0, bytes)
+      await host.appendStaging(storageKey, 0, plan.bytes)
       throwIfAborted(signal)
       records.push({
         storage_key: storageKey,
         pack_id: manifest.pack_id,
         pack_version: manifest.pack_version,
         variant_id: variant.variant_id,
-        file_id: file.file_id,
-        sha256: digest,
-        byte_size: bytes.byteLength
+        file_id: plan.fileId,
+        sha256: plan.sha256,
+        byte_size: plan.byteLength
       })
     }
     throwIfAborted(signal)
@@ -424,7 +487,7 @@ export async function openActiveBrowserModelPack(
   const freshReceipt = await verifyBrowserModelPackManifest(manifest, options)
   const variant = selectReceiptVariant(manifest, freshReceipt)
   validateVariantTaskScope(manifest, variant, normalizedScope.task)
-  validateActiveReceipt(active, freshReceipt)
+  validateActiveReceipt(active, manifest, variant, freshReceipt)
   const files: AuroraBrowserImmutableModelFile[] = []
   for (const record of active.files) {
     const stat = await host.promotedStat(record.storage_key)
@@ -508,8 +571,16 @@ function validateManifestShape(manifest: AuroraBrowserModelPackManifest): void {
     if (!isSha256(file.sha256) || !Number.isSafeInteger(file.byte_size) || file.byte_size <= 0) {
       throw modelPackError('size')
     }
-    if (!Number.isSafeInteger(file.installed_size) || file.installed_size < file.byte_size) throw modelPackError('size')
-    if (file.compression !== 'none') throw modelPackError('compression')
+    if (!Number.isSafeInteger(file.installed_size) || file.installed_size <= 0) throw modelPackError('size')
+    if (file.compression === 'none') {
+      if (file.installed_size < file.byte_size || file.archive_root !== undefined || file.archive_entries !== undefined) {
+        throw modelPackError('compression')
+      }
+    } else if (file.compression === 'tar_bzip2') {
+      validateArchiveFileShape(file, manifest.tasks)
+    } else {
+      throw modelPackError('compression')
+    }
     if (!manifest.tasks.includes(file.task)) throw modelPackError('variant_file')
   }
   if (!hasUniqueStrings(manifest.variants.map((variant) => variant.variant_id))) throw modelPackError('duplicate_id')
@@ -518,15 +589,38 @@ function validateManifestShape(manifest: AuroraBrowserModelPackManifest): void {
       throw modelPackError('invalid_id')
     }
     if (!hasUniqueStrings(variant.file_ids)) throw modelPackError('duplicate_id')
-    if (variant.model_bindings !== undefined && !validVariantModelBindings(variant.model_bindings, variant.file_ids)) {
+    if (variant.model_bindings !== undefined && !validVariantModelBindings(variant.model_bindings, manifest.files, variant.file_ids)) {
       throw modelPackError('model_metadata')
     }
   }
 }
 
-function validVariantModelBindings(bindings: readonly AuroraVoiceWebModelDescriptor[], variantFileIds: readonly string[]): boolean {
+function validateArchiveFileShape(file: AuroraBrowserModelPackFile, tasks: readonly string[]): void {
+  if (!safeArchivePath(file.archive_root) || !Array.isArray(file.archive_entries) || file.archive_entries.length === 0) {
+    throw modelPackError('compression')
+  }
+  if (!hasUniqueStrings(file.archive_entries.map((entry) => entry.file_id))) throw modelPackError('duplicate_id')
+  if (!hasUniqueStrings(file.archive_entries.map((entry) => entry.path))) throw modelPackError('duplicate_id')
+  let installedTotal = 0
+  for (const entry of file.archive_entries) {
+    if (!safeId(entry.file_id) || !safeId(entry.task) || !tasks.includes(entry.task)) throw modelPackError('invalid_id')
+    if (!safeArchivePath(entry.path) || !archivePathStartsWith(entry.path, file.archive_root)) throw modelPackError('compression')
+    if (entry.sha256 !== undefined && !isSha256(entry.sha256)) throw modelPackError('hash')
+    if (entry.byte_size !== undefined && (!Number.isSafeInteger(entry.byte_size) || entry.byte_size <= 0)) {
+      throw modelPackError('size')
+    }
+    if (entry.byte_size !== undefined) installedTotal = checkedAdd(installedTotal, entry.byte_size)
+  }
+  if (installedTotal > file.installed_size) throw modelPackError('size')
+}
+
+function validVariantModelBindings(
+  bindings: readonly AuroraVoiceWebModelDescriptor[],
+  manifestFiles: readonly AuroraBrowserModelPackFile[],
+  variantFileIds: readonly string[]
+): boolean {
   if (!Array.isArray(bindings) || bindings.length === 0 || bindings.length > 64) return false
-  const ids = new Set(variantFileIds)
+  const ids = new Set(expandedVariantFileIds(manifestFiles, variantFileIds))
   return bindings.every((model) => (
     (model.task === 'vad' || model.task === 'kws' || model.task === 'stt' || model.task === 'tts') &&
     (model.family === 'silero-vad' || model.family === 'moonshine' || model.family === 'whisper' || model.family === 'sense-voice' || model.family === 'sherpa-kws-transducer' || model.family === 'piper' || model.family === 'pockettts') &&
@@ -541,6 +635,23 @@ function validVariantModelBindings(bindings: readonly AuroraVoiceWebModelDescrip
       file.virtualPath.startsWith('/')
     ))
   ))
+}
+
+function expandedVariantFileIds(
+  manifestFiles: readonly AuroraBrowserModelPackFile[],
+  variantFileIds: readonly string[]
+): readonly string[] {
+  const ids: string[] = []
+  for (const fileId of variantFileIds) {
+    const file = manifestFiles.find((candidate) => candidate.file_id === fileId)
+    if (!file) continue
+    if (file.compression === 'tar_bzip2') {
+      ids.push(...(file.archive_entries ?? []).map((entry) => entry.file_id))
+    } else {
+      ids.push(file.file_id)
+    }
+  }
+  return ids
 }
 
 function selectWebWasmVariant(manifest: AuroraBrowserModelPackManifest): AuroraBrowserModelPackVariant {
@@ -575,7 +686,7 @@ function validateVariantTaskScope(
 ): void {
   const hasTaskFile = variant.file_ids.some((fileId) => {
     const file = manifest.files.find((candidate) => candidate.file_id === fileId)
-    return file?.task === task
+    return file?.task === task || file?.archive_entries?.some((entry) => entry.task === task) === true
   })
   if (!hasTaskFile) throw modelPackError('scope')
 }
@@ -588,6 +699,116 @@ async function defaultFetchBytes(url: string, signal?: AbortSignal): Promise<Uin
   })
   if (!response.ok) throw modelPackError('network')
   return new Uint8Array(await response.arrayBuffer())
+}
+
+async function createInstallRecordPlans(
+  file: AuroraBrowserModelPackFile,
+  bytes: Uint8Array,
+  extractTarBzip2Archive: AuroraBrowserTarBzip2Extractor,
+  archiveLimits: AuroraBrowserArchiveInstallLimits | undefined,
+  signal: AbortSignal | undefined
+): Promise<readonly InstallRecordPlan[]> {
+  if (file.compression === 'none') {
+    return [{ fileId: file.file_id, sha256: file.sha256, byteLength: bytes.byteLength, bytes }]
+  }
+  if (file.compression !== 'tar_bzip2') throw modelPackError('compression')
+  const entries = file.archive_entries ?? []
+  const root = file.archive_root
+  if (root === undefined || entries.length === 0) throw modelPackError('compression')
+  const limits = normalizeArchiveLimits(archiveLimits)
+  const extracted = await extractTarBzip2Archive(bytes, {
+    expectedRoot: root,
+    expectedPaths: entries.map((entry) => entry.path),
+    maxEntries: limits.maxEntries,
+    maxFileBytes: limits.maxFileBytes,
+    maxTotalBytes: limits.maxTotalBytes
+  })
+  throwIfAborted(signal)
+  if (extracted.length !== entries.length) throw modelPackError('archive_missing')
+  const byPath = new Map<string, AuroraBrowserExtractedArchiveFile>()
+  for (const extractedFile of extracted) {
+    if (!safeArchivePath(extractedFile.path) || byPath.has(extractedFile.path)) throw modelPackError('archive_invalid')
+    byPath.set(extractedFile.path, extractedFile)
+  }
+  let total = 0
+  return entries.map((entry) => {
+    const extractedFile = byPath.get(entry.path)
+    if (!extractedFile) throw modelPackError('archive_missing')
+    if (entry.byte_size !== undefined && (extractedFile.byteSize !== entry.byte_size || extractedFile.bytes.byteLength !== entry.byte_size)) throw modelPackError('size')
+    if (entry.sha256 !== undefined && extractedFile.sha256 !== entry.sha256) throw modelPackError('hash')
+    total = checkedAdd(total, extractedFile.bytes.byteLength)
+    if (total > file.installed_size || total > limits.maxTotalBytes) throw modelPackError('archive_bounds')
+    return {
+      fileId: entry.file_id,
+      sha256: extractedFile.sha256,
+      byteLength: extractedFile.byteSize,
+      bytes: extractedFile.bytes
+    }
+  })
+}
+
+async function defaultExtractTarBzip2Archive(
+  archiveBytes: Uint8Array,
+  request: Parameters<AuroraBrowserTarBzip2Extractor>[1]
+): Promise<readonly AuroraBrowserExtractedArchiveFile[]> {
+  const bindings = await loadArchiveWasmBindings()
+  let receipt: unknown
+  try {
+    receipt = bindings.aurora_extract_tar_bzip2_archive(archiveBytes, {
+      expected_root: request.expectedRoot,
+      expected_paths: request.expectedPaths,
+      max_entries: request.maxEntries,
+      max_file_bytes: request.maxFileBytes,
+      max_total_bytes: request.maxTotalBytes
+    })
+  } catch (error) {
+    throw modelPackError(safeArchiveErrorCode(error), error)
+  }
+  if (!isObjectRecord(receipt) || !Array.isArray(receipt.files)) throw modelPackError('archive_invalid')
+  return receipt.files.map((file) => {
+    if (!isObjectRecord(file)) throw modelPackError('archive_invalid')
+    const path = file.path
+    const byteSize = file.byte_size
+    const sha256 = file.sha256
+    if (typeof path !== 'string' || typeof byteSize !== 'number' || !Number.isSafeInteger(byteSize) || typeof sha256 !== 'string') {
+      throw modelPackError('archive_invalid')
+    }
+    const bytes = file.bytes instanceof Uint8Array
+      ? file.bytes
+      : Array.isArray(file.bytes)
+        ? Uint8Array.from(file.bytes)
+        : null
+    if (bytes === null) throw modelPackError('archive_invalid')
+    return {
+      path,
+      byteSize,
+      sha256,
+      bytes
+    }
+  })
+}
+
+function safeArchiveErrorCode(error: unknown): string {
+  const code = typeof error === 'string'
+    ? error
+    : error instanceof Error
+      ? error.message
+      : ''
+  return /^archive_[a-z_]{1,40}$/.test(code) ? code : 'archive_invalid'
+}
+
+async function loadArchiveWasmBindings(): Promise<typeof AuroraVoiceWasmModule> {
+  const bindings = await import('./wasm/aurora_voice_wasm.js')
+  await bindings.default()
+  return bindings
+}
+
+function normalizeArchiveLimits(limits: AuroraBrowserArchiveInstallLimits | undefined): Required<AuroraBrowserArchiveInstallLimits> {
+  const normalized = { ...DEFAULT_ARCHIVE_LIMITS, ...(limits ?? {}) }
+  for (const value of [normalized.maxEntries, normalized.maxFileBytes, normalized.maxTotalBytes]) {
+    if (!Number.isSafeInteger(value) || value <= 0) throw modelPackError('archive_bounds')
+  }
+  return normalized
 }
 
 function resolveTrustedAssetUrl(
@@ -853,11 +1074,18 @@ function parseManifestJson(raw: string): AuroraBrowserModelPackManifest {
   }
 }
 
-function validateActiveReceipt(active: ActiveRecord, freshReceipt: AuroraBrowserManifestVerificationReceipt): void {
+function validateActiveReceipt(
+  active: ActiveRecord,
+  manifest: AuroraBrowserModelPackManifest,
+  variant: AuroraBrowserModelPackVariant,
+  freshReceipt: AuroraBrowserManifestVerificationReceipt
+): void {
   const receipt = active.verification_receipt
   if (!Array.isArray(receipt.file_ids) || !Array.isArray(receipt.files)) throw modelPackError('receipt')
   const receiptFileIds = receipt.files.map((file) => file.file_id)
   const activeFileIds = active.files.map((file) => file.file_id)
+  const expectedInstalledFiles = expectedInstalledRecords(manifest.files, variant.file_ids)
+  const expectedInstalledFileIds = expectedInstalledFiles.map((file) => file.fileId)
   if (
     receipt.pack_id !== active.identity.pack_id ||
     receipt.pack_version !== active.identity.pack_version ||
@@ -877,21 +1105,40 @@ function validateActiveReceipt(active: ActiveRecord, freshReceipt: AuroraBrowser
   ) {
     throw modelPackError('receipt')
   }
-  if (!sameStringMultiset(activeFileIds, receipt.file_ids)) throw modelPackError('receipt')
+  if (!sameStringMultiset(activeFileIds, expectedInstalledFileIds)) throw modelPackError('receipt')
   for (const file of active.files) {
-    const verified = receipt.files.find((candidate) => candidate.file_id === file.file_id)
-    const fresh = freshReceipt.files.find((candidate) => candidate.file_id === file.file_id)
+    const expected = expectedInstalledFiles.find((candidate) => candidate.fileId === file.file_id)
     if (
-      !verified ||
-      !fresh ||
-      verified.sha256 !== fresh.sha256 ||
-      verified.byte_size !== fresh.byte_size ||
-      file.sha256 !== verified.sha256 ||
-      file.byte_size !== verified.byte_size
+      !expected ||
+      (expected.sha256 !== undefined && file.sha256 !== expected.sha256) ||
+      (expected.byteLength !== undefined && file.byte_size !== expected.byteLength)
     ) {
       throw modelPackError('receipt')
     }
   }
+}
+
+function expectedInstalledRecords(
+  manifestFiles: readonly AuroraBrowserModelPackFile[],
+  variantFileIds: readonly string[]
+): readonly ExpectedInstalledRecord[] {
+  const records: ExpectedInstalledRecord[] = []
+  for (const fileId of variantFileIds) {
+    const file = manifestFiles.find((candidate) => candidate.file_id === fileId)
+    if (!file) throw modelPackError('receipt')
+    if (file.compression === 'tar_bzip2') {
+      const entries = file.archive_entries ?? []
+      records.push(...entries.map((entry) => {
+        const record: ExpectedInstalledRecord = { fileId: entry.file_id }
+        if (entry.sha256 !== undefined) Object.assign(record, { sha256: entry.sha256 })
+        if (entry.byte_size !== undefined) Object.assign(record, { byteLength: entry.byte_size })
+        return record
+      }))
+    } else {
+      records.push({ fileId: file.file_id, sha256: file.sha256, byteLength: file.byte_size })
+    }
+  }
+  return records
 }
 
 function normalizeScope(scope: AuroraBrowserModelPackScope | undefined, fallbackTask: string | undefined): Required<AuroraBrowserModelPackScope> {
@@ -1018,6 +1265,34 @@ function safeId(value: unknown): value is string {
 
 function isSha256(value: unknown): value is string {
   return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
+}
+
+function safeArchivePath(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.trim() === value &&
+    value.length > 0 &&
+    !value.startsWith('/') &&
+    !value.startsWith('//') &&
+    !value.includes('\\') &&
+    !value.split('/').some((segment) => (
+      segment === '' ||
+      segment === '.' ||
+      segment === '..' ||
+      segment.includes(':') ||
+      !/^[A-Za-z0-9._-]+$/.test(segment)
+    ))
+  )
+}
+
+function archivePathStartsWith(path: string, root: string): boolean {
+  return path === root || path.startsWith(`${root}/`)
+}
+
+function checkedAdd(left: number, right: number): number {
+  const value = left + right
+  if (!Number.isSafeInteger(value) || value < left) throw modelPackError('size')
+  return value
 }
 
 function hasUniqueStrings(values: readonly string[]): boolean {

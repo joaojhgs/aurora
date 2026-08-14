@@ -31,6 +31,8 @@
   ],
   "scripts": {
     "build": "pnpm run build:typescript && pnpm run build:wasm && pnpm run build:worker",
+    "generate:catalog": "node scripts/generate-browser-voice-catalog.mjs",
+    "check:catalog": "node scripts/generate-browser-voice-catalog.mjs --check",
     "build:typescript": "tsc -p tsconfig.build.json",
     "build:wasm": "node scripts/build-wasm.mjs",
     "build:worker": "node scripts/build-worker.mjs",

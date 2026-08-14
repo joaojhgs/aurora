@@ -299,6 +299,113 @@ describe('browser model pack verification', () => {
     }])
   })
 
+  it('installs a verified tar.bzip2 archive as extracted immutable model files', async () => {
+    const archiveBytes = new Uint8Array([201, 202, 203])
+    const modelBytes = new Uint8Array([1, 3, 5, 7])
+    const tokensBytes = new Uint8Array([2, 4, 6])
+    const manifest = await signedUnsignedManifest({
+      schema_version: 1,
+      pack_id: 'archive-web-test',
+      pack_version: '1.0.0',
+      display_name: 'Archive Web Test',
+      tasks: ['stt'],
+      files: [{
+        file_id: 'archive',
+        asset_id: 'archive',
+        task: 'stt',
+        url: `${TEST_ASSET_BASE_URL}/fixtures/archive.tar.bz2`,
+        sha256: await sha256Hex(archiveBytes),
+        byte_size: archiveBytes.byteLength,
+        installed_size: 64,
+        compression: 'tar_bzip2',
+        archive_root: 'archive-root',
+        archive_entries: [
+          { file_id: 'model', task: 'stt', path: 'archive-root/model.onnx', sha256: await sha256Hex(modelBytes), byte_size: modelBytes.byteLength },
+          { file_id: 'tokens', task: 'stt', path: 'archive-root/tokens.txt', sha256: await sha256Hex(tokensBytes), byte_size: tokensBytes.byteLength }
+        ]
+      }],
+      variants: [{
+        variant_id: 'web-wasm32-test',
+        file_ids: ['archive'],
+        target: 'web',
+        os: 'web',
+        arch: 'wasm32',
+        model_bindings: [{
+          task: 'stt',
+          family: 'sense-voice',
+          kind: 'offline-asr',
+          files: [
+            { role: 'model', fileId: 'model', virtualPath: '/archive-root/model.onnx' },
+            { role: 'tokens', fileId: 'tokens', virtualPath: '/archive-root/tokens.txt' }
+          ],
+          config: { language: 'en' }
+        }]
+      }],
+      revocation: null,
+      signature: null
+    })
+    const host = new MemoryWebModelStoreHost()
+    const receipt = await installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
+      fetchBytes: async () => archiveBytes,
+      extractTarBzip2Archive: async (_bytes, request) => {
+        expect(request.expectedRoot).toBe('archive-root')
+        expect(request.expectedPaths).toEqual(['archive-root/model.onnx', 'archive-root/tokens.txt'])
+        return [
+          { path: 'archive-root/model.onnx', byteSize: modelBytes.byteLength, sha256: await sha256Hex(modelBytes), bytes: modelBytes },
+          { path: 'archive-root/tokens.txt', byteSize: tokensBytes.byteLength, sha256: await sha256Hex(tokensBytes), bytes: tokensBytes }
+        ]
+      }
+    })
+
+    expect(receipt.files.map((file) => file.fileId)).toEqual(['model', 'tokens'])
+    const reopened = await openActiveBrowserModelPack(host, { task: 'stt' }, { allowNonProductionTestSignature: true })
+    expect(await Promise.all(reopened?.files.map(async (file) => Array.from(await file.readAll())) ?? [])).toEqual([
+      Array.from(modelBytes),
+      Array.from(tokensBytes)
+    ])
+  })
+
+  it('rejects archive extraction mismatches and cleans staging', async () => {
+    const archiveBytes = new Uint8Array([211, 212, 213])
+    const modelBytes = new Uint8Array([9, 8, 7])
+    const manifest = await signedUnsignedManifest({
+      ...(await signedManifest(archiveBytes)),
+      files: [{
+        file_id: 'archive',
+        asset_id: 'archive',
+        task: 'stt',
+        url: `${TEST_ASSET_BASE_URL}/fixtures/archive.tar.bz2`,
+        sha256: await sha256Hex(archiveBytes),
+        byte_size: archiveBytes.byteLength,
+        installed_size: 64,
+        compression: 'tar_bzip2',
+        archive_root: 'archive-root',
+        archive_entries: [{ file_id: 'model', task: 'stt', path: 'archive-root/model.onnx', sha256: await sha256Hex(new Uint8Array([1])), byte_size: 1 }]
+      }],
+      variants: [{ variant_id: 'web-wasm32-test', file_ids: ['archive'], target: 'web', os: 'web', arch: 'wasm32' }],
+      signature: null
+    })
+    const host = new MemoryWebModelStoreHost()
+
+    await expect(installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
+      fetchBytes: async () => archiveBytes,
+      extractTarBzip2Archive: async () => [
+        { path: 'archive-root/model.onnx', byteSize: modelBytes.byteLength, sha256: await sha256Hex(modelBytes), bytes: modelBytes }
+      ]
+    })).rejects.toMatchObject({ code: 'size' })
+
+    expect(await host.listPromotedKeys()).toEqual([])
+    expect(await host.listJsonKeys('aurora.voice.web-store.v1:active:')).toEqual([])
+  })
+
   it('rejects unsafe asset source URLs before fetching or mutating storage', async () => {
     const bytes = new Uint8Array([101, 102, 103])
     const unsafeUrls = [
