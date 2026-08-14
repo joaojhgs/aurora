@@ -1072,6 +1072,7 @@ describe('VoiceSettingsView', () => {
           packId: request.selection.packId,
           packVersion: request.selection.packVersion,
           voiceId: request.selection.voiceId,
+          ...(request.selection.referenceProfileId ? { referenceProfileId: request.selection.referenceProfileId } : {}),
           releaseKeyId: 'aurora-release',
           releasePublicKeyBase64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
           expectedManifestSha256: 'a'.repeat(64),
@@ -1115,6 +1116,18 @@ describe('VoiceSettingsView', () => {
             referenceProfileSelected: false,
           }],
         })),
+        listReferenceProfiles: vi.fn(async () => []),
+        saveReferenceProfile: vi.fn(async () => ({
+          id: 'voice-ref-1',
+          label: 'sample.wav',
+          transcript: 'hello from me',
+          sampleRateHz: 16_000,
+          durationMs: 1000,
+          byteLength: 32044,
+          sha256: 'c'.repeat(64),
+          createdAtMs: 1,
+          updatedAtMs: 1,
+        })),
         select,
       },
     })
@@ -1130,6 +1143,25 @@ describe('VoiceSettingsView', () => {
     await flushReactWork()
     await act(async () => {
       buttonByText(container, 'Add voice sample').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+    expect(select).toHaveBeenCalledTimes(2)
+    expect(visibleText(container)).toContain('Add a short WAV recording and type the words spoken in it.')
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement | null
+    const transcriptInput = container.querySelector('textarea') as HTMLTextAreaElement | null
+    if (!fileInput || !transcriptInput) throw new Error('expected voice sample form')
+    const file = new File([new Uint8Array([1, 2, 3])], 'sample.wav', { type: 'audio/wav' })
+    Object.defineProperty(file, 'arrayBuffer', { configurable: true, value: vi.fn(async () => new Uint8Array([1, 2, 3]).buffer) })
+    Object.defineProperty(fileInput, 'files', { configurable: true, value: [file] })
+    await act(async () => {
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+      setInputValue(transcriptInput, 'hello from me')
+      transcriptInput.dispatchEvent(new Event('input', { bubbles: true }))
+      transcriptInput.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await flushReactWork()
+    await act(async () => {
+      buttonByText(container, 'Save sample').click()
     })
     await flushReactWork()
 
@@ -1149,16 +1181,84 @@ describe('VoiceSettingsView', () => {
         voiceRevision: 'voice-rev-1',
       }),
     }))
-    expect(select).toHaveBeenCalledTimes(2)
+    expect(select).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      selection: expect.objectContaining({
+        task: 'tts',
+        packId: 'pocket.en',
+        packVersion: 'pocket-pack-rev-1',
+        voiceId: 'pocket.en',
+        voiceRevision: 'pocket-voice-rev-1',
+        referenceProfileId: 'voice-ref-1',
+        referenceProfileSelected: true,
+      }),
+    }))
+    expect(select).toHaveBeenCalledTimes(3)
     expect(onLocalSpeechSelectionConfirmed).not.toHaveBeenCalled()
     const text = visibleText(container)
     expect(text).toContain('On-device speech')
     expect(text).toContain('On-device voices')
-    expect(text).toContain('Add a voice sample before using this voice.')
+    expect(text).toContain('Voice sample saved.')
     expect(text).not.toContain('Voice choice updated.')
     expect(text).not.toContain('whisper.tiny.en')
     expect(text).not.toContain('piper.en')
     assertNoForbiddenCopy(text)
+    await unmount()
+  })
+
+  it('shows catalog choices before cached speech is ready and downloads only the selected item', async () => {
+    const select = vi.fn(async (request: Parameters<NonNullable<VoiceSettingsViewProps['localSpeechCatalog']>['select']>[0]) => ({
+      task: request.selection.task,
+      packId: request.selection.packId,
+      packVersion: request.selection.packVersion,
+      trust: {
+        task: request.selection.task,
+        packId: request.selection.packId,
+        packVersion: request.selection.packVersion,
+        expectedManifestSha256: 'a'.repeat(64),
+      },
+    }))
+    const client = voiceClient({ capabilities: capabilities({ engine_capabilities: { vad: false, kws: false, stt: false, tts: false } }) })
+    const { container, unmount } = await renderVoiceSettings(client, {
+      runtimeProfile: meshVoiceRuntimeProfile(),
+      surfaceProfile: browserCatalogSurfaceProfile(),
+      onLocalSpeechSelectionConfirmed: vi.fn(),
+      localSpeechCatalog: {
+        available: true,
+        listCatalog: vi.fn(async () => ({
+          state: 'ready' as const,
+          items: [{
+            task: 'vad' as const,
+            packId: 'vad.web',
+            packVersion: 'vad-rev-1',
+            displayName: 'Speech start',
+          }, {
+            task: 'stt' as const,
+            packId: 'stt.web',
+            packVersion: 'stt-rev-1',
+            displayName: 'English transcription',
+          }],
+        })),
+        listReferenceProfiles: vi.fn(async () => []),
+        select,
+      },
+    })
+    await flushReactWork()
+
+    const beforeClickText = visibleText(container)
+    expect(beforeClickText).toContain('Speech start')
+    expect(beforeClickText).toContain('English transcription')
+    expect(select).not.toHaveBeenCalled()
+
+    await act(async () => {
+      buttonByText(container, 'Add').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+
+    expect(select).toHaveBeenCalledTimes(1)
+    expect(select).toHaveBeenCalledWith(expect.objectContaining({
+      selection: expect.objectContaining({ task: 'stt', packId: 'stt.web' }),
+    }))
+    assertNoForbiddenCopy(visibleText(container))
     await unmount()
   })
 
@@ -1747,6 +1847,57 @@ function meshVoiceRuntimeProfile(): AuroraRuntimeProfileV2 {
   }
 }
 
+function browserCatalogSurfaceProfile(): NonNullable<VoiceSettingsViewProps['surfaceProfile']> {
+  return {
+    physicalKind: 'hosted-web',
+    kind: 'web',
+    legacyKind: 'web',
+    deploymentKind: 'web',
+    label: 'Web',
+    isDesktop: false,
+    isMobile: false,
+    isAndroid: false,
+    isIos: false,
+    usesLocalSidecar: false,
+    usesNativeShell: false,
+    supportsDesktopCommands: false,
+    supportsMobileNative: false,
+    supportsIosOnly: false,
+    supportsAndroidOnly: false,
+    supportsNativeWebRtcBridge: false,
+    isWebThin: true,
+    supportsWebRtcThin: false,
+    prefersWebRtcTransport: false,
+    trustsNativeWebViewOrigin: false,
+    canManageLocalServiceConfiguration: false,
+    nodeMode: 'mesh-node',
+    runtimeTier: 'lightweight-ts',
+    ownsLocalNodeState: true,
+    isRemoteConsole: false,
+    usesBrowserVoiceRuntime: true,
+    localSpeechPack: {
+      state: 'downloading',
+      availabilityState: 'pending',
+      label: 'Speech downloads',
+      detail: 'Speech choices can be added on this device.',
+      blockers: [],
+      canRunLocalVad: false,
+      canRunLocalKws: false,
+      canRunLocalStt: false,
+      canRunLocalTts: false,
+    },
+    voiceCapture: {
+      focusedPushToTalkOwner: 'webview-focused',
+      wakewordOwner: 'webview-focused',
+      wakewordRequiresFocus: true,
+      canUseWebViewVisualizer: true,
+      avoidCoordinatorPushToTalk: true,
+      usesBrowserVoiceRuntime: true,
+      detail: 'Speech choices can be added on this device.',
+    },
+  }
+}
+
 function remoteVoiceRuntimeProfile(): AuroraRuntimeProfileV2 {
   return {
     version: 2,
@@ -1813,6 +1964,15 @@ function buttonByText(container: HTMLElement, label: string): HTMLButtonElement 
 
 function buttonsByText(container: HTMLElement, label: string): HTMLButtonElement[] {
   return Array.from(container.querySelectorAll('button')).filter((candidate) => candidate.textContent?.trim() === label)
+}
+
+function setInputValue(input: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+  const prototype = input instanceof HTMLTextAreaElement
+    ? HTMLTextAreaElement.prototype
+    : HTMLInputElement.prototype
+  const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set
+  if (!setter) throw new Error('Missing input value setter')
+  setter.call(input, value)
 }
 
 function visibleText(container: HTMLElement): string {

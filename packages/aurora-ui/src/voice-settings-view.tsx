@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { routePath, type AuroraClient, type JsonObject } from '@aurora/client'
 import { Button, Card, StatStrip } from './primitives'
 import { safeErrorCopy } from './product-copy'
@@ -19,6 +19,7 @@ import { Badge } from '#components/ui/badge'
 import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from './platform-surface'
 import type { AuroraLocalSpeechSelectionProfile, AuroraLocalSpeechTask, AuroraRuntimeProfileV2 } from './runtime-profile'
 import type {
+  AuroraBrowserPocketReferenceProfileSummary,
   AuroraBrowserSpeechPackCatalogSelection,
   AuroraLocalSpeechCatalogPort,
 } from './browser-speech-pack'
@@ -186,6 +187,12 @@ export function VoiceSettingsView({
   const [mutationMessage, setMutationMessage] = useState<string | null>(null)
   const [wakePhraseMessage, setWakePhraseMessage] = useState<string | null>(null)
   const [browserCatalogItems, setBrowserCatalogItems] = useState<readonly AuroraBrowserSpeechPackCatalogSelection[]>([])
+  const [referenceProfiles, setReferenceProfiles] = useState<readonly AuroraBrowserPocketReferenceProfileSummary[]>([])
+  const [referenceEditor, setReferenceEditor] = useState<LocalSpeechAssetRow | null>(null)
+  const [referenceTranscript, setReferenceTranscript] = useState('')
+  const [referenceFile, setReferenceFile] = useState<File | null>(null)
+  const referenceFileInputRef = useRef<HTMLInputElement | null>(null)
+  const referenceTranscriptInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [confirmAction, setConfirmAction] = useState<VoiceConfirmation | null>(null)
   const [adminReason, setAdminReason] = useState('Manage spoken reply voices')
   const [adminReviewConfirmed, setAdminReviewConfirmed] = useState(false)
@@ -316,17 +323,17 @@ export function VoiceSettingsView({
   ), [onLocalSpeechSelectionConfirmed, surfaceProfile])
   const localSpeechRows = useMemo(
     () => canManageLocalSpeechAssets && browserCatalogItems.length > 0
-      ? toBrowserSpeechAssetRows(browserCatalogItems, surfaceProfile.localSpeechPack, runtimeProfile?.localNode.localSpeechSelection ?? null, false)
+      ? toBrowserSpeechAssetRows(browserCatalogItems, runtimeProfile?.localNode.localSpeechSelection ?? null, referenceProfiles, false)
       : canManageLocalSpeechAssets
         ? toLocalSpeechAssetRows(state.capabilities, surfaceProfile.localSpeechPack)
         : [],
-    [browserCatalogItems, canManageLocalSpeechAssets, runtimeProfile?.localNode.localSpeechSelection, state.capabilities, surfaceProfile.localSpeechPack],
+    [browserCatalogItems, canManageLocalSpeechAssets, referenceProfiles, runtimeProfile?.localNode.localSpeechSelection, state.capabilities, surfaceProfile.localSpeechPack],
   )
   const browserTtsRows = useMemo(
     () => canManageLocalSpeechAssets
-      ? toBrowserSpeechAssetRows(browserCatalogItems, surfaceProfile.localSpeechPack, runtimeProfile?.localNode.localSpeechSelection ?? null, true)
+      ? toBrowserSpeechAssetRows(browserCatalogItems, runtimeProfile?.localNode.localSpeechSelection ?? null, referenceProfiles, true)
       : [],
-    [browserCatalogItems, canManageLocalSpeechAssets, runtimeProfile?.localNode.localSpeechSelection, surfaceProfile.localSpeechPack],
+    [browserCatalogItems, canManageLocalSpeechAssets, referenceProfiles, runtimeProfile?.localNode.localSpeechSelection, surfaceProfile.localSpeechPack],
   )
   const readyLanguages = useMemo(() => languageList(state.capabilities?.ready_languages), [state.capabilities])
   const canShowInstall = state.managementState === 'ready'
@@ -346,23 +353,30 @@ export function VoiceSettingsView({
   useEffect(() => {
     if (!localSpeechCatalog?.available || !canManageLocalSpeechAssets) {
       setBrowserCatalogItems([])
+      setReferenceProfiles([])
       setState((current) => ({ ...current, browserCatalogState: 'locked' }))
       return
     }
     let active = true
     setState((current) => ({ ...current, browserCatalogState: 'loading' }))
-    void localSpeechCatalog.listCatalog().then((result) => {
+    void Promise.all([
+      localSpeechCatalog.listCatalog(),
+      localSpeechCatalog.listReferenceProfiles?.() ?? Promise.resolve(Object.freeze([])),
+    ]).then(([result, profiles]) => {
       if (!active) return
       if (result.state !== 'ready') {
         setBrowserCatalogItems([])
+        setReferenceProfiles([])
         setState((current) => ({ ...current, browserCatalogState: 'limited' }))
         return
       }
       setBrowserCatalogItems(result.items)
+      setReferenceProfiles(profiles)
       setState((current) => ({ ...current, browserCatalogState: 'ready' }))
     }, () => {
       if (!active) return
       setBrowserCatalogItems([])
+      setReferenceProfiles([])
       setState((current) => ({ ...current, browserCatalogState: 'limited' }))
     })
     return () => {
@@ -495,7 +509,7 @@ export function VoiceSettingsView({
   async function selectLocalSpeechAsset(row: LocalSpeechAssetRow): Promise<void> {
     if (actionPending || !canManageLocalSpeechAssets) return
     if (row.needsReferenceProfile) {
-      setMutationMessage('Add a voice sample before using this voice.')
+      openReferenceEditor(row)
       return
     }
     const actionKey = localSpeechActionKey(row)
@@ -538,6 +552,93 @@ export function VoiceSettingsView({
         : `${row.copy.noun} choice was not changed. Try again.`)
     } catch {
       setMutationMessage(`${row.copy.noun} choice was not changed. Try again.`)
+    } finally {
+      setPendingActionKey(null)
+    }
+  }
+
+  function openReferenceEditor(row: LocalSpeechAssetRow): void {
+    setReferenceEditor(row)
+    setReferenceTranscript('')
+    setReferenceFile(null)
+    setMutationMessage(null)
+  }
+
+  async function saveReferenceVoiceSample(): Promise<void> {
+    if (!referenceEditor || actionPending || !localSpeechCatalog?.saveReferenceProfile) return
+    const file = referenceFile ?? referenceFileInputRef.current?.files?.[0] ?? null
+    const transcript = (referenceTranscript || referenceTranscriptInputRef.current?.value || '').trim()
+    if (!file || transcript.length === 0) {
+      setMutationMessage('Choose a voice sample and add the spoken words.')
+      return
+    }
+    const row = referenceEditor
+    const actionKey = localSpeechActionKey(row)
+    setPendingActionKey(actionKey)
+    setMutationMessage('Saving voice sample.')
+    try {
+      const audioBytes = new Uint8Array(await file.arrayBuffer())
+      const profile = await localSpeechCatalog.saveReferenceProfile({
+        audioBytes,
+        transcript,
+        filename: file.name,
+        mimeType: file.type || undefined,
+      })
+      setReferenceProfiles((current) => Object.freeze([profile, ...current.filter((item) => item.id !== profile.id)]))
+      await localSpeechCatalog.select({
+        selection: {
+          ...(row.selection ?? {
+            task: row.task,
+            packId: row.packId,
+            packVersion: row.revision,
+            displayName: row.label,
+            voiceId: row.voiceId,
+            voiceRevision: row.voiceRevision,
+          }),
+          referenceProfileId: profile.id,
+          referenceProfileSelected: true,
+        },
+        onProgress: (progress) => {
+          if (progress.state === 'downloading') {
+            const pct = progress.totalBytes && progress.totalBytes > 0
+              ? Math.floor(((progress.receivedBytes ?? 0) / progress.totalBytes) * 100)
+              : null
+            setMutationMessage(pct !== null ? `Adding voice (${pct}%).` : 'Adding voice.')
+            return
+          }
+          setMutationMessage(progress.state === 'ready' ? 'Voice sample saved.' : 'Adding voice.')
+        },
+      })
+      setReferenceEditor(null)
+      setReferenceTranscript('')
+      setReferenceFile(null)
+      setMutationMessage('Voice sample saved.')
+    } catch (error) {
+      setMutationMessage(referenceSampleErrorCopy(error))
+    } finally {
+      setPendingActionKey(null)
+    }
+  }
+
+  async function deleteReferenceVoiceSample(row: LocalSpeechAssetRow): Promise<void> {
+    const profileId = row.referenceProfileId
+    if (!profileId || actionPending || !localSpeechCatalog?.deleteReferenceProfile) return
+    setPendingActionKey(localSpeechActionKey(row))
+    setMutationMessage('Removing voice sample.')
+    try {
+      await localSpeechCatalog.deleteReferenceProfile(profileId)
+      setReferenceProfiles((current) => Object.freeze(current.filter((profile) => profile.id !== profileId)))
+      await persistConfirmedLocalSpeechSelection({
+        [row.task]: {
+          packId: row.packId,
+          packRevision: row.revision,
+          ...(row.voiceId ? { voiceId: row.voiceId } : {}),
+          ...(row.voiceRevision ? { voiceRevision: row.voiceRevision } : {}),
+        },
+      })
+      setMutationMessage('Voice sample removed.')
+    } catch {
+      setMutationMessage('Voice sample was not removed. Try again.')
     } finally {
       setPendingActionKey(null)
     }
@@ -703,16 +804,95 @@ export function VoiceSettingsView({
                   <Button
                     variant="outline"
                     className="h-8 px-3 text-xs"
-                    onClick={() => void selectLocalSpeechAsset(row)}
+                    onClick={() => row.needsReferenceProfile ? openReferenceEditor(row) : void selectLocalSpeechAsset(row)}
                     disabled={actionPending || (!row.ready && !row.selection)}
                   >
                     {pendingActionKey === localSpeechActionKey(row)
                       ? 'Updating'
                       : row.ready ? 'Use voice' : row.needsReferenceProfile ? 'Add voice sample' : 'Add voice'}
                   </Button>
+                  {row.referenceProfileId ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="h-8 px-3 text-xs"
+                        onClick={() => openReferenceEditor(row)}
+                        disabled={actionPending}
+                      >
+                        Replace sample
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-8 px-3 text-xs"
+                        onClick={() => void deleteReferenceVoiceSample(row)}
+                        disabled={actionPending || !localSpeechCatalog?.deleteReferenceProfile}
+                      >
+                        Remove sample
+                      </Button>
+                    </>
+                  ) : null}
                 </div>
               </div>
             ))}
+            {referenceEditor ? (
+              <form
+                className="flex flex-col gap-3 rounded-md border border-border/70 p-3"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void saveReferenceVoiceSample()
+                }}
+              >
+                <div>
+                  <p className="text-sm font-medium">{referenceEditor.label}</p>
+                  <p className="text-xs text-muted-foreground">Add a short WAV recording and type the words spoken in it.</p>
+                </div>
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="font-medium">Voice sample</span>
+                  <input
+                    ref={referenceFileInputRef}
+                    type="file"
+                    accept="audio/wav,audio/x-wav,.wav"
+                    onChange={(event) => setReferenceFile(event.currentTarget.files?.[0] ?? null)}
+                    disabled={actionPending}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="font-medium">Spoken words</span>
+                  <textarea
+                    ref={referenceTranscriptInputRef}
+                    className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={referenceTranscript}
+                    onChange={(event) => setReferenceTranscript(event.currentTarget.value)}
+                    maxLength={1000}
+                    disabled={actionPending}
+                  />
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => void saveReferenceVoiceSample()}
+                    disabled={actionPending || !localSpeechCatalog?.saveReferenceProfile}
+                  >
+                    {pendingActionKey === localSpeechActionKey(referenceEditor) ? 'Saving' : 'Save sample'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => {
+                      setReferenceEditor(null)
+                      setReferenceTranscript('')
+                      setReferenceFile(null)
+                    }}
+                    disabled={actionPending}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            ) : null}
           </div>
         </Card>
       ) : null}
@@ -939,13 +1119,14 @@ function voiceSettingsSurfaceProfile(input: {
   runtimeProfile: AuroraRuntimeProfileV2 | null
   engineCapabilities: TtsCapabilities['engine_capabilities'] | undefined
 }): AuroraSurfaceProfile {
+  if (input.surfaceProfile) return input.surfaceProfile
   const localNode = input.runtimeProfile?.nodeMode === 'mesh-node'
     ? input.runtimeProfile.localNode
     : null
   return getAuroraSurfaceProfile({
-    runtimeMode: input.surfaceProfile?.legacyKind,
+    runtimeMode: undefined,
     transportKind: input.transportKind,
-    nativePlatform: input.surfaceProfile?.physicalKind,
+    nativePlatform: undefined,
     userAgent: typeof navigator === 'undefined' ? null : navigator.userAgent,
     nodeMode: input.runtimeProfile?.nodeMode,
     runtimeTier: input.runtimeProfile?.runtimeTier,
@@ -958,12 +1139,6 @@ function voiceSettingsSurfaceProfile(input: {
 function localSpeechSurfaceCanManageAssets(
   surfaceProfile: AuroraSurfaceProfile,
 ): boolean {
-  const localSpeechPack = surfaceProfile.localSpeechPack
-  const hasTaskCapability = localSpeechPack.canRunLocalVad
-    || localSpeechPack.canRunLocalKws
-    || localSpeechPack.canRunLocalStt
-    || localSpeechPack.canRunLocalTts
-  if (!hasTaskCapability) return false
   return surfaceProfile.usesNativeShell || surfaceProfile.usesBrowserVoiceRuntime || surfaceProfile.supportsMobileNative || surfaceProfile.legacyKind === 'mock'
 }
 
@@ -1012,6 +1187,7 @@ interface LocalSpeechAssetRow {
   label: string
   ready: boolean
   needsReferenceProfile?: boolean | undefined
+  referenceProfileId?: string | undefined
   voiceId?: string | undefined
   voiceRevision?: string | undefined
   selection?: AuroraBrowserSpeechPackCatalogSelection | undefined
@@ -1115,23 +1291,24 @@ function toLocalSpeechAssetRows(
 
 function toBrowserSpeechAssetRows(
   items: readonly AuroraBrowserSpeechPackCatalogSelection[],
-  localSpeechPack: AuroraSurfaceProfile['localSpeechPack'],
   currentSelection: AuroraLocalSpeechSelectionProfile | null,
+  referenceProfiles: readonly AuroraBrowserPocketReferenceProfileSummary[],
   ttsOnly: boolean,
 ): LocalSpeechAssetRow[] {
   const rows: LocalSpeechAssetRow[] = []
   const seen = new Set<string>()
+  const knownReferenceProfileIds = new Set(referenceProfiles.map((profile) => profile.id))
   for (const item of items) {
     if (ttsOnly !== (item.task === 'tts')) continue
-    if (!browserSpeechTaskCanRun(item.task, localSpeechPack)) continue
     const packId = safePackId(item.packId)
     const revision = safePackId(item.packVersion)
     if (!packId || !revision) continue
     const copy = localSpeechTaskCopy(item.task)
     const currentTaskSelection = currentSelection?.[item.task]
     const selectedReferenceProfileId = item.referenceProfileId ?? currentTaskSelection?.referenceProfileId
-    const referenceProfileReady = item.requiresReferenceProfile !== true || item.referenceProfileSelected === true || Boolean(selectedReferenceProfileId)
-    const selected = localSpeechSelectionMatches(currentSelection?.[item.task], item) && referenceProfileReady
+    const selectedReferenceProfileReady = selectedReferenceProfileId ? knownReferenceProfileIds.has(selectedReferenceProfileId) : false
+    const referenceProfileReady = item.requiresReferenceProfile !== true || item.referenceProfileSelected === true || selectedReferenceProfileReady
+    const selected = localSpeechSelectionMatches(currentSelection?.[item.task], item, referenceProfiles) && referenceProfileReady
     const detail = item.requiresReferenceProfile === true && !referenceProfileReady
       ? `${copy.detail} Add a voice sample before using this voice.`
       : item.language ? `${copy.detail} ${item.language}.` : copy.detail
@@ -1142,6 +1319,7 @@ function toBrowserSpeechAssetRows(
       label: safeVoiceText(item.displayName, `${copy.noun} option ${rows.length + 1}`),
       ready: referenceProfileReady && (item.active === true || item.cached === true || selected),
       needsReferenceProfile: item.requiresReferenceProfile === true && !referenceProfileReady,
+      ...(selectedReferenceProfileId && selectedReferenceProfileReady ? { referenceProfileId: selectedReferenceProfileId } : {}),
       ...(item.voiceId ? { voiceId: item.voiceId } : {}),
       ...(item.voiceRevision ? { voiceRevision: item.voiceRevision } : {}),
       selection: selectedReferenceProfileId && item.referenceProfileId !== selectedReferenceProfileId
@@ -1167,14 +1345,6 @@ function localSpeechTaskCanRun(
   if (task === 'vad') return localSpeechPack.canRunLocalVad
   if (task === 'kws') return localSpeechPack.canRunLocalKws
   return localSpeechPack.canRunLocalStt
-}
-
-function browserSpeechTaskCanRun(
-  task: AuroraLocalSpeechTask,
-  localSpeechPack: AuroraSurfaceProfile['localSpeechPack'],
-): boolean {
-  if (task === 'tts') return localSpeechPack.canRunLocalTts
-  return localSpeechTaskCanRun(task, localSpeechPack)
 }
 
 function localSpeechCatalogAssets(
@@ -1248,12 +1418,16 @@ function localSpeechTaskCopy(task: AuroraLocalSpeechTask): LocalSpeechAssetRow['
 function localSpeechSelectionMatches(
   current: AuroraLocalSpeechSelectionProfile[AuroraLocalSpeechTask] | undefined,
   item: AuroraBrowserSpeechPackCatalogSelection,
+  referenceProfiles: readonly AuroraBrowserPocketReferenceProfileSummary[],
 ): boolean {
   if (!current) return false
   if (current.packId !== item.packId || current.packRevision !== item.packVersion) return false
   if (item.task !== 'tts') return true
+  const referenceReady = current.referenceProfileId
+    ? referenceProfiles.some((profile) => profile.id === current.referenceProfileId)
+    : false
   return current.voiceId === item.voiceId && current.voiceRevision === item.voiceRevision
-    && (item.requiresReferenceProfile !== true || Boolean(current.referenceProfileId))
+    && (item.requiresReferenceProfile !== true || referenceReady)
 }
 
 function localSpeechActionKey(row: Pick<LocalSpeechAssetRow, 'packId' | 'task' | 'voiceId'>): string {
@@ -1620,6 +1794,17 @@ function voiceSettingsManagementCopy(error: unknown): string {
 
 function languageCatalogUnavailableCopy(): string {
   return 'Language options could not be loaded. Review access and try again.'
+}
+
+function referenceSampleErrorCopy(error: unknown): string {
+  const message = error instanceof Error ? error.message : ''
+  if (message === 'voice_sample_format') return 'Use a mono 16-bit WAV file.'
+  if (message === 'voice_sample_rate') return 'Use a WAV file between 8 kHz and 48 kHz.'
+  if (message === 'voice_sample_short') return 'Use a voice sample at least half a second long.'
+  if (message === 'voice_sample_long') return 'Use a voice sample shorter than 30 seconds.'
+  if (message === 'voice_sample_words') return 'Add the spoken words for this voice sample.'
+  if (message === 'voice_sample_file') return 'Use a WAV file smaller than 10 MB.'
+  return 'Voice sample was not saved. Try again.'
 }
 
 function installOutcomeCopy(status: InstallStatus): string {

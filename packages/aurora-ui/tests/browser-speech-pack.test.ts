@@ -21,7 +21,16 @@ vi.mock('@aurora/voice-web/browser', () => ({
   installVerifiedBrowserModelPack: voiceWeb.installPack,
 }))
 
-import { createAuroraBrowserVoiceCatalogPort, openActiveBrowserSpeechPacks, openHostedBrowserSttSpeechPack } from '../src/browser-speech-pack'
+import {
+  createAuroraBrowserVoiceCatalogPort,
+  decodeAuroraPocketReferenceWav,
+  deleteAuroraBrowserPocketReferenceProfile,
+  listAuroraBrowserPocketReferenceProfiles,
+  openActiveBrowserSpeechPacks,
+  openHostedBrowserSttSpeechPack,
+  readAuroraBrowserPocketReferenceProfile,
+  saveAuroraBrowserPocketReferenceProfile,
+} from '../src/browser-speech-pack'
 
 const RELEASE_KEY_ID = 'aurora-release-web-stt'
 const RELEASE_PUBLIC_KEY_BASE64 = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
@@ -213,6 +222,144 @@ describe('openActiveBrowserSpeechPacks', () => {
       expectedReleaseManifestSha256: RELEASE_MANIFEST_SHA256,
     }))
   })
+
+  it('keeps Pocket voices unavailable until an explicit reference profile is selected', async () => {
+    const host = fakeModelStoreHost()
+    voiceWeb.openExistingHost.mockResolvedValueOnce(host)
+    voiceWeb.openActive.mockResolvedValueOnce(modelPack('tts', 'pocket-pack', 'tts-file', '/tts/model.onnx', 'pockettts'))
+
+    const result = await openActiveBrowserSpeechPacks({
+      trustSelections: [
+        { ...releaseTrust(), task: 'tts', packId: 'pocket-pack', packVersion: '1.0.0', voiceId: 'pocket.en' },
+      ],
+      tasks: ['tts'],
+      ttsVoiceId: 'pocket.en',
+      loadReferenceProfile: vi.fn(),
+    })
+
+    expect(result).toMatchObject({
+      state: 'absent',
+      capabilities: { vad: false, kws: false, stt: false, tts: false },
+    })
+  })
+
+  it('attaches explicit Pocket reference audio and text to active model bindings', async () => {
+    const host = fakeModelStoreHost()
+    const audioBytes = wavBytes({ sampleRateHz: 16_000, durationMs: 1_000 })
+    voiceWeb.openExistingHost.mockResolvedValueOnce(host)
+    voiceWeb.openActive.mockResolvedValueOnce(modelPack('tts', 'pocket-pack', 'tts-file', '/tts/model.onnx', 'pockettts'))
+
+    const result = await openActiveBrowserSpeechPacks({
+      trustSelections: [
+        { ...releaseTrust(), task: 'tts', packId: 'pocket-pack', packVersion: '1.0.0', voiceId: 'pocket.en', referenceProfileId: 'voice-ref-1' },
+      ],
+      tasks: ['tts'],
+      ttsVoiceId: 'pocket.en',
+      loadReferenceProfile: vi.fn(async () => ({
+        id: 'voice-ref-1',
+        label: 'Voice sample',
+        transcript: 'hello from the speaker',
+        sampleRateHz: 16_000,
+        durationMs: 1_000,
+        byteLength: audioBytes.byteLength,
+        sha256: 'c'.repeat(64),
+        createdAtMs: 1,
+        updatedAtMs: 1,
+        audioBytes,
+      })),
+    })
+
+    expect(result.state).toBe('ready')
+    if (result.state !== 'ready') throw new Error('expected ready')
+    expect(result.capabilities.tts).toBe(true)
+    expect(result.modelBindings.files).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        task: 'tts',
+        fileId: 'reference-audio:voice-ref-1',
+        virtualPath: '/aurora/reference/voice-ref-1.wav',
+        bytes: audioBytes,
+      }),
+    ]))
+    expect(result.modelBindings.models[0]).toMatchObject({
+      family: 'pockettts',
+      files: expect.arrayContaining([
+        expect.objectContaining({ role: 'referenceAudio', fileId: 'reference-audio:voice-ref-1' }),
+      ]),
+      config: expect.objectContaining({
+        referenceText: 'hello from the speaker',
+        referenceSampleRateHz: 16_000,
+      }),
+    })
+    expect(result.revision).toContain('reference-audio:voice-ref-1')
+  })
+})
+
+describe('AuroraBrowserPocketReferenceProfile store', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      value: {
+        randomUUID: () => 'voice-ref-1',
+        subtle: {
+          digest: async () => new Uint8Array(32).fill(0xcc).buffer,
+        },
+      },
+    })
+  })
+
+  it('saves normalized PCM WAV audio outside JSON records and can read and delete it', async () => {
+    const host = memoryModelStoreHost()
+    const audioBytes = wavBytes({ sampleRateHz: 16_000, durationMs: 1_000 })
+
+    const saved = await saveAuroraBrowserPocketReferenceProfile({
+      audioBytes,
+      filename: 'my voice.wav',
+      transcript: '  hello   from me  ',
+    }, { createHost: async () => host })
+    const listed = await listAuroraBrowserPocketReferenceProfiles({ createHost: async () => host })
+    const loaded = await readAuroraBrowserPocketReferenceProfile(saved.id, { createHost: async () => host })
+
+    expect(saved).toMatchObject({
+      id: 'voice-ref-1',
+      label: 'my voice.wav',
+      transcript: 'hello from me',
+      sampleRateHz: 16_000,
+      durationMs: 1_000,
+      byteLength: audioBytes.byteLength,
+      sha256: 'c'.repeat(64),
+    })
+    expect(listed).toEqual([saved])
+    expect(loaded?.audioBytes).toEqual(audioBytes)
+    expect([...host.json.values()].join(' ')).not.toContain('RIFF')
+    expect([...host.json.values()].join(' ')).not.toContain(String.fromCharCode(...audioBytes.slice(0, 12)))
+
+    await deleteAuroraBrowserPocketReferenceProfile(saved.id, { createHost: async () => host })
+    expect(await listAuroraBrowserPocketReferenceProfiles({ createHost: async () => host })).toEqual([])
+    expect(await readAuroraBrowserPocketReferenceProfile(saved.id, { createHost: async () => host })).toBeNull()
+  })
+
+  it('decodes validated mono PCM WAV samples for native adapters', () => {
+    const decoded = decodeAuroraPocketReferenceWav(wavBytes({ sampleRateHz: 24_000, durationMs: 1_000 }))
+
+    expect(decoded.sampleRateHz).toBe(24_000)
+    expect(decoded.durationMs).toBe(1_000)
+    expect(decoded.normalizedBytes.slice(0, 12)).toEqual(new Uint8Array([82, 73, 70, 70, 164, 187, 0, 0, 87, 65, 86, 69]))
+    expect(decoded.samples).toBeInstanceOf(Float32Array)
+    expect(decoded.samples).toHaveLength(24_000)
+  })
+
+  it('rejects unsupported reference audio before writing browser storage', async () => {
+    const host = memoryModelStoreHost()
+
+    await expect(saveAuroraBrowserPocketReferenceProfile({
+      audioBytes: wavBytes({ sampleRateHz: 16_000, durationMs: 1_000, channels: 2 }),
+      transcript: 'hello',
+    }, { createHost: async () => host })).rejects.toThrow('voice_sample_format')
+
+    expect(host.writeJson).not.toHaveBeenCalled()
+    expect(host.appendStaging).not.toHaveBeenCalled()
+  })
 })
 
 describe('createAuroraBrowserVoiceCatalogPort', () => {
@@ -303,7 +450,7 @@ function fakeModelStoreHost(): AuroraWebModelStoreHost {
   }
 }
 
-function modelPack(task: 'vad' | 'kws' | 'stt' | 'tts', packId: string, fileId: string, virtualPath: string) {
+function modelPack(task: 'vad' | 'kws' | 'stt' | 'tts', packId: string, fileId: string, virtualPath: string, family?: 'vits' | 'pockettts') {
   return {
     identity: {
       packId,
@@ -321,7 +468,7 @@ function modelPack(task: 'vad' | 'kws' | 'stt' | 'tts', packId: string, fileId: 
     }],
     models: [{
       task,
-      family: task === 'tts' ? 'vits' : 'sherpa',
+      family: task === 'tts' ? family ?? 'vits' : 'sherpa',
       kind: task === 'tts' ? 'offline-tts' : task === 'stt' ? 'offline-asr' : task,
       files: [{
         role: task === 'tts' ? 'model' : 'encoder',
@@ -331,6 +478,87 @@ function modelPack(task: 'vad' | 'kws' | 'stt' | 'tts', packId: string, fileId: 
       config: task === 'tts' ? { voiceId: 'voice-en' } : { language: 'en' },
     }],
   }
+}
+
+function memoryModelStoreHost(): AuroraWebModelStoreHost & {
+  readonly json: Map<string, string>
+  readonly promoted: Map<string, Uint8Array>
+} {
+  const json = new Map<string, string>()
+  const staging = new Map<string, Uint8Array>()
+  const promoted = new Map<string, Uint8Array>()
+  return {
+    json,
+    promoted,
+    persistenceReport: vi.fn(),
+    readJson: vi.fn(async (key: string) => json.get(key) ?? null),
+    writeJson: vi.fn(async (key: string, value: string) => {
+      json.set(key, value)
+    }),
+    deleteJson: vi.fn(async (key: string) => {
+      json.delete(key)
+    }),
+    listJsonKeys: vi.fn(async (prefix: string) => [...json.keys()].filter((key) => key.startsWith(prefix))),
+    stagingLen: vi.fn(async (key: string) => staging.get(key)?.byteLength ?? 0),
+    readStagingChunk: vi.fn(async (key: string, offset: number, maxBytes: number) => {
+      const bytes = staging.get(key) ?? new Uint8Array()
+      return { bytes: bytes.slice(offset, offset + maxBytes), offset, complete: offset + maxBytes >= bytes.byteLength }
+    }),
+    appendStaging: vi.fn(async (key: string, offset: number, bytes: Uint8Array) => {
+      const current = staging.get(key) ?? new Uint8Array()
+      const next = new Uint8Array(Math.max(current.byteLength, offset + bytes.byteLength))
+      next.set(current)
+      next.set(bytes, offset)
+      staging.set(key, next)
+    }),
+    clearStaging: vi.fn(async (key: string) => {
+      staging.delete(key)
+    }),
+    promotedStat: vi.fn(async (key: string) => {
+      const bytes = promoted.get(key)
+      return bytes ? { byteLength: bytes.byteLength, sha256: null } : null
+    }),
+    readPromotedChunk: vi.fn(async (key: string, offset: number, maxBytes: number) => {
+      const bytes = promoted.get(key) ?? new Uint8Array()
+      return { bytes: bytes.slice(offset, offset + maxBytes), offset, complete: offset + maxBytes >= bytes.byteLength }
+    }),
+    promoteStagingAtomic: vi.fn(async (key: string) => {
+      const bytes = staging.get(key)
+      if (bytes) promoted.set(key, bytes)
+      staging.delete(key)
+    }),
+    deletePromoted: vi.fn(async (key: string) => {
+      promoted.delete(key)
+    }),
+    listPromotedKeys: vi.fn(async () => [...promoted.keys()]),
+    removePackData: vi.fn(),
+  }
+}
+
+function wavBytes(options: { sampleRateHz: number, durationMs: number, channels?: number }): Uint8Array {
+  const channels = options.channels ?? 1
+  const sampleCount = Math.floor((options.sampleRateHz * options.durationMs) / 1000)
+  const dataBytes = sampleCount * channels * 2
+  const bytes = new Uint8Array(44 + dataBytes)
+  const view = new DataView(bytes.buffer)
+  writeAscii(bytes, 0, 'RIFF')
+  view.setUint32(4, 36 + dataBytes, true)
+  writeAscii(bytes, 8, 'WAVE')
+  writeAscii(bytes, 12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, channels, true)
+  view.setUint32(24, options.sampleRateHz, true)
+  view.setUint32(28, options.sampleRateHz * channels * 2, true)
+  view.setUint16(32, channels * 2, true)
+  view.setUint16(34, 16, true)
+  writeAscii(bytes, 36, 'data')
+  view.setUint32(40, dataBytes, true)
+  return bytes
+}
+
+function writeAscii(bytes: Uint8Array, offset: number, value: string): void {
+  for (let index = 0; index < value.length; index += 1) bytes[offset + index] = value.charCodeAt(index)
 }
 
 function catalogEntry(id: string) {

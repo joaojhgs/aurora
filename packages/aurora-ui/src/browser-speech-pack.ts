@@ -107,10 +107,49 @@ export interface AuroraBrowserSpeechPackInstallReceipt {
   readonly trust: AuroraBrowserSpeechPackTrustSelection
 }
 
+export interface AuroraBrowserPocketReferenceProfileSummary {
+  readonly id: string
+  readonly label: string
+  readonly transcript: string
+  readonly sampleRateHz: number
+  readonly durationMs: number
+  readonly byteLength: number
+  readonly sha256: string
+  readonly createdAtMs: number
+  readonly updatedAtMs: number
+}
+
+export interface AuroraBrowserPocketReferenceProfileInput {
+  readonly audioBytes: Uint8Array
+  readonly transcript: string
+  readonly filename?: string | undefined
+  readonly mimeType?: string | undefined
+  readonly label?: string | undefined
+}
+
+export interface AuroraBrowserPocketReferenceProfileData extends AuroraBrowserPocketReferenceProfileSummary {
+  readonly audioBytes: Uint8Array
+}
+
+export interface AuroraPocketReferenceWavDecodeResult {
+  readonly normalizedBytes: Uint8Array
+  readonly samples: Float32Array
+  readonly sampleRateHz: number
+  readonly durationMs: number
+}
+
+export interface AuroraBrowserPocketReferenceProfileStoreOptions {
+  readonly globalObject?: Parameters<typeof AuroraBrowserModelStoreHost.create>[0]
+  readonly createHost?: () => Promise<AuroraWebModelStoreHost>
+}
+
 export interface AuroraLocalSpeechCatalogPort {
   readonly available: boolean
   listCatalog(): Promise<AuroraBrowserSpeechPackCatalogResult>
   select(request: AuroraBrowserSpeechPackInstallRequest): Promise<AuroraBrowserSpeechPackInstallReceipt>
+  listReferenceProfiles?(): Promise<readonly AuroraBrowserPocketReferenceProfileSummary[]>
+  saveReferenceProfile?(input: AuroraBrowserPocketReferenceProfileInput): Promise<AuroraBrowserPocketReferenceProfileSummary>
+  deleteReferenceProfile?(profileId: string): Promise<void>
 }
 
 export type AuroraBrowserSpeechPackInstallPort = AuroraLocalSpeechCatalogPort
@@ -147,6 +186,7 @@ export interface AuroraBrowserSpeechPacksOptions {
   readonly trustSelections?: readonly AuroraBrowserSpeechPackTrustSelection[] | null | undefined
   readonly tasks?: readonly AuroraBrowserSpeechPackTask[] | undefined
   readonly ttsVoiceId?: string | null | undefined
+  readonly loadReferenceProfile?: ((profileId: string) => Promise<AuroraBrowserPocketReferenceProfileData | null>) | undefined
   readonly globalObject?: Parameters<typeof AuroraBrowserModelStoreHost.create>[0]
   readonly createHost?: () => Promise<AuroraWebModelStoreHost | null>
 }
@@ -158,6 +198,7 @@ export interface AuroraBrowserVoiceCatalogPortOptions {
   readonly globalObject?: Parameters<typeof AuroraBrowserModelStoreHost.create>[0]
   readonly trustedAssetOrigins?: readonly string[] | undefined
   readonly afterSelect?: ((receipt: AuroraBrowserSpeechPackInstallReceipt, request: AuroraBrowserSpeechPackInstallRequest) => Promise<void> | void) | undefined
+  readonly afterReferenceProfileDeleted?: ((profileId: string) => Promise<void> | void) | undefined
 }
 
 export function createAuroraBrowserVoiceCatalogPort(
@@ -199,7 +240,97 @@ export function createAuroraBrowserVoiceCatalogPort(
       request.onProgress?.({ state: 'ready' })
       return mapped
     },
+    listReferenceProfiles: () => listAuroraBrowserPocketReferenceProfiles(options),
+    saveReferenceProfile: (input: AuroraBrowserPocketReferenceProfileInput) => saveAuroraBrowserPocketReferenceProfile(input, options),
+    async deleteReferenceProfile(profileId: string): Promise<void> {
+      await deleteAuroraBrowserPocketReferenceProfile(profileId, options)
+      await options.afterReferenceProfileDeleted?.(profileId)
+    },
   })
+}
+
+export async function listAuroraBrowserPocketReferenceProfiles(
+  options: AuroraBrowserPocketReferenceProfileStoreOptions = {},
+): Promise<readonly AuroraBrowserPocketReferenceProfileSummary[]> {
+  const host = await pocketReferenceProfileHost(options)
+  const index = await readPocketReferenceProfileIndex(host)
+  const recovered: string[] = []
+  const profiles: AuroraBrowserPocketReferenceProfileSummary[] = []
+  for (const id of index) {
+    const profile = await readPocketReferenceProfileSummary(host, id)
+    if (!profile) continue
+    const stat = await host.promotedStat(pocketReferenceAudioKey(id))
+    if (!stat || stat.byteLength !== profile.byteLength) {
+      await deletePocketReferenceProfile(host, id)
+      continue
+    }
+    recovered.push(id)
+    profiles.push(profile)
+  }
+  if (recovered.length !== index.length) await writePocketReferenceProfileIndex(host, recovered)
+  return Object.freeze(profiles.sort((left, right) => right.updatedAtMs - left.updatedAtMs).map((profile) => Object.freeze(profile)))
+}
+
+export async function saveAuroraBrowserPocketReferenceProfile(
+  input: AuroraBrowserPocketReferenceProfileInput,
+  options: AuroraBrowserPocketReferenceProfileStoreOptions = {},
+): Promise<AuroraBrowserPocketReferenceProfileSummary> {
+  const decoded = decodeAuroraPocketReferenceWav(input.audioBytes)
+  const transcript = normalizePocketReferenceTranscript(input.transcript)
+  const host = await pocketReferenceProfileHost(options)
+  const id = createPocketReferenceProfileId(options.globalObject)
+  const now = Date.now()
+  const audioKey = pocketReferenceAudioKey(id)
+  const audioBytes = decoded.normalizedBytes
+  const sha256 = await sha256Hex(audioBytes)
+  await host.clearStaging(audioKey)
+  await host.appendStaging(audioKey, 0, audioBytes)
+  await host.promoteStagingAtomic(audioKey)
+  const summary: AuroraBrowserPocketReferenceProfileSummary = Object.freeze({
+    id,
+    label: pocketReferenceProfileLabel(input.label, input.filename, now),
+    transcript,
+    sampleRateHz: decoded.sampleRateHz,
+    durationMs: decoded.durationMs,
+    byteLength: audioBytes.byteLength,
+    sha256,
+    createdAtMs: now,
+    updatedAtMs: now,
+  })
+  await host.writeJson(pocketReferenceProfileKey(id), JSON.stringify(summary))
+  const index = await readPocketReferenceProfileIndex(host)
+  await writePocketReferenceProfileIndex(host, [id, ...index.filter((candidate) => candidate !== id)])
+  return summary
+}
+
+export async function readAuroraBrowserPocketReferenceProfile(
+  profileId: string,
+  options: AuroraBrowserPocketReferenceProfileStoreOptions = {},
+): Promise<AuroraBrowserPocketReferenceProfileData | null> {
+  if (!isPocketReferenceProfileId(profileId)) return null
+  const host = await pocketReferenceProfileHost(options)
+  const summary = await readPocketReferenceProfileSummary(host, profileId)
+  if (!summary) return null
+  const bytes = await readPromotedBytes(host, pocketReferenceAudioKey(profileId), summary.byteLength)
+  if (!bytes || bytes.byteLength !== summary.byteLength) {
+    await deletePocketReferenceProfile(host, profileId)
+    await writePocketReferenceProfileIndex(host, (await readPocketReferenceProfileIndex(host)).filter((id) => id !== profileId))
+    return null
+  }
+  return Object.freeze({
+    ...summary,
+    audioBytes: bytes,
+  })
+}
+
+export async function deleteAuroraBrowserPocketReferenceProfile(
+  profileId: string,
+  options: AuroraBrowserPocketReferenceProfileStoreOptions = {},
+): Promise<void> {
+  if (!isPocketReferenceProfileId(profileId)) return
+  const host = await pocketReferenceProfileHost(options)
+  await deletePocketReferenceProfile(host, profileId)
+  await writePocketReferenceProfileIndex(host, (await readPocketReferenceProfileIndex(host)).filter((id) => id !== profileId))
 }
 
 export async function openHostedBrowserSttSpeechPack(
@@ -284,8 +415,46 @@ export async function openActiveBrowserSpeechPacks(
       const scope: AuroraBrowserModelPackScope = trusted.slotId ? { task, slotId: trusted.slotId } : { task }
       const pack = await openActiveBrowserModelPack(host, scope, trust.options)
       if (pack === null) continue
-      const taskModels = pack.models.filter((model) => model.task === task)
+      let taskModels = pack.models.filter((model) => model.task === task)
       if (taskModels.length === 0) return rejectedBrowserSpeechPacksStatus('rejected', 'unavailable')
+      let referenceFile: AuroraVoiceWebModelBindings['files'][number] | null = null
+      if (task === 'tts' && taskModels.some(isPocketTtsModel)) {
+        const referenceProfileId = trusted.referenceProfileId
+        if (!referenceProfileId) continue
+        const referenceProfile = options.loadReferenceProfile
+          ? await options.loadReferenceProfile(referenceProfileId)
+          : await readAuroraBrowserPocketReferenceProfile(referenceProfileId, { createHost: async () => host })
+        if (!referenceProfile) continue
+        const referenceFileId = `reference-audio:${referenceProfile.id}`
+        const referenceVirtualPath = `/aurora/reference/${referenceProfile.id}.wav`
+        referenceFile = Object.freeze({
+          task,
+          fileId: referenceFileId,
+          virtualPath: referenceVirtualPath,
+          sha256: referenceProfile.sha256,
+          byteLength: referenceProfile.byteLength,
+          bytes: referenceProfile.audioBytes,
+        })
+        taskModels = taskModels.map((model) => {
+          if (!isPocketTtsModel(model)) return model
+          return Object.freeze({
+            ...model,
+            files: Object.freeze([
+              ...model.files.filter((file) => file.role !== 'referenceAudio'),
+              Object.freeze({
+                role: 'referenceAudio' as const,
+                fileId: referenceFileId,
+                virtualPath: referenceVirtualPath,
+              }),
+            ]),
+            config: Object.freeze({
+              ...(model.config ?? {}),
+              referenceText: referenceProfile.transcript,
+              referenceSampleRateHz: referenceProfile.sampleRateHz,
+            }),
+          })
+        })
+      }
       packs.push(freezePack(pack))
       models.push(...taskModels)
       capabilities[task] = true
@@ -299,6 +468,7 @@ export async function openActiveBrowserSpeechPacks(
           bytes: await file.readAll(),
         })
       }
+      if (referenceFile) files.push(referenceFile)
     }
   } catch (error) {
     if (isBrowserModelPackError(error)) {
@@ -318,7 +488,7 @@ export async function openActiveBrowserSpeechPacks(
     modelBindings,
     capabilities,
     ...(options.ttsVoiceId ? { ttsVoiceId: options.ttsVoiceId } : {}),
-    revision: browserSpeechPacksRevision(packs),
+    revision: browserSpeechPacksRevision(packs, modelBindings),
   })
 }
 
@@ -451,11 +621,24 @@ function virtualPathFromModels(models: readonly AuroraVoiceWebModelDescriptor[],
   return `/aurora/${fileId}`
 }
 
-function browserSpeechPacksRevision(packs: readonly AuroraBrowserActiveModelPack[]): string {
-  return packs
+function browserSpeechPacksRevision(
+  packs: readonly AuroraBrowserActiveModelPack[],
+  modelBindings: AuroraVoiceWebModelBindings,
+): string {
+  const packRevision = packs
     .map((pack) => `${pack.identity.scope.task}:${pack.identity.packId}:${pack.identity.packVersion}:${pack.identity.variantId}`)
     .sort()
     .join('|')
+  const bindingRevision = modelBindings.files
+    .filter((file) => file.fileId.startsWith('reference-audio:'))
+    .map((file) => `${file.fileId}:${file.sha256}`)
+    .sort()
+    .join('|')
+  return bindingRevision ? `${packRevision}|${bindingRevision}` : packRevision
+}
+
+function isPocketTtsModel(model: AuroraVoiceWebModelDescriptor): boolean {
+  return model.task === 'tts' && model.family === 'pockettts'
 }
 
 async function activeBrowserVoiceCatalogPacks(
@@ -544,7 +727,259 @@ function safeReason(error: unknown, fallback: string): string {
   return fallback
 }
 
+type PocketReferenceProfileRecord = AuroraBrowserPocketReferenceProfileSummary
+
+const POCKET_REFERENCE_PROFILE_INDEX_KEY = 'aurora.voice.reference.v1:index'
+const POCKET_REFERENCE_PROFILE_PREFIX = 'aurora.voice.reference.v1:profile:'
+const POCKET_REFERENCE_AUDIO_PREFIX = 'aurora.voice.reference.v1:audio:'
+const POCKET_REFERENCE_MAX_BYTES = 10 * 1024 * 1024
+const POCKET_REFERENCE_MIN_DURATION_MS = 500
+const POCKET_REFERENCE_MAX_DURATION_MS = 30_000
+const POCKET_REFERENCE_MAX_TRANSCRIPT_CHARS = 1_000
+
+async function pocketReferenceProfileHost(
+  options: AuroraBrowserPocketReferenceProfileStoreOptions,
+): Promise<AuroraWebModelStoreHost> {
+  return options.createHost
+    ? await options.createHost()
+    : await AuroraBrowserModelStoreHost.create(options.globalObject)
+}
+
+async function readPocketReferenceProfileIndex(host: AuroraWebModelStoreHost): Promise<readonly string[]> {
+  try {
+    const raw = await host.readJson(POCKET_REFERENCE_PROFILE_INDEX_KEY)
+    if (!raw) return Object.freeze([])
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return Object.freeze([])
+    return Object.freeze(parsed.filter((id): id is string => typeof id === 'string' && isPocketReferenceProfileId(id)))
+  } catch {
+    return Object.freeze([])
+  }
+}
+
+async function writePocketReferenceProfileIndex(
+  host: AuroraWebModelStoreHost,
+  ids: readonly string[],
+): Promise<void> {
+  await host.writeJson(POCKET_REFERENCE_PROFILE_INDEX_KEY, JSON.stringify([...new Set(ids)].filter(isPocketReferenceProfileId)))
+}
+
+async function readPocketReferenceProfileSummary(
+  host: AuroraWebModelStoreHost,
+  profileId: string,
+): Promise<AuroraBrowserPocketReferenceProfileSummary | null> {
+  try {
+    const raw = await host.readJson(pocketReferenceProfileKey(profileId))
+    if (!raw) return null
+    return parsePocketReferenceProfileRecord(JSON.parse(raw) as unknown)
+  } catch {
+    return null
+  }
+}
+
+async function deletePocketReferenceProfile(host: AuroraWebModelStoreHost, profileId: string): Promise<void> {
+  await Promise.all([
+    host.deleteJson(pocketReferenceProfileKey(profileId)).catch(() => undefined),
+    host.deletePromoted(pocketReferenceAudioKey(profileId)).catch(() => undefined),
+    host.clearStaging(pocketReferenceAudioKey(profileId)).catch(() => undefined),
+  ])
+}
+
+async function readPromotedBytes(
+  host: AuroraWebModelStoreHost,
+  storageKey: string,
+  byteLength: number,
+): Promise<Uint8Array | null> {
+  const stat = await host.promotedStat(storageKey)
+  if (!stat || stat.byteLength !== byteLength) return null
+  const bytes = new Uint8Array(byteLength)
+  let offset = 0
+  while (offset < byteLength) {
+    const chunk = await host.readPromotedChunk(storageKey, offset, Math.min(1024 * 1024, byteLength - offset))
+    if (chunk.bytes.byteLength === 0) return null
+    bytes.set(chunk.bytes, offset)
+    offset += chunk.bytes.byteLength
+  }
+  return bytes
+}
+
+function parsePocketReferenceProfileRecord(value: unknown): AuroraBrowserPocketReferenceProfileSummary | null {
+  if (typeof value !== 'object' || value === null) return null
+  const record = value as Partial<PocketReferenceProfileRecord>
+  let transcript: string
+  try {
+    transcript = typeof record.transcript === 'string' ? normalizePocketReferenceTranscript(record.transcript) : ''
+  } catch {
+    return null
+  }
+  if (
+    typeof record.id !== 'string'
+    || !isPocketReferenceProfileId(record.id)
+    || typeof record.label !== 'string'
+    || record.label.trim() === ''
+    || transcript !== record.transcript
+    || typeof record.sampleRateHz !== 'number'
+    || !Number.isSafeInteger(record.sampleRateHz)
+    || record.sampleRateHz < 8_000
+    || record.sampleRateHz > 48_000
+    || typeof record.durationMs !== 'number'
+    || !Number.isFinite(record.durationMs)
+    || record.durationMs < POCKET_REFERENCE_MIN_DURATION_MS
+    || record.durationMs > POCKET_REFERENCE_MAX_DURATION_MS
+    || typeof record.byteLength !== 'number'
+    || !Number.isSafeInteger(record.byteLength)
+    || record.byteLength <= 0
+    || record.byteLength > POCKET_REFERENCE_MAX_BYTES
+    || typeof record.sha256 !== 'string'
+    || !isSha256(record.sha256)
+    || typeof record.createdAtMs !== 'number'
+    || !Number.isSafeInteger(record.createdAtMs)
+    || typeof record.updatedAtMs !== 'number'
+    || !Number.isSafeInteger(record.updatedAtMs)
+  ) {
+    return null
+  }
+  return Object.freeze({
+    id: record.id,
+    label: record.label,
+    transcript,
+    sampleRateHz: record.sampleRateHz,
+    durationMs: record.durationMs,
+    byteLength: record.byteLength,
+    sha256: record.sha256,
+    createdAtMs: record.createdAtMs,
+    updatedAtMs: record.updatedAtMs,
+  })
+}
+
+export function decodeAuroraPocketReferenceWav(bytes: Uint8Array): AuroraPocketReferenceWavDecodeResult {
+  if (bytes.byteLength < 44 || bytes.byteLength > POCKET_REFERENCE_MAX_BYTES) throw new Error('voice_sample_file')
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  if (ascii(bytes, 0, 4) !== 'RIFF' || ascii(bytes, 8, 4) !== 'WAVE') throw new Error('voice_sample_file')
+  let offset = 12
+  let audioFormat = 0
+  let channelCount = 0
+  let sampleRateHz = 0
+  let bitsPerSample = 0
+  let dataOffset = -1
+  let dataLength = 0
+  while (offset + 8 <= bytes.byteLength) {
+    const chunkId = ascii(bytes, offset, 4)
+    const chunkLength = view.getUint32(offset + 4, true)
+    const chunkDataOffset = offset + 8
+    if (chunkLength > bytes.byteLength - chunkDataOffset) throw new Error('voice_sample_file')
+    if (chunkId === 'fmt ') {
+      if (chunkLength < 16) throw new Error('voice_sample_file')
+      audioFormat = view.getUint16(chunkDataOffset, true)
+      channelCount = view.getUint16(chunkDataOffset + 2, true)
+      sampleRateHz = view.getUint32(chunkDataOffset + 4, true)
+      bitsPerSample = view.getUint16(chunkDataOffset + 14, true)
+    } else if (chunkId === 'data') {
+      dataOffset = chunkDataOffset
+      dataLength = chunkLength
+    }
+    offset = chunkDataOffset + chunkLength + (chunkLength % 2)
+  }
+  if (audioFormat !== 1 || channelCount !== 1 || bitsPerSample !== 16 || dataOffset < 0 || dataLength <= 0 || dataLength % 2 !== 0) {
+    throw new Error('voice_sample_format')
+  }
+  if (!Number.isSafeInteger(sampleRateHz) || sampleRateHz < 8_000 || sampleRateHz > 48_000) throw new Error('voice_sample_rate')
+  const durationMs = Math.round((dataLength / 2 / sampleRateHz) * 1000)
+  if (durationMs < POCKET_REFERENCE_MIN_DURATION_MS) throw new Error('voice_sample_short')
+  if (durationMs > POCKET_REFERENCE_MAX_DURATION_MS) throw new Error('voice_sample_long')
+  const pcm = bytes.slice(dataOffset, dataOffset + dataLength)
+  return Object.freeze({
+    normalizedBytes: writePcm16MonoWav(sampleRateHz, pcm),
+    samples: pcm16BytesToFloat32(pcm),
+    sampleRateHz,
+    durationMs,
+  })
+}
+
+function pcm16BytesToFloat32(pcmBytes: Uint8Array): Float32Array {
+  const view = new DataView(pcmBytes.buffer, pcmBytes.byteOffset, pcmBytes.byteLength)
+  const samples = new Float32Array(pcmBytes.byteLength / 2)
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = view.getInt16(index * 2, true)
+    samples[index] = sample < 0 ? sample / 32768 : sample / 32767
+  }
+  return samples
+}
+
+function writePcm16MonoWav(sampleRateHz: number, pcmBytes: Uint8Array): Uint8Array {
+  const output = new Uint8Array(44 + pcmBytes.byteLength)
+  const view = new DataView(output.buffer)
+  writeAscii(output, 0, 'RIFF')
+  view.setUint32(4, 36 + pcmBytes.byteLength, true)
+  writeAscii(output, 8, 'WAVE')
+  writeAscii(output, 12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, sampleRateHz, true)
+  view.setUint32(28, sampleRateHz * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  writeAscii(output, 36, 'data')
+  view.setUint32(40, pcmBytes.byteLength, true)
+  output.set(pcmBytes, 44)
+  return output
+}
+
+function normalizePocketReferenceTranscript(value: string): string {
+  const normalized = value.replace(/\s+/gu, ' ').trim()
+  if (normalized.length === 0 || normalized.length > POCKET_REFERENCE_MAX_TRANSCRIPT_CHARS) throw new Error('voice_sample_words')
+  return normalized
+}
+
+function pocketReferenceProfileLabel(label: string | undefined, filename: string | undefined, now: number): string {
+  const preferred = (label ?? filename ?? '').replace(/\s+/gu, ' ').trim()
+  const safe = preferred.length > 0 ? preferred : `Voice sample ${new Date(now).toLocaleDateString('en-US')}`
+  return safe.slice(0, 96)
+}
+
+function createPocketReferenceProfileId(globalObject: Parameters<typeof AuroraBrowserModelStoreHost.create>[0] | undefined): string {
+  const cryptoObject = globalObject?.crypto ?? globalThis.crypto
+  if (typeof cryptoObject?.randomUUID === 'function') return cryptoObject.randomUUID()
+  const random = new Uint8Array(16)
+  cryptoObject?.getRandomValues?.(random)
+  if (random.some((byte) => byte !== 0)) {
+    return Array.from(random, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  }
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`
+}
+
+function pocketReferenceProfileKey(profileId: string): string {
+  return `${POCKET_REFERENCE_PROFILE_PREFIX}${profileId}`
+}
+
+function pocketReferenceAudioKey(profileId: string): string {
+  return `${POCKET_REFERENCE_AUDIO_PREFIX}${profileId}`
+}
+
+function isPocketReferenceProfileId(value: string): boolean {
+  return SAFE_PROFILE_ID_RE.test(value)
+}
+
+function ascii(bytes: Uint8Array, offset: number, length: number): string {
+  let value = ''
+  for (let index = 0; index < length; index += 1) value += String.fromCharCode(bytes[offset + index] ?? 0)
+  return value
+}
+
+function writeAscii(bytes: Uint8Array, offset: number, value: string): void {
+  for (let index = 0; index < value.length; index += 1) bytes[offset + index] = value.charCodeAt(index)
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const subtle = globalThis.crypto?.subtle
+  if (!subtle) throw new Error('voice_sample_storage')
+  const digest = await subtle.digest('SHA-256', bytes)
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
 const SAFE_ID_RE = /^[A-Za-z0-9._-]{1,128}$/u
+const SAFE_PROFILE_ID_RE = /^[A-Za-z0-9._:@+-]{1,128}$/u
 const SHA256_RE = /^[a-f0-9]{64}$/u
 
 function isSha256(value: string): boolean {

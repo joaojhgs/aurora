@@ -39,6 +39,8 @@ import {
   sanitizeRuntimeProfileDocument,
   type AuroraBrowserSpeechPackCatalogResult,
   type AuroraBrowserSpeechPackCatalogSelection,
+  type AuroraBrowserPocketReferenceProfileInput,
+  type AuroraBrowserPocketReferenceProfileSummary,
   type AuroraBrowserSpeechPackInstallReceipt,
   type AuroraBrowserSpeechPackInstallRequest,
   type AuroraBrowserSpeechPackTask,
@@ -136,6 +138,9 @@ type BrowserMeshNodeServicesFactory = (
 export type BrowserVoicePackCatalogSource = {
   listCatalog(): Promise<AuroraBrowserSpeechPackCatalogResult>
   select(request: AuroraBrowserSpeechPackInstallRequest): Promise<AuroraBrowserSpeechPackInstallReceipt>
+  listReferenceProfiles?(): Promise<readonly AuroraBrowserPocketReferenceProfileSummary[]>
+  saveReferenceProfile?(input: AuroraBrowserPocketReferenceProfileInput): Promise<AuroraBrowserPocketReferenceProfileSummary>
+  deleteReferenceProfile?(profileId: string): Promise<void>
 }
 
 export const AURORA_BROWSER_VOICE_PACKS_CHANGED_EVENT = 'aurora-browser-voice-packs-changed'
@@ -815,12 +820,18 @@ function createBrowserLocalSpeechCatalogPort(): AuroraLocalSpeechCatalogPort {
         await persistBrowserVoiceCatalogSelection(receipt, request)
         return receipt
       },
+      ...(source.listReferenceProfiles ? { listReferenceProfiles: () => source.listReferenceProfiles!() } : {}),
+      ...(source.saveReferenceProfile ? { saveReferenceProfile: (input: AuroraBrowserPocketReferenceProfileInput) => source.saveReferenceProfile!(input) } : {}),
+      ...(source.deleteReferenceProfile ? { deleteReferenceProfile: (profileId: string) => source.deleteReferenceProfile!(profileId) } : {}),
     })
   }
   return createAuroraBrowserVoiceCatalogPort({
     available: typeof window !== 'undefined',
     async afterSelect(receipt, request) {
       await persistBrowserVoiceCatalogSelection(receipt, request)
+    },
+    async afterReferenceProfileDeleted(profileId) {
+      await clearDeletedBrowserVoiceReferenceProfile(profileId)
     },
   })
 }
@@ -842,6 +853,20 @@ async function persistBrowserVoiceCatalogSelection(
       ...(receipt.trust.voiceId ? { voiceId: receipt.trust.voiceId } : {}),
       ...(request.selection.voiceRevision ? { voiceRevision: request.selection.voiceRevision } : {}),
       ...(request.selection.referenceProfileId ? { referenceProfileId: request.selection.referenceProfileId } : {}),
+    },
+  })
+}
+
+async function clearDeletedBrowserVoiceReferenceProfile(profileId: string): Promise<void> {
+  const current = auroraBrowserRuntimeProfile()
+  const selected = current?.localNode.localSpeechSelection?.tts
+  if (!selected || selected.referenceProfileId !== profileId) return
+  await saveAuroraBrowserLocalSpeechSelection({
+    tts: {
+      packId: selected.packId,
+      packRevision: selected.packRevision,
+      ...(selected.voiceId ? { voiceId: selected.voiceId } : {}),
+      ...(selected.voiceRevision ? { voiceRevision: selected.voiceRevision } : {}),
     },
   })
 }
