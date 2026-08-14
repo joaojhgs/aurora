@@ -11,10 +11,10 @@ describe('browser voice catalog', () => {
     const summary = auroraBrowserVoiceCatalogSummary()
 
     expect(summary.speechEntries).toBe(21)
-    expect(summary.ttsEntries).toBe(536)
+    expect(summary.ttsEntries).toBe(537)
     expect(summary.speechLanguages).toContain('en')
     expect(summary.ttsLanguages).toContain('en-us')
-    expect(listAuroraBrowserVoiceCatalogEntries({ task: 'tts' })).toHaveLength(536)
+    expect(listAuroraBrowserVoiceCatalogEntries({ task: 'tts' })).toHaveLength(537)
     expect(listAuroraBrowserVoiceCatalogEntries({ task: 'stt' })).toHaveLength(12)
   })
 
