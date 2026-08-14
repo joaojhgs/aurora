@@ -1000,6 +1000,11 @@
                       "description": "Whisper model size for realtime transcription",
                       "default": "tiny"
                     },
+                    "model_size_or_path": {
+                      "type": "string",
+                      "description": "Faster Whisper preset, Hugging Face model ID, or local model path for realtime transcription",
+                      "default": "tiny"
+                    },
                     "device": {
                       "type": "string",
                       "enum": [
@@ -1043,6 +1048,11 @@
                         "large"
                       ],
                       "description": "Whisper model size for accurate transcription",
+                      "default": "base"
+                    },
+                    "model_size_or_path": {
+                      "type": "string",
+                      "description": "Faster Whisper preset, Hugging Face model ID, or local model path for accurate transcription",
                       "default": "base"
                     },
                     "device": {

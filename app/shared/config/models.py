@@ -427,6 +427,10 @@ class RealtimeModel(BaseConfigModel):
     """
     Whisper model size for realtime transcription
     """
+    model_size_or_path: str | None = "tiny"
+    """
+    Faster Whisper preset, Hugging Face model ID, or local model path for realtime transcription
+    """
     device: Literal["cpu", "cuda", "auto"] | None = "cpu"
     """
     Device for realtime model
@@ -445,6 +449,10 @@ class AccurateModel(BaseConfigModel):
     model_size: Literal["tiny", "base", "small", "medium", "large"] | None = "base"
     """
     Whisper model size for accurate transcription
+    """
+    model_size_or_path: str | None = "base"
+    """
+    Faster Whisper preset, Hugging Face model ID, or local model path for accurate transcription
     """
     device: Literal["cpu", "cuda", "auto"] | None = "cpu"
     """

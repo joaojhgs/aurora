@@ -403,7 +403,26 @@ class TranscriptionService(BaseService):
     def _set_model_status(self, model_role: str, status: str, message: str) -> None:
         """Record model readiness without exposing local paths in status messages."""
         self._model_status[model_role] = status
-        self._model_status_message[model_role] = message
+        self._model_status_message[model_role] = self._redact_status_message(message)
+
+    def _redact_status_message(self, message: str) -> str:
+        """Keep readiness messages bounded and free of selected model IDs/paths."""
+        allowed = {
+            "disabled",
+            "model_ready",
+            "not_loaded",
+            "preparing_model",
+            "previous_model_retained",
+        }
+        if message in allowed:
+            return message
+        if message.endswith("Error") or message.endswith("Exception"):
+            return message
+        return "model_unavailable"
+
+    def _safe_exception_type(self, exc: BaseException) -> str:
+        """Return exception class only; exception text may contain paths/model IDs."""
+        return type(exc).__name__
 
     def _model_ready(self, model_role: str) -> bool:
         """Return whether a realtime or accurate model is loaded and ready."""
@@ -490,24 +509,24 @@ class TranscriptionService(BaseService):
             self._set_model_status(role, "unavailable", "disabled")
             return None
         try:
-            self._set_model_status(role, "downloading", f"preparing_{model_size}")
-            log_info(f"Loading {role} model ({model_size}) on {device}...")
+            self._set_model_status(role, "downloading", "preparing_model")
+            log_info("Loading %s transcription model on %s", role, device)
             model = _create_whisper_model(
                 model_size,
                 device=device,
                 compute_type=compute_type,
                 download_root=download_root,
             )
-            self._set_model_status(role, "ready", model_size)
-            log_info(f"{role.capitalize()} model ready ({model_size})")
+            self._set_model_status(role, "ready", "model_ready")
+            log_info("%s transcription model ready", role.capitalize())
             return model
         except Exception as e:
-            self._set_model_status(role, "unavailable", type(e).__name__)
+            self._set_model_status(role, "unavailable", self._safe_exception_type(e))
             self._refresh_callable_capabilities()
             log_warning(
                 "%s transcription model unavailable; service remains active: %s",
                 role.capitalize(),
-                e,
+                self._safe_exception_type(e),
             )
             return None
 
@@ -799,8 +818,16 @@ class TranscriptionService(BaseService):
             self._transcriptions_done += 1
 
         except Exception as e:
-            log_error(f"Transcription error ({transcription_type.value}): {e}", exc_info=True)
-            self._emit_error(error_message=str(e), error_type="transcription_failed")
+            log_error(
+                "Transcription error (%s): %s",
+                transcription_type.value,
+                self._safe_exception_type(e),
+                exc_info=True,
+            )
+            self._emit_error(
+                error_message="Transcription failed",
+                error_type="transcription_failed",
+            )
 
     def _emit_result(
         self,
@@ -1319,8 +1346,10 @@ class TranscriptionService(BaseService):
             )
 
         except Exception as e:
-            log_error(f"Transcription error: {e}", exc_info=True)
-            raise
+            log_error("Transcription error: %s", self._safe_exception_type(e), exc_info=True)
+            if isinstance(e, ValueError) and str(e).startswith("Invalid base64 audio data"):
+                raise
+            raise RuntimeError("Transcription failed") from e
 
 
 # Export service

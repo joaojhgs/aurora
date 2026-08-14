@@ -262,12 +262,14 @@
         "realtime_model": {
           "enabled": true,
           "model_size": "tiny",
+          "model_size_or_path": "tiny",
           "device": "cpu",
           "compute_type": "int8"
         },
         "accurate_model": {
           "enabled": true,
           "model_size": "base",
+          "model_size_or_path": "base",
           "device": "cpu",
           "compute_type": "int8"
         }

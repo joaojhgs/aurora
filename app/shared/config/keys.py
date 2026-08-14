@@ -405,6 +405,7 @@ class _ServicesSttTranscriptionAccurateModelConfigPath(ConfigPath):
     device: ConfigPath
     enabled: ConfigPath
     model_size: ConfigPath
+    model_size_or_path: ConfigPath
 
     def __new__(cls) -> _ServicesSttTranscriptionAccurateModelConfigPath:
         self = super().__new__(cls, "services.stt.transcription.accurate_model")
@@ -412,6 +413,9 @@ class _ServicesSttTranscriptionAccurateModelConfigPath(ConfigPath):
         self.device = ConfigPath("services.stt.transcription.accurate_model.device")
         self.enabled = ConfigPath("services.stt.transcription.accurate_model.enabled")
         self.model_size = ConfigPath("services.stt.transcription.accurate_model.model_size")
+        self.model_size_or_path = ConfigPath(
+            "services.stt.transcription.accurate_model.model_size_or_path"
+        )
         return self
 
 
@@ -484,6 +488,7 @@ class _ServicesSttTranscriptionRealtimeModelConfigPath(ConfigPath):
     device: ConfigPath
     enabled: ConfigPath
     model_size: ConfigPath
+    model_size_or_path: ConfigPath
 
     def __new__(cls) -> _ServicesSttTranscriptionRealtimeModelConfigPath:
         self = super().__new__(cls, "services.stt.transcription.realtime_model")
@@ -491,6 +496,9 @@ class _ServicesSttTranscriptionRealtimeModelConfigPath(ConfigPath):
         self.device = ConfigPath("services.stt.transcription.realtime_model.device")
         self.enabled = ConfigPath("services.stt.transcription.realtime_model.enabled")
         self.model_size = ConfigPath("services.stt.transcription.realtime_model.model_size")
+        self.model_size_or_path = ConfigPath(
+            "services.stt.transcription.realtime_model.model_size_or_path"
+        )
         return self
 
 

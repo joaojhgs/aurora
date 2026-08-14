@@ -39,7 +39,7 @@ class BaseService(ABC):
         """
         self.module = module
         self._summary = summary
-        self._capabilities = capabilities or []
+        self._capabilities = list(capabilities) if capabilities is not None else None
         # self.service_name is deprecated, use self.module instead
         # For backward compatibility with logging/bus_init, we can use self.module
         self._bus = None
@@ -1063,7 +1063,11 @@ class BaseService(ABC):
                 module=self.module,
                 version=module_contract.version,
                 summary=self._summary or module_contract.summary,
-                capabilities=self._capabilities or module_contract.capabilities,
+                capabilities=(
+                    self._capabilities
+                    if self._capabilities is not None
+                    else module_contract.capabilities
+                ),
                 callable_features=module_contract.callable_features,
                 methods=methods,
                 instance_id=self._instance_id,

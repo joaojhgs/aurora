@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import http.client
 import ipaddress
 import json
 import os
@@ -27,8 +28,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
-from urllib.parse import urlparse
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.parse import urlparse, urlunparse
+from urllib.request import HTTPRedirectHandler
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import (
@@ -108,6 +109,29 @@ class _NoRedirectHandler(HTTPRedirectHandler):
         raise HTTPError(req.full_url, code, "redirects are not allowed", headers, fp)
 
 
+class _PinnedIPHTTPSConnection(http.client.HTTPSConnection):
+    """HTTPS connection pinned to a prevalidated IP while retaining hostname/SNI."""
+
+    def __init__(
+        self,
+        host: str,
+        *,
+        port: int,
+        pinned_ip: str,
+        timeout: float,
+    ) -> None:
+        super().__init__(host=host, port=port, timeout=timeout)
+        self._pinned_ip = pinned_ip
+
+    def connect(self) -> None:
+        sock = socket.create_connection(
+            (self._pinned_ip, self.port),
+            self.timeout,
+            self.source_address,
+        )
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+
 def _is_remote_model_path(value: str) -> bool:
     """Return true for direct network model selections, which are not allowed."""
     return urlparse(value).scheme in {"http", "https"}
@@ -157,18 +181,18 @@ def _validate_size(value: Any) -> int:
     return size
 
 
-def _validate_https_download_url(url: str) -> tuple[str, int]:
+def _validate_https_download_url(url: str) -> tuple[str, int, str]:
     parsed = urlparse(url)
     if parsed.scheme != "https" or not parsed.hostname:
         raise ValueError("wakeword catalog downloads must use HTTPS")
     if parsed.username or parsed.password:
         raise ValueError("wakeword catalog downloads must not include credentials")
     port = parsed.port or 443
-    _deny_ssrf_host(parsed.hostname, port)
-    return parsed.hostname, port
+    pinned_ip = _public_ip_for_host(parsed.hostname, port)
+    return parsed.hostname, port, pinned_ip
 
 
-def _deny_ssrf_host(hostname: str, port: int) -> None:
+def _public_ip_for_host(hostname: str, port: int) -> str:
     try:
         infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
     except OSError as exc:
@@ -176,7 +200,7 @@ def _deny_ssrf_host(hostname: str, port: int) -> None:
     addresses = {info[4][0] for info in infos}
     if not addresses:
         raise ValueError("wakeword catalog download host could not be resolved")
-    for address in addresses:
+    for address in sorted(addresses):
         ip = ipaddress.ip_address(address)
         if (
             ip.is_private
@@ -187,6 +211,7 @@ def _deny_ssrf_host(hostname: str, port: int) -> None:
             or ip.is_unspecified
         ):
             raise ValueError("wakeword catalog download host is not allowed")
+    return sorted(addresses)[0]
 
 
 def _wakeword_name_from_path(path: str) -> str:
@@ -394,8 +419,8 @@ class WakeWordService(BaseService):
         # Resolve local paths relative to project root and catalog keys into cache.
         model_paths = []
         resolved_wake_words: list[str] = []
-        for path in raw_paths:
-            try:
+        try:
+            for path in raw_paths:
                 if isinstance(path, str) and self._is_catalog_model_key(path):
                     entry = self._catalog_entry_for_key(path)
                     model_paths.append(await self._download_model_to_cache(entry))
@@ -405,17 +430,19 @@ class WakeWordService(BaseService):
                 else:
                     model_paths.append(str(resolve_path(path)))
                     resolved_wake_words.append(_wakeword_name_from_path(str(path)))
-            except WakeWordModelUnavailableError as exc:
-                self._readiness_status = "unavailable"
-                self._readiness_message = str(exc)
-                log_warning("Wake word model unavailable: %s", exc)
+        except (WakeWordModelUnavailableError, OSError, ValueError, json.JSONDecodeError) as exc:
+            self._readiness_status = "unavailable"
+            self._readiness_message = self._safe_unavailable_reason(exc)
+            log_warning("Wake word model selection unavailable: %s", self._readiness_message)
+            model_paths = []
+            resolved_wake_words = []
 
         wake_words = resolved_wake_words
 
         log_info("Wake word configuration loaded:")
         log_info(f"  Backend: {backend_type.value}")
-        log_info(f"  Wake words: {wake_words}")
-        log_info(f"  Model paths (resolved): {model_paths}")
+        log_info(f"  Wake word count: {len(wake_words)}")
+        log_info(f"  Model count: {len(model_paths)}")
         log_info(f"  Sensitivity: {sensitivity}")
         return backend_type, sensitivity, model_paths, wake_words, language_policy
 
@@ -485,7 +512,10 @@ class WakeWordService(BaseService):
             self._readiness_status = "unavailable"
             self._readiness_message = type(e).__name__
             self._refresh_callable_capabilities()
-            log_warning("Wake word backend unavailable; service remains active: %s", e)
+            log_warning(
+                "Wake word backend unavailable; service remains active: %s",
+                type(e).__name__,
+            )
             return None
 
     def _wakeword_cache_dir(self) -> str:
@@ -551,7 +581,7 @@ class WakeWordService(BaseService):
         return await asyncio.to_thread(self._download_model_to_cache_sync, entry, cache_dir)
 
     def _download_model_to_cache_sync(self, entry: WakeWordCatalogEntry, cache_dir: Path) -> str:
-        _validate_https_download_url(entry.url)
+        hostname, port, pinned_ip = _validate_https_download_url(entry.url)
         if entry.size_bytes > self._wakeword_cache_quota_bytes():
             raise WakeWordModelUnavailableError("catalog_entry_too_large")
 
@@ -559,14 +589,14 @@ class WakeWordService(BaseService):
         lock = _cache_lock(entry.sha256)
         with lock:
             if destination.is_file() and _hash_matches(destination, entry.sha256, entry.size_bytes):
-                log_info("Wake word model cache hit: %s", entry.key)
+                log_info("Wake word model cache hit")
                 self._prune_wakeword_cache(cache_dir, keep_digests={entry.sha256})
                 return str(destination)
 
             destination.parent.mkdir(parents=True, exist_ok=True)
             tmp_path = destination.parent / f".{entry.sha256}.{uuid.uuid4().hex}.part"
             try:
-                self._stream_https_to_temp(entry, tmp_path)
+                self._stream_https_to_temp(entry, tmp_path, hostname, port, pinned_ip)
                 os.replace(tmp_path, destination)
                 if not _hash_matches(destination, entry.sha256, entry.size_bytes):
                     destination.unlink(missing_ok=True)
@@ -575,35 +605,98 @@ class WakeWordService(BaseService):
             finally:
                 tmp_path.unlink(missing_ok=True)
 
-        log_info("Wake word model cached: %s", entry.key)
+        log_info("Wake word model cached")
         return str(destination)
 
     def _cache_path_for_digest(self, cache_dir: Path, sha256: str) -> Path:
         return cache_dir / sha256[:2] / sha256
 
-    def _stream_https_to_temp(self, entry: WakeWordCatalogEntry, tmp_path: Path) -> None:
+    def _stream_https_to_temp(
+        self,
+        entry: WakeWordCatalogEntry,
+        tmp_path: Path,
+        hostname: str,
+        port: int,
+        pinned_ip: str,
+    ) -> None:
         timeout = self._wakeword_download_timeout_seconds()
-        request = Request(entry.url, headers={"User-Agent": "AuroraWakeWordModelCache/1.0"})
-        opener = build_opener(_NoRedirectHandler())
+        parsed = urlparse(entry.url)
+        target = urlunparse(("", "", parsed.path or "/", parsed.params, parsed.query, ""))
+        connection = _PinnedIPHTTPSConnection(
+            hostname,
+            port=port,
+            pinned_ip=pinned_ip,
+            timeout=timeout,
+        )
         total = 0
         digest = hashlib.sha256()
-        with opener.open(request, timeout=timeout) as response, tmp_path.open("wb") as handle:
+        try:
+            connection.request(
+                "GET",
+                target,
+                headers={"User-Agent": "AuroraWakeWordModelCache/1.0"},
+            )
+            response = connection.getresponse()
+            if 300 <= response.status < 400:
+                raise HTTPError(
+                    entry.url,
+                    response.status,
+                    "redirects are not allowed",
+                    response.headers,
+                    response,
+                )
+            if response.status != 200:
+                raise HTTPError(
+                    entry.url,
+                    response.status,
+                    response.reason,
+                    response.headers,
+                    response,
+                )
             content_length = response.headers.get("Content-Length")
             if content_length is not None and int(content_length) != entry.size_bytes:
                 raise ValueError("wakeword catalog download size mismatch")
-            while True:
-                chunk = response.read(DOWNLOAD_CHUNK_BYTES)
-                if not chunk:
-                    break
-                total += len(chunk)
-                if total > entry.size_bytes:
-                    raise ValueError("wakeword catalog download exceeded expected size")
-                digest.update(chunk)
-                handle.write(chunk)
+            with tmp_path.open("wb") as handle:
+                while True:
+                    chunk = response.read(DOWNLOAD_CHUNK_BYTES)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > entry.size_bytes:
+                        raise ValueError("wakeword catalog download exceeded expected size")
+                    digest.update(chunk)
+                    handle.write(chunk)
+        finally:
+            connection.close()
         if total != entry.size_bytes:
             raise ValueError("wakeword catalog download size mismatch")
         if digest.hexdigest().lower() != entry.sha256:
             raise ValueError("wakeword catalog download checksum mismatch")
+
+    def _safe_unavailable_reason(self, exc: BaseException) -> str:
+        """Return a bounded status reason that cannot expose selected paths/IDs."""
+        if isinstance(exc, WakeWordModelUnavailableError):
+            return str(exc) or "model_unavailable"
+        if isinstance(exc, json.JSONDecodeError):
+            return "catalog_invalid"
+        if isinstance(exc, ValueError):
+            message = str(exc)
+            if "HTTPS" in message:
+                return "catalog_https_required"
+            if "sha256" in message:
+                return "catalog_digest_required"
+            if "size_bytes" in message:
+                return "catalog_size_required"
+            if "not allowed" in message:
+                return "catalog_host_denied"
+            if "checksum" in message:
+                return "catalog_checksum_mismatch"
+            if "size mismatch" in message or "expected size" in message:
+                return "catalog_size_mismatch"
+            return "catalog_invalid"
+        if isinstance(exc, OSError):
+            return "model_path_unavailable"
+        return type(exc).__name__
 
     def _wakeword_download_timeout_seconds(self) -> float:
         raw_timeout = os.environ.get(WAKEWORD_MODEL_DOWNLOAD_TIMEOUT_ENV, "30")
@@ -687,14 +780,6 @@ class WakeWordService(BaseService):
                     stream_id=stream_id,
                     timestamp=timestamp or 0.0,
                     backend=self._backend_type,
-                    metadata={
-                        "model": (
-                            self._model_paths[result.wake_word_index]
-                            if result.wake_word_index >= 0
-                            and result.wake_word_index < len(self._model_paths)
-                            else "unknown"
-                        )
-                    },
                 )
 
                 await self.bus.publish(

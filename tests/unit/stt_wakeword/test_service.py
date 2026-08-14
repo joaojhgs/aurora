@@ -32,6 +32,7 @@ from app.services.stt_wakeword.service import (
     WakeWordCatalogEntry,
     WakeWordService,
     _NoRedirectHandler,
+    _PinnedIPHTTPSConnection,
 )
 from app.shared.config.models import Wakeword
 from app.shared.contracts.models.stt import WakeWordMethods
@@ -270,8 +271,10 @@ async def test_wakeword_catalog_model_downloads_and_reuses_digest_cache(
 
     def fake_validate(url):
         calls.append(("validate", url))
+        return ("models.example", 443, "93.184.216.34")
 
-    def fake_stream(entry, destination):
+    def fake_stream(entry, destination, hostname, port, pinned_ip):
+        assert (hostname, port, pinned_ip) == ("models.example", 443, "93.184.216.34")
         calls.append(("download", entry.url))
         Path(destination).write_bytes(model_bytes)
 
@@ -305,10 +308,11 @@ async def test_wakeword_catalog_download_rejects_bad_checksum(service, tmp_path,
     monkeypatch.setenv("AURORA_WAKEWORD_MODEL_CACHE_DIR", str(tmp_path / "cache"))
     monkeypatch.setattr(
         "app.services.stt_wakeword.service._validate_https_download_url",
-        lambda _url: None,
+        lambda _url: ("models.example", 443, "93.184.216.34"),
     )
 
-    def fake_stream(entry, destination):
+    def fake_stream(entry, destination, hostname, port, pinned_ip):
+        del hostname, port, pinned_ip
         del entry
         Path(destination).write_bytes(b"wrong bytes")
 
@@ -334,6 +338,30 @@ async def test_wakeword_direct_url_selection_is_denied_fail_soft(mock_bus):
                 backend="oww",
                 threshold=0.5,
                 model_path="https://models.example/aurora.onnx",
+            )
+        )
+        with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
+            service = WakeWordService()
+
+        await service._load_config()
+
+    assert service._model_paths == []
+    assert service._wake_words == []
+    assert service._readiness_status == "unavailable"
+    assert service._readiness_message == "catalog_required"
+
+
+@pytest.mark.asyncio
+async def test_wakeword_mixed_selection_fails_full_selected_set(mock_bus, tmp_path):
+    """Any invalid selected wake model makes the whole configured set unavailable."""
+    local_model = tmp_path / "local.onnx"
+    local_model.write_bytes(b"model")
+    with patch("app.services.stt_wakeword.service.config_api") as mock_cfg:
+        mock_cfg.aget = AsyncMock(
+            return_value=Wakeword(
+                backend="oww",
+                threshold=0.5,
+                model_path=f"{local_model},https://models.example/aurora.onnx",
             )
         )
         with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
@@ -423,6 +451,39 @@ def test_wakeword_catalog_redirects_are_denied():
         )
 
 
+def test_pinned_https_connection_uses_prevalidated_ip_and_hostname_sni(monkeypatch):
+    """The HTTPS socket connects to the screened IP while TLS verifies hostname/SNI."""
+    created = []
+    wrapped = []
+    fake_socket = object()
+
+    def fake_create_connection(address, timeout, source_address):
+        created.append((address, timeout, source_address))
+        return fake_socket
+
+    class FakeContext:
+        def wrap_socket(self, sock, *, server_hostname):
+            wrapped.append((sock, server_hostname))
+            return "tls-socket"
+
+    monkeypatch.setattr(
+        "app.services.stt_wakeword.service.socket.create_connection", fake_create_connection
+    )
+    connection = _PinnedIPHTTPSConnection(
+        "models.example",
+        port=443,
+        pinned_ip="93.184.216.34",
+        timeout=3,
+    )
+    connection._context = FakeContext()
+
+    connection.connect()
+
+    assert created == [(("93.184.216.34", 443), 3, None)]
+    assert wrapped == [(fake_socket, "models.example")]
+    assert connection.sock == "tls-socket"
+
+
 @pytest.mark.asyncio
 async def test_wakeword_catalog_download_uses_per_digest_lock(service, tmp_path, monkeypatch):
     """Concurrent downloads for the same digest write once and share the cache hit."""
@@ -431,11 +492,12 @@ async def test_wakeword_catalog_download_uses_per_digest_lock(service, tmp_path,
     monkeypatch.setenv("AURORA_WAKEWORD_MODEL_CACHE_DIR", str(tmp_path / "cache"))
     monkeypatch.setattr(
         "app.services.stt_wakeword.service._validate_https_download_url",
-        lambda _url: None,
+        lambda _url: ("models.example", 443, "93.184.216.34"),
     )
     calls = 0
 
-    def fake_stream(entry, destination):
+    def fake_stream(entry, destination, hostname, port, pinned_ip):
+        del hostname, port, pinned_ip
         nonlocal calls
         calls += 1
         Path(destination).write_bytes(model_bytes)
@@ -474,12 +536,14 @@ async def test_wakeword_cache_prunes_old_files_to_quota(service, tmp_path, monke
     )
     monkeypatch.setattr(
         "app.services.stt_wakeword.service._validate_https_download_url",
-        lambda _url: None,
+        lambda _url: ("models.example", 443, "93.184.216.34"),
     )
     monkeypatch.setattr(
         service,
         "_stream_https_to_temp",
-        lambda entry, destination: Path(destination).write_bytes(model_bytes),
+        lambda entry, destination, hostname, port, pinned_ip: Path(destination).write_bytes(
+            model_bytes
+        ),
     )
     entry = WakeWordCatalogEntry(
         key="aurora",
@@ -683,6 +747,7 @@ async def test_wake_word_detected_emits_event(service, mock_backend, mock_bus):
     assert event.source == "microphone"
     assert event.stream_id == "test-stream"
     assert event.backend == WakeWordBackendType.OPENWAKEWORD
+    assert not hasattr(event, "metadata")
 
 
 @pytest.mark.asyncio

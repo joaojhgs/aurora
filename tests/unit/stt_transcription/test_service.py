@@ -15,6 +15,7 @@ Tests cover:
 # ruff: noqa: E402
 
 import asyncio
+import base64
 import sys
 from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
@@ -38,7 +39,7 @@ from app.messaging import (
 from app.services.stt_transcription.service import TranscriptionService, VADMode
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import AccurateModel, RealtimeModel, Stt, System, Transcription
-from app.shared.contracts.models.stt import TranscriptionMethods
+from app.shared.contracts.models.stt import TranscribeAudioRequest, TranscriptionMethods
 
 
 @pytest.fixture
@@ -317,6 +318,8 @@ class TestModelLoading:
 
         assert service._model_ready("realtime") is True
         assert service._model_ready("accurate") is True
+        assert service._model_status_message["realtime"] == "model_ready"
+        assert service._model_status_message["accurate"] == "model_ready"
         assert service._model_cache_dir
         mock_whisper_model.assert_any_call(
             "tiny",
@@ -361,6 +364,10 @@ class TestModelLoading:
             compute_type="int8",
             download_root=ANY,
         )
+        assert service._model_status_message["realtime"] == "model_ready"
+        assert service._model_status_message["accurate"] == "model_ready"
+        assert "Systran" not in str(service._model_status_message)
+        assert str(local_model) not in str(service._model_status_message)
 
     @pytest.mark.asyncio
     async def test_runtime_config_preserves_raw_model_size_or_path(
@@ -839,6 +846,62 @@ class TestErrorHandling:
         assert service.bus.publish.call_count >= 1
 
         await service.stop()
+
+    @pytest.mark.asyncio
+    async def test_transcription_error_event_redacts_model_identifiers(
+        self, service, mock_whisper_model, mock_vad, tmp_path
+    ):
+        """Internal error events do not expose local paths or HF model IDs."""
+        await service.start()
+        service.bus.publish.reset_mock()
+        local_path = tmp_path / "Systran" / "faster-whisper-large-v3"
+        service._realtime_model.transcribe.side_effect = RuntimeError(f"cannot open {local_path}")
+
+        service._transcribe_with_model(
+            np.zeros(16000, dtype=np.float32),
+            service._realtime_model,
+            TranscriptionType.REALTIME,
+            1000.0,
+        )
+        await asyncio.sleep(0.1)
+
+        error_events = [
+            call.args[1]
+            for call in service.bus.publish.call_args_list
+            if call.args and call.args[0] == TranscriptionMethods.ERROR
+        ]
+        assert error_events
+        assert error_events[-1].error_message == "Transcription failed"
+        assert "Systran" not in error_events[-1].error_message
+        assert str(local_path) not in error_events[-1].error_message
+
+        await service.stop()
+
+    @pytest.mark.asyncio
+    async def test_transcribe_audio_external_error_redacts_model_identifiers(
+        self, service, tmp_path
+    ):
+        """Synchronous external transcription errors use a generic product-safe message."""
+        local_path = tmp_path / "models" / "faster-whisper-local"
+        service._realtime_enabled = True
+        service._realtime_model = MagicMock()
+        service._realtime_model.transcribe.side_effect = RuntimeError(
+            f"cannot load Systran/faster-whisper-large-v3 from {local_path}"
+        )
+        request = TranscribeAudioRequest(
+            audio_data=base64.b64encode(b"\x00\x00" * 16000).decode("ascii"),
+            format="raw",
+            sample_rate=16000,
+            channels=1,
+            model="realtime",
+        )
+
+        with pytest.raises(RuntimeError) as exc_info:
+            await service.transcribe_audio(request)
+
+        assert str(exc_info.value) == "Transcription failed"
+        assert "Systran" not in str(exc_info.value)
+        assert str(local_path) not in str(exc_info.value)
 
     def test_emit_result_handles_no_event_loop(self, service):
         """Test result emission handles missing event loop gracefully."""
