@@ -1063,6 +1063,76 @@ describe('VoiceSettingsView', () => {
     assertNoForbiddenCopy(readyText)
     await readyRendered.unmount()
   })
+
+  it('updates the wake phrase without replacing selected speech packs', async () => {
+    const onLocalSpeechSelectionConfirmed = vi.fn()
+    const runtimeProfile = meshVoiceRuntimeProfile()
+    runtimeProfile.localNode.localSpeechPackState = 'ready'
+    runtimeProfile.localNode.localSpeechSelection = {
+      vad: { packId: 'vad-small.en', packRevision: 'vad-rev-1' },
+      kws: {
+        packId: 'sherpa-kws-zipformer-gigaspeech.en',
+        packRevision: 'kws-rev-2',
+      },
+      stt: { packId: 'whisper.en', packRevision: 'stt-rev-3' },
+      tts: {
+        packId: 'piper.en',
+        packRevision: 'pack-rev-4',
+        voiceId: 'standard:piper.en:ava',
+        voiceRevision: 'voice-rev-5',
+      },
+      wakePhrase: {
+        phraseId: 'aurora.en',
+        phrase: 'Aurora',
+        language: 'en',
+        revision: 'wakephrase-v1-old',
+      },
+    }
+    const client = voiceClient({
+      capabilities: capabilities({
+        engine_capabilities: { vad: true, kws: true, stt: true, tts: true },
+      }),
+    })
+    const { container, unmount } = await renderVoiceSettings(client, {
+      runtimeProfile,
+      onLocalSpeechSelectionConfirmed,
+    })
+
+    expect(visibleText(container)).toContain('Wake phrase')
+    expect(visibleText(container)).toContain('Hey Aurora')
+    expect(visibleText(container)).toContain('Selected')
+    await act(async () => {
+      buttonByText(container, 'Use phrase').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenCalledWith({
+      vad: { packId: 'vad-small.en', packRevision: 'vad-rev-1' },
+      kws: {
+        packId: 'sherpa-kws-zipformer-gigaspeech.en',
+        packRevision: 'kws-rev-2',
+      },
+      stt: { packId: 'whisper.en', packRevision: 'stt-rev-3' },
+      tts: {
+        packId: 'piper.en',
+        packRevision: 'pack-rev-4',
+        voiceId: 'standard:piper.en:ava',
+        voiceRevision: 'voice-rev-5',
+      },
+      wakePhrase: {
+        phraseId: 'hey-aurora.en',
+        phrase: 'Hey Aurora',
+        language: 'en',
+        revision: expect.stringMatching(/^wakephrase-v1-[a-z0-9]{7,}$/u),
+      },
+    })
+    const text = visibleText(container)
+    expect(text).toContain('Wake phrase updated.')
+    expect(text).not.toContain('sherpa-kws-zipformer-gigaspeech.en')
+    expect(text).not.toContain('kws-rev-2')
+    assertNoForbiddenCopy(text)
+    await unmount()
+  })
 })
 
 function voiceClient(overrides: {

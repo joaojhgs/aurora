@@ -64,10 +64,19 @@ export interface AuroraLocalSpeechAssetSelection {
   voiceRevision?: string | undefined
 }
 
+export interface AuroraLocalWakePhraseSelection {
+  phraseId: string
+  phrase: string
+  language: string
+  revision: string
+}
+
 export type AuroraLocalSpeechSelectionProfile = Partial<Record<
   AuroraLocalSpeechTask,
   AuroraLocalSpeechAssetSelection
->>
+>> & {
+  wakePhrase?: AuroraLocalWakePhraseSelection | undefined
+}
 
 export interface AuroraHomeConnectionProfile {
   mode: AuroraConnectionMode
@@ -437,10 +446,28 @@ function sanitizeLocalSpeechSelection(value: unknown): AuroraLocalSpeechSelectio
   if (!isRecord(value)) throw new Error('Runtime profile local speech selection is invalid')
   const out: AuroraLocalSpeechSelectionProfile = {}
   for (const [task, selection] of Object.entries(value)) {
+    if (task === 'wakePhrase') {
+      out.wakePhrase = sanitizeLocalWakePhraseSelection(selection)
+      continue
+    }
     if (!isLocalSpeechTask(task)) throw new Error('Runtime profile local speech selection task is invalid')
     out[task] = sanitizeLocalSpeechAssetSelection(selection, task)
   }
   return Object.keys(out).length > 0 ? out : undefined
+}
+
+function sanitizeLocalWakePhraseSelection(value: unknown): AuroraLocalWakePhraseSelection {
+  if (!isRecord(value)) throw new Error('Runtime profile local wake phrase selection is invalid')
+  const allowed = new Set(['phraseId', 'phrase', 'language', 'revision'])
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) throw new Error('Runtime profile local wake phrase selection field is invalid')
+  }
+  return {
+    phraseId: requiredCatalogText(value.phraseId, 'local wake phrase id', 128),
+    phrase: requiredPhraseText(value.phrase, 'local wake phrase text', 64),
+    language: requiredLocaleText(value.language, 'local wake phrase language'),
+    revision: requiredCatalogText(value.revision, 'local wake phrase revision', 128),
+  }
 }
 
 function sanitizeLocalSpeechAssetSelection(
@@ -620,6 +647,25 @@ function requiredCatalogText(value: unknown, label: string, maxLength: number): 
 function optionalCatalogText(value: unknown, label: string, maxLength: number): string | undefined {
   if (value === undefined) return undefined
   return requiredCatalogText(value, label, maxLength)
+}
+
+function requiredLocaleText(value: unknown, label: string): string {
+  const text = requiredText(value, label, 32)
+  if (!/^(?:[a-zA-Z]{2,3}|und)(?:-[a-zA-Z0-9]{2,8}){0,6}$/u.test(text)) {
+    throw new Error(`Runtime profile ${label} is invalid`)
+  }
+  return text
+}
+
+function requiredPhraseText(value: unknown, label: string, maxLength: number): string {
+  const text = requiredText(value, label, maxLength)
+  if (
+    !/^[\p{L}\p{N}][\p{L}\p{N}' -]*$/u.test(text)
+    || /(?:https?:|wss?:|token|secret|password|key=)/iu.test(text)
+  ) {
+    throw new Error(`Runtime profile ${label} is invalid`)
+  }
+  return text
 }
 
 function copyOptionalText(

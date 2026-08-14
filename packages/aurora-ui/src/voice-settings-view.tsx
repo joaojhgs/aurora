@@ -159,6 +159,7 @@ export function VoiceSettingsView({
   const [installMessage, setInstallMessage] = useState<string | null>(null)
   const [pendingActionKey, setPendingActionKey] = useState<string | null>(null)
   const [mutationMessage, setMutationMessage] = useState<string | null>(null)
+  const [wakePhraseMessage, setWakePhraseMessage] = useState<string | null>(null)
   const [confirmAction, setConfirmAction] = useState<VoiceConfirmation | null>(null)
   const [adminReason, setAdminReason] = useState('Manage spoken reply voices')
   const [adminReviewConfirmed, setAdminReviewConfirmed] = useState(false)
@@ -289,6 +290,14 @@ export function VoiceSettingsView({
   const languageCatalogMessage = state.languageCatalogState === 'limited'
     ? 'Language options could not be loaded. Review access and try again.'
     : null
+  const wakePhraseOptions = useMemo(() => wakePhraseOptionsFor(runtimeProfile), [runtimeProfile])
+  const selectedWakePhraseId = runtimeProfile?.localNode.localSpeechSelection?.wakePhrase?.phraseId ?? null
+  const canChooseWakePhrase = Boolean(
+    onLocalSpeechSelectionConfirmed
+    && runtimeProfile?.nodeMode === 'mesh-node'
+    && surfaceProfile.localSpeechPack.canRunLocalKws
+    && runtimeProfile.localNode.localSpeechSelection?.kws
+  )
 
   async function installProfile(profile: ManagedVoice) {
     if (!profile.installable || actionPending || !adminActionReady) return
@@ -418,6 +427,21 @@ export function VoiceSettingsView({
     }
   }
 
+  async function chooseWakePhrase(option: WakePhraseOption): Promise<void> {
+    const selection = confirmedWakePhraseSelection(runtimeProfile, option)
+    if (!selection || !onLocalSpeechSelectionConfirmed) return
+    setPendingActionKey(actionKeyFor('default', `wake:${option.phraseId}`))
+    setWakePhraseMessage('Updating wake phrase.')
+    try {
+      await onLocalSpeechSelectionConfirmed(selection)
+      setWakePhraseMessage('Wake phrase updated.')
+    } catch {
+      setWakePhraseMessage('Wake phrase was not changed. Try again.')
+    } finally {
+      setPendingActionKey(null)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4 py-4">
       <StatStrip
@@ -455,6 +479,11 @@ export function VoiceSettingsView({
       {mutationMessage ? (
         <p role="status" className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
           {mutationMessage}
+        </p>
+      ) : null}
+      {wakePhraseMessage ? (
+        <p role="status" className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+          {wakePhraseMessage}
         </p>
       ) : null}
 
@@ -498,6 +527,39 @@ export function VoiceSettingsView({
           {packRows.length === 0 && state.managementState === 'ready' && state.languageCatalogState === 'ready' ? (
             <p className="text-sm text-muted-foreground">No language options are available yet.</p>
           ) : null}
+        </div>
+      </Card>
+
+      <Card title="Wake phrase" description="Choose the phrase Aurora listens for.">
+        <div className="flex flex-col gap-3">
+          {!canChooseWakePhrase ? (
+            <p className="text-sm text-muted-foreground">Choose a wake language before changing the phrase.</p>
+          ) : null}
+          {wakePhraseOptions.map((option) => {
+            const pending = pendingActionKey === actionKeyFor('default', `wake:${option.phraseId}`)
+            const selected = selectedWakePhraseId === option.phraseId
+            return (
+              <div key={option.phraseId} className="flex flex-col gap-2 border-b border-border/60 pb-3 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{option.label}</p>
+                  <p className="text-xs text-muted-foreground">{option.detail}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={selected ? 'default' : 'secondary'}>{selected ? 'Selected' : 'Available'}</Badge>
+                  {canChooseWakePhrase && !selected ? (
+                    <Button
+                      variant="outline"
+                      className="h-8 px-3 text-xs"
+                      onClick={() => void chooseWakePhrase(option)}
+                      disabled={actionPending}
+                    >
+                      {pending ? 'Updating' : 'Use phrase'}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            )
+          })}
         </div>
       </Card>
 
@@ -736,6 +798,14 @@ interface ManagedLanguagePack {
   badge: string
 }
 
+interface WakePhraseOption {
+  phraseId: string
+  phraseText: string
+  locale: string
+  label: string
+  detail: string
+}
+
 interface VoiceConfirmation {
   kind: 'delete' | 'remove'
   profile: ManagedVoice
@@ -876,6 +946,90 @@ function confirmedTtsSelection(
       voiceRevision: profile.revision,
     },
   }
+}
+
+function confirmedWakePhraseSelection(
+  runtimeProfile: AuroraRuntimeProfileV2 | null,
+  option: WakePhraseOption,
+): AuroraLocalSpeechSelectionProfile | null {
+  const current = runtimeProfile?.localNode.localSpeechSelection
+  const kws = current?.kws
+  if (!kws) return null
+  return {
+    ...current,
+    wakePhrase: {
+      phraseId: option.phraseId,
+      phrase: option.phraseText,
+      language: option.locale,
+      revision: wakePhraseRevision(kws, option),
+    },
+  }
+}
+
+function wakePhraseOptionsFor(runtimeProfile: AuroraRuntimeProfileV2 | null): WakePhraseOption[] {
+  const kws = runtimeProfile?.localNode.localSpeechSelection?.kws
+  if (!kws) return []
+  const locale = localeForWakePack(kws.packId)
+  if (locale === 'zh') {
+    return [
+      wakePhraseOption('ni-hao-aurora.zh', '你好 Aurora', 'zh', 'Chinese'),
+      wakePhraseOption('aurora.zh', 'Aurora', 'zh', 'Chinese'),
+    ]
+  }
+  if (locale === 'en') {
+    return [
+      wakePhraseOption('hey-aurora.en', 'Hey Aurora', 'en', 'English'),
+      wakePhraseOption('aurora.en', 'Aurora', 'en', 'English'),
+    ]
+  }
+  return [
+    wakePhraseOption('hey-aurora.und', 'Hey Aurora', 'und', 'selected wake language'),
+    wakePhraseOption('aurora.und', 'Aurora', 'und', 'selected wake language'),
+  ]
+}
+
+function wakePhraseOption(
+  phraseId: string,
+  phraseText: string,
+  locale: string,
+  languageLabelValue: string,
+): WakePhraseOption {
+  return {
+    phraseId,
+    phraseText,
+    locale,
+    label: phraseText,
+    detail: `Works with the ${languageLabelValue} wake language.`,
+  }
+}
+
+function localeForWakePack(packId: string): 'en' | 'zh' | 'und' {
+  const normalized = packId.toLowerCase()
+  if (/(?:^|[._:-])(?:zh|cn|chinese|wenet)(?:$|[._:-])/u.test(normalized)) return 'zh'
+  if (/(?:^|[._:-])(?:en|english|giga|gigaspeech)(?:$|[._:-])/u.test(normalized)) return 'en'
+  return 'und'
+}
+
+function wakePhraseRevision(
+  kws: NonNullable<AuroraLocalSpeechSelectionProfile['kws']>,
+  option: WakePhraseOption,
+): string {
+  const normalized = [
+    option.phraseText.trim().replace(/\s+/gu, ' ').toLocaleLowerCase(),
+    option.locale.toLocaleLowerCase(),
+    kws.packId,
+    kws.packRevision,
+  ].join('\n')
+  return `wakephrase-v1-${fnv1aBase36(normalized)}`
+}
+
+function fnv1aBase36(value: string): string {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return hash.toString(36).padStart(7, '0')
 }
 
 function exactPackForVoiceSelection(

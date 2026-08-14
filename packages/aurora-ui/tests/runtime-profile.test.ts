@@ -245,13 +245,22 @@ describe('runtime profile document', () => {
         localSpeechPackState: 'downloading',
         localSpeechSelection: {
           vad: { packId: 'vad-small.en', packRevision: 'vad-rev-1' },
-          kws: { packId: 'wake.en', packRevision: 'wake-rev-2' },
+          kws: {
+            packId: 'wake.en',
+            packRevision: 'wake-rev-2',
+          },
           stt: { packId: 'stt.en', packRevision: 'stt-rev-3' },
           tts: {
             packId: 'piper.en',
             packRevision: 'pack-rev-4',
             voiceId: 'standard:piper.en:ava',
             voiceRevision: 'voice-rev-5',
+          },
+          wakePhrase: {
+            phraseId: 'hey-aurora.en',
+            phrase: 'Hey Aurora',
+            language: 'en',
+            revision: 'wakephrase-v1-abc123',
           },
         },
         meshMembership: {
@@ -325,6 +334,34 @@ describe('runtime profile document', () => {
         },
       },
     } as unknown as AuroraRuntimeProfileV2)).toThrow(/selection task/u)
+
+    expect(() => sanitizeRuntimeProfile({
+      ...migrated.profiles[0]!,
+      localNode: {
+        ...migrated.profiles[0]!.localNode,
+        localSpeechSelection: {
+          stt: {
+            packId: 'stt.en',
+            packRevision: 'stt-rev-1',
+            phraseId: 'hey-aurora.en',
+          },
+        },
+      },
+    } as unknown as AuroraRuntimeProfileV2)).toThrow(/asset selection field/u)
+
+    expect(() => sanitizeRuntimeProfile({
+      ...migrated.profiles[0]!,
+      localNode: {
+        ...migrated.profiles[0]!.localNode,
+        localSpeechSelection: {
+          wakePhrase: {
+            phraseId: 'hey-aurora.en',
+            phrase: 'Hey Aurora',
+            language: 'en',
+          },
+        },
+      },
+    } as unknown as AuroraRuntimeProfileV2)).toThrow(/wake phrase revision/u)
   })
 
   it('keeps exact local speech selections neutral to physical surface capability', () => {
