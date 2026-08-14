@@ -45,6 +45,28 @@ interface Capabilities {
     stt?: boolean
     tts?: boolean
   }
+  local_speech_assets?: {
+    vad?: LocalSpeechAsset[]
+    kws?: LocalSpeechAsset[]
+    wakeword?: LocalSpeechAsset[]
+    wkw?: LocalSpeechAsset[]
+    stt?: LocalSpeechAsset[]
+  }
+  local_speech_packs?: LocalSpeechAsset[]
+}
+
+interface LocalSpeechAsset {
+  task?: 'vad' | 'kws' | 'wakeword' | 'wkw' | 'stt'
+  pack_id?: string
+  packId?: string
+  revision?: string | null
+  pack_revision?: string | null
+  display_name?: string | null
+  label?: string | null
+  installed?: boolean
+  ready?: boolean
+  enabled?: boolean
+  compatible_engine?: boolean
 }
 
 interface LanguagePack {
@@ -186,7 +208,10 @@ describe('VoiceSettingsView', () => {
       installVoiceProfile,
       adminExecute
     })
-    const { container, unmount } = await renderVoiceSettings(client, { onLocalSpeechSelectionConfirmed })
+    const { container, unmount } = await renderVoiceSettings(client, {
+      onLocalSpeechSelectionConfirmed,
+      runtimeProfile: meshVoiceRuntimeProfile(),
+    })
 
     expect(installVoiceProfile).not.toHaveBeenCalled()
     await loadManagedVoices(container)
@@ -305,7 +330,10 @@ describe('VoiceSettingsView', () => {
     const client = voiceClient({
       adminExecute
     })
-    const { container, unmount } = await renderVoiceSettings(client, { onLocalSpeechSelectionConfirmed })
+    const { container, unmount } = await renderVoiceSettings(client, {
+      onLocalSpeechSelectionConfirmed,
+      runtimeProfile: meshVoiceRuntimeProfile(),
+    })
 
     await loadManagedVoices(container)
     await act(async () => {
@@ -381,7 +409,10 @@ describe('VoiceSettingsView', () => {
       return adminResult(mutationResult<DefaultStatus>('activated'))
     })
     const client = voiceClient({ setDefaultVoice, adminExecute })
-    const { container, unmount } = await renderVoiceSettings(client, { onLocalSpeechSelectionConfirmed })
+    const { container, unmount } = await renderVoiceSettings(client, {
+      onLocalSpeechSelectionConfirmed,
+      runtimeProfile: meshVoiceRuntimeProfile(),
+    })
 
     await loadManagedVoices(container)
     await act(async () => {
@@ -859,7 +890,10 @@ describe('VoiceSettingsView', () => {
       }),
       voices: [],
     })
-    const { container, unmount } = await renderVoiceSettings(client, { onLocalSpeechSelectionConfirmed })
+    const { container, unmount } = await renderVoiceSettings(client, {
+      onLocalSpeechSelectionConfirmed,
+      runtimeProfile: meshVoiceRuntimeProfile(),
+    })
 
     await loadManagedVoices(container)
     await act(async () => {

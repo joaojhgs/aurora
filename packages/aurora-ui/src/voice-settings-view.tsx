@@ -17,7 +17,7 @@ import {
 } from '#components/ui/alert-dialog'
 import { Badge } from '#components/ui/badge'
 import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from './platform-surface'
-import type { AuroraLocalSpeechSelectionProfile, AuroraRuntimeProfileV2 } from './runtime-profile'
+import type { AuroraLocalSpeechSelectionProfile, AuroraLocalSpeechTask, AuroraRuntimeProfileV2 } from './runtime-profile'
 
 type SpeechLanguage = string
 type TtsModelStatus = 'degraded' | 'error' | 'loading' | 'ready' | 'unavailable'
@@ -29,6 +29,7 @@ type DeleteStatus = 'deleted' | 'not_found' | 'rejected' | 'revision_conflict'
 type VoiceMutationKind = 'default' | 'delete' | 'install' | 'remove'
 type TtsLanguagePackCatalogStatus = 'available' | 'unavailable'
 type TtsLanguagePackCatalogErrorCode = 'catalog_unavailable'
+type LocalSpeechCatalogTask = Exclude<AuroraLocalSpeechTask, 'tts'>
 
 interface TtsResidentLanguagePack {
   pack_id: string
@@ -51,6 +52,22 @@ interface TtsCapabilities {
     stt?: boolean | undefined
     tts?: boolean | undefined
   } | undefined
+  local_speech_assets?: Partial<Record<LocalSpeechCatalogTask | 'wakeword' | 'wkw', LocalSpeechCatalogAsset[]>> | undefined
+  local_speech_packs?: LocalSpeechCatalogAsset[] | undefined
+}
+
+interface LocalSpeechCatalogAsset {
+  task?: LocalSpeechCatalogTask | 'wakeword' | 'wkw' | undefined
+  pack_id?: string | undefined
+  packId?: string | undefined
+  revision?: string | null | undefined
+  pack_revision?: string | null | undefined
+  display_name?: string | null | undefined
+  label?: string | null | undefined
+  installed?: boolean | undefined
+  ready?: boolean | undefined
+  enabled?: boolean | undefined
+  compatible_engine?: boolean | undefined
 }
 
 interface TtsVoice {
@@ -277,9 +294,6 @@ export function VoiceSettingsView({
   const managedProfiles = useMemo(() => state.profiles.map((profile, index) => toManagedVoice(profile, index, state.capabilities, state.packs)), [state.profiles, state.capabilities, state.packs])
   const voiceRows = useMemo(() => state.voices.map((voice, index) => toVoiceRow(voice, index, state.capabilities)), [state.voices, state.capabilities])
   const packRows = useMemo(() => toPackRows(state.capabilities, state.packs), [state.capabilities, state.packs])
-  const readyLanguages = useMemo(() => languageList(state.capabilities?.ready_languages), [state.capabilities])
-  const canShowInstall = state.managementState === 'ready'
-  const actionPending = pendingActionKey !== null || state.managementState === 'loading'
   const transportKind = client.transport?.kind ?? 'http'
   const surfaceProfile = useMemo(() => voiceSettingsSurfaceProfile({
     surfaceProfile: providedSurfaceProfile,
@@ -295,6 +309,9 @@ export function VoiceSettingsView({
     () => canManageLocalSpeechAssets ? toLocalSpeechAssetRows(state.capabilities, surfaceProfile.localSpeechPack) : [],
     [canManageLocalSpeechAssets, state.capabilities, surfaceProfile.localSpeechPack],
   )
+  const readyLanguages = useMemo(() => languageList(state.capabilities?.ready_languages), [state.capabilities])
+  const canShowInstall = state.managementState === 'ready'
+  const actionPending = pendingActionKey !== null || state.managementState === 'loading'
   const languageCatalogMessage = state.languageCatalogState === 'limited'
     ? 'Language options could not be loaded. Review access and try again.'
     : null
@@ -426,7 +443,32 @@ export function VoiceSettingsView({
 
   async function persistConfirmedTtsSelection(profile: ManagedVoice): Promise<boolean> {
     const selection = confirmedTtsSelection(profile, state.capabilities, state.packs)
-    if (!selection || !onLocalSpeechSelectionConfirmed) return true
+    return persistConfirmedLocalSpeechSelection(selection)
+  }
+
+  async function selectLocalSpeechAsset(row: LocalSpeechAssetRow): Promise<void> {
+    if (actionPending || !canManageLocalSpeechAssets) return
+    const actionKey = localSpeechActionKey(row)
+    setPendingActionKey(actionKey)
+    setMutationMessage(`Updating ${row.copy.noun.toLowerCase()} choice.`)
+    try {
+      const ok = await persistConfirmedLocalSpeechSelection({
+        [row.task]: {
+          packId: row.packId,
+          packRevision: row.revision,
+        },
+      })
+      setMutationMessage(ok
+        ? `${row.copy.noun} choice updated.`
+        : `${row.copy.noun} choice was not changed. Try again.`)
+    } finally {
+      setPendingActionKey(null)
+    }
+  }
+
+  async function persistConfirmedLocalSpeechSelection(selection: AuroraLocalSpeechSelectionProfile | null): Promise<boolean> {
+    if (!selection) return true
+    if (!canManageLocalSpeechAssets || !onLocalSpeechSelectionConfirmed) return true
     try {
       await onLocalSpeechSelectionConfirmed(selection)
       return true
@@ -537,6 +579,32 @@ export function VoiceSettingsView({
           ) : null}
         </div>
       </Card>
+
+      {localSpeechRows.length > 0 ? (
+        <Card title="On-device speech" description="Speech pieces this device can use locally.">
+          <div className="flex flex-col gap-3">
+            {localSpeechRows.map((row) => (
+              <div key={`${row.task}:${row.packId}`} className="flex flex-col gap-2 border-b border-border/60 pb-3 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{row.label}</p>
+                  <p className="text-xs text-muted-foreground">{row.copy.detail}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={row.ready ? 'default' : 'secondary'}>{row.ready ? 'Ready' : 'Needs setup'}</Badge>
+                  <Button
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => void selectLocalSpeechAsset(row)}
+                    disabled={actionPending || !row.ready}
+                  >
+                    {pendingActionKey === localSpeechActionKey(row) ? 'Updating' : row.copy.action}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <Card title="Wake phrase" description="Choose the phrase Aurora listens for.">
         <div className="flex flex-col gap-3">
@@ -824,6 +892,19 @@ interface WakePhraseOption {
   locale: string
   label: string
   detail: string
+}
+
+interface LocalSpeechAssetRow {
+  task: LocalSpeechCatalogTask
+  packId: string
+  revision: string
+  label: string
+  ready: boolean
+  copy: {
+    action: string
+    detail: string
+    noun: string
+  }
 }
 
 interface VoiceConfirmation {

@@ -1622,11 +1622,15 @@ function createRuntimeBackedThinProfileController(
       const profiles = currentRuntimeDocument.profiles.map((profile) => {
         if (profile.id !== currentRuntimeDocument.activeProfileId) return profile;
         found = true;
+        const localSpeechSelection = {
+          ...(profile.localNode.localSpeechSelection ?? {}),
+          ...selection,
+        };
         return sanitizeRuntimeProfile({
           ...profile,
           localNode: {
             ...profile.localNode,
-            localSpeechSelection: selection,
+            localSpeechSelection,
           },
         }, {
           allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),

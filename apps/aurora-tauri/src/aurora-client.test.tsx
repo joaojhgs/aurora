@@ -1302,7 +1302,25 @@ describe("Aurora Tauri runtime wrapper", () => {
   });
 
   it("persists exact local speech selection on the active runtime profile", async () => {
-    const profile = meshRuntimeProfile();
+    const profile = meshRuntimeProfile({
+      localNode: {
+        ...meshRuntimeProfile().localNode,
+        localSpeechSelection: {
+          vad: {
+            packId: "vad.webrtc",
+            packRevision: "vad-rev-1",
+          },
+          kws: {
+            packId: "wake.aurora",
+            packRevision: "wake-rev-1",
+          },
+          stt: {
+            packId: "whisper.tiny.en",
+            packRevision: "stt-rev-1",
+          },
+        },
+      },
+    });
     const store = createMemoryRuntimeProfileStore({
       version: 2,
       activeProfileId: profile.id,
@@ -1325,6 +1343,18 @@ describe("Aurora Tauri runtime wrapper", () => {
     const saved = await store.load();
     expect(saved.profiles[0]?.localNode.localSpeechPackState).toBe("ready");
     expect(saved.profiles[0]?.localNode.localSpeechSelection).toEqual({
+      vad: {
+        packId: "vad.webrtc",
+        packRevision: "vad-rev-1",
+      },
+      kws: {
+        packId: "wake.aurora",
+        packRevision: "wake-rev-1",
+      },
+      stt: {
+        packId: "whisper.tiny.en",
+        packRevision: "stt-rev-1",
+      },
       tts: {
         packId: "piper.en",
         packRevision: "pack-rev-1",
@@ -1334,6 +1364,54 @@ describe("Aurora Tauri runtime wrapper", () => {
     });
     expect(saved.profiles[0]?.nodeMode).toBe("mesh-node");
     expect(saved.profiles[0]?.runtimeTier).toBe("lightweight-ts");
+    await runtime.dispose();
+  });
+
+  it("merges exact local speech selection on remote-console profiles after caller capability gating", async () => {
+    const profile = thinRuntimeProfile("webrtc-preferred");
+    const runtimeProfile = {
+      version: 2 as const,
+      id: profile.id,
+      label: profile.label,
+      nodeMode: "remote-console" as const,
+      runtimeTier: "none" as const,
+      homeConnection: {
+        mode: profile.mode,
+        gatewayUrl: profile.gatewayUrl,
+        signalingUrl: profile.signalingUrl,
+        webrtcProfile: profile.webrtcProfile,
+      },
+      localNode: {
+        nodeName: profile.nodeName,
+        stablePeerId: profile.localStablePeerId,
+        enabledCapabilityPacks: [],
+      },
+    };
+    const store = createMemoryRuntimeProfileStore({
+      version: 2,
+      activeProfileId: runtimeProfile.id,
+      profiles: [runtimeProfile],
+    });
+    const runtime = createAuroraTauriRuntime({
+      runtimeProfileStore: store,
+      runtimeProfileDocument: await store.load(),
+    });
+
+    await runtime.thinProfileController?.updateActiveLocalSpeechSelection?.({
+      vad: {
+        packId: "vad.webrtc",
+        packRevision: "vad-rev-1",
+      },
+    });
+
+    const saved = await store.load();
+    expect(saved.profiles[0]?.nodeMode).toBe("remote-console");
+    expect(saved.profiles[0]?.localNode.localSpeechSelection).toEqual({
+      vad: {
+        packId: "vad.webrtc",
+        packRevision: "vad-rev-1",
+      },
+    });
     await runtime.dispose();
   });
 
@@ -2625,10 +2703,7 @@ describe("Tauri CI/E2E route gates", () => {
     const runtime = testRuntime(client);
     const getCapabilities = vi.spyOn(client.speech.tts, "getCapabilities");
     const listVoices = vi.spyOn(client.speech.tts, "listVoices");
-    const listVoiceProfiles = vi.spyOn(
-      client.speech.tts,
-      "listVoiceProfiles",
-    );
+    const adminExecute = vi.spyOn(client.admin, "execute");
     window.history.replaceState({}, "", "/settings");
     const settings = await mountOutcomeApp(runtime);
 
@@ -2642,7 +2717,7 @@ describe("Tauri CI/E2E route gates", () => {
       });
       expect(getCapabilities).not.toHaveBeenCalled();
       expect(listVoices).not.toHaveBeenCalled();
-      expect(listVoiceProfiles).not.toHaveBeenCalled();
+      expect(adminExecute).not.toHaveBeenCalled();
 
       const voiceTab = settings.container.querySelector<HTMLButtonElement>(
         "#settings-tab-voice",
@@ -2657,7 +2732,7 @@ describe("Tauri CI/E2E route gates", () => {
       await waitUntil(() => {
         expect(getCapabilities).toHaveBeenCalledTimes(1);
         expect(listVoices).toHaveBeenCalledTimes(1);
-        expect(listVoiceProfiles).toHaveBeenCalledTimes(1);
+        expect(adminExecute).not.toHaveBeenCalled();
         expect(settings.container.textContent).toContain(
           "Spoken reply voices",
         );
