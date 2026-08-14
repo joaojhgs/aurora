@@ -14,12 +14,14 @@ use std::sync::{
 use thiserror::Error;
 
 pub use aurora_voice_engine::{
-    BoundFiniteSttRequest, BoundTaskRequest, BoundTtsSynthesisRequest, EngineError, FiniteSttAudio,
-    FiniteSttAudioBuilder, FiniteSttPort, FiniteSttProviderBinding, FiniteSttResult,
-    FiniteSttRouteScope, ResourceReport, RouteFiniteSttBinding, RouteFiniteSttRequest,
-    RouteTtsBinding, RouteTtsSynthesisRequest, TaskCapability, TaskPackBinding, TaskProvider,
-    TaskReadiness, TaskRequest, TtsSynthesisConfig, TtsSynthesisPort, TtsSynthesisProviderBinding,
-    TtsSynthesisResult, VoiceTask,
+    BoundFiniteSttRequest, BoundKwsRequest, BoundStreamSession, BoundTaskRequest,
+    BoundTtsSynthesisRequest, BoundVadRequest, EngineError, FiniteSttAudio, FiniteSttAudioBuilder,
+    FiniteSttPort, FiniteSttProviderBinding, FiniteSttResult, FiniteSttRouteScope, KwsConfig,
+    KwsStreamProvider, ResourceReport, RouteFiniteSttBinding, RouteFiniteSttRequest,
+    RouteTtsBinding, RouteTtsSynthesisRequest, StreamResetReason, StreamingAudioFrame,
+    TaskCapability, TaskPackBinding, TaskProvider, TaskReadiness, TaskRequest, TtsSynthesisConfig,
+    TtsSynthesisPort, TtsSynthesisProviderBinding, TtsSynthesisResult, VadConfig,
+    VadStreamProvider, VoiceTask, MONO_CHANNELS, VAD_SAMPLE_RATE_HZ,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -59,6 +61,14 @@ pub enum VoiceCoreError {
     InvalidTransition,
     #[error("cancelled")]
     Cancelled,
+    #[error("wake provider unavailable")]
+    WakeUnavailable,
+    #[error("wake word not detected")]
+    WakeNotDetected,
+    #[error("speech was not detected after wake")]
+    SpeechNotDetected,
+    #[error("speech capture timed out")]
+    SpeechTimeout,
     #[error("transport fault: {code}")]
     TransportFault { code: String },
     #[error("invalid identifier")]
@@ -898,6 +908,99 @@ pub trait AudioOutput {
     ) -> Result<(), VoiceCoreError>;
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct WakeOrchestrationConfig {
+    vad_binding: TaskPackBinding,
+    kws_binding: TaskPackBinding,
+    vad_config: VadConfig,
+    kws_config: KwsConfig,
+    max_wake_frames: u64,
+    max_utterance_frames: u64,
+}
+
+impl WakeOrchestrationConfig {
+    pub fn new(
+        vad_binding: TaskPackBinding,
+        kws_binding: TaskPackBinding,
+        vad_config: VadConfig,
+        kws_config: KwsConfig,
+        max_wake_frames: u64,
+        max_utterance_frames: u64,
+    ) -> Result<Self, VoiceCoreError> {
+        let config = Self {
+            vad_binding,
+            kws_binding,
+            vad_config,
+            kws_config,
+            max_wake_frames,
+            max_utterance_frames,
+        };
+        config.validate()?;
+        Ok(config)
+    }
+
+    pub fn validate(&self) -> Result<(), VoiceCoreError> {
+        self.vad_config.validate_binding(&self.vad_binding)?;
+        self.kws_config.validate_binding(&self.kws_binding)?;
+        if self.max_wake_frames == 0 || self.max_utterance_frames == 0 {
+            return Err(VoiceCoreError::Engine(EngineError::InvalidRequest));
+        }
+        Ok(())
+    }
+
+    pub fn vad_binding(&self) -> &TaskPackBinding {
+        &self.vad_binding
+    }
+
+    pub fn kws_binding(&self) -> &TaskPackBinding {
+        &self.kws_binding
+    }
+
+    pub fn vad_config(&self) -> &VadConfig {
+        &self.vad_config
+    }
+
+    pub fn kws_config(&self) -> &KwsConfig {
+        &self.kws_config
+    }
+}
+
+struct WakeRuntime {
+    vad: Box<dyn VadStreamProvider>,
+    kws: Box<dyn KwsStreamProvider>,
+    config: WakeOrchestrationConfig,
+}
+
+impl WakeRuntime {
+    fn new(
+        vad: Box<dyn VadStreamProvider>,
+        kws: Box<dyn KwsStreamProvider>,
+        config: WakeOrchestrationConfig,
+    ) -> Result<Self, VoiceCoreError> {
+        config.validate()?;
+        Ok(Self { vad, kws, config })
+    }
+
+    fn ready(&self) -> bool {
+        provider_ready_for(&*self.vad, self.config.vad_binding())
+            && provider_ready_for(&*self.kws, self.config.kws_binding())
+    }
+
+    async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        self.vad.cancel_generation(generation).await?;
+        self.kws.cancel_generation(generation).await
+    }
+}
+
+fn provider_ready_for(provider: &dyn TaskProvider, binding: &TaskPackBinding) -> bool {
+    provider.resource_report().readiness == TaskReadiness::Ready
+        && provider.capabilities().iter().any(|capability| {
+            capability.streaming_enabled()
+                && capability.task() == binding.task()
+                && capability.binding() == binding
+        })
+}
+
 pub struct VoiceRuntime<A, E, P, T, O, S> {
     audio: A,
     stt: E,
@@ -905,6 +1008,7 @@ pub struct VoiceRuntime<A, E, P, T, O, S> {
     transport: T,
     output: O,
     sink: S,
+    wake: Option<WakeRuntime>,
     leases: CaptureLeaseManager,
     state: VoiceStateMachine,
     route_revision: RouteRevision,
@@ -939,6 +1043,7 @@ where
             transport,
             output,
             sink,
+            wake: None,
             leases: CaptureLeaseManager::new(),
             state: VoiceStateMachine::new(surface),
             route_revision: RouteRevision(0),
@@ -946,8 +1051,22 @@ where
         })
     }
 
+    pub fn with_wake_providers(
+        mut self,
+        vad: Box<dyn VadStreamProvider>,
+        kws: Box<dyn KwsStreamProvider>,
+        config: WakeOrchestrationConfig,
+    ) -> Result<Self, VoiceCoreError> {
+        self.wake = Some(WakeRuntime::new(vad, kws, config)?);
+        Ok(self)
+    }
+
     pub fn state(&self) -> VoiceState {
         self.state.state()
+    }
+
+    pub fn wake_background_ready(&self) -> bool {
+        self.wake.as_ref().is_some_and(WakeRuntime::ready)
     }
 
     pub fn has_active_capture(&self) -> bool {
@@ -1034,6 +1153,14 @@ where
         start_reason: CaptureStartReason,
     ) -> Result<String, VoiceCoreError> {
         lease.start_reason = start_reason;
+        if matches!(lease.start_reason, CaptureStartReason::BackgroundSession)
+            && !lease.background_eligible
+        {
+            return Err(VoiceCoreError::WakeUnavailable);
+        }
+        if !self.wake_background_ready() {
+            return Err(VoiceCoreError::WakeUnavailable);
+        }
         let lease = self.leases.request_start(lease)?;
         let mut capture_started = false;
         let result = match cancellation.check() {
@@ -1101,25 +1228,215 @@ where
         )
         .await?;
         cancellation.check()?;
-        self.transition_emit(
-            VoiceState::WakeDetected,
-            TransitionReason::WakeDetected,
-            lease.generation,
-            lease.route_revision,
-            TimestampMicros(at.0.saturating_add(2)),
-        )
-        .await?;
+        let utterance_frames = self
+            .capture_wake_utterance(
+                &lease,
+                TimestampMicros(at.0.saturating_add(2)),
+                &cancellation,
+            )
+            .await?;
         cancellation.check()?;
-        self.transition_emit(
-            VoiceState::CapturingUtterance,
-            TransitionReason::SpeechStarted,
-            lease.generation,
-            lease.route_revision,
-            TimestampMicros(at.0.saturating_add(3)),
+        self.finish_voice_turn_with_sample_frames(
+            lease,
+            TimestampMicros(at.0.saturating_add(4)),
+            cancellation,
+            utterance_frames,
         )
-        .await?;
-        self.finish_voice_turn(lease, TimestampMicros(at.0.saturating_add(4)), cancellation)
-            .await
+        .await
+    }
+
+    async fn capture_wake_utterance(
+        &mut self,
+        lease: &VoiceCaptureLease,
+        at: TimestampMicros,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<Vec<f32>>, VoiceCoreError> {
+        let wake = self.wake.as_mut().ok_or(VoiceCoreError::WakeUnavailable)?;
+        if !wake.ready() {
+            return Err(VoiceCoreError::WakeUnavailable);
+        }
+        wake.config.validate()?;
+        let vad_request = BoundTaskRequest::new(
+            TaskRequest {
+                task: VoiceTask::VoiceActivityDetection,
+                language: None,
+                generation: lease.generation.0,
+            },
+            wake.config.vad_binding.clone(),
+        )?;
+        let kws_request = BoundTaskRequest::new(
+            TaskRequest {
+                task: VoiceTask::KeywordSpotting,
+                language: None,
+                generation: lease.generation.0,
+            },
+            wake.config.kws_binding.clone(),
+        )?;
+        wake.vad.warm_task(vad_request.clone()).await?;
+        wake.kws.warm_task(kws_request.clone()).await?;
+        let vad_session = wake
+            .vad
+            .start_vad_session(BoundVadRequest::new(
+                vad_request,
+                wake.config.vad_config.clone(),
+            )?)
+            .await?;
+        let kws_session = wake
+            .kws
+            .start_kws_session(BoundKwsRequest::new(
+                kws_request,
+                wake.config.kws_config.clone(),
+            )?)
+            .await?;
+
+        let mut wake_frames = 0_u64;
+        let mut utterance_frames = 0_u64;
+        let mut wake_detected = false;
+        let mut speech_started = false;
+        let mut segmented_samples = Vec::<Vec<f32>>::new();
+
+        loop {
+            cancellation.check()?;
+            let Some(frame) = self.audio.next_frame().await? else {
+                break;
+            };
+            if frame.generation() != lease.generation {
+                continue;
+            }
+            if frame.route_revision() != lease.route_revision || frame.discontinuity() {
+                Self::reset_wake_sessions(
+                    wake,
+                    &vad_session,
+                    &kws_session,
+                    StreamResetReason::RouteChanged,
+                )
+                .await;
+                self.route_revision = RouteRevision(self.route_revision.0.saturating_add(1));
+                return Err(VoiceCoreError::InvalidTransition);
+            }
+
+            let stream_frame = StreamingAudioFrame::new(
+                frame.sequence(),
+                VAD_SAMPLE_RATE_HZ,
+                MONO_CHANNELS,
+                frame.samples(),
+                false,
+            )?;
+            if !wake_detected {
+                wake_frames = wake_frames.saturating_add(1);
+                if wake_frames > wake.config.max_wake_frames {
+                    Self::reset_wake_sessions(
+                        wake,
+                        &vad_session,
+                        &kws_session,
+                        StreamResetReason::Manual,
+                    )
+                    .await;
+                    return Err(VoiceCoreError::WakeNotDetected);
+                }
+                let kws_result = wake
+                    .kws
+                    .push_kws_frame(&kws_session, stream_frame, &|| cancellation.is_cancelled())
+                    .await?;
+                if kws_result.reset().is_some() {
+                    wake.vad
+                        .reset_vad_session(&vad_session, StreamResetReason::NewGeneration)
+                        .await?;
+                }
+                if kws_result.matches().is_empty() {
+                    continue;
+                }
+                wake_detected = true;
+                let transition = self.state.transition(
+                    VoiceState::WakeDetected,
+                    TransitionReason::WakeDetected,
+                    lease.generation,
+                    lease.route_revision,
+                    at,
+                )?;
+                self.sink.event(RuntimeEvent::State { transition }).await?;
+            }
+
+            utterance_frames = utterance_frames.saturating_add(1);
+            if utterance_frames > wake.config.max_utterance_frames {
+                let flushed = wake
+                    .vad
+                    .flush_vad_session(&vad_session, &|| cancellation.is_cancelled())
+                    .await?;
+                Self::push_segments(&mut segmented_samples, &flushed);
+                Self::reset_wake_sessions(
+                    wake,
+                    &vad_session,
+                    &kws_session,
+                    StreamResetReason::Manual,
+                )
+                .await;
+                if segmented_samples.is_empty() {
+                    return Err(VoiceCoreError::SpeechTimeout);
+                }
+                break;
+            }
+            let vad_result = wake
+                .vad
+                .push_vad_frame(&vad_session, stream_frame, &|| cancellation.is_cancelled())
+                .await?;
+            if vad_result.reset().is_some() {
+                wake.kws
+                    .reset_kws_session(&kws_session, StreamResetReason::NewGeneration)
+                    .await?;
+            }
+            if vad_result.detected() && !speech_started {
+                speech_started = true;
+                let transition = self.state.transition(
+                    VoiceState::CapturingUtterance,
+                    TransitionReason::SpeechStarted,
+                    lease.generation,
+                    lease.route_revision,
+                    TimestampMicros(at.0.saturating_add(1)),
+                )?;
+                self.sink.event(RuntimeEvent::State { transition }).await?;
+            }
+            Self::push_segments(&mut segmented_samples, vad_result.segments());
+            if speech_started && !segmented_samples.is_empty() {
+                break;
+            }
+        }
+
+        if wake_detected && speech_started && segmented_samples.is_empty() {
+            let flushed = wake
+                .vad
+                .flush_vad_session(&vad_session, &|| cancellation.is_cancelled())
+                .await?;
+            Self::push_segments(&mut segmented_samples, &flushed);
+        }
+        Self::reset_wake_sessions(wake, &vad_session, &kws_session, StreamResetReason::Manual)
+            .await;
+        if !wake_detected {
+            return Err(VoiceCoreError::WakeNotDetected);
+        }
+        if !speech_started || segmented_samples.is_empty() {
+            return Err(VoiceCoreError::SpeechNotDetected);
+        }
+        Ok(segmented_samples)
+    }
+
+    fn push_segments(target: &mut Vec<Vec<f32>>, segments: &[aurora_voice_engine::SpeechSegment]) {
+        target.extend(
+            segments
+                .iter()
+                .filter(|segment| !segment.samples().is_empty())
+                .map(|segment| segment.samples().to_vec()),
+        );
+    }
+
+    async fn reset_wake_sessions(
+        wake: &mut WakeRuntime,
+        vad_session: &BoundStreamSession,
+        kws_session: &BoundStreamSession,
+        reason: StreamResetReason,
+    ) {
+        let _ = wake.vad.reset_vad_session(vad_session, reason).await;
+        let _ = wake.kws.reset_kws_session(kws_session, reason).await;
     }
 
     async fn ensure_idle(
@@ -1172,6 +1489,7 @@ where
                 RouteFiniteSttRequest::new(route, None, lease.generation.0)?,
             )?,
         };
+        let mut sample_frames = Vec::<Vec<f32>>::new();
         cancellation.check()?;
         while let Some(frame) = self.audio.next_frame().await? {
             if cancellation.is_cancelled() {
@@ -1186,7 +1504,71 @@ where
                 self.route_revision = RouteRevision(self.route_revision.0.saturating_add(1));
                 return Err(VoiceCoreError::InvalidTransition);
             }
-            stt_audio.push_frame(frame.samples())?;
+            sample_frames.push(frame.samples().to_vec());
+        }
+        self.finish_voice_turn_with_builder(
+            lease,
+            at,
+            cancellation,
+            stt_binding,
+            stt_audio,
+            sample_frames,
+        )
+        .await
+    }
+
+    async fn finish_voice_turn_with_sample_frames(
+        &mut self,
+        lease: VoiceCaptureLease,
+        at: TimestampMicros,
+        cancellation: CancellationToken,
+        sample_frames: Vec<Vec<f32>>,
+    ) -> Result<String, VoiceCoreError> {
+        let stt_binding = self.stt.finite_stt_binding()?;
+        if stt_binding.sample_rate_hz() != VAD_SAMPLE_RATE_HZ
+            || stt_binding.channels() != MONO_CHANNELS
+        {
+            return Err(VoiceCoreError::Engine(EngineError::InvalidRequest));
+        }
+        let stt_audio = match stt_binding.clone() {
+            FiniteSttProviderBinding::LocalTask(binding) => {
+                let task_request = BoundTaskRequest::new(
+                    TaskRequest {
+                        task: VoiceTask::SpeechToText,
+                        language: None,
+                        generation: lease.generation.0,
+                    },
+                    *binding,
+                )?;
+                FiniteSttAudioBuilder::new(task_request)?
+            }
+            FiniteSttProviderBinding::Route(route) => FiniteSttAudioBuilder::new_route(
+                RouteFiniteSttRequest::new(route, None, lease.generation.0)?,
+            )?,
+        };
+        self.finish_voice_turn_with_builder(
+            lease,
+            at,
+            cancellation,
+            stt_binding,
+            stt_audio,
+            sample_frames,
+        )
+        .await
+    }
+
+    async fn finish_voice_turn_with_builder(
+        &mut self,
+        lease: VoiceCaptureLease,
+        at: TimestampMicros,
+        cancellation: CancellationToken,
+        stt_binding: FiniteSttProviderBinding,
+        mut stt_audio: FiniteSttAudioBuilder,
+        sample_frames: Vec<Vec<f32>>,
+    ) -> Result<String, VoiceCoreError> {
+        for samples in sample_frames {
+            cancellation.check()?;
+            stt_audio.push_frame(&samples)?;
         }
         if cancellation.is_cancelled() {
             stt_audio.clear();
@@ -1312,8 +1694,12 @@ where
             Ok(_) if cancellation.is_cancelled() => Err(VoiceCoreError::Cancelled),
             other => other,
         };
-        let (stt_cancel_result, tts_cancel_result) =
+        let (wake_cancel_result, stt_cancel_result, tts_cancel_result) =
             if result.is_err() || cancellation.is_cancelled() {
+                let wake_result = match self.wake.as_mut() {
+                    Some(wake) => wake.cancel_generation(lease.generation.0).await,
+                    None => Ok(()),
+                };
                 let stt_result = self
                     .stt
                     .cancel_finite_stt_generation(lease.generation.0)
@@ -1323,9 +1709,9 @@ where
                     .cancel_synthesis_generation(lease.generation.0)
                     .await;
                 let _ = self.transport.cancel_session(lease.generation).await;
-                (stt_result, tts_result)
+                (wake_result, stt_result, tts_result)
             } else {
-                (Ok(()), Ok(()))
+                (Ok(()), Ok(()), Ok(()))
             };
         let output_stop_result = if result.is_err() || cancellation.is_cancelled() {
             self.output
@@ -1356,6 +1742,7 @@ where
                 output_stop_result?;
                 stop_result?;
                 release_result?;
+                wake_cancel_result?;
                 stt_cancel_result?;
                 tts_cancel_result?;
                 Ok(value)
@@ -1363,11 +1750,17 @@ where
             Err(error) => {
                 let _ = stop_result;
                 let _ = release_result;
-                match (output_stop_result, stt_cancel_result, tts_cancel_result) {
-                    (Err(stop_error), _, _) => Err(Self::playback_cleanup_failed(stop_error)),
-                    (_, Err(stt_error), _) => Err(Self::stt_cleanup_failed(stt_error)),
-                    (_, _, Err(tts_error)) => Err(Self::tts_cleanup_failed(tts_error)),
-                    (Ok(()), Ok(()), Ok(())) => Err(error),
+                match (
+                    output_stop_result,
+                    wake_cancel_result,
+                    stt_cancel_result,
+                    tts_cancel_result,
+                ) {
+                    (Err(stop_error), _, _, _) => Err(Self::playback_cleanup_failed(stop_error)),
+                    (_, Err(wake_error), _, _) => Err(Self::wake_cleanup_failed(wake_error)),
+                    (_, _, Err(stt_error), _) => Err(Self::stt_cleanup_failed(stt_error)),
+                    (_, _, _, Err(tts_error)) => Err(Self::tts_cleanup_failed(tts_error)),
+                    (Ok(()), Ok(()), Ok(()), Ok(())) => Err(error),
                 }
             }
         }
@@ -1394,6 +1787,17 @@ where
             EngineError::TaskUnavailable => "tts_cleanup_task_unavailable".to_owned(),
             EngineError::ResourceLimit => "tts_cleanup_resource_limit".to_owned(),
             EngineError::InvalidRequest => "tts_cleanup_invalid_request".to_owned(),
+        };
+        VoiceCoreError::TransportFault { code }
+    }
+
+    fn wake_cleanup_failed(error: EngineError) -> VoiceCoreError {
+        let code = match error {
+            EngineError::Cancelled => "wake_cleanup_cancelled".to_owned(),
+            EngineError::ProviderFault { .. } => "wake_cleanup_provider_fault".to_owned(),
+            EngineError::TaskUnavailable => "wake_cleanup_task_unavailable".to_owned(),
+            EngineError::ResourceLimit => "wake_cleanup_resource_limit".to_owned(),
+            EngineError::InvalidRequest => "wake_cleanup_invalid_request".to_owned(),
         };
         VoiceCoreError::TransportFault { code }
     }
@@ -1463,7 +1867,22 @@ pub fn default_test_lease(owner: CaptureOwnerKind, at: TimestampMicros) -> Voice
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
+    use aurora_voice_engine::{
+        select_verified_variant, verify_manifest, AbiRequirements, BrowserFeature, CapabilityFlags,
+        Compatibility, CompressionKind, DeviceClass, EngineKind, KwsCooldownState, LanguageSupport,
+        LicenseGrant, LicenseInfo, ManifestSignature, ModelPackError, ModelPackFile,
+        ModelPackManifest, ModelPackVariant, PackTask, Provenance, ResourceBudget, RuntimeGates,
+        RuntimeSelection, RuntimeTarget, SelectedVariant, ShapeMetadata, SignatureVerifier,
+        TargetArch, TargetOs, TrustPolicy, TtsAudioChunk, VerifiedManifest,
+        VAD_WINDOW_SIZE_SAMPLES,
+    };
     use proptest::prelude::*;
+    use std::cell::RefCell;
+    use std::collections::{BTreeSet, VecDeque};
+    use std::rc::Rc;
+
+    const HASH: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     fn frame(sequence: u64, generation: Generation) -> Result<PcmFrame, VoiceCoreError> {
         PcmFrame::new(
@@ -1474,6 +1893,636 @@ mod tests {
             RouteRevision(1),
             generation,
         )
+    }
+
+    fn frame_with_samples(
+        sequence: u64,
+        generation: Generation,
+        samples: Vec<f32>,
+    ) -> Result<PcmFrame, VoiceCoreError> {
+        PcmFrame::new(
+            samples,
+            TimestampMicros(sequence),
+            sequence,
+            false,
+            RouteRevision(1),
+            generation,
+        )
+    }
+
+    struct AcceptingVerifier;
+
+    impl SignatureVerifier for AcceptingVerifier {
+        fn verify(
+            &self,
+            _canonical_json: &str,
+            signature: &ManifestSignature,
+        ) -> Result<bool, ModelPackError> {
+            Ok(signature.value == "signed")
+        }
+    }
+
+    fn test_license() -> LicenseInfo {
+        LicenseInfo {
+            identifier: "Apache-2.0".to_owned(),
+            text_url: "https://example.test/license".to_owned(),
+            text_sha256: HASH.to_owned(),
+            commercial_use: true,
+            redistribution: LicenseGrant::RedistributionAllowed,
+            attribution: "Aurora".to_owned(),
+        }
+    }
+
+    fn test_provenance() -> Provenance {
+        Provenance {
+            upstream_source: "https://example.test/source".to_owned(),
+            upstream_revision: "rev1".to_owned(),
+            build_recipe_sha256: HASH.to_owned(),
+        }
+    }
+
+    fn test_processing() -> aurora_voice_engine::ProcessingMetadata {
+        aurora_voice_engine::ProcessingMetadata {
+            tokenizer_sha256: None,
+            operator_inventory_sha256: HASH.to_owned(),
+            preprocessing_abi: "pre-v1".to_owned(),
+            postprocessing_abi: "post-v1".to_owned(),
+            shapes: ShapeMetadata {
+                sample_rate_hz: VAD_SAMPLE_RATE_HZ,
+                channels: MONO_CHANNELS,
+                frame_size: VAD_WINDOW_SIZE_SAMPLES as u32,
+                window_size: 1024,
+                cache_state: vec!["state".to_owned()],
+            },
+        }
+    }
+
+    fn test_file(file_id: &str, task: PackTask) -> ModelPackFile {
+        ModelPackFile {
+            file_id: file_id.to_owned(),
+            asset_id: file_id.to_owned(),
+            task,
+            byte_size: 100,
+            sha256: HASH.to_owned(),
+            url: format!("https://example.test/{file_id}"),
+            compression: CompressionKind::None,
+            installed_size: 100,
+            install_order: 0,
+            dependencies: Vec::new(),
+            license: test_license(),
+            provenance: test_provenance(),
+            processing: test_processing(),
+            raven: None,
+            revocation: None,
+        }
+    }
+
+    fn test_variant(file_id: &str) -> ModelPackVariant {
+        ModelPackVariant {
+            variant_id: "linux".to_owned(),
+            target: RuntimeTarget::Desktop,
+            os: TargetOs::Linux,
+            arch: TargetArch::X86_64,
+            engine: EngineKind::SherpaOnnx,
+            required_browser_features: Vec::<BrowserFeature>::new(),
+            min_device_memory_mb: None,
+            runtime_gates: RuntimeGates {
+                min_cpu_threads: 1,
+                max_rtf_millis_per_second: 1_000,
+                min_device_class: DeviceClass::Low,
+            },
+            resource_budget: ResourceBudget {
+                max_download_bytes: 1024,
+                max_installed_bytes: 1024,
+                max_memory_bytes: 1024,
+            },
+            compatibility: Compatibility {
+                group_id: "group-a".to_owned(),
+                voice_state_group_id: "voice-state-a".to_owned(),
+                preprocessing_abi: "pre-v1".to_owned(),
+                postprocessing_abi: "post-v1".to_owned(),
+                sample_rate_hz: VAD_SAMPLE_RATE_HZ,
+                channels: MONO_CHANNELS,
+                frame_size: VAD_WINDOW_SIZE_SAMPLES as u32,
+                interoperable: true,
+            },
+            file_ids: vec![file_id.to_owned()],
+            abi: AbiRequirements {
+                min_aurora_version: "1.0.0".to_owned(),
+                min_runtime_version: "1.0.0".to_owned(),
+                min_engine_version: "1.0.0".to_owned(),
+                engine_source_revision: "rev1".to_owned(),
+                build_flags: vec!["cpu".to_owned()],
+            },
+            revocation: None,
+        }
+    }
+
+    fn verified_selection(pack_task: PackTask) -> (VerifiedManifest, SelectedVariant) {
+        let manifest = ModelPackManifest {
+            schema_version: 1,
+            pack_id: format!("pack-{pack_task:?}"),
+            pack_version: "1.0.0".to_owned(),
+            display_name: "Pack".to_owned(),
+            tasks: vec![pack_task],
+            license: test_license(),
+            languages: vec![LanguageSupport {
+                language: "en".to_owned(),
+                locale: Some("en-US".to_owned()),
+                fixed_language: true,
+                auto_detect: false,
+            }],
+            capabilities: CapabilityFlags {
+                streaming: true,
+                cancellation: true,
+            },
+            provenance: test_provenance(),
+            files: vec![test_file("model", pack_task)],
+            variants: vec![test_variant("model")],
+            rollback_from: None,
+            supersedes_pack_id: None,
+            revocation: None,
+            signature: Some(ManifestSignature {
+                key_id: "key1".to_owned(),
+                algorithm: "ed25519".to_owned(),
+                value: "signed".to_owned(),
+            }),
+        };
+        let verified = verify_manifest(manifest, &TrustPolicy::default(), Some(&AcceptingVerifier))
+            .expect("verified manifest");
+        let selection = select_verified_variant(
+            &verified,
+            &RuntimeSelection {
+                target: RuntimeTarget::Desktop,
+                os: TargetOs::Linux,
+                arch: TargetArch::X86_64,
+                browser_features: BTreeSet::new(),
+                device_memory_mb: None,
+                max_download_bytes: 1024,
+                max_installed_bytes: 1024,
+                max_memory_bytes: 1024,
+                cpu_threads: 1,
+                max_rtf_millis_per_second: 1_000,
+                device_class: DeviceClass::Low,
+                require_interoperable: true,
+            },
+        )
+        .expect("selected variant");
+        (verified, selection)
+    }
+
+    fn test_task_binding(task: VoiceTask, pack_task: PackTask) -> TaskPackBinding {
+        let (verified, selection) = verified_selection(pack_task);
+        TaskPackBinding::from_selection(task, &verified, &selection).expect("task binding")
+    }
+
+    #[derive(Clone)]
+    struct FakeAudioInput {
+        frames: Rc<RefCell<VecDeque<PcmFrame>>>,
+        stopped: Rc<RefCell<Vec<TransitionReason>>>,
+    }
+
+    impl FakeAudioInput {
+        fn new(frames: Vec<PcmFrame>) -> Self {
+            Self {
+                frames: Rc::new(RefCell::new(frames.into())),
+                stopped: Rc::new(RefCell::new(Vec::new())),
+            }
+        }
+
+        fn stopped(&self) -> Vec<TransitionReason> {
+            self.stopped.borrow().clone()
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl AudioInput for FakeAudioInput {
+        async fn start(&mut self, _lease: VoiceCaptureLease) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+
+        async fn stop(&mut self, reason: TransitionReason) -> Result<(), VoiceCoreError> {
+            self.stopped.borrow_mut().push(reason);
+            Ok(())
+        }
+
+        async fn next_frame(&mut self) -> Result<Option<PcmFrame>, VoiceCoreError> {
+            Ok(self.frames.borrow_mut().pop_front())
+        }
+
+        fn current_route_revision(&self) -> RouteRevision {
+            RouteRevision(1)
+        }
+    }
+
+    #[derive(Clone)]
+    struct FakeEngine {
+        transcript: String,
+        transcribed: Rc<RefCell<Vec<Vec<f32>>>>,
+        stt_cancelled: Rc<RefCell<Vec<u64>>>,
+        tts_cancelled: Rc<RefCell<Vec<u64>>>,
+    }
+
+    impl FakeEngine {
+        fn new(transcript: &str) -> Self {
+            Self {
+                transcript: transcript.to_owned(),
+                transcribed: Rc::new(RefCell::new(Vec::new())),
+                stt_cancelled: Rc::new(RefCell::new(Vec::new())),
+                tts_cancelled: Rc::new(RefCell::new(Vec::new())),
+            }
+        }
+
+        fn transcribed_audio(&self) -> Vec<Vec<f32>> {
+            self.transcribed.borrow().clone()
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl FiniteSttPort for FakeEngine {
+        fn finite_stt_binding(&self) -> Result<FiniteSttProviderBinding, EngineError> {
+            Ok(FiniteSttProviderBinding::Route(RouteFiniteSttBinding::new(
+                "route.stt.fake",
+                FiniteSttRouteScope::LoopbackSidecar,
+                VAD_SAMPLE_RATE_HZ,
+                10,
+                1,
+            )?))
+        }
+
+        async fn warm_finite_stt(
+            &mut self,
+            _binding: FiniteSttProviderBinding,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        async fn transcribe_finite(
+            &mut self,
+            request: BoundFiniteSttRequest,
+            audio: FiniteSttAudio,
+            cancellation: &dyn Fn() -> bool,
+        ) -> Result<FiniteSttResult, EngineError> {
+            if cancellation() {
+                return Err(EngineError::Cancelled);
+            }
+            self.transcribed.borrow_mut().push(audio.samples().to_vec());
+            FiniteSttResult::new(&request, &audio, self.transcript.clone())
+        }
+
+        async fn cancel_finite_stt_generation(
+            &mut self,
+            generation: u64,
+        ) -> Result<(), EngineError> {
+            self.stt_cancelled.borrow_mut().push(generation);
+            Ok(())
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl TtsSynthesisPort for FakeEngine {
+        fn synthesis_binding(&self) -> Result<TtsSynthesisProviderBinding, EngineError> {
+            Ok(TtsSynthesisProviderBinding::Route(RouteTtsBinding::new(
+                "route.tts.fake",
+                "default",
+                VAD_SAMPLE_RATE_HZ,
+                1,
+            )?))
+        }
+
+        async fn warm_synthesis(
+            &mut self,
+            _binding: TtsSynthesisProviderBinding,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        async fn synthesize_text(
+            &mut self,
+            request: BoundTtsSynthesisRequest,
+            cancellation: &dyn Fn() -> bool,
+        ) -> Result<TtsSynthesisResult, EngineError> {
+            if cancellation() {
+                return Err(EngineError::Cancelled);
+            }
+            let chunk = TtsAudioChunk::new(
+                &request,
+                1,
+                VAD_SAMPLE_RATE_HZ,
+                MONO_CHANNELS,
+                vec![0; 64],
+                true,
+            )?;
+            TtsSynthesisResult::new(&request, vec![chunk], false)
+        }
+
+        async fn cancel_synthesis_generation(
+            &mut self,
+            generation: u64,
+        ) -> Result<(), EngineError> {
+            self.tts_cancelled.borrow_mut().push(generation);
+            Ok(())
+        }
+    }
+
+    struct FakeTransport {
+        response: String,
+        invoked: Rc<RefCell<Vec<AssistantTurnRequest>>>,
+        cancelled: Rc<RefCell<Vec<Generation>>>,
+    }
+
+    impl FakeTransport {
+        fn new(response: &str) -> Self {
+            Self {
+                response: response.to_owned(),
+                invoked: Rc::new(RefCell::new(Vec::new())),
+                cancelled: Rc::new(RefCell::new(Vec::new())),
+            }
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl SpeechTransport for FakeTransport {
+        async fn assistant_turn(
+            &mut self,
+            request: AssistantTurnRequest,
+            cancellation: CancellationToken,
+        ) -> Result<AssistantTurnResponse, VoiceCoreError> {
+            cancellation.check()?;
+            self.invoked.borrow_mut().push(request);
+            Ok(AssistantTurnResponse {
+                text: self.response.clone(),
+                session_id: None,
+                request_id: None,
+                correlation_id: None,
+            })
+        }
+
+        async fn cancel_session(&mut self, generation: Generation) -> Result<(), VoiceCoreError> {
+            self.cancelled.borrow_mut().push(generation);
+            Ok(())
+        }
+    }
+
+    struct FakeAudioOutput {
+        played: Rc<RefCell<Vec<Generation>>>,
+    }
+
+    impl FakeAudioOutput {
+        fn new() -> Self {
+            Self {
+                played: Rc::new(RefCell::new(Vec::new())),
+            }
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl AudioOutput for FakeAudioOutput {
+        async fn play(
+            &mut self,
+            context: AudioPlaybackContext,
+            _audio: TtsSynthesisResult,
+            cancellation: &dyn Fn() -> bool,
+        ) -> Result<AudioPlaybackReceipt, VoiceCoreError> {
+            if cancellation() {
+                return Err(VoiceCoreError::Cancelled);
+            }
+            self.played.borrow_mut().push(context.generation);
+            Ok(AudioPlaybackReceipt::new(
+                context,
+                1,
+                64,
+                TimestampMicros(context.started_at.0.saturating_add(1)),
+            ))
+        }
+
+        async fn stop(
+            &mut self,
+            _generation: Generation,
+            _reason: TransitionReason,
+        ) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+    }
+
+    #[derive(Default)]
+    struct FakeEventSink {
+        events: Vec<RuntimeEvent>,
+    }
+
+    #[async_trait(?Send)]
+    impl RuntimeEventSink for FakeEventSink {
+        async fn snapshot(&mut self, _snapshot: RedactedSnapshot) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+
+        async fn event(&mut self, event: RuntimeEvent) -> Result<(), VoiceCoreError> {
+            self.events.push(event);
+            Ok(())
+        }
+    }
+
+    struct FakeKwsProvider {
+        binding: TaskPackBinding,
+        match_sequences: BTreeSet<u64>,
+        ready: bool,
+        cancelled: Rc<RefCell<Vec<u64>>>,
+    }
+
+    impl FakeKwsProvider {
+        fn new(binding: TaskPackBinding, match_sequences: impl IntoIterator<Item = u64>) -> Self {
+            Self {
+                binding,
+                match_sequences: match_sequences.into_iter().collect(),
+                ready: true,
+                cancelled: Rc::new(RefCell::new(Vec::new())),
+            }
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl TaskProvider for FakeKwsProvider {
+        fn capabilities(&self) -> Vec<TaskCapability> {
+            vec![TaskCapability::new(self.binding.clone()).streaming(true)]
+        }
+
+        fn resource_report(&self) -> ResourceReport {
+            ResourceReport {
+                loaded_tasks: vec![VoiceTask::KeywordSpotting],
+                memory_bytes: 1,
+                active_streams: 0,
+                readiness: if self.ready {
+                    TaskReadiness::Ready
+                } else {
+                    TaskReadiness::Cold
+                },
+            }
+        }
+
+        async fn warm_task(&mut self, request: BoundTaskRequest) -> Result<(), EngineError> {
+            if request.binding() == &self.binding {
+                Ok(())
+            } else {
+                Err(EngineError::TaskUnavailable)
+            }
+        }
+
+        async fn unload_task(&mut self, _binding: TaskPackBinding) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+            self.cancelled.borrow_mut().push(generation);
+            Ok(())
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl KwsStreamProvider for FakeKwsProvider {
+        async fn start_kws_session(
+            &mut self,
+            request: BoundKwsRequest,
+        ) -> Result<BoundStreamSession, EngineError> {
+            BoundStreamSession::new(aurora_voice_engine::StreamSessionId(1), request.request())
+        }
+
+        async fn push_kws_frame(
+            &mut self,
+            _session: &BoundStreamSession,
+            frame: StreamingAudioFrame<'_>,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<aurora_voice_engine::KwsFrameResult, EngineError> {
+            let config = KwsConfig::new(["wake.main"], "phrases:v1", 0.5, 0, 1)?;
+            let mut cooldown = KwsCooldownState::new();
+            let matches = if self.match_sequences.contains(&frame.sequence()) {
+                vec![aurora_voice_engine::KeywordMatch::new(
+                    "wake.main",
+                    0.9,
+                    frame.sequence(),
+                )?]
+            } else {
+                Vec::new()
+            };
+            aurora_voice_engine::KwsFrameResult::new(&config, &mut cooldown, matches, None)
+        }
+
+        async fn reset_kws_session(
+            &mut self,
+            _session: &BoundStreamSession,
+            _reason: StreamResetReason,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+    }
+
+    struct FakeVadProvider {
+        binding: TaskPackBinding,
+        speech_sequences: BTreeSet<u64>,
+        segment_sequences: BTreeSet<u64>,
+        ready: bool,
+        cancelled: Rc<RefCell<Vec<u64>>>,
+    }
+
+    impl FakeVadProvider {
+        fn new(
+            binding: TaskPackBinding,
+            speech_sequences: impl IntoIterator<Item = u64>,
+            segment_sequences: impl IntoIterator<Item = u64>,
+        ) -> Self {
+            Self {
+                binding,
+                speech_sequences: speech_sequences.into_iter().collect(),
+                segment_sequences: segment_sequences.into_iter().collect(),
+                ready: true,
+                cancelled: Rc::new(RefCell::new(Vec::new())),
+            }
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl TaskProvider for FakeVadProvider {
+        fn capabilities(&self) -> Vec<TaskCapability> {
+            vec![TaskCapability::new(self.binding.clone()).streaming(true)]
+        }
+
+        fn resource_report(&self) -> ResourceReport {
+            ResourceReport {
+                loaded_tasks: vec![VoiceTask::VoiceActivityDetection],
+                memory_bytes: 1,
+                active_streams: 0,
+                readiness: if self.ready {
+                    TaskReadiness::Ready
+                } else {
+                    TaskReadiness::Cold
+                },
+            }
+        }
+
+        async fn warm_task(&mut self, request: BoundTaskRequest) -> Result<(), EngineError> {
+            if request.binding() == &self.binding {
+                Ok(())
+            } else {
+                Err(EngineError::TaskUnavailable)
+            }
+        }
+
+        async fn unload_task(&mut self, _binding: TaskPackBinding) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+            self.cancelled.borrow_mut().push(generation);
+            Ok(())
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl VadStreamProvider for FakeVadProvider {
+        async fn start_vad_session(
+            &mut self,
+            request: BoundVadRequest,
+        ) -> Result<BoundStreamSession, EngineError> {
+            BoundStreamSession::new(aurora_voice_engine::StreamSessionId(2), request.request())
+        }
+
+        async fn push_vad_frame(
+            &mut self,
+            _session: &BoundStreamSession,
+            frame: StreamingAudioFrame<'_>,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<aurora_voice_engine::VadAcceptResult, EngineError> {
+            let detected = self.speech_sequences.contains(&frame.sequence());
+            let segments = if self.segment_sequences.contains(&frame.sequence()) {
+                vec![aurora_voice_engine::SpeechSegment::new(
+                    frame.sequence(),
+                    frame.sequence(),
+                    0,
+                    frame.samples().to_vec(),
+                    false,
+                )?]
+            } else {
+                Vec::new()
+            };
+            Ok(aurora_voice_engine::VadAcceptResult::new(
+                detected, segments, None,
+            ))
+        }
+
+        async fn flush_vad_session(
+            &mut self,
+            _session: &BoundStreamSession,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<Vec<aurora_voice_engine::SpeechSegment>, EngineError> {
+            Ok(Vec::new())
+        }
+
+        async fn reset_vad_session(
+            &mut self,
+            _session: &BoundStreamSession,
+            _reason: StreamResetReason,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
     }
 
     #[test]
@@ -1714,6 +2763,218 @@ mod tests {
         assert!(!json.contains("pcm"));
         assert!(!json.contains("token"));
         assert!(!json.contains("credential"));
+        Ok(())
+    }
+
+    type TestRuntime = VoiceRuntime<
+        FakeAudioInput,
+        FakeEngine,
+        FakeEngine,
+        FakeTransport,
+        FakeAudioOutput,
+        FakeEventSink,
+    >;
+
+    fn wake_config(
+        vad_binding: TaskPackBinding,
+        kws_binding: TaskPackBinding,
+        max_wake_frames: u64,
+        max_utterance_frames: u64,
+    ) -> WakeOrchestrationConfig {
+        WakeOrchestrationConfig::new(
+            vad_binding,
+            kws_binding,
+            VadConfig::default(),
+            KwsConfig::new(["wake.main"], "phrases:v1", 0.5, 0, 1).expect("kws config"),
+            max_wake_frames,
+            max_utterance_frames,
+        )
+        .expect("wake config")
+    }
+
+    fn runtime_with_wake(
+        frames: Vec<PcmFrame>,
+        kws_matches: impl IntoIterator<Item = u64>,
+        vad_speech: impl IntoIterator<Item = u64>,
+        vad_segments: impl IntoIterator<Item = u64>,
+        max_wake_frames: u64,
+        max_utterance_frames: u64,
+    ) -> Result<(TestRuntime, FakeEngine), VoiceCoreError> {
+        let vad_binding = test_task_binding(VoiceTask::VoiceActivityDetection, PackTask::Vad);
+        let kws_binding = test_task_binding(VoiceTask::KeywordSpotting, PackTask::Kws);
+        let engine = FakeEngine::new("wake transcript");
+        let runtime = VoiceRuntime::new(
+            FakeAudioInput::new(frames),
+            engine.clone(),
+            engine.clone(),
+            FakeTransport::new("wake answer"),
+            FakeAudioOutput::new(),
+            FakeEventSink::default(),
+            "test",
+            "wake-runtime-test",
+        )?
+        .with_wake_providers(
+            Box::new(FakeVadProvider::new(
+                vad_binding.clone(),
+                vad_speech,
+                vad_segments,
+            )),
+            Box::new(FakeKwsProvider::new(kws_binding.clone(), kws_matches)),
+            wake_config(
+                vad_binding,
+                kws_binding,
+                max_wake_frames,
+                max_utterance_frames,
+            ),
+        )?;
+        Ok((runtime, engine))
+    }
+
+    #[tokio::test]
+    async fn wake_turn_without_ready_providers_fails_before_capture() -> Result<(), VoiceCoreError>
+    {
+        let engine = FakeEngine::new("unused");
+        let mut runtime = VoiceRuntime::new(
+            FakeAudioInput::new(vec![frame_with_samples(1, Generation(1), vec![0.1])?]),
+            engine.clone(),
+            engine.clone(),
+            FakeTransport::new("unused"),
+            FakeAudioOutput::new(),
+            FakeEventSink::default(),
+            "test",
+            "wake-runtime-test",
+        )?;
+
+        assert!(!runtime.wake_background_ready());
+        let result = runtime
+            .run_wake_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+                TimestampMicros(10),
+                CancellationToken::new(),
+            )
+            .await;
+        assert!(matches!(result, Err(VoiceCoreError::WakeUnavailable)));
+        assert_eq!(runtime.state(), VoiceState::Disabled);
+        assert!(!runtime.has_active_capture());
+        let (audio, engine, _tts, _transport, _output, _sink) = runtime.into_parts();
+        assert!(audio.stopped().is_empty());
+        assert!(engine.transcribed_audio().is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn wake_turn_does_not_emit_wake_without_keyword() -> Result<(), VoiceCoreError> {
+        let frames = vec![
+            frame_with_samples(1, Generation(1), vec![0.1])?,
+            frame_with_samples(2, Generation(1), vec![0.2])?,
+        ];
+        let (mut runtime, engine) = runtime_with_wake(frames, [], [], [], 2, 2)?;
+
+        let result = runtime
+            .run_wake_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(20)),
+                TimestampMicros(20),
+                CancellationToken::new(),
+            )
+            .await;
+        assert!(matches!(result, Err(VoiceCoreError::WakeNotDetected)));
+        assert_eq!(runtime.state(), VoiceState::Idle);
+        assert!(engine.transcribed_audio().is_empty());
+        let (_audio, _engine, _tts, _transport, _output, sink) = runtime.into_parts();
+        assert!(!sink.events.iter().any(|event| matches!(
+            event,
+            RuntimeEvent::State { transition }
+                if transition.to == VoiceState::WakeDetected
+        )));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn wake_turn_rejects_keyword_without_following_speech() -> Result<(), VoiceCoreError> {
+        let frames = vec![
+            frame_with_samples(1, Generation(1), vec![0.1])?,
+            frame_with_samples(2, Generation(1), vec![0.2])?,
+        ];
+        let (mut runtime, engine) = runtime_with_wake(frames, [1], [], [], 4, 4)?;
+
+        let result = runtime
+            .run_wake_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(30)),
+                TimestampMicros(30),
+                CancellationToken::new(),
+            )
+            .await;
+        assert!(matches!(result, Err(VoiceCoreError::SpeechNotDetected)));
+        assert_eq!(runtime.state(), VoiceState::Idle);
+        assert!(engine.transcribed_audio().is_empty());
+        let (_audio, _engine, _tts, _transport, _output, sink) = runtime.into_parts();
+        assert!(sink.events.iter().any(|event| matches!(
+            event,
+            RuntimeEvent::State { transition }
+                if transition.to == VoiceState::WakeDetected
+        )));
+        assert!(!sink.events.iter().any(|event| matches!(
+            event,
+            RuntimeEvent::State { transition }
+                if transition.to == VoiceState::CapturingUtterance
+        )));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn wake_turn_transcribes_only_vad_segmented_utterance() -> Result<(), VoiceCoreError> {
+        let frames = vec![
+            frame_with_samples(1, Generation(1), vec![0.1])?,
+            frame_with_samples(2, Generation(1), vec![0.2, 0.3])?,
+            frame_with_samples(3, Generation(1), vec![0.4, 0.5])?,
+        ];
+        let (mut runtime, engine) = runtime_with_wake(frames, [1], [2, 3], [3], 4, 4)?;
+
+        let response = runtime
+            .run_wake_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(40)),
+                TimestampMicros(40),
+                CancellationToken::new(),
+            )
+            .await?;
+        assert_eq!(response, "wake answer");
+        assert_eq!(runtime.state(), VoiceState::Idle);
+        assert_eq!(engine.transcribed_audio(), vec![vec![0.4, 0.5]]);
+        let (_audio, _engine, _tts, _transport, _output, sink) = runtime.into_parts();
+        let transitions = sink
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                RuntimeEvent::State { transition } => Some(transition.to),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert!(transitions.contains(&VoiceState::ListeningForWake));
+        assert!(transitions.contains(&VoiceState::WakeDetected));
+        assert!(transitions.contains(&VoiceState::CapturingUtterance));
+        assert!(transitions.contains(&VoiceState::Transcribing));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn wake_turn_times_out_bounded_utterance_without_segment() -> Result<(), VoiceCoreError> {
+        let frames = vec![
+            frame_with_samples(1, Generation(1), vec![0.1])?,
+            frame_with_samples(2, Generation(1), vec![0.2])?,
+            frame_with_samples(3, Generation(1), vec![0.3])?,
+        ];
+        let (mut runtime, engine) = runtime_with_wake(frames, [1], [1, 2, 3], [], 4, 1)?;
+
+        let result = runtime
+            .run_wake_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(50)),
+                TimestampMicros(50),
+                CancellationToken::new(),
+            )
+            .await;
+        assert!(matches!(result, Err(VoiceCoreError::SpeechTimeout)));
+        assert_eq!(runtime.state(), VoiceState::Idle);
+        assert!(engine.transcribed_audio().is_empty());
         Ok(())
     }
 
