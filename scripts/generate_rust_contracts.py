@@ -391,6 +391,46 @@ def _marker_negative_cases(
         oversized = dict(base)
         oversized["operation_id"] = f" {'a' * 127} "
         add(oversized, "$.operation_id", "tts_operation_id", operation_marker)
+    if any(
+        path.endswith(":x-aurora-tts-clone-state-bundle-invariant") for path in marker_paths
+    ):
+        bundle_marker = _matching_marker_path(
+            marker_paths,
+            "TTSCloneVoiceStateBundle",
+            "x-aurora-tts-clone-state-bundle-invariant",
+        )
+        if isinstance(base.get("bundle"), dict):
+            invalid = json.loads(json.dumps(base))
+            invalid["bundle"]["artifact_size_bytes"] += 1
+            add(invalid, "$.bundle", "tts_clone_state_bundle", bundle_marker)
+    if schema_id == "TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest":
+        export_marker = _matching_marker_path(
+            marker_paths,
+            "$:x-aurora-tts-export-profile-request-invariant",
+            "x-aurora-tts-export-profile-request-invariant",
+        )
+        invalid = dict(base)
+        invalid["voice_id"] = "standard:starter_en:alba"
+        add(invalid, "$", "value_error", export_marker)
+    if schema_id == "TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse":
+        export_marker = _matching_marker_path(
+            marker_paths,
+            "$:x-aurora-tts-export-profile-response-invariant",
+            "x-aurora-tts-export-profile-response-invariant",
+        )
+        invalid = dict(base)
+        invalid["bundle"] = None
+        invalid["revision"] = None
+        add(invalid, "$", "value_error", export_marker)
+    if schema_id == "TTS.ImportVoiceProfile.output.TTSImportVoiceProfileResponse":
+        import_marker = _matching_marker_path(
+            marker_paths,
+            "$:x-aurora-tts-import-profile-response-invariant",
+            "x-aurora-tts-import-profile-response-invariant",
+        )
+        invalid = dict(base)
+        invalid["revision"] = None
+        add(invalid, "$", "value_error", import_marker)
     if "language" in base and any(
         path.endswith(":x-aurora-speech-language-string-normalize") for path in marker_paths
     ):
@@ -474,6 +514,15 @@ def _marker_negative_cases(
             "bounded_nonblank_string_set",
             pack_marker,
         )
+    if schema_id == "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse":
+        language_marker = _matching_marker_path(
+            marker_paths,
+            "TTSLanguagePackDescriptor.properties.language",
+            "x-aurora-speech-language-string-normalize",
+        )
+        invalid = json.loads(json.dumps(base))
+        invalid["packs"][0]["language"] = "en--US"
+        add(invalid, "$.packs.0.language", "speech_language", language_marker)
     if schema_id == "TTS.ListVoiceProfiles.output.TTSListVoiceProfilesResponse":
         allowed_marker = _matching_marker_path(
             marker_paths, "allowed_peer_ids", "x-aurora-bounded-nonblank-string-set-normalize"

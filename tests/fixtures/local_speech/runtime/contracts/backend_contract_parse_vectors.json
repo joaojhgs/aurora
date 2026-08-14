@@ -1479,6 +1479,23 @@
       "schema_id": "TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest"
     },
     {
+      "accepted": false,
+      "case_index": 3,
+      "direction": "input",
+      "input": {
+        "operation_id": " export-1 ",
+        "voice_id": "standard:starter_en:alba"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$",
+      "marker_paths": [
+        "$:x-aurora-tts-export-profile-request-invariant"
+      ],
+      "method_id": "TTS.ExportVoiceProfile",
+      "model_name": "TTSExportVoiceProfileRequest",
+      "schema_id": "TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest"
+    },
+    {
       "accepted": true,
       "direction": "output",
       "input": {
@@ -1541,6 +1558,57 @@
       },
       "issue_category": "value_error",
       "issue_path": "$",
+      "method_id": "TTS.ExportVoiceProfile",
+      "model_name": "TTSExportVoiceProfileResponse",
+      "schema_id": "TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 1,
+      "direction": "output",
+      "input": {
+        "bundle": {
+          "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+          "artifact_format": "safetensors",
+          "artifact_revision": "clone-rev-a",
+          "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+          "artifact_size_bytes": 20,
+          "bundle_type": "aurora-cloned-tts-voice-state",
+          "compatibility_group": "pockettts-base",
+          "display_name": "Private voice",
+          "language_bundle": "english_2026-04",
+          "runtime_target": "pockettts-python",
+          "schema_version": 1,
+          "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+        },
+        "revision": "voice-rev-a",
+        "status": "exported",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "issue_category": "tts_clone_state_bundle",
+      "issue_path": "$.bundle",
+      "marker_paths": [
+        "$.$defs.TTSCloneVoiceStateBundle:x-aurora-tts-clone-state-bundle-invariant"
+      ],
+      "method_id": "TTS.ExportVoiceProfile",
+      "model_name": "TTSExportVoiceProfileResponse",
+      "schema_id": "TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 2,
+      "direction": "output",
+      "input": {
+        "bundle": null,
+        "revision": null,
+        "status": "exported",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$",
+      "marker_paths": [
+        "$:x-aurora-tts-export-profile-response-invariant"
+      ],
       "method_id": "TTS.ExportVoiceProfile",
       "model_name": "TTSExportVoiceProfileResponse",
       "schema_id": "TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse"
@@ -2142,6 +2210,36 @@
       "schema_id": "TTS.ImportVoiceProfile.input.TTSImportVoiceProfileRequest"
     },
     {
+      "accepted": false,
+      "case_index": 3,
+      "direction": "input",
+      "input": {
+        "bundle": {
+          "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+          "artifact_format": "safetensors",
+          "artifact_revision": "clone-rev-a",
+          "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+          "artifact_size_bytes": 20,
+          "bundle_type": "aurora-cloned-tts-voice-state",
+          "compatibility_group": "pockettts-base",
+          "display_name": "Private voice",
+          "language_bundle": "english_2026-04",
+          "runtime_target": "pockettts-python",
+          "schema_version": 1,
+          "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+        },
+        "operation_id": " import-1 "
+      },
+      "issue_category": "tts_clone_state_bundle",
+      "issue_path": "$.bundle",
+      "marker_paths": [
+        "$.$defs.TTSCloneVoiceStateBundle:x-aurora-tts-clone-state-bundle-invariant"
+      ],
+      "method_id": "TTS.ImportVoiceProfile",
+      "model_name": "TTSImportVoiceProfileRequest",
+      "schema_id": "TTS.ImportVoiceProfile.input.TTSImportVoiceProfileRequest"
+    },
+    {
       "accepted": true,
       "direction": "output",
       "input": {
@@ -2174,6 +2272,24 @@
       },
       "issue_category": "value_error",
       "issue_path": "$",
+      "method_id": "TTS.ImportVoiceProfile",
+      "model_name": "TTSImportVoiceProfileResponse",
+      "schema_id": "TTS.ImportVoiceProfile.output.TTSImportVoiceProfileResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 1,
+      "direction": "output",
+      "input": {
+        "revision": null,
+        "status": "imported",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$",
+      "marker_paths": [
+        "$:x-aurora-tts-import-profile-response-invariant"
+      ],
       "method_id": "TTS.ImportVoiceProfile",
       "model_name": "TTSImportVoiceProfileResponse",
       "schema_id": "TTS.ImportVoiceProfile.output.TTSImportVoiceProfileResponse"
@@ -2482,6 +2598,48 @@
       },
       "issue_category": "value_error",
       "issue_path": "$",
+      "method_id": "TTS.ListLanguagePacks",
+      "model_name": "TTSListLanguagePacksResponse",
+      "schema_id": "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 2,
+      "direction": "output",
+      "input": {
+        "catalog_status": "available",
+        "default_voice_id": "standard:starter_en:alba",
+        "packs": [
+          {
+            "default": true,
+            "display_name": "English",
+            "installed": true,
+            "installed_voice_count": 1,
+            "language": "en--US",
+            "pack_id": "en",
+            "ready": true,
+            "ready_voice_count": 1,
+            "revision": "pack-rev-1",
+            "voice_count": 1,
+            "voices": [
+              {
+                "active": false,
+                "default": true,
+                "display_name": "Voice",
+                "installed": true,
+                "ready": true,
+                "revision": "rev-1",
+                "voice_id": "standard:starter_en:alba"
+              }
+            ]
+          }
+        ]
+      },
+      "issue_category": "speech_language",
+      "issue_path": "$.packs.0.language",
+      "marker_paths": [
+        "$.$defs.TTSLanguagePackDescriptor.properties.language:x-aurora-speech-language-string-normalize"
+      ],
       "method_id": "TTS.ListLanguagePacks",
       "model_name": "TTSListLanguagePacksResponse",
       "schema_id": "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse"

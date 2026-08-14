@@ -1,6 +1,9 @@
 use std::collections::BTreeSet;
+use std::fmt::Write as _;
 
+use base64::Engine as _;
 use serde_json::{Map, Value};
+use sha2::{Digest, Sha256};
 
 const MAX_SCHEMA_DEPTH: usize = 128;
 
@@ -305,6 +308,34 @@ fn validate_markers(schema: &Map<String, Value>, value: &Value) -> Result<(), St
         validate_tts_operation_id(value)?;
     }
     if schema
+        .get("x-aurora-tts-clone-state-bundle-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_clone_state_bundle(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-export-profile-request-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_export_profile_request(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-export-profile-response-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_export_profile_response(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-import-profile-response-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_import_profile_response(value)?;
+    }
+    if schema
         .get("x-aurora-bounded-nonblank-string-set-normalize")
         .and_then(Value::as_bool)
         == Some(true)
@@ -548,6 +579,103 @@ fn validate_tts_operation_id(value: &Value) -> Result<(), String> {
         return Err("operation_id must be a non-blank portable identifier".to_owned());
     }
     Ok(())
+}
+
+fn validate_tts_clone_state_bundle(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let data = object
+        .get("artifact_data_base64")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "voice state bundle artifact data is missing".to_owned())?;
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(data)
+        .map_err(|_| "voice state bundle artifact data must be valid base64".to_owned())?;
+    let expected_size = object
+        .get("artifact_size_bytes")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| "voice state bundle artifact size is missing".to_owned())?;
+    if decoded.len() as u64 != expected_size {
+        return Err("voice state bundle artifact size mismatch".to_owned());
+    }
+    let expected_sha = object
+        .get("artifact_sha256")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "voice state bundle artifact digest is missing".to_owned())?;
+    if sha256_hex(&decoded) != expected_sha {
+        return Err("voice state bundle artifact digest mismatch".to_owned());
+    }
+    if object
+        .get("voice_id")
+        .and_then(Value::as_str)
+        .is_some_and(|voice_id| !voice_id.starts_with("clone:"))
+    {
+        return Err("voice state bundle must identify a cloned voice".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_export_profile_request(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    if object
+        .get("voice_id")
+        .and_then(Value::as_str)
+        .is_some_and(|voice_id| !voice_id.starts_with("clone:"))
+    {
+        return Err("only cloned voice profiles can be exported".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_export_profile_response(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let status = object.get("status").and_then(Value::as_str);
+    let revision = object.get("revision").filter(|value| !value.is_null());
+    let bundle = object.get("bundle").filter(|value| !value.is_null());
+    if status == Some("exported") {
+        if revision.is_none() || bundle.is_none() {
+            return Err("exported voice profile responses require revision and bundle".to_owned());
+        }
+        let response_voice_id = object.get("voice_id").and_then(Value::as_str);
+        let bundle_voice_id = bundle
+            .and_then(Value::as_object)
+            .and_then(|bundle| bundle.get("voice_id"))
+            .and_then(Value::as_str);
+        if response_voice_id != bundle_voice_id {
+            return Err("exported voice profile bundle identity mismatch".to_owned());
+        }
+    } else if bundle.is_some() {
+        return Err("non-exported voice profile responses cannot include a bundle".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_import_profile_response(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let needs_revision = object
+        .get("status")
+        .and_then(Value::as_str)
+        .is_some_and(|status| matches!(status, "imported" | "unchanged" | "conflict"));
+    if needs_revision && object.get("revision").is_none_or(Value::is_null) {
+        return Err("voice profile import result requires revision".to_owned());
+    }
+    Ok(())
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    let mut output = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    output
 }
 
 fn is_tts_operation_id(value: &str) -> bool {
