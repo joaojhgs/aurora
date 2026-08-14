@@ -34,9 +34,9 @@ from app.shared.path_utils import resolve_path
 CATALOG_RESOURCE = "sherpa_onnx_tts_catalog.json"
 CATALOG_ID = "sherpa-onnx-tts-models-v1"
 CATALOG_REVISION = "github-release-130612623-30d65b392bba8dfb"
-ENTRIES_SHA256 = "74dd6a6413828c8cbdc26dcd62289214a3c56f12c166b7d1f1d60632c2967f28"
+ENTRIES_SHA256 = "ec1aec3887e058c23f4a18894b25ffe5aac4ba8bcb146a2e48eda7f8e4fa380e"
 SOURCE_CHECKSUM_SHA256 = "30d65b392bba8dfbdbc3479928d3f80adff2c71d4f518ce893d572b8aff021ee"
-EXPECTED_ENTRY_COUNT = 536
+EXPECTED_ENTRY_COUNT = 537
 EXPECTED_LANGUAGE_COUNT = 50
 DEFAULT_CACHE_DIR = "voice_models/piper"
 DEFAULT_MAX_CACHE_BYTES = 8 * 1024 * 1024 * 1024
@@ -61,6 +61,7 @@ class PiperCatalogVoice:
     installed: bool
     ready: bool
     sample_rate: int | None
+    model_family: Literal["vits_piper", "pockettts"] = "vits_piper"
 
 
 @dataclass(frozen=True)
@@ -116,7 +117,9 @@ class _ArchiveModel(BaseModel):
     @field_validator("url")
     @classmethod
     def _validate_url(cls, value: str) -> str:
-        if not value.startswith("https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/"):
+        if not value.startswith(
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/"
+        ):
             raise ValueError("unexpected archive url")
         return value
 
@@ -139,6 +142,39 @@ class _BindingsModel(BaseModel):
         return value
 
 
+class _PocketTTSBindingsModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    decoder: str = Field(min_length=1, max_length=300)
+    encoder: str = Field(min_length=1, max_length=300)
+    lm_flow: str = Field(min_length=1, max_length=300)
+    lm_main: str = Field(min_length=1, max_length=300)
+    text_conditioner: str = Field(min_length=1, max_length=300)
+    token_scores_json: str = Field(min_length=1, max_length=300)
+    vocab_json: str = Field(min_length=1, max_length=300)
+    model_card: str | None = Field(default=None, min_length=1, max_length=300)
+
+    @field_validator(
+        "decoder",
+        "encoder",
+        "lm_flow",
+        "lm_main",
+        "text_conditioner",
+        "token_scores_json",
+        "vocab_json",
+        "model_card",
+    )
+    @classmethod
+    def _validate_binding(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        _safe_relative_path(value)
+        return value
+
+
+_CatalogBindingsModel = _BindingsModel | _PocketTTSBindingsModel
+
+
 class _TermsModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
@@ -151,13 +187,14 @@ class _CatalogEntryModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
     archive: _ArchiveModel
-    bindings: _BindingsModel
+    bindings: _CatalogBindingsModel
     display_name: str = Field(min_length=1, max_length=256)
     engine: Literal["sherpa_onnx"]
     language: str = Field(min_length=1, max_length=32)
-    model_family: Literal["vits_piper"]
+    model_family: Literal["vits_piper", "pockettts"]
     precision: str | None = None
     quality: str | None = Field(default=None, min_length=1, max_length=32)
+    sample_rate_hz: int | None = Field(default=None, ge=8000, le=192000)
     terms: _TermsModel
     voice_id: str = Field(min_length=1, max_length=160)
 
@@ -174,13 +211,13 @@ class _CatalogEntryModel(BaseModel):
     @model_validator(mode="after")
     def _validate_bindings_under_root(self) -> _CatalogEntryModel:
         root = PurePosixPath(self.archive.root)
-        for value in (
-            self.bindings.model,
-            self.bindings.config,
-            self.bindings.tokens,
-            self.bindings.data_dir,
-            self.bindings.model_card,
+        if self.model_family == "vits_piper" and not isinstance(self.bindings, _BindingsModel):
+            raise ValueError("Piper catalog entry has invalid bindings")
+        if self.model_family == "pockettts" and not isinstance(
+            self.bindings, _PocketTTSBindingsModel
         ):
+            raise ValueError("PocketTTS catalog entry has invalid bindings")
+        for value in self._binding_values():
             if value is None:
                 continue
             path = PurePosixPath(value)
@@ -189,6 +226,26 @@ class _CatalogEntryModel(BaseModel):
         if self.archive.filename != self.archive.url.rsplit("/", 1)[-1]:
             raise ValueError("archive filename does not match URL")
         return self
+
+    def _binding_values(self) -> tuple[str | None, ...]:
+        if isinstance(self.bindings, _BindingsModel):
+            return (
+                self.bindings.model,
+                self.bindings.config,
+                self.bindings.tokens,
+                self.bindings.data_dir,
+                self.bindings.model_card,
+            )
+        return (
+            self.bindings.decoder,
+            self.bindings.encoder,
+            self.bindings.lm_flow,
+            self.bindings.lm_main,
+            self.bindings.text_conditioner,
+            self.bindings.token_scores_json,
+            self.bindings.vocab_json,
+            self.bindings.model_card,
+        )
 
 
 class _SourceModel(BaseModel):
@@ -273,6 +330,10 @@ def load_piper_catalog(payload: bytes | None = None) -> _CatalogModel:
     return catalog
 
 
+def _piper_catalog_entries(catalog: _CatalogModel) -> tuple[_CatalogEntryModel, ...]:
+    return tuple(entry for entry in catalog.entries if entry.model_family == "vits_piper")
+
+
 class PiperCatalogManager:
     """Install and resolve pinned Piper voice archives."""
 
@@ -300,6 +361,10 @@ class PiperCatalogManager:
         """Return all catalog voices with local installed state."""
         return await asyncio.to_thread(self._list_voices_sync)
 
+    async def list_catalog_voices(self) -> tuple[PiperCatalogVoice, ...]:
+        """Return metadata for all shared Sherpa catalog voices."""
+        return await asyncio.to_thread(self._list_catalog_voices_sync)
+
     async def install_voice(self, voice_id: str) -> PiperCatalogInstallResult:
         """Download/cache/extract one exact selected Piper voice."""
         return await asyncio.to_thread(self._install_voice_sync, voice_id)
@@ -317,11 +382,18 @@ class PiperCatalogManager:
 
     def _entry_by_voice_id(self, voice_id: str) -> _CatalogEntryModel | None:
         voice_id = validate_logical_voice_id(voice_id)
-        return next((entry for entry in self._catalog().entries if entry.voice_id == voice_id), None)
+        return next(
+            (
+                entry
+                for entry in _piper_catalog_entries(self._catalog())
+                if entry.voice_id == voice_id
+            ),
+            None,
+        )
 
     def _list_voices_sync(self) -> tuple[PiperCatalogVoice, ...]:
         rows: list[PiperCatalogVoice] = []
-        for entry in self._catalog().entries:
+        for entry in _piper_catalog_entries(self._catalog()):
             resolved = self._resolve_voice_sync(entry.voice_id, missing_ok=True)
             rows.append(
                 PiperCatalogVoice(
@@ -329,9 +401,34 @@ class PiperCatalogManager:
                     display_name=entry.display_name,
                     language=entry.language,
                     revision=CATALOG_REVISION,
+                    model_family=entry.model_family,
                     installed=resolved is not None,
                     ready=resolved is not None,
                     sample_rate=resolved.sample_rate if resolved is not None else None,
+                )
+            )
+        return tuple(rows)
+
+    def _list_catalog_voices_sync(self) -> tuple[PiperCatalogVoice, ...]:
+        rows: list[PiperCatalogVoice] = []
+        for entry in self._catalog().entries:
+            resolved = (
+                self._resolve_voice_sync(entry.voice_id, missing_ok=True)
+                if entry.model_family == "vits_piper"
+                else None
+            )
+            rows.append(
+                PiperCatalogVoice(
+                    voice_id=entry.voice_id,
+                    display_name=entry.display_name,
+                    language=entry.language,
+                    revision=CATALOG_REVISION,
+                    model_family=entry.model_family,
+                    installed=resolved is not None,
+                    ready=resolved is not None,
+                    sample_rate=(
+                        resolved.sample_rate if resolved is not None else entry.sample_rate_hz
+                    ),
                 )
             )
         return tuple(rows)
@@ -454,6 +551,8 @@ class PiperCatalogManager:
     def _build_receipt(
         self, stage_root: Path, extract_root: Path, entry: _CatalogEntryModel
     ) -> PiperResolvedVoice:
+        if entry.model_family != "vits_piper" or not isinstance(entry.bindings, _BindingsModel):
+            raise VoiceCatalogSourceError("voice is not listed in the catalog")
         model_file = _binding_path(extract_root, entry.bindings.model)
         config_file = _binding_path(extract_root, entry.bindings.config)
         tokens_file = _binding_path(extract_root, entry.bindings.tokens)
@@ -631,7 +730,13 @@ def _safe_extract_tar_bz2(
                 if normalized_key in seen:
                     raise VoiceCatalogDownloadError("voice artifact is unsafe")
                 seen.add(normalized_key)
-                if member.issym() or member.islnk() or member.ischr() or member.isblk() or member.isfifo():
+                if (
+                    member.issym()
+                    or member.islnk()
+                    or member.ischr()
+                    or member.isblk()
+                    or member.isfifo()
+                ):
                     raise VoiceCatalogDownloadError("voice artifact is unsafe")
                 if not (member.isfile() or member.isdir()):
                     raise VoiceCatalogDownloadError("voice artifact is unsafe")

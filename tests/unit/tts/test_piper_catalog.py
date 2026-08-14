@@ -116,15 +116,34 @@ def _valid_archive() -> bytes:
     )
 
 
-def test_embedded_piper_catalog_has_pinned_536_voice_50_language_metadata() -> None:
+def test_embedded_piper_catalog_has_pinned_537_voice_50_language_metadata() -> None:
     catalog = load_piper_catalog()
 
-    assert len(catalog.entries) == EXPECTED_ENTRY_COUNT == 536
+    assert len(catalog.entries) == EXPECTED_ENTRY_COUNT == 537
     assert len(catalog.languages) == EXPECTED_LANGUAGE_COUNT == 50
     assert catalog.entries_sha256 == ENTRIES_SHA256
     assert catalog.revision == CATALOG_REVISION
-    assert len({entry.voice_id for entry in catalog.entries}) == 536
+    assert len({entry.voice_id for entry in catalog.entries}) == 537
     assert all(entry.archive.url.startswith("https://") for entry in catalog.entries)
+    assert any(
+        entry.voice_id == "standard:pockettts:sherpa-onnx-pocket-tts-int8-2026-01-26"
+        and entry.model_family == "pockettts"
+        for entry in catalog.entries
+    )
+
+
+@pytest.mark.asyncio
+async def test_piper_manager_keeps_pockettts_catalog_row_metadata_only(tmp_path: Path) -> None:
+    manager = PiperCatalogManager(cache_dir=tmp_path / "cache")
+
+    voices = await manager.list_voices()
+
+    assert len(voices) == 536
+    assert "standard:pockettts:sherpa-onnx-pocket-tts-int8-2026-01-26" not in {
+        voice.voice_id for voice in voices
+    }
+    with pytest.raises(VoiceCatalogSourceError, match="voice is not listed in the catalog"):
+        await manager.install_voice("standard:pockettts:sherpa-onnx-pocket-tts-int8-2026-01-26")
 
 
 def test_python_and_rust_piper_catalog_resources_stay_in_sync() -> None:

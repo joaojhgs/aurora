@@ -1273,7 +1273,9 @@ class TTSService(BaseService):
         catalog_error_code: str | None = None
         if tts_cfg.provider == "piper":
             try:
-                catalog_rows = list(await self._piper_catalog_manager(tts_cfg).list_voices())
+                catalog_rows = list(
+                    await self._piper_catalog_manager(tts_cfg).list_catalog_voices()
+                )
             except (VoiceCatalogError, OSError):
                 catalog_status = "unavailable"
                 catalog_error_code = "catalog_unavailable"
