@@ -5,6 +5,9 @@ const voiceWeb = vi.hoisted(() => ({
   createHost: vi.fn(),
   openExistingHost: vi.fn(),
   openActive: vi.fn(),
+  listCatalog: vi.fn(),
+  findCatalogEntry: vi.fn(),
+  installPack: vi.fn(),
 }))
 
 vi.mock('@aurora/voice-web/browser', () => ({
@@ -13,9 +16,12 @@ vi.mock('@aurora/voice-web/browser', () => ({
     openExisting: voiceWeb.openExistingHost,
   },
   openActiveBrowserModelPack: voiceWeb.openActive,
+  listAuroraBrowserVoiceCatalogEntries: voiceWeb.listCatalog,
+  findAuroraBrowserVoiceCatalogEntry: voiceWeb.findCatalogEntry,
+  installVerifiedBrowserModelPack: voiceWeb.installPack,
 }))
 
-import { openActiveBrowserSpeechPacks, openHostedBrowserSttSpeechPack } from '../src/browser-speech-pack'
+import { createAuroraBrowserVoiceCatalogPort, openActiveBrowserSpeechPacks, openHostedBrowserSttSpeechPack } from '../src/browser-speech-pack'
 
 const RELEASE_KEY_ID = 'aurora-release-web-stt'
 const RELEASE_PUBLIC_KEY_BASE64 = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
@@ -209,6 +215,66 @@ describe('openActiveBrowserSpeechPacks', () => {
   })
 })
 
+describe('createAuroraBrowserVoiceCatalogPort', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('lists generated catalog entries and installs with embedded catalog trust', async () => {
+    const host = fakeModelStoreHost()
+    const entry = catalogEntry('standard:piper:en-us-test')
+    voiceWeb.openExistingHost.mockResolvedValueOnce(null)
+    voiceWeb.createHost.mockResolvedValueOnce(host)
+    voiceWeb.listCatalog.mockReturnValueOnce([entry])
+    voiceWeb.findCatalogEntry.mockReturnValueOnce(entry)
+    voiceWeb.installPack.mockResolvedValueOnce({
+      identity: {
+        packId: 'standard:piper:en-us-test',
+        packVersion: '1.0.0',
+        variantId: 'web-wasm32',
+        scope: { task: 'tts', slotId: 'default' },
+      },
+      files: [],
+      manifestSha256: RELEASE_MANIFEST_SHA256,
+      verificationMode: 'embedded-catalog',
+      verificationKeyId: 'aurora-browser-voice-catalog',
+    })
+    const progress: string[] = []
+    const afterSelect = vi.fn()
+    const port = createAuroraBrowserVoiceCatalogPort({ afterSelect })
+
+    const catalog = await port.listCatalog()
+    const selection = catalog.items[0]
+    if (!selection) throw new Error('expected catalog item')
+    const receipt = await port.select({ selection, onProgress: (event) => progress.push(event.state) })
+
+    expect(catalog).toMatchObject({
+      state: 'ready',
+      items: [expect.objectContaining({
+        task: 'tts',
+        packId: 'standard:piper:en-us-test',
+        voiceId: 'standard:piper:en-us-test',
+        active: false,
+      })],
+    })
+    expect(voiceWeb.installPack).toHaveBeenCalledWith(expect.objectContaining({
+      host,
+      manifest: entry.toModelPackManifest(),
+      scope: { task: 'tts' },
+      allowEmbeddedBrowserVoiceCatalogTrust: true,
+      trustedAssetOrigins: ['https://github.com'],
+    }))
+    expect(receipt.trust).toMatchObject({
+      task: 'tts',
+      packId: 'standard:piper:en-us-test',
+      verificationMode: 'embedded-catalog',
+      expectedManifestSha256: RELEASE_MANIFEST_SHA256,
+    })
+    expect(progress).toEqual(['queued', 'downloading', 'saving', 'ready'])
+    expect(afterSelect).toHaveBeenCalledWith(receipt, expect.objectContaining({ selection }))
+  })
+})
+
 function releaseTrust() {
   return {
     releaseKeyId: RELEASE_KEY_ID,
@@ -264,5 +330,63 @@ function modelPack(task: 'vad' | 'kws' | 'stt' | 'tts', packId: string, fileId: 
       }],
       config: task === 'tts' ? { voiceId: 'voice-en' } : { language: 'en' },
     }],
+  }
+}
+
+function catalogEntry(id: string) {
+  const manifest = {
+    schema_version: 1 as const,
+    pack_id: id,
+    pack_version: '1.0.0',
+    display_name: 'Test voice',
+    tasks: ['tts'],
+    files: [{
+      file_id: 'tts-archive',
+      asset_id: '1',
+      task: 'tts',
+      url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/test.tar.bz2',
+      sha256: 'b'.repeat(64),
+      byte_size: 4,
+      installed_size: 4,
+      compression: 'none' as const,
+    }],
+    variants: [{
+      variant_id: 'web-wasm32',
+      file_ids: ['tts-archive'],
+      target: 'web',
+      os: 'web',
+      arch: 'wasm32',
+      model_bindings: [{
+        task: 'tts' as const,
+        family: 'piper' as const,
+        kind: 'offline-tts' as const,
+        files: [{ role: 'model' as const, fileId: 'tts-archive', virtualPath: '/test.onnx' }],
+        config: { voiceId: id },
+      }],
+    }],
+    revocation: null,
+    signature: null,
+  }
+  return {
+    id,
+    displayName: 'Test voice',
+    task: 'tts' as const,
+    languages: ['en-us'],
+    archive: {
+      asset_id: 1,
+      byte_size: 4,
+      filename: 'test.tar.bz2',
+      format: 'file' as const,
+      sha256: 'b'.repeat(64),
+      updated_at: '2026-01-01T00:00:00Z',
+      url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/test.tar.bz2',
+    },
+    installableByBrowserArchive: true,
+    terms: {
+      download_initiated_by_user: true,
+      redistributed_by_aurora: false,
+      source: 'upstream_model_card',
+    },
+    toModelPackManifest: () => manifest,
   }
 }
