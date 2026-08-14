@@ -41,13 +41,11 @@ const forbiddenPathPatterns = [
   { id: 'speech-model-asset', pattern: /(^|[/\\])(kws|vad|stt|tts|speech|voice|pockettts|sherpa|whisper|tokenizer|tokens|voices?|models?|packs?)([/\\]|$).*\.(onnx|ort|bin|data|gguf|ggml|tflite|safetensors|pt|pth|ckpt|npy|npz|ark|wav|flac|opus)$/i },
   { id: 'speech-model-file', pattern: /(^|[/\\]).*(kws|vad|stt|tts|speech|voice|pockettts|sherpa|whisper|tokenizer|tokens).*\.(onnx|ort|bin|data|gguf|ggml|tflite|safetensors|pt|pth|ckpt|npy|npz|ark|wav|flac|opus)$/i },
   { id: 'speech-model-support-file', pattern: /(^|[/\\]).*(tokenizer|tokens|vocab|lexicon|sentencepiece|speakers?|durations?|phonemes?|bpe|spm).*(\.model|\.txt|\.json)$/i },
-  { id: 'unapproved-pack', pattern: /pockettts|raven|non[-_ ]?commercial|cc[-_ ]?by[-_ ]?nc|creative[-_ ]commons[-_ ]?non[-_ ]?commercial/i },
   { id: 'secret-file', pattern: /(^|[/\\])(\.env(\..*)?|id_rsa|id_ed25519|credentials?\.json|service[-_]?account.*\.json|.*private[-_]?key.*\.(pem|key|json)|.*secret.*\.(json|txt|env))$/i },
 ]
 
 const forbiddenTextPatterns = [
   { id: 'python-sidecar-text', pattern: /aurora-sidecar|prepare-sidecar|app\/services\/config\/config_defaults\.json|libpython|site-packages|\.venv|bundled[-_]?gateway/i },
-  { id: 'unapproved-pack-text', pattern: /pockettts|raven|non[-_ ]?commercial|noncommercial|cc[-_ ]?by[-_ ]?nc|creative commons attribution-noncommercial/i },
   { id: 'private-key-text', pattern: /-----BEGIN (RSA |OPENSSH |EC |DSA |)?PRIVATE KEY-----/ },
   { id: 'api-secret-text', pattern: /\b(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|GOOGLE_APPLICATION_CREDENTIALS|OPENAI_API_KEY|ANTHROPIC_API_KEY|STRIPE_SECRET_KEY)\s*[:=]\s*['"]?[^'"\s]{12,}/i },
   { id: 'token-text', pattern: /\b(sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b/ },

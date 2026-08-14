@@ -140,22 +140,24 @@ describe('native voice desktop artifact policy', () => {
     expect(result.stderr).toContain('speech-model-support-file')
   })
 
-  it('rejects secrets and unapproved non-commercial voice packs', () => {
+  it('allows license/catalog metadata while still rejecting secrets', () => {
     const context = createContext()
-    writeArtifact(context, '.env', 'OPENAI_API_KEY=sk-123456789012345678901234\n')
     writeArtifact(
       context,
-      'resources/packs/pockettts/LICENSE.txt',
-      'PocketTTS Raven pack. Creative Commons Attribution-NonCommercial.\n',
+      'assets/voice-catalog.json',
+      '{"id":"pockettts-example","license":"CC-BY-NC","download":"https://upstream.invalid/voice"}\n',
     )
 
-    const result = runPolicy(context)
+    const allowed = runPolicy(context)
 
-    expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('secret-file')
-    expect(result.stderr).toContain('api-secret-text')
-    expect(result.stderr).toContain('unapproved-pack')
-    expect(result.stderr).toContain('unapproved-pack-text')
+    expect(allowed.status, allowed.stderr).toBe(0)
+
+    writeArtifact(context, '.env', 'OPENAI_API_KEY=sk-123456789012345678901234\n')
+    const rejected = runPolicy(context)
+
+    expect(rejected.status).not.toBe(0)
+    expect(rejected.stderr).toContain('secret-file')
+    expect(rejected.stderr).toContain('api-secret-text')
   })
 
   it('scans zip-style app archives deterministically', () => {
@@ -174,7 +176,6 @@ describe('native voice desktop artifact policy', () => {
     expect(first.status).not.toBe(0)
     expect(second.status).not.toBe(0)
     expect(first.stderr).toContain('speech-model-asset')
-    expect(first.stderr).toContain('unapproved-pack')
     expect(firstReport).toBe(secondReport)
     const report = JSON.parse(firstReport)
     expect(report.checkedArchives).toBe(1)
