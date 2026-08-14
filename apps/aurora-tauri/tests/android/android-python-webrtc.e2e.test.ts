@@ -31,6 +31,7 @@ import {
   splitAndroidConsoleErrors,
   type AndroidRuntimeExceptionDetails,
 } from './android-webrtc-harness-utils.js'
+import { connectAndroidWebviewCdp } from '../../scripts/android-webview-cdp.mjs'
 
 type BrowserConfig = {
   lane: string
@@ -707,6 +708,7 @@ async function connectAndroidWebView(
   onEvent: (message: CdpMessage) => void,
 ) {
   const deadline = Date.now() + Math.max(90_000, interopTimeoutMs)
+  let lastError: unknown
   while (Date.now() < deadline) {
     const pid = adbOutputOrEmpty(['shell', 'pidof', packageName])
       .trim()
@@ -730,19 +732,7 @@ async function connectAndroidWebView(
       `localabstract:${socketName}`,
     ]).trim()
     try {
-      const targets = (await fetch(
-        `http://127.0.0.1:${port}/json/list`,
-      ).then((response) => response.json())) as Array<{
-        type?: string
-        webSocketDebuggerUrl?: string
-      }>
-      const target = targets.find(
-        (entry) => entry.type === 'page' && entry.webSocketDebuggerUrl,
-      )
-      if (!target?.webSocketDebuggerUrl) {
-        throw new Error('Android WebView did not expose a page target')
-      }
-      const client = await connectCdp(target.webSocketDebuggerUrl, onEvent)
+      const client = await connectCdp(port, onEvent)
       return {
         ...client,
         close() {
@@ -752,118 +742,44 @@ async function connectAndroidWebView(
           })
         },
       }
-    } catch {
+    } catch (error) {
+      lastError = error
       spawnSync(adb, ['forward', '--remove', `tcp:${port}`], {
         stdio: 'ignore',
       })
       await sleep(500)
     }
   }
-  throw new Error('Timed out waiting for the packaged Android WebView')
+  const detail = lastError instanceof Error
+    ? lastError.message
+    : String(lastError ?? 'no CDP error was reported')
+  throw new Error(
+    `Timed out waiting for the packaged Android WebView. Last CDP error: ${detail}`,
+  )
 }
 
 async function connectCdp(
-  url: string,
+  port: string,
   onEvent: (message: CdpMessage) => void,
 ) {
   const commandTimeoutMs = Math.min(
     120_000,
     Math.max(30_000, Math.floor(interopTimeoutMs / 5)),
   )
-  const socket = new WebSocket(url)
-  const pending = new Map<
-    number,
-    {
-      resolve: (message: CdpMessage) => void
-      reject: (error: Error) => void
-      timer: NodeJS.Timeout
-    }
-  >()
-  let sequence = 0
-  let closed = false
-
-  const rejectPending = (error: Error) => {
-    if (closed) return
-    closed = true
-    for (const waiter of pending.values()) {
-      clearTimeout(waiter.timer)
-      waiter.reject(error)
-    }
-    pending.clear()
-  }
-
-  await new Promise<void>((resolvePromise, rejectPromise) => {
-    socket.addEventListener('open', () => resolvePromise(), { once: true })
-    socket.addEventListener(
-      'error',
-      () => rejectPromise(new Error('Android WebView CDP connection failed')),
-      { once: true },
-    )
-  })
-  socket.addEventListener('message', (event) => {
-    const message = JSON.parse(String(event.data)) as CdpMessage
-    if (message.id && pending.has(message.id)) {
-      const waiter = pending.get(message.id)!
-      pending.delete(message.id)
-      clearTimeout(waiter.timer)
-      if (message.error) {
-        waiter.reject(
-          new Error(
-            `Android WebView CDP command failed: ${message.error.message ?? 'unknown error'}`,
-          ),
-        )
-      } else {
-        waiter.resolve(message)
-      }
-      return
-    }
-    onEvent(message)
-  })
-  socket.addEventListener('close', () => {
-    rejectPending(
-      new Error(
-        'Android WebView CDP connection closed; the app or renderer may have exited',
-      ),
-    )
-  })
-  socket.addEventListener('error', () => {
-    rejectPending(new Error('Android WebView CDP connection failed'))
-  })
-
-  return {
+  return connectAndroidWebviewCdp({
+    port,
+    onEvent,
+    commandTimeoutMs,
+  }) as Promise<{
+    mode: 'browser-flattened' | 'browser-nested' | 'direct-page'
+    target?: Record<string, unknown>
     send(
       method: string,
-      params: Record<string, unknown> = {},
-      timeoutMs = commandTimeoutMs,
-    ): Promise<CdpMessage> {
-      if (closed || socket.readyState !== WebSocket.OPEN) {
-        return Promise.reject(
-          new Error(
-            `Android WebView CDP connection is not open: ${method}`,
-          ),
-        )
-      }
-      const id = ++sequence
-      return new Promise((resolvePromise, rejectPromise) => {
-        const timer = setTimeout(() => {
-          pending.delete(id)
-          rejectPromise(
-            new Error(`Android WebView CDP command timed out: ${method}`),
-          )
-        }, timeoutMs)
-        pending.set(id, {
-          resolve: resolvePromise,
-          reject: rejectPromise,
-          timer,
-        })
-        socket.send(JSON.stringify({ id, method, params }))
-      })
-    },
-    close() {
-      socket.close()
-      rejectPending(new Error('Android WebView CDP connection closed'))
-    },
-  }
+      params?: Record<string, unknown>,
+      timeoutMs?: number,
+    ): Promise<CdpMessage>
+    close(): void
+  }>
 }
 
 async function formatRuntimeExceptions(
