@@ -150,7 +150,7 @@ async def test_load_config_with_list_model_paths(mock_bus):
 
 @pytest.mark.asyncio
 async def test_load_config_with_none_model_path(mock_bus):
-    """Test loading configuration with None model path uses default."""
+    """Null model path means no local wake model selected yet."""
     with patch("app.services.stt_wakeword.service.config_api") as mock_cfg:
         mock_cfg.aget = AsyncMock(
             return_value=Wakeword(backend="oww", threshold=0.5, model_path=None)
@@ -162,7 +162,8 @@ async def test_load_config_with_none_model_path(mock_bus):
         ):
             service = WakeWordService()
         await service._load_config()
-        assert service._wake_words == ["jarvis"]
+        assert service._model_paths == []
+        assert service._wake_words == []
 
 
 # ============================================================================

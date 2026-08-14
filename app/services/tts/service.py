@@ -510,13 +510,15 @@ class TTSService(BaseService):
         model_path = (
             piper_cfg.model_file_path
             if piper_cfg and piper_cfg.model_file_path
-            else tts_cfg.model_file_path or "voice_models/en_US-lessac-medium.onnx"
+            else tts_cfg.model_file_path
         )
         config_path = (
             piper_cfg.model_config_file_path
             if piper_cfg and piper_cfg.model_config_file_path
-            else tts_cfg.model_config_file_path or "voice_models/en_US-lessac-medium.onnx.txt"
+            else tts_cfg.model_config_file_path
         )
+        if not model_path:
+            raise TTSProviderError("unsupported_voice", "TTS voice is unavailable")
         model_file = resolve_path(model_path)
         config_file = resolve_path(config_path) if config_path else None
         return str(model_file), str(config_file) if config_file else None
@@ -654,7 +656,7 @@ class TTSService(BaseService):
             preload=(
                 pocket_cfg.preload_model
                 if pocket_cfg and pocket_cfg.preload_model is not None
-                else True
+                else False
             ),
             quantize=bool(pocket_cfg.quantize) if pocket_cfg else False,
             device=(pocket_cfg.device if pocket_cfg and pocket_cfg.device else "cpu"),

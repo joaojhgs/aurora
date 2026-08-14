@@ -133,7 +133,7 @@ immediate rollback path. To opt into PocketTTS, set `services.tts.provider =
 | `services.tts.providers.pockettts.initialization_timeout_s` | `120.0` | Model initialization timeout. |
 | `services.tts.providers.pockettts.request_timeout_s` | `120.0` | Per-request synthesis timeout. |
 | `services.tts.providers.pockettts.max_concurrent_requests` | `1` | Schema and provider enforce serialized entry. |
-| `services.tts.providers.pockettts.preload_model` | `true` | Preload the selected base at provider start. |
+| `services.tts.providers.pockettts.preload_model` | `false` | Keep the selected base unloaded until explicit use unless an operator opts into preload. |
 | `services.tts.providers.pockettts.preload_voice_ids` | `[]` | Additional logical voices must exist in the registry and be supported by the provider. |
 | `services.tts.providers.pockettts.temperature` | `null` | Optional provider sampling control. |
 | `services.tts.providers.pockettts.lsd_decode_steps` | `1` | Optional provider decode control. |

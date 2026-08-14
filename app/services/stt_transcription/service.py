@@ -397,6 +397,7 @@ class TranscriptionService(BaseService):
             "disabled",
             "model_ready",
             "not_loaded",
+            "not_selected",
             "preparing_model",
             "previous_model_retained",
         }
@@ -427,8 +428,8 @@ class TranscriptionService(BaseService):
         realtime_model_cfg = raw_realtime or RealtimeModel()
         accurate_model_cfg = self._cfg_value(transcription_cfg, "accurate_model") or AccurateModel()
 
-        accurate_model_size = self._model_size_or_path(accurate_model_cfg, default="base")
-        realtime_model_size = self._model_size_or_path(realtime_model_cfg, default="tiny")
+        accurate_model_size = self._model_size_or_path(accurate_model_cfg)
+        realtime_model_size = self._model_size_or_path(realtime_model_cfg)
         realtime_device = self._cfg_value(realtime_model_cfg, "device")
         accurate_device = self._cfg_value(accurate_model_cfg, "device")
         accurate_compute_type = self._cfg_value(accurate_model_cfg, "compute_type") or "int8"
@@ -473,11 +474,11 @@ class TranscriptionService(BaseService):
             return cfg.get(key)
         return getattr(cfg, key, None)
 
-    def _model_size_or_path(self, cfg: Any, *, default: str) -> str:
+    def _model_size_or_path(self, cfg: Any) -> str | None:
         """Accept Faster Whisper presets, Hugging Face IDs, and local paths."""
         selected = self._cfg_value(cfg, "model_size_or_path") or self._cfg_value(cfg, "model_size")
         if not isinstance(selected, str) or not selected.strip():
-            return default
+            return None
         return selected.strip()
 
     def _load_one_model(
@@ -485,7 +486,7 @@ class TranscriptionService(BaseService):
         *,
         role: str,
         enabled: bool,
-        model_size: str,
+        model_size: str | None,
         device: str | None,
         compute_type: str,
         download_root: str,
@@ -493,6 +494,9 @@ class TranscriptionService(BaseService):
         """Load one Faster Whisper model, downloading to cache when needed."""
         if not enabled:
             self._set_model_status(role, "unavailable", "disabled")
+            return None
+        if model_size is None:
+            self._set_model_status(role, "unavailable", "not_selected")
             return None
         try:
             self._set_model_status(role, "downloading", "preparing_model")

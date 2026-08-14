@@ -405,11 +405,11 @@ class WakeWordService(BaseService):
 
         # Wake word configuration
         sensitivity = wakeword_cfg.threshold if wakeword_cfg.threshold is not None else 0.5
-        model_path = wakeword_cfg.model_path or "voice_models/jarvis.onnx"
+        model_path = wakeword_cfg.model_path
 
         # JSON null / empty string must not become raw_paths [""] (breaks wake word labels / OWW)
         if model_path is None or (isinstance(model_path, str) and not str(model_path).strip()):
-            raw_paths = ["voice_models/jarvis.onnx"]
+            raw_paths = []
         elif isinstance(model_path, str):
             # Split by comma if multiple paths provided
             if "," in model_path:

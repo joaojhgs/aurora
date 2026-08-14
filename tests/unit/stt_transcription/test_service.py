@@ -17,6 +17,7 @@ Tests cover:
 import asyncio
 import base64
 import sys
+from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 import numpy as np
@@ -69,7 +70,7 @@ def mock_config():
         stt.transcription.accurate_model.compute_type = "int8"
 
         async def mock_aget(key, default_or_model=None, *args, **kwargs):
-            if default_or_model is Stt:
+            if key == ConfigKeys.services.stt or default_or_model is Stt:
                 return Stt(
                     language="en",
                     transcription=Transcription(
@@ -251,6 +252,54 @@ class TestLifecycle:
         await service.stop()  # Should not raise
         await service.stop()  # Should not raise
 
+    @pytest.mark.asyncio
+    async def test_process_entrypoint_starts_and_stops_transcription_service(
+        self, monkeypatch
+    ) -> None:
+        """Starts and stops the transcription service through the process-mode entrypoint."""
+        from app.services.stt_transcription import __main__ as transcription_main
+
+        events: list[str] = []
+        bus = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
+        service = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
+
+        class ShutdownSignalWaiter:
+            def __init__(self, service_name: str) -> None:
+                events.append(f"install:{service_name}")
+
+            async def wait(self) -> None:
+                events.append("wait")
+
+            def close(self) -> None:
+                events.append("close")
+
+        monkeypatch.setattr(
+            transcription_main,
+            "register_all_service_topics",
+            lambda: events.append("topics"),
+        )
+        monkeypatch.setattr(
+            transcription_main,
+            "initialize_bus_for_service",
+            lambda service_name: events.append(service_name) or bus,
+        )
+        monkeypatch.setattr(transcription_main, "TranscriptionService", lambda: service)
+        monkeypatch.setattr(transcription_main, "ShutdownSignalWaiter", ShutdownSignalWaiter)
+
+        await transcription_main.main()
+
+        assert events == [
+            "install:TranscriptionService",
+            "topics",
+            "TranscriptionService",
+            "wait",
+            "close",
+        ]
+        bus.start.assert_awaited_once_with()
+        service.start.assert_awaited_once_with()
+        service.stop.assert_awaited_once_with()
+        bus.stop.assert_awaited_once_with()
+
 
 # ============================================================================
 # 3. MODEL LOADING TESTS
@@ -417,6 +466,31 @@ class TestModelLoading:
             compute_type="int8",
             download_root=ANY,
         )
+
+    @pytest.mark.asyncio
+    async def test_cold_start_without_selected_models_does_not_download_or_advertise_stt(
+        self, service, mock_whisper_model
+    ):
+        """Default config keeps local STT dormant until a model is selected."""
+        realtime, accurate = await service._create_models(
+            Transcription(
+                realtime_model=RealtimeModel(enabled=True),
+                accurate_model=AccurateModel(enabled=True),
+            ),
+            realtime_enabled=True,
+            accurate_enabled=True,
+        )
+        service._realtime_model = realtime
+        service._accurate_model = accurate
+        service._refresh_callable_capabilities()
+
+        mock_whisper_model.assert_not_called()
+        assert realtime is None
+        assert accurate is None
+        assert service._model_status_message["realtime"] == "not_selected"
+        assert service._model_status_message["accurate"] == "not_selected"
+        assert "vad" in service._capabilities
+        assert "audio_transcription" not in service._capabilities
 
     @pytest.mark.asyncio
     async def test_unavailable_models_remove_transcription_capability(

@@ -295,11 +295,11 @@ class Auth(BaseConfigModel):
 
 
 class Piper(BaseConfigModel):
-    model_file_path: str | None = "voice_models/en_US-lessac-medium.onnx"
+    model_file_path: str | None = None
     """
     Path to the Piper model file
     """
-    model_config_file_path: str | None = "voice_models/en_US-lessac-medium.onnx.txt"
+    model_config_file_path: str | None = None
     """
     Path to the Piper model configuration file
     """
@@ -326,7 +326,7 @@ class Pockettts(BaseConfigModel):
     initialization_timeout_s: float | None = Field(120.0, ge=1.0)
     request_timeout_s: float | None = Field(120.0, ge=1.0)
     max_concurrent_requests: int | None = Field(1, ge=1, le=1)
-    preload_model: bool | None = True
+    preload_model: bool | None = False
     preload_voice_ids: list[str] | None = []
     temperature: float | None = None
     lsd_decode_steps: int | None = Field(1, ge=1)
@@ -427,11 +427,11 @@ class RealtimeModel(BaseConfigModel):
     """
     Enable realtime transcription model
     """
-    model_size: Literal["tiny", "base", "small", "medium", "large"] | None = "tiny"
+    model_size: Literal["tiny", "base", "small", "medium", "large"] | None = None
     """
     Whisper model size for realtime transcription
     """
-    model_size_or_path: str | None = "tiny"
+    model_size_or_path: str | None = None
     """
     Faster Whisper preset, Hugging Face model ID, or local model path for realtime transcription
     """
@@ -450,11 +450,11 @@ class AccurateModel(BaseConfigModel):
     """
     Enable accurate transcription model
     """
-    model_size: Literal["tiny", "base", "small", "medium", "large"] | None = "base"
+    model_size: Literal["tiny", "base", "small", "medium", "large"] | None = None
     """
     Whisper model size for accurate transcription
     """
-    model_size_or_path: str | None = "base"
+    model_size_or_path: str | None = None
     """
     Faster Whisper preset, Hugging Face model ID, or local model path for accurate transcription
     """
@@ -1031,11 +1031,11 @@ class Tts(BaseConfigModel):
     """
     Logical voice registry settings
     """
-    model_file_path: str | None = "voice_models/en_US-lessac-medium.onnx"
+    model_file_path: str | None = None
     """
     Path to the TTS model file
     """
-    model_config_file_path: str | None = "voice_models/en_US-lessac-medium.onnx.txt"
+    model_config_file_path: str | None = None
     """
     Path to the TTS model configuration file
     """

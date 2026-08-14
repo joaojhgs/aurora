@@ -110,8 +110,8 @@
       "hardware_acceleration": false,
       "providers": {
         "piper": {
-          "model_file_path": "voice_models/en_US-lessac-medium.onnx",
-          "model_config_file_path": "voice_models/en_US-lessac-medium.onnx.txt",
+          "model_file_path": null,
+          "model_config_file_path": null,
           "model_sample_rate": 22050,
           "executable_path": "",
           "cache_dir": "voice_models/piper"
@@ -125,7 +125,7 @@
           "initialization_timeout_s": 120.0,
           "request_timeout_s": 120.0,
           "max_concurrent_requests": 1,
-          "preload_model": true,
+          "preload_model": false,
           "preload_voice_ids": [],
           "temperature": null,
           "lsd_decode_steps": 1,
@@ -157,8 +157,8 @@
           "webm"
         ]
       },
-      "model_file_path": "voice_models/en_US-lessac-medium.onnx",
-      "model_config_file_path": "voice_models/en_US-lessac-medium.onnx.txt",
+      "model_file_path": null,
+      "model_config_file_path": null,
       "model_sample_rate": 22050,
       "piper_path": ""
     },
@@ -262,15 +262,15 @@
         "max_speech_duration_s": 30,
         "realtime_model": {
           "enabled": true,
-          "model_size": "tiny",
-          "model_size_or_path": "tiny",
+          "model_size": null,
+          "model_size_or_path": null,
           "device": "cpu",
           "compute_type": "int8"
         },
         "accurate_model": {
           "enabled": true,
-          "model_size": "base",
-          "model_size_or_path": "base",
+          "model_size": null,
+          "model_size_or_path": null,
           "device": "cpu",
           "compute_type": "int8"
         }

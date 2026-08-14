@@ -492,18 +492,24 @@
                   "additionalProperties": false,
                   "properties": {
                     "model_file_path": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "description": "Path to the Piper model file",
                       "ui_type": "file",
                       "ui_file_filter": "ONNX files (*.onnx)|*.onnx|All files (*.*)|*.*",
-                      "default": "voice_models/en_US-lessac-medium.onnx"
+                      "default": null
                     },
                     "model_config_file_path": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "description": "Path to the Piper model configuration file",
                       "ui_type": "file",
                       "ui_file_filter": "Text files (*.txt)|*.txt|All files (*.*)|*.*",
-                      "default": "voice_models/en_US-lessac-medium.onnx.txt"
+                      "default": null
                     },
                     "model_sample_rate": {
                       "type": "integer",
@@ -580,7 +586,7 @@
                     },
                     "preload_model": {
                       "type": "boolean",
-                      "default": true
+                      "default": false
                     },
                     "preload_voice_ids": {
                       "type": "array",
@@ -728,18 +734,24 @@
               "default": {}
             },
             "model_file_path": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
               "description": "Path to the TTS model file",
               "ui_type": "file",
               "ui_file_filter": "ONNX files (*.onnx)|*.onnx|All files (*.*)|*.*",
-              "default": "voice_models/en_US-lessac-medium.onnx"
+              "default": null
             },
             "model_config_file_path": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
               "description": "Path to the TTS model configuration file",
               "ui_type": "file",
               "ui_file_filter": "Text files (*.txt)|*.txt|All files (*.*)|*.*",
-              "default": "voice_models/en_US-lessac-medium.onnx.txt"
+              "default": null
             },
             "model_sample_rate": {
               "type": "integer",
@@ -1007,21 +1019,28 @@
                       "default": true
                     },
                     "model_size": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "enum": [
                         "tiny",
                         "base",
                         "small",
                         "medium",
-                        "large"
+                        "large",
+                        null
                       ],
                       "description": "Whisper model size for realtime transcription",
-                      "default": "tiny"
+                      "default": null
                     },
                     "model_size_or_path": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "description": "Faster Whisper preset, Hugging Face model ID, or local model path for realtime transcription",
-                      "default": "tiny"
+                      "default": null
                     },
                     "device": {
                       "type": "string",
@@ -1057,21 +1076,28 @@
                       "default": true
                     },
                     "model_size": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "enum": [
                         "tiny",
                         "base",
                         "small",
                         "medium",
-                        "large"
+                        "large",
+                        null
                       ],
                       "description": "Whisper model size for accurate transcription",
-                      "default": "base"
+                      "default": null
                     },
                     "model_size_or_path": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "description": "Faster Whisper preset, Hugging Face model ID, or local model path for accurate transcription",
-                      "default": "base"
+                      "default": null
                     },
                     "device": {
                       "type": "string",

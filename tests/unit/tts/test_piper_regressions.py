@@ -500,6 +500,30 @@ async def test_start_initializes_piper_stream_from_nested_piper_config(
 
 
 @pytest.mark.asyncio
+async def test_tts_cold_start_without_selected_piper_voice_does_not_bind_bundled_default(
+    service: TTSService,
+    fake_realtimetts,
+    fake_piper_engine,
+    monkeypatch,
+) -> None:
+    """Default metadata-only config does not imply a bundled English Piper voice."""
+
+    async def fake_config(*_args, **_kwargs):
+        return Tts(provider="piper", providers=Providers(piper=Piper()))
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.shutil.which", lambda _name: None)
+
+    await service.on_start()
+
+    assert service._provider is None
+    assert service.engine is None
+    assert service.stream is None
+    assert fake_piper_engine.PiperEngine.instances == []
+    assert fake_realtimetts.TextToAudioStream.instances == []
+
+
+@pytest.mark.asyncio
 async def test_piper_list_language_packs_exposes_catalog_voices_even_uninstalled(
     service: TTSService, monkeypatch, tmp_path: Path
 ) -> None:
