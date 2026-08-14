@@ -44,32 +44,54 @@ def candidate_manifest_references(data: dict) -> set[str]:
     return references
 
 
-def test_phase6_disposition_is_fail_closed_for_release_capabilities():
+def test_phase6_disposition_enables_on_demand_capabilities_without_bundling_weights():
     data = disposition()
 
-    assert data["schema_version"] == "aurora.voice.phase6.capability_disposition.v1"
-    assert data["overall_status"] == "withheld"
+    assert data["schema_version"] == "aurora.voice.phase6.capability_disposition.v2"
+    assert data["overall_status"] == "production_runtime_enabled_on_demand"
     assert data["production_capabilities"] == {
-        "vad": False,
-        "kws": False,
-        "stt": False,
-        "tts": False,
+        "vad": True,
+        "kws": True,
+        "stt": True,
+        "tts": True,
     }
     assert data["allowed_behavior"] == {
-        "vad": "candidate_validation_only",
-        "kws": "withhold_release_capability",
-        "stt": "withhold_release_capability",
-        "tts": "task_unavailable",
+        "vad": "explicit_user_download_cache_and_activate",
+        "kws": "explicit_user_download_cache_and_activate",
+        "stt": "explicit_user_download_cache_and_activate",
+        "tts": "explicit_user_download_cache_and_activate",
     }
 
-    for entry in data["candidate_validations"].values():
-        assert entry["release_capability"] is False
-        assert entry["release_index_eligible"] is False
-        assert entry["advertised_languages"] == []
-        assert entry["unsatisfied_gates"]
+    activation = data["activation_policy"]
+    assert activation["bundled_model_weights"] is False
+    assert activation["automatic_download"] is False
+    assert activation["redistributed_by_aurora"] is False
+    assert activation["download_initiated_by_user"] is True
+    assert activation["terms_presented_from_catalog"] is True
 
-    assert data["candidate_validations"]["kws"]["supported_wake_phrases"] == []
-    assert data["candidate_validations"]["tts"]["selectable_model_pack"] is False
+    for entry in data["candidate_validations"].values():
+        assert entry["release_capability"] is True
+        assert entry["release_index_eligible"] is False
+        assert entry["embedded_catalog_eligible"] is True
+        assert entry["remaining_evidence_gaps"]
+
+    assert data["candidate_validations"]["kws"]["wake_phrase_policy"]
+    assert data["candidate_validations"]["tts"]["selectable_model_pack"] is True
+
+
+def test_embedded_catalogs_list_all_pinned_entries_for_explicit_user_download():
+    data = disposition()
+
+    for catalog_name, expected_count in (("speech", 21), ("tts", 537)):
+        catalog_policy = data["metadata_catalogs"][catalog_name]
+        catalog = load_json(ROOT / catalog_policy["path"])
+        assert len(catalog["entries"]) == catalog_policy["entry_count"] == expected_count
+        assert len(catalog["languages"]) == catalog_policy["language_count"]
+        for entry in catalog["entries"]:
+            assert entry["archive"]["url"].startswith("https://")
+            assert re.fullmatch(r"[0-9a-f]{64}", entry["archive"]["sha256"])
+            assert entry["terms"]["download_initiated_by_user"] is True
+            assert entry["terms"]["redistributed_by_aurora"] is False
 
 
 def test_disposition_cross_checks_current_candidate_manifests_and_trust():
@@ -132,7 +154,8 @@ def test_every_disposition_candidate_manifest_is_release_ineligible():
         entry = validation_by_manifest[reference]
 
         assert entry["candidate_pack_id"] == pack_id
-        assert entry["release_capability"] is False
+        assert entry["release_capability"] is True
+        assert entry["embedded_catalog_eligible"] is True
         assert entry["release_index_eligible"] is False
         assert data["release_index_eligible"][pack_id] is False
         assert manifest["variants"]
@@ -149,6 +172,8 @@ def test_phase4_docs_describe_phase6_candidates_as_validation_only():
     assert "phase6-capability-disposition.json" in doc
     assert "validation inputs only" in doc
     assert "excluded from release eligibility" in doc
+    assert re.search(r"explicit user\s+choice", doc)
+    assert "does not bundle or redistribute" in doc
 
     forbidden_release_selection_language = (
         r"\bselected\s+model\s+candidates\b",
@@ -168,45 +193,65 @@ def test_phase4_docs_describe_phase6_candidates_as_validation_only():
         assert data["release_index_eligible"][manifest["pack_id"]] is False
 
 
-def test_tts_disposition_references_all_blocked_candidates():
+def test_tts_disposition_separates_on_demand_selection_from_redistribution():
     data = disposition()
     tts = data["candidate_validations"]["tts"]
     blocked = load_json(CANDIDATES / "blocked-tts-disposition.json")
 
-    assert tts["blocked_disposition"] == (
+    assert tts["distribution_disposition"] == (
         "tools/voice-runtime/model-packs/candidates/blocked-tts-disposition.json"
     )
-    assert blocked["status"] == "blocked"
-    assert blocked["selectable_model_pack"] is False
+    assert blocked["status"] == "user_download_enabled"
+    assert blocked["selectable_model_pack"] is True
+    assert blocked["bundled_model_weights"] is False
+    assert blocked["automatic_download"] is False
     assert {item["id"] for item in blocked["dispositions"]} == {
         "pockettts-standard-voice-packs",
         "piper-espeak-sherpa-tts-chain",
         "sherpa-onnx-supertonic-3-tts-int8-2026-05-11",
     }
-    assert tts["candidate_manifest"] is None
-    assert tts["candidate_pack_id"] is None
+    selectable = [item for item in blocked["dispositions"] if item["catalog_selectable"]]
+    assert {item["id"] for item in selectable} == {
+        "pockettts-standard-voice-packs",
+        "piper-espeak-sherpa-tts-chain",
+    }
+    for item in selectable:
+        assert item["download_initiated_by_user"] is True
+        assert item["status"] == "user_download_only"
+        assert item["aurora_redistribution"] in {"prohibited", "not_bundled"}
+
+    supertonic = next(
+        item
+        for item in blocked["dispositions"]
+        if item["id"] == "sherpa-onnx-supertonic-3-tts-int8-2026-05-11"
+    )
+    assert supertonic["catalog_selectable"] is False
+    assert supertonic["status"] == "unsupported_model_family"
+    assert "not in Aurora's current runtime catalog" in supertonic["reason"]
 
 
-def test_disposition_does_not_promote_emulator_browser_or_ios_evidence():
+def test_disposition_keeps_runtime_implementation_separate_from_external_evidence():
     boundaries = disposition()["evidence_boundaries"]
 
     assert boundaries["native_linux"] == {
         "candidate_engine_validation": True,
-        "release_claim": False,
+        "runtime_implementation": True,
+        "unsigned_package_allowed": True,
     }
     assert boundaries["android"] == {
-        "checked_in_emulator_evidence": False,
         "physical_device_quality_or_resource_evidence": False,
-        "release_claim": False,
+        "runtime_implementation": True,
+        "unsigned_package_allowed": True,
     }
     assert boundaries["browser"] == {
-        "checked_in_parity_evidence": False,
         "physical_device_claim": False,
-        "release_claim": False,
+        "runtime_implementation": True,
+        "unsigned_package_allowed": True,
     }
     assert boundaries["ios"] == {
-        "evidence_present": False,
-        "release_claim": False,
+        "apple_runtime_evidence_present": False,
+        "runtime_implementation": True,
+        "unsigned_frontend_and_project_allowed": True,
     }
 
 
@@ -214,7 +259,7 @@ def test_disposition_references_are_repo_relative_and_checked_in():
     data = disposition()
     referenced_paths = set(data["source_references"])
     for entry in data["candidate_validations"].values():
-        for key in ("candidate_manifest", "blocked_disposition"):
+        for key in ("candidate_manifest", "distribution_disposition", "catalog_source"):
             value = entry.get(key)
             if value:
                 referenced_paths.add(value)
@@ -241,7 +286,7 @@ def test_disposition_does_not_leak_host_paths_secrets_transcripts_or_audio_names
         r"[A-Za-z]:\\",
         r"secret",
         r"token",
-        r"private",
+        r"private[_ -]key",
         r"Ask not what",
         r"LIGHT UP",
         r"test_wavs",

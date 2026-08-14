@@ -362,22 +362,40 @@ fn phase6_candidate_state_and_inventory_metadata_are_exact() {
 }
 
 #[test]
-fn phase6_tts_disposition_is_blocked_and_not_selectable() {
+fn phase6_tts_disposition_enables_explicit_user_download_without_redistribution() {
     let disposition = read_json(candidates_dir().join("blocked-tts-disposition.json"));
 
-    assert_eq!(disposition["status"], "blocked");
-    assert_eq!(disposition["selectable_model_pack"], false);
+    assert_eq!(disposition["status"], "user_download_enabled");
+    assert_eq!(disposition["selectable_model_pack"], true);
+    assert_eq!(disposition["bundled_model_weights"], false);
+    assert_eq!(disposition["automatic_download"], false);
     assert!(disposition.get("files").is_none());
     assert!(disposition.get("variants").is_none());
-    assert!(disposition.to_string().contains("PocketTTS"));
-    assert!(disposition.to_string().contains("Piper/espeak"));
+    let rendered_disposition = disposition.to_string().to_ascii_lowercase();
+    assert!(rendered_disposition.contains("pockettts"));
+    assert!(rendered_disposition.contains("piper-espeak"));
+    for id in [
+        "pockettts-standard-voice-packs",
+        "piper-espeak-sherpa-tts-chain",
+    ] {
+        let entry = disposition["dispositions"]
+            .as_array()
+            .expect("TTS dispositions")
+            .iter()
+            .find(|entry| entry["id"] == id)
+            .expect("selectable TTS family");
+        assert_eq!(entry["catalog_selectable"], true);
+        assert_eq!(entry["download_initiated_by_user"], true);
+        assert_eq!(entry["status"], "user_download_only");
+    }
     let supertonic = disposition["dispositions"]
         .as_array()
-        .expect("blocked dispositions")
+        .expect("TTS dispositions")
         .iter()
         .find(|entry| entry["id"] == "sherpa-onnx-supertonic-3-tts-int8-2026-05-11")
-        .expect("Supertonic 3 TTS block");
-    assert_eq!(supertonic["status"], "blocked");
+        .expect("Supertonic 3 TTS disposition");
+    assert_eq!(supertonic["status"], "unsupported_model_family");
+    assert_eq!(supertonic["catalog_selectable"], false);
     assert_eq!(
         supertonic["archive_sha256"],
         "82fa96f91c4ef8abaae3a14a3f4153facf88bed821d1f7331cec2700f432c427"
@@ -398,7 +416,7 @@ fn phase6_tts_disposition_is_blocked_and_not_selectable() {
     let rendered = supertonic.to_string();
     assert!(rendered.contains("OpenRAIL-M"));
     assert!(rendered.contains("MIT software"));
-    assert!(rendered.contains("legal redistribution"));
-    assert!(rendered.contains("maintenance abandonment"));
-    assert!(rendered.contains("Do not advertise"));
+    assert!(rendered.contains("current production adapter"));
+    assert!(rendered.contains("upstream project announced archival"));
+    assert!(rendered.contains("not in Aurora's current runtime catalog"));
 }
