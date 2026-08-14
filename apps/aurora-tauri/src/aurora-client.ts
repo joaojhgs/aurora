@@ -3,6 +3,7 @@ import {
   HttpGatewayTransport,
   MockAuroraTransport,
   TauriLocalTransport,
+  type NativeSpeechPackTask,
   type TauriAndroidBaselineStatus,
   type AndroidLocalLightInferenceStatus,
   type NativeCapabilityManifest,
@@ -243,6 +244,30 @@ export interface AuroraThinProfileController {
   ) => Promise<AuroraTauriRuntime>;
 }
 
+type AuroraLocalSpeechPackActivator = (
+  selection: AuroraLocalSpeechSelectionProfile,
+) => Promise<void>;
+
+function createTauriLocalSpeechPackActivator(
+  transport: TauriLocalTransport,
+): AuroraLocalSpeechPackActivator {
+  return async (selection) => {
+    const selectedPacks: Array<{ task: NativeSpeechPackTask; packId: string }> = [];
+    if (selection.vad?.packId) selectedPacks.push({ task: "vad", packId: selection.vad.packId });
+    if (selection.kws?.packId) selectedPacks.push({ task: "kws", packId: selection.kws.packId });
+    if (selection.stt?.packId) selectedPacks.push({ task: "stt", packId: selection.stt.packId });
+    if (selection.tts?.packId) selectedPacks.push({ task: "tts", packId: selection.tts.packId });
+
+    for (const selected of selectedPacks) {
+      await transport.installNativeSpeechPack(selected);
+      await transport.activateNativeSpeechPack({
+        ...selected,
+        slot: selected.task,
+      });
+    }
+  };
+}
+
 export function isThinProfileConfigured(
   profile: AuroraThinConnectionProfile | undefined,
 ): boolean {
@@ -455,6 +480,7 @@ export function createAuroraTauriRuntime({
   localAssistant = null,
   thinInviteText: explicitThinInviteText,
   consumeThinInvite = true,
+  localSpeechPackActivator,
 }: {
   thinProfileStore?: AuroraThinProfileStore;
   thinProfileDocument?: AuroraThinProfileDocument;
@@ -465,6 +491,7 @@ export function createAuroraTauriRuntime({
   localAssistant?: AuroraTauriLightweightAssistantConfig | null | undefined;
   thinInviteText?: string | null;
   consumeThinInvite?: boolean;
+  localSpeechPackActivator?: AuroraLocalSpeechPackActivator;
 } = {}): AuroraTauriRuntime {
   const runtimeDocument = runtimeProfileDocument
     ? sanitizeRuntimeProfileDocument(runtimeProfileDocument, {
@@ -490,6 +517,11 @@ export function createAuroraTauriRuntime({
   const thinInviteText =
     explicitThinInviteText ??
     (consumeThinInvite ? consumeFragmentInviteFromRuntime() : null);
+  const resolvedLocalSpeechPackActivator =
+    localSpeechPackActivator ??
+    (isTauriRuntime()
+      ? createTauriLocalSpeechPackActivator(new TauriLocalTransport({ invoke, listen }))
+      : undefined);
   const thinProfileController =
     runtimeProfileStore
       ? createRuntimeBackedThinProfileController(
@@ -497,6 +529,7 @@ export function createAuroraTauriRuntime({
         runtimeDocument,
         packageCapabilities,
         runtimeModePreferenceStore,
+        resolvedLocalSpeechPackActivator,
       )
       : thinProfileStore && thinProfileDocument
         ? createThinProfileController(thinProfileStore, thinProfileDocument)
@@ -1541,6 +1574,7 @@ function createRuntimeBackedThinProfileController(
   runtimeDocument: AuroraRuntimeProfileDocument,
   packageCapabilities: AuroraTauriPackageCapabilities,
   modePreferenceStore: AuroraModePreferenceStore | undefined,
+  localSpeechPackActivator: AuroraLocalSpeechPackActivator | undefined,
 ): AuroraThinProfileController {
   let currentRuntimeDocument = runtimeDocument;
   let currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
@@ -1619,6 +1653,7 @@ function createRuntimeBackedThinProfileController(
         throw new Error("Runtime profile does not exist");
       }
       let found = false;
+      let activationSelection: AuroraLocalSpeechSelectionProfile | null = null;
       const profiles = currentRuntimeDocument.profiles.map((profile) => {
         if (profile.id !== currentRuntimeDocument.activeProfileId) return profile;
         found = true;
@@ -1626,6 +1661,9 @@ function createRuntimeBackedThinProfileController(
           ...(profile.localNode.localSpeechSelection ?? {}),
           ...selection,
         };
+        if (profile.nodeMode === "mesh-node") {
+          activationSelection = localSpeechSelection;
+        }
         return sanitizeRuntimeProfile({
           ...profile,
           localNode: {
@@ -1637,6 +1675,9 @@ function createRuntimeBackedThinProfileController(
         });
       });
       if (!found) throw new Error("Runtime profile does not exist");
+      if (activationSelection) {
+        await localSpeechPackActivator?.(activationSelection);
+      }
       const next: AuroraRuntimeProfileDocument = {
         ...currentRuntimeDocument,
         profiles,

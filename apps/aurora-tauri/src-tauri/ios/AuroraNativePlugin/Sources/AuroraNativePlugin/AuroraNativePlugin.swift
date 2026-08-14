@@ -663,6 +663,17 @@ public final class AuroraNativePlugin: Plugin {
     }
   }
 
+  @objc public func voicePackActivate(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraIOSVoicePackActivateArgs.self)
+      let slot = args.slot ?? "stt"
+      let payload = try packManager.activate(packId: args.packId, slot: slot)
+      invoke.resolve(payload)
+    } catch {
+      invoke.reject("voice_pack_activate_failed")
+    }
+  }
+
   @objc public func voicePackRemove(_ invoke: Invoke) {
     do {
       let args = try invoke.parseArgs(AuroraIOSVoicePackRemoveArgs.self)

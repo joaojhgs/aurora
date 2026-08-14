@@ -64,4 +64,75 @@ describe('Tauri bounded native action transport', () => {
     } satisfies Partial<AuroraError>)
   })
 
+  it('routes native speech pack commands through typed request payloads', async () => {
+    const calls: Array<{ command: string, args: unknown }> = []
+    const status = {
+      available: true,
+      activeSlots: {},
+      count: 0,
+      packs: [],
+      secretsRedacted: true
+    }
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        if (command === 'aurora_native_speech_pack_catalog') {
+          return { ...status, languages: [] }
+        }
+        if (command.startsWith('aurora_native_speech_pack_')) return status
+        if (command.startsWith('aurora_ios_voice_pack_')) return { ok: true, secretsRedacted: true }
+        throw new Error(`unexpected command: ${command}`)
+      }
+    })
+
+    await transport.getNativeSpeechPackCatalog({ task: 'stt', language: 'en' })
+    await transport.getNativeSpeechPackStatus()
+    await transport.installNativeSpeechPack({ task: 'tts', packId: 'piper.en' })
+    await transport.activateNativeSpeechPack({ task: 'tts', packId: 'piper.en', slot: 'tts' })
+    await transport.removeNativeSpeechPack({ task: 'tts', packId: 'piper.en' })
+    await transport.setIosVoicePackCatalog({ entries: [], replaceExisting: true })
+    await transport.downloadIosVoicePack({ task: 'stt', packId: 'whisper.tiny.en' })
+    await transport.activateIosVoicePack({ task: 'stt', packId: 'whisper.tiny.en', slot: 'stt' })
+    await transport.removeIosVoicePack({ task: 'stt', packId: 'whisper.tiny.en' })
+
+    expect(calls).toEqual([
+      {
+        command: 'aurora_native_speech_pack_catalog',
+        args: { request: { task: 'stt', language: 'en' } }
+      },
+      {
+        command: 'aurora_native_speech_pack_status',
+        args: undefined
+      },
+      {
+        command: 'aurora_native_speech_pack_install',
+        args: { request: { task: 'tts', packId: 'piper.en' } }
+      },
+      {
+        command: 'aurora_native_speech_pack_activate',
+        args: { request: { task: 'tts', packId: 'piper.en', slot: 'tts' } }
+      },
+      {
+        command: 'aurora_native_speech_pack_remove',
+        args: { request: { task: 'tts', packId: 'piper.en' } }
+      },
+      {
+        command: 'aurora_ios_voice_pack_catalog_set',
+        args: { request: { entries: [], replaceExisting: true } }
+      },
+      {
+        command: 'aurora_ios_voice_pack_download',
+        args: { request: { task: 'stt', packId: 'whisper.tiny.en' } }
+      },
+      {
+        command: 'aurora_ios_voice_pack_activate',
+        args: { request: { task: 'stt', packId: 'whisper.tiny.en', slot: 'stt' } }
+      },
+      {
+        command: 'aurora_ios_voice_pack_remove',
+        args: { request: { task: 'stt', packId: 'whisper.tiny.en' } }
+      }
+    ])
+  })
+
 })

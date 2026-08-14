@@ -11,6 +11,7 @@ commands.allow = [
   "aurora_ios_voice_pack_list",
   "aurora_ios_voice_pack_status",
   "aurora_ios_voice_pack_download",
+  "aurora_ios_voice_pack_activate",
   "aurora_ios_voice_pack_remove",
   "aurora_ios_background_status",
 ]

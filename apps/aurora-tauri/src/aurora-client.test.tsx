@@ -1326,9 +1326,14 @@ describe("Aurora Tauri runtime wrapper", () => {
       activeProfileId: profile.id,
       profiles: [profile],
     });
+    const activateLocalSpeechPacks = vi.fn(async () => {
+      const savedBeforeActivation = await store.load();
+      expect(savedBeforeActivation.profiles[0]?.localNode.localSpeechSelection?.tts).toBeUndefined();
+    });
     const runtime = createAuroraTauriRuntime({
       runtimeProfileStore: store,
       runtimeProfileDocument: await store.load(),
+      localSpeechPackActivator: activateLocalSpeechPacks,
     });
 
     await runtime.thinProfileController?.updateActiveLocalSpeechSelection?.({
@@ -1343,6 +1348,26 @@ describe("Aurora Tauri runtime wrapper", () => {
     const saved = await store.load();
     expect(saved.profiles[0]?.localNode.localSpeechPackState).toBe("ready");
     expect(saved.profiles[0]?.localNode.localSpeechSelection).toEqual({
+      vad: {
+        packId: "vad.webrtc",
+        packRevision: "vad-rev-1",
+      },
+      kws: {
+        packId: "wake.aurora",
+        packRevision: "wake-rev-1",
+      },
+      stt: {
+        packId: "whisper.tiny.en",
+        packRevision: "stt-rev-1",
+      },
+      tts: {
+        packId: "piper.en",
+        packRevision: "pack-rev-1",
+        voiceId: "standard:piper.en:ava",
+        voiceRevision: "voice-rev-1",
+      },
+    });
+    expect(activateLocalSpeechPacks).toHaveBeenCalledWith({
       vad: {
         packId: "vad.webrtc",
         packRevision: "vad-rev-1",

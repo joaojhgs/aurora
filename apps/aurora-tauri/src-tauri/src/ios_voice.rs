@@ -3,16 +3,23 @@
 //! The opaque session owns the Rust input/output queues. The audio state and
 //! output pointers borrowed from it are valid only until the session is freed.
 
-use aurora_voice_engine::PackTask;
+use aurora_voice_core::CancellationToken;
+use aurora_voice_engine::{
+    PackTask, SpeechCatalogTask, SpeechModelCatalog, TtsVoiceCatalog, VoiceTask,
+};
 use aurora_voice_ios_bridge::{AuroraIosAudioOutput, AuroraIosAudioState};
 use aurora_voice_native::{
     GatewayAuth, IosVoicePackBinding, IosVoicePackBindings, IosVoicePackFileBinding,
     IosVoiceSession, IosVoiceSessionCommandError, IosVoiceSessionConfig, IosVoiceSessionStatus,
+    SpeechModelBindings, SpeechPackBindings, SpeechPackManager, SpeechPackManagerConfig,
     MAX_IOS_PACK_BINDINGS,
 };
-use serde::Deserialize;
-use std::ffi::CStr;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
+use std::path::{Path, PathBuf};
+use tokio::runtime::Builder as TokioRuntimeBuilder;
 use url::Url;
 
 pub const AURORA_IOS_VOICE_OK: i32 = 0;
@@ -21,6 +28,9 @@ pub const AURORA_IOS_VOICE_UNAVAILABLE: i32 = 1;
 pub const AURORA_IOS_VOICE_ALREADY_ACTIVE: i32 = 2;
 pub const AURORA_IOS_VOICE_NOT_ACTIVE: i32 = 3;
 pub const AURORA_IOS_VOICE_CLOSED: i32 = 4;
+pub const AURORA_IOS_VOICE_PACK_OK: i32 = 0;
+pub const AURORA_IOS_VOICE_PACK_INVALID_ARGUMENT: i32 = -1;
+pub const AURORA_IOS_VOICE_PACK_UNAVAILABLE: i32 = 1;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -68,6 +78,21 @@ struct AuroraIosVoiceTaskPackFileJson {
     size_bytes: u64,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuroraIosResolvedVoicePack {
+    pack_id: String,
+    task: String,
+    archive_sha256: String,
+    archive_path: String,
+    root: Option<String>,
+    files: BTreeMap<String, String>,
+    languages: Vec<String>,
+    language: Option<String>,
+    sample_rate_hz: u32,
+    frame_size: u32,
+}
+
 /// # Safety
 /// `value` must be null or point to a valid NUL-terminated UTF-8 string of at
 /// most `max_bytes` bytes for the duration of the call.
@@ -113,6 +138,154 @@ fn pack_task_from_abi(value: i32) -> Option<PackTask> {
     }
 }
 
+fn speech_catalog_task_from_pack_task(task: PackTask) -> Option<SpeechCatalogTask> {
+    match task {
+        PackTask::Kws | PackTask::Wakeword => Some(SpeechCatalogTask::KeywordSpotting),
+        PackTask::Vad => Some(SpeechCatalogTask::VoiceActivityDetection),
+        PackTask::Stt => Some(SpeechCatalogTask::SpeechToText),
+        PackTask::Tts => None,
+        _ => None,
+    }
+}
+
+fn voice_task_to_pack_id(task: VoiceTask) -> &'static str {
+    match task {
+        VoiceTask::KeywordSpotting => "kws",
+        VoiceTask::VoiceActivityDetection => "vad",
+        VoiceTask::SpeechToText => "stt",
+        VoiceTask::TextToSpeech => "tts",
+    }
+}
+
+fn speech_pack_manager_at(root: PathBuf) -> Option<SpeechPackManager> {
+    SpeechPackManagerConfig::new(root, None)
+        .ok()
+        .and_then(|config| SpeechPackManager::open(config).ok())
+}
+
+fn archive_path(root: &Path, sha256: &str) -> PathBuf {
+    root.join("cache").join(sha256).join("archive.tar.bz2")
+}
+
+fn resolved_voice_pack_payload(
+    root: &Path,
+    bindings: SpeechPackBindings,
+) -> AuroraIosResolvedVoicePack {
+    let catalog = TtsVoiceCatalog::embedded().ok();
+    let entry = catalog.and_then(|catalog| catalog.voice(&bindings.voice_id));
+    let mut files = BTreeMap::new();
+    files.insert("model".to_owned(), bindings.model.display().to_string());
+    files.insert("config".to_owned(), bindings.config.display().to_string());
+    files.insert("tokens".to_owned(), bindings.tokens.display().to_string());
+    AuroraIosResolvedVoicePack {
+        pack_id: bindings.voice_id,
+        task: "tts".to_owned(),
+        archive_path: archive_path(root, &bindings.archive_sha256)
+            .display()
+            .to_string(),
+        archive_sha256: bindings.archive_sha256,
+        root: Some(bindings.root.display().to_string()),
+        files,
+        languages: entry
+            .map(|entry| vec![entry.language.clone()])
+            .unwrap_or_default(),
+        language: entry.map(|entry| entry.language.clone()),
+        sample_rate_hz: bindings.task_binding.sample_rate_hz(),
+        frame_size: bindings.task_binding.frame_size().max(1),
+    }
+}
+
+fn resolved_model_pack_payload(
+    root: &Path,
+    bindings: SpeechModelBindings,
+) -> AuroraIosResolvedVoicePack {
+    AuroraIosResolvedVoicePack {
+        pack_id: bindings.model_id,
+        task: voice_task_to_pack_id(bindings.task_binding.task()).to_owned(),
+        archive_path: archive_path(root, &bindings.archive_sha256)
+            .display()
+            .to_string(),
+        archive_sha256: bindings.archive_sha256,
+        root: bindings.root.map(|root| root.display().to_string()),
+        files: bindings
+            .bindings
+            .into_iter()
+            .map(|(file_id, path)| (file_id, path.display().to_string()))
+            .collect(),
+        language: bindings.languages.first().cloned(),
+        languages: bindings.languages,
+        sample_rate_hz: bindings.task_binding.sample_rate_hz(),
+        frame_size: bindings.task_binding.frame_size().max(1),
+    }
+}
+
+fn install_pack_blocking(root: String, pack_id: String, task: PackTask) -> bool {
+    let Some(manager) = speech_pack_manager_at(PathBuf::from(root)) else {
+        return false;
+    };
+    let Ok(runtime) = TokioRuntimeBuilder::new_current_thread()
+        .enable_all()
+        .build()
+    else {
+        return false;
+    };
+    runtime.block_on(async move {
+        let cancellation = CancellationToken::new();
+        if task == PackTask::Tts {
+            manager
+                .install_voice(&pack_id, &cancellation, |_| {})
+                .await
+                .is_ok()
+        } else if speech_catalog_task_from_pack_task(task).is_some() {
+            manager
+                .install_model(&pack_id, &cancellation, |_| {})
+                .await
+                .is_ok()
+        } else {
+            false
+        }
+    })
+}
+
+fn remove_pack_blocking(root: String, pack_id: String, task: PackTask) -> bool {
+    let Some(manager) = speech_pack_manager_at(PathBuf::from(root)) else {
+        return false;
+    };
+    if task == PackTask::Tts {
+        manager.remove_voice(&pack_id).is_ok()
+    } else {
+        speech_catalog_task_from_pack_task(task).is_some() && manager.remove_model(&pack_id).is_ok()
+    }
+}
+
+fn resolve_pack_json(root: String, pack_id: String, task: PackTask) -> Option<String> {
+    let root_path = PathBuf::from(root);
+    let manager = speech_pack_manager_at(root_path.clone())?;
+    let payload = if task == PackTask::Tts {
+        let bindings = manager.resolve_voice_bindings(&pack_id).ok()?;
+        resolved_voice_pack_payload(&root_path, bindings)
+    } else {
+        speech_catalog_task_from_pack_task(task)?;
+        let bindings = manager.resolve_model_bindings(&pack_id).ok()?;
+        resolved_model_pack_payload(&root_path, bindings)
+    };
+    serde_json::to_string(&payload).ok()
+}
+
+fn catalog_contains_pack(pack_id: &str, task: PackTask) -> bool {
+    if task == PackTask::Tts {
+        TtsVoiceCatalog::embedded()
+            .ok()
+            .and_then(|catalog| catalog.voice(pack_id))
+            .is_some()
+    } else {
+        SpeechModelCatalog::embedded()
+            .ok()
+            .and_then(|catalog| catalog.model(pack_id))
+            .is_some()
+    }
+}
+
 /// # Safety
 /// `bindings` must be null when `bindings_len` is zero, otherwise it must
 /// point to `bindings_len` initialized [`AuroraIosVoiceTaskPackBinding`] items.
@@ -143,17 +316,11 @@ unsafe fn parse_pack_bindings(
         let runtime_revision = unsafe { bounded_string(binding.runtime_revision, 128) }?;
         let language = unsafe { bounded_string(binding.language, 64) }?;
         let files_json = unsafe { bounded_string(binding.files_json, 65_536) }?;
-        let files: Vec<AuroraIosVoiceTaskPackFileJson> =
-            serde_json::from_str(&files_json).ok()?;
+        let files: Vec<AuroraIosVoiceTaskPackFileJson> = serde_json::from_str(&files_json).ok()?;
         let files = files
             .into_iter()
             .map(|file| {
-                IosVoicePackFileBinding::new(
-                    file.file_id,
-                    file.path,
-                    file.sha256,
-                    file.size_bytes,
-                )
+                IosVoicePackFileBinding::new(file.file_id, file.path, file.sha256, file.size_bytes)
             })
             .collect::<Result<Vec<_>, _>>()
             .ok()?;
@@ -200,6 +367,96 @@ pub unsafe extern "C" fn aurora_ios_voice_session_new(
     match IosVoiceSession::new_default(config) {
         Ok(session) => Box::into_raw(Box::new(session)),
         Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// # Safety
+/// `root` and `pack_id` must be valid NUL-terminated UTF-8 strings for the
+/// duration of the call. Strings are copied and bounded.
+#[no_mangle]
+pub unsafe extern "C" fn aurora_ios_voice_pack_install(
+    root: *const c_char,
+    pack_id: *const c_char,
+    task: i32,
+) -> i32 {
+    let Some(task) = pack_task_from_abi(task) else {
+        return AURORA_IOS_VOICE_PACK_INVALID_ARGUMENT;
+    };
+    let Some(root) = (unsafe { bounded_string(root, 4096) }) else {
+        return AURORA_IOS_VOICE_PACK_INVALID_ARGUMENT;
+    };
+    let Some(pack_id) = (unsafe { bounded_string(pack_id, 256) }) else {
+        return AURORA_IOS_VOICE_PACK_INVALID_ARGUMENT;
+    };
+    if !catalog_contains_pack(&pack_id, task) {
+        return AURORA_IOS_VOICE_PACK_INVALID_ARGUMENT;
+    }
+    if install_pack_blocking(root, pack_id, task) {
+        AURORA_IOS_VOICE_PACK_OK
+    } else {
+        AURORA_IOS_VOICE_PACK_UNAVAILABLE
+    }
+}
+
+/// # Safety
+/// `root` and `pack_id` must be valid NUL-terminated UTF-8 strings for the
+/// duration of the call. The returned string must be freed with
+/// `aurora_ios_voice_pack_string_free`.
+#[no_mangle]
+pub unsafe extern "C" fn aurora_ios_voice_pack_resolve_json(
+    root: *const c_char,
+    pack_id: *const c_char,
+    task: i32,
+) -> *mut c_char {
+    let Some(task) = pack_task_from_abi(task) else {
+        return std::ptr::null_mut();
+    };
+    let Some(root) = (unsafe { bounded_string(root, 4096) }) else {
+        return std::ptr::null_mut();
+    };
+    let Some(pack_id) = (unsafe { bounded_string(pack_id, 256) }) else {
+        return std::ptr::null_mut();
+    };
+    let Some(payload) = resolve_pack_json(root, pack_id, task) else {
+        return std::ptr::null_mut();
+    };
+    CString::new(payload)
+        .map(CString::into_raw)
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// # Safety
+/// `root` and `pack_id` must be valid NUL-terminated UTF-8 strings for the
+/// duration of the call. Strings are copied and bounded.
+#[no_mangle]
+pub unsafe extern "C" fn aurora_ios_voice_pack_remove(
+    root: *const c_char,
+    pack_id: *const c_char,
+    task: i32,
+) -> i32 {
+    let Some(task) = pack_task_from_abi(task) else {
+        return AURORA_IOS_VOICE_PACK_INVALID_ARGUMENT;
+    };
+    let Some(root) = (unsafe { bounded_string(root, 4096) }) else {
+        return AURORA_IOS_VOICE_PACK_INVALID_ARGUMENT;
+    };
+    let Some(pack_id) = (unsafe { bounded_string(pack_id, 256) }) else {
+        return AURORA_IOS_VOICE_PACK_INVALID_ARGUMENT;
+    };
+    if remove_pack_blocking(root, pack_id, task) {
+        AURORA_IOS_VOICE_PACK_OK
+    } else {
+        AURORA_IOS_VOICE_PACK_UNAVAILABLE
+    }
+}
+
+/// # Safety
+/// `value` must be null or a pointer returned by
+/// `aurora_ios_voice_pack_resolve_json` that has not already been freed.
+#[no_mangle]
+pub unsafe extern "C" fn aurora_ios_voice_pack_string_free(value: *mut c_char) {
+    if !value.is_null() {
+        unsafe { drop(CString::from_raw(value)) };
     }
 }
 

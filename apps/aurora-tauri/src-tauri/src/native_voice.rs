@@ -2869,6 +2869,20 @@ mod tests {
             validate_local_speech_selection(&stale_language_pack),
             Err(PROFILE_REASON)
         );
+
+        let model_without_selected_voice = LocalSpeechSelection {
+            tts: Some(LocalSpeechAssetSelection {
+                pack_id: voice.language.clone(),
+                pack_revision: voice_catalog.revision().to_owned(),
+                voice_id: None,
+                voice_revision: None,
+            }),
+            ..LocalSpeechSelection::default()
+        };
+        assert_eq!(
+            validate_local_speech_selection(&model_without_selected_voice),
+            Err(PROFILE_REASON)
+        );
     }
 
     #[test]

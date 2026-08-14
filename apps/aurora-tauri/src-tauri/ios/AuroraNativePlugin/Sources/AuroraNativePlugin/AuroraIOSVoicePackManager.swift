@@ -369,11 +369,22 @@ struct AuroraIOSVoicePackRemoveArgs: Decodable {
   let packId: String
 }
 
-private struct AuroraIOSVoicePackInstalledRecord: Codable {
-  let pack: AuroraIOSVoicePackCatalogEntry
-  let installedAtMs: UInt64
-  let localSha256: String
-  let bytesDownloaded: UInt64
+struct AuroraIOSVoicePackActivateArgs: Decodable {
+  let packId: String
+  let slot: String?
+}
+
+private struct AuroraIOSRustVoicePackResolution: Decodable {
+  let packId: String
+  let task: String
+  let archiveSha256: String
+  let archivePath: String
+  let root: String?
+  let files: [String: String]
+  let languages: [String]
+  let language: String?
+  let sampleRateHz: UInt32
+  let frameSize: UInt32
 }
 
 struct AuroraIOSVoicePackPathBinding: Equatable {
@@ -425,13 +436,10 @@ enum AuroraIOSVoicePackManager {
   static let trustedHostsFileName = "trusted-hosts.json"
   static let activeFileName = "active.json"
   static let catalogDirectoryName = "voice-packs"
-  static let stagingPrefix = "staging-"
 
   private static let catalogEntryLimit = 200
   private static let maxPackBytes = 1024 * 1024 * 1024
   private static let maxPackDownloadBytes = 1024 * 1024 * 1024
-  private static let maxRedirects = 5
-  private static let downloadTimeout: TimeInterval = 180
   private static let runtimeProbeTimeout: TimeInterval = 6
   private static let operationQueue = DispatchQueue(label: "aurora.ios.voicepack.manager")
 
@@ -493,11 +501,15 @@ enum AuroraIOSVoicePackManager {
 
   private static func activateLocked(packId: String, slot: String) throws -> [String: Any] {
     let safePackId = try sanitizePackId(packId)
-    let installed = try installedPackRecords()
-    guard let record = installed[safePackId] else { throw AuroraIOSVoicePackManagerError.packNotFound }
+    let catalog = try loadCatalog()
+    guard let entry = catalog.first(where: { $0.packId == safePackId }) else {
+      throw AuroraIOSVoicePackManagerError.packNotFound
+    }
+    guard (try? resolveWithRust(entry)) != nil else {
+      throw AuroraIOSVoicePackManagerError.packNotFound
+    }
     guard slot.isEmpty == false else { throw AuroraIOSVoicePackManagerError.invalidPack }
     let normalizedSlot = slot.lowercased()
-    let entry = record.pack
     guard isPackCompatible(entry) else { throw AuroraIOSVoicePackManagerError.incompatiblePack }
     guard entry.acknowledged else { throw AuroraIOSVoicePackManagerError.invalidPack }
 
@@ -526,54 +538,7 @@ enum AuroraIOSVoicePackManager {
       }
       guard isPackCompatible(entry) else { throw AuroraIOSVoicePackManagerError.incompatiblePack }
       guard entry.acknowledged else { throw AuroraIOSVoicePackManagerError.invalidPack }
-      let root = try cacheRoot()
-      let safePackId = try sanitizePackId(entry.packId)
-      let packDirectory = root.appendingPathComponent(safePackId, isDirectory: true)
-      try FileManager.default.createDirectory(
-        at: packDirectory,
-        withIntermediateDirectories: true
-      )
-      try excludeFromBackup(packDirectory)
-      cleanupStagingFiles(in: packDirectory)
-
-      let safeFileName = try sanitizeFileName(entry.fileName)
-      let targetFile = packDirectory.appendingPathComponent(safeFileName)
-      let stagingFile = packDirectory.appendingPathComponent(
-        "\(AuroraIOSVoicePackManager.stagingPrefix)\(UUID().uuidString).tmp"
-      )
-      guard isSafeCachedURL(packDirectory, candidate: targetFile) else {
-        throw AuroraIOSVoicePackManagerError.invalidPack
-      }
-      guard isSafeCachedURL(packDirectory, candidate: stagingFile) else {
-        throw AuroraIOSVoicePackManagerError.invalidPack
-      }
-      defer { try? FileManager.default.removeItem(at: stagingFile) }
-
-      let result = try downloadAndVerify(
-        urlString: entry.downloadUrl,
-        destination: stagingFile,
-        expectedSize: entry.fileSize
-      )
-      guard result == entry.sha256.lowercased() else {
-        try? FileManager.default.removeItem(at: stagingFile)
-        throw AuroraIOSVoicePackManagerError.hashMismatch
-      }
-      let backupTarget = targetFile.appendingPathExtension("old")
-      if FileManager.default.fileExists(atPath: targetFile.path) {
-        try? FileManager.default.removeItem(at: backupTarget)
-        try? FileManager.default.copyItem(at: targetFile, to: backupTarget)
-      }
-      try writeAtomically(data: try Data(contentsOf: stagingFile), to: targetFile)
-      let record = AuroraIOSVoicePackInstalledRecord(
-        pack: entry,
-        installedAtMs: UInt64(Date().timeIntervalSince1970 * 1000),
-        localSha256: result,
-        bytesDownloaded: entry.fileSize
-      )
-      let metadataURL = packDirectory.appendingPathComponent("metadata.json")
-      let encodedMetadata = try JSONEncoder().encode(record)
-      try writeAtomically(data: encodedMetadata, to: metadataURL)
-      try FileManager.default.removeItem(at: backupTarget)
+      try installWithRust(entry)
       _ = try activateLocked(packId: safePackId, slot: entry.task)
       return try statusLocked()
     }
@@ -583,7 +548,7 @@ enum AuroraIOSVoicePackManager {
     try withSerializedState {
       let active = try? activeSelection()
       return try loadCatalog().map { entry in
-        let installed = (try? installedPackRecords()[entry.packId]) != nil
+        let installed = (try? resolveWithRust(entry)) != nil
         let activeSlot = active?.first(where: { $0.value == entry.packId })?.key
         return [
           "packId": entry.packId,
@@ -609,10 +574,8 @@ enum AuroraIOSVoicePackManager {
   static func remove(packId: String) throws -> [String: Any] {
     try withSerializedState {
       let safePackId = try sanitizePackId(packId)
-      let root = try cacheRoot()
-      let packDirectory = root.appendingPathComponent(safePackId, isDirectory: true)
-      if FileManager.default.fileExists(atPath: packDirectory.path) {
-        try FileManager.default.removeItem(at: packDirectory)
+      if let entry = try loadCatalog().first(where: { $0.packId == safePackId }) {
+        try removeWithRust(entry)
       }
       if let active = try? activeSelection() {
         let filtered = active.filter { $0.value != safePackId }
@@ -662,12 +625,12 @@ enum AuroraIOSVoicePackManager {
 
   static func slotCompatibilities() -> [String: [String: Bool]] {
     (try? withSerializedState {
-      let installed = try installedPackRecords()
+      let catalog = try loadCatalog()
       let active = (try? activeSelection()) ?? [:]
       var result: [String: [String: Bool]] = [:]
       for (slot, packId) in active {
-        let installedEntry = installed[packId]
-        let compatible = installedEntry != nil && isPackCompatible(installedEntry?.pack ?? nil)
+        let entry = catalog.first(where: { $0.packId == packId })
+        let compatible = entry.map { isPackCompatible($0) && ((try? resolveWithRust($0)) != nil) } ?? false
         result[slot] = ["compatible": compatible]
       }
       return result
@@ -696,9 +659,10 @@ enum AuroraIOSVoicePackManager {
     let active = (try? activeSelection()) ?? [:]
     let readySlotPackId = readyPack
     let compatible = (try? {
-      let packRecords = try installedPackRecords()
-      if let selected = readySlotPackId, let record = packRecords[selected] {
-        return isPackCompatible(record.pack)
+      let catalog = try loadCatalog()
+      if let selected = readySlotPackId,
+         let entry = catalog.first(where: { $0.packId == selected }) {
+        return isPackCompatible(entry) && ((try? resolveWithRust(entry)) != nil)
       }
       return false
     }()) ?? false
@@ -720,14 +684,14 @@ enum AuroraIOSVoicePackManager {
 
   private static func statusLocked() throws -> [String: Any] {
     let catalog = try loadCatalog()
-    let installed = try installedPackRecords()
     let active = try activeSelection()
     let available = isRuntimeConnected() && active.values.contains(where: { isReadyPack(packId: $0) })
     let safeActive = active.reduce(into: [String: String]()) { acc, pair in
       acc[pair.key.lowercased()] = pair.value
     }
     let packStatuses = catalog.map { entry in
-      let isInstalled = installed[entry.packId] != nil
+      let resolution = try? resolveWithRust(entry)
+      let isInstalled = resolution != nil
       let activeSlot = active.first(where: { $0.value == entry.packId })?.key
       return [
         "packId": entry.packId,
@@ -746,8 +710,8 @@ enum AuroraIOSVoicePackManager {
         "fileName": entry.fileName,
         "installed": isInstalled,
         "activeSlot": activeSlot ?? NSNull(),
-        "bytesDownloaded": installed[entry.packId]?.bytesDownloaded ?? 0,
-        "installedAtMs": installed[entry.packId]?.installedAtMs ?? NSNull()
+        "bytesDownloaded": isInstalled ? entry.fileSize : 0,
+        "installedAtMs": NSNull()
       ] as [String: Any]
     }
     return [
@@ -762,9 +726,8 @@ enum AuroraIOSVoicePackManager {
 
   private static func isReadyPack(packId: String) -> Bool {
     do {
-      let installed = try installedPackRecords()
-      guard let record = installed[packId] else { return false }
-      return isPackCompatible(record.pack) && record.pack.acknowledged
+      guard let entry = try loadCatalog().first(where: { $0.packId == packId }) else { return false }
+      return isPackCompatible(entry) && entry.acknowledged && ((try? resolveWithRust(entry)) != nil)
     } catch {
       return false
     }
@@ -1066,43 +1029,12 @@ enum AuroraIOSVoicePackManager {
     return scheme == "https"
   }
 
-  private static func downloadAndVerify(
-    urlString: String,
-    destination: URL,
-    expectedSize: UInt64
-  ) throws -> String {
-    let url = try parseDownloadUrl(urlString)
-    let coordinator = try DownloadCoordinator(
-      sourceURL: url,
-      expectedSize: expectedSize,
-      destination: destination
-    )
-    return try coordinator.download()
-  }
-
   private static func isValidSha(_ value: String) -> Bool {
     let hex = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
     return value.count == 64 && value.allSatisfy { char in
       let scalar = String(char).unicodeScalars.first!
       return hex.contains(scalar)
     }
-  }
-
-  private static func installedPackRecords() throws -> [String: AuroraIOSVoicePackInstalledRecord] {
-    let root = try cacheRoot()
-    guard FileManager.default.fileExists(atPath: root.path) else { return [:] }
-    let children = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
-    var result: [String: AuroraIOSVoicePackInstalledRecord] = [:]
-    for child in children {
-      let metadata = child.appendingPathComponent("metadata.json")
-      guard FileManager.default.fileExists(atPath: metadata.path),
-            let data = try? Data(contentsOf: metadata),
-            let record = try? JSONDecoder().decode(AuroraIOSVoicePackInstalledRecord.self, from: data) else {
-        continue
-      }
-      result[record.pack.packId] = record
-    }
-    return result
   }
 
   private static func activeSelection() throws -> [String: String] {
@@ -1132,7 +1064,6 @@ enum AuroraIOSVoicePackManager {
   private static func boundPackBindingsForSlotsLocked(_ slots: Set<String>) throws -> [AuroraIOSVoicePackPathBinding] {
     guard !slots.isEmpty else { return [] }
     let active = try readActiveSelectionLocked()
-    let root = try cacheRoot()
     let catalog = try loadCatalog()
     let catalogById = Dictionary(uniqueKeysWithValues: catalog.map { ($0.packId, $0) })
     var bindings: [AuroraIOSVoicePackPathBinding] = []
@@ -1140,24 +1071,20 @@ enum AuroraIOSVoicePackManager {
       guard let packId = active[slot], let catalogEntry = catalogById[packId] else {
         continue
       }
-      guard let metadata = try? readInstalledRecord(for: packId) else { continue }
+      guard let resolution = try? resolveWithRust(catalogEntry) else { continue }
       guard isPackCompatible(catalogEntry),
-            metadata.pack.acknowledged,
-            metadata.localSha256 == catalogEntry.sha256,
-            metadata.bytesDownloaded == catalogEntry.fileSize,
-            metadata.pack.runtimeRevision == catalogEntry.runtimeRevision,
+            catalogEntry.acknowledged,
+            resolution.archiveSha256 == catalogEntry.sha256,
             catalogEntry.sampleRateHz > 0,
             catalogEntry.frameSize > 0 else {
         continue
       }
-      let packDirectory = root.appendingPathComponent(packId, isDirectory: true)
-      let packPath = packDirectory.appendingPathComponent(catalogEntry.fileName)
-      if isSafeCachedPackFile(packDirectory, candidate: packPath, expectedSize: catalogEntry.fileSize),
-         let filesJson = modelFilesJson(root: packDirectory, files: catalogEntry.modelFiles) {
+      if FileManager.default.fileExists(atPath: resolution.archivePath),
+         let filesJson = modelFilesJson(paths: resolution.files, files: catalogEntry.modelFiles) {
         bindings.append(AuroraIOSVoicePackPathBinding(
           slot: slot,
           task: catalogEntry.task.lowercased(),
-          packPath: packPath.path,
+          packPath: resolution.archivePath,
           sha256: catalogEntry.sha256,
           fileSize: catalogEntry.fileSize,
           runtimeRevision: catalogEntry.runtimeRevision,
@@ -1170,6 +1097,57 @@ enum AuroraIOSVoicePackManager {
       }
     }
     return bindings
+  }
+
+  private static func installWithRust(_ entry: AuroraIOSVoicePackCatalogEntry) throws {
+    let root = try cacheRoot()
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    try excludeFromBackup(root)
+    let code = root.path.withCString { rootPtr in
+      entry.packId.withCString { packPtr in
+        aurora_ios_voice_pack_install(rootPtr, packPtr, rustTaskCode(entry.task))
+      }
+    }
+    guard code == AURORA_IOS_VOICE_PACK_OK else {
+      throw AuroraIOSVoicePackManagerError.downloadFailed
+    }
+  }
+
+  private static func resolveWithRust(_ entry: AuroraIOSVoicePackCatalogEntry) throws -> AuroraIOSRustVoicePackResolution {
+    let root = try cacheRoot()
+    let pointer = root.path.withCString { rootPtr in
+      entry.packId.withCString { packPtr in
+        aurora_ios_voice_pack_resolve_json(rootPtr, packPtr, rustTaskCode(entry.task))
+      }
+    }
+    guard let pointer else { throw AuroraIOSVoicePackManagerError.packNotFound }
+    defer { aurora_ios_voice_pack_string_free(pointer) }
+    let payload = String(cString: pointer)
+    guard let data = payload.data(using: .utf8) else { throw AuroraIOSVoicePackManagerError.invalidPack }
+    return try JSONDecoder().decode(AuroraIOSRustVoicePackResolution.self, from: data)
+  }
+
+  private static func removeWithRust(_ entry: AuroraIOSVoicePackCatalogEntry) throws {
+    let root = try cacheRoot()
+    let code = root.path.withCString { rootPtr in
+      entry.packId.withCString { packPtr in
+        aurora_ios_voice_pack_remove(rootPtr, packPtr, rustTaskCode(entry.task))
+      }
+    }
+    guard code == AURORA_IOS_VOICE_PACK_OK else {
+      throw AuroraIOSVoicePackManagerError.ioFailure
+    }
+  }
+
+  private static func rustTaskCode(_ task: String) -> Int32 {
+    switch task.lowercased() {
+    case "kws": return 1
+    case "wakeword", "wake-word": return 2
+    case "vad": return 3
+    case "stt", "asr", "transcription": return 4
+    case "tts", "text-to-speech": return 5
+    default: return -1
+    }
   }
 
   private static func modelFilesJson(root: URL, files: [AuroraIOSVoicePackModelFile]) -> String? {
@@ -1192,13 +1170,25 @@ enum AuroraIOSVoicePackManager {
     }
   }
 
-  private static func readInstalledRecord(for packId: String) throws -> AuroraIOSVoicePackInstalledRecord {
-    let root = try cacheRoot()
-    let metadataURL = root
-      .appendingPathComponent(packId, isDirectory: true)
-      .appendingPathComponent("metadata.json")
-    let data = try Data(contentsOf: metadataURL)
-    return try JSONDecoder().decode(AuroraIOSVoicePackInstalledRecord.self, from: data)
+  private static func modelFilesJson(paths: [String: String], files: [AuroraIOSVoicePackModelFile]) -> String? {
+    guard !files.isEmpty else { return nil }
+    do {
+      let payload = try files.map { file -> [String: Any] in
+        guard let path = paths[file.fileId], FileManager.default.fileExists(atPath: path) else {
+          throw AuroraIOSVoicePackManagerError.invalidPack
+        }
+        return [
+          "file_id": file.fileId,
+          "path": path,
+          "sha256": file.sha256,
+          "size_bytes": file.fileSize
+        ]
+      }
+      let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+      return String(data: data, encoding: .utf8)
+    } catch {
+      return nil
+    }
   }
 
   private static func loadCatalog() throws -> [AuroraIOSVoicePackCatalogEntry] {
@@ -1267,28 +1257,6 @@ enum AuroraIOSVoicePackManager {
     return normalizedCandidate == normalizedRoot || normalizedCandidate.hasPrefix(rootPrefix)
   }
 
-  private static func isSafeCachedPackFile(_ root: URL, candidate: URL, expectedSize: UInt64) -> Bool {
-    guard isSafeCachedURL(root, candidate: candidate) else { return false }
-    do {
-      let values = try candidate.resourceValues(forKeys: [
-        .isRegularFileKey,
-        .isSymbolicLinkKey,
-        .fileSizeKey
-      ])
-      guard let fileSize = values.fileSize, fileSize >= 0 else { return false }
-      guard values.isRegularFile == true,
-            values.isSymbolicLink != true,
-            UInt64(fileSize) == expectedSize else {
-        return false
-      }
-      let actualSha256 = try sha256File(candidate)
-      let installedSha256 = try readInstalledRecord(for: root.lastPathComponent).localSha256
-      return actualSha256 == installedSha256
-    } catch {
-      return false
-    }
-  }
-
   private static func isSafeCachedModelFile(_ root: URL, file: AuroraIOSVoicePackModelFile) -> Bool {
     do {
       let candidate = try modelFileURL(root: root, file: file)
@@ -1346,15 +1314,6 @@ enum AuroraIOSVoicePackManager {
     return hasher.finalize().compactMap { String(format: "%02x", $0) }.joined()
   }
 
-  private static func cleanupStagingFiles(in packDirectory: URL) {
-    guard let children = try? FileManager.default.contentsOfDirectory(atPath: packDirectory.path) else {
-      return
-    }
-    for child in children where child.hasPrefix(stagingPrefix) {
-      try? FileManager.default.removeItem(at: packDirectory.appendingPathComponent(child))
-    }
-  }
-
   private static func excludeFromBackup(_ url: URL) throws {
     var values = URLResourceValues()
     values.isExcludedFromBackup = true
@@ -1396,144 +1355,4 @@ enum AuroraIOSVoicePackManager {
     return value.utf8.allSatisfy { $0 >= 0x20 && $0 < 0x7F }
   }
 
-  private static final class DownloadCoordinator: NSObject, URLSessionDataDelegate {
-    private let sourceURL: URL
-    private let destination: URL
-    private let expectedSize: UInt64
-    private let semaphore = DispatchSemaphore(value: 0)
-    private var hasher = SHA256()
-    private var downloaded: UInt64 = 0
-    private var streamError: Error?
-    private var task: URLSessionDataTask?
-    private var response: HTTPURLResponse?
-    private var redirects = 0
-    private var fileHandle: FileHandle?
-    private var session: URLSession?
-
-    init(sourceURL: URL, expectedSize: UInt64, destination: URL) throws {
-      self.sourceURL = sourceURL
-      self.expectedSize = expectedSize
-      self.destination = destination
-      super.init()
-      FileManager.default.createFile(atPath: destination.path, contents: nil)
-      self.fileHandle = try FileHandle(forWritingTo: destination)
-      guard self.fileHandle != nil else {
-        throw AuroraIOSVoicePackManagerError.ioFailure
-      }
-    }
-
-    func download() throws -> String {
-      guard expectedSize > 0, expectedSize <= maxPackDownloadBytes else {
-        throw AuroraIOSVoicePackManagerError.invalidPack
-      }
-      defer {
-        if let fileHandle {
-          fileHandle.synchronizeFile()
-          fileHandle.closeFile()
-          self.fileHandle = nil
-        }
-        session?.finishTasksAndInvalidate()
-      }
-      var request = URLRequest(url: sourceURL)
-      request.httpMethod = "GET"
-      request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-      request.timeoutInterval = downloadTimeout
-      let config = URLSessionConfiguration.ephemeral
-      config.timeoutIntervalForRequest = downloadTimeout
-      config.timeoutIntervalForResource = downloadTimeout
-      session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
-      guard let session else { throw AuroraIOSVoicePackManagerError.ioFailure }
-
-      task = session.dataTask(with: request)
-      task?.resume()
-      semaphore.wait()
-
-      guard streamError == nil else { throw streamError ?? AuroraIOSVoicePackManagerError.downloadFailed }
-      guard downloaded == expectedSize else { throw AuroraIOSVoicePackManagerError.downloadFailed }
-      guard let response = response, (200..<400).contains(response.statusCode) else {
-        throw AuroraIOSVoicePackManagerError.downloadFailed
-      }
-      return hasher.finalize().compactMap { String(format: "%02x", $0) }.joined()
-    }
-
-    func urlSession(
-      _ session: URLSession,
-      task: URLSessionTask,
-      willPerformHTTPRedirection response: HTTPURLResponse,
-      newRequest: URLRequest,
-      completionHandler: @escaping (URLRequest?) -> Void
-    ) {
-      guard redirects < maxRedirects,
-            let newURL = newRequest.url,
-            validateGatewayURL(newURL, allowHttp: false),
-            validateDownloadTarget(newURL) else {
-        completionHandler(nil)
-        streamError = AuroraIOSVoicePackManagerError.invalidUri
-        self.task?.cancel()
-        semaphore.signal()
-        return
-      }
-      redirects += 1
-      completionHandler(newRequest)
-    }
-
-    func urlSession(
-      _ session: URLSession,
-      dataTask: URLSessionDataTask,
-      didReceive response: URLResponse,
-      completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
-    ) {
-      guard let http = response as? HTTPURLResponse else {
-        streamError = AuroraIOSVoicePackManagerError.invalidUri
-        completionHandler(.cancel)
-        return
-      }
-      responseCode(response: http)
-      if http.statusCode >= 400 || downloaded > expectedSize {
-        streamError = AuroraIOSVoicePackManagerError.downloadFailed
-        completionHandler(.cancel)
-        return
-      }
-      self.response = http
-      guard let length = http.value(forHTTPHeaderField: "Content-Length"),
-            let remote = UInt64(length),
-            remote == expectedSize else {
-        streamError = AuroraIOSVoicePackManagerError.invalidPack
-        completionHandler(.cancel)
-        return
-      }
-      completionHandler(.allow)
-    }
-
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-      guard streamError == nil else { return }
-      do {
-        try fileHandle?.write(contentsOf: data)
-        downloaded += UInt64(data.count)
-        hasher.update(data: data)
-        if downloaded > expectedSize || downloaded > maxPackDownloadBytes {
-          throw AuroraIOSVoicePackManagerError.downloadFailed
-        }
-      } catch {
-        streamError = error
-        dataTask.cancel()
-      }
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-      if let error = error {
-        streamError = error
-      }
-      semaphore.signal()
-    }
-
-    private func responseCode(response: HTTPURLResponse) {
-      switch response.statusCode {
-      case 200...399:
-        break
-      default:
-        streamError = AuroraIOSVoicePackManagerError.downloadFailed
-      }
-    }
-  }
 }

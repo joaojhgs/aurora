@@ -51,6 +51,12 @@ enum {
   AURORA_IOS_VOICE_CLOSED = 4,
 };
 
+enum {
+  AURORA_IOS_VOICE_PACK_OK = 0,
+  AURORA_IOS_VOICE_PACK_INVALID_ARGUMENT = -1,
+  AURORA_IOS_VOICE_PACK_UNAVAILABLE = 1,
+};
+
 typedef struct AuroraIosAudioStats {
   uint64_t accepted_chunks;
   uint64_t accepted_samples;
@@ -133,5 +139,19 @@ int32_t aurora_ios_voice_session_status(
     AuroraIosVoiceSession *session,
     AuroraIosVoiceSessionStatus *out_status);
 void aurora_ios_voice_session_close(AuroraIosVoiceSession *session);
+
+int32_t aurora_ios_voice_pack_install(
+    const char *root,
+    const char *pack_id,
+    int32_t task);
+char *aurora_ios_voice_pack_resolve_json(
+    const char *root,
+    const char *pack_id,
+    int32_t task);
+int32_t aurora_ios_voice_pack_remove(
+    const char *root,
+    const char *pack_id,
+    int32_t task);
+void aurora_ios_voice_pack_string_free(char *value);
 
 #endif

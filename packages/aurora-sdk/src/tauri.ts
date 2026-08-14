@@ -64,6 +64,17 @@ export interface TauriCommandNames {
   iosVoiceForegroundCaptureFinish: string
   iosVoiceForegroundCaptureStatus: string
   iosBackgroundStatus: string
+  iosVoicePackCatalogSet: string
+  iosVoicePackList: string
+  iosVoicePackStatus: string
+  iosVoicePackDownload: string
+  iosVoicePackActivate: string
+  iosVoicePackRemove: string
+  nativeSpeechPackCatalog: string
+  nativeSpeechPackStatus: string
+  nativeSpeechPackInstall: string
+  nativeSpeechPackActivate: string
+  nativeSpeechPackRemove: string
   dialogStatus: string
   audioBridgeStatus: string
   androidBaselineStatus: string
@@ -196,6 +207,50 @@ export interface TauriAndroidBaselineStatus {
   assistantRole: TauriAndroidAssistantRoleStatus
   fallbackEntrypoints: Record<string, boolean>
   evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export type NativeSpeechPackTask = 'stt' | 'vad' | 'kws' | 'tts'
+
+export interface NativeSpeechPackCatalogRequest {
+  task?: NativeSpeechPackTask | null
+  language?: string | null
+}
+
+export interface NativeSpeechPackIdRequest {
+  packId: string
+  task: NativeSpeechPackTask
+}
+
+export interface NativeSpeechPackActivateRequest extends NativeSpeechPackIdRequest {
+  slot?: string | null
+}
+
+export interface NativeSpeechPackCatalogEntry {
+  packId: string
+  displayName: string
+  task: NativeSpeechPackTask
+  languages: string[]
+  language?: string | null
+  sha256: string
+  fileSize: number
+  installed: boolean
+  activeSlot?: string | null
+}
+
+export interface NativeSpeechPackCatalogResponse {
+  available: boolean
+  count: number
+  languages: string[]
+  packs: NativeSpeechPackCatalogEntry[]
+  secretsRedacted: boolean
+}
+
+export interface NativeSpeechPackStatusResponse {
+  available: boolean
+  activeSlots: Record<string, string>
+  count: number
+  packs: NativeSpeechPackCatalogEntry[]
   secretsRedacted: boolean
 }
 
@@ -364,6 +419,17 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   iosVoiceForegroundCaptureFinish: 'aurora_ios_voice_foreground_capture_finish',
   iosVoiceForegroundCaptureStatus: 'aurora_ios_voice_foreground_capture_status',
   iosBackgroundStatus: 'aurora_ios_background_status',
+  iosVoicePackCatalogSet: 'aurora_ios_voice_pack_catalog_set',
+  iosVoicePackList: 'aurora_ios_voice_pack_list',
+  iosVoicePackStatus: 'aurora_ios_voice_pack_status',
+  iosVoicePackDownload: 'aurora_ios_voice_pack_download',
+  iosVoicePackActivate: 'aurora_ios_voice_pack_activate',
+  iosVoicePackRemove: 'aurora_ios_voice_pack_remove',
+  nativeSpeechPackCatalog: 'aurora_native_speech_pack_catalog',
+  nativeSpeechPackStatus: 'aurora_native_speech_pack_status',
+  nativeSpeechPackInstall: 'aurora_native_speech_pack_install',
+  nativeSpeechPackActivate: 'aurora_native_speech_pack_activate',
+  nativeSpeechPackRemove: 'aurora_native_speech_pack_remove',
   dialogStatus: 'aurora_dialog_status',
   audioBridgeStatus: 'aurora_audio_bridge_status',
   androidBaselineStatus: 'aurora_android_baseline_status',
@@ -556,6 +622,74 @@ export class TauriLocalTransport implements AuroraTransport {
 
   getAndroidBaselineStatus(): Promise<TauriAndroidBaselineStatus> {
     return this.invokeCommand<TauriAndroidBaselineStatus>(this.commands.androidBaselineStatus)
+  }
+
+  getNativeSpeechPackCatalog(
+    request: NativeSpeechPackCatalogRequest = {}
+  ): Promise<NativeSpeechPackCatalogResponse> {
+    return this.invokeCommand<NativeSpeechPackCatalogResponse>(
+      this.commands.nativeSpeechPackCatalog,
+      { request }
+    )
+  }
+
+  getNativeSpeechPackStatus(): Promise<NativeSpeechPackStatusResponse> {
+    return this.invokeCommand<NativeSpeechPackStatusResponse>(this.commands.nativeSpeechPackStatus)
+  }
+
+  installNativeSpeechPack(
+    request: NativeSpeechPackIdRequest
+  ): Promise<NativeSpeechPackStatusResponse> {
+    return this.invokeCommand<NativeSpeechPackStatusResponse>(
+      this.commands.nativeSpeechPackInstall,
+      { request }
+    )
+  }
+
+  activateNativeSpeechPack(
+    request: NativeSpeechPackActivateRequest
+  ): Promise<NativeSpeechPackStatusResponse> {
+    return this.invokeCommand<NativeSpeechPackStatusResponse>(
+      this.commands.nativeSpeechPackActivate,
+      { request }
+    )
+  }
+
+  removeNativeSpeechPack(
+    request: NativeSpeechPackIdRequest
+  ): Promise<NativeSpeechPackStatusResponse> {
+    return this.invokeCommand<NativeSpeechPackStatusResponse>(
+      this.commands.nativeSpeechPackRemove,
+      { request }
+    )
+  }
+
+  setIosVoicePackCatalog(request: {
+    entries: unknown[]
+    replaceExisting: boolean
+    trustedHosts?: string[]
+  }): Promise<unknown> {
+    return this.invokeCommand(this.commands.iosVoicePackCatalogSet, { request })
+  }
+
+  listIosVoicePacks(): Promise<unknown> {
+    return this.invokeCommand(this.commands.iosVoicePackList)
+  }
+
+  getIosVoicePackStatus(): Promise<unknown> {
+    return this.invokeCommand(this.commands.iosVoicePackStatus)
+  }
+
+  downloadIosVoicePack(request: NativeSpeechPackIdRequest): Promise<unknown> {
+    return this.invokeCommand(this.commands.iosVoicePackDownload, { request })
+  }
+
+  activateIosVoicePack(request: NativeSpeechPackActivateRequest): Promise<unknown> {
+    return this.invokeCommand(this.commands.iosVoicePackActivate, { request })
+  }
+
+  removeIosVoicePack(request: NativeSpeechPackIdRequest): Promise<unknown> {
+    return this.invokeCommand(this.commands.iosVoicePackRemove, { request })
   }
 
   getIosNativePluginManifest(): Promise<NativeCapabilityManifest> {
