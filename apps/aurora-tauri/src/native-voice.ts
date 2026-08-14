@@ -34,6 +34,8 @@ const CONNECTIONS = new Set<NativeDesktopVoiceConnection>([
 const TRIGGERS = new Set<NativeDesktopVoiceTrigger>([
   "focused_push_to_talk",
   "tray_push_to_talk",
+  "wake_word",
+  "background_wake",
 ]);
 
 const STOP_REASONS = new Set<NativeDesktopVoiceStopReason>([

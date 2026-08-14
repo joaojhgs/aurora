@@ -12,6 +12,8 @@ export type NativeDesktopVoicePhase =
 export type NativeDesktopVoiceTrigger =
   | 'focused_push_to_talk'
   | 'tray_push_to_talk'
+  | 'wake_word'
+  | 'background_wake'
 
 export type NativeDesktopVoiceStopReason =
   | 'user_request'

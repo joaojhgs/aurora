@@ -77,7 +77,7 @@ import {
 import { EvidenceBadge, StatusBadge } from './status-badges'
 import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from './platform-surface'
 import type { AuroraSurfaceProfile } from './platform-surface'
-import type { NativeDesktopVoicePhase, NativeDesktopVoicePort, NativeDesktopVoiceStatus, NativeDesktopVoiceStopReason } from './native-desktop-voice'
+import type { NativeDesktopVoicePhase, NativeDesktopVoicePort, NativeDesktopVoiceStatus, NativeDesktopVoiceStopReason, NativeDesktopVoiceTrigger } from './native-desktop-voice'
 import type { NativeMobileVoicePort } from './native-mobile-voice'
 import {
   createLightweightAssistantOrchestrator,
@@ -408,6 +408,8 @@ export function AssistantView({
   const [voiceEvents, setVoiceEvents] = useState<VoiceRuntimeEvent[]>(recentVoiceEvents)
   const [voiceWaveformBars, setVoiceWaveformBars] = useState<number[]>(() => idleWaveformBars())
   const [voiceElapsedSeconds, setVoiceElapsedSeconds] = useState(0)
+  const [nativeVoiceStatusState, setNativeVoiceStatusState] = useState<NativeDesktopVoiceStatus | null>(null)
+  const [nativeDesktopBackgroundWakeActive, setNativeDesktopBackgroundWakeActive] = useState(false)
   const [routeDetailsOpen, setRouteDetailsOpen] = useState(false)
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
   const attachmentInputRef = useRef<HTMLInputElement | null>(null)
@@ -428,6 +430,7 @@ export function AssistantView({
   const browserVoiceTurnSettlementRef = useRef<BrowserVoiceTurnSettlement | null>(null)
   const nativeVoiceStatusRef = useRef<NativeDesktopVoiceStatus | null>(null)
   const nativeVoiceGenerationRef = useRef<number | null>(null)
+  const nativeDesktopBackgroundWakeActiveRef = useRef(false)
   const nativeVoiceOperationTokenRef = useRef(0)
   const nativeVoicePendingCancelReasonRef = useRef<NativeDesktopVoiceStopReason | null>(null)
   const nativeVoiceCancelledGenerationsRef = useRef<Set<number>>(new Set())
@@ -592,6 +595,8 @@ export function AssistantView({
       surfaceProfile,
       captureStatus: voiceCaptureStatus,
       consentGranted: voiceConsentGranted,
+      nativeDesktopVoiceStatus: nativeVoiceStatusState,
+      nativeDesktopBackgroundWakeActive,
       voiceEvents,
       waveformBars: voiceWaveformBars
     }),
@@ -606,6 +611,8 @@ export function AssistantView({
       surfaceProfile,
       voiceCaptureStatus,
       voiceConsentGranted,
+      nativeVoiceStatusState,
+      nativeDesktopBackgroundWakeActive,
       voiceEvents,
       voiceWaveformBars
     ]
@@ -1041,6 +1048,9 @@ export function AssistantView({
     if (!nativeVoice) {
       nativeVoiceStatusRef.current = null
       nativeVoiceGenerationRef.current = null
+      setNativeVoiceStatusState(null)
+      nativeDesktopBackgroundWakeActiveRef.current = false
+      setNativeDesktopBackgroundWakeActive(false)
       setVoiceCaptureStatus('no-device')
       setLastError('Voice is unavailable in this desktop app.')
       return
@@ -1066,6 +1076,9 @@ export function AssistantView({
         if (!active) return
         nativeVoiceStatusRef.current = null
         nativeVoiceGenerationRef.current = null
+        setNativeVoiceStatusState(null)
+        nativeDesktopBackgroundWakeActiveRef.current = false
+        setNativeDesktopBackgroundWakeActive(false)
         setVoiceCaptureStatus('error')
         setLastError('Voice could not start. Check this device and try again.')
       }
@@ -1105,6 +1118,7 @@ export function AssistantView({
       const nativeRelease = event?.type === AURORA_RELEASE_FOCUSED_MEDIA_EVENT
       if (!hidden && !blurred && !nativeRelease) return
       if (usesNativeDesktopVoice) {
+        if (nativeDesktopBackgroundWakeActiveRef.current) return
         requestNativeDesktopVoiceCancel('window_hidden')
         return
       }
@@ -2133,8 +2147,11 @@ export function AssistantView({
   function applyNativeDesktopVoiceStatus(status: NativeDesktopVoiceStatus) {
     nativeVoiceStatusRef.current = status
     nativeVoiceGenerationRef.current = status.generation
+    setNativeVoiceStatusState(status)
     setVoiceCaptureStatus(nativeDesktopVoiceCaptureStatus(status.phase))
     if (!status.available || status.phase === 'unavailable') {
+      nativeDesktopBackgroundWakeActiveRef.current = false
+      setNativeDesktopBackgroundWakeActive(false)
       activeVoiceSessionRef.current = null
       ownedVoiceSessionIdsRef.current.clear()
       coordinatorVoiceSessionIdsRef.current.clear()
@@ -2147,6 +2164,8 @@ export function AssistantView({
       ownedVoiceSessionIdsRef.current.add(sessionId)
     }
     if (status.phase === 'idle' || status.phase === 'stopping' || status.phase === 'faulted') {
+      nativeDesktopBackgroundWakeActiveRef.current = false
+      setNativeDesktopBackgroundWakeActive(false)
       activeVoiceSessionRef.current = null
       ownedVoiceSessionIdsRef.current.clear()
       coordinatorVoiceSessionIdsRef.current.clear()
@@ -2711,12 +2730,15 @@ export function AssistantView({
     if (!result.ok) setLastError(productAssistantErrorCopy(result.error))
   }
 
-  async function startNativeDesktopVoice(): Promise<boolean> {
+  async function startNativeDesktopVoice(trigger: NativeDesktopVoiceTrigger = 'focused_push_to_talk'): Promise<boolean> {
     const remoteAudioConsent = remoteAudioConsentForCurrentRoute(voiceModel.transcriptionRoute)
     if (remoteAudioConsent === null) return false
     if (!nativeVoice) {
       nativeVoiceStatusRef.current = null
       nativeVoiceGenerationRef.current = null
+      setNativeVoiceStatusState(null)
+      nativeDesktopBackgroundWakeActiveRef.current = false
+      setNativeDesktopBackgroundWakeActive(false)
       setVoiceCaptureStatus('no-device')
       setLastError('Voice is unavailable in this desktop app.')
       setStreamState((current) => ({ ...current, status: 'lost', message: 'Voice is unavailable in this desktop app.' }))
@@ -2726,10 +2748,10 @@ export function AssistantView({
     nativeVoiceOperationTokenRef.current = token
     nativeVoicePendingCancelReasonRef.current = null
     nativeVoiceCancelledGenerationsRef.current.clear()
-    setStreamState((current) => ({ ...current, status: 'streaming', message: 'Starting voice...' }))
+    setStreamState((current) => ({ ...current, status: 'streaming', message: trigger === 'background_wake' ? 'Starting hands-free voice...' : 'Starting voice...' }))
     try {
       const status = await nativeVoice.start({
-        trigger: 'focused_push_to_talk',
+        trigger,
         remoteAudioConsent
       })
       const pendingReason = nativeVoicePendingCancelReasonRef.current
@@ -2750,6 +2772,9 @@ export function AssistantView({
           if (cancelled) {
             nativeVoiceGenerationRef.current = null
             nativeVoiceStatusRef.current = null
+            setNativeVoiceStatusState(null)
+            nativeDesktopBackgroundWakeActiveRef.current = false
+            setNativeDesktopBackgroundWakeActive(false)
             nativeVoicePendingCancelReasonRef.current = null
             if (!assistantViewDisposedRef.current) {
               setVoiceCaptureStatus('idle')
@@ -2775,6 +2800,10 @@ export function AssistantView({
         return false
       }
       applyNativeDesktopVoiceStatus(status)
+      if (trigger === 'background_wake' && status.available && status.phase !== 'unavailable' && status.phase !== 'faulted' && status.generation !== null) {
+        nativeDesktopBackgroundWakeActiveRef.current = true
+        setNativeDesktopBackgroundWakeActive(true)
+      }
       if (!status.available || status.phase === 'unavailable') {
         setLastError('Voice is unavailable in this desktop app.')
         setStreamState((current) => ({ ...current, status: 'lost', message: 'Voice is unavailable in this desktop app.' }))
@@ -2785,6 +2814,9 @@ export function AssistantView({
     } catch {
       nativeVoiceStatusRef.current = null
       nativeVoiceGenerationRef.current = null
+      setNativeVoiceStatusState(null)
+      nativeDesktopBackgroundWakeActiveRef.current = false
+      setNativeDesktopBackgroundWakeActive(false)
       activeVoiceSessionRef.current = null
       ownedVoiceSessionIdsRef.current.clear()
       coordinatorVoiceSessionIdsRef.current.clear()
@@ -2809,6 +2841,8 @@ export function AssistantView({
     setStreamState((current) => ({ ...current, status: 'streaming', message: 'Voice captured. Aurora is processing the request.' }))
     try {
       applyNativeDesktopVoiceStatus(await nativeVoice.finish({ generation, reason: 'user_request' }))
+      nativeDesktopBackgroundWakeActiveRef.current = false
+      setNativeDesktopBackgroundWakeActive(false)
       return true
     } catch {
       setVoiceCaptureStatus('error')
@@ -2821,6 +2855,20 @@ export function AssistantView({
     void cancelNativeDesktopVoice(reason)
   }
 
+  async function startNativeDesktopForegroundWake(): Promise<boolean> {
+    if (!voiceModel.controls.find((control) => control.id === 'wakeword')?.enabled) return false
+    return startNativeDesktopVoice('wake_word')
+  }
+
+  async function toggleNativeDesktopBackgroundWake(): Promise<boolean> {
+    const control = voiceModel.controls.find((candidate) => candidate.id === 'background-wake')
+    if (!control?.enabled) return false
+    if (nativeDesktopBackgroundWakeActiveRef.current) {
+      return cancelNativeDesktopVoice('user_request')
+    }
+    return startNativeDesktopVoice('background_wake')
+  }
+
   async function cancelNativeDesktopVoiceGeneration(
     generation: number,
     reason: NativeDesktopVoiceStopReason
@@ -2829,6 +2877,8 @@ export function AssistantView({
     try {
       await nativeVoice.cancel({ generation, reason })
       nativeVoiceCancelledGenerationsRef.current.add(generation)
+      nativeDesktopBackgroundWakeActiveRef.current = false
+      setNativeDesktopBackgroundWakeActive(false)
       return true
     } catch {
       return false
@@ -2845,6 +2895,8 @@ export function AssistantView({
       try {
         await port.cancel({ generation, reason })
         nativeVoiceCancelledGenerationsRef.current.add(generation)
+        nativeDesktopBackgroundWakeActiveRef.current = false
+        setNativeDesktopBackgroundWakeActive(false)
         return true
       } catch {
         // App shutdown remains the final native-owner safeguard if bounded retries fail.
@@ -2861,6 +2913,8 @@ export function AssistantView({
     try {
       const status = await nativeVoice.cancel({ generation, reason })
       nativeVoiceCancelledGenerationsRef.current.add(generation)
+      nativeDesktopBackgroundWakeActiveRef.current = false
+      setNativeDesktopBackgroundWakeActive(false)
       applyNativeDesktopVoiceStatus(status)
       nativeVoicePendingCancelReasonRef.current = null
       return true
@@ -3305,6 +3359,10 @@ export function AssistantView({
     }
     if (currentCaptureStatus === 'listening') {
       if (usesNativeDesktopVoice) {
+        if (nativeDesktopBackgroundWakeActiveRef.current) {
+          await cancelNativeDesktopVoice('user_request')
+          return
+        }
         await finishNativeDesktopVoice()
         return
       }
@@ -3725,6 +3783,8 @@ export function AssistantView({
                 elapsedSeconds={voiceElapsedSeconds}
                 onToggleCapture={requestVoiceToggle}
                 onToggleConsent={() => { void toggleRemoteAudioConsent() }}
+                onWakeForeground={() => { void startNativeDesktopForegroundWake() }}
+                onToggleBackgroundWake={() => { void toggleNativeDesktopBackgroundWake() }}
               />
               <RouteSheet
                 client={client}
@@ -3861,6 +3921,8 @@ export function buildAssistantVoiceModel(input: {
   surfaceProfile?: AuroraSurfaceProfile | undefined
   captureStatus: VoiceCaptureStatus
   consentGranted: boolean
+  nativeDesktopVoiceStatus?: NativeDesktopVoiceStatus | null | undefined
+  nativeDesktopBackgroundWakeActive?: boolean | undefined
   voiceEvents?: VoiceRuntimeEvent[] | undefined
   waveformBars?: number[] | undefined
 }): AssistantVoiceModel {
@@ -3878,6 +3940,10 @@ export function buildAssistantVoiceModel(input: {
   const browserCaptureState = browserCaptureAvailability(surfaceProfile, input.captureStatus)
   const remoteAudioRoute = remoteAudioRouteFor(transcription, wakeProcess)
   const localSpeechPack = surfaceProfile.localSpeechPack
+  const nativeDesktopWakeReady = surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'native-desktop'
+    && input.nativeDesktopVoiceStatus?.available === true
+    && input.nativeDesktopVoiceStatus.backgroundEligible === true
+  const nativeDesktopWakeRoute = nativeDesktopWakeAvailability(nativeDesktopWakeReady)
 
   return {
     captureStatus: input.captureStatus,
@@ -3916,13 +3982,15 @@ export function buildAssistantVoiceModel(input: {
       voiceChip('remote-processing', 'Connected speech help', transcription, 'raw-audio', input.consentGranted
         ? 'Session consent is active for speech help.'
         : 'Session consent is required before audio leaves this device.'),
-      voiceChip(
-        'wake',
-        surfaceProfile.voiceCapture.wakewordRequiresFocus ? 'Wake while open' : 'Wake and background',
-        wakeControl.disabled ? wakeProcess : wakeControl,
-        'raw-audio',
-        wakeDetail(input.nativePlatform ?? 'not available', wakeControl, wakeProcess)
-      ),
+      nativeDesktopWakeReady
+        ? voiceChip('wake', 'Wake and background', nativeDesktopWakeRoute, 'raw-audio', 'Hands-free voice is ready on this device.')
+        : voiceChip(
+          'wake',
+          surfaceProfile.voiceCapture.wakewordRequiresFocus ? 'Wake while open' : 'Wake and background',
+          wakeControl.disabled ? wakeProcess : wakeControl,
+          'raw-audio',
+          wakeDetail(input.nativePlatform ?? 'not available', wakeControl, wakeProcess)
+        ),
       voiceChip('tts', 'Speech generation', ttsSynthesize, 'personal', 'Speech can be prepared before playback starts.'),
       voiceChip('playback', 'Local playback', ttsStop, 'personal', 'Playback stop/control is separate from remote synthesis.')
     ],
@@ -3946,7 +4014,15 @@ export function buildAssistantVoiceModel(input: {
         route: remoteAudioRoute
       },
       voiceAction('remote-transcription', 'Start speech capture', transcription, input.captureStatus, input.consentGranted),
-      voiceAction('wakeword', 'Wake foreground', wakeControl.disabled ? wakeProcess : wakeControl, input.captureStatus, input.consentGranted),
+      nativeDesktopWakeReady
+        ? nativeWakeAction('wakeword', 'Wake foreground', nativeDesktopWakeRoute, false)
+        : voiceAction('wakeword', 'Wake foreground', wakeControl.disabled ? wakeProcess : wakeControl, input.captureStatus, input.consentGranted),
+      nativeWakeAction(
+        'background-wake',
+        input.nativeDesktopBackgroundWakeActive ? 'Stop hands-free' : 'Hands-free',
+        nativeDesktopWakeRoute,
+        input.nativeDesktopBackgroundWakeActive === true
+      ),
       voiceAction('tts-synthesize', 'Synthesize speech', ttsSynthesize, input.captureStatus, input.consentGranted),
       voiceAction('playback-stop', 'Stop playback', ttsStop, input.captureStatus, input.consentGranted)
     ],
@@ -3965,7 +4041,9 @@ function VoiceModePanel({
   captureStatus,
   elapsedSeconds,
   onToggleCapture,
-  onToggleConsent
+  onToggleConsent,
+  onWakeForeground,
+  onToggleBackgroundWake
 }: {
   client: AuroraClient
   model: AssistantVoiceModel
@@ -3973,6 +4051,8 @@ function VoiceModePanel({
   elapsedSeconds: number
   onToggleCapture: () => void
   onToggleConsent: () => void
+  onWakeForeground: () => void
+  onToggleBackgroundWake: () => void
 }) {
   return (
     <section className="aui-voice-panel" aria-labelledby="assistant-voice-title">
@@ -4023,13 +4103,25 @@ function VoiceModePanel({
             {model.controls.filter((control) => control.id !== 'push-to-talk').map((control) => {
               const isCapture = control.id === 'push-to-talk'
               const isConsent = control.id === 'remote-consent'
+              const isWakeForeground = control.id === 'wakeword'
+              const isBackgroundWake = control.id === 'background-wake'
               return (
                 <button
                   key={control.id}
                   type="button"
                   disabled={!control.enabled}
                   onPointerUp={isCapture ? (event) => { if (event.button === 0) { event.preventDefault(); onToggleCapture() } } : undefined}
-                  onClick={isCapture ? (event) => { event.preventDefault() } : isConsent ? onToggleConsent : undefined}
+                  onClick={
+                    isCapture
+                      ? (event) => { event.preventDefault() }
+                      : isConsent
+                        ? onToggleConsent
+                        : isWakeForeground
+                          ? onWakeForeground
+                          : isBackgroundWake
+                            ? onToggleBackgroundWake
+                            : undefined
+                  }
                 >
                   {isCapture ? <Mic size={16} aria-hidden /> : control.id.includes('tts') || control.id.includes('playback') ? <Volume2 size={16} aria-hidden /> : <Radio size={16} aria-hidden />}
                   <span>{control.label}</span>
@@ -5426,6 +5518,28 @@ function missingVoiceRoute(
   }
 }
 
+function nativeDesktopWakeAvailability(ready: boolean): RouteAvailability {
+  const route = missingVoiceRoute('native-desktop-wake', 'Desktop wake voice', 'WakeWord.Control', 'raw-audio')
+  if (!ready) {
+    return {
+      ...route,
+      providerLabel: 'This device',
+      blockers: ['native_desktop_wake_unavailable'],
+      evidenceSources: ['device_voice_status']
+    }
+  }
+  return {
+    ...route,
+    state: 'available-local',
+    explanation: 'Hands-free voice is ready on this device.',
+    providerLabel: 'This device',
+    blockers: [],
+    evidenceSources: ['device_voice_status'],
+    routeable: true,
+    disabled: false
+  }
+}
+
 function nativeCaptureState(
   nativeAvailable: boolean,
   nativePlatform: string,
@@ -5658,6 +5772,32 @@ function voiceAction(
     state: route.state,
     enabled: false,
     reason: 'Audio can start after this device confirms microphone access.',
+    route
+  }
+}
+
+function nativeWakeAction(
+  id: string,
+  label: string,
+  route: RouteAvailability,
+  active: boolean
+): VoiceControlModel {
+  if (route.disabled) {
+    return {
+      id,
+      label,
+      state: route.state,
+      enabled: false,
+      reason: 'Hands-free voice needs a ready local speech pack on this device.',
+      route
+    }
+  }
+  return {
+    id,
+    label,
+    state: active ? 'pending' : route.state,
+    enabled: true,
+    reason: active ? 'Hands-free voice is listening on this device.' : 'Ready',
     route
   }
 }
@@ -7049,6 +7189,8 @@ function voiceChipStatusCopy(chip: VoiceCapabilityChip): string {
 }
 
 function voiceControlReasonCopy(control: VoiceControlModel): string {
+  if (control.reason === 'Hands-free voice is listening on this device.') return control.reason
+  if (control.reason === 'Hands-free voice needs a ready local speech pack on this device.') return control.reason
   if (control.enabled) return 'Ready'
   if (control.reason === 'Choose a connected voice device before starting speech.') return control.reason
   if (control.state === 'privacy-blocked') return 'Grant session consent before sharing audio with another device.'

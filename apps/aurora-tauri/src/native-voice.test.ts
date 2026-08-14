@@ -146,6 +146,18 @@ describe("Tauri native desktop voice port", () => {
       }),
     ).resolves.toEqual(validStatus);
     await expect(
+      port.start({
+        trigger: "wake_word",
+        remoteAudioConsent: false,
+      }),
+    ).resolves.toEqual(validStatus);
+    await expect(
+      port.start({
+        trigger: "background_wake",
+        remoteAudioConsent: false,
+      }),
+    ).resolves.toEqual(validStatus);
+    await expect(
       port.finish({
         generation: 2,
         reason: "user_request",
@@ -165,6 +177,24 @@ describe("Tauri native desktop voice port", () => {
         args: {
           request: {
             trigger: "focused_push_to_talk",
+            remoteAudioConsent: false,
+          },
+        },
+      },
+      {
+        command: "aurora_native_voice_start",
+        args: {
+          request: {
+            trigger: "wake_word",
+            remoteAudioConsent: false,
+          },
+        },
+      },
+      {
+        command: "aurora_native_voice_start",
+        args: {
+          request: {
+            trigger: "background_wake",
             remoteAudioConsent: false,
           },
         },

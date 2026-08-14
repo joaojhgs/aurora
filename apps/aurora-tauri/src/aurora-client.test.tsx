@@ -3499,6 +3499,115 @@ describe("Tauri CI/E2E route gates", () => {
     }
   });
 
+  it("e2e:assistant routes desktop foreground and background wake controls to native voice", async () => {
+    const transport = new RecordingMockAuroraTransport();
+    transport.register(GATEWAY_METHODS.health, () => ({ status: "healthy" }));
+    transport.register(GATEWAY_METHODS.getCapabilityCatalog, () =>
+      assistantCapabilityCatalog(),
+    );
+    transport.register(GATEWAY_METHODS.explainRoute, () =>
+      cloneFixture(routeExplainFixture),
+    );
+    transport.register(ORCHESTRATOR_MODEL_METHODS.getRuntime, () =>
+      cloneFixture(modelRuntimeCatalogFixture),
+    );
+    const nativeCalls = {
+      startRequests: [] as Array<Parameters<NativeDesktopVoicePort["start"]>[0]>,
+      cancelRequests: [] as Array<Parameters<NativeDesktopVoicePort["cancel"]>[0]>,
+    };
+    const nativeVoice: NativeDesktopVoicePort = {
+      status: async () => ({
+        available: true,
+        phase: "idle",
+        generation: null,
+        backgroundEligible: true,
+        connection: "this_device",
+        reasonCode: null,
+        redacted: true,
+      }),
+      start: async (request) => {
+        nativeCalls.startRequests.push(request);
+        return request.trigger === "background_wake"
+          ? {
+              available: true,
+              phase: "listening",
+              generation: 9,
+              backgroundEligible: true,
+              connection: "this_device",
+              reasonCode: null,
+              redacted: true,
+            }
+          : {
+              available: true,
+              phase: "idle",
+              generation: null,
+              backgroundEligible: true,
+              connection: "this_device",
+              reasonCode: null,
+              redacted: true,
+            };
+      },
+      finish: async () => {
+        throw new Error("wake controls should not finish a push-to-talk turn");
+      },
+      cancel: async (request) => {
+        nativeCalls.cancelRequests.push(request);
+        return {
+          available: true,
+          phase: "idle",
+          generation: null,
+          backgroundEligible: true,
+          connection: "this_device",
+          reasonCode: null,
+          redacted: true,
+        };
+      },
+      subscribe: async () => () => undefined,
+    };
+    const runtime = {
+      ...testRuntime(
+        new Aurora({ transport: tauriLocalTransportProxy(transport) }),
+      ),
+      mode: "desktop-local" as const,
+      nativeVoice,
+    };
+    window.history.replaceState({}, "", "/");
+    const mounted = await mountOutcomeApp(runtime);
+    try {
+      await clickButtonByLabel(mounted.container, "Open route details");
+      await waitUntil(() => {
+        expect(mounted.container.textContent).toContain("Wake foreground");
+        expect(mounted.container.textContent).toContain("Hands-free");
+      });
+      await clickButtonByLabel(mounted.container, "Wake foreground");
+      await waitUntil(() => {
+        expect(nativeCalls.startRequests).toContainEqual({
+          trigger: "wake_word",
+          remoteAudioConsent: false,
+        });
+      });
+      await clickButtonByLabel(mounted.container, "Hands-free");
+      await waitUntil(() => {
+        expect(nativeCalls.startRequests).toContainEqual({
+          trigger: "background_wake",
+          remoteAudioConsent: false,
+        });
+        expect(mounted.container.textContent).toContain("Stop hands-free");
+      });
+      await clickButtonByLabel(mounted.container, "Stop hands-free");
+      await waitUntil(() => {
+        expect(nativeCalls.cancelRequests).toContainEqual({
+          generation: 9,
+          reason: "user_request",
+        });
+        expect(requestMethods(transport)).not.toContain(STT_METHODS.listen);
+      });
+    } finally {
+      await act(async () => mounted.root.unmount());
+      mounted.container.remove();
+    }
+  });
+
   it("e2e:assistant covers live stream, fallback banner, stop/retry, route sheet, tool approval, and no-model state", async () => {
     const fallbackTransport = assistantGatewayTransport(
       "Fallback final response from local Orchestrator.",
