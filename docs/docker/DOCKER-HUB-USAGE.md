@@ -170,23 +170,24 @@ docker run -v ./models:/app/models \
 
 ### Example: Using Pre-built Images with Models
 
-1. **Create models directory**:
+1. **Create models directory for user-managed files**:
    ```bash
    mkdir -p models/voice models/wakeword models/llama
    ```
 
-2. **Download model files**:
+2. **Optional: add user-managed files**:
    ```bash
-   # Download TTS models
+   # Optional custom TTS files for advanced local overrides
    wget -O models/voice/en_US-lessac-medium.onnx <model-url>
    wget -O models/voice/en_US-lessac-medium.onnx.txt <config-url>
-   
-   # Download wake word models
-   wget -O models/wakeword/jarvis.onnx <wakeword-url>
-   
+
    # Download Llama.cpp models
    wget -O models/llama/model.gguf <llama-model-url>
    ```
+
+   Normal VAD, wake word, STT, and TTS setup uses Aurora's speech catalog.
+   The selected files are downloaded on demand, verified, and cached under
+   the application data volume instead of being baked into the image or repo.
 
 3. **Run services with models**:
    ```bash
@@ -349,7 +350,6 @@ docker pull aurora-ai/aurora-orchestrator:openai-latest
 - [Docker Process Mode](../../README.process-mode.md) - Running Aurora in process mode
 - [DB Service Embeddings](DB-SERVICE-EMBEDDINGS.md) - DB service configuration
 - [Orchestrator LLM Modes](ORCHESTRATOR-SERVICE-LLM-MODES.md) - Orchestrator configuration
-
 
 
 
