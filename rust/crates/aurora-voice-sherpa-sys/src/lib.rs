@@ -1048,11 +1048,6 @@ impl OfflineSttConfig {
         self
     }
 
-    pub fn with_task(mut self, task: impl Into<String>) -> Self {
-        self.task = task.into();
-        self
-    }
-
     pub fn with_whisper_tail_paddings(mut self, tail_paddings: i32) -> Self {
         self.whisper_tail_paddings = tail_paddings;
         self
@@ -1094,11 +1089,6 @@ impl OfflineSttConfig {
                 ErrorCode::ConfigWhisperTaskEmpty,
                 ErrorCode::ConfigWhisperTaskNul,
             )?;
-            if self.task != "transcribe" {
-                return Err(SttError::InvalidConfig {
-                    code: ErrorCode::ConfigWhisperTaskUnsupported,
-                });
-            }
         }
         if self.sample_rate != DEFAULT_SAMPLE_RATE {
             return Err(SttError::InvalidConfig {
@@ -1770,7 +1760,6 @@ pub enum ErrorCode {
     ConfigWhisperLanguageNul,
     ConfigWhisperTaskEmpty,
     ConfigWhisperTaskNul,
-    ConfigWhisperTaskUnsupported,
     ConfigMaxAudioSecondsRange,
     ConfigMaxNumSentencesRange,
     ConfigSilenceScaleRange,
@@ -1875,7 +1864,6 @@ impl ErrorCode {
             Self::ConfigWhisperLanguageNul => "config.whisper_language_nul",
             Self::ConfigWhisperTaskEmpty => "config.whisper_task_empty",
             Self::ConfigWhisperTaskNul => "config.whisper_task_nul",
-            Self::ConfigWhisperTaskUnsupported => "config.whisper_task_unsupported",
             Self::ConfigMaxAudioSecondsRange => "config.max_audio_seconds_range",
             Self::ConfigMaxNumSentencesRange => "config.max_num_sentences_range",
             Self::ConfigSilenceScaleRange => "config.silence_scale_range",
@@ -2695,7 +2683,7 @@ mod tests {
     }
 
     #[test]
-    fn offline_stt_whisper_rejects_unsafe_language_and_non_transcribe_task() {
+    fn offline_stt_whisper_rejects_unsafe_language() {
         let files = temp_stt_files("whisper-invalid");
         let language_error =
             OfflineSttConfig::whisper(&files.encoder, &files.decoder, &files.tokens)
@@ -2703,19 +2691,6 @@ mod tests {
                 .validate()
                 .expect_err("nul language should be rejected");
         assert_eq!(language_error.code(), ErrorCode::ConfigWhisperLanguageNul);
-
-        let task_error = OfflineSttConfig::whisper(&files.encoder, &files.decoder, &files.tokens)
-            .with_task("translate")
-            .validate()
-            .expect_err("non-transcribe task should be rejected");
-        assert_eq!(task_error.code(), ErrorCode::ConfigWhisperTaskUnsupported);
-
-        let empty_task_error =
-            OfflineSttConfig::whisper(&files.encoder, &files.decoder, &files.tokens)
-                .with_task("")
-                .validate()
-                .expect_err("empty task should be rejected");
-        assert_eq!(empty_task_error.code(), ErrorCode::ConfigWhisperTaskEmpty);
     }
 
     #[test]

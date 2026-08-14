@@ -315,6 +315,7 @@ pub trait SherpaSttBackend {
         &mut self,
         sample_rate_hz: u32,
         pcm: &[f32],
+        language: Option<&str>,
     ) -> Result<String, SherpaAdapterError>;
 }
 
@@ -1303,9 +1304,11 @@ where
             return Err(EngineError::ResourceLimit);
         }
         check_engine_cancellation(cancellation)?;
-        let result = self
-            .backend
-            .transcribe(audio.sample_rate_hz(), audio.samples());
+        let result = self.backend.transcribe(
+            audio.sample_rate_hz(),
+            audio.samples(),
+            local_request.request().language.as_deref(),
+        );
         let transcript = self
             .capture_backend(result)
             .map_err(SherpaAdapterError::into_engine_error)?;
@@ -1988,6 +1991,17 @@ mod native_stt_backend {
 
     pub struct NativeSttBackend {
         recognizer: OfflineSttRecognizer,
+        config: NativeSttRecognizerConfig,
+        active_language: Option<String>,
+    }
+
+    #[derive(Clone)]
+    struct NativeSttRecognizerConfig {
+        model_kind: OfflineSttModelKind,
+        encoder_path: PathBuf,
+        decoder_path: PathBuf,
+        tokens_path: PathBuf,
+        default_language: Option<String>,
     }
 
     impl fmt::Debug for NativeSttBackend {
@@ -2031,27 +2045,21 @@ mod native_stt_backend {
             require_selected_file(binding, &files.encoder_file_id, STT_ENCODER_FILE_ID)?;
             require_selected_file(binding, &files.tokens_file_id, STT_TOKENS_FILE_ID)?;
             let model_kind = selected_stt_model_kind(binding, &files.decoder_file_id)?;
-            let config = match model_kind {
-                OfflineSttModelKind::Moonshine => OfflineSttConfig::moonshine_v2(
-                    files.encoder_path,
-                    files.decoder_path,
-                    files.tokens_path,
-                ),
-                OfflineSttModelKind::Whisper => {
-                    let mut config = OfflineSttConfig::whisper(
-                        files.encoder_path,
-                        files.decoder_path,
-                        files.tokens_path,
-                    );
-                    if let Some(language) = files.language {
-                        config = config.with_language(language);
-                    }
-                    config
-                }
-            }
-            .with_sample_rate(VAD_SAMPLE_RATE_HZ as i32);
-            let recognizer = OfflineSttRecognizer::new(&config).map_err(native_stt_error)?;
-            Ok(Self { recognizer })
+            let config = NativeSttRecognizerConfig {
+                model_kind,
+                encoder_path: files.encoder_path,
+                decoder_path: files.decoder_path,
+                tokens_path: files.tokens_path,
+                default_language: files.language,
+            };
+            let active_language = config.language_for_request(None);
+            let recognizer =
+                build_recognizer(&config, active_language.as_deref()).map_err(native_stt_error)?;
+            Ok(Self {
+                recognizer,
+                config,
+                active_language,
+            })
         }
     }
 
@@ -2060,7 +2068,10 @@ mod native_stt_backend {
             &mut self,
             sample_rate_hz: u32,
             pcm: &[f32],
+            language: Option<&str>,
         ) -> Result<String, SherpaAdapterError> {
+            self.ensure_language(language)
+                .map_err(native_stt_adapter_error)?;
             let sample_rate =
                 i32::try_from(sample_rate_hz).map_err(|_| SherpaAdapterError::InvalidConfig)?;
             let result = self
@@ -2069,6 +2080,58 @@ mod native_stt_backend {
                 .map_err(native_stt_adapter_error)?;
             Ok(result.text().to_owned())
         }
+    }
+
+    impl NativeSttBackend {
+        fn ensure_language(&mut self, language: Option<&str>) -> Result<(), NativeSttError> {
+            let next_language = self.config.language_for_request(language);
+            if self.config.model_kind != OfflineSttModelKind::Whisper
+                || self.active_language == next_language
+            {
+                return Ok(());
+            }
+            self.recognizer = build_recognizer(&self.config, next_language.as_deref())?;
+            self.active_language = next_language;
+            Ok(())
+        }
+    }
+
+    impl NativeSttRecognizerConfig {
+        fn language_for_request(&self, language: Option<&str>) -> Option<String> {
+            if self.model_kind != OfflineSttModelKind::Whisper {
+                return None;
+            }
+            language
+                .map(ToOwned::to_owned)
+                .or_else(|| self.default_language.clone())
+                .filter(|value| !value.is_empty())
+        }
+    }
+
+    fn build_recognizer(
+        config: &NativeSttRecognizerConfig,
+        language: Option<&str>,
+    ) -> Result<OfflineSttRecognizer, NativeSttError> {
+        let config = match config.model_kind {
+            OfflineSttModelKind::Moonshine => OfflineSttConfig::moonshine_v2(
+                &config.encoder_path,
+                &config.decoder_path,
+                &config.tokens_path,
+            ),
+            OfflineSttModelKind::Whisper => {
+                let mut stt_config = OfflineSttConfig::whisper(
+                    &config.encoder_path,
+                    &config.decoder_path,
+                    &config.tokens_path,
+                );
+                if let Some(language) = language {
+                    stt_config = stt_config.with_language(language);
+                }
+                stt_config
+            }
+        }
+        .with_sample_rate(VAD_SAMPLE_RATE_HZ as i32);
+        OfflineSttRecognizer::new(&config)
     }
 
     fn selected_stt_model_kind(
@@ -2457,6 +2520,7 @@ mod tests {
         calls: Vec<&'static str>,
         last_rate: Option<u32>,
         last_samples: Vec<f32>,
+        last_language: Option<String>,
         transcript: String,
         fail: bool,
     }
@@ -2467,6 +2531,7 @@ mod tests {
                 calls: Vec::new(),
                 last_rate: None,
                 last_samples: Vec::new(),
+                last_language: None,
                 transcript: "hello aurora".to_owned(),
                 fail: false,
             }
@@ -2478,10 +2543,12 @@ mod tests {
             &mut self,
             sample_rate_hz: u32,
             pcm: &[f32],
+            language: Option<&str>,
         ) -> Result<String, SherpaAdapterError> {
             self.calls.push("transcribe");
             self.last_rate = Some(sample_rate_hz);
             self.last_samples.extend_from_slice(pcm);
+            self.last_language = language.map(ToOwned::to_owned);
             if self.fail {
                 Err(SherpaAdapterError::from_host_fault(
                     "path=/secret/moonshine transcript=private",
@@ -2714,10 +2781,19 @@ mod tests {
         task: VoiceTask,
         generation: u64,
     ) -> BoundTaskRequest {
+        task_request_with_language(binding, task, generation, None)
+    }
+
+    fn task_request_with_language(
+        binding: TaskPackBinding,
+        task: VoiceTask,
+        generation: u64,
+        language: Option<&str>,
+    ) -> BoundTaskRequest {
         BoundTaskRequest::new(
             TaskRequest {
                 task,
-                language: None,
+                language: language.map(ToOwned::to_owned),
                 generation,
             },
             binding,
@@ -2787,6 +2863,19 @@ mod tests {
             config,
         )
         .expect("tts request")
+    }
+
+    fn finite_stt_with_language(
+        binding: TaskPackBinding,
+        generation: u64,
+        language: Option<&str>,
+        frames: Vec<Vec<f32>>,
+    ) -> (BoundFiniteSttRequest, FiniteSttAudio) {
+        FiniteSttAudio::from_frames(
+            task_request_with_language(binding, VoiceTask::SpeechToText, generation, language),
+            frames,
+        )
+        .expect("finite stt audio")
     }
 
     fn frame(samples: &[f32]) -> StreamingAudioFrame<'_> {
@@ -3280,6 +3369,16 @@ mod tests {
     }
 
     #[test]
+    fn finite_stt_passes_requested_language_to_backend() {
+        let mut engine = stt_engine(FakeSttBackend::default());
+        let (request, audio) =
+            finite_stt_with_language(engine.binding().clone(), 6, Some("en"), vec![vec![0.25]]);
+        futures_lite((), |_| engine.transcribe_finite(request, audio, &|| false))
+            .expect("stt result");
+        assert_eq!(engine.into_backend().last_language.as_deref(), Some("en"));
+    }
+
+    #[test]
     fn finite_stt_cancellation_and_duration_bound_happen_before_backend() {
         let mut engine = stt_engine(FakeSttBackend::default());
         let (request, audio) = finite_stt(engine.binding().clone(), 5, vec![vec![0.25]]);
@@ -3647,7 +3746,12 @@ mod tests {
         let (request, audio) = finite_stt(engine.binding().clone(), 89, frames);
         let result = futures_lite((), |_| engine.transcribe_finite(request, audio, &|| false))
             .expect("stt result");
+        println!("whisper transcript: {}", result.transcript());
         assert!(!result.transcript().trim().is_empty());
+        assert!(result
+            .transcript()
+            .to_ascii_lowercase()
+            .contains("after early nightfall"));
         let rendered = format!("{engine:?} {result:?}");
         assert!(!rendered.contains(result.transcript()));
         assert!(!rendered.contains("whisper"));

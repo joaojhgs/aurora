@@ -1,14 +1,12 @@
 //! Desktop native speech-engine construction from active model-pack state.
 
-#![cfg(feature = "desktop-sherpa")]
-
 use aurora_voice_engine::{
-    EngineError, EngineFaultCode, KwsConfig, ModelPackFile, ModelPackManifest, ModelStoreScope,
-    PackTask, RuntimeSelection, SelectedVariant, TaskPackBinding, VadConfig, VerifiedManifest,
-    VoiceTask,
+    EngineError, EngineFaultCode, KwsConfig, LanguageSupport, ModelPackFile, ModelPackManifest,
+    ModelStoreScope, PackTask, RuntimeSelection, SelectedVariant, TaskPackBinding, VadConfig,
+    VerifiedManifest, VoiceTask,
 };
 use aurora_voice_sherpa::{
-    NativeKwsBackend, NativeKwsModelFiles, NativeSttBackend, NativeVadBackend,
+    NativeKwsBackend, NativeKwsModelFiles, NativeSttBackend, NativeSttModelFiles, NativeVadBackend,
     SherpaFiniteSttEngine, SherpaKwsPhraseSet, SherpaKwsProvider, SherpaVadProvider,
 };
 
@@ -79,15 +77,8 @@ pub fn build_active_stt_provider(
         manifest,
         runtime,
     )?;
-    let backend = NativeSttBackend::from_selected_model(
-        &binding,
-        "encoder",
-        store_path(store, &selection, "encoder")?,
-        "decoder-merged",
-        store_path(store, &selection, "decoder-merged")?,
-        "tokens",
-        store_path(store, &selection, "tokens")?,
-    )?;
+    let files = active_stt_model_files(store, &selection, &binding)?;
+    let backend = NativeSttBackend::from_selected_model_files(&binding, files)?;
     SherpaFiniteSttEngine::new(binding, backend)
 }
 
@@ -148,4 +139,114 @@ fn store_path(
         .map_err(|_| EngineError::ProviderFault {
             code: EngineFaultCode::Native,
         })
+}
+
+fn active_stt_model_files(
+    store: &NativeModelStore,
+    selection: &SelectedVariant,
+    binding: &TaskPackBinding,
+) -> Result<NativeSttModelFiles, EngineError> {
+    let decoder_file_id = selected_stt_decoder_file_id(binding.selected_file_ids())?;
+    Ok(NativeSttModelFiles {
+        encoder_file_id: "encoder".to_owned(),
+        encoder_path: store_path(store, selection, "encoder")?,
+        decoder_file_id: decoder_file_id.to_owned(),
+        decoder_path: store_path(store, selection, decoder_file_id)?,
+        tokens_file_id: "tokens".to_owned(),
+        tokens_path: store_path(store, selection, "tokens")?,
+        language: default_stt_language(binding.languages()),
+    })
+}
+
+fn selected_stt_decoder_file_id(file_ids: &[String]) -> Result<&'static str, EngineError> {
+    let has_moonshine_decoder = file_ids.iter().any(|file_id| file_id == "decoder-merged");
+    let has_whisper_decoder = file_ids.iter().any(|file_id| file_id == "decoder");
+    match (has_moonshine_decoder, has_whisper_decoder) {
+        (true, false) => Ok("decoder-merged"),
+        (false, true) => Ok("decoder"),
+        _ => Err(EngineError::InvalidRequest),
+    }
+}
+
+fn default_stt_language(languages: &[LanguageSupport]) -> Option<String> {
+    match languages {
+        [language] if language.fixed_language && !language.auto_detect => {
+            Some(language.language.clone())
+        }
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn active_stt_decoder_selection_supports_moonshine_and_whisper() {
+        assert_eq!(
+            selected_stt_decoder_file_id(&[
+                "encoder".to_owned(),
+                "decoder-merged".to_owned(),
+                "tokens".to_owned(),
+            ]),
+            Ok("decoder-merged")
+        );
+        assert_eq!(
+            selected_stt_decoder_file_id(&[
+                "encoder".to_owned(),
+                "decoder".to_owned(),
+                "tokens".to_owned(),
+            ]),
+            Ok("decoder")
+        );
+        assert_eq!(
+            selected_stt_decoder_file_id(&[
+                "encoder".to_owned(),
+                "decoder".to_owned(),
+                "decoder-merged".to_owned(),
+                "tokens".to_owned(),
+            ]),
+            Err(EngineError::InvalidRequest)
+        );
+    }
+
+    #[test]
+    fn active_stt_language_defaults_only_for_single_fixed_language() {
+        assert_eq!(
+            default_stt_language(&[LanguageSupport {
+                language: "en".to_owned(),
+                locale: Some("en-US".to_owned()),
+                fixed_language: true,
+                auto_detect: false,
+            }])
+            .as_deref(),
+            Some("en")
+        );
+        assert_eq!(
+            default_stt_language(&[LanguageSupport {
+                language: "en".to_owned(),
+                locale: None,
+                fixed_language: false,
+                auto_detect: true,
+            }]),
+            None
+        );
+        assert_eq!(
+            default_stt_language(&[
+                LanguageSupport {
+                    language: "en".to_owned(),
+                    locale: None,
+                    fixed_language: true,
+                    auto_detect: false,
+                },
+                LanguageSupport {
+                    language: "fr".to_owned(),
+                    locale: None,
+                    fixed_language: true,
+                    auto_detect: false,
+                },
+            ]),
+            None
+        );
+    }
 }
