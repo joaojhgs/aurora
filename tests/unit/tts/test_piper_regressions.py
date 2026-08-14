@@ -226,9 +226,13 @@ class FakePiperCatalogManager:
                 sample_rate=None,
             ),
         )
+        self.catalog_voices = self.voices
 
     async def list_voices(self):
         return self.voices
+
+    async def list_catalog_voices(self):
+        return self.catalog_voices
 
     async def install_voice(self, voice_id: str) -> PiperCatalogInstallResult:
         self.installed_voice_ids.append(voice_id)
@@ -624,6 +628,50 @@ async def test_piper_language_pack_revision_is_stable_catalog_provenance(
 
 
 @pytest.mark.asyncio
+async def test_piper_language_pack_inventory_includes_shared_pockettts_metadata_only(
+    service: TTSService, monkeypatch, tmp_path: Path
+) -> None:
+    manager = FakePiperCatalogManager()
+    pockettts_voice_id = "standard:pockettts:sherpa-onnx-pocket-tts-int8-2026-01-26"
+    manager.catalog_voices = (
+        *manager.voices,
+        PiperCatalogVoice(
+            voice_id=pockettts_voice_id,
+            display_name="PocketTTS English int8",
+            language="en-us",
+            revision=CATALOG_REVISION,
+            installed=False,
+            ready=False,
+            sample_rate=24000,
+            model_family="pockettts",
+        ),
+    )
+
+    async def fake_config(*_args, **_kwargs):
+        return Tts(provider="piper", providers=Providers(piper=Piper(cache_dir=str(tmp_path))))
+
+    async def noop_audit(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr(service, "_piper_catalog_manager", lambda _cfg: manager)
+    monkeypatch.setattr(service, "_audit_voice_management", noop_audit)
+
+    inventory = await service.list_language_packs(TTSListLanguagePacksRequest())
+    install_response = await service.install_voice_profile(
+        TTSInstallVoiceProfileRequest(
+            voice_id=pockettts_voice_id,
+            operation_id="install-pockettts-from-piper",
+        )
+    )
+
+    en_pack = next(pack for pack in inventory.packs if pack.pack_id == "en-us")
+    assert pockettts_voice_id in {voice.voice_id for voice in en_pack.voices}
+    assert install_response.status == "not_found"
+    assert manager.installed_voice_ids == []
+
+
+@pytest.mark.asyncio
 async def test_piper_install_checks_catalog_revision_and_installs_exact_voice(
     service: TTSService, monkeypatch, tmp_path: Path
 ) -> None:
@@ -751,7 +799,9 @@ async def test_piper_remove_uses_manager_and_preserves_pockettts_registry(
     )
     monkeypatch.setattr(service, "_piper_catalog_manager", lambda _cfg: manager)
     monkeypatch.setattr(service, "_audit_voice_management", noop_audit)
-    monkeypatch.setattr(service, "_voice_registry", Mock(side_effect=AssertionError("wrong registry")))
+    monkeypatch.setattr(
+        service, "_voice_registry", Mock(side_effect=AssertionError("wrong registry"))
+    )
     monkeypatch.setattr(service, "_initialize_engine_fail_soft", AsyncMock(return_value=False))
 
     response = await service.remove_voice_profile(
