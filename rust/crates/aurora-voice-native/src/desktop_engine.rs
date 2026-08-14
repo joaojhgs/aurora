@@ -6,8 +6,10 @@ use aurora_voice_engine::{
     TaskPackBinding, VadConfig, VerifiedManifest, VoiceTask,
 };
 use aurora_voice_sherpa::{
-    NativeKwsBackend, NativeKwsModelFiles, NativeSttBackend, NativeSttModelFiles, NativeVadBackend,
-    SherpaFiniteSttEngine, SherpaKwsPhraseSet, SherpaKwsProvider, SherpaVadProvider,
+    compile_gigaspeech_sentencepiece_phrase_set, NativeKwsBackend, NativeKwsModelFiles,
+    NativeSttBackend, NativeSttModelFiles, NativeVadBackend, SherpaFiniteSttEngine,
+    SherpaKwsPhraseCompileError, SherpaKwsPhraseInput, SherpaKwsPhraseSet, SherpaKwsProvider,
+    SherpaVadProvider,
 };
 #[cfg(feature = "desktop-sherpa-tts")]
 use aurora_voice_sherpa::{NativeTtsBackend, NativeTtsVitsPiperModelFiles, SherpaTtsProvider};
@@ -87,16 +89,31 @@ pub fn build_installed_kws_provider(
     phrase_set: SherpaKwsPhraseSet,
 ) -> Result<SherpaKwsProvider<NativeKwsBackend>, EngineError> {
     let bindings = resolve_installed_model(manager, model_id, SpeechCatalogTask::KeywordSpotting)?;
-    let files = NativeKwsModelFiles {
-        encoder_file_id: "encoder".to_owned(),
-        encoder_path: catalog_path(&bindings, "encoder")?,
-        decoder_file_id: "decoder".to_owned(),
-        decoder_path: catalog_path(&bindings, "decoder")?,
-        joiner_file_id: "joiner".to_owned(),
-        joiner_path: catalog_path(&bindings, "joiner")?,
-        tokens_file_id: "tokens".to_owned(),
-        tokens_path: catalog_path(&bindings, "tokens")?,
+    let files = installed_kws_model_files(&bindings)?;
+    let backend = NativeKwsBackend::from_catalog_model_files(&bindings.task_binding, files)?;
+    SherpaKwsProvider::new(bindings.task_binding, phrase_set, backend)
+}
+
+/// Native desktop KWS provider from user phrase text for supported installed KWS families.
+pub fn build_installed_kws_provider_from_phrases(
+    manager: &SpeechPackManager,
+    model_id: &str,
+    phrase_revision: impl Into<String>,
+    phrases: impl IntoIterator<Item = SherpaKwsPhraseInput>,
+) -> Result<SherpaKwsProvider<NativeKwsBackend>, EngineError> {
+    let bindings = resolve_installed_model(manager, model_id, SpeechCatalogTask::KeywordSpotting)?;
+    let phrase_set = match installed_kws_compiler_family(&bindings.model_id)
+        .map_err(SherpaKwsPhraseCompileError::into_engine_error)?
+    {
+        InstalledKwsCompilerFamily::GigaspeechSentencePiece => {
+            let tokenizer_path = catalog_path(&bindings, "tokenizer")
+                .map_err(|_| SherpaKwsPhraseCompileError::InvalidTokenizer)
+                .map_err(SherpaKwsPhraseCompileError::into_engine_error)?;
+            compile_gigaspeech_sentencepiece_phrase_set(phrase_revision, tokenizer_path, phrases)
+                .map_err(SherpaKwsPhraseCompileError::into_engine_error)?
+        }
     };
+    let files = installed_kws_model_files(&bindings)?;
     let backend = NativeKwsBackend::from_catalog_model_files(&bindings.task_binding, files)?;
     SherpaKwsProvider::new(bindings.task_binding, phrase_set, backend)
 }
@@ -228,6 +245,40 @@ fn catalog_voice_task(task: SpeechCatalogTask) -> VoiceTask {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum InstalledKwsCompilerFamily {
+    GigaspeechSentencePiece,
+}
+
+fn installed_kws_compiler_family(
+    model_id: &str,
+) -> Result<InstalledKwsCompilerFamily, SherpaKwsPhraseCompileError> {
+    match model_id {
+        "kws:zipformer:gigaspeech" | "kws:zipformer:gigaspeech-mobile" => {
+            Ok(InstalledKwsCompilerFamily::GigaspeechSentencePiece)
+        }
+        "kws:zipformer:wenetspeech"
+        | "kws:zipformer:wenetspeech-mobile"
+        | "kws:zipformer:zh-en-2025" => Err(SherpaKwsPhraseCompileError::UnsupportedFamily),
+        _ => Err(SherpaKwsPhraseCompileError::UnsupportedFamily),
+    }
+}
+
+fn installed_kws_model_files(
+    bindings: &SpeechModelBindings,
+) -> Result<NativeKwsModelFiles, EngineError> {
+    Ok(NativeKwsModelFiles {
+        encoder_file_id: "encoder".to_owned(),
+        encoder_path: catalog_path(bindings, "encoder")?,
+        decoder_file_id: "decoder".to_owned(),
+        decoder_path: catalog_path(bindings, "decoder")?,
+        joiner_file_id: "joiner".to_owned(),
+        joiner_path: catalog_path(bindings, "joiner")?,
+        tokens_file_id: "tokens".to_owned(),
+        tokens_path: catalog_path(bindings, "tokens")?,
+    })
+}
+
 fn active_binding(
     store: &NativeModelStore,
     pack_task: PackTask,
@@ -307,6 +358,30 @@ fn default_stt_language(languages: &[LanguageSupport]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn installed_kws_compiler_family_is_truthful() {
+        assert_eq!(
+            installed_kws_compiler_family("kws:zipformer:gigaspeech"),
+            Ok(InstalledKwsCompilerFamily::GigaspeechSentencePiece)
+        );
+        assert_eq!(
+            installed_kws_compiler_family("kws:zipformer:gigaspeech-mobile"),
+            Ok(InstalledKwsCompilerFamily::GigaspeechSentencePiece)
+        );
+        assert_eq!(
+            installed_kws_compiler_family("kws:zipformer:wenetspeech"),
+            Err(SherpaKwsPhraseCompileError::UnsupportedFamily)
+        );
+        assert_eq!(
+            installed_kws_compiler_family("kws:zipformer:wenetspeech-mobile"),
+            Err(SherpaKwsPhraseCompileError::UnsupportedFamily)
+        );
+        assert_eq!(
+            installed_kws_compiler_family("kws:zipformer:zh-en-2025"),
+            Err(SherpaKwsPhraseCompileError::UnsupportedFamily)
+        );
+    }
 
     #[test]
     fn active_stt_decoder_selection_supports_moonshine_and_whisper() {

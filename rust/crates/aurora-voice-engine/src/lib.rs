@@ -4676,6 +4676,7 @@ mod tests {
                 "decoder".to_owned(),
                 "encoder".to_owned(),
                 "joiner".to_owned(),
+                "tokenizer".to_owned(),
                 "tokens".to_owned()
             ]
         );

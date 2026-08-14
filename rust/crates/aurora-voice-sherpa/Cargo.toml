@@ -11,11 +11,17 @@ async-trait.workspace = true
 aurora-voice-core = { path = "../aurora-voice-core" }
 aurora-voice-engine = { path = "../aurora-voice-engine" }
 aurora-voice-sherpa-sys = { path = "../aurora-voice-sherpa-sys", optional = true }
+sentencepiece-rust = { version = "=0.1.1", optional = true, default-features = false }
 thiserror.workspace = true
 
 [features]
 default = []
-native-kws = ["dep:aurora-voice-sherpa-sys", "aurora-voice-sherpa-sys/native-kws"]
+kws-sentencepiece = ["dep:sentencepiece-rust"]
+native-kws = [
+    "dep:aurora-voice-sherpa-sys",
+    "aurora-voice-sherpa-sys/native-kws",
+    "kws-sentencepiece",
+]
 native-stt = ["dep:aurora-voice-sherpa-sys", "aurora-voice-sherpa-sys/native-stt"]
 native-tts = ["dep:aurora-voice-sherpa-sys", "aurora-voice-sherpa-sys/native-tts"]
 native-vad = ["dep:aurora-voice-sherpa-sys", "aurora-voice-sherpa-sys/native-vad"]

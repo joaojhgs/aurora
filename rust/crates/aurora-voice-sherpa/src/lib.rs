@@ -18,6 +18,8 @@ use aurora_voice_engine::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+#[cfg(feature = "kws-sentencepiece")]
+use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -30,6 +32,11 @@ const MAX_LOGICAL_PHRASE_ID_BYTES: usize = 128;
 const MAX_NATIVE_KEYWORD_BYTES: usize = 512;
 const MAX_KEYWORD_BUFFER_BYTES: usize = 4096;
 const MAX_PHRASE_REVISION_BYTES: usize = 128;
+const MAX_KWS_PHRASE_TEXT_BYTES: usize = 128;
+#[cfg(feature = "kws-sentencepiece")]
+const MAX_KWS_SENTENCEPIECE_MODEL_BYTES: u64 = 2 * 1024 * 1024;
+#[cfg(feature = "kws-sentencepiece")]
+const MAX_COMPILED_KWS_TOKENS: usize = 64;
 const SHERPA_FINITE_STT_MAX_SECONDS: usize = 60;
 const SHERPA_TTS_MAX_SECONDS: usize = 60;
 const SHERPA_TTS_MIN_SPEED: f32 = 0.5;
@@ -108,6 +115,62 @@ impl SherpaAdapterError {
                 code: code.as_engine_fault(),
             },
         }
+    }
+}
+
+/// Product-safe keyword phrase compilation failures.
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
+pub enum SherpaKwsPhraseCompileError {
+    #[error("unsupported keyword tokenizer family")]
+    UnsupportedFamily,
+    #[error("invalid keyword phrase")]
+    InvalidPhrase,
+    #[error("invalid keyword tokenizer model")]
+    InvalidTokenizer,
+    #[error("keyword phrase output exceeds limits")]
+    ResourceLimit,
+}
+
+impl SherpaKwsPhraseCompileError {
+    pub fn into_engine_error(self) -> EngineError {
+        match self {
+            Self::UnsupportedFamily => EngineError::TaskUnavailable,
+            Self::InvalidPhrase | Self::InvalidTokenizer => EngineError::InvalidRequest,
+            Self::ResourceLimit => EngineError::ResourceLimit,
+        }
+    }
+}
+
+/// User-selected KWS phrase text before backend-family tokenization.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SherpaKwsPhraseInput {
+    logical_id: String,
+    phrase_text: String,
+}
+
+impl SherpaKwsPhraseInput {
+    pub fn new(
+        logical_id: impl Into<String>,
+        phrase_text: impl Into<String>,
+    ) -> Result<Self, SherpaKwsPhraseCompileError> {
+        let input = Self {
+            logical_id: logical_id.into(),
+            phrase_text: phrase_text.into(),
+        };
+        if !valid_logical_phrase_id(&input.logical_id)
+            || !valid_kws_phrase_text_input(&input.phrase_text)
+        {
+            return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+        }
+        Ok(input)
+    }
+
+    pub fn logical_id(&self) -> &str {
+        &self.logical_id
+    }
+
+    pub fn phrase_text(&self) -> &str {
+        &self.phrase_text
     }
 }
 
@@ -261,6 +324,45 @@ impl fmt::Debug for SherpaKwsPhrase {
             .field("keyword_spec_line_bytes", &self.keyword_spec_line.len())
             .finish()
     }
+}
+
+#[cfg(feature = "kws-sentencepiece")]
+pub fn compile_gigaspeech_sentencepiece_phrase_set(
+    revision: impl Into<String>,
+    bpe_model_path: impl AsRef<Path>,
+    phrases: impl IntoIterator<Item = SherpaKwsPhraseInput>,
+) -> Result<SherpaKwsPhraseSet, SherpaKwsPhraseCompileError> {
+    let metadata = std::fs::metadata(bpe_model_path.as_ref())
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidTokenizer)?;
+    if !metadata.is_file() {
+        return Err(SherpaKwsPhraseCompileError::InvalidTokenizer);
+    }
+    if metadata.len() > MAX_KWS_SENTENCEPIECE_MODEL_BYTES {
+        return Err(SherpaKwsPhraseCompileError::ResourceLimit);
+    }
+    let processor = sentencepiece_rust::SentencePieceProcessor::open(bpe_model_path.as_ref())
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidTokenizer)?;
+
+    let mut compiled = Vec::new();
+    for phrase in phrases {
+        let normalized = normalize_gigaspeech_phrase(phrase.phrase_text())?;
+        let pieces = processor
+            .encode_pieces(&normalized)
+            .map_err(|_| SherpaKwsPhraseCompileError::InvalidPhrase)?;
+        if pieces.is_empty()
+            || pieces.len() > MAX_COMPILED_KWS_TOKENS
+            || pieces.iter().any(|piece| !valid_compiled_kws_piece(piece))
+        {
+            return Err(SherpaKwsPhraseCompileError::ResourceLimit);
+        }
+        let keyword_spec_line = pieces.join(" ");
+        compiled.push(
+            SherpaKwsPhrase::new(phrase.logical_id(), normalized, keyword_spec_line)
+                .map_err(|_| SherpaKwsPhraseCompileError::InvalidPhrase)?,
+        );
+    }
+    SherpaKwsPhraseSet::new(revision, compiled)
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidPhrase)
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -1627,6 +1729,37 @@ fn valid_plain_field(value: &str, min_bytes: usize, max_bytes: usize) -> bool {
     len >= min_bytes && len <= max_bytes && !value.chars().any(|ch| ch == '\0' || ch.is_control())
 }
 
+fn valid_kws_phrase_text_input(value: &str) -> bool {
+    valid_plain_field(value, 1, MAX_KWS_PHRASE_TEXT_BYTES)
+        && value.chars().any(|ch| !ch.is_whitespace())
+}
+
+fn normalize_gigaspeech_phrase(value: &str) -> Result<String, SherpaKwsPhraseCompileError> {
+    if value.len() > MAX_KWS_PHRASE_TEXT_BYTES
+        || value
+            .chars()
+            .any(|ch| !(ch == ' ' || ch.is_ascii_graphic()))
+    {
+        return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+    }
+    let normalized = value
+        .split_ascii_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_uppercase();
+    if normalized.is_empty() || normalized.len() > MAX_KWS_PHRASE_TEXT_BYTES {
+        return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+    }
+    Ok(normalized)
+}
+
+#[cfg(feature = "kws-sentencepiece")]
+fn valid_compiled_kws_piece(value: &str) -> bool {
+    valid_plain_field(value, 1, MAX_NATIVE_KEYWORD_BYTES)
+        && value.len() <= MAX_NATIVE_KEYWORD_BYTES
+        && !value.chars().any(char::is_whitespace)
+}
+
 #[cfg(feature = "native-vad")]
 mod native_backend {
     use super::*;
@@ -2561,8 +2694,6 @@ mod tests {
     #[allow(dead_code)]
     const TTS_MODEL: &str = "models/extracted/vits-piper-en_US-ljspeech-medium";
     #[allow(dead_code)]
-    const LIGHT_UP_SPEC: &str = "▁ L IGHT ▁UP";
-    #[allow(dead_code)]
     const EXPECTED_STT_TEXT: &str =
         "Ask not what your country can do for you. Ask what you can do for your country.";
 
@@ -3078,6 +3209,7 @@ mod tests {
                 "decoder".to_owned(),
                 "encoder".to_owned(),
                 "joiner".to_owned(),
+                "tokenizer".to_owned(),
                 "tokens".to_owned()
             ]
         );
@@ -3371,6 +3503,78 @@ mod tests {
                 .keyword_buffer_for_request(&request_config)
                 .expect("buffer"),
             "SPEC-B\nSPEC-A"
+        );
+    }
+
+    #[test]
+    fn phrase_input_is_bounded_and_gigaspeech_normalization_is_english_only() {
+        let input = SherpaKwsPhraseInput::new("wake.main", " hey   aurora ").expect("phrase input");
+        assert_eq!(input.logical_id(), "wake.main");
+        assert_eq!(input.phrase_text(), " hey   aurora ");
+        assert_eq!(
+            normalize_gigaspeech_phrase(input.phrase_text()),
+            Ok("HEY AURORA".to_owned())
+        );
+        assert!(SherpaKwsPhraseInput::new("wake*", "hey aurora").is_err());
+        assert!(SherpaKwsPhraseInput::new("wake.main", "   ").is_err());
+        assert!(SherpaKwsPhraseInput::new("wake.main", "hey\naurora").is_err());
+        assert_eq!(
+            normalize_gigaspeech_phrase("你好"),
+            Err(SherpaKwsPhraseCompileError::InvalidPhrase)
+        );
+        assert_eq!(
+            normalize_gigaspeech_phrase(&"A".repeat(MAX_KWS_PHRASE_TEXT_BYTES + 1)),
+            Err(SherpaKwsPhraseCompileError::InvalidPhrase)
+        );
+    }
+
+    #[cfg(feature = "kws-sentencepiece")]
+    #[test]
+    fn gigaspeech_sentencepiece_compiler_rejects_missing_or_oversized_model() {
+        let input = SherpaKwsPhraseInput::new("wake.main", "hey aurora").expect("phrase input");
+        assert_eq!(
+            compile_gigaspeech_sentencepiece_phrase_set(
+                "rev-a",
+                std::env::temp_dir().join("aurora-missing-bpe.model"),
+                [input.clone()],
+            ),
+            Err(SherpaKwsPhraseCompileError::InvalidTokenizer)
+        );
+
+        let oversized_path =
+            std::env::temp_dir().join(format!("aurora-oversized-bpe-{}.model", std::process::id()));
+        std::fs::write(
+            &oversized_path,
+            vec![0_u8; MAX_KWS_SENTENCEPIECE_MODEL_BYTES as usize + 1],
+        )
+        .expect("write oversized model fixture");
+        assert_eq!(
+            compile_gigaspeech_sentencepiece_phrase_set("rev-a", &oversized_path, [input]),
+            Err(SherpaKwsPhraseCompileError::ResourceLimit)
+        );
+        let _ = std::fs::remove_file(oversized_path);
+    }
+
+    #[cfg(feature = "kws-sentencepiece")]
+    #[test]
+    #[ignore = "requires AURORA_SHERPA_ONNX_KWS_BPE_MODEL to point at the pinned GigaSpeech bpe.model"]
+    fn live_gigaspeech_sentencepiece_compiler_matches_pinned_mobile_archive() {
+        let model_path = std::env::var_os("AURORA_SHERPA_ONNX_KWS_BPE_MODEL")
+            .map(PathBuf::from)
+            .expect("AURORA_SHERPA_ONNX_KWS_BPE_MODEL");
+        let phrases = compile_gigaspeech_sentencepiece_phrase_set(
+            "rev-live",
+            model_path,
+            [SherpaKwsPhraseInput::new("wake.main", "HEY AURORA").expect("phrase input")],
+        )
+        .expect("compile phrase");
+        assert_eq!(
+            phrases.keyword_spec_for("wake.main"),
+            Some("▁HE Y ▁A UR OR A")
+        );
+        assert_eq!(
+            phrases.logical_id_for_native("HEY AURORA"),
+            Some("wake.main")
         );
     }
 
@@ -3798,9 +4002,10 @@ mod tests {
             },
         )
         .expect("native kws backend");
-        let phrase_set = SherpaKwsPhraseSet::new(
+        let phrase_set = compile_gigaspeech_sentencepiece_phrase_set(
             "phase4",
-            [SherpaKwsPhrase::new("wake.main", "LIGHT UP", LIGHT_UP_SPEC).expect("phrase")],
+            dir.join("bpe.model"),
+            [SherpaKwsPhraseInput::new("wake.main", "LIGHT UP").expect("phrase")],
         )
         .expect("phrase set");
         let mut provider = SherpaKwsProvider::new(binding, phrase_set, backend).expect("provider");
@@ -3840,7 +4045,6 @@ mod tests {
         assert!(detected, "LIGHT UP should be detected");
         let rendered = format!("{provider:?}");
         assert!(!rendered.contains("LIGHT UP"));
-        assert!(!rendered.contains(LIGHT_UP_SPEC));
         assert!(!rendered.contains("encoder-epoch"));
     }
 

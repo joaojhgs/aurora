@@ -12,7 +12,7 @@ const EMBEDDED_CATALOG: &str = include_str!("../resources/sherpa_onnx_speech_cat
 const CATALOG_SCHEMA_VERSION: u32 = 1;
 const CATALOG_ID: &str = "sherpa-onnx-speech-models-v1";
 const CATALOG_REVISION: &str = "github-releases-130628817-145831594-4e34edcb-284637b2";
-const ENTRIES_SHA256: &str = "3fe2302d3db5773d58cb23b99bee3f731a513858c366cb8e1e07d3fbc71de541";
+const ENTRIES_SHA256: &str = "d2a7f52543cb738248839e39f1cea803e29d38e28089bbe17a1ebb42ed84f5c8";
 const EXPECTED_ENTRY_COUNT: usize = 21;
 const EXPECTED_LANGUAGE_COUNT: usize = 100;
 const MAX_CATALOG_BYTES: usize = 250_000;
@@ -378,7 +378,7 @@ impl SpeechCatalogEntry {
             12
         };
         let stem = format!("epoch-{epoch}-avg-2-chunk-16-left-64");
-        let expected = BTreeMap::from([
+        let mut expected = BTreeMap::from([
             ("decoder".to_owned(), format!("{root}/decoder-{stem}.onnx")),
             (
                 "encoder".to_owned(),
@@ -390,6 +390,12 @@ impl SpeechCatalogEntry {
             ),
             ("tokens".to_owned(), format!("{root}/tokens.txt")),
         ]);
+        if matches!(
+            self.model_id.as_str(),
+            "kws:zipformer:gigaspeech" | "kws:zipformer:gigaspeech-mobile"
+        ) {
+            expected.insert("tokenizer".to_owned(), format!("{root}/bpe.model"));
+        }
         let expected_languages: BTreeSet<&str> = match self.model_id.as_str() {
             "kws:zipformer:gigaspeech" | "kws:zipformer:gigaspeech-mobile" => {
                 BTreeSet::from(["en"])
@@ -574,6 +580,28 @@ mod tests {
                 .len(),
             12
         );
+    }
+
+    #[test]
+    fn kws_sentencepiece_tokenizer_binding_is_gigaspeech_only() {
+        let catalog = SpeechModelCatalog::embedded().expect("embedded catalog validates");
+        for entry in catalog.models_for_task(SpeechCatalogTask::KeywordSpotting) {
+            let has_tokenizer = entry.bindings.contains_key("tokenizer");
+            match entry.model_id.as_str() {
+                "kws:zipformer:gigaspeech" | "kws:zipformer:gigaspeech-mobile" => {
+                    assert!(has_tokenizer);
+                    assert!(entry
+                        .bindings
+                        .get("tokenizer")
+                        .expect("tokenizer binding")
+                        .ends_with("/bpe.model"));
+                }
+                "kws:zipformer:wenetspeech"
+                | "kws:zipformer:wenetspeech-mobile"
+                | "kws:zipformer:zh-en-2025" => assert!(!has_tokenizer),
+                _ => panic!("unexpected KWS model"),
+            }
+        }
     }
 
     #[test]

@@ -16,6 +16,7 @@
         "decoder": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
         "encoder": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
         "joiner": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+        "tokenizer": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/bpe.model",
         "tokens": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/tokens.txt"
       },
       "display_name": "English wake words",
@@ -49,6 +50,7 @@
         "decoder": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile/decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
         "encoder": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile/encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
         "joiner": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile/joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+        "tokenizer": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile/bpe.model",
         "tokens": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile/tokens.txt"
       },
       "display_name": "English wake words (compact)",
@@ -1440,7 +1442,7 @@
       }
     }
   ],
-  "entries_sha256": "3fe2302d3db5773d58cb23b99bee3f731a513858c366cb8e1e07d3fbc71de541",
+  "entries_sha256": "d2a7f52543cb738248839e39f1cea803e29d38e28089bbe17a1ebb42ed84f5c8",
   "languages": [
     "af",
     "am",
