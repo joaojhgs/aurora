@@ -1685,6 +1685,7 @@ pub enum ErrorCode {
     NativeAudioTooLong,
     NativeInvalidSpeakerCount,
     TtsCancelled,
+    TtsCallbackFailed,
     StreamWaveformMissing,
     StreamWaveformAlreadyAccepted,
     StreamAlreadyDecoded,
@@ -1785,6 +1786,7 @@ impl ErrorCode {
             Self::NativeAudioTooLong => "native.audio_too_long",
             Self::NativeInvalidSpeakerCount => "native.invalid_speaker_count",
             Self::TtsCancelled => "tts.cancelled",
+            Self::TtsCallbackFailed => "tts.callback_failed",
             Self::StreamWaveformMissing => "stream.waveform_missing",
             Self::StreamWaveformAlreadyAccepted => "stream.waveform_already_accepted",
             Self::StreamAlreadyDecoded => "stream.already_decoded",
@@ -1910,6 +1912,7 @@ pub enum TtsError {
     NativeAudioTooLong,
     NativeInvalidSpeakerCount,
     Cancelled,
+    CallbackFailed,
 }
 
 impl TtsError {
@@ -1923,6 +1926,7 @@ impl TtsError {
             Self::NativeAudioTooLong => ErrorCode::NativeAudioTooLong,
             Self::NativeInvalidSpeakerCount => ErrorCode::NativeInvalidSpeakerCount,
             Self::Cancelled => ErrorCode::TtsCancelled,
+            Self::CallbackFailed => ErrorCode::TtsCallbackFailed,
         }
     }
 }
@@ -2735,6 +2739,14 @@ mod tests {
             TtsError::Cancelled.to_string(),
             "sherpa tts error: tts.cancelled"
         );
+        assert_eq!(
+            TtsError::CallbackFailed.code(),
+            ErrorCode::TtsCallbackFailed
+        );
+        assert_eq!(
+            TtsError::CallbackFailed.to_string(),
+            "sherpa tts error: tts.callback_failed"
+        );
         let error = OfflineTtsGenerationConfig::new(-1, 1.0)
             .validate(Some(1))
             .expect_err("negative speaker should fail");
@@ -2833,6 +2845,22 @@ mod tests {
             .expect_err("callback cancellation should stop generation");
         assert_eq!(cancelled, TtsError::Cancelled);
         assert!(checks.get() > 1);
+
+        let panicking_checks = std::cell::Cell::new(0usize);
+        let callback_failed = synthesizer
+            .generate(
+                "This request should fail inside the callback.",
+                &generation,
+                &|| {
+                    let current = panicking_checks.get();
+                    panicking_checks.set(current + 1);
+                    assert_eq!(current, 0, "callback panic should be contained");
+                    false
+                },
+            )
+            .expect_err("callback panic should be sanitized");
+        assert_eq!(callback_failed, TtsError::CallbackFailed);
+        assert!(panicking_checks.get() > 1);
     }
 
     #[cfg(not(feature = "native-vad"))]

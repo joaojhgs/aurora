@@ -1,6 +1,7 @@
 use std::ffi::CString;
 use std::fmt;
 use std::os::raw::{c_char, c_float, c_int, c_void};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr::NonNull;
 
 use super::{
@@ -233,6 +234,7 @@ impl OfflineTts {
             cancellation,
             invalid_audio: false,
             cancelled: false,
+            callback_failed: false,
         };
         let audio = unsafe {
             SherpaOnnxOfflineTtsGenerateWithConfig(
@@ -247,7 +249,17 @@ impl OfflineTts {
             destroy_generated_audio_if_present(audio);
             return Err(TtsError::NativeInvalidAudio);
         }
-        if callback_state.cancelled || cancellation() {
+        if callback_state.callback_failed {
+            destroy_generated_audio_if_present(audio);
+            return Err(TtsError::CallbackFailed);
+        }
+        let stopped_after_generate =
+            callback_state.cancelled || poll_cancellation(&mut callback_state);
+        if callback_state.callback_failed {
+            destroy_generated_audio_if_present(audio);
+            return Err(TtsError::CallbackFailed);
+        }
+        if stopped_after_generate {
             destroy_generated_audio_if_present(audio);
             return Err(TtsError::Cancelled);
         }
@@ -306,6 +318,7 @@ struct CallbackState<'a> {
     cancellation: &'a dyn Fn() -> bool,
     invalid_audio: bool,
     cancelled: bool,
+    callback_failed: bool,
 }
 
 extern "C" fn progress_callback(
@@ -318,11 +331,10 @@ extern "C" fn progress_callback(
         return 0;
     }
     let state = unsafe { &mut *arg.cast::<CallbackState<'_>>() };
-    if (state.cancellation)() {
-        state.cancelled = true;
+    if poll_cancellation(state) {
         return 0;
     }
-    if n < 0 || n > MAX_TTS_CALLBACK_CHUNK_SAMPLES {
+    if !(0..=MAX_TTS_CALLBACK_CHUNK_SAMPLES).contains(&n) {
         state.invalid_audio = true;
         return 0;
     }
@@ -341,6 +353,21 @@ extern "C" fn progress_callback(
         }
     }
     1
+}
+
+fn poll_cancellation(state: &mut CallbackState<'_>) -> bool {
+    match catch_unwind(AssertUnwindSafe(|| (state.cancellation)())) {
+        Ok(cancelled) => {
+            if cancelled {
+                state.cancelled = true;
+            }
+            cancelled
+        }
+        Err(_) => {
+            state.callback_failed = true;
+            true
+        }
+    }
 }
 
 fn destroy_generated_audio_if_present(audio: *const SherpaOnnxGeneratedAudio) {
