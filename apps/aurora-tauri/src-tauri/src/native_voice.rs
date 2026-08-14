@@ -8,22 +8,30 @@ use {
     aurora_voice_core::{
         CancellationToken, CaptureStartReason, Generation, RedactedSnapshot, RouteRevision,
         RuntimeEvent, RuntimeEventSink, TimestampMicros, VoiceCaptureLease, VoiceCoreError,
-        VoiceRuntime, VoiceState,
+        VoiceRuntime, VoiceState, WakeKwsProvider, WakeOrchestrationConfig, WakeVadProvider,
     },
     aurora_voice_engine::{
-        BoundFiniteSttRequest, BoundTtsSynthesisRequest, EngineError, FiniteSttAudio,
-        FiniteSttPort, FiniteSttProviderBinding, FiniteSttResult, FiniteSttRouteScope,
-        RouteFiniteSttBinding, RouteTtsBinding, SpeechCatalogTask, SpeechModelCatalog,
-        TtsSynthesisPort, TtsSynthesisProviderBinding, TtsSynthesisResult, TtsVoiceCatalog,
-        MAX_FINITE_STT_SAMPLES, VAD_SAMPLE_RATE_HZ,
+        BoundFiniteSttRequest, BoundKwsRequest, BoundStreamSession, BoundTaskRequest,
+        BoundTtsSynthesisRequest, BoundVadRequest, EngineError, FiniteSttAudio, FiniteSttPort,
+        FiniteSttProviderBinding, FiniteSttResult, FiniteSttRouteScope, KwsConfig, KwsFrameResult,
+        KwsStreamProvider, ResourceReport, RouteFiniteSttBinding, RouteTtsBinding,
+        SpeechCatalogTask, SpeechModelCatalog, SpeechSegment, StreamResetReason,
+        StreamingAudioFrame, TaskCapability, TaskPackBinding, TaskProvider, TtsSynthesisPort,
+        TtsSynthesisProviderBinding, TtsSynthesisResult, TtsVoiceCatalog, VadAcceptResult,
+        VadConfig, VadStreamProvider, MAX_FINITE_STT_SAMPLES, VAD_SAMPLE_RATE_HZ,
     },
     aurora_voice_native::{
-        build_installed_stt_provider, build_installed_tts_provider, CpalAudioInput,
-        CpalAudioOutput, GatewayAuth, MicrophoneAudioPolicy, NativeAudioConfig,
-        NativeCaptureConfig, NativeCaptureControl, NativeGatewayCaptureGrant,
-        NativeGatewayCaptureHandoff, NativeGatewayCaptureHandoffConfig, NativeGatewayFiniteStt,
-        NativeGatewayFiniteSttConfig, NativeGatewayTransport, NativeGatewayTtsConfig,
-        NativeGatewayTtsSynthesizer, SpeechPackManager, SpeechPackManagerConfig, TransportLimits,
+        build_installed_kws_provider, build_installed_stt_provider, build_installed_tts_provider,
+        build_installed_vad_provider, CpalAudioInput, CpalAudioOutput, GatewayAuth,
+        MicrophoneAudioPolicy, NativeAudioConfig, NativeCaptureConfig, NativeCaptureControl,
+        NativeGatewayCaptureGrant, NativeGatewayCaptureHandoff, NativeGatewayCaptureHandoffConfig,
+        NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig, NativeGatewayTransport,
+        NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer, SpeechPackManager,
+        SpeechPackManagerConfig, TransportLimits,
+    },
+    aurora_voice_sherpa::{
+        NativeKwsBackend, NativeVadBackend, SherpaKwsPhrase, SherpaKwsPhraseSet, SherpaKwsProvider,
+        SherpaVadProvider,
     },
     serde_json::Value,
     std::cell::Cell,
@@ -69,6 +77,17 @@ const HANDOFF_RECOVERY_TIMEOUT: Duration = Duration::from_secs(9);
 const SHUTDOWN_CLEANUP_TIMEOUT: Duration = Duration::from_secs(45);
 #[cfg(desktop)]
 const HOST_STOP_WAIT_TIMEOUT: Duration = Duration::from_secs(75);
+#[cfg(all(desktop, test))]
+const DEFAULT_WAKE_PHRASE_ID: &str = "wake.aurora";
+#[cfg(desktop)]
+const DEFAULT_WAKE_PHRASE_TEXT: &str = "HEY AURORA";
+#[cfg(desktop)]
+const DEFAULT_WAKE_PHRASE_NATIVE_LABEL: &str = "HEY_AURORA";
+#[cfg(desktop)]
+const DEFAULT_WAKE_PHRASE_SPEC: &str = "▁HE Y ▁A UR OR A @HEY_AURORA";
+#[cfg(all(desktop, test))]
+const DEFAULT_WAKE_PHRASE_REVISION: &str = "phrases:aurora-default:v1";
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeVoicePhase {
@@ -87,6 +106,8 @@ pub enum NativeVoicePhase {
 pub enum NativeVoiceTrigger {
     FocusedPushToTalk,
     TrayPushToTalk,
+    WakeWord,
+    BackgroundWake,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -613,7 +634,7 @@ impl NativeVoiceActor {
 
     fn refresh_idle_status(&mut self) {
         match self.resolve_profile(false) {
-            Ok(profile) => self.status = idle_status(profile.connection()),
+            Ok(profile) => self.status = idle_status(&self.app, &profile),
             Err(reason) => self.status = NativeVoiceStatus::unavailable(reason),
         }
     }
@@ -628,7 +649,7 @@ impl NativeVoiceActor {
         let profile = self
             .resolve_profile(request.remote_audio_consent)
             .map_err(NativeVoiceCommandError::unavailable)?;
-        install_profile_connection(&mut self.status, profile.connection());
+        install_profile(&mut self.status, &profile);
 
         let profile_key = profile.reusable_key();
         if !runtime_cache_matches(self.runtime_profile.as_ref(), profile_key.as_ref()) {
@@ -645,6 +666,7 @@ impl NativeVoiceActor {
             None => build_runtime(&app, &profile, self.tx.clone())?,
             Some(_) => build_runtime(&app, &profile, self.tx.clone())?,
         };
+        self.status.background_eligible = runtime.core.wake_background_ready();
 
         let core_generation = runtime
             .core
@@ -656,6 +678,8 @@ impl NativeVoiceActor {
         let start_reason = match request.trigger {
             NativeVoiceTrigger::FocusedPushToTalk => CaptureStartReason::PushToTalk,
             NativeVoiceTrigger::TrayPushToTalk => CaptureStartReason::AssistantRole,
+            NativeVoiceTrigger::WakeWord => CaptureStartReason::ForegroundWake,
+            NativeVoiceTrigger::BackgroundWake => CaptureStartReason::BackgroundSession,
         };
         let handoff = if let RuntimeProfile::Local { .. } = profile {
             let mut adapter = build_handoff(&profile, start_reason.clone())?;
@@ -701,7 +725,7 @@ impl NativeVoiceActor {
                 generation: core_generation,
                 created_at: now_micros(),
                 route_revision: RouteRevision(ROUTE_REVISION),
-                background_eligible: false,
+                background_eligible: profile.background_voice_eligible(),
                 consent_revision: if request.remote_audio_consent { 1 } else { 0 },
                 heartbeat_at: now_micros(),
                 stop_deadline: None,
@@ -713,6 +737,7 @@ impl NativeVoiceActor {
         self.active = Some(ActiveTurn {
             ui_generation,
             core_generation,
+            continuous: matches!(request.trigger, NativeVoiceTrigger::BackgroundWake),
             _handoff_generation: handoff_slot
                 .borrow()
                 .as_ref()
@@ -727,10 +752,23 @@ impl NativeVoiceActor {
         let tx = self.tx.clone();
         let runtime_slot = Rc::clone(&self.runtime);
         tokio::task::spawn_local(async move {
-            let result = runtime
-                .core
-                .run_push_to_talk_turn(lease, now_micros(), cancellation.clone())
-                .await;
+            let result = match request.trigger {
+                NativeVoiceTrigger::FocusedPushToTalk | NativeVoiceTrigger::TrayPushToTalk => {
+                    runtime
+                        .core
+                        .run_push_to_talk_turn(lease, now_micros(), cancellation.clone())
+                        .await
+                }
+                NativeVoiceTrigger::WakeWord => {
+                    runtime
+                        .core
+                        .run_wake_turn(lease, now_micros(), cancellation.clone())
+                        .await
+                }
+                NativeVoiceTrigger::BackgroundWake => {
+                    run_background_session(&mut runtime.core, lease, cancellation.clone()).await
+                }
+            };
             let reason_code = result.err().map(|error| reason_from_core_error(&error));
             let cleanup_reason = release_handoff_slot(&handoff_slot, true).await;
             runtime.ui_generation.set(None);
@@ -754,7 +792,7 @@ impl NativeVoiceActor {
         if request.generation != active.ui_generation {
             return Err(NativeVoiceCommandError::invalid(STALE_CONTROL_REASON));
         }
-        if control_requires_terminal_suppression(cancel) {
+        if control_requires_terminal_suppression(cancel || active.continuous) {
             active.expected_terminal = true;
             active.cancellation.cancel();
             active.control.interrupt(active.core_generation);
@@ -810,7 +848,7 @@ impl NativeVoiceActor {
             available: !matches!(phase, NativeVoicePhase::Unavailable),
             phase,
             generation,
-            background_eligible: background_voice_eligible(connection),
+            background_eligible: self.status.background_eligible,
             connection,
             reason_code: reason_code.map(str::to_owned),
             redacted: true,
@@ -832,6 +870,7 @@ impl NativeVoiceActor {
 struct ActiveTurn {
     ui_generation: u64,
     core_generation: Generation,
+    continuous: bool,
     _handoff_generation: Option<Generation>,
     control: NativeCaptureControl,
     cancellation: CancellationToken,
@@ -1026,30 +1065,31 @@ impl RuntimeProfile {
             && self.local_speech().stt.is_none()
             && !self.permits_remote_audio()
     }
+
+    fn background_voice_eligible(&self) -> bool {
+        self.local_speech().vad.is_some()
+            && self.local_speech().kws.is_some()
+            && self.local_speech().wake_phrase.is_some()
+    }
 }
 
 #[cfg(desktop)]
-fn idle_status(connection: NativeVoiceConnection) -> NativeVoiceStatus {
+fn idle_status(app: &AppHandle, profile: &RuntimeProfile) -> NativeVoiceStatus {
     NativeVoiceStatus {
         available: true,
         phase: NativeVoicePhase::Idle,
         generation: None,
-        background_eligible: background_voice_eligible(connection),
-        connection,
+        background_eligible: installed_wake_bindings_ready(app, profile),
+        connection: profile.connection(),
         reason_code: None,
         redacted: true,
     }
 }
 
 #[cfg(desktop)]
-fn install_profile_connection(status: &mut NativeVoiceStatus, connection: NativeVoiceConnection) {
-    status.connection = connection;
-    status.background_eligible = background_voice_eligible(connection);
-}
-
-#[cfg(any(desktop, test))]
-fn background_voice_eligible(_connection: NativeVoiceConnection) -> bool {
-    false
+fn install_profile(status: &mut NativeVoiceStatus, profile: &RuntimeProfile) {
+    status.connection = profile.connection();
+    status.background_eligible = profile.background_voice_eligible();
 }
 
 #[cfg(desktop)]
@@ -1070,6 +1110,53 @@ fn runtime_cache_matches(
 }
 
 #[cfg(desktop)]
+async fn run_background_session(
+    core: &mut RuntimeCore,
+    lease: VoiceCaptureLease,
+    cancellation: CancellationToken,
+) -> Result<String, VoiceCoreError> {
+    loop {
+        cancellation.check()?;
+        match core
+            .run_background_turn(lease.clone(), now_micros(), cancellation.clone())
+            .await
+        {
+            Ok(_) => {
+                if cancellation.is_cancelled() {
+                    return Err(VoiceCoreError::Cancelled);
+                }
+            }
+            Err(VoiceCoreError::WakeNotDetected)
+            | Err(VoiceCoreError::SpeechNotDetected)
+            | Err(VoiceCoreError::SpeechTimeout)
+                if !cancellation.is_cancelled() => {}
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+#[cfg(desktop)]
+fn installed_wake_bindings_ready(app: &AppHandle, profile: &RuntimeProfile) -> bool {
+    if !profile.background_voice_eligible() {
+        return false;
+    }
+    let local_speech = profile.local_speech();
+    let (Some(vad), Some(kws), Some(phrase)) = (
+        local_speech.vad.as_ref(),
+        local_speech.kws.as_ref(),
+        local_speech.wake_phrase.as_ref(),
+    ) else {
+        return false;
+    };
+    let Ok(manager) = speech_pack_manager(app) else {
+        return false;
+    };
+    manager.resolve_model_bindings(&vad.pack_id).is_ok()
+        && manager.resolve_model_bindings(&kws.pack_id).is_ok()
+        && selected_wake_phrase_set(kws, phrase).is_ok()
+}
+
+#[cfg(desktop)]
 fn build_runtime(
     app: &AppHandle,
     profile: &RuntimeProfile,
@@ -1077,7 +1164,11 @@ fn build_runtime(
 ) -> Result<RuntimeBundle, NativeVoiceCommandError> {
     let ui_generation = Rc::new(Cell::new(None));
     let local_speech = profile.local_speech();
-    let manager = if local_speech.stt.is_some() || local_speech.tts.is_some() {
+    let manager = if local_speech.vad.is_some()
+        || local_speech.kws.is_some()
+        || local_speech.stt.is_some()
+        || local_speech.tts.is_some()
+    {
         Some(speech_pack_manager(app)?)
     } else {
         None
@@ -1161,7 +1252,7 @@ fn build_runtime(
         tx,
         ui_generation: Rc::clone(&ui_generation),
     };
-    let core = VoiceRuntime::new(
+    let mut core = VoiceRuntime::new(
         audio,
         stt,
         tts,
@@ -1172,11 +1263,209 @@ fn build_runtime(
         "tauri-native-voice",
     )
     .map_err(|_| NativeVoiceCommandError::unavailable("runtime_unavailable"))?;
+    if let Some((vad, kws, wake_config)) = build_wake_runtime(profile, manager.as_ref())? {
+        core = core
+            .with_wake_providers(vad, kws, wake_config)
+            .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
+    }
     Ok(RuntimeBundle {
         core,
         control,
         ui_generation,
     })
+}
+
+#[cfg(desktop)]
+fn build_wake_runtime(
+    profile: &RuntimeProfile,
+    manager: Option<&SpeechPackManager>,
+) -> Result<
+    Option<(WakeVadProvider, WakeKwsProvider, WakeOrchestrationConfig)>,
+    NativeVoiceCommandError,
+> {
+    let local_speech = profile.local_speech();
+    let (Some(vad_selection), Some(kws_selection), Some(wake_phrase)) = (
+        local_speech.vad.as_ref(),
+        local_speech.kws.as_ref(),
+        local_speech.wake_phrase.as_ref(),
+    ) else {
+        return Ok(None);
+    };
+    let manager =
+        manager.ok_or_else(|| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    let vad_config = VadConfig::default();
+    let vad = build_installed_vad_provider(manager, &vad_selection.pack_id, &vad_config)
+        .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
+    let phrase_set = selected_wake_phrase_set(kws_selection, wake_phrase)
+        .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
+    let kws = build_installed_kws_provider(manager, &kws_selection.pack_id, phrase_set)
+        .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
+    let kws_config = KwsConfig::new([&wake_phrase.phrase_id], &wake_phrase.revision, 0.25, 30, 1)
+        .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
+    let wake_config = WakeOrchestrationConfig::new(
+        vad.binding().clone(),
+        kws.binding().clone(),
+        vad_config,
+        kws_config,
+        1_000,
+        500,
+    )
+    .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
+    Ok(Some((
+        Box::new(DesktopWakeVad(vad)),
+        Box::new(DesktopWakeKws(kws)),
+        wake_config,
+    )))
+}
+
+#[cfg(desktop)]
+struct DesktopWakeVad(SherpaVadProvider<NativeVadBackend>);
+
+#[cfg(desktop)]
+struct DesktopWakeKws(SherpaKwsProvider<NativeKwsBackend>);
+
+// The Tauri native voice actor constructs and drives wake providers on its
+// dedicated local runtime thread. These wrappers satisfy the shared native
+// provider alias without marking the underlying sherpa backend as Send.
+#[cfg(desktop)]
+unsafe impl Send for DesktopWakeVad {}
+
+#[cfg(desktop)]
+unsafe impl Send for DesktopWakeKws {}
+
+#[cfg(desktop)]
+#[async_trait(?Send)]
+impl TaskProvider for DesktopWakeVad {
+    fn capabilities(&self) -> Vec<TaskCapability> {
+        self.0.capabilities()
+    }
+
+    fn resource_report(&self) -> ResourceReport {
+        self.0.resource_report()
+    }
+
+    async fn warm_task(&mut self, request: BoundTaskRequest) -> Result<(), EngineError> {
+        self.0.warm_task(request).await
+    }
+
+    async fn unload_task(&mut self, binding: TaskPackBinding) -> Result<(), EngineError> {
+        self.0.unload_task(binding).await
+    }
+
+    async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        self.0.cancel_generation(generation).await
+    }
+}
+
+#[cfg(desktop)]
+#[async_trait(?Send)]
+impl VadStreamProvider for DesktopWakeVad {
+    async fn start_vad_session(
+        &mut self,
+        request: BoundVadRequest,
+    ) -> Result<BoundStreamSession, EngineError> {
+        self.0.start_vad_session(request).await
+    }
+
+    async fn push_vad_frame(
+        &mut self,
+        session: &BoundStreamSession,
+        frame: StreamingAudioFrame<'_>,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<VadAcceptResult, EngineError> {
+        self.0.push_vad_frame(session, frame, cancellation).await
+    }
+
+    async fn flush_vad_session(
+        &mut self,
+        session: &BoundStreamSession,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<Vec<SpeechSegment>, EngineError> {
+        self.0.flush_vad_session(session, cancellation).await
+    }
+
+    async fn reset_vad_session(
+        &mut self,
+        session: &BoundStreamSession,
+        reason: StreamResetReason,
+    ) -> Result<(), EngineError> {
+        self.0.reset_vad_session(session, reason).await
+    }
+}
+
+#[cfg(desktop)]
+#[async_trait(?Send)]
+impl TaskProvider for DesktopWakeKws {
+    fn capabilities(&self) -> Vec<TaskCapability> {
+        self.0.capabilities()
+    }
+
+    fn resource_report(&self) -> ResourceReport {
+        self.0.resource_report()
+    }
+
+    async fn warm_task(&mut self, request: BoundTaskRequest) -> Result<(), EngineError> {
+        self.0.warm_task(request).await
+    }
+
+    async fn unload_task(&mut self, binding: TaskPackBinding) -> Result<(), EngineError> {
+        self.0.unload_task(binding).await
+    }
+
+    async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        self.0.cancel_generation(generation).await
+    }
+}
+
+#[cfg(desktop)]
+#[async_trait(?Send)]
+impl KwsStreamProvider for DesktopWakeKws {
+    async fn start_kws_session(
+        &mut self,
+        request: BoundKwsRequest,
+    ) -> Result<BoundStreamSession, EngineError> {
+        self.0.start_kws_session(request).await
+    }
+
+    async fn push_kws_frame(
+        &mut self,
+        session: &BoundStreamSession,
+        frame: StreamingAudioFrame<'_>,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<KwsFrameResult, EngineError> {
+        self.0.push_kws_frame(session, frame, cancellation).await
+    }
+
+    async fn reset_kws_session(
+        &mut self,
+        session: &BoundStreamSession,
+        reason: StreamResetReason,
+    ) -> Result<(), EngineError> {
+        self.0.reset_kws_session(session, reason).await
+    }
+}
+
+#[cfg(desktop)]
+fn selected_wake_phrase_set(
+    kws_selection: &LocalSpeechAssetSelection,
+    phrase: &LocalWakePhraseSelection,
+) -> Result<SherpaKwsPhraseSet, EngineError> {
+    if !kws_selection
+        .pack_id
+        .starts_with("kws:zipformer:gigaspeech")
+        || phrase.language != "en"
+        || phrase.phrase.trim().to_uppercase() != DEFAULT_WAKE_PHRASE_TEXT
+    {
+        return Err(EngineError::TaskUnavailable);
+    }
+    SherpaKwsPhraseSet::new(
+        &phrase.revision,
+        [SherpaKwsPhrase::new(
+            &phrase.phrase_id,
+            DEFAULT_WAKE_PHRASE_NATIVE_LABEL,
+            DEFAULT_WAKE_PHRASE_SPEC,
+        )?],
+    )
 }
 
 #[cfg(desktop)]
@@ -1208,7 +1497,7 @@ fn build_handoff(
         .map_err(|_| NativeVoiceCommandError::unavailable("handoff_unavailable"))?
         .with_start_reason(start_reason)
         .with_route_revision(RouteRevision(ROUTE_REVISION))
-        .with_background_eligible(background_voice_eligible(profile.connection()))
+        .with_background_eligible(profile.background_voice_eligible())
         .with_consent_revision(1);
     NativeGatewayCaptureHandoff::new(transport_for_handoff(profile)?, config)
         .map_err(|_| NativeVoiceCommandError::unavailable("handoff_unavailable"))
@@ -1342,10 +1631,10 @@ impl RuntimeEventSink for StatusOnlySink {
 #[cfg(desktop)]
 fn phase_from_state(state: VoiceState) -> NativeVoicePhase {
     match state {
-        VoiceState::Arming | VoiceState::ListeningForWake | VoiceState::WakeDetected => {
-            NativeVoicePhase::Starting
-        }
-        VoiceState::CapturingUtterance => NativeVoicePhase::Listening,
+        VoiceState::Arming => NativeVoicePhase::Starting,
+        VoiceState::ListeningForWake
+        | VoiceState::WakeDetected
+        | VoiceState::CapturingUtterance => NativeVoicePhase::Listening,
         VoiceState::Transcribing | VoiceState::Dispatching | VoiceState::AwaitingResponse => {
             NativeVoicePhase::Processing
         }
@@ -1458,6 +1747,8 @@ struct LocalSpeechSelection {
     stt: Option<LocalSpeechAssetSelection>,
     #[serde(default)]
     tts: Option<LocalSpeechAssetSelection>,
+    #[serde(default)]
+    wake_phrase: Option<LocalWakePhraseSelection>,
 }
 
 #[cfg(desktop)]
@@ -1477,6 +1768,16 @@ struct LocalSpeechAssetSelection {
     voice_id: Option<String>,
     #[serde(default)]
     voice_revision: Option<String>,
+}
+
+#[cfg(desktop)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LocalWakePhraseSelection {
+    phrase_id: String,
+    phrase: String,
+    language: String,
+    revision: String,
 }
 
 #[cfg(desktop)]
@@ -1648,6 +1949,21 @@ fn validate_local_speech_selection(selection: &LocalSpeechSelection) -> Result<(
             return Err(PROFILE_REASON);
         }
     }
+    match (&selection.kws, &selection.wake_phrase) {
+        (None, Some(_)) => return Err(PROFILE_REASON),
+        (Some(kws), Some(phrase)) => {
+            let entry = speech_catalog.model(&kws.pack_id).ok_or(PROFILE_REASON)?;
+            if !entry
+                .languages
+                .iter()
+                .any(|language| language == &phrase.language)
+                || !valid_wake_phrase_selection(phrase)
+            {
+                return Err(PROFILE_REASON);
+            }
+        }
+        (None, None) | (Some(_), None) => {}
+    }
     if let Some(selected) = &selection.tts {
         let catalog = TtsVoiceCatalog::embedded().map_err(|_| PROFILE_REASON)?;
         let voice_id = selected.voice_id.as_deref().ok_or(PROFILE_REASON)?;
@@ -1661,6 +1977,24 @@ fn validate_local_speech_selection(selection: &LocalSpeechSelection) -> Result<(
         }
     }
     Ok(())
+}
+
+#[cfg(desktop)]
+fn valid_wake_phrase_selection(selection: &LocalWakePhraseSelection) -> bool {
+    fn valid_id(value: &str) -> bool {
+        !value.is_empty()
+            && value.len() <= 128
+            && value.as_bytes()[0].is_ascii_alphanumeric()
+            && value.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b':')
+            })
+    }
+
+    valid_id(&selection.phrase_id)
+        && valid_id(&selection.revision)
+        && !selection.phrase.trim().is_empty()
+        && selection.phrase.len() <= 256
+        && !selection.phrase.chars().any(char::is_control)
 }
 
 #[cfg(desktop)]
@@ -2377,6 +2711,7 @@ mod tests {
                 voice_id: Some(voice.voice_id.clone()),
                 voice_revision: Some(voice_catalog.revision().to_owned()),
             }),
+            wake_phrase: None,
         };
         validate_local_speech_selection(&selection).expect("exact catalog selection");
 
@@ -2455,6 +2790,54 @@ mod tests {
     }
 
     #[test]
+    fn wake_phrase_is_bound_to_the_selected_kws_language() {
+        let catalog = SpeechModelCatalog::embedded().expect("speech catalog");
+        let kws = catalog
+            .models_for_task(SpeechCatalogTask::KeywordSpotting)
+            .into_iter()
+            .find(|entry| entry.model_id == "kws:zipformer:gigaspeech-mobile")
+            .expect("English KWS model");
+        let phrase = LocalWakePhraseSelection {
+            phrase_id: "hey-aurora.en".to_owned(),
+            phrase: "Hey Aurora".to_owned(),
+            language: "en".to_owned(),
+            revision: "wakephrase-v1-en".to_owned(),
+        };
+        let selection = LocalSpeechSelection {
+            kws: Some(LocalSpeechAssetSelection {
+                pack_id: kws.model_id.clone(),
+                pack_revision: catalog.revision().to_owned(),
+                voice_id: None,
+                voice_revision: None,
+            }),
+            wake_phrase: Some(phrase.clone()),
+            ..LocalSpeechSelection::default()
+        };
+        validate_local_speech_selection(&selection).expect("exact English wake phrase");
+
+        let without_kws = LocalSpeechSelection {
+            wake_phrase: Some(phrase.clone()),
+            ..LocalSpeechSelection::default()
+        };
+        assert_eq!(
+            validate_local_speech_selection(&without_kws),
+            Err(PROFILE_REASON)
+        );
+
+        let wrong_language = LocalSpeechSelection {
+            wake_phrase: Some(LocalWakePhraseSelection {
+                language: "zh".to_owned(),
+                ..phrase
+            }),
+            ..selection
+        };
+        assert_eq!(
+            validate_local_speech_selection(&wrong_language),
+            Err(PROFILE_REASON)
+        );
+    }
+
+    #[test]
     fn local_speech_selection_rejects_invalid_tts_voice_binding() {
         let voice_catalog = TtsVoiceCatalog::embedded().expect("voice catalog");
         let voice = voice_catalog.entries.first().expect("tts voice");
@@ -2528,18 +2911,146 @@ mod tests {
 
     #[test]
     fn active_status_uses_resolved_profile_connection_without_endpoints() {
+        let speech_catalog = SpeechModelCatalog::embedded().expect("speech catalog");
+        let vad_model_id = speech_catalog
+            .models_for_task(SpeechCatalogTask::VoiceActivityDetection)
+            .first()
+            .expect("vad model")
+            .model_id
+            .clone();
+        let kws_model_id = speech_catalog
+            .models_for_task(SpeechCatalogTask::KeywordSpotting)
+            .first()
+            .expect("kws model")
+            .model_id
+            .clone();
+        let local_profile = RuntimeProfile::Local {
+            gateway: Url::parse("http://127.0.0.1:8000").expect("local gateway"),
+            local_speech: LocalSpeechSelection {
+                vad: Some(LocalSpeechAssetSelection {
+                    pack_id: vad_model_id,
+                    pack_revision: speech_catalog.revision().to_owned(),
+                    voice_id: None,
+                    voice_revision: None,
+                }),
+                kws: Some(LocalSpeechAssetSelection {
+                    pack_id: kws_model_id,
+                    pack_revision: speech_catalog.revision().to_owned(),
+                    voice_id: None,
+                    voice_revision: None,
+                }),
+                wake_phrase: Some(LocalWakePhraseSelection {
+                    phrase_id: DEFAULT_WAKE_PHRASE_ID.to_owned(),
+                    phrase: DEFAULT_WAKE_PHRASE_TEXT.to_owned(),
+                    language: "en".to_owned(),
+                    revision: DEFAULT_WAKE_PHRASE_REVISION.to_owned(),
+                }),
+                ..LocalSpeechSelection::default()
+            },
+        };
         let mut local = NativeVoiceStatus::unavailable(PROFILE_REASON);
-        install_profile_connection(&mut local, NativeVoiceConnection::ThisDevice);
+        install_profile(&mut local, &local_profile);
         assert_eq!(local.connection, NativeVoiceConnection::ThisDevice);
-        assert!(!local.background_eligible);
+        assert!(local.background_eligible);
 
+        let remote_profile = RuntimeProfile::Remote {
+            gateway: Url::parse("https://gateway.example.test").expect("remote gateway"),
+            bearer: "secret".to_owned(),
+            remote_audio_consent: true,
+            local_speech: local_profile.local_speech().clone(),
+        };
         let mut remote = NativeVoiceStatus::unavailable(PROFILE_REASON);
-        install_profile_connection(&mut remote, NativeVoiceConnection::ConnectedDevice);
+        install_profile(&mut remote, &remote_profile);
         assert_eq!(remote.connection, NativeVoiceConnection::ConnectedDevice);
-        assert!(!remote.background_eligible);
+        assert!(remote.background_eligible);
         let rendered = serde_json::to_string(&remote).expect("remote status");
         assert!(!rendered.contains("gateway.example"));
         assert!(!rendered.contains("https://"));
+    }
+
+    #[test]
+    fn wake_background_requires_both_local_vad_and_kws() {
+        let speech_catalog = SpeechModelCatalog::embedded().expect("speech catalog");
+        let vad_model_id = speech_catalog
+            .models_for_task(SpeechCatalogTask::VoiceActivityDetection)
+            .first()
+            .expect("vad model")
+            .model_id
+            .clone();
+        let kws_model_id = speech_catalog
+            .models_for_task(SpeechCatalogTask::KeywordSpotting)
+            .first()
+            .expect("kws model")
+            .model_id
+            .clone();
+        let gateway = Url::parse("http://127.0.0.1:8000").expect("local gateway");
+
+        let no_wake = RuntimeProfile::Local {
+            gateway: gateway.clone(),
+            local_speech: LocalSpeechSelection::default(),
+        };
+        assert!(!no_wake.background_voice_eligible());
+
+        let vad_only = RuntimeProfile::Local {
+            gateway: gateway.clone(),
+            local_speech: LocalSpeechSelection {
+                vad: Some(LocalSpeechAssetSelection {
+                    pack_id: vad_model_id.clone(),
+                    pack_revision: speech_catalog.revision().to_owned(),
+                    voice_id: None,
+                    voice_revision: None,
+                }),
+                ..LocalSpeechSelection::default()
+            },
+        };
+        assert!(!vad_only.background_voice_eligible());
+
+        let local_wake = RuntimeProfile::Local {
+            gateway: gateway.clone(),
+            local_speech: LocalSpeechSelection {
+                vad: Some(LocalSpeechAssetSelection {
+                    pack_id: vad_model_id,
+                    pack_revision: speech_catalog.revision().to_owned(),
+                    voice_id: None,
+                    voice_revision: None,
+                }),
+                kws: Some(LocalSpeechAssetSelection {
+                    pack_id: kws_model_id,
+                    pack_revision: speech_catalog.revision().to_owned(),
+                    voice_id: None,
+                    voice_revision: None,
+                }),
+                wake_phrase: Some(LocalWakePhraseSelection {
+                    phrase_id: DEFAULT_WAKE_PHRASE_ID.to_owned(),
+                    phrase: DEFAULT_WAKE_PHRASE_TEXT.to_owned(),
+                    language: "en".to_owned(),
+                    revision: DEFAULT_WAKE_PHRASE_REVISION.to_owned(),
+                }),
+                ..LocalSpeechSelection::default()
+            },
+        };
+        assert!(local_wake.background_voice_eligible());
+
+        let remote_wake = RuntimeProfile::Remote {
+            gateway: Url::parse("https://gateway.example.test").expect("remote gateway"),
+            bearer: "secret".to_owned(),
+            remote_audio_consent: true,
+            local_speech: local_wake.local_speech().clone(),
+        };
+        assert!(remote_wake.background_voice_eligible());
+        assert!(selected_wake_phrase_set(
+            local_wake
+                .local_speech()
+                .kws
+                .as_ref()
+                .expect("kws selection"),
+            local_wake
+                .local_speech()
+                .wake_phrase
+                .as_ref()
+                .expect("wake phrase"),
+        )
+        .is_ok());
     }
 
     #[test]
@@ -2763,7 +3274,7 @@ fn accepted_start_status(
         available: true,
         phase: NativeVoicePhase::Starting,
         generation: Some(ui_generation),
-        background_eligible: background_voice_eligible(connection),
+        background_eligible: false,
         connection,
         reason_code: None,
         redacted: true,

@@ -428,6 +428,7 @@ dependencies = [
  "aurora-voice-engine",
  "aurora-voice-ios-bridge",
  "aurora-voice-native",
+ "aurora-voice-sherpa",
  "base64 0.22.1",
  "bytes",
  "getrandom 0.2.17",
