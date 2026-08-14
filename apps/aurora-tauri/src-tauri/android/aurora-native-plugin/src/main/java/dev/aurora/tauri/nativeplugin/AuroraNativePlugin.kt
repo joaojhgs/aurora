@@ -653,54 +653,59 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             synchronized(lock) {
                 cleanStalePackArtifacts(packId)
                 state.status = "started"
-                val result = downloadPackToCache(entry.uri, packId, entry.sha256, entry.sizeBytes)
-                when (result.first) {
-                    VoicePackDownloadResult.SUCCESS -> {
-                        state.status = "completed"
-                        state.downloadedBytes = result.second
-                        state.totalBytes = result.second
-                        state.error = null
-                        state.completedAtMs = currentUnixMs()
-                        if (args.activate) setActivePack(packId)
+                try {
+                    val result = downloadPackToCache(entry.uri, packId, entry.sha256, entry.sizeBytes)
+                    when (result.first) {
+                        VoicePackDownloadResult.SUCCESS -> {
+                            state.status = "completed"
+                            state.downloadedBytes = result.second
+                            state.totalBytes = result.second
+                            state.error = null
+                            if (args.activate) setActivePack(packId)
+                        }
+                        VoicePackDownloadResult.BAD_HASH -> {
+                            state.status = "failed"
+                            state.error = "sha256_mismatch"
+                        }
+                        VoicePackDownloadResult.WRITE_FAILED -> {
+                            state.status = "failed"
+                            state.error = "download_failed"
+                        }
+                        VoicePackDownloadResult.INVALID_INPUT -> {
+                            state.status = "failed"
+                            state.error = "invalid_catalog"
+                        }
+                        VoicePackDownloadResult.REDIRECT_DENIED -> {
+                            state.status = "failed"
+                            state.error = "redirect_denied"
+                        }
+                        VoicePackDownloadResult.SIZE_MISMATCH -> {
+                            state.status = "failed"
+                            state.error = "size_mismatch"
+                        }
+                        VoicePackDownloadResult.CONNECT_TIMEOUT -> {
+                            state.status = "failed"
+                            state.error = "connect_timeout"
+                        }
+                        VoicePackDownloadResult.READ_TIMEOUT -> {
+                            state.status = "failed"
+                            state.error = "read_timeout"
+                        }
                     }
-                    VoicePackDownloadResult.BAD_HASH -> {
-                        state.status = "failed"
-                        state.error = "sha256_mismatch"
+                } catch (_: Exception) {
+                    state.status = "failed"
+                    state.error = "download_failed"
+                } finally {
+                    if (state.status == "failed" && state.totalBytes <= 0) {
+                        state.totalBytes = entry.sizeBytes
                     }
-                    VoicePackDownloadResult.WRITE_FAILED -> {
-                        state.status = "failed"
-                        state.error = "download_failed"
-                    }
-                    VoicePackDownloadResult.INVALID_INPUT -> {
-                        state.status = "failed"
-                        state.error = "invalid_catalog"
-                    }
-                    VoicePackDownloadResult.REDIRECT_DENIED -> {
-                        state.status = "failed"
-                        state.error = "redirect_denied"
-                    }
-                    VoicePackDownloadResult.SIZE_MISMATCH -> {
-                        state.status = "failed"
-                        state.error = "size_mismatch"
-                    }
-                    VoicePackDownloadResult.CONNECT_TIMEOUT -> {
-                        state.status = "failed"
-                        state.error = "connect_timeout"
-                    }
-                    VoicePackDownloadResult.READ_TIMEOUT -> {
-                        state.status = "failed"
-                        state.error = "read_timeout"
-                    }
-                }
-                if (state.status == "failed") {
                     state.completedAtMs = currentUnixMs()
-                    state.totalBytes = entry.sizeBytes
-                }
-                if (state.status == "completed" && !args.activate) {
-                    val active = activePackId()
-                    if (active == null || !isPackDownloaded(active, null)) {
-                        if (isPackCompatibleAndReady(packId = packId, activeRouteRequired = false)) {
-                            setActivePack(packId)
+                    if (state.status == "completed" && !args.activate) {
+                        val active = activePackId()
+                        if (active == null || !isPackDownloaded(active, null)) {
+                            if (isPackCompatibleAndReady(packId = packId, activeRouteRequired = false)) {
+                                setActivePack(packId)
+                            }
                         }
                     }
                 }
