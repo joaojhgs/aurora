@@ -131,21 +131,6 @@ interface InstallOutput {
   idempotent: boolean
 }
 
-interface CloneVoiceBundle {
-  artifact_data_base64: string
-  artifact_format: 'safetensors'
-  artifact_revision: string
-  artifact_sha256: string
-  artifact_size_bytes: number
-  bundle_type: 'aurora-cloned-tts-voice-state'
-  compatibility_group: string
-  display_name: string
-  language_bundle: string
-  runtime_target: string
-  schema_version: 1
-  voice_id: string
-}
-
 interface MutationOutput<TStatus extends string> {
   status: TStatus
   voice_id: string
@@ -260,112 +245,6 @@ describe('VoiceSettingsView', () => {
     })
     expect(visibleText(container)).toContain('Voice added.')
     assertNoForbiddenCopy(visibleText(container))
-    await unmount()
-  })
-
-  it('downloads and adds cloned voice copies through managed actions', async () => {
-    const cloneVoiceId = 'clone:123e4567-e89b-42d3-a456-426614174000'
-    const bundle: CloneVoiceBundle = {
-      artifact_data_base64: 'dm9pY2Utc3RhdGU=',
-      artifact_format: 'safetensors',
-      artifact_revision: 'artifact-rev-1',
-      artifact_sha256: '0'.repeat(64),
-      artifact_size_bytes: 11,
-      bundle_type: 'aurora-cloned-tts-voice-state',
-      compatibility_group: 'pockettts-base',
-      display_name: 'Private voice',
-      language_bundle: 'english',
-      runtime_target: 'pockettts',
-      schema_version: 1,
-      voice_id: cloneVoiceId,
-    }
-    const adminExecute = vi.fn(async (input: { methodId: string }) => {
-      if (input.methodId === 'TTS.ListVoiceProfiles') {
-        return adminResult({
-          profiles: [profile({
-            voice_id: cloneVoiceId,
-            display_name: 'Private voice',
-            kind: 'cloned',
-            default: false,
-            active: false,
-          })],
-        })
-      }
-      if (input.methodId === 'TTS.ListLanguagePacks') return adminResult({ packs: [] })
-      if (input.methodId === 'TTS.ExportVoiceProfile') {
-        return adminResult({
-          bundle,
-          idempotent: false,
-          revision: 'rev-1',
-          status: 'exported',
-          voice_id: cloneVoiceId,
-        })
-      }
-      if (input.methodId === 'TTS.ImportVoiceProfile') {
-        return adminResult({
-          idempotent: false,
-          revision: 'rev-1',
-          status: 'imported',
-          voice_id: cloneVoiceId,
-        })
-      }
-      throw new Error(`Unexpected action: ${input.methodId}`)
-    })
-    const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:voice-copy')
-    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
-    const client = voiceClient({ adminExecute })
-    const { container, unmount } = await renderVoiceSettings(client)
-
-    await loadManagedVoices(container)
-    await act(async () => {
-      buttonByText(container, 'Download copy').dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await flushReactWork()
-
-    expect(adminExecute).toHaveBeenCalledWith(expect.objectContaining({
-      methodId: 'TTS.ExportVoiceProfile',
-      payload: expect.objectContaining({
-        voice_id: cloneVoiceId,
-        expected_revision: 'rev-1',
-        operation_id: expect.stringMatching(/^voice-export-/u),
-      }),
-      reason: 'Download voice copy: Manage spoken reply voices',
-      reauthConfirmed: true,
-      affectedResources: [`voice-profile:${cloneVoiceId}`],
-      path: '/api/TTS/ExportVoiceProfile',
-    }))
-    expect(createObjectUrl).toHaveBeenCalledTimes(1)
-    expect(click).toHaveBeenCalledTimes(1)
-    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:voice-copy')
-    expect(visibleText(container)).toContain('Voice copy downloaded.')
-
-    const input = container.querySelector('input[aria-label="Choose voice copy"]')
-    if (!(input instanceof HTMLInputElement)) throw new Error('Missing voice copy input')
-    const file = new File([JSON.stringify(bundle)], 'voice-copy.json', { type: 'application/json' })
-    Object.defineProperty(file, 'text', { configurable: true, value: vi.fn(async () => JSON.stringify(bundle)) })
-    Object.defineProperty(input, 'files', { value: [file], configurable: true })
-    await act(async () => {
-      input.dispatchEvent(new Event('change', { bubbles: true }))
-    })
-    await flushReactWork()
-
-    expect(adminExecute).toHaveBeenCalledWith(expect.objectContaining({
-      methodId: 'TTS.ImportVoiceProfile',
-      payload: expect.objectContaining({
-        bundle,
-        operation_id: expect.stringMatching(/^voice-import-/u),
-      }),
-      reason: 'Add voice from file: Manage spoken reply voices',
-      reauthConfirmed: true,
-      affectedResources: [`voice-profile:${cloneVoiceId}`],
-      path: '/api/TTS/ImportVoiceProfile',
-    }))
-    expect(visibleText(container)).toContain('Voice added from file.')
-    assertNoForbiddenCopy(visibleText(container))
-    click.mockRestore()
-    createObjectUrl.mockRestore()
-    revokeObjectUrl.mockRestore()
     await unmount()
   })
 
