@@ -4,12 +4,13 @@ import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { AuroraClient } from '@aurora/client'
-import { VoiceSettingsView } from '../src/voice-settings-view'
+import { VoiceSettingsView, type VoiceSettingsViewProps } from '../src/voice-settings-view'
 import { SettingsView } from '../src/settings-view'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import type { AuroraShellSnapshot, RouteAvailability } from '../src/shell-data'
 import { buildCapabilityGraph, capabilityGraphCatalogFixture, gatewayRegistryFixture } from '@aurora/client'
 import { snapshotFromGraph } from '../src/shell-data'
+import type { AuroraRuntimeProfileV2 } from '../src/runtime-profile'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -712,7 +713,49 @@ describe('VoiceSettingsView', () => {
     await unmount()
   })
 
-  it('does not mark speech downloads ready unless the engine and selected language are ready', async () => {
+  it('shows a limited state instead of treating missing language downloads as an empty catalog', async () => {
+    const adminExecute = vi.fn(async (input: { methodId: string }) => {
+      if (input.methodId === 'TTS.ListVoiceProfiles') {
+        return adminResult({
+          profiles: [profile({
+            installed: false,
+            ready: false,
+            compatible_language_pack_ids: ['pt-BR-local'],
+          })],
+        })
+      }
+      if (input.methodId === 'TTS.ListLanguagePacks') {
+        throw { code: 'not_found', message: 'TTS.ListLanguagePacks unavailable provider manifest' }
+      }
+      throw new Error(`Unexpected action: ${input.methodId}`)
+    })
+    const client = voiceClient({
+      adminExecute,
+      capabilities: capabilities({
+        ready: false,
+        ready_languages: [],
+        supported_language_pack_ids: [],
+        installed_language_pack_ids: [],
+        resident_language_pack_ids: [],
+        resident_language_packs: [],
+        language_packs: [],
+      }),
+      voices: [voice({ compatible_language_pack_ids: ['pt-BR-local'], ready: false })],
+    })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    await loadManagedVoices(container)
+
+    const text = visibleText(container)
+    expect(text).toContain('Language downloads could not be loaded. Review access and try again.')
+    expect(text).not.toContain('No language downloads are available yet.')
+    expect(text).not.toContain('pt-BR-local')
+    expect(buttonsByText(container, 'Add and use')).toHaveLength(0)
+    assertNoForbiddenCopy(text)
+    await unmount()
+  })
+
+  it('does not mark speech downloads ready without runtime profile evidence', async () => {
     const client = voiceClient({
       capabilities: capabilities({
         ready: true,
@@ -723,7 +766,7 @@ describe('VoiceSettingsView', () => {
         resident_language_packs: [{ pack_id: 'zh-Hant-TW-local', ready_languages: ['zh-Hant-TW'] }],
         active_language_pack_id: 'zh-Hant-TW-local',
         default_language_pack_id: 'zh-Hant-TW-local',
-        engine_capabilities: { vad: true, kws: true, stt: true, tts: false },
+        engine_capabilities: { vad: true, kws: true, stt: true, tts: true },
       }),
       languagePacks: [
         languagePack({
@@ -747,6 +790,40 @@ describe('VoiceSettingsView', () => {
     expect(text).not.toContain('zh-Hant-TW-local')
     assertNoForbiddenCopy(text)
     await unmount()
+
+    const readyClient = voiceClient({
+      capabilities: capabilities({
+        ready: true,
+        ready_languages: ['zh-Hant-TW'],
+        supported_language_pack_ids: ['zh-Hant-TW-local'],
+        installed_language_pack_ids: ['zh-Hant-TW-local'],
+        resident_language_pack_ids: ['zh-Hant-TW-local'],
+        resident_language_packs: [{ pack_id: 'zh-Hant-TW-local', ready_languages: ['zh-Hant-TW'] }],
+        active_language_pack_id: 'zh-Hant-TW-local',
+        default_language_pack_id: 'zh-Hant-TW-local',
+        engine_capabilities: { vad: true, kws: true, stt: true, tts: true },
+      }),
+      languagePacks: [
+        languagePack({
+          pack_id: 'zh-Hant-TW-local',
+          languages: ['zh-Hant-TW'],
+          ready_languages: ['zh-Hant-TW'],
+          installed: true,
+          ready: true,
+          active: true,
+          default: true,
+        }),
+      ],
+    })
+    const readyRendered = await renderVoiceSettings(readyClient, { runtimeProfile: meshVoiceRuntimeProfile() })
+    await loadManagedVoices(readyRendered.container)
+
+    const readyText = visibleText(readyRendered.container)
+    expect(readyText).toContain('Spoken replies can use available voices.')
+    expect(readyText).toContain('Used by default for spoken replies.')
+    expect(readyText).not.toContain('zh-Hant-TW-local')
+    assertNoForbiddenCopy(readyText)
+    await readyRendered.unmount()
   })
 })
 
@@ -948,12 +1025,12 @@ function adminResult<TData>(data: TData) {
   }
 }
 
-async function renderVoiceSettings(client: AuroraClient) {
+async function renderVoiceSettings(client: AuroraClient, props: Partial<Omit<VoiceSettingsViewProps, 'client'>> = {}) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   await act(async () => {
-    root.render(<VoiceSettingsView client={client} />)
+    root.render(<VoiceSettingsView client={client} {...props} />)
   })
   await flushReactWork()
   return {
@@ -962,6 +1039,32 @@ async function renderVoiceSettings(client: AuroraClient) {
       await act(async () => root.unmount())
       container.remove()
     }
+  }
+}
+
+function meshVoiceRuntimeProfile(): AuroraRuntimeProfileV2 {
+  return {
+    version: 2,
+    id: 'voice-runtime',
+    label: 'This Aurora',
+    nodeMode: 'mesh-node',
+    runtimeTier: 'lightweight-ts',
+    localNode: {
+      nodeName: 'This Aurora',
+      stablePeerId: 'voice-peer',
+      enabledCapabilityPacks: ['foreground-voice'],
+      localSpeechPackState: 'ready',
+      meshMembership: {
+        signalingUrl: 'wss://signal.example.test/mqtt',
+        webrtcProfile: {
+          mode: 'webrtc-only',
+          appId: 'aurora',
+          room: 'voice-room',
+          roomSecretRef: 'voice-room-secret',
+          signalingBrokers: ['wss://signal.example.test/mqtt'],
+        },
+      },
+    },
   }
 }
 

@@ -16,7 +16,8 @@ import {
   AlertDialogTitle
 } from '#components/ui/alert-dialog'
 import { Badge } from '#components/ui/badge'
-import { getAuroraSurfaceProfile } from './platform-surface'
+import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from './platform-surface'
+import type { AuroraRuntimeProfileV2 } from './runtime-profile'
 
 type SpeechLanguage = string
 type TtsModelStatus = 'degraded' | 'error' | 'loading' | 'ready' | 'unavailable'
@@ -97,6 +98,7 @@ interface VoiceSettingsState {
   packs: TtsLanguagePack[]
   loadState: 'loading' | 'ready' | 'error'
   managementState: 'locked' | 'loading' | 'ready' | 'limited'
+  languageCatalogState: 'locked' | 'loading' | 'ready' | 'limited'
   message: string | null
 }
 
@@ -107,6 +109,7 @@ const initialVoiceSettingsState: VoiceSettingsState = {
   packs: [],
   loadState: 'loading',
   managementState: 'locked',
+  languageCatalogState: 'locked',
   message: null
 }
 
@@ -127,9 +130,11 @@ const TTS_MANAGE_METHODS = {
 
 export interface VoiceSettingsViewProps {
   client: AuroraClient
+  runtimeProfile?: AuroraRuntimeProfileV2 | null | undefined
+  surfaceProfile?: AuroraSurfaceProfile | null | undefined
 }
 
-export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
+export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfile: providedSurfaceProfile = null }: VoiceSettingsViewProps) {
   const [state, setState] = useState<VoiceSettingsState>(initialVoiceSettingsState)
   const [installingVoiceId, setInstallingVoiceId] = useState<string | null>(null)
   const [pendingPackId, setPendingPackId] = useState<string | null>(null)
@@ -149,7 +154,7 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
       capabilities: null,
       voices: [],
       loadState: 'loading',
-      message: current.managementState === 'limited' ? current.message : null
+      message: current.managementState === 'limited' || current.languageCatalogState === 'limited' ? current.message : null
     }))
 
     void Promise.all([
@@ -170,7 +175,7 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
         loadState: readError ? 'error' : 'ready',
         message: readError
           ? productVoiceSettingsErrorCopy(readProblem)
-          : current.managementState === 'limited'
+          : current.managementState === 'limited' || current.languageCatalogState === 'limited'
             ? current.message
             : null
       }))
@@ -195,6 +200,7 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
     setState((current) => ({
       ...current,
       managementState: 'loading',
+      languageCatalogState: 'loading',
       message: null
     }))
     try {
@@ -206,26 +212,38 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
         affectedResources: ['voice-profiles'],
         path: routePath('TTS', 'ListVoiceProfiles')
       })
-      const packsResult = await client.admin.execute<{ language_packs?: TtsLanguagePack[] }>({
-        methodId: TTS_MANAGE_METHODS.listLanguagePacks,
-        payload: { include_unavailable: true },
-        reason: adminReasonFor(reason, adminReasonValue),
-        reauthConfirmed: adminReviewConfirmed,
-        affectedResources: ['voice-language-downloads'],
-        path: routePath('TTS', 'ListLanguagePacks')
-      }).catch(() => null)
+      let packs: TtsLanguagePack[] = []
+      let languageCatalogState: VoiceSettingsState['languageCatalogState'] = 'ready'
+      let message: string | null = null
+      try {
+        const packsResult = await client.admin.execute<{ language_packs?: TtsLanguagePack[] }>({
+          methodId: TTS_MANAGE_METHODS.listLanguagePacks,
+          payload: { include_unavailable: true },
+          reason: adminReasonFor(reason, adminReasonValue),
+          reauthConfirmed: adminReviewConfirmed,
+          affectedResources: ['voice-language-downloads'],
+          path: routePath('TTS', 'ListLanguagePacks')
+        })
+        packs = packsResult.data.language_packs ?? []
+      } catch {
+        languageCatalogState = 'limited'
+        message = languageCatalogUnavailableCopy()
+      }
       setState((current) => ({
         ...current,
         profiles: result.data.profiles ?? [],
-        packs: packsResult?.data.language_packs ?? [],
+        packs,
         managementState: 'ready',
-        message: null
+        languageCatalogState,
+        message
       }))
     } catch (error) {
       setState((current) => ({
         ...current,
         profiles: [],
+        packs: [],
         managementState: 'limited',
+        languageCatalogState: 'limited',
         message: voiceSettingsManagementCopy(error)
       }))
     }
@@ -235,20 +253,20 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
 
   const managedProfiles = useMemo(() => state.profiles.map((profile, index) => toManagedVoice(profile, index, state.capabilities)), [state.profiles, state.capabilities])
   const voiceRows = useMemo(() => state.voices.map((voice, index) => toVoiceRow(voice, index, state.capabilities)), [state.voices, state.capabilities])
-  const packRows = useMemo(() => toPackRows(state.capabilities, state.packs, state.profiles), [state.capabilities, state.packs, state.profiles])
+  const packRows = useMemo(() => toPackRows(state.capabilities, state.packs), [state.capabilities, state.packs])
   const readyLanguages = useMemo(() => languageList(state.capabilities?.ready_languages), [state.capabilities])
   const canShowInstall = state.managementState === 'ready'
+  const canShowPackActions = canShowInstall && state.languageCatalogState === 'ready'
   const actionPending = pendingActionKey !== null || state.managementState === 'loading'
   const transportKind = client.transport?.kind ?? 'http'
-  const surfaceProfile = useMemo(() => getAuroraSurfaceProfile({
+  const surfaceProfile = useMemo(() => providedSurfaceProfile ?? voiceSettingsSurfaceProfile({
     transportKind,
-    userAgent: typeof navigator === 'undefined' ? null : navigator.userAgent,
-    nodeMode: 'mesh-node',
-    runtimeTier: state.capabilities?.ready ? 'lightweight-ts' : 'none',
-    enabledCapabilityPacks: ['foreground-voice'],
-    localSpeechPackState: state.capabilities?.ready ? 'ready' : state.capabilities?.model_status === 'loading' ? 'downloading' : 'unavailable',
-    localSpeechEngineCapabilities: state.capabilities?.engine_capabilities,
-  }), [transportKind, state.capabilities])
+    runtimeProfile,
+    engineCapabilities: state.capabilities?.engine_capabilities,
+  }), [providedSurfaceProfile, transportKind, runtimeProfile, state.capabilities?.engine_capabilities])
+  const languageCatalogMessage = state.languageCatalogState === 'limited'
+    ? 'Language downloads could not be loaded. Review access and try again.'
+    : null
 
   async function installProfile(profile: ManagedVoice) {
     if (!profile.installable || actionPending || !adminActionReady) return
@@ -507,6 +525,9 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
           {state.managementState === 'locked' ? (
             <p className="text-sm text-muted-foreground">Show available voices to manage language downloads.</p>
           ) : null}
+          {languageCatalogMessage ? (
+            <p role="status" className="text-sm text-muted-foreground">{languageCatalogMessage}</p>
+          ) : null}
           {packRows.map((pack) => (
             <div key={pack.packId} className="flex flex-col gap-2 border-b border-border/60 pb-3 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
@@ -515,7 +536,7 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={pack.ready ? 'default' : 'secondary'}>{pack.badge}</Badge>
-                {canShowInstall && pack.installable ? (
+                {canShowPackActions && pack.installable ? (
                   <Button
                     variant="outline"
                     className="h-8 px-3 text-xs"
@@ -525,7 +546,7 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
                     {pendingPackId === pack.packId ? 'Adding' : 'Add and use'}
                   </Button>
                 ) : null}
-                {canShowInstall && pack.canSetDefault ? (
+                {canShowPackActions && pack.canSetDefault ? (
                   <Button
                     variant="outline"
                     className="h-8 px-3 text-xs"
@@ -535,7 +556,7 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
                     {pendingPackId === pack.packId ? 'Updating' : 'Use by default'}
                   </Button>
                 ) : null}
-                {canShowInstall && pack.canRemove ? (
+                {canShowPackActions && pack.canRemove ? (
                   <Button
                     variant="outline"
                     className="h-8 px-3 text-xs"
@@ -548,7 +569,7 @@ export function VoiceSettingsView({ client }: VoiceSettingsViewProps) {
               </div>
             </div>
           ))}
-          {packRows.length === 0 && state.managementState === 'ready' ? (
+          {packRows.length === 0 && state.managementState === 'ready' && state.languageCatalogState === 'ready' ? (
             <p className="text-sm text-muted-foreground">No language downloads are available yet.</p>
           ) : null}
         </div>
@@ -774,6 +795,25 @@ function affectedPackResources(pack: Pick<ManagedLanguagePack, 'packId'>): strin
   return [`voice-language:${pack.packId}`]
 }
 
+function voiceSettingsSurfaceProfile(input: {
+  transportKind: string
+  runtimeProfile: AuroraRuntimeProfileV2 | null
+  engineCapabilities: TtsCapabilities['engine_capabilities'] | undefined
+}): AuroraSurfaceProfile {
+  const localNode = input.runtimeProfile?.nodeMode === 'mesh-node'
+    ? input.runtimeProfile.localNode
+    : null
+  return getAuroraSurfaceProfile({
+    transportKind: input.transportKind,
+    userAgent: typeof navigator === 'undefined' ? null : navigator.userAgent,
+    nodeMode: input.runtimeProfile?.nodeMode,
+    runtimeTier: input.runtimeProfile?.runtimeTier,
+    enabledCapabilityPacks: localNode?.enabledCapabilityPacks ?? [],
+    localSpeechPackState: localNode?.localSpeechPackState,
+    localSpeechEngineCapabilities: localNode ? input.engineCapabilities : undefined,
+  })
+}
+
 function adminReasonFor(action: string, userReason: string): string {
   return `${action}: ${userReason}`
 }
@@ -843,7 +883,6 @@ function toManagedVoice(profile: TtsVoiceProfile, index: number, capabilities: T
 function toPackRows(
   capabilities: TtsCapabilities | null,
   catalogPacks: readonly TtsLanguagePack[],
-  profiles: readonly TtsVoiceProfile[],
 ): ManagedLanguagePack[] {
   const rows = new Map<string, TtsLanguagePack>()
   for (const pack of capabilities?.language_packs ?? []) rows.set(pack.pack_id, pack)
@@ -863,12 +902,6 @@ function toPackRows(
   for (const packId of capabilities?.installed_language_pack_ids ?? []) {
     rows.set(packId, { ...rows.get(packId), pack_id: packId, installed: true })
   }
-  for (const profile of profiles) {
-    for (const packId of profile.compatible_language_pack_ids ?? []) {
-      rows.set(packId, { ...rows.get(packId), pack_id: packId })
-    }
-  }
-
   return Array.from(rows.values())
     .filter((pack) => safePackId(pack.pack_id) !== null)
     .sort((left, right) => packSortLabel(left).localeCompare(packSortLabel(right)))
@@ -1041,6 +1074,10 @@ function voiceSettingsManagementCopy(error: unknown): string {
   if (copy.title.includes('Permission')) return 'Available voices need access before they can be shown.'
   if (copy.title.includes('cannot use')) return 'Available voices are not shown on this Aurora version.'
   return 'Available voices could not be loaded. Review access and try again.'
+}
+
+function languageCatalogUnavailableCopy(): string {
+  return 'Language downloads could not be loaded. Review access and try again.'
 }
 
 function installOutcomeCopy(status: InstallStatus): string {
