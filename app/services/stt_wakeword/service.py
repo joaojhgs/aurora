@@ -212,14 +212,7 @@ def _public_ip_for_host(hostname: str, port: int) -> str:
         raise ValueError("wakeword catalog download host could not be resolved")
     for address in sorted(addresses):
         ip = ipaddress.ip_address(address)
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_multicast
-            or ip.is_reserved
-            or ip.is_unspecified
-        ):
+        if not ip.is_global:
             raise ValueError("wakeword catalog download host is not allowed")
     return str(sorted(addresses)[0])
 

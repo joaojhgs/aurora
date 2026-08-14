@@ -34,6 +34,7 @@ from app.services.stt_wakeword.service import (
     WakeWordService,
     _NoRedirectHandler,
     _PinnedIPHTTPSConnection,
+    _public_ip_for_host,
 )
 from app.shared.config.models import Wakeword
 from app.shared.contracts.models.stt import WakeWordDetectRequest, WakeWordMethods
@@ -439,6 +440,33 @@ def test_wakeword_catalog_denies_private_dns(service, tmp_path, monkeypatch):
 
     with pytest.raises(ValueError, match="not allowed"):
         service._catalog_entry_for_key("aurora")
+
+
+def test_wakeword_catalog_denies_shared_address_space(monkeypatch):
+    """Carrier-grade NAT/shared ranges are not globally routable download targets."""
+    monkeypatch.setattr(
+        "app.services.stt_wakeword.service.socket.getaddrinfo",
+        lambda *args, **kwargs: [
+            (None, None, None, "", ("100.64.0.1", 443)),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="not allowed"):
+        _public_ip_for_host("models.example", 443)
+
+
+def test_wakeword_catalog_denies_mixed_global_and_non_global_dns(monkeypatch):
+    """A safe-looking global answer must not hide an unsafe resolved address."""
+    monkeypatch.setattr(
+        "app.services.stt_wakeword.service.socket.getaddrinfo",
+        lambda *args, **kwargs: [
+            (None, None, None, "", ("93.184.216.34", 443)),
+            (None, None, None, "", ("100.64.0.1", 443)),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="not allowed"):
+        _public_ip_for_host("models.example", 443)
 
 
 def test_wakeword_catalog_redirects_are_denied():
