@@ -32,7 +32,11 @@ from app.services.tts.providers.base import (
 )
 from app.services.tts.service import TTSService
 from app.services.tts.voice_catalog import VoiceCatalogItem, VoiceCatalogSourceError
-from app.services.tts.voice_registry import VoiceCatalogEntry, VoiceStateArtifactHandle
+from app.services.tts.voice_registry import (
+    ExportedCloneVoiceState,
+    VoiceCatalogEntry,
+    VoiceStateArtifactHandle,
+)
 from app.shared.config.models import (
     Piper,
     Pockettts,
@@ -46,8 +50,10 @@ from app.shared.contracts.models.tts import (
     TTSAudioChunkEvent,
     TTSCreateVoiceProfileRequest,
     TTSDeleteVoiceProfileRequest,
+    TTSExportVoiceProfileRequest,
     TTSGetCapabilitiesRequest,
     TTSGetVoiceProfileRequest,
+    TTSImportVoiceProfileRequest,
     TTSInstallVoiceProfileRequest,
     TTSListLanguagePacksRequest,
     TTSListVoiceProfilesRequest,
@@ -80,6 +86,9 @@ def mock_bus():
     FakeVoiceRegistry.installed = []
     FakeVoiceRegistry.deleted = []
     FakeVoiceRegistry.created = []
+    FakeVoiceRegistry.exported = []
+    FakeVoiceRegistry.imported = []
+    FakeVoiceRegistry.fail_import = None
     FakeVoiceRegistry.updated = []
     FakeVoiceRegistry.install_calls = 0
     FakeVoiceCatalogInstaller.items = ()
@@ -281,10 +290,14 @@ class FakeVoiceRegistry:
     installed = []
     deleted: list[str] = []
     created = []
+    exported = []
+    imported = []
+    fail_import: Exception | None = None
     updated = []
     install_calls = 0
 
-    def __init__(self, root) -> None:
+    def __init__(self, root, **kwargs) -> None:
+        del kwargs
         self.root = root
 
     async def catalog(self, identity, *, include_private: bool = False):
@@ -350,6 +363,44 @@ class FakeVoiceRegistry:
     async def delete_voice(self, voice_id: str):
         self.deleted.append(voice_id)
 
+    async def export_clone_voice_state(self, voice_id: str, identity):
+        self.exported.append((voice_id, identity))
+        payload = f"exported-state:{voice_id}".encode()
+        return ExportedCloneVoiceState(
+            voice_id=voice_id,
+            runtime_target=identity.runtime_target,
+            language_bundle=identity.language_bundle,
+            compatibility_group=identity.compatibility_group,
+            artifact_revision="clone-rev-a",
+            sha256=hashlib.sha256(payload).hexdigest(),
+            size_bytes=len(payload),
+            format="safetensors",
+            artifact_bytes=payload,
+        )
+
+    async def import_clone_voice_state(self, exported, **kwargs):
+        if self.fail_import is not None:
+            raise self.fail_import
+        self.imported.append((exported, kwargs))
+        entry = types.SimpleNamespace(
+            profile_key="clone-profile",
+            voice_id=exported.voice_id,
+            display_name=kwargs["display_name"],
+            kind="clone",
+            visibility=kwargs["visibility"],
+            ready_state="ready",
+            runtime_target=exported.runtime_target,
+            language_bundle=exported.language_bundle,
+            compatibility_group=exported.compatibility_group,
+            artifact_revision=exported.artifact_revision,
+            metadata_revision=exported.artifact_revision,
+            artifact_refs=("artifacts/clone-profile/voice-state.safetensors",),
+            enabled=True,
+            source_retained=False,
+            allowed_peer_ids=(),
+        )
+        return entry, True
+
     async def resolve_voice_state_artifact(self, voice_id: str, identity):
         if voice_id == self.cancel_resolve_for:
             raise asyncio.CancelledError()
@@ -410,6 +461,31 @@ def _catalog_item(
         license_name="Test License",
         attribution=None,
         source="local",
+    )
+
+
+def _installed_clone_profile(
+    voice_id: str = "clone:11111111-1111-4111-8111-111111111111",
+    *,
+    display_name: str = "Dina",
+    metadata_revision: str = "voice-rev-a",
+) -> types.SimpleNamespace:
+    return types.SimpleNamespace(
+        profile_key="clone-profile",
+        voice_id=voice_id,
+        display_name=display_name,
+        kind="clone",
+        visibility="private",
+        ready_state="ready",
+        runtime_target="pockettts-python",
+        language_bundle="english_2026-04",
+        compatibility_group="pockettts-base",
+        artifact_revision="clone-rev-a",
+        metadata_revision=metadata_revision,
+        artifact_refs=("artifacts/clone-profile/voice-state.safetensors",),
+        enabled=True,
+        source_retained=False,
+        allowed_peer_ids=(),
     )
 
 
@@ -919,6 +995,8 @@ def test_tts_voice_registration_contract_metadata() -> None:
         TTSMethods.VOICE_IMPORT_ABORT,
         TTSMethods.CREATE_VOICE_PROFILE,
         TTSMethods.DELETE_VOICE_PROFILE,
+        TTSMethods.EXPORT_VOICE_PROFILE,
+        TTSMethods.IMPORT_VOICE_PROFILE,
     }
 
     for method_id in expected_use | expected_manage:
@@ -938,6 +1016,8 @@ def test_tts_voice_registration_contract_metadata() -> None:
             TTSMethods.VOICE_IMPORT_ABORT: "voice_import_abort",
             TTSMethods.CREATE_VOICE_PROFILE: "create_voice_profile",
             TTSMethods.DELETE_VOICE_PROFILE: "delete_voice_profile",
+            TTSMethods.EXPORT_VOICE_PROFILE: "export_voice_profile",
+            TTSMethods.IMPORT_VOICE_PROFILE: "import_voice_profile",
         }[method_id]
         metadata = getattr(TTSService, method_name)._contract_metadata
         assert metadata["method_id"] == method_id

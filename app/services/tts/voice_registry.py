@@ -526,6 +526,23 @@ class VoiceRegistry:
                 resident_base_identity,
             )
 
+    async def import_clone_voice_state(
+        self,
+        exported: ExportedCloneVoiceState,
+        *,
+        display_name: str,
+        visibility: ProfileVisibility = "private",
+    ) -> tuple[VoiceProfileInventoryEntry, bool]:
+        """Atomically import a verified clone-state payload without overwriting profiles."""
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._with_fs_lock,
+                self._import_clone_voice_state_locked,
+                exported,
+                display_name,
+                visibility,
+            )
+
     async def delete_voice(self, voice_id: str) -> None:
         """Quarantine, commit, and delete profile artifacts for a logical voice."""
         async with self._lock:
@@ -880,6 +897,85 @@ class VoiceRegistry:
             format=artifact.format,
             artifact_bytes=payload,
         )
+
+    def _import_clone_voice_state_locked(
+        self,
+        exported: ExportedCloneVoiceState,
+        display_name: str,
+        visibility: ProfileVisibility,
+    ) -> tuple[VoiceProfileInventoryEntry, bool]:
+        validate_logical_voice_id(exported.voice_id)
+        if not exported.voice_id.startswith("clone:"):
+            raise VoiceArtifactError("imported voice state must be cloned")
+        if exported.format != "safetensors":
+            raise VoiceArtifactError("imported voice state format is invalid")
+        if not exported.artifact_bytes:
+            raise VoiceArtifactError("imported voice state is empty")
+        if len(exported.artifact_bytes) > self._max_clone_artifact_bytes:
+            raise VoiceArtifactError("imported voice state exceeds configured size limit")
+        if len(exported.artifact_bytes) != exported.size_bytes:
+            raise VoiceArtifactError("imported voice state size mismatch")
+        if hashlib.sha256(exported.artifact_bytes).hexdigest() != exported.sha256:
+            raise VoiceArtifactError("imported voice state hash mismatch")
+        _validate_supported_voice_state_runtime(exported.runtime_target)
+        for value in (
+            exported.runtime_target,
+            exported.language_bundle,
+            exported.compatibility_group,
+            exported.artifact_revision,
+        ):
+            if not _COMPONENT_RE.fullmatch(value):
+                raise VoiceArtifactError("invalid imported voice compatibility component")
+        if visibility not in ("private", "allowed_peers"):
+            raise VoiceArtifactError("invalid imported voice visibility")
+
+        clone_uuid = uuid.UUID(exported.voice_id.removeprefix("clone:"))
+        profile_key = _profile_key(
+            exported.voice_id,
+            exported.runtime_target,
+            exported.language_bundle,
+            exported.compatibility_group,
+            exported.artifact_revision,
+        )
+        state = self._read_state()
+        existing = state.profiles.get(profile_key)
+        if existing is not None:
+            if (
+                existing.kind != "clone"
+                or existing.voice_id != exported.voice_id
+                or existing.runtime_target != exported.runtime_target
+                or existing.language_bundle != exported.language_bundle
+                or existing.compatibility_group != exported.compatibility_group
+                or existing.artifact_revision != exported.artifact_revision
+                or len(existing.artifacts) != 1
+                or existing.artifacts[0].format != exported.format
+                or existing.artifacts[0].size_bytes != exported.size_bytes
+                or existing.artifacts[0].sha256 != exported.sha256
+            ):
+                raise VoiceArtifactError("imported voice conflicts with existing profile")
+            handle = self._open_profile_voice_state_artifact(existing)
+            os.close(handle.fd)
+            return _inventory_entry(existing), False
+        if profile_key in state.deletions:
+            raise VoiceArtifactError("imported voice is pending deletion")
+        if any(
+            profile.voice_id == exported.voice_id
+            for key, profile in state.profiles.items()
+            if key != profile_key
+        ):
+            raise VoiceArtifactError("imported voice id conflicts with existing profile")
+        created = self._create_clone_profile_locked(
+            display_name,
+            exported.runtime_target,
+            exported.language_bundle,
+            exported.compatibility_group,
+            exported.artifact_revision,
+            exported.artifact_bytes,
+            False,
+            visibility,
+            clone_uuid,
+        )
+        return created, True
 
     def _verified_voice_state_artifact_locked(
         self,

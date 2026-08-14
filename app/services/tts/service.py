@@ -54,7 +54,11 @@ from app.services.tts.voice_catalog import (
     VoiceCatalogInstaller,
     VoiceCatalogSourceError,
 )
-from app.services.tts.voice_registry import VoiceRegistry, VoiceRegistryError
+from app.services.tts.voice_registry import (
+    ExportedCloneVoiceState,
+    VoiceRegistry,
+    VoiceRegistryError,
+)
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import System, Tts
@@ -67,16 +71,22 @@ from app.shared.contracts.models.speech import (
 )
 from app.shared.contracts.models.tts import (
     VOICE_IMPORT_MAX_DURATION_MS,
+    VOICE_STATE_TRANSFER_MAX_BYTES,
     TTSAudioChunkEvent,
     TTSCapabilities,
+    TTSCloneVoiceStateBundle,
     TTSCreateVoiceProfileRequest,
     TTSCreateVoiceProfileResponse,
     TTSDeleteVoiceProfileRequest,
     TTSDeleteVoiceProfileResponse,
+    TTSExportVoiceProfileRequest,
+    TTSExportVoiceProfileResponse,
     TTSGetCapabilitiesRequest,
     TTSGetCapabilitiesResponse,
     TTSGetVoiceProfileRequest,
     TTSGetVoiceProfileResponse,
+    TTSImportVoiceProfileRequest,
+    TTSImportVoiceProfileResponse,
     TTSInstallVoiceProfileRequest,
     TTSInstallVoiceProfileResponse,
     TTSLanguagePackDescriptor,
@@ -1076,7 +1086,15 @@ class TTSService(BaseService):
             if registry_cfg and registry_cfg.cache_dir
             else "voice_models/voice-pack"
         )
-        return VoiceRegistry(resolve_path(registry_cache_dir))
+        max_clone_artifact_bytes = (
+            registry_cfg.clone_max_wire_bytes
+            if registry_cfg and registry_cfg.clone_max_wire_bytes is not None
+            else VOICE_STATE_TRANSFER_MAX_BYTES
+        )
+        return VoiceRegistry(
+            resolve_path(registry_cache_dir),
+            max_clone_artifact_bytes=max_clone_artifact_bytes,
+        )
 
     def _voice_catalog_installer(self, tts_cfg: Tts) -> VoiceCatalogInstaller:
         registry_cfg = tts_cfg.voice_registry
@@ -2626,6 +2644,258 @@ class TTSService(BaseService):
                     "delete_voice_profile", request, response, envelope
                 )
             self._cache_mutation("delete_voice_profile", request, response, envelope)
+        return response
+
+    @method_contract(
+        method_id=TTSMethods.EXPORT_VOICE_PROFILE,
+        summary="Export a managed cloned TTS voice profile",
+        input_model=TTSExportVoiceProfileRequest,
+        output_model=TTSExportVoiceProfileResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def export_voice_profile(
+        self, request: TTSExportVoiceProfileRequest, envelope: Envelope | None = None
+    ) -> TTSExportVoiceProfileResponse:
+        """Export a derived cloned voice-state bundle for authorized managers."""
+        async with self._voice_management_lock:
+            tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+            profile = next(
+                (
+                    item
+                    for item in await self._current_voice_profiles()
+                    if item.voice_id == request.voice_id
+                ),
+                None,
+            )
+            if profile is None:
+                response = TTSExportVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="not_found",
+                    correlation_id=request.correlation_id,
+                )
+            elif (
+                request.expected_revision is not None
+                and request.expected_revision != profile.revision
+            ):
+                response = TTSExportVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="revision_conflict",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+            elif profile.kind != "cloned" or not profile.ready:
+                response = TTSExportVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="rejected",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+            else:
+                registry_cfg = tts_cfg.voice_registry
+                cloning_enabled = (
+                    registry_cfg.cloning_enabled
+                    if registry_cfg and registry_cfg.cloning_enabled is not None
+                    else True
+                )
+                max_wire_bytes = (
+                    registry_cfg.clone_max_wire_bytes
+                    if registry_cfg and registry_cfg.clone_max_wire_bytes is not None
+                    else VOICE_STATE_TRANSFER_MAX_BYTES
+                )
+                if tts_cfg.provider != "pockettts" or not cloning_enabled:
+                    response = TTSExportVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="unavailable",
+                        revision=profile.revision,
+                        correlation_id=request.correlation_id,
+                    )
+                else:
+                    planned_response = type(
+                        "PlannedVoiceProfileExport",
+                        (),
+                        {"status": "exported"},
+                    )()
+                    await self._audit_voice_management(
+                        "export_voice_profile",
+                        request,
+                        planned_response,
+                        envelope,
+                        phase="intent",
+                        audit_status="attempted",
+                    )
+                    try:
+                        provider_config = await self._pockettts_provider_config(tts_cfg)
+                        identity = resolve_pockettts_base_identity_spec(
+                            provider_config
+                        ).voice_base_identity
+                        exported = await self._voice_registry(tts_cfg).export_clone_voice_state(
+                            request.voice_id, identity
+                        )
+                        if exported.size_bytes > max_wire_bytes:
+                            raise VoiceRegistryError(
+                                "exported voice state exceeds configured limit"
+                            )
+                        bundle = TTSCloneVoiceStateBundle(
+                            voice_id=exported.voice_id,
+                            display_name=profile.display_name,
+                            runtime_target=exported.runtime_target,
+                            language_bundle=exported.language_bundle,
+                            compatibility_group=exported.compatibility_group,
+                            artifact_revision=exported.artifact_revision,
+                            artifact_format=exported.format,
+                            artifact_sha256=exported.sha256,
+                            artifact_size_bytes=exported.size_bytes,
+                            artifact_data_base64=base64.b64encode(exported.artifact_bytes).decode(
+                                "ascii"
+                            ),
+                        )
+                        response = TTSExportVoiceProfileResponse(
+                            voice_id=request.voice_id,
+                            status="exported",
+                            revision=profile.revision,
+                            bundle=bundle,
+                            correlation_id=request.correlation_id,
+                        )
+                    except TTSProviderError as exc:
+                        response = TTSExportVoiceProfileResponse(
+                            voice_id=request.voice_id,
+                            status="unavailable",
+                            revision=profile.revision,
+                            correlation_id=request.correlation_id,
+                        )
+                        log_error(f"TTS clone export unavailable: error={_safe_tts_error(exc)}")
+                    except VoiceRegistryError as exc:
+                        response = TTSExportVoiceProfileResponse(
+                            voice_id=request.voice_id,
+                            status="rejected",
+                            revision=profile.revision,
+                            correlation_id=request.correlation_id,
+                        )
+                        log_error(f"TTS clone export rejected: error={_safe_tts_error(exc)}")
+            await self._audit_voice_management("export_voice_profile", request, response, envelope)
+        return response
+
+    @method_contract(
+        method_id=TTSMethods.IMPORT_VOICE_PROFILE,
+        summary="Import a managed cloned TTS voice profile",
+        input_model=TTSImportVoiceProfileRequest,
+        output_model=TTSImportVoiceProfileResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def import_voice_profile(
+        self, request: TTSImportVoiceProfileRequest, envelope: Envelope | None = None
+    ) -> TTSImportVoiceProfileResponse:
+        """Import a derived cloned voice-state bundle for authorized managers."""
+        async with self._voice_management_lock:
+            cached = self._cached_mutation("import_voice_profile", request, envelope)
+            if cached is not None:
+                return cached
+            tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+            registry_cfg = tts_cfg.voice_registry
+            cloning_enabled = (
+                registry_cfg.cloning_enabled
+                if registry_cfg and registry_cfg.cloning_enabled is not None
+                else True
+            )
+            max_wire_bytes = (
+                registry_cfg.clone_max_wire_bytes
+                if registry_cfg and registry_cfg.clone_max_wire_bytes is not None
+                else VOICE_STATE_TRANSFER_MAX_BYTES
+            )
+            bundle = request.bundle
+            voice_id = bundle.voice_id
+            if tts_cfg.provider != "pockettts" or not cloning_enabled:
+                response = TTSImportVoiceProfileResponse(
+                    voice_id=voice_id,
+                    status="unavailable",
+                    correlation_id=request.correlation_id,
+                )
+            else:
+                try:
+                    artifact_bytes = base64.b64decode(bundle.artifact_data_base64, validate=True)
+                    if len(artifact_bytes) > max_wire_bytes:
+                        raise VoiceRegistryError("imported voice state exceeds configured limit")
+                    provider_config = await self._pockettts_provider_config(tts_cfg)
+                    identity = resolve_pockettts_base_identity_spec(
+                        provider_config
+                    ).voice_base_identity
+                    if (
+                        bundle.runtime_target,
+                        bundle.language_bundle,
+                        bundle.compatibility_group,
+                    ) != identity.as_tuple():
+                        response = TTSImportVoiceProfileResponse(
+                            voice_id=voice_id,
+                            status="rejected",
+                            revision=bundle.artifact_revision,
+                            correlation_id=request.correlation_id,
+                        )
+                    else:
+                        planned_response = TTSImportVoiceProfileResponse(
+                            voice_id=voice_id,
+                            status="imported",
+                            revision=bundle.artifact_revision,
+                            correlation_id=request.correlation_id,
+                        )
+                        await self._audit_voice_management(
+                            "import_voice_profile",
+                            request,
+                            planned_response,
+                            envelope,
+                            phase="intent",
+                            audit_status="attempted",
+                        )
+                        entry, created = await self._voice_registry(
+                            tts_cfg
+                        ).import_clone_voice_state(
+                            ExportedCloneVoiceState(
+                                voice_id=voice_id,
+                                runtime_target=bundle.runtime_target,
+                                language_bundle=bundle.language_bundle,
+                                compatibility_group=bundle.compatibility_group,
+                                artifact_revision=bundle.artifact_revision,
+                                sha256=bundle.artifact_sha256,
+                                size_bytes=bundle.artifact_size_bytes,
+                                format=bundle.artifact_format,
+                                artifact_bytes=artifact_bytes,
+                            ),
+                            display_name=bundle.display_name,
+                            visibility="private",
+                        )
+                        if created:
+                            self._voice_revision += 1
+                            await self._initialize_engine_fail_soft("voice profile import")
+                        response = TTSImportVoiceProfileResponse(
+                            voice_id=voice_id,
+                            status="imported" if created else "unchanged",
+                            revision=entry.metadata_revision,
+                            idempotent=not created,
+                            correlation_id=request.correlation_id,
+                        )
+                except TTSProviderError as exc:
+                    response = TTSImportVoiceProfileResponse(
+                        voice_id=voice_id,
+                        status="unavailable",
+                        correlation_id=request.correlation_id,
+                    )
+                    log_error(f"TTS clone import unavailable: error={_safe_tts_error(exc)}")
+                except VoiceRegistryError as exc:
+                    status = "conflict" if "conflict" in str(exc) else "rejected"
+                    response = TTSImportVoiceProfileResponse(
+                        voice_id=voice_id,
+                        status=status,  # type: ignore[arg-type]
+                        revision=bundle.artifact_revision,
+                        correlation_id=request.correlation_id,
+                    )
+                    log_error(f"TTS clone import rejected: error={_safe_tts_error(exc)}")
+            await self._audit_voice_management("import_voice_profile", request, response, envelope)
+            self._cache_mutation("import_voice_profile", request, response, envelope)
         return response
 
     @method_contract(

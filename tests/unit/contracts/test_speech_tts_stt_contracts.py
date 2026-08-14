@@ -244,6 +244,8 @@ def test_tts_method_constants_cover_voice_lifecycle_surface() -> None:
     assert TTSMethods.VOICE_IMPORT_ABORT == "TTS.VoiceImportAbort"
     assert TTSMethods.CREATE_VOICE_PROFILE == "TTS.CreateVoiceProfile"
     assert TTSMethods.DELETE_VOICE_PROFILE == "TTS.DeleteVoiceProfile"
+    assert TTSMethods.EXPORT_VOICE_PROFILE == "TTS.ExportVoiceProfile"
+    assert TTSMethods.IMPORT_VOICE_PROFILE == "TTS.ImportVoiceProfile"
 
 
 def test_stt_capture_handoff_contracts_keep_lease_tokens_off_status() -> None:

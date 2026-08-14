@@ -687,6 +687,101 @@ async def test_clone_export_rejects_tamper_symlink_and_deleted_profiles(
 
 
 @pytest.mark.asyncio
+async def test_clone_import_preserves_id_is_idempotent_and_exports_no_paths(
+    tmp_path: Path,
+) -> None:
+    identity = VoiceBaseIdentity("pockettts-python", "en-us-compact", "pockettts-en-compact-v1")
+    source_registry = VoiceRegistry(tmp_path / "source")
+    data = _multi_tensor_safetensors_bytes()
+    clone = await source_registry.create_clone_profile(
+        display_name="Transferable",
+        runtime_target=identity.runtime_target,
+        language_bundle=identity.language_bundle,
+        compatibility_group=identity.compatibility_group,
+        artifact_revision="clone-rev-transfer",
+        artifact_bytes=data,
+        clone_uuid=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+    )
+
+    exported = await source_registry.export_clone_voice_state(clone.voice_id, identity)
+
+    assert not hasattr(exported, "relative_ref")
+    assert not hasattr(exported, "source_audio")
+    assert exported.artifact_bytes == data
+
+    target_registry = VoiceRegistry(tmp_path / "target")
+    imported, created = await target_registry.import_clone_voice_state(
+        exported,
+        display_name="Transferable",
+    )
+    repeated, repeated_created = await target_registry.import_clone_voice_state(
+        exported,
+        display_name="Changed label is ignored for existing state",
+    )
+
+    assert created is True
+    assert imported.voice_id == clone.voice_id
+    assert imported.display_name == "Transferable"
+    assert imported.artifact_revision == "clone-rev-transfer"
+    assert repeated_created is False
+    assert repeated.voice_id == clone.voice_id
+    assert repeated.display_name == "Transferable"
+    selected = await target_registry.export_clone_voice_state(clone.voice_id, identity)
+    assert selected.artifact_bytes == data
+
+
+@pytest.mark.asyncio
+async def test_clone_import_rejects_tamper_oversize_cross_compat_and_conflict(
+    tmp_path: Path,
+) -> None:
+    identity = VoiceBaseIdentity("pockettts-python", "en-us-compact", "pockettts-en-compact-v1")
+    data = _safetensors_bytes()
+    exported = ExportedCloneVoiceState(
+        voice_id="clone:12345678-1234-4234-9234-123456789abc",
+        runtime_target=identity.runtime_target,
+        language_bundle=identity.language_bundle,
+        compatibility_group=identity.compatibility_group,
+        artifact_revision="clone-rev-a",
+        sha256=_sha256(data),
+        size_bytes=len(data),
+        format="safetensors",
+        artifact_bytes=data,
+    )
+
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(tmp_path / "bad-hash").import_clone_voice_state(
+            ExportedCloneVoiceState(
+                **{**exported.__dict__, "sha256": "0" * 64},
+            ),
+            display_name="Bad",
+        )
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(
+            tmp_path / "bad-size", max_clone_artifact_bytes=8
+        ).import_clone_voice_state(
+            exported,
+            display_name="Large",
+        )
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(tmp_path / "bad-compat").import_clone_voice_state(
+            ExportedCloneVoiceState(
+                **{**exported.__dict__, "compatibility_group": "../escape"},
+            ),
+            display_name="Bad",
+        )
+
+    conflict_registry = VoiceRegistry(tmp_path / "conflict")
+    await conflict_registry.import_clone_voice_state(exported, display_name="First")
+    with pytest.raises(VoiceArtifactError, match="conflicts"):
+        await conflict_registry.import_clone_voice_state(
+            ExportedCloneVoiceState(
+                **{**exported.__dict__, "artifact_revision": "clone-rev-b"},
+            ),
+            display_name="Second",
+        )
+
+
+@pytest.mark.asyncio
 async def test_atomic_promotion_failure_rolls_back_metadata_and_artifacts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
