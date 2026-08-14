@@ -27,6 +27,8 @@ type RemoveStatus = 'drained' | 'not_found' | 'rejected' | 'removed' | 'revision
 type DefaultStatus = 'activated' | 'drained' | 'not_found' | 'rejected' | 'revision_conflict'
 type DeleteStatus = 'deleted' | 'not_found' | 'rejected' | 'revision_conflict'
 type VoiceMutationKind = 'default' | 'delete' | 'install' | 'remove'
+type TtsLanguagePackCatalogStatus = 'available' | 'unavailable'
+type TtsLanguagePackCatalogErrorCode = 'catalog_unavailable'
 
 interface TtsResidentLanguagePack {
   pack_id: string
@@ -87,6 +89,12 @@ interface TtsLanguagePack {
   download_progress?: number | null | undefined
   compatible_engine?: boolean | undefined
   voices?: TtsLanguagePackVoice[] | undefined
+}
+
+interface TtsListLanguagePacksSuccess {
+  packs?: TtsLanguagePack[] | undefined
+  catalog_status?: TtsLanguagePackCatalogStatus | undefined
+  catalog_error_code?: TtsLanguagePackCatalogErrorCode | null | undefined
 }
 
 interface TtsLanguagePackVoice {
@@ -220,7 +228,7 @@ export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfil
       let languageCatalogState: VoiceSettingsState['languageCatalogState'] = 'ready'
       let message: string | null = null
       try {
-        const packsResult = await client.admin.execute<{ packs?: TtsLanguagePack[] }>({
+        const packsResult = await client.admin.execute<TtsListLanguagePacksSuccess>({
           methodId: TTS_MANAGE_METHODS.listLanguagePacks,
           payload: { include_unavailable: true },
           reason: adminReasonFor(reason, adminReasonValue),
@@ -229,6 +237,10 @@ export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfil
           path: routePath('TTS', 'ListLanguagePacks')
         })
         packs = packsResult.data.packs ?? []
+        if (packsResult.data.catalog_status === 'unavailable') {
+          languageCatalogState = 'limited'
+          message = languageCatalogUnavailableCopy()
+        }
       } catch {
         languageCatalogState = 'limited'
         message = languageCatalogUnavailableCopy()
@@ -255,7 +267,7 @@ export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfil
 
   useEffect(() => refresh(), [refresh])
 
-  const managedProfiles = useMemo(() => state.profiles.map((profile, index) => toManagedVoice(profile, index, state.capabilities)), [state.profiles, state.capabilities])
+  const managedProfiles = useMemo(() => state.profiles.map((profile, index) => toManagedVoice(profile, index, state.capabilities, state.packs)), [state.profiles, state.capabilities, state.packs])
   const voiceRows = useMemo(() => state.voices.map((voice, index) => toVoiceRow(voice, index, state.capabilities)), [state.voices, state.capabilities])
   const packRows = useMemo(() => toPackRows(state.capabilities, state.packs), [state.capabilities, state.packs])
   const readyLanguages = useMemo(() => languageList(state.capabilities?.ready_languages), [state.capabilities])
@@ -707,22 +719,28 @@ function toVoiceRow(voice: TtsVoice, index: number, capabilities: TtsCapabilitie
   }
 }
 
-function toManagedVoice(profile: TtsVoiceProfile, index: number, capabilities: TtsCapabilities | null): ManagedVoice {
+function toManagedVoice(
+  profile: TtsVoiceProfile,
+  index: number,
+  capabilities: TtsCapabilities | null,
+  catalogPacks: readonly TtsLanguagePack[],
+): ManagedVoice {
   const languages = languageListForPacks(capabilities, profile.compatible_language_pack_ids)
   const installed = profile.installed === true
   const ready = profile.ready === true
   const isDefault = profile.default === true
+  const installable = canInstallProfile(profile, capabilities, catalogPacks)
   return {
     voiceId: profile.voice_id,
     revision: profile.revision,
     label: safeVoiceText(profile.display_name, `Available voice ${index + 1}`),
-    detail: managedVoiceDetail(installed, ready, isDefault, languages),
+    detail: managedVoiceDetail(installed, ready, isDefault, installable, languages),
     ready,
-    installable: canInstallProfile(profile, capabilities),
+    installable,
     canDelete: canDeleteProfile(profile),
     canRemove: canRemoveProfile(profile),
     canSetDefault: canSetDefaultProfile(profile),
-    badge: isDefault ? 'Default' : ready ? 'Ready' : installed ? 'Needs setup' : 'Available to add'
+    badge: isDefault ? 'Default' : ready ? 'Ready' : installed || !installable ? 'Needs setup' : 'Available to add'
   }
 }
 
@@ -810,14 +828,49 @@ function toManagedLanguagePack(
   }
 }
 
-function canInstallProfile(profile: TtsVoiceProfile, capabilities: TtsCapabilities | null): boolean {
+function canInstallProfile(
+  profile: TtsVoiceProfile,
+  capabilities: TtsCapabilities | null,
+  catalogPacks: readonly TtsLanguagePack[],
+): boolean {
   if (profile.installed === true) return false
   if (profile.enabled === false) return false
   if (profile.kind !== 'standard') return false
   if (!capabilities) return false
   const supportedPacks = new Set([...(capabilities.supported_language_pack_ids ?? []), ...(capabilities.installed_language_pack_ids ?? [])])
+  if (supportedPacks.size === 0) return false
   const compatible = profile.compatible_language_pack_ids ?? []
-  return compatible.length === 0 || supportedPacks.size === 0 || compatible.some((packId) => supportedPacks.has(packId))
+  if (compatible.some((packId) => supportedPacks.has(packId))) return true
+  return compatible.some((packId) => catalogPackCanRunProfile(profile, packId, catalogPacks, supportedPacks))
+}
+
+function catalogPackCanRunProfile(
+  profile: TtsVoiceProfile,
+  packId: string,
+  catalogPacks: readonly TtsLanguagePack[],
+  supportedPacks: ReadonlySet<string>,
+): boolean {
+  const pack = catalogPacks.find((candidate) => candidate.pack_id === packId)
+  if (!pack || pack.downloadable === false || pack.compatible_engine === false) return false
+  if (!pack.voices?.some((voice) => voice.voice_id === profile.voice_id && voice.revision === profile.revision)) return false
+  return capabilityPackIdsForCatalogPack(pack).some((candidate) => supportedPacks.has(candidate))
+}
+
+function capabilityPackIdsForCatalogPack(pack: TtsLanguagePack): string[] {
+  const candidates = new Set<string>()
+  for (const value of [
+    pack.pack_id,
+    pack.language,
+    ...(pack.languages ?? []),
+    ...(pack.ready_languages ?? []),
+  ]) {
+    const normalized = normalizeLanguageTag(value ?? '')
+    if (normalized) {
+      candidates.add(normalized)
+      candidates.add(`${normalized}-local`)
+    }
+  }
+  return [...candidates]
 }
 
 function canSetDefaultProfile(profile: TtsVoiceProfile): boolean {
@@ -832,11 +885,12 @@ function canDeleteProfile(profile: TtsVoiceProfile): boolean {
   return profile.enabled !== false && profile.kind === 'cloned' && profile.default !== true && profile.active !== true
 }
 
-function managedVoiceDetail(installed: boolean, ready: boolean, isDefault: boolean, languages: string[]): string {
+function managedVoiceDetail(installed: boolean, ready: boolean, isDefault: boolean, installable: boolean, languages: string[]): string {
   const languageCopy = languages.length > 0 ? ` ${languages.join(', ')}.` : ''
   if (isDefault) return `Used by default for spoken replies.${languageCopy}`
   if (ready) return `Ready for spoken replies.${languageCopy}`
   if (installed) return `Available but not ready yet.${languageCopy}`
+  if (!installable) return `Not available for spoken replies on this Aurora.${languageCopy}`
   return `Can be added for spoken replies.${languageCopy}`
 }
 

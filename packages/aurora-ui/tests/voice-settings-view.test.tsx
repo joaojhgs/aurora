@@ -737,6 +737,190 @@ describe('VoiceSettingsView', () => {
     await unmount()
   })
 
+  it('keeps returned language rows visible when the catalog reports limited availability', async () => {
+    const adminExecute = vi.fn(async (input: { methodId: string }) => {
+      if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: [] })
+      if (input.methodId === 'TTS.ListLanguagePacks') {
+        return adminResult({
+          catalog_status: 'unavailable',
+          catalog_error_code: 'catalog_unavailable',
+          packs: [
+            languagePack({
+              pack_id: 'en',
+              language: 'en',
+              display_name: 'English',
+              installed: true,
+              ready: true,
+              default: true,
+              voices: [{
+                voice_id: 'standard:starter_en:alba',
+                display_name: 'Alba',
+                revision: 'voice-rev-en-1',
+                installed: true,
+                ready: true,
+                active: false,
+                default: true,
+              }],
+            }),
+          ],
+        })
+      }
+      throw new Error(`Unexpected action: ${input.methodId}`)
+    })
+    const client = voiceClient({
+      adminExecute,
+      capabilities: capabilities({
+        supported_language_pack_ids: ['en-local'],
+        installed_language_pack_ids: ['en-local'],
+        resident_language_pack_ids: ['en-local'],
+        resident_language_packs: [{ pack_id: 'en-local', ready_languages: ['en'] }],
+        active_language_pack_id: 'en-local',
+        default_language_pack_id: 'en-local',
+        language_packs: [],
+      }),
+      voices: [],
+    })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    await loadManagedVoices(container)
+
+    const text = visibleText(container)
+    expect(text).toContain('Language options could not be loaded. Review access and try again.')
+    expect(text).toContain('English')
+    expect(text).toContain('Used by default for spoken replies.')
+    expect(text).not.toContain('No language options are available yet.')
+    expect(text).not.toContain('catalog_unavailable')
+    expect(text).not.toContain('en-local')
+    assertNoForbiddenCopy(text)
+    await unmount()
+  })
+
+  it('allows a catalog voice only when its exact voice revision maps to an advertised language capability', async () => {
+    const adminExecute = vi.fn(async (input: { methodId: string }) => {
+      if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: [] })
+      if (input.methodId === 'TTS.ListLanguagePacks') {
+        return adminResult({
+          catalog_status: 'available',
+          catalog_error_code: null,
+          packs: [
+            languagePack({
+              pack_id: 'en',
+              language: 'en',
+              display_name: 'English',
+              installed: false,
+              ready: false,
+              voices: [{
+                voice_id: 'standard:starter_en:alba',
+                display_name: 'Alba',
+                revision: 'voice-rev-en-1',
+                installed: false,
+                ready: false,
+                active: false,
+                default: false,
+              }],
+            }),
+          ],
+        })
+      }
+      if (input.methodId === 'TTS.InstallVoiceProfile') return adminResult(installResult('installed'))
+      throw new Error(`Unexpected action: ${input.methodId}`)
+    })
+    const client = voiceClient({
+      adminExecute,
+      capabilities: capabilities({
+        ready: false,
+        ready_languages: [],
+        supported_language_pack_ids: ['en-local'],
+        installed_language_pack_ids: [],
+        resident_language_pack_ids: [],
+        resident_language_packs: [],
+        language_packs: [],
+      }),
+      voices: [],
+    })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    await loadManagedVoices(container)
+    await act(async () => {
+      buttonByText(container, 'Add voice').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+
+    expect(adminExecute).toHaveBeenCalledWith(expect.objectContaining({
+      methodId: 'TTS.InstallVoiceProfile',
+      payload: expect.objectContaining({
+        voice_id: 'standard:starter_en:alba',
+        expected_revision: 'voice-rev-en-1',
+        operation_id: expect.stringMatching(/^voice-install-/u)
+      }),
+      affectedResources: ['voice-profile:standard:starter_en:alba'],
+      path: '/api/TTS/InstallVoiceProfile'
+    }))
+    const text = visibleText(container)
+    expect(text).toContain('Voice added.')
+    expect(text).not.toContain('standard:starter_en:alba')
+    expect(text).not.toContain('en-local')
+    assertNoForbiddenCopy(text)
+    await unmount()
+  })
+
+  it('keeps catalog-only voice installs disabled when no language capability is advertised', async () => {
+    const adminExecute = vi.fn(async (input: { methodId: string }) => {
+      if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: [] })
+      if (input.methodId === 'TTS.ListLanguagePacks') {
+        return adminResult({
+          catalog_status: 'available',
+          catalog_error_code: null,
+          packs: [
+            languagePack({
+              pack_id: 'en',
+              language: 'en',
+              display_name: 'English',
+              installed: false,
+              ready: false,
+              voices: [{
+                voice_id: 'standard:starter_en:alba',
+                display_name: 'Alba',
+                revision: 'voice-rev-en-1',
+                installed: false,
+                ready: false,
+                active: false,
+                default: false,
+              }],
+            }),
+          ],
+        })
+      }
+      throw new Error(`Unexpected action: ${input.methodId}`)
+    })
+    const client = voiceClient({
+      adminExecute,
+      capabilities: capabilities({
+        ready: false,
+        ready_languages: [],
+        supported_language_pack_ids: [],
+        installed_language_pack_ids: [],
+        resident_language_pack_ids: [],
+        resident_language_packs: [],
+        language_packs: [],
+      }),
+      voices: [],
+    })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    await loadManagedVoices(container)
+
+    const text = visibleText(container)
+    expect(text).toContain('English')
+    expect(text).toContain('Not available for spoken replies on this Aurora.')
+    expect(buttonsByText(container, 'Add voice')).toHaveLength(0)
+    expect(adminExecute.mock.calls.filter(([input]) => input.methodId === 'TTS.InstallVoiceProfile')).toHaveLength(0)
+    expect(text).not.toContain('standard:starter_en:alba')
+    expect(text).not.toContain('Can be added for spoken replies.')
+    assertNoForbiddenCopy(text)
+    await unmount()
+  })
+
   it('shows a limited state instead of treating missing language options as an empty catalog', async () => {
     const adminExecute = vi.fn(async (input: { methodId: string }) => {
       if (input.methodId === 'TTS.ListVoiceProfiles') {
