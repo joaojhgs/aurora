@@ -53,6 +53,7 @@ pub use gateway_tts::{NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer};
 pub use ios_session::{
     IosVoicePackBinding, IosVoicePackBindings, IosVoiceSession, IosVoiceSessionCommandError,
     IosVoiceSessionConfig, IosVoiceSessionPhase, IosVoiceSessionStatus, IosVoiceStartMode,
+    MAX_IOS_PACK_BINDINGS,
 };
 pub use model_store::{NativeImmutableModelFile, NativeModelStore, NativeModelStoreConfig};
 pub use transport::{

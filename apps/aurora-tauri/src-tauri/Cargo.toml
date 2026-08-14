@@ -62,3 +62,6 @@ aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native" }
 [target.'cfg(target_os = "android")'.dependencies]
 aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native" }
 jni = "0.21"
+
+[dev-dependencies]
+aurora-voice-ios-bridge = { path = "../../../rust/crates/aurora-voice-ios-bridge" }

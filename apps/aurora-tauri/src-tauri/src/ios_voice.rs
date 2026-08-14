@@ -8,6 +8,7 @@ use aurora_voice_ios_bridge::{AuroraIosAudioOutput, AuroraIosAudioState};
 use aurora_voice_native::{
     GatewayAuth, IosVoicePackBinding, IosVoicePackBindings, IosVoiceSession,
     IosVoiceSessionCommandError, IosVoiceSessionConfig, IosVoiceSessionStatus,
+    MAX_IOS_PACK_BINDINGS,
 };
 use std::ffi::CStr;
 use std::os::raw::c_char;
@@ -98,6 +99,9 @@ unsafe fn parse_pack_bindings(
 ) -> Option<IosVoicePackBindings> {
     if bindings_len == 0 {
         return Some(IosVoicePackBindings::default());
+    }
+    if bindings_len > MAX_IOS_PACK_BINDINGS {
+        return None;
     }
     if bindings.is_null() {
         return None;
@@ -313,5 +317,35 @@ pub unsafe extern "C" fn aurora_ios_voice_session_close(session: *mut IosVoiceSe
     if !session.is_null() {
         // SAFETY: the caller guarantees that a non-null pointer is valid.
         unsafe { &*session }.close();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ptr::NonNull;
+
+    #[test]
+    fn parse_pack_bindings_rejects_null_pointer_with_nonzero_len() {
+        let parsed = unsafe { parse_pack_bindings(std::ptr::null(), 1) };
+        assert!(parsed.is_none());
+    }
+
+    #[test]
+    fn parse_pack_bindings_rejects_over_limit_len_before_reading_pointer() {
+        let dangling = NonNull::<AuroraIosVoiceTaskPackBinding>::dangling().as_ptr();
+
+        let parsed = unsafe { parse_pack_bindings(dangling, MAX_IOS_PACK_BINDINGS + 1) };
+
+        assert!(parsed.is_none());
+    }
+
+    #[test]
+    fn parse_pack_bindings_rejects_huge_len_before_reading_pointer() {
+        let dangling = NonNull::<AuroraIosVoiceTaskPackBinding>::dangling().as_ptr();
+
+        let parsed = unsafe { parse_pack_bindings(dangling, usize::MAX) };
+
+        assert!(parsed.is_none());
     }
 }

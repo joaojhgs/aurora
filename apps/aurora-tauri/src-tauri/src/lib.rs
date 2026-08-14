@@ -36,7 +36,7 @@ use url::Url;
 mod android_audio;
 #[cfg(all(desktop, debug_assertions, feature = "desktop-native-voice-e2e"))]
 mod desktop_native_voice_e2e_keyring;
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", test))]
 mod ios_voice;
 #[cfg(target_os = "ios")]
 use aurora_voice_ios_bridge::*;

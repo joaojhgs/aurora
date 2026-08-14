@@ -41,7 +41,7 @@ const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(45);
 const DEFAULT_INPUT_CAPACITY_CHUNKS: usize = 8;
 const DEFAULT_INPUT_MAX_CHUNK_SAMPLES: usize = 4_096;
 const DEFAULT_OUTPUT_CAPACITY_CHUNKS: usize = 16;
-const MAX_IOS_PACK_BINDINGS: usize = 16;
+pub const MAX_IOS_PACK_BINDINGS: usize = 16;
 const MAX_IOS_PACK_PATH_BYTES: usize = 4096;
 
 type RuntimeCore = VoiceRuntime<
