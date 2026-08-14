@@ -4,24 +4,34 @@
 //! queue. This module owns the shared Rust voice runtime, typed Gateway
 //! transport, generations, cancellation, and redacted lifecycle status.
 
+use crate::{GatewayAuth, MicrophoneAudioPolicy, NativeGatewayTransport, TransportLimits};
+#[cfg(not(feature = "ios-sherpa"))]
 use crate::{
-    GatewayAuth, MicrophoneAudioPolicy, NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig,
-    NativeGatewayTransport, NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer, TransportLimits,
+    NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig, NativeGatewayTtsConfig,
+    NativeGatewayTtsSynthesizer,
 };
 use async_trait::async_trait;
 #[cfg(feature = "ios-sherpa")]
 use aurora_voice_core::WakeOrchestrationConfig;
 use aurora_voice_core::{
     CancellationToken, CaptureOwnerKind, CaptureStartReason, Generation, RedactedSnapshot,
-    RouteFiniteSttBinding, RouteRevision, RouteTtsBinding, RuntimeEvent, RuntimeEventSink,
-    TimestampMicros, VoiceCaptureLease, VoiceCoreError, VoiceRuntime, VoiceState,
+    RouteRevision, RuntimeEvent, RuntimeEventSink, TimestampMicros, VoiceCaptureLease,
+    VoiceCoreError, VoiceRuntime, VoiceState,
 };
+#[cfg(not(feature = "ios-sherpa"))]
+use aurora_voice_core::{RouteFiniteSttBinding, RouteTtsBinding};
+#[cfg(feature = "ios-sherpa")]
 use aurora_voice_engine::{
-    FiniteSttRouteScope, ModelPackError, ModelStoreScope, PackTask, MAX_FINITE_STT_SAMPLES,
-    VAD_SAMPLE_RATE_HZ,
+    BoundKwsRequest, BoundStreamSession, BoundTaskRequest, BoundVadRequest, EngineError,
+    KwsFrameResult, KwsStreamProvider, ResourceReport, SpeechSegment, StreamResetReason,
+    StreamingAudioFrame, TaskCapability, TaskProvider, TaskReadiness, VadAcceptResult,
+    VadStreamProvider,
 };
+#[cfg(not(feature = "ios-sherpa"))]
+use aurora_voice_engine::{FiniteSttRouteScope, MAX_FINITE_STT_SAMPLES, VAD_SAMPLE_RATE_HZ};
 #[cfg(feature = "ios-sherpa")]
 use aurora_voice_engine::{KwsConfig, TaskPackBinding, VadConfig, VoiceTask};
+use aurora_voice_engine::{ModelPackError, ModelStoreScope, PackTask};
 use aurora_voice_ios_bridge::{
     AuroraIosAudioInput, AuroraIosAudioOutput, AuroraIosAudioState, AuroraIosCaptureControl,
 };
@@ -32,6 +42,8 @@ use aurora_voice_sherpa::{
     SherpaKwsPhraseSet, SherpaKwsProvider, SherpaTtsProvider, SherpaVadProvider,
 };
 use sha2::{Digest, Sha256};
+#[cfg(feature = "ios-sherpa")]
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::fs;
@@ -39,6 +51,8 @@ use std::future::Future;
 use std::io::Read;
 use std::path::PathBuf;
 use std::pin::Pin;
+#[cfg(feature = "ios-sherpa")]
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -139,6 +153,7 @@ pub struct IosVoicePackBinding {
 }
 
 impl IosVoicePackBinding {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         task: PackTask,
         slot_id: impl Into<String>,
@@ -469,25 +484,40 @@ impl IosVoiceSession {
         let input = AuroraIosAudioInput::new(audio_state.clone());
         let capture_control = input.control();
         let status = Arc::new(Mutex::new(IosVoiceSessionStatus::default()));
-        let sink = IosSessionSink {
-            status: Arc::clone(&status),
-        };
-        let runtime = build_runtime(&config, input, output.clone(), sink)?;
         let (commands, command_rx) = tokio_mpsc::unbounded_channel();
+        let (ready_tx, ready_rx) = mpsc::channel();
         let thread_status = Arc::clone(&status);
         let thread_control = capture_control.clone();
+        let thread_output = output.clone();
         let join = thread::Builder::new()
             .name("aurora-ios-voice".to_owned())
             .spawn(move || {
-                run_session_thread(
-                    runtime,
-                    command_rx,
-                    thread_status,
-                    thread_control,
-                    config.remote_audio_consent,
-                )
+                let sink = IosSessionSink {
+                    status: Arc::clone(&thread_status),
+                };
+                run_session_thread(SessionThreadInputs {
+                    config,
+                    input,
+                    output: thread_output,
+                    sink,
+                    commands: command_rx,
+                    ready: ready_tx,
+                    status: thread_status,
+                    control: thread_control,
+                })
             })
             .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+        match ready_rx
+            .recv()
+            .unwrap_or(Err(IosVoiceSessionCommandError::Closed))
+        {
+            Ok(()) => {}
+            Err(error) => {
+                let _ = commands.send(Command::Shutdown);
+                let _ = join.join();
+                return Err(error);
+            }
+        }
         Ok(Self {
             audio_state,
             output,
@@ -655,17 +685,15 @@ fn build_local_ios_runtime(
 
     let vad_config = VadConfig::default();
     let vad_model = required_file(vad_binding, "model")?;
-    let vad_backend = NativeVadBackend::from_selected_model(
-        &vad_task,
-        vad_model.file_id(),
+    let vad = IosWakeVad::new(
+        vad_task.clone(),
+        vad_model.file_id().to_owned(),
         vad_model.path().clone(),
-        &vad_config,
+        vad_config.clone(),
     )
     .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
-    let vad = SherpaVadProvider::new(vad_task.clone(), vad_backend)
-        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
 
-    let kws_files = NativeKwsModelFiles {
+    let kws_files = IosWakeKwsFiles {
         encoder_file_id: "encoder-int8".to_owned(),
         encoder_path: required_file(kws_binding, "encoder-int8")?.path().clone(),
         decoder_file_id: "decoder".to_owned(),
@@ -675,15 +703,13 @@ fn build_local_ios_runtime(
         tokens_file_id: "tokens".to_owned(),
         tokens_path: required_file(kws_binding, "tokens")?.path().clone(),
     };
-    let kws_backend = NativeKwsBackend::from_selected_model(&kws_task, kws_files)
-        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
     let phrase_set = SherpaKwsPhraseSet::new(
         kws_binding.runtime_revision().to_owned(),
         [SherpaKwsPhrase::new("wake.main", "AURORA", "AURORA")
             .map_err(|_| IosVoiceSessionCommandError::Unavailable)?],
     )
     .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
-    let kws = SherpaKwsProvider::new(kws_task.clone(), phrase_set.clone(), kws_backend)
+    let kws = IosWakeKws::new(kws_task.clone(), phrase_set.clone(), kws_files)
         .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
 
     let stt_decoder = stt_decoder_file(stt_binding)?;
@@ -746,6 +772,331 @@ fn build_local_ios_runtime(
     )
     .and_then(|runtime| runtime.with_wake_providers(Box::new(vad), Box::new(kws), wake_config))
     .map_err(|_| IosVoiceSessionCommandError::Unavailable)
+}
+
+#[cfg(feature = "ios-sherpa")]
+static NEXT_IOS_WAKE_PROVIDER_ID: AtomicU64 = AtomicU64::new(1);
+
+#[cfg(feature = "ios-sherpa")]
+thread_local! {
+    static IOS_WAKE_VAD_PROVIDERS: RefCell<BTreeMap<u64, SherpaVadProvider<NativeVadBackend>>> =
+        const { RefCell::new(BTreeMap::new()) };
+    static IOS_WAKE_KWS_PROVIDERS: RefCell<BTreeMap<u64, SherpaKwsProvider<NativeKwsBackend>>> =
+        const { RefCell::new(BTreeMap::new()) };
+}
+
+#[cfg(feature = "ios-sherpa")]
+fn next_ios_wake_provider_id() -> u64 {
+    NEXT_IOS_WAKE_PROVIDER_ID.fetch_add(1, Ordering::Relaxed)
+}
+
+#[cfg(feature = "ios-sherpa")]
+struct IosWakeVad {
+    id: u64,
+    binding: TaskPackBinding,
+    model_file_id: String,
+    model_path: PathBuf,
+    config: VadConfig,
+}
+
+#[cfg(feature = "ios-sherpa")]
+impl IosWakeVad {
+    fn new(
+        binding: TaskPackBinding,
+        model_file_id: String,
+        model_path: PathBuf,
+        config: VadConfig,
+    ) -> Result<Self, EngineError> {
+        config.validate_binding(&binding)?;
+        Ok(Self {
+            id: next_ios_wake_provider_id(),
+            binding,
+            model_file_id,
+            model_path,
+            config,
+        })
+    }
+
+    fn build_provider(&self) -> Result<SherpaVadProvider<NativeVadBackend>, EngineError> {
+        let backend = NativeVadBackend::from_selected_model(
+            &self.binding,
+            &self.model_file_id,
+            self.model_path.clone(),
+            &self.config,
+        )?;
+        SherpaVadProvider::new(self.binding.clone(), backend)
+    }
+
+    fn take_provider(&self) -> Result<SherpaVadProvider<NativeVadBackend>, EngineError> {
+        IOS_WAKE_VAD_PROVIDERS.with(|providers| {
+            providers
+                .borrow_mut()
+                .remove(&self.id)
+                .map(Ok)
+                .unwrap_or_else(|| self.build_provider())
+        })
+    }
+
+    fn put_provider(&self, provider: SherpaVadProvider<NativeVadBackend>) {
+        IOS_WAKE_VAD_PROVIDERS.with(|providers| {
+            providers.borrow_mut().insert(self.id, provider);
+        });
+    }
+}
+
+#[cfg(feature = "ios-sherpa")]
+impl Drop for IosWakeVad {
+    fn drop(&mut self) {
+        IOS_WAKE_VAD_PROVIDERS.with(|providers| {
+            providers.borrow_mut().remove(&self.id);
+        });
+    }
+}
+
+#[cfg(feature = "ios-sherpa")]
+#[async_trait(?Send)]
+impl TaskProvider for IosWakeVad {
+    fn capabilities(&self) -> Vec<TaskCapability> {
+        vec![TaskCapability::new(self.binding.clone()).streaming(true)]
+    }
+
+    fn resource_report(&self) -> ResourceReport {
+        ResourceReport {
+            loaded_tasks: vec![VoiceTask::VoiceActivityDetection],
+            memory_bytes: self.binding.resource_budget().max_memory_bytes,
+            active_streams: 0,
+            readiness: TaskReadiness::Ready,
+        }
+    }
+
+    async fn warm_task(&mut self, request: BoundTaskRequest) -> Result<(), EngineError> {
+        let mut provider = self.take_provider()?;
+        let result = provider.warm_task(request).await;
+        self.put_provider(provider);
+        result
+    }
+
+    async fn unload_task(&mut self, binding: TaskPackBinding) -> Result<(), EngineError> {
+        let mut provider = self.take_provider()?;
+        let result = provider.unload_task(binding).await;
+        self.put_provider(provider);
+        result
+    }
+
+    async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        let mut provider = self.take_provider()?;
+        let result = provider.cancel_generation(generation).await;
+        self.put_provider(provider);
+        result
+    }
+}
+
+#[cfg(feature = "ios-sherpa")]
+#[async_trait(?Send)]
+impl VadStreamProvider for IosWakeVad {
+    async fn start_vad_session(
+        &mut self,
+        request: BoundVadRequest,
+    ) -> Result<BoundStreamSession, EngineError> {
+        let mut provider = self.take_provider()?;
+        let result = provider.start_vad_session(request).await;
+        self.put_provider(provider);
+        result
+    }
+
+    async fn push_vad_frame(
+        &mut self,
+        session: &BoundStreamSession,
+        frame: StreamingAudioFrame<'_>,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<VadAcceptResult, EngineError> {
+        let mut provider = self.take_provider()?;
+        let result = provider.push_vad_frame(session, frame, cancellation).await;
+        self.put_provider(provider);
+        result
+    }
+
+    async fn flush_vad_session(
+        &mut self,
+        session: &BoundStreamSession,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<Vec<SpeechSegment>, EngineError> {
+        let mut provider = self.take_provider()?;
+        let result = provider.flush_vad_session(session, cancellation).await;
+        self.put_provider(provider);
+        result
+    }
+
+    async fn reset_vad_session(
+        &mut self,
+        session: &BoundStreamSession,
+        reason: StreamResetReason,
+    ) -> Result<(), EngineError> {
+        let mut provider = self.take_provider()?;
+        let result = provider.reset_vad_session(session, reason).await;
+        self.put_provider(provider);
+        result
+    }
+}
+
+#[cfg(feature = "ios-sherpa")]
+struct IosWakeKwsFiles {
+    encoder_file_id: String,
+    encoder_path: PathBuf,
+    decoder_file_id: String,
+    decoder_path: PathBuf,
+    joiner_file_id: String,
+    joiner_path: PathBuf,
+    tokens_file_id: String,
+    tokens_path: PathBuf,
+}
+
+#[cfg(feature = "ios-sherpa")]
+struct IosWakeKws {
+    id: u64,
+    binding: TaskPackBinding,
+    phrase_set: SherpaKwsPhraseSet,
+    files: IosWakeKwsFiles,
+}
+
+#[cfg(feature = "ios-sherpa")]
+impl IosWakeKws {
+    fn new(
+        binding: TaskPackBinding,
+        phrase_set: SherpaKwsPhraseSet,
+        files: IosWakeKwsFiles,
+    ) -> Result<Self, EngineError> {
+        phrase_set.validate_request(&KwsConfig::new(
+            ["wake.main"],
+            phrase_set.revision(),
+            0.5,
+            2,
+            1,
+        )?)?;
+        Ok(Self {
+            id: next_ios_wake_provider_id(),
+            binding,
+            phrase_set,
+            files,
+        })
+    }
+
+    fn build_provider(&self) -> Result<SherpaKwsProvider<NativeKwsBackend>, EngineError> {
+        let backend = NativeKwsBackend::from_selected_model(
+            &self.binding,
+            NativeKwsModelFiles {
+                encoder_file_id: self.files.encoder_file_id.clone(),
+                encoder_path: self.files.encoder_path.clone(),
+                decoder_file_id: self.files.decoder_file_id.clone(),
+                decoder_path: self.files.decoder_path.clone(),
+                joiner_file_id: self.files.joiner_file_id.clone(),
+                joiner_path: self.files.joiner_path.clone(),
+                tokens_file_id: self.files.tokens_file_id.clone(),
+                tokens_path: self.files.tokens_path.clone(),
+            },
+        )?;
+        SherpaKwsProvider::new(self.binding.clone(), self.phrase_set.clone(), backend)
+    }
+
+    fn take_provider(&self) -> Result<SherpaKwsProvider<NativeKwsBackend>, EngineError> {
+        IOS_WAKE_KWS_PROVIDERS.with(|providers| {
+            providers
+                .borrow_mut()
+                .remove(&self.id)
+                .map(Ok)
+                .unwrap_or_else(|| self.build_provider())
+        })
+    }
+
+    fn put_provider(&self, provider: SherpaKwsProvider<NativeKwsBackend>) {
+        IOS_WAKE_KWS_PROVIDERS.with(|providers| {
+            providers.borrow_mut().insert(self.id, provider);
+        });
+    }
+}
+
+#[cfg(feature = "ios-sherpa")]
+impl Drop for IosWakeKws {
+    fn drop(&mut self) {
+        IOS_WAKE_KWS_PROVIDERS.with(|providers| {
+            providers.borrow_mut().remove(&self.id);
+        });
+    }
+}
+
+#[cfg(feature = "ios-sherpa")]
+#[async_trait(?Send)]
+impl TaskProvider for IosWakeKws {
+    fn capabilities(&self) -> Vec<TaskCapability> {
+        vec![TaskCapability::new(self.binding.clone()).streaming(true)]
+    }
+
+    fn resource_report(&self) -> ResourceReport {
+        ResourceReport {
+            loaded_tasks: vec![VoiceTask::KeywordSpotting],
+            memory_bytes: self.binding.resource_budget().max_memory_bytes,
+            active_streams: 0,
+            readiness: TaskReadiness::Ready,
+        }
+    }
+
+    async fn warm_task(&mut self, request: BoundTaskRequest) -> Result<(), EngineError> {
+        let mut provider = self.take_provider()?;
+        let result = provider.warm_task(request).await;
+        self.put_provider(provider);
+        result
+    }
+
+    async fn unload_task(&mut self, binding: TaskPackBinding) -> Result<(), EngineError> {
+        let mut provider = self.take_provider()?;
+        let result = provider.unload_task(binding).await;
+        self.put_provider(provider);
+        result
+    }
+
+    async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        let mut provider = self.take_provider()?;
+        let result = provider.cancel_generation(generation).await;
+        self.put_provider(provider);
+        result
+    }
+}
+
+#[cfg(feature = "ios-sherpa")]
+#[async_trait(?Send)]
+impl KwsStreamProvider for IosWakeKws {
+    async fn start_kws_session(
+        &mut self,
+        request: BoundKwsRequest,
+    ) -> Result<BoundStreamSession, EngineError> {
+        let mut provider = self.take_provider()?;
+        let result = provider.start_kws_session(request).await;
+        self.put_provider(provider);
+        result
+    }
+
+    async fn push_kws_frame(
+        &mut self,
+        session: &BoundStreamSession,
+        frame: StreamingAudioFrame<'_>,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<KwsFrameResult, EngineError> {
+        let mut provider = self.take_provider()?;
+        let result = provider.push_kws_frame(session, frame, cancellation).await;
+        self.put_provider(provider);
+        result
+    }
+
+    async fn reset_kws_session(
+        &mut self,
+        session: &BoundStreamSession,
+        reason: StreamResetReason,
+    ) -> Result<(), EngineError> {
+        let mut provider = self.take_provider()?;
+        let result = provider.reset_kws_session(session, reason).await;
+        self.put_provider(provider);
+        result
+    }
 }
 
 #[cfg(not(feature = "ios-sherpa"))]
@@ -1043,13 +1394,29 @@ fn background_eligible(mode: IosVoiceStartMode) -> bool {
     matches!(mode, IosVoiceStartMode::BackgroundSession)
 }
 
-fn run_session_thread(
-    mut voice_runtime: RuntimeCore,
-    mut commands: tokio_mpsc::UnboundedReceiver<Command>,
+struct SessionThreadInputs {
+    config: IosVoiceSessionConfig,
+    input: AuroraIosAudioInput,
+    output: AuroraIosAudioOutput,
+    sink: IosSessionSink,
+    commands: tokio_mpsc::UnboundedReceiver<Command>,
+    ready: mpsc::Sender<Result<(), IosVoiceSessionCommandError>>,
     status: Arc<Mutex<IosVoiceSessionStatus>>,
     control: AuroraIosCaptureControl,
-    remote_audio_consent: bool,
-) {
+}
+
+fn run_session_thread(inputs: SessionThreadInputs) {
+    let SessionThreadInputs {
+        config,
+        input,
+        output,
+        sink,
+        mut commands,
+        ready,
+        status,
+        control,
+    } = inputs;
+    let remote_audio_consent = config.remote_audio_consent;
     let tokio_runtime = match TokioRuntimeBuilder::new_current_thread()
         .enable_all()
         .build()
@@ -1057,9 +1424,19 @@ fn run_session_thread(
         Ok(runtime) => runtime,
         Err(_) => {
             set_fault(&status, "runtime_unavailable");
+            let _ = ready.send(Err(IosVoiceSessionCommandError::Unavailable));
             return;
         }
     };
+    let mut voice_runtime = match build_runtime(&config, input, output, sink) {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            set_fault(&status, "runtime_unavailable");
+            let _ = ready.send(Err(error));
+            return;
+        }
+    };
+    let _ = ready.send(Ok(()));
     tokio_runtime.block_on(async move {
         loop {
             let Some(command) = commands.recv().await else {
