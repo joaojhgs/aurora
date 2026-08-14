@@ -120,7 +120,7 @@ async def test_auto_voice_language_keeps_transcription_auto_with_primary_hint() 
 
 
 @pytest.mark.asyncio
-async def test_failed_reload_retains_previous_language_and_models() -> None:
+async def test_failed_reload_clears_failed_selected_role() -> None:
     with (
         patch("app.shared.services.base_service.get_bus_singleton"),
         patch("app.services.stt_transcription.service._create_vad"),
@@ -129,7 +129,22 @@ async def test_failed_reload_retains_previous_language_and_models() -> None:
     ):
         old_realtime = MagicMock(name="old_realtime")
         old_accurate = MagicMock(name="old_accurate")
-        create_model.side_effect = [old_realtime, old_accurate, RuntimeError("load failed")]
+        new_accurate = MagicMock(name="new_accurate")
+        created: list[str] = []
+
+        def create_model_side_effect(model_size: str, *args, **kwargs):
+            created.append(model_size)
+            if len(created) == 1:
+                return old_realtime
+            if len(created) == 2:
+                return old_accurate
+            if model_size == "tiny":
+                raise RuntimeError("load failed for /private/models/tiny")
+            if model_size == "base":
+                return new_accurate
+            raise AssertionError(f"unexpected model size: {model_size}")
+
+        create_model.side_effect = create_model_side_effect
 
         async def aget(key, default_or_model=None, *args, **kwargs):
             if key == ConfigKeys.services.stt and kwargs.get("default") == {}:
@@ -145,11 +160,13 @@ async def test_failed_reload_retains_previous_language_and_models() -> None:
         await service._load_config()
         await service._load_models()
 
-        service._language = "pt"
+        service._language = "old"
         await service.reload("services.stt")
 
         assert service._language == "pt"
-        assert service._realtime_model is old_realtime
-        assert service._accurate_model is old_accurate
-        assert service._model_status["realtime"] == "ready"
-        assert service._model_status_message["realtime"] == "previous_model_retained"
+        assert service._realtime_model is None
+        assert service._accurate_model is new_accurate
+        assert service._model_status["realtime"] == "unavailable"
+        assert service._model_status_message["realtime"] == "RuntimeError"
+        assert service._model_status["accurate"] == "ready"
+        assert service._model_status_message["accurate"] == "model_ready"

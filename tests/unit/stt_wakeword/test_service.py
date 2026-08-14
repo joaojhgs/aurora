@@ -11,6 +11,7 @@ Tests cover:
 """
 
 import asyncio
+import base64
 import hashlib
 import json
 import sys
@@ -35,7 +36,7 @@ from app.services.stt_wakeword.service import (
     _PinnedIPHTTPSConnection,
 )
 from app.shared.config.models import Wakeword
-from app.shared.contracts.models.stt import WakeWordMethods
+from app.shared.contracts.models.stt import WakeWordDetectRequest, WakeWordMethods
 
 # Mock hardware dependencies before imports
 sys.modules["openwakeword"] = MagicMock()
@@ -73,6 +74,10 @@ def mock_backend():
     backend.cleanup = AsyncMock()
     backend.detect = AsyncMock()
     return backend
+
+
+def mark_wakeword_ready(service: WakeWordService) -> None:
+    service._readiness_status = "ready"
 
 
 @pytest.fixture
@@ -642,6 +647,7 @@ async def test_on_audio_chunk_when_enabled(service, mock_backend):
     """Test audio chunk processing when service is enabled."""
     service._enabled = True
     service._backend = mock_backend
+    mark_wakeword_ready(service)
 
     # Create mock detection result
     mock_result = Mock()
@@ -701,6 +707,7 @@ async def test_on_audio_chunk_with_exception(service, mock_backend):
     """Test audio chunk processing handles exceptions gracefully."""
     service._enabled = True
     service._backend = mock_backend
+    mark_wakeword_ready(service)
     mock_backend.detect.side_effect = Exception("Detection error")
 
     chunk = AudioChunk(data=b"audio_data", sequence=0, stream_id="test-stream", source="microphone")
@@ -720,6 +727,7 @@ async def test_wake_word_detected_emits_event(service, mock_backend, mock_bus):
     """Test wake word detection emits WakeWordDetected event."""
     service._enabled = True
     service._backend = mock_backend
+    mark_wakeword_ready(service)
     service._wake_words = ["aurora", "jarvis"]
     service._backend_type = WakeWordBackendType.OPENWAKEWORD
 
@@ -755,6 +763,7 @@ async def test_wake_word_not_detected_no_event(service, mock_backend, mock_bus):
     """Test no event is emitted when wake word is not detected."""
     service._enabled = True
     service._backend = mock_backend
+    mark_wakeword_ready(service)
 
     # Create mock detection result without detection
     mock_result = Mock()
@@ -775,6 +784,7 @@ async def test_wake_word_detection_with_multiple_models(service, mock_backend, m
     """Test wake word detection with multiple wake word models."""
     service._enabled = True
     service._backend = mock_backend
+    mark_wakeword_ready(service)
     service._wake_words = ["aurora", "jarvis", "computer"]
     service._backend_type = WakeWordBackendType.PORCUPINE
 
@@ -806,6 +816,7 @@ async def test_control_command_start(service):
     """Test start control command enables detection."""
     service._enabled = False
     service._backend = Mock()
+    mark_wakeword_ready(service)
 
     cmd = WakeWordControl(action="start")
 
@@ -843,6 +854,7 @@ async def test_control_command_resume(service):
     """Test resume control command enables detection."""
     service._enabled = False
     service._backend = Mock()
+    mark_wakeword_ready(service)
 
     cmd = WakeWordControl(action="resume")
 
@@ -856,6 +868,7 @@ async def test_control_command_case_insensitive(service):
     """Test control commands are case-insensitive."""
     service._enabled = False
     service._backend = Mock()
+    mark_wakeword_ready(service)
 
     cmd = WakeWordControl(action="START")
 
@@ -904,6 +917,7 @@ async def test_process_audio_chunk_with_detection_error(service, mock_backend, m
     """Test error handling during wake word detection."""
     service._enabled = True
     service._backend = mock_backend
+    mark_wakeword_ready(service)
     mock_backend.detect.side_effect = Exception("Backend error")
 
     chunk = AudioChunk(data=b"audio_data", sequence=0, stream_id="test-stream", source="microphone")
@@ -913,6 +927,33 @@ async def test_process_audio_chunk_with_detection_error(service, mock_backend, m
 
     # No event should be published due to error
     mock_bus.publish.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_external_detect_error_is_generic(service, mock_backend):
+    """Backend detection errors never expose exception text or selected paths externally."""
+    service._enabled = True
+    service._backend = mock_backend
+    mark_wakeword_ready(service)
+    raw_detail = "backend failed for /private/models/jarvis.onnx"
+    mock_backend.detect.side_effect = RuntimeError(raw_detail)
+    logged: list[tuple[str, tuple[object, ...]]] = []
+
+    with (
+        patch(
+            "app.services.stt_wakeword.service.log_warning",
+            side_effect=lambda message, *args, **kwargs: logged.append((str(message), args)),
+        ),
+        pytest.raises(RuntimeError) as exc_info,
+    ):
+        await service.detect_wake_word(
+            WakeWordDetectRequest(audio_data=base64.b64encode(b"audio").decode("ascii"))
+        )
+
+    assert str(exc_info.value) == "Wake word detection failed"
+    assert raw_detail not in str(exc_info.value)
+    assert logged == [("Wake word detection request failed: %s", ("backend_error",))]
+    assert raw_detail not in str(logged)
 
 
 # ============================================================================
@@ -925,6 +966,7 @@ async def test_stream_id_tracking(service, mock_backend):
     """Test service tracks current stream ID."""
     service._enabled = True
     service._backend = mock_backend
+    mark_wakeword_ready(service)
     mock_backend.detect.return_value = Mock(detected=False)
 
     chunk1 = AudioChunk(data=b"data1", sequence=0, stream_id="stream-1", source="mic")
@@ -947,6 +989,7 @@ async def test_audio_format_tracking(service, mock_backend):
     """Test service tracks audio format."""
     service._enabled = True
     service._backend = mock_backend
+    mark_wakeword_ready(service)
     mock_backend.detect.return_value = Mock(detected=False)
 
     audio_format = AudioFormat(sample_rate=16000, channels=1, bits_per_sample=16)

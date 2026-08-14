@@ -26,7 +26,7 @@ import threading
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.error import HTTPError
 from urllib.parse import urlparse, urlunparse
 from urllib.request import HTTPRedirectHandler
@@ -105,7 +105,15 @@ class WakeWordCatalogEntry:
 class _NoRedirectHandler(HTTPRedirectHandler):
     """Deny redirects so DNS/SSRF checks apply to the exact catalog URL."""
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
+    def redirect_request(
+        self,
+        req: Any,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> None:
         raise HTTPError(req.full_url, code, "redirects are not allowed", headers, fp)
 
 
@@ -124,12 +132,14 @@ class _PinnedIPHTTPSConnection(http.client.HTTPSConnection):
         self._pinned_ip = pinned_ip
 
     def connect(self) -> None:
+        source_address = getattr(self, "source_address", None)
         sock = socket.create_connection(
             (self._pinned_ip, self.port),
             self.timeout,
-            self.source_address,
+            source_address,
         )
-        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+        context = cast(Any, self)._context
+        self.sock = context.wrap_socket(sock, server_hostname=self.host)
 
 
 def _is_remote_model_path(value: str) -> bool:
@@ -141,7 +151,7 @@ def _app_data_subdir(*parts: str) -> Path:
     """Return a durable app-data path without creating shared config state."""
     from app.shared.path_utils import get_data_dir
 
-    return get_data_dir().joinpath(*parts)
+    return Path(get_data_dir()).joinpath(*parts)
 
 
 def _hash_matches(path: Path, expected_sha256: str, expected_size: int | None = None) -> bool:
@@ -211,7 +221,7 @@ def _public_ip_for_host(hostname: str, port: int) -> str:
             or ip.is_unspecified
         ):
             raise ValueError("wakeword catalog download host is not allowed")
-    return sorted(addresses)[0]
+    return str(sorted(addresses)[0])
 
 
 def _wakeword_name_from_path(path: str) -> str:
@@ -233,7 +243,7 @@ class WakeWordService(BaseService):
     - Handle wake word timeout logic
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize wake word service."""
         super().__init__(
             module=WakeWordModule.NAME,
@@ -354,9 +364,7 @@ class WakeWordService(BaseService):
                 self._enabled = True
                 if old_backend and old_backend is not self._backend:
                     await old_backend.cleanup()
-            elif self._backend is not None:
-                log_warning("Wake word backend reload did not activate; retaining previous backend")
-            elif old_backend is None:
+            else:
                 self._backend_type = backend_type
                 self._sensitivity = sensitivity
                 self._model_paths = model_paths
@@ -364,6 +372,8 @@ class WakeWordService(BaseService):
                 self._language_policy = language_policy
                 self._backend = None
                 self._enabled = False
+                if old_backend is not None:
+                    await old_backend.cleanup()
             await self._republish_readiness()
         log_info("WakeWordService configuration reloaded")
 
@@ -755,7 +765,7 @@ class WakeWordService(BaseService):
             source: Source of the audio (e.g. "microphone")
             timestamp: Timestamp of the audio chunk
         """
-        if not self._enabled or not self._backend:
+        if not self._enabled or not self._inference_ready() or not self._backend:
             return
 
         try:
@@ -791,8 +801,8 @@ class WakeWordService(BaseService):
                     origin="internal",
                 )
 
-        except Exception as e:
-            log_error(f"Error in wake word detection: {e}", exc_info=True)
+        except Exception:
+            log_error("Wake word detection failed")
 
     async def _on_audio_chunk(self, env: Envelope) -> None:
         """Handle incoming audio chunks from internal bus.
@@ -934,6 +944,8 @@ class WakeWordService(BaseService):
         Args:
             chunk: AudioChunk containing audio data
         """
+        if not self._enabled or not self._inference_ready() or not self._backend:
+            return
         try:
             # Detect wake word using configured backend
             detection_result = await self._backend.detect(chunk.data)
@@ -955,8 +967,8 @@ class WakeWordService(BaseService):
                     priority=get_interactive_priority(),  # High priority for wake word detection
                 )
 
-        except Exception as e:
-            log_error(f"Error detecting wake word: {e}", exc_info=True)
+        except Exception:
+            log_error("Wake word detection failed")
 
     @method_contract(
         method_id=WakeWordMethods.CONTROL,
@@ -976,7 +988,7 @@ class WakeWordService(BaseService):
             action = data.action.lower()
 
             if action == "start":
-                self._enabled = self._backend is not None
+                self._enabled = self._inference_ready()
                 log_info("Wake word detection started")
 
             elif action == "stop":
@@ -988,7 +1000,7 @@ class WakeWordService(BaseService):
                 log_info("Wake word detection paused")
 
             elif action == "resume":
-                self._enabled = self._backend is not None
+                self._enabled = self._inference_ready()
                 log_info("Wake word detection resumed")
 
             else:
@@ -1024,6 +1036,9 @@ class WakeWordService(BaseService):
         try:
             if not self._inference_ready():
                 raise RuntimeError(f"Wake word backend unavailable: {self._readiness_message}")
+            backend = self._backend
+            if backend is None:
+                raise RuntimeError("Wake word backend unavailable")
 
             # Decode base64 audio
             try:
@@ -1034,7 +1049,14 @@ class WakeWordService(BaseService):
             log_debug(f"Wake word detection request: {len(audio_bytes)} bytes")
 
             # Run detection
-            result = await self._backend.detect(audio_bytes)
+            try:
+                result = await backend.detect(audio_bytes)
+            except Exception as exc:
+                log_warning(
+                    "Wake word detection request failed: %s",
+                    self._safe_detection_error(exc),
+                )
+                raise RuntimeError("Wake word detection failed") from None
 
             if result.detected:
                 wake_word = (
@@ -1058,6 +1080,11 @@ class WakeWordService(BaseService):
                     confidence=None,
                 )
 
-        except Exception as e:
-            log_error(f"Wake word detection error: {e}", exc_info=True)
+        except (ValueError, RuntimeError):
             raise
+
+    def _safe_detection_error(self, exc: BaseException) -> str:
+        """Return a generic backend detection failure reason."""
+        if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
+            return "backend_timeout"
+        return "backend_error"

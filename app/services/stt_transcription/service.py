@@ -103,7 +103,7 @@ class TranscriptionService(BaseService):
     - Emit TranscriptionResult events
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize transcription service."""
         super().__init__(
             module=TranscriptionModule.NAME,
@@ -294,29 +294,15 @@ class TranscriptionService(BaseService):
                 accurate_enabled=accurate_enabled,
             )
             old_realtime, old_accurate = self._realtime_model, self._accurate_model
-            reload_failed = (
-                realtime_enabled and new_realtime is None and old_realtime is not None
-            ) or (accurate_enabled and new_accurate is None and old_accurate is not None)
-            if reload_failed:
-                if new_realtime:
-                    del new_realtime
-                if new_accurate:
-                    del new_accurate
-                self._set_model_status("realtime", "ready", "previous_model_retained")
-                self._set_model_status("accurate", "ready", "previous_model_retained")
-                log_warning(
-                    "Transcription model reload did not activate; retaining previous models"
-                )
-                return
             self._language = language
             self._language_policy = policy
             self._realtime_enabled = realtime_enabled
             self._accurate_enabled = accurate_enabled
             self._realtime_model = new_realtime
             self._accurate_model = new_accurate
-            if old_realtime:
+            if old_realtime and old_realtime is not new_realtime:
                 del old_realtime
-            if old_accurate:
+            if old_accurate and old_accurate is not new_accurate:
                 del old_accurate
             await self._republish_readiness()
         log_info("TranscriptionService configuration reloaded")
