@@ -7,6 +7,7 @@ import java.util.Locale
 internal const val AURORA_SPEECH_PACK_STORE_DIR = "aurora_speech_packs"
 internal const val AURORA_SPEECH_PACK_PREFS = "aurora_voice_pack_cache"
 internal const val AURORA_SPEECH_PACK_LEGACY_ACTIVE_ID_KEY = "active_voice_pack_id"
+internal const val AURORA_TTS_REFERENCE_PREFS = "aurora_tts_reference_profiles"
 internal const val AURORA_WAKE_PHRASE_ID_KEY = "wake_phrase_id"
 internal const val AURORA_WAKE_PHRASE_TEXT_KEY = "wake_phrase_text"
 internal const val AURORA_WAKE_PHRASE_REVISION_KEY = "wake_phrase_revision"
@@ -16,6 +17,7 @@ internal const val AURORA_TTS_REFERENCE_TEXT_KEY = "tts_reference_text"
 internal const val AURORA_TTS_REFERENCE_REVISION_KEY = "tts_reference_revision"
 internal const val AURORA_TTS_REFERENCE_SAMPLE_RATE_HZ_KEY = "tts_reference_sample_rate_hz"
 internal const val AURORA_TTS_REFERENCE_SAMPLES_KEY = "tts_reference_samples"
+internal const val AURORA_TTS_REFERENCE_MAX_SAMPLES = 160_000
 
 internal enum class AuroraSpeechPackTask(val nativeName: String) {
     STT("stt"),

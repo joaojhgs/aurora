@@ -118,19 +118,6 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private val voicePackJobsByPack: ConcurrentHashMap<String, String> = ConcurrentHashMap()
     private val voicePackLocks: ConcurrentHashMap<String, Any> = ConcurrentHashMap()
     private val packCatalogIdRegex = Regex("[A-Za-z0-9._:-]+")
-    private val voicePackSupportedTaskTokens = setOf(
-        "stt",
-        "asr",
-        "transcription",
-        "vad",
-        "tts",
-        "wakeword",
-        "wake-word",
-        "local-inference",
-        "local_inference",
-        "inference",
-    )
-
     private data class VoicePackDownloadState(
         var status: String = "queued",
         var packId: String = "",
@@ -836,6 +823,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             }
             if (task != null && activePackId(task) == args.packId) {
                 clearActivePack(task)
+            }
+            if (removedNow && task == AuroraSpeechPackTask.TTS) {
+                clearTtsReferenceSelection()
             }
             if (legacyActivePackId() == args.packId) {
                 clearLegacyActivePack()
@@ -1901,7 +1891,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     }
 
     private fun ttsReferenceSelection(): AuroraTtsReferenceSelection? {
-        val prefs = voicePackPrefs()
+        val prefs = ttsReferencePrefs()
         val id = prefs.getString(AURORA_TTS_REFERENCE_ID_KEY, null)?.trim().orEmpty()
         val audioUri = prefs.getString(AURORA_TTS_REFERENCE_AUDIO_URI_KEY, null)?.trim().orEmpty()
         val text = prefs.getString(AURORA_TTS_REFERENCE_TEXT_KEY, null)?.trim().orEmpty()
@@ -1954,11 +1944,13 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             samples.isEmpty()
         ) return ttsReferenceSelection() != null
         if (id.isBlank() || text.isBlank() || sampleRateHz <= 0 || samples.isEmpty()) return false
+        if (samples.size > AURORA_TTS_REFERENCE_MAX_SAMPLES) return false
         if (samples.any { !it.isFinite() || it < -1.0f || it > 1.0f }) return false
         val encodedSamples = org.json.JSONArray().also { array ->
             samples.forEach { sample -> array.put(sample.toDouble()) }
         }.toString()
-        voicePackPrefs().edit()
+        clearLegacyTtsReferenceSelection()
+        ttsReferencePrefs().edit()
             .putString(AURORA_TTS_REFERENCE_ID_KEY, id)
             .putString(AURORA_TTS_REFERENCE_AUDIO_URI_KEY, audioUri)
             .putString(AURORA_TTS_REFERENCE_TEXT_KEY, text)
@@ -1968,6 +1960,32 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             .apply()
         return true
     }
+
+    private fun clearTtsReferenceSelection() {
+        clearLegacyTtsReferenceSelection()
+        ttsReferencePrefs().edit()
+            .remove(AURORA_TTS_REFERENCE_ID_KEY)
+            .remove(AURORA_TTS_REFERENCE_AUDIO_URI_KEY)
+            .remove(AURORA_TTS_REFERENCE_TEXT_KEY)
+            .remove(AURORA_TTS_REFERENCE_REVISION_KEY)
+            .remove(AURORA_TTS_REFERENCE_SAMPLE_RATE_HZ_KEY)
+            .remove(AURORA_TTS_REFERENCE_SAMPLES_KEY)
+            .apply()
+    }
+
+    private fun clearLegacyTtsReferenceSelection() {
+        voicePackPrefs().edit()
+            .remove(AURORA_TTS_REFERENCE_ID_KEY)
+            .remove(AURORA_TTS_REFERENCE_AUDIO_URI_KEY)
+            .remove(AURORA_TTS_REFERENCE_TEXT_KEY)
+            .remove(AURORA_TTS_REFERENCE_REVISION_KEY)
+            .remove(AURORA_TTS_REFERENCE_SAMPLE_RATE_HZ_KEY)
+            .remove(AURORA_TTS_REFERENCE_SAMPLES_KEY)
+            .apply()
+    }
+
+    private fun ttsReferencePrefs() =
+        activity.getSharedPreferences(AURORA_TTS_REFERENCE_PREFS, Context.MODE_PRIVATE)
 
     private fun parseReferenceSamples(raw: String?): FloatArray =
         parseReferenceSamples(runCatching { JSONArray(raw ?: "[]") }.getOrNull())
@@ -1983,8 +2001,15 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         return samples
     }
 
-    private fun requestedPackTask(entry: VoicePackCatalogEntry, requestedTask: String): AuroraSpeechPackTask? =
-        auroraSpeechPackTaskFromName(requestedTask) ?: inferAuroraSpeechPackTask(entry.tasks)
+    private fun requestedPackTask(entry: VoicePackCatalogEntry, requestedTask: String): AuroraSpeechPackTask? {
+        val catalogTask = inferAuroraSpeechPackTask(entry.tasks) ?: return null
+        val requested = requestedTask.trim().takeIf { it.isNotBlank() }?.let(::auroraSpeechPackTaskFromName)
+        return when {
+            requestedTask.isBlank() -> catalogTask
+            requested == catalogTask -> requested
+            else -> null
+        }
+    }
 
     private fun isActiveCompatiblePackReady(): Boolean {
         val active = activePackId(AuroraSpeechPackTask.STT) ?: return false
@@ -2009,10 +2034,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             }
         }
         if (!abiOk) return false
-        val taskHint = entry.tasks.any { task ->
-            voicePackSupportedTaskTokens.any { token -> task.lowercase(Locale.getDefault()).contains(token) }
-        }
-        return taskHint
+        return inferAuroraSpeechPackTask(entry.tasks) != null
     }
 
     private fun isPackDownloadReady(entry: VoicePackCatalogEntry): Boolean = runCatching {

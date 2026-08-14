@@ -8,6 +8,10 @@ const kotlinPath =
   'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt'
 const voiceStorePath =
   'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraVoiceForegroundService.kt'
+const assistActivityPath =
+  'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraAssistActivity.kt'
+const speechPackPath =
+  'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativeSpeechPacks.kt'
 const permissionPath = 'apps/aurora-tauri/src-tauri/permissions/aurora-android-native-plugin.toml'
 const capabilityPath = 'apps/aurora-tauri/src-tauri/capabilities/aurora-android-thin.json'
 
@@ -72,6 +76,7 @@ describe('Android native voice route policy', () => {
   it('starts assistant and background voice through the native session with fail-closed readiness', () => {
     const plugin = repoText(kotlinPath)
     const foregroundService = repoText(voiceStorePath)
+    const assistActivity = repoText(assistActivityPath)
     const assistantService = repoText(
       'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraVoiceInteractionSessionService.kt',
     )
@@ -81,10 +86,17 @@ describe('Android native voice route policy', () => {
     expect(plugin).toContain('if (args.backgroundSession) action = AuroraVoiceForegroundService.ACTION_START_BACKGROUND')
     expect(foregroundService).toContain('ACTION_START_ASSISTANT')
     expect(foregroundService).not.toContain('BACKGROUND_VOICE_AVAILABLE')
+    expect(foregroundService).toContain('intent?.action == ACTION_START_BACKGROUND || intent?.action == ACTION_START_ASSISTANT')
     expect(foregroundService).toContain('backgroundSession && !isBackgroundVoiceSessionAvailable()')
     expect(foregroundService).toContain('nativeSession.startBackground()')
     expect(assistantService).toContain('action = AuroraVoiceForegroundService.ACTION_START_ASSISTANT')
     expect(assistantService).not.toContain('AuroraVoiceNativeConfigStore.setRemoteAudioConsent')
+    expect(assistActivity).toContain('if (!isAuroraAssistantRoleHeld())')
+    expect(assistActivity).toContain('roleManager.isRoleHeld(RoleManager.ROLE_ASSISTANT)')
+    expect(assistActivity).toContain('ComponentName.unflattenFromString')
+    expect(assistActivity.indexOf('if (!isAuroraAssistantRoleHeld())')).toBeLessThan(
+      assistActivity.indexOf('ACTION_START_ASSISTANT'),
+    )
 
     const backgroundReadinessBody = foregroundService.slice(
       foregroundService.indexOf('private fun isBackgroundVoiceSessionAvailable()'),
@@ -119,6 +131,7 @@ describe('Android native voice route policy', () => {
   it('advertises Android local speech only after exact installed pack and route readiness', () => {
     const plugin = repoText(kotlinPath)
     const foregroundService = repoText(voiceStorePath)
+    const speechPack = repoText(speechPackPath)
     const permission = repoText(permissionPath)
     const aclManifest = repoText('apps/aurora-tauri/src-tauri/gen/schemas/acl-manifests.json')
     const localLightBody = plugin.slice(
@@ -189,6 +202,26 @@ describe('Android native voice route policy', () => {
     expect(localLightBody).toContain('ret.put("routeConfigured", routeConfigured)')
     expect(plugin).toContain('item.put("readyForRuntime", installed && task != null && isPackReadyForRuntime(entry))')
     expect(plugin).toContain('item.put("readyForInstall", task != null && isPackDownloadReady(entry))')
+    expect(plugin).toContain('private fun requestedPackTask(entry: VoicePackCatalogEntry, requestedTask: String): AuroraSpeechPackTask?')
+    expect(plugin).toContain('requested == catalogTask -> requested')
+    expect(plugin).toContain('else -> null')
+    expect(plugin).toContain('return inferAuroraSpeechPackTask(entry.tasks) != null')
+    expect(plugin).not.toContain('voicePackSupportedTaskTokens')
+    expect(foregroundService).toContain('private fun isValidVoicePackUri(value: String): Boolean')
+    expect(foregroundService).toContain('uri.scheme?.lowercase() == "https"')
+    expect(foregroundService).toContain('uri.userInfo == null')
+    expect(foregroundService).toContain('uri.fragment == null')
+    expect(foregroundService).toContain('if (inferAuroraSpeechPackTask(entry.tasks) == null) return false')
+    expect(foregroundService).not.toContain('voicePackNativeSupportedTasks')
+    expect(speechPack).toContain('AURORA_TTS_REFERENCE_PREFS')
+    expect(speechPack).toContain('AURORA_TTS_REFERENCE_MAX_SAMPLES')
+    expect(plugin).toContain('activity.getSharedPreferences(AURORA_TTS_REFERENCE_PREFS, Context.MODE_PRIVATE)')
+    expect(plugin).toContain('if (samples.size > AURORA_TTS_REFERENCE_MAX_SAMPLES) return false')
+    expect(plugin).toContain('private fun clearLegacyTtsReferenceSelection()')
+    expect(plugin).toMatch(/clearLegacyTtsReferenceSelection\(\)[\s\S]*ttsReferencePrefs\(\)\.edit\(\)/)
+    expect(plugin).toContain('if (removedNow && task == AuroraSpeechPackTask.TTS)')
+    expect(plugin).toContain('clearTtsReferenceSelection()')
+    expect(foregroundService).toContain('getSharedPreferences(AURORA_TTS_REFERENCE_PREFS, Context.MODE_PRIVATE)')
 
     expect(foregroundStatusBody).toContain('val localDuplexReady = nativeRouteReady &&')
     expect(foregroundStatusBody).toContain('val backgroundRuntimeReady = localDuplexReady &&')

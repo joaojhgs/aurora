@@ -27,6 +27,7 @@ import android.util.Base64
 import androidx.core.app.NotificationManagerCompat
 import java.io.File
 import java.io.FileInputStream
+import java.net.URI
 import org.json.JSONObject
 import java.security.KeyStore
 import java.util.concurrent.atomic.AtomicBoolean
@@ -61,7 +62,6 @@ private val voicePackCatalogIdRegex = Regex("[A-Za-z0-9._:-]+")
 private const val VOICE_PACK_MIN_BYTES = 4L * 1024L
 private const val VOICE_PACK_MAX_BYTES = 1L * 1024L * 1024L * 1024L
 private const val VOICE_PACK_SHA256_HEX_LENGTH = 64
-private val voicePackNativeSupportedTasks = setOf("stt", "asr", "transcription", "vad", "tts", "wakeword", "wake-word", "local-inference", "local_inference", "inference")
 
 private data class VoicePackCatalogEntry(
     val packId: String,
@@ -683,7 +683,7 @@ class AuroraVoiceForegroundService : Service() {
             finishNativeSession()
             return START_NOT_STICKY
         }
-        val backgroundSession = intent?.action == ACTION_START_BACKGROUND
+        val backgroundSession = intent?.action == ACTION_START_BACKGROUND || intent?.action == ACTION_START_ASSISTANT
         if (backgroundSession && !isBackgroundVoiceSessionAvailable()) {
             captureError = "background_voice_unavailable"
             stopSelf()
@@ -786,7 +786,7 @@ class AuroraVoiceForegroundService : Service() {
             if (sizeBytes !in VOICE_PACK_MIN_BYTES..VOICE_PACK_MAX_BYTES) continue
             if (tasks.isEmpty() || supportedOperatingSystems.isEmpty() || supportedAbis.isEmpty()) continue
             val uri = item.optString("uri", "").trim()
-            if (uri.isBlank()) continue
+            if (!isValidVoicePackUri(uri)) continue
             val sha256 = item.optString("sha256", "").trim()
             if (!isValidHexSha256(sha256)) continue
             entries.add(
@@ -825,10 +825,7 @@ class AuroraVoiceForegroundService : Service() {
     }
 
     private fun isPackMetadataRuntimeCompatible(entry: VoicePackCatalogEntry): Boolean {
-        val taskSupported = entry.tasks.any { task ->
-            voicePackNativeSupportedTasks.any { token -> task.lowercase().contains(token) }
-        }
-        if (!taskSupported) return false
+        if (inferAuroraSpeechPackTask(entry.tasks) == null) return false
         val osOk = entry.supportedOperatingSystems.any { os ->
             val normalized = os.lowercase()
             normalized == "android" || normalized == "android-native"
@@ -852,6 +849,14 @@ class AuroraVoiceForegroundService : Service() {
 
     private fun isValidHexSha256(value: String): Boolean =
         value.length == VOICE_PACK_SHA256_HEX_LENGTH && value.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }
+
+    private fun isValidVoicePackUri(value: String): Boolean = runCatching {
+        val uri = URI(value.trim())
+        uri.scheme?.lowercase() == "https" &&
+            !uri.host.isNullOrBlank() &&
+            uri.userInfo == null &&
+            uri.fragment == null
+    }.getOrDefault(false)
 
     private fun safePackFileName(packId: String): String =
         packId.lowercase().filter { it.isLetterOrDigit() || it in "._-" }.ifBlank { "pack.bin" }
@@ -958,7 +963,7 @@ class AuroraVoiceForegroundService : Service() {
     }
 
     private fun ttsReferenceSelection(): AuroraTtsReferenceSelection? {
-        val prefs = getSharedPreferences(VOICE_PACK_PREFS, Context.MODE_PRIVATE)
+        val prefs = getSharedPreferences(AURORA_TTS_REFERENCE_PREFS, Context.MODE_PRIVATE)
         val id = prefs.getString(AURORA_TTS_REFERENCE_ID_KEY, null)?.trim().orEmpty()
         val audioUri = prefs.getString(AURORA_TTS_REFERENCE_AUDIO_URI_KEY, null)?.trim().orEmpty()
         val text = prefs.getString(AURORA_TTS_REFERENCE_TEXT_KEY, null)?.trim().orEmpty()
