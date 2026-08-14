@@ -758,7 +758,7 @@
       "handler": "_on_external_audio",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 832
+        "line": 958
       },
       "exposure": "both",
       "method_type": "use",
@@ -779,7 +779,7 @@
       "handler": "transcribe_audio",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1110
+        "line": 1240
       },
       "exposure": "both",
       "method_type": "use",
@@ -800,7 +800,7 @@
       "handler": "_on_external_audio",
       "source": {
         "file": "app/services/stt_wakeword/service.py",
-        "line": 355
+        "line": 818
       },
       "exposure": "both",
       "method_type": "use",
@@ -821,7 +821,7 @@
       "handler": "detect_wake_word",
       "source": {
         "file": "app/services/stt_wakeword/service.py",
-        "line": 540
+        "line": 1007
       },
       "exposure": "both",
       "method_type": "use",
@@ -1661,7 +1661,7 @@
       "handler": "get_capabilities",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 981
+        "line": 1433
       },
       "exposure": "both",
       "method_type": "use",
@@ -1681,7 +1681,7 @@
       "handler": "list_voices",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1062
+        "line": 1514
       },
       "exposure": "both",
       "method_type": "use",
@@ -1697,11 +1697,31 @@
     },
     {
       "module": "TTS",
+      "bus_topic": "TTS.ListLanguagePacks",
+      "handler": "list_language_packs",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 1539
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
       "bus_topic": "TTS.ListVoiceProfiles",
       "handler": "list_voice_profiles",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1087
+        "line": 1569
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1721,7 +1741,7 @@
       "handler": "get_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1110
+        "line": 1596
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1741,7 +1761,7 @@
       "handler": "update_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1133
+        "line": 1622
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1761,7 +1781,7 @@
       "handler": "install_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1160
+        "line": 1755
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1781,7 +1801,7 @@
       "handler": "remove_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1318
+        "line": 1971
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1801,7 +1821,7 @@
       "handler": "set_default_voice",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1345
+        "line": 2091
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1821,7 +1841,7 @@
       "handler": "voice_import_start",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1373
+        "line": 2190
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1841,7 +1861,7 @@
       "handler": "voice_import_chunk",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1437
+        "line": 2254
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1861,7 +1881,7 @@
       "handler": "voice_import_end",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1520
+        "line": 2337
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1881,7 +1901,7 @@
       "handler": "voice_import_abort",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1579
+        "line": 2396
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1901,7 +1921,7 @@
       "handler": "create_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1628
+        "line": 2445
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1921,7 +1941,47 @@
       "handler": "delete_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1684
+        "line": 2576
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.ExportVoiceProfile",
+      "handler": "export_voice_profile",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 2651
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_voice_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.ImportVoiceProfile",
+      "handler": "import_voice_profile",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 2783
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1941,7 +2001,7 @@
       "handler": "_on_tts_request",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1759
+        "line": 2903
       },
       "exposure": "both",
       "method_type": "use",
@@ -1961,7 +2021,7 @@
       "handler": "_on_stream_start",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1814
+        "line": 2958
       },
       "exposure": "both",
       "method_type": "use",
@@ -1981,7 +2041,7 @@
       "handler": "_on_stream_chunk",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1882
+        "line": 3026
       },
       "exposure": "both",
       "method_type": "use",
@@ -2001,7 +2061,7 @@
       "handler": "_on_stream_end",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1930
+        "line": 3076
       },
       "exposure": "both",
       "method_type": "use",
@@ -2021,7 +2081,7 @@
       "handler": "synthesize",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2354
+        "line": 3500
       },
       "exposure": "both",
       "method_type": "use",
