@@ -1190,6 +1190,8 @@ enum AuroraCommandError {
     #[cfg(any(target_os = "android", target_os = "ios"))]
     #[error("Aurora mobile native plugin call failed: {0}")]
     AuroraMobileNativePlugin(String),
+    #[error("Selected speech pack cannot be used for that voice feature")]
+    NativeSpeechPackSelectionInvalid,
     #[error("{0}")]
     UnsupportedFeature(String),
     #[error("Desktop thin mode is connected to a remote Gateway and cannot start a local sidecar")]
@@ -2464,12 +2466,13 @@ async fn aurora_native_speech_pack_activate(
                 "Speech pack is not ready".to_string(),
             ));
         }
-        let slot = request
-            .slot
-            .filter(|slot| !slot.trim().is_empty())
-            .unwrap_or_else(|| native_speech_pack_task_id(request.task).to_owned());
         let mut active = native_speech_pack_active_slots(&app)?;
-        active.insert(slot, request.pack_id);
+        insert_native_speech_pack_active_slot(
+            &mut active,
+            request.task,
+            request.slot.as_deref(),
+            request.pack_id,
+        )?;
         write_native_speech_pack_active_slots(&app, &active)?;
         native_speech_pack_status(&app)
     }
@@ -4511,6 +4514,7 @@ impl AuroraCommandError {
             Self::NativePermissionMissing(_) => "native_permission_missing",
             #[cfg(any(target_os = "android", target_os = "ios"))]
             Self::AuroraMobileNativePlugin(_) => "native_plugin_error",
+            Self::NativeSpeechPackSelectionInvalid => "validation_error",
             Self::UnsupportedFeature(_) => "unsupported_feature",
             Self::ThinModeSidecarDisabled => "unsupported_feature",
             Self::SidecarLoopbackRequired(_) => "validation_error",
@@ -5293,6 +5297,32 @@ fn native_speech_pack_task_id(task: NativeSpeechPackTask) -> &'static str {
         NativeSpeechPackTask::Kws => "kws",
         NativeSpeechPackTask::Tts => "tts",
     }
+}
+
+fn native_speech_pack_activation_slot(
+    task: NativeSpeechPackTask,
+    slot: Option<&str>,
+) -> Result<String, AuroraCommandError> {
+    let canonical = native_speech_pack_task_id(task);
+    let Some(slot) = slot.map(str::trim).filter(|slot| !slot.is_empty()) else {
+        return Ok(canonical.to_owned());
+    };
+    if slot == canonical {
+        Ok(canonical.to_owned())
+    } else {
+        Err(AuroraCommandError::NativeSpeechPackSelectionInvalid)
+    }
+}
+
+fn insert_native_speech_pack_active_slot(
+    active: &mut BTreeMap<String, String>,
+    task: NativeSpeechPackTask,
+    slot: Option<&str>,
+    pack_id: String,
+) -> Result<(), AuroraCommandError> {
+    let slot = native_speech_pack_activation_slot(task, slot)?;
+    active.insert(slot, pack_id);
+    Ok(())
 }
 
 #[cfg(any(desktop, target_os = "ios", test))]
@@ -10643,6 +10673,50 @@ mod tests {
         ];
 
         assert!(filtered_native_speech_pack_active_slots(active, &packs).is_empty());
+    }
+
+    #[test]
+    fn native_speech_pack_activation_uses_canonical_slot() {
+        let mut active = BTreeMap::new();
+
+        insert_native_speech_pack_active_slot(
+            &mut active,
+            NativeSpeechPackTask::Stt,
+            None,
+            "stt.ready".to_string(),
+        )
+        .unwrap();
+        insert_native_speech_pack_active_slot(
+            &mut active,
+            NativeSpeechPackTask::Tts,
+            Some(" tts "),
+            "tts.ready".to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(active.get("stt").map(String::as_str), Some("stt.ready"));
+        assert_eq!(active.get("tts").map(String::as_str), Some("tts.ready"));
+        assert_eq!(active.len(), 2);
+    }
+
+    #[test]
+    fn native_speech_pack_activation_rejects_task_slot_mismatch_without_polluting_state() {
+        let mut active = BTreeMap::from([("tts".to_string(), "tts.ready".to_string())]);
+        let before = active.clone();
+
+        let result = insert_native_speech_pack_active_slot(
+            &mut active,
+            NativeSpeechPackTask::Stt,
+            Some("tts"),
+            "tts.ready".to_string(),
+        );
+
+        assert!(matches!(
+            result,
+            Err(AuroraCommandError::NativeSpeechPackSelectionInvalid)
+        ));
+        assert_eq!(active, before);
+        assert!(!active.contains_key("stt"));
     }
 
     #[test]
