@@ -13,6 +13,7 @@ import pytest
 from app.services.tts.voice_catalog import (
     VoiceCatalogDownloadError,
     VoiceCatalogInstaller,
+    VoiceCatalogSourceError,
 )
 from app.services.tts.voice_registry import VoiceRegistry
 
@@ -110,3 +111,136 @@ def test_catalog_rejects_non_https_non_localhost_download_urls(tmp_path: Path) -
 
     with pytest.raises(VoiceCatalogDownloadError):
         installer._artifact_source("voices/alba.safetensors")
+
+
+@pytest.mark.asyncio
+async def test_catalog_rejects_local_artifact_with_wrong_declared_size(tmp_path: Path) -> None:
+    data = _safetensors_bytes()
+    manifest = _manifest(data)
+    manifest["assets"][0]["size_bytes"] = len(data) + 1  # type: ignore[index]
+    manifest["assets"][0]["unpacked_size_bytes"] = len(data) + 1  # type: ignore[index]
+    source_root = tmp_path / "source"
+    source_root.joinpath("voices").mkdir(parents=True)
+    source_root.joinpath("voices/alba.safetensors").write_bytes(data)
+    manifest_path = tmp_path / "voices.manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    installer = VoiceCatalogInstaller(
+        manifest_path=str(manifest_path),
+        asset_base_url=str(source_root),
+        cache_dir=tmp_path / "cache",
+        registry=VoiceRegistry(tmp_path / "registry"),
+    )
+
+    with pytest.raises(VoiceCatalogDownloadError, match="size mismatch"):
+        await installer.install_voice("standard:starter_en:alba")
+
+
+@pytest.mark.asyncio
+async def test_catalog_replaces_invalid_cached_artifact(tmp_path: Path) -> None:
+    data = _safetensors_bytes()
+    source_root = tmp_path / "source"
+    source_root.joinpath("voices").mkdir(parents=True)
+    source_root.joinpath("voices/alba.safetensors").write_bytes(data)
+    manifest_path = tmp_path / "voices.manifest.json"
+    manifest_path.write_text(json.dumps(_manifest(data)), encoding="utf-8")
+    cache_path = tmp_path / "cache" / "downloads" / _sha256(data) / "voices/alba.safetensors"
+    cache_path.parent.mkdir(parents=True)
+    cache_path.write_bytes(b"truncated")
+    installer = VoiceCatalogInstaller(
+        manifest_path=str(manifest_path),
+        asset_base_url=str(source_root),
+        cache_dir=tmp_path / "cache",
+        registry=VoiceRegistry(tmp_path / "registry"),
+    )
+
+    result = await installer.install_voice("standard:starter_en:alba")
+
+    assert result.reused_cached_artifact is False
+    assert cache_path.read_bytes() == data
+
+
+def test_catalog_rejects_local_http_without_explicit_dev_override(tmp_path: Path) -> None:
+    installer = VoiceCatalogInstaller(
+        manifest_path="https://example.invalid/voices.manifest.json",
+        asset_base_url="http://localhost:8080/assets",
+        cache_dir=tmp_path / "cache",
+        registry=VoiceRegistry(tmp_path / "registry"),
+    )
+
+    with pytest.raises(VoiceCatalogDownloadError):
+        installer._artifact_source("voices/alba.safetensors")
+
+
+def test_catalog_rejects_private_https_hosts(tmp_path: Path) -> None:
+    installer = VoiceCatalogInstaller(
+        manifest_path="https://example.invalid/voices.manifest.json",
+        asset_base_url="https://127.0.0.1/assets",
+        cache_dir=tmp_path / "cache",
+        registry=VoiceRegistry(tmp_path / "registry"),
+    )
+
+    with pytest.raises(VoiceCatalogDownloadError, match="not allowed"):
+        installer._artifact_source("voices/alba.safetensors")
+
+
+@pytest.mark.asyncio
+async def test_catalog_enforces_cache_limit_before_copy(tmp_path: Path) -> None:
+    data = _safetensors_bytes()
+    source_root = tmp_path / "source"
+    source_root.joinpath("voices").mkdir(parents=True)
+    source_root.joinpath("voices/alba.safetensors").write_bytes(data)
+    manifest_path = tmp_path / "voices.manifest.json"
+    manifest_path.write_text(json.dumps(_manifest(data)), encoding="utf-8")
+    installer = VoiceCatalogInstaller(
+        manifest_path=str(manifest_path),
+        asset_base_url=str(source_root),
+        cache_dir=tmp_path / "cache",
+        registry=VoiceRegistry(tmp_path / "registry"),
+        max_cache_bytes=len(data) - 1,
+    )
+
+    with pytest.raises(VoiceCatalogDownloadError, match="cache limit"):
+        await installer.install_voice("standard:starter_en:alba")
+
+
+@pytest.mark.asyncio
+async def test_catalog_rejects_cache_symlink_escape(tmp_path: Path) -> None:
+    data = _safetensors_bytes()
+    source_root = tmp_path / "source"
+    source_root.joinpath("voices").mkdir(parents=True)
+    source_root.joinpath("voices/alba.safetensors").write_bytes(data)
+    manifest_path = tmp_path / "voices.manifest.json"
+    manifest_path.write_text(json.dumps(_manifest(data)), encoding="utf-8")
+    digest_dir = tmp_path / "cache" / "downloads" / _sha256(data)
+    digest_dir.parent.mkdir(parents=True)
+    digest_dir.symlink_to(tmp_path / "outside", target_is_directory=True)
+    installer = VoiceCatalogInstaller(
+        manifest_path=str(manifest_path),
+        asset_base_url=str(source_root),
+        cache_dir=tmp_path / "cache",
+        registry=VoiceRegistry(tmp_path / "registry"),
+    )
+
+    with pytest.raises(VoiceCatalogDownloadError, match="cache path is unsafe"):
+        await installer.install_voice("standard:starter_en:alba")
+
+
+def test_catalog_sanitizes_remote_source_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fail_download(*_args: object, **_kwargs: object) -> bytes:
+        raise VoiceCatalogDownloadError("private upstream detail")
+
+    installer = VoiceCatalogInstaller(
+        manifest_path="https://catalog.example/voices.manifest.json",
+        asset_base_url=None,
+        cache_dir=tmp_path / "cache",
+        registry=VoiceRegistry(tmp_path / "registry"),
+    )
+    monkeypatch.setattr(
+        "app.services.tts.voice_catalog._download_bytes",
+        fail_download,
+    )
+
+    with pytest.raises(VoiceCatalogSourceError, match="voice catalog is unavailable"):
+        installer._load_manifest()

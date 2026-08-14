@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import ipaddress
 import os
 import shutil
+import socket
+import threading
 import uuid
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Literal
 from urllib.parse import quote, unquote, urljoin, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from pydantic import ValidationError
 
@@ -24,6 +27,7 @@ from app.services.tts.voice_registry import (
 from app.shared.path_utils import resolve_path
 
 _MAX_MANIFEST_BYTES = 512 * 1024
+_DEFAULT_MAX_CACHE_BYTES = 4 * 1024 * 1024 * 1024
 _DOWNLOAD_CHUNK_BYTES = 1024 * 1024
 _LOCAL_HTTP_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
@@ -75,13 +79,20 @@ class VoiceCatalogInstaller:
         asset_base_url: str | None,
         cache_dir: Path | str,
         registry: VoiceRegistry,
+        allow_local_http: bool = False,
+        max_cache_bytes: int = _DEFAULT_MAX_CACHE_BYTES,
     ) -> None:
         self.manifest_path = manifest_path or "voice_models/voices.manifest.json"
         self.asset_base_url = asset_base_url
         self.cache_dir = Path(cache_dir)
         self.registry = registry
+        self.allow_local_http = allow_local_http
+        if max_cache_bytes <= 0:
+            raise ValueError("voice catalog cache limit must be positive")
+        self.max_cache_bytes = max_cache_bytes
         self._downloads_dir = self.cache_dir / "downloads"
         self._stage_dir = self.cache_dir / ".catalog-stage"
+        self._cache_lock = threading.RLock()
 
     async def list_items(self) -> tuple[VoiceCatalogItem, ...]:
         """Return local/remote catalog rows merged with installed registry state."""
@@ -133,7 +144,11 @@ class VoiceCatalogInstaller:
         if len(matching_assets) > 1:
             raise VoiceCatalogSourceError("catalog contains duplicate voice entries")
         asset = matching_assets[0]
-        cached_artifact, reused = self._materialize_artifact(asset.relative_path, asset.sha256)
+        cached_artifact, reused = self._materialize_artifact(
+            asset.relative_path,
+            asset.sha256,
+            asset.size_bytes,
+        )
         staged_root = self._stage_dir / f"install.{uuid.uuid4().hex}"
         try:
             artifact_target = staged_root / asset.relative_path
@@ -158,7 +173,14 @@ class VoiceCatalogInstaller:
 
     def _load_manifest(self) -> tuple[VoicePackManifest, Literal["local", "remote"]]:
         if _is_url(self.manifest_path):
-            payload = _download_bytes(self.manifest_path, max_bytes=_MAX_MANIFEST_BYTES)
+            try:
+                payload = _download_bytes(
+                    self.manifest_path,
+                    max_bytes=_MAX_MANIFEST_BYTES,
+                    allow_local_http=self.allow_local_http,
+                )
+            except (OSError, VoiceCatalogDownloadError) as exc:
+                raise VoiceCatalogSourceError("voice catalog is unavailable") from exc
             source: Literal["local", "remote"] = "remote"
         else:
             source = "local"
@@ -174,38 +196,94 @@ class VoiceCatalogInstaller:
             raise VoiceCatalogSourceError("voice catalog is invalid") from exc
         return manifest, source
 
-    def _materialize_artifact(self, relative_path: str, expected_sha256: str) -> tuple[Path, bool]:
-        cached = self._cached_artifact_path(expected_sha256, relative_path)
-        if cached.is_file() and _file_sha256(cached) == expected_sha256:
-            return cached, True
-        source = self._artifact_source(relative_path)
-        cached.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = cached.with_name(f".{cached.name}.{uuid.uuid4().hex}.tmp")
-        try:
-            if _is_url(source):
-                _download_to_path(source, tmp_path)
-            else:
-                local_source = resolve_path(source)
-                if not local_source.is_file():
-                    raise VoiceCatalogDownloadError("voice artifact is unavailable")
-                shutil.copyfile(local_source, tmp_path)
-            digest = _file_sha256(tmp_path)
-            if digest != expected_sha256:
-                raise VoiceCatalogDownloadError("voice artifact hash mismatch")
-            os.replace(tmp_path, cached)
-            _fsync_dir(cached.parent)
-            return cached, False
-        finally:
-            if tmp_path.exists():
-                tmp_path.unlink()
+    def _materialize_artifact(
+        self,
+        relative_path: str,
+        expected_sha256: str,
+        expected_size: int,
+    ) -> tuple[Path, bool]:
+        with self._cache_lock:
+            cached = self._cached_artifact_path(expected_sha256, relative_path)
+            self._validate_cache_target(cached)
+            if _verified_cached_file(cached, expected_sha256, expected_size):
+                return cached, True
+            if cached.exists() or cached.is_symlink():
+                cached.unlink()
+            source = self._artifact_source(relative_path)
+            self._reserve_cache_space(expected_size, preserve=cached)
+            cached.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            self._validate_cache_target(cached)
+            tmp_path = cached.with_name(f".{cached.name}.{uuid.uuid4().hex}.tmp")
+            try:
+                if _is_url(source):
+                    _download_to_path(
+                        source,
+                        tmp_path,
+                        expected_size=expected_size,
+                        allow_local_http=self.allow_local_http,
+                    )
+                else:
+                    local_source = resolve_path(source)
+                    if not local_source.is_file() or local_source.is_symlink():
+                        raise VoiceCatalogDownloadError("voice artifact is unavailable")
+                    _copy_exact(local_source, tmp_path, expected_size=expected_size)
+                digest = _file_sha256(tmp_path)
+                if digest != expected_sha256:
+                    raise VoiceCatalogDownloadError("voice artifact hash mismatch")
+                os.replace(tmp_path, cached)
+                _fsync_dir(cached.parent)
+                return cached, False
+            finally:
+                if tmp_path.exists() or tmp_path.is_symlink():
+                    tmp_path.unlink()
+
+    def _reserve_cache_space(self, required_bytes: int, *, preserve: Path) -> None:
+        if required_bytes < 0 or required_bytes > self.max_cache_bytes:
+            raise VoiceCatalogDownloadError("voice artifact exceeds cache limit")
+        if not self._downloads_dir.exists():
+            return
+        candidates: list[tuple[float, int, Path]] = []
+        total = 0
+        for path in self._downloads_dir.rglob("*"):
+            if path == preserve or path.is_symlink() or not path.is_file():
+                continue
+            stat_result = path.stat()
+            total += stat_result.st_size
+            candidates.append((stat_result.st_mtime, stat_result.st_size, path))
+        for _modified, size, path in sorted(candidates):
+            if total + required_bytes <= self.max_cache_bytes:
+                break
+            path.unlink(missing_ok=True)
+            total -= size
+        if total + required_bytes > self.max_cache_bytes:
+            raise VoiceCatalogDownloadError("voice catalog cache is full")
+
+    def _validate_cache_target(self, target: Path) -> None:
+        root = self._downloads_dir.resolve(strict=False)
+        resolved_target = target.resolve(strict=False)
+        if not resolved_target.is_relative_to(root):
+            raise VoiceCatalogDownloadError("voice artifact cache path is unsafe")
+        current = self._downloads_dir
+        relative_parent = target.parent.relative_to(self._downloads_dir)
+        for part in relative_parent.parts:
+            if current.is_symlink():
+                raise VoiceCatalogDownloadError("voice artifact cache path is unsafe")
+            current = current / part
+        if current.is_symlink() or target.is_symlink():
+            raise VoiceCatalogDownloadError("voice artifact cache path is unsafe")
 
     def _artifact_source(self, relative_path: str) -> str:
         _safe_relative_path(relative_path)
         if self.asset_base_url:
             if _is_url(self.asset_base_url):
-                _validate_download_url(self.asset_base_url)
+                _validate_download_url(
+                    self.asset_base_url,
+                    allow_local_http=self.allow_local_http,
+                )
                 quoted = "/".join(quote(part) for part in PurePosixPath(relative_path).parts)
-                return urljoin(self.asset_base_url.rstrip("/") + "/", quoted)
+                source = urljoin(self.asset_base_url.rstrip("/") + "/", quoted)
+                _validate_download_url(source, allow_local_http=self.allow_local_http)
+                return source
             return str(resolve_path(self.asset_base_url) / Path(relative_path))
         if _is_url(self.manifest_path):
             return urljoin(self.manifest_path.rsplit("/", 1)[0] + "/", relative_path)
@@ -223,10 +301,11 @@ def _is_url(value: str | None) -> bool:
     return urlparse(value).scheme in {"http", "https"}
 
 
-def _validate_download_url(url: str) -> None:
+def _validate_download_url(url: str, *, allow_local_http: bool = False) -> None:
     parsed = urlparse(url)
+    hostname = (parsed.hostname or "").lower()
     allowed = parsed.scheme == "https" or (
-        parsed.scheme == "http" and (parsed.hostname or "").lower() in _LOCAL_HTTP_HOSTS
+        allow_local_http and parsed.scheme == "http" and hostname in _LOCAL_HTTP_HOSTS
     )
     if not allowed:
         raise VoiceCatalogDownloadError("voice catalog download URL is not allowed")
@@ -234,12 +313,64 @@ def _validate_download_url(url: str) -> None:
         raise VoiceCatalogDownloadError("voice catalog download URL is not allowed")
     if not parsed.netloc:
         raise VoiceCatalogDownloadError("voice catalog download URL is invalid")
+    try:
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    except ValueError as exc:
+        raise VoiceCatalogDownloadError("voice catalog download URL is invalid") from exc
+    if allow_local_http and hostname in _LOCAL_HTTP_HOSTS:
+        return
+    try:
+        addresses = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+    except OSError as exc:
+        raise VoiceCatalogDownloadError("voice catalog host could not be resolved") from exc
+    if not addresses:
+        raise VoiceCatalogDownloadError("voice catalog host could not be resolved")
+    for address in addresses:
+        try:
+            resolved = ipaddress.ip_address(address[4][0])
+        except ValueError as exc:
+            raise VoiceCatalogDownloadError("voice catalog host address is invalid") from exc
+        if not resolved.is_global:
+            raise VoiceCatalogDownloadError("voice catalog host address is not allowed")
 
 
-def _download_bytes(url: str, *, max_bytes: int) -> bytes:
-    _validate_download_url(url)
+class _SafeRedirectHandler(HTTPRedirectHandler):
+    def __init__(self, *, allow_local_http: bool) -> None:
+        self._allow_local_http = allow_local_http
+        super().__init__()
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+        redirected_url = urljoin(req.full_url, newurl)
+        _validate_download_url(
+            redirected_url,
+            allow_local_http=self._allow_local_http,
+        )
+        return super().redirect_request(req, fp, code, msg, headers, redirected_url)
+
+
+def _open_download(url: str, *, timeout: int, allow_local_http: bool):
+    _validate_download_url(url, allow_local_http=allow_local_http)
     request = Request(url, headers={"User-Agent": "AuroraVoiceCatalog/1"})
-    with urlopen(request, timeout=30) as response:
+    opener = build_opener(_SafeRedirectHandler(allow_local_http=allow_local_http))
+    response = opener.open(request, timeout=timeout)
+    try:
+        _validate_download_url(response.geturl(), allow_local_http=allow_local_http)
+    except Exception:
+        response.close()
+        raise
+    return response
+
+
+def _download_bytes(url: str, *, max_bytes: int, allow_local_http: bool = False) -> bytes:
+    with _open_download(url, timeout=30, allow_local_http=allow_local_http) as response:
+        content_length = response.headers.get("Content-Length")
+        if content_length is not None:
+            try:
+                declared_size = int(content_length)
+            except ValueError as exc:
+                raise VoiceCatalogDownloadError("voice catalog size is invalid") from exc
+            if declared_size < 0 or declared_size > max_bytes:
+                raise VoiceCatalogDownloadError("voice catalog download exceeded size limit")
         chunks: list[bytes] = []
         total = 0
         while True:
@@ -253,17 +384,66 @@ def _download_bytes(url: str, *, max_bytes: int) -> bytes:
     return b"".join(chunks)
 
 
-def _download_to_path(url: str, target: Path) -> None:
-    _validate_download_url(url)
-    request = Request(url, headers={"User-Agent": "AuroraVoiceCatalog/1"})
-    with urlopen(request, timeout=120) as response, target.open("wb") as handle:
+def _download_to_path(
+    url: str,
+    target: Path,
+    *,
+    expected_size: int,
+    allow_local_http: bool = False,
+) -> None:
+    with (
+        _open_download(url, timeout=120, allow_local_http=allow_local_http) as response,
+        target.open("xb") as handle,
+    ):
+        content_length = response.headers.get("Content-Length")
+        if content_length is not None:
+            try:
+                declared_size = int(content_length)
+            except ValueError as exc:
+                raise VoiceCatalogDownloadError("voice artifact size is invalid") from exc
+            if declared_size != expected_size:
+                raise VoiceCatalogDownloadError("voice artifact size mismatch")
+        total = 0
         while True:
             chunk = response.read(_DOWNLOAD_CHUNK_BYTES)
             if not chunk:
                 break
+            total += len(chunk)
+            if total > expected_size:
+                raise VoiceCatalogDownloadError("voice artifact size mismatch")
             handle.write(chunk)
+        if total != expected_size:
+            raise VoiceCatalogDownloadError("voice artifact size mismatch")
         handle.flush()
         os.fsync(handle.fileno())
+
+
+def _copy_exact(source: Path, target: Path, *, expected_size: int) -> None:
+    if source.stat().st_size != expected_size:
+        raise VoiceCatalogDownloadError("voice artifact size mismatch")
+    total = 0
+    with source.open("rb") as source_handle, target.open("xb") as target_handle:
+        while True:
+            chunk = source_handle.read(_DOWNLOAD_CHUNK_BYTES)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > expected_size:
+                raise VoiceCatalogDownloadError("voice artifact size mismatch")
+            target_handle.write(chunk)
+        if total != expected_size:
+            raise VoiceCatalogDownloadError("voice artifact size mismatch")
+        target_handle.flush()
+        os.fsync(target_handle.fileno())
+
+
+def _verified_cached_file(path: Path, expected_sha256: str, expected_size: int) -> bool:
+    return (
+        path.is_file()
+        and not path.is_symlink()
+        and path.stat().st_size == expected_size
+        and _file_sha256(path) == expected_sha256
+    )
 
 
 def _file_sha256(path: Path) -> str:
