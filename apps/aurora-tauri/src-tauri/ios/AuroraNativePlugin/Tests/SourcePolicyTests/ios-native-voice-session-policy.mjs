@@ -18,12 +18,23 @@ const header = readFileSync(
   resolve(packageRoot, 'Sources', 'CAuroraIOSVoiceBridge', 'include', 'aurora_ios_voice_bridge.h'),
   'utf8',
 )
+const nativeAbi = readFileSync(resolve(packageRoot, '..', '..', 'src', 'ios_voice.rs'), 'utf8')
+const nativeSession = readFileSync(
+  resolve(packageRoot, '..', '..', '..', '..', '..', 'rust', 'crates', 'aurora-voice-native', 'src', 'ios_session.rs'),
+  'utf8',
+)
 const loadRecordBody = credentialStore.match(
   /private static func loadRecord\(\) throws -> AuroraIOSVoiceCredentialRecord\? \{[\s\S]*?\n  private static func validateGateway/,
 )?.[0] ?? ''
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
+}
+
+function assertIncludesAll(source, snippets, messagePrefix) {
+  for (const snippet of snippets) {
+    assert(source.includes(snippet), `${messagePrefix}: ${snippet}`)
+  }
 }
 
 for (const symbol of [
@@ -53,24 +64,55 @@ assert(
   'session host must support native stored credentials',
 )
 assert(
-  sessionHost.includes('requiredSlots: ["stt"]')
+  sessionHost.includes('requiredSlots: ["vad", "kws", "stt", "tts"]')
     && sessionHost.includes('AuroraIOSVoicePackManager.boundPackBindings')
     && sessionHost.includes('requiredTaskPackUnavailable'),
-  'session host must require slot-bound ready packs before native session construction',
+  'session host must require the full local voice pack set before native session construction',
 )
+assert(!sessionHost.includes('requiredSlots: ["stt"]'), 'session host must not allow STT-only native sessions')
 assert(
   sessionHost.includes('AuroraIosVoiceTaskPackBinding')
     && sessionHost.includes('aurora_ios_voice_session_new_with_pack_bindings'),
   'session host must pass selected pack bindings to Rust',
 )
 for (const exactBindingField of [
+  'pack_id',
   'expected_sha256',
   'expected_size_bytes',
   'runtime_revision',
+  'files_json',
+  'language',
+  'sample_rate_hz',
+  'frame_size',
 ]) {
   assert(header.includes(exactBindingField), `iOS ABI must carry exact binding field ${exactBindingField}`)
   assert(sessionHost.includes(exactBindingField), `Swift session host must pass ${exactBindingField}`)
+  assert(nativeAbi.includes(exactBindingField), `Rust iOS ABI must parse exact binding field ${exactBindingField}`)
 }
+assertIncludesAll(
+  nativeSession,
+  [
+    'build_local_ios_runtime',
+    'verify_ios_pack_bindings',
+    'verify_ios_pack_file_binding',
+    'SherpaVadProvider',
+    'SherpaKwsProvider',
+    'SherpaFiniteSttEngine',
+    'SherpaTtsProvider',
+    'NativeVadBackend',
+    'NativeKwsBackend',
+    'NativeSttBackend',
+    'NativeTtsBackend',
+    'TaskPackBinding::from_ios_cached_sherpa',
+    'required_file(vad_binding, "model")',
+    'required_file(kws_binding, "encoder-int8")',
+    'stt_decoder_file(stt_binding)',
+    'required_file(tts_binding, "espeak-ng-data")',
+    '#[cfg(not(feature = "ios-sherpa"))]',
+    'Err(IosVoiceSessionCommandError::Unavailable)',
+  ],
+  'Rust iOS session must build local Sherpa providers from exact cached pack files and fail closed',
+)
 assert(
   credentialStore.includes('kSecAttrAccessibleWhenUnlockedThisDeviceOnly'),
   'voice credentials must be device-only Keychain data',
@@ -152,6 +194,12 @@ for (const snippet of [
   'localSha256 == catalogEntry.sha256',
   'metadata.bytesDownloaded == catalogEntry.fileSize',
   'metadata.pack.runtimeRevision == catalogEntry.runtimeRevision',
+  'modelFilesJson',
+  'modelFiles',
+  'isSafeCachedModelFile',
+  'sanitizeRelativePath',
+  'catalogEntry.sampleRateHz > 0',
+  'catalogEntry.frameSize > 0',
   'isSafeCachedPackFile',
   'isSymbolicLink',
   'entry.acknowledged',

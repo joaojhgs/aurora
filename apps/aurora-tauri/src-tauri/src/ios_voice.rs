@@ -6,10 +6,11 @@
 use aurora_voice_engine::PackTask;
 use aurora_voice_ios_bridge::{AuroraIosAudioOutput, AuroraIosAudioState};
 use aurora_voice_native::{
-    GatewayAuth, IosVoicePackBinding, IosVoicePackBindings, IosVoiceSession,
-    IosVoiceSessionCommandError, IosVoiceSessionConfig, IosVoiceSessionStatus,
+    GatewayAuth, IosVoicePackBinding, IosVoicePackBindings, IosVoicePackFileBinding,
+    IosVoiceSession, IosVoiceSessionCommandError, IosVoiceSessionConfig, IosVoiceSessionStatus,
     MAX_IOS_PACK_BINDINGS,
 };
+use serde::Deserialize;
 use std::ffi::CStr;
 use std::os::raw::c_char;
 use url::Url;
@@ -39,6 +40,8 @@ pub struct AuroraIosVoiceTaskPackBinding {
     pub task: i32,
     /// Optional NUL-terminated UTF-8 slot id. Null means the default slot.
     pub slot_id: *const c_char,
+    /// Required NUL-terminated UTF-8 exact pack id selected by Swift.
+    pub pack_id: *const c_char,
     /// Required NUL-terminated UTF-8 active pack path selected by Swift.
     pub pack_path: *const c_char,
     /// Required NUL-terminated lowercase hex SHA-256 selected by Swift.
@@ -47,6 +50,22 @@ pub struct AuroraIosVoiceTaskPackBinding {
     pub expected_size_bytes: u64,
     /// Required NUL-terminated runtime/catalog revision selected by Swift.
     pub runtime_revision: *const c_char,
+    /// Required NUL-terminated JSON array of exact local files selected by Swift.
+    pub files_json: *const c_char,
+    /// Required NUL-terminated BCP-47 language selected by Swift.
+    pub language: *const c_char,
+    /// Required audio sample rate selected from the catalog.
+    pub sample_rate_hz: u32,
+    /// Required provider frame size selected from the catalog.
+    pub frame_size: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct AuroraIosVoiceTaskPackFileJson {
+    file_id: String,
+    path: String,
+    sha256: String,
+    size_bytes: u64,
 }
 
 /// # Safety
@@ -118,17 +137,39 @@ unsafe fn parse_pack_bindings(
         let task = pack_task_from_abi(binding.task)?;
         let slot_id =
             unsafe { bounded_string(binding.slot_id, 64) }.unwrap_or_else(|| "default".to_owned());
+        let pack_id = unsafe { bounded_string(binding.pack_id, 128) }?;
         let pack_path = unsafe { bounded_string(binding.pack_path, 4096) }?;
         let expected_sha256 = unsafe { bounded_string(binding.expected_sha256, 64) }?;
         let runtime_revision = unsafe { bounded_string(binding.runtime_revision, 128) }?;
+        let language = unsafe { bounded_string(binding.language, 64) }?;
+        let files_json = unsafe { bounded_string(binding.files_json, 65_536) }?;
+        let files: Vec<AuroraIosVoiceTaskPackFileJson> =
+            serde_json::from_str(&files_json).ok()?;
+        let files = files
+            .into_iter()
+            .map(|file| {
+                IosVoicePackFileBinding::new(
+                    file.file_id,
+                    file.path,
+                    file.sha256,
+                    file.size_bytes,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .ok()?;
         parsed.push(
             IosVoicePackBinding::new(
                 task,
                 slot_id,
+                pack_id,
                 pack_path,
                 expected_sha256,
                 binding.expected_size_bytes,
                 runtime_revision,
+                language,
+                binding.sample_rate_hz,
+                binding.frame_size,
+                files,
             )
             .ok()?,
         );

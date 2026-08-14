@@ -19,6 +19,11 @@ private struct AuroraIOSVoiceTaskPackPathBinding {
   let sha256: String
   let fileSize: UInt64
   let runtimeRevision: String
+  let filesJson: String
+  let language: String
+  let packId: String
+  let sampleRateHz: UInt32
+  let frameSize: UInt32
 }
 
 /// Swift-owned lifecycle host for a Rust-owned native voice session.
@@ -42,7 +47,7 @@ public final class AuroraIOSVoiceSessionHost {
     storedConfiguration audioSession: AVAudioSession = .sharedInstance()
   ) throws {
     try self.init(
-      requiredSlots: ["stt"],
+      requiredSlots: ["vad", "kws", "stt", "tts"],
       storedConfiguration: audioSession
     )
   }
@@ -73,7 +78,7 @@ public final class AuroraIOSVoiceSessionHost {
       gateway: gateway,
       bearer: bearer,
       remoteAudioConsent: remoteAudioConsent,
-      requiredSlots: ["stt"],
+      requiredSlots: ["vad", "kws", "stt", "tts"],
       audioSession: audioSession
     )
   }
@@ -161,7 +166,12 @@ public final class AuroraIOSVoiceSessionHost {
         packPath: pack.packPath,
         sha256: pack.sha256,
         fileSize: pack.fileSize,
-        runtimeRevision: pack.runtimeRevision
+        runtimeRevision: pack.runtimeRevision,
+        filesJson: pack.filesJson,
+        language: pack.language,
+        packId: pack.packId,
+        sampleRateHz: pack.sampleRateHz,
+        frameSize: pack.frameSize
       )
     }
   }
@@ -191,7 +201,19 @@ public final class AuroraIOSVoiceSessionHost {
       return body(nil, 0)
     }
     var nativeBindings = Array(
-      repeating: AuroraIosVoiceTaskPackBinding(task: 0, slot_id: nil, pack_path: nil),
+      repeating: AuroraIosVoiceTaskPackBinding(
+        task: 0,
+        slot_id: nil,
+        pack_id: nil,
+        pack_path: nil,
+        expected_sha256: nil,
+        expected_size_bytes: 0,
+        runtime_revision: nil,
+        files_json: nil,
+        language: nil,
+        sample_rate_hz: 0,
+        frame_size: 0
+      ),
       count: bindings.count
     )
 
@@ -203,18 +225,29 @@ public final class AuroraIOSVoiceSessionHost {
       }
       let binding = bindings[index]
       return binding.slotId.withCString { slotPointer in
-        binding.packPath.withCString { packPathPointer in
-          binding.sha256.withCString { shaPointer in
-            binding.runtimeRevision.withCString { revisionPointer in
-              nativeBindings[index] = AuroraIosVoiceTaskPackBinding(
-                task: binding.task,
-                slot_id: slotPointer,
-                pack_path: packPathPointer,
-                expected_sha256: shaPointer,
-                expected_size_bytes: binding.fileSize,
-                runtime_revision: revisionPointer
-              )
-              return bind(index + 1)
+        binding.packId.withCString { packIdPointer in
+          binding.packPath.withCString { packPathPointer in
+            binding.sha256.withCString { shaPointer in
+              binding.runtimeRevision.withCString { revisionPointer in
+                binding.filesJson.withCString { filesPointer in
+                  binding.language.withCString { languagePointer in
+                    nativeBindings[index] = AuroraIosVoiceTaskPackBinding(
+                      task: binding.task,
+                      slot_id: slotPointer,
+                      pack_id: packIdPointer,
+                      pack_path: packPathPointer,
+                      expected_sha256: shaPointer,
+                      expected_size_bytes: binding.fileSize,
+                      runtime_revision: revisionPointer,
+                      files_json: filesPointer,
+                      language: languagePointer,
+                      sample_rate_hz: binding.sampleRateHz,
+                      frame_size: binding.frameSize
+                    )
+                    return bind(index + 1)
+                  }
+                }
+              }
             }
           }
         }

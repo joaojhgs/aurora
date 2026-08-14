@@ -22,6 +22,8 @@ typedef struct AuroraIosVoiceTaskPackBinding {
   int32_t task;
   // Optional NUL-terminated UTF-8 slot id. Null means the default slot.
   const char *slot_id;
+  // Required NUL-terminated UTF-8 exact pack id selected from the catalog.
+  const char *pack_id;
   // Required NUL-terminated UTF-8 active pack path selected by Swift.
   const char *pack_path;
   // Required NUL-terminated lowercase hex SHA-256 selected from the catalog.
@@ -30,6 +32,14 @@ typedef struct AuroraIosVoiceTaskPackBinding {
   uint64_t expected_size_bytes;
   // Required NUL-terminated runtime/catalog revision selected from the catalog.
   const char *runtime_revision;
+  // Required NUL-terminated JSON array of exact local files selected from the catalog.
+  const char *files_json;
+  // Required NUL-terminated BCP-47 language selected from the catalog.
+  const char *language;
+  // Required audio sample rate selected from the catalog.
+  uint32_t sample_rate_hz;
+  // Required provider frame size selected from the catalog.
+  uint32_t frame_size;
 } AuroraIosVoiceTaskPackBinding;
 
 enum {

@@ -521,7 +521,7 @@ public final class AuroraNativePlugin: Plugin {
   }
 
   private func startVoiceCapture(_ invoke: Invoke, background: Bool) {
-    let requiredSlots = ["stt"]
+    let requiredSlots = ["vad", "kws", "stt", "tts"]
     let transportReady = AuroraNativePlugin.nativeTurnTransportReady()
     guard transportReady.available else {
       invoke.reject("native_voice_transport_unavailable")
@@ -1244,10 +1244,11 @@ public final class AuroraNativePlugin: Plugin {
     packCatalogCount: Any,
     packCatalogReady: Bool
   ) {
+    let requiredSlots = ["vad", "kws", "stt", "tts"]
     let packStatus = AuroraIOSVoicePackManager.status(forSlot: "stt")
     let activePack = packStatus["activePack"] ?? NSNull()
-    let slotReady = AuroraIOSVoicePackManager.status(forSlots: ["stt"])
-    let packReady = slotReady["stt"] == true
+    let slotReady = AuroraIOSVoicePackManager.status(forSlots: requiredSlots)
+    let packReady = requiredSlots.allSatisfy { slotReady[$0] == true }
     let catalogStatus = AuroraIOSVoicePackManager.status()
     let catalogCount = catalogStatus["count"] ?? 0
 

@@ -22,6 +22,9 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
   let version: String?
   let compatiblePlatforms: [String]
   let compatibleArchitectures: [String]
+  let modelFiles: [AuroraIOSVoicePackModelFile]
+  let sampleRateHz: UInt32
+  let frameSize: UInt32
 
   init(
     packId: String,
@@ -38,7 +41,10 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
     acknowledged: Bool = false,
     version: String? = nil,
     compatiblePlatforms: [String] = ["ios"],
-    compatibleArchitectures: [String] = ["arm64"]
+    compatibleArchitectures: [String] = ["arm64"],
+    modelFiles: [AuroraIOSVoicePackModelFile] = [],
+    sampleRateHz: UInt32 = 16_000,
+    frameSize: UInt32 = 512
   ) {
     self.packId = packId
     self.displayName = displayName
@@ -55,6 +61,9 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
     self.version = version
     self.compatiblePlatforms = compatiblePlatforms
     self.compatibleArchitectures = compatibleArchitectures
+    self.modelFiles = modelFiles
+    self.sampleRateHz = sampleRateHz
+    self.frameSize = frameSize
   }
 
   init(from decoder: Decoder) throws {
@@ -112,9 +121,42 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
     let architectureValue = try? container.decodeIfPresent([String].self, forKey: .compatibleArchitectures)
     let architectureAlias = try? container.decodeIfPresent([String].self, forKey: .architectures)
     self.compatibleArchitectures = architectureValue ?? architectureAlias ?? ["arm64"]
+    let filesValue = try? container.decodeIfPresent([AuroraIOSVoicePackModelFile].self, forKey: .modelFiles)
+    let filesAlias = try? container.decodeIfPresent([AuroraIOSVoicePackModelFile].self, forKey: .model_files)
+    self.modelFiles = filesValue ?? filesAlias ?? []
+    self.sampleRateHz = try Self.decodeUInt32IfPresent(
+      container,
+      keys: ["sample_rate_hz", "sampleRateHz"]
+    ) ?? 16_000
+    self.frameSize = try Self.decodeUInt32IfPresent(
+      container,
+      keys: ["frame_size", "frameSize"]
+    ) ?? 512
   }
 
-  private static func decodeString(
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(packId, forKey: .packId)
+    try container.encode(displayName, forKey: .displayName)
+    try container.encode(language, forKey: .language)
+    try container.encode(task, forKey: .task)
+    try container.encode(downloadUrl, forKey: .downloadUrl)
+    try container.encode(sha256, forKey: .sha256)
+    try container.encode(fileSize, forKey: .fileSize)
+    try container.encode(fileName, forKey: .fileName)
+    try container.encode(runtimeRevision, forKey: .runtimeRevision)
+    try container.encode(license, forKey: .license)
+    try container.encode(attribution, forKey: .attribution)
+    try container.encode(acknowledged, forKey: .acknowledged)
+    try container.encodeIfPresent(version, forKey: .version)
+    try container.encode(compatiblePlatforms, forKey: .compatiblePlatforms)
+    try container.encode(compatibleArchitectures, forKey: .compatibleArchitectures)
+    try container.encode(modelFiles, forKey: .modelFiles)
+    try container.encode(sampleRateHz, forKey: .sampleRateHz)
+    try container.encode(frameSize, forKey: .frameSize)
+  }
+
+  fileprivate static func decodeString(
     _ container: KeyedDecodingContainer<CodingKeys>,
     keys: [String]
   ) throws -> String {
@@ -132,7 +174,7 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
     )
   }
 
-  private static func decodeUInt64(
+  fileprivate static func decodeUInt64(
     _ container: KeyedDecodingContainer<CodingKeys>,
     keys: [String]
   ) throws -> UInt64 {
@@ -153,6 +195,24 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
         debugDescription: "missing or invalid voice pack catalog numeric field"
       )
     )
+  }
+
+  fileprivate static func decodeUInt32IfPresent(
+    _ container: KeyedDecodingContainer<CodingKeys>,
+    keys: [String]
+  ) throws -> UInt32? {
+    for key in keys {
+      if let codingKey = CodingKeys(rawValue: key) {
+        if let value = try? container.decodeIfPresent(UInt32.self, forKey: codingKey) {
+          return value
+        }
+        if let stringValue = try? container.decodeIfPresent(String.self, forKey: codingKey),
+           let parsed = UInt32(stringValue) {
+          return parsed
+        }
+      }
+    }
+    return nil
   }
 
   enum CodingKeys: String, CodingKey {
@@ -188,6 +248,87 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
     case platforms
     case compatibleArchitectures
     case architectures
+    case modelFiles
+    case model_files
+    case sampleRateHz
+    case sample_rate_hz
+    case frameSize
+    case frame_size
+  }
+}
+
+struct AuroraIOSVoicePackModelFile: Codable, Equatable {
+  let fileId: String
+  let relativePath: String
+  let sha256: String
+  let fileSize: UInt64
+
+  init(fileId: String, relativePath: String, sha256: String, fileSize: UInt64) {
+    self.fileId = fileId
+    self.relativePath = relativePath
+    self.sha256 = sha256.lowercased()
+    self.fileSize = fileSize
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.fileId = try Self.decodeString(container, keys: [.file_id, .fileId])
+    self.relativePath = try Self.decodeString(container, keys: [.relative_path, .relativePath, .path])
+    self.sha256 = try Self.decodeString(container, keys: [.sha256, .sha_256]).lowercased()
+    self.fileSize = try Self.decodeUInt64(container, keys: [.file_size_bytes, .fileSize, .size_bytes])
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(fileId, forKey: .fileId)
+    try container.encode(relativePath, forKey: .relativePath)
+    try container.encode(sha256, forKey: .sha256)
+    try container.encode(fileSize, forKey: .fileSize)
+  }
+
+  private static func decodeString(
+    _ container: KeyedDecodingContainer<CodingKeys>,
+    keys: [CodingKeys]
+  ) throws -> String {
+    for key in keys {
+      if let value = try? container.decodeIfPresent(String.self, forKey: key), !value.isEmpty {
+        return value
+      }
+    }
+    throw DecodingError.dataCorrupted(
+      .init(codingPath: container.codingPath, debugDescription: "missing required model file field")
+    )
+  }
+
+  private static func decodeUInt64(
+    _ container: KeyedDecodingContainer<CodingKeys>,
+    keys: [CodingKeys]
+  ) throws -> UInt64 {
+    for key in keys {
+      if let u64Value = try? container.decodeIfPresent(UInt64.self, forKey: key) {
+        return u64Value
+      }
+      if let stringValue = try? container.decodeIfPresent(String.self, forKey: key),
+         let parsed = UInt64(stringValue) {
+        return parsed
+      }
+    }
+    throw DecodingError.dataCorrupted(
+      .init(codingPath: container.codingPath, debugDescription: "missing or invalid model file size")
+    )
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case fileId
+    case file_id
+    case relativePath
+    case relative_path
+    case path
+    case sha256
+    case sha_256
+    case fileSize
+    case file_size_bytes
+    case size_bytes
   }
 }
 
@@ -242,6 +383,11 @@ struct AuroraIOSVoicePackPathBinding: Equatable {
   let sha256: String
   let fileSize: UInt64
   let runtimeRevision: String
+  let language: String
+  let filesJson: String
+  let packId: String
+  let sampleRateHz: UInt32
+  let frameSize: UInt32
 }
 
 private struct AuroraIOSVoicePackActiveSelection: Codable {
@@ -705,7 +851,21 @@ enum AuroraIOSVoicePackManager {
           entry.compatiblePlatforms.isEmpty == false else {
       return false
     }
-    return isPackCompatible(entry) && validateDownloadTarget(url)
+    return isPackCompatible(entry) && validateDownloadTarget(url) && isValidModelFiles(entry.modelFiles)
+  }
+
+  private static func isValidModelFiles(_ files: [AuroraIOSVoicePackModelFile]) -> Bool {
+    var seen = Set<String>()
+    for file in files {
+      guard isValidSlot(file.fileId),
+            seen.insert(file.fileId).inserted,
+            isValidSha256(file.sha256),
+            file.fileSize > 0,
+            (try? sanitizeRelativePath(file.relativePath)) != nil else {
+        return false
+      }
+    }
+    return true
   }
 
   private static func currentArchitectures() -> Set<String> {
@@ -985,23 +1145,51 @@ enum AuroraIOSVoicePackManager {
             metadata.pack.acknowledged,
             metadata.localSha256 == catalogEntry.sha256,
             metadata.bytesDownloaded == catalogEntry.fileSize,
-            metadata.pack.runtimeRevision == catalogEntry.runtimeRevision else {
+            metadata.pack.runtimeRevision == catalogEntry.runtimeRevision,
+            catalogEntry.sampleRateHz > 0,
+            catalogEntry.frameSize > 0 else {
         continue
       }
       let packDirectory = root.appendingPathComponent(packId, isDirectory: true)
       let packPath = packDirectory.appendingPathComponent(catalogEntry.fileName)
-      if isSafeCachedPackFile(packDirectory, candidate: packPath, expectedSize: catalogEntry.fileSize) {
+      if isSafeCachedPackFile(packDirectory, candidate: packPath, expectedSize: catalogEntry.fileSize),
+         let filesJson = modelFilesJson(root: packDirectory, files: catalogEntry.modelFiles) {
         bindings.append(AuroraIOSVoicePackPathBinding(
           slot: slot,
           task: catalogEntry.task.lowercased(),
           packPath: packPath.path,
           sha256: catalogEntry.sha256,
           fileSize: catalogEntry.fileSize,
-          runtimeRevision: catalogEntry.runtimeRevision
+          runtimeRevision: catalogEntry.runtimeRevision,
+          language: catalogEntry.language,
+          filesJson: filesJson,
+          packId: catalogEntry.packId,
+          sampleRateHz: catalogEntry.sampleRateHz,
+          frameSize: catalogEntry.frameSize
         ))
       }
     }
     return bindings
+  }
+
+  private static func modelFilesJson(root: URL, files: [AuroraIOSVoicePackModelFile]) -> String? {
+    guard !files.isEmpty, files.allSatisfy({ isSafeCachedModelFile(root, file: $0) }) else {
+      return nil
+    }
+    do {
+      let payload = try files.map { file -> [String: Any] in
+        [
+          "file_id": file.fileId,
+          "path": try modelFileURL(root: root, file: file).path,
+          "sha256": file.sha256,
+          "size_bytes": file.fileSize
+        ]
+      }
+      let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+      return String(data: data, encoding: .utf8)
+    } catch {
+      return nil
+    }
   }
 
   private static func readInstalledRecord(for packId: String) throws -> AuroraIOSVoicePackInstalledRecord {
@@ -1099,6 +1287,51 @@ enum AuroraIOSVoicePackManager {
     } catch {
       return false
     }
+  }
+
+  private static func isSafeCachedModelFile(_ root: URL, file: AuroraIOSVoicePackModelFile) -> Bool {
+    do {
+      let candidate = try modelFileURL(root: root, file: file)
+      guard isSafeCachedURL(root, candidate: candidate) else { return false }
+      let values = try candidate.resourceValues(forKeys: [
+        .isRegularFileKey,
+        .isSymbolicLinkKey,
+        .fileSizeKey
+      ])
+      guard let fileSize = values.fileSize, fileSize >= 0 else { return false }
+      guard values.isRegularFile == true,
+            values.isSymbolicLink != true,
+            UInt64(fileSize) == file.fileSize else {
+        return false
+      }
+      return try sha256File(candidate) == file.sha256
+    } catch {
+      return false
+    }
+  }
+
+  private static func modelFileURL(root: URL, file: AuroraIOSVoicePackModelFile) throws -> URL {
+    root.appendingPathComponent(try sanitizeRelativePath(file.relativePath), isDirectory: false)
+  }
+
+  private static func sanitizeRelativePath(_ value: String) throws -> String {
+    guard !value.isEmpty, value.utf8.count <= 1024, !value.hasPrefix("/") else {
+      throw AuroraIOSVoicePackManagerError.invalidPack
+    }
+    let parts = value.split(separator: "/", omittingEmptySubsequences: false)
+    guard !parts.isEmpty else { throw AuroraIOSVoicePackManagerError.invalidPack }
+    let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/")
+    guard value.rangeOfCharacter(from: allowed.inverted) == nil else {
+      throw AuroraIOSVoicePackManagerError.invalidPack
+    }
+    for part in parts {
+      guard !part.isEmpty,
+            part != ".",
+            part != ".." else {
+        throw AuroraIOSVoicePackManagerError.invalidPack
+      }
+    }
+    return value
   }
 
   private static func sha256File(_ url: URL) throws -> String {

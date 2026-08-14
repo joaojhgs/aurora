@@ -271,6 +271,107 @@ impl TaskPackBinding {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_ios_cached_sherpa(
+        task: VoiceTask,
+        pack_id: impl Into<String>,
+        pack_version: impl Into<String>,
+        archive_sha256: impl Into<String>,
+        runtime_revision: impl Into<String>,
+        selected_file_ids: Vec<String>,
+        language: impl Into<String>,
+        sample_rate_hz: u32,
+        frame_size: u32,
+        max_installed_bytes: u64,
+    ) -> Result<Self, EngineError> {
+        let pack_id = pack_id.into();
+        let pack_version = pack_version.into();
+        let archive_sha256 = archive_sha256.into();
+        let runtime_revision = runtime_revision.into();
+        let language = language.into();
+        if !valid_logical_id(&pack_id)
+            || !valid_logical_id(&pack_version)
+            || archive_sha256.len() != 64
+            || !archive_sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
+            || !valid_logical_id(&runtime_revision)
+            || selected_file_ids.is_empty()
+            || selected_file_ids
+                .iter()
+                .any(|file_id| !valid_logical_id(file_id))
+            || !valid_logical_id(&language)
+            || sample_rate_hz == 0
+            || frame_size == 0
+            || max_installed_bytes == 0
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        let mut hasher = Sha256::new();
+        hash_part(&mut hasher, b"aurora.ios.cached.sherpa.binding.v1");
+        hash_part(&mut hasher, pack_id.as_bytes());
+        hash_part(&mut hasher, pack_version.as_bytes());
+        hash_part(&mut hasher, archive_sha256.as_bytes());
+        hash_part(&mut hasher, runtime_revision.as_bytes());
+        for file_id in &selected_file_ids {
+            hash_part(&mut hasher, file_id.as_bytes());
+        }
+        let digest = hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<Vec<_>>()
+            .join("");
+        Ok(Self {
+            source: TaskBindingSource::SpeechCatalog {
+                catalog_id: "aurora-ios-cache".to_owned(),
+                catalog_revision: pack_version.clone(),
+                archive_sha256: archive_sha256.clone(),
+                model_family: runtime_revision.clone(),
+                language_scope: "specific".to_owned(),
+            },
+            task,
+            manifest_sha256: digest,
+            pack_id,
+            pack_version,
+            variant_id: archive_sha256,
+            selected_file_ids,
+            compatibility_group_id: runtime_revision.clone(),
+            voice_state_compatibility_group_id: runtime_revision.clone(),
+            target: RuntimeTarget::Ios,
+            os: TargetOs::Ios,
+            arch: TargetArch::Aarch64,
+            engine: EngineKind::SherpaOnnx,
+            required_browser_features: Vec::new(),
+            min_device_memory_mb: None,
+            runtime_gates: RuntimeGates {
+                min_cpu_threads: 1,
+                max_rtf_millis_per_second: 1_000,
+                min_device_class: DeviceClass::Low,
+            },
+            resource_budget: ResourceBudget {
+                max_download_bytes: max_installed_bytes,
+                max_installed_bytes,
+                max_memory_bytes: max_installed_bytes,
+            },
+            variant_abi: AbiRequirements {
+                min_aurora_version: "ios-native".to_owned(),
+                min_runtime_version: runtime_revision.clone(),
+                min_engine_version: runtime_revision,
+                engine_source_revision: "ios-cached".to_owned(),
+                build_flags: vec!["ios-sherpa".to_owned()],
+            },
+            interoperable: true,
+            sample_rate_hz,
+            channels: MONO_CHANNELS,
+            frame_size,
+            languages: vec![LanguageSupport {
+                language,
+                locale: None,
+                fixed_language: true,
+                auto_detect: false,
+            }],
+        })
+    }
+
     pub fn from_speech_catalog_entry(
         catalog: &SpeechModelCatalog,
         entry: &SpeechCatalogEntry,

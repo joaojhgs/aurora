@@ -9,6 +9,8 @@ use crate::{
     NativeGatewayTransport, NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer, TransportLimits,
 };
 use async_trait::async_trait;
+#[cfg(feature = "ios-sherpa")]
+use aurora_voice_core::WakeOrchestrationConfig;
 use aurora_voice_core::{
     CancellationToken, CaptureOwnerKind, CaptureStartReason, Generation, RedactedSnapshot,
     RouteFiniteSttBinding, RouteRevision, RouteTtsBinding, RuntimeEvent, RuntimeEventSink,
@@ -18,10 +20,19 @@ use aurora_voice_engine::{
     FiniteSttRouteScope, ModelPackError, ModelStoreScope, PackTask, MAX_FINITE_STT_SAMPLES,
     VAD_SAMPLE_RATE_HZ,
 };
+#[cfg(feature = "ios-sherpa")]
+use aurora_voice_engine::{KwsConfig, TaskPackBinding, VadConfig, VoiceTask};
 use aurora_voice_ios_bridge::{
     AuroraIosAudioInput, AuroraIosAudioOutput, AuroraIosAudioState, AuroraIosCaptureControl,
 };
+#[cfg(feature = "ios-sherpa")]
+use aurora_voice_sherpa::{
+    NativeKwsBackend, NativeKwsModelFiles, NativeSttBackend, NativeSttModelFiles, NativeTtsBackend,
+    NativeTtsVitsPiperModelFiles, NativeVadBackend, SherpaFiniteSttEngine, SherpaKwsPhrase,
+    SherpaKwsPhraseSet, SherpaKwsProvider, SherpaTtsProvider, SherpaVadProvider,
+};
 use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::fs;
 use std::future::Future;
@@ -47,10 +58,19 @@ const DEFAULT_OUTPUT_CAPACITY_CHUNKS: usize = 16;
 pub const MAX_IOS_PACK_BINDINGS: usize = 16;
 const MAX_IOS_PACK_PATH_BYTES: usize = 4096;
 
+#[cfg(not(feature = "ios-sherpa"))]
+type IosFiniteSttProvider = NativeGatewayFiniteStt;
+#[cfg(feature = "ios-sherpa")]
+type IosFiniteSttProvider = SherpaFiniteSttEngine<NativeSttBackend>;
+#[cfg(not(feature = "ios-sherpa"))]
+type IosTtsProvider = NativeGatewayTtsSynthesizer;
+#[cfg(feature = "ios-sherpa")]
+type IosTtsProvider = SherpaTtsProvider<NativeTtsBackend>;
+
 type RuntimeCore = VoiceRuntime<
     AuroraIosAudioInput,
-    NativeGatewayFiniteStt,
-    NativeGatewayTtsSynthesizer,
+    IosFiniteSttProvider,
+    IosTtsProvider,
     NativeGatewayTransport,
     AuroraIosAudioOutput,
     IosSessionSink,
@@ -107,31 +127,48 @@ impl fmt::Debug for IosVoiceSessionConfig {
 pub struct IosVoicePackBinding {
     task: PackTask,
     slot_id: String,
+    pack_id: String,
     pack_path: PathBuf,
     expected_sha256: String,
     expected_size_bytes: u64,
     runtime_revision: String,
+    language: String,
+    sample_rate_hz: u32,
+    frame_size: u32,
+    files: Vec<IosVoicePackFileBinding>,
 }
 
 impl IosVoicePackBinding {
     pub fn new(
         task: PackTask,
         slot_id: impl Into<String>,
+        pack_id: impl Into<String>,
         pack_path: impl Into<PathBuf>,
         expected_sha256: impl Into<String>,
         expected_size_bytes: u64,
         runtime_revision: impl Into<String>,
+        language: impl Into<String>,
+        sample_rate_hz: u32,
+        frame_size: u32,
+        files: Vec<IosVoicePackFileBinding>,
     ) -> Result<Self, ModelPackError> {
         let slot_id = slot_id.into();
         ModelStoreScope::new(task, slot_id.clone())?;
+        let pack_id = pack_id.into();
         let pack_path = pack_path.into();
         let expected_sha256 = expected_sha256.into();
         let runtime_revision = runtime_revision.into();
-        if pack_path.as_os_str().is_empty()
+        let language = language.into();
+        if pack_id.is_empty()
+            || pack_path.as_os_str().is_empty()
             || pack_path.as_os_str().len() > MAX_IOS_PACK_PATH_BYTES
             || !is_hex_sha256(&expected_sha256)
             || expected_size_bytes == 0
             || runtime_revision.is_empty()
+            || language.is_empty()
+            || sample_rate_hz == 0
+            || frame_size == 0
+            || files.is_empty()
             || !matches!(
                 task,
                 PackTask::Kws | PackTask::Wakeword | PackTask::Vad | PackTask::Stt | PackTask::Tts
@@ -139,13 +176,24 @@ impl IosVoicePackBinding {
         {
             return Err(ModelPackError::Store { code: "binding" });
         }
+        let mut seen = BTreeSet::new();
+        for file in &files {
+            if !seen.insert(file.file_id.clone()) {
+                return Err(ModelPackError::Store { code: "binding" });
+            }
+        }
         Ok(Self {
             task,
             slot_id,
+            pack_id,
             pack_path,
             expected_sha256,
             expected_size_bytes,
             runtime_revision,
+            language,
+            sample_rate_hz,
+            frame_size,
+            files,
         })
     }
 
@@ -155,6 +203,10 @@ impl IosVoicePackBinding {
 
     pub fn slot_id(&self) -> &str {
         &self.slot_id
+    }
+
+    pub fn pack_id(&self) -> &str {
+        &self.pack_id
     }
 
     pub fn pack_path(&self) -> &PathBuf {
@@ -172,6 +224,22 @@ impl IosVoicePackBinding {
     pub fn runtime_revision(&self) -> &str {
         &self.runtime_revision
     }
+
+    pub fn language(&self) -> &str {
+        &self.language
+    }
+
+    pub fn sample_rate_hz(&self) -> u32 {
+        self.sample_rate_hz
+    }
+
+    pub fn frame_size(&self) -> u32 {
+        self.frame_size
+    }
+
+    pub fn files(&self) -> &[IosVoicePackFileBinding] {
+        &self.files
+    }
 }
 
 impl fmt::Debug for IosVoicePackBinding {
@@ -180,10 +248,79 @@ impl fmt::Debug for IosVoicePackBinding {
             .debug_struct("IosVoicePackBinding")
             .field("task", &self.task)
             .field("slot_id", &self.slot_id)
+            .field("pack_id_bytes", &self.pack_id.len())
             .field("pack_path", &"<redacted>")
             .field("expected_sha256_bytes", &self.expected_sha256.len())
             .field("expected_size_bytes", &self.expected_size_bytes)
             .field("runtime_revision_bytes", &self.runtime_revision.len())
+            .field("language_bytes", &self.language.len())
+            .field("sample_rate_hz", &self.sample_rate_hz)
+            .field("frame_size", &self.frame_size)
+            .field("file_count", &self.files.len())
+            .finish()
+    }
+}
+
+/// One exact local file inside an iOS-selected Sherpa pack.
+#[derive(Clone, PartialEq, Eq)]
+pub struct IosVoicePackFileBinding {
+    file_id: String,
+    path: PathBuf,
+    expected_sha256: String,
+    expected_size_bytes: u64,
+}
+
+impl IosVoicePackFileBinding {
+    pub fn new(
+        file_id: impl Into<String>,
+        path: impl Into<PathBuf>,
+        expected_sha256: impl Into<String>,
+        expected_size_bytes: u64,
+    ) -> Result<Self, ModelPackError> {
+        let file_id = file_id.into();
+        let path = path.into();
+        let expected_sha256 = expected_sha256.into();
+        if file_id.is_empty()
+            || path.as_os_str().is_empty()
+            || path.as_os_str().len() > MAX_IOS_PACK_PATH_BYTES
+            || !is_hex_sha256(&expected_sha256)
+            || expected_size_bytes == 0
+        {
+            return Err(ModelPackError::Store { code: "binding" });
+        }
+        Ok(Self {
+            file_id,
+            path,
+            expected_sha256,
+            expected_size_bytes,
+        })
+    }
+
+    pub fn file_id(&self) -> &str {
+        &self.file_id
+    }
+
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+
+    pub fn expected_sha256(&self) -> &str {
+        &self.expected_sha256
+    }
+
+    pub fn expected_size_bytes(&self) -> u64 {
+        self.expected_size_bytes
+    }
+}
+
+impl fmt::Debug for IosVoicePackFileBinding {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("IosVoicePackFileBinding")
+            .field("file_id", &self.file_id)
+            .field("path", &"<redacted>")
+            .field("expected_sha256_bytes", &self.expected_sha256.len())
+            .field("expected_size_bytes", &self.expected_size_bytes)
             .finish()
     }
 }
@@ -472,7 +609,152 @@ fn build_runtime(
     output: AuroraIosAudioOutput,
     sink: IosSessionSink,
 ) -> Result<RuntimeCore, IosVoiceSessionCommandError> {
-    verify_ios_pack_bindings(&config.pack_bindings)?;
+    let verified = verify_ios_pack_bindings(&config.pack_bindings)?;
+    if !verified.is_empty() {
+        return build_local_ios_runtime(config, input, output, sink, verified);
+    }
+    build_gateway_runtime(config, input, output, sink)
+}
+
+#[cfg(not(feature = "ios-sherpa"))]
+fn build_local_ios_runtime(
+    _config: &IosVoiceSessionConfig,
+    _input: AuroraIosAudioInput,
+    _output: AuroraIosAudioOutput,
+    _sink: IosSessionSink,
+    _verified: BTreeMap<PackTask, IosVoicePackBinding>,
+) -> Result<RuntimeCore, IosVoiceSessionCommandError> {
+    Err(IosVoiceSessionCommandError::Unavailable)
+}
+
+#[cfg(feature = "ios-sherpa")]
+fn build_local_ios_runtime(
+    config: &IosVoiceSessionConfig,
+    input: AuroraIosAudioInput,
+    output: AuroraIosAudioOutput,
+    sink: IosSessionSink,
+    verified: BTreeMap<PackTask, IosVoicePackBinding>,
+) -> Result<RuntimeCore, IosVoiceSessionCommandError> {
+    let policy = microphone_policy(config)?;
+    if !matches!(policy, MicrophoneAudioPolicy::LoopbackOnly) {
+        return Err(IosVoiceSessionCommandError::Unavailable);
+    }
+    let transport_for_assistant = assistant_transport(config, policy)?;
+    let vad_binding = verified_binding(&verified, PackTask::Vad)?;
+    let kws_binding = verified
+        .get(&PackTask::Kws)
+        .or_else(|| verified.get(&PackTask::Wakeword))
+        .ok_or(IosVoiceSessionCommandError::Unavailable)?;
+    let stt_binding = verified_binding(&verified, PackTask::Stt)?;
+    let tts_binding = verified_binding(&verified, PackTask::Tts)?;
+
+    let vad_task = task_pack_binding(vad_binding, VoiceTask::VoiceActivityDetection)?;
+    let kws_task = task_pack_binding(kws_binding, VoiceTask::KeywordSpotting)?;
+    let stt_task = task_pack_binding(stt_binding, VoiceTask::SpeechToText)?;
+    let tts_task = task_pack_binding(tts_binding, VoiceTask::TextToSpeech)?;
+
+    let vad_config = VadConfig::default();
+    let vad_model = required_file(vad_binding, "model")?;
+    let vad_backend = NativeVadBackend::from_selected_model(
+        &vad_task,
+        vad_model.file_id(),
+        vad_model.path().clone(),
+        &vad_config,
+    )
+    .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    let vad = SherpaVadProvider::new(vad_task.clone(), vad_backend)
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+
+    let kws_files = NativeKwsModelFiles {
+        encoder_file_id: "encoder-int8".to_owned(),
+        encoder_path: required_file(kws_binding, "encoder-int8")?.path().clone(),
+        decoder_file_id: "decoder".to_owned(),
+        decoder_path: required_file(kws_binding, "decoder")?.path().clone(),
+        joiner_file_id: "joiner-int8".to_owned(),
+        joiner_path: required_file(kws_binding, "joiner-int8")?.path().clone(),
+        tokens_file_id: "tokens".to_owned(),
+        tokens_path: required_file(kws_binding, "tokens")?.path().clone(),
+    };
+    let kws_backend = NativeKwsBackend::from_selected_model(&kws_task, kws_files)
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    let phrase_set = SherpaKwsPhraseSet::new(
+        kws_binding.runtime_revision().to_owned(),
+        [SherpaKwsPhrase::new("wake.main", "AURORA", "AURORA")
+            .map_err(|_| IosVoiceSessionCommandError::Unavailable)?],
+    )
+    .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    let kws = SherpaKwsProvider::new(kws_task.clone(), phrase_set.clone(), kws_backend)
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+
+    let stt_decoder = stt_decoder_file(stt_binding)?;
+    let stt_files = NativeSttModelFiles {
+        encoder_file_id: "encoder".to_owned(),
+        encoder_path: required_file(stt_binding, "encoder")?.path().clone(),
+        decoder_file_id: stt_decoder.file_id().to_owned(),
+        decoder_path: stt_decoder.path().clone(),
+        tokens_file_id: "tokens".to_owned(),
+        tokens_path: required_file(stt_binding, "tokens")?.path().clone(),
+        language: Some(stt_binding.language().to_owned()),
+    };
+    let stt_backend = NativeSttBackend::from_selected_model_files(&stt_task, stt_files)
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    let stt = SherpaFiniteSttEngine::new(stt_task, stt_backend)
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+
+    let tts_files = NativeTtsVitsPiperModelFiles {
+        model_file_id: "model".to_owned(),
+        model_path: required_file(tts_binding, "model")?.path().clone(),
+        tokens_file_id: "tokens".to_owned(),
+        tokens_path: required_file(tts_binding, "tokens")?.path().clone(),
+        espeak_data_file_id: "espeak-ng-data".to_owned(),
+        espeak_data_dir: required_file(tts_binding, "espeak-ng-data")?.path().clone(),
+        lexicon_file_id: optional_file(tts_binding, "lexicon")
+            .map(|file| file.file_id().to_owned()),
+        lexicon_path: optional_file(tts_binding, "lexicon").map(|file| file.path().clone()),
+    };
+    let tts_backend = NativeTtsBackend::from_selected_vits_piper_model(&tts_task, tts_files)
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    let tts = SherpaTtsProvider::new(tts_task, tts_backend)
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+
+    let wake_config = WakeOrchestrationConfig::new(
+        vad_task,
+        kws_task,
+        vad_config,
+        KwsConfig::new(
+            ["wake.main"],
+            kws_binding.runtime_revision().to_owned(),
+            0.5,
+            2,
+            1,
+        )
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?,
+        16_000 * 30,
+        16_000 * 60,
+    )
+    .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+
+    VoiceRuntime::new(
+        input,
+        stt,
+        tts,
+        transport_for_assistant,
+        output,
+        sink,
+        IOS_SURFACE,
+        IOS_RUNTIME_ID,
+    )
+    .and_then(|runtime| runtime.with_wake_providers(Box::new(vad), Box::new(kws), wake_config))
+    .map_err(|_| IosVoiceSessionCommandError::Unavailable)
+}
+
+#[cfg(not(feature = "ios-sherpa"))]
+fn build_gateway_runtime(
+    config: &IosVoiceSessionConfig,
+    input: AuroraIosAudioInput,
+    output: AuroraIosAudioOutput,
+    sink: IosSessionSink,
+) -> Result<RuntimeCore, IosVoiceSessionCommandError> {
     let policy = microphone_policy(config)?;
     let scope = if matches!(policy, MicrophoneAudioPolicy::LoopbackOnly) {
         FiniteSttRouteScope::LoopbackSidecar
@@ -536,13 +818,37 @@ fn build_runtime(
     .map_err(|_| IosVoiceSessionCommandError::Unavailable)
 }
 
+#[cfg(feature = "ios-sherpa")]
+fn build_gateway_runtime(
+    _config: &IosVoiceSessionConfig,
+    _input: AuroraIosAudioInput,
+    _output: AuroraIosAudioOutput,
+    _sink: IosSessionSink,
+) -> Result<RuntimeCore, IosVoiceSessionCommandError> {
+    Err(IosVoiceSessionCommandError::Unavailable)
+}
+
 fn verify_ios_pack_bindings(
     bindings: &IosVoicePackBindings,
-) -> Result<(), IosVoiceSessionCommandError> {
+) -> Result<BTreeMap<PackTask, IosVoicePackBinding>, IosVoiceSessionCommandError> {
+    let mut verified = BTreeMap::new();
     for binding in bindings.iter() {
         verify_ios_pack_binding(binding)?;
+        for file in binding.files() {
+            verify_ios_pack_file_binding(file)?;
+        }
+        verified.insert(binding.task(), binding.clone());
     }
-    Ok(())
+    if !verified.is_empty()
+        && !(verified.contains_key(&PackTask::Vad)
+            && (verified.contains_key(&PackTask::Kws)
+                || verified.contains_key(&PackTask::Wakeword))
+            && verified.contains_key(&PackTask::Stt)
+            && verified.contains_key(&PackTask::Tts))
+    {
+        return Err(IosVoiceSessionCommandError::Unavailable);
+    }
+    Ok(verified)
 }
 
 fn verify_ios_pack_binding(
@@ -563,6 +869,116 @@ fn verify_ios_pack_binding(
         return Err(IosVoiceSessionCommandError::Unavailable);
     }
     Ok(())
+}
+
+fn verify_ios_pack_file_binding(
+    binding: &IosVoicePackFileBinding,
+) -> Result<(), IosVoiceSessionCommandError> {
+    let metadata = fs::symlink_metadata(binding.path())
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    if metadata.file_type().is_symlink()
+        || !metadata.file_type().is_file()
+        || metadata.len() != binding.expected_size_bytes()
+    {
+        return Err(IosVoiceSessionCommandError::Unavailable);
+    }
+    let digest =
+        sha256_path(binding.path()).map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    if digest != binding.expected_sha256() {
+        return Err(IosVoiceSessionCommandError::Unavailable);
+    }
+    Ok(())
+}
+
+#[cfg(feature = "ios-sherpa")]
+fn assistant_transport(
+    config: &IosVoiceSessionConfig,
+    policy: MicrophoneAudioPolicy,
+) -> Result<NativeGatewayTransport, IosVoiceSessionCommandError> {
+    let limits = TransportLimits {
+        max_request_bytes: 2 * 1024 * 1024,
+        max_response_bytes: 8 * 1024 * 1024,
+        max_event_bytes: 2 * 1024 * 1024,
+        request_timeout: REQUEST_TIMEOUT,
+        stream_idle_timeout: STREAM_IDLE_TIMEOUT,
+        allow_loopback_http: matches!(policy, MicrophoneAudioPolicy::LoopbackOnly),
+        microphone_audio_policy: policy,
+    };
+    NativeGatewayTransport::new(config.gateway.clone(), config.auth.clone(), limits)
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)
+}
+
+#[cfg(feature = "ios-sherpa")]
+fn verified_binding(
+    verified: &BTreeMap<PackTask, IosVoicePackBinding>,
+    task: PackTask,
+) -> Result<&IosVoicePackBinding, IosVoiceSessionCommandError> {
+    verified
+        .get(&task)
+        .ok_or(IosVoiceSessionCommandError::Unavailable)
+}
+
+#[cfg(feature = "ios-sherpa")]
+fn required_file<'a>(
+    binding: &'a IosVoicePackBinding,
+    file_id: &str,
+) -> Result<&'a IosVoicePackFileBinding, IosVoiceSessionCommandError> {
+    optional_file(binding, file_id).ok_or(IosVoiceSessionCommandError::Unavailable)
+}
+
+#[cfg(feature = "ios-sherpa")]
+fn optional_file<'a>(
+    binding: &'a IosVoicePackBinding,
+    file_id: &str,
+) -> Option<&'a IosVoicePackFileBinding> {
+    binding
+        .files()
+        .iter()
+        .find(|file| file.file_id() == file_id)
+}
+
+#[cfg(feature = "ios-sherpa")]
+fn stt_decoder_file(
+    binding: &IosVoicePackBinding,
+) -> Result<&IosVoicePackFileBinding, IosVoiceSessionCommandError> {
+    match (
+        optional_file(binding, "decoder"),
+        optional_file(binding, "decoder-merged"),
+    ) {
+        (Some(file), None) | (None, Some(file)) => Ok(file),
+        _ => Err(IosVoiceSessionCommandError::Unavailable),
+    }
+}
+
+#[cfg(feature = "ios-sherpa")]
+fn task_pack_binding(
+    binding: &IosVoicePackBinding,
+    task: VoiceTask,
+) -> Result<TaskPackBinding, IosVoiceSessionCommandError> {
+    let installed_bytes = binding
+        .files()
+        .iter()
+        .try_fold(0_u64, |total, file| {
+            total.checked_add(file.expected_size_bytes())
+        })
+        .ok_or(IosVoiceSessionCommandError::Unavailable)?;
+    TaskPackBinding::from_ios_cached_sherpa(
+        task,
+        binding.pack_id().to_owned(),
+        binding.runtime_revision().to_owned(),
+        binding.expected_sha256().to_owned(),
+        binding.runtime_revision().to_owned(),
+        binding
+            .files()
+            .iter()
+            .map(|file| file.file_id().to_owned())
+            .collect(),
+        binding.language().to_owned(),
+        binding.sample_rate_hz(),
+        binding.frame_size(),
+        installed_bytes,
+    )
+    .map_err(|_| IosVoiceSessionCommandError::Unavailable)
 }
 
 fn sha256_path(path: &PathBuf) -> Result<String, std::io::Error> {
@@ -886,19 +1302,35 @@ mod tests {
 
     #[test]
     fn ios_pack_bindings_are_bounded_deduplicated_and_redacted() {
+        let file = IosVoicePackFileBinding::new(
+            "encoder",
+            "/private/model-pack/encoder.onnx",
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            12,
+        )
+        .expect("file binding");
         let binding = IosVoicePackBinding::new(
             PackTask::Stt,
             "default",
+            "stt.en",
             "/private/model-pack",
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             12,
             "sherpa-onnx-1.13.4",
+            "en-US",
+            16_000,
+            512,
+            vec![file.clone()],
         )
         .expect("binding");
         assert_eq!(binding.task(), PackTask::Stt);
         assert_eq!(binding.slot_id(), "default");
+        assert_eq!(binding.pack_id(), "stt.en");
         assert_eq!(binding.expected_size_bytes(), 12);
         assert_eq!(binding.runtime_revision(), "sherpa-onnx-1.13.4");
+        assert_eq!(binding.language(), "en-US");
+        assert_eq!(binding.sample_rate_hz(), 16_000);
+        assert_eq!(binding.frame_size(), 512);
         assert_eq!(
             IosVoicePackBindings::new(vec![binding.clone()])
                 .expect("bindings")
@@ -906,26 +1338,100 @@ mod tests {
             1
         );
         assert!(IosVoicePackBindings::new(vec![binding.clone(), binding.clone()]).is_err());
+        assert!(IosVoicePackBinding::new(
+            PackTask::Stt,
+            "default",
+            "stt.en",
+            "/private/model-pack",
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            12,
+            "sherpa-onnx-1.13.4",
+            "en-US",
+            16_000,
+            512,
+            vec![file.clone(), file]
+        )
+        .is_err());
         let debug = format!("{binding:?}");
         assert!(debug.contains("Stt"));
+        assert!(!debug.contains("stt.en"));
         assert!(!debug.contains("/private/model-pack"));
     }
 
     #[test]
-    fn ios_session_accepts_cached_exact_pack_bindings() {
+    fn ios_session_accepts_cached_exact_pack_binding_set_for_verification() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let pack = dir.path().join("model.pack");
-        std::fs::write(&pack, b"cached model").expect("write pack");
-        let sha256 = sha256_path(&pack).expect("hash");
-        let bindings = IosVoicePackBindings::new(vec![IosVoicePackBinding::new(
+        let bindings = IosVoicePackBindings::new(vec![
+            test_pack_binding(dir.path(), PackTask::Vad, "vad", &["model"]),
+            test_pack_binding(
+                dir.path(),
+                PackTask::Kws,
+                "kws",
+                &["encoder-int8", "decoder", "joiner-int8", "tokens"],
+            ),
+            test_pack_binding(
+                dir.path(),
+                PackTask::Stt,
+                "stt",
+                &["encoder", "decoder", "tokens"],
+            ),
+            test_pack_binding(
+                dir.path(),
+                PackTask::Tts,
+                "tts",
+                &["model", "tokens", "espeak-ng-data"],
+            ),
+        ])
+        .expect("bindings");
+        let verified = verify_ios_pack_bindings(&bindings).expect("verified");
+        assert_eq!(verified.len(), 4);
+        assert!(verified.contains_key(&PackTask::Vad));
+        assert!(verified.contains_key(&PackTask::Kws));
+        assert!(verified.contains_key(&PackTask::Stt));
+        assert!(verified.contains_key(&PackTask::Tts));
+    }
+
+    #[test]
+    fn ios_session_rejects_incomplete_cached_pack_binding_set() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let bindings = IosVoicePackBindings::new(vec![test_pack_binding(
+            dir.path(),
             PackTask::Stt,
-            "default",
-            pack,
-            sha256,
-            12,
-            "sherpa-onnx-1.13.4",
-        )
-        .expect("binding")])
+            "stt",
+            &["encoder", "decoder", "tokens"],
+        )])
+        .expect("bindings");
+        assert!(matches!(
+            verify_ios_pack_bindings(&bindings),
+            Err(IosVoiceSessionCommandError::Unavailable)
+        ));
+    }
+
+    #[test]
+    #[cfg(not(feature = "ios-sherpa"))]
+    fn ios_runtime_fails_closed_for_native_pack_bindings_without_sherpa_feature() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let bindings = IosVoicePackBindings::new(vec![
+            test_pack_binding(dir.path(), PackTask::Vad, "vad", &["model"]),
+            test_pack_binding(
+                dir.path(),
+                PackTask::Kws,
+                "kws",
+                &["encoder-int8", "decoder", "joiner-int8", "tokens"],
+            ),
+            test_pack_binding(
+                dir.path(),
+                PackTask::Stt,
+                "stt",
+                &["encoder", "decoder", "tokens"],
+            ),
+            test_pack_binding(
+                dir.path(),
+                PackTask::Tts,
+                "tts",
+                &["model", "tokens", "espeak-ng-data"],
+            ),
+        ])
         .expect("bindings");
         let config = IosVoiceSessionConfig::with_pack_bindings(
             Url::parse("http://127.0.0.1:8000").expect("url"),
@@ -939,7 +1445,10 @@ mod tests {
         let sink = IosSessionSink {
             status: Arc::new(Mutex::new(IosVoiceSessionStatus::default())),
         };
-        assert!(build_runtime(&config, input, output, sink).is_ok());
+        assert!(matches!(
+            build_runtime(&config, input, output, sink),
+            Err(IosVoiceSessionCommandError::Unavailable)
+        ));
     }
 
     #[test]
@@ -954,16 +1463,69 @@ mod tests {
         let binding = IosVoicePackBinding::new(
             PackTask::Stt,
             "default",
+            "stt.en",
             link,
             sha256,
             12,
             "sherpa-onnx-1.13.4",
+            "en-US",
+            16_000,
+            512,
+            vec![IosVoicePackFileBinding::new(
+                "encoder",
+                target.clone(),
+                sha256_path(&target).expect("hash file"),
+                12,
+            )
+            .expect("file binding")],
         )
         .expect("binding");
         assert!(matches!(
             verify_ios_pack_binding(&binding),
             Err(IosVoiceSessionCommandError::Unavailable)
         ));
+    }
+
+    fn test_pack_binding(
+        root: &std::path::Path,
+        task: PackTask,
+        slot: &str,
+        file_ids: &[&str],
+    ) -> IosVoicePackBinding {
+        let pack = root.join(format!("{slot}.pack"));
+        std::fs::write(&pack, format!("cached {slot} pack")).expect("write pack");
+        let pack_sha256 = sha256_path(&pack).expect("hash pack");
+        let files = file_ids
+            .iter()
+            .map(|file_id| {
+                let file_path = root.join(format!("{slot}-{file_id}.bin"));
+                std::fs::write(&file_path, format!("cached {slot} {file_id}")).expect("write file");
+                let size = std::fs::metadata(&file_path).expect("metadata").len();
+                IosVoicePackFileBinding::new(
+                    *file_id,
+                    file_path,
+                    sha256_path(&root.join(format!("{slot}-{file_id}.bin"))).expect("hash file"),
+                    size,
+                )
+                .expect("file binding")
+            })
+            .collect();
+        IosVoicePackBinding::new(
+            task,
+            slot,
+            format!("{slot}.en"),
+            pack,
+            pack_sha256,
+            std::fs::metadata(root.join(format!("{slot}.pack")))
+                .expect("metadata")
+                .len(),
+            "sherpa-onnx-1.13.4",
+            "en-US",
+            16_000,
+            512,
+            files,
+        )
+        .expect("binding")
     }
 
     #[test]
