@@ -38,6 +38,10 @@ desktop-sherpa = [
     "aurora-voice-sherpa/native-stt",
     "aurora-voice-sherpa/native-vad",
 ]
+desktop-sherpa-tts = [
+    "desktop-sherpa",
+    "aurora-voice-sherpa/native-tts",
+]
 
 [dev-dependencies]
 tempfile.workspace = true

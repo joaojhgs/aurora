@@ -109,6 +109,14 @@ impl SpeechModelCatalog {
             .and_then(|index| self.entries.get(index))
     }
 
+    pub fn catalog_id(&self) -> &str {
+        &self.catalog_id
+    }
+
+    pub fn revision(&self) -> &str {
+        &self.revision
+    }
+
     /// Return metadata for one task; this does not install any listed model.
     pub fn models_for_task(&self, task: SpeechCatalogTask) -> Vec<&SpeechCatalogEntry> {
         self.entries
@@ -588,7 +596,10 @@ mod tests {
     #[test]
     fn invalid_binding_is_rejected_even_with_recomputed_entry_digest_constant() {
         let catalog = SpeechModelCatalog::embedded().expect("embedded catalog validates");
-        let mut entry = catalog.model("kws:zipformer:zh-en-2025").unwrap().clone();
+        let mut entry = catalog
+            .model("kws:zipformer:zh-en-2025")
+            .expect("known catalog model")
+            .clone();
         entry
             .bindings
             .insert("encoder".to_owned(), "../outside/encoder.onnx".to_owned());

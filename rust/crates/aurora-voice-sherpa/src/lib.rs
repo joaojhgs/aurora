@@ -1482,6 +1482,43 @@ fn validate_stt_binding(binding: &TaskPackBinding) -> Result<(), EngineError> {
     Ok(())
 }
 
+#[cfg(any(
+    feature = "native-kws",
+    feature = "native-stt",
+    feature = "native-tts",
+    feature = "native-vad"
+))]
+fn require_speech_catalog_binding(binding: &TaskPackBinding) -> Result<(), EngineError> {
+    match binding.source() {
+        aurora_voice_engine::TaskBindingSource::SpeechCatalog { .. } => Ok(()),
+        aurora_voice_engine::TaskBindingSource::ModelPackManifest { .. } => {
+            Err(EngineError::InvalidRequest)
+        }
+    }
+}
+
+#[cfg(any(
+    feature = "native-kws",
+    feature = "native-stt",
+    feature = "native-tts",
+    feature = "native-vad"
+))]
+fn require_catalog_selected_file(
+    binding: &TaskPackBinding,
+    actual_file_id: &str,
+    required_file_id: &str,
+) -> Result<(), EngineError> {
+    if actual_file_id != required_file_id
+        || !binding
+            .selected_file_ids()
+            .iter()
+            .any(|file_id| file_id == required_file_id)
+    {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(())
+}
+
 fn validate_tts_binding(binding: &TaskPackBinding) -> Result<(), EngineError> {
     if binding.task() != VoiceTask::TextToSpeech
         || !(TTS_MIN_SAMPLE_RATE_HZ..=TTS_MAX_SAMPLE_RATE_HZ).contains(&binding.sample_rate_hz())
@@ -1622,6 +1659,19 @@ mod native_backend {
             {
                 return Err(EngineError::InvalidRequest);
             }
+            Self::from_path(model_path.into(), config)
+        }
+
+        pub fn from_catalog_model(
+            binding: &TaskPackBinding,
+            selected_file_id: &str,
+            model_path: impl Into<PathBuf>,
+            config: &VadConfig,
+        ) -> Result<Self, EngineError> {
+            validate_vad_binding(binding)?;
+            config.validate_binding(binding)?;
+            require_speech_catalog_binding(binding)?;
+            require_catalog_selected_file(binding, selected_file_id, "model")?;
             Self::from_path(model_path.into(), config)
         }
 
@@ -1846,6 +1896,25 @@ mod native_kws_backend {
                 session: None,
             })
         }
+
+        pub fn from_catalog_model_files(
+            binding: &TaskPackBinding,
+            files: NativeKwsModelFiles,
+        ) -> Result<Self, EngineError> {
+            validate_kws_binding(binding)?;
+            require_speech_catalog_binding(binding)?;
+            require_catalog_selected_file(binding, &files.encoder_file_id, "encoder")?;
+            require_catalog_selected_file(binding, &files.decoder_file_id, "decoder")?;
+            require_catalog_selected_file(binding, &files.joiner_file_id, "joiner")?;
+            require_catalog_selected_file(binding, &files.tokens_file_id, "tokens")?;
+            Ok(Self {
+                encoder_path: files.encoder_path,
+                decoder_path: files.decoder_path,
+                joiner_path: files.joiner_path,
+                tokens_path: files.tokens_path,
+                session: None,
+            })
+        }
     }
 
     impl SherpaKwsBackend for NativeKwsBackend {
@@ -2047,6 +2116,36 @@ mod native_stt_backend {
             let model_kind = selected_stt_model_kind(binding, &files.decoder_file_id)?;
             let config = NativeSttRecognizerConfig {
                 model_kind,
+                encoder_path: files.encoder_path,
+                decoder_path: files.decoder_path,
+                tokens_path: files.tokens_path,
+                default_language: files.language,
+            };
+            let active_language = config.language_for_request(None);
+            let recognizer =
+                build_recognizer(&config, active_language.as_deref()).map_err(native_stt_error)?;
+            Ok(Self {
+                recognizer,
+                config,
+                active_language,
+            })
+        }
+
+        pub fn from_catalog_model_files(
+            binding: &TaskPackBinding,
+            files: NativeSttModelFiles,
+        ) -> Result<Self, EngineError> {
+            validate_stt_binding(binding)?;
+            require_speech_catalog_binding(binding)?;
+            require_catalog_selected_file(binding, &files.encoder_file_id, STT_ENCODER_FILE_ID)?;
+            require_catalog_selected_file(
+                binding,
+                &files.decoder_file_id,
+                STT_WHISPER_DECODER_FILE_ID,
+            )?;
+            require_catalog_selected_file(binding, &files.tokens_file_id, STT_TOKENS_FILE_ID)?;
+            let config = NativeSttRecognizerConfig {
+                model_kind: OfflineSttModelKind::Whisper,
                 encoder_path: files.encoder_path,
                 decoder_path: files.decoder_path,
                 tokens_path: files.tokens_path,
@@ -2282,6 +2381,29 @@ mod native_tts_backend {
             }
             Ok(Self { synthesizer })
         }
+
+        pub fn from_catalog_vits_piper_model(
+            binding: &TaskPackBinding,
+            files: NativeTtsVitsPiperModelFiles,
+        ) -> Result<Self, EngineError> {
+            validate_tts_binding(binding)?;
+            require_speech_catalog_binding(binding)?;
+            require_catalog_selected_file(binding, &files.model_file_id, TTS_MODEL_FILE_ID)?;
+            require_catalog_selected_file(binding, &files.tokens_file_id, TTS_TOKENS_FILE_ID)?;
+            require_catalog_selected_file(
+                binding,
+                &files.espeak_data_file_id,
+                TTS_ESPEAK_DATA_FILE_ID,
+            )?;
+            match (&files.lexicon_file_id, &files.lexicon_path) {
+                (Some(lexicon_file_id), Some(_)) => {
+                    require_catalog_selected_file(binding, lexicon_file_id, TTS_LEXICON_FILE_ID)?;
+                }
+                (None, None) => {}
+                _ => return Err(EngineError::InvalidRequest),
+            }
+            Self::from_selected_vits_piper_model(binding, files)
+        }
     }
 
     pub struct NativeTtsVitsPiperModelFiles {
@@ -2424,8 +2546,8 @@ mod tests {
         CompressionKind, DeviceClass, EngineKind, LanguageSupport, LicenseGrant, LicenseInfo,
         ManifestSignature, ModelPackError, ModelPackFile, ModelPackManifest, PackTask,
         ProcessingMetadata, Provenance, ResourceBudget, RuntimeGates, RuntimeSelection,
-        RuntimeTarget, SelectedVariant, ShapeMetadata, SignatureVerifier, TargetArch, TargetOs,
-        TaskRequest, TrustPolicy, TtsSynthesisConfig, VerifiedManifest,
+        RuntimeTarget, SelectedVariant, ShapeMetadata, SignatureVerifier, SpeechModelCatalog,
+        TargetArch, TargetOs, TaskRequest, TrustPolicy, TtsSynthesisConfig, VerifiedManifest,
     };
     use std::cell::Cell;
     use std::collections::{BTreeSet, VecDeque};
@@ -2764,6 +2886,19 @@ mod tests {
             .expect("tts binding")
     }
 
+    fn catalog_binding(model_id: &str) -> TaskPackBinding {
+        let catalog = SpeechModelCatalog::embedded().expect("speech catalog");
+        let entry = catalog.model(model_id).expect("catalog model");
+        TaskPackBinding::from_speech_catalog_entry(
+            catalog,
+            entry,
+            RuntimeTarget::Desktop,
+            TargetOs::Linux,
+            TargetArch::X86_64,
+        )
+        .expect("catalog binding")
+    }
+
     fn request(binding: TaskPackBinding, generation: u64) -> BoundTaskRequest {
         BoundTaskRequest::new(
             TaskRequest {
@@ -2920,6 +3055,54 @@ mod tests {
         assert_eq!(capabilities[0].task(), VoiceTask::VoiceActivityDetection);
         assert_eq!(capabilities[0].binding(), provider.binding());
         assert!(capabilities[0].streaming_enabled());
+    }
+
+    #[test]
+    fn providers_accept_catalog_backed_vad_kws_and_stt_bindings() {
+        let vad_binding = catalog_binding("vad:silero:current");
+        let vad = SherpaVadProvider::new(vad_binding.clone(), FakeBackend::default())
+            .expect("catalog vad provider");
+        assert!(matches!(
+            vad.binding().source(),
+            aurora_voice_engine::TaskBindingSource::SpeechCatalog { .. }
+        ));
+        assert_eq!(vad.binding().selected_file_ids(), &["model".to_owned()]);
+
+        let kws_binding = catalog_binding("kws:zipformer:gigaspeech");
+        let kws =
+            SherpaKwsProvider::new(kws_binding.clone(), phrase_set(), FakeKwsBackend::default())
+                .expect("catalog kws provider");
+        assert_eq!(
+            kws.binding().selected_file_ids(),
+            &[
+                "decoder".to_owned(),
+                "encoder".to_owned(),
+                "joiner".to_owned(),
+                "tokens".to_owned()
+            ]
+        );
+
+        let stt_binding = catalog_binding("stt:whisper:tiny.en");
+        let stt = SherpaFiniteSttEngine::new(stt_binding, FakeSttBackend::default())
+            .expect("catalog stt provider");
+        assert_eq!(stt.binding().task(), VoiceTask::SpeechToText);
+    }
+
+    #[test]
+    fn catalog_backed_provider_construction_rejects_wrong_task() {
+        let stt_binding = catalog_binding("stt:whisper:tiny.en");
+        assert!(SherpaVadProvider::new(stt_binding.clone(), FakeBackend::default()).is_err());
+        assert!(SherpaKwsProvider::new(
+            stt_binding.clone(),
+            phrase_set(),
+            FakeKwsBackend::default(),
+        )
+        .is_err());
+        assert!(SherpaFiniteSttEngine::new(
+            catalog_binding("vad:silero:current"),
+            FakeSttBackend::default()
+        )
+        .is_err());
     }
 
     #[test]

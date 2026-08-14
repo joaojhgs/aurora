@@ -37,10 +37,13 @@ pub use desktop_capture::{
     CpalAudioInput, NativeCaptureConfig, NativeCaptureControl, NativeCaptureStatus,
     NativeInputDevice, NativeInputDeviceId,
 };
+#[cfg(all(feature = "desktop-sherpa", feature = "desktop-sherpa-tts"))]
+pub use desktop_engine::build_installed_tts_provider;
 #[cfg(feature = "desktop-sherpa")]
 pub use desktop_engine::{
     build_active_kws_provider, build_active_stt_provider, build_active_vad_provider,
-    warm_active_kws,
+    build_installed_kws_provider, build_installed_stt_provider, build_installed_vad_provider,
+    warm_active_kws, warm_installed_kws,
 };
 pub use downloader::{
     AssetIntegrity, DownloadError, DownloadPolicy, DownloadProgress, DownloadReceipt,

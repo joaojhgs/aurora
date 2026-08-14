@@ -144,7 +144,48 @@ pub struct TaskRequest {
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum TaskBindingSource {
+    ModelPackManifest {
+        manifest_sha256: String,
+    },
+    SpeechCatalog {
+        catalog_id: String,
+        catalog_revision: String,
+        archive_sha256: String,
+        model_family: String,
+        language_scope: String,
+    },
+}
+
+impl fmt::Debug for TaskBindingSource {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ModelPackManifest { manifest_sha256 } => formatter
+                .debug_struct("TaskBindingSource::ModelPackManifest")
+                .field("manifest_sha256_bytes", &manifest_sha256.len())
+                .finish(),
+            Self::SpeechCatalog {
+                catalog_id,
+                catalog_revision,
+                archive_sha256,
+                model_family,
+                language_scope,
+            } => formatter
+                .debug_struct("TaskBindingSource::SpeechCatalog")
+                .field("catalog_id_bytes", &catalog_id.len())
+                .field("catalog_revision_bytes", &catalog_revision.len())
+                .field("archive_sha256_bytes", &archive_sha256.len())
+                .field("model_family", model_family)
+                .field("language_scope", language_scope)
+                .finish(),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct TaskPackBinding {
+    source: TaskBindingSource,
     task: VoiceTask,
     manifest_sha256: String,
     pack_id: String,
@@ -202,6 +243,9 @@ impl TaskPackBinding {
             return Err(EngineError::InvalidRequest);
         }
         Ok(Self {
+            source: TaskBindingSource::ModelPackManifest {
+                manifest_sha256: manifest.manifest_sha256().to_owned(),
+            },
             task,
             manifest_sha256: manifest.manifest_sha256().to_owned(),
             pack_id: manifest.manifest().pack_id.clone(),
@@ -225,6 +269,158 @@ impl TaskPackBinding {
             frame_size: variant.compatibility.frame_size,
             languages: manifest.manifest().languages.clone(),
         })
+    }
+
+    pub fn from_speech_catalog_entry(
+        catalog: &SpeechModelCatalog,
+        entry: &SpeechCatalogEntry,
+        target: RuntimeTarget,
+        os: TargetOs,
+        arch: TargetArch,
+    ) -> Result<Self, EngineError> {
+        if catalog.model(&entry.model_id).is_none()
+            || entry.engine != "sherpa_onnx"
+            || !speech_catalog_task_matches_id(entry.task, &entry.model_id)
+            || entry.bindings.is_empty()
+            || entry.archive.sha256.len() != 64
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        let task = voice_task_from_speech_catalog_task(entry.task);
+        let selected_file_ids = entry.bindings.keys().cloned().collect::<Vec<_>>();
+        let frame_size = match task {
+            VoiceTask::VoiceActivityDetection => VAD_WINDOW_SIZE_SAMPLES as u32,
+            VoiceTask::KeywordSpotting | VoiceTask::SpeechToText => 0,
+            VoiceTask::TextToSpeech => return Err(EngineError::InvalidRequest),
+        };
+        let languages = speech_catalog_languages(entry)?;
+        Ok(Self {
+            source: TaskBindingSource::SpeechCatalog {
+                catalog_id: catalog.catalog_id().to_owned(),
+                catalog_revision: catalog.revision().to_owned(),
+                archive_sha256: entry.archive.sha256.clone(),
+                model_family: entry.model_family.clone(),
+                language_scope: entry.language_scope.clone(),
+            },
+            task,
+            manifest_sha256: String::new(),
+            pack_id: entry.model_id.clone(),
+            pack_version: catalog.revision().to_owned(),
+            variant_id: entry.archive.sha256.clone(),
+            selected_file_ids,
+            compatibility_group_id: format!(
+                "speech-catalog:{}:{:?}",
+                entry.model_family, entry.task
+            ),
+            voice_state_compatibility_group_id: String::new(),
+            target,
+            os,
+            arch,
+            engine: EngineKind::SherpaOnnx,
+            required_browser_features: Vec::new(),
+            min_device_memory_mb: None,
+            runtime_gates: RuntimeGates {
+                min_cpu_threads: 1,
+                max_rtf_millis_per_second: 1_000,
+                min_device_class: DeviceClass::Balanced,
+            },
+            resource_budget: ResourceBudget {
+                max_download_bytes: entry.archive.byte_size,
+                max_installed_bytes: entry.archive.byte_size,
+                max_memory_bytes: entry.archive.byte_size,
+            },
+            variant_abi: AbiRequirements {
+                min_aurora_version: "0.0.0".to_owned(),
+                min_runtime_version: "1.88.0".to_owned(),
+                min_engine_version: "sherpa-onnx-v1.13.4".to_owned(),
+                engine_source_revision: catalog.revision().to_owned(),
+                build_flags: Vec::new(),
+            },
+            interoperable: true,
+            sample_rate_hz: VAD_SAMPLE_RATE_HZ,
+            channels: MONO_CHANNELS,
+            frame_size,
+            languages,
+        })
+    }
+
+    pub fn from_tts_catalog_entry(
+        catalog: &TtsVoiceCatalog,
+        entry: &TtsCatalogEntry,
+        target: RuntimeTarget,
+        os: TargetOs,
+        arch: TargetArch,
+        sample_rate_hz: u32,
+    ) -> Result<Self, EngineError> {
+        if catalog.voice(&entry.voice_id).is_none()
+            || entry.engine != "sherpa_onnx"
+            || entry.model_family != "vits_piper"
+            || !entry.voice_id.starts_with("standard:piper:")
+            || entry.archive.sha256.len() != 64
+            || !(TTS_MIN_SAMPLE_RATE_HZ..=TTS_MAX_SAMPLE_RATE_HZ).contains(&sample_rate_hz)
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(Self {
+            source: TaskBindingSource::SpeechCatalog {
+                catalog_id: catalog.catalog_id().to_owned(),
+                catalog_revision: catalog.revision().to_owned(),
+                archive_sha256: entry.archive.sha256.clone(),
+                model_family: entry.model_family.clone(),
+                language_scope: "specific".to_owned(),
+            },
+            task: VoiceTask::TextToSpeech,
+            manifest_sha256: String::new(),
+            pack_id: entry.voice_id.clone(),
+            pack_version: catalog.revision().to_owned(),
+            variant_id: entry.archive.sha256.clone(),
+            selected_file_ids: vec![
+                "config".to_owned(),
+                "espeak-ng-data".to_owned(),
+                "model".to_owned(),
+                "model-card".to_owned(),
+                "tokens".to_owned(),
+            ],
+            compatibility_group_id: format!("tts-catalog:{}", entry.model_family),
+            voice_state_compatibility_group_id: format!("tts-catalog:{}", entry.voice_id),
+            target,
+            os,
+            arch,
+            engine: EngineKind::SherpaOnnx,
+            required_browser_features: Vec::new(),
+            min_device_memory_mb: None,
+            runtime_gates: RuntimeGates {
+                min_cpu_threads: 1,
+                max_rtf_millis_per_second: 1_000,
+                min_device_class: DeviceClass::Balanced,
+            },
+            resource_budget: ResourceBudget {
+                max_download_bytes: entry.archive.byte_size,
+                max_installed_bytes: entry.archive.byte_size,
+                max_memory_bytes: entry.archive.byte_size,
+            },
+            variant_abi: AbiRequirements {
+                min_aurora_version: "0.0.0".to_owned(),
+                min_runtime_version: "1.88.0".to_owned(),
+                min_engine_version: "sherpa-onnx-v1.13.4".to_owned(),
+                engine_source_revision: catalog.revision().to_owned(),
+                build_flags: Vec::new(),
+            },
+            interoperable: true,
+            sample_rate_hz,
+            channels: MONO_CHANNELS,
+            frame_size: 0,
+            languages: vec![LanguageSupport {
+                language: entry.language.clone(),
+                locale: None,
+                fixed_language: true,
+                auto_detect: false,
+            }],
+        })
+    }
+
+    pub fn source(&self) -> &TaskBindingSource {
+        &self.source
     }
 
     pub fn task(&self) -> VoiceTask {
@@ -324,6 +520,7 @@ impl fmt::Debug for TaskPackBinding {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("TaskPackBinding")
+            .field("source", &self.source)
             .field("task", &self.task)
             .field("manifest_sha256_bytes", &self.manifest_sha256.len())
             .field("pack_id_bytes", &self.pack_id.len())
@@ -353,6 +550,49 @@ impl fmt::Debug for TaskPackBinding {
             .field("frame_size", &self.frame_size)
             .field("language_count", &self.languages.len())
             .finish()
+    }
+}
+
+fn voice_task_from_speech_catalog_task(task: SpeechCatalogTask) -> VoiceTask {
+    match task {
+        SpeechCatalogTask::SpeechToText => VoiceTask::SpeechToText,
+        SpeechCatalogTask::VoiceActivityDetection => VoiceTask::VoiceActivityDetection,
+        SpeechCatalogTask::KeywordSpotting => VoiceTask::KeywordSpotting,
+    }
+}
+
+fn speech_catalog_task_matches_id(task: SpeechCatalogTask, model_id: &str) -> bool {
+    match task {
+        SpeechCatalogTask::SpeechToText => model_id.starts_with("stt:"),
+        SpeechCatalogTask::VoiceActivityDetection => model_id.starts_with("vad:"),
+        SpeechCatalogTask::KeywordSpotting => model_id.starts_with("kws:"),
+    }
+}
+
+fn speech_catalog_languages(
+    entry: &SpeechCatalogEntry,
+) -> Result<Vec<LanguageSupport>, EngineError> {
+    if entry.language_scope == "language_independent" {
+        if entry.languages.is_empty() {
+            return Ok(Vec::new());
+        }
+        return Err(EngineError::InvalidRequest);
+    }
+    let auto_detect = entry.language_scope == "multilingual";
+    let languages = entry
+        .languages
+        .iter()
+        .map(|language| LanguageSupport {
+            language: language.clone(),
+            locale: None,
+            fixed_language: !auto_detect,
+            auto_detect,
+        })
+        .collect::<Vec<_>>();
+    if languages.is_empty() {
+        Err(EngineError::InvalidRequest)
+    } else {
+        Ok(languages)
     }
 }
 
@@ -4395,6 +4635,130 @@ mod tests {
         let identity_debug = format!("{:?}", chunk.request_identity());
         assert!(identity_debug.contains("<redacted>"));
         assert!(!identity_debug.contains("hello"));
+    }
+
+    #[test]
+    fn speech_catalog_binding_carries_exact_selected_files_and_metadata() {
+        let catalog = SpeechModelCatalog::embedded().expect("speech catalog");
+        let entry = catalog
+            .model("kws:zipformer:gigaspeech")
+            .expect("kws model");
+        let binding = TaskPackBinding::from_speech_catalog_entry(
+            catalog,
+            entry,
+            RuntimeTarget::Desktop,
+            TargetOs::Linux,
+            TargetArch::X86_64,
+        )
+        .expect("catalog binding");
+
+        assert_eq!(binding.task(), VoiceTask::KeywordSpotting);
+        assert_eq!(binding.pack_id(), "kws:zipformer:gigaspeech");
+        assert_eq!(binding.pack_version(), catalog.revision());
+        assert_eq!(binding.variant_id(), entry.archive.sha256);
+        assert_eq!(
+            binding.selected_file_ids(),
+            &[
+                "decoder".to_owned(),
+                "encoder".to_owned(),
+                "joiner".to_owned(),
+                "tokens".to_owned()
+            ]
+        );
+        assert!(matches!(
+            binding.source(),
+            TaskBindingSource::SpeechCatalog { catalog_id, catalog_revision, archive_sha256, .. }
+                if catalog_id == catalog.catalog_id()
+                    && catalog_revision == catalog.revision()
+                    && archive_sha256 == &entry.archive.sha256
+        ));
+        let debug = format!("{binding:?}");
+        assert!(debug.contains("TaskBindingSource::SpeechCatalog"));
+        assert!(debug.contains("catalog_id_bytes"));
+        assert!(!debug.contains(catalog.catalog_id()));
+        assert!(!debug.contains(&entry.archive.sha256));
+    }
+
+    #[test]
+    fn speech_catalog_binding_rejects_wrong_or_ambiguous_ids() {
+        let catalog = SpeechModelCatalog::embedded().expect("speech catalog");
+        let mut entry = catalog
+            .model("vad:silero:current")
+            .expect("vad model")
+            .clone();
+        entry.model_id = "kws:zipformer:gigaspeech".to_owned();
+        assert_eq!(
+            TaskPackBinding::from_speech_catalog_entry(
+                catalog,
+                &entry,
+                RuntimeTarget::Desktop,
+                TargetOs::Linux,
+                TargetArch::X86_64,
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let entry = catalog.model("vad:silero:current").expect("vad model");
+        let binding = TaskPackBinding::from_speech_catalog_entry(
+            catalog,
+            entry,
+            RuntimeTarget::Desktop,
+            TargetOs::Linux,
+            TargetArch::X86_64,
+        )
+        .expect("vad binding");
+        assert_eq!(binding.selected_file_ids(), &["model".to_owned()]);
+        assert_eq!(binding.languages(), &[]);
+        assert!(BoundTaskRequest::new(
+            TaskRequest {
+                task: VoiceTask::VoiceActivityDetection,
+                language: Some("en".to_owned()),
+                generation: 1,
+            },
+            binding,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn tts_catalog_binding_requires_installed_sample_rate_metadata() {
+        let catalog = TtsVoiceCatalog::embedded().expect("tts catalog");
+        let entry = catalog
+            .voice("standard:piper:en_us-ljspeech-medium")
+            .expect("voice");
+        assert_eq!(
+            TaskPackBinding::from_tts_catalog_entry(
+                catalog,
+                entry,
+                RuntimeTarget::Desktop,
+                TargetOs::Linux,
+                TargetArch::X86_64,
+                0,
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+        let binding = TaskPackBinding::from_tts_catalog_entry(
+            catalog,
+            entry,
+            RuntimeTarget::Desktop,
+            TargetOs::Linux,
+            TargetArch::X86_64,
+            22_050,
+        )
+        .expect("tts binding");
+        assert_eq!(binding.task(), VoiceTask::TextToSpeech);
+        assert_eq!(binding.sample_rate_hz(), 22_050);
+        assert_eq!(
+            binding.selected_file_ids(),
+            &[
+                "config".to_owned(),
+                "espeak-ng-data".to_owned(),
+                "model".to_owned(),
+                "model-card".to_owned(),
+                "tokens".to_owned()
+            ]
+        );
+        assert_eq!(binding.languages()[0].language, "en-us");
     }
 
     #[test]

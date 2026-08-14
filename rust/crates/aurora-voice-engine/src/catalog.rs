@@ -73,6 +73,14 @@ impl TtsVoiceCatalog {
             .and_then(|index| self.entries.get(index))
     }
 
+    pub fn catalog_id(&self) -> &str {
+        &self.catalog_id
+    }
+
+    pub fn revision(&self) -> &str {
+        &self.revision
+    }
+
     /// List voices that explicitly advertise the requested normalized language.
     pub fn voices_for_language(&self, language: &str) -> Vec<&TtsCatalogEntry> {
         self.entries

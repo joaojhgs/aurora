@@ -10,10 +10,12 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use aurora_voice_core::CancellationToken;
 use aurora_voice_engine::{
-    SpeechCatalogEntry, SpeechCatalogTask, SpeechModelCatalog, TtsCatalogEntry, TtsVoiceCatalog,
+    RuntimeTarget, SpeechCatalogEntry, SpeechCatalogTask, SpeechModelCatalog, TargetArch, TargetOs,
+    TaskPackBinding, TtsCatalogEntry, TtsVoiceCatalog,
 };
 use bzip2::read::BzDecoder;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tar::EntryType;
 use thiserror::Error;
@@ -95,6 +97,7 @@ pub enum SpeechPackInstallPhase {
 pub struct SpeechPackBindings {
     pub voice_id: String,
     pub archive_sha256: String,
+    pub task_binding: TaskPackBinding,
     pub root: PathBuf,
     pub model: PathBuf,
     pub config: PathBuf,
@@ -109,6 +112,7 @@ pub struct SpeechModelBindings {
     pub model_id: String,
     pub task: SpeechCatalogTask,
     pub archive_sha256: String,
+    pub task_binding: TaskPackBinding,
     pub root: Option<PathBuf>,
     pub bindings: BTreeMap<String, PathBuf>,
     pub languages: Vec<String>,
@@ -736,6 +740,7 @@ impl SpeechPackManager {
         let bindings = SpeechPackBindings {
             voice_id: entry.voice_id.clone(),
             archive_sha256: entry.archive.sha256.clone(),
+            task_binding: tts_task_binding(entry, &root.join(&entry.bindings.config))?,
             root: pack_root.clone(),
             model: root.join(&entry.bindings.model),
             config: root.join(&entry.bindings.config),
@@ -776,6 +781,7 @@ impl SpeechPackManager {
             model_id: entry.model_id.clone(),
             task: entry.task,
             archive_sha256: entry.archive.sha256.clone(),
+            task_binding: catalog_task_binding(entry)?,
             root: model_root,
             bindings,
             languages: entry.languages.clone(),
@@ -842,6 +848,70 @@ impl SpeechPackManager {
         record.extracted_bytes = report.extracted_bytes;
         record.receipt = build_model_receipt(&root, entry)?;
         Ok(record)
+    }
+}
+
+fn catalog_task_binding(entry: &SpeechCatalogEntry) -> Result<TaskPackBinding, SpeechPackError> {
+    let catalog = SpeechModelCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+    TaskPackBinding::from_speech_catalog_entry(
+        catalog,
+        entry,
+        RuntimeTarget::Desktop,
+        current_target_os(),
+        current_target_arch(),
+    )
+    .map_err(|_| SpeechPackError::InvalidArchive)
+}
+
+fn tts_task_binding(
+    entry: &TtsCatalogEntry,
+    config_path: &Path,
+) -> Result<TaskPackBinding, SpeechPackError> {
+    let catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+    TaskPackBinding::from_tts_catalog_entry(
+        catalog,
+        entry,
+        RuntimeTarget::Desktop,
+        current_target_os(),
+        current_target_arch(),
+        read_tts_sample_rate_hz(config_path)?,
+    )
+    .map_err(|_| SpeechPackError::InvalidArchive)
+}
+
+fn read_tts_sample_rate_hz(config_path: &Path) -> Result<u32, SpeechPackError> {
+    let file = File::open(config_path).map_err(|_| SpeechPackError::InvalidArchive)?;
+    let value: Value =
+        serde_json::from_reader(file).map_err(|_| SpeechPackError::InvalidArchive)?;
+    let sample_rate = value
+        .pointer("/audio/sample_rate")
+        .or_else(|| value.pointer("/audio/sample_rate_hz"))
+        .or_else(|| value.pointer("/sample_rate"))
+        .or_else(|| value.pointer("/sample_rate_hz"))
+        .and_then(Value::as_u64)
+        .ok_or(SpeechPackError::InvalidArchive)?;
+    u32::try_from(sample_rate).map_err(|_| SpeechPackError::InvalidArchive)
+}
+
+fn current_target_os() -> TargetOs {
+    if cfg!(target_os = "windows") {
+        TargetOs::Windows
+    } else if cfg!(target_os = "macos") {
+        TargetOs::Macos
+    } else if cfg!(target_os = "android") {
+        TargetOs::Android
+    } else if cfg!(target_os = "ios") {
+        TargetOs::Ios
+    } else {
+        TargetOs::Linux
+    }
+}
+
+fn current_target_arch() -> TargetArch {
+    if cfg!(target_arch = "aarch64") {
+        TargetArch::Aarch64
+    } else {
+        TargetArch::X86_64
     }
 }
 
@@ -2057,7 +2127,11 @@ mod tests {
         let extracted = extract_root(root, &entry.archive.sha256);
         fs::create_dir_all(extracted.join(&entry.archive.root)).expect("pack root");
         fs::write(extracted.join(&entry.bindings.model), b"onnx").expect("model");
-        fs::write(extracted.join(&entry.bindings.config), b"{}").expect("config");
+        fs::write(
+            extracted.join(&entry.bindings.config),
+            br#"{"audio":{"sample_rate":22050}}"#,
+        )
+        .expect("config");
         fs::write(extracted.join(&entry.bindings.tokens), b"a\n").expect("tokens");
         fs::create_dir_all(extracted.join(&entry.bindings.data_dir)).expect("data dir");
         fs::write(extracted.join(&entry.bindings.model_card), b"card").expect("card");
@@ -2117,6 +2191,21 @@ mod tests {
 
         assert_eq!(bindings.voice_id, VOICE_ID);
         assert!(bindings.model.ends_with("en_US-ljspeech-medium.onnx"));
+        assert_eq!(
+            bindings.task_binding.task(),
+            aurora_voice_engine::VoiceTask::TextToSpeech
+        );
+        assert_eq!(bindings.task_binding.sample_rate_hz(), 22_050);
+        assert_eq!(
+            bindings.task_binding.selected_file_ids(),
+            &[
+                "config".to_owned(),
+                "espeak-ng-data".to_owned(),
+                "model".to_owned(),
+                "model-card".to_owned(),
+                "tokens".to_owned()
+            ]
+        );
         let state = read_state(directory.path()).expect("state");
         assert_eq!(state.installed.len(), 1);
         assert!(manager.resolve_entry_bindings(&entry).is_ok());
@@ -2377,6 +2466,21 @@ mod tests {
                 .expect("install model");
             assert_eq!(bindings.model_id, model_id);
             assert_eq!(bindings.bindings.len(), entry.bindings.len());
+            assert_eq!(bindings.task_binding.pack_id(), model_id);
+            assert_eq!(bindings.task_binding.variant_id(), entry.archive.sha256);
+            assert_eq!(
+                bindings.task_binding.selected_file_ids(),
+                entry.bindings.keys().cloned().collect::<Vec<_>>()
+            );
+            assert!(matches!(
+                bindings.task_binding.source(),
+                aurora_voice_engine::TaskBindingSource::SpeechCatalog {
+                    catalog_revision,
+                    archive_sha256,
+                    ..
+                } if catalog_revision == SpeechModelCatalog::embedded().expect("catalog").revision()
+                    && archive_sha256 == &entry.archive.sha256
+            ));
             for (name, path) in &bindings.bindings {
                 assert!(entry.bindings.contains_key(name));
                 assert!(path.exists());

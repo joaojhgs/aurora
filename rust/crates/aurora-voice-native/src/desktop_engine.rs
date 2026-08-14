@@ -2,15 +2,17 @@
 
 use aurora_voice_engine::{
     EngineError, EngineFaultCode, KwsConfig, LanguageSupport, ModelPackFile, ModelPackManifest,
-    ModelStoreScope, PackTask, RuntimeSelection, SelectedVariant, TaskPackBinding, VadConfig,
-    VerifiedManifest, VoiceTask,
+    ModelStoreScope, PackTask, RuntimeSelection, SelectedVariant, SpeechCatalogTask,
+    TaskPackBinding, VadConfig, VerifiedManifest, VoiceTask,
 };
 use aurora_voice_sherpa::{
     NativeKwsBackend, NativeKwsModelFiles, NativeSttBackend, NativeSttModelFiles, NativeVadBackend,
     SherpaFiniteSttEngine, SherpaKwsPhraseSet, SherpaKwsProvider, SherpaVadProvider,
 };
+#[cfg(feature = "desktop-sherpa-tts")]
+use aurora_voice_sherpa::{NativeTtsBackend, NativeTtsVitsPiperModelFiles, SherpaTtsProvider};
 
-use crate::NativeModelStore;
+use crate::{NativeModelStore, SpeechModelBindings, SpeechPackManager};
 
 /// Native desktop VAD provider bound to the currently active compatible pack.
 pub fn build_active_vad_provider(
@@ -34,6 +36,20 @@ pub fn build_active_vad_provider(
         config,
     )?;
     SherpaVadProvider::new(binding, backend)
+}
+
+/// Native desktop VAD provider bound to an installed speech-catalog model.
+pub fn build_installed_vad_provider(
+    manager: &SpeechPackManager,
+    model_id: &str,
+    config: &VadConfig,
+) -> Result<SherpaVadProvider<NativeVadBackend>, EngineError> {
+    let bindings =
+        resolve_installed_model(manager, model_id, SpeechCatalogTask::VoiceActivityDetection)?;
+    let model_path = catalog_path(&bindings, "model")?;
+    let backend =
+        NativeVadBackend::from_catalog_model(&bindings.task_binding, "model", model_path, config)?;
+    SherpaVadProvider::new(bindings.task_binding, backend)
 }
 
 /// Native desktop KWS provider bound to the currently active compatible pack.
@@ -64,6 +80,27 @@ pub fn build_active_kws_provider(
     SherpaKwsProvider::new(binding, phrase_set, backend)
 }
 
+/// Native desktop KWS provider bound to an installed speech-catalog model.
+pub fn build_installed_kws_provider(
+    manager: &SpeechPackManager,
+    model_id: &str,
+    phrase_set: SherpaKwsPhraseSet,
+) -> Result<SherpaKwsProvider<NativeKwsBackend>, EngineError> {
+    let bindings = resolve_installed_model(manager, model_id, SpeechCatalogTask::KeywordSpotting)?;
+    let files = NativeKwsModelFiles {
+        encoder_file_id: "encoder".to_owned(),
+        encoder_path: catalog_path(&bindings, "encoder")?,
+        decoder_file_id: "decoder".to_owned(),
+        decoder_path: catalog_path(&bindings, "decoder")?,
+        joiner_file_id: "joiner".to_owned(),
+        joiner_path: catalog_path(&bindings, "joiner")?,
+        tokens_file_id: "tokens".to_owned(),
+        tokens_path: catalog_path(&bindings, "tokens")?,
+    };
+    let backend = NativeKwsBackend::from_catalog_model_files(&bindings.task_binding, files)?;
+    SherpaKwsProvider::new(bindings.task_binding, phrase_set, backend)
+}
+
 /// Native desktop finite STT provider bound to the currently active compatible pack.
 pub fn build_active_stt_provider(
     store: &NativeModelStore,
@@ -80,6 +117,51 @@ pub fn build_active_stt_provider(
     let files = active_stt_model_files(store, &selection, &binding)?;
     let backend = NativeSttBackend::from_selected_model_files(&binding, files)?;
     SherpaFiniteSttEngine::new(binding, backend)
+}
+
+/// Native desktop finite STT provider bound to an installed speech-catalog model.
+pub fn build_installed_stt_provider(
+    manager: &SpeechPackManager,
+    model_id: &str,
+) -> Result<SherpaFiniteSttEngine<NativeSttBackend>, EngineError> {
+    let bindings = resolve_installed_model(manager, model_id, SpeechCatalogTask::SpeechToText)?;
+    let files = NativeSttModelFiles {
+        encoder_file_id: "encoder".to_owned(),
+        encoder_path: catalog_path(&bindings, "encoder")?,
+        decoder_file_id: "decoder".to_owned(),
+        decoder_path: catalog_path(&bindings, "decoder")?,
+        tokens_file_id: "tokens".to_owned(),
+        tokens_path: catalog_path(&bindings, "tokens")?,
+        language: default_stt_language(bindings.task_binding.languages()),
+    };
+    let backend = NativeSttBackend::from_catalog_model_files(&bindings.task_binding, files)?;
+    SherpaFiniteSttEngine::new(bindings.task_binding, backend)
+}
+
+/// Native desktop TTS provider bound to an installed TTS catalog voice.
+#[cfg(feature = "desktop-sherpa-tts")]
+pub fn build_installed_tts_provider(
+    manager: &SpeechPackManager,
+    voice_id: &str,
+) -> Result<SherpaTtsProvider<NativeTtsBackend>, EngineError> {
+    let bindings = manager
+        .resolve_voice_bindings(voice_id)
+        .map_err(|_| EngineError::TaskUnavailable)?;
+    if bindings.task_binding.task() != VoiceTask::TextToSpeech {
+        return Err(EngineError::InvalidRequest);
+    }
+    let files = NativeTtsVitsPiperModelFiles {
+        model_file_id: "model".to_owned(),
+        model_path: bindings.model.clone(),
+        tokens_file_id: "tokens".to_owned(),
+        tokens_path: bindings.tokens.clone(),
+        espeak_data_file_id: "espeak-ng-data".to_owned(),
+        espeak_data_dir: bindings.data_dir.clone(),
+        lexicon_file_id: None,
+        lexicon_path: None,
+    };
+    let backend = NativeTtsBackend::from_catalog_vits_piper_model(&bindings.task_binding, files)?;
+    SherpaTtsProvider::new(bindings.task_binding, backend)
 }
 
 /// Validate a KWS request against the active compatible provider without opening audio.
@@ -99,6 +181,51 @@ pub fn warm_active_kws(
     )?;
     config.validate_binding(&binding)?;
     phrase_set.validate_request(config)
+}
+
+/// Validate a KWS request against an installed speech-catalog model.
+pub fn warm_installed_kws(
+    manager: &SpeechPackManager,
+    model_id: &str,
+    config: &KwsConfig,
+    phrase_set: &SherpaKwsPhraseSet,
+) -> Result<(), EngineError> {
+    let bindings = resolve_installed_model(manager, model_id, SpeechCatalogTask::KeywordSpotting)?;
+    config.validate_binding(&bindings.task_binding)?;
+    phrase_set.validate_request(config)
+}
+
+fn resolve_installed_model(
+    manager: &SpeechPackManager,
+    model_id: &str,
+    task: SpeechCatalogTask,
+) -> Result<SpeechModelBindings, EngineError> {
+    let bindings = manager
+        .resolve_model_bindings(model_id)
+        .map_err(|_| EngineError::TaskUnavailable)?;
+    if bindings.task != task || bindings.task_binding.task() != catalog_voice_task(task) {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(bindings)
+}
+
+fn catalog_path(
+    bindings: &SpeechModelBindings,
+    file_id: &str,
+) -> Result<std::path::PathBuf, EngineError> {
+    bindings
+        .bindings
+        .get(file_id)
+        .cloned()
+        .ok_or(EngineError::InvalidRequest)
+}
+
+fn catalog_voice_task(task: SpeechCatalogTask) -> VoiceTask {
+    match task {
+        SpeechCatalogTask::SpeechToText => VoiceTask::SpeechToText,
+        SpeechCatalogTask::VoiceActivityDetection => VoiceTask::VoiceActivityDetection,
+        SpeechCatalogTask::KeywordSpotting => VoiceTask::KeywordSpotting,
+    }
 }
 
 fn active_binding(
