@@ -417,6 +417,7 @@ export function AssistantView({
   const [voiceElapsedSeconds, setVoiceElapsedSeconds] = useState(0)
   const [nativeVoiceStatusState, setNativeVoiceStatusState] = useState<NativeDesktopVoiceStatus | null>(null)
   const [nativeDesktopBackgroundWakeActive, setNativeDesktopBackgroundWakeActive] = useState(false)
+  const [nativeMobileBackgroundWakeActive, setNativeMobileBackgroundWakeActive] = useState(false)
   const [routeDetailsOpen, setRouteDetailsOpen] = useState(false)
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
   const attachmentInputRef = useRef<HTMLInputElement | null>(null)
@@ -443,6 +444,7 @@ export function AssistantView({
   const nativeVoiceCancelledGenerationsRef = useRef<Set<number>>(new Set())
   const nativeMobileVoiceOperationTokenRef = useRef(0)
   const nativeMobileVoiceStartInFlightRef = useRef(false)
+  const nativeMobileBackgroundWakeActiveRef = useRef(false)
   const assistantViewDisposedRef = useRef(false)
   const sessionLoadGenerationRef = useRef(0)
   function setVoiceCaptureStatus(next: VoiceCaptureStatus) {
@@ -609,6 +611,11 @@ export function AssistantView({
       consentGranted: voiceConsentGranted,
       nativeDesktopVoiceStatus: nativeVoiceStatusState,
       nativeDesktopBackgroundWakeActive,
+      nativeMobileBackgroundWakeActive,
+      nativeMobileBackgroundWakeReady: usesNativeMobileVoice
+        && surfaceProfile.voiceCapture.wakewordOwner === 'mobile-native'
+        && typeof nativeMobileVoice?.startBackground === 'function'
+        && typeof nativeMobileVoice?.stopBackground === 'function',
       voiceEvents,
       waveformBars: voiceWaveformBars
     }),
@@ -625,6 +632,9 @@ export function AssistantView({
       voiceConsentGranted,
       nativeVoiceStatusState,
       nativeDesktopBackgroundWakeActive,
+      nativeMobileBackgroundWakeActive,
+      nativeMobileVoice,
+      usesNativeMobileVoice,
       voiceEvents,
       voiceWaveformBars
     ]
@@ -940,7 +950,11 @@ export function AssistantView({
     stopStreamedTtsPlayback()
     void cancelNativeDesktopVoice('shutdown')
     nativeMobileVoiceOperationTokenRef.current += 1
-    if (nativeMobileVoiceStartInFlightRef.current || voiceCaptureStatusRef.current === 'listening' || voiceCaptureStatusRef.current === 'processing') {
+    const mobileBackgroundActive = nativeMobileBackgroundWakeActiveRef.current
+    if (mobileBackgroundActive) {
+      void stopNativeMobileBackgroundWake({ updateUi: false })
+    }
+    if (!mobileBackgroundActive && (nativeMobileVoiceStartInFlightRef.current || voiceCaptureStatusRef.current === 'listening' || voiceCaptureStatusRef.current === 'processing')) {
       void cancelNativeMobileVoice({ updateUi: false })
     }
     const token = browserVoiceOperationTokenRef.current
@@ -1124,13 +1138,20 @@ export function AssistantView({
   useEffect(() => {
     if (!usesNativeMobileVoice || !nativeMobileVoice) return
     let active = true
-    void nativeMobileVoice.status().then((status) => {
+    void nativeMobileVoice.status().then(async (status) => {
       if (!active) return
       if (!status.available) {
         setVoiceCaptureStatus('no-device')
       } else if (status.phase === 'faulted') {
         setVoiceCaptureStatus('error')
       } else if (status.captureActive) {
+        setVoiceCaptureStatus('listening')
+      }
+      const backgroundStatus = await nativeMobileVoice.backgroundStatus?.().catch(() => null)
+      if (!active || !backgroundStatus) return
+      if (backgroundStatus.backgroundActive === true) {
+        nativeMobileBackgroundWakeActiveRef.current = true
+        setNativeMobileBackgroundWakeActive(true)
         setVoiceCaptureStatus('listening')
       }
     }).catch(() => {
@@ -1155,6 +1176,7 @@ export function AssistantView({
         return
       }
       if (usesNativeMobileVoice) {
+        if (nativeMobileBackgroundWakeActiveRef.current) return
         void cancelNativeMobileVoice()
         return
       }
@@ -2626,6 +2648,10 @@ export function AssistantView({
     }
     if (primaryComposerAction !== 'stop') return
     if (voiceCaptureStatus === 'listening') {
+      if (usesNativeMobileVoice && nativeMobileBackgroundWakeActiveRef.current) {
+        await stopNativeMobileBackgroundWake()
+        return
+      }
       await toggleLocalCapture()
       return
     }
@@ -3050,12 +3076,95 @@ export function AssistantView({
     }
   }
 
+  async function startNativeMobileBackgroundWake(): Promise<boolean> {
+    const remoteAudioConsent = remoteAudioConsentForCurrentRoute(voiceModel.transcriptionRoute)
+    if (remoteAudioConsent === null) return false
+    if (!defaultVoiceRoutePolicy(voiceModel.transcriptionRoute)) return false
+    if (!nativeMobileVoice?.startBackground) {
+      setVoiceCaptureStatus('no-device')
+      setLastError('Hands-free voice is unavailable on this device.')
+      return false
+    }
+    setStreamState((current) => ({ ...current, status: 'streaming', message: 'Starting hands-free voice...' }))
+    const operationToken = ++nativeMobileVoiceOperationTokenRef.current
+    nativeMobileVoiceStartInFlightRef.current = true
+    try {
+      const status = await nativeMobileVoice.startBackground({ remoteAudioConsent })
+      if (assistantViewDisposedRef.current || operationToken !== nativeMobileVoiceOperationTokenRef.current) {
+        await nativeMobileVoice.stopBackground?.().catch(() => undefined)
+        return false
+      }
+      if (!status.available || status.phase === 'unavailable' || status.phase === 'faulted') {
+        nativeMobileBackgroundWakeActiveRef.current = false
+        setNativeMobileBackgroundWakeActive(false)
+        setVoiceCaptureStatus('error')
+        setLastError('Hands-free voice could not start. Check microphone access on this device.')
+        return false
+      }
+      nativeMobileBackgroundWakeActiveRef.current = true
+      setNativeMobileBackgroundWakeActive(true)
+      setVoiceCaptureStatus('listening')
+      activeVoiceSessionRef.current = 'native-mobile-background'
+      ownedVoiceSessionIdsRef.current.add('native-mobile-background')
+      return true
+    } catch {
+      if (assistantViewDisposedRef.current || operationToken !== nativeMobileVoiceOperationTokenRef.current) return false
+      nativeMobileBackgroundWakeActiveRef.current = false
+      setNativeMobileBackgroundWakeActive(false)
+      setVoiceCaptureStatus('error')
+      setLastError('Hands-free voice could not start. Check microphone access on this device.')
+      return false
+    } finally {
+      if (operationToken === nativeMobileVoiceOperationTokenRef.current) {
+        nativeMobileVoiceStartInFlightRef.current = false
+      }
+    }
+  }
+
+  async function stopNativeMobileBackgroundWake(options: { updateUi?: boolean } = {}): Promise<boolean> {
+    if (!nativeMobileVoice?.stopBackground) return false
+    nativeMobileVoiceOperationTokenRef.current += 1
+    const updateUi = options.updateUi !== false
+    try {
+      await nativeMobileVoice.stopBackground()
+      nativeMobileBackgroundWakeActiveRef.current = false
+      setNativeMobileBackgroundWakeActive(false)
+      if (updateUi) setVoiceCaptureStatus('idle')
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.clear()
+      return true
+    } catch {
+      if (updateUi) {
+        setVoiceCaptureStatus('error')
+        setLastError('Hands-free voice could not stop cleanly. Try again.')
+      }
+      return false
+    }
+  }
+
+  async function toggleNativeMobileBackgroundWake(): Promise<boolean> {
+    const control = voiceModel.controls.find((candidate) => candidate.id === 'background-wake')
+    if (!control?.enabled) return false
+    if (nativeMobileBackgroundWakeActiveRef.current) {
+      return stopNativeMobileBackgroundWake()
+    }
+    return startNativeMobileBackgroundWake()
+  }
+
+  async function toggleBackgroundWakeForSurface(): Promise<boolean> {
+    if (usesNativeDesktopVoice) return toggleNativeDesktopBackgroundWake()
+    if (usesNativeMobileVoice) return toggleNativeMobileBackgroundWake()
+    return false
+  }
+
   async function cancelNativeMobileVoice(options: { updateUi?: boolean } = {}): Promise<boolean> {
     if (!nativeMobileVoice) return false
     nativeMobileVoiceOperationTokenRef.current += 1
     const updateUi = options.updateUi !== false
     try {
       await nativeMobileVoice.cancel()
+      nativeMobileBackgroundWakeActiveRef.current = false
+      setNativeMobileBackgroundWakeActive(false)
       if (updateUi) setVoiceCaptureStatus('idle')
       activeVoiceSessionRef.current = null
       ownedVoiceSessionIdsRef.current.clear()
@@ -3451,6 +3560,10 @@ export function AssistantView({
         return
       }
       if (usesNativeMobileVoice) {
+        if (nativeMobileBackgroundWakeActiveRef.current) {
+          await stopNativeMobileBackgroundWake()
+          return
+        }
         await finishNativeMobileVoice()
         return
       }
@@ -3868,7 +3981,7 @@ export function AssistantView({
                 onToggleCapture={requestVoiceToggle}
                 onToggleConsent={() => { void toggleRemoteAudioConsent() }}
                 onWakeForeground={() => { void startNativeDesktopForegroundWake() }}
-                onToggleBackgroundWake={() => { void toggleNativeDesktopBackgroundWake() }}
+                onToggleBackgroundWake={() => { void toggleBackgroundWakeForSurface() }}
               />
               <RouteSheet
                 client={client}
@@ -4007,6 +4120,8 @@ export function buildAssistantVoiceModel(input: {
   consentGranted: boolean
   nativeDesktopVoiceStatus?: NativeDesktopVoiceStatus | null | undefined
   nativeDesktopBackgroundWakeActive?: boolean | undefined
+  nativeMobileBackgroundWakeActive?: boolean | undefined
+  nativeMobileBackgroundWakeReady?: boolean | undefined
   voiceEvents?: VoiceRuntimeEvent[] | undefined
   waveformBars?: number[] | undefined
 }): AssistantVoiceModel {
@@ -4027,7 +4142,20 @@ export function buildAssistantVoiceModel(input: {
   const nativeDesktopWakeReady = surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'native-desktop'
     && input.nativeDesktopVoiceStatus?.available === true
     && input.nativeDesktopVoiceStatus.backgroundEligible === true
-  const nativeDesktopWakeRoute = nativeDesktopWakeAvailability(nativeDesktopWakeReady)
+  const nativeMobileWakeReady = surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'mobile-native'
+    && surfaceProfile.voiceCapture.wakewordOwner === 'mobile-native'
+    && input.nativeMobileBackgroundWakeReady === true
+  const nativeDesktopWakeRoute = nativeWakeAvailability(nativeDesktopWakeReady, {
+    id: 'native-desktop-wake',
+    label: 'Desktop wake voice',
+    unavailableBlocker: 'native_desktop_wake_unavailable'
+  })
+  const nativeMobileWakeRoute = nativeWakeAvailability(nativeMobileWakeReady, {
+    id: 'native-mobile-wake',
+    label: 'Mobile hands-free voice',
+    unavailableBlocker: 'native_mobile_wake_unavailable'
+  })
+  const backgroundWakeActive = input.nativeDesktopBackgroundWakeActive === true || input.nativeMobileBackgroundWakeActive === true
 
   return {
     captureStatus: input.captureStatus,
@@ -4066,8 +4194,8 @@ export function buildAssistantVoiceModel(input: {
       voiceChip('remote-processing', 'Connected speech help', transcription, 'raw-audio', input.consentGranted
         ? 'Session consent is active for speech help.'
         : 'Session consent is required before audio leaves this device.'),
-      nativeDesktopWakeReady
-        ? voiceChip('wake', 'Wake and background', nativeDesktopWakeRoute, 'raw-audio', 'Hands-free voice is ready on this device.')
+      nativeDesktopWakeReady || nativeMobileWakeReady
+        ? voiceChip('wake', 'Wake and background', nativeDesktopWakeReady ? nativeDesktopWakeRoute : nativeMobileWakeRoute, 'raw-audio', 'Hands-free voice is ready on this device.')
         : voiceChip(
           'wake',
           surfaceProfile.voiceCapture.wakewordRequiresFocus ? 'Wake while open' : 'Wake and background',
@@ -4103,9 +4231,9 @@ export function buildAssistantVoiceModel(input: {
         : voiceAction('wakeword', 'Wake foreground', wakeControl.disabled ? wakeProcess : wakeControl, input.captureStatus, input.consentGranted),
       nativeWakeAction(
         'background-wake',
-        input.nativeDesktopBackgroundWakeActive ? 'Stop hands-free' : 'Hands-free',
-        nativeDesktopWakeRoute,
-        input.nativeDesktopBackgroundWakeActive === true
+        backgroundWakeActive ? 'Stop hands-free' : 'Hands-free',
+        nativeDesktopWakeReady ? nativeDesktopWakeRoute : nativeMobileWakeRoute,
+        backgroundWakeActive
       ),
       voiceAction('tts-synthesize', 'Synthesize speech', ttsSynthesize, input.captureStatus, input.consentGranted),
       voiceAction('playback-stop', 'Stop playback', ttsStop, input.captureStatus, input.consentGranted)
@@ -5602,13 +5730,16 @@ function missingVoiceRoute(
   }
 }
 
-function nativeDesktopWakeAvailability(ready: boolean): RouteAvailability {
-  const route = missingVoiceRoute('native-desktop-wake', 'Desktop wake voice', 'WakeWord.Control', 'raw-audio')
+function nativeWakeAvailability(
+  ready: boolean,
+  options: { id: string; label: string; unavailableBlocker: string }
+): RouteAvailability {
+  const route = missingVoiceRoute(options.id, options.label, 'WakeWord.Control', 'raw-audio')
   if (!ready) {
     return {
       ...route,
       providerLabel: 'This device',
-      blockers: ['native_desktop_wake_unavailable'],
+      blockers: [options.unavailableBlocker],
       evidenceSources: ['device_voice_status']
     }
   }

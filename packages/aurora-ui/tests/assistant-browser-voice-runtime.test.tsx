@@ -1085,6 +1085,94 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(grantedMobileVoice.start).toHaveBeenCalledWith({ remoteAudioConsent: true })
   })
 
+  it('routes native mobile hands-free control through the background port and preserves it when hidden', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+    const container = renderAssistant(client, nativeMobileBackgroundSurface(), undefined, {
+      nativeMobileVoice,
+      nativeAvailable: true,
+      nativePlatform: 'android'
+    })
+
+    await clickButton(container, 'Open route details')
+    await clickButtonByText(container, 'Hands-free')
+    await vi.waitFor(() => expect(nativeMobileVoice.startBackground).toHaveBeenCalledTimes(1))
+    expect(nativeMobileVoice.startBackground).toHaveBeenCalledWith({ remoteAudioConsent: false })
+    expect(nativeMobileVoice.start).not.toHaveBeenCalled()
+
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+      await Promise.resolve()
+    })
+    expect(nativeMobileVoice.cancel).not.toHaveBeenCalled()
+    expect(nativeMobileVoice.stopBackground).not.toHaveBeenCalled()
+
+    await clickButtonByText(container, 'Stop hands-free')
+    await vi.waitFor(() => expect(nativeMobileVoice.stopBackground).toHaveBeenCalledTimes(1))
+    expect(findButtonByText(container, 'Hands-free')).toBeTruthy()
+  })
+
+  it('keeps native mobile push-to-talk available when hands-free prerequisites are missing', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    nativeMobileVoice.backgroundStatus.mockResolvedValue(nativeMobileStatus('unavailable'))
+    const container = renderAssistant(client, nativeMobileSurface(), undefined, {
+      nativeMobileVoice,
+      nativeAvailable: true,
+      nativePlatform: 'android'
+    })
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(nativeMobileVoice.start).toHaveBeenCalledTimes(1))
+    expect(nativeMobileVoice.startBackground).not.toHaveBeenCalled()
+  })
+
+  it('keeps native mobile focused push-to-talk foreground-only when hidden', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+    const container = renderAssistant(client, nativeMobileBackgroundSurface(), undefined, {
+      nativeMobileVoice,
+      nativeAvailable: true,
+      nativePlatform: 'android'
+    })
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(nativeMobileVoice.start).toHaveBeenCalledTimes(1))
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+      await Promise.resolve()
+    })
+
+    await vi.waitFor(() => expect(nativeMobileVoice.cancel).toHaveBeenCalledTimes(1))
+    expect(nativeMobileVoice.stopBackground).not.toHaveBeenCalled()
+  })
+
+  it('does not expose a native background voice action on pure web', () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    const model = buildAssistantVoiceModel({
+      client,
+      route: assistantRoute(),
+      surfaceProfile: hostedSurface(),
+      captureStatus: 'idle',
+      consentGranted: false,
+      nativeMobileBackgroundWakeReady: true,
+    })
+
+    const background = model.controls.find((control) => control.id === 'background-wake')
+    expect(background).toMatchObject({
+      enabled: false,
+      label: 'Hands-free',
+    })
+    expect(nativeMobileVoice.startBackground).not.toHaveBeenCalled()
+  })
+
   it('blocks selector-required connected speech before native mobile start after consent', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const startVoiceListen = vi.spyOn(client.assistant, 'startVoiceListen')
@@ -2121,21 +2209,31 @@ function createNativeMobileVoicePort(): NativeMobileVoicePort & {
   start: ReturnType<typeof vi.fn>
   finish: ReturnType<typeof vi.fn>
   cancel: ReturnType<typeof vi.fn>
+  backgroundStatus: ReturnType<typeof vi.fn>
+  startBackground: ReturnType<typeof vi.fn>
+  stopBackground: ReturnType<typeof vi.fn>
 } {
   return {
     status: vi.fn(async () => nativeMobileStatus('idle')),
     start: vi.fn(async () => nativeMobileStatus('listening')),
     finish: vi.fn(async () => nativeMobileStatus('processing')),
-    cancel: vi.fn(async () => nativeMobileStatus('idle'))
+    cancel: vi.fn(async () => nativeMobileStatus('idle')),
+    backgroundStatus: vi.fn(async () => nativeMobileStatus('idle')),
+    startBackground: vi.fn(async () => nativeMobileStatus('listening', true)),
+    stopBackground: vi.fn(async () => nativeMobileStatus('idle'))
   }
 }
 
-function nativeMobileStatus(phase: NativeMobileVoiceStatus['phase']): NativeMobileVoiceStatus {
+function nativeMobileStatus(
+  phase: NativeMobileVoiceStatus['phase'],
+  backgroundActive = false
+): NativeMobileVoiceStatus {
   return {
     available: phase !== 'unavailable',
     phase,
     running: phase === 'listening' || phase === 'processing',
     captureActive: phase === 'listening',
+    backgroundActive,
     reasonCode: null,
     redacted: true
   }
@@ -2165,6 +2263,14 @@ async function clickButton(container: HTMLElement, label: string) {
   })
 }
 
+async function clickButtonByText(container: HTMLElement, label: string) {
+  await act(async () => {
+    findButtonByText(container, label).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+}
+
 function hostedSurface() {
   return getAuroraSurfaceProfile({
     runtimeMode: 'web',
@@ -2179,6 +2285,19 @@ function nativeMobileSurface() {
     transportKind: 'native-mobile',
     nativePlatform: 'android',
     nativeVoiceAvailable: true,
+    userAgent: 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Mobile Safari/537.36'
+  })
+}
+
+function nativeMobileBackgroundSurface() {
+  return getAuroraSurfaceProfile({
+    runtimeMode: 'mobile',
+    transportKind: 'native-mobile',
+    nativePlatform: 'android',
+    nativeVoiceAvailable: true,
+    nativeWakewordAvailable: true,
+    localSpeechPackState: 'ready',
+    localSpeechEngineCapabilities: { vad: true, kws: true, stt: true, tts: true },
     userAgent: 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Mobile Safari/537.36'
   })
 }
@@ -2277,6 +2396,12 @@ function assistantRoute(): RouteAvailability {
 
 function findButton(container: HTMLElement, label: string): HTMLButtonElement {
   const button = Array.from(container.querySelectorAll('button')).find((candidate) => candidate.getAttribute('aria-label') === label)
+  if (!button) throw new Error(`button ${label} not found`)
+  return button
+}
+
+function findButtonByText(container: HTMLElement, label: string): HTMLButtonElement {
+  const button = Array.from(container.querySelectorAll('button')).find((candidate) => candidate.textContent?.trim() === label)
   if (!button) throw new Error(`button ${label} not found`)
   return button
 }

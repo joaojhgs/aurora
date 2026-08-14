@@ -10,6 +10,7 @@ export interface NativeMobileVoiceStatus {
   phase: NativeMobileVoicePhase
   running: boolean
   captureActive: boolean
+  backgroundActive?: boolean
   reasonCode: string | null
   redacted: true
 }
@@ -19,4 +20,7 @@ export interface NativeMobileVoicePort {
   start(request: { remoteAudioConsent: boolean }): Promise<NativeMobileVoiceStatus>
   finish(): Promise<NativeMobileVoiceStatus>
   cancel(): Promise<NativeMobileVoiceStatus>
+  backgroundStatus?(): Promise<NativeMobileVoiceStatus>
+  startBackground?(request: { remoteAudioConsent: boolean }): Promise<NativeMobileVoiceStatus>
+  stopBackground?(): Promise<NativeMobileVoiceStatus>
 }

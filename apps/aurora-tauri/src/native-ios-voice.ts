@@ -46,28 +46,55 @@ export function createTauriNativeIosVoicePort(
       await callNative("aurora_ios_voice_foreground_capture_stop"),
       await callNative("aurora_ios_voice_foreground_capture_status"),
     ),
+    backgroundStatus: async () => {
+      const [capability, background, capture] = await Promise.all([
+        callNative("aurora_ios_voice_status"),
+        callNative("aurora_ios_background_status"),
+        callNative("aurora_ios_voice_foreground_capture_status"),
+      ]);
+      return parseStatus(capability, capture, background);
+    },
+    startBackground: async (request) => parseStatus(
+      await callNative("aurora_ios_voice_background_capture_start", {
+        request: validateStartRequest(request),
+      }),
+      await callNative("aurora_ios_voice_foreground_capture_status"),
+      await callNative("aurora_ios_background_status"),
+    ),
+    stopBackground: async () => parseStatus(
+      await callNative("aurora_ios_voice_foreground_capture_stop"),
+      await callNative("aurora_ios_voice_foreground_capture_status"),
+      await callNative("aurora_ios_background_status"),
+    ),
   };
 }
 
 function parseStatus(
   capabilityValue: unknown,
   captureValue: unknown,
+  backgroundValue?: unknown,
 ): NativeMobileVoiceStatus {
   const capability = isRecord(capabilityValue) ? capabilityValue : {};
   const capture = isRecord(captureValue) ? captureValue : {};
-  const available = capability.available === true;
-  const running = capture.running === true;
-  const captureActive = running;
+  const background = isRecord(backgroundValue) ? backgroundValue : null;
+  const backgroundDetails = isRecord(background?.details) ? background.details : {};
+  const backgroundAvailable = background ? background.available === true : true;
+  const available = capability.available === true && backgroundAvailable;
+  const backgroundActive = capture.backgroundListening === true || backgroundDetails.backgroundSessionActive === true;
+  const running = capture.running === true || backgroundActive;
+  const captureActive = running || backgroundActive;
   const reasonCode = typeof capability.reason === "string"
     ? capability.reason
-    : typeof capture.reason === "string"
+    : typeof background?.reason === "string"
+      ? background.reason
+      : typeof capture.reason === "string"
       ? capture.reason
       : null;
   const phase: NativeMobileVoicePhase = !available
     ? "unavailable"
     : reasonCode && !running
       ? "faulted"
-      : captureActive
+      : captureActive || backgroundActive
         ? "listening"
         : "idle";
 
@@ -76,6 +103,7 @@ function parseStatus(
     phase,
     running,
     captureActive,
+    backgroundActive,
     reasonCode,
     redacted: true,
   };
