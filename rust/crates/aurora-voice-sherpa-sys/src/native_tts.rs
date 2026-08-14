@@ -244,14 +244,11 @@ impl OfflineTts {
             )
         };
         if callback_state.invalid_audio {
+            destroy_generated_audio_if_present(audio);
             return Err(TtsError::NativeInvalidAudio);
         }
         if callback_state.cancelled || cancellation() {
-            if !audio.is_null() {
-                unsafe {
-                    SherpaOnnxDestroyOfflineTtsGeneratedAudio(audio);
-                }
-            }
+            destroy_generated_audio_if_present(audio);
             return Err(TtsError::Cancelled);
         }
         let handle = GeneratedAudioHandle::new(audio)?;
@@ -344,6 +341,14 @@ extern "C" fn progress_callback(
         }
     }
     1
+}
+
+fn destroy_generated_audio_if_present(audio: *const SherpaOnnxGeneratedAudio) {
+    if !audio.is_null() {
+        unsafe {
+            SherpaOnnxDestroyOfflineTtsGeneratedAudio(audio);
+        }
+    }
 }
 
 fn path_cstring(path: &std::path::Path, empty_code: ErrorCode) -> Result<CString, TtsError> {

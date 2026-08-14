@@ -18,6 +18,10 @@ use aurora_voice_engine::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use thiserror::Error;
 
 const MAX_DRAINED_SEGMENTS: usize = 512;
@@ -872,6 +876,40 @@ where
     }
 }
 
+#[derive(Clone)]
+pub struct SherpaTtsCancellationToken {
+    cancelled: Arc<AtomicBool>,
+}
+
+impl SherpaTtsCancellationToken {
+    fn new() -> Self {
+        Self {
+            cancelled: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Release);
+    }
+
+    fn reset(&self) {
+        self.cancelled.store(false, Ordering::Release);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Acquire)
+    }
+}
+
+impl fmt::Debug for SherpaTtsCancellationToken {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SherpaTtsCancellationToken")
+            .field("cancelled", &self.is_cancelled())
+            .finish()
+    }
+}
+
 pub struct SherpaFiniteSttEngine<B> {
     installed_binding: TaskPackBinding,
     backend: B,
@@ -884,7 +922,7 @@ pub struct SherpaTtsProvider<B> {
     backend: B,
     readiness: TaskReadiness,
     active_generation: Option<u64>,
-    active_cancelled: bool,
+    cancellation_token: SherpaTtsCancellationToken,
     speaker_id: i32,
     speed: f32,
     last_backend_fault: Option<BackendFaultCode>,
@@ -897,7 +935,10 @@ impl<B> fmt::Debug for SherpaTtsProvider<B> {
             .field("installed_binding", &self.installed_binding)
             .field("readiness", &self.readiness)
             .field("active_generation", &self.active_generation)
-            .field("active_cancelled", &self.active_cancelled)
+            .field(
+                "cancellation_requested",
+                &self.cancellation_token.is_cancelled(),
+            )
             .field("speaker_id", &self.speaker_id)
             .field("speed", &self.speed)
             .field("last_backend_fault", &self.last_backend_fault)
@@ -926,7 +967,7 @@ where
             backend,
             readiness: TaskReadiness::Ready,
             active_generation: None,
-            active_cancelled: false,
+            cancellation_token: SherpaTtsCancellationToken::new(),
             speaker_id,
             speed,
             last_backend_fault: None,
@@ -939,6 +980,10 @@ where
 
     pub fn last_backend_fault(&self) -> Option<BackendFaultCode> {
         self.last_backend_fault
+    }
+
+    pub fn cancellation_token(&self) -> SherpaTtsCancellationToken {
+        self.cancellation_token.clone()
     }
 
     pub fn into_backend(self) -> B {
@@ -1030,10 +1075,13 @@ where
     async fn unload_task(&mut self, binding: TaskPackBinding) -> Result<(), EngineError> {
         self.ensure_binding(&binding)?;
         self.active_generation = None;
-        self.active_cancelled = false;
+        self.cancellation_token.cancel();
         let result = self.backend.cancel();
-        self.capture_backend(result)
-            .map_err(SherpaAdapterError::into_engine_error)
+        let output = self
+            .capture_backend(result)
+            .map_err(SherpaAdapterError::into_engine_error);
+        self.cancellation_token.reset();
+        output
     }
 
     async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
@@ -1074,42 +1122,41 @@ where
         check_engine_cancellation(cancellation)?;
         let generation = request.generation();
         self.active_generation = Some(generation);
-        self.active_cancelled = false;
-        let result =
-            self.backend
-                .synthesize(request.text(), self.speaker_id, self.speed, cancellation);
+        self.cancellation_token.reset();
+        let cancellation_token = self.cancellation_token.clone();
+        let result = self
+            .backend
+            .synthesize(request.text(), self.speaker_id, self.speed, &|| {
+                cancellation() || cancellation_token.is_cancelled()
+            });
         let audio = match self.capture_backend(result) {
             Ok(audio) => audio,
             Err(SherpaAdapterError::Cancelled) => {
                 self.active_generation = None;
-                self.active_cancelled = false;
                 return Err(EngineError::Cancelled);
             }
             Err(error) => {
                 self.active_generation = None;
-                self.active_cancelled = false;
                 return Err(error.into_engine_error());
             }
         };
-        if cancellation() || self.active_cancelled {
+        if cancellation() || self.cancellation_token.is_cancelled() {
             self.active_generation = None;
-            self.active_cancelled = false;
             return Err(EngineError::Cancelled);
         }
         let chunks = chunk_tts_audio(&request, &audio)?;
         self.active_generation = None;
-        self.active_cancelled = false;
         TtsSynthesisResult::new(&request, chunks, false)
     }
 
     async fn cancel_synthesis_generation(&mut self, generation: u64) -> Result<(), EngineError> {
         if self.active_generation == Some(generation) {
-            self.active_cancelled = true;
+            self.cancellation_token.cancel();
             let result = self.backend.cancel();
             self.capture_backend(result)
                 .map_err(SherpaAdapterError::into_engine_error)?;
             self.active_generation = None;
-            self.active_cancelled = false;
+            self.cancellation_token.reset();
         }
         Ok(())
     }
@@ -2402,6 +2449,31 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
+    struct BlockingTtsBackend {
+        started: std::sync::mpsc::Sender<()>,
+    }
+
+    impl SherpaTtsBackend for BlockingTtsBackend {
+        fn synthesize(
+            &mut self,
+            _text: &str,
+            _speaker_id: i32,
+            _speed: f32,
+            cancellation: &dyn Fn() -> bool,
+        ) -> Result<SherpaTtsAudio, SherpaAdapterError> {
+            self.started.send(()).expect("started signal");
+            while !cancellation() {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            Err(SherpaAdapterError::Cancelled)
+        }
+
+        fn cancel(&mut self) -> Result<(), SherpaAdapterError> {
+            Ok(())
+        }
+    }
+
     impl FakeBackend {
         fn with_segment(segment: SpeechSegment) -> Self {
             let mut segments = VecDeque::new();
@@ -2493,7 +2565,10 @@ mod tests {
         SherpaFiniteSttEngine::new(stt_binding(), backend).expect("valid stt engine")
     }
 
-    fn tts_provider(backend: FakeTtsBackend) -> SherpaTtsProvider<FakeTtsBackend> {
+    fn tts_provider<B>(backend: B) -> SherpaTtsProvider<B>
+    where
+        B: SherpaTtsBackend,
+    {
         SherpaTtsProvider::new(tts_binding(), backend).expect("valid tts provider")
     }
 
@@ -3293,6 +3368,29 @@ mod tests {
         );
     }
 
+    #[test]
+    fn tts_shared_cancellation_token_stops_blocking_backend_without_mut_provider() {
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let mut provider = tts_provider(BlockingTtsBackend {
+            started: started_tx,
+        });
+        let token = provider.cancellation_token();
+        let request = tts_request(provider.binding().clone(), 13, 64);
+        let handle = std::thread::spawn(move || {
+            futures_lite((), |_| provider.synthesize_text(request, &|| false))
+        });
+
+        started_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("blocking backend should start");
+        token.cancel();
+        let result = handle.join().expect("synthesis thread should finish");
+        assert_eq!(result, Err(EngineError::Cancelled));
+        assert!(token.is_cancelled());
+        token.reset();
+        assert!(!token.is_cancelled());
+    }
+
     #[cfg(all(feature = "native-kws", not(target_arch = "wasm32")))]
     #[test]
     fn native_kws_adapter_detects_light_up_with_manifest_int8_encoder() {
@@ -3499,6 +3597,10 @@ mod tests {
     #[cfg(all(feature = "native-tts", not(target_arch = "wasm32")))]
     #[test]
     fn native_tts_adapter_generates_vits_piper_chunks_when_available() {
+        if !live_tts_smoke_enabled() {
+            eprintln!("skipping live native TTS smoke; set AURORA_SHERPA_ONNX_ENABLE_LIVE_TTS=1");
+            return;
+        }
         let binding = binding_with_files_and_sample_rate(
             "native-tts",
             PackTask::Tts,
@@ -3698,6 +3800,11 @@ mod tests {
             "{env_name} should point at the expected test wav"
         );
         path
+    }
+
+    #[allow(dead_code)]
+    fn live_tts_smoke_enabled() -> bool {
+        std::env::var("AURORA_SHERPA_ONNX_ENABLE_LIVE_TTS").as_deref() == Ok("1")
     }
 
     #[allow(dead_code)]

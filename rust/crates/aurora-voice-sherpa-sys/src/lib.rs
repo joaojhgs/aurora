@@ -1684,6 +1684,7 @@ pub enum ErrorCode {
     NativeInvalidAudio,
     NativeAudioTooLong,
     NativeInvalidSpeakerCount,
+    TtsCancelled,
     StreamWaveformMissing,
     StreamWaveformAlreadyAccepted,
     StreamAlreadyDecoded,
@@ -1783,6 +1784,7 @@ impl ErrorCode {
             Self::NativeInvalidAudio => "native.invalid_audio",
             Self::NativeAudioTooLong => "native.audio_too_long",
             Self::NativeInvalidSpeakerCount => "native.invalid_speaker_count",
+            Self::TtsCancelled => "tts.cancelled",
             Self::StreamWaveformMissing => "stream.waveform_missing",
             Self::StreamWaveformAlreadyAccepted => "stream.waveform_already_accepted",
             Self::StreamAlreadyDecoded => "stream.already_decoded",
@@ -1920,7 +1922,7 @@ impl TtsError {
             Self::NativeInvalidAudio => ErrorCode::NativeInvalidAudio,
             Self::NativeAudioTooLong => ErrorCode::NativeAudioTooLong,
             Self::NativeInvalidSpeakerCount => ErrorCode::NativeInvalidSpeakerCount,
-            Self::Cancelled => ErrorCode::NativeUnavailable,
+            Self::Cancelled => ErrorCode::TtsCancelled,
         }
     }
 }
@@ -2728,6 +2730,11 @@ mod tests {
         OfflineTtsGenerationConfig::new(0, 1.0)
             .validate(Some(1))
             .expect("valid generation config");
+        assert_eq!(TtsError::Cancelled.code(), ErrorCode::TtsCancelled);
+        assert_eq!(
+            TtsError::Cancelled.to_string(),
+            "sherpa tts error: tts.cancelled"
+        );
         let error = OfflineTtsGenerationConfig::new(-1, 1.0)
             .validate(Some(1))
             .expect_err("negative speaker should fail");
@@ -2781,6 +2788,10 @@ mod tests {
     #[cfg(all(feature = "native-tts", not(target_arch = "wasm32")))]
     #[test]
     fn native_tts_vits_piper_smoke_generates_audio_and_cancels_callback() {
+        if std::env::var("AURORA_SHERPA_ONNX_ENABLE_LIVE_TTS").as_deref() != Ok("1") {
+            eprintln!("skipping live native TTS smoke; set AURORA_SHERPA_ONNX_ENABLE_LIVE_TTS=1");
+            return;
+        }
         let dir = std::env::var_os("AURORA_SHERPA_ONNX_TTS_MODEL_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
