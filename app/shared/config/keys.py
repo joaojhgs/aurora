@@ -1281,6 +1281,9 @@ class _ServicesTtsVoiceRegistryConfigPath(ConfigPath):
     manifest_path: ConfigPath
     retain_clone_source: ConfigPath
     standard_pack_enabled: ConfigPath
+    trusted_manifest_public_keys: ConfigPath
+    trusted_manifest_sha256: ConfigPath
+    trusted_manifest_signature: ConfigPath
     verify_sha256: ConfigPath
 
     def __new__(cls) -> _ServicesTtsVoiceRegistryConfigPath:
@@ -1300,6 +1303,15 @@ class _ServicesTtsVoiceRegistryConfigPath(ConfigPath):
         self.manifest_path = ConfigPath("services.tts.voice_registry.manifest_path")
         self.retain_clone_source = ConfigPath("services.tts.voice_registry.retain_clone_source")
         self.standard_pack_enabled = ConfigPath("services.tts.voice_registry.standard_pack_enabled")
+        self.trusted_manifest_public_keys = ConfigPath(
+            "services.tts.voice_registry.trusted_manifest_public_keys"
+        )
+        self.trusted_manifest_sha256 = ConfigPath(
+            "services.tts.voice_registry.trusted_manifest_sha256"
+        )
+        self.trusted_manifest_signature = ConfigPath(
+            "services.tts.voice_registry.trusted_manifest_signature"
+        )
         self.verify_sha256 = ConfigPath("services.tts.voice_registry.verify_sha256")
         return self
 

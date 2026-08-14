@@ -6,14 +6,20 @@ import hashlib
 import json
 import os
 import struct
+from base64 import b64encode
 from pathlib import Path
 
 import pytest
 
 from app.services.tts.voice_catalog import (
+    _ED25519_Q,
     VoiceCatalogDownloadError,
     VoiceCatalogInstaller,
     VoiceCatalogSourceError,
+    _ed25519_base_point,
+    _ed25519_encode_point,
+    _ed25519_scalar_mult,
+    _open_download,
 )
 from app.services.tts.voice_registry import VoiceRegistry
 
@@ -67,6 +73,31 @@ def _manifest(data: bytes) -> dict[str, object]:
     }
 
 
+def _manifest_payload(data: bytes) -> bytes:
+    return json.dumps(_manifest(data), separators=(",", ":")).encode("utf-8")
+
+
+def _signature_config(payload: bytes) -> tuple[str, list[str]]:
+    seed = bytes(range(32))
+    hashed = hashlib.sha512(seed).digest()
+    scalar_bytes = bytearray(hashed[:32])
+    scalar_bytes[0] &= 248
+    scalar_bytes[31] &= 63
+    scalar_bytes[31] |= 64
+    scalar = int.from_bytes(scalar_bytes, "little")
+    prefix = hashed[32:]
+    public_key = _ed25519_encode_point(_ed25519_scalar_mult(scalar, _ed25519_base_point()))
+    nonce = int.from_bytes(hashlib.sha512(prefix + payload).digest(), "little") % _ED25519_Q
+    encoded_r = _ed25519_encode_point(_ed25519_scalar_mult(nonce, _ed25519_base_point()))
+    challenge = (
+        int.from_bytes(hashlib.sha512(encoded_r + public_key + payload).digest(), "little")
+        % _ED25519_Q
+    )
+    encoded_s = ((nonce + challenge * scalar) % _ED25519_Q).to_bytes(32, "little")
+    signature = encoded_r + encoded_s
+    return b64encode(signature).decode("ascii"), [b64encode(public_key).decode("ascii")]
+
+
 @pytest.mark.asyncio
 async def test_catalog_installs_selected_voice_and_reuses_cached_artifact(tmp_path: Path) -> None:
     data = _safetensors_bytes()
@@ -99,6 +130,120 @@ async def test_catalog_installs_selected_voice_and_reuses_cached_artifact(tmp_pa
     cached = tmp_path / "cache" / "downloads" / _sha256(data) / "voices/alba.safetensors"
     assert cached.read_bytes() == data
     assert [entry.voice_id for entry in await registry.inventory()] == ["standard:starter_en:alba"]
+
+
+@pytest.mark.asyncio
+async def test_remote_catalog_requires_configured_trust_before_parsing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = _safetensors_bytes()
+    payload = _manifest_payload(data)
+    source_root = tmp_path / "source"
+    source_root.joinpath("voices").mkdir(parents=True)
+    source_root.joinpath("voices/alba.safetensors").write_bytes(data)
+    installer = VoiceCatalogInstaller(
+        manifest_path="https://catalog.example/voices.manifest.json",
+        asset_base_url=str(source_root),
+        cache_dir=tmp_path / "cache",
+        registry=VoiceRegistry(tmp_path / "registry"),
+    )
+    monkeypatch.setattr("app.services.tts.voice_catalog._download_bytes", lambda *_, **__: payload)
+
+    with pytest.raises(VoiceCatalogSourceError, match="trust could not be verified"):
+        await installer.list_items()
+
+
+@pytest.mark.asyncio
+async def test_remote_catalog_rejects_pinned_digest_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = _safetensors_bytes()
+    payload = _manifest_payload(data)
+    installer = VoiceCatalogInstaller(
+        manifest_path="https://catalog.example/voices.manifest.json",
+        asset_base_url=str(tmp_path / "source"),
+        cache_dir=tmp_path / "cache",
+        registry=VoiceRegistry(tmp_path / "registry"),
+        trusted_manifest_sha256="0" * 64,
+    )
+    monkeypatch.setattr("app.services.tts.voice_catalog._download_bytes", lambda *_, **__: payload)
+
+    with pytest.raises(VoiceCatalogSourceError, match="trust could not be verified"):
+        await installer.list_items()
+
+
+@pytest.mark.asyncio
+async def test_remote_catalog_installs_with_pinned_digest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = _safetensors_bytes()
+    payload = _manifest_payload(data)
+    source_root = tmp_path / "source"
+    source_root.joinpath("voices").mkdir(parents=True)
+    source_root.joinpath("voices/alba.safetensors").write_bytes(data)
+    installer = VoiceCatalogInstaller(
+        manifest_path="https://catalog.example/voices.manifest.json",
+        asset_base_url=str(source_root),
+        cache_dir=tmp_path / "cache",
+        registry=VoiceRegistry(tmp_path / "registry"),
+        trusted_manifest_sha256=_sha256(payload),
+    )
+    monkeypatch.setattr("app.services.tts.voice_catalog._download_bytes", lambda *_, **__: payload)
+
+    installed = await installer.install_voice("standard:starter_en:alba")
+
+    assert installed.entry.voice_id == "standard:starter_en:alba"
+
+
+@pytest.mark.asyncio
+async def test_remote_catalog_installs_with_ed25519_signature(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = _safetensors_bytes()
+    payload = _manifest_payload(data)
+    signature, public_keys = _signature_config(payload)
+    source_root = tmp_path / "source"
+    source_root.joinpath("voices").mkdir(parents=True)
+    source_root.joinpath("voices/alba.safetensors").write_bytes(data)
+    installer = VoiceCatalogInstaller(
+        manifest_path="https://catalog.example/voices.manifest.json",
+        asset_base_url=str(source_root),
+        cache_dir=tmp_path / "cache",
+        registry=VoiceRegistry(tmp_path / "registry"),
+        trusted_manifest_public_keys=public_keys,
+        trusted_manifest_signature=signature,
+    )
+    monkeypatch.setattr("app.services.tts.voice_catalog._download_bytes", lambda *_, **__: payload)
+
+    installed = await installer.install_voice("standard:starter_en:alba")
+
+    assert installed.entry.voice_id == "standard:starter_en:alba"
+
+
+@pytest.mark.asyncio
+async def test_remote_catalog_rejects_tampered_signed_payload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = _safetensors_bytes()
+    payload = _manifest_payload(data)
+    signature, public_keys = _signature_config(payload)
+    tampered = bytearray(payload)
+    tampered[-2] = ord("x")
+    installer = VoiceCatalogInstaller(
+        manifest_path="https://catalog.example/voices.manifest.json",
+        asset_base_url=str(tmp_path / "source"),
+        cache_dir=tmp_path / "cache",
+        registry=VoiceRegistry(tmp_path / "registry"),
+        trusted_manifest_public_keys=public_keys,
+        trusted_manifest_signature=signature,
+    )
+    monkeypatch.setattr(
+        "app.services.tts.voice_catalog._download_bytes",
+        lambda *_, **__: bytes(tampered),
+    )
+
+    with pytest.raises(VoiceCatalogSourceError, match="trust could not be verified"):
+        await installer.list_items()
 
 
 def test_catalog_rejects_non_https_non_localhost_download_urls(tmp_path: Path) -> None:
@@ -181,6 +326,44 @@ def test_catalog_rejects_private_https_hosts(tmp_path: Path) -> None:
 
     with pytest.raises(VoiceCatalogDownloadError, match="not allowed"):
         installer._artifact_source("voices/alba.safetensors")
+
+
+def test_catalog_rejects_redirects_to_private_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeResponse:
+        status = 302
+
+        def getheader(self, name: str) -> str | None:
+            return "https://127.0.0.1/voices.manifest.json" if name == "Location" else None
+
+        def close(self) -> None:
+            return None
+
+    class FakeConnection:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def request(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def getresponse(self) -> FakeResponse:
+            return FakeResponse()
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(
+        "app.services.tts.voice_catalog._resolve_download_ip",
+        lambda *_, **__: "93.184.216.34",
+    )
+    def fake_getaddrinfo(host: str, *_args: object, **_kwargs: object) -> list[tuple[None, None, None, None, tuple[str, int]]]:
+        address = "127.0.0.1" if host == "127.0.0.1" else "93.184.216.34"
+        return [(None, None, None, None, (address, 443))]
+
+    monkeypatch.setattr("app.services.tts.voice_catalog.socket.getaddrinfo", fake_getaddrinfo)
+    monkeypatch.setattr("app.services.tts.voice_catalog._PinnedHTTPSConnection", FakeConnection)
+
+    with pytest.raises(VoiceCatalogDownloadError, match="not allowed"):
+        _open_download("https://catalog.example/voices.manifest.json", timeout=1, allow_local_http=False)
 
 
 @pytest.mark.asyncio

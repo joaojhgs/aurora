@@ -633,6 +633,32 @@
                   ],
                   "default": null
                 },
+                "trusted_manifest_sha256": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[0-9a-f]{64}$",
+                  "default": null
+                },
+                "trusted_manifest_public_keys": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 128
+                  },
+                  "default": []
+                },
+                "trusted_manifest_signature": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 64,
+                  "maxLength": 256,
+                  "default": null
+                },
                 "cache_dir": {
                   "type": "string",
                   "default": "voice_models/voice-pack"

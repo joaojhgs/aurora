@@ -136,6 +136,9 @@
       "voice_registry": {
         "manifest_path": "voice_models/voices.manifest.json",
         "asset_base_url": null,
+        "trusted_manifest_sha256": null,
+        "trusted_manifest_public_keys": [],
+        "trusted_manifest_signature": null,
         "cache_dir": "voice_models/voice-pack",
         "verify_sha256": true,
         "standard_pack_enabled": true,

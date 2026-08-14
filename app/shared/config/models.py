@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import AnyUrl, Field, SecretStr, constr
+from pydantic import AnyUrl, Field, RootModel, SecretStr, constr
 
 from app.shared.config.models_base import BaseConfigModel
 
@@ -342,9 +342,18 @@ class Providers(BaseConfigModel):
     """
 
 
+class TrustedManifestPublicKey(RootModel[str]):
+    root: str = Field(..., max_length=128, min_length=32)
+
+
 class VoiceRegistry(BaseConfigModel):
     manifest_path: str | None = "voice_models/voices.manifest.json"
     asset_base_url: str | None = None
+    trusted_manifest_sha256: str | None = Field(None, pattern="^[0-9a-f]{64}$")
+    trusted_manifest_public_keys: list[TrustedManifestPublicKey] | None = Field(
+        [], validate_default=True
+    )
+    trusted_manifest_signature: str | None = Field(None, max_length=256, min_length=64)
     cache_dir: str | None = "voice_models/voice-pack"
     verify_sha256: bool | None = True
     standard_pack_enabled: bool | None = True

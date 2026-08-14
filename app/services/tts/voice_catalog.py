@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import hashlib
+import http.client
 import ipaddress
 import os
 import shutil
 import socket
+import ssl
 import threading
 import uuid
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Literal
 from urllib.parse import quote, unquote, urljoin, urlparse
-from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from pydantic import ValidationError
 
@@ -30,6 +33,14 @@ _MAX_MANIFEST_BYTES = 512 * 1024
 _DEFAULT_MAX_CACHE_BYTES = 4 * 1024 * 1024 * 1024
 _DOWNLOAD_CHUNK_BYTES = 1024 * 1024
 _LOCAL_HTTP_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+_MAX_REDIRECTS = 5
+_MAX_SIGNATURE_BYTES = 64
+_MAX_PUBLIC_KEY_BYTES = 32
+_ED25519_P = 2**255 - 19
+_ED25519_Q = 2**252 + 27742317777372353535851937790883648493
+_ED25519_D = -121665 * pow(121666, -1, _ED25519_P) % _ED25519_P
+_ED25519_I = pow(2, (_ED25519_P - 1) // 4, _ED25519_P)
+_ED25519_BASE_Y = 4 * pow(5, -1, _ED25519_P) % _ED25519_P
 
 
 class VoiceCatalogError(ValueError):
@@ -81,12 +92,18 @@ class VoiceCatalogInstaller:
         registry: VoiceRegistry,
         allow_local_http: bool = False,
         max_cache_bytes: int = _DEFAULT_MAX_CACHE_BYTES,
+        trusted_manifest_sha256: str | None = None,
+        trusted_manifest_public_keys: tuple[str, ...] | list[str] | None = None,
+        trusted_manifest_signature: str | None = None,
     ) -> None:
         self.manifest_path = manifest_path or "voice_models/voices.manifest.json"
         self.asset_base_url = asset_base_url
         self.cache_dir = Path(cache_dir)
         self.registry = registry
         self.allow_local_http = allow_local_http
+        self.trusted_manifest_sha256 = trusted_manifest_sha256
+        self.trusted_manifest_public_keys = tuple(trusted_manifest_public_keys or ())
+        self.trusted_manifest_signature = trusted_manifest_signature
         if max_cache_bytes <= 0:
             raise ValueError("voice catalog cache limit must be positive")
         self.max_cache_bytes = max_cache_bytes
@@ -181,6 +198,15 @@ class VoiceCatalogInstaller:
                 )
             except (OSError, VoiceCatalogDownloadError) as exc:
                 raise VoiceCatalogSourceError("voice catalog is unavailable") from exc
+            try:
+                _verify_remote_manifest_payload(
+                    payload,
+                    trusted_sha256=self.trusted_manifest_sha256,
+                    trusted_public_keys=self.trusted_manifest_public_keys,
+                    signature=self.trusted_manifest_signature,
+                )
+            except VoiceCatalogDownloadError as exc:
+                raise VoiceCatalogSourceError("voice catalog trust could not be verified") from exc
             source: Literal["local", "remote"] = "remote"
         else:
             source = "local"
@@ -334,31 +360,132 @@ def _validate_download_url(url: str, *, allow_local_http: bool = False) -> None:
             raise VoiceCatalogDownloadError("voice catalog host address is not allowed")
 
 
-class _SafeRedirectHandler(HTTPRedirectHandler):
-    def __init__(self, *, allow_local_http: bool) -> None:
-        self._allow_local_http = allow_local_http
-        super().__init__()
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
-        redirected_url = urljoin(req.full_url, newurl)
-        _validate_download_url(
-            redirected_url,
-            allow_local_http=self._allow_local_http,
-        )
-        return super().redirect_request(req, fp, code, msg, headers, redirected_url)
-
-
-def _open_download(url: str, *, timeout: int, allow_local_http: bool):
-    _validate_download_url(url, allow_local_http=allow_local_http)
-    request = Request(url, headers={"User-Agent": "AuroraVoiceCatalog/1"})
-    opener = build_opener(_SafeRedirectHandler(allow_local_http=allow_local_http))
-    response = opener.open(request, timeout=timeout)
+def _resolve_download_ip(url: str, *, allow_local_http: bool = False) -> str | None:
+    parsed = urlparse(url)
+    hostname = (parsed.hostname or "").lower()
+    if allow_local_http and parsed.scheme == "http" and hostname in _LOCAL_HTTP_HOSTS:
+        return None
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
     try:
-        _validate_download_url(response.geturl(), allow_local_http=allow_local_http)
-    except Exception:
+        addresses = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+    except OSError as exc:
+        raise VoiceCatalogDownloadError("voice catalog host could not be resolved") from exc
+    if not addresses:
+        raise VoiceCatalogDownloadError("voice catalog host could not be resolved")
+    selected: str | None = None
+    for address in addresses:
+        candidate = address[4][0]
+        try:
+            resolved = ipaddress.ip_address(candidate)
+        except ValueError as exc:
+            raise VoiceCatalogDownloadError("voice catalog host address is invalid") from exc
+        if not resolved.is_global:
+            raise VoiceCatalogDownloadError("voice catalog host address is not allowed")
+        selected = candidate
+    if selected is None:
+        raise VoiceCatalogDownloadError("voice catalog host could not be resolved")
+    return selected
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, hostname: str, *, connect_host: str, **kwargs: object) -> None:
+        self._connect_host = connect_host
+        super().__init__(hostname, **kwargs)
+
+    def connect(self) -> None:
+        sock = socket.create_connection(
+            (self._connect_host, self.port),
+            self.timeout,
+            self.source_address,
+        )
+        try:
+            if self._tunnel_host:
+                self.sock = sock
+                self._tunnel()
+            self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+        except Exception:
+            sock.close()
+            raise
+
+
+class _DownloadResponse:
+    def __init__(self, response: http.client.HTTPResponse, connection: http.client.HTTPConnection, url: str) -> None:
+        self._response = response
+        self._connection = connection
+        self._url = url
+        self.headers = dict(response.getheaders())
+
+    def read(self, size: int = -1) -> bytes:
+        return self._response.read(size)
+
+    def geturl(self) -> str:
+        return self._url
+
+    def close(self) -> None:
+        self._response.close()
+        self._connection.close()
+
+    def __enter__(self) -> _DownloadResponse:
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        self.close()
+
+
+def _open_download(
+    url: str, *, timeout: int, allow_local_http: bool, redirect_count: int = 0
+) -> _DownloadResponse:
+    if redirect_count > _MAX_REDIRECTS:
+        raise VoiceCatalogDownloadError("voice catalog redirected too many times")
+    _validate_download_url(url, allow_local_http=allow_local_http)
+    parsed = urlparse(url)
+    hostname = parsed.hostname or ""
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    path = parsed.path or "/"
+    if parsed.query:
+        path = f"{path}?{parsed.query}"
+    if parsed.scheme == "https":
+        connect_host = _resolve_download_ip(url, allow_local_http=allow_local_http)
+        if connect_host is None:
+            raise VoiceCatalogDownloadError("voice catalog host address is invalid")
+        connection: http.client.HTTPConnection = _PinnedHTTPSConnection(
+            hostname,
+            connect_host=connect_host,
+            port=port,
+            timeout=timeout,
+            context=ssl.create_default_context(),
+        )
+    else:
+        connection = http.client.HTTPConnection(hostname, port=port, timeout=timeout)
+    connection.request(
+        "GET",
+        path,
+        headers={
+            "Host": parsed.netloc,
+            "User-Agent": "AuroraVoiceCatalog/1",
+            "Accept": "application/octet-stream, application/json",
+        },
+    )
+    response = connection.getresponse()
+    if response.status in {301, 302, 303, 307, 308}:
+        location = response.getheader("Location")
         response.close()
-        raise
-    return response
+        connection.close()
+        if not location:
+            raise VoiceCatalogDownloadError("voice catalog redirect is invalid")
+        redirected_url = urljoin(url, location)
+        _validate_download_url(redirected_url, allow_local_http=allow_local_http)
+        return _open_download(
+            redirected_url,
+            timeout=timeout,
+            allow_local_http=allow_local_http,
+            redirect_count=redirect_count + 1,
+        )
+    if response.status < 200 or response.status >= 300:
+        response.close()
+        connection.close()
+        raise VoiceCatalogDownloadError("voice catalog download failed")
+    return _DownloadResponse(response, connection, url)
 
 
 def _download_bytes(url: str, *, max_bytes: int, allow_local_http: bool = False) -> bytes:
@@ -416,6 +543,145 @@ def _download_to_path(
             raise VoiceCatalogDownloadError("voice artifact size mismatch")
         handle.flush()
         os.fsync(handle.fileno())
+
+
+def _verify_remote_manifest_payload(
+    payload: bytes,
+    *,
+    trusted_sha256: str | None,
+    trusted_public_keys: tuple[str, ...],
+    signature: str | None,
+) -> None:
+    digest = hashlib.sha256(payload).hexdigest()
+    digest_verified = False
+    if trusted_sha256:
+        _validate_sha256(trusted_sha256)
+        if digest != trusted_sha256:
+            raise VoiceCatalogDownloadError("voice catalog digest mismatch")
+        digest_verified = True
+    signature_verified = False
+    if signature or trusted_public_keys:
+        if not signature or not trusted_public_keys:
+            raise VoiceCatalogDownloadError("voice catalog signature trust is incomplete")
+        signature_bytes = _decode_trust_bytes(signature, expected_length=_MAX_SIGNATURE_BYTES)
+        for encoded_key in trusted_public_keys:
+            public_key_bytes = _decode_trust_bytes(
+                encoded_key,
+                expected_length=_MAX_PUBLIC_KEY_BYTES,
+            )
+            if _ed25519_verify(public_key_bytes, signature_bytes, payload):
+                signature_verified = True
+                break
+        if not signature_verified:
+            raise VoiceCatalogDownloadError("voice catalog signature mismatch")
+    if not digest_verified and not signature_verified:
+        raise VoiceCatalogDownloadError("voice catalog trust is not configured")
+
+
+def _decode_trust_bytes(value: str, *, expected_length: int) -> bytes:
+    normalized = "".join(value.split())
+    try:
+        if len(normalized) == expected_length * 2 and all(
+            char in "0123456789abcdefABCDEF" for char in normalized
+        ):
+            decoded = bytes.fromhex(normalized)
+        else:
+            decoded = base64.b64decode(normalized, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise VoiceCatalogDownloadError("voice catalog trust material is invalid") from exc
+    if len(decoded) != expected_length:
+        raise VoiceCatalogDownloadError("voice catalog trust material is invalid")
+    return decoded
+
+
+def _ed25519_verify(public_key: bytes, signature: bytes, payload: bytes) -> bool:
+    if len(public_key) != 32 or len(signature) != 64:
+        return False
+    encoded_r = signature[:32]
+    s = int.from_bytes(signature[32:], "little")
+    if s >= _ED25519_Q:
+        return False
+    try:
+        public_point = _ed25519_decode_point(public_key)
+        r_point = _ed25519_decode_point(encoded_r)
+    except ValueError:
+        return False
+    challenge = int.from_bytes(
+        hashlib.sha512(encoded_r + public_key + payload).digest(),
+        "little",
+    ) % _ED25519_Q
+    left = _ed25519_scalar_mult(s, _ed25519_base_point())
+    right = _ed25519_point_add(r_point, _ed25519_scalar_mult(challenge, public_point))
+    return _ed25519_encode_point(left) == _ed25519_encode_point(right)
+
+
+def _ed25519_base_point() -> tuple[int, int, int, int]:
+    x = _ed25519_xrecover(_ED25519_BASE_Y)
+    return (x, _ED25519_BASE_Y, 1, x * _ED25519_BASE_Y % _ED25519_P)
+
+
+def _ed25519_xrecover(y: int) -> int:
+    xx = (y * y - 1) * pow(_ED25519_D * y * y + 1, -1, _ED25519_P)
+    x = pow(xx, (_ED25519_P + 3) // 8, _ED25519_P)
+    if (x * x - xx) % _ED25519_P != 0:
+        x = (x * _ED25519_I) % _ED25519_P
+    if x % 2 != 0:
+        x = _ED25519_P - x
+    return x
+
+
+def _ed25519_decode_point(encoded: bytes) -> tuple[int, int, int, int]:
+    y = int.from_bytes(encoded, "little") & ((1 << 255) - 1)
+    sign = encoded[31] >> 7
+    if y >= _ED25519_P:
+        raise ValueError("invalid point")
+    x = _ed25519_xrecover(y)
+    if x & 1 != sign:
+        x = _ED25519_P - x
+    if (-x * x + y * y - 1 - _ED25519_D * x * x * y * y) % _ED25519_P != 0:
+        raise ValueError("invalid point")
+    return (x, y, 1, x * y % _ED25519_P)
+
+
+def _ed25519_encode_point(point: tuple[int, int, int, int]) -> bytes:
+    x, y, z, _t = point
+    z_inv = pow(z, -1, _ED25519_P)
+    affine_x = x * z_inv % _ED25519_P
+    affine_y = y * z_inv % _ED25519_P
+    encoded = bytearray(affine_y.to_bytes(32, "little"))
+    encoded[31] |= (affine_x & 1) << 7
+    return bytes(encoded)
+
+
+def _ed25519_point_add(
+    point_a: tuple[int, int, int, int],
+    point_b: tuple[int, int, int, int],
+) -> tuple[int, int, int, int]:
+    x1, y1, z1, t1 = point_a
+    x2, y2, z2, t2 = point_b
+    a = (y1 - x1) * (y2 - x2) % _ED25519_P
+    b = (y1 + x1) * (y2 + x2) % _ED25519_P
+    c = 2 * _ED25519_D * t1 * t2 % _ED25519_P
+    d = 2 * z1 * z2 % _ED25519_P
+    e = b - a
+    f = d - c
+    g = d + c
+    h = b + a
+    return (e * f % _ED25519_P, g * h % _ED25519_P, f * g % _ED25519_P, e * h % _ED25519_P)
+
+
+def _ed25519_scalar_mult(
+    scalar: int,
+    point: tuple[int, int, int, int],
+) -> tuple[int, int, int, int]:
+    result = (0, 1, 1, 0)
+    addend = point
+    while scalar:
+        if scalar & 1:
+            result = _ed25519_point_add(result, addend)
+        addend = _ed25519_point_add(addend, addend)
+        scalar >>= 1
+    return result
 
 
 def _copy_exact(source: Path, target: Path, *, expected_size: int) -> None:

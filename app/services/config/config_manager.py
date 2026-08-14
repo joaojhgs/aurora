@@ -565,6 +565,9 @@ class ConfigManager:
             "services.tts.voice_registry": {
                 "manifest_path",
                 "asset_base_url",
+                "trusted_manifest_sha256",
+                "trusted_manifest_public_keys",
+                "trusted_manifest_signature",
                 "cache_dir",
                 "verify_sha256",
                 "standard_pack_enabled",
