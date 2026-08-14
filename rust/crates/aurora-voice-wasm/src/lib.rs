@@ -289,7 +289,11 @@ impl From<VoiceCoreError> for WasmFacadeError {
             VoiceCoreError::SampleNotFinite | VoiceCoreError::SampleOutOfRange => {
                 Self::new("invalid_audio")
             }
+            VoiceCoreError::SpeechNotDetected => Self::new("speech_not_detected"),
+            VoiceCoreError::SpeechTimeout => Self::new("speech_timeout"),
             VoiceCoreError::StaleGeneration => Self::new("stale_generation"),
+            VoiceCoreError::WakeNotDetected => Self::new("wake_not_detected"),
+            VoiceCoreError::WakeUnavailable => Self::new("wake_unavailable"),
             VoiceCoreError::TransportFault { .. } | VoiceCoreError::Engine(_) => {
                 Self::new("internal")
             }
@@ -3562,6 +3566,26 @@ mod wasm_facade_tests {
         assert_eq!(
             WasmFacadeError::from(VoiceCoreError::GenerationExhausted).code(),
             "generation_exhausted"
+        );
+    }
+
+    #[test]
+    fn maps_wake_and_speech_turn_errors_to_stable_redacted_codes() {
+        assert_eq!(
+            WasmFacadeError::from(VoiceCoreError::WakeUnavailable).code(),
+            "wake_unavailable"
+        );
+        assert_eq!(
+            WasmFacadeError::from(VoiceCoreError::WakeNotDetected).code(),
+            "wake_not_detected"
+        );
+        assert_eq!(
+            WasmFacadeError::from(VoiceCoreError::SpeechNotDetected).code(),
+            "speech_not_detected"
+        );
+        assert_eq!(
+            WasmFacadeError::from(VoiceCoreError::SpeechTimeout).code(),
+            "speech_timeout"
         );
     }
 
