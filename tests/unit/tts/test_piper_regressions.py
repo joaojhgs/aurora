@@ -521,6 +521,85 @@ async def test_piper_list_language_packs_exposes_catalog_voices_even_uninstalled
 
 
 @pytest.mark.asyncio
+async def test_piper_language_packs_allow_listed_stale_default(
+    service: TTSService, monkeypatch, tmp_path: Path
+) -> None:
+    """keeps an uninstalled catalog default listed without making it ready/default."""
+    manager = FakePiperCatalogManager()
+
+    async def fake_config(*_args, **_kwargs):
+        return Tts(
+            provider="piper",
+            default_voice_id="standard:piper:en_us-test-low",
+            providers=Providers(piper=Piper(cache_dir=str(tmp_path))),
+        )
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr(service, "_piper_catalog_manager", lambda _cfg: manager)
+
+    response = await service.list_language_packs(
+        TTSListLanguagePacksRequest(include_unavailable=True)
+    )
+
+    pack = response.packs[0]
+    voice = pack.voices[0]
+    assert response.default_voice_id == "standard:piper:en_us-test-low"
+    assert response.stale_default_voice_id == "standard:piper:en_us-test-low"
+    assert voice.voice_id == "standard:piper:en_us-test-low"
+    assert voice.installed is False
+    assert voice.ready is False
+    assert voice.default is False
+    assert pack.default is False
+
+
+@pytest.mark.asyncio
+async def test_piper_language_pack_revision_is_stable_catalog_provenance(
+    service: TTSService, monkeypatch, tmp_path: Path
+) -> None:
+    """does not change pack provenance when install/default/active state changes."""
+    manager = FakePiperCatalogManager()
+
+    async def fake_config(*_args, **_kwargs):
+        return Tts(
+            provider="piper",
+            default_voice_id="standard:piper:en_us-test-low",
+            providers=Providers(piper=Piper(cache_dir=str(tmp_path))),
+        )
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr(service, "_piper_catalog_manager", lambda _cfg: manager)
+
+    first = await service.list_language_packs(TTSListLanguagePacksRequest())
+    first_revision = first.packs[0].revision
+    assert first_revision == CATALOG_REVISION
+
+    manager.installed = True
+    manager.voices = (
+        PiperCatalogVoice(
+            voice_id="standard:piper:en_us-test-low",
+            display_name="Test low",
+            language="en-us",
+            revision=CATALOG_REVISION,
+            installed=True,
+            ready=True,
+            sample_rate=16000,
+        ),
+        manager.voices[1],
+    )
+    service._provider = FakeProvider()
+    service._provider.voices = (
+        TTSVoiceInfo("standard:piper:en_us-test-low", "Test low", True, language="en-us"),
+    )
+
+    second = await service.list_language_packs(TTSListLanguagePacksRequest())
+
+    assert second.packs[0].revision == first_revision
+    assert second.packs[0].voices[0].installed is True
+    assert second.packs[0].voices[0].ready is True
+    assert second.packs[0].voices[0].default is True
+
+
+@pytest.mark.asyncio
 async def test_piper_install_checks_catalog_revision_and_installs_exact_voice(
     service: TTSService, monkeypatch, tmp_path: Path
 ) -> None:

@@ -30,6 +30,7 @@ from typing import Any, Literal
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.messaging import Envelope
 from app.services.tts.piper_catalog import (
+    CATALOG_REVISION as PIPER_CATALOG_REVISION,
     PiperCatalogManager,
     piper_cache_dir_from_config,
 )
@@ -1215,22 +1216,20 @@ class TTSService(BaseService):
         profiles, _catalog_error = await self._current_voice_profiles_with_catalog_status()
         return profiles
 
-    def _language_pack_revision(self, voices: list[TTSLanguagePackVoice]) -> str:
+    def _language_pack_revision(
+        self,
+        voices: list[TTSLanguagePackVoice],
+        *,
+        catalog_revision: str | None = None,
+    ) -> str:
+        if catalog_revision is not None:
+            return catalog_revision
         parts = [
-            ":".join(
-                (
-                    voice.voice_id,
-                    voice.revision,
-                    str(voice.installed),
-                    str(voice.ready),
-                    str(voice.default),
-                    str(voice.active),
-                )
-            )
+            ":".join((voice.voice_id, voice.revision))
             for voice in voices
         ]
         digest = hashlib.sha256("|".join(sorted(parts)).encode("utf-8")).hexdigest()[:16]
-        return f"language-pack-rev-{self._voice_revision}-{digest}"
+        return f"language-pack-rev-{digest}"
 
     async def _current_language_pack_inventory(self) -> _LanguagePackInventory:
         tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
@@ -1333,7 +1332,12 @@ class TTSService(BaseService):
                     installed_voice_count=installed_count,
                     ready_voice_count=ready_count,
                     voices=voices,
-                    revision=self._language_pack_revision(voices),
+                    revision=self._language_pack_revision(
+                        voices,
+                        catalog_revision=PIPER_CATALOG_REVISION
+                        if tts_cfg.provider == "piper"
+                        else None,
+                    ),
                 )
             )
         return _LanguagePackInventory(

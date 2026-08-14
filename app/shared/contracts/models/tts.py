@@ -570,17 +570,16 @@ class TTSListLanguagePacksResponse(_StrictTTSIOModel):
             raise ValueError("available language pack catalog cannot include an error code")
         if self.catalog_status == "unavailable" and self.catalog_error_code is None:
             raise ValueError("unavailable language pack catalog requires an error code")
-        ready_voice_ids = {
-            voice.voice_id
-            for pack in self.packs
-            for voice in pack.voices
-            if voice.ready
-        }
-        if (
-            self.stale_default_voice_id is not None
-            and self.stale_default_voice_id in ready_voice_ids
-        ):
-            raise ValueError("stale default voice cannot be ready in listed voices")
+        if self.stale_default_voice_id is not None:
+            for pack in self.packs:
+                for voice in pack.voices:
+                    if (
+                        voice.voice_id == self.stale_default_voice_id
+                        and (voice.ready or voice.default)
+                    ):
+                        raise ValueError(
+                            "stale default voice cannot be ready or default"
+                        )
         return self
 
 
