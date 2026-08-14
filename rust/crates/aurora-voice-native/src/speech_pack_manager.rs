@@ -26,6 +26,7 @@ const STATE_FILE: &str = "speech-packs.json";
 const ARCHIVE_FILE: &str = "archive.tar.bz2";
 const TMP_PREFIX: &str = ".tmp-";
 const DEFAULT_MAX_ARCHIVE_BYTES: u64 = 512 * 1024 * 1024;
+const DEFAULT_MAX_SPEECH_MODEL_ASSET_BYTES: u64 = 3 * 1024 * 1024 * 1024;
 const DEFAULT_MAX_EXTRACTED_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const DEFAULT_MAX_FILE_BYTES: u64 = 768 * 1024 * 1024;
 const DEFAULT_MAX_ENTRIES: usize = 12_000;
@@ -58,7 +59,7 @@ impl SpeechPackManagerConfig {
     ) -> Result<Self, SpeechPackError> {
         Ok(Self {
             root: root.into(),
-            download_policy: DownloadPolicy::https_only(default_max_download_bytes()?)
+            download_policy: DownloadPolicy::https_only(default_max_download_bytes())
                 .map_err(SpeechPackError::Download)?,
             quota_bytes,
             max_extracted_bytes: DEFAULT_MAX_EXTRACTED_BYTES,
@@ -69,15 +70,8 @@ impl SpeechPackManagerConfig {
     }
 }
 
-fn default_max_download_bytes() -> Result<u64, SpeechPackError> {
-    let speech_catalog = SpeechModelCatalog::embedded().map_err(|_| SpeechPackError::State)?;
-    let speech_max = speech_catalog
-        .entries
-        .iter()
-        .map(|entry| entry.archive.byte_size)
-        .max()
-        .unwrap_or(0);
-    Ok(DEFAULT_MAX_ARCHIVE_BYTES.max(speech_max))
+fn default_max_download_bytes() -> u64 {
+    DEFAULT_MAX_ARCHIVE_BYTES.max(DEFAULT_MAX_SPEECH_MODEL_ASSET_BYTES)
 }
 
 /// Product-safe install progress for the selected voice only.
@@ -1962,6 +1956,10 @@ mod tests {
             .expect("catalog entries");
 
         assert!(largest > DEFAULT_MAX_ARCHIVE_BYTES);
+        assert_eq!(
+            config.download_policy.max_asset_bytes,
+            DEFAULT_MAX_SPEECH_MODEL_ASSET_BYTES
+        );
         assert!(catalog
             .entries
             .iter()
