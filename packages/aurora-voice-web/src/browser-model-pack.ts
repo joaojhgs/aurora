@@ -1,4 +1,5 @@
 import type { AuroraWebModelStoreHost } from './model-store-host.js'
+import type { AuroraVoiceWebModelDescriptor } from './types.js'
 
 export const AURORA_NON_PRODUCTION_MODEL_PACK_KEY_ID = 'aurora-nonproduction-web-wasm-test'
 export const AURORA_MODEL_PACK_SIGNATURE_ALGORITHM = 'ed25519'
@@ -36,6 +37,7 @@ export interface AuroraBrowserModelPackVariant {
   readonly target: string
   readonly os: string
   readonly arch: string
+  readonly model_bindings?: readonly AuroraVoiceWebModelDescriptor[]
 }
 
 export interface AuroraBrowserModelPackManifest {
@@ -126,6 +128,7 @@ export interface AuroraBrowserImmutableModelFile {
 export interface AuroraBrowserActiveModelPack {
   readonly identity: AuroraBrowserModelPackIdentity
   readonly files: readonly AuroraBrowserImmutableModelFile[]
+  readonly models: readonly AuroraVoiceWebModelDescriptor[]
 }
 
 interface ActiveRecord {
@@ -444,7 +447,8 @@ export async function openActiveBrowserModelPack(
       variantId: active.identity.variant_id,
       scope: normalizedScope
     },
-    files
+    files,
+    models: variant.model_bindings ?? []
   }
 }
 
@@ -514,7 +518,29 @@ function validateManifestShape(manifest: AuroraBrowserModelPackManifest): void {
       throw modelPackError('invalid_id')
     }
     if (!hasUniqueStrings(variant.file_ids)) throw modelPackError('duplicate_id')
+    if (variant.model_bindings !== undefined && !validVariantModelBindings(variant.model_bindings, variant.file_ids)) {
+      throw modelPackError('model_metadata')
+    }
   }
+}
+
+function validVariantModelBindings(bindings: readonly AuroraVoiceWebModelDescriptor[], variantFileIds: readonly string[]): boolean {
+  if (!Array.isArray(bindings) || bindings.length === 0 || bindings.length > 64) return false
+  const ids = new Set(variantFileIds)
+  return bindings.every((model) => (
+    (model.task === 'vad' || model.task === 'kws' || model.task === 'stt') &&
+    (model.family === 'silero-vad' || model.family === 'moonshine' || model.family === 'whisper' || model.family === 'sense-voice' || model.family === 'sherpa-kws-transducer') &&
+    (model.kind === 'vad' || model.kind === 'offline-asr' || model.kind === 'keyword-spotter') &&
+    Array.isArray(model.files) &&
+    model.files.length > 0 &&
+    model.files.every((file: AuroraVoiceWebModelDescriptor['files'][number]) => (
+      ['model', 'encoder', 'decoder', 'mergedDecoder', 'tokens', 'joiner', 'keywords'].includes(file.role) &&
+      ids.has(file.fileId) &&
+      safeId(file.fileId) &&
+      typeof file.virtualPath === 'string' &&
+      file.virtualPath.startsWith('/')
+    ))
+  ))
 }
 
 function selectWebWasmVariant(manifest: AuroraBrowserModelPackManifest): AuroraBrowserModelPackVariant {

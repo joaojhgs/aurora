@@ -5,7 +5,10 @@ import {
   type AuroraVoiceInferenceOutput,
   type AuroraVoiceWebCapabilities,
   type AuroraVoiceWebModelBindings,
+  type AuroraVoiceWebModelDescriptor,
   type AuroraVoiceWebModelFileBinding,
+  type AuroraVoiceWebModelFileReference,
+  type AuroraVoiceWebModelFileRole,
   type AuroraVoiceWebModelTask
 } from './types.js'
 import type { AuroraVoiceWorkerSherpaAssets } from './worker-assets.js'
@@ -31,10 +34,17 @@ interface SherpaRuntimeHandles {
   readonly kwsStream: SherpaKwsStream | null
 }
 
+interface ValidatedModelBindings {
+  readonly files: readonly AuroraVoiceWebModelFileBinding[]
+  readonly models: readonly AuroraVoiceWebModelDescriptor[]
+}
+
 export interface SherpaModule {
   FS_createDataFile(parent: string, name: string, data: Uint8Array, canRead: boolean, canWrite: boolean, canOwn: boolean): void
   FS_unlink?(path: string): void
 }
+
+type SherpaEmscriptenFactory = (config: Record<string, unknown>) => Promise<SherpaModule> | SherpaModule
 
 interface SherpaVad {
   acceptWaveform(samples: Float32Array): void
@@ -56,7 +66,7 @@ interface SherpaOfflineRecognizer {
 
 interface SherpaOfflineStream {
   acceptWaveform(sampleRate: number, samples: Float32Array): void
-  inputFinished(): void
+  inputFinished?(): void
   reset?(): void
   free(): void
 }
@@ -81,6 +91,14 @@ interface SherpaHelpers {
   readonly createOfflineRecognizer?: (module: SherpaModule, config: unknown) => SherpaOfflineRecognizer
   readonly createKws?: (module: SherpaModule, config: unknown) => SherpaKws
 }
+
+type MutableSherpaHelpers = {
+  createVad?: (module: SherpaModule, config: unknown) => SherpaVad
+  createOfflineRecognizer?: (module: SherpaModule, config: unknown) => SherpaOfflineRecognizer
+  createKws?: (module: SherpaModule, config: unknown) => SherpaKws
+}
+
+type OfflineRecognizerConstructor = new(config: unknown, module: SherpaModule) => SherpaOfflineRecognizer
 
 export interface AuroraSherpaWasmVoiceEngineOptions {
   readonly engineAssets?: AuroraVoiceWorkerSherpaAssets
@@ -110,8 +128,10 @@ export class AuroraSherpaWasmVoiceEngine implements AuroraSherpaVoiceEngine {
       this.capabilities = AURORA_VOICE_WEB_DEFAULT_CAPABILITIES
       return this.capabilities
     }
-    const files = await validateModelBindings(bindings)
-    const tasks = new Set(files.map((file) => file.task))
+    const validated = await validateModelBindings(bindings)
+    const files = validated.files
+    const models = validated.models
+    const tasks = new Set(models.map((model) => model.task))
     const assets = this.engineAssets
     const needsVadAsr = tasks.has('vad') || tasks.has('stt')
     const needsKws = tasks.has('kws')
@@ -139,20 +159,22 @@ export class AuroraSherpaWasmVoiceEngine implements AuroraSherpaVoiceEngine {
         if (!helpers.createOfflineRecognizer && tasks.has('stt')) throw unavailable('missing_asr_helper')
         vadAsrModule = await this.loadModule(vadAsrModuleUrl!, files.filter((file) => file.task === 'vad' || file.task === 'stt'))
         mountSelectedModelFiles(vadAsrModule, files.filter((file) => file.task === 'vad' || file.task === 'stt'))
-        if (tasks.has('vad')) vad = helpers.createVad?.(vadAsrModule, vadConfig(files)) ?? null
+        if (tasks.has('vad')) vad = helpers.createVad?.(vadAsrModule, vadConfig(models)) ?? null
         if (tasks.has('stt')) {
-          requireOfflineAsrFiles(files)
-          recognizer = helpers.createOfflineRecognizer?.(vadAsrModule, asrConfig(files)) ?? null
-          if (recognizer === null) throw unavailable('missing_asr_helper')
+          recognizer = helpers.createOfflineRecognizer?.(vadAsrModule, asrConfig(models)) ?? null
+          if (recognizer === null || !validOfflineRecognizer(recognizer)) throw unavailable('missing_asr_helper')
           recognizerStream = recognizer.createStream()
+          if (!validOfflineStream(recognizerStream)) throw unavailable('missing_asr_helper')
         }
       }
       if (needsKws) {
         if (!helpers.createKws) throw unavailable('missing_kws_helper')
         kwsModule = await this.loadModule(kwsModuleUrl!, files.filter((file) => file.task === 'kws'))
         mountSelectedModelFiles(kwsModule, files.filter((file) => file.task === 'kws'))
-        kws = helpers.createKws(kwsModule, kwsConfig(files))
+        kws = helpers.createKws(kwsModule, kwsConfig(models))
+        if (!validKws(kws)) throw unavailable('missing_kws_helper')
         kwsStream = kws.createStream()
+        if (!validKwsStream(kwsStream)) throw unavailable('missing_kws_helper')
       }
       this.handles = { vad, recognizer, recognizerStream, kws, kwsStream }
       this.capabilities = Object.freeze({
@@ -210,7 +232,7 @@ export class AuroraSherpaWasmVoiceEngine implements AuroraSherpaVoiceEngine {
   async stopSession(): Promise<void> {
     const handles = this.handles
     handles?.vad?.flush?.()
-    handles?.recognizerStream?.inputFinished()
+    handles?.recognizerStream?.inputFinished?.()
     handles?.kwsStream?.inputFinished()
   }
 
@@ -234,34 +256,45 @@ export function cloneModelBindingsForWorker(bindings: AuroraVoiceWebModelBinding
   }))
   return {
     bindings: {
-      files
+      files,
+      models: bindings.models.map((model) => ({
+        ...model,
+        files: model.files.map((file) => ({ ...file })),
+        ...(model.config === undefined ? {} : { config: { ...model.config } })
+      }))
     },
     transfer: files.map((file) => file.bytes.buffer).filter((buffer): buffer is ArrayBuffer => buffer instanceof ArrayBuffer)
   }
 }
 
-async function validateModelBindings(bindings: AuroraVoiceWebModelBindings): Promise<readonly AuroraVoiceWebModelFileBinding[]> {
+async function validateModelBindings(bindings: AuroraVoiceWebModelBindings): Promise<ValidatedModelBindings> {
   if (!Array.isArray(bindings.files) || bindings.files.length === 0 || bindings.files.length > MAX_MODEL_FILES) throw unavailable('invalid_bindings')
-  const seen = new Set<string>()
+  if (!Array.isArray(bindings.models) || bindings.models.length === 0 || bindings.models.length > MAX_MODEL_FILES) throw unavailable('invalid_model_metadata')
+  const seenVirtualPaths = new Set<string>()
+  const seenFileIds = new Set<string>()
   const files = bindings.files.map((file) => {
     if (!isTask(file.task) || !safeId(file.fileId) || !safeVirtualPath(file.virtualPath) || !isSha256(file.sha256)) throw unavailable('invalid_binding')
     if (!(file.bytes instanceof Uint8Array) || file.byteLength !== file.bytes.byteLength || file.byteLength <= 0 || file.byteLength > MAX_MODEL_FILE_BYTES) {
       throw unavailable('invalid_binding')
     }
-    if (seen.has(file.virtualPath)) throw unavailable('duplicate_binding')
-    seen.add(file.virtualPath)
+    if (seenVirtualPaths.has(file.virtualPath) || seenFileIds.has(file.fileId)) throw unavailable('duplicate_binding')
+    seenVirtualPaths.add(file.virtualPath)
+    seenFileIds.add(file.fileId)
     return file
   })
   for (const file of files) {
     if (await sha256Hex(file.bytes) !== file.sha256) throw unavailable('model_hash_mismatch')
   }
-  return files
+  const fileIds = new Map(files.map((file) => [file.fileId, file]))
+  const models = bindings.models.map((model) => validateModelDescriptor(model, fileIds))
+  return { files, models }
 }
 
-function vadConfig(files: readonly AuroraVoiceWebModelFileBinding[]): unknown {
+function vadConfig(models: readonly AuroraVoiceWebModelDescriptor[]): unknown {
+  const model = requireModel(models, 'vad')
   return {
     sileroVad: {
-      model: findPath(files, 'vad', ['silero', '.onnx']),
+      model: requireRole(model, 'model'),
       threshold: 0.5,
       minSilenceDuration: 0.5,
       minSpeechDuration: 0.25,
@@ -277,35 +310,37 @@ function vadConfig(files: readonly AuroraVoiceWebModelFileBinding[]): unknown {
   }
 }
 
-function asrConfig(files: readonly AuroraVoiceWebModelFileBinding[]): unknown {
-  const moonshineDecoder = findPath(files, 'stt', ['merged', 'decoder']) || findPath(files, 'stt', ['decoder'])
+function asrConfig(models: readonly AuroraVoiceWebModelDescriptor[]): unknown {
+  const model = requireModel(models, 'stt')
+  const language = model.config?.language ?? ''
   return {
     featConfig: { sampleRate: SAMPLE_RATE_HZ, featureDim: 80 },
     modelConfig: {
       moonshine: {
         preprocessor: '',
-        encoder: findPath(files, 'stt', ['encoder']),
-        uncachedDecoder: moonshineDecoder,
-        cachedDecoder: moonshineDecoder
+        encoder: model.family === 'moonshine' ? requireRole(model, 'encoder') : '',
+        uncachedDecoder: '',
+        cachedDecoder: '',
+        mergedDecoder: model.family === 'moonshine' ? requireRole(model, 'mergedDecoder') : ''
       },
       whisper: {
-        encoder: findPath(files, 'stt', ['whisper', 'encoder']) || findPath(files, 'stt', ['encoder']),
-        decoder: findPath(files, 'stt', ['whisper', 'decoder']) || findPath(files, 'stt', ['decoder']),
-        language: '',
-        task: 'transcribe',
+        encoder: model.family === 'whisper' ? requireRole(model, 'encoder') : '',
+        decoder: model.family === 'whisper' ? requireRole(model, 'decoder') : '',
+        language,
+        task: model.config?.task ?? 'transcribe',
         tailPaddings: -1
       },
       senseVoice: {
-        model: findPath(files, 'stt', ['sense', 'model']) || findPath(files, 'stt', ['sensevoice']),
-        language: '',
+        model: model.family === 'sense-voice' ? requireRole(model, 'model') : '',
+        language,
         useInverseTextNormalization: 1
       },
-      tokens: findPath(files, 'stt', ['tokens']),
+      tokens: requireRole(model, 'tokens'),
       numThreads: 1,
       provider: 'cpu',
       debug: 0,
-      modelType: sttModelType(files),
-      modelingUnit: 'bpe',
+      modelType: sttModelType(model),
+      modelingUnit: model.family === 'moonshine' ? '' : 'bpe',
       bpeVocab: ''
     },
     decodingMethod: 'greedy_search',
@@ -314,39 +349,64 @@ function asrConfig(files: readonly AuroraVoiceWebModelFileBinding[]): unknown {
   }
 }
 
-function kwsConfig(files: readonly AuroraVoiceWebModelFileBinding[]): unknown {
+function kwsConfig(models: readonly AuroraVoiceWebModelDescriptor[]): unknown {
+  const model = requireModel(models, 'kws')
   return {
     featConfig: { samplingRate: SAMPLE_RATE_HZ, featureDim: 80 },
     modelConfig: {
       transducer: {
-        encoder: findPath(files, 'kws', ['encoder']),
-        decoder: findPath(files, 'kws', ['decoder']),
-        joiner: findPath(files, 'kws', ['joiner'])
+        encoder: requireRole(model, 'encoder'),
+        decoder: requireRole(model, 'decoder'),
+        joiner: requireRole(model, 'joiner')
       },
-      tokens: findPath(files, 'kws', ['tokens']),
+      tokens: requireRole(model, 'tokens'),
       provider: 'cpu',
       modelType: '',
       numThreads: 1,
       debug: 0,
       modelingUnit: 'bpe',
-      bpeVocab: ''
+      bpeVocab: optionalRole(model, 'bpeVocab')
     },
     maxActivePaths: 4,
     numTrailingBlanks: 1,
-    keywordsScore: 1.0,
-    keywordsThreshold: 0.25,
-    keywords: ''
+    keywordsScore: model.config?.keywordsScore ?? 1.0,
+    keywordsThreshold: model.config?.keywordsThreshold ?? 0.25,
+    keywords: model.config?.keywords ?? ''
   }
 }
 
 async function loadControlledSherpaHelpers(urls: readonly string[], fetchImpl: typeof fetch): Promise<SherpaHelpers> {
+  const helpers: MutableSherpaHelpers = {}
   for (const url of urls) await fetchNeutralEngineSource(url, fetchImpl)
-  throw unavailable('safe_sherpa_loader_missing')
+  for (const url of urls) {
+    const module = await import(/* @vite-ignore */ url) as Partial<SherpaHelpers> & { readonly OfflineRecognizer?: unknown }
+    if (typeof module.createVad === 'function') helpers.createVad = module.createVad
+    if (typeof module.createOfflineRecognizer === 'function') helpers.createOfflineRecognizer = module.createOfflineRecognizer
+    if (helpers.createOfflineRecognizer === undefined && typeof module.OfflineRecognizer === 'function') {
+      const OfflineRecognizer = module.OfflineRecognizer as OfflineRecognizerConstructor
+      helpers.createOfflineRecognizer = (sherpaModule, config) => new OfflineRecognizer(config, sherpaModule)
+    }
+    if (typeof module.createKws === 'function') helpers.createKws = module.createKws
+  }
+  return helpers
 }
 
 async function loadControlledSherpaModule(url: string, _files: readonly AuroraVoiceWebModelFileBinding[], fetchImpl: typeof fetch): Promise<SherpaModule> {
   await fetchNeutralEngineSource(url, fetchImpl)
-  throw unavailable('safe_sherpa_loader_missing')
+  const imported = await import(/* @vite-ignore */ url) as { readonly default?: unknown }
+  if (typeof imported.default !== 'function') throw unavailable('safe_sherpa_loader_missing')
+  const wasmUrl = wasmUrlForEngineModule(url)
+  await assertFetchableNeutralWasm(wasmUrl, fetchImpl)
+  return imported.default({
+    noInitialRun: true,
+    print: () => undefined,
+    printErr: () => undefined,
+    locateFile: (path: string) => {
+      if (path.endsWith('.data')) throw unavailable('bundled_data_rejected')
+      if (path.endsWith('.wasm')) return wasmUrl
+      return new URL(path, url).href
+    }
+  }) as Promise<SherpaModule>
 }
 
 export async function fetchNeutralEngineSource(url: string, fetchImpl: typeof fetch = globalThis.fetch): Promise<string> {
@@ -362,22 +422,32 @@ export function assertNoBundledDataPreload(source: string): void {
   if (BUNDLED_DATA_PATTERNS.some((pattern) => pattern.test(source))) throw unavailable('bundled_data_rejected')
 }
 
+function wasmUrlForEngineModule(url: string): string {
+  const parsed = new URL(url)
+  if (!parsed.pathname.endsWith('.js')) throw unavailable('asset_unavailable')
+  parsed.pathname = `${parsed.pathname.slice(0, -3)}.wasm`
+  parsed.search = ''
+  parsed.hash = ''
+  return parsed.href
+}
+
+async function assertFetchableNeutralWasm(url: string, fetchImpl: typeof fetch): Promise<void> {
+  const parsed = new URL(url)
+  if (!parsed.pathname.endsWith('.wasm') || parsed.pathname.endsWith('.data')) throw unavailable('asset_unavailable')
+  const response = await fetchImpl(url, { credentials: 'same-origin' })
+  if (!response.ok) throw unavailable('asset_unavailable')
+}
+
 const BUNDLED_DATA_PATTERNS = [
   /\.data(?:["'`)\s?&]|$)/i,
   /remote_package_size/i,
   /getPreloadedPackage/i,
   /expectedDataFileDownloads/i,
-  /FS_createPreloadedFile/i,
-  /loadPackage/i,
   /PACKAGE_NAME/i
 ]
 
 function mountSelectedModelFiles(module: SherpaModule, files: readonly AuroraVoiceWebModelFileBinding[]): void {
   for (const file of files) module.FS_createDataFile('/', file.virtualPath.slice(1), new Uint8Array(file.bytes), true, false, true)
-}
-
-function findPath(files: readonly AuroraVoiceWebModelFileBinding[], task: AuroraVoiceWebModelTask, needles: readonly string[]): string {
-  return files.find((file) => file.task === task && needles.every((needle) => file.virtualPath.toLowerCase().includes(needle)))?.virtualPath ?? ''
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
@@ -387,37 +457,106 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-function requireOfflineAsrFiles(files: readonly AuroraVoiceWebModelFileBinding[]): void {
-  const hasMoonshine = files.some((file) => file.task === 'stt' && file.virtualPath.toLowerCase().includes('moonshine'))
-  const hasWhisper = files.some((file) => file.task === 'stt' && file.virtualPath.toLowerCase().includes('whisper'))
-  const hasSenseVoice = files.some((file) => file.task === 'stt' && file.virtualPath.toLowerCase().includes('sense'))
-  if (hasMoonshine) {
-    if (
-      findPath(files, 'stt', ['encoder']) === '' ||
-      (findPath(files, 'stt', ['merged', 'decoder']) === '' && findPath(files, 'stt', ['decoder']) === '') ||
-      findPath(files, 'stt', ['tokens']) === ''
-    ) throw unavailable('missing_asr_binding')
-    return
+function validateModelDescriptor(
+  model: AuroraVoiceWebModelDescriptor,
+  fileIds: ReadonlyMap<string, AuroraVoiceWebModelFileBinding>
+): AuroraVoiceWebModelDescriptor {
+  if (!isTask(model.task) || !isFamily(model.family) || !isKind(model.kind) || !Array.isArray(model.files) || model.files.length === 0) {
+    throw unavailable('invalid_model_metadata')
   }
-  if (hasWhisper || hasSenseVoice) {
-    if (hasWhisper && (
-      (findPath(files, 'stt', ['whisper', 'encoder']) === '' && findPath(files, 'stt', ['encoder']) === '') ||
-      (findPath(files, 'stt', ['whisper', 'decoder']) === '' && findPath(files, 'stt', ['decoder']) === '') ||
-      findPath(files, 'stt', ['tokens']) === ''
-    )) throw unavailable('missing_asr_binding')
-    if (hasSenseVoice && (
-      (findPath(files, 'stt', ['sense', 'model']) === '' && findPath(files, 'stt', ['sensevoice']) === '') ||
-      findPath(files, 'stt', ['tokens']) === ''
-    )) throw unavailable('missing_asr_binding')
-    return
-  }
-  if (findPath(files, 'stt', ['tokens']) === '') throw unavailable('missing_asr_binding')
+  if (
+    (model.task === 'vad' && (model.kind !== 'vad' || model.family !== 'silero-vad')) ||
+    (model.task === 'kws' && (model.kind !== 'keyword-spotter' || model.family !== 'sherpa-kws-transducer')) ||
+    (model.task === 'stt' && model.kind !== 'offline-asr')
+  ) throw unavailable('invalid_model_metadata')
+  const refs = model.files.map((ref) => validateModelFileReference(ref, model.task, fileIds))
+  requireRoles(model, refs)
+  return Object.freeze({
+    task: model.task,
+    family: model.family,
+    kind: model.kind,
+    files: refs,
+    ...(model.config === undefined ? {} : { config: validateModelConfig(model.config) })
+  })
 }
 
-function sttModelType(files: readonly AuroraVoiceWebModelFileBinding[]): string {
-  if (files.some((file) => file.task === 'stt' && file.virtualPath.toLowerCase().includes('sense'))) return 'sense-voice'
-  if (files.some((file) => file.task === 'stt' && file.virtualPath.toLowerCase().includes('whisper'))) return 'whisper'
-  return 'moonshine'
+function validateModelFileReference(
+  ref: AuroraVoiceWebModelFileReference,
+  task: AuroraVoiceWebModelTask,
+  fileIds: ReadonlyMap<string, AuroraVoiceWebModelFileBinding>
+): AuroraVoiceWebModelFileReference {
+  if (!isRole(ref.role) || !safeId(ref.fileId) || !safeVirtualPath(ref.virtualPath)) throw unavailable('invalid_model_metadata')
+  const file = fileIds.get(ref.fileId)
+  if (file === undefined || file.task !== task || file.virtualPath !== ref.virtualPath) throw unavailable('invalid_model_metadata')
+  return Object.freeze({ role: ref.role, fileId: ref.fileId, virtualPath: ref.virtualPath })
+}
+
+function validateModelConfig(config: NonNullable<AuroraVoiceWebModelDescriptor['config']>): NonNullable<AuroraVoiceWebModelDescriptor['config']> {
+  if (config.language !== undefined && !/^[A-Za-z0-9_-]{0,32}$/.test(config.language)) throw unavailable('invalid_model_metadata')
+  if (config.task !== undefined && !/^[A-Za-z0-9_-]{1,32}$/.test(config.task)) throw unavailable('invalid_model_metadata')
+  if (config.keywords !== undefined && config.keywords.length > 4096) throw unavailable('invalid_model_metadata')
+  if (config.keywordsScore !== undefined && (!Number.isFinite(config.keywordsScore) || config.keywordsScore < 0)) throw unavailable('invalid_model_metadata')
+  if (config.keywordsThreshold !== undefined && (!Number.isFinite(config.keywordsThreshold) || config.keywordsThreshold < 0)) throw unavailable('invalid_model_metadata')
+  return Object.freeze({ ...config })
+}
+
+function requireRoles(model: AuroraVoiceWebModelDescriptor, refs: readonly AuroraVoiceWebModelFileReference[]): void {
+  const roles = new Set(refs.map((ref) => ref.role))
+  const requireEvery = (required: readonly AuroraVoiceWebModelFileRole[]) => {
+    if (!required.every((role) => roles.has(role))) throw unavailable('missing_model_role')
+  }
+  if (model.family === 'silero-vad') requireEvery(['model'])
+  if (model.family === 'moonshine') requireEvery(['encoder', 'mergedDecoder', 'tokens'])
+  if (model.family === 'whisper') requireEvery(['encoder', 'decoder', 'tokens'])
+  if (model.family === 'sense-voice') requireEvery(['model', 'tokens'])
+  if (model.family === 'sherpa-kws-transducer') requireEvery(['encoder', 'decoder', 'joiner', 'tokens'])
+}
+
+function requireModel(models: readonly AuroraVoiceWebModelDescriptor[], task: AuroraVoiceWebModelTask): AuroraVoiceWebModelDescriptor {
+  const matches = models.filter((model) => model.task === task)
+  if (matches.length !== 1 || matches[0] === undefined) throw unavailable('invalid_model_metadata')
+  return matches[0]
+}
+
+function requireRole(model: AuroraVoiceWebModelDescriptor, role: AuroraVoiceWebModelFileRole): string {
+  const ref = model.files.find((file) => file.role === role)
+  if (ref === undefined) throw unavailable('missing_model_role')
+  return ref.virtualPath
+}
+
+function optionalRole(model: AuroraVoiceWebModelDescriptor, role: AuroraVoiceWebModelFileRole): string {
+  return model.files.find((file) => file.role === role)?.virtualPath ?? ''
+}
+
+function validOfflineRecognizer(recognizer: SherpaOfflineRecognizer): boolean {
+  return typeof recognizer.createStream === 'function' &&
+    typeof recognizer.decode === 'function' &&
+    typeof recognizer.getResult === 'function' &&
+    typeof recognizer.free === 'function'
+}
+
+function validOfflineStream(stream: SherpaOfflineStream): boolean {
+  return typeof stream.acceptWaveform === 'function' && typeof stream.free === 'function'
+}
+
+function validKws(kws: SherpaKws): boolean {
+  return typeof kws.createStream === 'function' &&
+    typeof kws.isReady === 'function' &&
+    typeof kws.decode === 'function' &&
+    typeof kws.getResult === 'function' &&
+    typeof kws.reset === 'function' &&
+    typeof kws.free === 'function'
+}
+
+function validKwsStream(stream: SherpaKwsStream): boolean {
+  return typeof stream.acceptWaveform === 'function' && typeof stream.inputFinished === 'function' && typeof stream.free === 'function'
+}
+
+function sttModelType(model: AuroraVoiceWebModelDescriptor): string {
+  if (model.family === 'sense-voice') return 'sense-voice'
+  if (model.family === 'whisper') return 'whisper'
+  if (model.family === 'moonshine') return 'moonshine'
+  throw unavailable('invalid_model_metadata')
 }
 
 function textFromResult(value: unknown): string {
@@ -460,6 +599,18 @@ function pcmI16ToF32(pcm: Int16Array): Float32Array {
 
 function isTask(value: unknown): value is AuroraVoiceWebModelTask {
   return value === 'vad' || value === 'kws' || value === 'stt'
+}
+
+function isFamily(value: unknown): value is AuroraVoiceWebModelDescriptor['family'] {
+  return value === 'silero-vad' || value === 'moonshine' || value === 'whisper' || value === 'sense-voice' || value === 'sherpa-kws-transducer'
+}
+
+function isKind(value: unknown): value is AuroraVoiceWebModelDescriptor['kind'] {
+  return value === 'vad' || value === 'offline-asr' || value === 'keyword-spotter'
+}
+
+function isRole(value: unknown): value is AuroraVoiceWebModelFileRole {
+  return value === 'model' || value === 'encoder' || value === 'decoder' || value === 'mergedDecoder' || value === 'tokens' || value === 'joiner' || value === 'keywords' || value === 'bpeVocab'
 }
 
 function safeId(value: unknown): value is string {

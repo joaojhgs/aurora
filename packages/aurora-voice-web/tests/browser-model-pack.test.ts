@@ -208,6 +208,97 @@ describe('browser model pack verification', () => {
     expect(Array.from(await reopened?.files[0]?.readAll() ?? [])).toEqual([4, 5, 6, 7])
   })
 
+  it('carries explicit model family kind and config metadata from the verified manifest', async () => {
+    const encoderBytes = new Uint8Array([31, 32])
+    const decoderBytes = new Uint8Array([33, 34])
+    const tokensBytes = new Uint8Array([35, 36])
+    const manifest = await signedUnsignedManifest({
+      schema_version: 1,
+      pack_id: 'moonshine-web-test',
+      pack_version: '1.0.0',
+      display_name: 'Moonshine Web Test',
+      tasks: ['stt'],
+      files: [{
+        file_id: 'encoder',
+        asset_id: 'encoder',
+        task: 'stt',
+        url: `${TEST_ASSET_BASE_URL}/fixtures/moonshine-encoder.ort`,
+        sha256: await sha256Hex(encoderBytes),
+        byte_size: encoderBytes.byteLength,
+        installed_size: encoderBytes.byteLength,
+        compression: 'none'
+      }, {
+        file_id: 'decoder-merged',
+        asset_id: 'decoder-merged',
+        task: 'stt',
+        url: `${TEST_ASSET_BASE_URL}/fixtures/moonshine-decoder-merged.ort`,
+        sha256: await sha256Hex(decoderBytes),
+        byte_size: decoderBytes.byteLength,
+        installed_size: decoderBytes.byteLength,
+        compression: 'none'
+      }, {
+        file_id: 'tokens',
+        asset_id: 'tokens',
+        task: 'stt',
+        url: `${TEST_ASSET_BASE_URL}/fixtures/moonshine-tokens.txt`,
+        sha256: await sha256Hex(tokensBytes),
+        byte_size: tokensBytes.byteLength,
+        installed_size: tokensBytes.byteLength,
+        compression: 'none'
+      }],
+      variants: [{
+        variant_id: 'web-wasm32-test',
+        file_ids: ['encoder', 'decoder-merged', 'tokens'],
+        target: 'web',
+        os: 'web',
+        arch: 'wasm32',
+        model_bindings: [{
+          task: 'stt',
+          family: 'moonshine',
+          kind: 'offline-asr',
+          files: [
+            { role: 'encoder', fileId: 'encoder', virtualPath: '/moonshine-encoder.ort' },
+            { role: 'mergedDecoder', fileId: 'decoder-merged', virtualPath: '/moonshine-decoder-merged.ort' },
+            { role: 'tokens', fileId: 'tokens', virtualPath: '/moonshine-tokens.txt' }
+          ],
+          config: { language: 'en', task: 'transcribe' }
+        }]
+      }],
+      revocation: null,
+      signature: null
+    })
+    const host = new MemoryWebModelStoreHost()
+
+    await installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
+      fetchBytes: async (url) => {
+        if (url.endsWith('encoder.ort')) return encoderBytes
+        if (url.endsWith('decoder-merged.ort')) return decoderBytes
+        return tokensBytes
+      }
+    })
+    const reopened = await openActiveBrowserModelPack(
+      host,
+      { task: 'stt' },
+      { allowNonProductionTestSignature: true }
+    )
+
+    expect(reopened?.models).toEqual([{
+      task: 'stt',
+      family: 'moonshine',
+      kind: 'offline-asr',
+      files: [
+        { role: 'encoder', fileId: 'encoder', virtualPath: '/moonshine-encoder.ort' },
+        { role: 'mergedDecoder', fileId: 'decoder-merged', virtualPath: '/moonshine-decoder-merged.ort' },
+        { role: 'tokens', fileId: 'tokens', virtualPath: '/moonshine-tokens.txt' }
+      ],
+      config: { language: 'en', task: 'transcribe' }
+    }])
+  })
+
   it('rejects unsafe asset source URLs before fetching or mutating storage', async () => {
     const bytes = new Uint8Array([101, 102, 103])
     const unsafeUrls = [

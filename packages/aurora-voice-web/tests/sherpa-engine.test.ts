@@ -32,11 +32,11 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
       modelFile('vad', 'silero-vad.onnx', [1]),
       modelFile('stt', 'moonshine-encoder.ort', [2]),
       modelFile('stt', 'moonshine-merged-decoder.ort', [3]),
-      modelFile('stt', 'tokens.txt', [4]),
+      modelFile('stt', 'moonshine-tokens.txt', [4]),
       modelFile('kws', 'encoder.onnx', [5]),
       modelFile('kws', 'decoder.onnx', [6]),
       modelFile('kws', 'joiner.onnx', [7]),
-      modelFile('kws', 'tokens.txt', [8])
+      modelFile('kws', 'kws-tokens.txt', [8])
     ]))
     await engine.startSession()
     const inference = await engine.pushPcmI16(frame(), new Int16Array([0, 32767, -32768]))
@@ -80,7 +80,7 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
   it('fails closed when selected files are present but matching engine assets are missing', async () => {
     const engine = new AuroraSherpaWasmVoiceEngine()
 
-    await expect(engine.initialize({ files: [modelFile('vad', 'silero-vad.onnx', [1])] }))
+    await expect(engine.initialize(bindings([modelFile('vad', 'silero-vad.onnx', [1])])))
       .rejects.toMatchObject({ code: 'missing_vad_asr_engine' })
   })
 
@@ -95,7 +95,7 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
       loadHelpers: async () => ({ createVad: () => new FakeVad([]) })
     })
 
-    await expect(engine.initialize({ files: [{ ...modelFile('vad', 'silero-vad.onnx', [1]), sha256: '0'.repeat(64) }] }))
+    await expect(engine.initialize(bindings([{ ...modelFile('vad', 'silero-vad.onnx', [1]), sha256: '0'.repeat(64) }])))
       .rejects.toMatchObject({ code: 'model_hash_mismatch' })
     expect(loaded).toBe(false)
   })
@@ -114,12 +114,60 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
       .rejects.toMatchObject({ code: 'bundled_data_rejected' })
     expect(fetched).toEqual(['https://voice.example/sherpa-onnx-wasm-main-vad-asr.js'])
     expect(fetched.some((url) => url.endsWith('.data'))).toBe(false)
+    expect(() => assertNoBundledDataPreload('var FS_createPreloadedFile = () => undefined')).not.toThrow()
     expect(() => assertNoBundledDataPreload('function engineOnly() { return 1 }')).not.toThrow()
   })
 })
 
 function bindings(files: readonly AuroraVoiceWebModelFileBinding[]): AuroraVoiceWebModelBindings {
-  return { files }
+  const models: AuroraVoiceWebModelBindings['models'] = [
+    ...(files.some((file) => file.task === 'vad')
+      ? [{
+          task: 'vad' as const,
+          family: 'silero-vad' as const,
+          kind: 'vad' as const,
+          files: [ref(files, 'vad', 'model', 'silero-vad.onnx')]
+        }]
+      : []),
+    ...(files.some((file) => file.task === 'stt')
+      ? [{
+          task: 'stt' as const,
+          family: 'moonshine' as const,
+          kind: 'offline-asr' as const,
+          files: [
+            ref(files, 'stt', 'encoder', 'moonshine-encoder.ort'),
+            ref(files, 'stt', 'mergedDecoder', 'moonshine-merged-decoder.ort'),
+            ref(files, 'stt', 'tokens', 'moonshine-tokens.txt')
+          ]
+        }]
+      : []),
+    ...(files.some((file) => file.task === 'kws')
+      ? [{
+          task: 'kws' as const,
+          family: 'sherpa-kws-transducer' as const,
+          kind: 'keyword-spotter' as const,
+          files: [
+            ref(files, 'kws', 'encoder', 'encoder.onnx'),
+            ref(files, 'kws', 'decoder', 'decoder.onnx'),
+            ref(files, 'kws', 'joiner', 'joiner.onnx'),
+            ref(files, 'kws', 'tokens', 'kws-tokens.txt')
+          ],
+          config: { keywords: 'aurora', keywordsScore: 1.0, keywordsThreshold: 0.25 }
+        }]
+      : [])
+  ]
+  return { files, models }
+}
+
+function ref(
+  files: readonly AuroraVoiceWebModelFileBinding[],
+  task: 'vad' | 'kws' | 'stt',
+  role: AuroraVoiceWebModelBindings['models'][number]['files'][number]['role'],
+  fileId: string
+) {
+  const file = files.find((candidate) => candidate.task === task && candidate.fileId === fileId)
+  if (file === undefined) throw new Error(`missing fixture ${task}:${fileId}`)
+  return { role, fileId: file.fileId, virtualPath: file.virtualPath }
 }
 
 function engineAssets() {

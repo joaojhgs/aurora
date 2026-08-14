@@ -57,6 +57,12 @@ describe('AuroraVoiceWorkerDispatcher', () => {
           sha256: 'c'.repeat(64),
           byteLength: 1,
           bytes: Uint8Array.from([1])
+        }],
+        models: [{
+          task: 'vad',
+          family: 'silero-vad',
+          kind: 'vad',
+          files: [{ role: 'model', fileId: 'silero', virtualPath: '/silero.onnx' }]
         }]
       }
     }))
@@ -113,6 +119,12 @@ describe('AuroraVoiceWorkerDispatcher', () => {
             sha256: 'c'.repeat(64),
             byteLength: 1,
             bytes: Uint8Array.from([1])
+          }],
+          models: [{
+            task: 'vad',
+            family: 'silero-vad',
+            kind: 'vad',
+            files: [{ role: 'model', fileId: 'silero', virtualPath: '/silero.onnx' }]
           }],
           sherpaAssets: { vadAsrModuleUrl: 'https://voice.example/sherpa-onnx-wasm-main-vad-asr.js' }
         }

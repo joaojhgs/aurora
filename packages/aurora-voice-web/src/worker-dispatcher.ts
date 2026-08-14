@@ -316,7 +316,9 @@ function validModelBindings(bindings: unknown): bindings is AuroraVoiceWebModelB
   if (typeof bindings !== 'object' || bindings === null) return false
   if ('sherpaAssets' in bindings) return false
   const files = (bindings as Partial<AuroraVoiceWebModelBindings>).files
+  const models = (bindings as Partial<AuroraVoiceWebModelBindings>).models
   if (!Array.isArray(files) || files.length === 0 || files.length > 64) return false
+  if (!Array.isArray(models) || models.length === 0 || models.length > 64) return false
   return files.every((file) => {
     if (typeof file !== 'object' || file === null) return false
     const candidate = file as Record<string, unknown>
@@ -328,7 +330,27 @@ function validModelBindings(bindings: unknown): bindings is AuroraVoiceWebModelB
       candidate.bytes instanceof Uint8Array &&
       safePositiveInteger(candidate.byteLength) &&
       candidate.byteLength === candidate.bytes.byteLength
-  })
+  }) && models.every(validModelDescriptor)
+}
+
+function validModelDescriptor(model: unknown): boolean {
+  if (typeof model !== 'object' || model === null) return false
+  const candidate = model as Record<string, unknown>
+  if (
+    !(candidate.task === 'vad' || candidate.task === 'kws' || candidate.task === 'stt') ||
+    !(candidate.family === 'silero-vad' || candidate.family === 'moonshine' || candidate.family === 'whisper' || candidate.family === 'sense-voice' || candidate.family === 'sherpa-kws-transducer') ||
+    !(candidate.kind === 'vad' || candidate.kind === 'offline-asr' || candidate.kind === 'keyword-spotter') ||
+    !Array.isArray(candidate.files) ||
+    candidate.files.length === 0
+  ) return false
+  return candidate.files.every((file) => (
+    typeof file === 'object' &&
+    file !== null &&
+    (file as { role?: unknown }).role !== undefined &&
+    ['model', 'encoder', 'decoder', 'mergedDecoder', 'tokens', 'joiner', 'keywords', 'bpeVocab'].includes(String((file as { role?: unknown }).role)) &&
+    safeString((file as { fileId?: unknown }).fileId) &&
+    safeVirtualPath((file as { virtualPath?: unknown }).virtualPath)
+  ))
 }
 
 function validInferenceOutput(inference: unknown, sequence: number): inference is AuroraVoiceInferenceOutput {

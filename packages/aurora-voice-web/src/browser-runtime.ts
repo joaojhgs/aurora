@@ -22,6 +22,7 @@ import type {
   AuroraVoiceLifecycleEligibility,
   AuroraVoiceLifecycleReason,
   AuroraVoiceWebModelBindings,
+  AuroraVoiceWebModelDescriptor,
   AuroraVoiceWebModelFileBinding,
   AuroraVoiceWebModelTask,
   AuroraVoiceWebRuntimeOptions
@@ -162,21 +163,26 @@ export async function loadAuroraBrowserVoiceModelBindings(
   tasks: readonly AuroraVoiceWebModelTask[] = ['vad', 'kws', 'stt']
 ): Promise<AuroraVoiceWebModelBindings | undefined> {
   const files: AuroraVoiceWebModelFileBinding[] = []
+  const models: AuroraVoiceWebModelDescriptor[] = []
   for (const task of tasks) {
     const pack = await openActiveBrowserModelPack(host, { task }, trust)
     if (pack === null) continue
+    const packModels = pack.models.filter((model) => model.task === task)
+    if (packModels.length === 0) throw new Error('Voice worker is not available')
+    models.push(...packModels)
     for (const file of pack.files) {
+      const virtualPath = virtualPathFromModels(packModels, file.fileId)
       files.push({
         task,
         fileId: file.fileId,
-        virtualPath: virtualPathFor(task, file.fileId),
+        virtualPath,
         sha256: file.sha256,
         byteLength: file.byteLength,
         bytes: await file.readAll()
       })
     }
   }
-  return files.length === 0 ? undefined : { files }
+  return files.length === 0 ? undefined : { files, models }
 }
 
 function createWorker(
@@ -192,7 +198,8 @@ function createWorker(
   return new Worker(url, { type: 'module', name: 'aurora-voice-worker' })
 }
 
-function virtualPathFor(task: AuroraVoiceWebModelTask, fileId: string): string {
-  const safe = fileId.replace(/[^A-Za-z0-9_.:-]/g, '_')
-  return `/${task}-${safe}`
+function virtualPathFromModels(models: readonly AuroraVoiceWebModelDescriptor[], fileId: string): string {
+  const refs = models.flatMap((model) => model.files).filter((file) => file.fileId === fileId)
+  if (refs.length !== 1) throw new Error('Voice worker is not available')
+  return refs[0]!.virtualPath
 }

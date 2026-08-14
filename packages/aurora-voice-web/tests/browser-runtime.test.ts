@@ -177,6 +177,16 @@ describe('createAuroraBrowserVoiceRuntime', () => {
           sha256: 'b'.repeat(64),
           byteLength: selectedBytes.byteLength,
           bytes: selectedBytes
+        }],
+        models: [{
+          task: 'stt',
+          family: 'moonshine',
+          kind: 'offline-asr',
+          files: [
+            { role: 'tokens', fileId: 'tokens', virtualPath: '/tokens.txt' },
+            { role: 'encoder', fileId: 'tokens', virtualPath: '/tokens.txt' },
+            { role: 'mergedDecoder', fileId: 'tokens', virtualPath: '/tokens.txt' }
+          ]
         }]
       },
       sessionIdFactory: (ownerId, generation) => `${ownerId}:${generation}`
@@ -190,7 +200,8 @@ describe('createAuroraBrowserVoiceRuntime', () => {
     expect(worker.commands[0]).toMatchObject({
       type: 'init',
       modelBindings: {
-        files: [expect.objectContaining({ fileId: 'tokens', byteLength: 3 })]
+        files: [expect.objectContaining({ fileId: 'tokens', byteLength: 3 })],
+        models: [expect.objectContaining({ family: 'moonshine', kind: 'offline-asr' })]
       }
     })
 

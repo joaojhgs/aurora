@@ -78,6 +78,37 @@ export interface AuroraCapturedAudio {
 }
 
 export type AuroraVoiceWebModelTask = 'vad' | 'kws' | 'stt'
+export type AuroraVoiceWebModelFamily = 'silero-vad' | 'moonshine' | 'whisper' | 'sense-voice' | 'sherpa-kws-transducer'
+export type AuroraVoiceWebModelKind = 'vad' | 'offline-asr' | 'keyword-spotter'
+export type AuroraVoiceWebModelFileRole =
+  | 'model'
+  | 'encoder'
+  | 'decoder'
+  | 'mergedDecoder'
+  | 'tokens'
+  | 'joiner'
+  | 'keywords'
+  | 'bpeVocab'
+
+export interface AuroraVoiceWebModelFileReference {
+  readonly role: AuroraVoiceWebModelFileRole
+  readonly fileId: string
+  readonly virtualPath: string
+}
+
+export interface AuroraVoiceWebModelDescriptor {
+  readonly task: AuroraVoiceWebModelTask
+  readonly family: AuroraVoiceWebModelFamily
+  readonly kind: AuroraVoiceWebModelKind
+  readonly files: readonly AuroraVoiceWebModelFileReference[]
+  readonly config?: {
+    readonly language?: string
+    readonly task?: string
+    readonly keywords?: string
+    readonly keywordsScore?: number
+    readonly keywordsThreshold?: number
+  }
+}
 
 export interface AuroraVoiceWebModelFileBinding {
   readonly task: AuroraVoiceWebModelTask
@@ -90,6 +121,7 @@ export interface AuroraVoiceWebModelFileBinding {
 
 export interface AuroraVoiceWebModelBindings {
   readonly files: readonly AuroraVoiceWebModelFileBinding[]
+  readonly models: readonly AuroraVoiceWebModelDescriptor[]
 }
 
 export interface AuroraVoiceVadState {
