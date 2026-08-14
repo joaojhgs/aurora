@@ -278,7 +278,13 @@ impl TaskPackBinding {
         os: TargetOs,
         arch: TargetArch,
     ) -> Result<Self, EngineError> {
-        if catalog.model(&entry.model_id).is_none()
+        let canonical_catalog =
+            SpeechModelCatalog::embedded().map_err(|_| EngineError::InvalidRequest)?;
+        let canonical_entry = canonical_catalog
+            .model(&entry.model_id)
+            .ok_or(EngineError::InvalidRequest)?;
+        if catalog != canonical_catalog
+            || entry != canonical_entry
             || entry.engine != "sherpa_onnx"
             || !speech_catalog_task_matches_id(entry.task, &entry.model_id)
             || entry.bindings.is_empty()
@@ -286,6 +292,7 @@ impl TaskPackBinding {
         {
             return Err(EngineError::InvalidRequest);
         }
+        let entry = canonical_entry;
         let task = voice_task_from_speech_catalog_task(entry.task);
         let selected_file_ids = entry.bindings.keys().cloned().collect::<Vec<_>>();
         let frame_size = match task {
@@ -352,7 +359,13 @@ impl TaskPackBinding {
         arch: TargetArch,
         sample_rate_hz: u32,
     ) -> Result<Self, EngineError> {
-        if catalog.voice(&entry.voice_id).is_none()
+        let canonical_catalog =
+            TtsVoiceCatalog::embedded().map_err(|_| EngineError::InvalidRequest)?;
+        let canonical_entry = canonical_catalog
+            .voice(&entry.voice_id)
+            .ok_or(EngineError::InvalidRequest)?;
+        if catalog != canonical_catalog
+            || entry != canonical_entry
             || entry.engine != "sherpa_onnx"
             || entry.model_family != "vits_piper"
             || !entry.voice_id.starts_with("standard:piper:")
@@ -361,6 +374,7 @@ impl TaskPackBinding {
         {
             return Err(EngineError::InvalidRequest);
         }
+        let entry = canonical_entry;
         Ok(Self {
             source: TaskBindingSource::SpeechCatalog {
                 catalog_id: catalog.catalog_id().to_owned(),
@@ -4721,6 +4735,68 @@ mod tests {
     }
 
     #[test]
+    fn speech_catalog_binding_rejects_same_id_mutated_entry_provenance() {
+        let catalog = SpeechModelCatalog::embedded().expect("speech catalog");
+        let entry = catalog
+            .model("kws:zipformer:gigaspeech")
+            .expect("kws model");
+
+        let mut mutated_hash = entry.clone();
+        mutated_hash.archive.sha256 = "0".repeat(64);
+        assert_eq!(
+            TaskPackBinding::from_speech_catalog_entry(
+                catalog,
+                &mutated_hash,
+                RuntimeTarget::Desktop,
+                TargetOs::Linux,
+                TargetArch::X86_64,
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let mut mutated_bindings = entry.clone();
+        mutated_bindings
+            .bindings
+            .insert("tokens".to_owned(), "tampered/tokens.txt".to_owned());
+        assert_eq!(
+            TaskPackBinding::from_speech_catalog_entry(
+                catalog,
+                &mutated_bindings,
+                RuntimeTarget::Desktop,
+                TargetOs::Linux,
+                TargetArch::X86_64,
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let mut mutated_language_scope = entry.clone();
+        mutated_language_scope.language_scope = "multilingual".to_owned();
+        assert_eq!(
+            TaskPackBinding::from_speech_catalog_entry(
+                catalog,
+                &mutated_language_scope,
+                RuntimeTarget::Desktop,
+                TargetOs::Linux,
+                TargetArch::X86_64,
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let mut mutated_model_family = entry.clone();
+        mutated_model_family.model_family = "zipformer_shadow".to_owned();
+        assert_eq!(
+            TaskPackBinding::from_speech_catalog_entry(
+                catalog,
+                &mutated_model_family,
+                RuntimeTarget::Desktop,
+                TargetOs::Linux,
+                TargetArch::X86_64,
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+    }
+
+    #[test]
     fn tts_catalog_binding_requires_installed_sample_rate_metadata() {
         let catalog = TtsVoiceCatalog::embedded().expect("tts catalog");
         let entry = catalog
@@ -4759,6 +4835,70 @@ mod tests {
             ]
         );
         assert_eq!(binding.languages()[0].language, "en-us");
+    }
+
+    #[test]
+    fn tts_catalog_binding_rejects_same_id_mutated_entry_provenance() {
+        let catalog = TtsVoiceCatalog::embedded().expect("tts catalog");
+        let entry = catalog
+            .voice("standard:piper:en_us-ljspeech-medium")
+            .expect("voice");
+
+        let mut mutated_hash = entry.clone();
+        mutated_hash.archive.sha256 = "0".repeat(64);
+        assert_eq!(
+            TaskPackBinding::from_tts_catalog_entry(
+                catalog,
+                &mutated_hash,
+                RuntimeTarget::Desktop,
+                TargetOs::Linux,
+                TargetArch::X86_64,
+                22_050,
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let mut mutated_bindings = entry.clone();
+        mutated_bindings.bindings.tokens = "tampered/tokens.txt".to_owned();
+        assert_eq!(
+            TaskPackBinding::from_tts_catalog_entry(
+                catalog,
+                &mutated_bindings,
+                RuntimeTarget::Desktop,
+                TargetOs::Linux,
+                TargetArch::X86_64,
+                22_050,
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let mut mutated_language = entry.clone();
+        mutated_language.language = "en".to_owned();
+        assert_eq!(
+            TaskPackBinding::from_tts_catalog_entry(
+                catalog,
+                &mutated_language,
+                RuntimeTarget::Desktop,
+                TargetOs::Linux,
+                TargetArch::X86_64,
+                22_050,
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let mut mutated_model_family = entry.clone();
+        mutated_model_family.model_family = "vits_piper_shadow".to_owned();
+        assert_eq!(
+            TaskPackBinding::from_tts_catalog_entry(
+                catalog,
+                &mutated_model_family,
+                RuntimeTarget::Desktop,
+                TargetOs::Linux,
+                TargetArch::X86_64,
+                22_050,
+            ),
+            Err(EngineError::InvalidRequest)
+        );
     }
 
     #[test]
