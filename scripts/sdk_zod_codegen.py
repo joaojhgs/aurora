@@ -69,6 +69,16 @@ TTS_PROFILE_MUTATION_RESPONSE_INVARIANT_MARKER = "x-aurora-tts-profile-mutation-
 TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER = "x-aurora-tts-import-start-response-invariant"
 TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER = "x-aurora-tts-import-chunk-request-invariant"
 TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER = "x-aurora-tts-import-chunk-response-invariant"
+TTS_CLONE_STATE_BUNDLE_INVARIANT_MARKER = "x-aurora-tts-clone-state-bundle-invariant"
+TTS_EXPORT_PROFILE_REQUEST_INVARIANT_MARKER = (
+    "x-aurora-tts-export-profile-request-invariant"
+)
+TTS_EXPORT_PROFILE_RESPONSE_INVARIANT_MARKER = (
+    "x-aurora-tts-export-profile-response-invariant"
+)
+TTS_IMPORT_PROFILE_RESPONSE_INVARIANT_MARKER = (
+    "x-aurora-tts-import-profile-response-invariant"
+)
 TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER = "x-aurora-tts-audio-chunk-event-invariant"
 STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER = "x-aurora-stt-transcribe-language-shape"
 METADATA_KEYS = {
@@ -112,6 +122,10 @@ METADATA_KEYS = {
     TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
     TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
     TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
+    TTS_CLONE_STATE_BUNDLE_INVARIANT_MARKER,
+    TTS_EXPORT_PROFILE_REQUEST_INVARIANT_MARKER,
+    TTS_EXPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
+    TTS_IMPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
     TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
     STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
     "x-aurora-extra-behavior",
@@ -528,6 +542,10 @@ class ZodCompiler:
             TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
             TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
             TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
+            TTS_CLONE_STATE_BUNDLE_INVARIANT_MARKER,
+            TTS_EXPORT_PROFILE_REQUEST_INVARIANT_MARKER,
+            TTS_EXPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
+            TTS_IMPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
             TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
             STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
         )
@@ -600,6 +618,10 @@ class ZodCompiler:
                 TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
                 TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
                 TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
+                TTS_CLONE_STATE_BUNDLE_INVARIANT_MARKER,
+                TTS_EXPORT_PROFILE_REQUEST_INVARIANT_MARKER,
+                TTS_EXPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
+                TTS_IMPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
                 TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
                 STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
                 "x-aurora-extra-behavior",
@@ -903,6 +925,19 @@ class ZodCompiler:
             (TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER, "validateTtsImportStartResponseInvariant"),
             (TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER, "validateTtsImportChunkRequestInvariant"),
             (TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER, "validateTtsImportChunkResponseInvariant"),
+            (TTS_CLONE_STATE_BUNDLE_INVARIANT_MARKER, "validateTtsCloneStateBundleInvariant"),
+            (
+                TTS_EXPORT_PROFILE_REQUEST_INVARIANT_MARKER,
+                "validateTtsExportProfileRequestInvariant",
+            ),
+            (
+                TTS_EXPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
+                "validateTtsExportProfileResponseInvariant",
+            ),
+            (
+                TTS_IMPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
+                "validateTtsImportProfileResponseInvariant",
+            ),
             (TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER, "validateTtsAudioChunkEventInvariant"),
             (STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER, "validateSttTranscribeLanguageShape"),
         )
@@ -1278,6 +1313,10 @@ def render_zod_module(contract_schema: dict[str, Any]) -> str:
         "function validateTtsImportStartResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (typeof value.max_chunk_bytes === 'number' && typeof value.max_chunks === 'number' && typeof value.accepted_total_bytes === 'number' && value.max_chunk_bytes * value.max_chunks < value.accepted_total_bytes) addInvariantIssue(ctx, ['accepted_total_bytes'], 'upload session capacity is below accepted total bytes'); }",
         "function validateTtsImportChunkRequestInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { let decoded: Uint8Array; if (typeof value.chunk_data !== 'string') return; try { decoded = base64ToBytes(value.chunk_data) } catch { addInvariantIssue(ctx, ['chunk_data'], 'chunk_data must be valid base64'); return } if (decoded.length === 0) addInvariantIssue(ctx, ['chunk_data'], 'decoded chunk must not be empty'); if (decoded.length > 49152) addInvariantIssue(ctx, ['chunk_data'], 'decoded chunk exceeds limit'); if (typeof value.chunk_sha256 === 'string' && bytesToHex(sha256(decoded)) !== value.chunk_sha256) addInvariantIssue(ctx, ['chunk_sha256'], 'chunk SHA-256 mismatch'); if (new TextEncoder().encode(JSON.stringify(value)).length > 131072) addInvariantIssue(ctx, [], 'voice import chunk request exceeds JSON limit'); }",
         "function validateTtsImportChunkResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (typeof value.sequence === 'number' && value.next_sequence !== value.sequence + 1) addInvariantIssue(ctx, ['next_sequence'], 'next_sequence must acknowledge exactly one chunk'); if (value.status === 'duplicate' && value.idempotent !== true) addInvariantIssue(ctx, ['idempotent'], 'duplicate chunk acknowledgement must be idempotent'); if (value.status === 'accepted' && value.idempotent === true) addInvariantIssue(ctx, ['idempotent'], 'first chunk acknowledgement cannot be idempotent'); }",
+        "function validateTtsCloneStateBundleInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const voiceId = optionalString(value, 'voice_id'); if (!voiceId || !voiceId.startsWith('clone:')) addInvariantIssue(ctx, ['voice_id'], 'voice bundle must use a clone logical voice id'); let decoded: Uint8Array; if (typeof value.artifact_data_base64 !== 'string') return; try { decoded = base64ToBytes(value.artifact_data_base64) } catch { addInvariantIssue(ctx, ['artifact_data_base64'], 'artifact_data_base64 must be valid base64'); return } if (decoded.length !== value.artifact_size_bytes) addInvariantIssue(ctx, ['artifact_size_bytes'], 'artifact size does not match payload'); if (typeof value.artifact_sha256 === 'string' && bytesToHex(sha256(decoded)) !== value.artifact_sha256) addInvariantIssue(ctx, ['artifact_sha256'], 'artifact SHA-256 mismatch'); if (new TextEncoder().encode(JSON.stringify(value)).length > 2927276) addInvariantIssue(ctx, [], 'voice state bundle exceeds JSON limit'); }",
+        "function validateTtsExportProfileRequestInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const voiceId = optionalString(value, 'voice_id'); if (!voiceId || !voiceId.startsWith('clone:')) addInvariantIssue(ctx, [], 'only cloned voice profiles can be exported'); }",
+        "function validateTtsExportProfileResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const status = value.status; const bundle = value.bundle; if (status === 'exported') { if (value.revision === null || value.revision === undefined) addInvariantIssue(ctx, [], 'exported result needs revision'); if (bundle === null || bundle === undefined) addInvariantIssue(ctx, [], 'exported result needs a bundle'); else if (typeof bundle === 'object' && !Array.isArray(bundle) && (bundle as Record<string, unknown>).voice_id !== value.voice_id) addInvariantIssue(ctx, [], 'exported bundle voice id must match response'); } else if (bundle !== null && bundle !== undefined) addInvariantIssue(ctx, [], 'non-exported response cannot include a bundle'); }",
+        "function validateTtsImportProfileResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const status = value.status; if ((status === 'imported' || status === 'unchanged' || status === 'conflict') && (value.revision === null || value.revision === undefined)) addInvariantIssue(ctx, [], 'import result needs revision'); }",
         "function validateTtsAudioChunkEventInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (value.is_final !== true && value.audio_data === '') addInvariantIssue(ctx, [], 'non-final audio chunk requires audio data'); }",
         "function validateSttTranscribeLanguageShape(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (value.language !== null && value.language !== undefined && listIds(value, 'auto_language_candidates').length > 0) addInvariantIssue(ctx, ['auto_language_candidates'], 'exact STT language cannot include auto candidates'); }",
         "",

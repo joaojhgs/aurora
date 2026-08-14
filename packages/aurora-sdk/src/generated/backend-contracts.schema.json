@@ -23,6 +23,8 @@
     "TTS.VoiceImportAbort",
     "TTS.CreateVoiceProfile",
     "TTS.DeleteVoiceProfile",
+    "TTS.ExportVoiceProfile",
+    "TTS.ImportVoiceProfile",
     "TTS.Request",
     "TTS.StreamStart",
     "TTS.StreamChunk",
@@ -38,7 +40,7 @@
     "Transcription.ProcessAudio",
     "Transcription.Transcribe"
   ],
-  "allowlist_hash": "793f4ee958ef54cc7aeca5e6fb7007cc59e6d154d63733eeb050f00015dc90f8",
+  "allowlist_hash": "97d6529cb9d9c61be4b005dc8044eba630d89ffee82a855bddc3d741251227ce",
   "artifact": "aurora-sdk-backend-contracts",
   "envelope_descriptors": [
     {
@@ -532,7 +534,9 @@
             "TTS.VoiceImportEnd",
             "TTS.VoiceImportAbort",
             "TTS.CreateVoiceProfile",
-            "TTS.DeleteVoiceProfile"
+            "TTS.DeleteVoiceProfile",
+            "TTS.ExportVoiceProfile",
+            "TTS.ImportVoiceProfile"
           ],
           "module": "TTS",
           "summary": "Administer local TTS voice profiles and bounded voice imports."
@@ -586,7 +590,9 @@
             "TTS.VoiceImportEnd",
             "TTS.VoiceImportAbort",
             "TTS.CreateVoiceProfile",
-            "TTS.DeleteVoiceProfile"
+            "TTS.DeleteVoiceProfile",
+            "TTS.ExportVoiceProfile",
+            "TTS.ImportVoiceProfile"
           ],
           "module": "TTS",
           "summary": "Administer local TTS voice profiles and bounded voice imports."
@@ -640,7 +646,9 @@
             "TTS.VoiceImportEnd",
             "TTS.VoiceImportAbort",
             "TTS.CreateVoiceProfile",
-            "TTS.DeleteVoiceProfile"
+            "TTS.DeleteVoiceProfile",
+            "TTS.ExportVoiceProfile",
+            "TTS.ImportVoiceProfile"
           ],
           "module": "TTS",
           "summary": "Administer local TTS voice profiles and bounded voice imports."
@@ -694,7 +702,9 @@
             "TTS.VoiceImportEnd",
             "TTS.VoiceImportAbort",
             "TTS.CreateVoiceProfile",
-            "TTS.DeleteVoiceProfile"
+            "TTS.DeleteVoiceProfile",
+            "TTS.ExportVoiceProfile",
+            "TTS.ImportVoiceProfile"
           ],
           "module": "TTS",
           "summary": "Administer local TTS voice profiles and bounded voice imports."
@@ -748,7 +758,9 @@
             "TTS.VoiceImportEnd",
             "TTS.VoiceImportAbort",
             "TTS.CreateVoiceProfile",
-            "TTS.DeleteVoiceProfile"
+            "TTS.DeleteVoiceProfile",
+            "TTS.ExportVoiceProfile",
+            "TTS.ImportVoiceProfile"
           ],
           "module": "TTS",
           "summary": "Administer local TTS voice profiles and bounded voice imports."
@@ -802,7 +814,9 @@
             "TTS.VoiceImportEnd",
             "TTS.VoiceImportAbort",
             "TTS.CreateVoiceProfile",
-            "TTS.DeleteVoiceProfile"
+            "TTS.DeleteVoiceProfile",
+            "TTS.ExportVoiceProfile",
+            "TTS.ImportVoiceProfile"
           ],
           "module": "TTS",
           "summary": "Administer local TTS voice profiles and bounded voice imports."
@@ -856,7 +870,9 @@
             "TTS.VoiceImportEnd",
             "TTS.VoiceImportAbort",
             "TTS.CreateVoiceProfile",
-            "TTS.DeleteVoiceProfile"
+            "TTS.DeleteVoiceProfile",
+            "TTS.ExportVoiceProfile",
+            "TTS.ImportVoiceProfile"
           ],
           "module": "TTS",
           "summary": "Administer local TTS voice profiles and bounded voice imports."
@@ -910,7 +926,9 @@
             "TTS.VoiceImportEnd",
             "TTS.VoiceImportAbort",
             "TTS.CreateVoiceProfile",
-            "TTS.DeleteVoiceProfile"
+            "TTS.DeleteVoiceProfile",
+            "TTS.ExportVoiceProfile",
+            "TTS.ImportVoiceProfile"
           ],
           "module": "TTS",
           "summary": "Administer local TTS voice profiles and bounded voice imports."
@@ -964,7 +982,9 @@
             "TTS.VoiceImportEnd",
             "TTS.VoiceImportAbort",
             "TTS.CreateVoiceProfile",
-            "TTS.DeleteVoiceProfile"
+            "TTS.DeleteVoiceProfile",
+            "TTS.ExportVoiceProfile",
+            "TTS.ImportVoiceProfile"
           ],
           "module": "TTS",
           "summary": "Administer local TTS voice profiles and bounded voice imports."
@@ -1018,7 +1038,9 @@
             "TTS.VoiceImportEnd",
             "TTS.VoiceImportAbort",
             "TTS.CreateVoiceProfile",
-            "TTS.DeleteVoiceProfile"
+            "TTS.DeleteVoiceProfile",
+            "TTS.ExportVoiceProfile",
+            "TTS.ImportVoiceProfile"
           ],
           "module": "TTS",
           "summary": "Administer local TTS voice profiles and bounded voice imports."
@@ -1072,7 +1094,9 @@
             "TTS.VoiceImportEnd",
             "TTS.VoiceImportAbort",
             "TTS.CreateVoiceProfile",
-            "TTS.DeleteVoiceProfile"
+            "TTS.DeleteVoiceProfile",
+            "TTS.ExportVoiceProfile",
+            "TTS.ImportVoiceProfile"
           ],
           "module": "TTS",
           "summary": "Administer local TTS voice profiles and bounded voice imports."
@@ -1126,7 +1150,9 @@
             "TTS.VoiceImportEnd",
             "TTS.VoiceImportAbort",
             "TTS.CreateVoiceProfile",
-            "TTS.DeleteVoiceProfile"
+            "TTS.DeleteVoiceProfile",
+            "TTS.ExportVoiceProfile",
+            "TTS.ImportVoiceProfile"
           ],
           "module": "TTS",
           "summary": "Administer local TTS voice profiles and bounded voice imports."
@@ -1180,7 +1206,9 @@
             "TTS.VoiceImportEnd",
             "TTS.VoiceImportAbort",
             "TTS.CreateVoiceProfile",
-            "TTS.DeleteVoiceProfile"
+            "TTS.DeleteVoiceProfile",
+            "TTS.ExportVoiceProfile",
+            "TTS.ImportVoiceProfile"
           ],
           "module": "TTS",
           "summary": "Administer local TTS voice profiles and bounded voice imports."
@@ -1211,6 +1239,118 @@
         "rpc_kind": "unary"
       },
       "topic": "TTS.DeleteVoiceProfile"
+    },
+    {
+      "bus_topic": "TTS.ExportVoiceProfile",
+      "callable_feature_ids": [
+        "speech_voice_management"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "speech_voice_management",
+          "label": "Voice Profile Management",
+          "method_ids": [
+            "TTS.ListLanguagePacks",
+            "TTS.ListVoiceProfiles",
+            "TTS.GetVoiceProfile",
+            "TTS.UpdateVoiceProfile",
+            "TTS.InstallVoiceProfile",
+            "TTS.RemoveVoiceProfile",
+            "TTS.SetDefaultVoice",
+            "TTS.VoiceImportStart",
+            "TTS.VoiceImportChunk",
+            "TTS.VoiceImportEnd",
+            "TTS.VoiceImportAbort",
+            "TTS.CreateVoiceProfile",
+            "TTS.DeleteVoiceProfile",
+            "TTS.ExportVoiceProfile",
+            "TTS.ImportVoiceProfile"
+          ],
+          "module": "TTS",
+          "summary": "Administer local TTS voice profiles and bounded voice imports."
+        }
+      ],
+      "exposure": "both",
+      "input_model": "TTSExportVoiceProfileRequest",
+      "input_schema_hash": "b4fd7de973c58b3873d3e47fb541a8462301310a17c50c89b2ff21b21c350b8c",
+      "input_schema_id": "TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest",
+      "method_id": "TTS.ExportVoiceProfile",
+      "method_type": "manage",
+      "module": "TTS",
+      "name": "ExportVoiceProfile",
+      "output_model": "TTSExportVoiceProfileResponse",
+      "output_schema_hash": "ca22940aa58eb0409ec785cb446fb3d71ce8eeb8bf64940306263ec10f2c5549",
+      "output_schema_id": "TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "route_kind": "dynamic",
+      "route_path": "/api/TTS/ExportVoiceProfile",
+      "speech_constraints": null,
+      "streaming": {
+        "event_topic": null,
+        "ordered_command_group": null,
+        "request_stream": false,
+        "response_stream": false,
+        "rpc_kind": "unary"
+      },
+      "topic": "TTS.ExportVoiceProfile"
+    },
+    {
+      "bus_topic": "TTS.ImportVoiceProfile",
+      "callable_feature_ids": [
+        "speech_voice_management"
+      ],
+      "callable_features": [
+        {
+          "feature_id": "speech_voice_management",
+          "label": "Voice Profile Management",
+          "method_ids": [
+            "TTS.ListLanguagePacks",
+            "TTS.ListVoiceProfiles",
+            "TTS.GetVoiceProfile",
+            "TTS.UpdateVoiceProfile",
+            "TTS.InstallVoiceProfile",
+            "TTS.RemoveVoiceProfile",
+            "TTS.SetDefaultVoice",
+            "TTS.VoiceImportStart",
+            "TTS.VoiceImportChunk",
+            "TTS.VoiceImportEnd",
+            "TTS.VoiceImportAbort",
+            "TTS.CreateVoiceProfile",
+            "TTS.DeleteVoiceProfile",
+            "TTS.ExportVoiceProfile",
+            "TTS.ImportVoiceProfile"
+          ],
+          "module": "TTS",
+          "summary": "Administer local TTS voice profiles and bounded voice imports."
+        }
+      ],
+      "exposure": "both",
+      "input_model": "TTSImportVoiceProfileRequest",
+      "input_schema_hash": "01387ef937b920bbf6430506b48134f7e90af5f36fdeb60eb186896da5025fb3",
+      "input_schema_id": "TTS.ImportVoiceProfile.input.TTSImportVoiceProfileRequest",
+      "method_id": "TTS.ImportVoiceProfile",
+      "method_type": "manage",
+      "module": "TTS",
+      "name": "ImportVoiceProfile",
+      "output_model": "TTSImportVoiceProfileResponse",
+      "output_schema_hash": "ec268dd6219a7881a94f2b87637711a3b2d4b20dd7942cb65ee37caaa4d985fc",
+      "output_schema_id": "TTS.ImportVoiceProfile.output.TTSImportVoiceProfileResponse",
+      "required_perms": [
+        "TTS.manage"
+      ],
+      "route_kind": "dynamic",
+      "route_path": "/api/TTS/ImportVoiceProfile",
+      "speech_constraints": null,
+      "streaming": {
+        "event_topic": null,
+        "ordered_command_group": null,
+        "request_stream": false,
+        "response_stream": false,
+        "rpc_kind": "unary"
+      },
+      "topic": "TTS.ImportVoiceProfile"
     },
     {
       "bus_topic": "TTS.Request",
@@ -6316,6 +6456,467 @@
     },
     {
       "direction": "input",
+      "method_id": "TTS.ExportVoiceProfile",
+      "model_name": "TTSExportVoiceProfileRequest",
+      "pydantic_mode": "validation",
+      "schema": {
+        "$defs": {
+          "MeshAddressSelector": {
+            "description": "Explicit mesh target selector for safety-sensitive remote calls.\n\nThe selector is optional on bus payloads so transparent module routing\nremains backward compatible. When present, routing treats peer/provider\nfields as binding hints and validates them before falling back to module\nselection.",
+            "properties": {
+              "data_scope": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "x-aurora-string-non-blank": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Data Scope"
+              },
+              "hardware_target": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "x-aurora-string-non-blank": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Hardware Target"
+              },
+              "peer_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "x-aurora-string-non-blank": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Peer Id"
+              },
+              "provider_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "x-aurora-string-non-blank": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Provider Id"
+              },
+              "resource_namespace": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "x-aurora-string-non-blank": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Resource Namespace"
+              },
+              "service_instance_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "x-aurora-string-non-blank": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Service Instance Id"
+              },
+              "tool_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "x-aurora-string-non-blank": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Tool Id"
+              }
+            },
+            "title": "MeshAddressSelector",
+            "type": "object",
+            "x-aurora-extra-behavior": "strip"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Export a manager-authorized cloned voice state bundle.",
+        "properties": {
+          "correlation_id": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Correlation Id"
+          },
+          "expected_revision": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string",
+                "x-aurora-string-non-blank": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expected Revision"
+          },
+          "mesh_selector": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/MeshAddressSelector"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "operation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Operation Id",
+            "type": "string",
+            "x-aurora-tts-operation-id": true
+          },
+          "voice_id": {
+            "pattern": "^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+            "title": "Voice Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "voice_id"
+        ],
+        "title": "TTSExportVoiceProfileRequest",
+        "type": "object",
+        "x-aurora-extra-behavior": "forbid",
+        "x-aurora-tts-export-profile-request-invariant": true
+      },
+      "schema_hash": "b4fd7de973c58b3873d3e47fb541a8462301310a17c50c89b2ff21b21c350b8c",
+      "schema_id": "TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest",
+      "vectors": {
+        "negative": {
+          "accepted": false,
+          "input": {
+            "operation_id": "export-standard",
+            "voice_id": "standard:starter_en:alba"
+          },
+          "issue_category": "value_error",
+          "issue_path": "$"
+        },
+        "negative_cases": [
+          {
+            "accepted": false,
+            "input": {
+              "operation_id": "export-standard",
+              "voice_id": "standard:starter_en:alba"
+            },
+            "issue_category": "value_error",
+            "issue_path": "$"
+          }
+        ],
+        "positive": {
+          "accepted": true,
+          "input": {
+            "operation_id": " export-1 ",
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+          },
+          "normalized": {
+            "correlation_id": null,
+            "expected_revision": null,
+            "mesh_selector": null,
+            "operation_id": "export-1",
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+          },
+          "normalized_hash": "ef1f81dd0ad40bbe498e58d2d2e4d3ecf3eb44e1904b08a1cdeaa29ccc6a046f"
+        }
+      }
+    },
+    {
+      "direction": "output",
+      "method_id": "TTS.ExportVoiceProfile",
+      "model_name": "TTSExportVoiceProfileResponse",
+      "pydantic_mode": "serialization",
+      "schema": {
+        "$defs": {
+          "TTSCloneVoiceStateBundle": {
+            "additionalProperties": false,
+            "description": "Portable cloned voice-state bundle containing derived state only.",
+            "properties": {
+              "artifact_data_base64": {
+                "maxLength": 2796204,
+                "title": "Artifact Data Base64",
+                "type": "string"
+              },
+              "artifact_format": {
+                "const": "safetensors",
+                "default": "safetensors",
+                "title": "Artifact Format",
+                "type": "string"
+              },
+              "artifact_revision": {
+                "maxLength": 96,
+                "minLength": 1,
+                "title": "Artifact Revision",
+                "type": "string",
+                "x-aurora-string-non-blank": true
+              },
+              "artifact_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Artifact Sha256",
+                "type": "string"
+              },
+              "artifact_size_bytes": {
+                "exclusiveMinimum": 0,
+                "maximum": 2097152,
+                "title": "Artifact Size Bytes",
+                "type": "integer"
+              },
+              "bundle_type": {
+                "const": "aurora-cloned-tts-voice-state",
+                "default": "aurora-cloned-tts-voice-state",
+                "title": "Bundle Type",
+                "type": "string"
+              },
+              "compatibility_group": {
+                "maxLength": 256,
+                "minLength": 1,
+                "title": "Compatibility Group",
+                "type": "string",
+                "x-aurora-string-non-blank": true
+              },
+              "display_name": {
+                "maxLength": 256,
+                "minLength": 1,
+                "title": "Display Name",
+                "type": "string",
+                "x-aurora-string-non-blank": true
+              },
+              "language_bundle": {
+                "maxLength": 96,
+                "minLength": 1,
+                "title": "Language Bundle",
+                "type": "string",
+                "x-aurora-string-non-blank": true
+              },
+              "runtime_target": {
+                "maxLength": 96,
+                "minLength": 1,
+                "title": "Runtime Target",
+                "type": "string",
+                "x-aurora-string-non-blank": true
+              },
+              "schema_version": {
+                "const": 1,
+                "default": 1,
+                "title": "Schema Version",
+                "type": "integer"
+              },
+              "voice_id": {
+                "pattern": "^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+                "title": "Voice Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "artifact_data_base64",
+              "artifact_revision",
+              "artifact_sha256",
+              "artifact_size_bytes",
+              "compatibility_group",
+              "display_name",
+              "language_bundle",
+              "runtime_target",
+              "voice_id"
+            ],
+            "title": "TTSCloneVoiceStateBundle",
+            "type": "object",
+            "x-aurora-extra-behavior": "forbid",
+            "x-aurora-tts-clone-state-bundle-invariant": true
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Manager-authorized cloned voice state export response.",
+        "properties": {
+          "bundle": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TTSCloneVoiceStateBundle"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Correlation Id"
+          },
+          "idempotent": {
+            "default": false,
+            "title": "Idempotent",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Revision"
+          },
+          "status": {
+            "enum": [
+              "exported",
+              "not_found",
+              "rejected",
+              "revision_conflict",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "voice_id": {
+            "pattern": "^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+            "title": "Voice Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "voice_id"
+        ],
+        "title": "TTSExportVoiceProfileResponse",
+        "type": "object",
+        "x-aurora-extra-behavior": "forbid",
+        "x-aurora-tts-export-profile-response-invariant": true
+      },
+      "schema_hash": "ca22940aa58eb0409ec785cb446fb3d71ce8eeb8bf64940306263ec10f2c5549",
+      "schema_id": "TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse",
+      "vectors": {
+        "negative": {
+          "accepted": false,
+          "input": {
+            "bundle": null,
+            "revision": null,
+            "status": "exported",
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+          },
+          "issue_category": "value_error",
+          "issue_path": "$"
+        },
+        "negative_cases": [
+          {
+            "accepted": false,
+            "input": {
+              "bundle": null,
+              "revision": null,
+              "status": "exported",
+              "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+            },
+            "issue_category": "value_error",
+            "issue_path": "$"
+          }
+        ],
+        "positive": {
+          "accepted": true,
+          "input": {
+            "bundle": {
+              "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+              "artifact_format": "safetensors",
+              "artifact_revision": "clone-rev-a",
+              "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+              "artifact_size_bytes": 19,
+              "bundle_type": "aurora-cloned-tts-voice-state",
+              "compatibility_group": "pockettts-base",
+              "display_name": "Private voice",
+              "language_bundle": "english_2026-04",
+              "runtime_target": "pockettts-python",
+              "schema_version": 1,
+              "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+            },
+            "revision": "voice-rev-a",
+            "status": "exported",
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+          },
+          "normalized": {
+            "bundle": {
+              "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+              "artifact_format": "safetensors",
+              "artifact_revision": "clone-rev-a",
+              "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+              "artifact_size_bytes": 19,
+              "bundle_type": "aurora-cloned-tts-voice-state",
+              "compatibility_group": "pockettts-base",
+              "display_name": "Private voice",
+              "language_bundle": "english_2026-04",
+              "runtime_target": "pockettts-python",
+              "schema_version": 1,
+              "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+            },
+            "correlation_id": null,
+            "idempotent": false,
+            "revision": "voice-rev-a",
+            "status": "exported",
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+          },
+          "normalized_hash": "9d2802eba7dfb39aa85ba5d80d835465372cdc09e717e9031d350709ff6ebcc8"
+        }
+      }
+    },
+    {
+      "direction": "input",
       "method_id": "TTS.GetCapabilities",
       "model_name": "TTSGetCapabilitiesRequest",
       "pydantic_mode": "validation",
@@ -7086,6 +7687,474 @@
       "schema_hash": "fe69d7c7c5ad334b37c2b3e770e60850eaa6b7dde884da63be46a0963e9fdcff",
       "schema_id": "TTS.GetVoiceProfile.output.TTSGetVoiceProfileResponse",
       "vectors": {}
+    },
+    {
+      "direction": "input",
+      "method_id": "TTS.ImportVoiceProfile",
+      "model_name": "TTSImportVoiceProfileRequest",
+      "pydantic_mode": "validation",
+      "schema": {
+        "$defs": {
+          "MeshAddressSelector": {
+            "description": "Explicit mesh target selector for safety-sensitive remote calls.\n\nThe selector is optional on bus payloads so transparent module routing\nremains backward compatible. When present, routing treats peer/provider\nfields as binding hints and validates them before falling back to module\nselection.",
+            "properties": {
+              "data_scope": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "x-aurora-string-non-blank": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Data Scope"
+              },
+              "hardware_target": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "x-aurora-string-non-blank": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Hardware Target"
+              },
+              "peer_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "x-aurora-string-non-blank": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Peer Id"
+              },
+              "provider_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "x-aurora-string-non-blank": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Provider Id"
+              },
+              "resource_namespace": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "x-aurora-string-non-blank": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Resource Namespace"
+              },
+              "service_instance_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "x-aurora-string-non-blank": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Service Instance Id"
+              },
+              "tool_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "x-aurora-string-non-blank": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Tool Id"
+              }
+            },
+            "title": "MeshAddressSelector",
+            "type": "object",
+            "x-aurora-extra-behavior": "strip"
+          },
+          "TTSCloneVoiceStateBundle": {
+            "additionalProperties": false,
+            "description": "Portable cloned voice-state bundle containing derived state only.",
+            "properties": {
+              "artifact_data_base64": {
+                "maxLength": 2796204,
+                "title": "Artifact Data Base64",
+                "type": "string"
+              },
+              "artifact_format": {
+                "const": "safetensors",
+                "default": "safetensors",
+                "title": "Artifact Format",
+                "type": "string"
+              },
+              "artifact_revision": {
+                "maxLength": 96,
+                "minLength": 1,
+                "title": "Artifact Revision",
+                "type": "string",
+                "x-aurora-string-non-blank": true
+              },
+              "artifact_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Artifact Sha256",
+                "type": "string"
+              },
+              "artifact_size_bytes": {
+                "exclusiveMinimum": 0,
+                "maximum": 2097152,
+                "title": "Artifact Size Bytes",
+                "type": "integer"
+              },
+              "bundle_type": {
+                "const": "aurora-cloned-tts-voice-state",
+                "default": "aurora-cloned-tts-voice-state",
+                "title": "Bundle Type",
+                "type": "string"
+              },
+              "compatibility_group": {
+                "maxLength": 256,
+                "minLength": 1,
+                "title": "Compatibility Group",
+                "type": "string",
+                "x-aurora-string-non-blank": true
+              },
+              "display_name": {
+                "maxLength": 256,
+                "minLength": 1,
+                "title": "Display Name",
+                "type": "string",
+                "x-aurora-string-non-blank": true
+              },
+              "language_bundle": {
+                "maxLength": 96,
+                "minLength": 1,
+                "title": "Language Bundle",
+                "type": "string",
+                "x-aurora-string-non-blank": true
+              },
+              "runtime_target": {
+                "maxLength": 96,
+                "minLength": 1,
+                "title": "Runtime Target",
+                "type": "string",
+                "x-aurora-string-non-blank": true
+              },
+              "schema_version": {
+                "const": 1,
+                "default": 1,
+                "title": "Schema Version",
+                "type": "integer"
+              },
+              "voice_id": {
+                "pattern": "^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+                "title": "Voice Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "artifact_data_base64",
+              "artifact_revision",
+              "artifact_sha256",
+              "artifact_size_bytes",
+              "compatibility_group",
+              "display_name",
+              "language_bundle",
+              "runtime_target",
+              "voice_id"
+            ],
+            "title": "TTSCloneVoiceStateBundle",
+            "type": "object",
+            "x-aurora-extra-behavior": "forbid",
+            "x-aurora-tts-clone-state-bundle-invariant": true
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Import a manager-authorized cloned voice state bundle.",
+        "properties": {
+          "bundle": {
+            "$ref": "#/$defs/TTSCloneVoiceStateBundle"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Correlation Id"
+          },
+          "expected_revision": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string",
+                "x-aurora-string-non-blank": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expected Revision"
+          },
+          "mesh_selector": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/MeshAddressSelector"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "operation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Operation Id",
+            "type": "string",
+            "x-aurora-string-non-blank": true,
+            "x-aurora-tts-operation-id": true
+          }
+        },
+        "required": [
+          "bundle",
+          "operation_id"
+        ],
+        "title": "TTSImportVoiceProfileRequest",
+        "type": "object",
+        "x-aurora-extra-behavior": "forbid"
+      },
+      "schema_hash": "01387ef937b920bbf6430506b48134f7e90af5f36fdeb60eb186896da5025fb3",
+      "schema_id": "TTS.ImportVoiceProfile.input.TTSImportVoiceProfileRequest",
+      "vectors": {
+        "negative": {
+          "accepted": false,
+          "input": {
+            "bundle": {
+              "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+              "artifact_format": "safetensors",
+              "artifact_revision": "clone-rev-a",
+              "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+              "artifact_size_bytes": 19,
+              "bundle_type": "aurora-cloned-tts-voice-state",
+              "compatibility_group": "pockettts-base",
+              "display_name": "Private voice",
+              "language_bundle": "english_2026-04",
+              "runtime_target": "pockettts-python",
+              "schema_version": 1,
+              "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+            },
+            "operation_id": " bad id "
+          },
+          "issue_category": "value_error",
+          "issue_path": "$.operation_id"
+        },
+        "negative_cases": [
+          {
+            "accepted": false,
+            "input": {
+              "bundle": {
+                "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+                "artifact_format": "safetensors",
+                "artifact_revision": "clone-rev-a",
+                "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+                "artifact_size_bytes": 19,
+                "bundle_type": "aurora-cloned-tts-voice-state",
+                "compatibility_group": "pockettts-base",
+                "display_name": "Private voice",
+                "language_bundle": "english_2026-04",
+                "runtime_target": "pockettts-python",
+                "schema_version": 1,
+                "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+              },
+              "operation_id": " bad id "
+            },
+            "issue_category": "value_error",
+            "issue_path": "$.operation_id"
+          }
+        ],
+        "positive": {
+          "accepted": true,
+          "input": {
+            "bundle": {
+              "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+              "artifact_format": "safetensors",
+              "artifact_revision": "clone-rev-a",
+              "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+              "artifact_size_bytes": 19,
+              "bundle_type": "aurora-cloned-tts-voice-state",
+              "compatibility_group": "pockettts-base",
+              "display_name": "Private voice",
+              "language_bundle": "english_2026-04",
+              "runtime_target": "pockettts-python",
+              "schema_version": 1,
+              "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+            },
+            "operation_id": " import-1 "
+          },
+          "normalized": {
+            "bundle": {
+              "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+              "artifact_format": "safetensors",
+              "artifact_revision": "clone-rev-a",
+              "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+              "artifact_size_bytes": 19,
+              "bundle_type": "aurora-cloned-tts-voice-state",
+              "compatibility_group": "pockettts-base",
+              "display_name": "Private voice",
+              "language_bundle": "english_2026-04",
+              "runtime_target": "pockettts-python",
+              "schema_version": 1,
+              "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+            },
+            "correlation_id": null,
+            "expected_revision": null,
+            "mesh_selector": null,
+            "operation_id": "import-1"
+          },
+          "normalized_hash": "3c5aa93eedc414bc4a2ada7f8cca8874ae8e125948d3c3e1a5160f5e442a35aa"
+        }
+      }
+    },
+    {
+      "direction": "output",
+      "method_id": "TTS.ImportVoiceProfile",
+      "model_name": "TTSImportVoiceProfileResponse",
+      "pydantic_mode": "serialization",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Manager-authorized cloned voice state import response.",
+        "properties": {
+          "correlation_id": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Correlation Id"
+          },
+          "idempotent": {
+            "default": false,
+            "title": "Idempotent",
+            "type": "boolean"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Revision"
+          },
+          "status": {
+            "enum": [
+              "conflict",
+              "imported",
+              "rejected",
+              "unavailable",
+              "unchanged"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "voice_id": {
+            "pattern": "^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+            "title": "Voice Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "voice_id"
+        ],
+        "title": "TTSImportVoiceProfileResponse",
+        "type": "object",
+        "x-aurora-extra-behavior": "forbid",
+        "x-aurora-tts-import-profile-response-invariant": true
+      },
+      "schema_hash": "ec268dd6219a7881a94f2b87637711a3b2d4b20dd7942cb65ee37caaa4d985fc",
+      "schema_id": "TTS.ImportVoiceProfile.output.TTSImportVoiceProfileResponse",
+      "vectors": {
+        "negative": {
+          "accepted": false,
+          "input": {
+            "revision": null,
+            "status": "imported",
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+          },
+          "issue_category": "value_error",
+          "issue_path": "$"
+        },
+        "negative_cases": [
+          {
+            "accepted": false,
+            "input": {
+              "revision": null,
+              "status": "imported",
+              "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+            },
+            "issue_category": "value_error",
+            "issue_path": "$"
+          }
+        ],
+        "positive": {
+          "accepted": true,
+          "input": {
+            "revision": "voice-rev-a",
+            "status": "imported",
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+          },
+          "normalized": {
+            "correlation_id": null,
+            "idempotent": false,
+            "revision": "voice-rev-a",
+            "status": "imported",
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+          },
+          "normalized_hash": "1fdc1cbe442eb5ef3f6ae43c7b67f2bb2e6d343e373240c334e94a46cc5fabec"
+        }
+      }
     },
     {
       "direction": "input",

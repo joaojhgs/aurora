@@ -136,12 +136,16 @@ const auroraMetadataKeys = [
   'x-aurora-string-non-blank',
   'x-aurora-string-trimmed',
   'x-aurora-tts-capabilities-invariant',
+  'x-aurora-tts-clone-state-bundle-invariant',
   'x-aurora-tts-create-profile-response-invariant',
   'x-aurora-tts-delete-profile-request-invariant',
   'x-aurora-tts-delete-profile-response-invariant',
+  'x-aurora-tts-export-profile-request-invariant',
+  'x-aurora-tts-export-profile-response-invariant',
   'x-aurora-tts-get-profile-response-invariant',
   'x-aurora-tts-import-chunk-request-invariant',
   'x-aurora-tts-import-chunk-response-invariant',
+  'x-aurora-tts-import-profile-response-invariant',
   'x-aurora-tts-import-start-response-invariant',
   'x-aurora-tts-audio-chunk-event-invariant',
   'x-aurora-tts-operation-id',
@@ -257,12 +261,16 @@ const normalizeJsonSchema = (schema: unknown, root: unknown = schema, seenRefs =
         'x-aurora-string-non-blank',
         'x-aurora-string-trimmed',
         'x-aurora-tts-capabilities-invariant',
+        'x-aurora-tts-clone-state-bundle-invariant',
         'x-aurora-tts-create-profile-response-invariant',
         'x-aurora-tts-delete-profile-request-invariant',
         'x-aurora-tts-delete-profile-response-invariant',
+        'x-aurora-tts-export-profile-request-invariant',
+        'x-aurora-tts-export-profile-response-invariant',
         'x-aurora-tts-get-profile-response-invariant',
         'x-aurora-tts-import-chunk-request-invariant',
         'x-aurora-tts-import-chunk-response-invariant',
+        'x-aurora-tts-import-profile-response-invariant',
         'x-aurora-tts-import-start-response-invariant',
         'x-aurora-tts-audio-chunk-event-invariant',
         'x-aurora-tts-operation-id',
@@ -293,6 +301,9 @@ const normalizeJsonSchema = (schema: unknown, root: unknown = schema, seenRefs =
   if (normalized.type === 'number' && normalized.multipleOf === 1) {
     normalized.type = 'integer'
     delete normalized.multipleOf
+  }
+  if (normalized.type === 'number' && Number.isInteger(normalized.const)) {
+    normalized.type = 'integer'
   }
   if (Array.isArray(normalized.required)) {
     normalized.required = [...normalized.required].sort()
@@ -815,6 +826,8 @@ describe('generated backend contracts', () => {
       'TTS.VoiceImportAbort',
       'TTS.CreateVoiceProfile',
       'TTS.DeleteVoiceProfile',
+      'TTS.ExportVoiceProfile',
+      'TTS.ImportVoiceProfile',
       'TTS.Request',
       'TTS.StreamStart',
       'TTS.StreamChunk',
@@ -830,8 +843,8 @@ describe('generated backend contracts', () => {
       'Transcription.ProcessAudio',
       'Transcription.Transcribe',
     ])
-    expect(contractSchema.schemas).toHaveLength(76)
-    expect(contractSchema.method_descriptors).toHaveLength(36)
+    expect(contractSchema.schemas).toHaveLength(80)
+    expect(contractSchema.method_descriptors).toHaveLength(38)
     expect(contractSchema.event_descriptors).toHaveLength(3)
     expect(contractSchema.envelope_descriptors).toHaveLength(1)
     expect(contractSchema.tooling_provider_allowlist).toHaveLength(4)
@@ -909,7 +922,9 @@ describe('generated backend contracts', () => {
       'TTS.VoiceImportEnd',
       'TTS.VoiceImportAbort',
       'TTS.CreateVoiceProfile',
-      'TTS.DeleteVoiceProfile'
+      'TTS.DeleteVoiceProfile',
+      'TTS.ExportVoiceProfile',
+      'TTS.ImportVoiceProfile'
     ]) {
       expect(descriptors[methodId]?.method_type, methodId).toBe('manage')
       expect(descriptors[methodId]?.required_perms, methodId).toEqual(['TTS.manage'])
@@ -965,7 +980,7 @@ describe('generated backend contracts', () => {
   it('keeps generated method descriptors aligned with SDK coverage and streaming metadata', () => {
     const descriptorIds = backendContractMethodDescriptors.map((descriptor) => descriptor.method_id)
     expect(descriptorIds).toEqual(contractSchema.allowlist)
-    expect(new Set(descriptorIds).size).toBe(36)
+    expect(new Set(descriptorIds).size).toBe(38)
     expect(Object.keys(backendContractMethodDescriptorById).sort()).toEqual([...descriptorIds].sort())
 
     for (const methodId of ['TTS.StreamStart', 'TTS.StreamChunk', 'TTS.StreamEnd'] as const) {

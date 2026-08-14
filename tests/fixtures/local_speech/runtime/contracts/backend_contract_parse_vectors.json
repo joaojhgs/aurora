@@ -2,7 +2,7 @@
   "artifact": "aurora-rust-contract-parse-vectors",
   "generator_format_version": "aurora-rust-contract-codegen-v1",
   "schema_artifact": "aurora-sdk-backend-contracts",
-  "schema_content_hash": "f329953fc87d20105e5eb8ac08043a17a8007ed8bdc98758d80d01c98631e135",
+  "schema_content_hash": "823bee7259fd3389881ccdc1805b2b2bb3678b120ead2e0ada645b77d5b286ce",
   "vectors": [
     {
       "accepted": true,
@@ -1412,6 +1412,141 @@
     },
     {
       "accepted": true,
+      "direction": "input",
+      "input": {
+        "operation_id": " export-1 ",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "marker_paths": [
+        "$:x-aurora-tts-export-profile-request-invariant",
+        "$.properties.operation_id:x-aurora-tts-operation-id"
+      ],
+      "method_id": "TTS.ExportVoiceProfile",
+      "model_name": "TTSExportVoiceProfileRequest",
+      "normalized": {
+        "operation_id": "export-1",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "normalized_hash": "d58ba3d7205a34e4fa3be56802a60e1fe27987e772d26fe2c80a26144e22c1c9",
+      "schema_id": "TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest"
+    },
+    {
+      "accepted": false,
+      "case_index": 0,
+      "direction": "input",
+      "input": {
+        "operation_id": "export-standard",
+        "voice_id": "standard:starter_en:alba"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$",
+      "method_id": "TTS.ExportVoiceProfile",
+      "model_name": "TTSExportVoiceProfileRequest",
+      "schema_id": "TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest"
+    },
+    {
+      "accepted": false,
+      "case_index": 1,
+      "direction": "input",
+      "input": {
+        "operation_id": " bad id ",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "issue_category": "tts_operation_id",
+      "issue_path": "$.operation_id",
+      "marker_paths": [
+        "$.properties.operation_id:x-aurora-tts-operation-id"
+      ],
+      "method_id": "TTS.ExportVoiceProfile",
+      "model_name": "TTSExportVoiceProfileRequest",
+      "schema_id": "TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest"
+    },
+    {
+      "accepted": false,
+      "case_index": 2,
+      "direction": "input",
+      "input": {
+        "operation_id": " aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "issue_category": "tts_operation_id",
+      "issue_path": "$.operation_id",
+      "marker_paths": [
+        "$.properties.operation_id:x-aurora-tts-operation-id"
+      ],
+      "method_id": "TTS.ExportVoiceProfile",
+      "model_name": "TTSExportVoiceProfileRequest",
+      "schema_id": "TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "bundle": {
+          "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+          "artifact_format": "safetensors",
+          "artifact_revision": "clone-rev-a",
+          "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+          "artifact_size_bytes": 19,
+          "bundle_type": "aurora-cloned-tts-voice-state",
+          "compatibility_group": "pockettts-base",
+          "display_name": "Private voice",
+          "language_bundle": "english_2026-04",
+          "runtime_target": "pockettts-python",
+          "schema_version": 1,
+          "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+        },
+        "revision": "voice-rev-a",
+        "status": "exported",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "marker_paths": [
+        "$:x-aurora-tts-export-profile-response-invariant",
+        "$.$defs.TTSCloneVoiceStateBundle:x-aurora-tts-clone-state-bundle-invariant"
+      ],
+      "method_id": "TTS.ExportVoiceProfile",
+      "model_name": "TTSExportVoiceProfileResponse",
+      "normalized": {
+        "bundle": {
+          "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+          "artifact_format": "safetensors",
+          "artifact_revision": "clone-rev-a",
+          "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+          "artifact_size_bytes": 19,
+          "bundle_type": "aurora-cloned-tts-voice-state",
+          "compatibility_group": "pockettts-base",
+          "display_name": "Private voice",
+          "language_bundle": "english_2026-04",
+          "runtime_target": "pockettts-python",
+          "schema_version": 1,
+          "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+        },
+        "idempotent": false,
+        "revision": "voice-rev-a",
+        "status": "exported",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "normalized_hash": "32ad966f2fb805c8c6cab6d728a1278d8b74683b51e65eda9cf1fd83590368dd",
+      "schema_id": "TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 0,
+      "direction": "output",
+      "input": {
+        "bundle": null,
+        "revision": null,
+        "status": "exported",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$",
+      "method_id": "TTS.ExportVoiceProfile",
+      "model_name": "TTSExportVoiceProfileResponse",
+      "schema_id": "TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse"
+    },
+    {
+      "accepted": true,
       "direction": "output",
       "input": {
         "capabilities": {
@@ -1872,6 +2007,176 @@
       "method_id": "TTS.GetVoiceProfile",
       "model_name": "TTSGetVoiceProfileResponse",
       "schema_id": "TTS.GetVoiceProfile.output.TTSGetVoiceProfileResponse"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "bundle": {
+          "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+          "artifact_format": "safetensors",
+          "artifact_revision": "clone-rev-a",
+          "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+          "artifact_size_bytes": 19,
+          "bundle_type": "aurora-cloned-tts-voice-state",
+          "compatibility_group": "pockettts-base",
+          "display_name": "Private voice",
+          "language_bundle": "english_2026-04",
+          "runtime_target": "pockettts-python",
+          "schema_version": 1,
+          "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+        },
+        "operation_id": " import-1 "
+      },
+      "marker_paths": [
+        "$.$defs.TTSCloneVoiceStateBundle:x-aurora-tts-clone-state-bundle-invariant",
+        "$.properties.operation_id:x-aurora-tts-operation-id"
+      ],
+      "method_id": "TTS.ImportVoiceProfile",
+      "model_name": "TTSImportVoiceProfileRequest",
+      "normalized": {
+        "bundle": {
+          "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+          "artifact_format": "safetensors",
+          "artifact_revision": "clone-rev-a",
+          "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+          "artifact_size_bytes": 19,
+          "bundle_type": "aurora-cloned-tts-voice-state",
+          "compatibility_group": "pockettts-base",
+          "display_name": "Private voice",
+          "language_bundle": "english_2026-04",
+          "runtime_target": "pockettts-python",
+          "schema_version": 1,
+          "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+        },
+        "operation_id": "import-1"
+      },
+      "normalized_hash": "ecea7fcf07dadc6730f6a482e36a7f0f5c66b19ca5bccbbfea29ab73871d1213",
+      "schema_id": "TTS.ImportVoiceProfile.input.TTSImportVoiceProfileRequest"
+    },
+    {
+      "accepted": false,
+      "case_index": 0,
+      "direction": "input",
+      "input": {
+        "bundle": {
+          "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+          "artifact_format": "safetensors",
+          "artifact_revision": "clone-rev-a",
+          "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+          "artifact_size_bytes": 19,
+          "bundle_type": "aurora-cloned-tts-voice-state",
+          "compatibility_group": "pockettts-base",
+          "display_name": "Private voice",
+          "language_bundle": "english_2026-04",
+          "runtime_target": "pockettts-python",
+          "schema_version": 1,
+          "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+        },
+        "operation_id": " bad id "
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.operation_id",
+      "method_id": "TTS.ImportVoiceProfile",
+      "model_name": "TTSImportVoiceProfileRequest",
+      "schema_id": "TTS.ImportVoiceProfile.input.TTSImportVoiceProfileRequest"
+    },
+    {
+      "accepted": false,
+      "case_index": 1,
+      "direction": "input",
+      "input": {
+        "bundle": {
+          "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+          "artifact_format": "safetensors",
+          "artifact_revision": "clone-rev-a",
+          "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+          "artifact_size_bytes": 19,
+          "bundle_type": "aurora-cloned-tts-voice-state",
+          "compatibility_group": "pockettts-base",
+          "display_name": "Private voice",
+          "language_bundle": "english_2026-04",
+          "runtime_target": "pockettts-python",
+          "schema_version": 1,
+          "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+        },
+        "operation_id": " bad id "
+      },
+      "issue_category": "tts_operation_id",
+      "issue_path": "$.operation_id",
+      "marker_paths": [
+        "$.properties.operation_id:x-aurora-tts-operation-id"
+      ],
+      "method_id": "TTS.ImportVoiceProfile",
+      "model_name": "TTSImportVoiceProfileRequest",
+      "schema_id": "TTS.ImportVoiceProfile.input.TTSImportVoiceProfileRequest"
+    },
+    {
+      "accepted": false,
+      "case_index": 2,
+      "direction": "input",
+      "input": {
+        "bundle": {
+          "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+          "artifact_format": "safetensors",
+          "artifact_revision": "clone-rev-a",
+          "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+          "artifact_size_bytes": 19,
+          "bundle_type": "aurora-cloned-tts-voice-state",
+          "compatibility_group": "pockettts-base",
+          "display_name": "Private voice",
+          "language_bundle": "english_2026-04",
+          "runtime_target": "pockettts-python",
+          "schema_version": 1,
+          "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+        },
+        "operation_id": " aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "
+      },
+      "issue_category": "tts_operation_id",
+      "issue_path": "$.operation_id",
+      "marker_paths": [
+        "$.properties.operation_id:x-aurora-tts-operation-id"
+      ],
+      "method_id": "TTS.ImportVoiceProfile",
+      "model_name": "TTSImportVoiceProfileRequest",
+      "schema_id": "TTS.ImportVoiceProfile.input.TTSImportVoiceProfileRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "revision": "voice-rev-a",
+        "status": "imported",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "marker_paths": [
+        "$:x-aurora-tts-import-profile-response-invariant"
+      ],
+      "method_id": "TTS.ImportVoiceProfile",
+      "model_name": "TTSImportVoiceProfileResponse",
+      "normalized": {
+        "idempotent": false,
+        "revision": "voice-rev-a",
+        "status": "imported",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "normalized_hash": "9ca4b17d8b484181d88e44e649da20bd932e149bc678703d81a6dc89acdc549b",
+      "schema_id": "TTS.ImportVoiceProfile.output.TTSImportVoiceProfileResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 0,
+      "direction": "output",
+      "input": {
+        "revision": null,
+        "status": "imported",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$",
+      "method_id": "TTS.ImportVoiceProfile",
+      "model_name": "TTSImportVoiceProfileResponse",
+      "schema_id": "TTS.ImportVoiceProfile.output.TTSImportVoiceProfileResponse"
     },
     {
       "accepted": true,

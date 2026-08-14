@@ -14,6 +14,10 @@ from scripts.sdk_zod_codegen import (
     STRING_NON_BLANK_MARKER,
     STRING_TRIMMED_MARKER,
     TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
+    TTS_CLONE_STATE_BUNDLE_INVARIANT_MARKER,
+    TTS_EXPORT_PROFILE_REQUEST_INVARIANT_MARKER,
+    TTS_EXPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
+    TTS_IMPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
     UNIQUE_STRING_ARRAY_NORMALIZE_MARKER,
     CompileContext,
     UnsupportedSchemaError,
@@ -391,9 +395,9 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     assert schema["tooling_provider_allowlist"] == (
         list(generate_backend_inventory.SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST)
     )
-    assert len(schema["allowlist"]) == 36
-    assert len(schema["schemas"]) == 76
-    assert len(schema["method_descriptors"]) == 36
+    assert len(schema["allowlist"]) == 38
+    assert len(schema["schemas"]) == 80
+    assert len(schema["method_descriptors"]) == 38
     assert len(schema["event_descriptors"]) == 3
     assert len(schema["envelope_descriptors"]) == 1
     assert len(provider["methods"]) == 4
@@ -412,6 +416,10 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     assert all(not method_id.startswith("AudioSession.") for method_id in descriptor_ids)
     assert descriptors["TTS.CreateVoiceProfile"]["method_type"] == "manage"
     assert descriptors["TTS.CreateVoiceProfile"]["required_perms"] == ["TTS.manage"]
+    assert descriptors["TTS.ExportVoiceProfile"]["method_type"] == "manage"
+    assert descriptors["TTS.ExportVoiceProfile"]["required_perms"] == ["TTS.manage"]
+    assert descriptors["TTS.ImportVoiceProfile"]["method_type"] == "manage"
+    assert descriptors["TTS.ImportVoiceProfile"]["required_perms"] == ["TTS.manage"]
     event_descriptors = {item["event_topic"]: item for item in schema["event_descriptors"]}
     assert set(event_descriptors) == {
         "TTS.AudioChunk",
@@ -460,6 +468,30 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
         if item["schema_id"] == "TTS.AudioChunk.event.TTSAudioChunkEvent"
     )
     assert event_schema["schema"][TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER] is True
+    schema_by_id = {item["schema_id"]: item["schema"] for item in schema["schemas"]}
+    assert (
+        schema_by_id["TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest"][
+            TTS_EXPORT_PROFILE_REQUEST_INVARIANT_MARKER
+        ]
+        is True
+    )
+    assert (
+        schema_by_id["TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse"][
+            TTS_EXPORT_PROFILE_RESPONSE_INVARIANT_MARKER
+        ]
+        is True
+    )
+    export_bundle = schema_by_id["TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse"][
+        "$defs"
+    ]["TTSCloneVoiceStateBundle"]
+    assert export_bundle[TTS_CLONE_STATE_BUNDLE_INVARIANT_MARKER] is True
+    assert export_bundle["properties"]["artifact_sha256"]["pattern"] == "^[0-9a-f]{64}$"
+    assert (
+        schema_by_id["TTS.ImportVoiceProfile.output.TTSImportVoiceProfileResponse"][
+            TTS_IMPORT_PROFILE_RESPONSE_INVARIANT_MARKER
+        ]
+        is True
+    )
     assert any(
         vector["issue_path"] == "$"
         and vector["input"]["audio_data"] == ""

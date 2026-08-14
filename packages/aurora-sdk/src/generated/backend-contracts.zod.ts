@@ -161,6 +161,10 @@ function validateTtsProfileMutationResponseInvariant(value: Record<string, unkno
 function validateTtsImportStartResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (typeof value.max_chunk_bytes === 'number' && typeof value.max_chunks === 'number' && typeof value.accepted_total_bytes === 'number' && value.max_chunk_bytes * value.max_chunks < value.accepted_total_bytes) addInvariantIssue(ctx, ['accepted_total_bytes'], 'upload session capacity is below accepted total bytes'); }
 function validateTtsImportChunkRequestInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { let decoded: Uint8Array; if (typeof value.chunk_data !== 'string') return; try { decoded = base64ToBytes(value.chunk_data) } catch { addInvariantIssue(ctx, ['chunk_data'], 'chunk_data must be valid base64'); return } if (decoded.length === 0) addInvariantIssue(ctx, ['chunk_data'], 'decoded chunk must not be empty'); if (decoded.length > 49152) addInvariantIssue(ctx, ['chunk_data'], 'decoded chunk exceeds limit'); if (typeof value.chunk_sha256 === 'string' && bytesToHex(sha256(decoded)) !== value.chunk_sha256) addInvariantIssue(ctx, ['chunk_sha256'], 'chunk SHA-256 mismatch'); if (new TextEncoder().encode(JSON.stringify(value)).length > 131072) addInvariantIssue(ctx, [], 'voice import chunk request exceeds JSON limit'); }
 function validateTtsImportChunkResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (typeof value.sequence === 'number' && value.next_sequence !== value.sequence + 1) addInvariantIssue(ctx, ['next_sequence'], 'next_sequence must acknowledge exactly one chunk'); if (value.status === 'duplicate' && value.idempotent !== true) addInvariantIssue(ctx, ['idempotent'], 'duplicate chunk acknowledgement must be idempotent'); if (value.status === 'accepted' && value.idempotent === true) addInvariantIssue(ctx, ['idempotent'], 'first chunk acknowledgement cannot be idempotent'); }
+function validateTtsCloneStateBundleInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const voiceId = optionalString(value, 'voice_id'); if (!voiceId || !voiceId.startsWith('clone:')) addInvariantIssue(ctx, ['voice_id'], 'voice bundle must use a clone logical voice id'); let decoded: Uint8Array; if (typeof value.artifact_data_base64 !== 'string') return; try { decoded = base64ToBytes(value.artifact_data_base64) } catch { addInvariantIssue(ctx, ['artifact_data_base64'], 'artifact_data_base64 must be valid base64'); return } if (decoded.length !== value.artifact_size_bytes) addInvariantIssue(ctx, ['artifact_size_bytes'], 'artifact size does not match payload'); if (typeof value.artifact_sha256 === 'string' && bytesToHex(sha256(decoded)) !== value.artifact_sha256) addInvariantIssue(ctx, ['artifact_sha256'], 'artifact SHA-256 mismatch'); if (new TextEncoder().encode(JSON.stringify(value)).length > 2927276) addInvariantIssue(ctx, [], 'voice state bundle exceeds JSON limit'); }
+function validateTtsExportProfileRequestInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const voiceId = optionalString(value, 'voice_id'); if (!voiceId || !voiceId.startsWith('clone:')) addInvariantIssue(ctx, [], 'only cloned voice profiles can be exported'); }
+function validateTtsExportProfileResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const status = value.status; const bundle = value.bundle; if (status === 'exported') { if (value.revision === null || value.revision === undefined) addInvariantIssue(ctx, [], 'exported result needs revision'); if (bundle === null || bundle === undefined) addInvariantIssue(ctx, [], 'exported result needs a bundle'); else if (typeof bundle === 'object' && !Array.isArray(bundle) && (bundle as Record<string, unknown>).voice_id !== value.voice_id) addInvariantIssue(ctx, [], 'exported bundle voice id must match response'); } else if (bundle !== null && bundle !== undefined) addInvariantIssue(ctx, [], 'non-exported response cannot include a bundle'); }
+function validateTtsImportProfileResponseInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { const status = value.status; if ((status === 'imported' || status === 'unchanged' || status === 'conflict') && (value.revision === null || value.revision === undefined)) addInvariantIssue(ctx, [], 'import result needs revision'); }
 function validateTtsAudioChunkEventInvariant(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (value.is_final !== true && value.audio_data === '') addInvariantIssue(ctx, [], 'non-final audio chunk requires audio data'); }
 function validateSttTranscribeLanguageShape(value: Record<string, unknown>, ctx: AuroraRefinementContext): void { if (value.language !== null && value.language !== undefined && listIds(value, 'auto_language_candidates').length > 0) addInvariantIssue(ctx, ['auto_language_candidates'], 'exact STT language cannot include auto candidates'); }
 
@@ -601,6 +605,50 @@ export const TTSDeleteVoiceProfileOutputTTSDeleteVoiceProfileResponseSchema = z.
 }).superRefine((value, ctx) => validateTtsDeleteProfileResponseInvariant(value, ctx)).superRefine((value, ctx) => validateTtsProfileMutationResponseInvariant(value, ctx)).meta({"x-aurora-extra-behavior":"forbid","x-aurora-tts-delete-profile-response-invariant":true,"x-aurora-tts-profile-mutation-response-invariant":true})
 export type TTSDeleteVoiceProfileOutputTTSDeleteVoiceProfileResponse = z.infer<typeof TTSDeleteVoiceProfileOutputTTSDeleteVoiceProfileResponseSchema>
 
+const TTSExportVoiceProfileInputTTSExportVoiceProfileRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
+  "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "hardware_target": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "peer_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "provider_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "resource_namespace": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "service_instance_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "tool_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional()
+}).meta({"x-aurora-extra-behavior":"strip"}))
+
+export const TTSExportVoiceProfileInputTTSExportVoiceProfileRequestSchema = z.strictObject({
+  "correlation_id": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "expected_revision": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "mesh_selector": TTSExportVoiceProfileInputTTSExportVoiceProfileRequestSchemaMeshAddressSelectorSchemaDef.nullable().prefault(null).meta({"default":null}).optional(),
+  "operation_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).superRefine((value, ctx) => { const trimmed = value.trim(); if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(trimmed)) ctx.addIssue({ code: 'custom', message: 'operation_id must be a non-blank portable identifier' });}).overwrite((value) => value.trim()).meta({"x-aurora-tts-operation-id":true}),
+  "voice_id": z.string().regex(new RegExp("^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$"))
+}).superRefine((value, ctx) => validateTtsExportProfileRequestInvariant(value, ctx)).meta({"x-aurora-extra-behavior":"forbid","x-aurora-tts-export-profile-request-invariant":true})
+export type TTSExportVoiceProfileInputTTSExportVoiceProfileRequest = z.infer<typeof TTSExportVoiceProfileInputTTSExportVoiceProfileRequestSchema>
+
+const TTSExportVoiceProfileOutputTTSExportVoiceProfileResponseSchemaTTSCloneVoiceStateBundleSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.strictObject({
+  "artifact_data_base64": z.string().refine((value) => codePointLength(value) <= 2796204, { message: 'string must contain at most 2796204 Unicode code points' }).meta({"maxLength":2796204}),
+  "artifact_format": z.literal("safetensors").prefault("safetensors").meta({"default":"safetensors"}).optional(),
+  "artifact_revision": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 96, { message: 'string must contain at most 96 Unicode code points' }).meta({"maxLength":96}).regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}),
+  "artifact_sha256": z.string().regex(new RegExp("^[0-9a-f]{64}$")),
+  "artifact_size_bytes": z.number().finite().multipleOf(1).gt(0).max(2097152),
+  "bundle_type": z.literal("aurora-cloned-tts-voice-state").prefault("aurora-cloned-tts-voice-state").meta({"default":"aurora-cloned-tts-voice-state"}).optional(),
+  "compatibility_group": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}),
+  "display_name": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}),
+  "language_bundle": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 96, { message: 'string must contain at most 96 Unicode code points' }).meta({"maxLength":96}).regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}),
+  "runtime_target": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 96, { message: 'string must contain at most 96 Unicode code points' }).meta({"maxLength":96}).regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}),
+  "schema_version": z.literal(1).prefault(1).meta({"default":1}).optional(),
+  "voice_id": z.string().regex(new RegExp("^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$"))
+}).superRefine((value, ctx) => validateTtsCloneStateBundleInvariant(value, ctx)).meta({"x-aurora-extra-behavior":"forbid","x-aurora-tts-clone-state-bundle-invariant":true}))
+
+export const TTSExportVoiceProfileOutputTTSExportVoiceProfileResponseSchema = z.strictObject({
+  "bundle": TTSExportVoiceProfileOutputTTSExportVoiceProfileResponseSchemaTTSCloneVoiceStateBundleSchemaDef.nullable().prefault(null).meta({"default":null}).optional(),
+  "correlation_id": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "idempotent": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "revision": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "status": z.enum(["exported", "not_found", "rejected", "revision_conflict", "unavailable"]),
+  "voice_id": z.string().regex(new RegExp("^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$"))
+}).superRefine((value, ctx) => validateTtsExportProfileResponseInvariant(value, ctx)).meta({"x-aurora-extra-behavior":"forbid","x-aurora-tts-export-profile-response-invariant":true})
+export type TTSExportVoiceProfileOutputTTSExportVoiceProfileResponse = z.infer<typeof TTSExportVoiceProfileOutputTTSExportVoiceProfileResponseSchema>
+
 const TTSGetCapabilitiesInputTTSGetCapabilitiesRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
   "hardware_target": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
@@ -700,6 +748,49 @@ export const TTSGetVoiceProfileOutputTTSGetVoiceProfileResponseSchema = z.strict
   "profile": TTSGetVoiceProfileOutputTTSGetVoiceProfileResponseSchemaTTSVoiceProfileDescriptorSchemaDef.nullable().prefault(null).meta({"default":null}).optional()
 }).superRefine((value, ctx) => validateTtsGetProfileResponseInvariant(value, ctx)).meta({"x-aurora-extra-behavior":"forbid","x-aurora-tts-get-profile-response-invariant":true})
 export type TTSGetVoiceProfileOutputTTSGetVoiceProfileResponse = z.infer<typeof TTSGetVoiceProfileOutputTTSGetVoiceProfileResponseSchema>
+
+const TTSImportVoiceProfileInputTTSImportVoiceProfileRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
+  "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "hardware_target": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "peer_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "provider_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "resource_namespace": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "service_instance_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "tool_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional()
+}).meta({"x-aurora-extra-behavior":"strip"}))
+
+const TTSImportVoiceProfileInputTTSImportVoiceProfileRequestSchemaTTSCloneVoiceStateBundleSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.strictObject({
+  "artifact_data_base64": z.string().refine((value) => codePointLength(value) <= 2796204, { message: 'string must contain at most 2796204 Unicode code points' }).meta({"maxLength":2796204}),
+  "artifact_format": z.literal("safetensors").prefault("safetensors").meta({"default":"safetensors"}).optional(),
+  "artifact_revision": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 96, { message: 'string must contain at most 96 Unicode code points' }).meta({"maxLength":96}).regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}),
+  "artifact_sha256": z.string().regex(new RegExp("^[0-9a-f]{64}$")),
+  "artifact_size_bytes": z.number().finite().multipleOf(1).gt(0).max(2097152),
+  "bundle_type": z.literal("aurora-cloned-tts-voice-state").prefault("aurora-cloned-tts-voice-state").meta({"default":"aurora-cloned-tts-voice-state"}).optional(),
+  "compatibility_group": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}),
+  "display_name": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}),
+  "language_bundle": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 96, { message: 'string must contain at most 96 Unicode code points' }).meta({"maxLength":96}).regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}),
+  "runtime_target": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 96, { message: 'string must contain at most 96 Unicode code points' }).meta({"maxLength":96}).regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}),
+  "schema_version": z.literal(1).prefault(1).meta({"default":1}).optional(),
+  "voice_id": z.string().regex(new RegExp("^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$"))
+}).superRefine((value, ctx) => validateTtsCloneStateBundleInvariant(value, ctx)).meta({"x-aurora-extra-behavior":"forbid","x-aurora-tts-clone-state-bundle-invariant":true}))
+
+export const TTSImportVoiceProfileInputTTSImportVoiceProfileRequestSchema = z.strictObject({
+  "bundle": TTSImportVoiceProfileInputTTSImportVoiceProfileRequestSchemaTTSCloneVoiceStateBundleSchemaDef,
+  "correlation_id": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "expected_revision": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
+  "mesh_selector": TTSImportVoiceProfileInputTTSImportVoiceProfileRequestSchemaMeshAddressSelectorSchemaDef.nullable().prefault(null).meta({"default":null}).optional(),
+  "operation_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(/^(?=.*\S)[\s\S]*$/).superRefine((value, ctx) => { const trimmed = value.trim(); if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(trimmed)) ctx.addIssue({ code: 'custom', message: 'operation_id must be a non-blank portable identifier' });}).overwrite((value) => value.trim()).meta({"x-aurora-string-non-blank":true,"x-aurora-tts-operation-id":true})
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TTSImportVoiceProfileInputTTSImportVoiceProfileRequest = z.infer<typeof TTSImportVoiceProfileInputTTSImportVoiceProfileRequestSchema>
+
+export const TTSImportVoiceProfileOutputTTSImportVoiceProfileResponseSchema = z.strictObject({
+  "correlation_id": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "idempotent": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "revision": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "status": z.enum(["conflict", "imported", "rejected", "unavailable", "unchanged"]),
+  "voice_id": z.string().regex(new RegExp("^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$"))
+}).superRefine((value, ctx) => validateTtsImportProfileResponseInvariant(value, ctx)).meta({"x-aurora-extra-behavior":"forbid","x-aurora-tts-import-profile-response-invariant":true})
+export type TTSImportVoiceProfileOutputTTSImportVoiceProfileResponse = z.infer<typeof TTSImportVoiceProfileOutputTTSImportVoiceProfileResponseSchema>
 
 const TTSInstallVoiceProfileInputTTSInstallVoiceProfileRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
@@ -1711,10 +1802,14 @@ export const backendContractSchemas = {
   TTSCreateVoiceProfileOutputTTSCreateVoiceProfileResponseSchema,
   TTSDeleteVoiceProfileInputTTSDeleteVoiceProfileRequestSchema,
   TTSDeleteVoiceProfileOutputTTSDeleteVoiceProfileResponseSchema,
+  TTSExportVoiceProfileInputTTSExportVoiceProfileRequestSchema,
+  TTSExportVoiceProfileOutputTTSExportVoiceProfileResponseSchema,
   TTSGetCapabilitiesInputTTSGetCapabilitiesRequestSchema,
   TTSGetCapabilitiesOutputTTSGetCapabilitiesResponseSchema,
   TTSGetVoiceProfileInputTTSGetVoiceProfileRequestSchema,
   TTSGetVoiceProfileOutputTTSGetVoiceProfileResponseSchema,
+  TTSImportVoiceProfileInputTTSImportVoiceProfileRequestSchema,
+  TTSImportVoiceProfileOutputTTSImportVoiceProfileResponseSchema,
   TTSInstallVoiceProfileInputTTSInstallVoiceProfileRequestSchema,
   TTSInstallVoiceProfileOutputTTSInstallVoiceProfileResponseSchema,
   TTSListLanguagePacksInputTTSListLanguagePacksRequestSchema,
@@ -1790,10 +1885,14 @@ export const backendContractSchemaById = {
   "TTS.CreateVoiceProfile.output.TTSCreateVoiceProfileResponse": TTSCreateVoiceProfileOutputTTSCreateVoiceProfileResponseSchema,
   "TTS.DeleteVoiceProfile.input.TTSDeleteVoiceProfileRequest": TTSDeleteVoiceProfileInputTTSDeleteVoiceProfileRequestSchema,
   "TTS.DeleteVoiceProfile.output.TTSDeleteVoiceProfileResponse": TTSDeleteVoiceProfileOutputTTSDeleteVoiceProfileResponseSchema,
+  "TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest": TTSExportVoiceProfileInputTTSExportVoiceProfileRequestSchema,
+  "TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse": TTSExportVoiceProfileOutputTTSExportVoiceProfileResponseSchema,
   "TTS.GetCapabilities.input.TTSGetCapabilitiesRequest": TTSGetCapabilitiesInputTTSGetCapabilitiesRequestSchema,
   "TTS.GetCapabilities.output.TTSGetCapabilitiesResponse": TTSGetCapabilitiesOutputTTSGetCapabilitiesResponseSchema,
   "TTS.GetVoiceProfile.input.TTSGetVoiceProfileRequest": TTSGetVoiceProfileInputTTSGetVoiceProfileRequestSchema,
   "TTS.GetVoiceProfile.output.TTSGetVoiceProfileResponse": TTSGetVoiceProfileOutputTTSGetVoiceProfileResponseSchema,
+  "TTS.ImportVoiceProfile.input.TTSImportVoiceProfileRequest": TTSImportVoiceProfileInputTTSImportVoiceProfileRequestSchema,
+  "TTS.ImportVoiceProfile.output.TTSImportVoiceProfileResponse": TTSImportVoiceProfileOutputTTSImportVoiceProfileResponseSchema,
   "TTS.InstallVoiceProfile.input.TTSInstallVoiceProfileRequest": TTSInstallVoiceProfileInputTTSInstallVoiceProfileRequestSchema,
   "TTS.InstallVoiceProfile.output.TTSInstallVoiceProfileResponse": TTSInstallVoiceProfileOutputTTSInstallVoiceProfileResponseSchema,
   "TTS.ListLanguagePacks.input.TTSListLanguagePacksRequest": TTSListLanguagePacksInputTTSListLanguagePacksRequestSchema,
@@ -2265,7 +2364,9 @@ export const backendContractMethodDescriptors = [
           "TTS.VoiceImportEnd",
           "TTS.VoiceImportAbort",
           "TTS.CreateVoiceProfile",
-          "TTS.DeleteVoiceProfile"
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.ImportVoiceProfile"
         ]
       }
     ],
@@ -2319,7 +2420,9 @@ export const backendContractMethodDescriptors = [
           "TTS.VoiceImportEnd",
           "TTS.VoiceImportAbort",
           "TTS.CreateVoiceProfile",
-          "TTS.DeleteVoiceProfile"
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.ImportVoiceProfile"
         ]
       }
     ],
@@ -2373,7 +2476,9 @@ export const backendContractMethodDescriptors = [
           "TTS.VoiceImportEnd",
           "TTS.VoiceImportAbort",
           "TTS.CreateVoiceProfile",
-          "TTS.DeleteVoiceProfile"
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.ImportVoiceProfile"
         ]
       }
     ],
@@ -2427,7 +2532,9 @@ export const backendContractMethodDescriptors = [
           "TTS.VoiceImportEnd",
           "TTS.VoiceImportAbort",
           "TTS.CreateVoiceProfile",
-          "TTS.DeleteVoiceProfile"
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.ImportVoiceProfile"
         ]
       }
     ],
@@ -2481,7 +2588,9 @@ export const backendContractMethodDescriptors = [
           "TTS.VoiceImportEnd",
           "TTS.VoiceImportAbort",
           "TTS.CreateVoiceProfile",
-          "TTS.DeleteVoiceProfile"
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.ImportVoiceProfile"
         ]
       }
     ],
@@ -2535,7 +2644,9 @@ export const backendContractMethodDescriptors = [
           "TTS.VoiceImportEnd",
           "TTS.VoiceImportAbort",
           "TTS.CreateVoiceProfile",
-          "TTS.DeleteVoiceProfile"
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.ImportVoiceProfile"
         ]
       }
     ],
@@ -2589,7 +2700,9 @@ export const backendContractMethodDescriptors = [
           "TTS.VoiceImportEnd",
           "TTS.VoiceImportAbort",
           "TTS.CreateVoiceProfile",
-          "TTS.DeleteVoiceProfile"
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.ImportVoiceProfile"
         ]
       }
     ],
@@ -2643,7 +2756,9 @@ export const backendContractMethodDescriptors = [
           "TTS.VoiceImportEnd",
           "TTS.VoiceImportAbort",
           "TTS.CreateVoiceProfile",
-          "TTS.DeleteVoiceProfile"
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.ImportVoiceProfile"
         ]
       }
     ],
@@ -2697,7 +2812,9 @@ export const backendContractMethodDescriptors = [
           "TTS.VoiceImportEnd",
           "TTS.VoiceImportAbort",
           "TTS.CreateVoiceProfile",
-          "TTS.DeleteVoiceProfile"
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.ImportVoiceProfile"
         ]
       }
     ],
@@ -2751,7 +2868,9 @@ export const backendContractMethodDescriptors = [
           "TTS.VoiceImportEnd",
           "TTS.VoiceImportAbort",
           "TTS.CreateVoiceProfile",
-          "TTS.DeleteVoiceProfile"
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.ImportVoiceProfile"
         ]
       }
     ],
@@ -2805,7 +2924,9 @@ export const backendContractMethodDescriptors = [
           "TTS.VoiceImportEnd",
           "TTS.VoiceImportAbort",
           "TTS.CreateVoiceProfile",
-          "TTS.DeleteVoiceProfile"
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.ImportVoiceProfile"
         ]
       }
     ],
@@ -2859,7 +2980,9 @@ export const backendContractMethodDescriptors = [
           "TTS.VoiceImportEnd",
           "TTS.VoiceImportAbort",
           "TTS.CreateVoiceProfile",
-          "TTS.DeleteVoiceProfile"
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.ImportVoiceProfile"
         ]
       }
     ],
@@ -2913,7 +3036,9 @@ export const backendContractMethodDescriptors = [
           "TTS.VoiceImportEnd",
           "TTS.VoiceImportAbort",
           "TTS.CreateVoiceProfile",
-          "TTS.DeleteVoiceProfile"
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.ImportVoiceProfile"
         ]
       }
     ],
@@ -2931,6 +3056,118 @@ export const backendContractMethodDescriptors = [
     "output_schema_id": "TTS.DeleteVoiceProfile.output.TTSDeleteVoiceProfileResponse",
     "input_schema_hash": "d4e21efd4b4a31a2fbc8aab099203e766c808dec5c6c5f090a32ec931338688d",
     "output_schema_hash": "5761b20bf24e294410ea27adc1bbc3254d039ffbc4b4ad8806d0183d83b4f44b"
+  },
+  {
+    "method_id": "TTS.ExportVoiceProfile",
+    "module": "TTS",
+    "name": "ExportVoiceProfile",
+    "topic": "TTS.ExportVoiceProfile",
+    "bus_topic": "TTS.ExportVoiceProfile",
+    "route_path": "/api/TTS/ExportVoiceProfile",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "manage",
+    "required_perms": [
+      "TTS.manage"
+    ],
+    "callable_feature_ids": [
+      "speech_voice_management"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "speech_voice_management",
+        "module": "TTS",
+        "label": "Voice Profile Management",
+        "summary": "Administer local TTS voice profiles and bounded voice imports.",
+        "method_ids": [
+          "TTS.ListLanguagePacks",
+          "TTS.ListVoiceProfiles",
+          "TTS.GetVoiceProfile",
+          "TTS.UpdateVoiceProfile",
+          "TTS.InstallVoiceProfile",
+          "TTS.RemoveVoiceProfile",
+          "TTS.SetDefaultVoice",
+          "TTS.VoiceImportStart",
+          "TTS.VoiceImportChunk",
+          "TTS.VoiceImportEnd",
+          "TTS.VoiceImportAbort",
+          "TTS.CreateVoiceProfile",
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.ImportVoiceProfile"
+        ]
+      }
+    ],
+    "input_model": "TTSExportVoiceProfileRequest",
+    "output_model": "TTSExportVoiceProfileResponse",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest",
+    "output_schema_id": "TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse",
+    "input_schema_hash": "b4fd7de973c58b3873d3e47fb541a8462301310a17c50c89b2ff21b21c350b8c",
+    "output_schema_hash": "ca22940aa58eb0409ec785cb446fb3d71ce8eeb8bf64940306263ec10f2c5549"
+  },
+  {
+    "method_id": "TTS.ImportVoiceProfile",
+    "module": "TTS",
+    "name": "ImportVoiceProfile",
+    "topic": "TTS.ImportVoiceProfile",
+    "bus_topic": "TTS.ImportVoiceProfile",
+    "route_path": "/api/TTS/ImportVoiceProfile",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "manage",
+    "required_perms": [
+      "TTS.manage"
+    ],
+    "callable_feature_ids": [
+      "speech_voice_management"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "speech_voice_management",
+        "module": "TTS",
+        "label": "Voice Profile Management",
+        "summary": "Administer local TTS voice profiles and bounded voice imports.",
+        "method_ids": [
+          "TTS.ListLanguagePacks",
+          "TTS.ListVoiceProfiles",
+          "TTS.GetVoiceProfile",
+          "TTS.UpdateVoiceProfile",
+          "TTS.InstallVoiceProfile",
+          "TTS.RemoveVoiceProfile",
+          "TTS.SetDefaultVoice",
+          "TTS.VoiceImportStart",
+          "TTS.VoiceImportChunk",
+          "TTS.VoiceImportEnd",
+          "TTS.VoiceImportAbort",
+          "TTS.CreateVoiceProfile",
+          "TTS.DeleteVoiceProfile",
+          "TTS.ExportVoiceProfile",
+          "TTS.ImportVoiceProfile"
+        ]
+      }
+    ],
+    "input_model": "TTSImportVoiceProfileRequest",
+    "output_model": "TTSImportVoiceProfileResponse",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "TTS.ImportVoiceProfile.input.TTSImportVoiceProfileRequest",
+    "output_schema_id": "TTS.ImportVoiceProfile.output.TTSImportVoiceProfileResponse",
+    "input_schema_hash": "01387ef937b920bbf6430506b48134f7e90af5f36fdeb60eb186896da5025fb3",
+    "output_schema_hash": "ec268dd6219a7881a94f2b87637711a3b2d4b20dd7942cb65ee37caaa4d985fc"
   },
   {
     "method_id": "TTS.Request",
@@ -3562,19 +3799,21 @@ export const backendContractMethodDescriptorById = {
   "Orchestrator.Interrupt": {"method_id": "Orchestrator.Interrupt", "module": "Orchestrator", "name": "Interrupt", "topic": "Orchestrator.Interrupt", "bus_topic": "Orchestrator.Interrupt", "route_path": "/api/Orchestrator/Interrupt", "route_kind": "dynamic", "exposure": "external", "method_type": "use", "required_perms": ["Orchestrator.use"], "callable_feature_ids": ["assistant_control"], "callable_features": [{"feature_id": "assistant_control", "module": "Orchestrator", "label": "Assistant Control", "summary": "Interrupt active assistant work.", "method_ids": ["Orchestrator.Interrupt"]}], "input_model": "OrchestratorInterruptRequest", "output_model": "OrchestratorInterruptResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Orchestrator.Interrupt.input.OrchestratorInterruptRequest", "output_schema_id": "Orchestrator.Interrupt.output.OrchestratorInterruptResponse", "input_schema_hash": "1c273edd72d1fe38a292f2f1abcbf4a68302c3a056358a0853e641ae14a2e095", "output_schema_hash": "2abfb95b02edaa0a3da7d0eee783aa3899db0d079e281488c87fe41716f0beda"},
   "TTS.GetCapabilities": {"method_id": "TTS.GetCapabilities", "module": "TTS", "name": "GetCapabilities", "topic": "TTS.GetCapabilities", "bus_topic": "TTS.GetCapabilities", "route_path": "/api/TTS/GetCapabilities", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.use"], "callable_feature_ids": ["speech_voice_discovery"], "callable_features": [{"feature_id": "speech_voice_discovery", "module": "TTS", "label": "Voice Discovery", "summary": "Read TTS capabilities and use-safe voice choices.", "method_ids": ["TTS.GetCapabilities", "TTS.ListVoices"]}], "input_model": "TTSGetCapabilitiesRequest", "output_model": "TTSGetCapabilitiesResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.GetCapabilities.input.TTSGetCapabilitiesRequest", "output_schema_id": "TTS.GetCapabilities.output.TTSGetCapabilitiesResponse", "input_schema_hash": "0adcf095a1796861de001117544967a9201061ce3ec92c2e9a7a2a5e7b29fa95", "output_schema_hash": "01b05a49afa867e44fa37e1801bc85a2757f4055001dbee0afe71a741f58c155"},
   "TTS.ListVoices": {"method_id": "TTS.ListVoices", "module": "TTS", "name": "ListVoices", "topic": "TTS.ListVoices", "bus_topic": "TTS.ListVoices", "route_path": "/api/TTS/ListVoices", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.use"], "callable_feature_ids": ["speech_voice_discovery"], "callable_features": [{"feature_id": "speech_voice_discovery", "module": "TTS", "label": "Voice Discovery", "summary": "Read TTS capabilities and use-safe voice choices.", "method_ids": ["TTS.GetCapabilities", "TTS.ListVoices"]}], "input_model": "TTSListVoicesRequest", "output_model": "TTSListVoicesResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.ListVoices.input.TTSListVoicesRequest", "output_schema_id": "TTS.ListVoices.output.TTSListVoicesResponse", "input_schema_hash": "5a67735133d22419018f9e3f35063734fc61d78a182d0011b4a691d5db384d1e", "output_schema_hash": "597ea4f7521b0a313ee301a780440a01c6ea3c69ce15835fa9921fa81ebcb437"},
-  "TTS.ListLanguagePacks": {"method_id": "TTS.ListLanguagePacks", "module": "TTS", "name": "ListLanguagePacks", "topic": "TTS.ListLanguagePacks", "bus_topic": "TTS.ListLanguagePacks", "route_path": "/api/TTS/ListLanguagePacks", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSListLanguagePacksRequest", "output_model": "TTSListLanguagePacksResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.ListLanguagePacks.input.TTSListLanguagePacksRequest", "output_schema_id": "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse", "input_schema_hash": "97b96c151445cffd98d2f890e89d0c15659bd81d31a4bab75b18099dd3aed442", "output_schema_hash": "cd89499d6404308b9ed42b763bd6e82b5d1e3a1e30168c0e12c984b485bd591c"},
-  "TTS.ListVoiceProfiles": {"method_id": "TTS.ListVoiceProfiles", "module": "TTS", "name": "ListVoiceProfiles", "topic": "TTS.ListVoiceProfiles", "bus_topic": "TTS.ListVoiceProfiles", "route_path": "/api/TTS/ListVoiceProfiles", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSListVoiceProfilesRequest", "output_model": "TTSListVoiceProfilesResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.ListVoiceProfiles.input.TTSListVoiceProfilesRequest", "output_schema_id": "TTS.ListVoiceProfiles.output.TTSListVoiceProfilesResponse", "input_schema_hash": "31045e05ae45e59efe8ee19bdd3f8980e40fb864d89e7627971c00c1058e2c91", "output_schema_hash": "04b672e2dfabb6fb3cfcf578556d62017374ddce0649d11edd6809592b2a0c2f"},
-  "TTS.GetVoiceProfile": {"method_id": "TTS.GetVoiceProfile", "module": "TTS", "name": "GetVoiceProfile", "topic": "TTS.GetVoiceProfile", "bus_topic": "TTS.GetVoiceProfile", "route_path": "/api/TTS/GetVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSGetVoiceProfileRequest", "output_model": "TTSGetVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.GetVoiceProfile.input.TTSGetVoiceProfileRequest", "output_schema_id": "TTS.GetVoiceProfile.output.TTSGetVoiceProfileResponse", "input_schema_hash": "a26ddd489476ef2df0813321e35e3c27052a95d9470fd6947f3bc605106aebc7", "output_schema_hash": "fe69d7c7c5ad334b37c2b3e770e60850eaa6b7dde884da63be46a0963e9fdcff"},
-  "TTS.UpdateVoiceProfile": {"method_id": "TTS.UpdateVoiceProfile", "module": "TTS", "name": "UpdateVoiceProfile", "topic": "TTS.UpdateVoiceProfile", "bus_topic": "TTS.UpdateVoiceProfile", "route_path": "/api/TTS/UpdateVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSUpdateVoiceProfileRequest", "output_model": "TTSUpdateVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.UpdateVoiceProfile.input.TTSUpdateVoiceProfileRequest", "output_schema_id": "TTS.UpdateVoiceProfile.output.TTSUpdateVoiceProfileResponse", "input_schema_hash": "6d6f9506f805c64ab710207e85f8b5173b5733c3f2f24e2797dd6d1d33b9d322", "output_schema_hash": "99c191a2d71a227bae0fb07d810c4095d288d851ee7ecd223c3aa35b878ae123"},
-  "TTS.InstallVoiceProfile": {"method_id": "TTS.InstallVoiceProfile", "module": "TTS", "name": "InstallVoiceProfile", "topic": "TTS.InstallVoiceProfile", "bus_topic": "TTS.InstallVoiceProfile", "route_path": "/api/TTS/InstallVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSInstallVoiceProfileRequest", "output_model": "TTSInstallVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.InstallVoiceProfile.input.TTSInstallVoiceProfileRequest", "output_schema_id": "TTS.InstallVoiceProfile.output.TTSInstallVoiceProfileResponse", "input_schema_hash": "42978ca21ac8c27eb54a29d45617e8fe6bddcfa837c3391af6aa4823a0e797a9", "output_schema_hash": "8fd498e8964ed05bb825d436cec455d78b1e012679e068eef51c6064f53d8448"},
-  "TTS.RemoveVoiceProfile": {"method_id": "TTS.RemoveVoiceProfile", "module": "TTS", "name": "RemoveVoiceProfile", "topic": "TTS.RemoveVoiceProfile", "bus_topic": "TTS.RemoveVoiceProfile", "route_path": "/api/TTS/RemoveVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSRemoveVoiceProfileRequest", "output_model": "TTSRemoveVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.RemoveVoiceProfile.input.TTSRemoveVoiceProfileRequest", "output_schema_id": "TTS.RemoveVoiceProfile.output.TTSRemoveVoiceProfileResponse", "input_schema_hash": "3813fa711e9fa360947190d7d2928121cd26926492db05401ad31a5be45f5a36", "output_schema_hash": "952c43ac09fbbacf6f7e684a50a5ed5398ac530544c3d0e10fcd144f339cd277"},
-  "TTS.SetDefaultVoice": {"method_id": "TTS.SetDefaultVoice", "module": "TTS", "name": "SetDefaultVoice", "topic": "TTS.SetDefaultVoice", "bus_topic": "TTS.SetDefaultVoice", "route_path": "/api/TTS/SetDefaultVoice", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSSetDefaultVoiceRequest", "output_model": "TTSSetDefaultVoiceResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.SetDefaultVoice.input.TTSSetDefaultVoiceRequest", "output_schema_id": "TTS.SetDefaultVoice.output.TTSSetDefaultVoiceResponse", "input_schema_hash": "84a64ea71948775d1c1aa4c23f0480a113799c305f5b9dfec6cd6509da292ba0", "output_schema_hash": "bf2c58f7681e18671af70e4df7377a7608b6e07808c4440ea7f483190b550c5b"},
-  "TTS.VoiceImportStart": {"method_id": "TTS.VoiceImportStart", "module": "TTS", "name": "VoiceImportStart", "topic": "TTS.VoiceImportStart", "bus_topic": "TTS.VoiceImportStart", "route_path": "/api/TTS/VoiceImportStart", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSVoiceImportStartRequest", "output_model": "TTSVoiceImportStartResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.VoiceImportStart.input.TTSVoiceImportStartRequest", "output_schema_id": "TTS.VoiceImportStart.output.TTSVoiceImportStartResponse", "input_schema_hash": "b9c72eea8b848e4ff2dc30d93a77f06e6f44994bcbb4ce6a1ab92f1914caeb40", "output_schema_hash": "7c39813952f7454a85462d14b1e923588e3cb19bb22194f54778776e927a8030"},
-  "TTS.VoiceImportChunk": {"method_id": "TTS.VoiceImportChunk", "module": "TTS", "name": "VoiceImportChunk", "topic": "TTS.VoiceImportChunk", "bus_topic": "TTS.VoiceImportChunk", "route_path": "/api/TTS/VoiceImportChunk", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSVoiceImportChunkRequest", "output_model": "TTSVoiceImportChunkResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.VoiceImportChunk.input.TTSVoiceImportChunkRequest", "output_schema_id": "TTS.VoiceImportChunk.output.TTSVoiceImportChunkResponse", "input_schema_hash": "813355b26dfa4064225fc3d9c7e65e7bb79accd6d36a7e2ad4c4f5a8e95d54a2", "output_schema_hash": "ca95163fbd47ba84e4471f0ea9dffdcc5e151b7666f942d8d4a6a7006dce0f40"},
-  "TTS.VoiceImportEnd": {"method_id": "TTS.VoiceImportEnd", "module": "TTS", "name": "VoiceImportEnd", "topic": "TTS.VoiceImportEnd", "bus_topic": "TTS.VoiceImportEnd", "route_path": "/api/TTS/VoiceImportEnd", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSVoiceImportEndRequest", "output_model": "TTSVoiceImportEndResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.VoiceImportEnd.input.TTSVoiceImportEndRequest", "output_schema_id": "TTS.VoiceImportEnd.output.TTSVoiceImportEndResponse", "input_schema_hash": "bb326382f76c85b75383af4471633293462ae386ecbca8a820b8adb737dcf353", "output_schema_hash": "9e5f37f673a52a5b05716f0d043df4ceb6224911d2710df9d99c8e43de025cad"},
-  "TTS.VoiceImportAbort": {"method_id": "TTS.VoiceImportAbort", "module": "TTS", "name": "VoiceImportAbort", "topic": "TTS.VoiceImportAbort", "bus_topic": "TTS.VoiceImportAbort", "route_path": "/api/TTS/VoiceImportAbort", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSVoiceImportAbortRequest", "output_model": "TTSVoiceImportAbortResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.VoiceImportAbort.input.TTSVoiceImportAbortRequest", "output_schema_id": "TTS.VoiceImportAbort.output.TTSVoiceImportAbortResponse", "input_schema_hash": "3928201a9870fb651c3185bdf9d47b07e0f984a49d0eaddad56498928f26fe42", "output_schema_hash": "94423e37f4ea1801b4e2277f843c9a1b141a70cc8e9e334c142f46090d8d232c"},
-  "TTS.CreateVoiceProfile": {"method_id": "TTS.CreateVoiceProfile", "module": "TTS", "name": "CreateVoiceProfile", "topic": "TTS.CreateVoiceProfile", "bus_topic": "TTS.CreateVoiceProfile", "route_path": "/api/TTS/CreateVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSCreateVoiceProfileRequest", "output_model": "TTSCreateVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.CreateVoiceProfile.input.TTSCreateVoiceProfileRequest", "output_schema_id": "TTS.CreateVoiceProfile.output.TTSCreateVoiceProfileResponse", "input_schema_hash": "71864d04c37f9d3891344d90eb1c694da70e06c9b1ad131e174276d13b861d15", "output_schema_hash": "2706c7668161681b2dae334e87dbc1ff041e20e9a2af1eeed0e7deb3ceb78584"},
-  "TTS.DeleteVoiceProfile": {"method_id": "TTS.DeleteVoiceProfile", "module": "TTS", "name": "DeleteVoiceProfile", "topic": "TTS.DeleteVoiceProfile", "bus_topic": "TTS.DeleteVoiceProfile", "route_path": "/api/TTS/DeleteVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile"]}], "input_model": "TTSDeleteVoiceProfileRequest", "output_model": "TTSDeleteVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.DeleteVoiceProfile.input.TTSDeleteVoiceProfileRequest", "output_schema_id": "TTS.DeleteVoiceProfile.output.TTSDeleteVoiceProfileResponse", "input_schema_hash": "d4e21efd4b4a31a2fbc8aab099203e766c808dec5c6c5f090a32ec931338688d", "output_schema_hash": "5761b20bf24e294410ea27adc1bbc3254d039ffbc4b4ad8806d0183d83b4f44b"},
+  "TTS.ListLanguagePacks": {"method_id": "TTS.ListLanguagePacks", "module": "TTS", "name": "ListLanguagePacks", "topic": "TTS.ListLanguagePacks", "bus_topic": "TTS.ListLanguagePacks", "route_path": "/api/TTS/ListLanguagePacks", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSListLanguagePacksRequest", "output_model": "TTSListLanguagePacksResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.ListLanguagePacks.input.TTSListLanguagePacksRequest", "output_schema_id": "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse", "input_schema_hash": "97b96c151445cffd98d2f890e89d0c15659bd81d31a4bab75b18099dd3aed442", "output_schema_hash": "cd89499d6404308b9ed42b763bd6e82b5d1e3a1e30168c0e12c984b485bd591c"},
+  "TTS.ListVoiceProfiles": {"method_id": "TTS.ListVoiceProfiles", "module": "TTS", "name": "ListVoiceProfiles", "topic": "TTS.ListVoiceProfiles", "bus_topic": "TTS.ListVoiceProfiles", "route_path": "/api/TTS/ListVoiceProfiles", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSListVoiceProfilesRequest", "output_model": "TTSListVoiceProfilesResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.ListVoiceProfiles.input.TTSListVoiceProfilesRequest", "output_schema_id": "TTS.ListVoiceProfiles.output.TTSListVoiceProfilesResponse", "input_schema_hash": "31045e05ae45e59efe8ee19bdd3f8980e40fb864d89e7627971c00c1058e2c91", "output_schema_hash": "04b672e2dfabb6fb3cfcf578556d62017374ddce0649d11edd6809592b2a0c2f"},
+  "TTS.GetVoiceProfile": {"method_id": "TTS.GetVoiceProfile", "module": "TTS", "name": "GetVoiceProfile", "topic": "TTS.GetVoiceProfile", "bus_topic": "TTS.GetVoiceProfile", "route_path": "/api/TTS/GetVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSGetVoiceProfileRequest", "output_model": "TTSGetVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.GetVoiceProfile.input.TTSGetVoiceProfileRequest", "output_schema_id": "TTS.GetVoiceProfile.output.TTSGetVoiceProfileResponse", "input_schema_hash": "a26ddd489476ef2df0813321e35e3c27052a95d9470fd6947f3bc605106aebc7", "output_schema_hash": "fe69d7c7c5ad334b37c2b3e770e60850eaa6b7dde884da63be46a0963e9fdcff"},
+  "TTS.UpdateVoiceProfile": {"method_id": "TTS.UpdateVoiceProfile", "module": "TTS", "name": "UpdateVoiceProfile", "topic": "TTS.UpdateVoiceProfile", "bus_topic": "TTS.UpdateVoiceProfile", "route_path": "/api/TTS/UpdateVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSUpdateVoiceProfileRequest", "output_model": "TTSUpdateVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.UpdateVoiceProfile.input.TTSUpdateVoiceProfileRequest", "output_schema_id": "TTS.UpdateVoiceProfile.output.TTSUpdateVoiceProfileResponse", "input_schema_hash": "6d6f9506f805c64ab710207e85f8b5173b5733c3f2f24e2797dd6d1d33b9d322", "output_schema_hash": "99c191a2d71a227bae0fb07d810c4095d288d851ee7ecd223c3aa35b878ae123"},
+  "TTS.InstallVoiceProfile": {"method_id": "TTS.InstallVoiceProfile", "module": "TTS", "name": "InstallVoiceProfile", "topic": "TTS.InstallVoiceProfile", "bus_topic": "TTS.InstallVoiceProfile", "route_path": "/api/TTS/InstallVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSInstallVoiceProfileRequest", "output_model": "TTSInstallVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.InstallVoiceProfile.input.TTSInstallVoiceProfileRequest", "output_schema_id": "TTS.InstallVoiceProfile.output.TTSInstallVoiceProfileResponse", "input_schema_hash": "42978ca21ac8c27eb54a29d45617e8fe6bddcfa837c3391af6aa4823a0e797a9", "output_schema_hash": "8fd498e8964ed05bb825d436cec455d78b1e012679e068eef51c6064f53d8448"},
+  "TTS.RemoveVoiceProfile": {"method_id": "TTS.RemoveVoiceProfile", "module": "TTS", "name": "RemoveVoiceProfile", "topic": "TTS.RemoveVoiceProfile", "bus_topic": "TTS.RemoveVoiceProfile", "route_path": "/api/TTS/RemoveVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSRemoveVoiceProfileRequest", "output_model": "TTSRemoveVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.RemoveVoiceProfile.input.TTSRemoveVoiceProfileRequest", "output_schema_id": "TTS.RemoveVoiceProfile.output.TTSRemoveVoiceProfileResponse", "input_schema_hash": "3813fa711e9fa360947190d7d2928121cd26926492db05401ad31a5be45f5a36", "output_schema_hash": "952c43ac09fbbacf6f7e684a50a5ed5398ac530544c3d0e10fcd144f339cd277"},
+  "TTS.SetDefaultVoice": {"method_id": "TTS.SetDefaultVoice", "module": "TTS", "name": "SetDefaultVoice", "topic": "TTS.SetDefaultVoice", "bus_topic": "TTS.SetDefaultVoice", "route_path": "/api/TTS/SetDefaultVoice", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSSetDefaultVoiceRequest", "output_model": "TTSSetDefaultVoiceResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.SetDefaultVoice.input.TTSSetDefaultVoiceRequest", "output_schema_id": "TTS.SetDefaultVoice.output.TTSSetDefaultVoiceResponse", "input_schema_hash": "84a64ea71948775d1c1aa4c23f0480a113799c305f5b9dfec6cd6509da292ba0", "output_schema_hash": "bf2c58f7681e18671af70e4df7377a7608b6e07808c4440ea7f483190b550c5b"},
+  "TTS.VoiceImportStart": {"method_id": "TTS.VoiceImportStart", "module": "TTS", "name": "VoiceImportStart", "topic": "TTS.VoiceImportStart", "bus_topic": "TTS.VoiceImportStart", "route_path": "/api/TTS/VoiceImportStart", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSVoiceImportStartRequest", "output_model": "TTSVoiceImportStartResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.VoiceImportStart.input.TTSVoiceImportStartRequest", "output_schema_id": "TTS.VoiceImportStart.output.TTSVoiceImportStartResponse", "input_schema_hash": "b9c72eea8b848e4ff2dc30d93a77f06e6f44994bcbb4ce6a1ab92f1914caeb40", "output_schema_hash": "7c39813952f7454a85462d14b1e923588e3cb19bb22194f54778776e927a8030"},
+  "TTS.VoiceImportChunk": {"method_id": "TTS.VoiceImportChunk", "module": "TTS", "name": "VoiceImportChunk", "topic": "TTS.VoiceImportChunk", "bus_topic": "TTS.VoiceImportChunk", "route_path": "/api/TTS/VoiceImportChunk", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSVoiceImportChunkRequest", "output_model": "TTSVoiceImportChunkResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.VoiceImportChunk.input.TTSVoiceImportChunkRequest", "output_schema_id": "TTS.VoiceImportChunk.output.TTSVoiceImportChunkResponse", "input_schema_hash": "813355b26dfa4064225fc3d9c7e65e7bb79accd6d36a7e2ad4c4f5a8e95d54a2", "output_schema_hash": "ca95163fbd47ba84e4471f0ea9dffdcc5e151b7666f942d8d4a6a7006dce0f40"},
+  "TTS.VoiceImportEnd": {"method_id": "TTS.VoiceImportEnd", "module": "TTS", "name": "VoiceImportEnd", "topic": "TTS.VoiceImportEnd", "bus_topic": "TTS.VoiceImportEnd", "route_path": "/api/TTS/VoiceImportEnd", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSVoiceImportEndRequest", "output_model": "TTSVoiceImportEndResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.VoiceImportEnd.input.TTSVoiceImportEndRequest", "output_schema_id": "TTS.VoiceImportEnd.output.TTSVoiceImportEndResponse", "input_schema_hash": "bb326382f76c85b75383af4471633293462ae386ecbca8a820b8adb737dcf353", "output_schema_hash": "9e5f37f673a52a5b05716f0d043df4ceb6224911d2710df9d99c8e43de025cad"},
+  "TTS.VoiceImportAbort": {"method_id": "TTS.VoiceImportAbort", "module": "TTS", "name": "VoiceImportAbort", "topic": "TTS.VoiceImportAbort", "bus_topic": "TTS.VoiceImportAbort", "route_path": "/api/TTS/VoiceImportAbort", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSVoiceImportAbortRequest", "output_model": "TTSVoiceImportAbortResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.VoiceImportAbort.input.TTSVoiceImportAbortRequest", "output_schema_id": "TTS.VoiceImportAbort.output.TTSVoiceImportAbortResponse", "input_schema_hash": "3928201a9870fb651c3185bdf9d47b07e0f984a49d0eaddad56498928f26fe42", "output_schema_hash": "94423e37f4ea1801b4e2277f843c9a1b141a70cc8e9e334c142f46090d8d232c"},
+  "TTS.CreateVoiceProfile": {"method_id": "TTS.CreateVoiceProfile", "module": "TTS", "name": "CreateVoiceProfile", "topic": "TTS.CreateVoiceProfile", "bus_topic": "TTS.CreateVoiceProfile", "route_path": "/api/TTS/CreateVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSCreateVoiceProfileRequest", "output_model": "TTSCreateVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.CreateVoiceProfile.input.TTSCreateVoiceProfileRequest", "output_schema_id": "TTS.CreateVoiceProfile.output.TTSCreateVoiceProfileResponse", "input_schema_hash": "71864d04c37f9d3891344d90eb1c694da70e06c9b1ad131e174276d13b861d15", "output_schema_hash": "2706c7668161681b2dae334e87dbc1ff041e20e9a2af1eeed0e7deb3ceb78584"},
+  "TTS.DeleteVoiceProfile": {"method_id": "TTS.DeleteVoiceProfile", "module": "TTS", "name": "DeleteVoiceProfile", "topic": "TTS.DeleteVoiceProfile", "bus_topic": "TTS.DeleteVoiceProfile", "route_path": "/api/TTS/DeleteVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSDeleteVoiceProfileRequest", "output_model": "TTSDeleteVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.DeleteVoiceProfile.input.TTSDeleteVoiceProfileRequest", "output_schema_id": "TTS.DeleteVoiceProfile.output.TTSDeleteVoiceProfileResponse", "input_schema_hash": "d4e21efd4b4a31a2fbc8aab099203e766c808dec5c6c5f090a32ec931338688d", "output_schema_hash": "5761b20bf24e294410ea27adc1bbc3254d039ffbc4b4ad8806d0183d83b4f44b"},
+  "TTS.ExportVoiceProfile": {"method_id": "TTS.ExportVoiceProfile", "module": "TTS", "name": "ExportVoiceProfile", "topic": "TTS.ExportVoiceProfile", "bus_topic": "TTS.ExportVoiceProfile", "route_path": "/api/TTS/ExportVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSExportVoiceProfileRequest", "output_model": "TTSExportVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest", "output_schema_id": "TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse", "input_schema_hash": "b4fd7de973c58b3873d3e47fb541a8462301310a17c50c89b2ff21b21c350b8c", "output_schema_hash": "ca22940aa58eb0409ec785cb446fb3d71ce8eeb8bf64940306263ec10f2c5549"},
+  "TTS.ImportVoiceProfile": {"method_id": "TTS.ImportVoiceProfile", "module": "TTS", "name": "ImportVoiceProfile", "topic": "TTS.ImportVoiceProfile", "bus_topic": "TTS.ImportVoiceProfile", "route_path": "/api/TTS/ImportVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSImportVoiceProfileRequest", "output_model": "TTSImportVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.ImportVoiceProfile.input.TTSImportVoiceProfileRequest", "output_schema_id": "TTS.ImportVoiceProfile.output.TTSImportVoiceProfileResponse", "input_schema_hash": "01387ef937b920bbf6430506b48134f7e90af5f36fdeb60eb186896da5025fb3", "output_schema_hash": "ec268dd6219a7881a94f2b87637711a3b2d4b20dd7942cb65ee37caaa4d985fc"},
   "TTS.Request": {"method_id": "TTS.Request", "module": "TTS", "name": "Request", "topic": "TTS.Request", "bus_topic": "TTS.Request", "route_path": "/api/TTS/Request", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.Request"], "callable_feature_ids": ["speech_playback"], "callable_features": [{"feature_id": "speech_playback", "module": "TTS", "label": "Speech Playback", "summary": "Play synthesized speech on the provider.", "method_ids": ["TTS.Request"]}], "input_model": "TTSRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.Request.input.TTSRequest", "output_schema_id": "TTS.Request.output.EmptyOutput", "input_schema_hash": "847bdcf850fb47d40ef76f6e827fbd24282ed9464bd2d847b4f46d94aa45d29a", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
   "TTS.StreamStart": {"method_id": "TTS.StreamStart", "module": "TTS", "name": "StreamStart", "topic": "TTS.StreamStart", "bus_topic": "TTS.StreamStart", "route_path": "/api/TTS/StreamStart", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamStart"], "callable_feature_ids": ["speech_streaming"], "callable_features": [{"feature_id": "speech_streaming", "module": "TTS", "label": "Speech Streaming", "summary": "Start, stream, and end ordered text-to-speech audio streams.", "method_ids": ["TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd"]}], "input_model": "TTSStreamStartRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": "tts_text_stream", "request_stream": false, "response_stream": false, "event_topic": "TTS.AudioChunk"}, "speech_constraints": null, "input_schema_id": "TTS.StreamStart.input.TTSStreamStartRequest", "output_schema_id": "TTS.StreamStart.output.EmptyOutput", "input_schema_hash": "00bb387df534190b9026e472cff6d6c1deeed67429a309bfdc731cbb13f8d498", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
   "TTS.StreamChunk": {"method_id": "TTS.StreamChunk", "module": "TTS", "name": "StreamChunk", "topic": "TTS.StreamChunk", "bus_topic": "TTS.StreamChunk", "route_path": "/api/TTS/StreamChunk", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamChunk"], "callable_feature_ids": ["speech_streaming"], "callable_features": [{"feature_id": "speech_streaming", "module": "TTS", "label": "Speech Streaming", "summary": "Start, stream, and end ordered text-to-speech audio streams.", "method_ids": ["TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd"]}], "input_model": "TTSStreamChunkRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": "tts_text_stream", "request_stream": false, "response_stream": false, "event_topic": "TTS.AudioChunk"}, "speech_constraints": null, "input_schema_id": "TTS.StreamChunk.input.TTSStreamChunkRequest", "output_schema_id": "TTS.StreamChunk.output.EmptyOutput", "input_schema_hash": "0c0d3bc9834efb039133fa4cc21f200ce4eee0b13727e8a39cf63697c899399d", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},

@@ -48,6 +48,7 @@ from app.shared.config.models import (
 from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.tts import (
     TTSAudioChunkEvent,
+    TTSCloneVoiceStateBundle,
     TTSCreateVoiceProfileRequest,
     TTSDeleteVoiceProfileRequest,
     TTSExportVoiceProfileRequest,
@@ -3255,6 +3256,150 @@ async def test_create_voice_profile_keeps_sealed_upload_when_provider_unavailabl
         for session in service._voice_import_sessions.values()
     )
     assert FakeVoiceRegistry.created == []
+
+
+@pytest.mark.asyncio
+async def test_clone_voice_state_export_and_import_preserve_identity_and_audit_redacted(
+    monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    profile = _installed_clone_profile()
+    FakeVoiceRegistry.installed = [profile]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    service = TTSService()
+
+    exported = await service.export_voice_profile(
+        TTSExportVoiceProfileRequest(
+            operation_id="export-clone",
+            voice_id=profile.voice_id,
+            expected_revision=profile.metadata_revision,
+        )
+    )
+
+    assert exported.status == "exported"
+    assert exported.bundle is not None
+    assert exported.bundle.voice_id == profile.voice_id
+    assert exported.bundle.display_name == profile.display_name
+    assert exported.bundle.artifact_data_base64 not in repr(exported.bundle)
+    assert "artifact" not in json.dumps(
+        [json.loads(call.args[1].details) for call in mock_bus.request.await_args_list]
+    )
+    _assert_last_two_management_audits(
+        mock_bus,
+        method="export_voice_profile",
+        outcome_status="exported",
+    )
+
+    FakeVoiceRegistry.installed = []
+    monkeypatch.setattr(service, "_initialize_engine_fail_soft", AsyncMock())
+    request = TTSImportVoiceProfileRequest(
+        operation_id="import-clone",
+        bundle=exported.bundle,
+    )
+    imported = await service.import_voice_profile(request)
+    replayed = await service.import_voice_profile(request)
+
+    assert imported.status == "imported"
+    assert imported.voice_id == profile.voice_id
+    assert imported.idempotent is False
+    assert replayed.status == "imported"
+    assert replayed.idempotent is True
+    assert len(FakeVoiceRegistry.imported) == 1
+    registry_payload, registry_options = FakeVoiceRegistry.imported[0]
+    assert registry_payload.voice_id == profile.voice_id
+    assert registry_payload.artifact_bytes == base64.b64decode(
+        exported.bundle.artifact_data_base64,
+        validate=True,
+    )
+    assert registry_options == {
+        "display_name": profile.display_name,
+        "visibility": "private",
+    }
+    _assert_last_two_management_audits(
+        mock_bus,
+        method="import_voice_profile",
+        outcome_status="imported",
+    )
+
+
+@pytest.mark.asyncio
+async def test_clone_voice_state_transfer_honors_configured_wire_limit(
+    monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    profile = _installed_clone_profile()
+    FakeVoiceRegistry.installed = [profile]
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            providers=Providers(pockettts=Pockettts()),
+            voice_registry=VoiceRegistryConfig(clone_max_wire_bytes=8),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    service = TTSService()
+
+    exported = await service.export_voice_profile(
+        TTSExportVoiceProfileRequest(
+            operation_id="export-too-large",
+            voice_id=profile.voice_id,
+        )
+    )
+    payload = b"derived-clone-state"
+    bundle = TTSCloneVoiceStateBundle(
+        voice_id=profile.voice_id,
+        display_name=profile.display_name,
+        runtime_target="pockettts-python",
+        language_bundle="english_2026-04",
+        compatibility_group="pockettts-base",
+        artifact_revision="clone-rev-a",
+        artifact_sha256=hashlib.sha256(payload).hexdigest(),
+        artifact_size_bytes=len(payload),
+        artifact_data_base64=base64.b64encode(payload).decode("ascii"),
+    )
+    imported = await service.import_voice_profile(
+        TTSImportVoiceProfileRequest(
+            operation_id="import-too-large",
+            bundle=bundle,
+        )
+    )
+
+    assert exported.status == "rejected"
+    assert imported.status == "rejected"
+    assert FakeVoiceRegistry.imported == []
+
+
+@pytest.mark.asyncio
+async def test_clone_voice_state_export_fails_closed_when_audit_is_unavailable(
+    monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock(side_effect=RuntimeError("audit unavailable"))
+    profile = _installed_clone_profile()
+    FakeVoiceRegistry.installed = [profile]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    service = TTSService()
+
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        await service.export_voice_profile(
+            TTSExportVoiceProfileRequest(
+                operation_id="export-audit-fail",
+                voice_id=profile.voice_id,
+            )
+        )
+
+    assert FakeVoiceRegistry.exported == []
 
 
 @pytest.mark.asyncio

@@ -127,6 +127,64 @@ describe('generated speech client', () => {
     expect(JSON.stringify(result.error.detail)).not.toContain('private transcript')
   })
 
+  it('routes cloned voice state export and import through generated contracts', async () => {
+    const voiceId = 'clone:123e4567-e89b-42d3-a456-426614174000'
+    const artifactData = 'ZGVyaXZlZC1zdGF0ZQ=='
+    const bundle = {
+      artifact_data_base64: artifactData,
+      artifact_format: 'safetensors' as const,
+      artifact_revision: 'clone-rev-a',
+      artifact_sha256: '2f6b3cf0253d17cf2fb3161e0ff8c98bc0789ec0ff7d9f4880568e680883d1ec',
+      artifact_size_bytes: 13,
+      bundle_type: 'aurora-cloned-tts-voice-state' as const,
+      compatibility_group: 'pockettts-base',
+      display_name: 'Private voice',
+      language_bundle: 'english_2026-04',
+      runtime_target: 'pockettts-python',
+      schema_version: 1 as const,
+      voice_id: voiceId
+    }
+    const observed: AuroraTransportRequest[] = []
+    const transport = MockAuroraTransport.empty()
+      .register('TTS.ExportVoiceProfile', (request) => {
+        observed.push(request)
+        return {
+          bundle,
+          idempotent: false,
+          revision: 'voice-rev-a',
+          status: 'exported',
+          voice_id: voiceId
+        }
+      })
+      .register('TTS.ImportVoiceProfile', (request) => {
+        observed.push(request)
+        return {
+          idempotent: false,
+          revision: 'clone-rev-a',
+          status: 'imported',
+          voice_id: voiceId
+        }
+      })
+    const client = new AuroraClient({ transport })
+
+    const exported = await client.speech.tts.exportVoiceProfile({
+      operation_id: 'export-a',
+      voice_id: voiceId
+    })
+    const imported = await client.speech.tts.importVoiceProfile({
+      bundle,
+      operation_id: 'import-a'
+    })
+
+    expect(exported).toMatchObject({ ok: true, data: { status: 'exported', bundle } })
+    expect(imported).toMatchObject({ ok: true, data: { status: 'imported' } })
+    expect(observed.map((request) => request.method)).toEqual([
+      'TTS.ExportVoiceProfile',
+      'TTS.ImportVoiceProfile'
+    ])
+    expect(observed[1]?.payload).toMatchObject({ bundle })
+  })
+
   it.each([
     ['WakeWord.ProcessAudio', 'wakeWord'],
     ['Transcription.ProcessAudio', 'transcription']

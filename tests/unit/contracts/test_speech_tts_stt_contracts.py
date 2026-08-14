@@ -27,11 +27,16 @@ from app.shared.contracts.models.tts import (
     VOICE_IMPORT_MAX_DURATION_MS,
     VOICE_IMPORT_MAX_TOTAL_BYTES,
     TTSCapabilities,
+    TTSCloneVoiceStateBundle,
     TTSCreateVoiceProfileRequest,
     TTSCreateVoiceProfileResponse,
     TTSDeleteVoiceProfileRequest,
     TTSDeleteVoiceProfileResponse,
+    TTSExportVoiceProfileRequest,
+    TTSExportVoiceProfileResponse,
     TTSGetVoiceProfileResponse,
+    TTSImportVoiceProfileRequest,
+    TTSImportVoiceProfileResponse,
     TTSInstallVoiceProfileRequest,
     TTSInstallVoiceProfileResponse,
     TTSLanguagePackDescriptor,
@@ -246,6 +251,55 @@ def test_tts_method_constants_cover_voice_lifecycle_surface() -> None:
     assert TTSMethods.DELETE_VOICE_PROFILE == "TTS.DeleteVoiceProfile"
     assert TTSMethods.EXPORT_VOICE_PROFILE == "TTS.ExportVoiceProfile"
     assert TTSMethods.IMPORT_VOICE_PROFILE == "TTS.ImportVoiceProfile"
+
+
+def test_clone_voice_state_transfer_is_integrity_bound_and_repr_redacted() -> None:
+    payload = b"derived-clone-state"
+    encoded = base64.b64encode(payload).decode("ascii")
+    bundle = TTSCloneVoiceStateBundle(
+        voice_id=CLONE_ID,
+        display_name="Private voice",
+        runtime_target="pockettts-python",
+        language_bundle="english_2026-04",
+        compatibility_group="pockettts-base",
+        artifact_revision="clone-rev-a",
+        artifact_sha256=hashlib.sha256(payload).hexdigest(),
+        artifact_size_bytes=len(payload),
+        artifact_data_base64=encoded,
+    )
+
+    request = TTSImportVoiceProfileRequest(operation_id="import-a", bundle=bundle)
+    exported = TTSExportVoiceProfileResponse(
+        voice_id=CLONE_ID,
+        status="exported",
+        revision="voice-rev-a",
+        bundle=bundle,
+    )
+
+    assert request.bundle.voice_id == CLONE_ID
+    assert exported.bundle == bundle
+    assert encoded not in repr(bundle)
+    assert "artifact_data_base64" not in repr(bundle)
+    assert encoded in bundle.model_dump_json()
+
+    with pytest.raises(ValidationError, match="artifact SHA-256 mismatch"):
+        TTSCloneVoiceStateBundle.model_validate(
+            {**bundle.model_dump(), "artifact_sha256": "0" * 64}
+        )
+    with pytest.raises(ValidationError):
+        TTSCloneVoiceStateBundle.model_validate(
+            {**bundle.model_dump(), "source_audio": encoded}
+        )
+    with pytest.raises(ValidationError, match="only cloned voice profiles"):
+        TTSExportVoiceProfileRequest(
+            operation_id="export-standard",
+            voice_id=STANDARD_ID,
+        )
+    with pytest.raises(ValidationError, match="needs revision"):
+        TTSImportVoiceProfileResponse(
+            voice_id=CLONE_ID,
+            status="imported",
+        )
 
 
 def test_stt_capture_handoff_contracts_keep_lease_tokens_off_status() -> None:

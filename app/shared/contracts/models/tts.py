@@ -1110,7 +1110,10 @@ class TTSCloneVoiceStateBundle(_StrictTTSIOModel):
     artifact_format: Literal["safetensors"] = "safetensors"
     artifact_sha256: str
     artifact_size_bytes: int = Field(gt=0, le=VOICE_STATE_TRANSFER_MAX_BYTES)
-    artifact_data_base64: str = Field(max_length=VOICE_STATE_TRANSFER_MAX_BASE64_CHARS)
+    artifact_data_base64: str = Field(
+        max_length=VOICE_STATE_TRANSFER_MAX_BASE64_CHARS,
+        repr=False,
+    )
 
     @field_validator("voice_id")
     @classmethod
