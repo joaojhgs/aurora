@@ -29,6 +29,7 @@ import {
   encodeMeshInviteToken,
   webRtcProfileFromInvite,
   type BrowserWebRtcSnapshot,
+  type AuroraRuntimeProfileV2,
   type NativeDesktopVoicePort,
 } from "@aurora/ui";
 import {
@@ -51,6 +52,7 @@ import type {
 } from "@aurora/client/local-tools";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createMemoryRuntimeProfileStore,
   createAuroraTauriRuntime,
   loadTauriRemoteAssistantTools,
   type AuroraThinConnectionProfile,
@@ -154,6 +156,36 @@ function thinRuntimeDocument(profile: AuroraThinConnectionProfile) {
     version: 1 as const,
     activeProfileId: profile.id,
     profiles: [profile],
+  };
+}
+
+function meshRuntimeProfile(
+  overrides: Partial<AuroraRuntimeProfileV2> = {},
+): AuroraRuntimeProfileV2 {
+  const thin = thinRuntimeProfile("webrtc-only");
+  return {
+    version: 2,
+    id: thin.id,
+    label: thin.label,
+    nodeMode: "mesh-node",
+    runtimeTier: "lightweight-ts",
+    homeConnection: {
+      mode: "webrtc-only",
+      signalingUrl: thin.signalingUrl,
+      homePeerId: "home-peer",
+      webrtcProfile: thin.webrtcProfile!,
+    },
+    localNode: {
+      nodeName: thin.nodeName,
+      stablePeerId: thin.localStablePeerId,
+      enabledCapabilityPacks: ["foreground-voice"],
+      localSpeechPackState: "ready",
+      meshMembership: {
+        signalingUrl: thin.signalingUrl,
+        webrtcProfile: thin.webrtcProfile!,
+      },
+    },
+    ...overrides,
   };
 }
 
@@ -1267,6 +1299,74 @@ describe("Aurora Tauri runtime wrapper", () => {
     expect(dispose).toHaveBeenCalledTimes(1);
     expect(createRuntime).toHaveBeenCalledWith(savedDocument);
     expect(recreateRuntime).not.toHaveBeenCalled();
+  });
+
+  it("persists exact local speech selection on the active runtime profile", async () => {
+    const profile = meshRuntimeProfile();
+    const store = createMemoryRuntimeProfileStore({
+      version: 2,
+      activeProfileId: profile.id,
+      profiles: [profile],
+    });
+    const runtime = createAuroraTauriRuntime({
+      runtimeProfileStore: store,
+      runtimeProfileDocument: await store.load(),
+    });
+
+    await runtime.thinProfileController?.updateActiveLocalSpeechSelection?.({
+      tts: {
+        packId: "piper.en",
+        packRevision: "pack-rev-1",
+        voiceId: "standard:piper.en:ava",
+        voiceRevision: "voice-rev-1",
+      },
+    });
+
+    const saved = await store.load();
+    expect(saved.profiles[0]?.localNode.localSpeechPackState).toBe("ready");
+    expect(saved.profiles[0]?.localNode.localSpeechSelection).toEqual({
+      tts: {
+        packId: "piper.en",
+        packRevision: "pack-rev-1",
+        voiceId: "standard:piper.en:ava",
+        voiceRevision: "voice-rev-1",
+      },
+    });
+    expect(saved.profiles[0]?.nodeMode).toBe("mesh-node");
+    expect(saved.profiles[0]?.runtimeTier).toBe("lightweight-ts");
+    await runtime.dispose();
+  });
+
+  it("preserves exact local speech selection when a runtime profile connection is saved again", async () => {
+    const profile = meshRuntimeProfile({
+      localNode: {
+        ...meshRuntimeProfile().localNode,
+        localSpeechSelection: {
+          tts: {
+            packId: "piper.en",
+            packRevision: "pack-rev-1",
+            voiceId: "standard:piper.en:ava",
+            voiceRevision: "voice-rev-1",
+          },
+        },
+      },
+    });
+    const store = createMemoryRuntimeProfileStore({
+      version: 2,
+      activeProfileId: profile.id,
+      profiles: [profile],
+    });
+    const runtime = createAuroraTauriRuntime({
+      runtimeProfileStore: store,
+      runtimeProfileDocument: await store.load(),
+    });
+
+    await runtime.thinProfileController?.saveProfile(thinRuntimeProfile("webrtc-only"));
+
+    const saved = await store.load();
+    expect(saved.profiles[0]?.localNode.localSpeechSelection).toEqual(profile.localNode.localSpeechSelection);
+    expect(saved.profiles[0]?.nodeMode).toBe("mesh-node");
+    await runtime.dispose();
   });
 
   it("uses the SDK mock transport when no Tauri shell or Gateway URL is present", async () => {

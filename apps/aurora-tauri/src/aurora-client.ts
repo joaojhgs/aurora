@@ -38,6 +38,7 @@ import {
   serializeThinProfileDocument as serializeSharedThinProfileDocument,
   surfaceSupportsRuntimeTier,
   type AuroraNodeMode,
+  type AuroraLocalSpeechSelectionProfile,
   type AuroraRuntimeProfileDocumentV2,
   type AuroraRuntimeProfileV2,
   type AuroraRuntimeTier,
@@ -233,6 +234,9 @@ export interface AuroraThinProfileController {
     },
   ) => Promise<AuroraThinProfileDocument>;
   selectProfile: (profileId: string) => Promise<AuroraThinProfileDocument>;
+  updateActiveLocalSpeechSelection?: (
+    selection: AuroraLocalSpeechSelectionProfile,
+  ) => Promise<AuroraThinProfileDocument>;
   recreateRuntime?: () => Promise<AuroraTauriRuntime>;
   createRuntime: (
     document: AuroraThinProfileDocument,
@@ -1610,6 +1614,36 @@ function createRuntimeBackedThinProfileController(
       controller.document = currentThinDocument;
       return currentThinDocument;
     },
+    updateActiveLocalSpeechSelection: async (selection) => {
+      if (!currentRuntimeDocument.activeProfileId) {
+        throw new Error("Runtime profile does not exist");
+      }
+      let found = false;
+      const profiles = currentRuntimeDocument.profiles.map((profile) => {
+        if (profile.id !== currentRuntimeDocument.activeProfileId) return profile;
+        found = true;
+        return sanitizeRuntimeProfile({
+          ...profile,
+          localNode: {
+            ...profile.localNode,
+            localSpeechSelection: selection,
+          },
+        }, {
+          allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
+        });
+      });
+      if (!found) throw new Error("Runtime profile does not exist");
+      const next: AuroraRuntimeProfileDocument = {
+        ...currentRuntimeDocument,
+        profiles,
+      };
+      await store.save(next);
+      currentRuntimeDocument = next;
+      currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
+      controller.runtimeDocument = currentRuntimeDocument;
+      controller.document = currentThinDocument;
+      return currentThinDocument;
+    },
     recreateRuntime: () =>
       bootstrapAuroraTauriRuntime(store, packageCapabilities),
     createRuntime: async () =>
@@ -1712,6 +1746,12 @@ function runtimeProfileFromThinProfile({
         existingProfile?.nodeMode === "mesh-node"
           ? existingProfile.localNode.enabledCapabilityPacks
           : ["native-actions"],
+      ...(existingProfile?.nodeMode === "mesh-node" && existingProfile.localNode.localSpeechPackState
+        ? { localSpeechPackState: existingProfile.localNode.localSpeechPackState }
+        : {}),
+      ...(existingProfile?.nodeMode === "mesh-node" && existingProfile.localNode.localSpeechSelection
+        ? { localSpeechSelection: existingProfile.localNode.localSpeechSelection }
+        : {}),
       meshMembership: {
         signalingUrl,
         webrtcProfile,

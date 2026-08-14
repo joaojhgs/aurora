@@ -30,6 +30,8 @@ export interface AuroraSurfaceProfileInput {
   /** The native voice adapter exists, but its route may still be unavailable. */
   nativeVoicePresent?: boolean | undefined
   nativeVoiceAvailable?: boolean | undefined
+  /** Native background or hands-free voice is available with installed wake assets. */
+  nativeWakewordAvailable?: boolean | undefined
 }
 
 export interface AuroraLocalSpeechEngineCapabilities {
@@ -183,16 +185,18 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
   const ownsLocalNodeState = nodeMode === 'mesh-node'
   const canManageLocalServiceConfiguration = legacyKind === 'mock' || (ownsLocalNodeState && usesLocalSidecar)
   const isRemoteConsole = !ownsLocalNodeState
-  const voiceCapture = getAuroraVoiceCapturePolicy(legacyKind, {
-    nativeVoicePresent: input.nativeVoicePresent === true,
-    nativeVoiceAvailable: input.nativeVoiceAvailable === true,
-  })
   const usesBrowserVoiceRuntime = physicalKind === 'hosted-web' && !usesNativeShell
   const localSpeechPack = resolveAuroraLocalSpeechPack({
     requestedState: input.localSpeechPackState ?? undefined,
     runtimeTier,
     enabledCapabilityPacks,
     engineCapabilities: input.localSpeechEngineCapabilities ?? undefined,
+  })
+  const voiceCapture = getAuroraVoiceCapturePolicy(legacyKind, {
+    nativeVoicePresent: input.nativeVoicePresent === true,
+    nativeVoiceAvailable: input.nativeVoiceAvailable === true,
+    nativeWakewordAvailable: input.nativeWakewordAvailable === true,
+    localSpeechPack,
   })
   return {
     physicalKind,
@@ -239,13 +243,13 @@ export function resolveAuroraLocalSpeechPack(input: {
     ? input.requestedState
     : null
   const foregroundVoiceEnabled = input.enabledCapabilityPacks?.includes('foreground-voice') === true
-  const state: AuroraLocalSpeechPackState = !foregroundVoiceEnabled
-    ? 'disabled'
-    : requestedState
-      ?? (input.runtimeTier === 'none' ? 'incompatible' : 'unavailable')
-  const availabilityState = localSpeechAvailabilityState(state)
-  const canRunLocalEngine = foregroundVoiceEnabled && input.runtimeTier !== 'none' && state === 'ready'
   const engines = input.engineCapabilities ?? {}
+  const engineCapabilityPresent = engines.vad === true || engines.kws === true || engines.stt === true || engines.tts === true
+  const localSpeechAllowed = foregroundVoiceEnabled || engineCapabilityPresent
+  const state: AuroraLocalSpeechPackState = requestedState
+    ?? (!localSpeechAllowed ? 'disabled' : 'unavailable')
+  const availabilityState = localSpeechAvailabilityState(state)
+  const canRunLocalEngine = localSpeechAllowed && state === 'ready'
   return {
     state,
     availabilityState,
@@ -352,10 +356,29 @@ export function shouldShowForSurface(profile: AuroraSurfaceProfile, feature: Aur
 
 export function getAuroraVoiceCapturePolicy(
   kind: LegacyAuroraSurfaceKind,
-  options: { nativeVoicePresent?: boolean; nativeVoiceAvailable?: boolean } = {},
+  options: {
+    nativeVoicePresent?: boolean
+    nativeVoiceAvailable?: boolean
+    nativeWakewordAvailable?: boolean
+    localSpeechPack?: AuroraLocalSpeechPackStatus
+  } = {},
 ): AuroraVoiceCapturePolicy {
+  const nativeWakewordReady = options.nativeWakewordAvailable === true
+    && options.localSpeechPack?.canRunLocalVad === true
+    && options.localSpeechPack.canRunLocalKws === true
   switch (kind) {
     case 'desktop-local':
+      if (nativeWakewordReady) {
+        return {
+          focusedPushToTalkOwner: 'native-desktop',
+          wakewordOwner: 'native-desktop',
+          wakewordRequiresFocus: false,
+          canUseWebViewVisualizer: false,
+          avoidCoordinatorPushToTalk: true,
+          usesBrowserVoiceRuntime: false,
+          detail: 'Desktop voice can listen while Aurora is running.'
+        }
+      }
       return {
         focusedPushToTalkOwner: 'native-desktop',
         wakewordOwner: 'unavailable',
@@ -366,6 +389,17 @@ export function getAuroraVoiceCapturePolicy(
         detail: 'Desktop push-to-talk is available. Background voice is not available yet.'
       }
     case 'desktop-thin':
+      if (nativeWakewordReady) {
+        return {
+          focusedPushToTalkOwner: 'native-desktop',
+          wakewordOwner: 'native-desktop',
+          wakewordRequiresFocus: false,
+          canUseWebViewVisualizer: false,
+          avoidCoordinatorPushToTalk: true,
+          usesBrowserVoiceRuntime: false,
+          detail: 'Desktop voice can listen while Aurora is running.'
+        }
+      }
       return {
         focusedPushToTalkOwner: 'native-desktop',
         wakewordOwner: 'unavailable',
@@ -387,6 +421,17 @@ export function getAuroraVoiceCapturePolicy(
       }
     case 'android':
       if (options.nativeVoiceAvailable === true) {
+        if (nativeWakewordReady) {
+          return {
+            focusedPushToTalkOwner: 'mobile-native',
+            wakewordOwner: 'mobile-native',
+            wakewordRequiresFocus: false,
+            canUseWebViewVisualizer: false,
+            avoidCoordinatorPushToTalk: true,
+            usesBrowserVoiceRuntime: false,
+            detail: 'Android voice can listen while Aurora is active on this device.'
+          }
+        }
         return {
           focusedPushToTalkOwner: 'mobile-native',
           wakewordOwner: 'unavailable',

@@ -51,6 +51,7 @@ import {
   thinConnectionProfileWithManualAddress,
   type AuroraNavItem,
   type AuroraOwlLoaderStageId,
+  type AuroraLocalSpeechSelectionProfile,
   type AuroraShellSnapshot,
   type RouteAvailability,
   type WebThinRoomSecret,
@@ -594,6 +595,17 @@ export function AuroraTauriApp({
     [rebuildThinRuntime],
   );
 
+  const saveLocalSpeechSelection = useCallback(
+    (selection: AuroraLocalSpeechSelectionProfile) =>
+      rebuildThinRuntime((controller) => {
+        if (!controller.updateActiveLocalSpeechSelection) {
+          return Promise.resolve(controller.document);
+        }
+        return controller.updateActiveLocalSpeechSelection(selection);
+      }),
+    [rebuildThinRuntime],
+  );
+
   const applyModePreference = useCallback(async () => {
     if (!runtime.thinProfile || !runtime.thinProfileController) return;
     await rebuildThinRuntime((controller) =>
@@ -899,6 +911,7 @@ export function AuroraTauriApp({
     thinProfileController: runtime.thinProfileController,
     saveThinProfile,
     selectThinProfile,
+    saveLocalSpeechSelection,
   };
 
   if (!profileBootstrapReady) {
@@ -1391,6 +1404,9 @@ interface NativeContext {
     roomSecret?: WebThinRoomSecret,
   ) => Promise<void>;
   selectThinProfile: (profileId: string) => Promise<void>;
+  saveLocalSpeechSelection: (
+    selection: AuroraLocalSpeechSelectionProfile,
+  ) => Promise<void>;
   nativePermissions: TauriNativePermissionStatus | null;
   nativeFeatures: Record<string, TauriNativeFeatureStatus | null>;
   iosInvocationStatus: TauriIosInvocationStatus | null;
@@ -1901,6 +1917,7 @@ function TauriSettingsPage({
             client={client}
             runtimeProfile={nativeContext.runtimeProfile ?? null}
             surfaceProfile={nativeContext.surfaceProfile}
+            onLocalSpeechSelectionConfirmed={nativeContext.saveLocalSpeechSelection}
           />
         ) : null}
       </section>

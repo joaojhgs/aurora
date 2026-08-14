@@ -176,6 +176,7 @@ describe('VoiceSettingsView', () => {
 
   it('adds a voice only after an explicit click', async () => {
     const installVoiceProfile = vi.fn()
+    const onLocalSpeechSelectionConfirmed = vi.fn()
     const adminExecute = vi.fn(async (input: { methodId: string }) => (
       input.methodId === 'TTS.ListVoiceProfiles'
         ? adminResult({ profiles: [profile({ installed: false, ready: false })] })
@@ -185,7 +186,7 @@ describe('VoiceSettingsView', () => {
       installVoiceProfile,
       adminExecute
     })
-    const { container, unmount } = await renderVoiceSettings(client)
+    const { container, unmount } = await renderVoiceSettings(client, { onLocalSpeechSelectionConfirmed })
 
     expect(installVoiceProfile).not.toHaveBeenCalled()
     await loadManagedVoices(container)
@@ -209,6 +210,14 @@ describe('VoiceSettingsView', () => {
       path: '/api/TTS/InstallVoiceProfile'
     }))
     expect(adminExecute.mock.calls.find(([input]) => input.methodId === 'TTS.InstallVoiceProfile')?.[0]).not.toHaveProperty('phrase')
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenCalledWith({
+      tts: {
+        packId: 'en_pack',
+        packRevision: 'pack-rev-1',
+        voiceId: 'standard:en_pack:ava',
+        voiceRevision: 'rev-1',
+      },
+    })
     expect(visibleText(container)).toContain('Voice added.')
     assertNoForbiddenCopy(visibleText(container))
     await unmount()
@@ -287,6 +296,7 @@ describe('VoiceSettingsView', () => {
   })
 
   it('maps install outcomes without exposing returned identifiers', async () => {
+    const onLocalSpeechSelectionConfirmed = vi.fn()
     const adminExecute = vi.fn(async (input: { methodId: string }) => (
       input.methodId === 'TTS.ListVoiceProfiles'
         ? adminResult({ profiles: [profile({ installed: false, ready: false })] })
@@ -295,7 +305,7 @@ describe('VoiceSettingsView', () => {
     const client = voiceClient({
       adminExecute
     })
-    const { container, unmount } = await renderVoiceSettings(client)
+    const { container, unmount } = await renderVoiceSettings(client, { onLocalSpeechSelectionConfirmed })
 
     await loadManagedVoices(container)
     await act(async () => {
@@ -306,6 +316,7 @@ describe('VoiceSettingsView', () => {
     const text = visibleText(container)
     expect(text).toContain('Voice was not added. Try again.')
     expect(text).not.toContain('standard:en_pack:ava')
+    expect(onLocalSpeechSelectionConfirmed).not.toHaveBeenCalled()
     assertNoForbiddenCopy(text)
     await unmount()
   })
@@ -357,6 +368,7 @@ describe('VoiceSettingsView', () => {
 
   it('sets the default voice with the expected SDK payload and refreshes on success', async () => {
     const setDefaultVoice = vi.fn()
+    const onLocalSpeechSelectionConfirmed = vi.fn()
     const adminExecute = vi.fn(async (input: { methodId: string }) => {
       if (input.methodId === 'TTS.ListVoiceProfiles') {
         const listCalls = adminExecute.mock.calls.filter(([call]) => call.methodId === 'TTS.ListVoiceProfiles').length
@@ -369,7 +381,7 @@ describe('VoiceSettingsView', () => {
       return adminResult(mutationResult<DefaultStatus>('activated'))
     })
     const client = voiceClient({ setDefaultVoice, adminExecute })
-    const { container, unmount } = await renderVoiceSettings(client)
+    const { container, unmount } = await renderVoiceSettings(client, { onLocalSpeechSelectionConfirmed })
 
     await loadManagedVoices(container)
     await act(async () => {
@@ -392,6 +404,14 @@ describe('VoiceSettingsView', () => {
     }))
     expect(adminExecute.mock.calls.find(([input]) => input.methodId === 'TTS.SetDefaultVoice')?.[0]).not.toHaveProperty('phrase')
     expect(adminExecute.mock.calls.filter(([input]) => input.methodId === 'TTS.ListVoiceProfiles')).toHaveLength(2)
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenCalledWith({
+      tts: {
+        packId: 'en_pack',
+        packRevision: 'pack-rev-1',
+        voiceId: 'standard:en_pack:ava',
+        voiceRevision: 'rev-1',
+      },
+    })
     expect(visibleText(container)).toContain('Voice choice updated.')
     assertNoForbiddenCopy(visibleText(container))
     await unmount()
@@ -796,6 +816,7 @@ describe('VoiceSettingsView', () => {
   })
 
   it('allows a catalog voice only when its exact voice revision maps to an advertised language capability', async () => {
+    const onLocalSpeechSelectionConfirmed = vi.fn()
     const adminExecute = vi.fn(async (input: { methodId: string }) => {
       if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: [] })
       if (input.methodId === 'TTS.ListLanguagePacks') {
@@ -838,7 +859,7 @@ describe('VoiceSettingsView', () => {
       }),
       voices: [],
     })
-    const { container, unmount } = await renderVoiceSettings(client)
+    const { container, unmount } = await renderVoiceSettings(client, { onLocalSpeechSelectionConfirmed })
 
     await loadManagedVoices(container)
     await act(async () => {
@@ -860,6 +881,14 @@ describe('VoiceSettingsView', () => {
     expect(text).toContain('Voice added.')
     expect(text).not.toContain('standard:starter_en:alba')
     expect(text).not.toContain('en-local')
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenCalledWith({
+      tts: {
+        packId: 'en',
+        packRevision: 'pack-rev-1',
+        voiceId: 'standard:starter_en:alba',
+        voiceRevision: 'voice-rev-en-1',
+      },
+    })
     assertNoForbiddenCopy(text)
     await unmount()
   })

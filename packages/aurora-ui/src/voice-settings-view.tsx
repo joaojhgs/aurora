@@ -17,7 +17,7 @@ import {
 } from '#components/ui/alert-dialog'
 import { Badge } from '#components/ui/badge'
 import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from './platform-surface'
-import type { AuroraRuntimeProfileV2 } from './runtime-profile'
+import type { AuroraLocalSpeechSelectionProfile, AuroraRuntimeProfileV2 } from './runtime-profile'
 
 type SpeechLanguage = string
 type TtsModelStatus = 'degraded' | 'error' | 'loading' | 'ready' | 'unavailable'
@@ -145,9 +145,15 @@ export interface VoiceSettingsViewProps {
   client: AuroraClient
   runtimeProfile?: AuroraRuntimeProfileV2 | null | undefined
   surfaceProfile?: AuroraSurfaceProfile | null | undefined
+  onLocalSpeechSelectionConfirmed?: ((selection: AuroraLocalSpeechSelectionProfile) => void | Promise<void>) | undefined
 }
 
-export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfile: providedSurfaceProfile = null }: VoiceSettingsViewProps) {
+export function VoiceSettingsView({
+  client,
+  runtimeProfile = null,
+  surfaceProfile: providedSurfaceProfile = null,
+  onLocalSpeechSelectionConfirmed
+}: VoiceSettingsViewProps) {
   const [state, setState] = useState<VoiceSettingsState>(initialVoiceSettingsState)
   const [installingVoiceId, setInstallingVoiceId] = useState<string | null>(null)
   const [installMessage, setInstallMessage] = useState<string | null>(null)
@@ -274,7 +280,8 @@ export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfil
   const canShowInstall = state.managementState === 'ready'
   const actionPending = pendingActionKey !== null || state.managementState === 'loading'
   const transportKind = client.transport?.kind ?? 'http'
-  const surfaceProfile = useMemo(() => providedSurfaceProfile ?? voiceSettingsSurfaceProfile({
+  const surfaceProfile = useMemo(() => voiceSettingsSurfaceProfile({
+    surfaceProfile: providedSurfaceProfile,
     transportKind,
     runtimeProfile,
     engineCapabilities: state.capabilities?.engine_capabilities,
@@ -303,7 +310,12 @@ export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfil
         path: routePath('TTS', 'InstallVoiceProfile')
       })
       setInstallMessage(installOutcomeCopy(result.status))
-      if (isInstallSuccess(result.status)) await loadManagedProfiles('Refresh available voice settings')
+      if (isInstallSuccess(result.status)) {
+        if (!await persistConfirmedTtsSelection(profile)) {
+          setInstallMessage('Voice added. Choose it again if it is missing next time.')
+        }
+        await loadManagedProfiles('Refresh available voice settings')
+      }
     } catch (error) {
       setInstallMessage(productVoiceSettingsErrorCopy(error, 'Voice was not added. Try again.'))
     } finally {
@@ -347,7 +359,12 @@ export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfil
         path: routePath('TTS', 'SetDefaultVoice')
       })
       setMutationMessage(defaultOutcomeCopy(result.status))
-      if (isDefaultSuccess(result.status)) await loadManagedProfiles('Refresh available voice settings')
+      if (isDefaultSuccess(result.status)) {
+        if (!await persistConfirmedTtsSelection(profile)) {
+          setMutationMessage('Voice choice updated. Choose it again if it is missing next time.')
+        }
+        await loadManagedProfiles('Refresh available voice settings')
+      }
     } catch (error) {
       setMutationMessage(productVoiceSettingsErrorCopy(error, 'Voice choice was not changed. Try again.'))
     } finally {
@@ -387,6 +404,17 @@ export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfil
       setMutationMessage(productVoiceSettingsErrorCopy(error, action.kind === 'remove' ? 'Voice was not removed. Try again.' : 'Voice was not deleted. Try again.'))
     } finally {
       setPendingActionKey(null)
+    }
+  }
+
+  async function persistConfirmedTtsSelection(profile: ManagedVoice): Promise<boolean> {
+    const selection = confirmedTtsSelection(profile, state.capabilities, state.packs)
+    if (!selection || !onLocalSpeechSelectionConfirmed) return true
+    try {
+      await onLocalSpeechSelectionConfirmed(selection)
+      return true
+    } catch {
+      return false
     }
   }
 
@@ -657,6 +685,7 @@ function affectedVoiceResources(profile: Pick<ManagedVoice, 'voiceId'>): string[
 }
 
 function voiceSettingsSurfaceProfile(input: {
+  surfaceProfile: AuroraSurfaceProfile | null
   transportKind: string
   runtimeProfile: AuroraRuntimeProfileV2 | null
   engineCapabilities: TtsCapabilities['engine_capabilities'] | undefined
@@ -665,13 +694,15 @@ function voiceSettingsSurfaceProfile(input: {
     ? input.runtimeProfile.localNode
     : null
   return getAuroraSurfaceProfile({
+    runtimeMode: input.surfaceProfile?.legacyKind,
     transportKind: input.transportKind,
+    nativePlatform: input.surfaceProfile?.physicalKind,
     userAgent: typeof navigator === 'undefined' ? null : navigator.userAgent,
     nodeMode: input.runtimeProfile?.nodeMode,
     runtimeTier: input.runtimeProfile?.runtimeTier,
     enabledCapabilityPacks: localNode?.enabledCapabilityPacks ?? [],
-    localSpeechPackState: localNode?.localSpeechPackState,
-    localSpeechEngineCapabilities: localNode ? input.engineCapabilities : undefined,
+    localSpeechPackState: input.runtimeProfile?.localNode.localSpeechPackState,
+    localSpeechEngineCapabilities: input.engineCapabilities,
   })
 }
 
@@ -688,6 +719,7 @@ interface VoiceRow {
 
 interface ManagedVoice extends VoiceRow {
   revision: string
+  compatiblePackIds: string[]
   installable: boolean
   canDelete: boolean
   canRemove: boolean
@@ -733,6 +765,7 @@ function toManagedVoice(
   return {
     voiceId: profile.voice_id,
     revision: profile.revision,
+    compatiblePackIds: profile.compatible_language_pack_ids ?? [],
     label: safeVoiceText(profile.display_name, `Available voice ${index + 1}`),
     detail: managedVoiceDetail(installed, ready, isDefault, installable, languages),
     ready,
@@ -826,6 +859,41 @@ function toManagedLanguagePack(
     ready,
     badge: isDefault ? 'Default' : ready ? 'Ready' : installed ? 'Needs setup' : downloadProgress !== null ? 'Adding' : 'Available'
   }
+}
+
+function confirmedTtsSelection(
+  profile: ManagedVoice,
+  capabilities: TtsCapabilities | null,
+  catalogPacks: readonly TtsLanguagePack[],
+): AuroraLocalSpeechSelectionProfile | null {
+  const pack = exactPackForVoiceSelection(profile, capabilities, catalogPacks)
+  if (!pack?.revision) return null
+  return {
+    tts: {
+      packId: pack.packId,
+      packRevision: pack.revision,
+      voiceId: profile.voiceId,
+      voiceRevision: profile.revision,
+    },
+  }
+}
+
+function exactPackForVoiceSelection(
+  profile: ManagedVoice,
+  capabilities: TtsCapabilities | null,
+  catalogPacks: readonly TtsLanguagePack[],
+): ManagedLanguagePack | null {
+  const rows = toPackRows(capabilities, catalogPacks)
+  const catalogCompatiblePackIds = [...catalogPacks, ...(capabilities?.language_packs ?? [])]
+    .filter((pack) => pack.voices?.some((voice) => voice.voice_id === profile.voiceId && voice.revision === profile.revision))
+    .map((pack) => pack.pack_id)
+  const compatible = new Set(profile.compatiblePackIds.length > 0
+    ? profile.compatiblePackIds
+    : catalogCompatiblePackIds)
+  for (const pack of rows) {
+    if (compatible.has(pack.packId) && pack.revision) return pack
+  }
+  return null
 }
 
 function canInstallProfile(
