@@ -46,6 +46,7 @@ from app.shared.contracts.models.tts import (
     TTSCreateVoiceProfileRequest,
     TTSDeleteVoiceProfileRequest,
     TTSGetCapabilitiesRequest,
+    TTSGetVoiceProfileRequest,
     TTSInstallVoiceProfileRequest,
     TTSListLanguagePacksRequest,
     TTSListVoiceProfilesRequest,
@@ -2012,7 +2013,14 @@ async def test_install_voice_profile_prevalidates_configured_manifest(
     manifest = tmp_path / "voices.manifest.json"
     manifest.write_text(
         '{"schema_version":1,"pack_id":"starter_en","pack_version":"1",'
-        '"minimum_aurora_version":"1","minimum_runtime_version":"1","assets":[]}',
+        '"minimum_aurora_version":"1","minimum_runtime_version":"1","assets":[{'
+        '"asset_id":"bela","logical_voice_id":"standard:starter_en:bela",'
+        '"display_name":"Bela","runtime_target":"pockettts-python",'
+        '"language_bundle":"en","compatibility_group":"base",'
+        '"artifact_revision":"rev1","feature":"voice-state","size_bytes":0,'
+        f'"sha256":"{hashlib.sha256(b"").hexdigest()}","relative_path":"bela.safetensors",'
+        '"compression":"none","unpacked_size_bytes":0,"license_name":"test",'
+        '"redistribution":"approved"}]}',
         encoding="utf-8",
     )
     fake_config = await _fake_config_for(
@@ -2037,6 +2045,75 @@ async def test_install_voice_profile_prevalidates_configured_manifest(
 
     assert response.status == "not_found"
     assert FakeVoiceRegistry.install_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_install_voice_profile_raises_when_manifest_is_missing(
+    tmp_path, monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    missing_manifest = tmp_path / "missing.manifest.json"
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            voice_registry=VoiceRegistryConfig(
+                manifest_path=str(missing_manifest), cache_dir=str(tmp_path)
+            ),
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    with pytest.raises(VoiceCatalogSourceError, match="voice catalog is unavailable"):
+        await TTSService().install_voice_profile(
+            TTSInstallVoiceProfileRequest(
+                operation_id="install-missing-catalog",
+                voice_id="standard:starter_en:alba",
+            )
+        )
+
+    assert FakeVoiceRegistry.install_calls == 0
+    assert mock_bus.request.await_count == 1
+    _assert_outcome_audit(mock_bus, method="install_voice_profile", status="rejected")
+
+
+@pytest.mark.asyncio
+async def test_install_voice_profile_raises_when_remote_manifest_is_untrusted(
+    tmp_path, monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    payload = (
+        b'{"schema_version":1,"pack_id":"starter_en","pack_version":"1",'
+        b'"minimum_aurora_version":"1","minimum_runtime_version":"1","assets":[]}'
+    )
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            voice_registry=VoiceRegistryConfig(
+                manifest_path="https://catalog.example/voices.manifest.json",
+                cache_dir=str(tmp_path),
+            ),
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr("app.services.tts.voice_catalog._download_bytes", lambda *_, **__: payload)
+
+    with pytest.raises(VoiceCatalogSourceError, match="trust could not be verified"):
+        await TTSService().install_voice_profile(
+            TTSInstallVoiceProfileRequest(
+                operation_id="install-untrusted-catalog",
+                voice_id="standard:starter_en:alba",
+            )
+        )
+
+    assert FakeVoiceRegistry.install_calls == 0
+    assert mock_bus.request.await_count == 1
+    _assert_outcome_audit(mock_bus, method="install_voice_profile", status="rejected")
 
 
 @pytest.mark.asyncio
@@ -2196,6 +2273,99 @@ async def test_list_voice_profiles_includes_uninstalled_catalog_entries(
 
 
 @pytest.mark.asyncio
+async def test_list_voice_profiles_raises_catalog_failure_when_no_registry_data(
+    tmp_path, monkeypatch, mock_bus
+) -> None:
+    del mock_bus
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            voice_registry=VoiceRegistryConfig(
+                manifest_path=str(tmp_path / "missing.manifest.json"),
+                cache_dir=str(tmp_path / "cache"),
+            ),
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    with pytest.raises(VoiceCatalogSourceError, match="voice catalog is unavailable"):
+        await TTSService().list_voice_profiles(
+            TTSListVoiceProfilesRequest(include_unavailable=True)
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_voice_profile_raises_catalog_failure_for_unknown_voice(
+    tmp_path, monkeypatch, mock_bus
+) -> None:
+    del mock_bus
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            voice_registry=VoiceRegistryConfig(
+                manifest_path=str(tmp_path / "missing.manifest.json"),
+                cache_dir=str(tmp_path / "cache"),
+            ),
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    with pytest.raises(VoiceCatalogSourceError, match="voice catalog is unavailable"):
+        await TTSService().get_voice_profile(
+            TTSGetVoiceProfileRequest(voice_id="standard:starter_en:alba")
+        )
+
+
+@pytest.mark.asyncio
+async def test_list_voice_profiles_preserves_installed_data_when_catalog_is_missing(
+    tmp_path, monkeypatch, mock_bus
+) -> None:
+    del mock_bus
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id="standard:starter_en:alba",
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            artifact_refs=("artifacts/alba/voice-state.safetensors",),
+            source_retained=False,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            voice_registry=VoiceRegistryConfig(
+                manifest_path=str(tmp_path / "missing.manifest.json"),
+                cache_dir=str(tmp_path / "cache"),
+            ),
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    response = await TTSService().list_voice_profiles(
+        TTSListVoiceProfilesRequest(include_unavailable=True)
+    )
+
+    assert [(profile.voice_id, profile.installed) for profile in response.profiles] == [
+        ("standard:starter_en:alba", True)
+    ]
+
+
+@pytest.mark.asyncio
 async def test_voice_profiles_keep_default_and_active_independent(monkeypatch, mock_bus) -> None:
     default_voice = "standard:starter_en:bela"
     active_voice = "standard:starter_en:alba"
@@ -2247,6 +2417,51 @@ async def test_voice_profiles_keep_default_and_active_independent(monkeypatch, m
     assert by_id[active_voice].default is False
     assert by_id[default_voice].active is False
     assert by_id[default_voice].default is True
+
+
+@pytest.mark.asyncio
+async def test_voice_profiles_report_non_ready_persisted_default_as_stale(
+    monkeypatch, mock_bus
+) -> None:
+    del mock_bus
+    stale_default = "standard:starter_en:bela"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=stale_default,
+            display_name="Bela",
+            kind="standard",
+            visibility="public",
+            ready_state="failed",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev2",
+            artifact_refs=("artifacts/bela/voice-state.safetensors",),
+            source_retained=False,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            default_voice_id=stale_default,
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    service = TTSService()
+    service._provider = FakeVoiceListingProvider((), active_voice=stale_default)
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    response = await service.list_voice_profiles(TTSListVoiceProfilesRequest())
+
+    assert len(response.profiles) == 1
+    profile = response.profiles[0]
+    assert profile.voice_id == stale_default
+    assert profile.installed is True
+    assert profile.ready is False
+    assert profile.default is False
+    assert profile.active is False
 
 
 @pytest.mark.asyncio
@@ -2417,6 +2632,60 @@ async def test_remove_active_voice_does_not_clear_different_persisted_default(
 
 
 @pytest.mark.asyncio
+async def test_remove_default_voice_fails_closed_when_intent_audit_fails(
+    monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock(side_effect=RuntimeError("audit unavailable"))
+    voice_id = "standard:starter_en:alba"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=voice_id,
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            artifact_refs=("artifacts/alba/voice-state.safetensors",),
+            source_retained=False,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            default_voice_id=voice_id,
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    updated_paths: list[tuple[str, object]] = []
+
+    async def fake_update(path: str, value: object, *, timeout: float = 15.0) -> bool:
+        del timeout
+        updated_paths.append((path, value))
+        return True
+
+    service = TTSService()
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.config_api.aupdate_config", fake_update)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        await service.remove_voice_profile(
+            TTSRemoveVoiceProfileRequest(
+                operation_id="remove-default-audit-fail",
+                voice_id=voice_id,
+                expected_revision="rev1",
+            )
+        )
+
+    assert updated_paths == []
+    assert FakeVoiceRegistry.deleted == []
+
+
+@pytest.mark.asyncio
 async def test_set_default_voice_persists_config_and_reloads_runtime(monkeypatch, mock_bus) -> None:
     mock_bus.request = AsyncMock()
     FakeVoiceRegistry.installed = [
@@ -2466,6 +2735,56 @@ async def test_set_default_voice_persists_config_and_reloads_runtime(monkeypatch
     _assert_last_two_management_audits(
         mock_bus, method="set_default_voice", outcome_status="activated"
     )
+
+
+@pytest.mark.asyncio
+async def test_set_default_voice_fails_closed_when_intent_audit_fails(
+    monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock(side_effect=RuntimeError("audit unavailable"))
+    voice_id = "standard:starter_en:alba"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=voice_id,
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            artifact_refs=("artifacts/alba/voice-state.safetensors",),
+            source_retained=False,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    updated_paths: list[tuple[str, object]] = []
+
+    async def fake_update(path: str, value: object, *, timeout: float = 15.0) -> bool:
+        del timeout
+        updated_paths.append((path, value))
+        return True
+
+    service = TTSService()
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.config_api.aupdate_config", fake_update)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        await service.set_default_voice(
+            TTSSetDefaultVoiceRequest(
+                operation_id="set-default-audit-fail",
+                voice_id=voice_id,
+                expected_revision="rev1",
+            )
+        )
+
+    assert updated_paths == []
+    assert service._voice_revision == 0
 
 
 @pytest.mark.asyncio

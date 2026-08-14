@@ -966,7 +966,9 @@ class TTSService(BaseService):
             ),
         )
 
-    async def _current_voice_profiles(self) -> list[TTSVoiceProfileDescriptor]:
+    async def _current_voice_profiles_with_catalog_status(
+        self, *, include_catalog: bool = True
+    ) -> tuple[list[TTSVoiceProfileDescriptor], VoiceCatalogSourceError | None]:
         tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
         default_voice_id = tts_cfg.default_voice_id
         registry_entries = []
@@ -983,15 +985,16 @@ class TTSService(BaseService):
                 active_voice_id = health.active_voice
         profiles: list[TTSVoiceProfileDescriptor] = []
         for entry in registry_entries:
-            is_active = provider_ready and entry.voice_id == active_voice_id
-            is_default = entry.voice_id == default_voice_id
+            is_ready = entry.ready_state == "ready"
+            is_active = is_ready and provider_ready and entry.voice_id == active_voice_id
+            is_default = is_ready and entry.voice_id == default_voice_id
             profiles.append(
                 TTSVoiceProfileDescriptor(
                     voice_id=entry.voice_id,
                     display_name=entry.display_name,
                     kind=_profile_kind(entry.kind),  # type: ignore[arg-type]
                     installed=True,
-                    ready=entry.ready_state == "ready",
+                    ready=is_ready,
                     default=is_default,
                     active=is_active,
                     enabled=True,
@@ -1007,8 +1010,9 @@ class TTSService(BaseService):
                 )
             )
         known_voice_ids = {profile.voice_id for profile in profiles}
-        if tts_cfg.provider == "pockettts":
-            with contextlib.suppress(VoiceCatalogError, VoiceRegistryError, OSError):
+        catalog_error: VoiceCatalogSourceError | None = None
+        if include_catalog and tts_cfg.provider == "pockettts":
+            try:
                 for item in await self._voice_catalog_installer(tts_cfg).list_items():
                     if item.voice_id in known_voice_ids:
                         continue
@@ -1031,14 +1035,19 @@ class TTSService(BaseService):
                             allowed_peer_ids=[],
                         )
                     )
+            except VoiceCatalogSourceError as exc:
+                catalog_error = exc
+            except (VoiceCatalogError, VoiceRegistryError, OSError) as exc:
+                catalog_error = VoiceCatalogSourceError("voice catalog is unavailable")
+                catalog_error.__cause__ = exc
         if profiles or self._provider is None:
-            return profiles
+            return profiles, catalog_error
         for voice in await self._provider.list_voices():
             language = _voice_language_pack(voice.language)
             if language is None:
                 continue
-            is_active = provider_ready and voice.voice_id == active_voice_id
-            is_default = voice.voice_id == default_voice_id
+            is_active = voice.ready and provider_ready and voice.voice_id == active_voice_id
+            is_default = voice.ready and voice.voice_id == default_voice_id
             profiles.append(
                 TTSVoiceProfileDescriptor(
                     voice_id=voice.voice_id,
@@ -1053,6 +1062,10 @@ class TTSService(BaseService):
                     revision=self._voice_revision_token(),
                 )
             )
+        return profiles, catalog_error
+
+    async def _current_voice_profiles(self) -> list[TTSVoiceProfileDescriptor]:
+        profiles, _catalog_error = await self._current_voice_profiles_with_catalog_status()
         return profiles
 
     def _language_pack_revision(self, voices: list[TTSLanguagePackVoice]) -> str:
@@ -1365,7 +1378,11 @@ class TTSService(BaseService):
         self, request: TTSListVoiceProfilesRequest
     ) -> TTSListVoiceProfilesResponse:
         """Return administrative voice profile metadata."""
-        profiles = await self._current_voice_profiles()
+        profiles, catalog_error = await self._current_voice_profiles_with_catalog_status(
+            include_catalog=request.include_unavailable
+        )
+        if catalog_error is not None and request.include_unavailable and not profiles:
+            raise catalog_error
         if not request.include_unavailable:
             profiles = [profile for profile in profiles if profile.installed]
         return TTSListVoiceProfilesResponse(
@@ -1388,13 +1405,16 @@ class TTSService(BaseService):
         self, request: TTSGetVoiceProfileRequest
     ) -> TTSGetVoiceProfileResponse:
         """Return one administrative voice profile."""
-        for profile in await self._current_voice_profiles():
+        profiles, catalog_error = await self._current_voice_profiles_with_catalog_status()
+        for profile in profiles:
             if profile.voice_id == request.voice_id:
                 return TTSGetVoiceProfileResponse(
                     found=True,
                     profile=profile,
                     correlation_id=request.correlation_id,
                 )
+        if catalog_error is not None:
+            raise catalog_error
         return TTSGetVoiceProfileResponse(found=False, correlation_id=request.correlation_id)
 
     @method_contract(
@@ -1447,17 +1467,21 @@ class TTSService(BaseService):
             installer = self._voice_catalog_installer(tts_cfg)
             try:
                 catalog_items = {item.voice_id: item for item in await installer.list_items()}
-            except VoiceCatalogSourceError:
+            except VoiceCatalogSourceError as exc:
+                catalog_message = (
+                    exc.args[0]
+                    if exc.args and isinstance(exc.args[0], str)
+                    else "voice catalog is unavailable"
+                )
                 response = TTSInstallVoiceProfileResponse(
                     voice_id=request.voice_id,
-                    status="not_found",
+                    status="rejected",
                     correlation_id=request.correlation_id,
                 )
                 await self._audit_voice_management(
                     "install_voice_profile", request, response, envelope
                 )
-                self._cache_mutation("install_voice_profile", request, response, envelope)
-                return response
+                raise VoiceCatalogSourceError(catalog_message) from exc
             target_item = catalog_items.get(request.voice_id)
             if target_item is None:
                 response = TTSInstallVoiceProfileResponse(
@@ -1598,6 +1622,21 @@ class TTSService(BaseService):
                 self._cache_mutation("remove_voice_profile", request, response, envelope)
                 return response
             removing_default = tts_cfg.default_voice_id == request.voice_id
+            status = "drained" if profile.active or removing_default else "removed"
+            response = TTSRemoveVoiceProfileResponse(
+                voice_id=request.voice_id,
+                status=status,
+                revision=f"voice-rev-{self._voice_revision + 1}",
+                correlation_id=request.correlation_id,
+            )
+            await self._audit_voice_management(
+                "remove_voice_profile",
+                request,
+                response,
+                envelope,
+                phase="intent",
+                audit_status="attempted",
+            )
             if removing_default:
                 updated = await config_api.aupdate_config(
                     "services.tts.default_voice_id", None, timeout=15.0
@@ -1614,21 +1653,6 @@ class TTSService(BaseService):
                     )
                     self._cache_mutation("remove_voice_profile", request, response, envelope)
                     return response
-            status = "drained" if profile.active or removing_default else "removed"
-            response = TTSRemoveVoiceProfileResponse(
-                voice_id=request.voice_id,
-                status=status,
-                revision=f"voice-rev-{self._voice_revision + 1}",
-                correlation_id=request.correlation_id,
-            )
-            await self._audit_voice_management(
-                "remove_voice_profile",
-                request,
-                response,
-                envelope,
-                phase="intent",
-                audit_status="attempted",
-            )
             if profile.active and self._provider is not None:
                 await self._stop_playback("voice_removed")
                 await self._provider.stop()
@@ -1715,10 +1739,7 @@ class TTSService(BaseService):
                 await self._audit_voice_management("set_default_voice", request, response, envelope)
                 self._cache_mutation("set_default_voice", request, response, envelope)
                 return response
-            updated = await config_api.aupdate_config(
-                "services.tts.default_voice_id", request.voice_id, timeout=15.0
-            )
-            if not updated:
+            if not profile.ready:
                 response = TTSSetDefaultVoiceResponse(
                     voice_id=request.voice_id,
                     status="rejected",
@@ -1742,6 +1763,19 @@ class TTSService(BaseService):
                 phase="intent",
                 audit_status="attempted",
             )
+            updated = await config_api.aupdate_config(
+                "services.tts.default_voice_id", request.voice_id, timeout=15.0
+            )
+            if not updated:
+                response = TTSSetDefaultVoiceResponse(
+                    voice_id=request.voice_id,
+                    status="rejected",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management("set_default_voice", request, response, envelope)
+                self._cache_mutation("set_default_voice", request, response, envelope)
+                return response
             self._voice_revision += 1
             await self._initialize_engine_fail_soft("default voice change")
             await self._audit_voice_management("set_default_voice", request, response, envelope)
