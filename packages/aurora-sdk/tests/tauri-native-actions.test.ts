@@ -81,6 +81,16 @@ describe('Tauri bounded native action transport', () => {
         }
         if (command.startsWith('aurora_native_speech_pack_')) return status
         if (command.startsWith('aurora_ios_voice_pack_')) return { ok: true, secretsRedacted: true }
+        if (command === 'aurora_android_voice_pack_catalog_status') {
+          return { platform: 'android', available: true, entries: [], secretsRedacted: true }
+        }
+        if (command === 'aurora_android_voice_pack_download') {
+          return { started: true, packId: 'pocket.en', jobId: 'job-1' }
+        }
+        if (command === 'aurora_android_voice_pack_download_status') {
+          return { jobId: 'job-1', status: 'completed', packId: 'pocket.en', downloadedBytes: 1, totalBytes: 1 }
+        }
+        if (command.startsWith('aurora_android_voice_pack_')) return { ok: true, secretsRedacted: true }
         throw new Error(`unexpected command: ${command}`)
       }
     })
@@ -94,6 +104,20 @@ describe('Tauri bounded native action transport', () => {
     await transport.downloadIosVoicePack({ task: 'stt', packId: 'whisper.tiny.en' })
     await transport.activateIosVoicePack({ task: 'stt', packId: 'whisper.tiny.en', slot: 'stt' })
     await transport.removeIosVoicePack({ task: 'stt', packId: 'whisper.tiny.en' })
+    await transport.getAndroidVoicePackCatalogStatus()
+    await transport.downloadAndroidVoicePack({
+      task: 'tts',
+      packId: 'pocket.en',
+      activate: true,
+      referenceId: 'reference-1',
+      referenceText: 'A reference sentence.',
+      referenceRevision: 'sha256:abc',
+      referenceSampleRateHz: 24_000,
+      referenceSamples: [0, 0.25, -0.25]
+    })
+    await transport.getAndroidVoicePackDownloadStatus('job-1')
+    await transport.activateAndroidVoicePack({ task: 'tts', packId: 'pocket.en', slot: 'tts' })
+    await transport.removeAndroidVoicePack({ task: 'tts', packId: 'pocket.en' })
 
     expect(calls).toEqual([
       {
@@ -131,6 +155,37 @@ describe('Tauri bounded native action transport', () => {
       {
         command: 'aurora_ios_voice_pack_remove',
         args: { request: { task: 'stt', packId: 'whisper.tiny.en' } }
+      },
+      {
+        command: 'aurora_android_voice_pack_catalog_status',
+        args: undefined
+      },
+      {
+        command: 'aurora_android_voice_pack_download',
+        args: {
+          request: {
+            task: 'tts',
+            packId: 'pocket.en',
+            activate: true,
+            referenceId: 'reference-1',
+            referenceText: 'A reference sentence.',
+            referenceRevision: 'sha256:abc',
+            referenceSampleRateHz: 24_000,
+            referenceSamples: [0, 0.25, -0.25]
+          }
+        }
+      },
+      {
+        command: 'aurora_android_voice_pack_download_status',
+        args: { request: { jobId: 'job-1' } }
+      },
+      {
+        command: 'aurora_android_voice_pack_activate',
+        args: { request: { task: 'tts', packId: 'pocket.en', slot: 'tts' } }
+      },
+      {
+        command: 'aurora_android_voice_pack_remove',
+        args: { request: { task: 'tts', packId: 'pocket.en' } }
       }
     ])
   })
