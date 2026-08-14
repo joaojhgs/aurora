@@ -38,16 +38,15 @@ const forbiddenPathPatterns = [
   { id: 'python-sidecar', pattern: /aurora-sidecar|prepare-sidecar|gateway-sidecar|bundled[-_]?gateway/i },
   { id: 'python-runtime', pattern: /(^|[/\\])python(\d+(\.\d+)?)?(\.exe)?$|libpython[^/\\]*\.(so|dylib|dll)|pyvenv\.cfg|site-packages|__pycache__|(^|[/\\])\.venv([/\\]|$)|(^|[/\\])venv([/\\]|$)|(^|[/\\])uv(\.exe)?$/i },
   { id: 'python-source', pattern: /(^|[/\\])main\.py$|(^|[/\\])app[/\\]services[/\\]config|config_defaults\.json/i },
-  { id: 'speech-model-asset', pattern: /(^|[/\\])(kws|vad|stt|tts|speech|voice|pockettts|sherpa|whisper|tokenizer|tokens|voices?|models?|packs?)([/\\]|$).*\.(onnx|ort|bin|gguf|ggml|tflite|safetensors|pt|pth|ckpt|wav|flac|opus|json)$/i },
-  { id: 'speech-model-file', pattern: /(^|[/\\]).*(kws|vad|stt|tts|speech|voice|pockettts|sherpa|whisper|tokenizer|tokens).*\.(onnx|ort|bin|gguf|ggml|tflite|safetensors|pt|pth|ckpt|wav|flac|opus|json)$/i },
-  { id: 'browser-wasm-voice-runtime', pattern: /(^|[/\\]).*(voice|speech|local-speech|audio-worklet|audioworklet|wakeword).*\.(wasm|worker\.js|worklet\.js|mjs|js)$/i },
+  { id: 'speech-model-asset', pattern: /(^|[/\\])(kws|vad|stt|tts|speech|voice|pockettts|sherpa|whisper|tokenizer|tokens|voices?|models?|packs?)([/\\]|$).*\.(onnx|ort|bin|data|gguf|ggml|tflite|safetensors|pt|pth|ckpt|npy|npz|ark|wav|flac|opus)$/i },
+  { id: 'speech-model-file', pattern: /(^|[/\\]).*(kws|vad|stt|tts|speech|voice|pockettts|sherpa|whisper|tokenizer|tokens).*\.(onnx|ort|bin|data|gguf|ggml|tflite|safetensors|pt|pth|ckpt|npy|npz|ark|wav|flac|opus)$/i },
+  { id: 'speech-model-support-file', pattern: /(^|[/\\]).*(tokenizer|tokens|vocab|lexicon|sentencepiece|speakers?|durations?|phonemes?|bpe|spm).*(\.model|\.txt|\.json)$/i },
   { id: 'unapproved-pack', pattern: /pockettts|raven|non[-_ ]?commercial|cc[-_ ]?by[-_ ]?nc|creative[-_ ]commons[-_ ]?non[-_ ]?commercial/i },
   { id: 'secret-file', pattern: /(^|[/\\])(\.env(\..*)?|id_rsa|id_ed25519|credentials?\.json|service[-_]?account.*\.json|.*private[-_]?key.*\.(pem|key|json)|.*secret.*\.(json|txt|env))$/i },
 ]
 
 const forbiddenTextPatterns = [
   { id: 'python-sidecar-text', pattern: /aurora-sidecar|prepare-sidecar|app\/services\/config\/config_defaults\.json|libpython|site-packages|\.venv|bundled[-_]?gateway/i },
-  { id: 'browser-wasm-voice-text', pattern: /local-speech|voice[-_ ]?worker|audio[-_ ]?worklet|speech[-_ ]?wasm|wakeword[-_ ]?wasm/i },
   { id: 'unapproved-pack-text', pattern: /pockettts|raven|non[-_ ]?commercial|noncommercial|cc[-_ ]?by[-_ ]?nc|creative commons attribution-noncommercial/i },
   { id: 'private-key-text', pattern: /-----BEGIN (RSA |OPENSSH |EC |DSA |)?PRIVATE KEY-----/ },
   { id: 'api-secret-text', pattern: /\b(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|GOOGLE_APPLICATION_CREDENTIALS|OPENAI_API_KEY|ANTHROPIC_API_KEY|STRIPE_SECRET_KEY)\s*[:=]\s*['"]?[^'"\s]{12,}/i },

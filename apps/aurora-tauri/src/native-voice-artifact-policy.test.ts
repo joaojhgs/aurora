@@ -95,6 +95,21 @@ describe('native voice desktop artifact policy', () => {
     expect(report.forbiddenMatches).toEqual([])
   })
 
+  it('allows browser speech engine code while keeping model weights out of release artifacts', () => {
+    const context = createContext()
+    writeArtifact(context, 'assets/sherpa-onnx-wasm-main-vad-asr.js', 'export const createRuntime = () => ({})\n')
+    writeArtifact(context, 'assets/sherpa-onnx-wasm-main-vad-asr.wasm', 'wasm engine bytes\n')
+    writeArtifact(context, 'assets/aurora-speech-worker.js', 'self.onmessage = () => undefined\n')
+    writeArtifact(context, 'assets/aurora-audio-worklet.js', 'registerProcessor("aurora-audio", class {})\n')
+    writeArtifact(context, 'assets/speech-model-catalog.json', '{"entries":[]}\n')
+
+    const result = runPolicy(context)
+
+    expect(result.status, result.stderr).toBe(0)
+    const report = JSON.parse(readFileSync(context.reportPath, 'utf8'))
+    expect(report.forbiddenMatches).toEqual([])
+  })
+
   it('rejects bundled Python runtimes and sidecar resources', () => {
     const context = createContext()
     writeArtifact(context, 'usr/bin/aurora-sidecar-x86_64-unknown-linux-gnu', '#!/bin/sh\n')
@@ -110,19 +125,19 @@ describe('native voice desktop artifact policy', () => {
     expect(result.stderr).toContain('python-source')
   })
 
-  it('rejects bundled speech model assets and browser WASM voice runtimes', () => {
+  it('rejects bundled speech model and voice assets', () => {
     const context = createContext()
     writeArtifact(context, 'usr/lib/libaurora_native_voice.so', 'rust native voice library\n')
     writeArtifact(context, 'resources/models/stt/english.onnx', 'model bytes\n')
-    writeArtifact(context, 'resources/voice-worker.wasm', 'wasm bytes\n')
-    writeArtifact(context, 'resources/assets/voice.worker.js', 'const label = "voice-worker"\n')
+    writeArtifact(context, 'resources/models/tts/english-voice.wav', 'voice sample bytes\n')
+    writeArtifact(context, 'resources/models/stt/english-model.data', 'packed model bytes\n')
+    writeArtifact(context, 'resources/models/stt/english-tokens.txt', 'token list\n')
 
     const result = runPolicy(context)
 
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('speech-model-asset')
-    expect(result.stderr).toContain('browser-wasm-voice-runtime')
-    expect(result.stderr).toContain('browser-wasm-voice-text')
+    expect(result.stderr).toContain('speech-model-support-file')
   })
 
   it('rejects secrets and unapproved non-commercial voice packs', () => {
