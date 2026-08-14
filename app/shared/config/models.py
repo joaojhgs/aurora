@@ -311,6 +311,10 @@ class Piper(BaseConfigModel):
     """
     Path to Piper executable
     """
+    cache_dir: str | None = "voice_models/piper"
+    """
+    Directory for selected Piper voice downloads and installed models
+    """
 
 
 class Pockettts(BaseConfigModel):

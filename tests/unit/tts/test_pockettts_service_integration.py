@@ -14,6 +14,7 @@ import tempfile
 import types
 import wave
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -814,10 +815,22 @@ async def test_pockettts_playback_construction_failure_stops_started_provider(
 
 
 @pytest.mark.asyncio
-async def test_piper_remains_default_and_uses_text_playback(monkeypatch, mock_bus) -> None:
+async def test_piper_remains_default_and_uses_text_playback(
+    monkeypatch, mock_bus, tmp_path: Path
+) -> None:
     playback = FakeTextPlayback()
+    model_path = tmp_path / "voice.onnx"
+    config_path = tmp_path / "voice.onnx.json"
+    model_path.write_bytes(b"model")
+    config_path.write_text('{"audio": {"sample_rate": 22050}}', encoding="utf-8")
     tts_cfg = Tts(
-        providers=Providers(piper=Piper(model_file_path="voice.onnx", executable_path="piper"))
+        providers=Providers(
+            piper=Piper(
+                model_file_path=str(model_path),
+                model_config_file_path=str(config_path),
+                executable_path="piper",
+            )
+        )
     )
     fake_config = await _fake_config_for(tts_cfg, System())
 
@@ -829,7 +842,6 @@ async def test_piper_remains_default_and_uses_text_playback(monkeypatch, mock_bu
         "app.services.tts.service.create_realtime_piper_stream",
         lambda **_kwargs: (object(), playback),
     )
-    monkeypatch.setattr("app.services.tts.service.resolve_path", lambda path: path)
 
     provider, engine, stream = await TTSService()._build_runtime()
 

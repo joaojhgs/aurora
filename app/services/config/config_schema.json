@@ -518,6 +518,11 @@
                       "ui_type": "file",
                       "ui_file_filter": "Executable files (*.exe)|*.exe|All files (*.*)|*.*",
                       "default": ""
+                    },
+                    "cache_dir": {
+                      "type": "string",
+                      "description": "Directory for selected Piper voice downloads and installed models",
+                      "default": "voice_models/piper"
                     }
                   },
                   "default": {}

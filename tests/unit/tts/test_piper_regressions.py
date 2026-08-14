@@ -8,11 +8,18 @@ import io
 import sys
 import types
 import wave
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from app.services.tts.piper_catalog import (
+    CATALOG_REVISION,
+    PiperCatalogInstallResult,
+    PiperCatalogVoice,
+    PiperResolvedVoice,
+)
 from app.services.tts.providers.base import (
     TTSProviderCapabilities,
     TTSProviderError,
@@ -27,8 +34,12 @@ from app.shared.config.models import Piper, Providers, Tts
 from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.gateway import GatewayMethods
 from app.shared.contracts.models.tts import (
+    TTSInstallVoiceProfileRequest,
+    TTSListLanguagePacksRequest,
     TTSMethods,
+    TTSRemoveVoiceProfileRequest,
     TTSRequest,
+    TTSSetDefaultVoiceRequest,
     TTSSynthesizeRequest,
 )
 from app.shared.messaging import bus_init
@@ -116,6 +127,28 @@ def _decode_wav(encoded_audio: str) -> tuple[bytes, int, int, int]:
         )
 
 
+def _resolved_piper_voice(tmp_path: Path) -> PiperResolvedVoice:
+    model = tmp_path / "voice.onnx"
+    config = tmp_path / "voice.onnx.json"
+    tokens = tmp_path / "tokens.txt"
+    data_dir = tmp_path / "espeak-ng-data"
+    model.write_bytes(b"model")
+    config.write_text('{"audio": {"sample_rate": 16000}}', encoding="utf-8")
+    tokens.write_text("a\nb\n", encoding="utf-8")
+    data_dir.mkdir()
+    return PiperResolvedVoice(
+        voice_id="standard:piper:en_us-test-low",
+        display_name="Test low",
+        language="en-us",
+        revision=CATALOG_REVISION,
+        model_file=model,
+        config_file=config,
+        tokens_file=tokens,
+        data_dir=data_dir,
+        sample_rate=16000,
+    )
+
+
 class FakeProvider:
     """Minimal provider double for service-boundary tests."""
 
@@ -163,6 +196,64 @@ class FakeProvider:
 
     async def cancel(self, request_id: str) -> None:
         pass
+
+
+class FakePiperCatalogManager:
+    def __init__(self, resolved_voice: PiperResolvedVoice | None = None) -> None:
+        self.resolved_voice = resolved_voice
+        self.installed = resolved_voice is not None
+        self.installed_voice_ids: list[str] = []
+        self.removed_voice_ids: list[str] = []
+        self.voices = (
+            PiperCatalogVoice(
+                voice_id="standard:piper:en_us-test-low",
+                display_name="Test low",
+                language="en-us",
+                revision=CATALOG_REVISION,
+                installed=self.installed,
+                ready=self.installed,
+                sample_rate=16000 if self.installed else None,
+            ),
+            PiperCatalogVoice(
+                voice_id="standard:piper:fr_fr-test-low",
+                display_name="Test French",
+                language="fr-fr",
+                revision=CATALOG_REVISION,
+                installed=False,
+                ready=False,
+                sample_rate=None,
+            ),
+        )
+
+    async def list_voices(self):
+        return self.voices
+
+    async def install_voice(self, voice_id: str) -> PiperCatalogInstallResult:
+        self.installed_voice_ids.append(voice_id)
+        assert self.resolved_voice is not None
+        self.installed = True
+        self.voices = (
+            self.voices[0].__class__(
+                voice_id=self.voices[0].voice_id,
+                display_name=self.voices[0].display_name,
+                language=self.voices[0].language,
+                revision=self.voices[0].revision,
+                installed=True,
+                ready=True,
+                sample_rate=16000,
+            ),
+            self.voices[1],
+        )
+        return PiperCatalogInstallResult(voice=self.resolved_voice, reused_cached_archive=False)
+
+    async def remove_voice(self, voice_id: str) -> bool:
+        self.removed_voice_ids.append(voice_id)
+        return True
+
+    async def resolve_voice(self, voice_id: str) -> PiperResolvedVoice:
+        assert self.resolved_voice is not None
+        assert voice_id == self.resolved_voice.voice_id
+        return self.resolved_voice
 
 
 @pytest.mark.asyncio
@@ -407,14 +498,182 @@ async def test_start_initializes_piper_stream_from_nested_piper_config(
 
 
 @pytest.mark.asyncio
+async def test_piper_list_language_packs_exposes_catalog_voices_even_uninstalled(
+    service: TTSService, monkeypatch, tmp_path: Path
+) -> None:
+    """shows pinned Piper catalog voices through language packs without installing them."""
+    manager = FakePiperCatalogManager()
+
+    async def fake_config(*_args, **_kwargs):
+        return Tts(provider="piper", providers=Providers(piper=Piper(cache_dir=str(tmp_path))))
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr(service, "_piper_catalog_manager", lambda _cfg: manager)
+
+    response = await service.list_language_packs(TTSListLanguagePacksRequest())
+
+    assert [pack.pack_id for pack in response.packs] == ["en-us", "fr-fr"]
+    assert response.packs[0].voices[0].voice_id == "standard:piper:en_us-test-low"
+    assert response.packs[0].voices[0].installed is False
+    assert response.catalog_status == "available"
+
+
+@pytest.mark.asyncio
+async def test_piper_install_checks_catalog_revision_and_installs_exact_voice(
+    service: TTSService, monkeypatch, tmp_path: Path
+) -> None:
+    """uses the Piper catalog manager for exact selected-voice installs."""
+    manager = FakePiperCatalogManager(_resolved_piper_voice(tmp_path))
+    manager.installed = False
+    manager.voices = (
+        PiperCatalogVoice(
+            voice_id="standard:piper:en_us-test-low",
+            display_name="Test low",
+            language="en-us",
+            revision=CATALOG_REVISION,
+            installed=False,
+            ready=False,
+            sample_rate=None,
+        ),
+        manager.voices[1],
+    )
+
+    async def fake_config(*_args, **_kwargs):
+        return Tts(provider="piper", providers=Providers(piper=Piper(cache_dir=str(tmp_path))))
+
+    async def noop_audit(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr(service, "_piper_catalog_manager", lambda _cfg: manager)
+    monkeypatch.setattr(service, "_audit_voice_management", noop_audit)
+    monkeypatch.setattr(service, "_initialize_engine_fail_soft", AsyncMock(return_value=True))
+
+    conflict = await service.install_voice_profile(
+        TTSInstallVoiceProfileRequest(
+            voice_id="standard:piper:en_us-test-low",
+            operation_id="install-conflict",
+            expected_revision="older",
+        )
+    )
+    installed = await service.install_voice_profile(
+        TTSInstallVoiceProfileRequest(
+            voice_id="standard:piper:en_us-test-low",
+            operation_id="install-ok",
+            expected_revision=CATALOG_REVISION,
+        )
+    )
+
+    assert conflict.status == "revision_conflict"
+    assert installed.status == "installed"
+    assert installed.revision == CATALOG_REVISION
+    assert manager.installed_voice_ids == ["standard:piper:en_us-test-low"]
+
+
+@pytest.mark.asyncio
+async def test_piper_set_default_persists_and_runtime_binds_selected_receipt(
+    service: TTSService,
+    fake_realtimetts,
+    fake_piper_engine,
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """activates an installed exact Piper voice and binds runtime to receipt paths."""
+    resolved = _resolved_piper_voice(tmp_path)
+    manager = FakePiperCatalogManager(resolved)
+    default_voice_id: str | None = None
+
+    async def fake_config(*_args, **_kwargs):
+        return Tts(
+            provider="piper",
+            default_voice_id=default_voice_id,
+            providers=Providers(
+                piper=Piper(cache_dir=str(tmp_path), executable_path="/opt/nested-piper")
+            ),
+        )
+
+    async def update_config(_path: str, value: str | None, **_kwargs):
+        nonlocal default_voice_id
+        default_voice_id = value
+        return True
+
+    async def noop_audit(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.config_api.aupdate_config", update_config)
+    monkeypatch.setattr(service, "_piper_catalog_manager", lambda _cfg: manager)
+    monkeypatch.setattr(service, "_audit_voice_management", noop_audit)
+    monkeypatch.setattr("app.services.tts.service.shutil.which", lambda _name: None)
+
+    response = await service.set_default_voice(
+        TTSSetDefaultVoiceRequest(
+            voice_id=resolved.voice_id,
+            operation_id="default-ok",
+            expected_revision=CATALOG_REVISION,
+        )
+    )
+
+    engine = fake_piper_engine.PiperEngine.instances[-1]
+    assert response.status == "activated"
+    assert engine.voice.model_file == str(resolved.model_file)
+    assert engine.voice.config_file == str(resolved.config_file)
+    assert service._provider._voice.voice_id == resolved.voice_id
+    assert engine._sample_rate == 16000
+
+
+@pytest.mark.asyncio
+async def test_piper_remove_uses_manager_and_preserves_pockettts_registry(
+    service: TTSService, monkeypatch, tmp_path: Path
+) -> None:
+    """removes Piper installed artifacts through the Piper manager, not VoiceRegistry."""
+    resolved = _resolved_piper_voice(tmp_path)
+    manager = FakePiperCatalogManager(resolved)
+
+    async def fake_config(*_args, **_kwargs):
+        return Tts(
+            provider="piper",
+            default_voice_id=resolved.voice_id,
+            providers=Providers(piper=Piper(cache_dir=str(tmp_path))),
+        )
+
+    async def noop_audit(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr(
+        "app.services.tts.service.config_api.aupdate_config", AsyncMock(return_value=True)
+    )
+    monkeypatch.setattr(service, "_piper_catalog_manager", lambda _cfg: manager)
+    monkeypatch.setattr(service, "_audit_voice_management", noop_audit)
+    monkeypatch.setattr(service, "_voice_registry", Mock(side_effect=AssertionError("wrong registry")))
+    monkeypatch.setattr(service, "_initialize_engine_fail_soft", AsyncMock(return_value=False))
+
+    response = await service.remove_voice_profile(
+        TTSRemoveVoiceProfileRequest(
+            voice_id=resolved.voice_id,
+            operation_id="remove-ok",
+            expected_revision=CATALOG_REVISION,
+        )
+    )
+
+    assert response.status == "drained"
+    assert manager.removed_voice_ids == [resolved.voice_id]
+
+
+@pytest.mark.asyncio
 async def test_build_runtime_stops_started_provider_when_stream_construction_fails(
-    service: TTSService, monkeypatch
+    service: TTSService, monkeypatch, tmp_path: Path
 ) -> None:
     """cleans up the replacement provider if local playback stream construction fails."""
     new_provider = FakeProvider()
+    model = tmp_path / "voice.onnx"
+    config = tmp_path / "voice.onnx.json"
+    model.write_bytes(b"model")
+    config.write_text('{"audio": {"sample_rate": 22050}}', encoding="utf-8")
 
     async def fake_model_paths(_tts_cfg):
-        return "/models/voice.onnx", "/models/voice.onnx.json"
+        return str(model), str(config)
 
     async def fake_config(*_args, **_kwargs):
         return Tts(providers=Providers(piper=Piper()))

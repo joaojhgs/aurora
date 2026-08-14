@@ -22,10 +22,15 @@ import wave
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any, Literal
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.messaging import Envelope
+from app.services.tts.piper_catalog import (
+    PiperCatalogManager,
+    piper_cache_dir_from_config,
+)
 from app.services.tts.playback import create_pcm_playback, create_realtime_piper_stream
 from app.services.tts.providers.base import (
     TTSProvider,
@@ -407,7 +412,7 @@ class TTSService(BaseService):
             await asyncio.to_thread(close)
 
     async def _get_model_paths(self, tts_cfg: Tts | None = None) -> tuple[str, str | None]:
-        """Get Piper model paths from canonical config with flat-key compatibility."""
+        """Get legacy Piper model paths from canonical config with flat-key compatibility."""
         tts_cfg = tts_cfg or await config_api.aget(ConfigKeys.services.tts, Tts)
         piper_cfg = tts_cfg.providers.piper if tts_cfg.providers else None
         model_path = (
@@ -423,6 +428,10 @@ class TTSService(BaseService):
         model_file = resolve_path(model_path)
         config_file = resolve_path(config_path) if config_path else None
         return str(model_file), str(config_file) if config_file else None
+
+    def _piper_catalog_manager(self, tts_cfg: Tts) -> PiperCatalogManager:
+        """Return the pinned Piper catalog manager for this TTS config."""
+        return PiperCatalogManager(cache_dir=piper_cache_dir_from_config(tts_cfg))
 
     def _resolve_piper_executable(self, tts_cfg: Tts) -> str:
         """Resolve the Piper executable from canonical config and local PATH."""
@@ -597,31 +606,43 @@ class TTSService(BaseService):
         if tts_cfg.provider not in (None, "piper"):
             raise TTSProviderError("unavailable", "Configured TTS provider is unavailable")
 
-        model_file, config_file = await self._get_model_paths(tts_cfg)
         piper_path = self._resolve_piper_executable(tts_cfg)
-        piper_cfg = tts_cfg.providers.piper if tts_cfg.providers else None
-        sample_rate = (
-            piper_cfg.model_sample_rate
-            if piper_cfg and piper_cfg.model_sample_rate is not None
-            else tts_cfg.model_sample_rate
-            if tts_cfg.model_sample_rate is not None
-            else 22050
-        )
-        effective_language = _voice_language_pack(await self._effective_tts_language())
-        if effective_language is None:
-            raise TTSProviderError("unsupported_voice", "TTS language is unavailable")
         configured_voice_id = tts_cfg.default_voice_id
-        if configured_voice_id in {None, "default"}:
-            voice_id = f"standard:piper:{effective_language}"
-        elif ":" not in configured_voice_id:
-            voice_id = f"standard:piper:{_piper_voice_slug(configured_voice_id)}"
+        if configured_voice_id and configured_voice_id != "default" and ":" in configured_voice_id:
+            selected_voice = await self._piper_catalog_manager(tts_cfg).resolve_voice(
+                validate_logical_voice_id(configured_voice_id)
+            )
+            model_file = str(selected_voice.model_file)
+            config_file = str(selected_voice.config_file)
+            sample_rate = selected_voice.sample_rate
+            voice_id = selected_voice.voice_id
+            display_name = selected_voice.display_name
+            effective_language = selected_voice.language
         else:
-            voice_id = validate_logical_voice_id(configured_voice_id)
+            model_file, config_file = await self._get_model_paths(tts_cfg)
+            if not Path(model_file).is_file() or not (config_file and Path(config_file).is_file()):
+                raise TTSProviderError("unsupported_voice", "TTS voice is unavailable")
+            piper_cfg = tts_cfg.providers.piper if tts_cfg.providers else None
+            sample_rate = (
+                piper_cfg.model_sample_rate
+                if piper_cfg and piper_cfg.model_sample_rate is not None
+                else tts_cfg.model_sample_rate
+                if tts_cfg.model_sample_rate is not None
+                else 22050
+            )
+            effective_language = _voice_language_pack(await self._effective_tts_language())
+            if effective_language is None:
+                raise TTSProviderError("unsupported_voice", "TTS language is unavailable")
+            if configured_voice_id and configured_voice_id != "default" and ":" not in configured_voice_id:
+                voice_id = f"standard:piper:{_piper_voice_slug(configured_voice_id)}"
+            else:
+                voice_id = f"standard:piper:{effective_language}"
+            display_name = "Piper"
         voice_config = PiperVoiceConfig(
             voice_id=voice_id,
             model_file=model_file,
             config_file=config_file,
-            display_name="Piper",
+            display_name=display_name,
             expected_sample_rate=sample_rate,
             language=effective_language,
         )
@@ -984,6 +1005,42 @@ class TTSService(BaseService):
                 provider_ready = health.ready
                 active_voice_id = health.active_voice
         profiles: list[TTSVoiceProfileDescriptor] = []
+        catalog_error: VoiceCatalogSourceError | None = None
+        if tts_cfg.provider == "piper":
+            try:
+                for item in await self._piper_catalog_manager(tts_cfg).list_voices():
+                    if not item.installed:
+                        continue
+                    is_active = item.ready and provider_ready and item.voice_id == active_voice_id
+                    is_default = item.ready and item.voice_id == default_voice_id
+                    profiles.append(
+                        TTSVoiceProfileDescriptor(
+                            voice_id=item.voice_id,
+                            display_name=item.display_name,
+                            kind="standard",
+                            installed=True,
+                            ready=item.ready,
+                            default=is_default,
+                            active=is_active,
+                            enabled=True,
+                            compatible_language_pack_ids=[item.language],
+                            compatible_selection_group="piper-sherpa-onnx-v1",
+                            revision=item.revision,
+                            retained_source=False,
+                            storage=SpeechStorageSummary(artifact_count=3),
+                            visibility="private",
+                            allowed_peer_ids=[],
+                        )
+                    )
+                    if len(profiles) >= 256:
+                        break
+            except VoiceCatalogSourceError as exc:
+                catalog_error = exc
+            except (VoiceCatalogError, OSError) as exc:
+                catalog_error = VoiceCatalogSourceError("voice catalog is unavailable")
+                catalog_error.__cause__ = exc
+            if profiles or self._provider is None:
+                return profiles, catalog_error
         for entry in registry_entries:
             is_ready = entry.ready_state == "ready"
             is_active = is_ready and provider_ready and entry.voice_id == active_voice_id
@@ -1010,7 +1067,6 @@ class TTSService(BaseService):
                 )
             )
         known_voice_ids = {profile.voice_id for profile in profiles}
-        catalog_error: VoiceCatalogSourceError | None = None
         if include_catalog and tts_cfg.provider == "pockettts":
             try:
                 for item in await self._voice_catalog_installer(tts_cfg).list_items():
@@ -1090,7 +1146,13 @@ class TTSService(BaseService):
         catalog_rows = []
         catalog_status = "available"
         catalog_error_code: str | None = None
-        if tts_cfg.provider == "pockettts":
+        if tts_cfg.provider == "piper":
+            try:
+                catalog_rows = list(await self._piper_catalog_manager(tts_cfg).list_voices())
+            except (VoiceCatalogError, OSError):
+                catalog_status = "unavailable"
+                catalog_error_code = "catalog_unavailable"
+        elif tts_cfg.provider == "pockettts":
             try:
                 catalog_rows = list(await self._voice_catalog_installer(tts_cfg).list_items())
             except (VoiceCatalogError, VoiceRegistryError, OSError):
@@ -1100,7 +1162,9 @@ class TTSService(BaseService):
         profile_by_voice_id = {profile.voice_id: profile for profile in profiles}
         grouped: dict[str, dict[str, Any]] = {}
         for item in catalog_rows:
-            pack_id = _voice_language_pack(item.language_bundle)
+            pack_id = _voice_language_pack(
+                item.language if tts_cfg.provider == "piper" else item.language_bundle
+            )
             if pack_id is None:
                 continue
             row = grouped.setdefault(
@@ -1114,7 +1178,13 @@ class TTSService(BaseService):
             profile = profile_by_voice_id.get(item.voice_id)
             installed = bool(profile.installed) if profile is not None else item.installed
             ready = bool(profile.ready) if profile is not None else item.ready
-            revision = profile.revision if profile is not None else item.artifact_revision
+            revision = (
+                profile.revision
+                if profile is not None
+                else item.revision
+                if tts_cfg.provider == "piper"
+                else item.artifact_revision
+            )
             row["voices"][item.voice_id] = TTSLanguagePackVoice(
                 voice_id=item.voice_id,
                 display_name=item.display_name,
@@ -1463,6 +1533,100 @@ class TTSService(BaseService):
             if cached is not None:
                 return cached
             tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+            if tts_cfg.provider == "piper":
+                manager = self._piper_catalog_manager(tts_cfg)
+                try:
+                    catalog_items = {item.voice_id: item for item in await manager.list_voices()}
+                except VoiceCatalogSourceError as exc:
+                    response = TTSInstallVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="rejected",
+                        correlation_id=request.correlation_id,
+                    )
+                    await self._audit_voice_management(
+                        "install_voice_profile", request, response, envelope
+                    )
+                    raise VoiceCatalogSourceError("voice catalog is unavailable") from exc
+                target_item = catalog_items.get(request.voice_id)
+                if target_item is None:
+                    response = TTSInstallVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="not_found",
+                        correlation_id=request.correlation_id,
+                    )
+                    await self._audit_voice_management(
+                        "install_voice_profile", request, response, envelope
+                    )
+                    self._cache_mutation("install_voice_profile", request, response, envelope)
+                    return response
+                if (
+                    request.expected_revision is not None
+                    and request.expected_revision != target_item.revision
+                ):
+                    response = TTSInstallVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="revision_conflict",
+                        revision=target_item.revision,
+                        correlation_id=request.correlation_id,
+                    )
+                    await self._audit_voice_management(
+                        "install_voice_profile", request, response, envelope
+                    )
+                    self._cache_mutation("install_voice_profile", request, response, envelope)
+                    return response
+                if target_item.installed and target_item.ready:
+                    response = TTSInstallVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="unchanged",
+                        revision=target_item.revision,
+                        correlation_id=request.correlation_id,
+                    )
+                    await self._audit_voice_management(
+                        "install_voice_profile", request, response, envelope
+                    )
+                    self._cache_mutation("install_voice_profile", request, response, envelope)
+                    return response
+                planned_response = TTSInstallVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="installed",
+                    revision=target_item.revision,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "install_voice_profile",
+                    request,
+                    planned_response,
+                    envelope,
+                    phase="intent",
+                    audit_status="attempted",
+                )
+                try:
+                    result = await manager.install_voice(request.voice_id)
+                except VoiceCatalogError as exc:
+                    log_error(f"TTS voice install failed: error={_safe_tts_error(exc)}")
+                    response = TTSInstallVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="rejected",
+                        correlation_id=request.correlation_id,
+                    )
+                    await self._audit_voice_management(
+                        "install_voice_profile", request, response, envelope
+                    )
+                    self._cache_mutation("install_voice_profile", request, response, envelope)
+                    return response
+                self._voice_revision += 1
+                response = TTSInstallVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="installed",
+                    revision=result.voice.revision,
+                    correlation_id=request.correlation_id,
+                )
+                await self._initialize_engine_fail_soft("voice install")
+                await self._audit_voice_management(
+                    "install_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("install_voice_profile", request, response, envelope)
+                return response
             registry = self._voice_registry(tts_cfg)
             installer = self._voice_catalog_installer(tts_cfg)
             try:
@@ -1660,8 +1824,15 @@ class TTSService(BaseService):
                 self.engine = None
                 self.stream = None
             try:
-                await self._voice_registry(tts_cfg).delete_voice(request.voice_id)
-            except VoiceRegistryError as exc:
+                if tts_cfg.provider == "piper":
+                    removed = await self._piper_catalog_manager(tts_cfg).remove_voice(
+                        request.voice_id
+                    )
+                    if not removed:
+                        raise VoiceCatalogSourceError("Piper voice is unavailable")
+                else:
+                    await self._voice_registry(tts_cfg).delete_voice(request.voice_id)
+            except (VoiceCatalogError, VoiceRegistryError) as exc:
                 log_error(f"TTS voice removal failed: error={_safe_tts_error(exc)}")
                 response = TTSRemoveVoiceProfileResponse(
                     voice_id=request.voice_id,

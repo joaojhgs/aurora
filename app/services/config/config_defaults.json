@@ -113,7 +113,8 @@
           "model_file_path": "voice_models/en_US-lessac-medium.onnx",
           "model_config_file_path": "voice_models/en_US-lessac-medium.onnx.txt",
           "model_sample_rate": 22050,
-          "executable_path": ""
+          "executable_path": "",
+          "cache_dir": "voice_models/piper"
         },
         "pockettts": {
           "quality_tier": "compact",
