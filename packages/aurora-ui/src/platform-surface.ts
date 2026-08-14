@@ -464,6 +464,17 @@ export function getAuroraVoiceCapturePolicy(
       }
     case 'ios':
       if (options.nativeVoiceAvailable === true) {
+        if (nativeWakewordReady) {
+          return {
+            focusedPushToTalkOwner: 'mobile-native',
+            wakewordOwner: 'mobile-native',
+            wakewordRequiresFocus: false,
+            canUseWebViewVisualizer: false,
+            avoidCoordinatorPushToTalk: true,
+            usesBrowserVoiceRuntime: false,
+            detail: 'iOS voice can keep listening during a listening session you start.'
+          }
+        }
         return {
           focusedPushToTalkOwner: 'mobile-native',
           wakewordOwner: 'unavailable',

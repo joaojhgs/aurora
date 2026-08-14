@@ -366,8 +366,8 @@ describe('Aurora surface profile regression coverage', () => {
     expect(missingKws.voiceCapture.wakewordOwner).toBe('unavailable')
     expect(ios.voiceCapture).toMatchObject({
       focusedPushToTalkOwner: 'mobile-native',
-      wakewordOwner: 'unavailable',
-      wakewordRequiresFocus: true,
+      wakewordOwner: 'mobile-native',
+      wakewordRequiresFocus: false,
     })
     expect(findForbiddenProductionCopyTerms(desktop.voiceCapture.detail)).toEqual([])
     expect(findForbiddenProductionCopyTerms(android.voiceCapture.detail)).toEqual([])
