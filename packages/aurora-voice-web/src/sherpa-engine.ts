@@ -16,7 +16,7 @@ import {
 import type { AuroraVoiceWorkerSherpaAssets } from './worker-assets.js'
 
 const SAMPLE_RATE_HZ = 16_000
-const MAX_MODEL_FILES = 64
+const MAX_MODEL_FILES = 4096
 const MAX_MODEL_FILE_BYTES = 256 * 1024 * 1024
 const MAX_VIRTUAL_PATH_BYTES = 256
 const MAX_TTS_TEXT_CHARS = 1_000
@@ -40,6 +40,7 @@ interface SherpaRuntimeHandles {
   readonly kws: SherpaKws | null
   readonly kwsStream: SherpaKwsStream | null
   readonly tts: SherpaOfflineTts | null
+  readonly ttsGenerationConfig: Record<string, unknown>
 }
 
 interface ValidatedModelBindings {
@@ -207,7 +208,7 @@ export class AuroraSherpaWasmVoiceEngine implements AuroraSherpaVoiceEngine {
         tts = helpers.createOfflineTts(ttsModule, ttsConfig(models))
         if (!validTts(tts)) throw unavailable('missing_tts_helper')
       }
-      this.handles = { vad, recognizer, recognizerStream, kws, kwsStream, tts }
+      this.handles = { vad, recognizer, recognizerStream, kws, kwsStream, tts, ttsGenerationConfig: ttsGenerationConfig(models) }
       this.capabilities = Object.freeze({
         vad: vad !== null,
         kws: kws !== null,
@@ -216,7 +217,7 @@ export class AuroraSherpaWasmVoiceEngine implements AuroraSherpaVoiceEngine {
       })
       return this.capabilities
     } catch (error) {
-      freeHandles({ vad, recognizer, recognizerStream, kws, kwsStream, tts })
+      freeHandles({ vad, recognizer, recognizerStream, kws, kwsStream, tts, ttsGenerationConfig: {} })
       throw error
     }
   }
@@ -270,14 +271,14 @@ export class AuroraSherpaWasmVoiceEngine implements AuroraSherpaVoiceEngine {
   async synthesizeSpeech(request: AuroraVoiceTtsRequest): Promise<AuroraVoiceTtsAudio> {
     const handles = this.handles
     const tts = handles?.tts ?? null
-    if (tts === null || !this.capabilities.tts) throw unavailable('tts_unavailable')
+    if (handles === null || tts === null || !this.capabilities.tts) throw unavailable('tts_unavailable')
     const text = validateTtsText(request.text)
     const generation = boundedGeneration(request.generation)
     const speed = boundedFloat(request.speed ?? 1.0, 0.25, 4.0, 'invalid_tts_request')
     const speakerId = boundedSpeakerId(request.speakerId)
     const audio = typeof tts.generateWithConfig === 'function'
-      ? tts.generateWithConfig(text, { sid: speakerId, speed })
-      : tts.generate?.({ text, sid: speakerId, speed })
+      ? tts.generateWithConfig(text, { sid: speakerId, speed, ...handles.ttsGenerationConfig })
+      : tts.generate?.({ text, sid: speakerId, speed, ...handles.ttsGenerationConfig })
     return Object.freeze(validateTtsAudio(audio, generation))
   }
 
@@ -331,7 +332,7 @@ async function validateModelBindings(bindings: AuroraVoiceWebModelBindings): Pro
     if (await sha256Hex(file.bytes) !== file.sha256) throw unavailable('model_hash_mismatch')
   }
   const fileIds = new Map(files.map((file) => [file.fileId, file]))
-  const models = bindings.models.map((model) => validateModelDescriptor(model, fileIds))
+  const models = bindings.models.map((model) => validateModelDescriptor(model, fileIds, files))
   return { files, models }
 }
 
@@ -478,11 +479,26 @@ function ttsConfig(models: readonly AuroraVoiceWebModelDescriptor[]): unknown {
   }
 }
 
+function ttsGenerationConfig(models: readonly AuroraVoiceWebModelDescriptor[]): Record<string, unknown> {
+  const matches = models.filter((model) => model.task === 'tts')
+  if (matches.length === 0) return {}
+  const model = requireModel(models, 'tts')
+  if (model.family !== 'pockettts') return {}
+  const referenceText = model.config?.referenceText
+  const referenceSampleRate = model.config?.referenceSampleRateHz
+  if (referenceText === undefined || referenceSampleRate === undefined) throw unavailable('missing_model_role')
+  return {
+    referenceAudio: requireRole(model, 'referenceAudio'),
+    referenceText,
+    referenceSampleRate
+  }
+}
+
 async function loadControlledSherpaHelpers(urls: readonly string[], fetchImpl: typeof fetch): Promise<SherpaHelpers> {
   const helpers: MutableSherpaHelpers = {}
   for (const url of urls) await fetchNeutralEngineSource(url, fetchImpl)
   for (const url of urls) {
-    const module = await dynamicImport(url) as Partial<SherpaHelpers> & { readonly OfflineRecognizer?: unknown }
+    const module = await import(/* webpackIgnore: true */ /* @vite-ignore */ url) as Partial<SherpaHelpers> & { readonly OfflineRecognizer?: unknown }
     if (typeof module.createVad === 'function') helpers.createVad = module.createVad
     if (typeof module.createOfflineRecognizer === 'function') helpers.createOfflineRecognizer = module.createOfflineRecognizer
     if (helpers.createOfflineRecognizer === undefined && typeof module.OfflineRecognizer === 'function') {
@@ -497,7 +513,7 @@ async function loadControlledSherpaHelpers(urls: readonly string[], fetchImpl: t
 
 async function loadControlledSherpaModule(url: string, _files: readonly AuroraVoiceWebModelFileBinding[], fetchImpl: typeof fetch): Promise<SherpaModule> {
   await fetchNeutralEngineSource(url, fetchImpl)
-  const imported = await dynamicImport(url) as { readonly default?: unknown }
+  const imported = await import(/* webpackIgnore: true */ /* @vite-ignore */ url) as { readonly default?: unknown }
   if (typeof imported.default !== 'function') throw unavailable('safe_sherpa_loader_missing')
   const wasmUrl = wasmUrlForEngineModule(url)
   await assertFetchableNeutralWasm(wasmUrl, fetchImpl)
@@ -511,10 +527,6 @@ async function loadControlledSherpaModule(url: string, _files: readonly AuroraVo
       return new URL(path, url).href
     }
   }) as Promise<SherpaModule>
-}
-
-function dynamicImport(url: string): Promise<unknown> {
-  return Function('url', 'return import(url)')(url) as Promise<unknown>
 }
 
 export async function fetchNeutralEngineSource(url: string, fetchImpl: typeof fetch = globalThis.fetch): Promise<string> {
@@ -584,7 +596,8 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 
 function validateModelDescriptor(
   model: AuroraVoiceWebModelDescriptor,
-  fileIds: ReadonlyMap<string, AuroraVoiceWebModelFileBinding>
+  fileIds: ReadonlyMap<string, AuroraVoiceWebModelFileBinding>,
+  files: readonly AuroraVoiceWebModelFileBinding[]
 ): AuroraVoiceWebModelDescriptor {
   if (!isTask(model.task) || !isFamily(model.family) || !isKind(model.kind) || !Array.isArray(model.files) || model.files.length === 0) {
     throw unavailable('invalid_model_metadata')
@@ -595,7 +608,7 @@ function validateModelDescriptor(
     (model.task === 'stt' && model.kind !== 'offline-asr') ||
     (model.task === 'tts' && (model.kind !== 'offline-tts' || !(model.family === 'piper' || model.family === 'pockettts')))
   ) throw unavailable('invalid_model_metadata')
-  const refs = model.files.map((ref) => validateModelFileReference(ref, model.task, fileIds))
+  const refs = model.files.map((ref) => validateModelFileReference(ref, model.task, fileIds, files))
   requireRoles(model, refs)
   return Object.freeze({
     task: model.task,
@@ -609,9 +622,14 @@ function validateModelDescriptor(
 function validateModelFileReference(
   ref: AuroraVoiceWebModelFileReference,
   task: AuroraVoiceWebModelTask,
-  fileIds: ReadonlyMap<string, AuroraVoiceWebModelFileBinding>
+  fileIds: ReadonlyMap<string, AuroraVoiceWebModelFileBinding>,
+  files: readonly AuroraVoiceWebModelFileBinding[]
 ): AuroraVoiceWebModelFileReference {
   if (!isRole(ref.role) || !safeId(ref.fileId) || !safeVirtualPath(ref.virtualPath)) throw unavailable('invalid_model_metadata')
+  if (ref.role === 'dataDir') {
+    if (!files.some((file) => file.task === task && file.virtualPath.startsWith(`${ref.virtualPath}/`))) throw unavailable('invalid_model_metadata')
+    return Object.freeze({ role: ref.role, fileId: ref.fileId, virtualPath: ref.virtualPath })
+  }
   const file = fileIds.get(ref.fileId)
   if (file === undefined || file.task !== task || file.virtualPath !== ref.virtualPath) throw unavailable('invalid_model_metadata')
   return Object.freeze({ role: ref.role, fileId: ref.fileId, virtualPath: ref.virtualPath })
@@ -631,6 +649,12 @@ function validateModelConfig(config: NonNullable<AuroraVoiceWebModelDescriptor['
   if (config.noiseScale !== undefined) boundedFloat(config.noiseScale, 0, 10, 'invalid_model_metadata')
   if (config.noiseScaleW !== undefined) boundedFloat(config.noiseScaleW, 0, 10, 'invalid_model_metadata')
   if (config.lengthScale !== undefined) boundedFloat(config.lengthScale, 0.1, 10, 'invalid_model_metadata')
+  if (config.referenceText !== undefined && (typeof config.referenceText !== 'string' || config.referenceText.trim() === '' || config.referenceText.length > 1_000)) {
+    throw unavailable('invalid_model_metadata')
+  }
+  if (config.referenceSampleRateHz !== undefined && (!Number.isSafeInteger(config.referenceSampleRateHz) || config.referenceSampleRateHz < 8_000 || config.referenceSampleRateHz > 48_000)) {
+    throw unavailable('invalid_model_metadata')
+  }
   return Object.freeze({ ...config })
 }
 
@@ -644,8 +668,8 @@ function requireRoles(model: AuroraVoiceWebModelDescriptor, refs: readonly Auror
   if (model.family === 'whisper') requireEvery(['encoder', 'decoder', 'tokens'])
   if (model.family === 'sense-voice') requireEvery(['model', 'tokens'])
   if (model.family === 'sherpa-kws-transducer') requireEvery(['encoder', 'decoder', 'joiner', 'tokens'])
-  if (model.family === 'piper') requireEvery(['model', 'tokens'])
-  if (model.family === 'pockettts') requireEvery(['lmFlow', 'lmMain', 'encoder', 'decoder', 'textConditioner', 'vocabJson', 'tokenScoresJson'])
+  if (model.family === 'piper') requireEvery(['model', 'tokens', 'dataDir'])
+  if (model.family === 'pockettts') requireEvery(['lmFlow', 'lmMain', 'encoder', 'decoder', 'textConditioner', 'vocabJson', 'tokenScoresJson', 'referenceAudio'])
 }
 
 function requireModel(models: readonly AuroraVoiceWebModelDescriptor[], task: AuroraVoiceWebModelTask): AuroraVoiceWebModelDescriptor {
@@ -824,7 +848,8 @@ function isRole(value: unknown): value is AuroraVoiceWebModelFileRole {
     value === 'lmMain' ||
     value === 'textConditioner' ||
     value === 'vocabJson' ||
-    value === 'tokenScoresJson'
+    value === 'tokenScoresJson' ||
+    value === 'referenceAudio'
 }
 
 function safeId(value: unknown): value is string {

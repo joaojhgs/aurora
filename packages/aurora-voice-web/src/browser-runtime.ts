@@ -175,11 +175,10 @@ export async function loadAuroraBrowserVoiceModelBindings(
     if (packModels.length === 0) throw new Error('Voice worker is not available')
     models.push(...packModels)
     for (const file of pack.files) {
-      const virtualPath = virtualPathFromModels(packModels, file.fileId)
       files.push({
         task,
         fileId: file.fileId,
-        virtualPath,
+        virtualPath: file.virtualPath,
         sha256: file.sha256,
         byteLength: file.byteLength,
         bytes: await file.readAll()
@@ -200,10 +199,4 @@ function createWorker(
   const url = buildAuroraVoiceWorkerUrl(resolvedWorkerUrl, resolvedWasmUrl, undefined, sherpaAssets)
   if (factory !== undefined) return factory(url, { type: 'module', name: 'aurora-voice-worker' })
   return new Worker(url, { type: 'module', name: 'aurora-voice-worker' })
-}
-
-function virtualPathFromModels(models: readonly AuroraVoiceWebModelDescriptor[], fileId: string): string {
-  const refs = models.flatMap((model) => model.files).filter((file) => file.fileId === fileId)
-  if (refs.length !== 1) throw new Error('Voice worker is not available')
-  return refs[0]!.virtualPath
 }

@@ -1,11 +1,23 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { AuroraSherpaWasmVoiceEngine, assertNoBundledDataPreload, fetchNeutralEngineSource } from '../src/sherpa-engine.js'
 import type { AuroraPcmFrameEnvelope, AuroraVoiceWebModelBindings, AuroraVoiceWebModelFileBinding } from '../src/types.js'
 
+const packageDir = new URL('..', import.meta.url).pathname
+
 describe('AuroraSherpaWasmVoiceEngine', () => {
+  it('keeps controlled Sherpa module loading CSP safe for Next and Vite builds', () => {
+    const source = readFileSync(join(packageDir, 'src/sherpa-engine.ts'), 'utf8')
+
+    expect(source).not.toMatch(/\bFunction\s*\(/)
+    expect(source).not.toMatch(/\beval\s*\(/)
+    expect(source).toMatch(/webpackIgnore:\s*true/)
+    expect(source).toMatch(/@vite-ignore/)
+  })
+
   it('keeps all capabilities unavailable without selected model bindings', async () => {
     const engine = new AuroraSherpaWasmVoiceEngine()
 
@@ -120,21 +132,23 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
       loadHelpers: async () => ({
         createOfflineTts: (_module, config) => {
           configs.push(config)
-          return new FakeTts()
+          return new FakeTts([])
         }
       })
     })
 
     const capabilities = await engine.initialize(bindings([
       modelFile('tts', 'piper-model.onnx', [1], '/voices/en/model.onnx'),
-      modelFile('tts', 'piper-tokens.txt', [2], '/voices/en/tokens.txt')
+      modelFile('tts', 'piper-tokens.txt', [2], '/voices/en/tokens.txt'),
+      modelFile('tts', 'piper-phonemes.txt', [3], '/voices/en/espeak-ng-data/phonemes.txt')
     ], [{
       task: 'tts',
       family: 'piper',
       kind: 'offline-tts',
       files: [
         { role: 'model', fileId: 'piper-model.onnx', virtualPath: '/voices/en/model.onnx' },
-        { role: 'tokens', fileId: 'piper-tokens.txt', virtualPath: '/voices/en/tokens.txt' }
+        { role: 'tokens', fileId: 'piper-tokens.txt', virtualPath: '/voices/en/tokens.txt' },
+        { role: 'dataDir', fileId: 'piper-data-dir', virtualPath: '/voices/en/espeak-ng-data' }
       ],
       config: { speed: 1.1 }
     }]))
@@ -144,6 +158,7 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
     expect(capabilities).toEqual({ vad: false, kws: false, stt: false, tts: true })
     expect(mounted).toContain('dir:/voices')
     expect(mounted).toContain('dir:/voices/en')
+    expect(mounted).toContain('dir:/voices/en/espeak-ng-data')
     expect(mounted).toContain('fs:/voices/en/model.onnx')
     expect(configs[0]).toMatchObject({
       offlineTtsModelConfig: {
@@ -157,83 +172,80 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
     expect([...audio.pcm]).toEqual([0, 16384, -16384])
   })
 
-  it('requires complete PocketTTS bindings before advertising browser TTS', async () => {
-    const configCalls: unknown[] = []
+  it('keeps Pocket TTS unavailable without an explicit reference profile', async () => {
     const engine = new AuroraSherpaWasmVoiceEngine({
-      engineAssets: {
-        ttsModuleUrl: 'https://voice.example/sherpa-onnx-wasm-main-tts.js',
-        ttsHelperUrl: 'https://voice.example/sherpa-onnx-tts.js'
-      },
+      engineAssets: { ttsModuleUrl: 'https://voice.example/tts.js', ttsHelperUrl: 'https://voice.example/tts-helper.js' },
       loadModule: async () => ({ FS_createDataFile: () => undefined }),
-      loadHelpers: async () => ({ createOfflineTts: (_module, config) => { configCalls.push(config); return new FakeTts() } })
+      loadHelpers: async () => ({ createOfflineTts: () => new FakeTts([]) })
     })
-    const files = [
-      modelFile('tts', 'lm-flow', [1], '/pocket/lm_flow.int8.onnx'),
-      modelFile('tts', 'lm-main', [2], '/pocket/lm_main.int8.onnx'),
-      modelFile('tts', 'encoder', [3], '/pocket/encoder.onnx'),
-      modelFile('tts', 'decoder', [4], '/pocket/decoder.int8.onnx'),
-      modelFile('tts', 'conditioner', [5], '/pocket/text_conditioner.onnx'),
-      modelFile('tts', 'vocab', [6], '/pocket/vocab.json'),
-      modelFile('tts', 'scores', [7], '/pocket/token_scores.json')
-    ]
 
-    await expect(engine.initialize(bindings(files.slice(0, -1), [{
-      task: 'tts',
-      family: 'pockettts',
-      kind: 'offline-tts',
+    await expect(engine.initialize({
       files: [
-        { role: 'lmFlow', fileId: 'lm-flow', virtualPath: '/pocket/lm_flow.int8.onnx' },
-        { role: 'lmMain', fileId: 'lm-main', virtualPath: '/pocket/lm_main.int8.onnx' },
-        { role: 'encoder', fileId: 'encoder', virtualPath: '/pocket/encoder.onnx' },
-        { role: 'decoder', fileId: 'decoder', virtualPath: '/pocket/decoder.int8.onnx' },
-        { role: 'textConditioner', fileId: 'conditioner', virtualPath: '/pocket/text_conditioner.onnx' },
-        { role: 'vocabJson', fileId: 'vocab', virtualPath: '/pocket/vocab.json' }
-      ]
-    }]))).rejects.toMatchObject({ code: 'missing_model_role' })
-
-    await expect(engine.initialize(bindings(files, [{
-      task: 'tts',
-      family: 'pockettts',
-      kind: 'offline-tts',
-      files: [
-        { role: 'lmFlow', fileId: 'lm-flow', virtualPath: '/pocket/lm_flow.int8.onnx' },
-        { role: 'lmMain', fileId: 'lm-main', virtualPath: '/pocket/lm_main.int8.onnx' },
-        { role: 'encoder', fileId: 'encoder', virtualPath: '/pocket/encoder.onnx' },
-        { role: 'decoder', fileId: 'decoder', virtualPath: '/pocket/decoder.int8.onnx' },
-        { role: 'textConditioner', fileId: 'conditioner', virtualPath: '/pocket/text_conditioner.onnx' },
-        { role: 'vocabJson', fileId: 'vocab', virtualPath: '/pocket/vocab.json' },
-        { role: 'tokenScoresJson', fileId: 'scores', virtualPath: '/pocket/token_scores.json' }
-      ]
-    }]))).resolves.toEqual({ vad: false, kws: false, stt: false, tts: true })
-    expect(configCalls.at(-1)).toMatchObject({
-      offlineTtsModelConfig: {
-        offlineTtsPocketModelConfig: {
-          lmFlow: '/pocket/lm_flow.int8.onnx',
-          tokenScoresJson: '/pocket/token_scores.json'
-        }
-      }
-    })
+        modelFile('tts', 'lm-flow.onnx', [1]),
+        modelFile('tts', 'lm-main.onnx', [2]),
+        modelFile('tts', 'encoder.onnx', [3]),
+        modelFile('tts', 'decoder.onnx', [4]),
+        modelFile('tts', 'text-conditioner.onnx', [5]),
+        modelFile('tts', 'vocab.json', [6]),
+        modelFile('tts', 'token-scores.json', [7])
+      ],
+      models: [{
+        task: 'tts',
+        family: 'pockettts',
+        kind: 'offline-tts',
+        files: [
+          refById('lmFlow', 'lm-flow.onnx'),
+          refById('lmMain', 'lm-main.onnx'),
+          refById('encoder', 'encoder.onnx'),
+          refById('decoder', 'decoder.onnx'),
+          refById('textConditioner', 'text-conditioner.onnx'),
+          refById('vocabJson', 'vocab.json'),
+          refById('tokenScoresJson', 'token-scores.json')
+        ]
+      }]
+    })).rejects.toMatchObject({ code: 'missing_model_role' })
   })
 
-  it('matches the pinned neutral Sherpa TTS helper API shape', () => {
-    const helperSource = readFileSync(
-      join(
-        '/home',
-        'developer',
-        'projects',
-        'aurora',
-        '.artifacts',
-        'sherpa-onnx-1.13.4-neutral-tts-20260814',
-        'sherpa-onnx-tts.js'
-      ),
-      'utf8'
-    )
+  it('passes an explicit Pocket reference profile during synthesis', async () => {
+    const calls: string[] = []
+    const engine = new AuroraSherpaWasmVoiceEngine({
+      engineAssets: { ttsModuleUrl: 'https://voice.example/tts.js', ttsHelperUrl: 'https://voice.example/tts-helper.js' },
+      loadModule: async () => ({ FS_createDataFile: (_parent, name) => calls.push(`fs:/${name}`), FS_createPath: () => undefined }),
+      loadHelpers: async () => ({ createOfflineTts: () => new FakeTts(calls) })
+    })
 
-    expect(helperSource).toMatch(/function createOfflineTts\(Module, myConfig\)/)
-    expect(helperSource).toMatch(/generate\(config\)\s*\{[\s\S]*config\.text is required/)
-    expect(helperSource).toMatch(/generateWithConfig\(text, genConfig\)/)
-    expect(helperSource).toContain('return {samples: samples, sampleRate: sampleRate}')
-    expect(helperSource).toContain('createOfflineTts,')
+    await engine.initialize({
+      files: [
+        modelFile('tts', 'lm-flow.onnx', [1]),
+        modelFile('tts', 'lm-main.onnx', [2]),
+        modelFile('tts', 'encoder.onnx', [3]),
+        modelFile('tts', 'decoder.onnx', [4]),
+        modelFile('tts', 'text-conditioner.onnx', [5]),
+        modelFile('tts', 'vocab.json', [6]),
+        modelFile('tts', 'token-scores.json', [7]),
+        modelFile('tts', 'reference.wav', [8])
+      ],
+      models: [{
+        task: 'tts',
+        family: 'pockettts',
+        kind: 'offline-tts',
+        files: [
+          refById('lmFlow', 'lm-flow.onnx'),
+          refById('lmMain', 'lm-main.onnx'),
+          refById('encoder', 'encoder.onnx'),
+          refById('decoder', 'decoder.onnx'),
+          refById('textConditioner', 'text-conditioner.onnx'),
+          refById('vocabJson', 'vocab.json'),
+          refById('tokenScoresJson', 'token-scores.json'),
+          refById('referenceAudio', 'reference.wav')
+        ],
+        config: { referenceText: 'hello from speaker', referenceSampleRateHz: 16_000 }
+      }]
+    })
+    await engine.synthesizeSpeech({ text: 'hello', generation: 3 })
+
+    expect(calls).toContain('fs:/tts-reference.wav')
+    expect(calls).toContain('tts:hello:/tts-reference.wav:16000:hello from speaker')
   })
 
   it('rejects engine sources that declare an Emscripten data preload without fetching data assets', async () => {
@@ -304,6 +316,13 @@ function ref(
   const file = files.find((candidate) => candidate.task === task && candidate.fileId === fileId)
   if (file === undefined) throw new Error(`missing fixture ${task}:${fileId}`)
   return { role, fileId: file.fileId, virtualPath: file.virtualPath }
+}
+
+function refById(
+  role: AuroraVoiceWebModelBindings['models'][number]['files'][number]['role'],
+  fileId: string
+) {
+  return { role, fileId, virtualPath: `/tts-${fileId}` }
 }
 
 function engineAssets() {
@@ -382,20 +401,25 @@ class FakeKws {
   free(): void { this.calls.push('kws:free') }
 }
 
+class FakeTts {
+  constructor(private readonly calls: string[]) {}
+  generateWithConfig(text: string, config: unknown): unknown {
+    const candidate = config as { referenceAudio?: unknown; referenceSampleRate?: unknown; referenceText?: unknown }
+    if (candidate.referenceAudio !== undefined) {
+      this.calls.push(`tts:${text}:${String(candidate.referenceAudio)}:${String(candidate.referenceSampleRate)}:${String(candidate.referenceText)}`)
+      return { sampleRate: 16_000, samples: new Float32Array([0.2]) }
+    }
+    expect(text).toBe('Hello Aurora')
+    expect(config).toMatchObject({ sid: 0, speed: 1.25 })
+    return { samples: new Float32Array([0, 0.5, -0.5]), sampleRate: 16000 }
+  }
+  free(): void { this.calls.push('tts:free') }
+}
+
 class FakeStream {
   constructor(private readonly calls: string[]) {}
   acceptWaveform(sampleRate: number, samples: Float32Array): void { this.calls.push(`stream:accept:${sampleRate}:${samples.length}`) }
   inputFinished(): void { this.calls.push('stream:finished') }
   reset(): void { this.calls.push('stream:reset') }
   free(): void { this.calls.push('stream:free') }
-}
-
-class FakeTts {
-  generateWithConfig(text: string, config: unknown): unknown {
-    expect(text).toBe('Hello Aurora')
-    expect(config).toMatchObject({ sid: 0, speed: 1.25 })
-    return { samples: new Float32Array([0, 0.5, -0.5]), sampleRate: 16000 }
-  }
-
-  free(): void {}
 }

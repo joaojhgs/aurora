@@ -8,6 +8,9 @@ import {
   verifyBrowserModelPackManifest,
   type AuroraBrowserModelPackManifest
 } from '../src/browser-model-pack.js'
+import { loadAuroraBrowserVoiceModelBindings } from '../src/browser-runtime.js'
+import { findAuroraBrowserVoiceCatalogEntry } from '../src/browser-voice-catalog.js'
+import { AuroraSherpaWasmVoiceEngine } from '../src/sherpa-engine.js'
 import { MemoryWebModelStoreHost } from '../src/test-doubles/index.js'
 
 const TEST_PRIVATE_KEY_PKCS8_BASE64 = 'MC4CAQAwBQYDK2VwBCIEIBVNj/cSHz9pWMrteoqMMTyDd+p51OEdgbIRQJDEHiBP'
@@ -147,6 +150,24 @@ describe('browser model pack verification', () => {
       key_id: AURORA_NON_PRODUCTION_MODEL_PACK_KEY_ID,
       variant_id: 'web-wasm32-test'
     })
+  })
+
+  it('allows unsigned generated catalog manifests only through embedded catalog trust', async () => {
+    const manifest = findAuroraBrowserVoiceCatalogEntry('standard:piper:en_us-amy-low')?.toModelPackManifest()
+    expect(manifest).toBeDefined()
+
+    await expect(verifyBrowserModelPackManifest(manifest!)).rejects.toMatchObject({ code: 'unsigned' })
+    await expect(verifyBrowserModelPackManifest(manifest!, { allowEmbeddedBrowserVoiceCatalogTrust: true }))
+      .resolves.toMatchObject({
+        pack_id: 'standard:piper:en_us-amy-low',
+        verification_mode: 'embedded-catalog',
+        key_id: 'aurora-browser-voice-catalog'
+      })
+
+    await expect(verifyBrowserModelPackManifest({
+      ...manifest!,
+      display_name: 'tampered'
+    }, { allowEmbeddedBrowserVoiceCatalogTrust: true })).rejects.toMatchObject({ code: 'release_hash' })
   })
 
   it('rejects structurally invalid manifest file URLs during verification', async () => {
@@ -374,6 +395,7 @@ describe('browser model pack verification', () => {
     const modelBytes = new Uint8Array([9, 8, 7])
     const manifest = await signedUnsignedManifest({
       ...(await signedManifest(archiveBytes)),
+      tasks: ['stt'],
       files: [{
         file_id: 'archive',
         asset_id: 'archive',
@@ -404,6 +426,206 @@ describe('browser model pack verification', () => {
 
     expect(await host.listPromotedKeys()).toEqual([])
     expect(await host.listJsonKeys('aurora.voice.web-store.v1:active:')).toEqual([])
+  })
+
+  it('loads a Piper archive data directory into the browser engine after installation', async () => {
+    const archiveBytes = new Uint8Array([220])
+    const modelBytes = new Uint8Array([221])
+    const tokensBytes = new Uint8Array([222])
+    const langBytes = new Uint8Array([223])
+    const voiceBytes = new Uint8Array([224])
+    const manifest = await signedUnsignedManifest({
+      schema_version: 1,
+      pack_id: 'piper-web-test',
+      pack_version: '1.0.0',
+      display_name: 'Piper Web Test',
+      tasks: ['tts'],
+      files: [{
+        file_id: 'tts-archive',
+        asset_id: 'tts-archive',
+        task: 'tts',
+        url: `${TEST_ASSET_BASE_URL}/fixtures/piper.tar.bz2`,
+        sha256: await sha256Hex(archiveBytes),
+        byte_size: archiveBytes.byteLength,
+        installed_size: 16,
+        compression: 'tar_bzip2',
+        archive_root: 'piper-root',
+        archive_entries: [
+          { file_id: 'model', task: 'tts', path: 'piper-root/voice.onnx', sha256: await sha256Hex(modelBytes), byte_size: modelBytes.byteLength },
+          { file_id: 'tokens', task: 'tts', path: 'piper-root/tokens.txt', sha256: await sha256Hex(tokensBytes), byte_size: tokensBytes.byteLength },
+          { file_id: 'data-dir', task: 'tts', path: 'piper-root/espeak-ng-data', kind: 'directory' }
+        ]
+      }],
+      variants: [{
+        variant_id: 'web-wasm32-test',
+        file_ids: ['tts-archive'],
+        target: 'web',
+        os: 'web',
+        arch: 'wasm32',
+        model_bindings: [{
+          task: 'tts',
+          family: 'piper',
+          kind: 'offline-tts',
+          files: [
+            { role: 'model', fileId: 'model', virtualPath: '/piper-root/voice.onnx' },
+            { role: 'tokens', fileId: 'tokens', virtualPath: '/piper-root/tokens.txt' },
+            { role: 'dataDir', fileId: 'data-dir', virtualPath: '/piper-root/espeak-ng-data' }
+          ],
+          config: { language: 'en-us', voiceId: 'piper-web-test' }
+        }]
+      }],
+      revocation: null,
+      signature: null
+    })
+    const host = new MemoryWebModelStoreHost()
+    await installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      scope: { task: 'tts' },
+      allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
+      fetchBytes: async () => archiveBytes,
+      extractTarBzip2Archive: async (_bytes, request) => {
+        expect(request).toMatchObject({
+          expectedRoot: 'piper-root',
+          expectedPaths: ['piper-root/voice.onnx', 'piper-root/tokens.txt'],
+          expectedDirectories: ['piper-root/espeak-ng-data'],
+          allowUnexpectedFiles: false
+        })
+        return [
+          { path: 'piper-root/voice.onnx', byteSize: modelBytes.byteLength, sha256: await sha256Hex(modelBytes), bytes: modelBytes },
+          { path: 'piper-root/tokens.txt', byteSize: tokensBytes.byteLength, sha256: await sha256Hex(tokensBytes), bytes: tokensBytes },
+          { path: 'piper-root/espeak-ng-data/lang/en-us', byteSize: langBytes.byteLength, sha256: await sha256Hex(langBytes), bytes: langBytes },
+          { path: 'piper-root/espeak-ng-data/voices/en-us', byteSize: voiceBytes.byteLength, sha256: await sha256Hex(voiceBytes), bytes: voiceBytes }
+        ]
+      }
+    })
+
+    const bindings = await loadAuroraBrowserVoiceModelBindings(host, { allowNonProductionTestSignature: true }, ['tts'])
+    const mounted: string[] = []
+    const ttsConfigs: unknown[] = []
+    const engine = new AuroraSherpaWasmVoiceEngine({
+      engineAssets: {
+        ttsModuleUrl: 'https://voice.example/sherpa-onnx-wasm-tts.js',
+        ttsHelperUrl: 'https://voice.example/sherpa-onnx-tts.js'
+      },
+      loadModule: async (_url, files) => {
+        for (const file of files) mounted.push(file.virtualPath)
+        return { FS_createDataFile: (_parent, name) => mounted.push(`fs:/${name}`), FS_createPath: () => undefined }
+      },
+      loadHelpers: async () => ({
+        createOfflineTts: (_module, config) => {
+          ttsConfigs.push(config)
+          return new FakeTts()
+        }
+      })
+    })
+
+    await expect(engine.initialize(bindings)).resolves.toMatchObject({ tts: true })
+    const audio = await engine.synthesizeSpeech({ text: ' hello ', generation: 7 })
+    expect(audio).toMatchObject({ generation: 7, sampleRateHz: 16_000, sampleCount: 2, redacted: true })
+    expect(mounted).toEqual(expect.arrayContaining([
+      '/piper-root/voice.onnx',
+      '/piper-root/tokens.txt',
+      '/piper-root/espeak-ng-data/lang/en-us',
+      '/piper-root/espeak-ng-data/voices/en-us',
+      'fs:/piper-root/espeak-ng-data/lang/en-us',
+      'fs:/piper-root/espeak-ng-data/voices/en-us'
+    ]))
+    expect(JSON.stringify(ttsConfigs[0])).toContain('/piper-root/espeak-ng-data')
+  })
+
+  it('rejects reopened packs when a directory-expanded file is removed', async () => {
+    const archiveBytes = new Uint8Array([225])
+    const modelBytes = new Uint8Array([226])
+    const manifest = await signedUnsignedManifest({
+      ...(await signedManifest(archiveBytes)),
+      tasks: ['tts'],
+      files: [{
+        file_id: 'archive',
+        asset_id: 'archive',
+        task: 'tts',
+        url: `${TEST_ASSET_BASE_URL}/fixtures/piper-corrupt.tar.bz2`,
+        sha256: await sha256Hex(archiveBytes),
+        byte_size: archiveBytes.byteLength,
+        installed_size: 8,
+        compression: 'tar_bzip2',
+        archive_root: 'piper-root',
+        archive_entries: [
+          { file_id: 'model', task: 'tts', path: 'piper-root/voice.onnx' },
+          { file_id: 'data-dir', task: 'tts', path: 'piper-root/espeak-ng-data', kind: 'directory' }
+        ]
+      }],
+      variants: [{
+        variant_id: 'web-wasm32-test',
+        file_ids: ['archive'],
+        target: 'web',
+        os: 'web',
+        arch: 'wasm32',
+        model_bindings: [{
+          task: 'tts',
+          family: 'piper',
+          kind: 'offline-tts',
+          files: [
+            { role: 'model', fileId: 'model', virtualPath: '/piper-root/voice.onnx' },
+            { role: 'tokens', fileId: 'model', virtualPath: '/piper-root/voice.onnx' },
+            { role: 'dataDir', fileId: 'data-dir', virtualPath: '/piper-root/espeak-ng-data' }
+          ]
+        }]
+      }],
+      signature: null
+    })
+    const host = new MemoryWebModelStoreHost()
+    const receipt = await installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      scope: { task: 'tts' },
+      allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
+      fetchBytes: async () => archiveBytes,
+      extractTarBzip2Archive: async () => [
+        { path: 'piper-root/voice.onnx', byteSize: modelBytes.byteLength, sha256: await sha256Hex(modelBytes), bytes: modelBytes },
+        { path: 'piper-root/espeak-ng-data/lang/en-us', byteSize: 1, sha256: await sha256Hex(new Uint8Array([227])), bytes: new Uint8Array([227]) }
+      ]
+    })
+    await host.deletePromoted(receipt.files.at(-1)?.storageKey ?? '')
+
+    await expect(openActiveBrowserModelPack(host, { task: 'tts' }, { allowNonProductionTestSignature: true }))
+      .rejects.toMatchObject({ code: 'missing_file' })
+  })
+
+  it('rejects archive expansion that exceeds the declared installed budget', async () => {
+    const archiveBytes = new Uint8Array([230])
+    const manifest = await signedUnsignedManifest({
+      ...(await signedManifest(archiveBytes)),
+      files: [{
+        file_id: 'archive',
+        asset_id: 'archive',
+        task: 'stt',
+        url: `${TEST_ASSET_BASE_URL}/fixtures/expanded.tar.bz2`,
+        sha256: await sha256Hex(archiveBytes),
+        byte_size: archiveBytes.byteLength,
+        installed_size: 1,
+        compression: 'tar_bzip2',
+        archive_root: 'archive-root',
+        archive_entries: [{ file_id: 'model', task: 'stt', path: 'archive-root/model.onnx' }]
+      }],
+      variants: [{ variant_id: 'web-wasm32-test', file_ids: ['archive'], target: 'web', os: 'web', arch: 'wasm32' }],
+      signature: null
+    })
+    const host = new MemoryWebModelStoreHost()
+
+    await expect(installVerifiedBrowserModelPack({
+      host,
+      manifest,
+      allowNonProductionTestSignature: true,
+      ...TEST_ASSET_POLICY,
+      fetchBytes: async () => archiveBytes,
+      extractTarBzip2Archive: async () => [
+        { path: 'archive-root/model.onnx', byteSize: 2, sha256: await sha256Hex(new Uint8Array([1, 2])), bytes: new Uint8Array([1, 2]) }
+      ]
+    })).rejects.toMatchObject({ code: 'archive_bounds' })
+    expect(await host.listPromotedKeys()).toEqual([])
   })
 
   it('rejects unsafe asset source URLs before fetching or mutating storage', async () => {
@@ -535,24 +757,51 @@ describe('browser model pack verification', () => {
     expect(receipt.files).toHaveLength(1)
   })
 
-  it('uses no-store fetches that reject redirects for trusted default downloads', async () => {
+  it('uses no-store fetches and accepts bounded GitHub release asset redirects for trusted default downloads', async () => {
     const bytes = new Uint8Array([117, 118, 119])
-    const manifest = await signedManifestWithUrl(bytes, `${TEST_ASSET_BASE_URL}/fixtures/default-fetch.bin`)
+    const manifest = await signedManifestWithUrl(bytes, 'https://github.com/k2-fsa/sherpa-onnx/releases/download/model/default-fetch.bin')
     const host = new MemoryWebModelStoreHost()
     const previousFetch = globalThis.fetch
     globalThis.fetch = async (url, init) => {
-      expect(url).toBe(`${TEST_ASSET_BASE_URL}/fixtures/default-fetch.bin`)
-      expect(init).toMatchObject({ cache: 'no-store', redirect: 'error' })
-      return new Response(bytes)
+      expect(url).toBe('https://github.com/k2-fsa/sherpa-onnx/releases/download/model/default-fetch.bin')
+      expect(init).toMatchObject({ cache: 'no-store', redirect: 'follow' })
+      return {
+        ok: true,
+        url: 'https://release-assets.githubusercontent.com/github-production-release-asset/default-fetch.bin',
+        arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+      } as Response
     }
     try {
       const receipt = await installVerifiedBrowserModelPack({
         host,
         manifest,
         allowNonProductionTestSignature: true,
-        ...TEST_ASSET_POLICY
+        trustedAssetOrigins: ['https://github.com']
       })
       expect(receipt.files).toHaveLength(1)
+    } finally {
+      globalThis.fetch = previousFetch
+    }
+  })
+
+  it('rejects unlisted default-fetch redirect origins before storing bytes', async () => {
+    const bytes = new Uint8Array([127, 128, 129])
+    const manifest = await signedManifestWithUrl(bytes, 'https://github.com/k2-fsa/sherpa-onnx/releases/download/model/bad.bin')
+    const host = new MemoryWebModelStoreHost()
+    const previousFetch = globalThis.fetch
+    globalThis.fetch = async () => ({
+      ok: true,
+      url: 'https://evil.example/bad.bin',
+      arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+    } as Response)
+    try {
+      await expect(installVerifiedBrowserModelPack({
+        host,
+        manifest,
+        allowNonProductionTestSignature: true,
+        trustedAssetOrigins: ['https://github.com']
+      })).rejects.toMatchObject({ code: 'asset_url' })
+      expect(await host.listPromotedKeys()).toEqual([])
     } finally {
       globalThis.fetch = previousFetch
     }
@@ -1518,4 +1767,12 @@ function encodeBase64(value: Uint8Array): string {
   let binary = ''
   for (const byte of value) binary += String.fromCharCode(byte)
   return btoa(binary)
+}
+
+class FakeTts {
+  generateWithConfig(): unknown {
+    return { sampleRate: 16_000, samples: new Float32Array([0.1, -0.1]) }
+  }
+
+  free(): void {}
 }

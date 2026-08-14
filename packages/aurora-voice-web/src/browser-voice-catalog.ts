@@ -132,7 +132,7 @@ function ttsEntry(entry: AuroraBrowserRawTtsEntry): AuroraBrowserVoiceCatalogEnt
     task: 'tts',
     languages: [entry.language],
     archive: entry.archive,
-    installableByBrowserArchive: false,
+    installableByBrowserArchive: archiveInstallable(entry.archive),
     terms: entry.terms,
     toModelPackManifest: () => manifestFor(entry.voice_id, entry.display_name, ['tts'], 'tts', entry.archive, entry.bindings, 'piper', 'offline-tts', entry.language, entry.voice_id)
   }
@@ -165,7 +165,7 @@ function manifestFor(
       url: archive.url,
       sha256: archive.sha256,
       byte_size: archive.byte_size,
-      installed_size: archive.byte_size,
+      installed_size: archive.format === 'tar_bzip2' ? 1024 * 1024 * 1024 : archive.byte_size,
       compression: archive.format === 'tar_bzip2' ? 'tar_bzip2' : 'none',
       ...(archive.root === undefined || archive.root === null ? {} : { archive_root: archive.root }),
       ...(archive.format === 'tar_bzip2' ? { archive_entries: bindingEntries } : {})
@@ -201,8 +201,13 @@ function bindingArchiveEntries(
     return [{ file_id: 'model', task, path: archive.filename, sha256: archive.sha256, byte_size: archive.byte_size }]
   }
   return Object.entries(bindings)
-    .filter(([role]) => role !== 'model_card' && role !== 'config' && role !== 'data_dir')
-    .map(([role, path]) => ({ file_id: roleFileId(role), task, path }))
+    .filter(([role]) => role !== 'model_card' && role !== 'config')
+    .map(([role, path]) => ({
+      file_id: roleFileId(role),
+      task,
+      path,
+      ...(role === 'data_dir' ? { kind: 'directory' as const } : {})
+    }))
 }
 
 function modelFileRefs(
@@ -242,6 +247,7 @@ function roleName(role: string): AuroraVoiceWebModelFileRole | null {
   if (role === 'tokenizer') return 'bpeVocab'
   if (role === 'data_dir') return 'dataDir'
   if (role === 'bpe_vocab') return 'bpeVocab'
+  if (role === 'reference_audio') return 'referenceAudio'
   if (['model', 'encoder', 'decoder', 'tokens', 'joiner', 'keywords', 'lexicon'].includes(role)) {
     return role as AuroraVoiceWebModelFileRole
   }

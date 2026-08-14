@@ -42,4 +42,20 @@ describe('browser voice catalog', () => {
       'tokens'
     ])
   })
+
+  it('marks Piper voices installable with an explicit data directory binding', () => {
+    const entry = findAuroraBrowserVoiceCatalogEntry('standard:piper:en_us-amy-low')
+    const manifest = entry?.toModelPackManifest()
+
+    expect(entry?.installableByBrowserArchive).toBe(true)
+    expect(manifest?.files[0]?.installed_size).toBe(1024 * 1024 * 1024)
+    expect(manifest?.files[0]?.archive_entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ file_id: 'model' }),
+      expect.objectContaining({ file_id: 'tokens' }),
+      expect.objectContaining({ file_id: 'data-dir', kind: 'directory' })
+    ]))
+    expect(manifest?.variants[0]?.model_bindings?.[0]?.files).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'dataDir', fileId: 'data-dir' })
+    ]))
+  })
 })

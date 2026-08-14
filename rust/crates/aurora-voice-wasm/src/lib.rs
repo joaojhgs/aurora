@@ -211,7 +211,11 @@ pub struct WebLoadedModelArtifact {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WasmArchiveExtractRequest {
     pub expected_root: String,
+    #[serde(default)]
+    pub expected_directories: Vec<String>,
     pub expected_paths: Vec<String>,
+    #[serde(default)]
+    pub allow_unexpected_files: bool,
     #[serde(default = "default_archive_max_entries")]
     pub max_entries: usize,
     #[serde(default = "default_archive_max_file_bytes")]
@@ -1008,8 +1012,8 @@ pub fn extract_tar_bzip2_archive(
     request: WasmArchiveExtractRequest,
 ) -> Result<WasmArchiveExtractReceipt, WasmFacadeError> {
     let expected_root = safe_archive_path_text(&request.expected_root)?;
-    if request.expected_paths.is_empty()
-        || request.expected_paths.len() > request.max_entries
+    if (request.expected_paths.is_empty() && request.expected_directories.is_empty())
+        || request.expected_paths.len() + request.expected_directories.len() > request.max_entries
         || request.max_entries == 0
         || request.max_file_bytes == 0
         || request.max_total_bytes == 0
@@ -1017,12 +1021,29 @@ pub fn extract_tar_bzip2_archive(
         return Err(WasmFacadeError::new("archive_bounds"));
     }
     let mut expected_paths = BTreeSet::new();
+    let mut expected_directories = BTreeSet::new();
+    let mut expected_case_paths = BTreeSet::new();
     for path in &request.expected_paths {
         let normalized = safe_archive_path_text(path)?;
         if !archive_path_starts_with(&normalized, &expected_root) {
             return Err(WasmFacadeError::new("archive_root"));
         }
-        if !expected_paths.insert(pathbuf_to_slash_path(&normalized)) {
+        let path_key = pathbuf_to_slash_path(&normalized);
+        if !expected_case_paths.insert(path_key.to_ascii_lowercase())
+            || !expected_paths.insert(path_key)
+        {
+            return Err(WasmFacadeError::new("archive_duplicate"));
+        }
+    }
+    for path in &request.expected_directories {
+        let normalized = safe_archive_path_text(path)?;
+        if !archive_path_starts_with(&normalized, &expected_root) {
+            return Err(WasmFacadeError::new("archive_root"));
+        }
+        let path_key = pathbuf_to_slash_path(&normalized);
+        if !expected_case_paths.insert(path_key.to_ascii_lowercase())
+            || !expected_directories.insert(path_key)
+        {
             return Err(WasmFacadeError::new("archive_duplicate"));
         }
     }
@@ -1030,6 +1051,7 @@ pub fn extract_tar_bzip2_archive(
     let decoder = BzDecoder::new(Cursor::new(archive_bytes));
     let mut archive = tar::Archive::new(decoder);
     let mut seen = BTreeSet::new();
+    let mut seen_case_paths = BTreeSet::new();
     let mut files = BTreeMap::new();
     let mut entry_count = 0_usize;
     let mut total_bytes = 0_u64;
@@ -1059,7 +1081,8 @@ pub fn extract_tar_bzip2_archive(
             return Err(WasmFacadeError::new("archive_root"));
         }
         let path_key = pathbuf_to_slash_path(&path);
-        if !seen.insert(path_key.clone()) {
+        if !seen_case_paths.insert(path_key.to_ascii_lowercase()) || !seen.insert(path_key.clone())
+        {
             return Err(WasmFacadeError::new("archive_duplicate"));
         }
         if entry_type == EntryType::Directory {
@@ -1078,10 +1101,17 @@ pub fn extract_tar_bzip2_archive(
         if total_bytes > request.max_total_bytes {
             return Err(WasmFacadeError::new("archive_bounds"));
         }
-        if !expected_paths.contains(&path_key) {
+        let expected_file = expected_paths.contains(&path_key);
+        let expected_directory_file = expected_directories
+            .iter()
+            .any(|directory| archive_path_text_starts_with(&path_key, directory));
+        if !expected_file && !expected_directory_file && !request.allow_unexpected_files {
             return Err(WasmFacadeError::new("archive_unexpected"));
         }
         let bytes = read_tar_entry_exact(&mut entry, declared)?;
+        if !expected_file && !expected_directory_file {
+            continue;
+        }
         let sha256 = encode_hex(&Sha256::digest(&bytes));
         files.insert(
             path_key.clone(),
@@ -1093,14 +1123,17 @@ pub fn extract_tar_bzip2_archive(
             },
         );
     }
-    if files.len() != expected_paths.len() {
+    if !expected_paths.iter().all(|path| files.contains_key(path))
+        || !expected_directories.iter().all(|directory| {
+            files
+                .keys()
+                .any(|path| archive_path_text_starts_with(path, directory))
+        })
+    {
         return Err(WasmFacadeError::new("archive_missing"));
     }
     Ok(WasmArchiveExtractReceipt {
-        files: expected_paths
-            .iter()
-            .filter_map(|path| files.remove(path))
-            .collect(),
+        files: files.into_values().collect(),
         entry_count,
         total_bytes,
     })
@@ -1172,6 +1205,10 @@ fn archive_path_starts_with(path: &Path, root: &Path) -> bool {
         }
     }
     true
+}
+
+fn archive_path_text_starts_with(path: &str, root: &str) -> bool {
+    path.starts_with(&format!("{root}/"))
 }
 
 fn pathbuf_to_slash_path(path: &Path) -> String {
@@ -3614,10 +3651,12 @@ mod wasm_facade_tests {
             &archive,
             WasmArchiveExtractRequest {
                 expected_root: "voice-root".to_owned(),
+                expected_directories: Vec::new(),
                 expected_paths: vec![
                     "voice-root/model.onnx".to_owned(),
                     "voice-root/tokens.txt".to_owned(),
                 ],
+                allow_unexpected_files: false,
                 max_entries: 8,
                 max_file_bytes: 64,
                 max_total_bytes: 128,
@@ -3652,6 +3691,108 @@ mod wasm_facade_tests {
     }
 
     #[test]
+    fn extracts_declared_directory_prefixes_and_rejects_case_collisions() {
+        let archive = test_tar_bzip2(&[
+            ("voice-root/espeak-ng-data/", None, EntryType::Directory),
+            (
+                "voice-root/model.onnx",
+                Some(b"model".as_slice()),
+                EntryType::Regular,
+            ),
+            (
+                "voice-root/espeak-ng-data/lang/en",
+                Some(b"lang".as_slice()),
+                EntryType::Regular,
+            ),
+            (
+                "voice-root/espeak-ng-data/voices/en-us",
+                Some(b"voice".as_slice()),
+                EntryType::Regular,
+            ),
+        ]);
+
+        let receipt = extract_tar_bzip2_archive(
+            &archive,
+            WasmArchiveExtractRequest {
+                expected_root: "voice-root".to_owned(),
+                expected_paths: vec!["voice-root/model.onnx".to_owned()],
+                expected_directories: vec!["voice-root/espeak-ng-data".to_owned()],
+                allow_unexpected_files: false,
+                max_entries: 8,
+                max_file_bytes: 64,
+                max_total_bytes: 128,
+            },
+        )
+        .expect("extract directory");
+
+        assert_eq!(
+            receipt
+                .files
+                .iter()
+                .map(|file| file.path.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "voice-root/espeak-ng-data/lang/en",
+                "voice-root/espeak-ng-data/voices/en-us",
+                "voice-root/model.onnx"
+            ]
+        );
+
+        let collision = test_tar_bzip2(&[
+            (
+                "voice-root/espeak-ng-data/lang/en",
+                Some(b"one".as_slice()),
+                EntryType::Regular,
+            ),
+            (
+                "voice-root/espeak-ng-data/lang/EN",
+                Some(b"two".as_slice()),
+                EntryType::Regular,
+            ),
+        ]);
+        assert_eq!(
+            extract_tar_bzip2_archive(
+                &collision,
+                WasmArchiveExtractRequest {
+                    expected_root: "voice-root".to_owned(),
+                    expected_paths: Vec::new(),
+                    expected_directories: vec!["voice-root/espeak-ng-data".to_owned()],
+                    allow_unexpected_files: false,
+                    max_entries: 8,
+                    max_file_bytes: 64,
+                    max_total_bytes: 128,
+                }
+            )
+            .expect_err("case collision")
+            .code(),
+            "archive_duplicate"
+        );
+
+        let directory_as_file = test_tar_bzip2(&[(
+            "voice-root/espeak-ng-data",
+            Some(b"not a directory child".as_slice()),
+            EntryType::Regular,
+        )]);
+        assert_eq!(
+            extract_tar_bzip2_archive(
+                &directory_as_file,
+                WasmArchiveExtractRequest {
+                    expected_root: "voice-root".to_owned(),
+                    expected_paths: Vec::new(),
+                    expected_directories: vec!["voice-root/espeak-ng-data".to_owned()],
+                    allow_unexpected_files: false,
+                    max_entries: 8,
+                    max_file_bytes: 64,
+                    max_total_bytes: 128,
+                }
+            )
+            .expect_err("directory prefix must contain child files")
+            .code(),
+            "archive_unexpected"
+        );
+    }
+
+    #[test]
     fn rejects_links_unexpected_paths_and_resource_limits() {
         let link_archive = test_tar_bzip2(&[("voice-root/model.onnx", None, EntryType::Symlink)]);
         assert_eq!(
@@ -3679,6 +3820,16 @@ mod wasm_facade_tests {
                 .code(),
             "archive_unexpected"
         );
+        let allowed_extra = extract_tar_bzip2_archive(
+            &unexpected,
+            WasmArchiveExtractRequest {
+                allow_unexpected_files: true,
+                ..archive_request()
+            },
+        )
+        .expect("allowed extra");
+        assert_eq!(allowed_extra.files.len(), 1);
+        assert_eq!(allowed_extra.files[0].path, "voice-root/model.onnx");
 
         let large = test_tar_bzip2(&[(
             "voice-root/model.onnx",
@@ -4348,7 +4499,9 @@ mod wasm_facade_tests {
     fn archive_request() -> WasmArchiveExtractRequest {
         WasmArchiveExtractRequest {
             expected_root: "voice-root".to_owned(),
+            expected_directories: Vec::new(),
             expected_paths: vec!["voice-root/model.onnx".to_owned()],
+            allow_unexpected_files: false,
             max_entries: 8,
             max_file_bytes: 64,
             max_total_bytes: 128,

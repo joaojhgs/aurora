@@ -103,6 +103,7 @@ export type AuroraVoiceWebModelFileRole =
   | 'textConditioner'
   | 'vocabJson'
   | 'tokenScoresJson'
+  | 'referenceAudio'
 
 export interface AuroraVoiceWebModelFileReference {
   readonly role: AuroraVoiceWebModelFileRole
@@ -127,6 +128,8 @@ export interface AuroraVoiceWebModelDescriptor {
     readonly noiseScale?: number
     readonly noiseScaleW?: number
     readonly lengthScale?: number
+    readonly referenceText?: string
+    readonly referenceSampleRateHz?: number
   }
 }
 

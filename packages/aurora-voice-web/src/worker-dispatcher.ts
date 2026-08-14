@@ -367,7 +367,7 @@ function validModelBindings(bindings: unknown): bindings is AuroraVoiceWebModelB
   if ('sherpaAssets' in bindings) return false
   const files = (bindings as Partial<AuroraVoiceWebModelBindings>).files
   const models = (bindings as Partial<AuroraVoiceWebModelBindings>).models
-  if (!Array.isArray(files) || files.length === 0 || files.length > 64) return false
+  if (!Array.isArray(files) || files.length === 0 || files.length > 4096) return false
   if (!Array.isArray(models) || models.length === 0 || models.length > 64) return false
   return files.every((file) => {
     if (typeof file !== 'object' || file === null) return false
@@ -397,7 +397,7 @@ function validModelDescriptor(model: unknown): boolean {
     typeof file === 'object' &&
     file !== null &&
     (file as { role?: unknown }).role !== undefined &&
-    ['model', 'encoder', 'decoder', 'mergedDecoder', 'tokens', 'joiner', 'keywords', 'bpeVocab', 'lexicon', 'dataDir', 'lmFlow', 'lmMain', 'textConditioner', 'vocabJson', 'tokenScoresJson'].includes(String((file as { role?: unknown }).role)) &&
+    ['model', 'encoder', 'decoder', 'mergedDecoder', 'tokens', 'joiner', 'keywords', 'bpeVocab', 'lexicon', 'dataDir', 'lmFlow', 'lmMain', 'textConditioner', 'vocabJson', 'tokenScoresJson', 'referenceAudio'].includes(String((file as { role?: unknown }).role)) &&
     safeString((file as { fileId?: unknown }).fileId) &&
     safeVirtualPath((file as { virtualPath?: unknown }).virtualPath)
   ))
