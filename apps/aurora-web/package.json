@@ -10,7 +10,9 @@
     "build": "next build",
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run --environment node",
-    "test:browser:voice": "pnpm --dir ../.. --filter @aurora/voice-web run build && pnpm exec playwright test --config tests/playwright/assistant-browser-voice.playwright.config.ts"
+    "test:browser:voice": "pnpm --dir ../.. --filter @aurora/voice-web run build && pnpm exec playwright test --config tests/playwright/assistant-browser-voice.playwright.config.ts",
+    "package:unsigned": "pnpm build && node scripts/package-web-release.mjs && pnpm verify:package:unsigned",
+    "verify:package:unsigned": "node scripts/assert-web-release-artifact-clean.mjs"
   },
   "dependencies": {
     "@aurora/client": "workspace:*",
