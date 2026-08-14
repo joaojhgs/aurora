@@ -8,12 +8,13 @@
 use async_trait::async_trait;
 use aurora_voice_engine::{
     check_engine_cancellation, BoundFiniteSttRequest, BoundKwsRequest, BoundStreamSession,
-    BoundTaskRequest, BoundVadRequest, EngineError, EngineFaultCode, FiniteSttAudio, FiniteSttPort,
-    FiniteSttProviderBinding, FiniteSttResult, KeywordMatch, KwsConfig, KwsCooldownState,
-    KwsFrameResult, ResourceReport, SpeechSegment, StreamResetReason, StreamSessionId,
-    StreamingAudioFrame, TaskCapability, TaskPackBinding, TaskProvider, TaskReadiness,
-    VadAcceptResult, VadConfig, VadStreamProvider, VoiceTask, MONO_CHANNELS, VAD_SAMPLE_RATE_HZ,
-    VAD_WINDOW_SIZE_SAMPLES,
+    BoundTaskRequest, BoundTtsSynthesisRequest, BoundVadRequest, EngineError, EngineFaultCode,
+    FiniteSttAudio, FiniteSttPort, FiniteSttProviderBinding, FiniteSttResult, KeywordMatch,
+    KwsConfig, KwsCooldownState, KwsFrameResult, ResourceReport, SpeechSegment, StreamResetReason,
+    StreamSessionId, StreamingAudioFrame, TaskCapability, TaskPackBinding, TaskProvider,
+    TaskReadiness, TtsAudioChunk, TtsSynthesisPort, TtsSynthesisProviderBinding,
+    TtsSynthesisResult, VadAcceptResult, VadConfig, VadStreamProvider, VoiceTask, MONO_CHANNELS,
+    TTS_MAX_SAMPLE_RATE_HZ, TTS_MIN_SAMPLE_RATE_HZ, VAD_SAMPLE_RATE_HZ, VAD_WINDOW_SIZE_SAMPLES,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -26,6 +27,9 @@ const MAX_NATIVE_KEYWORD_BYTES: usize = 512;
 const MAX_KEYWORD_BUFFER_BYTES: usize = 4096;
 const MAX_PHRASE_REVISION_BYTES: usize = 128;
 const SHERPA_FINITE_STT_MAX_SECONDS: usize = 60;
+const SHERPA_TTS_MAX_SECONDS: usize = 60;
+const SHERPA_TTS_MIN_SPEED: f32 = 0.5;
+const SHERPA_TTS_MAX_SPEED: f32 = 2.0;
 
 /// Product-safe backend fault classes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,6 +70,8 @@ pub enum SherpaAdapterError {
     InvalidConfig,
     #[error("invalid audio frame")]
     InvalidFrame,
+    #[error("invalid synthesized audio")]
+    InvalidAudio,
     #[error("invalid speech segment")]
     InvalidSegment,
     #[error("invalid phrase map")]
@@ -89,6 +95,7 @@ impl SherpaAdapterError {
         match self {
             Self::InvalidConfig
             | Self::InvalidFrame
+            | Self::InvalidAudio
             | Self::InvalidSegment
             | Self::InvalidPhraseMap
             | Self::InvalidTranscript => EngineError::InvalidRequest,
@@ -305,6 +312,61 @@ pub trait SherpaSttBackend {
         sample_rate_hz: u32,
         pcm: &[f32],
     ) -> Result<String, SherpaAdapterError>;
+}
+
+pub trait SherpaTtsBackend {
+    fn synthesize(
+        &mut self,
+        text: &str,
+        speaker_id: i32,
+        speed: f32,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<SherpaTtsAudio, SherpaAdapterError>;
+
+    fn cancel(&mut self) -> Result<(), SherpaAdapterError>;
+}
+
+#[derive(Clone, PartialEq)]
+pub struct SherpaTtsAudio {
+    sample_rate_hz: u32,
+    samples: Vec<f32>,
+}
+
+impl SherpaTtsAudio {
+    pub fn new(sample_rate_hz: u32, samples: Vec<f32>) -> Result<Self, SherpaAdapterError> {
+        if !(TTS_MIN_SAMPLE_RATE_HZ..=TTS_MAX_SAMPLE_RATE_HZ).contains(&sample_rate_hz)
+            || samples.is_empty()
+            || samples.len() > sample_rate_hz as usize * SHERPA_TTS_MAX_SECONDS
+            || samples
+                .iter()
+                .any(|sample| !sample.is_finite() || !(-1.0..=1.0).contains(sample))
+        {
+            return Err(SherpaAdapterError::InvalidAudio);
+        }
+        Ok(Self {
+            sample_rate_hz,
+            samples,
+        })
+    }
+
+    pub fn sample_rate_hz(&self) -> u32 {
+        self.sample_rate_hz
+    }
+
+    pub fn samples(&self) -> &[f32] {
+        &self.samples
+    }
+}
+
+impl fmt::Debug for SherpaTtsAudio {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SherpaTtsAudio")
+            .field("sample_rate_hz", &self.sample_rate_hz)
+            .field("sample_count", &self.samples.len())
+            .field("samples", &"<redacted>")
+            .finish()
+    }
 }
 
 /// Safe host/backend boundary. Implementations may own native FFI or browser
@@ -817,6 +879,121 @@ pub struct SherpaFiniteSttEngine<B> {
     last_backend_fault: Option<BackendFaultCode>,
 }
 
+pub struct SherpaTtsProvider<B> {
+    installed_binding: TaskPackBinding,
+    backend: B,
+    readiness: TaskReadiness,
+    active_generation: Option<u64>,
+    active_cancelled: bool,
+    speaker_id: i32,
+    speed: f32,
+    last_backend_fault: Option<BackendFaultCode>,
+}
+
+impl<B> fmt::Debug for SherpaTtsProvider<B> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SherpaTtsProvider")
+            .field("installed_binding", &self.installed_binding)
+            .field("readiness", &self.readiness)
+            .field("active_generation", &self.active_generation)
+            .field("active_cancelled", &self.active_cancelled)
+            .field("speaker_id", &self.speaker_id)
+            .field("speed", &self.speed)
+            .field("last_backend_fault", &self.last_backend_fault)
+            .finish()
+    }
+}
+
+impl<B> SherpaTtsProvider<B>
+where
+    B: SherpaTtsBackend,
+{
+    pub fn new(installed_binding: TaskPackBinding, backend: B) -> Result<Self, EngineError> {
+        Self::with_voice_options(installed_binding, backend, 0, 1.0)
+    }
+
+    pub fn with_voice_options(
+        installed_binding: TaskPackBinding,
+        backend: B,
+        speaker_id: i32,
+        speed: f32,
+    ) -> Result<Self, EngineError> {
+        validate_tts_binding(&installed_binding)?;
+        validate_tts_voice_options(speaker_id, speed)?;
+        Ok(Self {
+            installed_binding,
+            backend,
+            readiness: TaskReadiness::Ready,
+            active_generation: None,
+            active_cancelled: false,
+            speaker_id,
+            speed,
+            last_backend_fault: None,
+        })
+    }
+
+    pub fn binding(&self) -> &TaskPackBinding {
+        &self.installed_binding
+    }
+
+    pub fn last_backend_fault(&self) -> Option<BackendFaultCode> {
+        self.last_backend_fault
+    }
+
+    pub fn into_backend(self) -> B {
+        self.backend
+    }
+
+    fn ensure_binding(&self, binding: &TaskPackBinding) -> Result<(), EngineError> {
+        if binding == &self.installed_binding {
+            Ok(())
+        } else {
+            Err(EngineError::InvalidRequest)
+        }
+    }
+
+    fn ensure_request(&self, request: &BoundTaskRequest) -> Result<(), EngineError> {
+        self.ensure_binding(request.binding())?;
+        if request.request().task != VoiceTask::TextToSpeech {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
+    }
+
+    fn validate_synthesis_request(
+        &self,
+        request: &BoundTtsSynthesisRequest,
+    ) -> Result<(), EngineError> {
+        let local = request.local_request().ok_or(EngineError::InvalidRequest)?;
+        self.ensure_request(local)?;
+        request.config().validate_binding(&self.installed_binding)?;
+        self.installed_binding
+            .validate_language(request.binding().language())?;
+        if request.config().seed().is_some() {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
+    }
+
+    fn capture_backend<T>(
+        &mut self,
+        result: Result<T, SherpaAdapterError>,
+    ) -> Result<T, SherpaAdapterError> {
+        match result {
+            Ok(value) => Ok(value),
+            Err(error) => {
+                if let SherpaAdapterError::BackendFault { code } = error {
+                    self.last_backend_fault = Some(code);
+                    Err(SherpaAdapterError::BackendFault { code })
+                } else {
+                    Err(error)
+                }
+            }
+        }
+    }
+}
+
 impl<B> fmt::Debug for SherpaFiniteSttEngine<B> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -825,6 +1002,116 @@ impl<B> fmt::Debug for SherpaFiniteSttEngine<B> {
             .field("readiness", &self.readiness)
             .field("last_backend_fault", &self.last_backend_fault)
             .finish()
+    }
+}
+
+#[async_trait(?Send)]
+impl<B> TaskProvider for SherpaTtsProvider<B>
+where
+    B: SherpaTtsBackend,
+{
+    fn capabilities(&self) -> Vec<TaskCapability> {
+        vec![TaskCapability::new(self.installed_binding.clone()).streaming(false)]
+    }
+
+    fn resource_report(&self) -> ResourceReport {
+        ResourceReport {
+            loaded_tasks: vec![VoiceTask::TextToSpeech],
+            memory_bytes: self.installed_binding.resource_budget().max_memory_bytes,
+            active_streams: u32::from(self.active_generation.is_some()),
+            readiness: self.readiness,
+        }
+    }
+
+    async fn warm_task(&mut self, request: BoundTaskRequest) -> Result<(), EngineError> {
+        self.ensure_request(&request)
+    }
+
+    async fn unload_task(&mut self, binding: TaskPackBinding) -> Result<(), EngineError> {
+        self.ensure_binding(&binding)?;
+        self.active_generation = None;
+        self.active_cancelled = false;
+        let result = self.backend.cancel();
+        self.capture_backend(result)
+            .map_err(SherpaAdapterError::into_engine_error)
+    }
+
+    async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        self.cancel_synthesis_generation(generation).await
+    }
+}
+
+#[async_trait(?Send)]
+impl<B> TtsSynthesisPort for SherpaTtsProvider<B>
+where
+    B: SherpaTtsBackend,
+{
+    fn synthesis_binding(&self) -> Result<TtsSynthesisProviderBinding, EngineError> {
+        Ok(TtsSynthesisProviderBinding::LocalTask(Box::new(
+            self.installed_binding.clone(),
+        )))
+    }
+
+    async fn warm_synthesis(
+        &mut self,
+        binding: TtsSynthesisProviderBinding,
+    ) -> Result<(), EngineError> {
+        match binding {
+            TtsSynthesisProviderBinding::LocalTask(binding) => self.ensure_binding(&binding),
+            TtsSynthesisProviderBinding::Route(_) => Err(EngineError::InvalidRequest),
+        }
+    }
+
+    async fn synthesize_text(
+        &mut self,
+        request: BoundTtsSynthesisRequest,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<TtsSynthesisResult, EngineError> {
+        if self.active_generation.is_some() {
+            return Err(EngineError::ResourceLimit);
+        }
+        self.validate_synthesis_request(&request)?;
+        check_engine_cancellation(cancellation)?;
+        let generation = request.generation();
+        self.active_generation = Some(generation);
+        self.active_cancelled = false;
+        let result =
+            self.backend
+                .synthesize(request.text(), self.speaker_id, self.speed, cancellation);
+        let audio = match self.capture_backend(result) {
+            Ok(audio) => audio,
+            Err(SherpaAdapterError::Cancelled) => {
+                self.active_generation = None;
+                self.active_cancelled = false;
+                return Err(EngineError::Cancelled);
+            }
+            Err(error) => {
+                self.active_generation = None;
+                self.active_cancelled = false;
+                return Err(error.into_engine_error());
+            }
+        };
+        if cancellation() || self.active_cancelled {
+            self.active_generation = None;
+            self.active_cancelled = false;
+            return Err(EngineError::Cancelled);
+        }
+        let chunks = chunk_tts_audio(&request, &audio)?;
+        self.active_generation = None;
+        self.active_cancelled = false;
+        TtsSynthesisResult::new(&request, chunks, false)
+    }
+
+    async fn cancel_synthesis_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        if self.active_generation == Some(generation) {
+            self.active_cancelled = true;
+            let result = self.backend.cancel();
+            self.capture_backend(result)
+                .map_err(SherpaAdapterError::into_engine_error)?;
+            self.active_generation = None;
+            self.active_cancelled = false;
+        }
+        Ok(())
     }
 }
 
@@ -1135,6 +1422,60 @@ fn validate_stt_binding(binding: &TaskPackBinding) -> Result<(), EngineError> {
         return Err(EngineError::InvalidRequest);
     }
     Ok(())
+}
+
+fn validate_tts_binding(binding: &TaskPackBinding) -> Result<(), EngineError> {
+    if binding.task() != VoiceTask::TextToSpeech
+        || !(TTS_MIN_SAMPLE_RATE_HZ..=TTS_MAX_SAMPLE_RATE_HZ).contains(&binding.sample_rate_hz())
+        || binding.channels() != MONO_CHANNELS
+    {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(())
+}
+
+fn validate_tts_voice_options(speaker_id: i32, speed: f32) -> Result<(), EngineError> {
+    if speaker_id < 0
+        || !speed.is_finite()
+        || !(SHERPA_TTS_MIN_SPEED..=SHERPA_TTS_MAX_SPEED).contains(&speed)
+    {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(())
+}
+
+fn chunk_tts_audio(
+    request: &BoundTtsSynthesisRequest,
+    audio: &SherpaTtsAudio,
+) -> Result<Vec<TtsAudioChunk>, EngineError> {
+    if audio.sample_rate_hz() != request.config().sample_rate_hz() {
+        return Err(EngineError::InvalidRequest);
+    }
+    let mut chunks = Vec::new();
+    let chunk_samples = request.config().chunk_samples();
+    for (index, samples) in audio.samples().chunks(chunk_samples).enumerate() {
+        let final_chunk = (index + 1) * chunk_samples >= audio.samples().len();
+        chunks.push(TtsAudioChunk::new(
+            request,
+            u64::try_from(index)
+                .map_err(|_| EngineError::ResourceLimit)?
+                .saturating_add(1),
+            audio.sample_rate_hz(),
+            MONO_CHANNELS,
+            samples.iter().map(|sample| float_to_i16(*sample)).collect(),
+            final_chunk,
+        )?);
+    }
+    Ok(chunks)
+}
+
+fn float_to_i16(sample: f32) -> i16 {
+    let clamped = sample.clamp(-1.0, 1.0);
+    if clamped <= -1.0 {
+        i16::MIN
+    } else {
+        (clamped * f32::from(i16::MAX)).round() as i16
+    }
 }
 
 fn validate_frame(config: &VadConfig, frame: &StreamingAudioFrame<'_>) -> Result<(), EngineError> {
@@ -1679,11 +2020,188 @@ mod native_stt_backend {
     }
 }
 
+#[cfg(feature = "native-tts")]
+mod native_tts_backend {
+    use super::*;
+    use aurora_voice_sherpa_sys::{
+        OfflineTtsConfig, OfflineTtsGenerationConfig, OfflineTtsSynthesizer,
+        TtsError as NativeTtsError,
+    };
+    use std::path::PathBuf;
+
+    const TTS_MODEL_FILE_ID: &str = "model";
+    const TTS_TOKENS_FILE_ID: &str = "tokens";
+    const TTS_ESPEAK_DATA_FILE_ID: &str = "espeak-ng-data";
+    const TTS_LEXICON_FILE_ID: &str = "lexicon";
+
+    pub struct NativeTtsBackend {
+        synthesizer: OfflineTtsSynthesizer,
+    }
+
+    impl fmt::Debug for NativeTtsBackend {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter
+                .debug_struct("NativeTtsBackend")
+                .field("synthesizer", &"<redacted>")
+                .finish()
+        }
+    }
+
+    impl NativeTtsBackend {
+        pub fn from_selected_vits_piper_model(
+            binding: &TaskPackBinding,
+            files: NativeTtsVitsPiperModelFiles,
+        ) -> Result<Self, EngineError> {
+            validate_tts_binding(binding)?;
+            require_selected_file(binding, &files.model_file_id, TTS_MODEL_FILE_ID)?;
+            require_selected_file(binding, &files.tokens_file_id, TTS_TOKENS_FILE_ID)?;
+            require_selected_file(binding, &files.espeak_data_file_id, TTS_ESPEAK_DATA_FILE_ID)?;
+            match (&files.lexicon_file_id, &files.lexicon_path) {
+                (Some(lexicon_file_id), Some(_)) => {
+                    require_selected_file(binding, lexicon_file_id, TTS_LEXICON_FILE_ID)?;
+                }
+                (None, None) => {}
+                _ => return Err(EngineError::InvalidRequest),
+            }
+            let mut config = OfflineTtsConfig::vits_piper(
+                files.model_path,
+                files.tokens_path,
+                files.espeak_data_dir,
+            )
+            .with_num_threads(1);
+            if let Some(lexicon_path) = files.lexicon_path {
+                config = config.with_lexicon_path(lexicon_path);
+            }
+            let synthesizer = OfflineTtsSynthesizer::new(&config).map_err(native_tts_error)?;
+            let sample_rate = u32::try_from(synthesizer.sample_rate())
+                .map_err(|_| EngineError::InvalidRequest)?;
+            if sample_rate != binding.sample_rate_hz() {
+                return Err(EngineError::InvalidRequest);
+            }
+            Ok(Self { synthesizer })
+        }
+    }
+
+    pub struct NativeTtsVitsPiperModelFiles {
+        pub model_file_id: String,
+        pub model_path: PathBuf,
+        pub tokens_file_id: String,
+        pub tokens_path: PathBuf,
+        pub espeak_data_file_id: String,
+        pub espeak_data_dir: PathBuf,
+        pub lexicon_file_id: Option<String>,
+        pub lexicon_path: Option<PathBuf>,
+    }
+
+    impl fmt::Debug for NativeTtsVitsPiperModelFiles {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter
+                .debug_struct("NativeTtsVitsPiperModelFiles")
+                .field("model_file_id_bytes", &self.model_file_id.len())
+                .field("model_path", &"<redacted>")
+                .field("tokens_file_id_bytes", &self.tokens_file_id.len())
+                .field("tokens_path", &"<redacted>")
+                .field("espeak_data_file_id_bytes", &self.espeak_data_file_id.len())
+                .field("espeak_data_dir", &"<redacted>")
+                .field(
+                    "lexicon_file_id_bytes",
+                    &self.lexicon_file_id.as_ref().map(String::len),
+                )
+                .field("lexicon_path_present", &self.lexicon_path.is_some())
+                .finish()
+        }
+    }
+
+    impl SherpaTtsBackend for NativeTtsBackend {
+        fn synthesize(
+            &mut self,
+            text: &str,
+            speaker_id: i32,
+            speed: f32,
+            cancellation: &dyn Fn() -> bool,
+        ) -> Result<SherpaTtsAudio, SherpaAdapterError> {
+            let config = OfflineTtsGenerationConfig::new(speaker_id, speed);
+            let audio = self
+                .synthesizer
+                .generate(text, &config, cancellation)
+                .map_err(native_tts_adapter_error)?;
+            let sample_rate =
+                u32::try_from(audio.sample_rate()).map_err(|_| SherpaAdapterError::InvalidAudio)?;
+            SherpaTtsAudio::new(sample_rate, audio.samples().to_vec())
+        }
+
+        fn cancel(&mut self) -> Result<(), SherpaAdapterError> {
+            Ok(())
+        }
+    }
+
+    fn require_selected_file(
+        binding: &TaskPackBinding,
+        actual_file_id: &str,
+        required_file_id: &str,
+    ) -> Result<(), EngineError> {
+        if actual_file_id != required_file_id
+            || !binding
+                .selected_file_ids()
+                .iter()
+                .any(|file_id| file_id == required_file_id)
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
+    }
+
+    fn native_tts_error(error: NativeTtsError) -> EngineError {
+        match error {
+            aurora_voice_sherpa_sys::TtsError::NativeUnavailable => EngineError::ProviderFault {
+                code: EngineFaultCode::HostUnavailable,
+            },
+            aurora_voice_sherpa_sys::TtsError::InvalidConfig { .. }
+            | aurora_voice_sherpa_sys::TtsError::InvalidText { .. }
+            | aurora_voice_sherpa_sys::TtsError::NativeInvalidAudio
+            | aurora_voice_sherpa_sys::TtsError::NativeAudioTooLong
+            | aurora_voice_sherpa_sys::TtsError::NativeInvalidSpeakerCount => {
+                EngineError::InvalidRequest
+            }
+            aurora_voice_sherpa_sys::TtsError::Cancelled => EngineError::Cancelled,
+            _ => EngineError::ProviderFault {
+                code: EngineFaultCode::Native,
+            },
+        }
+    }
+
+    fn native_tts_adapter_error(error: NativeTtsError) -> SherpaAdapterError {
+        match error {
+            aurora_voice_sherpa_sys::TtsError::NativeUnavailable => {
+                SherpaAdapterError::BackendFault {
+                    code: BackendFaultCode::HostUnavailable,
+                }
+            }
+            aurora_voice_sherpa_sys::TtsError::InvalidConfig { .. }
+            | aurora_voice_sherpa_sys::TtsError::InvalidText { .. } => {
+                SherpaAdapterError::InvalidConfig
+            }
+            aurora_voice_sherpa_sys::TtsError::NativeInvalidAudio
+            | aurora_voice_sherpa_sys::TtsError::NativeAudioTooLong
+            | aurora_voice_sherpa_sys::TtsError::NativeInvalidSpeakerCount => {
+                SherpaAdapterError::InvalidAudio
+            }
+            aurora_voice_sherpa_sys::TtsError::Cancelled => SherpaAdapterError::Cancelled,
+            _ => SherpaAdapterError::BackendFault {
+                code: BackendFaultCode::NativeFault,
+            },
+        }
+    }
+}
+
 #[cfg(feature = "native-kws")]
 pub use native_kws_backend::{NativeKwsBackend, NativeKwsModelFiles};
 
 #[cfg(feature = "native-stt")]
 pub use native_stt_backend::NativeSttBackend;
+
+#[cfg(feature = "native-tts")]
+pub use native_tts_backend::{NativeTtsBackend, NativeTtsVitsPiperModelFiles};
 
 #[cfg(feature = "native-vad")]
 pub use native_backend::NativeVadBackend;
@@ -1698,7 +2216,7 @@ mod tests {
         ManifestSignature, ModelPackError, ModelPackFile, ModelPackManifest, PackTask,
         ProcessingMetadata, Provenance, ResourceBudget, RuntimeGates, RuntimeSelection,
         RuntimeTarget, SelectedVariant, ShapeMetadata, SignatureVerifier, TargetArch, TargetOs,
-        TaskRequest, TrustPolicy, VerifiedManifest,
+        TaskRequest, TrustPolicy, TtsSynthesisConfig, VerifiedManifest,
     };
     use std::cell::Cell;
     use std::collections::{BTreeSet, VecDeque};
@@ -1709,6 +2227,8 @@ mod tests {
     const KWS_MODEL: &str = "models/extracted/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01";
     #[allow(dead_code)]
     const STT_MODEL: &str = "models/extracted/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27";
+    #[allow(dead_code)]
+    const TTS_MODEL: &str = "models/extracted/vits-piper-en_US-ljspeech-medium";
     #[allow(dead_code)]
     const LIGHT_UP_SPEC: &str = "▁ L IGHT ▁UP";
     #[allow(dead_code)]
@@ -1826,6 +2346,62 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
+    struct FakeTtsBackend {
+        calls: Vec<&'static str>,
+        last_text_bytes: Option<usize>,
+        last_speaker_id: Option<i32>,
+        last_speed: Option<f32>,
+        audio: SherpaTtsAudio,
+        fail: bool,
+    }
+
+    impl Default for FakeTtsBackend {
+        fn default() -> Self {
+            let mut samples = vec![0.0, 1.0, -1.0, 0.5];
+            samples.resize(64, 0.0);
+            samples.push(0.25);
+            Self {
+                calls: Vec::new(),
+                last_text_bytes: None,
+                last_speaker_id: None,
+                last_speed: None,
+                audio: SherpaTtsAudio::new(VAD_SAMPLE_RATE_HZ, samples).expect("audio"),
+                fail: false,
+            }
+        }
+    }
+
+    impl SherpaTtsBackend for FakeTtsBackend {
+        fn synthesize(
+            &mut self,
+            text: &str,
+            speaker_id: i32,
+            speed: f32,
+            cancellation: &dyn Fn() -> bool,
+        ) -> Result<SherpaTtsAudio, SherpaAdapterError> {
+            self.calls.push("synthesize");
+            self.last_text_bytes = Some(text.len());
+            self.last_speaker_id = Some(speaker_id);
+            self.last_speed = Some(speed);
+            if cancellation() {
+                return Err(SherpaAdapterError::Cancelled);
+            }
+            if self.fail {
+                Err(SherpaAdapterError::from_host_fault(
+                    "path=/secret/vits.onnx text=private ptr=0xfeed",
+                ))
+            } else {
+                Ok(self.audio.clone())
+            }
+        }
+
+        fn cancel(&mut self) -> Result<(), SherpaAdapterError> {
+            self.calls.push("cancel");
+            Ok(())
+        }
+    }
+
     impl FakeBackend {
         fn with_segment(segment: SpeechSegment) -> Self {
             let mut segments = VecDeque::new();
@@ -1917,6 +2493,10 @@ mod tests {
         SherpaFiniteSttEngine::new(stt_binding(), backend).expect("valid stt engine")
     }
 
+    fn tts_provider(backend: FakeTtsBackend) -> SherpaTtsProvider<FakeTtsBackend> {
+        SherpaTtsProvider::new(tts_binding(), backend).expect("valid tts provider")
+    }
+
     fn binding() -> TaskPackBinding {
         let (manifest, selection) = selected();
         TaskPackBinding::from_selection(VoiceTask::VoiceActivityDetection, &manifest, &selection)
@@ -1933,6 +2513,12 @@ mod tests {
         let (manifest, selection) = selected_for("stt-pack", PackTask::Stt);
         TaskPackBinding::from_selection(VoiceTask::SpeechToText, &manifest, &selection)
             .expect("stt binding")
+    }
+
+    fn tts_binding() -> TaskPackBinding {
+        let (manifest, selection) = selected_for("tts-pack", PackTask::Tts);
+        TaskPackBinding::from_selection(VoiceTask::TextToSpeech, &manifest, &selection)
+            .expect("tts binding")
     }
 
     fn request(binding: TaskPackBinding, generation: u64) -> BoundTaskRequest {
@@ -2004,6 +2590,27 @@ mod tests {
             frames,
         )
         .expect("finite stt audio")
+    }
+
+    fn tts_request(
+        binding: TaskPackBinding,
+        generation: u64,
+        chunk_samples: usize,
+    ) -> BoundTtsSynthesisRequest {
+        let config = TtsSynthesisConfig::new(
+            "default",
+            binding.voice_state_compatibility_group_id(),
+            binding.sample_rate_hz(),
+            chunk_samples,
+            None,
+        )
+        .expect("tts config");
+        BoundTtsSynthesisRequest::new(
+            task_request(binding, VoiceTask::TextToSpeech, generation),
+            "hello aurora",
+            config,
+        )
+        .expect("tts request")
     }
 
     fn frame(samples: &[f32]) -> StreamingAudioFrame<'_> {
@@ -2570,6 +3177,122 @@ mod tests {
             .any(|capability| capability.task() == VoiceTask::TextToSpeech));
     }
 
+    #[test]
+    fn tts_advertises_local_binding_readiness_and_chunks_pcm16() {
+        let mut provider = tts_provider(FakeTtsBackend::default());
+        let capabilities = provider.capabilities();
+        assert_eq!(capabilities.len(), 1);
+        assert_eq!(capabilities[0].task(), VoiceTask::TextToSpeech);
+        assert!(!capabilities[0].streaming_enabled());
+        assert_eq!(provider.resource_report().readiness, TaskReadiness::Ready);
+        assert_eq!(
+            provider.synthesis_binding().expect("binding"),
+            TtsSynthesisProviderBinding::LocalTask(Box::new(provider.binding().clone()))
+        );
+
+        let request = tts_request(provider.binding().clone(), 9, 64);
+        let result =
+            futures_lite((), |_| provider.synthesize_text(request, &|| false)).expect("tts result");
+        assert_eq!(result.chunk_count(), 2);
+        assert!(!result.cancelled());
+        assert_eq!(
+            &result.chunks()[0].samples()[..4],
+            &[0, i16::MAX, i16::MIN, 16384]
+        );
+        assert!(!result.chunks()[0].final_chunk());
+        assert_eq!(result.chunks()[1].samples(), &[8192]);
+        assert!(result.chunks()[1].final_chunk());
+
+        let backend = provider.into_backend();
+        assert_eq!(backend.calls, vec!["synthesize"]);
+        assert_eq!(backend.last_text_bytes, Some("hello aurora".len()));
+        assert_eq!(backend.last_speaker_id, Some(0));
+        assert_eq!(backend.last_speed, Some(1.0));
+    }
+
+    #[test]
+    fn tts_rejects_wrong_binding_seed_and_concurrent_generation() {
+        let mut provider = tts_provider(FakeTtsBackend::default());
+        let wrong = stt_binding();
+        assert_eq!(
+            futures_lite(
+                task_request(wrong.clone(), VoiceTask::SpeechToText, 1),
+                |request| provider.warm_task(request)
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            futures_lite(
+                TtsSynthesisProviderBinding::LocalTask(Box::new(wrong)),
+                |binding| provider.warm_synthesis(binding)
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let seeded_config = TtsSynthesisConfig::new(
+            "default",
+            provider.binding().voice_state_compatibility_group_id(),
+            provider.binding().sample_rate_hz(),
+            64,
+            Some(7),
+        )
+        .expect("seed config");
+        let seeded = BoundTtsSynthesisRequest::new(
+            task_request(provider.binding().clone(), VoiceTask::TextToSpeech, 1),
+            "hello aurora",
+            seeded_config,
+        )
+        .expect("seeded request");
+        assert_eq!(
+            futures_lite((), |_| provider.synthesize_text(seeded, &|| false)),
+            Err(EngineError::InvalidRequest)
+        );
+
+        provider.active_generation = Some(77);
+        assert_eq!(
+            futures_lite((), |_| provider.synthesize_text(
+                tts_request(provider.binding().clone(), 78, 64),
+                &|| false
+            )),
+            Err(EngineError::ResourceLimit)
+        );
+        assert_eq!(
+            futures_lite((), |_| provider.cancel_synthesis_generation(77)),
+            Ok(())
+        );
+        assert!(provider.active_generation.is_none());
+    }
+
+    #[test]
+    fn tts_cancellation_and_backend_faults_are_fail_closed_and_redacted() {
+        let mut provider = tts_provider(FakeTtsBackend::default());
+        assert_eq!(
+            futures_lite((), |_| provider.synthesize_text(
+                tts_request(provider.binding().clone(), 11, 64),
+                &|| true
+            )),
+            Err(EngineError::Cancelled)
+        );
+        assert!(provider.into_backend().calls.is_empty());
+
+        let mut provider = tts_provider(FakeTtsBackend {
+            fail: true,
+            ..FakeTtsBackend::default()
+        });
+        let error = futures_lite((), |_| {
+            provider.synthesize_text(tts_request(provider.binding().clone(), 12, 64), &|| false)
+        })
+        .expect_err("provider fault");
+        let rendered = format!("{error:?} {error} {provider:?}");
+        assert!(rendered.contains("provider"));
+        assert!(!rendered.contains("/secret"));
+        assert!(!rendered.contains("private"));
+        assert_eq!(
+            provider.last_backend_fault(),
+            Some(BackendFaultCode::BackendFault)
+        );
+    }
+
     #[cfg(all(feature = "native-kws", not(target_arch = "wasm32")))]
     #[test]
     fn native_kws_adapter_detects_light_up_with_manifest_int8_encoder() {
@@ -2727,6 +3450,97 @@ mod tests {
         assert!(matches!(result, Err(EngineError::InvalidRequest)));
     }
 
+    #[cfg(feature = "native-tts")]
+    #[test]
+    fn native_tts_constructor_requires_exact_dependency_closed_file_ids() {
+        let binding = binding_with_files(
+            "native-tts-ids",
+            PackTask::Tts,
+            VoiceTask::TextToSpeech,
+            &["model", "tokens", "espeak-ng-data"],
+        );
+        let result = NativeTtsBackend::from_selected_vits_piper_model(
+            &binding,
+            NativeTtsVitsPiperModelFiles {
+                model_file_id: "voice-model".to_owned(),
+                model_path: PathBuf::from("model.onnx"),
+                tokens_file_id: "tokens".to_owned(),
+                tokens_path: PathBuf::from("tokens.txt"),
+                espeak_data_file_id: "espeak-ng-data".to_owned(),
+                espeak_data_dir: PathBuf::from("espeak-ng-data"),
+                lexicon_file_id: None,
+                lexicon_path: None,
+            },
+        );
+        assert!(matches!(result, Err(EngineError::InvalidRequest)));
+
+        let binding = binding_with_files(
+            "native-tts-lexicon-ids",
+            PackTask::Tts,
+            VoiceTask::TextToSpeech,
+            &["model", "tokens", "espeak-ng-data", "lexicon"],
+        );
+        let result = NativeTtsBackend::from_selected_vits_piper_model(
+            &binding,
+            NativeTtsVitsPiperModelFiles {
+                model_file_id: "model".to_owned(),
+                model_path: PathBuf::from("model.onnx"),
+                tokens_file_id: "tokens".to_owned(),
+                tokens_path: PathBuf::from("tokens.txt"),
+                espeak_data_file_id: "espeak-ng-data".to_owned(),
+                espeak_data_dir: PathBuf::from("espeak-ng-data"),
+                lexicon_file_id: None,
+                lexicon_path: Some(PathBuf::from("lexicon.txt")),
+            },
+        );
+        assert!(matches!(result, Err(EngineError::InvalidRequest)));
+    }
+
+    #[cfg(all(feature = "native-tts", not(target_arch = "wasm32")))]
+    #[test]
+    fn native_tts_adapter_generates_vits_piper_chunks_when_available() {
+        let binding = binding_with_files_and_sample_rate(
+            "native-tts",
+            PackTask::Tts,
+            VoiceTask::TextToSpeech,
+            &["model", "tokens", "espeak-ng-data"],
+            22_050,
+        );
+        let dir = phase4_path("AURORA_SHERPA_ONNX_TTS_MODEL_DIR", TTS_MODEL);
+        let backend = NativeTtsBackend::from_selected_vits_piper_model(
+            &binding,
+            NativeTtsVitsPiperModelFiles {
+                model_file_id: "model".to_owned(),
+                model_path: dir.join("en_US-ljspeech-medium.onnx"),
+                tokens_file_id: "tokens".to_owned(),
+                tokens_path: dir.join("tokens.txt"),
+                espeak_data_file_id: "espeak-ng-data".to_owned(),
+                espeak_data_dir: dir.join("espeak-ng-data"),
+                lexicon_file_id: None,
+                lexicon_path: None,
+            },
+        )
+        .expect("native tts backend");
+        let mut provider = SherpaTtsProvider::new(binding, backend).expect("provider");
+        let request = tts_request(provider.binding().clone(), 99, 1600);
+        let result = futures_lite((), |_| provider.synthesize_text(request, &|| false))
+            .expect("native tts result");
+        assert!(!result.cancelled());
+        assert!(result.chunk_count() > 0);
+        assert!(result.chunks().iter().all(|chunk| {
+            chunk.sample_rate_hz() == 22_050
+                && chunk.channels() == MONO_CHANNELS
+                && !chunk.samples().is_empty()
+        }));
+        assert!(result
+            .chunks()
+            .last()
+            .is_some_and(TtsAudioChunk::final_chunk));
+        let rendered = format!("{provider:?} {result:?}");
+        assert!(!rendered.contains("en_US-ljspeech"));
+        assert!(!rendered.contains("hello aurora"));
+    }
+
     #[cfg(feature = "native-vad")]
     #[test]
     fn native_feature_constructor_is_bound_to_selected_file() {
@@ -2795,7 +3609,25 @@ mod tests {
         voice_task: VoiceTask,
         file_ids: &[&str],
     ) -> TaskPackBinding {
+        binding_with_files_and_sample_rate(
+            pack_id,
+            pack_task,
+            voice_task,
+            file_ids,
+            VAD_SAMPLE_RATE_HZ,
+        )
+    }
+
+    #[allow(dead_code)]
+    fn binding_with_files_and_sample_rate(
+        pack_id: &str,
+        pack_task: PackTask,
+        voice_task: VoiceTask,
+        file_ids: &[&str],
+        sample_rate_hz: u32,
+    ) -> TaskPackBinding {
         let mut raw = manifest(pack_id, pack_task);
+        raw.variants[0].compatibility.sample_rate_hz = sample_rate_hz;
         raw.files = file_ids
             .iter()
             .enumerate()

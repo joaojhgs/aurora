@@ -17,6 +17,7 @@ thiserror.workspace = true
 default = []
 native-kws = ["dep:aurora-voice-sherpa-sys", "aurora-voice-sherpa-sys/native-kws"]
 native-stt = ["dep:aurora-voice-sherpa-sys", "aurora-voice-sherpa-sys/native-stt"]
+native-tts = ["dep:aurora-voice-sherpa-sys", "aurora-voice-sherpa-sys/native-tts"]
 native-vad = ["dep:aurora-voice-sherpa-sys", "aurora-voice-sherpa-sys/native-vad"]
 
 [lints]
