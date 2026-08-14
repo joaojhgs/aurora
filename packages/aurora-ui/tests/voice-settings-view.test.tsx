@@ -49,6 +49,7 @@ interface Capabilities {
 
 interface LanguagePack {
   pack_id: string
+  language?: SpeechLanguage
   display_name?: string | null
   revision?: string | null
   languages?: SpeechLanguage[]
@@ -60,6 +61,17 @@ interface LanguagePack {
   downloadable?: boolean
   download_progress?: number | null
   compatible_engine?: boolean
+  voices?: LanguagePackVoice[]
+}
+
+interface LanguagePackVoice {
+  voice_id: string
+  display_name: string
+  revision: string
+  installed: boolean
+  ready: boolean
+  active: boolean
+  default: boolean
 }
 
 interface Voice {
@@ -209,7 +221,7 @@ describe('VoiceSettingsView', () => {
     const operationIds: string[] = []
     const adminExecute = vi.fn(async (input: { methodId: string, payload?: { operation_id?: string } }) => {
       if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: [profile({ installed: false, ready: false })] })
-      if (input.methodId === 'TTS.ListLanguagePacks') return adminResult({ language_packs: [] })
+      if (input.methodId === 'TTS.ListLanguagePacks') return adminResult({ packs: [] })
       if (input.methodId === 'TTS.InstallVoiceProfile') operationIds.push(input.payload?.operation_id ?? '')
       return adminResult(installResult('installed'))
     })
@@ -251,7 +263,7 @@ describe('VoiceSettingsView', () => {
     const pendingInstall = deferred<unknown>()
     const adminExecute = vi.fn((input: { methodId: string }) => {
       if (input.methodId === 'TTS.ListVoiceProfiles') return Promise.resolve(adminResult({ profiles: [profile({ installed: false, ready: false })] }))
-      if (input.methodId === 'TTS.ListLanguagePacks') return Promise.resolve(adminResult({ language_packs: [] }))
+      if (input.methodId === 'TTS.ListLanguagePacks') return Promise.resolve(adminResult({ packs: [] }))
       return pendingInstall.promise
     })
     const client = voiceClient({
@@ -460,7 +472,7 @@ describe('VoiceSettingsView', () => {
     const pendingRemove = deferred<unknown>()
     const adminExecute = vi.fn((input: { methodId: string }) => {
       if (input.methodId === 'TTS.ListVoiceProfiles') return Promise.resolve(adminResult({ profiles: [profile({ installed: true, ready: true, default: false, active: false })] }))
-      if (input.methodId === 'TTS.ListLanguagePacks') return Promise.resolve(adminResult({ language_packs: [] }))
+      if (input.methodId === 'TTS.ListLanguagePacks') return Promise.resolve(adminResult({ packs: [] }))
       return pendingRemove.promise
     })
     const client = voiceClient({ adminExecute })
@@ -646,20 +658,28 @@ describe('VoiceSettingsView', () => {
 
   it('shows language catalog metadata but downloads only the selected voice', async () => {
     const adminExecute = vi.fn(async (input: { methodId: string }) => {
-      if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: [profile({ installed: false, ready: false, compatible_language_pack_ids: ['pt-BR-local'] })] })
+      if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: [] })
       if (input.methodId === 'TTS.ListLanguagePacks') {
         return adminResult({
-          language_packs: [
+          packs: [
             languagePack({
-              pack_id: 'pt-BR-local',
+              pack_id: 'pt-br',
+              language: 'pt-BR',
               display_name: 'Brazilian Portuguese',
-              languages: ['pt-BR'],
-              ready_languages: ['pt-BR'],
               installed: false,
               ready: false,
               active: false,
               default: false,
               downloadable: true,
+              voices: [{
+                voice_id: 'standard:piper:pt_br-faber-medium',
+                display_name: 'Faber medium',
+                revision: 'voice-rev-pt-br-1',
+                installed: false,
+                ready: false,
+                active: false,
+                default: false,
+              }],
             }),
           ],
         })
@@ -672,14 +692,14 @@ describe('VoiceSettingsView', () => {
       capabilities: capabilities({
         ready: false,
         ready_languages: [],
-        supported_language_pack_ids: ['pt-BR-local'],
+        supported_language_pack_ids: ['pt-br'],
         installed_language_pack_ids: [],
         resident_language_pack_ids: [],
         resident_language_packs: [],
-        language_packs: [languagePack({ pack_id: 'pt-BR-local', languages: ['pt-BR'], ready_languages: ['pt-BR'], installed: false, ready: false, active: false, default: false })],
+        language_packs: [languagePack({ pack_id: 'pt-br', language: 'pt-BR', languages: ['pt-BR'], ready_languages: ['pt-BR'], installed: false, ready: false, active: false, default: false })],
         engine_capabilities: { vad: true, kws: true, stt: true, tts: true },
       }),
-      voices: [voice({ compatible_language_pack_ids: ['pt-BR-local'], ready: false })],
+      voices: [],
     })
     const { container, unmount } = await renderVoiceSettings(client)
 
@@ -698,13 +718,13 @@ describe('VoiceSettingsView', () => {
     expect(adminExecute).toHaveBeenCalledWith(expect.objectContaining({
       methodId: 'TTS.InstallVoiceProfile',
       payload: expect.objectContaining({
-        voice_id: 'standard:en_pack:ava',
-        expected_revision: 'rev-1',
+        voice_id: 'standard:piper:pt_br-faber-medium',
+        expected_revision: 'voice-rev-pt-br-1',
         operation_id: expect.stringMatching(/^voice-install-/u)
       }),
       reason: 'Add spoken reply voice: Manage spoken reply voices',
       reauthConfirmed: true,
-      affectedResources: ['voice-profile:standard:en_pack:ava'],
+      affectedResources: ['voice-profile:standard:piper:pt_br-faber-medium'],
       path: '/api/TTS/InstallVoiceProfile'
     }))
     expect(new Set(adminExecute.mock.calls.map(([input]) => input.methodId))).toEqual(new Set([
@@ -858,7 +878,7 @@ function voiceClient(overrides: {
   const deleteVoiceProfile = overrides.deleteVoiceProfile ?? directVoiceManageCall
   const adminExecute = overrides.adminExecute ?? vi.fn(async (input: { methodId: string }) => {
     if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: overrides.profiles ?? [] })
-    if (input.methodId === 'TTS.ListLanguagePacks') return adminResult({ language_packs: overrides.languagePacks ?? [] })
+    if (input.methodId === 'TTS.ListLanguagePacks') return adminResult({ packs: overrides.languagePacks ?? [] })
     if (input.methodId === 'TTS.InstallVoiceProfile') return adminResult(installResult('installed'))
     if (input.methodId === 'TTS.RemoveVoiceProfile') return adminResult(mutationResult<RemoveStatus>('removed'))
     if (input.methodId === 'TTS.SetDefaultVoice') return adminResult(mutationResult<DefaultStatus>('activated'))

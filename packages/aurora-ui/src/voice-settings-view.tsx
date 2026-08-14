@@ -74,6 +74,7 @@ interface TtsVoiceProfile {
 
 interface TtsLanguagePack {
   pack_id: string
+  language?: SpeechLanguage | undefined
   display_name?: string | null | undefined
   revision?: string | null | undefined
   languages?: SpeechLanguage[] | undefined
@@ -85,6 +86,17 @@ interface TtsLanguagePack {
   downloadable?: boolean | undefined
   download_progress?: number | null | undefined
   compatible_engine?: boolean | undefined
+  voices?: TtsLanguagePackVoice[] | undefined
+}
+
+interface TtsLanguagePackVoice {
+  voice_id: string
+  display_name: string
+  revision: string
+  installed?: boolean | undefined
+  ready?: boolean | undefined
+  active?: boolean | undefined
+  default?: boolean | undefined
 }
 
 interface VoiceSettingsState {
@@ -208,7 +220,7 @@ export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfil
       let languageCatalogState: VoiceSettingsState['languageCatalogState'] = 'ready'
       let message: string | null = null
       try {
-        const packsResult = await client.admin.execute<{ language_packs?: TtsLanguagePack[] }>({
+        const packsResult = await client.admin.execute<{ packs?: TtsLanguagePack[] }>({
           methodId: TTS_MANAGE_METHODS.listLanguagePacks,
           payload: { include_unavailable: true },
           reason: adminReasonFor(reason, adminReasonValue),
@@ -216,14 +228,14 @@ export function VoiceSettingsView({ client, runtimeProfile = null, surfaceProfil
           affectedResources: ['voice-language-downloads'],
           path: routePath('TTS', 'ListLanguagePacks')
         })
-        packs = packsResult.data.language_packs ?? []
+        packs = packsResult.data.packs ?? []
       } catch {
         languageCatalogState = 'limited'
         message = languageCatalogUnavailableCopy()
       }
       setState((current) => ({
         ...current,
-        profiles: result.data.profiles ?? [],
+        profiles: mergeCatalogProfiles(result.data.profiles ?? [], packs),
         packs,
         managementState: 'ready',
         languageCatalogState,
@@ -742,13 +754,44 @@ function toPackRows(
     .map((pack, index) => toManagedLanguagePack(pack, index, capabilities))
 }
 
+function mergeCatalogProfiles(
+  profiles: readonly TtsVoiceProfile[],
+  packs: readonly TtsLanguagePack[],
+): TtsVoiceProfile[] {
+  const byVoiceId = new Map(profiles.map((profile) => [profile.voice_id, profile]))
+  for (const pack of packs) {
+    for (const voice of pack.voices ?? []) {
+      const existing = byVoiceId.get(voice.voice_id)
+      const compatibleLanguagePackIds = [...new Set([
+        ...(existing?.compatible_language_pack_ids ?? []),
+        pack.pack_id,
+      ])]
+      byVoiceId.set(voice.voice_id, {
+        voice_id: voice.voice_id,
+        display_name: voice.display_name,
+        revision: voice.revision,
+        kind: 'standard',
+        active: voice.active === true,
+        default: voice.default === true,
+        enabled: true,
+        installed: voice.installed === true,
+        ready: voice.ready === true,
+        retained_source: false,
+        ...existing,
+        compatible_language_pack_ids: compatibleLanguagePackIds,
+      })
+    }
+  }
+  return [...byVoiceId.values()].sort((left, right) => left.voice_id.localeCompare(right.voice_id))
+}
+
 function toManagedLanguagePack(
   pack: TtsLanguagePack,
   index: number,
   capabilities: TtsCapabilities | null,
 ): ManagedLanguagePack {
   const packId = safePackId(pack.pack_id) ?? `voice-language-${index + 1}`
-  const languages = languageList(pack.ready_languages ?? pack.languages)
+  const languages = languageList(pack.ready_languages ?? pack.languages ?? (pack.language ? [pack.language] : []))
   const installed = pack.installed === true || capabilities?.installed_language_pack_ids?.includes(packId) === true
   const ready = pack.ready === true || capabilities?.resident_language_packs?.some((resident) => resident.pack_id === packId) === true
   const isDefault = pack.default === true || capabilities?.default_language_pack_id === packId
@@ -774,7 +817,7 @@ function canInstallProfile(profile: TtsVoiceProfile, capabilities: TtsCapabiliti
   if (!capabilities) return false
   const supportedPacks = new Set([...(capabilities.supported_language_pack_ids ?? []), ...(capabilities.installed_language_pack_ids ?? [])])
   const compatible = profile.compatible_language_pack_ids ?? []
-  return compatible.length === 0 || compatible.some((packId) => supportedPacks.has(packId))
+  return compatible.length === 0 || supportedPacks.size === 0 || compatible.some((packId) => supportedPacks.has(packId))
 }
 
 function canSetDefaultProfile(profile: TtsVoiceProfile): boolean {
@@ -865,7 +908,7 @@ function safePackId(value: unknown): string | null {
 }
 
 function packSortLabel(pack: TtsLanguagePack): string {
-  return safeVoiceText(pack.display_name, '') || languageList(pack.ready_languages ?? pack.languages).join(', ') || pack.pack_id
+  return safeVoiceText(pack.display_name, '') || languageList(pack.ready_languages ?? pack.languages ?? (pack.language ? [pack.language] : [])).join(', ') || pack.pack_id
 }
 
 function languageLabel(value: unknown): string | null {
