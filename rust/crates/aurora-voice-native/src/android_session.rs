@@ -204,6 +204,7 @@ pub struct AndroidTtsReferenceProfile {
     sample_rate_hz: i32,
     samples: Vec<f32>,
     reference_text: Option<String>,
+    revision: Option<String>,
 }
 
 #[cfg(feature = "native-sherpa-tts")]
@@ -212,6 +213,7 @@ impl AndroidTtsReferenceProfile {
         sample_rate_hz: i32,
         samples: Vec<f32>,
         reference_text: Option<String>,
+        revision: Option<String>,
     ) -> Result<Self, AndroidVoiceSessionCommandError> {
         NativeTtsReferenceAudio::new(sample_rate_hz, samples.clone())
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
@@ -219,6 +221,7 @@ impl AndroidTtsReferenceProfile {
             sample_rate_hz,
             samples,
             reference_text,
+            revision,
         })
     }
 
@@ -229,6 +232,10 @@ impl AndroidTtsReferenceProfile {
 
     fn reference_text(&self) -> Option<String> {
         self.reference_text.clone()
+    }
+
+    fn revision(&self) -> Option<String> {
+        self.revision.clone()
     }
 }
 
@@ -286,6 +293,11 @@ impl AndroidVoiceSessionConfig {
     pub fn with_tts_reference_profile(mut self, profile: AndroidTtsReferenceProfile) -> Self {
         self.tts_reference_profile = Some(profile);
         self
+    }
+
+    #[cfg(all(test, feature = "native-sherpa-tts"))]
+    fn tts_reference_profile(&self) -> Option<&AndroidTtsReferenceProfile> {
+        self.tts_reference_profile.as_ref()
     }
 }
 
@@ -556,6 +568,7 @@ fn build_local_runtime(
     let stt = build_installed_stt_provider(&manager, stt_model_id)
         .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
     let tts = if let Some(reference_profile) = &config.tts_reference_profile {
+        let _reference_revision = reference_profile.revision();
         build_installed_tts_provider_with_reference(
             &manager,
             tts_voice_id,
@@ -1083,5 +1096,47 @@ mod tests {
         assert!(!status.active);
         assert_eq!(status.failed_turns, 1);
         assert_eq!(status.last_error.as_deref(), Some("cancelled"));
+    }
+
+    #[cfg(feature = "native-sherpa-tts")]
+    #[test]
+    fn android_tts_reference_profile_requires_explicit_audio() {
+        let invalid = AndroidTtsReferenceProfile::new(
+            16_000,
+            Vec::new(),
+            Some("reference text".to_owned()),
+            Some("rev-1".to_owned()),
+        );
+        assert!(invalid.is_err());
+    }
+
+    #[cfg(feature = "native-sherpa-tts")]
+    #[test]
+    fn local_pack_config_carries_explicit_tts_reference_profile() {
+        let profile = AndroidTtsReferenceProfile::new(
+            16_000,
+            vec![0.0, 0.1, -0.1, 0.0],
+            Some("reference text".to_owned()),
+            Some("rev-1".to_owned()),
+        )
+        .expect("profile");
+        let config = AndroidVoiceSessionConfig::with_local_pack_selection(
+            Url::parse("http://127.0.0.1:8000").expect("url"),
+            GatewayAuth::None,
+            false,
+            "/tmp/aurora-packs",
+            "stt-model",
+            "standard:pockettts:voice",
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .with_tts_reference_profile(profile);
+        let stored = config.tts_reference_profile().expect("reference");
+        assert_eq!(stored.reference_text().as_deref(), Some("reference text"));
+        assert_eq!(stored.revision().as_deref(), Some("rev-1"));
+        assert!(stored.to_native().is_ok());
     }
 }

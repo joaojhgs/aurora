@@ -10,6 +10,12 @@ internal const val AURORA_SPEECH_PACK_LEGACY_ACTIVE_ID_KEY = "active_voice_pack_
 internal const val AURORA_WAKE_PHRASE_ID_KEY = "wake_phrase_id"
 internal const val AURORA_WAKE_PHRASE_TEXT_KEY = "wake_phrase_text"
 internal const val AURORA_WAKE_PHRASE_REVISION_KEY = "wake_phrase_revision"
+internal const val AURORA_TTS_REFERENCE_ID_KEY = "tts_reference_id"
+internal const val AURORA_TTS_REFERENCE_AUDIO_URI_KEY = "tts_reference_audio_uri"
+internal const val AURORA_TTS_REFERENCE_TEXT_KEY = "tts_reference_text"
+internal const val AURORA_TTS_REFERENCE_REVISION_KEY = "tts_reference_revision"
+internal const val AURORA_TTS_REFERENCE_SAMPLE_RATE_HZ_KEY = "tts_reference_sample_rate_hz"
+internal const val AURORA_TTS_REFERENCE_SAMPLES_KEY = "tts_reference_samples"
 
 internal enum class AuroraSpeechPackTask(val nativeName: String) {
     STT("stt"),
@@ -22,6 +28,15 @@ internal data class AuroraWakePhraseSelection(
     val id: String,
     val text: String,
     val revision: String,
+)
+
+internal data class AuroraTtsReferenceSelection(
+    val id: String,
+    val audioUri: String,
+    val text: String,
+    val revision: String,
+    val sampleRateHz: Int,
+    val samples: FloatArray,
 )
 
 internal fun auroraSpeechPackStoreRoot(context: Context): File =
@@ -47,6 +62,15 @@ internal fun inferAuroraSpeechPackTask(tasks: List<String>): AuroraSpeechPackTas
     return null
 }
 
+internal fun auroraSpeechPackTaskFromName(value: String): AuroraSpeechPackTask? =
+    when (value.trim().lowercase(Locale.getDefault())) {
+        "stt", "asr", "transcription" -> AuroraSpeechPackTask.STT
+        "tts", "speech_synthesis", "speech-synthesis", "text-to-speech" -> AuroraSpeechPackTask.TTS
+        "vad", "voice-activity", "voice_activity" -> AuroraSpeechPackTask.VAD
+        "kws", "wakeword", "wake-word", "keyword" -> AuroraSpeechPackTask.KWS
+        else -> null
+    }
+
 internal object AuroraNativeSpeechPackBridge {
     fun install(context: Context, packId: String, task: AuroraSpeechPackTask): Boolean =
         nativeInstall(auroraSpeechPackStoreRoot(context).path, packId, task.nativeName)
@@ -57,9 +81,13 @@ internal object AuroraNativeSpeechPackBridge {
     fun remove(context: Context, packId: String, task: AuroraSpeechPackTask): Boolean =
         nativeRemove(auroraSpeechPackStoreRoot(context).path, packId, task.nativeName)
 
+    fun embeddedCatalogJson(): String =
+        nativeEmbeddedCatalogJson()
+
     private external fun nativeInstall(root: String, packId: String, task: String): Boolean
     private external fun nativeResolve(root: String, packId: String, task: String): Boolean
     private external fun nativeRemove(root: String, packId: String, task: String): Boolean
+    private external fun nativeEmbeddedCatalogJson(): String
 
     init {
         System.loadLibrary("aurora_tauri_lib")

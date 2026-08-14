@@ -1,15 +1,15 @@
 //! Android JNI binding for the shared Rust-native PCM ingress.
 
-use aurora_voice_core::CancellationToken;
-use aurora_voice_engine::SpeechCatalogTask;
 use aurora_voice_native::{
-    AndroidAudioOutput, AndroidPcmIngress, AndroidPcmPushResult, AndroidVoiceSession,
-    AndroidVoiceSessionCommandError, AndroidVoiceSessionConfig, SpeechPackManager,
-    SpeechPackManagerConfig,
+    AndroidAudioOutput, AndroidPcmIngress, AndroidPcmPushResult, AndroidTtsReferenceProfile,
+    AndroidVoiceSession, AndroidVoiceSessionCommandError, AndroidVoiceSessionConfig,
+    CancellationToken, SpeechCatalogTask, SpeechModelCatalog, SpeechPackManager,
+    SpeechPackManagerConfig, TtsVoiceCatalog,
 };
-use jni::objects::{JClass, JShortArray, JString};
-use jni::sys::{jboolean, jint, jlong, jlongArray, jshortArray};
+use jni::objects::{JClass, JFloatArray, JShortArray, JString};
+use jni::sys::{jboolean, jint, jlong, jlongArray, jshortArray, jstring};
 use jni::JNIEnv;
+use serde_json::json;
 use std::path::PathBuf;
 use std::ptr;
 use tokio::runtime::Builder as TokioRuntimeBuilder;
@@ -67,6 +67,19 @@ fn optional_string_from_jni(env: &mut JNIEnv<'_>, value: JString<'_>) -> Option<
     })
 }
 
+fn float_vec_from_jni(env: &mut JNIEnv<'_>, value: JFloatArray<'_>) -> Option<Vec<f32>> {
+    let length = env.get_array_length(&value).ok()?;
+    if length <= 0 {
+        return None;
+    }
+    let mut samples = vec![0.0_f32; length as usize];
+    env.get_float_array_region(&value, 0, &mut samples).ok()?;
+    if samples.iter().any(|sample| !sample.is_finite()) {
+        return None;
+    }
+    Some(samples)
+}
+
 fn manager_from_root(root: String) -> Option<SpeechPackManager> {
     SpeechPackManagerConfig::new(PathBuf::from(root), None)
         .ok()
@@ -80,6 +93,67 @@ fn speech_catalog_task(task: &str) -> Option<SpeechCatalogTask> {
         "kws" | "wakeword" | "wake-word" => Some(SpeechCatalogTask::KeywordSpotting),
         _ => None,
     }
+}
+
+fn android_catalog_task_name(task: SpeechCatalogTask) -> &'static str {
+    match task {
+        SpeechCatalogTask::SpeechToText => "stt",
+        SpeechCatalogTask::VoiceActivityDetection => "vad",
+        SpeechCatalogTask::KeywordSpotting => "kws",
+    }
+}
+
+fn android_embedded_catalog_json() -> Option<String> {
+    let mut entries = Vec::new();
+    let speech_catalog = SpeechModelCatalog::embedded().ok()?;
+    for entry in &speech_catalog.entries {
+        let language = match entry.languages.as_slice() {
+            [] => "und".to_owned(),
+            [language] => language.clone(),
+            _ => "multi".to_owned(),
+        };
+        entries.push(json!({
+            "packId": &entry.model_id,
+            "packName": &entry.display_name,
+            "provider": "k2-fsa/sherpa-onnx",
+            "language": language,
+            "uri": &entry.archive.url,
+            "sha256": &entry.archive.sha256,
+            "sizeBytes": entry.archive.byte_size,
+            "tasks": [android_catalog_task_name(entry.task)],
+            "engineRuntimeRevision": speech_catalog.revision(),
+            "supportedOperatingSystems": ["android"],
+            "supportedAbis": ["all"],
+            "license": &entry.terms.source,
+            "attributionRequired": false,
+            "attributionText": "",
+            "modelFamily": &entry.model_family,
+            "requiresReferenceAudio": false,
+        }));
+    }
+
+    let tts_catalog = TtsVoiceCatalog::embedded().ok()?;
+    for entry in &tts_catalog.entries {
+        entries.push(json!({
+            "packId": &entry.voice_id,
+            "packName": &entry.display_name,
+            "provider": "k2-fsa/sherpa-onnx",
+            "language": &entry.language,
+            "uri": &entry.archive.url,
+            "sha256": &entry.archive.sha256,
+            "sizeBytes": entry.archive.byte_size,
+            "tasks": ["tts"],
+            "engineRuntimeRevision": tts_catalog.revision(),
+            "supportedOperatingSystems": ["android"],
+            "supportedAbis": ["all"],
+            "license": &entry.terms.source,
+            "attributionRequired": false,
+            "attributionText": "",
+            "modelFamily": &entry.model_family,
+            "requiresReferenceAudio": entry.model_family == "pockettts",
+        }));
+    }
+    serde_json::to_string(&entries).ok()
 }
 
 fn install_pack_blocking(root: String, pack_id: String, task: String) -> bool {
@@ -198,6 +272,19 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeSpeechPack
         return 0;
     };
     bool_to_jboolean(remove_pack_blocking(root, pack_id, task))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeSpeechPackBridge_nativeEmbeddedCatalogJson(
+    env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) -> jstring {
+    let Some(catalog) = android_embedded_catalog_json() else {
+        return ptr::null_mut();
+    };
+    env.new_string(catalog)
+        .map(|value| value.into_raw())
+        .unwrap_or_else(|_| ptr::null_mut())
 }
 
 #[no_mangle]
@@ -468,6 +555,10 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     wake_phrase_id: JString<'_>,
     wake_phrase_text: JString<'_>,
     wake_phrase_revision: JString<'_>,
+    tts_reference_sample_rate_hz: jint,
+    tts_reference_samples: JFloatArray<'_>,
+    tts_reference_text: JString<'_>,
+    tts_reference_revision: JString<'_>,
 ) -> jlong {
     let Some(gateway) = string_from_jni(&mut env, gateway) else {
         return 0;
@@ -492,7 +583,7 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     } else {
         aurora_voice_native::GatewayAuth::Bearer(bearer)
     };
-    let config = AndroidVoiceSessionConfig::with_local_pack_selection(
+    let mut config = AndroidVoiceSessionConfig::with_local_pack_selection(
         gateway,
         auth,
         remote_audio_consent != 0,
@@ -505,6 +596,22 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
         optional_string_from_jni(&mut env, wake_phrase_text),
         optional_string_from_jni(&mut env, wake_phrase_revision),
     );
+    let reference_text = optional_string_from_jni(&mut env, tts_reference_text);
+    let _reference_revision = optional_string_from_jni(&mut env, tts_reference_revision);
+    if tts_reference_sample_rate_hz > 0 {
+        let Some(reference_samples) = float_vec_from_jni(&mut env, tts_reference_samples) else {
+            return 0;
+        };
+        let Ok(profile) = AndroidTtsReferenceProfile::new(
+            tts_reference_sample_rate_hz,
+            reference_samples,
+            reference_text,
+            _reference_revision,
+        ) else {
+            return 0;
+        };
+        config = config.with_tts_reference_profile(profile);
+    }
     AndroidVoiceSession::new(config, 8, 4_096, 16)
         .map(|session| Box::into_raw(Box::new(session)) as jlong)
         .unwrap_or(0)

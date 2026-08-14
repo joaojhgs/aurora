@@ -34,6 +34,8 @@ pub use android_session::{
 };
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
 pub use audio::{CpalAudioOutput, NativeAudioConfig, NativeAudioStatus};
+pub use aurora_voice_core::CancellationToken;
+pub use aurora_voice_engine::{SpeechCatalogTask, SpeechModelCatalog, TtsVoiceCatalog};
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
 pub use desktop_capture::{
     CpalAudioInput, NativeCaptureConfig, NativeCaptureControl, NativeCaptureStatus,
