@@ -68,6 +68,61 @@ describe('AuroraVoiceWorkerDispatcher', () => {
     expect(bridge.initializeCalls).toBe(1)
   })
 
+  it('returns typed voice outputs on frame acknowledgements', async () => {
+    const bridge = new FakeBridge({ inference: true })
+    const port = new RecordingPort()
+    const dispatcher = new AuroraVoiceWorkerDispatcher(bridge, port)
+    const session = voiceSession()
+
+    await dispatcher.handleMessage(request(1, { type: 'init', protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION, maxFrameSamples: 4_800, maxQueuedBytes: 320_000 }))
+    await dispatcher.handleMessage(request(2, { type: 'start', session, capabilities: { vad: true, kws: true, stt: true, tts: false } }))
+    await dispatcher.handleMessage(request(3, { type: 'audio_frame', frame: frameEnvelope(session, 0, 2), pcm: new Int16Array([1, 2]) }))
+
+    expect(port.messages[2]?.response).toEqual({
+      type: 'ack',
+      sessionId: session.sessionId,
+      generation: session.generation,
+      sequence: 0,
+      inference: {
+        vad: { active: true, speechDetected: true, sequence: 0, redacted: true },
+        kwsHits: [{ keyword: 'aurora', score: 0.5, sequence: 0, redacted: true }],
+        stt: [{ text: 'hello', final: false, sequence: 0, redacted: true }],
+        redacted: true
+      }
+    })
+  })
+
+  it('rejects model bindings that try to supply executable engine assets', async () => {
+    const bridge = new FakeBridge()
+    const port = new RecordingPort()
+    const dispatcher = new AuroraVoiceWorkerDispatcher(bridge, port)
+
+    await dispatcher.handleMessage({
+      protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+      requestId: 1,
+      command: {
+        type: 'init',
+        protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+        maxFrameSamples: 4_800,
+        maxQueuedBytes: 320_000,
+        modelBindings: {
+          files: [{
+            task: 'vad',
+            fileId: 'silero',
+            virtualPath: '/silero.onnx',
+            sha256: 'c'.repeat(64),
+            byteLength: 1,
+            bytes: Uint8Array.from([1])
+          }],
+          sherpaAssets: { vadAsrModuleUrl: 'https://voice.example/sherpa-onnx-wasm-main-vad-asr.js' }
+        }
+      }
+    })
+
+    expect(port.messages[0]?.response).toEqual({ type: 'reject', sessionId: null, generation: 0, sequence: null, reason: 'worker_rejected' })
+    expect(bridge.initializeCalls).toBe(0)
+  })
+
   it('rejects stale and duplicate frames without leaking payloads', async () => {
     const bridge = new FakeBridge()
     const port = new RecordingPort()
@@ -257,12 +312,14 @@ class FakeBridge implements AuroraVoiceWasmBridge {
   readonly finishCalls: { readonly sessionId: string; readonly generation: number; readonly outcome: 'completed' | 'abandoned' }[] = []
   private readonly rejectNullShutdown: boolean
   private readonly capabilities
+  private readonly inference: boolean
   startCalls = 0
   initializeCalls = 0
 
-  constructor(options: { readonly rejectNullShutdown?: boolean; readonly capabilities?: { readonly vad: boolean; readonly kws: boolean; readonly stt: boolean; readonly tts: false } } = {}) {
+  constructor(options: { readonly rejectNullShutdown?: boolean; readonly capabilities?: { readonly vad: boolean; readonly kws: boolean; readonly stt: boolean; readonly tts: false }; readonly inference?: boolean } = {}) {
     this.rejectNullShutdown = options.rejectNullShutdown === true
     this.capabilities = options.capabilities ?? { vad: false, kws: false, stt: false, tts: false }
+    this.inference = options.inference === true
   }
 
   async initialize(): Promise<{ readonly capabilities?: { readonly vad: boolean; readonly kws: boolean; readonly stt: boolean; readonly tts: false } }> {
@@ -274,8 +331,15 @@ class FakeBridge implements AuroraVoiceWasmBridge {
     this.startCalls += 1
   }
 
-  async pushPcmI16(frame: AuroraPcmFrameEnvelope, pcm: Int16Array): Promise<void> {
+  async pushPcmI16(frame: AuroraPcmFrameEnvelope, pcm: Int16Array) {
     this.frames.push({ frame, pcm: new Int16Array(pcm) })
+    if (!this.inference) return undefined
+    return {
+      vad: { active: true, speechDetected: true, sequence: frame.sequence, redacted: true as const },
+      kwsHits: [{ keyword: 'aurora', score: 0.5, sequence: frame.sequence, redacted: true as const }],
+      stt: [{ text: 'hello', final: false, sequence: frame.sequence, redacted: true as const }],
+      redacted: true as const
+    }
   }
 
   async stopSession(sessionId: string, generation: number): Promise<AuroraCapturedAudio> {

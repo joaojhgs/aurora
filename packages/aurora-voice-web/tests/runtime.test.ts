@@ -480,6 +480,46 @@ describe('AuroraVoiceWebRuntime', () => {
     expect(serializedEvents).not.toMatch(/42|secret|transcript|pcm|path|credential|pointer|native/i)
     expect(worker.serializedCommands()).not.toMatch(/secret|transcript|path|credential|pointer|native/i)
   })
+
+  it('delivers typed VAD KWS and STT outputs from frame acknowledgements to runtime callers', async () => {
+    const worker = new RecordingVoiceWorkerHost()
+    const events: AuroraVoiceWebEvent[] = []
+    worker.responseOverride = (command) => {
+      if (command.type === 'audio_frame') {
+        return {
+          type: 'ack',
+          sessionId: command.frame.sessionId,
+          generation: command.frame.generation,
+          sequence: command.frame.sequence,
+          inference: {
+            vad: { active: true, speechDetected: true, sequence: command.frame.sequence, redacted: true },
+            kwsHits: [{ keyword: 'aurora', score: 0.5, sequence: command.frame.sequence, redacted: true }],
+            stt: [{ text: 'hello', final: false, sequence: command.frame.sequence, redacted: true }],
+            redacted: true
+          }
+        }
+      }
+      return defaultResponseFor(command)
+    }
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker, nowMs: () => 10 })
+    runtime.onEvent((event) => events.push(event))
+    const session = await runtime.start()
+
+    await expect(runtime.pushFrame(frame(session.sessionId, session.generation, 0, [1, 2]))).resolves.toBe(true)
+
+    expect(events).toContainEqual(expect.objectContaining({
+      kind: 'voice_inference',
+      sequence: 0,
+      inference: {
+        vad: { active: true, speechDetected: true, sequence: 0, redacted: true },
+        kwsHits: [{ keyword: 'aurora', score: 0.5, sequence: 0, redacted: true }],
+        stt: [{ text: 'hello', final: false, sequence: 0, redacted: true }],
+        redacted: true
+      },
+      redacted: true
+    }))
+    await runtime.cancel()
+  })
 })
 
 class FailingWorkerHost extends RecordingVoiceWorkerHost {

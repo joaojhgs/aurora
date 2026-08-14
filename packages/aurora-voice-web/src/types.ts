@@ -88,17 +88,36 @@ export interface AuroraVoiceWebModelFileBinding {
   readonly bytes: Uint8Array
 }
 
-export interface AuroraVoiceWebSherpaAssets {
-  readonly vadAsrModuleUrl?: string
-  readonly vadHelperUrl?: string
-  readonly asrHelperUrl?: string
-  readonly kwsModuleUrl?: string
-  readonly kwsHelperUrl?: string
-}
-
 export interface AuroraVoiceWebModelBindings {
   readonly files: readonly AuroraVoiceWebModelFileBinding[]
-  readonly sherpaAssets?: AuroraVoiceWebSherpaAssets
+}
+
+export interface AuroraVoiceVadState {
+  readonly active: boolean
+  readonly speechDetected: boolean
+  readonly sequence: number
+  readonly redacted: true
+}
+
+export interface AuroraVoiceKwsHit {
+  readonly keyword: string
+  readonly score: number | null
+  readonly sequence: number
+  readonly redacted: true
+}
+
+export interface AuroraVoiceSttResult {
+  readonly text: string
+  readonly final: boolean
+  readonly sequence: number
+  readonly redacted: true
+}
+
+export interface AuroraVoiceInferenceOutput {
+  readonly vad?: AuroraVoiceVadState
+  readonly kwsHits: readonly AuroraVoiceKwsHit[]
+  readonly stt: readonly AuroraVoiceSttResult[]
+  readonly redacted: true
 }
 
 export type AuroraVoiceWebEventKind =
@@ -108,6 +127,7 @@ export type AuroraVoiceWebEventKind =
   | 'lifecycle_lost'
   | 'frame_accepted'
   | 'frame_dropped'
+  | 'voice_inference'
   | 'error'
 
 export interface AuroraVoiceWebEvent {
@@ -120,6 +140,7 @@ export interface AuroraVoiceWebEvent {
   readonly byteLength: number
   readonly queuedBytes: number
   readonly reason: string | null
+  readonly inference?: AuroraVoiceInferenceOutput
   readonly redacted: true
   readonly occurredAtMs: number
 }
@@ -193,6 +214,7 @@ export type AuroraVoiceWorkerResponse =
       readonly sessionId: string
       readonly generation: number
       readonly sequence: number | null
+      readonly inference?: AuroraVoiceInferenceOutput
     }
   | {
       readonly type: 'reject'

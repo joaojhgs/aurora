@@ -177,10 +177,7 @@ describe('createAuroraBrowserVoiceRuntime', () => {
           sha256: 'b'.repeat(64),
           byteLength: selectedBytes.byteLength,
           bytes: selectedBytes
-        }],
-        sherpaAssets: {
-          vadAsrModuleUrl: 'https://voice.example/sherpa-vad-asr.js'
-        }
+        }]
       },
       sessionIdFactory: (ownerId, generation) => `${ownerId}:${generation}`
     })

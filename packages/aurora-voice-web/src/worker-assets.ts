@@ -1,5 +1,3 @@
-import type { AuroraVoiceWebSherpaAssets } from './types.js'
-
 export const AURORA_VOICE_WORKER_ASSET_NAME = 'voice-worker.js'
 export const AURORA_VOICE_WASM_CORE_ASSET_NAME = 'aurora_voice_wasm_bg.wasm'
 export const AURORA_VOICE_SHERPA_VAD_ASR_QUERY = 'sherpa_vad_asr'
@@ -15,6 +13,26 @@ export interface AuroraVoiceWorkerSherpaAssetUrls {
   readonly kwsModuleUrl?: Pick<URL, 'href'>
   readonly kwsHelperUrl?: Pick<URL, 'href'>
 }
+
+export interface AuroraVoiceWorkerSherpaAssets {
+  readonly vadAsrModuleUrl?: string
+  readonly vadHelperUrl?: string
+  readonly asrHelperUrl?: string
+  readonly kwsModuleUrl?: string
+  readonly kwsHelperUrl?: string
+}
+
+const SHERPA_ASSET_BASENAMES = new Set([
+  'sherpa-onnx-wasm-main-vad-asr.js',
+  'sherpa-onnx-wasm-main-vad-asr.wasm',
+  'sherpa-onnx-wasm-main-offline-asr.js',
+  'sherpa-onnx-wasm-main-offline-asr.wasm',
+  'sherpa-onnx-wasm-kws-main.js',
+  'sherpa-onnx-wasm-kws-main.wasm',
+  'sherpa-onnx-vad.js',
+  'sherpa-onnx-asr.js',
+  'sherpa-onnx-kws.js'
+])
 
 function currentPageUrl(): string | undefined {
   return typeof globalThis.location === 'undefined'
@@ -53,7 +71,7 @@ export function resolveSameOriginWasmUrl(location: Pick<Location, 'href'>): URL 
   return wasmUrl
 }
 
-export function resolveSameOriginSherpaAssetUrls(location: Pick<Location, 'href'>): AuroraVoiceWebSherpaAssets {
+export function resolveSameOriginSherpaAssetUrls(location: Pick<Location, 'href'>): AuroraVoiceWorkerSherpaAssets {
   const workerUrl = new URL(location.href)
   return {
     ...resolveOptionalSameOriginQuery(workerUrl, AURORA_VOICE_SHERPA_VAD_ASR_QUERY, 'vadAsrModuleUrl'),
@@ -67,11 +85,11 @@ export function resolveSameOriginSherpaAssetUrls(location: Pick<Location, 'href'
 function setOptionalSameOriginQuery(url: URL, key: string, asset: Pick<URL, 'href'> | undefined): void {
   if (asset === undefined) return
   const resolved = new URL(asset.href, url)
-  if (resolved.origin !== url.origin) throw new Error('Voice worker is not available')
+  validateSherpaAssetUrl(resolved, url)
   url.searchParams.set(key, resolved.href)
 }
 
-function resolveOptionalSameOriginQuery<T extends keyof AuroraVoiceWebSherpaAssets>(
+function resolveOptionalSameOriginQuery<T extends keyof AuroraVoiceWorkerSherpaAssets>(
   workerUrl: URL,
   key: string,
   property: T
@@ -79,6 +97,14 @@ function resolveOptionalSameOriginQuery<T extends keyof AuroraVoiceWebSherpaAsse
   const value = workerUrl.searchParams.get(key)
   if (value === null) return {}
   const asset = new URL(value, workerUrl)
-  if (asset.origin !== workerUrl.origin) throw new Error('Voice worker is not available')
+  validateSherpaAssetUrl(asset, workerUrl)
   return { [property]: asset.href } as Partial<Record<T, string>>
+}
+
+function validateSherpaAssetUrl(asset: URL, workerUrl: URL): void {
+  if (asset.origin !== workerUrl.origin) throw new Error('Voice worker is not available')
+  const name = asset.pathname.split('/').filter(Boolean).at(-1) ?? ''
+  if (!SHERPA_ASSET_BASENAMES.has(name) || name.endsWith('.data')) {
+    throw new Error('Voice worker is not available')
+  }
 }

@@ -24,7 +24,6 @@ import type {
   AuroraVoiceWebModelBindings,
   AuroraVoiceWebModelFileBinding,
   AuroraVoiceWebModelTask,
-  AuroraVoiceWebSherpaAssets,
   AuroraVoiceWebRuntimeOptions
 } from './types.js'
 import type { AuroraWebModelStoreHost } from './model-store-host.js'
@@ -160,7 +159,6 @@ function isEligible(eligibility: AuroraVoiceLifecycleEligibility): boolean {
 export async function loadAuroraBrowserVoiceModelBindings(
   host: AuroraWebModelStoreHost,
   trust: AuroraBrowserModelPackTrustOptions,
-  sherpaAssets: AuroraVoiceWebSherpaAssets,
   tasks: readonly AuroraVoiceWebModelTask[] = ['vad', 'kws', 'stt']
 ): Promise<AuroraVoiceWebModelBindings | undefined> {
   const files: AuroraVoiceWebModelFileBinding[] = []
@@ -178,7 +176,7 @@ export async function loadAuroraBrowserVoiceModelBindings(
       })
     }
   }
-  return files.length === 0 ? undefined : { files, sherpaAssets }
+  return files.length === 0 ? undefined : { files }
 }
 
 function createWorker(

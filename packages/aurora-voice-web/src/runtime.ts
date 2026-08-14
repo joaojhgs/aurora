@@ -5,6 +5,7 @@ import {
   type AuroraCapturedAudio,
   type AuroraPcmFrame,
   type AuroraPcmFrameEnvelope,
+  type AuroraVoiceInferenceOutput,
   type AuroraVoiceLifecycleEligibility,
   type AuroraVoiceWebCapabilities,
   type AuroraVoiceWebEvent,
@@ -314,7 +315,7 @@ export class AuroraVoiceWebRuntime {
         timeoutMs: this.workerTimeoutMs,
         transfer: [transferBuffer]
       })
-      validateAck(posted, session.sessionId, session.generation, frame.sequence)
+      const ack = validateAck(posted, session.sessionId, session.generation, frame.sequence)
       if (
         this.session !== session ||
         this.state !== 'active' ||
@@ -325,6 +326,9 @@ export class AuroraVoiceWebRuntime {
       }
       this.nextSequence = frame.sequence + 1
       this.emit('frame_accepted', frame.sequence, frame.generation, sampleCount, byteLength, this.queuedBytes - byteLength, null)
+      if (ack.inference !== undefined) {
+        this.emit('voice_inference', frame.sequence, frame.generation, sampleCount, byteLength, this.queuedBytes - byteLength, null, ack.inference)
+      }
       return true
     } catch {
       await this.failClosed('frame_failed')
@@ -430,7 +434,8 @@ export class AuroraVoiceWebRuntime {
     sampleCount: number,
     byteLength: number,
     queuedBytes: number,
-    reason: string | null
+    reason: string | null,
+    inference?: AuroraVoiceInferenceOutput
   ): void {
     const event: AuroraVoiceWebEvent = Object.freeze({
       kind,
@@ -442,6 +447,7 @@ export class AuroraVoiceWebRuntime {
       byteLength,
       queuedBytes,
       reason,
+      ...(inference !== undefined ? { inference } : {}),
       redacted: true,
       occurredAtMs: this.nowMs()
     })
@@ -526,7 +532,9 @@ function validReadyCapabilities(capabilities: AuroraVoiceWebCapabilities): boole
     capabilities.tts === false
 }
 
-function validateAck(response: unknown, sessionId: string, generation: number, sequence: number | null): void {
+function validateAck(response: unknown, sessionId: string, generation: number, sequence: number | null): {
+  readonly inference?: AuroraVoiceInferenceOutput
+} {
   if (
     typeof response !== 'object' ||
     response === null ||
@@ -537,6 +545,40 @@ function validateAck(response: unknown, sessionId: string, generation: number, s
   ) {
     throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker rejected the request')
   }
+  const inference = (response as { inference?: unknown }).inference
+  if (inference !== undefined && !validInferenceOutput(inference, sequence)) {
+    throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker rejected the request')
+  }
+  return inference === undefined ? {} : { inference }
+}
+
+function validInferenceOutput(inference: unknown, sequence: number | null): inference is AuroraVoiceInferenceOutput {
+  if (sequence === null || typeof inference !== 'object' || inference === null) return false
+  const candidate = inference as Partial<AuroraVoiceInferenceOutput>
+  if (candidate.redacted !== true || !Array.isArray(candidate.kwsHits) || !Array.isArray(candidate.stt)) return false
+  if (candidate.vad !== undefined && (
+    candidate.vad.redacted !== true ||
+    typeof candidate.vad.active !== 'boolean' ||
+    typeof candidate.vad.speechDetected !== 'boolean' ||
+    candidate.vad.sequence !== sequence
+  )) return false
+  return candidate.kwsHits.every((hit) => (
+    typeof hit === 'object' &&
+    hit !== null &&
+    typeof hit.keyword === 'string' &&
+    hit.keyword.length > 0 &&
+    (hit.score === null || typeof hit.score === 'number') &&
+    hit.sequence === sequence &&
+    hit.redacted === true
+  )) && candidate.stt.every((result) => (
+    typeof result === 'object' &&
+    result !== null &&
+    typeof result.text === 'string' &&
+    result.text.length > 0 &&
+    typeof result.final === 'boolean' &&
+    result.sequence === sequence &&
+    result.redacted === true
+  ))
 }
 
 function validateStopResult(response: unknown, sessionId: string, generation: number): AuroraCapturedAudio {

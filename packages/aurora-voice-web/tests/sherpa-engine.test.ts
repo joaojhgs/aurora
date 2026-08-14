@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { AuroraSherpaWasmVoiceEngine } from '../src/sherpa-engine.js'
+import { AuroraSherpaWasmVoiceEngine, assertNoBundledDataPreload, fetchNeutralEngineSource } from '../src/sherpa-engine.js'
 import type { AuroraPcmFrameEnvelope, AuroraVoiceWebModelBindings, AuroraVoiceWebModelFileBinding } from '../src/types.js'
 
 describe('AuroraSherpaWasmVoiceEngine', () => {
@@ -14,6 +14,7 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
     const mounted: string[] = []
     const calls: string[] = []
     const engine = new AuroraSherpaWasmVoiceEngine({
+      engineAssets: engineAssets(),
       loadModule: async (_url, files) => {
         for (const file of files) mounted.push(`${file.task}:${file.virtualPath}:${file.byteLength}`)
         return {
@@ -22,7 +23,7 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
       },
       loadHelpers: async () => ({
         createVad: () => new FakeVad(calls),
-        createOnlineRecognizer: () => new FakeRecognizer(calls),
+        createOfflineRecognizer: () => new FakeRecognizer(calls),
         createKws: () => new FakeKws(calls)
       })
     })
@@ -30,24 +31,32 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
     const capabilities = await engine.initialize(bindings([
       modelFile('vad', 'silero-vad.onnx', [1]),
       modelFile('stt', 'moonshine-encoder.ort', [2]),
-      modelFile('stt', 'tokens.txt', [3]),
-      modelFile('kws', 'encoder.onnx', [4]),
-      modelFile('kws', 'decoder.onnx', [5]),
-      modelFile('kws', 'joiner.onnx', [6]),
-      modelFile('kws', 'tokens.txt', [7])
+      modelFile('stt', 'moonshine-merged-decoder.ort', [3]),
+      modelFile('stt', 'tokens.txt', [4]),
+      modelFile('kws', 'encoder.onnx', [5]),
+      modelFile('kws', 'decoder.onnx', [6]),
+      modelFile('kws', 'joiner.onnx', [7]),
+      modelFile('kws', 'tokens.txt', [8])
     ]))
     await engine.startSession()
-    await engine.pushPcmI16(frame(), new Int16Array([0, 32767, -32768]))
+    const inference = await engine.pushPcmI16(frame(), new Int16Array([0, 32767, -32768]))
     await engine.stopSession()
     engine.dispose()
 
     expect(capabilities).toEqual({ vad: true, kws: true, stt: true, tts: false })
     expect(mounted).toContain('vad:/vad-silero-vad.onnx:1')
     expect(mounted).toContain('stt:/stt-moonshine-encoder.ort:1')
+    expect(mounted).toContain('fs:/stt-moonshine-merged-decoder.ort')
     expect(mounted).toContain('kws:/kws-joiner.onnx:1')
+    expect(inference).toEqual({
+      vad: { active: true, speechDetected: true, sequence: 0, redacted: true },
+      kwsHits: [{ keyword: 'aurora', score: 0.75, sequence: 0, redacted: true }],
+      stt: [{ text: 'hello', final: false, sequence: 0, redacted: true }],
+      redacted: true
+    })
     expect(calls).toEqual([
       'vad:reset',
-      'recognizer:reset',
+      'stream:reset',
       'kws:reset',
       'vad:accept:3',
       'vad:pop',
@@ -74,18 +83,52 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
     await expect(engine.initialize({ files: [modelFile('vad', 'silero-vad.onnx', [1])] }))
       .rejects.toMatchObject({ code: 'missing_vad_asr_engine' })
   })
+
+  it('recomputes selected model SHA-256 before loading or mounting bytes', async () => {
+    let loaded = false
+    const engine = new AuroraSherpaWasmVoiceEngine({
+      engineAssets: engineAssets(),
+      loadModule: async () => {
+        loaded = true
+        return { FS_createDataFile: () => undefined }
+      },
+      loadHelpers: async () => ({ createVad: () => new FakeVad([]) })
+    })
+
+    await expect(engine.initialize({ files: [{ ...modelFile('vad', 'silero-vad.onnx', [1]), sha256: '0'.repeat(64) }] }))
+      .rejects.toMatchObject({ code: 'model_hash_mismatch' })
+    expect(loaded).toBe(false)
+  })
+
+  it('rejects engine sources that declare an Emscripten data preload without fetching data assets', async () => {
+    const fetched: string[] = []
+    const fetchImpl: typeof fetch = async (input) => {
+      fetched.push(String(input))
+      return {
+        ok: true,
+        text: async () => 'var PACKAGE_NAME = "sherpa-onnx-wasm-main-vad-asr.data";'
+      } as Response
+    }
+
+    await expect(fetchNeutralEngineSource('https://voice.example/sherpa-onnx-wasm-main-vad-asr.js', fetchImpl))
+      .rejects.toMatchObject({ code: 'bundled_data_rejected' })
+    expect(fetched).toEqual(['https://voice.example/sherpa-onnx-wasm-main-vad-asr.js'])
+    expect(fetched.some((url) => url.endsWith('.data'))).toBe(false)
+    expect(() => assertNoBundledDataPreload('function engineOnly() { return 1 }')).not.toThrow()
+  })
 })
 
 function bindings(files: readonly AuroraVoiceWebModelFileBinding[]): AuroraVoiceWebModelBindings {
+  return { files }
+}
+
+function engineAssets() {
   return {
-    files,
-    sherpaAssets: {
-      vadAsrModuleUrl: 'https://voice.example/sherpa-vad-asr.js',
-      vadHelperUrl: 'https://voice.example/sherpa-vad.js',
-      asrHelperUrl: 'https://voice.example/sherpa-asr.js',
-      kwsModuleUrl: 'https://voice.example/sherpa-kws.js',
-      kwsHelperUrl: 'https://voice.example/sherpa-kws-helper.js'
-    }
+    vadAsrModuleUrl: 'https://voice.example/sherpa-onnx-wasm-main-vad-asr.js',
+    vadHelperUrl: 'https://voice.example/sherpa-onnx-vad.js',
+    asrHelperUrl: 'https://voice.example/sherpa-onnx-asr.js',
+    kwsModuleUrl: 'https://voice.example/sherpa-onnx-wasm-kws-main.js',
+    kwsHelperUrl: 'https://voice.example/sherpa-onnx-kws.js'
   }
 }
 
@@ -94,10 +137,21 @@ function modelFile(task: 'vad' | 'kws' | 'stt', fileId: string, bytes: readonly 
     task,
     fileId,
     virtualPath: `/${task}-${fileId}`,
-    sha256: 'a'.repeat(64),
+    sha256: SHA_BY_BYTE[bytes[0] ?? 0] ?? '',
     byteLength: bytes.length,
     bytes: Uint8Array.from(bytes)
   }
+}
+
+const SHA_BY_BYTE: Record<number, string> = {
+  1: '4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a',
+  2: 'dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986',
+  3: '084fed08b978af4d7d196a7446a86b58009e636b611db16211b65a9aadff29c5',
+  4: 'e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71',
+  5: 'e77b9a9ae9e30b0dbdb6f510a264ef9de781501d7b6b92ae89eb059c5ab743db',
+  6: '67586e98fad27da0b9968bc039a1ef34c939b9b8e523a8bef89d478608c5ecf6',
+  7: 'ca358758f6d27e6cf45272937977a748fd88391db679ceda7dc7bf1f005ee879',
+  8: 'beead77994cf573341ec17b58bbf7eb34d2711c993c1d976b128b3188dc1829a'
 }
 
 function frame(): AuroraPcmFrameEnvelope {
@@ -130,8 +184,7 @@ class FakeRecognizer {
   createStream(): FakeStream { return new FakeStream(this.calls) }
   isReady(): boolean { return !this.calls.includes('recognizer:decode') }
   decode(): void { this.calls.push('recognizer:decode') }
-  getResult(): unknown { this.calls.push('recognizer:result'); return { text: '' } }
-  reset(): void { this.calls.push('recognizer:reset') }
+  getResult(): unknown { this.calls.push('recognizer:result'); return { text: 'hello' } }
   free(): void { this.calls.push('recognizer:free') }
 }
 
@@ -140,7 +193,7 @@ class FakeKws {
   createStream(): FakeStream { return new FakeStream(this.calls) }
   isReady(): boolean { return !this.calls.includes('kws:decode') }
   decode(): void { this.calls.push('kws:decode') }
-  getResult(): unknown { this.calls.push('kws:result'); return { keyword: '' } }
+  getResult(): unknown { this.calls.push('kws:result'); return { keyword: 'aurora', score: 0.75 } }
   reset(): void { this.calls.push('kws:reset') }
   free(): void { this.calls.push('kws:free') }
 }
@@ -149,5 +202,6 @@ class FakeStream {
   constructor(private readonly calls: string[]) {}
   acceptWaveform(sampleRate: number, samples: Float32Array): void { this.calls.push(`stream:accept:${sampleRate}:${samples.length}`) }
   inputFinished(): void { this.calls.push('stream:finished') }
+  reset(): void { this.calls.push('stream:reset') }
   free(): void { this.calls.push('stream:free') }
 }

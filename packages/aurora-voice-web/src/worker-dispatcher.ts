@@ -3,6 +3,7 @@ import {
   AURORA_VOICE_WORKER_PROTOCOL_VERSION,
   type AuroraCapturedAudio,
   type AuroraPcmFrameEnvelope,
+  type AuroraVoiceInferenceOutput,
   type AuroraVoiceTurnFinishOutcome,
   type AuroraVoiceWebCapabilities,
   type AuroraVoiceWebModelBindings,
@@ -18,7 +19,7 @@ const MAX_CAPTURED_AUDIO_SAMPLES = 16_000 * 60
 export interface AuroraVoiceWasmBridge {
   initialize?(modelBindings: AuroraVoiceWebModelBindings | undefined): Promise<{ readonly capabilities?: AuroraVoiceWebCapabilities }>
   startSession(session: AuroraVoiceWebSession): Promise<void>
-  pushPcmI16(frame: AuroraPcmFrameEnvelope, pcm: Int16Array): Promise<void>
+  pushPcmI16(frame: AuroraPcmFrameEnvelope, pcm: Int16Array): Promise<AuroraVoiceInferenceOutput | undefined>
   stopSession(sessionId: string, generation: number): Promise<AuroraCapturedAudio>
   finishTurn(sessionId: string, generation: number, outcome: AuroraVoiceTurnFinishOutcome): Promise<void>
   cancelGeneration(sessionId: string | null, generation: number, reason: string): Promise<void>
@@ -104,9 +105,16 @@ export class AuroraVoiceWorkerDispatcher {
         } else if (command.frame.sequence !== this.nextSequence) {
           throw new Error('sequence')
         }
-        await this.bridge.pushPcmI16(command.frame, command.pcm)
+        const inference = await this.bridge.pushPcmI16(command.frame, command.pcm)
+        if (inference !== undefined && !validInferenceOutput(inference, command.frame.sequence)) throw new Error('inference')
         this.nextSequence = command.frame.sequence + 1
-        return { type: 'ack', sessionId: command.frame.sessionId, generation: command.frame.generation, sequence: command.frame.sequence }
+        return {
+          type: 'ack',
+          sessionId: command.frame.sessionId,
+          generation: command.frame.generation,
+          sequence: command.frame.sequence,
+          ...(inference !== undefined ? { inference } : {})
+        }
       case 'stop': {
         this.requireActive(command.sessionId, command.generation)
         const audio = boundedCapturedAudio(await this.bridge.stopSession(command.sessionId, command.generation), command.sessionId, command.generation)
@@ -306,6 +314,7 @@ function validCapabilities(capabilities: unknown): capabilities is AuroraVoiceWe
 function validModelBindings(bindings: unknown): bindings is AuroraVoiceWebModelBindings | undefined {
   if (bindings === undefined) return true
   if (typeof bindings !== 'object' || bindings === null) return false
+  if ('sherpaAssets' in bindings) return false
   const files = (bindings as Partial<AuroraVoiceWebModelBindings>).files
   if (!Array.isArray(files) || files.length === 0 || files.length > 64) return false
   return files.every((file) => {
@@ -320,6 +329,35 @@ function validModelBindings(bindings: unknown): bindings is AuroraVoiceWebModelB
       safePositiveInteger(candidate.byteLength) &&
       candidate.byteLength === candidate.bytes.byteLength
   })
+}
+
+function validInferenceOutput(inference: unknown, sequence: number): inference is AuroraVoiceInferenceOutput {
+  if (typeof inference !== 'object' || inference === null) return false
+  const candidate = inference as Partial<AuroraVoiceInferenceOutput>
+  if (candidate.redacted !== true || !Array.isArray(candidate.kwsHits) || !Array.isArray(candidate.stt)) return false
+  if (candidate.vad !== undefined && (
+    candidate.vad.redacted !== true ||
+    typeof candidate.vad.active !== 'boolean' ||
+    typeof candidate.vad.speechDetected !== 'boolean' ||
+    candidate.vad.sequence !== sequence
+  )) return false
+  return candidate.kwsHits.every((hit) => (
+    typeof hit === 'object' &&
+    hit !== null &&
+    typeof hit.keyword === 'string' &&
+    hit.keyword.length > 0 &&
+    (hit.score === null || typeof hit.score === 'number') &&
+    hit.sequence === sequence &&
+    hit.redacted === true
+  )) && candidate.stt.every((result) => (
+    typeof result === 'object' &&
+    result !== null &&
+    typeof result.text === 'string' &&
+    result.text.length > 0 &&
+    typeof result.final === 'boolean' &&
+    result.sequence === sequence &&
+    result.redacted === true
+  ))
 }
 
 function safeVirtualPath(value: unknown): value is string {

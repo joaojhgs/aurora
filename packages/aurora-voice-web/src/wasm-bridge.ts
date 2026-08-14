@@ -2,16 +2,17 @@ import {
   AURORA_VOICE_WEB_DEFAULT_CAPABILITIES,
   AuroraVoiceWebRuntimeError,
   type AuroraCapturedAudio,
+  type AuroraVoiceInferenceOutput,
   type AuroraPcmFrameEnvelope,
   type AuroraVoiceTurnFinishOutcome,
   type AuroraVoiceWebCapabilities,
   type AuroraVoiceWebModelBindings,
-  type AuroraVoiceWebSherpaAssets,
   type AuroraVoiceWebSession
 } from './types.js'
 import { AuroraSherpaWasmVoiceEngine, type AuroraSherpaVoiceEngine } from './sherpa-engine.js'
 import type { AuroraVoiceWasmBridge } from './worker-dispatcher.js'
 import type * as AuroraVoiceWasmModule from './wasm/aurora_voice_wasm.js'
+import type { AuroraVoiceWorkerSherpaAssets } from './worker-assets.js'
 
 const DEFAULT_WASM_MAX_FRAMES = 4_096
 const DEFAULT_WASM_MAX_SAMPLES = 16_000 * 60
@@ -29,7 +30,7 @@ interface AuroraWasmVoiceBridgeOptions {
   readonly bindings?: AuroraVoiceWasmBindingsLoader
   readonly wasmUrl?: AuroraVoiceWasmUrl
   readonly sherpaEngine?: AuroraSherpaVoiceEngine
-  readonly sherpaAssets?: AuroraVoiceWebSherpaAssets
+  readonly sherpaAssets?: AuroraVoiceWorkerSherpaAssets
   readonly surface?: string
   readonly maxFrames?: number
   readonly maxSamples?: number
@@ -51,7 +52,6 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
   private readonly nowMs: () => number
   private readonly wasmUrl: AuroraVoiceWasmUrl | undefined
   private readonly sherpaEngine: AuroraSherpaVoiceEngine
-  private readonly defaultSherpaAssets: AuroraVoiceWebSherpaAssets | undefined
   private bindingsPromise: Promise<AuroraVoiceWasmBindings> | null = null
   private runtime: AuroraVoiceWasmRuntime | null = null
   private active: GenerationOwnership | null = null
@@ -65,13 +65,14 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
     this.maxFrames = boundedInteger(options.maxFrames ?? DEFAULT_WASM_MAX_FRAMES, 'maxFrames', 1, DEFAULT_WASM_MAX_FRAMES)
     this.maxSamples = boundedInteger(options.maxSamples ?? DEFAULT_WASM_MAX_SAMPLES, 'maxSamples', 1, DEFAULT_WASM_MAX_SAMPLES)
     this.nowMs = options.nowMs ?? Date.now
-    this.sherpaEngine = options.sherpaEngine ?? new AuroraSherpaWasmVoiceEngine()
-    this.defaultSherpaAssets = options.sherpaAssets
+    this.sherpaEngine = options.sherpaEngine ?? new AuroraSherpaWasmVoiceEngine(
+      options.sherpaAssets === undefined ? {} : { engineAssets: options.sherpaAssets }
+    )
   }
 
   async initialize(modelBindings: AuroraVoiceWebModelBindings | undefined): Promise<{ readonly capabilities?: AuroraVoiceWebCapabilities }> {
     await this.ensureRuntime()
-    this.capabilities = await this.sherpaEngine.initialize(mergeSherpaAssets(modelBindings, this.defaultSherpaAssets))
+    this.capabilities = await this.sherpaEngine.initialize(modelBindings)
     return { capabilities: this.capabilities }
   }
 
@@ -94,7 +95,7 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
     await this.sherpaEngine.startSession()
   }
 
-  async pushPcmI16(frame: AuroraPcmFrameEnvelope, pcm: Int16Array): Promise<void> {
+  async pushPcmI16(frame: AuroraPcmFrameEnvelope, pcm: Int16Array): Promise<AuroraVoiceInferenceOutput | undefined> {
     const ownership = this.requireActive(frame.sessionId, frame.generation)
     if (!(pcm instanceof Int16Array) || pcm.length !== frame.sampleCount || pcm.byteLength !== frame.byteLength) {
       throw sanitizedError('audio_shape')
@@ -114,7 +115,7 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
         samples: Array.from(pcm)
       })
     })
-    await this.sherpaEngine.pushPcmI16(frame, pcm)
+    return this.sherpaEngine.pushPcmI16(frame, pcm)
   }
 
   async stopSession(sessionId: string, generation: number): Promise<AuroraCapturedAudio> {
@@ -250,21 +251,6 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
       this.pendingStopped = null
       this.sherpaEngine.dispose()
       this.capabilities = AURORA_VOICE_WEB_DEFAULT_CAPABILITIES
-    }
-  }
-}
-
-function mergeSherpaAssets(
-  bindings: AuroraVoiceWebModelBindings | undefined,
-  assets: AuroraVoiceWebSherpaAssets | undefined
-): AuroraVoiceWebModelBindings | undefined {
-  if (bindings === undefined) return undefined
-  if (assets === undefined && bindings.sherpaAssets === undefined) return bindings
-  return {
-    ...bindings,
-    sherpaAssets: {
-      ...assets,
-      ...bindings.sherpaAssets
     }
   }
 }
