@@ -12,6 +12,7 @@ aurora-contracts = { path = "../aurora-contracts" }
 aurora-voice-core = { path = "../aurora-voice-core" }
 aurora-voice-engine = { path = "../aurora-voice-engine" }
 aurora-voice-ios-bridge = { path = "../aurora-voice-ios-bridge" }
+aurora-voice-sherpa = { path = "../aurora-voice-sherpa", optional = true }
 base64.workspace = true
 crossbeam-queue.workspace = true
 ed25519-dalek.workspace = true
@@ -26,6 +27,15 @@ url.workspace = true
 
 [target.'cfg(any(target_os = "linux", windows, target_os = "macos"))'.dependencies]
 cpal.workspace = true
+
+[features]
+default = []
+desktop-sherpa = [
+    "dep:aurora-voice-sherpa",
+    "aurora-voice-sherpa/native-kws",
+    "aurora-voice-sherpa/native-stt",
+    "aurora-voice-sherpa/native-vad",
+]
 
 [dev-dependencies]
 tempfile.workspace = true

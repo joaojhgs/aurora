@@ -924,8 +924,8 @@ fn install_profile_connection(status: &mut NativeVoiceStatus, connection: Native
 }
 
 #[cfg(any(desktop, test))]
-fn background_voice_eligible(_connection: NativeVoiceConnection) -> bool {
-    false
+fn background_voice_eligible(connection: NativeVoiceConnection) -> bool {
+    matches!(connection, NativeVoiceConnection::ThisDevice)
 }
 
 #[cfg(desktop)]
@@ -1971,7 +1971,7 @@ mod tests {
         let mut local = NativeVoiceStatus::unavailable(PROFILE_REASON);
         install_profile_connection(&mut local, NativeVoiceConnection::ThisDevice);
         assert_eq!(local.connection, NativeVoiceConnection::ThisDevice);
-        assert!(!local.background_eligible);
+        assert!(local.background_eligible);
 
         let mut remote = NativeVoiceStatus::unavailable(PROFILE_REASON);
         install_profile_connection(&mut remote, NativeVoiceConnection::ConnectedDevice);
@@ -1988,7 +1988,7 @@ mod tests {
         assert_eq!(accepted.phase, NativeVoicePhase::Starting);
         assert_eq!(accepted.generation, Some(9));
         assert!(accepted.available);
-        assert!(!accepted.background_eligible);
+        assert!(accepted.background_eligible);
     }
 
     #[test]

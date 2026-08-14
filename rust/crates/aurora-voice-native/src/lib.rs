@@ -9,6 +9,8 @@ mod android_session;
 mod audio;
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
 mod desktop_capture;
+#[cfg(feature = "desktop-sherpa")]
+mod desktop_engine;
 mod downloader;
 mod gateway_capture_handoff;
 mod gateway_stt;
@@ -34,6 +36,11 @@ pub use desktop_capture::{
     CpalAudioInput, NativeCaptureConfig, NativeCaptureControl, NativeCaptureStatus,
     NativeInputDevice, NativeInputDeviceId,
 };
+#[cfg(feature = "desktop-sherpa")]
+pub use desktop_engine::{
+    build_active_kws_provider, build_active_stt_provider, build_active_vad_provider,
+    warm_active_kws,
+};
 pub use downloader::{
     AssetIntegrity, DownloadError, DownloadPolicy, DownloadProgress, DownloadReceipt,
     NativeDownloader,
@@ -44,8 +51,8 @@ pub use gateway_capture_handoff::{
 pub use gateway_stt::{NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig};
 pub use gateway_tts::{NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer};
 pub use ios_session::{
-    IosVoiceSession, IosVoiceSessionCommandError, IosVoiceSessionConfig, IosVoiceSessionPhase,
-    IosVoiceSessionStatus, IosVoiceStartMode,
+    IosVoicePackBinding, IosVoicePackBindings, IosVoiceSession, IosVoiceSessionCommandError,
+    IosVoiceSessionConfig, IosVoiceSessionPhase, IosVoiceSessionStatus, IosVoiceStartMode,
 };
 pub use model_store::{NativeImmutableModelFile, NativeModelStore, NativeModelStoreConfig};
 pub use transport::{

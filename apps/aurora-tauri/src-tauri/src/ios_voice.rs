@@ -3,10 +3,11 @@
 //! The opaque session owns the Rust input/output queues. The audio state and
 //! output pointers borrowed from it are valid only until the session is freed.
 
+use aurora_voice_engine::PackTask;
 use aurora_voice_ios_bridge::{AuroraIosAudioOutput, AuroraIosAudioState};
 use aurora_voice_native::{
-    GatewayAuth, IosVoiceSession, IosVoiceSessionCommandError, IosVoiceSessionConfig,
-    IosVoiceSessionStatus,
+    GatewayAuth, IosVoicePackBinding, IosVoicePackBindings, IosVoiceSession,
+    IosVoiceSessionCommandError, IosVoiceSessionConfig, IosVoiceSessionStatus,
 };
 use std::ffi::CStr;
 use std::os::raw::c_char;
@@ -28,6 +29,17 @@ pub struct AuroraIosVoiceSessionStatus {
     pub generation: u64,
     pub completed_turns: u64,
     pub failed_turns: u64,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AuroraIosVoiceTaskPackBinding {
+    /// 1=kws, 2=wakeword, 3=vad, 4=stt, 5=tts.
+    pub task: i32,
+    /// Optional NUL-terminated UTF-8 slot id. Null means the default slot.
+    pub slot_id: *const c_char,
+    /// Required NUL-terminated UTF-8 active pack path selected by Swift.
+    pub pack_path: *const c_char,
 }
 
 /// # Safety
@@ -64,6 +76,44 @@ fn status_payload(status: IosVoiceSessionStatus) -> AuroraIosVoiceSessionStatus 
     }
 }
 
+fn pack_task_from_abi(value: i32) -> Option<PackTask> {
+    match value {
+        1 => Some(PackTask::Kws),
+        2 => Some(PackTask::Wakeword),
+        3 => Some(PackTask::Vad),
+        4 => Some(PackTask::Stt),
+        5 => Some(PackTask::Tts),
+        _ => None,
+    }
+}
+
+/// # Safety
+/// `bindings` must be null when `bindings_len` is zero, otherwise it must
+/// point to `bindings_len` initialized [`AuroraIosVoiceTaskPackBinding`] items.
+/// Each string pointer follows [`bounded_string`]'s UTF-8/NUL contract and is
+/// copied before this function returns.
+unsafe fn parse_pack_bindings(
+    bindings: *const AuroraIosVoiceTaskPackBinding,
+    bindings_len: usize,
+) -> Option<IosVoicePackBindings> {
+    if bindings_len == 0 {
+        return Some(IosVoicePackBindings::default());
+    }
+    if bindings.is_null() {
+        return None;
+    }
+    let raw = unsafe { std::slice::from_raw_parts(bindings, bindings_len) };
+    let mut parsed = Vec::with_capacity(raw.len());
+    for binding in raw {
+        let task = pack_task_from_abi(binding.task)?;
+        let slot_id =
+            unsafe { bounded_string(binding.slot_id, 64) }.unwrap_or_else(|| "default".to_owned());
+        let pack_path = unsafe { bounded_string(binding.pack_path, 4096) }?;
+        parsed.push(IosVoicePackBinding::new(task, slot_id, pack_path).ok()?);
+    }
+    IosVoicePackBindings::new(parsed).ok()
+}
+
 /// # Safety
 /// `gateway` and `bearer` must be null or valid NUL-terminated UTF-8 strings
 /// for the duration of the call. Each string is copied and bounded to 4096
@@ -84,6 +134,42 @@ pub unsafe extern "C" fn aurora_ios_voice_session_new(
         None => GatewayAuth::None,
     };
     let config = IosVoiceSessionConfig::new(gateway, auth, remote_audio_consent != 0);
+    match IosVoiceSession::new_default(config) {
+        Ok(session) => Box::into_raw(Box::new(session)),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// # Safety
+/// `gateway`, `bearer`, and every string in `bindings` must be null or valid
+/// NUL-terminated UTF-8 strings for the duration of this call. Strings are
+/// copied and bounded; no pointer is retained after this function returns.
+#[no_mangle]
+pub unsafe extern "C" fn aurora_ios_voice_session_new_with_pack_bindings(
+    gateway: *const c_char,
+    bearer: *const c_char,
+    remote_audio_consent: u32,
+    bindings: *const AuroraIosVoiceTaskPackBinding,
+    bindings_len: usize,
+) -> *mut IosVoiceSession {
+    let gateway =
+        match unsafe { bounded_string(gateway, 4096) }.and_then(|value| Url::parse(&value).ok()) {
+            Some(gateway) => gateway,
+            None => return std::ptr::null_mut(),
+        };
+    let auth = match unsafe { bounded_string(bearer, 4096) } {
+        Some(value) => GatewayAuth::Bearer(value),
+        None => GatewayAuth::None,
+    };
+    let Some(pack_bindings) = (unsafe { parse_pack_bindings(bindings, bindings_len) }) else {
+        return std::ptr::null_mut();
+    };
+    let config = IosVoiceSessionConfig::with_pack_bindings(
+        gateway,
+        auth,
+        remote_audio_consent != 0,
+        pack_bindings,
+    );
     match IosVoiceSession::new_default(config) {
         Ok(session) => Box::into_raw(Box::new(session)),
         Err(_) => std::ptr::null_mut(),

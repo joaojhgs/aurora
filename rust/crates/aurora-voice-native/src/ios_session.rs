@@ -14,12 +14,16 @@ use aurora_voice_core::{
     RouteFiniteSttBinding, RouteRevision, RouteTtsBinding, RuntimeEvent, RuntimeEventSink,
     TimestampMicros, VoiceCaptureLease, VoiceCoreError, VoiceRuntime, VoiceState,
 };
-use aurora_voice_engine::{FiniteSttRouteScope, MAX_FINITE_STT_SAMPLES, VAD_SAMPLE_RATE_HZ};
+use aurora_voice_engine::{
+    FiniteSttRouteScope, ModelPackError, ModelStoreScope, PackTask, MAX_FINITE_STT_SAMPLES,
+    VAD_SAMPLE_RATE_HZ,
+};
 use aurora_voice_ios_bridge::{
     AuroraIosAudioInput, AuroraIosAudioOutput, AuroraIosAudioState, AuroraIosCaptureControl,
 };
 use std::fmt;
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
@@ -37,6 +41,8 @@ const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(45);
 const DEFAULT_INPUT_CAPACITY_CHUNKS: usize = 8;
 const DEFAULT_INPUT_MAX_CHUNK_SAMPLES: usize = 4_096;
 const DEFAULT_OUTPUT_CAPACITY_CHUNKS: usize = 16;
+const MAX_IOS_PACK_BINDINGS: usize = 16;
+const MAX_IOS_PACK_PATH_BYTES: usize = 4096;
 
 type RuntimeCore = VoiceRuntime<
     AuroraIosAudioInput,
@@ -53,6 +59,7 @@ pub struct IosVoiceSessionConfig {
     gateway: Url,
     auth: GatewayAuth,
     remote_audio_consent: bool,
+    pack_bindings: IosVoicePackBindings,
 }
 
 impl IosVoiceSessionConfig {
@@ -61,6 +68,21 @@ impl IosVoiceSessionConfig {
             gateway,
             auth,
             remote_audio_consent,
+            pack_bindings: IosVoicePackBindings::default(),
+        }
+    }
+
+    pub fn with_pack_bindings(
+        gateway: Url,
+        auth: GatewayAuth,
+        remote_audio_consent: bool,
+        pack_bindings: IosVoicePackBindings,
+    ) -> Self {
+        Self {
+            gateway,
+            auth,
+            remote_audio_consent,
+            pack_bindings,
         }
     }
 }
@@ -72,6 +94,107 @@ impl fmt::Debug for IosVoiceSessionConfig {
             .field("endpoint_class", &endpoint_class(&self.gateway))
             .field("auth", &self.auth)
             .field("remote_audio_consent", &self.remote_audio_consent)
+            .field("pack_binding_count", &self.pack_bindings.len())
+            .finish()
+    }
+}
+
+/// One iOS-selected active model-pack binding.
+#[derive(Clone, PartialEq, Eq)]
+pub struct IosVoicePackBinding {
+    task: PackTask,
+    slot_id: String,
+    pack_path: PathBuf,
+}
+
+impl IosVoicePackBinding {
+    pub fn new(
+        task: PackTask,
+        slot_id: impl Into<String>,
+        pack_path: impl Into<PathBuf>,
+    ) -> Result<Self, ModelPackError> {
+        let slot_id = slot_id.into();
+        ModelStoreScope::new(task, slot_id.clone())?;
+        let pack_path = pack_path.into();
+        if pack_path.as_os_str().is_empty()
+            || pack_path.as_os_str().len() > MAX_IOS_PACK_PATH_BYTES
+            || !matches!(
+                task,
+                PackTask::Kws | PackTask::Wakeword | PackTask::Vad | PackTask::Stt | PackTask::Tts
+            )
+        {
+            return Err(ModelPackError::Store { code: "binding" });
+        }
+        Ok(Self {
+            task,
+            slot_id,
+            pack_path,
+        })
+    }
+
+    pub fn task(&self) -> PackTask {
+        self.task
+    }
+
+    pub fn slot_id(&self) -> &str {
+        &self.slot_id
+    }
+
+    pub fn pack_path(&self) -> &PathBuf {
+        &self.pack_path
+    }
+}
+
+impl fmt::Debug for IosVoicePackBinding {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("IosVoicePackBinding")
+            .field("task", &self.task)
+            .field("slot_id", &self.slot_id)
+            .field("pack_path", &"<redacted>")
+            .finish()
+    }
+}
+
+/// Bounded set of active iOS model-pack bindings selected by Swift.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct IosVoicePackBindings {
+    bindings: Vec<IosVoicePackBinding>,
+}
+
+impl IosVoicePackBindings {
+    pub fn new(bindings: Vec<IosVoicePackBinding>) -> Result<Self, ModelPackError> {
+        if bindings.len() > MAX_IOS_PACK_BINDINGS {
+            return Err(ModelPackError::Store { code: "binding" });
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for binding in &bindings {
+            let key = (binding.task, binding.slot_id.clone());
+            if !seen.insert(key) {
+                return Err(ModelPackError::Store { code: "binding" });
+            }
+        }
+        Ok(Self { bindings })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.bindings.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.bindings.len()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &IosVoicePackBinding> {
+        self.bindings.iter()
+    }
+}
+
+impl fmt::Debug for IosVoicePackBindings {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("IosVoicePackBindings")
+            .field("binding_count", &self.bindings.len())
             .finish()
     }
 }
@@ -317,6 +440,9 @@ fn build_runtime(
     output: AuroraIosAudioOutput,
     sink: IosSessionSink,
 ) -> Result<RuntimeCore, IosVoiceSessionCommandError> {
+    if !config.pack_bindings.is_empty() {
+        return Err(IosVoiceSessionCommandError::Unavailable);
+    }
     let policy = microphone_policy(config)?;
     let scope = if matches!(policy, MicrophoneAudioPolicy::LoopbackOnly) {
         FiniteSttRouteScope::LoopbackSidecar
@@ -674,6 +800,51 @@ mod tests {
         assert!(!debug.contains("native-secret"));
         assert!(!debug.contains("token=secret"));
         assert!(!debug.contains("user:pass"));
+    }
+
+    #[test]
+    fn ios_pack_bindings_are_bounded_deduplicated_and_redacted() {
+        let binding = IosVoicePackBinding::new(PackTask::Stt, "default", "/private/model-pack")
+            .expect("binding");
+        assert_eq!(binding.task(), PackTask::Stt);
+        assert_eq!(binding.slot_id(), "default");
+        assert_eq!(
+            IosVoicePackBindings::new(vec![binding.clone()])
+                .expect("bindings")
+                .len(),
+            1
+        );
+        assert!(IosVoicePackBindings::new(vec![binding.clone(), binding.clone()]).is_err());
+        let debug = format!("{binding:?}");
+        assert!(debug.contains("Stt"));
+        assert!(!debug.contains("/private/model-pack"));
+    }
+
+    #[test]
+    fn ios_session_with_pack_bindings_fails_closed_without_native_engine() {
+        let bindings = IosVoicePackBindings::new(vec![IosVoicePackBinding::new(
+            PackTask::Stt,
+            "default",
+            "/private/model-pack",
+        )
+        .expect("binding")])
+        .expect("bindings");
+        let config = IosVoiceSessionConfig::with_pack_bindings(
+            Url::parse("http://127.0.0.1:8000").expect("url"),
+            GatewayAuth::None,
+            false,
+            bindings,
+        );
+        let audio_state = AuroraIosAudioState::new(1, 1);
+        let output = AuroraIosAudioOutput::new(1);
+        let input = AuroraIosAudioInput::new(audio_state);
+        let sink = IosSessionSink {
+            status: Arc::new(Mutex::new(IosVoiceSessionStatus::default())),
+        };
+        assert!(matches!(
+            build_runtime(&config, input, output, sink),
+            Err(IosVoiceSessionCommandError::Unavailable)
+        ));
     }
 
     #[test]
