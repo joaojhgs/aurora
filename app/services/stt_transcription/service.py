@@ -232,7 +232,7 @@ class TranscriptionService(BaseService):
 
     def _ensure_huggingface_cache_env(self) -> None:
         """Point HF hub/xet at a writable tree (bind-mounted ./data is often root-owned)."""
-        hf_home = os.environ.get("HF_HOME", "/app/data/huggingface")
+        hf_home = os.environ.get("HF_HOME") or self._default_app_data_cache_dir("huggingface")
         writable = ensure_path_writable_or_tmp(hf_home, tmp_leaf="huggingface")
         os.environ["HF_HOME"] = writable
         hub = os.path.join(writable, "hub")
@@ -245,6 +245,31 @@ class TranscriptionService(BaseService):
                 hf_home,
                 writable,
             )
+
+    def _default_app_data_cache_dir(self, *parts: str) -> str:
+        """Return a durable app-data cache path for model downloads."""
+        from app.shared.path_utils import get_data_dir
+
+        return str(get_data_dir().joinpath("models", *parts))
+
+    def _inference_ready(self) -> bool:
+        """Return true when at least one enabled transcription model is callable."""
+        realtime_ready = self._realtime_enabled and self._realtime_model is not None
+        accurate_ready = self._accurate_enabled and self._accurate_model is not None
+        return realtime_ready or accurate_ready
+
+    def _refresh_callable_capabilities(self) -> None:
+        """Advertise model-dependent transcription only when inference is ready."""
+        capabilities = ["vad"]
+        if self._inference_ready():
+            capabilities.extend(["audio_transcription", "whisper"])
+        self._capabilities = capabilities
+
+    async def _republish_readiness(self) -> None:
+        """Refresh gateway discovery after inference readiness changes."""
+        self._refresh_callable_capabilities()
+        if getattr(self, "_runtime_state", None) == "active":
+            await self._publish_service_announcement()
 
     async def reload(self, config_section: str | None = None) -> None:
         """Reload service configuration.
@@ -293,6 +318,7 @@ class TranscriptionService(BaseService):
                 del old_realtime
             if old_accurate:
                 del old_accurate
+            await self._republish_readiness()
         log_info("TranscriptionService configuration reloaded")
 
     async def _load_config(self) -> None:
@@ -306,10 +332,17 @@ class TranscriptionService(BaseService):
 
     async def _read_runtime_config(
         self,
-    ) -> tuple[str, SpeechLanguagePolicy, Transcription, bool, bool]:
+    ) -> tuple[str, SpeechLanguagePolicy, Any, bool, bool]:
         """Read runtime config without mutating live models."""
 
-        stt_cfg = await config_api.aget(ConfigKeys.services.stt, Stt)
+        stt_raw = await config_api.aget(ConfigKeys.services.stt, default={})
+        if isinstance(stt_raw, Stt):
+            stt_cfg = stt_raw
+        else:
+            try:
+                stt_cfg = Stt.model_validate(stt_raw or {})
+            except Exception:
+                stt_cfg = Stt()
         system_cfg = await config_api.aget(ConfigKeys.system, System)
         if not isinstance(system_cfg, System):
             system_cfg = System()
@@ -317,19 +350,23 @@ class TranscriptionService(BaseService):
             system_cfg.primary_language,
             system_cfg.voice_language,
         )
-        transcription_cfg = stt_cfg.transcription or Transcription()
+        transcription_cfg = (
+            stt_raw.get("transcription")
+            if isinstance(stt_raw, dict) and isinstance(stt_raw.get("transcription"), dict)
+            else stt_cfg.transcription or Transcription()
+        )
 
-        realtime_model = transcription_cfg.realtime_model
+        realtime_model = self._cfg_value(transcription_cfg, "realtime_model")
         realtime_enabled = (
-            realtime_model.enabled
-            if realtime_model is not None and realtime_model.enabled is not None
+            self._cfg_value(realtime_model, "enabled")
+            if realtime_model is not None and self._cfg_value(realtime_model, "enabled") is not None
             else True
         )
 
-        accurate_model = transcription_cfg.accurate_model
+        accurate_model = self._cfg_value(transcription_cfg, "accurate_model")
         accurate_enabled = (
-            accurate_model.enabled
-            if accurate_model is not None and accurate_model.enabled is not None
+            self._cfg_value(accurate_model, "enabled")
+            if accurate_model is not None and self._cfg_value(accurate_model, "enabled") is not None
             else True
         )
         return (
@@ -353,7 +390,7 @@ class TranscriptionService(BaseService):
         """Load Faster Whisper models."""
         log_info("Loading transcription models...")
 
-        transcription_cfg = (await config_api.aget(ConfigKeys.services.stt, Stt)).transcription
+        _, _, transcription_cfg, _, _ = await self._read_runtime_config()
         new_realtime, new_accurate = await self._create_models(
             transcription_cfg or Transcription(),
             realtime_enabled=self._realtime_enabled,
@@ -361,6 +398,7 @@ class TranscriptionService(BaseService):
         )
         self._realtime_model = new_realtime
         self._accurate_model = new_accurate
+        self._refresh_callable_capabilities()
 
     def _set_model_status(self, model_role: str, status: str, message: str) -> None:
         """Record model readiness without exposing local paths in status messages."""
@@ -373,23 +411,23 @@ class TranscriptionService(BaseService):
 
     async def _create_models(
         self,
-        transcription_cfg: Transcription,
+        transcription_cfg: Any,
         *,
         realtime_enabled: bool,
         accurate_enabled: bool,
     ) -> tuple[Any | None, Any | None]:
         """Create Faster Whisper models without mutating live service state."""
 
-        raw_realtime = transcription_cfg.realtime_model
+        raw_realtime = self._cfg_value(transcription_cfg, "realtime_model")
         realtime_model_cfg = raw_realtime or RealtimeModel()
-        accurate_model_cfg = transcription_cfg.accurate_model or AccurateModel()
+        accurate_model_cfg = self._cfg_value(transcription_cfg, "accurate_model") or AccurateModel()
 
-        accurate_model_size = accurate_model_cfg.model_size or "base"
-        realtime_model_size = realtime_model_cfg.model_size or "tiny"
-        realtime_device = realtime_model_cfg.device
-        accurate_device = accurate_model_cfg.device
-        accurate_compute_type = accurate_model_cfg.compute_type or "int8"
-        realtime_compute_type = realtime_model_cfg.compute_type or "int8"
+        accurate_model_size = self._model_size_or_path(accurate_model_cfg, default="base")
+        realtime_model_size = self._model_size_or_path(realtime_model_cfg, default="tiny")
+        realtime_device = self._cfg_value(realtime_model_cfg, "device")
+        accurate_device = self._cfg_value(accurate_model_cfg, "device")
+        accurate_compute_type = self._cfg_value(accurate_model_cfg, "compute_type") or "int8"
+        realtime_compute_type = self._cfg_value(realtime_model_cfg, "compute_type") or "int8"
 
         # Fallback to legacy hardware_acceleration when realtime_model block exists (matches dict truthiness)
         if raw_realtime is not None:
@@ -399,7 +437,7 @@ class TranscriptionService(BaseService):
         # Never use cwd-relative paths: Tilt sets working_dir to /app/host (often not writable).
         from app.shared.path_utils import ensure_path_writable_or_tmp
 
-        _hf = os.environ.get("HF_HOME", "/app/data/huggingface")
+        _hf = os.environ.get("HF_HOME") or self._default_app_data_cache_dir("huggingface")
         _preferred = os.environ.get("AURORA_STT_WHISPER_DOWNLOAD_ROOT") or os.path.join(
             _hf, "whisper"
         )
@@ -423,6 +461,19 @@ class TranscriptionService(BaseService):
             download_root=download_root,
         )
         return realtime_model, accurate_model
+
+    def _cfg_value(self, cfg: Any, key: str) -> Any:
+        """Read generated Pydantic configs or raw dict-like test/config values."""
+        if isinstance(cfg, dict):
+            return cfg.get(key)
+        return getattr(cfg, key, None)
+
+    def _model_size_or_path(self, cfg: Any, *, default: str) -> str:
+        """Accept Faster Whisper presets, Hugging Face IDs, and local paths."""
+        selected = self._cfg_value(cfg, "model_size_or_path") or self._cfg_value(cfg, "model_size")
+        if not isinstance(selected, str) or not selected.strip():
+            return default
+        return selected.strip()
 
     def _load_one_model(
         self,
@@ -452,6 +503,7 @@ class TranscriptionService(BaseService):
             return model
         except Exception as e:
             self._set_model_status(role, "unavailable", type(e).__name__)
+            self._refresh_callable_capabilities()
             log_warning(
                 "%s transcription model unavailable; service remains active: %s",
                 role.capitalize(),
@@ -906,6 +958,8 @@ class TranscriptionService(BaseService):
             EmptyOutput on success
         """
         await self._validate_streaming_audio_session(chunk)
+        if not self._inference_ready():
+            raise RuntimeError("Transcription model unavailable")
 
         # Convert STT format to internal AudioFormat
         # Derive bits_per_sample and encoding from format string
@@ -1064,9 +1118,11 @@ class TranscriptionService(BaseService):
                 log_info(f"Language set to: {self._language}")
         elif action == "enable_realtime" and data.enabled is not None:
             self._realtime_enabled = data.enabled
+            await self._republish_readiness()
             log_info(f"Realtime transcription: {'enabled' if data.enabled else 'disabled'}")
         elif action == "enable_accurate" and data.enabled is not None:
             self._accurate_enabled = data.enabled
+            await self._republish_readiness()
             log_info(f"Accurate transcription: {'enabled' if data.enabled else 'disabled'}")
 
         return EmptyOutput()
@@ -1214,7 +1270,7 @@ class TranscriptionService(BaseService):
 
             # Select model
             if request.model == "accurate":
-                if self._accurate_model is None:
+                if not self._accurate_enabled or self._accurate_model is None:
                     raise RuntimeError(
                         "Accurate model unavailable: "
                         f"{self._model_status_message.get('accurate', 'not_loaded')}"
@@ -1222,7 +1278,7 @@ class TranscriptionService(BaseService):
                 model = self._accurate_model
                 beam_size = 5
             else:
-                if self._realtime_model is None:
+                if not self._realtime_enabled or self._realtime_model is None:
                     raise RuntimeError(
                         "Realtime model unavailable: "
                         f"{self._model_status_message.get('realtime', 'not_loaded')}"

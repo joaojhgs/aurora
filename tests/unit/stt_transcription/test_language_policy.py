@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.stt_transcription.service import TranscriptionService
+from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import (
     AccurateModel,
     RealtimeModel,
@@ -55,6 +56,10 @@ def _stt_config(language: str = "en") -> Stt:
     )
 
 
+def _stt_config_payload(language: str = "en") -> dict:
+    return _stt_config(language=language).model_dump()
+
+
 @pytest.mark.asyncio
 async def test_fixed_voice_language_controls_transcription_language() -> None:
     with (
@@ -66,6 +71,8 @@ async def test_fixed_voice_language_controls_transcription_language() -> None:
         create_model.return_value = MagicMock()
 
         async def aget(key, default_or_model=None, *args, **kwargs):
+            if key == ConfigKeys.services.stt and kwargs.get("default") == {}:
+                return _stt_config_payload()
             if default_or_model is Stt:
                 return _stt_config()
             if default_or_model is System:
@@ -93,6 +100,8 @@ async def test_auto_voice_language_keeps_transcription_auto_with_primary_hint() 
         create_model.return_value = MagicMock()
 
         async def aget(key, default_or_model=None, *args, **kwargs):
+            if key == ConfigKeys.services.stt and kwargs.get("default") == {}:
+                return _stt_config_payload(language="fr")
             if default_or_model is Stt:
                 return _stt_config(language="fr")
             if default_or_model is System:
@@ -123,6 +132,8 @@ async def test_failed_reload_retains_previous_language_and_models() -> None:
         create_model.side_effect = [old_realtime, old_accurate, RuntimeError("load failed")]
 
         async def aget(key, default_or_model=None, *args, **kwargs):
+            if key == ConfigKeys.services.stt and kwargs.get("default") == {}:
+                return _stt_config_payload()
             if default_or_model is Stt:
                 return _stt_config()
             if default_or_model is System:

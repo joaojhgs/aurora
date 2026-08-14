@@ -10,10 +10,13 @@ Tests cover:
 - Error handling
 """
 
+import asyncio
 import hashlib
+import json
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from urllib.error import HTTPError
 
 import pytest
 
@@ -23,7 +26,13 @@ from app.services.stt_wakeword.messages import (
     WakeWordControl,
     WakeWordDetected,
 )
-from app.services.stt_wakeword.service import WakeWordService
+from app.services.stt_wakeword.service import (
+    WAKEWORD_MODEL_CACHE_QUOTA_ENV,
+    WAKEWORD_MODEL_CATALOG_ENV,
+    WakeWordCatalogEntry,
+    WakeWordService,
+    _NoRedirectHandler,
+)
 from app.shared.config.models import Wakeword
 from app.shared.contracts.models.stt import WakeWordMethods
 
@@ -219,48 +228,271 @@ async def test_missing_wakeword_model_keeps_service_unavailable(service, tmp_pat
     assert backend is None
     assert service._readiness_status == "unavailable"
     assert service._readiness_message == "models_missing"
+    assert "wake_word_detection" not in service._capabilities
 
 
 @pytest.mark.asyncio
-async def test_wakeword_model_url_downloads_and_reuses_cache(service, tmp_path, monkeypatch):
-    """URL-selected wakeword models download on demand and reuse the cached file."""
+async def test_wakeword_readiness_republishes_after_recovery(service, tmp_path):
+    """A recovered backend updates callable capabilities and gateway discovery."""
+    service._backend_type = WakeWordBackendType.OPENWAKEWORD
+    service._runtime_state = "active"
+    service._publish_service_announcement = AsyncMock()
+    model_path = tmp_path / "ready.onnx"
+    model_path.write_bytes(b"model")
+
+    with patch("app.services.stt_wakeword.service.OpenWakeWordBackend") as mock_oww_class:
+        mock_backend = Mock()
+        mock_backend.initialize = AsyncMock()
+        mock_oww_class.return_value = mock_backend
+
+        service._backend = await service._build_backend(
+            backend_type=service._backend_type,
+            model_paths=[str(model_path)],
+            sensitivity=0.5,
+            wake_words=["ready"],
+        )
+        await service._republish_readiness()
+
+    assert "wake_word_detection" in service._capabilities
+    service._publish_service_announcement.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_wakeword_catalog_model_downloads_and_reuses_digest_cache(
+    service, tmp_path, monkeypatch
+):
+    """Catalog-selected wakeword models download on demand and reuse digest cache."""
     model_bytes = b"wakeword model bytes"
     expected_sha = hashlib.sha256(model_bytes).hexdigest()
     cache_dir = tmp_path / "cache"
     monkeypatch.setenv("AURORA_WAKEWORD_MODEL_CACHE_DIR", str(cache_dir))
     calls = []
 
-    def fake_urlretrieve(url, destination):
-        calls.append(url)
+    def fake_validate(url):
+        calls.append(("validate", url))
+
+    def fake_stream(entry, destination):
+        calls.append(("download", entry.url))
         Path(destination).write_bytes(model_bytes)
 
-    monkeypatch.setattr("app.services.stt_wakeword.service.urlretrieve", fake_urlretrieve)
-
-    selected = f"https://example.invalid/aurora.onnx#sha256={expected_sha}"
-    first_path = await service._download_model_to_cache(selected)
-    second_path = await service._download_model_to_cache(selected)
+    monkeypatch.setattr(
+        "app.services.stt_wakeword.service._validate_https_download_url", fake_validate
+    )
+    monkeypatch.setattr(service, "_stream_https_to_temp", fake_stream)
+    entry = WakeWordCatalogEntry(
+        key="aurora",
+        url="https://models.example/aurora.onnx",
+        sha256=expected_sha,
+        size_bytes=len(model_bytes),
+        name="aurora",
+    )
+    first_path = await service._download_model_to_cache(entry)
+    second_path = await service._download_model_to_cache(entry)
 
     assert first_path == second_path
+    assert Path(first_path).name == expected_sha
     assert Path(first_path).read_bytes() == model_bytes
-    assert calls == ["https://example.invalid/aurora.onnx"]
+    assert calls == [
+        ("validate", "https://models.example/aurora.onnx"),
+        ("download", "https://models.example/aurora.onnx"),
+        ("validate", "https://models.example/aurora.onnx"),
+    ]
 
 
 @pytest.mark.asyncio
-async def test_wakeword_model_download_rejects_bad_checksum(service, tmp_path, monkeypatch):
+async def test_wakeword_catalog_download_rejects_bad_checksum(service, tmp_path, monkeypatch):
     """Hash metadata from a catalog entry is enforced before activation."""
     monkeypatch.setenv("AURORA_WAKEWORD_MODEL_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setattr(
+        "app.services.stt_wakeword.service._validate_https_download_url",
+        lambda _url: None,
+    )
 
-    def fake_urlretrieve(url, destination):
-        del url
+    def fake_stream(entry, destination):
+        del entry
         Path(destination).write_bytes(b"wrong bytes")
 
-    monkeypatch.setattr("app.services.stt_wakeword.service.urlretrieve", fake_urlretrieve)
+    monkeypatch.setattr(service, "_stream_https_to_temp", fake_stream)
+    entry = WakeWordCatalogEntry(
+        key="aurora",
+        url="https://models.example/aurora.onnx",
+        sha256="0" * 64,
+        size_bytes=len(b"wrong bytes"),
+        name="aurora",
+    )
 
     with pytest.raises(ValueError, match="checksum"):
-        await service._download_model_to_cache(
-            "https://example.invalid/aurora.onnx#sha256="
-            "0000000000000000000000000000000000000000000000000000000000000000"
+        await service._download_model_to_cache(entry)
+
+
+@pytest.mark.asyncio
+async def test_wakeword_direct_url_selection_is_denied_fail_soft(mock_bus):
+    """Direct URL model selections are not fetched; startup remains fail-soft."""
+    with patch("app.services.stt_wakeword.service.config_api") as mock_cfg:
+        mock_cfg.aget = AsyncMock(
+            return_value=Wakeword(
+                backend="oww",
+                threshold=0.5,
+                model_path="https://models.example/aurora.onnx",
+            )
         )
+        with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
+            service = WakeWordService()
+
+        await service._load_config()
+
+    assert service._model_paths == []
+    assert service._wake_words == []
+    assert service._readiness_status == "unavailable"
+    assert service._readiness_message == "catalog_required"
+
+
+def test_wakeword_catalog_requires_sha256_size_and_https(service, tmp_path, monkeypatch):
+    """Catalog entries must be allowlisted HTTPS downloads with digest metadata."""
+    catalog = tmp_path / "catalog.json"
+    monkeypatch.setenv(WAKEWORD_MODEL_CATALOG_ENV, str(catalog))
+
+    catalog.write_text(
+        json.dumps({"models": [{"id": "aurora", "url": "https://models.example/a.onnx"}]}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="sha256"):
+        service._catalog_entry_for_key("aurora")
+
+    catalog.write_text(
+        json.dumps(
+            {
+                "models": [
+                    {
+                        "id": "aurora",
+                        "url": "http://models.example/a.onnx",
+                        "sha256": "0" * 64,
+                        "size_bytes": 10,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="HTTPS"):
+        service._catalog_entry_for_key("aurora")
+
+
+def test_wakeword_catalog_denies_private_dns(service, tmp_path, monkeypatch):
+    """Catalog URL hosts resolving to private addresses are rejected before download."""
+    catalog = tmp_path / "catalog.json"
+    catalog.write_text(
+        json.dumps(
+            {
+                "models": [
+                    {
+                        "id": "aurora",
+                        "url": "https://models.example/a.onnx",
+                        "sha256": "0" * 64,
+                        "size_bytes": 10,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(WAKEWORD_MODEL_CATALOG_ENV, str(catalog))
+    monkeypatch.setattr(
+        "app.services.stt_wakeword.service.socket.getaddrinfo",
+        lambda *args, **kwargs: [
+            (None, None, None, "", ("127.0.0.1", 443)),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="not allowed"):
+        service._catalog_entry_for_key("aurora")
+
+
+def test_wakeword_catalog_redirects_are_denied():
+    """Catalog downloader rejects redirects instead of following a new host."""
+    request = Mock(full_url="https://models.example/a.onnx")
+
+    with pytest.raises(HTTPError, match="redirects are not allowed"):
+        _NoRedirectHandler().redirect_request(
+            request,
+            None,
+            302,
+            "Found",
+            {},
+            "https://models.example/redirected.onnx",
+        )
+
+
+@pytest.mark.asyncio
+async def test_wakeword_catalog_download_uses_per_digest_lock(service, tmp_path, monkeypatch):
+    """Concurrent downloads for the same digest write once and share the cache hit."""
+    model_bytes = b"wakeword model bytes"
+    expected_sha = hashlib.sha256(model_bytes).hexdigest()
+    monkeypatch.setenv("AURORA_WAKEWORD_MODEL_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setattr(
+        "app.services.stt_wakeword.service._validate_https_download_url",
+        lambda _url: None,
+    )
+    calls = 0
+
+    def fake_stream(entry, destination):
+        nonlocal calls
+        calls += 1
+        Path(destination).write_bytes(model_bytes)
+
+    monkeypatch.setattr(service, "_stream_https_to_temp", fake_stream)
+    entry = WakeWordCatalogEntry(
+        key="aurora",
+        url="https://models.example/aurora.onnx",
+        sha256=expected_sha,
+        size_bytes=len(model_bytes),
+        name="aurora",
+    )
+
+    first_path, second_path = await asyncio.gather(
+        service._download_model_to_cache(entry),
+        service._download_model_to_cache(entry),
+    )
+
+    assert first_path == second_path
+    assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_wakeword_cache_prunes_old_files_to_quota(service, tmp_path, monkeypatch):
+    """Wakeword cache pruning removes older digest files outside the keep set."""
+    model_bytes = b"fresh model bytes"
+    expected_sha = hashlib.sha256(model_bytes).hexdigest()
+    cache_dir = tmp_path / "cache"
+    old_file = cache_dir / "aa" / ("a" * 64)
+    old_file.parent.mkdir(parents=True)
+    old_file.write_bytes(b"old bytes")
+    monkeypatch.setenv("AURORA_WAKEWORD_MODEL_CACHE_DIR", str(cache_dir))
+    monkeypatch.setenv(
+        WAKEWORD_MODEL_CACHE_QUOTA_ENV,
+        str(len(model_bytes) + 1),
+    )
+    monkeypatch.setattr(
+        "app.services.stt_wakeword.service._validate_https_download_url",
+        lambda _url: None,
+    )
+    monkeypatch.setattr(
+        service,
+        "_stream_https_to_temp",
+        lambda entry, destination: Path(destination).write_bytes(model_bytes),
+    )
+    entry = WakeWordCatalogEntry(
+        key="aurora",
+        url="https://models.example/aurora.onnx",
+        sha256=expected_sha,
+        size_bytes=len(model_bytes),
+        name="aurora",
+    )
+
+    fresh_path = await service._download_model_to_cache(entry)
+
+    assert Path(fresh_path).is_file()
+    assert not old_file.exists()
 
 
 @pytest.mark.asyncio
@@ -508,6 +740,7 @@ async def test_wake_word_detection_with_multiple_models(service, mock_backend, m
 async def test_control_command_start(service):
     """Test start control command enables detection."""
     service._enabled = False
+    service._backend = Mock()
 
     cmd = WakeWordControl(action="start")
 
@@ -544,6 +777,7 @@ async def test_control_command_pause(service):
 async def test_control_command_resume(service):
     """Test resume control command enables detection."""
     service._enabled = False
+    service._backend = Mock()
 
     cmd = WakeWordControl(action="resume")
 
@@ -556,6 +790,7 @@ async def test_control_command_resume(service):
 async def test_control_command_case_insensitive(service):
     """Test control commands are case-insensitive."""
     service._enabled = False
+    service._backend = Mock()
 
     cmd = WakeWordControl(action="START")
 

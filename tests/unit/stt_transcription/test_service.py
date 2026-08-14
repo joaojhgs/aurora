@@ -36,7 +36,8 @@ from app.messaging import (
     TranscriptionType,
 )
 from app.services.stt_transcription.service import TranscriptionService, VADMode
-from app.shared.config.models import AccurateModel, RealtimeModel, Stt, Transcription
+from app.shared.config.keys import ConfigKeys
+from app.shared.config.models import AccurateModel, RealtimeModel, Stt, System, Transcription
 from app.shared.contracts.models.stt import TranscriptionMethods
 
 
@@ -325,6 +326,131 @@ class TestModelLoading:
         )
 
         await service.stop()
+
+    @pytest.mark.asyncio
+    async def test_model_size_or_path_accepts_hf_id_and_local_path(
+        self, service, mock_whisper_model, tmp_path
+    ):
+        """Faster Whisper identifiers pass through without preset enum filtering."""
+        local_model = tmp_path / "whisper-local"
+        cfg = Mock()
+        cfg.realtime_model = {
+            "enabled": True,
+            "model_size_or_path": "Systran/faster-whisper-large-v3",
+            "device": "cpu",
+            "compute_type": "int8",
+        }
+        cfg.accurate_model = {
+            "enabled": True,
+            "model_size_or_path": str(local_model),
+            "device": "cpu",
+            "compute_type": "int8",
+        }
+
+        await service._create_models(cfg, realtime_enabled=True, accurate_enabled=True)
+
+        mock_whisper_model.assert_any_call(
+            "Systran/faster-whisper-large-v3",
+            device="cpu",
+            compute_type="int8",
+            download_root=ANY,
+        )
+        mock_whisper_model.assert_any_call(
+            str(local_model),
+            device="cpu",
+            compute_type="int8",
+            download_root=ANY,
+        )
+
+    @pytest.mark.asyncio
+    async def test_runtime_config_preserves_raw_model_size_or_path(
+        self, service, mock_whisper_model, monkeypatch
+    ):
+        """Raw STT config avoids generated enum fallback for Faster Whisper IDs."""
+
+        async def fake_aget(key, *args, **kwargs):
+            del args, kwargs
+            if key == ConfigKeys.services.stt:
+                return {
+                    "transcription": {
+                        "realtime_model": {
+                            "enabled": True,
+                            "model_size_or_path": "Systran/faster-whisper-large-v3",
+                            "device": "cpu",
+                            "compute_type": "int8",
+                        },
+                        "accurate_model": {"enabled": False},
+                    }
+                }
+            if key == ConfigKeys.system:
+                return System(primary_language="en", voice_language="auto")
+            return {}
+
+        monkeypatch.setattr(
+            "app.services.stt_transcription.service.config_api.aget",
+            fake_aget,
+        )
+
+        (
+            _,
+            _,
+            transcription_cfg,
+            realtime_enabled,
+            accurate_enabled,
+        ) = await service._read_runtime_config()
+        await service._create_models(
+            transcription_cfg,
+            realtime_enabled=realtime_enabled,
+            accurate_enabled=accurate_enabled,
+        )
+
+        mock_whisper_model.assert_any_call(
+            "Systran/faster-whisper-large-v3",
+            device="cpu",
+            compute_type="int8",
+            download_root=ANY,
+        )
+
+    @pytest.mark.asyncio
+    async def test_unavailable_models_remove_transcription_capability(
+        self, service, mock_whisper_model
+    ):
+        """Liveness remains while model-dependent callability is withdrawn."""
+        mock_whisper_model.side_effect = Exception("offline")
+
+        await service._create_models(
+            Transcription(
+                realtime_model=RealtimeModel(enabled=True, model_size="tiny"),
+                accurate_model=AccurateModel(enabled=True, model_size="base"),
+            ),
+            realtime_enabled=True,
+            accurate_enabled=True,
+        )
+        service._refresh_callable_capabilities()
+
+        assert "vad" in service._capabilities
+        assert "audio_transcription" not in service._capabilities
+
+    @pytest.mark.asyncio
+    async def test_readiness_is_republished_when_model_recovers(self, service, mock_whisper_model):
+        """Recovered models refresh advertised capabilities for Gateway discovery."""
+        service._runtime_state = "active"
+        service._publish_service_announcement = AsyncMock()
+
+        new_realtime, new_accurate = await service._create_models(
+            Transcription(
+                realtime_model=RealtimeModel(enabled=True, model_size="tiny"),
+                accurate_model=AccurateModel(enabled=True, model_size="base"),
+            ),
+            realtime_enabled=True,
+            accurate_enabled=True,
+        )
+        service._realtime_model = new_realtime
+        service._accurate_model = new_accurate
+        await service._republish_readiness()
+
+        assert "audio_transcription" in service._capabilities
+        service._publish_service_announcement.assert_awaited_once()
 
 
 # ============================================================================

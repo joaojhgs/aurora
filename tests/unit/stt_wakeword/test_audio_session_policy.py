@@ -31,6 +31,8 @@ def service(mock_bus):
     with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
         service = WakeWordService()
         service._process_audio_data = AsyncMock()
+        service._backend = Mock()
+        service._readiness_status = "ready"
         yield service
 
 
