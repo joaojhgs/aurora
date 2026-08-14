@@ -58,7 +58,7 @@ impl SpeechPackManagerConfig {
     ) -> Result<Self, SpeechPackError> {
         Ok(Self {
             root: root.into(),
-            download_policy: DownloadPolicy::https_only(DEFAULT_MAX_ARCHIVE_BYTES)
+            download_policy: DownloadPolicy::https_only(default_max_download_bytes()?)
                 .map_err(SpeechPackError::Download)?,
             quota_bytes,
             max_extracted_bytes: DEFAULT_MAX_EXTRACTED_BYTES,
@@ -67,6 +67,17 @@ impl SpeechPackManagerConfig {
             max_files: DEFAULT_MAX_FILES,
         })
     }
+}
+
+fn default_max_download_bytes() -> Result<u64, SpeechPackError> {
+    let speech_catalog = SpeechModelCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+    let speech_max = speech_catalog
+        .entries
+        .iter()
+        .map(|entry| entry.archive.byte_size)
+        .max()
+        .unwrap_or(0);
+    Ok(DEFAULT_MAX_ARCHIVE_BYTES.max(speech_max))
 }
 
 /// Product-safe install progress for the selected voice only.
@@ -1936,6 +1947,25 @@ mod tests {
         config.max_entries = 64;
         config.max_files = 32;
         SpeechPackManager::open(config).expect("manager")
+    }
+
+    #[test]
+    fn default_download_policy_accepts_every_pinned_speech_model_asset() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let config = SpeechPackManagerConfig::new(directory.path(), None).expect("config");
+        let catalog = SpeechModelCatalog::embedded().expect("catalog");
+        let largest = catalog
+            .entries
+            .iter()
+            .map(|entry| entry.archive.byte_size)
+            .max()
+            .expect("catalog entries");
+
+        assert!(largest > DEFAULT_MAX_ARCHIVE_BYTES);
+        assert!(catalog
+            .entries
+            .iter()
+            .all(|entry| entry.archive.byte_size <= config.download_policy.max_asset_bytes));
     }
 
     fn quota_manager(root: &Path, max_asset_bytes: u64, quota_bytes: u64) -> SpeechPackManager {
