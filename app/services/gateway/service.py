@@ -143,6 +143,7 @@ _DIAGNOSTIC_REDACT_KEY_PARTS = (
     "audio",
     "auth",
     "bearer",
+    "clone",
     "content",
     "cookie",
     "credential",
@@ -158,11 +159,15 @@ _DIAGNOSTIC_REDACT_KEY_PARTS = (
     "password",
     "path",
     "prompt",
+    "profile_state",
     "query",
     "rag",
     "redis_url",
+    "reference",
     "response",
     "result",
+    "safetensors",
+    "sample",
     "secret",
     "speech",
     "text",
@@ -179,6 +184,8 @@ _SUPPORT_BUNDLE_OMITTED_PAYLOADS = (
     "newly hidden tool names",
     "signaling room credentials",
     "migration backup contents and host paths",
+    "downloaded speech files and cache paths",
+    "voice clone state files and private samples",
 )
 _LIVE_SECRET_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?i)bearer\s+[a-z0-9._~+/=-]{12,}"),
@@ -1971,7 +1978,10 @@ class GatewayService(BaseService):
             capability_catalog_summary=catalog_summary,
             recent_events=recent_events,
             recent_audit_events=recent_audit_events,
-            native_capabilities=self._native_capability_diagnostics(),
+            native_capabilities=self._native_capability_diagnostics(
+                registry=registry_export,
+                services=services,
+            ),
             sidecar_logs=self._sidecar_log_diagnostics(),
             mesh_rollout=rollout_snapshot,
             config_shape=_diagnostic_redacted_copy(_model_dump(settings)),
@@ -3086,19 +3096,88 @@ class GatewayService(BaseService):
             ],
         )
 
-    def _native_capability_diagnostics(self) -> list[SupportBundleDiagnosticItem]:
-        """Expose native capability state without inventing platform support."""
-        return [
-            SupportBundleDiagnosticItem(
-                name="native_capability_manifest",
-                status="unavailable",
-                source="tauri/native manifest",
-                details={
-                    "reason": "no native manifest is registered in this backend runtime",
-                    "backend_coverage": "deferred",
-                },
+    def _native_capability_diagnostics(
+        self,
+        *,
+        registry: GetRegistryResponse,
+        services: list[ServiceInfo],
+    ) -> list[SupportBundleDiagnosticItem]:
+        """Expose speech readiness from registered services without payload data."""
+        available_topics = {
+            method.bus_topic
+            for module in registry.modules
+            for method in module.methods
+            if method.bus_topic
+        }
+        service_status = {service.module: service.status for service in services}
+        checks: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+            (
+                "Listening readiness",
+                "STTCoordinator",
+                (
+                    STTMethods.LISTEN,
+                    STTMethods.STOP_LISTENING,
+                    STTMethods.CAPTURE_PREPARE,
+                    STTMethods.CAPTURE_RELEASE,
+                ),
+            ),
+            (
+                "Wake phrase readiness",
+                "WakeWord",
+                (
+                    WakeWordMethods.CONTROL,
+                    WakeWordMethods.PROCESS_AUDIO,
+                    WakeWordMethods.DETECT,
+                ),
+            ),
+            (
+                "Speech recognition readiness",
+                "Transcription",
+                (
+                    TranscriptionMethods.CONTROL,
+                    TranscriptionMethods.PROCESS_AUDIO,
+                    TranscriptionMethods.TRANSCRIBE,
+                ),
+            ),
+            (
+                "Speech playback readiness",
+                "TTS",
+                (
+                    TTSMethods.REQUEST,
+                    TTSMethods.SYNTHESIZE,
+                    TTSMethods.LIST_LANGUAGE_PACKS,
+                    TTSMethods.INSTALL_VOICE_PROFILE,
+                    TTSMethods.SET_DEFAULT_VOICE,
+                ),
+            ),
+        )
+
+        diagnostics: list[SupportBundleDiagnosticItem] = []
+        for name, module, required_topics in checks:
+            present = sum(1 for topic in required_topics if topic in available_topics)
+            missing = len(required_topics) - present
+            status = service_status.get(module, "unavailable")
+            if status == "healthy" and missing == 0:
+                readiness = "ready"
+            elif status in {"healthy", "degraded"} or present:
+                readiness = "needs_attention"
+            else:
+                readiness = "unavailable"
+            diagnostics.append(
+                SupportBundleDiagnosticItem(
+                    name=name,
+                    status=readiness,
+                    source="Aurora service list",
+                    details={
+                        "state": status,
+                        "available": readiness == "ready",
+                        "available_actions": present,
+                        "expected_actions": len(required_topics),
+                        "missing_actions": missing,
+                    },
+                )
             )
-        ]
+        return diagnostics
 
     def _sidecar_log_diagnostics(self) -> list[SupportBundleDiagnosticItem]:
         """Expose sidecar log availability without reading local files or secrets."""

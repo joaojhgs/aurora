@@ -41,6 +41,7 @@ from app.shared.contracts.models.stt import (
     STTAudioLevel,
     STTMethods,
     TranscriptionMethods,
+    WakeWordMethods,
 )
 from app.shared.contracts.models.tooling import ToolingExecuteToolResponse, ToolingMethods
 from app.shared.contracts.models.tts import TTSMethods
@@ -543,6 +544,9 @@ def test_diagnostic_redaction_omits_personal_content_fields():
                 "transcription": "wakeword captured speech",
             }
         ),
+        "profile_state_path": "/home/user/.aurora/voices/private.safetensors",
+        "reference_samples": ["my private voice sample"],
+        "voice_clone_payload": {"weights": "private clone bytes"},
     }
 
     redacted = _diagnostic_redacted_copy(payload)
@@ -555,9 +559,32 @@ def test_diagnostic_redaction_omits_personal_content_fields():
     assert "private tool output" not in dumped
     assert "assistant transcript" not in dumped
     assert "wakeword captured speech" not in dumped
+    assert "private.safetensors" not in dumped
+    assert "private voice sample" not in dumped
+    assert "private clone bytes" not in dumped
     assert redacted["safe_status"] == "denied"
     assert redacted["text"]["redacted"] is True
     assert redacted["details"]["response"]["redacted"] is True
+
+
+def test_diagnostic_redaction_omits_clone_and_downloaded_speech_artifacts():
+    payload = {
+        "clone_bundle": b"private-clone-state",
+        "reference_sample": b"private-reference-recording",
+        "safetensors": b"private-speech-weights",
+        "cache_directory": "/home/person/.cache/aurora/speech",
+        "safe_status": "ready",
+    }
+
+    redacted = _diagnostic_redacted_copy(payload)
+    dumped = json.dumps(redacted)
+
+    assert "private-clone-state" not in dumped
+    assert "private-reference-recording" not in dumped
+    assert "private-speech-weights" not in dumped
+    assert "/home/person/.cache/aurora/speech" not in dumped
+    assert all(redacted[key]["redacted"] is True for key in payload if key != "safe_status")
+    assert redacted["safe_status"] == "ready"
 
 
 @pytest.mark.asyncio
@@ -852,11 +879,84 @@ async def test_support_bundle_redacts_config_and_collects_correlation_ids():
                                 required_perms=["Gateway.manage"],
                             )
                         ],
-                    }
+                    },
+                    {
+                        "module": "STTCoordinator",
+                        "version": "1.0.0",
+                        "summary": "listening",
+                        "capabilities": ["speech"],
+                        "methods": [
+                            MethodInfo(name="Listen", bus_topic=STTMethods.LISTEN),
+                            MethodInfo(name="StopListening", bus_topic=STTMethods.STOP_LISTENING),
+                            MethodInfo(name="CapturePrepare", bus_topic=STTMethods.CAPTURE_PREPARE),
+                            MethodInfo(name="CaptureRelease", bus_topic=STTMethods.CAPTURE_RELEASE),
+                        ],
+                    },
+                    {
+                        "module": "TTS",
+                        "version": "1.0.0",
+                        "summary": "tts",
+                        "capabilities": ["speech"],
+                        "methods": [
+                            MethodInfo(
+                                name="GetCapabilities", bus_topic=TTSMethods.GET_CAPABILITIES
+                            ),
+                            MethodInfo(name="Request", bus_topic=TTSMethods.REQUEST),
+                            MethodInfo(
+                                name="ListLanguagePacks", bus_topic=TTSMethods.LIST_LANGUAGE_PACKS
+                            ),
+                            MethodInfo(
+                                name="ListVoiceProfiles", bus_topic=TTSMethods.LIST_VOICE_PROFILES
+                            ),
+                            MethodInfo(
+                                name="InstallVoiceProfile",
+                                bus_topic=TTSMethods.INSTALL_VOICE_PROFILE,
+                            ),
+                            MethodInfo(
+                                name="SetDefaultVoice", bus_topic=TTSMethods.SET_DEFAULT_VOICE
+                            ),
+                            MethodInfo(
+                                name="ExportVoiceProfile", bus_topic=TTSMethods.EXPORT_VOICE_PROFILE
+                            ),
+                            MethodInfo(
+                                name="ImportVoiceProfile", bus_topic=TTSMethods.IMPORT_VOICE_PROFILE
+                            ),
+                            MethodInfo(name="Synthesize", bus_topic=TTSMethods.SYNTHESIZE),
+                        ],
+                    },
+                    {
+                        "module": "Transcription",
+                        "version": "1.0.0",
+                        "summary": "transcription",
+                        "capabilities": ["speech"],
+                        "methods": [
+                            MethodInfo(name="Control", bus_topic=TranscriptionMethods.CONTROL),
+                            MethodInfo(
+                                name="ProcessAudio",
+                                bus_topic=TranscriptionMethods.PROCESS_AUDIO,
+                            ),
+                            MethodInfo(
+                                name="Transcribe", bus_topic=TranscriptionMethods.TRANSCRIBE
+                            ),
+                        ],
+                    },
+                    {
+                        "module": "WakeWord",
+                        "version": "1.0.0",
+                        "summary": "wake",
+                        "capabilities": ["speech"],
+                        "methods": [
+                            MethodInfo(name="Control", bus_topic=WakeWordMethods.CONTROL),
+                            MethodInfo(name="Detect", bus_topic=WakeWordMethods.DETECT),
+                            MethodInfo(
+                                name="ProcessAudio", bus_topic=WakeWordMethods.PROCESS_AUDIO
+                            ),
+                        ],
+                    },
                 ],
                 "digest": "digest-registry",
-                "service_count": 1,
-                "method_count": 1,
+                "service_count": 5,
+                "method_count": 20,
             }
         ),
         get_services=AsyncMock(
@@ -867,10 +967,25 @@ async def test_support_bundle_redacts_config_and_collects_correlation_ids():
                     method_count=1,
                     last_seen="2026-06-20T00:00:00Z",
                     status="healthy",
-                )
+                ),
+                ServiceInfo(
+                    module="STTCoordinator",
+                    version="1.0.0",
+                    method_count=4,
+                    status="healthy",
+                ),
+                ServiceInfo(module="TTS", version="1.0.0", method_count=9, status="healthy"),
+                ServiceInfo(
+                    module="Transcription",
+                    version="1.0.0",
+                    method_count=3,
+                    status="healthy",
+                ),
+                ServiceInfo(module="WakeWord", version="1.0.0", method_count=3, status="healthy"),
             ]
         ),
     )
+    exported_artifact_payload = "portable voice clone state bytes"
     service._get_recent_audit_events = AsyncMock(
         return_value=[
             {
@@ -880,6 +995,7 @@ async def test_support_bundle_redacts_config_and_collects_correlation_ids():
                         "correlation_id": "corr-tool",
                         "token": "raw-token",
                         "model_path": "/models/private.bin",
+                        "voice_clone_payload": exported_artifact_payload,
                     }
                 ),
             }
@@ -940,7 +1056,17 @@ async def test_support_bundle_redacts_config_and_collects_correlation_ids():
     assert bundle.service_health[0].status == "healthy"
     assert bundle.webrtc_diagnostics.started is True
     assert bundle.webrtc_diagnostics.connected_peer_count == 1
-    assert bundle.native_capabilities[0].status == "unavailable"
+    speech_readiness = {item.name: item for item in bundle.native_capabilities}
+    assert set(speech_readiness) == {
+        "Listening readiness",
+        "Wake phrase readiness",
+        "Speech recognition readiness",
+        "Speech playback readiness",
+    }
+    assert {item.status for item in speech_readiness.values()} == {"ready"}
+    assert all(item.source == "Aurora service list" for item in speech_readiness.values())
+    assert all(item.details["available"] is True for item in speech_readiness.values())
+    assert all(item.details["missing_actions"] == 0 for item in speech_readiness.values())
     assert bundle.sidecar_logs[0].status == "metadata_only"
     assert bundle.mesh_rollout.secrets_redacted is True
     assert bundle.mesh_rollout.downgrade_status == "not_applicable"
@@ -952,9 +1078,18 @@ async def test_support_bundle_redacts_config_and_collects_correlation_ids():
     assert "raw-token" not in dumped
     assert "redis://localhost:6379" not in dumped
     assert "/models/private.bin" not in dumped
+    assert exported_artifact_payload not in dumped
+    readiness_json = json.dumps(
+        [item.model_dump(mode="json") for item in bundle.native_capabilities]
+    )
+    assert "TTS.ImportVoiceProfile" not in readiness_json
+    assert "WakeWord.Detect" not in readiness_json
+    assert "Transcription.Transcribe" not in readiness_json
     assert bundle.secrets_redacted is True
     assert "raw catalog schemas and projection cursors" in bundle.redaction.omitted_payloads
     assert "newly hidden tool names" in bundle.redaction.omitted_payloads
+    assert "downloaded speech files and cache paths" in bundle.redaction.omitted_payloads
+    assert "voice clone state files and private samples" in bundle.redaction.omitted_payloads
     audit_request = service.bus.request.await_args.args[1]
     assert service.bus.request.await_args.args[0] == AuthMethods.STORE_AUDIT_EVENT
     assert audit_request.event == "diagnostics.support_bundle.exported"
