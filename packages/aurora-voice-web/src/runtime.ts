@@ -24,6 +24,7 @@ import { cloneModelBindingsForWorker } from './sherpa-engine.js'
 const DEFAULT_MAX_FRAME_SAMPLES = 4_800
 const DEFAULT_MAX_QUEUED_BYTES = 16_000 * 2 * 10
 const DEFAULT_WORKER_TIMEOUT_MS = 5_000
+const DEFAULT_TTS_TIMEOUT_MS = 120_000
 const MAX_CAPTURED_AUDIO_SAMPLES = 16_000 * 60
 const MAX_TTS_TEXT_CHARS = 1_000
 const MAX_TTS_AUDIO_SAMPLES = 48_000 * 60
@@ -44,6 +45,7 @@ export class AuroraVoiceWebRuntime {
   private readonly maxFrameSamples: number
   private readonly maxQueuedBytes: number
   private readonly workerTimeoutMs: number
+  private readonly ttsTimeoutMs: number
   private readonly modelBindings: AuroraVoiceWebModelBindings | undefined
   private readonly nowMs: () => number
   private readonly sessionIdFactory: (ownerId: string, generation: number) => string
@@ -67,6 +69,7 @@ export class AuroraVoiceWebRuntime {
     this.maxFrameSamples = boundedIntegerInRange(options.maxFrameSamples ?? DEFAULT_MAX_FRAME_SAMPLES, 'maxFrameSamples', 1, DEFAULT_MAX_FRAME_SAMPLES)
     this.maxQueuedBytes = boundedIntegerInRange(options.maxQueuedBytes ?? DEFAULT_MAX_QUEUED_BYTES, 'maxQueuedBytes', 2, DEFAULT_MAX_QUEUED_BYTES)
     this.workerTimeoutMs = boundedIntegerInRange(options.workerTimeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS, 'workerTimeoutMs', 1, 60_000)
+    this.ttsTimeoutMs = boundedIntegerInRange(options.ttsTimeoutMs ?? DEFAULT_TTS_TIMEOUT_MS, 'ttsTimeoutMs', 1_000, DEFAULT_TTS_TIMEOUT_MS)
     this.modelBindings = options.modelBindings
     this.nowMs = options.nowMs ?? Date.now
     this.sessionIdFactory = options.sessionIdFactory ?? defaultSessionId
@@ -123,7 +126,7 @@ export class AuroraVoiceWebRuntime {
     this.session = nextSession
     let workerStarted = false
     try {
-      await this.initializeWorker()
+      await this.initializeWorker(this.hasTtsModelBindings() ? this.ttsTimeoutMs : this.workerTimeoutMs)
       this.assertStartStillCurrent(nextSession)
       const started = await this.worker.request({ type: 'start', session: nextSession, capabilities: this.capabilities }, { timeoutMs: this.workerTimeoutMs })
       this.assertStartStillCurrent(nextSession)
@@ -193,7 +196,7 @@ export class AuroraVoiceWebRuntime {
     this.ttsGeneration = Math.max(this.ttsGeneration, generation)
     this.activeTtsGeneration = generation
     try {
-      await this.initializeWorker()
+      await this.initializeWorker(this.ttsTimeoutMs)
       if (!this.capabilities.tts) throw new AuroraVoiceWebRuntimeError('tts_unavailable', 'Speech is not available')
       const response = await this.worker.request({
         type: 'synthesize_tts',
@@ -202,7 +205,7 @@ export class AuroraVoiceWebRuntime {
         ...(request.voiceId !== undefined ? { voiceId: safeIdentifier(request.voiceId, 'voiceId') } : {}),
         ...(request.speakerId !== undefined ? { speakerId: boundedIntegerInRange(request.speakerId, 'speakerId', 0, 10_000) } : {}),
         ...(request.speed !== undefined ? { speed: boundedFloatInRange(request.speed, 'speed', 0.25, 4.0) } : {})
-      }, { timeoutMs: this.workerTimeoutMs })
+      }, { timeoutMs: this.ttsTimeoutMs })
       if (this.activeTtsGeneration !== generation || generation < this.ttsGeneration) {
         throw new AuroraVoiceWebRuntimeError('stale_generation', 'Speech was cancelled')
       }
@@ -409,7 +412,7 @@ export class AuroraVoiceWebRuntime {
     }
   }
 
-  private async initializeWorker(): Promise<void> {
+  private async initializeWorker(timeoutMs = this.workerTimeoutMs): Promise<void> {
     const workerBindings = cloneModelBindingsForWorker(this.modelBindings)
     const ready = await this.worker.request({
       type: 'init',
@@ -417,7 +420,7 @@ export class AuroraVoiceWebRuntime {
       maxFrameSamples: this.maxFrameSamples,
       maxQueuedBytes: this.maxQueuedBytes,
       ...(workerBindings.bindings !== undefined ? { modelBindings: workerBindings.bindings } : {})
-    }, { timeoutMs: this.workerTimeoutMs, transfer: workerBindings.transfer })
+    }, { timeoutMs, transfer: workerBindings.transfer })
     if (
       ready.type !== 'ready' ||
       ready.protocolVersion !== AURORA_VOICE_WORKER_PROTOCOL_VERSION ||
@@ -428,6 +431,11 @@ export class AuroraVoiceWebRuntime {
       throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker is not available')
     }
     this.capabilities = ready.capabilities
+  }
+
+  private hasTtsModelBindings(): boolean {
+    return this.modelBindings?.models.some((model) => model.task === 'tts') === true ||
+      this.modelBindings?.files.some((file) => file.task === 'tts') === true
   }
 
   private async bestEffortCancelHosts(session: AuroraVoiceWebSession | null, notifyWorker: boolean, reason: string): Promise<void> {

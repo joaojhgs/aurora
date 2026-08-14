@@ -74,35 +74,6 @@ describe('AuroraVoiceWorkerDispatcher', () => {
     expect(bridge.initializeCalls).toBe(1)
   })
 
-  it('dispatches TTS synthesis and transfers generated PCM', async () => {
-    const bridge = new FakeBridge({ capabilities: { vad: false, kws: false, stt: false, tts: true } })
-    const port = new RecordingPort()
-    const dispatcher = new AuroraVoiceWorkerDispatcher(bridge, port)
-
-    await dispatcher.handleMessage(request(1, { type: 'init', protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION, maxFrameSamples: 4_800, maxQueuedBytes: 320_000 }))
-    await dispatcher.handleMessage(request(2, { type: 'synthesize_tts', generation: 1, text: 'Hello Aurora', speakerId: 2, speed: 1.05 }))
-
-    expect(port.messages[0]?.response).toMatchObject({
-      type: 'ready',
-      capabilities: { vad: false, kws: false, stt: false, tts: true }
-    })
-    expect(port.messages[1]?.response).toEqual({
-      type: 'tts_result',
-      generation: 1,
-      audio: {
-        generation: 1,
-        sampleRateHz: 16_000,
-        channels: 1,
-        sampleCount: 2,
-        durationMs: 1,
-        pcm: Int16Array.from([7, -7]),
-        redacted: true
-      }
-    })
-    expect(port.transfers[1]).toHaveLength(1)
-    expect(bridge.ttsCalls).toEqual([{ generation: 1, text: 'Hello Aurora', speakerId: 2, speed: 1.05 }])
-  })
-
   it('returns typed voice outputs on frame acknowledgements', async () => {
     const bridge = new FakeBridge({ inference: true })
     const port = new RecordingPort()
@@ -125,6 +96,49 @@ describe('AuroraVoiceWorkerDispatcher', () => {
         redacted: true
       }
     })
+  })
+
+  it('returns bounded TTS PCM through the worker protocol', async () => {
+    const bridge = new FakeBridge({ capabilities: { vad: false, kws: false, stt: false, tts: true }, tts: true })
+    const port = new RecordingPort()
+    const dispatcher = new AuroraVoiceWorkerDispatcher(bridge, port)
+
+    await dispatcher.handleMessage(request(1, { type: 'init', protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION, maxFrameSamples: 4_800, maxQueuedBytes: 320_000 }))
+    await dispatcher.handleMessage(request(2, { type: 'synthesize_tts', generation: 3, text: 'hello', voiceId: 'voice.en', speakerId: 1, speed: 1.1 }))
+
+    expect(port.messages[0]?.response).toMatchObject({ type: 'ready', capabilities: { tts: true } })
+    expect(port.messages[1]?.response).toEqual({
+      type: 'tts_result',
+      generation: 3,
+      audio: {
+        generation: 3,
+        sampleRateHz: 16000,
+        channels: 1,
+        sampleCount: 3,
+        durationMs: 1,
+        pcm: new Int16Array([0, 1024, -1024]),
+        redacted: true
+      }
+    })
+    expect(port.transfers[1]).toHaveLength(1)
+    expect(bridge.ttsCalls).toEqual([{ type: 'synthesize_tts', generation: 3, text: 'hello', voiceId: 'voice.en', speakerId: 1, speed: 1.1 }])
+  })
+
+  it('rejects malformed TTS commands without echoing text payloads', async () => {
+    const bridge = new FakeBridge({ capabilities: { vad: false, kws: false, stt: false, tts: true }, tts: true })
+    const port = new RecordingPort()
+    const dispatcher = new AuroraVoiceWorkerDispatcher(bridge, port)
+
+    await dispatcher.handleMessage(request(1, { type: 'init', protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION, maxFrameSamples: 4_800, maxQueuedBytes: 320_000 }))
+    await dispatcher.handleMessage({
+      protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+      requestId: 2,
+      command: { type: 'synthesize_tts', generation: 1, text: '', token: 'secret transcript path' }
+    })
+
+    expect(port.messages[1]?.response).toEqual({ type: 'reject', sessionId: null, generation: 1, sequence: null, reason: 'worker_rejected' })
+    expect(JSON.stringify(port.messages)).not.toMatch(/secret|transcript|path|hello|pcm|pointer/i)
+    expect(bridge.ttsCalls).toEqual([])
   })
 
   it('rejects model bindings that try to supply executable engine assets', async () => {
@@ -351,17 +365,19 @@ class FakeBridge implements AuroraVoiceWasmBridge {
   readonly frames: { readonly frame: AuroraPcmFrameEnvelope; readonly pcm: Int16Array }[] = []
   readonly cancelCalls: { readonly sessionId: string | null; readonly generation: number; readonly reason: string }[] = []
   readonly finishCalls: { readonly sessionId: string; readonly generation: number; readonly outcome: 'completed' | 'abandoned' }[] = []
-  readonly ttsCalls: { readonly generation: number; readonly text: string; readonly speakerId?: number; readonly speed?: number }[] = []
+  readonly ttsCalls: { readonly type: 'synthesize_tts'; readonly generation: number; readonly text: string; readonly voiceId?: string; readonly speakerId?: number; readonly speed?: number }[] = []
   private readonly rejectNullShutdown: boolean
   private readonly capabilities
   private readonly inference: boolean
+  private readonly tts: boolean
   startCalls = 0
   initializeCalls = 0
 
-  constructor(options: { readonly rejectNullShutdown?: boolean; readonly capabilities?: { readonly vad: boolean; readonly kws: boolean; readonly stt: boolean; readonly tts: boolean }; readonly inference?: boolean } = {}) {
+  constructor(options: { readonly rejectNullShutdown?: boolean; readonly capabilities?: { readonly vad: boolean; readonly kws: boolean; readonly stt: boolean; readonly tts: boolean }; readonly inference?: boolean; readonly tts?: boolean } = {}) {
     this.rejectNullShutdown = options.rejectNullShutdown === true
     this.capabilities = options.capabilities ?? { vad: false, kws: false, stt: false, tts: false }
     this.inference = options.inference === true
+    this.tts = options.tts === true
   }
 
   async initialize(): Promise<{ readonly capabilities?: { readonly vad: boolean; readonly kws: boolean; readonly stt: boolean; readonly tts: boolean } }> {
@@ -397,26 +413,22 @@ class FakeBridge implements AuroraVoiceWasmBridge {
     }
   }
 
-  async synthesizeSpeech(request: { readonly text: string; readonly generation: number; readonly speakerId?: number; readonly speed?: number }) {
-    this.ttsCalls.push({
-      generation: request.generation,
-      text: request.text,
-      ...(request.speakerId === undefined ? {} : { speakerId: request.speakerId }),
-      ...(request.speed === undefined ? {} : { speed: request.speed })
-    })
-    return {
-      generation: request.generation,
-      sampleRateHz: 16_000,
-      channels: 1 as const,
-      sampleCount: 2,
-      durationMs: 1,
-      pcm: new Int16Array([7, -7]),
-      redacted: true as const
-    }
-  }
-
   async finishTurn(sessionId: string, generation: number, outcome: 'completed' | 'abandoned'): Promise<void> {
     this.finishCalls.push({ sessionId, generation, outcome })
+  }
+
+  async synthesizeSpeech(request: { readonly type: 'synthesize_tts'; readonly generation: number; readonly text: string; readonly voiceId?: string; readonly speakerId?: number; readonly speed?: number }) {
+    if (!this.tts) throw new Error('tts')
+    this.ttsCalls.push(request)
+    return {
+      generation: request.generation,
+      sampleRateHz: 16000,
+      channels: 1 as const,
+      sampleCount: 3,
+      durationMs: 1,
+      pcm: new Int16Array([0, 1024, -1024]),
+      redacted: true as const
+    }
   }
 
   async cancelGeneration(sessionId: string | null, generation: number, reason: string): Promise<void> {

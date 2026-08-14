@@ -49,6 +49,7 @@ export interface AuroraBrowserVoiceRuntimeOptions {
   readonly lifecycle?: () => AuroraVoiceLifecycleEligibility
   readonly pageLifecycle?: AuroraBrowserPageLifecyclePort | null
   readonly workerTimeoutMs?: number
+  readonly ttsTimeoutMs?: number
   readonly audio?: AuroraBrowserAudioWorkletSourceOptions
   readonly onAudioLifecycleLost?: (reason: AuroraBrowserAudioLifecycleLostReason) => void
   readonly onPageLifecycleLost?: (reason: Exclude<AuroraVoiceLifecycleReason, 'visible'>) => void
@@ -80,6 +81,7 @@ export function createAuroraBrowserVoiceRuntime(options: AuroraBrowserVoiceRunti
     pcmSource,
     lifecycle,
     ...(options.workerTimeoutMs !== undefined ? { workerTimeoutMs: options.workerTimeoutMs } : {}),
+    ...(options.ttsTimeoutMs !== undefined ? { ttsTimeoutMs: options.ttsTimeoutMs } : {}),
     ...(options.modelBindings !== undefined ? { modelBindings: options.modelBindings } : {}),
     ...(options.sessionIdFactory !== undefined ? { sessionIdFactory: options.sessionIdFactory } : {}),
     ...(options.nowMs !== undefined ? { nowMs: options.nowMs } : {})

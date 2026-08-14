@@ -343,6 +343,7 @@ export interface AuroraVoiceWebRuntimeOptions {
   readonly maxFrameSamples?: number
   readonly maxQueuedBytes?: number
   readonly workerTimeoutMs?: number
+  readonly ttsTimeoutMs?: number
   readonly modelBindings?: AuroraVoiceWebModelBindings
   readonly nowMs?: () => number
   readonly sessionIdFactory?: (ownerId: string, generation: number) => string

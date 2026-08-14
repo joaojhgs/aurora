@@ -1,7 +1,6 @@
 import {
   AURORA_VOICE_WORKER_PROTOCOL_VERSION,
   type AuroraCapturedAudio,
-  type AuroraVoiceTtsAudio,
   type AuroraVoiceWorkerCommand,
   type AuroraVoiceWorkerHost,
   type AuroraVoiceWorkerRequestOptions,
@@ -54,7 +53,7 @@ function defaultResponse(command: AuroraVoiceWorkerCommand): AuroraVoiceWorkerRe
     case 'finish_turn':
       return { type: 'ack', sessionId: command.sessionId, generation: command.generation, sequence: null }
     case 'synthesize_tts':
-      return { type: 'tts_result', generation: command.generation, audio: ttsAudio(command.generation, [0, 128, -128]) }
+      return { type: 'tts_result', generation: command.generation, audio: synthesizedAudio(command.generation, [0, 1024, -1024]) }
     case 'cancel':
       return { type: 'ack', sessionId: command.sessionId ?? '', generation: command.generation, sequence: null }
     case 'shutdown':
@@ -62,16 +61,16 @@ function defaultResponse(command: AuroraVoiceWorkerCommand): AuroraVoiceWorkerRe
   }
 }
 
-export function ttsAudio(generation: number, samples: readonly number[]): AuroraVoiceTtsAudio {
+export function synthesizedAudio(generation: number, samples: readonly number[]) {
   const pcm = Int16Array.from(samples)
   return Object.freeze({
     generation,
     sampleRateHz: 16_000,
-    channels: 1,
+    channels: 1 as const,
     sampleCount: pcm.length,
     durationMs: Math.ceil((pcm.length / 16_000) * 1_000),
     pcm,
-    redacted: true
+    redacted: true as const
   })
 }
 
