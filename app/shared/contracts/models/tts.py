@@ -471,6 +471,8 @@ class TTSLanguagePackVoice(_StrictTTSIOModel):
     def _validate_voice_state(self) -> TTSLanguagePackVoice:
         if self.ready and not self.installed:
             raise ValueError("ready language pack voice must be installed")
+        if (self.default or self.active) and not self.ready:
+            raise ValueError("default or active language pack voice must be ready")
         return self
 
 

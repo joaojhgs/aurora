@@ -417,6 +417,24 @@ def test_tts_language_pack_contracts_are_redacted_and_exact() -> None:
             ready=True,
             revision="voice-rev-1",
         )
+    with pytest.raises(ValidationError, match="default or active language pack voice"):
+        TTSLanguagePackVoice(
+            voice_id=STANDARD_ID,
+            display_name="Default",
+            installed=True,
+            ready=False,
+            default=True,
+            revision="voice-rev-1",
+        )
+    with pytest.raises(ValidationError, match="default or active language pack voice"):
+        TTSLanguagePackVoice(
+            voice_id=STANDARD_ID,
+            display_name="Default",
+            installed=True,
+            ready=False,
+            active=True,
+            revision="voice-rev-1",
+        )
     with pytest.raises(ValidationError):
         TTSLanguagePackDescriptor.model_validate(
             {

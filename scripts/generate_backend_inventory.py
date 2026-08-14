@@ -1768,6 +1768,35 @@ def _positive_fixture(model_name: str) -> Any | None:
             "reason": None,
             "correlation_id": "corr-tts-1",
         },
+        "TTSListLanguagePacksResponse": {
+            "packs": [
+                {
+                    "pack_id": "en",
+                    "language": " EN ",
+                    "display_name": "English",
+                    "installed": True,
+                    "ready": True,
+                    "default": True,
+                    "voice_count": 1,
+                    "installed_voice_count": 1,
+                    "ready_voice_count": 1,
+                    "voices": [
+                        {
+                            "voice_id": "standard:starter_en:alba",
+                            "display_name": "Voice",
+                            "installed": True,
+                            "ready": True,
+                            "default": True,
+                            "active": False,
+                            "revision": "rev-1",
+                        }
+                    ],
+                    "revision": "pack-rev-1",
+                }
+            ],
+            "catalog_status": "available",
+            "default_voice_id": "standard:starter_en:alba",
+        },
     }
     return fixtures.get(model_name)
 
@@ -1971,6 +2000,29 @@ def _negative_fixtures(model_name: str) -> list[Any]:
                     {**base, "sample_rate": 192001},
                     {**base, "channels": 0},
                 ]
+            )
+    if model_name == "TTSListLanguagePacksResponse":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            pack = dict(base["packs"][0])
+            voice = {
+                **pack["voices"][0],
+                "ready": False,
+                "default": True,
+                "active": False,
+            }
+            cases.append(
+                {
+                    **base,
+                    "packs": [
+                        {
+                            **pack,
+                            "ready": False,
+                            "ready_voice_count": 0,
+                            "voices": [voice],
+                        }
+                    ],
+                }
             )
     if model_name == "AssistantStreamEvent":
         base = _positive_fixture(model_name)

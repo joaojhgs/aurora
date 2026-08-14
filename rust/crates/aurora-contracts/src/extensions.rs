@@ -270,6 +270,13 @@ fn validate_markers(schema: &Map<String, Value>, value: &Value) -> Result<(), St
         validate_audio_chunk(value)?;
     }
     if schema
+        .get("x-aurora-tts-language-pack-voice-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_language_pack_voice(value)?;
+    }
+    if schema
         .get("x-aurora-projection-page-termination")
         .and_then(Value::as_bool)
         == Some(true)
@@ -380,6 +387,23 @@ fn validate_audio_chunk(value: &Value) -> Result<(), String> {
     let has_audio = object.get("audio_data").and_then(Value::as_str) != Some("");
     if !is_final && !has_audio {
         return Err("non-final audio chunk requires audio data".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_language_pack_voice(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let ready = object.get("ready").and_then(Value::as_bool) == Some(true);
+    let installed = object.get("installed").and_then(Value::as_bool) == Some(true);
+    let default = object.get("default").and_then(Value::as_bool) == Some(true);
+    let active = object.get("active").and_then(Value::as_bool) == Some(true);
+    if ready && !installed {
+        return Err("ready language pack voice must be installed".to_owned());
+    }
+    if (default || active) && !ready {
+        return Err("default or active language pack voice must be ready".to_owned());
     }
     Ok(())
 }

@@ -2,7 +2,7 @@
   "artifact": "aurora-rust-contract-parse-vectors",
   "generator_format_version": "aurora-rust-contract-codegen-v1",
   "schema_artifact": "aurora-sdk-backend-contracts",
-  "schema_content_hash": "3d079594f6c0768334282f009457b3732f1833e22f8f7972a04b0e9a565c8258",
+  "schema_content_hash": "17422e17d13490cc1f4c756dc67b2fbbd57ee57ff4b4ef44a0c56c93da887382",
   "vectors": [
     {
       "accepted": true,
@@ -1965,7 +1965,7 @@
       "direction": "output",
       "input": {
         "catalog_status": "available",
-        "default_voice_id": "standard:starter:voice",
+        "default_voice_id": "standard:starter_en:alba",
         "packs": [
           {
             "default": true,
@@ -1986,7 +1986,7 @@
                 "installed": true,
                 "ready": true,
                 "revision": "rev-1",
-                "voice_id": "standard:starter:voice"
+                "voice_id": "standard:starter_en:alba"
               }
             ]
           }
@@ -2000,7 +2000,7 @@
       "normalized": {
         "capability_revision": 0,
         "catalog_status": "available",
-        "default_voice_id": "standard:starter:voice",
+        "default_voice_id": "standard:starter_en:alba",
         "packs": [
           {
             "default": true,
@@ -2021,13 +2021,52 @@
                 "installed": true,
                 "ready": true,
                 "revision": "rev-1",
-                "voice_id": "standard:starter:voice"
+                "voice_id": "standard:starter_en:alba"
               }
             ]
           }
         ]
       },
-      "normalized_hash": "bf9213870d57806b804609be5f8c6685cb94e83257d495feafa52be9b5e2d31f",
+      "normalized_hash": "757e00a537c5c283335e80556e663da0a47b17282d9912b2e78f378f020c01bb",
+      "schema_id": "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 0,
+      "direction": "output",
+      "input": {
+        "catalog_status": "available",
+        "default_voice_id": "standard:starter_en:alba",
+        "packs": [
+          {
+            "default": true,
+            "display_name": "English",
+            "installed": true,
+            "installed_voice_count": 1,
+            "language": " EN ",
+            "pack_id": "en",
+            "ready": false,
+            "ready_voice_count": 0,
+            "revision": "pack-rev-1",
+            "voice_count": 1,
+            "voices": [
+              {
+                "active": false,
+                "default": true,
+                "display_name": "Voice",
+                "installed": true,
+                "ready": false,
+                "revision": "rev-1",
+                "voice_id": "standard:starter_en:alba"
+              }
+            ]
+          }
+        ]
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.packs.0.voices.0",
+      "method_id": "TTS.ListLanguagePacks",
+      "model_name": "TTSListLanguagePacksResponse",
       "schema_id": "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse"
     },
     {

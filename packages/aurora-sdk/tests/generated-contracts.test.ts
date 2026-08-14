@@ -802,6 +802,7 @@ describe('generated backend contracts', () => {
       'Orchestrator.Interrupt',
       'TTS.GetCapabilities',
       'TTS.ListVoices',
+      'TTS.ListLanguagePacks',
       'TTS.ListVoiceProfiles',
       'TTS.GetVoiceProfile',
       'TTS.UpdateVoiceProfile',
@@ -829,8 +830,8 @@ describe('generated backend contracts', () => {
       'Transcription.ProcessAudio',
       'Transcription.Transcribe',
     ])
-    expect(contractSchema.schemas).toHaveLength(74)
-    expect(contractSchema.method_descriptors).toHaveLength(35)
+    expect(contractSchema.schemas).toHaveLength(76)
+    expect(contractSchema.method_descriptors).toHaveLength(36)
     expect(contractSchema.event_descriptors).toHaveLength(3)
     expect(contractSchema.envelope_descriptors).toHaveLength(1)
     expect(contractSchema.tooling_provider_allowlist).toHaveLength(4)
@@ -964,7 +965,7 @@ describe('generated backend contracts', () => {
   it('keeps generated method descriptors aligned with SDK coverage and streaming metadata', () => {
     const descriptorIds = backendContractMethodDescriptors.map((descriptor) => descriptor.method_id)
     expect(descriptorIds).toEqual(contractSchema.allowlist)
-    expect(new Set(descriptorIds).size).toBe(35)
+    expect(new Set(descriptorIds).size).toBe(36)
     expect(Object.keys(backendContractMethodDescriptorById).sort()).toEqual([...descriptorIds].sort())
 
     for (const methodId of ['TTS.StreamStart', 'TTS.StreamChunk', 'TTS.StreamEnd'] as const) {

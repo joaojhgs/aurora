@@ -391,9 +391,9 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     assert schema["tooling_provider_allowlist"] == (
         list(generate_backend_inventory.SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST)
     )
-    assert len(schema["allowlist"]) == 35
-    assert len(schema["schemas"]) == 74
-    assert len(schema["method_descriptors"]) == 35
+    assert len(schema["allowlist"]) == 36
+    assert len(schema["schemas"]) == 76
+    assert len(schema["method_descriptors"]) == 36
     assert len(schema["event_descriptors"]) == 3
     assert len(schema["envelope_descriptors"]) == 1
     assert len(provider["methods"]) == 4
@@ -766,6 +766,16 @@ def test_generated_vectors_capture_strip_and_reject_semantics() -> None:
     execute_negative = by_model["ToolingExecuteToolRequest"]["vectors"]["negative"]
     assert execute_negative["accepted"] is False
     assert execute_negative["issue_path"] == "$.tool_name"
+
+    language_packs_negative_cases = by_model["TTSListLanguagePacksResponse"]["vectors"][
+        "negative_cases"
+    ]
+    assert any(
+        case["issue_path"] == "$.packs.0.voices.0"
+        and case["input"]["packs"][0]["voices"][0]["default"] is True
+        and case["input"]["packs"][0]["voices"][0]["ready"] is False
+        for case in language_packs_negative_cases
+    )
 
     disallowed_methods = {"Tooling.GetStats", "Tooling.GetMCPStatus"}
     assert disallowed_methods.isdisjoint({item["method_id"] for item in schema["schemas"]})
