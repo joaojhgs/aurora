@@ -3103,13 +3103,13 @@ class GatewayService(BaseService):
         services: list[ServiceInfo],
     ) -> list[SupportBundleDiagnosticItem]:
         """Expose speech readiness from registered services without payload data."""
-        available_topics = {
-            method.bus_topic
+        topics_by_module = {
+            module.module: {method.bus_topic for method in module.methods if method.bus_topic}
             for module in registry.modules
-            for method in module.methods
-            if method.bus_topic
         }
-        service_status = {service.module: service.status for service in services}
+        states_by_module: dict[str, set[str]] = {}
+        for service in services:
+            states_by_module.setdefault(service.module, set()).add(service.status)
         checks: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             (
                 "Listening readiness",
@@ -3154,13 +3154,14 @@ class GatewayService(BaseService):
 
         diagnostics: list[SupportBundleDiagnosticItem] = []
         for name, module, required_topics in checks:
-            present = sum(1 for topic in required_topics if topic in available_topics)
+            module_topics = topics_by_module.get(module, set())
+            present = sum(1 for topic in required_topics if topic in module_topics)
             missing = len(required_topics) - present
-            status = service_status.get(module, "unavailable")
-            if status == "healthy" and missing == 0:
+            service_states = states_by_module.get(module, set())
+            if "healthy" in service_states and missing == 0:
                 readiness = "ready"
-            elif status in {"healthy", "degraded"} or present:
-                readiness = "needs_attention"
+            elif service_states.intersection({"healthy", "degraded"}) or present:
+                readiness = "degraded"
             else:
                 readiness = "unavailable"
             diagnostics.append(
@@ -3169,7 +3170,6 @@ class GatewayService(BaseService):
                     status=readiness,
                     source="Aurora service list",
                     details={
-                        "state": status,
                         "available": readiness == "ready",
                         "available_actions": present,
                         "expected_actions": len(required_topics),
