@@ -58,4 +58,34 @@ describe('browser voice catalog', () => {
       expect.objectContaining({ role: 'dataDir', fileId: 'data-dir' })
     ]))
   })
+
+  it('installs PocketTTS as an explicit-reference model family without choosing a bundled voice', () => {
+    const entry = findAuroraBrowserVoiceCatalogEntry('standard:pockettts:sherpa-onnx-pocket-tts-int8-2026-01-26')
+    const manifest = entry?.toModelPackManifest()
+    const binding = manifest?.variants[0]?.model_bindings?.[0]
+
+    expect(entry?.terms).toEqual({
+      download_initiated_by_user: true,
+      redistributed_by_aurora: false,
+      source: 'upstream_model_card_restricted_non_commercial'
+    })
+    expect(manifest?.files[0]).toMatchObject({
+      compression: 'tar_bzip2',
+      archive_root: 'sherpa-onnx-pocket-tts-int8-2026-01-26',
+      sha256: '2f3b88823cbbb9bf0b2477ec8ae7b3fec417b3a87b6bb5f256dba66f2ad967cb'
+    })
+    expect(binding).toMatchObject({ family: 'pockettts', kind: 'offline-tts' })
+    expect(binding?.files.map((file) => file.role).sort()).toEqual([
+      'decoder',
+      'encoder',
+      'lmFlow',
+      'lmMain',
+      'textConditioner',
+      'tokenScoresJson',
+      'vocabJson'
+    ])
+    expect(binding?.files.some((file) => file.role === 'referenceAudio')).toBe(false)
+    expect(binding?.config).not.toHaveProperty('referenceText')
+    expect(binding?.config).not.toHaveProperty('referenceSampleRateHz')
+  })
 })

@@ -29,11 +29,21 @@ export interface AuroraBrowserRawTtsEntry {
   readonly language: string
   readonly quality?: string | null
   readonly precision?: string | null
+  readonly sample_rate_hz?: number | null
   readonly engine: string
   readonly model_family: string
   readonly archive: AuroraBrowserRawArchive & { readonly root: string }
   readonly bindings: Record<string, string>
+  readonly reference_samples?: readonly AuroraBrowserRawTtsReferenceSample[]
   readonly terms: AuroraBrowserCatalogTerms
+}
+
+export interface AuroraBrowserRawTtsReferenceSample {
+  readonly sample_id: string
+  readonly display_name: string
+  readonly path: string
+  readonly byte_size: number
+  readonly sha256: string
 }
 
 export interface AuroraBrowserRawSpeechCatalog {
@@ -126,6 +136,7 @@ function speechEntry(entry: AuroraBrowserRawSpeechEntry): AuroraBrowserVoiceCata
 }
 
 function ttsEntry(entry: AuroraBrowserRawTtsEntry): AuroraBrowserVoiceCatalogEntry {
+  const family = ttsFamily(entry)
   return {
     id: entry.voice_id,
     displayName: entry.display_name,
@@ -134,8 +145,14 @@ function ttsEntry(entry: AuroraBrowserRawTtsEntry): AuroraBrowserVoiceCatalogEnt
     archive: entry.archive,
     installableByBrowserArchive: archiveInstallable(entry.archive),
     terms: entry.terms,
-    toModelPackManifest: () => manifestFor(entry.voice_id, entry.display_name, ['tts'], 'tts', entry.archive, entry.bindings, 'piper', 'offline-tts', entry.language, entry.voice_id)
+    toModelPackManifest: () => manifestFor(entry.voice_id, entry.display_name, ['tts'], 'tts', entry.archive, entry.bindings, family, 'offline-tts', entry.language, entry.voice_id)
   }
+}
+
+function ttsFamily(entry: AuroraBrowserRawTtsEntry): Extract<AuroraVoiceWebModelDescriptor['family'], 'piper' | 'pockettts'> {
+  if (entry.model_family === 'vits_piper') return 'piper'
+  if (entry.model_family === 'pockettts') return 'pockettts'
+  throw new Error('unsupported TTS catalog family')
 }
 
 function manifestFor(
@@ -248,6 +265,11 @@ function roleName(role: string): AuroraVoiceWebModelFileRole | null {
   if (role === 'data_dir') return 'dataDir'
   if (role === 'bpe_vocab') return 'bpeVocab'
   if (role === 'reference_audio') return 'referenceAudio'
+  if (role === 'lm_flow') return 'lmFlow'
+  if (role === 'lm_main') return 'lmMain'
+  if (role === 'text_conditioner') return 'textConditioner'
+  if (role === 'vocab_json') return 'vocabJson'
+  if (role === 'token_scores_json') return 'tokenScoresJson'
   if (['model', 'encoder', 'decoder', 'tokens', 'joiner', 'keywords', 'lexicon'].includes(role)) {
     return role as AuroraVoiceWebModelFileRole
   }
