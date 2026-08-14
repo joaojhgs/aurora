@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   type AuroraClient,
   type ConfigFieldMetadata,
@@ -88,11 +88,52 @@ describe('settings/native route separation', () => {
     )
 
     expect(markup).toContain('Advanced')
+    expect(markup).toContain('Device access')
+    expect(markup).toContain('Default assistant')
+    expect(markup).toContain('Request access')
     expect(markup).toContain('Platform')
     expect(markup).toContain('Export my data')
     expect(markup).not.toContain('Request permission')
     expect(markup).not.toContain('Request unavailable')
     expect(markup).not.toContain('Theme, accessibility, and local storage')
+  })
+
+  it('sends an explicit Android assistant selection request from the device access control', async () => {
+    const snapshot = snapshotFor(androidNativeCapabilityManifestFixture)
+    const requestAccess = vi.fn().mockResolvedValue(undefined)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    try {
+      await act(async () => {
+        root.render(
+          <SettingsPermissionsView
+            snapshot={snapshot}
+            surface="native"
+            onRequestNativeAccess={requestAccess}
+          />
+        )
+      })
+      await flushReactWork()
+
+      const assistantRow = Array.from(container.querySelectorAll('tr'))
+        .find((row) => row.textContent?.includes('Default assistant'))
+      const requestButton = assistantRow?.querySelector('button')
+      expect(requestButton).toBeTruthy()
+      expect(requestButton?.disabled).toBe(false)
+
+      await act(async () => {
+        requestButton?.click()
+      })
+      await flushReactWork()
+
+      expect(requestAccess).toHaveBeenCalledTimes(1)
+      expect(requestAccess).toHaveBeenCalledWith('android.assistantRole')
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
   })
 
   it('renders iOS Keychain, biometrics, App Intents, Shortcuts, widgets, share/deep links, and foreground constraints without native request fallbacks', () => {

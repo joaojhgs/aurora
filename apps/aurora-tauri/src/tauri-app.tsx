@@ -456,6 +456,35 @@ const DESKTOP_LOCAL_GATEWAY_READY_TIMEOUT_MS = 45_000;
 const DESKTOP_LOCAL_GATEWAY_RETRY_DELAY_MS = 500;
 const DESKTOP_LOCAL_SNAPSHOT_READY_TIMEOUT_MS = 10_000;
 const NATIVE_VOICE_STATUS_POLL_MS = 2_000;
+const ANDROID_RUNTIME_PERMISSION_IDS = new Set([
+  "aurora.android.microphone",
+  "aurora.android.notifications",
+  "aurora.android.voiceForegroundService",
+]);
+
+export async function requestTauriNativeAccess(
+  runtime: Pick<
+    AuroraTauriRuntime,
+    "requestAndroidAssistantRole" | "requestAndroidPermission"
+  >,
+  permissionId: string,
+): Promise<void> {
+  if (permissionId === "android.assistantRole") {
+    if (!runtime.requestAndroidAssistantRole) throw nativeAccessUnavailableError();
+    await runtime.requestAndroidAssistantRole();
+    return;
+  }
+  if (!ANDROID_RUNTIME_PERMISSION_IDS.has(permissionId) || !runtime.requestAndroidPermission) {
+    throw nativeAccessUnavailableError();
+  }
+  await runtime.requestAndroidPermission(permissionId);
+}
+
+function nativeAccessUnavailableError(): Error & { code: string } {
+  return Object.assign(new Error("This device cannot request that access here."), {
+    code: "unsupported_feature",
+  });
+}
 
 export function AuroraTauriApp({
   runtimeOverride,
@@ -841,6 +870,56 @@ export function AuroraTauriApp({
     };
   }, [runtime, thinPeerReadyRevision]);
 
+  const refreshNativeAccessState = useCallback(async () => {
+    const [nextSnapshot, nextNativePermissions, nextAndroidBaseline] =
+      await Promise.all([
+        buildRuntimeShellSnapshot(
+          runtime.client,
+          false,
+          runtime.nativeCapabilityManifest,
+        ),
+        runtime.nativePermissionStatus().catch(() => null),
+        runtime.androidBaselineStatus().catch(() => null),
+      ]);
+    setSnapshot((current) =>
+      retainThinShellSnapshot(
+        current,
+        nextSnapshot,
+        runtime.thinPeer?.snapshot(),
+      ),
+    );
+    setNativePermissions(nextNativePermissions);
+    setAndroidBaseline(nextAndroidBaseline);
+  }, [runtime]);
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined"
+      || snapshot.nativePlatform !== "android"
+      || (!runtime.requestAndroidAssistantRole && !runtime.requestAndroidPermission)
+    ) return;
+    const refresh = () => {
+      void refreshNativeAccessState();
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [refreshNativeAccessState, runtime, snapshot.nativePlatform]);
+
+  const requestNativeAccess = useCallback(
+    async (permissionId: string) => {
+      await requestTauriNativeAccess(runtime, permissionId);
+      await refreshNativeAccessState();
+    },
+    [refreshNativeAccessState, runtime],
+  );
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const onPopState = () => setCurrentPath(currentBrowserPath());
@@ -945,6 +1024,7 @@ export function AuroraTauriApp({
     saveThinProfile,
     selectThinProfile,
     saveLocalSpeechSelection,
+    requestNativeAccess,
   };
 
   if (!profileBootstrapReady) {
@@ -1448,6 +1528,7 @@ interface NativeContext {
   androidBaseline: TauriAndroidBaselineStatus | null;
   androidForeground: AndroidForegroundRuntimeStatus | null;
   androidMediaPolicy: AndroidMediaPolicyStatus | null;
+  requestNativeAccess?: ((permissionId: string) => Promise<void>) | undefined;
 }
 
 function localMeshNodeIdentity(
@@ -1666,6 +1747,7 @@ function TauriNativeSettingsPage({
         snapshot={snapshot}
         surface="native"
         currentPath="/settings/native"
+        onRequestNativeAccess={nativeContext.requestNativeAccess}
       />
       {showDesktopCommands ? (
         <section

@@ -3,7 +3,9 @@ import {
   HttpGatewayTransport,
   MockAuroraTransport,
   TauriLocalTransport,
+  type AndroidAssistantRoleRequestResult,
   type NativeSpeechPackTask,
+  type AndroidNativePermissionRequestResult,
   type TauriAndroidBaselineStatus,
   type AndroidLocalLightInferenceStatus,
   type NativeCapabilityManifest,
@@ -124,6 +126,8 @@ export interface AuroraTauriRuntime {
   stopSidecar: () => Promise<TauriSidecarStatus | null>;
   nativePermissionStatus: () => Promise<TauriNativePermissionStatus | null>;
   nativeCapabilityManifest?: () => Promise<NativeCapabilityManifest>;
+  requestAndroidAssistantRole?: () => Promise<AndroidAssistantRoleRequestResult | null>;
+  requestAndroidPermission?: (permission: string) => Promise<AndroidNativePermissionRequestResult | null>;
   trayStatus: () => Promise<TauriNativeFeatureStatus | null>;
   notificationStatus: () => Promise<TauriNativeFeatureStatus | null>;
   iosVoiceStatus: () => Promise<TauriNativeFeatureStatus | null>;
@@ -675,6 +679,10 @@ export function createAuroraTauriRuntime({
             nativeTransport.getNativePermissionStatus(),
           nativeCapabilityManifest: () =>
             nativeTransport.getNativeCapabilityManifest(),
+          requestAndroidAssistantRole: () =>
+            nativeTransport.requestAndroidAssistantRole(),
+          requestAndroidPermission: (permission) =>
+            nativeTransport.requestAndroidPermission(permission),
           trayStatus: async () => null,
           notificationStatus: () => nativeTransport.getNotificationStatus(),
           iosVoiceStatus: () => nativeTransport.getIosVoiceStatus(),
@@ -725,6 +733,10 @@ export function createAuroraTauriRuntime({
           nativeTransport.getNativePermissionStatus(),
         nativeCapabilityManifest: () =>
           nativeTransport.getNativeCapabilityManifest(),
+        requestAndroidAssistantRole: () =>
+          nativeTransport.requestAndroidAssistantRole(),
+        requestAndroidPermission: (permission) =>
+          nativeTransport.requestAndroidPermission(permission),
         trayStatus: async () => null,
         notificationStatus: () => nativeTransport.getNotificationStatus(),
         iosVoiceStatus: () => nativeTransport.getIosVoiceStatus(),
@@ -822,6 +834,10 @@ export function createAuroraTauriRuntime({
           nativeTransport.getNativePermissionStatus(),
         nativeCapabilityManifest: () =>
           nativeTransport.getNativeCapabilityManifest(),
+        requestAndroidAssistantRole: () =>
+          nativeTransport.requestAndroidAssistantRole(),
+        requestAndroidPermission: (permission) =>
+          nativeTransport.requestAndroidPermission(permission),
         trayStatus: () => nativeTransport.getTrayStatus(),
         notificationStatus: () => nativeTransport.getNotificationStatus(),
         iosVoiceStatus: () => nativeTransport.getIosVoiceStatus(),
@@ -873,6 +889,10 @@ export function createAuroraTauriRuntime({
       nativePermissionStatus: () => nativeTransport.getNativePermissionStatus(),
       nativeCapabilityManifest: () =>
         nativeTransport.getNativeCapabilityManifest(),
+      requestAndroidAssistantRole: () =>
+        nativeTransport.requestAndroidAssistantRole(),
+      requestAndroidPermission: (permission) =>
+        nativeTransport.requestAndroidPermission(permission),
       trayStatus: () => nativeTransport.getTrayStatus(),
       notificationStatus: () => nativeTransport.getNotificationStatus(),
       iosVoiceStatus: () => nativeTransport.getIosVoiceStatus(),
