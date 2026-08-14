@@ -27,6 +27,7 @@ import {
   emptyThinProfileDocument,
   emptyRuntimeProfileDocument,
   explainBrowserThinRuntime,
+  createAuroraBrowserVoiceCatalogPort,
   getAuroraSurfaceProfile,
   isRuntimeProfileConfigured,
   isThinConnectionProfileConfigured,
@@ -37,6 +38,7 @@ import {
   sanitizeRuntimeProfile,
   sanitizeRuntimeProfileDocument,
   type AuroraBrowserSpeechPackCatalogResult,
+  type AuroraBrowserSpeechPackCatalogSelection,
   type AuroraBrowserSpeechPackInstallReceipt,
   type AuroraBrowserSpeechPackInstallRequest,
   type AuroraBrowserSpeechPackTask,
@@ -742,6 +744,7 @@ function browserSpeechTrustSelectionsForProfile(
       && candidate.packId === taskSelection.packId
       && candidate.packVersion === taskSelection.packRevision
       && (task !== 'tts' || candidate.voiceId === taskSelection.voiceId)
+      && (task !== 'tts' || candidate.referenceProfileId === taskSelection.referenceProfileId)
     )
     if (trust) selections.push(trust)
   }
@@ -788,8 +791,9 @@ function isBrowserSpeechTrustSelection(value: unknown): value is AuroraBrowserSp
   return isBrowserSpeechTask(record.task)
     && typeof record.packId === 'string'
     && typeof record.packVersion === 'string'
-    && typeof record.releaseKeyId === 'string'
-    && typeof record.releasePublicKeyBase64 === 'string'
+    && (record.verificationMode === undefined || record.verificationMode === 'release-hash' || record.verificationMode === 'embedded-catalog' || record.verificationMode === 'signature')
+    && (record.releaseKeyId === undefined || typeof record.releaseKeyId === 'string')
+    && (record.releasePublicKeyBase64 === undefined || typeof record.releasePublicKeyBase64 === 'string')
     && typeof record.expectedManifestSha256 === 'string'
     && (record.slotId === undefined || typeof record.slotId === 'string')
     && (record.voiceId === undefined || typeof record.voiceId === 'string')
@@ -801,37 +805,45 @@ function isBrowserSpeechTask(value: unknown): value is AuroraBrowserSpeechPackTa
 }
 
 function createBrowserLocalSpeechCatalogPort(): AuroraLocalSpeechCatalogPort {
-  return Object.freeze({
-    available: browserVoicePackCatalogSource() !== null,
-    async listCatalog(): Promise<AuroraBrowserSpeechPackCatalogResult> {
-      const source = browserVoicePackCatalogSource()
-      if (!source) return Object.freeze({ state: 'unavailable', items: Object.freeze([]) })
-      return await source.listCatalog()
-    },
-    async select(request: AuroraBrowserSpeechPackInstallRequest): Promise<AuroraBrowserSpeechPackInstallReceipt> {
-      const source = browserVoicePackCatalogSource()
-      if (!source) throw new Error('voice_download_unavailable')
-      const receipt = await source.select(request)
-      saveBrowserSpeechTrustSelection(receipt.trust)
-      await saveAuroraBrowserLocalSpeechSelection({
-        [receipt.task]: {
-          packId: receipt.packId,
-          packRevision: receipt.packVersion,
-          ...(receipt.trust.voiceId ? { voiceId: receipt.trust.voiceId } : {}),
-          ...(request.selection.voiceRevision ? { voiceRevision: request.selection.voiceRevision } : {}),
-          ...(request.selection.referenceProfileId ? { referenceProfileId: request.selection.referenceProfileId } : {}),
-        },
-      })
-      return receipt
+  const source = browserVoicePackCatalogSource()
+  if (source) {
+    return Object.freeze({
+      available: true,
+      listCatalog: () => source.listCatalog(),
+      async select(request: AuroraBrowserSpeechPackInstallRequest) {
+        const receipt = await source.select(request)
+        await persistBrowserVoiceCatalogSelection(receipt, request)
+        return receipt
+      },
+    })
+  }
+  return createAuroraBrowserVoiceCatalogPort({
+    available: typeof window !== 'undefined',
+    async afterSelect(receipt, request) {
+      await persistBrowserVoiceCatalogSelection(receipt, request)
     },
   })
 }
 
 function browserVoicePackCatalogSource(): BrowserVoicePackCatalogSource | null {
   if (browserVoicePackCatalogForTests) return browserVoicePackCatalogForTests
-  if (typeof window === 'undefined') return null
-  const candidate = (window as Window & { __auroraLocalSpeechCatalog?: BrowserVoicePackCatalogSource }).__auroraLocalSpeechCatalog
-  return candidate && typeof candidate.listCatalog === 'function' && typeof candidate.select === 'function' ? candidate : null
+  return null
+}
+
+async function persistBrowserVoiceCatalogSelection(
+  receipt: AuroraBrowserSpeechPackInstallReceipt,
+  request: AuroraBrowserSpeechPackInstallRequest,
+): Promise<void> {
+  saveBrowserSpeechTrustSelection(receipt.trust)
+  await saveAuroraBrowserLocalSpeechSelection({
+    [receipt.task]: {
+      packId: receipt.packId,
+      packRevision: receipt.packVersion,
+      ...(receipt.trust.voiceId ? { voiceId: receipt.trust.voiceId } : {}),
+      ...(request.selection.voiceRevision ? { voiceRevision: request.selection.voiceRevision } : {}),
+      ...(request.selection.referenceProfileId ? { referenceProfileId: request.selection.referenceProfileId } : {}),
+    },
+  })
 }
 
 function dispatchBrowserVoicePacksChanged(): void {

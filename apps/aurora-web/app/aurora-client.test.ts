@@ -551,6 +551,24 @@ describe('createAuroraBrowserClient', () => {
     await runtime.close()
   })
 
+  it('loads the generated browser voice catalog in the product path without a page global', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const storage = installBrowserStorage()
+    await saveMeshOnboardingProfile('mesh-speech-catalog')
+    await enableForegroundVoiceOnSavedProfile()
+
+    const runtime = await createAuroraBrowserRuntimeAsync()
+    const catalog = await runtime.localSpeechCatalog.listCatalog()
+
+    expect((window as typeof window & { __auroraLocalSpeechCatalog?: unknown }).__auroraLocalSpeechCatalog).toBeUndefined()
+    expect(catalog.state).toBe('ready')
+    expect(catalog.items.length).toBeGreaterThan(500)
+    expect(catalog.items.filter((item) => item.task === 'tts').length).toBeGreaterThan(500)
+    expect(new Set(catalog.items.map((item) => item.task))).toEqual(new Set(['vad', 'kws', 'stt', 'tts']))
+    expect(JSON.stringify(storage.dump())).not.toContain('__auroraLocalSpeechCatalog')
+    await runtime.close()
+  })
+
   it('keeps the sync browser runtime path out of browser speech pack probing', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     installBrowserStorage()

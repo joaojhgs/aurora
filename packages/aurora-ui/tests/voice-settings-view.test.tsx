@@ -1149,20 +1149,13 @@ describe('VoiceSettingsView', () => {
         voiceRevision: 'voice-rev-1',
       }),
     }))
-    expect(select).toHaveBeenNthCalledWith(3, expect.objectContaining({
-      selection: expect.objectContaining({
-        task: 'tts',
-        packId: 'pocket.en',
-        requiresReferenceProfile: true,
-        referenceProfileSelected: false,
-      }),
-    }))
+    expect(select).toHaveBeenCalledTimes(2)
     expect(onLocalSpeechSelectionConfirmed).not.toHaveBeenCalled()
     const text = visibleText(container)
     expect(text).toContain('On-device speech')
     expect(text).toContain('On-device voices')
     expect(text).toContain('Add a voice sample before using this voice.')
-    expect(text).toContain('Voice choice updated.')
+    expect(text).not.toContain('Voice choice updated.')
     expect(text).not.toContain('whisper.tiny.en')
     expect(text).not.toContain('piper.en')
     assertNoForbiddenCopy(text)

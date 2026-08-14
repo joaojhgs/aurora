@@ -494,6 +494,10 @@ export function VoiceSettingsView({
 
   async function selectLocalSpeechAsset(row: LocalSpeechAssetRow): Promise<void> {
     if (actionPending || !canManageLocalSpeechAssets) return
+    if (row.needsReferenceProfile) {
+      setMutationMessage('Add a voice sample before using this voice.')
+      return
+    }
     const actionKey = localSpeechActionKey(row)
     setPendingActionKey(actionKey)
     setMutationMessage(row.ready ? `Updating ${row.copy.noun.toLowerCase()} choice.` : `Adding ${row.copy.noun.toLowerCase()}.`)
@@ -1124,7 +1128,9 @@ function toBrowserSpeechAssetRows(
     const revision = safePackId(item.packVersion)
     if (!packId || !revision) continue
     const copy = localSpeechTaskCopy(item.task)
-    const referenceProfileReady = item.requiresReferenceProfile !== true || item.referenceProfileSelected === true || Boolean(item.referenceProfileId)
+    const currentTaskSelection = currentSelection?.[item.task]
+    const selectedReferenceProfileId = item.referenceProfileId ?? currentTaskSelection?.referenceProfileId
+    const referenceProfileReady = item.requiresReferenceProfile !== true || item.referenceProfileSelected === true || Boolean(selectedReferenceProfileId)
     const selected = localSpeechSelectionMatches(currentSelection?.[item.task], item) && referenceProfileReady
     const detail = item.requiresReferenceProfile === true && !referenceProfileReady
       ? `${copy.detail} Add a voice sample before using this voice.`
@@ -1138,7 +1144,9 @@ function toBrowserSpeechAssetRows(
       needsReferenceProfile: item.requiresReferenceProfile === true && !referenceProfileReady,
       ...(item.voiceId ? { voiceId: item.voiceId } : {}),
       ...(item.voiceRevision ? { voiceRevision: item.voiceRevision } : {}),
-      selection: item,
+      selection: selectedReferenceProfileId && item.referenceProfileId !== selectedReferenceProfileId
+        ? { ...item, referenceProfileId: selectedReferenceProfileId, referenceProfileSelected: true }
+        : item,
       copy: {
         ...copy,
         detail,
@@ -1245,7 +1253,7 @@ function localSpeechSelectionMatches(
   if (current.packId !== item.packId || current.packRevision !== item.packVersion) return false
   if (item.task !== 'tts') return true
   return current.voiceId === item.voiceId && current.voiceRevision === item.voiceRevision
-    && (item.requiresReferenceProfile !== true || current.referenceProfileId === item.referenceProfileId)
+    && (item.requiresReferenceProfile !== true || Boolean(current.referenceProfileId))
 }
 
 function localSpeechActionKey(row: Pick<LocalSpeechAssetRow, 'packId' | 'task' | 'voiceId'>): string {

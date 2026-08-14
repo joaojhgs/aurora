@@ -1,9 +1,14 @@
 import {
   AuroraBrowserModelStoreHost,
+  findAuroraBrowserVoiceCatalogEntry,
+  installVerifiedBrowserModelPack,
+  listAuroraBrowserVoiceCatalogEntries,
   openActiveBrowserModelPack,
   type AuroraBrowserActiveModelPack,
+  type AuroraBrowserModelPackInstallReceipt as VoiceWebBrowserModelPackInstallReceipt,
   type AuroraBrowserModelPackScope,
   type AuroraBrowserModelPackReleaseTrustKey,
+  type AuroraBrowserVoiceCatalogEntry,
 } from '@aurora/voice-web/browser'
 import type {
   AuroraVoiceWebModelBindings,
@@ -50,10 +55,14 @@ export interface AuroraHostedBrowserSpeechPackOptions {
 
 export type AuroraBrowserSpeechPackTask = AuroraVoiceWebModelTask
 
-export interface AuroraBrowserSpeechPackTrustSelection extends AuroraHostedBrowserSpeechPackTrustInput {
+export interface AuroraBrowserSpeechPackTrustSelection {
   readonly task: AuroraBrowserSpeechPackTask
   readonly packId: string
   readonly packVersion: string
+  readonly verificationMode?: 'release-hash' | 'embedded-catalog' | 'signature' | undefined
+  readonly releaseKeyId?: string | undefined
+  readonly releasePublicKeyBase64?: string | undefined
+  readonly expectedManifestSha256: string
   readonly slotId?: string | undefined
   readonly voiceId?: string | undefined
   readonly referenceProfileId?: string | undefined
@@ -144,6 +153,55 @@ export interface AuroraBrowserSpeechPacksOptions {
 
 export const AURORA_BROWSER_SPEECH_PACK_TASKS: readonly AuroraBrowserSpeechPackTask[] = Object.freeze(['vad', 'kws', 'stt', 'tts'])
 
+export interface AuroraBrowserVoiceCatalogPortOptions {
+  readonly available?: boolean | undefined
+  readonly globalObject?: Parameters<typeof AuroraBrowserModelStoreHost.create>[0]
+  readonly trustedAssetOrigins?: readonly string[] | undefined
+  readonly afterSelect?: ((receipt: AuroraBrowserSpeechPackInstallReceipt, request: AuroraBrowserSpeechPackInstallRequest) => Promise<void> | void) | undefined
+}
+
+export function createAuroraBrowserVoiceCatalogPort(
+  options: AuroraBrowserVoiceCatalogPortOptions = {},
+): AuroraLocalSpeechCatalogPort {
+  return Object.freeze({
+    available: options.available ?? true,
+    async listCatalog(): Promise<AuroraBrowserSpeechPackCatalogResult> {
+      if (options.available === false) return Object.freeze({ state: 'unavailable', items: Object.freeze([]) })
+      const active = await activeBrowserVoiceCatalogPacks(options.globalObject)
+      const items = listAuroraBrowserVoiceCatalogEntries()
+        .filter((entry) => entry.installableByBrowserArchive)
+        .map((entry) => browserVoiceCatalogSelection(entry, active.get(entry.task)))
+      return Object.freeze({ state: 'ready', items: Object.freeze(items) })
+    },
+    async select(request: AuroraBrowserSpeechPackInstallRequest): Promise<AuroraBrowserSpeechPackInstallReceipt> {
+      if (options.available === false) throw new Error('voice_download_unavailable')
+      if (request.selection.requiresReferenceProfile === true && !request.selection.referenceProfileId) {
+        throw new Error('voice_reference_required')
+      }
+      const entry = findAuroraBrowserVoiceCatalogEntry(request.selection.packId)
+      if (!entry || entry.task !== request.selection.task || entry.installableByBrowserArchive !== true) {
+        throw new Error('voice_download_unavailable')
+      }
+      request.onProgress?.({ state: 'queued' })
+      const host = await AuroraBrowserModelStoreHost.create(options.globalObject)
+      request.onProgress?.({ state: 'downloading' })
+      const receipt = await installVerifiedBrowserModelPack({
+        host,
+        manifest: entry.toModelPackManifest(),
+        scope: { task: entry.task },
+        allowEmbeddedBrowserVoiceCatalogTrust: true,
+        trustedAssetOrigins: options.trustedAssetOrigins ?? ['https://github.com'],
+        ...(request.signal ? { signal: request.signal } : {}),
+      })
+      request.onProgress?.({ state: 'saving' })
+      const mapped = browserVoiceInstallReceipt(entry, request, receipt)
+      await options.afterSelect?.(mapped, request)
+      request.onProgress?.({ state: 'ready' })
+      return mapped
+    },
+  })
+}
+
 export async function openHostedBrowserSttSpeechPack(
   options: AuroraHostedBrowserSpeechPackOptions = {},
 ): Promise<AuroraHostedBrowserSpeechPackStatus> {
@@ -172,10 +230,7 @@ export async function openHostedBrowserSttSpeechPack(
   if (host === null) return Object.freeze({ state: 'absent', pack: null })
 
   try {
-    const pack = await openActiveBrowserModelPack(host, { task: 'stt' }, {
-      trustedReleaseKeys: [trust.releaseKey],
-      expectedReleaseManifestSha256: trust.expectedManifestSha256,
-    })
+    const pack = await openActiveBrowserModelPack(host, { task: 'stt' }, trust.options)
     if (!pack) return Object.freeze({ state: 'absent', pack: null })
     return Object.freeze({ state: 'verified', pack: freezePack(pack) })
   } catch (error) {
@@ -223,14 +278,11 @@ export async function openActiveBrowserSpeechPacks(
     for (const task of tasks) {
       const trusted = trustSelections.get(task)
       if (!trusted) continue
-      const trust = normalizeTrustInput(trusted)
+      const trust = normalizeTrustSelection(trusted)
       if (trust.state === 'not-configured') continue
       if (trust.state === 'invalid') return rejectedBrowserSpeechPacksStatus('rejected', trust.reason)
       const scope: AuroraBrowserModelPackScope = trusted.slotId ? { task, slotId: trusted.slotId } : { task }
-      const pack = await openActiveBrowserModelPack(host, scope, {
-        trustedReleaseKeys: [trust.releaseKey],
-        expectedReleaseManifestSha256: trust.expectedManifestSha256,
-      })
+      const pack = await openActiveBrowserModelPack(host, scope, trust.options)
       if (pack === null) continue
       const taskModels = pack.models.filter((model) => model.task === task)
       if (taskModels.length === 0) return rejectedBrowserSpeechPacksStatus('rejected', 'unavailable')
@@ -280,8 +332,11 @@ type NormalizedTrustInput =
     }
   | {
       readonly state: 'valid'
-      readonly releaseKey: AuroraBrowserModelPackReleaseTrustKey
-      readonly expectedManifestSha256: string
+      readonly options: {
+        readonly allowEmbeddedBrowserVoiceCatalogTrust?: true
+        readonly trustedReleaseKeys?: readonly AuroraBrowserModelPackReleaseTrustKey[]
+        readonly expectedReleaseManifestSha256?: string
+      }
     }
 
 function normalizeTrustInput(
@@ -296,11 +351,44 @@ function normalizeTrustInput(
   if (!isBase64ByteLength(publicKeyBase64, 32)) return { state: 'invalid', reason: 'public-key' }
   return {
     state: 'valid',
-    releaseKey: {
-      keyId,
-      publicKeyBase64,
+    options: {
+      trustedReleaseKeys: [{
+        keyId,
+        publicKeyBase64,
+      }],
+      expectedReleaseManifestSha256: expectedManifestSha256,
     },
-    expectedManifestSha256,
+  }
+}
+
+function normalizeTrustSelection(
+  input: AuroraBrowserSpeechPackTrustSelection | null,
+): NormalizedTrustInput {
+  if (!input) return { state: 'not-configured' }
+  const expectedManifestSha256 = input.expectedManifestSha256.trim().toLowerCase()
+  if (!isSha256(expectedManifestSha256)) return { state: 'invalid', reason: 'expected-digest' }
+  if (input.verificationMode === 'embedded-catalog' || (!input.releaseKeyId && !input.releasePublicKeyBase64)) {
+    return {
+      state: 'valid',
+      options: {
+        allowEmbeddedBrowserVoiceCatalogTrust: true,
+        expectedReleaseManifestSha256: expectedManifestSha256,
+      },
+    }
+  }
+  const keyId = input.releaseKeyId?.trim() ?? ''
+  const publicKeyBase64 = input.releasePublicKeyBase64?.trim() ?? ''
+  if (!SAFE_ID_RE.test(keyId)) return { state: 'invalid', reason: 'key-id' }
+  if (!isBase64ByteLength(publicKeyBase64, 32)) return { state: 'invalid', reason: 'public-key' }
+  return {
+    state: 'valid',
+    options: {
+      trustedReleaseKeys: [{
+        keyId,
+        publicKeyBase64,
+      }],
+      expectedReleaseManifestSha256: expectedManifestSha256,
+    },
   }
 }
 
@@ -368,6 +456,78 @@ function browserSpeechPacksRevision(packs: readonly AuroraBrowserActiveModelPack
     .map((pack) => `${pack.identity.scope.task}:${pack.identity.packId}:${pack.identity.packVersion}:${pack.identity.variantId}`)
     .sort()
     .join('|')
+}
+
+async function activeBrowserVoiceCatalogPacks(
+  globalObject: Parameters<typeof AuroraBrowserModelStoreHost.create>[0] | undefined,
+): Promise<Map<AuroraBrowserSpeechPackTask, { readonly packId: string; readonly packVersion: string }>> {
+  const active = new Map<AuroraBrowserSpeechPackTask, { readonly packId: string; readonly packVersion: string }>()
+  let host: AuroraWebModelStoreHost | null
+  try {
+    host = await AuroraBrowserModelStoreHost.openExisting(globalObject)
+  } catch {
+    return active
+  }
+  if (host === null) return active
+  for (const task of AURORA_BROWSER_SPEECH_PACK_TASKS) {
+    try {
+      const pack = await openActiveBrowserModelPack(host, { task }, { allowEmbeddedBrowserVoiceCatalogTrust: true })
+      if (pack) active.set(task, { packId: pack.identity.packId, packVersion: pack.identity.packVersion })
+    } catch {
+      // Keep the download list available even if an installed choice needs attention.
+    }
+  }
+  return active
+}
+
+function browserVoiceCatalogSelection(
+  entry: AuroraBrowserVoiceCatalogEntry,
+  active: { readonly packId: string; readonly packVersion: string } | undefined,
+): AuroraBrowserSpeechPackCatalogSelection {
+  const manifest = entry.toModelPackManifest()
+  const isActive = active?.packId === manifest.pack_id && active.packVersion === manifest.pack_version
+  const requiresReferenceProfile = browserVoiceCatalogEntryNeedsReferenceProfile(entry)
+  return Object.freeze({
+    task: entry.task,
+    packId: manifest.pack_id,
+    packVersion: manifest.pack_version,
+    displayName: entry.displayName,
+    language: entry.languages[0],
+    cached: isActive,
+    active: isActive,
+    ...(entry.task === 'tts' ? { voiceId: entry.id, voiceRevision: manifest.pack_version } : {}),
+    ...(requiresReferenceProfile ? { requiresReferenceProfile: true, referenceProfileSelected: false } : {}),
+  })
+}
+
+function browserVoiceInstallReceipt(
+  entry: AuroraBrowserVoiceCatalogEntry,
+  request: AuroraBrowserSpeechPackInstallRequest,
+  receipt: VoiceWebBrowserModelPackInstallReceipt,
+): AuroraBrowserSpeechPackInstallReceipt {
+  return Object.freeze({
+    task: entry.task,
+    packId: receipt.identity.packId,
+    packVersion: receipt.identity.packVersion,
+    trust: Object.freeze({
+      task: entry.task,
+      packId: receipt.identity.packId,
+      packVersion: receipt.identity.packVersion,
+      slotId: receipt.identity.scope.slotId,
+      verificationMode: receipt.verificationMode,
+      releaseKeyId: receipt.verificationKeyId,
+      expectedManifestSha256: receipt.manifestSha256,
+      ...(entry.task === 'tts' ? { voiceId: entry.id } : {}),
+      ...(request.selection.referenceProfileId ? { referenceProfileId: request.selection.referenceProfileId } : {}),
+    }),
+  })
+}
+
+function browserVoiceCatalogEntryNeedsReferenceProfile(entry: AuroraBrowserVoiceCatalogEntry): boolean {
+  const manifest = entry.toModelPackManifest()
+  return manifest.variants.some((variant) =>
+    (variant.model_bindings ?? []).some((model) => model.task === 'tts' && model.family === 'pockettts')
+  )
 }
 
 function isBrowserModelPackError(error: unknown): error is { readonly code: string } {
