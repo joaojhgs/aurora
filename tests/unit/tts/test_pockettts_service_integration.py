@@ -30,6 +30,7 @@ from app.services.tts.providers.base import (
     VoiceSelectionMode,
 )
 from app.services.tts.service import TTSService
+from app.services.tts.voice_catalog import VoiceCatalogItem, VoiceCatalogSourceError
 from app.services.tts.voice_registry import VoiceCatalogEntry, VoiceStateArtifactHandle
 from app.shared.config.models import (
     Piper,
@@ -46,6 +47,7 @@ from app.shared.contracts.models.tts import (
     TTSDeleteVoiceProfileRequest,
     TTSGetCapabilitiesRequest,
     TTSInstallVoiceProfileRequest,
+    TTSListLanguagePacksRequest,
     TTSListVoiceProfilesRequest,
     TTSListVoicesRequest,
     TTSMethods,
@@ -76,6 +78,8 @@ def mock_bus():
     FakeVoiceRegistry.installed = []
     FakeVoiceRegistry.deleted = []
     FakeVoiceRegistry.install_calls = 0
+    FakeVoiceCatalogInstaller.items = ()
+    FakeVoiceCatalogInstaller.fail_list = False
     bus = Mock()
     bus.publish = AsyncMock()
     bus.subscribe = Mock()
@@ -303,6 +307,16 @@ class FakeVoiceRegistry:
         return handle
 
 
+class FakeVoiceCatalogInstaller:
+    items: tuple[VoiceCatalogItem, ...] = ()
+    fail_list = False
+
+    async def list_items(self):
+        if self.fail_list:
+            raise VoiceCatalogSourceError("voice catalog is unavailable")
+        return self.items
+
+
 def _catalog_entry(
     voice_id: str,
     *,
@@ -318,6 +332,30 @@ def _catalog_entry(
         ready=ready,
         language_bundle=language_bundle,
         runtime_target="pockettts-python",
+    )
+
+
+def _catalog_item(
+    voice_id: str,
+    *,
+    display_name: str = "Voice",
+    language_bundle: str = "EN",
+    revision: str = "rev-1",
+    installed: bool = False,
+    ready: bool = False,
+) -> VoiceCatalogItem:
+    return VoiceCatalogItem(
+        voice_id=voice_id,
+        display_name=display_name,
+        language_bundle=language_bundle,
+        compatibility_group="pockettts-base",
+        runtime_target="pockettts-python",
+        artifact_revision=revision,
+        installed=installed,
+        ready=ready,
+        license_name="Test License",
+        attribution=None,
+        source="local",
     )
 
 
@@ -789,6 +827,7 @@ def test_tts_voice_registration_contract_metadata() -> None:
         TTSMethods.LIST_VOICES,
     }
     expected_manage = {
+        TTSMethods.LIST_LANGUAGE_PACKS,
         TTSMethods.LIST_VOICE_PROFILES,
         TTSMethods.GET_VOICE_PROFILE,
         TTSMethods.UPDATE_VOICE_PROFILE,
@@ -807,6 +846,7 @@ def test_tts_voice_registration_contract_metadata() -> None:
         method_name = {
             TTSMethods.GET_CAPABILITIES: "get_capabilities",
             TTSMethods.LIST_VOICES: "list_voices",
+            TTSMethods.LIST_LANGUAGE_PACKS: "list_language_packs",
             TTSMethods.LIST_VOICE_PROFILES: "list_voice_profiles",
             TTSMethods.GET_VOICE_PROFILE: "get_voice_profile",
             TTSMethods.UPDATE_VOICE_PROFILE: "update_voice_profile",
@@ -831,6 +871,194 @@ def test_tts_voice_registration_contract_metadata() -> None:
             assert metadata["method_type"] == "manage"
             assert metadata["required_perms"] == ["TTS.manage"]
             assert metadata["callable_feature_ids"] == ["speech_voice_management"]
+
+
+@pytest.mark.asyncio
+async def test_language_pack_listing_groups_catalog_voices_without_artifact_details(
+    monkeypatch, mock_bus
+) -> None:
+    service = TTSService()
+    FakeVoiceCatalogInstaller.items = (
+        _catalog_item("standard:starter_en:alba", display_name="Alba", language_bundle="EN"),
+        _catalog_item("standard:starter_en:bela", display_name="Bela", language_bundle="en"),
+    )
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            profile_key="profile-a",
+            voice_id="standard:starter_en:alba",
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="pockettts-base",
+            artifact_revision="rev-installed",
+            artifact_refs=("artifacts/private/path/voice-state.safetensors",),
+            source_retained=False,
+            license_name="Test License",
+            attribution=None,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", default_voice_id="standard:starter_en:alba"),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr(
+        service,
+        "_voice_catalog_installer",
+        lambda _tts_cfg: FakeVoiceCatalogInstaller(),
+    )
+
+    response = await service.list_language_packs(TTSListLanguagePacksRequest())
+
+    assert [pack.pack_id for pack in response.packs] == ["en"]
+    pack = response.packs[0]
+    assert pack.language == "en"
+    assert pack.installed is True
+    assert pack.ready is True
+    assert pack.default is True
+    assert pack.voice_count == 2
+    assert pack.installed_voice_count == 1
+    assert pack.ready_voice_count == 1
+    assert pack.voices[0].default is True
+    assert pack.voices[0].active is False
+    assert response.catalog_status == "available"
+    assert response.catalog_error_code is None
+    assert response.default_voice_id == "standard:starter_en:alba"
+    assert response.stale_default_voice_id is None
+    assert [voice.voice_id for voice in pack.voices] == [
+        "standard:starter_en:alba",
+        "standard:starter_en:bela",
+    ]
+    encoded = response.model_dump_json()
+    assert "voice-state.safetensors" not in encoded
+    assert "artifact_refs" not in encoded
+
+
+@pytest.mark.asyncio
+async def test_language_pack_listing_reports_catalog_unavailable_without_empty_success(
+    monkeypatch, mock_bus
+) -> None:
+    service = TTSService()
+    FakeVoiceCatalogInstaller.fail_list = True
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id="standard:starter_en:alba",
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="pockettts-base",
+            artifact_revision="rev-installed",
+            artifact_refs=("artifacts/private/path/voice-state.safetensors",),
+            source_retained=False,
+            license_name="Test License",
+            attribution=None,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", default_voice_id="standard:starter_en:alba"),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr(
+        service,
+        "_voice_catalog_installer",
+        lambda _tts_cfg: FakeVoiceCatalogInstaller(),
+    )
+
+    response = await service.list_language_packs(TTSListLanguagePacksRequest())
+
+    assert response.catalog_status == "unavailable"
+    assert response.catalog_error_code == "catalog_unavailable"
+    assert [pack.pack_id for pack in response.packs] == ["en"]
+    assert response.packs[0].voices[0].default is True
+    assert "voice catalog is unavailable" not in response.model_dump_json()
+    assert "voice-state.safetensors" not in response.model_dump_json()
+
+
+@pytest.mark.asyncio
+async def test_language_pack_listing_keeps_default_active_and_stale_default_separate(
+    monkeypatch, mock_bus
+) -> None:
+    service = TTSService()
+    service._provider = FakeVoiceListingProvider((), active_voice="standard:starter_en:alba")
+    FakeVoiceCatalogInstaller.items = (
+        _catalog_item("standard:starter_en:alba", display_name="Alba", language_bundle="en"),
+        _catalog_item("standard:starter_en:bela", display_name="Bela", language_bundle="en"),
+    )
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id="standard:starter_en:alba",
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="pockettts-base",
+            artifact_revision="rev-alba",
+            artifact_refs=("artifacts/alba/voice-state.safetensors",),
+            source_retained=False,
+            license_name="Test License",
+            attribution=None,
+        ),
+        types.SimpleNamespace(
+            voice_id="standard:starter_en:bela",
+            display_name="Bela",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="pockettts-base",
+            artifact_revision="rev-bela",
+            artifact_refs=("artifacts/bela/voice-state.safetensors",),
+            source_retained=False,
+            license_name="Test License",
+            attribution=None,
+        ),
+    ]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", default_voice_id="standard:starter_en:bela"),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr(
+        service,
+        "_voice_catalog_installer",
+        lambda _tts_cfg: FakeVoiceCatalogInstaller(),
+    )
+
+    response = await service.list_language_packs(TTSListLanguagePacksRequest())
+
+    voices = {voice.voice_id: voice for voice in response.packs[0].voices}
+    assert voices["standard:starter_en:alba"].active is True
+    assert voices["standard:starter_en:alba"].default is False
+    assert voices["standard:starter_en:bela"].active is False
+    assert voices["standard:starter_en:bela"].default is True
+    assert response.packs[0].default is True
+    assert response.default_voice_id == "standard:starter_en:bela"
+    assert response.stale_default_voice_id is None
+
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", default_voice_id="standard:starter_en:missing"),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+
+    stale_response = await service.list_language_packs(TTSListLanguagePacksRequest())
+
+    assert stale_response.default_voice_id == "standard:starter_en:missing"
+    assert stale_response.stale_default_voice_id == "standard:starter_en:missing"
+    assert stale_response.packs[0].default is False
 
 
 @pytest.mark.asyncio

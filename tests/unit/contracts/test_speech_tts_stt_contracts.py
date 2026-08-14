@@ -34,6 +34,10 @@ from app.shared.contracts.models.tts import (
     TTSGetVoiceProfileResponse,
     TTSInstallVoiceProfileRequest,
     TTSInstallVoiceProfileResponse,
+    TTSLanguagePackDescriptor,
+    TTSLanguagePackVoice,
+    TTSListLanguagePacksRequest,
+    TTSListLanguagePacksResponse,
     TTSListVoiceProfilesRequest,
     TTSListVoicesRequest,
     TTSListVoicesResponse,
@@ -227,6 +231,7 @@ def test_route_binding_is_internal_metadata_not_request_field() -> None:
 def test_tts_method_constants_cover_voice_lifecycle_surface() -> None:
     assert TTSMethods.GET_CAPABILITIES == "TTS.GetCapabilities"
     assert TTSMethods.LIST_VOICES == "TTS.ListVoices"
+    assert TTSMethods.LIST_LANGUAGE_PACKS == "TTS.ListLanguagePacks"
     assert TTSMethods.LIST_VOICE_PROFILES == "TTS.ListVoiceProfiles"
     assert TTSMethods.GET_VOICE_PROFILE == "TTS.GetVoiceProfile"
     assert TTSMethods.UPDATE_VOICE_PROFILE == "TTS.UpdateVoiceProfile"
@@ -353,6 +358,88 @@ def test_tts_descriptors_are_use_safe_and_forbid_internal_extras() -> None:
                 "embedding_tensor": [1, 2, 3],
             }
         )
+
+
+def test_tts_language_pack_contracts_are_redacted_and_exact() -> None:
+    voice = TTSLanguagePackVoice(
+        voice_id=STANDARD_ID,
+        display_name="Default",
+        installed=True,
+        ready=True,
+        default=True,
+        active=False,
+        revision="voice-rev-1",
+    )
+    pack = TTSLanguagePackDescriptor(
+        pack_id="en",
+        language="EN",
+        display_name="English",
+        installed=True,
+        ready=True,
+        default=True,
+        voice_count=1,
+        installed_voice_count=1,
+        ready_voice_count=1,
+        voices=[voice],
+        revision="pack-rev-1",
+    )
+    response = TTSListLanguagePacksResponse(
+        packs=[pack],
+        catalog_status="available",
+        default_voice_id=STANDARD_ID,
+    )
+
+    assert TTSListLanguagePacksRequest.model_validate({"language": "PT_br"}).language == "pt-br"
+    assert response.packs[0].language == "en"
+    assert response.packs[0].voices[0].default is True
+    assert response.packs[0].voices[0].active is False
+    assert "filesystem_path" not in response.model_dump_json()
+    with pytest.raises(ValidationError):
+        TTSListLanguagePacksRequest.model_validate({"language": "auto"})
+    with pytest.raises(ValidationError, match="voice count"):
+        TTSLanguagePackDescriptor(
+            pack_id="en",
+            language="en",
+            display_name="English",
+            installed=True,
+            ready=True,
+            voice_count=2,
+            installed_voice_count=1,
+            ready_voice_count=1,
+            voices=[voice],
+            revision="pack-rev-1",
+        )
+    with pytest.raises(ValidationError, match="ready language pack voice"):
+        TTSLanguagePackVoice(
+            voice_id=STANDARD_ID,
+            display_name="Default",
+            installed=False,
+            ready=True,
+            revision="voice-rev-1",
+        )
+    with pytest.raises(ValidationError):
+        TTSLanguagePackDescriptor.model_validate(
+            {
+                "pack_id": "en",
+                "language": "en",
+                "display_name": "English",
+                "installed": False,
+                "ready": False,
+                "voice_count": 0,
+                "revision": "pack-rev-1",
+                "source_url": "https://example.invalid/pack.json",
+            }
+        )
+    stale = TTSListLanguagePacksResponse(
+        packs=[],
+        catalog_status="unavailable",
+        catalog_error_code="catalog_unavailable",
+        default_voice_id=STANDARD_ID,
+        stale_default_voice_id=STANDARD_ID,
+    )
+    assert stale.stale_default_voice_id == STANDARD_ID
+    with pytest.raises(ValidationError, match="requires an error code"):
+        TTSListLanguagePacksResponse(catalog_status="unavailable")
 
 
 def test_tts_capabilities_keep_readiness_separate_from_method_constraints() -> None:

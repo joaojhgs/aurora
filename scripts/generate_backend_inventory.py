@@ -683,6 +683,7 @@ for _model, _validator in (
     ("TTSCreateVoiceProfileResponse", "_validate_voice_id"),
     ("TTSDeleteVoiceProfileRequest", "_validate_voice_id"),
     ("TTSDeleteVoiceProfileResponse", "_validate_voice_id"),
+    ("TTSListLanguagePacksResponse", "_validate_default_voice_ids"),
 ):
     VALIDATOR_EXTENSION_VERIFIERS[(_model, _validator)] = _assert_field_pattern(
         __import__(
@@ -1434,7 +1435,7 @@ def _annotate_tts_validator_fields(title: str, schema: dict[str, Any]) -> None:
         schema[marker] = True
     if title == "TTSDeleteVoiceProfileResponse":
         schema[TTS_DELETE_PROFILE_RESPONSE_INVARIANT_MARKER] = True
-    for field_name in ("voice_id", "voice"):
+    for field_name in ("voice_id", "voice", "default_voice_id", "stale_default_voice_id"):
         field_schema = properties.get(field_name)
         if isinstance(field_schema, dict):
             _annotate_optional_string_pattern(field_schema, LOGICAL_VOICE_ID_PATTERN)

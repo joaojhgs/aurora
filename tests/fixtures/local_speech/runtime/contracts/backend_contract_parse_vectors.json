@@ -2,7 +2,7 @@
   "artifact": "aurora-rust-contract-parse-vectors",
   "generator_format_version": "aurora-rust-contract-codegen-v1",
   "schema_artifact": "aurora-sdk-backend-contracts",
-  "schema_content_hash": "daa45ce48991fd5840682c74bd8381e2834258abed8160052b298f2ec3408e76",
+  "schema_content_hash": "3d079594f6c0768334282f009457b3732f1833e22f8f7972a04b0e9a565c8258",
   "vectors": [
     {
       "accepted": true,
@@ -1925,6 +1925,110 @@
       "method_id": "TTS.InstallVoiceProfile",
       "model_name": "TTSInstallVoiceProfileRequest",
       "schema_id": "TTS.InstallVoiceProfile.input.TTSInstallVoiceProfileRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "language": " EN "
+      },
+      "marker_paths": [
+        "$.properties.language:x-aurora-speech-language-string-normalize"
+      ],
+      "method_id": "TTS.ListLanguagePacks",
+      "model_name": "TTSListLanguagePacksRequest",
+      "normalized": {
+        "include_unavailable": true,
+        "language": "en"
+      },
+      "normalized_hash": "2814de498ca507e40810e13219d50e4e49d628e20e3d6118278598b963345a7e",
+      "schema_id": "TTS.ListLanguagePacks.input.TTSListLanguagePacksRequest"
+    },
+    {
+      "accepted": false,
+      "case_index": 0,
+      "direction": "input",
+      "input": {
+        "language": "en--US"
+      },
+      "issue_category": "speech_language",
+      "issue_path": "$.language",
+      "marker_paths": [
+        "$.properties.language:x-aurora-speech-language-string-normalize"
+      ],
+      "method_id": "TTS.ListLanguagePacks",
+      "model_name": "TTSListLanguagePacksRequest",
+      "schema_id": "TTS.ListLanguagePacks.input.TTSListLanguagePacksRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "catalog_status": "available",
+        "default_voice_id": "standard:starter:voice",
+        "packs": [
+          {
+            "default": true,
+            "display_name": "English",
+            "installed": true,
+            "installed_voice_count": 1,
+            "language": " EN ",
+            "pack_id": "en",
+            "ready": true,
+            "ready_voice_count": 1,
+            "revision": "pack-rev-1",
+            "voice_count": 1,
+            "voices": [
+              {
+                "active": false,
+                "default": true,
+                "display_name": "Voice",
+                "installed": true,
+                "ready": true,
+                "revision": "rev-1",
+                "voice_id": "standard:starter:voice"
+              }
+            ]
+          }
+        ]
+      },
+      "marker_paths": [
+        "$.$defs.TTSLanguagePackDescriptor.properties.language:x-aurora-speech-language-string-normalize"
+      ],
+      "method_id": "TTS.ListLanguagePacks",
+      "model_name": "TTSListLanguagePacksResponse",
+      "normalized": {
+        "capability_revision": 0,
+        "catalog_status": "available",
+        "default_voice_id": "standard:starter:voice",
+        "packs": [
+          {
+            "default": true,
+            "display_name": "English",
+            "installed": true,
+            "installed_voice_count": 1,
+            "language": "en",
+            "pack_id": "en",
+            "ready": true,
+            "ready_voice_count": 1,
+            "revision": "pack-rev-1",
+            "voice_count": 1,
+            "voices": [
+              {
+                "active": false,
+                "default": true,
+                "display_name": "Voice",
+                "installed": true,
+                "ready": true,
+                "revision": "rev-1",
+                "voice_id": "standard:starter:voice"
+              }
+            ]
+          }
+        ]
+      },
+      "normalized_hash": "bf9213870d57806b804609be5f8c6685cb94e83257d495feafa52be9b5e2d31f",
+      "schema_id": "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse"
     },
     {
       "accepted": true,

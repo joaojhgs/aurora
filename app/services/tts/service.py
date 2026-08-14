@@ -22,7 +22,7 @@ import wave
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.messaging import Envelope
@@ -70,6 +70,10 @@ from app.shared.contracts.models.tts import (
     TTSGetVoiceProfileResponse,
     TTSInstallVoiceProfileRequest,
     TTSInstallVoiceProfileResponse,
+    TTSLanguagePackDescriptor,
+    TTSLanguagePackVoice,
+    TTSListLanguagePacksRequest,
+    TTSListLanguagePacksResponse,
     TTSListVoiceProfilesRequest,
     TTSListVoiceProfilesResponse,
     TTSListVoicesRequest,
@@ -162,6 +166,15 @@ class _VoiceImportSession:
     expires_at: datetime
     chunks: dict[int, bytes] = field(default_factory=dict)
     sealed_ref: str | None = None
+
+
+@dataclass(frozen=True)
+class _LanguagePackInventory:
+    packs: list[TTSLanguagePackDescriptor]
+    catalog_status: Literal["available", "unavailable"]
+    catalog_error_code: Literal["catalog_unavailable"] | None
+    default_voice_id: str | None
+    stale_default_voice_id: str | None
 
 
 def _clean_envelope_string(value: object) -> str | None:
@@ -912,6 +925,7 @@ class TTSService(BaseService):
 
     async def _current_voice_profiles(self) -> list[TTSVoiceProfileDescriptor]:
         tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+        default_voice_id = tts_cfg.default_voice_id
         registry_entries = []
         if tts_cfg.provider == "pockettts":
             with contextlib.suppress(Exception):
@@ -926,6 +940,7 @@ class TTSService(BaseService):
         profiles: list[TTSVoiceProfileDescriptor] = []
         for entry in registry_entries:
             is_active = provider_ready and entry.voice_id == active_voice_id
+            is_default = entry.voice_id == default_voice_id
             profiles.append(
                 TTSVoiceProfileDescriptor(
                     voice_id=entry.voice_id,
@@ -933,7 +948,7 @@ class TTSService(BaseService):
                     kind=_profile_kind(entry.kind),  # type: ignore[arg-type]
                     installed=True,
                     ready=entry.ready_state == "ready",
-                    default=is_active,
+                    default=is_default,
                     active=is_active,
                     enabled=True,
                     compatible_language_pack_ids=[entry.language_bundle],
@@ -979,6 +994,7 @@ class TTSService(BaseService):
             if language is None:
                 continue
             is_active = provider_ready and voice.voice_id == active_voice_id
+            is_default = voice.voice_id == default_voice_id
             profiles.append(
                 TTSVoiceProfileDescriptor(
                     voice_id=voice.voice_id,
@@ -986,7 +1002,7 @@ class TTSService(BaseService):
                     kind="cloned" if voice.voice_id.startswith("clone:") else "standard",
                     installed=True,
                     ready=voice.ready,
-                    default=is_active,
+                    default=is_default,
                     active=is_active,
                     enabled=True,
                     compatible_language_pack_ids=[language],
@@ -994,6 +1010,123 @@ class TTSService(BaseService):
                 )
             )
         return profiles
+
+    def _language_pack_revision(self, voices: list[TTSLanguagePackVoice]) -> str:
+        parts = [
+            ":".join(
+                (
+                    voice.voice_id,
+                    voice.revision,
+                    str(voice.installed),
+                    str(voice.ready),
+                    str(voice.default),
+                    str(voice.active),
+                )
+            )
+            for voice in voices
+        ]
+        digest = hashlib.sha256("|".join(sorted(parts)).encode("utf-8")).hexdigest()[:16]
+        return f"language-pack-rev-{self._voice_revision}-{digest}"
+
+    async def _current_language_pack_inventory(self) -> _LanguagePackInventory:
+        tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+        catalog_rows = []
+        catalog_status = "available"
+        catalog_error_code: str | None = None
+        if tts_cfg.provider == "pockettts":
+            try:
+                catalog_rows = list(await self._voice_catalog_installer(tts_cfg).list_items())
+            except (VoiceCatalogError, VoiceRegistryError, OSError):
+                catalog_status = "unavailable"
+                catalog_error_code = "catalog_unavailable"
+        profiles = await self._current_voice_profiles()
+        profile_by_voice_id = {profile.voice_id: profile for profile in profiles}
+        grouped: dict[str, dict[str, Any]] = {}
+        for item in catalog_rows:
+            pack_id = _voice_language_pack(item.language_bundle)
+            if pack_id is None:
+                continue
+            row = grouped.setdefault(
+                pack_id,
+                {
+                    "language": pack_id,
+                    "display_name": pack_id,
+                    "voices": {},
+                },
+            )
+            profile = profile_by_voice_id.get(item.voice_id)
+            installed = bool(profile.installed) if profile is not None else item.installed
+            ready = bool(profile.ready) if profile is not None else item.ready
+            revision = profile.revision if profile is not None else item.artifact_revision
+            row["voices"][item.voice_id] = TTSLanguagePackVoice(
+                voice_id=item.voice_id,
+                display_name=item.display_name,
+                installed=installed,
+                ready=ready,
+                default=bool(profile.default) if profile is not None else False,
+                active=bool(profile.active) if profile is not None else False,
+                revision=revision,
+            )
+        for profile in profiles:
+            if profile.kind != "standard":
+                continue
+            for raw_pack_id in profile.compatible_language_pack_ids:
+                pack_id = _voice_language_pack(raw_pack_id)
+                if pack_id is None:
+                    continue
+                row = grouped.setdefault(
+                    pack_id,
+                    {
+                        "language": pack_id,
+                        "display_name": pack_id,
+                        "voices": {},
+                    },
+                )
+                row["voices"].setdefault(
+                    profile.voice_id,
+                    TTSLanguagePackVoice(
+                        voice_id=profile.voice_id,
+                        display_name=profile.display_name,
+                        installed=profile.installed,
+                        ready=profile.ready,
+                        default=profile.default,
+                        active=profile.active,
+                        revision=profile.revision,
+                    ),
+                )
+        default_voice_id = tts_cfg.default_voice_id
+        default_found = False
+        packs: list[TTSLanguagePackDescriptor] = []
+        for pack_id, row in grouped.items():
+            voices = sorted(row["voices"].values(), key=lambda voice: voice.voice_id)
+            installed_count = sum(1 for voice in voices if voice.installed)
+            ready_count = sum(1 for voice in voices if voice.ready)
+            pack_default = any(voice.default for voice in voices)
+            default_found = default_found or pack_default
+            packs.append(
+                TTSLanguagePackDescriptor(
+                    pack_id=pack_id,
+                    language=row["language"],
+                    display_name=row["display_name"],
+                    installed=installed_count > 0,
+                    ready=ready_count > 0,
+                    default=pack_default,
+                    voice_count=len(voices),
+                    installed_voice_count=installed_count,
+                    ready_voice_count=ready_count,
+                    voices=voices,
+                    revision=self._language_pack_revision(voices),
+                )
+            )
+        return _LanguagePackInventory(
+            packs=sorted(packs, key=lambda pack: pack.pack_id),
+            catalog_status=catalog_status,
+            catalog_error_code=catalog_error_code,
+            default_voice_id=default_voice_id,
+            stale_default_voice_id=default_voice_id
+            if default_voice_id is not None and not default_found
+            else None,
+        )
 
     async def _list_voice_descriptors(
         self, envelope: Envelope | None = None
@@ -1140,6 +1273,36 @@ class TTSService(BaseService):
             ]
         return TTSListVoicesResponse(
             voices=voices,
+            capability_revision=self._voice_revision,
+            correlation_id=request.correlation_id,
+        )
+
+    @method_contract(
+        method_id=TTSMethods.LIST_LANGUAGE_PACKS,
+        summary="List managed TTS language packs",
+        input_model=TTSListLanguagePacksRequest,
+        output_model=TTSListLanguagePacksResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def list_language_packs(
+        self, request: TTSListLanguagePacksRequest
+    ) -> TTSListLanguagePacksResponse:
+        """Return administrative language pack metadata without artifact locations."""
+        inventory = await self._current_language_pack_inventory()
+        packs = inventory.packs
+        if request.language is not None:
+            packs = [pack for pack in packs if pack.language == request.language]
+        if not request.include_unavailable:
+            packs = [pack for pack in packs if pack.installed]
+        return TTSListLanguagePacksResponse(
+            packs=packs,
+            catalog_status=inventory.catalog_status,
+            catalog_error_code=inventory.catalog_error_code,
+            default_voice_id=inventory.default_voice_id,
+            stale_default_voice_id=inventory.stale_default_voice_id,
             capability_revision=self._voice_revision,
             correlation_id=request.correlation_id,
         )
@@ -1384,7 +1547,7 @@ class TTSService(BaseService):
                 )
                 self._cache_mutation("remove_voice_profile", request, response, envelope)
                 return response
-            removing_default = tts_cfg.default_voice_id == request.voice_id or profile.default
+            removing_default = tts_cfg.default_voice_id == request.voice_id
             if removing_default:
                 updated = await config_api.aupdate_config(
                     "services.tts.default_voice_id", None, timeout=15.0

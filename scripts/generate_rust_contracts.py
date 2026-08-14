@@ -105,6 +105,36 @@ _MARKER_POSITIVE_INPUTS: dict[str, dict[str, Any]] = {
         ]
     },
     "TTS.ListVoices.input.TTSListVoicesRequest": {"language": " EN "},
+    "TTS.ListLanguagePacks.input.TTSListLanguagePacksRequest": {"language": " EN "},
+    "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse": {
+        "packs": [
+            {
+                "pack_id": "en",
+                "language": " EN ",
+                "display_name": "English",
+                "installed": True,
+                "ready": True,
+                "default": True,
+                "voice_count": 1,
+                "installed_voice_count": 1,
+                "ready_voice_count": 1,
+                "voices": [
+                    {
+                        "voice_id": _STANDARD_VOICE_ID,
+                        "display_name": "Voice",
+                        "installed": True,
+                        "ready": True,
+                        "default": True,
+                        "active": False,
+                        "revision": "rev-1",
+                    }
+                ],
+                "revision": "pack-rev-1",
+            }
+        ],
+        "catalog_status": "available",
+        "default_voice_id": _STANDARD_VOICE_ID,
+    },
     "TTS.ListVoices.output.TTSListVoicesResponse": {
         "voices": [
             {
