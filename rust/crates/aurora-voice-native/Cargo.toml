@@ -14,6 +14,7 @@ aurora-voice-engine = { path = "../aurora-voice-engine" }
 aurora-voice-ios-bridge = { path = "../aurora-voice-ios-bridge" }
 aurora-voice-sherpa = { path = "../aurora-voice-sherpa", optional = true }
 base64.workspace = true
+bzip2.workspace = true
 crossbeam-queue.workspace = true
 ed25519-dalek.workspace = true
 futures-util.workspace = true
@@ -21,6 +22,7 @@ reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+tar.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["fs"] }
 url.workspace = true

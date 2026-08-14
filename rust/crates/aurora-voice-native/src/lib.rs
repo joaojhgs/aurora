@@ -17,6 +17,7 @@ mod gateway_stt;
 mod gateway_tts;
 mod ios_session;
 mod model_store;
+mod speech_pack_manager;
 mod transport;
 mod trust;
 
@@ -56,6 +57,10 @@ pub use ios_session::{
     MAX_IOS_PACK_BINDINGS,
 };
 pub use model_store::{NativeImmutableModelFile, NativeModelStore, NativeModelStoreConfig};
+pub use speech_pack_manager::{
+    InstalledSpeechPack, SpeechPackBindings, SpeechPackError, SpeechPackInstallPhase,
+    SpeechPackInstallProgress, SpeechPackManager, SpeechPackManagerConfig,
+};
 pub use transport::{
     GatewayAuth, GatewayEvent, MicrophoneAudioPolicy, NativeEventStream,
     NativeGatewayEndpointClass, NativeGatewayMicrophoneAudioProfile, NativeGatewayTransport,

@@ -1,5 +1,6 @@
 //! Bounded, resumable native downloads for verified model-pack assets.
 
+use std::net::{IpAddr, SocketAddr};
 use std::path::Path;
 use std::time::Duration;
 
@@ -127,7 +128,6 @@ pub enum DownloadError {
 
 /// Reqwest-backed native downloader that never promotes staged bytes itself.
 pub struct NativeDownloader {
-    client: reqwest::Client,
     policy: DownloadPolicy,
 }
 
@@ -140,23 +140,7 @@ impl NativeDownloader {
         {
             return Err(DownloadError::InvalidPolicy);
         }
-        let allow_loopback_http = policy.allow_loopback_http;
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::custom(move |attempt| {
-                if redirect_is_allowed(
-                    attempt.previous().last(),
-                    attempt.url(),
-                    attempt.previous().len(),
-                    allow_loopback_http,
-                ) {
-                    attempt.follow()
-                } else {
-                    attempt.error("redirect target is not permitted")
-                }
-            }))
-            .build()
-            .map_err(|_| DownloadError::Request)?;
-        Ok(Self { client, policy })
+        Ok(Self { policy })
     }
 
     /// Resolve a manifest asset URL against its trusted manifest origin.
@@ -220,14 +204,7 @@ impl NativeDownloader {
             resumed_from = 0;
         }
 
-        let mut request = self.client.get(source.clone());
-        if resumed_from > 0 {
-            request = request.header(RANGE, format!("bytes={resumed_from}-"));
-        }
-
-        let response = await_bounded(request.send(), cancellation, self.policy.request_timeout)
-            .await?
-            .map_err(|_| DownloadError::Request)?;
+        let response = self.send_get(source, resumed_from, cancellation).await?;
         self.validate_source(response.url())?;
         let status = response.status();
         if !status.is_success() {
@@ -325,6 +302,112 @@ impl NativeDownloader {
             return Ok(());
         }
         Err(DownloadError::UnsafeSource)
+    }
+
+    async fn send_get(
+        &self,
+        source: &Url,
+        resumed_from: u64,
+        cancellation: &CancellationToken,
+    ) -> Result<reqwest::Response, DownloadError> {
+        let mut current = source.clone();
+        for redirect_count in 0..=5 {
+            self.validate_source(&current)?;
+            let client = client_for_pinned_url(&current, self.policy.allow_loopback_http).await?;
+            let mut request = client.get(current.clone());
+            if resumed_from > 0 {
+                request = request.header(RANGE, format!("bytes={resumed_from}-"));
+            }
+            let response = await_bounded(request.send(), cancellation, self.policy.request_timeout)
+                .await?
+                .map_err(|_| DownloadError::Request)?;
+            if !response.status().is_redirection() {
+                return Ok(response);
+            }
+            let location = response
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .and_then(|value| value.to_str().ok())
+                .ok_or(DownloadError::Request)?;
+            let target = current
+                .join(location)
+                .map_err(|_| DownloadError::UnsafeSource)?;
+            if !redirect_is_allowed(
+                Some(&current),
+                &target,
+                redirect_count,
+                self.policy.allow_loopback_http,
+            ) {
+                return Err(DownloadError::UnsafeSource);
+            }
+            current = target;
+        }
+        Err(DownloadError::UnsafeSource)
+    }
+}
+
+async fn client_for_pinned_url(
+    source: &Url,
+    allow_loopback_http: bool,
+) -> Result<reqwest::Client, DownloadError> {
+    let host = source.host_str().ok_or(DownloadError::UnsafeSource)?;
+    let port = source
+        .port_or_known_default()
+        .ok_or(DownloadError::UnsafeSource)?;
+    let pinned = resolve_public_addrs(host, port, allow_loopback_http).await?;
+    reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .resolve_to_addrs(host, &pinned)
+        .build()
+        .map_err(|_| DownloadError::Request)
+}
+
+async fn resolve_public_addrs(
+    host: &str,
+    port: u16,
+    allow_loopback_http: bool,
+) -> Result<Vec<SocketAddr>, DownloadError> {
+    let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host, port))
+        .await
+        .map_err(|_| DownloadError::UnsafeSource)?
+        .filter(|addr| ip_is_permitted(addr.ip(), allow_loopback_http))
+        .collect();
+    if addrs.is_empty() {
+        Err(DownloadError::UnsafeSource)
+    } else {
+        Ok(addrs)
+    }
+}
+
+fn ip_is_permitted(ip: IpAddr, allow_loopback_http: bool) -> bool {
+    match ip {
+        IpAddr::V4(ip) => {
+            if allow_loopback_http && ip.is_loopback() {
+                return true;
+            }
+            !(ip.is_private()
+                || ip.is_loopback()
+                || ip.is_link_local()
+                || ip.is_broadcast()
+                || ip.is_documentation()
+                || ip.is_multicast()
+                || ip.is_unspecified()
+                || ip.octets()[0] == 0
+                || ip.octets()[0] >= 224
+                || ip.octets()[0] == 100 && (64..=127).contains(&ip.octets()[1])
+                || ip.octets()[0] == 198 && (18..=19).contains(&ip.octets()[1]))
+        }
+        IpAddr::V6(ip) => {
+            if allow_loopback_http && ip.is_loopback() {
+                return true;
+            }
+            !(ip.is_loopback()
+                || ip.is_multicast()
+                || ip.is_unspecified()
+                || (ip.segments()[0] & 0xfe00) == 0xfc00
+                || (ip.segments()[0] & 0xffc0) == 0xfe80
+                || ip.segments()[0] == 0x2001 && ip.segments()[1] == 0x0db8)
+        }
     }
 }
 
@@ -766,7 +849,7 @@ mod tests {
             )
             .await;
 
-        assert_eq!(result, Err(DownloadError::Request));
+        assert_eq!(result, Err(DownloadError::UnsafeSource));
     }
 
     #[tokio::test]
