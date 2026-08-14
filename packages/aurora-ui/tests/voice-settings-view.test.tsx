@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import type { AuroraClient } from '@aurora/client'
+import type { AuroraClient, GeneratedBackendMethodOutput, JsonObject, JsonValue } from '@aurora/client'
 import { VoiceSettingsView, type VoiceSettingsViewProps } from '../src/voice-settings-view'
 import { SettingsView } from '../src/settings-view'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
@@ -19,6 +19,18 @@ type InstallStatus = 'installed' | 'not_found' | 'queued' | 'rejected' | 'revisi
 type RemoveStatus = 'drained' | 'not_found' | 'rejected' | 'removed' | 'revision_conflict' | 'unchanged'
 type DefaultStatus = 'activated' | 'drained' | 'not_found' | 'rejected' | 'revision_conflict'
 type DeleteStatus = 'deleted' | 'not_found' | 'rejected' | 'revision_conflict'
+type ImportOutput = GeneratedBackendMethodOutput<'TTS.ImportVoiceProfile'>
+
+interface CloneTransferBundle extends JsonObject {
+  bundle_type: 'aurora-cloned-tts-voice-state'
+  voice_id: string
+  display_name: string
+  artifact_revision?: string | null | undefined
+  artifact_data_base64: string
+  artifact_sha256: string
+  artifact_size_bytes: number
+  [key: string]: JsonValue | undefined
+}
 
 interface Capabilities {
   contract_revision: 'aurora-tts-capabilities-v1'
@@ -391,6 +403,221 @@ describe('VoiceSettingsView', () => {
     expect(buttonsByText(container, 'Add voice')).toHaveLength(1)
     expect(buttonsByText(container, 'Delete')).toHaveLength(1)
     assertNoForbiddenCopy(text)
+    await unmount()
+  })
+
+  it('keeps cloned voice transfer disabled until management access is confirmed', async () => {
+    const exportVoiceProfile = vi.fn()
+    const importVoiceProfile = vi.fn()
+    const client = voiceClient({
+      capabilities: capabilities({ cloning: true }),
+      exportVoiceProfile,
+      importVoiceProfile,
+      profiles: [
+        profile({ display_name: 'Dina', voice_id: 'clone:11111111-1111-4111-8111-111111111111', kind: 'cloned', installed: true, ready: true, default: false, active: false, retained_source: true })
+      ]
+    })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    expect(buttonByText(container, 'Show available voices').disabled).toBe(true)
+    expect(visibleText(container)).not.toContain('Download')
+    expect(visibleText(container)).not.toContain('Add from file')
+    await flushReactWork()
+
+    expect(exportVoiceProfile).not.toHaveBeenCalled()
+    expect(importVoiceProfile).not.toHaveBeenCalled()
+    assertNoForbiddenCopy(visibleText(container))
+    await unmount()
+  })
+
+  it('downloads a cloned voice through the typed SDK without rendering private data', async () => {
+    const bundle = cloneTransferBundle()
+    const exportVoiceProfile = vi.fn(async () => ({
+      ok: true,
+      data: {
+        status: 'exported',
+        voice_id: bundle.voice_id,
+        revision: 'rev-1',
+        idempotent: false,
+        bundle,
+      } satisfies GeneratedBackendMethodOutput<'TTS.ExportVoiceProfile'>,
+    }))
+    const importVoiceProfile = vi.fn()
+    const objectUrls: string[] = []
+    const clickedDownloads: string[] = []
+    const originalCreateObjectURL = URL.createObjectURL
+    const originalRevokeObjectURL = URL.revokeObjectURL
+    const originalClick = HTMLAnchorElement.prototype.click
+    URL.createObjectURL = vi.fn((blob: Blob) => {
+      objectUrls.push(blob.type)
+      return 'blob:voice-transfer'
+    })
+    URL.revokeObjectURL = vi.fn()
+    HTMLAnchorElement.prototype.click = function click() {
+      clickedDownloads.push(this.download)
+    }
+    const client = voiceClient({
+      capabilities: capabilities({ cloning: true }),
+      exportVoiceProfile,
+      importVoiceProfile,
+      profiles: [
+        profile({ display_name: 'Dina', voice_id: bundle.voice_id, kind: 'cloned', installed: true, ready: true, default: false, active: false, retained_source: true })
+      ]
+    })
+
+    try {
+      const { container, unmount } = await renderVoiceSettings(client)
+      await loadManagedVoices(container)
+      await act(async () => {
+        buttonByText(container, 'Download').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      })
+      await flushReactWork()
+
+      expect(exportVoiceProfile).toHaveBeenCalledWith({
+        voice_id: bundle.voice_id,
+        expected_revision: 'rev-1',
+        operation_id: expect.stringMatching(/^voice-export-/u),
+      })
+      expect(importVoiceProfile).not.toHaveBeenCalled()
+      expect(objectUrls).toEqual(['application/json'])
+      expect(clickedDownloads).toEqual(['aurora-voice-Dina-clone-rev-a.json'])
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:voice-transfer')
+      const text = visibleText(container)
+      expect(text).toContain('Voice file downloaded.')
+      expect(text).not.toContain(bundle.artifact_data_base64)
+      expect(text).not.toContain(bundle.artifact_sha256)
+      expect(text).not.toContain('11111111-1111-4111-8111-111111111111')
+      assertNoForbiddenCopy(text)
+      await unmount()
+    } finally {
+      URL.createObjectURL = originalCreateObjectURL
+      URL.revokeObjectURL = originalRevokeObjectURL
+      HTMLAnchorElement.prototype.click = originalClick
+    }
+  })
+
+  it('imports a cloned voice file through the typed SDK and clears the upload', async () => {
+    const bundle = cloneTransferBundle()
+    const importVoiceProfile = vi.fn(async (input: { bundle: CloneTransferBundle }) => ({
+      ok: true,
+      data: {
+        status: 'imported',
+        voice_id: input.bundle.voice_id,
+        revision: 'rev-imported',
+        idempotent: false,
+      } satisfies ImportOutput,
+    }))
+    const exportVoiceProfile = vi.fn()
+    const adminExecute = vi.fn(async (input: { methodId: string }) => {
+      if (input.methodId === 'TTS.ListVoiceProfiles') {
+        const listCalls = adminExecute.mock.calls.filter(([call]) => call.methodId === 'TTS.ListVoiceProfiles').length
+        return adminResult({
+          profiles: listCalls === 1
+            ? []
+            : [profile({ display_name: 'Dina', voice_id: bundle.voice_id, kind: 'cloned', installed: true, ready: true, default: false, active: false, retained_source: true })]
+        })
+      }
+      if (input.methodId === 'TTS.ListLanguagePacks') return adminResult({ packs: [] })
+      throw new Error(`Unexpected action: ${input.methodId}`)
+    })
+    const client = voiceClient({
+      adminExecute,
+      capabilities: capabilities({ cloning: true }),
+      exportVoiceProfile,
+      importVoiceProfile
+    })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    await loadManagedVoices(container)
+    const fileInput = inputByLabel(container, 'Voice file')
+    const file = textFile(JSON.stringify(bundle), 'dina.json')
+    await setFileInput(fileInput, file)
+    await act(async () => {
+      buttonByText(container, 'Add voice file').click()
+    })
+    await flushReactWork()
+
+    await vi.waitFor(() => expect(importVoiceProfile).toHaveBeenCalledWith({
+      bundle,
+      operation_id: expect.stringMatching(/^voice-import-/u),
+    }))
+    expect(exportVoiceProfile).not.toHaveBeenCalled()
+    expect(fileInput.value).toBe('')
+    expect(adminExecute.mock.calls.filter(([input]) => input.methodId === 'TTS.ListVoiceProfiles')).toHaveLength(2)
+    const text = visibleText(container)
+    expect(text).toContain('Voice file added.')
+    expect(text).toContain('Dina')
+    expect(text).not.toContain(bundle.artifact_data_base64)
+    expect(text).not.toContain(bundle.artifact_sha256)
+    expect(text).not.toContain('11111111-1111-4111-8111-111111111111')
+    assertNoForbiddenCopy(text)
+    await unmount()
+  })
+
+  it('keeps cloned voice transfer failure copy product-safe', async () => {
+    const bundle = cloneTransferBundle()
+    const exportVoiceProfile = vi.fn(async () => ({
+      ok: false,
+      error: { code: 'permission_denied', message: `artifact_data_base64 ${bundle.artifact_data_base64} schema denied` },
+    }))
+    const importVoiceProfile = vi.fn()
+    const client = voiceClient({
+      capabilities: capabilities({ cloning: true }),
+      exportVoiceProfile,
+      importVoiceProfile,
+      profiles: [
+        profile({ display_name: 'Dina', voice_id: bundle.voice_id, kind: 'cloned', installed: true, ready: true, default: false, active: false, retained_source: true })
+      ]
+    })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    await loadManagedVoices(container)
+    await act(async () => {
+      buttonByText(container, 'Download').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+    expect(visibleText(container)).toContain('Permission is needed to use this feature. Review access.')
+
+    const fileInput = inputByLabel(container, 'Voice file')
+    await setFileInput(fileInput, textFile('{"bundle_type":"wrong"}', 'bad.json'))
+    await act(async () => {
+      buttonByText(container, 'Add voice file').click()
+    })
+    await flushReactWork()
+
+    await vi.waitFor(() => expect(visibleText(container)).toContain('Choose a valid Aurora voice file.'))
+    const text = visibleText(container)
+    expect(importVoiceProfile).not.toHaveBeenCalled()
+    expect(text).not.toContain(bundle.artifact_data_base64)
+    expect(text).not.toContain('schema')
+    assertNoForbiddenCopy(text)
+    await unmount()
+  })
+
+  it('rejects oversized cloned voice files before import', async () => {
+    const importVoiceProfile = vi.fn()
+    const oversizedRead = vi.fn(async () => new ArrayBuffer(0))
+    const file = textFile('{"bundle_type":"aurora-cloned-tts-voice-state"}', 'too-large.json')
+    Object.defineProperty(file, 'size', { configurable: true, value: (3 * 1024 * 1024) + 1 })
+    Object.defineProperty(file, 'arrayBuffer', { configurable: true, value: oversizedRead })
+    const client = voiceClient({
+      capabilities: capabilities({ cloning: true }),
+      importVoiceProfile,
+    })
+    const { container, unmount } = await renderVoiceSettings(client)
+
+    await loadManagedVoices(container)
+    const fileInput = inputByLabel(container, 'Voice file')
+    await setFileInput(fileInput, file)
+    await act(async () => {
+      buttonByText(container, 'Add voice file').click()
+    })
+    await flushReactWork()
+
+    await vi.waitFor(() => expect(visibleText(container)).toContain('Choose a valid Aurora voice file.'))
+    expect(importVoiceProfile).not.toHaveBeenCalled()
+    expect(oversizedRead).not.toHaveBeenCalled()
+    assertNoForbiddenCopy(visibleText(container))
     await unmount()
   })
 
@@ -1649,6 +1876,8 @@ function voiceClient(overrides: {
   removeVoiceProfile?: ReturnType<typeof vi.fn>
   setDefaultVoice?: ReturnType<typeof vi.fn>
   deleteVoiceProfile?: ReturnType<typeof vi.fn>
+  exportVoiceProfile?: ReturnType<typeof vi.fn>
+  importVoiceProfile?: ReturnType<typeof vi.fn>
 } = {}): AuroraClient {
   const getCapabilities = overrides.getCapabilities ?? vi.fn(async () => ({ ok: true, data: { capabilities: overrides.capabilities ?? capabilities() } }))
   const listVoices = overrides.listVoices ?? vi.fn(async () => ({ ok: true, data: { voices: overrides.voices ?? [voice()] } }))
@@ -1660,6 +1889,8 @@ function voiceClient(overrides: {
   const removeVoiceProfile = overrides.removeVoiceProfile ?? directVoiceManageCall
   const setDefaultVoice = overrides.setDefaultVoice ?? directVoiceManageCall
   const deleteVoiceProfile = overrides.deleteVoiceProfile ?? directVoiceManageCall
+  const exportVoiceProfile = overrides.exportVoiceProfile ?? directVoiceManageCall
+  const importVoiceProfile = overrides.importVoiceProfile ?? directVoiceManageCall
   const adminExecute = overrides.adminExecute ?? vi.fn(async (input: { methodId: string }) => {
     if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: overrides.profiles ?? [] })
     if (input.methodId === 'TTS.ListLanguagePacks') return adminResult({ packs: overrides.languagePacks ?? [] })
@@ -1678,7 +1909,9 @@ function voiceClient(overrides: {
         installVoiceProfile,
         removeVoiceProfile,
         setDefaultVoice,
-        deleteVoiceProfile
+        deleteVoiceProfile,
+        exportVoiceProfile,
+        importVoiceProfile
       }
     },
     admin: {
@@ -1792,6 +2025,24 @@ function mutationResult<TStatus extends string>(status: TStatus, voiceId = 'stan
     revision: status === 'rejected' || status === 'not_found' ? null : 'rev-2',
     idempotent: false,
     correlation_id: 'OP-123'
+  }
+}
+
+function cloneTransferBundle(overrides: Partial<CloneTransferBundle> = {}): CloneTransferBundle {
+  return {
+    bundle_type: 'aurora-cloned-tts-voice-state',
+    schema_version: 1,
+    voice_id: 'clone:11111111-1111-4111-8111-111111111111',
+    display_name: 'Dina',
+    artifact_revision: 'clone-rev-a',
+    artifact_format: 'safetensors',
+    artifact_data_base64: 'ZGVyaXZlZC1zdGF0ZQ==',
+    artifact_sha256: '2f6b3cf0253d17cf2fb3161e0ff8c98bc0789ec0ff7d9f4880568e680883d1ec',
+    artifact_size_bytes: 13,
+    compatibility_group: 'pockettts-v1',
+    language_bundle: 'en_pack',
+    runtime_target: 'pockettts',
+    ...overrides,
   }
 }
 
@@ -2000,6 +2251,32 @@ function setInputValue(input: HTMLInputElement | HTMLTextAreaElement, value: str
   const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set
   if (!setter) throw new Error('Missing input value setter')
   setter.call(input, value)
+}
+
+function textFile(text: string, name: string): File {
+  const file = new File([text], name, { type: 'application/json' })
+  Object.defineProperty(file, 'arrayBuffer', {
+    configurable: true,
+    value: vi.fn(async () => new TextEncoder().encode(text).buffer),
+  })
+  return file
+}
+
+async function setFileInput(input: HTMLInputElement, file: File): Promise<void> {
+  Object.defineProperty(input, 'files', {
+    value: [file],
+    configurable: true,
+  })
+  await act(async () => {
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+  await flushReactWork()
+}
+
+function inputByLabel(container: HTMLElement, label: string): HTMLInputElement {
+  const input = Array.from(container.querySelectorAll('input')).find((candidate) => candidate.getAttribute('aria-label') === label)
+  if (!(input instanceof HTMLInputElement)) throw new Error(`Missing input: ${label}`)
+  return input
 }
 
 function visibleText(container: HTMLElement): string {

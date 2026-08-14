@@ -1,7 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { routePath, type AuroraClient, type JsonObject } from '@aurora/client'
+import {
+  routePath,
+  type AuroraClient,
+  type GeneratedBackendMethodInput,
+  type GeneratedBackendMethodOutput,
+  type JsonObject,
+  type JsonValue
+} from '@aurora/client'
 import { Button, Card, StatStrip } from './primitives'
 import { safeErrorCopy } from './product-copy'
 import { findForbiddenProductionCopyTerms } from './product-copy-forbidden-terms'
@@ -31,10 +38,24 @@ type InstallStatus = 'installed' | 'not_found' | 'queued' | 'rejected' | 'revisi
 type RemoveStatus = 'drained' | 'not_found' | 'rejected' | 'removed' | 'revision_conflict' | 'unchanged'
 type DefaultStatus = 'activated' | 'drained' | 'not_found' | 'rejected' | 'revision_conflict'
 type DeleteStatus = 'deleted' | 'not_found' | 'rejected' | 'revision_conflict'
-type VoiceMutationKind = 'default' | 'delete' | 'install' | 'remove'
+type ExportStatus = GeneratedBackendMethodOutput<'TTS.ExportVoiceProfile'>['status']
+type ImportStatus = GeneratedBackendMethodOutput<'TTS.ImportVoiceProfile'>['status']
+type VoiceMutationKind = 'default' | 'delete' | 'export' | 'import' | 'install' | 'remove'
+const CLONE_VOICE_IMPORT_FILE_MAX_BYTES = 3 * 1024 * 1024
 type TtsLanguagePackCatalogStatus = 'available' | 'unavailable'
 type TtsLanguagePackCatalogErrorCode = 'catalog_unavailable'
 type LocalSpeechCatalogTask = Exclude<AuroraLocalSpeechTask, 'tts'>
+
+interface CloneTransferBundle extends JsonObject {
+  bundle_type: 'aurora-cloned-tts-voice-state'
+  voice_id: string
+  display_name: string
+  artifact_revision?: string | null | undefined
+  artifact_data_base64: string
+  artifact_sha256: string
+  artifact_size_bytes: number
+  [key: string]: JsonValue | undefined
+}
 
 interface TtsResidentLanguagePack {
   pack_id: string
@@ -57,6 +78,7 @@ interface TtsCapabilities {
     stt?: boolean | undefined
     tts?: boolean | undefined
   } | undefined
+  cloning?: boolean | undefined
   local_speech_assets?: Partial<Record<LocalSpeechCatalogTask | 'wakeword' | 'wkw', LocalSpeechCatalogAsset[]>> | undefined
   local_speech_packs?: LocalSpeechCatalogAsset[] | undefined
 }
@@ -186,12 +208,15 @@ export function VoiceSettingsView({
   const [pendingActionKey, setPendingActionKey] = useState<string | null>(null)
   const [mutationMessage, setMutationMessage] = useState<string | null>(null)
   const [wakePhraseMessage, setWakePhraseMessage] = useState<string | null>(null)
+  const [transferMessage, setTransferMessage] = useState<string | null>(null)
+  const [importFile, setImportFile] = useState<File | null>(null)
   const [browserCatalogItems, setBrowserCatalogItems] = useState<readonly AuroraBrowserSpeechPackCatalogSelection[]>([])
   const [referenceProfiles, setReferenceProfiles] = useState<readonly AuroraBrowserPocketReferenceProfileSummary[]>([])
   const [referenceEditor, setReferenceEditor] = useState<LocalSpeechAssetRow | null>(null)
   const [referenceTranscript, setReferenceTranscript] = useState('')
   const [referenceFile, setReferenceFile] = useState<File | null>(null)
   const referenceFileInputRef = useRef<HTMLInputElement | null>(null)
+  const importFileInputRef = useRef<HTMLInputElement | null>(null)
   const referenceTranscriptInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [confirmAction, setConfirmAction] = useState<VoiceConfirmation | null>(null)
   const [adminReason, setAdminReason] = useState('Manage spoken reply voices')
@@ -337,6 +362,7 @@ export function VoiceSettingsView({
   )
   const readyLanguages = useMemo(() => languageList(state.capabilities?.ready_languages), [state.capabilities])
   const canShowInstall = state.managementState === 'ready'
+  const canTransferCloneVoices = state.capabilities?.cloning === true
   const actionPending = pendingActionKey !== null || state.managementState === 'loading'
   const languageCatalogMessage = state.languageCatalogState === 'limited'
     ? 'Language options could not be loaded. Review access and try again.'
@@ -496,6 +522,66 @@ export function VoiceSettingsView({
       setConfirmAction(null)
     } catch (error) {
       setMutationMessage(productVoiceSettingsErrorCopy(error, action.kind === 'remove' ? 'Voice was not removed. Try again.' : 'Voice was not deleted. Try again.'))
+    } finally {
+      setPendingActionKey(null)
+    }
+  }
+
+  async function exportCloneVoice(profile: ManagedVoice): Promise<void> {
+    if (!profile.canExport || actionPending || !adminActionReady) return
+    const actionKey = actionKeyFor('export', profile.voiceId)
+    setPendingActionKey(actionKey)
+    setTransferMessage('Preparing voice file.')
+    try {
+      const result = await client.speech.tts.exportVoiceProfile({
+        voice_id: profile.voiceId,
+        expected_revision: profile.revision,
+        operation_id: createVoiceOperationId('export')
+      })
+      if (!result.ok) {
+        setTransferMessage(productVoiceSettingsErrorCopy(result.error, exportOutcomeCopy('rejected')))
+        return
+      }
+      setTransferMessage(exportOutcomeCopy(result.data.status))
+      if (result.data.status === 'exported' && isCloneTransferBundle(result.data.bundle)) {
+        downloadCloneVoiceBundle(result.data.bundle)
+        setTransferMessage('Voice file downloaded.')
+      }
+    } catch (error) {
+      setTransferMessage(productVoiceSettingsErrorCopy(error, exportOutcomeCopy('rejected')))
+    } finally {
+      setPendingActionKey(null)
+    }
+  }
+
+  async function importCloneVoice(): Promise<void> {
+    if (actionPending || !adminActionReady) return
+    const file = importFile ?? importFileInputRef.current?.files?.[0] ?? null
+    if (!file) {
+      setTransferMessage('Choose a voice file first.')
+      return
+    }
+    const actionKey = actionKeyFor('import', file.name || 'selected')
+    setPendingActionKey(actionKey)
+    setTransferMessage('Adding voice file.')
+    try {
+      const bundle = await readCloneVoiceBundleFile(file)
+      const result = await client.speech.tts.importVoiceProfile({
+        bundle,
+        operation_id: createVoiceOperationId('import')
+      })
+      if (!result.ok) {
+        setTransferMessage(productVoiceSettingsErrorCopy(result.error, importOutcomeCopy('rejected')))
+        return
+      }
+      setTransferMessage(importOutcomeCopy(result.data.status))
+      if (isImportSuccess(result.data.status)) {
+        setImportFile(null)
+        if (importFileInputRef.current) importFileInputRef.current.value = ''
+        await loadManagedProfiles('Refresh available voice settings')
+      }
+    } catch (error) {
+      setTransferMessage(cloneTransferErrorCopy(error, importOutcomeCopy('rejected')))
     } finally {
       setPendingActionKey(null)
     }
@@ -709,6 +795,11 @@ export function VoiceSettingsView({
       {wakePhraseMessage ? (
         <p role="status" className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
           {wakePhraseMessage}
+        </p>
+      ) : null}
+      {transferMessage ? (
+        <p role="status" className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+          {transferMessage}
         </p>
       ) : null}
 
@@ -1025,11 +1116,54 @@ export function VoiceSettingsView({
                     Delete
                   </Button>
                 ) : null}
+                {canShowInstall && canTransferCloneVoices && profile.canExport ? (
+                  <Button
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => void exportCloneVoice(profile)}
+                    disabled={actionPending || !adminActionReady}
+                  >
+                    {pendingActionKey === actionKeyFor('export', profile.voiceId) ? 'Preparing' : 'Download'}
+                  </Button>
+                ) : null}
               </div>
             </div>
           ))}
           {managedProfiles.length === 0 && state.managementState === 'ready' ? (
             <p className="text-sm text-muted-foreground">No additional voices are available yet.</p>
+          ) : null}
+          {state.managementState === 'ready' && canTransferCloneVoices ? (
+            <form
+              className="flex flex-col gap-2 rounded-md border border-border/70 p-3"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void importCloneVoice()
+              }}
+            >
+              <div>
+                <p className="text-sm font-medium">Add from file</p>
+                <p className="text-xs text-muted-foreground">Choose an Aurora voice file from a device you trust.</p>
+              </div>
+              <input
+                ref={importFileInputRef}
+                type="file"
+                accept="application/json,.json"
+                aria-label="Voice file"
+                onChange={(event) => setImportFile(event.currentTarget.files?.[0] ?? null)}
+                disabled={actionPending || !adminActionReady}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-8 px-3 text-xs"
+                  onClick={() => void importCloneVoice()}
+                  disabled={actionPending || !adminActionReady}
+                >
+                  {pendingActionKey?.startsWith('import:') ? 'Adding' : 'Add voice file'}
+                </Button>
+              </div>
+            </form>
           ) : null}
         </div>
       </Card>
@@ -1155,6 +1289,7 @@ interface ManagedVoice extends VoiceRow {
   compatiblePackIds: string[]
   installable: boolean
   canDelete: boolean
+  canExport: boolean
   canRemove: boolean
   canSetDefault: boolean
   badge: string
@@ -1232,6 +1367,7 @@ function toManagedVoice(
     ready,
     installable,
     canDelete: canDeleteProfile(profile),
+    canExport: canExportProfile(profile),
     canRemove: canRemoveProfile(profile),
     canSetDefault: canSetDefaultProfile(profile),
     badge: isDefault ? 'Default' : ready ? 'Ready' : installed || !installable ? 'Needs setup' : 'Available to add'
@@ -1685,6 +1821,10 @@ function canDeleteProfile(profile: TtsVoiceProfile): boolean {
   return profile.enabled !== false && profile.kind === 'cloned' && profile.default !== true && profile.active !== true
 }
 
+function canExportProfile(profile: TtsVoiceProfile): boolean {
+  return profile.enabled !== false && profile.kind === 'cloned' && profile.installed === true && profile.ready === true
+}
+
 function managedVoiceDetail(installed: boolean, ready: boolean, isDefault: boolean, installable: boolean, languages: string[]): string {
   const languageCopy = languages.length > 0 ? ` ${languages.join(', ')}.` : ''
   if (isDefault) return `Used by default for spoken replies.${languageCopy}`
@@ -1859,6 +1999,29 @@ function deleteOutcomeCopy(status: DeleteStatus): string {
   return 'Voice was not deleted. Try again.'
 }
 
+function exportOutcomeCopy(status: ExportStatus): string {
+  if (status === 'exported') return 'Voice file downloaded.'
+  if (status === 'revision_conflict') return 'Voice changed before it could be downloaded. Try again.'
+  if (status === 'not_found') return 'Voice is no longer available.'
+  if (status === 'unavailable') return 'Voice file is unavailable on this Aurora.'
+  return 'Voice file was not downloaded. Try again.'
+}
+
+function importOutcomeCopy(status: ImportStatus): string {
+  if (status === 'imported') return 'Voice file added.'
+  if (status === 'unchanged') return 'Voice is already available.'
+  if (status === 'conflict') return 'Voice changed before it could be added. Try again.'
+  if (status === 'unavailable') return 'Voice file cannot be added on this Aurora.'
+  return 'Voice file was not added. Try again.'
+}
+
+function cloneTransferErrorCopy(error: unknown, backup: string): string {
+  if (error instanceof Error && error.message === 'voice_file_invalid') {
+    return 'Choose a valid Aurora voice file.'
+  }
+  return productVoiceSettingsErrorCopy(error, backup)
+}
+
 function isInstallSuccess(status: InstallStatus): boolean {
   return status === 'installed' || status === 'queued' || status === 'unchanged'
 }
@@ -1873,6 +2036,10 @@ function isRemoveSuccess(status: RemoveStatus): boolean {
 
 function isDeleteSuccess(status: DeleteStatus): boolean {
   return status === 'deleted' || status === 'not_found'
+}
+
+function isImportSuccess(status: ImportStatus): boolean {
+  return status === 'imported' || status === 'unchanged'
 }
 
 function createInstallOperationId(): string {
@@ -1892,4 +2059,59 @@ function createVoiceOperationId(kind: VoiceMutationKind): string {
 
 function actionKeyFor(kind: VoiceMutationKind, voiceId: string): string {
   return `${kind}:${voiceId}`
+}
+
+function downloadCloneVoiceBundle(bundle: CloneTransferBundle): void {
+  if (typeof document === 'undefined' || !bundle) return
+  const payload = JSON.stringify(bundle)
+  const blob = new Blob([payload], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = cloneVoiceBundleFilename(bundle)
+  try {
+    link.click()
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+async function readCloneVoiceBundleFile(file: File): Promise<GeneratedBackendMethodInput<'TTS.ImportVoiceProfile'>['bundle']> {
+  if (file.size <= 0 || file.size > CLONE_VOICE_IMPORT_FILE_MAX_BYTES) throw new Error('voice_file_invalid')
+  const text = new TextDecoder().decode(await file.arrayBuffer())
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    throw new Error('voice_file_invalid')
+  }
+  if (!isCloneTransferBundle(parsed)) throw new Error('voice_file_invalid')
+  return parsed
+}
+
+function isCloneTransferBundle(value: unknown): value is NonNullable<CloneTransferBundle> {
+  if (!value || typeof value !== 'object') return false
+  const record = value as Record<string, unknown>
+  return record.bundle_type === 'aurora-cloned-tts-voice-state'
+    && typeof record.voice_id === 'string'
+    && record.voice_id.startsWith('clone:')
+    && typeof record.display_name === 'string'
+    && typeof record.artifact_data_base64 === 'string'
+    && typeof record.artifact_sha256 === 'string'
+    && typeof record.artifact_size_bytes === 'number'
+}
+
+function cloneVoiceBundleFilename(bundle: NonNullable<CloneTransferBundle>): string {
+  const name = safeFilenamePart(bundle.display_name)
+  const revision = safeFilenamePart(bundle.artifact_revision)
+  return ['aurora-voice', name, revision].filter(Boolean).join('-').concat('.json')
+}
+
+function safeFilenamePart(value: string | null | undefined): string {
+  return (value ?? '')
+    .trim()
+    .replace(/[^A-Za-z0-9_-]+/gu, '-')
+    .replace(/-+/gu, '-')
+    .replace(/^-|-$/gu, '')
+    .slice(0, 80)
 }
