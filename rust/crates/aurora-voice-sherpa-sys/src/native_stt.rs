@@ -4,9 +4,9 @@ use std::os::raw::{c_char, c_float, c_int};
 use std::ptr::NonNull;
 
 use super::{
-    path_bytes_for_stt, pcm_len_i32_for_stt, ErrorCode, OfflineSttConfig, OfflineSttResult,
-    SttError, MAX_OFFLINE_STT_SEGMENTS, MAX_OFFLINE_STT_TEXT_BYTES, MAX_OFFLINE_STT_TOKENS,
-    MAX_OFFLINE_STT_TOKEN_BYTES,
+    path_bytes_for_stt, pcm_len_i32_for_stt, ErrorCode, OfflineSttConfig, OfflineSttModelKind,
+    OfflineSttResult, SttError, MAX_OFFLINE_STT_SEGMENTS, MAX_OFFLINE_STT_TEXT_BYTES,
+    MAX_OFFLINE_STT_TOKENS, MAX_OFFLINE_STT_TOKEN_BYTES,
 };
 
 #[repr(C)]
@@ -313,6 +313,12 @@ impl OfflineRecognizer {
             CString::new(config.decoding_method()).map_err(|_| SttError::InvalidConfig {
                 code: ErrorCode::ConfigDecodingMethodNul,
             })?;
+        let language = CString::new(config.language()).map_err(|_| SttError::InvalidConfig {
+            code: ErrorCode::ConfigWhisperLanguageNul,
+        })?;
+        let task = CString::new(config.task()).map_err(|_| SttError::InvalidConfig {
+            code: ErrorCode::ConfigWhisperTaskNul,
+        })?;
 
         let mut raw_model = SherpaOnnxOfflineModelConfig {
             tokens: tokens.as_ptr(),
@@ -321,8 +327,30 @@ impl OfflineRecognizer {
             provider: provider.as_ptr(),
             ..SherpaOnnxOfflineModelConfig::default()
         };
-        raw_model.moonshine.encoder = encoder.as_ptr();
-        raw_model.moonshine.merged_decoder = decoder.as_ptr();
+        match config.model_kind() {
+            OfflineSttModelKind::Moonshine => {
+                raw_model.moonshine.encoder = encoder.as_ptr();
+                raw_model.moonshine.merged_decoder = decoder.as_ptr();
+            }
+            OfflineSttModelKind::Whisper => {
+                raw_model.whisper.encoder = encoder.as_ptr();
+                raw_model.whisper.decoder = decoder.as_ptr();
+                raw_model.whisper.language = language.as_ptr();
+                raw_model.whisper.task = task.as_ptr();
+                raw_model.whisper.tail_paddings = config.whisper_tail_paddings();
+                raw_model.whisper.enable_token_timestamps = if config.whisper_token_timestamps() {
+                    1
+                } else {
+                    0
+                };
+                raw_model.whisper.enable_segment_timestamps = if config.whisper_segment_timestamps()
+                {
+                    1
+                } else {
+                    0
+                };
+            }
+        }
         let raw_config = SherpaOnnxOfflineRecognizerConfig {
             feat_config: SherpaOnnxFeatureConfig {
                 sample_rate: config.sample_rate(),

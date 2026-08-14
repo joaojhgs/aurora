@@ -884,9 +884,15 @@ pub struct VoiceActivityDetector {
 
 #[derive(Clone)]
 pub struct OfflineSttConfig {
+    model_kind: OfflineSttModelKind,
     encoder_path: PathBuf,
     decoder_path: PathBuf,
     tokens_path: PathBuf,
+    language: String,
+    task: String,
+    whisper_tail_paddings: i32,
+    whisper_token_timestamps: bool,
+    whisper_segment_timestamps: bool,
     sample_rate: i32,
     feature_dim: i32,
     num_threads: i32,
@@ -896,6 +902,12 @@ pub struct OfflineSttConfig {
     max_audio_seconds: f32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OfflineSttModelKind {
+    Moonshine,
+    Whisper,
+}
+
 impl OfflineSttConfig {
     pub fn moonshine_v2(
         encoder_path: impl Into<PathBuf>,
@@ -903,9 +915,15 @@ impl OfflineSttConfig {
         tokens_path: impl Into<PathBuf>,
     ) -> Self {
         Self {
+            model_kind: OfflineSttModelKind::Moonshine,
             encoder_path: encoder_path.into(),
             decoder_path: decoder_path.into(),
             tokens_path: tokens_path.into(),
+            language: String::new(),
+            task: "transcribe".to_owned(),
+            whisper_tail_paddings: -1,
+            whisper_token_timestamps: false,
+            whisper_segment_timestamps: false,
             sample_rate: DEFAULT_SAMPLE_RATE,
             feature_dim: DEFAULT_FEATURE_DIM,
             num_threads: DEFAULT_NUM_THREADS,
@@ -914,6 +932,35 @@ impl OfflineSttConfig {
             max_active_paths: 4,
             max_audio_seconds: MAX_OFFLINE_STT_SECONDS,
         }
+    }
+
+    pub fn whisper(
+        encoder_path: impl Into<PathBuf>,
+        decoder_path: impl Into<PathBuf>,
+        tokens_path: impl Into<PathBuf>,
+    ) -> Self {
+        Self {
+            model_kind: OfflineSttModelKind::Whisper,
+            encoder_path: encoder_path.into(),
+            decoder_path: decoder_path.into(),
+            tokens_path: tokens_path.into(),
+            language: String::new(),
+            task: "transcribe".to_owned(),
+            whisper_tail_paddings: -1,
+            whisper_token_timestamps: false,
+            whisper_segment_timestamps: false,
+            sample_rate: DEFAULT_SAMPLE_RATE,
+            feature_dim: DEFAULT_FEATURE_DIM,
+            num_threads: DEFAULT_NUM_THREADS,
+            provider: DEFAULT_PROVIDER.to_owned(),
+            decoding_method: DEFAULT_DECODING_METHOD.to_owned(),
+            max_active_paths: 4,
+            max_audio_seconds: MAX_OFFLINE_STT_SECONDS,
+        }
+    }
+
+    pub fn model_kind(&self) -> OfflineSttModelKind {
+        self.model_kind
     }
 
     pub fn encoder_path(&self) -> &Path {
@@ -926,6 +973,26 @@ impl OfflineSttConfig {
 
     pub fn tokens_path(&self) -> &Path {
         &self.tokens_path
+    }
+
+    pub fn language(&self) -> &str {
+        &self.language
+    }
+
+    pub fn task(&self) -> &str {
+        &self.task
+    }
+
+    pub fn whisper_tail_paddings(&self) -> i32 {
+        self.whisper_tail_paddings
+    }
+
+    pub fn whisper_token_timestamps(&self) -> bool {
+        self.whisper_token_timestamps
+    }
+
+    pub fn whisper_segment_timestamps(&self) -> bool {
+        self.whisper_segment_timestamps
     }
 
     pub fn sample_rate(&self) -> i32 {
@@ -976,6 +1043,31 @@ impl OfflineSttConfig {
         self
     }
 
+    pub fn with_language(mut self, language: impl Into<String>) -> Self {
+        self.language = language.into();
+        self
+    }
+
+    pub fn with_task(mut self, task: impl Into<String>) -> Self {
+        self.task = task.into();
+        self
+    }
+
+    pub fn with_whisper_tail_paddings(mut self, tail_paddings: i32) -> Self {
+        self.whisper_tail_paddings = tail_paddings;
+        self
+    }
+
+    pub fn with_whisper_token_timestamps(mut self, enabled: bool) -> Self {
+        self.whisper_token_timestamps = enabled;
+        self
+    }
+
+    pub fn with_whisper_segment_timestamps(mut self, enabled: bool) -> Self {
+        self.whisper_segment_timestamps = enabled;
+        self
+    }
+
     pub fn with_decoding_method(mut self, decoding_method: impl Into<String>) -> Self {
         self.decoding_method = decoding_method.into();
         self
@@ -995,6 +1087,19 @@ impl OfflineSttConfig {
         validate_model_file(&self.encoder_path, ErrorCode::ConfigEncoderPathEmpty)?;
         validate_model_file(&self.decoder_path, ErrorCode::ConfigDecoderPathEmpty)?;
         validate_model_file(&self.tokens_path, ErrorCode::ConfigTokensPathEmpty)?;
+        if self.model_kind == OfflineSttModelKind::Whisper {
+            validate_optional_c_string_value(&self.language, ErrorCode::ConfigWhisperLanguageNul)?;
+            validate_c_string_value(
+                &self.task,
+                ErrorCode::ConfigWhisperTaskEmpty,
+                ErrorCode::ConfigWhisperTaskNul,
+            )?;
+            if self.task != "transcribe" {
+                return Err(SttError::InvalidConfig {
+                    code: ErrorCode::ConfigWhisperTaskUnsupported,
+                });
+            }
+        }
         if self.sample_rate != DEFAULT_SAMPLE_RATE {
             return Err(SttError::InvalidConfig {
                 code: ErrorCode::ConfigSampleRateRange,
@@ -1041,9 +1146,12 @@ impl fmt::Debug for OfflineSttConfig {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("OfflineSttConfig")
+            .field("model_kind", &self.model_kind)
             .field("encoder_path", &"<redacted>")
             .field("decoder_path", &"<redacted>")
             .field("tokens_path", &"<redacted>")
+            .field("language", &"<redacted>")
+            .field("task", &self.task)
             .field("sample_rate", &self.sample_rate)
             .field("feature_dim", &self.feature_dim)
             .field("num_threads", &self.num_threads)
@@ -1659,6 +1767,10 @@ pub enum ErrorCode {
     ConfigDataDirUnreadable,
     ConfigDecodingMethodEmpty,
     ConfigDecodingMethodNul,
+    ConfigWhisperLanguageNul,
+    ConfigWhisperTaskEmpty,
+    ConfigWhisperTaskNul,
+    ConfigWhisperTaskUnsupported,
     ConfigMaxAudioSecondsRange,
     ConfigMaxNumSentencesRange,
     ConfigSilenceScaleRange,
@@ -1760,6 +1872,10 @@ impl ErrorCode {
             Self::ConfigDataDirUnreadable => "config.data_dir_unreadable",
             Self::ConfigDecodingMethodEmpty => "config.decoding_method_empty",
             Self::ConfigDecodingMethodNul => "config.decoding_method_nul",
+            Self::ConfigWhisperLanguageNul => "config.whisper_language_nul",
+            Self::ConfigWhisperTaskEmpty => "config.whisper_task_empty",
+            Self::ConfigWhisperTaskNul => "config.whisper_task_nul",
+            Self::ConfigWhisperTaskUnsupported => "config.whisper_task_unsupported",
             Self::ConfigMaxAudioSecondsRange => "config.max_audio_seconds_range",
             Self::ConfigMaxNumSentencesRange => "config.max_num_sentences_range",
             Self::ConfigSilenceScaleRange => "config.silence_scale_range",
@@ -2209,6 +2325,13 @@ fn validate_c_string_value(
     Ok(())
 }
 
+fn validate_optional_c_string_value(value: &str, nul_code: ErrorCode) -> Result<(), SttError> {
+    if value.as_bytes().contains(&0) {
+        return Err(SttError::InvalidConfig { code: nul_code });
+    }
+    Ok(())
+}
+
 fn validate_model_file(path: &Path, empty_code: ErrorCode) -> Result<(), SttError> {
     if path.as_os_str().is_empty() {
         return Err(SttError::InvalidConfig { code: empty_code });
@@ -2513,6 +2636,86 @@ mod tests {
         assert!(segment_debug.contains("samples: \"<redacted>\""));
         assert!(!segment_debug.contains("0.1"));
         assert!(!detector_error_debug.contains("private-user-token"));
+    }
+
+    struct TempSttFiles {
+        dir: PathBuf,
+        encoder: PathBuf,
+        decoder: PathBuf,
+        tokens: PathBuf,
+    }
+
+    impl Drop for TempSttFiles {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    fn temp_stt_files(label: &str) -> TempSttFiles {
+        let unique = format!(
+            "aurora-sherpa-sys-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        );
+        let dir = std::env::temp_dir().join(unique);
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let encoder = dir.join("encoder.onnx");
+        let decoder = dir.join("decoder.onnx");
+        let tokens = dir.join("tokens.txt");
+        std::fs::write(&encoder, b"encoder").expect("encoder");
+        std::fs::write(&decoder, b"decoder").expect("decoder");
+        std::fs::write(&tokens, b"tokens").expect("tokens");
+        TempSttFiles {
+            dir,
+            encoder,
+            decoder,
+            tokens,
+        }
+    }
+
+    #[test]
+    fn offline_stt_whisper_config_defaults_to_auto_transcribe() {
+        let files = temp_stt_files("whisper-defaults");
+        let config = OfflineSttConfig::whisper(&files.encoder, &files.decoder, &files.tokens);
+
+        assert_eq!(config.model_kind(), OfflineSttModelKind::Whisper);
+        assert_eq!(config.language(), "");
+        assert_eq!(config.task(), "transcribe");
+        assert_eq!(config.whisper_tail_paddings(), -1);
+        assert!(!config.whisper_token_timestamps());
+        assert!(!config.whisper_segment_timestamps());
+        config.validate().expect("whisper config should validate");
+        let rendered = format!("{config:?}");
+        assert!(rendered.contains("model_kind: Whisper"));
+        assert!(rendered.contains("task: \"transcribe\""));
+        assert!(!rendered.contains(files.dir.to_string_lossy().as_ref()));
+    }
+
+    #[test]
+    fn offline_stt_whisper_rejects_unsafe_language_and_non_transcribe_task() {
+        let files = temp_stt_files("whisper-invalid");
+        let language_error =
+            OfflineSttConfig::whisper(&files.encoder, &files.decoder, &files.tokens)
+                .with_language("en\0secret")
+                .validate()
+                .expect_err("nul language should be rejected");
+        assert_eq!(language_error.code(), ErrorCode::ConfigWhisperLanguageNul);
+
+        let task_error = OfflineSttConfig::whisper(&files.encoder, &files.decoder, &files.tokens)
+            .with_task("translate")
+            .validate()
+            .expect_err("non-transcribe task should be rejected");
+        assert_eq!(task_error.code(), ErrorCode::ConfigWhisperTaskUnsupported);
+
+        let empty_task_error =
+            OfflineSttConfig::whisper(&files.encoder, &files.decoder, &files.tokens)
+                .with_task("")
+                .validate()
+                .expect_err("empty task should be rejected");
+        assert_eq!(empty_task_error.code(), ErrorCode::ConfigWhisperTaskEmpty);
     }
 
     #[test]

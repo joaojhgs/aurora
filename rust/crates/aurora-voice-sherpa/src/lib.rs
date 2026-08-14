@@ -1952,13 +1952,39 @@ mod native_kws_backend {
 mod native_stt_backend {
     use super::*;
     use aurora_voice_sherpa_sys::{
-        OfflineSttConfig, OfflineSttRecognizer, SttError as NativeSttError,
+        OfflineSttConfig, OfflineSttModelKind, OfflineSttRecognizer, SttError as NativeSttError,
     };
     use std::path::PathBuf;
 
     const STT_ENCODER_FILE_ID: &str = "encoder";
-    const STT_DECODER_FILE_ID: &str = "decoder-merged";
+    const STT_WHISPER_DECODER_FILE_ID: &str = "decoder";
+    const STT_MOONSHINE_DECODER_FILE_ID: &str = "decoder-merged";
     const STT_TOKENS_FILE_ID: &str = "tokens";
+
+    pub struct NativeSttModelFiles {
+        pub encoder_file_id: String,
+        pub encoder_path: PathBuf,
+        pub decoder_file_id: String,
+        pub decoder_path: PathBuf,
+        pub tokens_file_id: String,
+        pub tokens_path: PathBuf,
+        pub language: Option<String>,
+    }
+
+    impl fmt::Debug for NativeSttModelFiles {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter
+                .debug_struct("NativeSttModelFiles")
+                .field("encoder_file_id_bytes", &self.encoder_file_id.len())
+                .field("encoder_path", &"<redacted>")
+                .field("decoder_file_id_bytes", &self.decoder_file_id.len())
+                .field("decoder_path", &"<redacted>")
+                .field("tokens_file_id_bytes", &self.tokens_file_id.len())
+                .field("tokens_path", &"<redacted>")
+                .field("language", &"<redacted>")
+                .finish()
+        }
+    }
 
     pub struct NativeSttBackend {
         recognizer: OfflineSttRecognizer,
@@ -1983,12 +2009,47 @@ mod native_stt_backend {
             tokens_file_id: &str,
             tokens_path: impl Into<PathBuf>,
         ) -> Result<Self, EngineError> {
+            Self::from_selected_model_files(
+                binding,
+                NativeSttModelFiles {
+                    encoder_file_id: encoder_file_id.to_owned(),
+                    encoder_path: encoder_path.into(),
+                    decoder_file_id: decoder_file_id.to_owned(),
+                    decoder_path: decoder_path.into(),
+                    tokens_file_id: tokens_file_id.to_owned(),
+                    tokens_path: tokens_path.into(),
+                    language: None,
+                },
+            )
+        }
+
+        pub fn from_selected_model_files(
+            binding: &TaskPackBinding,
+            files: NativeSttModelFiles,
+        ) -> Result<Self, EngineError> {
             validate_stt_binding(binding)?;
-            require_selected_file(binding, encoder_file_id, STT_ENCODER_FILE_ID)?;
-            require_selected_file(binding, decoder_file_id, STT_DECODER_FILE_ID)?;
-            require_selected_file(binding, tokens_file_id, STT_TOKENS_FILE_ID)?;
-            let config = OfflineSttConfig::moonshine_v2(encoder_path, decoder_path, tokens_path)
-                .with_sample_rate(VAD_SAMPLE_RATE_HZ as i32);
+            require_selected_file(binding, &files.encoder_file_id, STT_ENCODER_FILE_ID)?;
+            require_selected_file(binding, &files.tokens_file_id, STT_TOKENS_FILE_ID)?;
+            let model_kind = selected_stt_model_kind(binding, &files.decoder_file_id)?;
+            let config = match model_kind {
+                OfflineSttModelKind::Moonshine => OfflineSttConfig::moonshine_v2(
+                    files.encoder_path,
+                    files.decoder_path,
+                    files.tokens_path,
+                ),
+                OfflineSttModelKind::Whisper => {
+                    let mut config = OfflineSttConfig::whisper(
+                        files.encoder_path,
+                        files.decoder_path,
+                        files.tokens_path,
+                    );
+                    if let Some(language) = files.language {
+                        config = config.with_language(language);
+                    }
+                    config
+                }
+            }
+            .with_sample_rate(VAD_SAMPLE_RATE_HZ as i32);
             let recognizer = OfflineSttRecognizer::new(&config).map_err(native_stt_error)?;
             Ok(Self { recognizer })
         }
@@ -2007,6 +2068,29 @@ mod native_stt_backend {
                 .transcribe(sample_rate, pcm)
                 .map_err(native_stt_adapter_error)?;
             Ok(result.text().to_owned())
+        }
+    }
+
+    fn selected_stt_model_kind(
+        binding: &TaskPackBinding,
+        actual_decoder_file_id: &str,
+    ) -> Result<OfflineSttModelKind, EngineError> {
+        let has_moonshine_decoder = binding
+            .selected_file_ids()
+            .iter()
+            .any(|file_id| file_id == STT_MOONSHINE_DECODER_FILE_ID);
+        let has_whisper_decoder = binding
+            .selected_file_ids()
+            .iter()
+            .any(|file_id| file_id == STT_WHISPER_DECODER_FILE_ID);
+        match (
+            has_moonshine_decoder,
+            has_whisper_decoder,
+            actual_decoder_file_id,
+        ) {
+            (true, false, STT_MOONSHINE_DECODER_FILE_ID) => Ok(OfflineSttModelKind::Moonshine),
+            (false, true, STT_WHISPER_DECODER_FILE_ID) => Ok(OfflineSttModelKind::Whisper),
+            _ => Err(EngineError::InvalidRequest),
         }
     }
 
@@ -2260,7 +2344,7 @@ mod native_tts_backend {
 pub use native_kws_backend::{NativeKwsBackend, NativeKwsModelFiles};
 
 #[cfg(feature = "native-stt")]
-pub use native_stt_backend::NativeSttBackend;
+pub use native_stt_backend::{NativeSttBackend, NativeSttModelFiles};
 
 #[cfg(feature = "native-tts")]
 pub use native_tts_backend::{NativeTtsBackend, NativeTtsVitsPiperModelFiles};
@@ -3519,6 +3603,56 @@ mod tests {
         assert!(!rendered.contains("moonshine"));
     }
 
+    #[cfg(all(feature = "native-stt", not(target_arch = "wasm32")))]
+    #[test]
+    #[ignore = "requires AURORA_SHERPA_ONNX_WHISPER_MODEL_DIR and AURORA_SHERPA_ONNX_WHISPER_TEST_WAV"]
+    fn native_stt_adapter_transcribes_selected_whisper_model() {
+        let binding = binding_with_files(
+            "native-whisper-stt",
+            PackTask::Stt,
+            VoiceTask::SpeechToText,
+            &["encoder", "decoder", "tokens"],
+        );
+        let dir = std::env::var_os("AURORA_SHERPA_ONNX_WHISPER_MODEL_DIR")
+            .map(PathBuf::from)
+            .expect("AURORA_SHERPA_ONNX_WHISPER_MODEL_DIR");
+        let wav_path = std::env::var_os("AURORA_SHERPA_ONNX_WHISPER_TEST_WAV")
+            .map(PathBuf::from)
+            .expect("AURORA_SHERPA_ONNX_WHISPER_TEST_WAV");
+        let backend = NativeSttBackend::from_selected_model_files(
+            &binding,
+            NativeSttModelFiles {
+                encoder_file_id: "encoder".to_owned(),
+                encoder_path: dir.join("tiny-encoder.int8.onnx"),
+                decoder_file_id: "decoder".to_owned(),
+                decoder_path: dir.join("tiny-decoder.int8.onnx"),
+                tokens_file_id: "tokens".to_owned(),
+                tokens_path: dir.join("tiny-tokens.txt"),
+                language: None,
+            },
+        )
+        .expect("native whisper stt backend");
+        let mut engine = SherpaFiniteSttEngine::new(binding, backend).expect("engine");
+        let source = read_pcm16_mono_wav(&wav_path);
+        let source = if source.sample_rate == VAD_SAMPLE_RATE_HZ {
+            source
+        } else {
+            source.resample_to_16khz()
+        };
+        let frames = source
+            .pcm
+            .chunks(16_000)
+            .map(|chunk| chunk.to_vec())
+            .collect::<Vec<_>>();
+        let (request, audio) = finite_stt(engine.binding().clone(), 89, frames);
+        let result = futures_lite((), |_| engine.transcribe_finite(request, audio, &|| false))
+            .expect("stt result");
+        assert!(!result.transcript().trim().is_empty());
+        let rendered = format!("{engine:?} {result:?}");
+        assert!(!rendered.contains(result.transcript()));
+        assert!(!rendered.contains("whisper"));
+    }
+
     #[cfg(feature = "native-kws")]
     #[test]
     fn native_kws_constructor_requires_exact_dependency_closed_file_ids() {
@@ -3563,6 +3697,83 @@ mod tests {
             "tokens.txt",
         );
         assert!(matches!(result, Err(EngineError::InvalidRequest)));
+    }
+
+    #[cfg(feature = "native-stt")]
+    #[test]
+    fn native_stt_constructor_accepts_only_selected_whisper_file_ids() {
+        let binding = binding_with_files(
+            "native-whisper-stt-ids",
+            PackTask::Stt,
+            VoiceTask::SpeechToText,
+            &["encoder", "decoder", "tokens"],
+        );
+        let moonshine_decoder = NativeSttBackend::from_selected_model(
+            &binding,
+            "encoder",
+            "encoder.onnx",
+            "decoder-merged",
+            "decoder.onnx",
+            "tokens",
+            "tokens.txt",
+        );
+        assert!(matches!(
+            moonshine_decoder,
+            Err(EngineError::InvalidRequest)
+        ));
+
+        let missing_token = NativeSttBackend::from_selected_model_files(
+            &binding,
+            NativeSttModelFiles {
+                encoder_file_id: "encoder".to_owned(),
+                encoder_path: PathBuf::from("encoder.onnx"),
+                decoder_file_id: "decoder".to_owned(),
+                decoder_path: PathBuf::from("decoder.onnx"),
+                tokens_file_id: "tokens-extra".to_owned(),
+                tokens_path: PathBuf::from("tokens.txt"),
+                language: Some("en".to_owned()),
+            },
+        );
+        assert!(matches!(missing_token, Err(EngineError::InvalidRequest)));
+    }
+
+    #[cfg(feature = "native-stt")]
+    #[test]
+    fn native_stt_constructor_rejects_ambiguous_decoder_selection() {
+        let binding = binding_with_files(
+            "native-ambiguous-stt-ids",
+            PackTask::Stt,
+            VoiceTask::SpeechToText,
+            &["encoder", "decoder", "decoder-merged", "tokens"],
+        );
+        let result = NativeSttBackend::from_selected_model_files(
+            &binding,
+            NativeSttModelFiles {
+                encoder_file_id: "encoder".to_owned(),
+                encoder_path: PathBuf::from("encoder.onnx"),
+                decoder_file_id: "decoder".to_owned(),
+                decoder_path: PathBuf::from("decoder.onnx"),
+                tokens_file_id: "tokens".to_owned(),
+                tokens_path: PathBuf::from("tokens.txt"),
+                language: None,
+            },
+        );
+        assert!(matches!(result, Err(EngineError::InvalidRequest)));
+
+        let rendered = format!(
+            "{:?}",
+            NativeSttModelFiles {
+                encoder_file_id: "encoder".to_owned(),
+                encoder_path: PathBuf::from("/private/model/encoder.onnx"),
+                decoder_file_id: "decoder".to_owned(),
+                decoder_path: PathBuf::from("/private/model/decoder.onnx"),
+                tokens_file_id: "tokens".to_owned(),
+                tokens_path: PathBuf::from("/private/model/tokens.txt"),
+                language: Some("zz-private-language".to_owned()),
+            }
+        );
+        assert!(!rendered.contains("/private"));
+        assert!(!rendered.contains("zz-private-language"));
     }
 
     #[cfg(feature = "native-tts")]
