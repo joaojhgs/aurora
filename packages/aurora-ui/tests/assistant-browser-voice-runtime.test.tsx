@@ -14,6 +14,7 @@ import type { NativeDesktopVoicePort, NativeDesktopVoiceStatus } from '../src/na
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import type { AssistantVoiceRoutes, RouteAvailability } from '../src/shell-data'
 import type { NativeMobileVoicePort, NativeMobileVoiceStatus } from '../src/native-mobile-voice'
+import type { AuroraVoiceInferenceOutput, AuroraVoiceWebModelBindings } from '@aurora/voice-web'
 
 const voiceRuntimeMock = vi.hoisted(() => ({
   create: vi.fn()
@@ -86,6 +87,72 @@ describe('Assistant hosted browser voice runtime', () => {
     }))
     expect(runtime.abandonTurn).not.toHaveBeenCalled()
     expect(runtime.cancel).not.toHaveBeenCalled()
+  })
+
+  it('uses selected cached browser STT before remote transcription', async () => {
+    const runtime = createRuntimeMock({
+      capturedPcm: new Int16Array([0x1234, -2])
+    })
+    voiceRuntimeMock.create.mockReturnValue(runtime)
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const transcribe = vi.spyOn(client.assistant, 'transcribeVoiceAudio')
+    const streamMessage = vi.spyOn(client.assistant, 'streamMessage').mockImplementation(async function* () {
+      yield completedUpdate('Local response ready.')
+    })
+    const modelBindings: AuroraVoiceWebModelBindings = {
+      files: [{
+        task: 'stt' as const,
+        fileId: 'stt-model',
+        virtualPath: '/stt/model.onnx',
+        sha256: 'a'.repeat(64),
+        byteLength: 4,
+        bytes: new Uint8Array([1, 2, 3, 4]),
+      }],
+      models: [{
+        task: 'stt' as const,
+        family: 'whisper',
+        kind: 'offline-asr',
+        files: [{ role: 'model', fileId: 'stt-model', virtualPath: '/stt/model.onnx' }],
+        config: { language: 'en', task: 'transcribe' },
+      }],
+    }
+    const container = renderAssistant(client, hostedSurface(), undefined, {
+      browserSpeechPacks: {
+        state: 'ready',
+        packs: [],
+        modelBindings,
+        capabilities: { vad: false, kws: false, stt: true, tts: false },
+        revision: 'stt:small.en:1',
+      },
+    })
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(runtime.start).toHaveBeenCalledTimes(1))
+    await act(async () => {
+      runtime.emitEvent({
+        kind: 'voice_inference',
+        inference: {
+          stt: [{ text: 'open the calendar', final: true, sequence: 1, redacted: true }],
+          kwsHits: [],
+          redacted: true,
+        },
+      })
+      await Promise.resolve()
+    })
+    await clickButton(container, 'Stop listening')
+
+    await vi.waitFor(() => expect(streamMessage).toHaveBeenCalledTimes(1))
+    expect(transcribe).not.toHaveBeenCalled()
+    expect(streamMessage.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      text: 'open the calendar',
+    }))
+    expect(voiceRuntimeMock.create).toHaveBeenCalledWith(expect.objectContaining({
+      modelBindings,
+      sherpaAssets: expect.objectContaining({
+        vadAsrModuleUrl: expect.any(URL),
+      }),
+    }))
+    expect(runtime.completeTurn).toHaveBeenCalledTimes(1)
   })
 
   it('updates the hosted visualizer from redacted browser audio levels', async () => {
@@ -1268,6 +1335,92 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(readAloud.textContent?.trim()).toBe('Read aloud')
   })
 
+  it('uses selected cached browser TTS for read-aloud before remote synthesis', async () => {
+    const runtime = createRuntimeMock({ capturedPcm: new Int16Array([1, -1, 2, -2]) })
+    voiceRuntimeMock.create.mockReturnValue(runtime)
+    const objectUrls: string[] = []
+    const play = vi.fn(async () => undefined)
+    class MockAudio {
+      onended: (() => void) | null = null
+      onerror: (() => void) | null = null
+      constructor(readonly url: string) {}
+      play = play
+      pause = vi.fn()
+      load = vi.fn()
+      removeAttribute = vi.fn()
+    }
+    vi.stubGlobal('Audio', MockAudio)
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => {
+      const url = `blob:voice-${objectUrls.length + 1}`
+      objectUrls.push(url)
+      return url
+    })
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const synthesizeReadAloud = vi.spyOn(client.assistant, 'synthesizeReadAloud')
+    const modelBindings: AuroraVoiceWebModelBindings = {
+      files: [{
+        task: 'tts' as const,
+        fileId: 'tts-model',
+        virtualPath: '/tts/model.onnx',
+        sha256: 'a'.repeat(64),
+        byteLength: 4,
+        bytes: new Uint8Array([1, 2, 3, 4]),
+      }],
+      models: [{
+        task: 'tts' as const,
+        family: 'piper',
+        kind: 'offline-tts',
+        files: [{ role: 'model', fileId: 'tts-model', virtualPath: '/tts/model.onnx' }],
+        config: { voiceId: 'ava.en' },
+      }],
+    }
+    const container = renderAssistant(client, hostedSurface(), undefined, {
+      browserSpeechPacks: {
+        state: 'ready',
+        packs: [],
+        modelBindings,
+        capabilities: { vad: false, kws: false, stt: false, tts: true },
+        ttsVoiceId: 'ava.en',
+        revision: 'tts:piper.en:1',
+      },
+      initialSession: {
+        sessionId: 'browser-tts-read-aloud',
+        messages: [{
+          id: 'assistant-browser-tts',
+          role: 'assistant',
+          text: 'Read locally.',
+          createdAt: '2026-08-11T00:00:00Z',
+          status: 'sent',
+        }]
+      }
+    })
+    const readAloud = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Read aloud')
+    if (!readAloud) throw new Error('missing read-aloud action')
+
+    await act(async () => {
+      readAloud.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await vi.waitFor(() => expect(play).toHaveBeenCalledTimes(1))
+
+    expect(synthesizeReadAloud).not.toHaveBeenCalled()
+    expect(runtime.synthesizeSpeech).toHaveBeenCalledWith({
+      text: 'Read locally.',
+      voiceId: 'ava.en',
+      generation: expect.any(Number),
+    })
+    expect(voiceRuntimeMock.create).toHaveBeenCalledWith(expect.objectContaining({
+      modelBindings,
+      sherpaAssets: expect.objectContaining({
+        ttsModuleUrl: expect.any(URL),
+      }),
+    }))
+    expect(String((voiceRuntimeMock.create.mock.calls[0]?.[0] as { sherpaAssets?: { ttsModuleUrl?: URL } }).sherpaAssets?.ttsModuleUrl)).toBe('http://localhost:3000/voice/sherpa/sherpa-onnx-wasm-main-tts.js')
+  })
+
   it('shows microphone recovery guidance next to the composer controls', async () => {
     const runtime = createRuntimeMock({ capturedPcm: new Int16Array() })
     runtime.start.mockRejectedValueOnce(new Error('/private/device/path'))
@@ -1674,6 +1827,15 @@ function createRuntimeMock({ capturedPcm }: { capturedPcm: Int16Array }) {
     })),
     completeTurn: vi.fn(async () => undefined),
     abandonTurn: vi.fn(async () => undefined),
+    synthesizeSpeech: vi.fn(async (request: { generation: number }) => ({
+      generation: request.generation,
+      sampleRateHz: 16_000,
+      channels: 1 as const,
+      sampleCount: 4,
+      durationMs: 1,
+      pcm: new Int16Array([1, -1, 2, -2]),
+      redacted: true as const,
+    })),
     cancel: vi.fn(async () => undefined),
     dispose: vi.fn(async () => undefined),
     onEvent: vi.fn((listener: (event: BrowserVoiceRuntimeEvent) => void) => {
@@ -1698,6 +1860,7 @@ interface BrowserVoiceRuntimeEvent {
   byteLength: number
   queuedBytes: number
   reason: string | null
+  inference?: AuroraVoiceInferenceOutput
   redacted: true
   occurredAtMs: number
 }
@@ -1734,8 +1897,8 @@ function remoteVoiceRoutes(peerId: string): AssistantVoiceRoutes {
     transcription: remote,
     wakeProcess: remote,
     wakeControl: remote,
-    ttsSynthesize: remoteAudioRoute(peerId, 'voice-tts-synthesize', 'TTS synthesis', 'personal'),
-    ttsStop: remoteAudioRoute(peerId, 'voice-tts-stop', 'TTS playback stop', 'personal')
+    ttsSynthesize: remoteAudioRoute(peerId, 'voice-tts-synthesize', 'Spoken replies', 'personal'),
+    ttsStop: remoteAudioRoute(peerId, 'voice-tts-stop', 'Stop spoken replies', 'personal')
   }
 }
 

@@ -1058,6 +1058,117 @@ describe('VoiceSettingsView', () => {
     await unmount()
   })
 
+  it('uses the local speech catalog port for on-demand speech and voice choices', async () => {
+    const select = vi.fn(async (request: Parameters<NonNullable<VoiceSettingsViewProps['localSpeechCatalog']>['select']>[0]) => {
+      request.onProgress?.({ state: 'downloading', receivedBytes: 50, totalBytes: 100 })
+      request.onProgress?.({ state: 'saving' })
+      request.onProgress?.({ state: 'ready' })
+      return {
+        task: request.selection.task,
+        packId: request.selection.packId,
+        packVersion: request.selection.packVersion,
+        trust: {
+          task: request.selection.task,
+          packId: request.selection.packId,
+          packVersion: request.selection.packVersion,
+          voiceId: request.selection.voiceId,
+          releaseKeyId: 'aurora-release',
+          releasePublicKeyBase64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+          expectedManifestSha256: 'a'.repeat(64),
+        },
+      }
+    })
+    const onLocalSpeechSelectionConfirmed = vi.fn()
+    const client = voiceClient({ capabilities: capabilities({ engine_capabilities: { vad: true, kws: true, stt: true, tts: true } }) })
+    const { container, unmount } = await renderVoiceSettings(client, {
+      runtimeProfile: meshVoiceRuntimeProfile(),
+      onLocalSpeechSelectionConfirmed,
+      localSpeechCatalog: {
+        available: true,
+        listCatalog: vi.fn(async () => ({
+          state: 'ready' as const,
+          items: [{
+            task: 'stt' as const,
+            packId: 'whisper.tiny.en',
+            packVersion: 'stt-rev-1',
+            displayName: 'English transcription',
+            language: 'English',
+          }, {
+            task: 'tts' as const,
+            packId: 'piper.en',
+            packVersion: 'tts-pack-rev-1',
+            displayName: 'Ava',
+            language: 'English',
+            voiceId: 'ava.en',
+            voiceRevision: 'voice-rev-1',
+          }, {
+            task: 'tts' as const,
+            packId: 'pocket.en',
+            packVersion: 'pocket-pack-rev-1',
+            displayName: 'Pocket voice',
+            language: 'English',
+            voiceId: 'pocket.en',
+            voiceRevision: 'pocket-voice-rev-1',
+            cached: true,
+            active: true,
+            requiresReferenceProfile: true,
+            referenceProfileSelected: false,
+          }],
+        })),
+        select,
+      },
+    })
+    await flushReactWork()
+
+    await act(async () => {
+      buttonByText(container, 'Add').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+    await act(async () => {
+      buttonByText(container, 'Add voice').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+    await act(async () => {
+      buttonByText(container, 'Add voice sample').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushReactWork()
+
+    expect(select).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      selection: expect.objectContaining({
+        task: 'stt',
+        packId: 'whisper.tiny.en',
+        packVersion: 'stt-rev-1',
+      }),
+    }))
+    expect(select).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      selection: expect.objectContaining({
+        task: 'tts',
+        packId: 'piper.en',
+        packVersion: 'tts-pack-rev-1',
+        voiceId: 'ava.en',
+        voiceRevision: 'voice-rev-1',
+      }),
+    }))
+    expect(select).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      selection: expect.objectContaining({
+        task: 'tts',
+        packId: 'pocket.en',
+        requiresReferenceProfile: true,
+        referenceProfileSelected: false,
+      }),
+    }))
+    expect(onLocalSpeechSelectionConfirmed).not.toHaveBeenCalled()
+    const text = visibleText(container)
+    expect(text).toContain('On-device speech')
+    expect(text).toContain('On-device voices')
+    expect(text).toContain('Add a voice sample before using this voice.')
+    expect(text).toContain('Voice choice updated.')
+    expect(text).not.toContain('whisper.tiny.en')
+    expect(text).not.toContain('piper.en')
+    assertNoForbiddenCopy(text)
+    await unmount()
+  })
+
   it('allows local speech choice persistence for capable remote-console profiles', async () => {
     const onLocalSpeechSelectionConfirmed = vi.fn()
     const client = voiceClient({

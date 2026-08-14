@@ -18,6 +18,10 @@ import {
 import { Badge } from '#components/ui/badge'
 import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from './platform-surface'
 import type { AuroraLocalSpeechSelectionProfile, AuroraLocalSpeechTask, AuroraRuntimeProfileV2 } from './runtime-profile'
+import type {
+  AuroraBrowserSpeechPackCatalogSelection,
+  AuroraLocalSpeechCatalogPort,
+} from './browser-speech-pack'
 
 type SpeechLanguage = string
 type TtsModelStatus = 'degraded' | 'error' | 'loading' | 'ready' | 'unavailable'
@@ -132,6 +136,7 @@ interface VoiceSettingsState {
   loadState: 'loading' | 'ready' | 'error'
   managementState: 'locked' | 'loading' | 'ready' | 'limited'
   languageCatalogState: 'locked' | 'loading' | 'ready' | 'limited'
+  browserCatalogState: 'locked' | 'loading' | 'ready' | 'limited'
   message: string | null
 }
 
@@ -143,6 +148,7 @@ const initialVoiceSettingsState: VoiceSettingsState = {
   loadState: 'loading',
   managementState: 'locked',
   languageCatalogState: 'locked',
+  browserCatalogState: 'locked',
   message: null
 }
 
@@ -162,6 +168,7 @@ export interface VoiceSettingsViewProps {
   client: AuroraClient
   runtimeProfile?: AuroraRuntimeProfileV2 | null | undefined
   surfaceProfile?: AuroraSurfaceProfile | null | undefined
+  localSpeechCatalog?: AuroraLocalSpeechCatalogPort | null | undefined
   onLocalSpeechSelectionConfirmed?: ((selection: AuroraLocalSpeechSelectionProfile) => void | Promise<void>) | undefined
 }
 
@@ -169,6 +176,7 @@ export function VoiceSettingsView({
   client,
   runtimeProfile = null,
   surfaceProfile: providedSurfaceProfile = null,
+  localSpeechCatalog = null,
   onLocalSpeechSelectionConfirmed
 }: VoiceSettingsViewProps) {
   const [state, setState] = useState<VoiceSettingsState>(initialVoiceSettingsState)
@@ -177,6 +185,7 @@ export function VoiceSettingsView({
   const [pendingActionKey, setPendingActionKey] = useState<string | null>(null)
   const [mutationMessage, setMutationMessage] = useState<string | null>(null)
   const [wakePhraseMessage, setWakePhraseMessage] = useState<string | null>(null)
+  const [browserCatalogItems, setBrowserCatalogItems] = useState<readonly AuroraBrowserSpeechPackCatalogSelection[]>([])
   const [confirmAction, setConfirmAction] = useState<VoiceConfirmation | null>(null)
   const [adminReason, setAdminReason] = useState('Manage spoken reply voices')
   const [adminReviewConfirmed, setAdminReviewConfirmed] = useState(false)
@@ -306,8 +315,18 @@ export function VoiceSettingsView({
     && localSpeechSurfaceCanManageAssets(surfaceProfile)
   ), [onLocalSpeechSelectionConfirmed, surfaceProfile])
   const localSpeechRows = useMemo(
-    () => canManageLocalSpeechAssets ? toLocalSpeechAssetRows(state.capabilities, surfaceProfile.localSpeechPack) : [],
-    [canManageLocalSpeechAssets, state.capabilities, surfaceProfile.localSpeechPack],
+    () => canManageLocalSpeechAssets && browserCatalogItems.length > 0
+      ? toBrowserSpeechAssetRows(browserCatalogItems, surfaceProfile.localSpeechPack, runtimeProfile?.localNode.localSpeechSelection ?? null, false)
+      : canManageLocalSpeechAssets
+        ? toLocalSpeechAssetRows(state.capabilities, surfaceProfile.localSpeechPack)
+        : [],
+    [browserCatalogItems, canManageLocalSpeechAssets, runtimeProfile?.localNode.localSpeechSelection, state.capabilities, surfaceProfile.localSpeechPack],
+  )
+  const browserTtsRows = useMemo(
+    () => canManageLocalSpeechAssets
+      ? toBrowserSpeechAssetRows(browserCatalogItems, surfaceProfile.localSpeechPack, runtimeProfile?.localNode.localSpeechSelection ?? null, true)
+      : [],
+    [browserCatalogItems, canManageLocalSpeechAssets, runtimeProfile?.localNode.localSpeechSelection, surfaceProfile.localSpeechPack],
   )
   const readyLanguages = useMemo(() => languageList(state.capabilities?.ready_languages), [state.capabilities])
   const canShowInstall = state.managementState === 'ready'
@@ -323,6 +342,33 @@ export function VoiceSettingsView({
     && surfaceProfile.localSpeechPack.canRunLocalKws
     && runtimeProfile.localNode.localSpeechSelection?.kws
   )
+
+  useEffect(() => {
+    if (!localSpeechCatalog?.available || !canManageLocalSpeechAssets) {
+      setBrowserCatalogItems([])
+      setState((current) => ({ ...current, browserCatalogState: 'locked' }))
+      return
+    }
+    let active = true
+    setState((current) => ({ ...current, browserCatalogState: 'loading' }))
+    void localSpeechCatalog.listCatalog().then((result) => {
+      if (!active) return
+      if (result.state !== 'ready') {
+        setBrowserCatalogItems([])
+        setState((current) => ({ ...current, browserCatalogState: 'limited' }))
+        return
+      }
+      setBrowserCatalogItems(result.items)
+      setState((current) => ({ ...current, browserCatalogState: 'ready' }))
+    }, () => {
+      if (!active) return
+      setBrowserCatalogItems([])
+      setState((current) => ({ ...current, browserCatalogState: 'limited' }))
+    })
+    return () => {
+      active = false
+    }
+  }, [localSpeechCatalog, canManageLocalSpeechAssets])
 
   async function installProfile(profile: ManagedVoice) {
     if (!profile.installable || actionPending || !adminActionReady) return
@@ -450,17 +496,44 @@ export function VoiceSettingsView({
     if (actionPending || !canManageLocalSpeechAssets) return
     const actionKey = localSpeechActionKey(row)
     setPendingActionKey(actionKey)
-    setMutationMessage(`Updating ${row.copy.noun.toLowerCase()} choice.`)
+    setMutationMessage(row.ready ? `Updating ${row.copy.noun.toLowerCase()} choice.` : `Adding ${row.copy.noun.toLowerCase()}.`)
     try {
+      if (row.selection) {
+        if (!localSpeechCatalog?.available) {
+          setMutationMessage(`${row.copy.noun} could not be added. Try again.`)
+          return
+        }
+        await localSpeechCatalog.select({
+          selection: row.selection,
+          onProgress: (progress) => {
+            if (progress.state === 'downloading') {
+              const pct = progress.totalBytes && progress.totalBytes > 0
+                ? Math.floor(((progress.receivedBytes ?? 0) / progress.totalBytes) * 100)
+                : null
+              setMutationMessage(pct !== null ? `Adding ${row.copy.noun.toLowerCase()} (${pct}%).` : `Adding ${row.copy.noun.toLowerCase()}.`)
+              return
+            }
+            setMutationMessage(progress.state === 'ready'
+              ? `${row.copy.noun} added.`
+            : `Adding ${row.copy.noun.toLowerCase()}.`)
+          }
+        })
+        setMutationMessage(`${row.copy.noun} choice updated.`)
+        return
+      }
       const ok = await persistConfirmedLocalSpeechSelection({
         [row.task]: {
           packId: row.packId,
           packRevision: row.revision,
+          ...(row.voiceId ? { voiceId: row.voiceId } : {}),
+          ...(row.voiceRevision ? { voiceRevision: row.voiceRevision } : {}),
         },
       })
       setMutationMessage(ok
         ? `${row.copy.noun} choice updated.`
         : `${row.copy.noun} choice was not changed. Try again.`)
+    } catch {
+      setMutationMessage(`${row.copy.noun} choice was not changed. Try again.`)
     } finally {
       setPendingActionKey(null)
     }
@@ -580,9 +653,15 @@ export function VoiceSettingsView({
         </div>
       </Card>
 
-      {localSpeechRows.length > 0 ? (
+      {localSpeechRows.length > 0 || state.browserCatalogState === 'loading' || state.browserCatalogState === 'limited' ? (
         <Card title="On-device speech" description="Speech pieces this device can use locally.">
           <div className="flex flex-col gap-3">
+            {state.browserCatalogState === 'loading' ? (
+              <p className="text-sm text-muted-foreground">Loading speech choices.</p>
+            ) : null}
+            {state.browserCatalogState === 'limited' ? (
+              <p role="status" className="text-sm text-muted-foreground">Speech downloads could not be loaded. Try again.</p>
+            ) : null}
             {localSpeechRows.map((row) => (
               <div key={`${row.task}:${row.packId}`} className="flex flex-col gap-2 border-b border-border/60 pb-3 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
@@ -595,9 +674,37 @@ export function VoiceSettingsView({
                     variant="outline"
                     className="h-8 px-3 text-xs"
                     onClick={() => void selectLocalSpeechAsset(row)}
-                    disabled={actionPending || !row.ready}
+                    disabled={actionPending || (!row.ready && !row.selection)}
                   >
-                    {pendingActionKey === localSpeechActionKey(row) ? 'Updating' : row.copy.action}
+                    {pendingActionKey === localSpeechActionKey(row) ? 'Updating' : row.ready ? row.copy.action : 'Add'}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
+      {browserTtsRows.length > 0 ? (
+        <Card title="On-device voices" description="Voices this device can add for spoken replies.">
+          <div className="flex flex-col gap-3">
+            {browserTtsRows.map((row) => (
+              <div key={`${row.task}:${row.packId}:${row.voiceId ?? row.label}`} className="flex flex-col gap-2 border-b border-border/60 pb-3 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{row.label}</p>
+                  <p className="text-xs text-muted-foreground">{row.copy.detail}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={row.ready ? 'default' : 'secondary'}>{row.ready ? 'Ready' : 'Needs setup'}</Badge>
+                  <Button
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => void selectLocalSpeechAsset(row)}
+                    disabled={actionPending || (!row.ready && !row.selection)}
+                  >
+                    {pendingActionKey === localSpeechActionKey(row)
+                      ? 'Updating'
+                      : row.ready ? 'Use voice' : row.needsReferenceProfile ? 'Add voice sample' : 'Add voice'}
                   </Button>
                 </div>
               </div>
@@ -895,11 +1002,15 @@ interface WakePhraseOption {
 }
 
 interface LocalSpeechAssetRow {
-  task: LocalSpeechCatalogTask
+  task: AuroraLocalSpeechTask
   packId: string
   revision: string
   label: string
   ready: boolean
+  needsReferenceProfile?: boolean | undefined
+  voiceId?: string | undefined
+  voiceRevision?: string | undefined
+  selection?: AuroraBrowserSpeechPackCatalogSelection | undefined
   copy: {
     action: string
     detail: string
@@ -998,6 +1109,49 @@ function toLocalSpeechAssetRows(
   return rows
 }
 
+function toBrowserSpeechAssetRows(
+  items: readonly AuroraBrowserSpeechPackCatalogSelection[],
+  localSpeechPack: AuroraSurfaceProfile['localSpeechPack'],
+  currentSelection: AuroraLocalSpeechSelectionProfile | null,
+  ttsOnly: boolean,
+): LocalSpeechAssetRow[] {
+  const rows: LocalSpeechAssetRow[] = []
+  const seen = new Set<string>()
+  for (const item of items) {
+    if (ttsOnly !== (item.task === 'tts')) continue
+    if (!browserSpeechTaskCanRun(item.task, localSpeechPack)) continue
+    const packId = safePackId(item.packId)
+    const revision = safePackId(item.packVersion)
+    if (!packId || !revision) continue
+    const copy = localSpeechTaskCopy(item.task)
+    const referenceProfileReady = item.requiresReferenceProfile !== true || item.referenceProfileSelected === true || Boolean(item.referenceProfileId)
+    const selected = localSpeechSelectionMatches(currentSelection?.[item.task], item) && referenceProfileReady
+    const detail = item.requiresReferenceProfile === true && !referenceProfileReady
+      ? `${copy.detail} Add a voice sample before using this voice.`
+      : item.language ? `${copy.detail} ${item.language}.` : copy.detail
+    const row: LocalSpeechAssetRow = {
+      task: item.task,
+      packId,
+      revision,
+      label: safeVoiceText(item.displayName, `${copy.noun} option ${rows.length + 1}`),
+      ready: referenceProfileReady && (item.active === true || item.cached === true || selected),
+      needsReferenceProfile: item.requiresReferenceProfile === true && !referenceProfileReady,
+      ...(item.voiceId ? { voiceId: item.voiceId } : {}),
+      ...(item.voiceRevision ? { voiceRevision: item.voiceRevision } : {}),
+      selection: item,
+      copy: {
+        ...copy,
+        detail,
+      },
+    }
+    const key = localSpeechActionKey(row)
+    if (seen.has(key)) continue
+    seen.add(key)
+    rows.push(row)
+  }
+  return rows.sort((left, right) => left.label.localeCompare(right.label))
+}
+
 function localSpeechTaskCanRun(
   task: LocalSpeechCatalogTask,
   localSpeechPack: AuroraSurfaceProfile['localSpeechPack'],
@@ -1005,6 +1159,14 @@ function localSpeechTaskCanRun(
   if (task === 'vad') return localSpeechPack.canRunLocalVad
   if (task === 'kws') return localSpeechPack.canRunLocalKws
   return localSpeechPack.canRunLocalStt
+}
+
+function browserSpeechTaskCanRun(
+  task: AuroraLocalSpeechTask,
+  localSpeechPack: AuroraSurfaceProfile['localSpeechPack'],
+): boolean {
+  if (task === 'tts') return localSpeechPack.canRunLocalTts
+  return localSpeechTaskCanRun(task, localSpeechPack)
 }
 
 function localSpeechCatalogAssets(
@@ -1046,7 +1208,7 @@ function normalizeLocalSpeechTask(task: unknown): LocalSpeechCatalogTask | null 
   return null
 }
 
-function localSpeechTaskCopy(task: LocalSpeechCatalogTask): LocalSpeechAssetRow['copy'] {
+function localSpeechTaskCopy(task: AuroraLocalSpeechTask): LocalSpeechAssetRow['copy'] {
   if (task === 'vad') {
     return {
       action: 'Use listening start',
@@ -1061,6 +1223,13 @@ function localSpeechTaskCopy(task: LocalSpeechCatalogTask): LocalSpeechAssetRow[
       noun: 'Wake phrase',
     }
   }
+  if (task === 'tts') {
+    return {
+      action: 'Use voice',
+      detail: 'Lets Aurora speak on this device.',
+      noun: 'Voice',
+    }
+  }
   return {
     action: 'Use transcription',
     detail: 'Turns your speech into text on this device.',
@@ -1068,8 +1237,19 @@ function localSpeechTaskCopy(task: LocalSpeechCatalogTask): LocalSpeechAssetRow[
   }
 }
 
-function localSpeechActionKey(row: Pick<LocalSpeechAssetRow, 'packId' | 'task'>): string {
-  return `local:${row.task}:${row.packId}`
+function localSpeechSelectionMatches(
+  current: AuroraLocalSpeechSelectionProfile[AuroraLocalSpeechTask] | undefined,
+  item: AuroraBrowserSpeechPackCatalogSelection,
+): boolean {
+  if (!current) return false
+  if (current.packId !== item.packId || current.packRevision !== item.packVersion) return false
+  if (item.task !== 'tts') return true
+  return current.voiceId === item.voiceId && current.voiceRevision === item.voiceRevision
+    && (item.requiresReferenceProfile !== true || current.referenceProfileId === item.referenceProfileId)
+}
+
+function localSpeechActionKey(row: Pick<LocalSpeechAssetRow, 'packId' | 'task' | 'voiceId'>): string {
+  return `local:${row.task}:${row.packId}:${row.voiceId ?? ''}`
 }
 
 function mergeCatalogProfiles(

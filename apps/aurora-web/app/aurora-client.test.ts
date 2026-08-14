@@ -22,13 +22,8 @@ import {
   saveAuroraBrowserRuntimeProfile,
   saveAuroraBrowserThinProfile,
   setAuroraBrowserMeshNodeServicesFactoryForTests,
-  setAuroraBrowserSpeechPackOpenerForTests,
 } from './aurora-client'
 import { consumeFragmentInviteFromUrl } from './mesh/mesh-client'
-
-const RELEASE_KEY_ID = 'aurora-release-web-stt'
-const RELEASE_PUBLIC_KEY_BASE64 = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
-const RELEASE_MANIFEST_SHA256 = 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789'
 
 describe('createAuroraWebClient', () => {
   afterEach(() => {
@@ -491,19 +486,15 @@ describe('createAuroraBrowserClient', () => {
     await runtime.close()
   })
 
-  it('does not probe hosted browser speech storage when foreground voice is not selected', async () => {
+  it('keeps browser speech disabled when foreground voice is not selected', async () => {
     vi.stubEnv('NODE_ENV', 'production')
-    stubCompleteSpeechPackEnv()
     installBrowserStorage()
     await saveMeshOnboardingProfile('mesh-speech-disabled')
     setAuroraBrowserMeshNodeServicesFactoryForTests(vi.fn(async () => fakeMeshNodeServices(vi.fn(async () => undefined))))
-    const opener = vi.fn(async () => ({ state: 'absent' as const, pack: null }))
-    setAuroraBrowserSpeechPackOpenerForTests(opener)
 
     const runtime = await createAuroraBrowserRuntimeAsync()
 
-    expect(opener).not.toHaveBeenCalled()
-    expect(runtime.hostedBrowserSpeechPack).toEqual({ state: 'disabled', pack: null })
+    expect(runtime.browserSpeechPacks).toMatchObject({ state: 'disabled', packs: [] })
     expect(runtime.features.localSpeechPack).toMatchObject({
       canRunLocalVad: false,
       canRunLocalKws: false,
@@ -513,72 +504,43 @@ describe('createAuroraBrowserClient', () => {
     await runtime.close()
   })
 
-  it('does not probe hosted browser speech storage when release trust is absent or partial', async () => {
+  it('does not claim browser speech readiness when no exact pack selection is saved', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     installBrowserStorage()
     await saveMeshOnboardingProfile('mesh-speech-policy')
     await enableForegroundVoiceOnSavedProfile()
     setAuroraBrowserMeshNodeServicesFactoryForTests(vi.fn(async () => fakeMeshNodeServices(vi.fn(async () => undefined))))
-    const opener = vi.fn(async () => ({ state: 'absent' as const, pack: null }))
     const fetchSpy = vi.fn()
     vi.stubGlobal('fetch', fetchSpy)
-    setAuroraBrowserSpeechPackOpenerForTests(opener)
 
     const noConfigRuntime = await createAuroraBrowserRuntimeAsync()
-    expect(noConfigRuntime.hostedBrowserSpeechPack).toEqual({ state: 'not-configured', pack: null })
-    await noConfigRuntime.close()
 
-    vi.stubEnv('NEXT_PUBLIC_AURORA_BROWSER_STT_PACK_KEY_ID', RELEASE_KEY_ID)
-    const partialRuntime = await createAuroraBrowserRuntimeAsync()
-
-    expect(partialRuntime.hostedBrowserSpeechPack).toEqual({
-      state: 'rejected',
-      reason: 'partial',
-      pack: null,
-    })
-    expect(opener).not.toHaveBeenCalled()
+    expect(noConfigRuntime.browserSpeechPacks).toMatchObject({ state: 'not-configured', packs: [] })
     expect(fetchSpy).not.toHaveBeenCalled()
-    expect(partialRuntime.features.localSpeechPack).toMatchObject({
+    expect(noConfigRuntime.features.localSpeechPack).toMatchObject({
       canRunLocalVad: false,
       canRunLocalKws: false,
       canRunLocalStt: false,
       canRunLocalTts: false,
     })
-    await partialRuntime.close()
+    await noConfigRuntime.close()
   })
 
-  it('attaches verified preinstalled hosted browser speech status without promoting local capabilities', async () => {
+  it('ignores the old static browser STT environment policy in the active product path', async () => {
     vi.stubEnv('NODE_ENV', 'production')
-    stubCompleteSpeechPackEnv()
+    vi.stubEnv('NEXT_PUBLIC_AURORA_BROWSER_STT_PACK_KEY_ID', 'aurora-release-web-stt')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_BROWSER_STT_PACK_PUBLIC_KEY_BASE64', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_BROWSER_STT_PACK_MANIFEST_SHA256', 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789')
     installBrowserStorage()
     await saveMeshOnboardingProfile('mesh-speech-verified')
     await enableForegroundVoiceOnSavedProfile()
     setAuroraBrowserMeshNodeServicesFactoryForTests(vi.fn(async () => fakeMeshNodeServices(vi.fn(async () => undefined))))
-    const pack = {
-      identity: {
-        packId: 'aurora-stt',
-        packVersion: '1.0.0',
-        variantId: 'web-wasm',
-        scope: { task: 'stt', slotId: 'default' },
-      },
-      files: [],
-    }
-    const opener = vi.fn(async () => ({ state: 'verified' as const, pack }))
     const fetchSpy = vi.fn()
     vi.stubGlobal('fetch', fetchSpy)
-    setAuroraBrowserSpeechPackOpenerForTests(opener)
 
     const runtime = await createAuroraBrowserRuntimeAsync()
 
-    expect(opener).toHaveBeenCalledWith({
-      state: 'configured',
-      trust: {
-        releaseKeyId: RELEASE_KEY_ID,
-        releasePublicKeyBase64: RELEASE_PUBLIC_KEY_BASE64,
-        expectedManifestSha256: RELEASE_MANIFEST_SHA256,
-      },
-    })
-    expect(runtime.hostedBrowserSpeechPack).toEqual({ state: 'verified', pack })
+    expect(runtime.browserSpeechPacks).toMatchObject({ state: 'not-configured', packs: [] })
     expect(runtime.features.localSpeechPack).toMatchObject({
       canRunLocalVad: false,
       canRunLocalKws: false,
@@ -589,19 +551,15 @@ describe('createAuroraBrowserClient', () => {
     await runtime.close()
   })
 
-  it('keeps the sync browser runtime path out of hosted speech pack probing', async () => {
+  it('keeps the sync browser runtime path out of browser speech pack probing', async () => {
     vi.stubEnv('NODE_ENV', 'production')
-    stubCompleteSpeechPackEnv()
     installBrowserStorage()
     await saveMeshOnboardingProfile('mesh-speech-sync')
     await enableForegroundVoiceOnSavedProfile()
-    const opener = vi.fn(async () => ({ state: 'absent' as const, pack: null }))
-    setAuroraBrowserSpeechPackOpenerForTests(opener)
 
     const runtime = createAuroraBrowserRuntime()
 
-    expect(opener).not.toHaveBeenCalled()
-    expect(runtime.hostedBrowserSpeechPack).toBeUndefined()
+    expect(runtime.browserSpeechPacks).toMatchObject({ state: 'disabled', packs: [] })
     expect(runtime.features.localSpeechPack).toMatchObject({
       canRunLocalVad: false,
       canRunLocalKws: false,
@@ -694,73 +652,45 @@ describe('createAuroraBrowserClient', () => {
     await runtime.close()
   })
 
-  it('retries hosted speech pack attachment when profile saving races an in-flight runtime build', async () => {
+  it('retries browser runtime creation when profile saving races an in-flight runtime build', async () => {
     vi.stubEnv('NODE_ENV', 'production')
-    stubCompleteSpeechPackEnv()
     const storage = installBrowserStorage()
     await saveVoiceMeshOnboardingProfile('mesh-speech-race-a')
     const closeFirstServices = vi.fn(async () => undefined)
     const closeSecondServices = vi.fn(async () => undefined)
+    const closeThirdServices = vi.fn(async () => undefined)
     const firstServices = fakeMeshNodeServices(closeFirstServices)
     const secondServices = fakeMeshNodeServices(closeSecondServices)
+    const thirdServices = fakeMeshNodeServices(closeThirdServices)
+    let resolveFirstServices!: () => void
     const factory = vi
       .fn<() => Promise<BrowserMeshNodeServices>>()
-      .mockResolvedValueOnce(firstServices)
-      .mockResolvedValueOnce(secondServices)
-    setAuroraBrowserMeshNodeServicesFactoryForTests(factory)
-    const stalePack = {
-      identity: {
-        packId: 'aurora-stt-stale',
-        packVersion: '1.0.0',
-        variantId: 'web-wasm',
-        scope: { task: 'stt' as const, slotId: 'default' },
-      },
-      files: [],
-    }
-    const currentPack = {
-      identity: {
-        packId: 'aurora-stt-current',
-        packVersion: '1.0.0',
-        variantId: 'web-wasm',
-        scope: { task: 'stt' as const, slotId: 'default' },
-      },
-      files: [],
-    }
-    let resolveFirstOpener!: () => void
-    const opener = vi
-      .fn<() => Promise<{ state: 'verified'; pack: typeof stalePack } | { state: 'verified'; pack: typeof currentPack }>>()
       .mockImplementationOnce(
         () =>
           new Promise((resolve) => {
-            resolveFirstOpener = () => resolve({ state: 'verified', pack: stalePack })
+            resolveFirstServices = () => resolve(firstServices)
           }),
       )
-      .mockResolvedValueOnce({ state: 'verified', pack: currentPack })
-    setAuroraBrowserSpeechPackOpenerForTests(opener)
+      .mockResolvedValueOnce(secondServices)
+      .mockResolvedValueOnce(thirdServices)
+    setAuroraBrowserMeshNodeServicesFactoryForTests(factory)
 
     const runtimePromise = createAuroraBrowserRuntimeAsync()
-    await vi.waitFor(() => expect(opener).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(factory).toHaveBeenCalledTimes(1))
     const savePromise = saveVoiceMeshOnboardingProfile('mesh-speech-race-b')
+    resolveFirstServices()
     await savePromise
-    resolveFirstOpener()
     const runtime = await runtimePromise
 
-    expect(factory).toHaveBeenCalledTimes(2)
-    expect(opener).toHaveBeenCalledTimes(2)
+    expect(factory).toHaveBeenCalledTimes(3)
     expect(closeFirstServices).toHaveBeenCalledOnce()
+    expect(closeSecondServices).toHaveBeenCalledOnce()
     expect(auroraBrowserRuntimeProfile()?.id).toBe('mesh-speech-race-b')
-    expect(runtime.localData?.session).toBe(secondServices.session)
-    expect(runtime.hostedBrowserSpeechPack).toEqual({
-      state: 'verified',
-      pack: currentPack,
-    })
-    expect(runtime.hostedBrowserSpeechPack).not.toEqual({
-      state: 'verified',
-      pack: stalePack,
-    })
+    expect(runtime.localData?.session).toBe(thirdServices.session)
+    expect(runtime.browserSpeechPacks).toMatchObject({ state: 'not-configured', packs: [] })
     expect(JSON.stringify(storage.dump())).not.toContain('mesh-speech-race-b-secret')
     await runtime.close()
-    expect(closeSecondServices).toHaveBeenCalledOnce()
+    expect(closeThirdServices).toHaveBeenCalledOnce()
   })
 
   it('keeps a second tab out of provider mode when another tab owns local data', async () => {
@@ -977,12 +907,6 @@ async function enableForegroundVoiceOnSavedProfile(): Promise<void> {
 async function saveVoiceMeshOnboardingProfile(id: string): Promise<void> {
   await saveMeshOnboardingProfile(id)
   await enableForegroundVoiceOnSavedProfile()
-}
-
-function stubCompleteSpeechPackEnv(): void {
-  vi.stubEnv('NEXT_PUBLIC_AURORA_BROWSER_STT_PACK_KEY_ID', RELEASE_KEY_ID)
-  vi.stubEnv('NEXT_PUBLIC_AURORA_BROWSER_STT_PACK_PUBLIC_KEY_BASE64', RELEASE_PUBLIC_KEY_BASE64)
-  vi.stubEnv('NEXT_PUBLIC_AURORA_BROWSER_STT_PACK_MANIFEST_SHA256', RELEASE_MANIFEST_SHA256)
 }
 
 function fakeMeshNodeServices(close: () => Promise<void>): BrowserMeshNodeServices {

@@ -27,15 +27,23 @@ import {
   emptyThinProfileDocument,
   emptyRuntimeProfileDocument,
   explainBrowserThinRuntime,
+  getAuroraSurfaceProfile,
   isRuntimeProfileConfigured,
   isThinConnectionProfileConfigured,
-  openHostedBrowserSttSpeechPack,
+  openActiveBrowserSpeechPacks,
   runtimeProfileDocumentToThinDocument,
   runtimeProfileToThinConnectionProfile,
   sanitizeThinConnectionProfile,
   sanitizeRuntimeProfile,
   sanitizeRuntimeProfileDocument,
-  type AuroraHostedBrowserSpeechPackStatus,
+  type AuroraBrowserSpeechPackCatalogResult,
+  type AuroraBrowserSpeechPackInstallReceipt,
+  type AuroraBrowserSpeechPackInstallRequest,
+  type AuroraBrowserSpeechPackTask,
+  type AuroraBrowserSpeechPackTrustSelection,
+  type AuroraBrowserSpeechPacksRuntimeStatus,
+  type AuroraLocalSpeechCatalogPort,
+  type AuroraLocalSpeechSelectionProfile,
   type AuroraRuntimeProfileDocumentV2,
   type AuroraRuntimeProfileV2,
   type AuroraNodeMode,
@@ -56,10 +64,6 @@ import {
   type BrowserMeshNodeCompositionStatus,
   type BrowserMeshNodeServices,
 } from './browser-mesh-node-services'
-import {
-  browserSpeechPackPolicyFromEnv,
-  type BrowserSpeechPackPolicy,
-} from './browser-speech-pack-policy'
 
 type BrowserRuntimeCache = {
   baseKey: string
@@ -70,6 +74,7 @@ type BrowserRuntimeCache = {
 }
 
 const ASSISTANT_COMPLETION_ROUTE = '/api/assistant/completion'
+const BROWSER_SPEECH_TRUST_STORAGE_KEY = 'aurora.browserSpeechTrust.v1'
 
 export interface AuroraBrowserLocalDataContext {
   readonly session: LocalDataSession
@@ -95,7 +100,8 @@ export interface AuroraBrowserRuntime extends BrowserWebThinRuntime {
   readonly localToolProvider?: BrowserMeshNodeServices['provider'] | undefined
   readonly localAssistant?: AuroraBrowserLightweightAssistantConfig | undefined
   readonly localNodeProviderStatus: AuroraBrowserLocalNodeProviderStatus
-  readonly hostedBrowserSpeechPack?: AuroraBrowserHostedSpeechPackRuntimeStatus | undefined
+  readonly browserSpeechPacks: AuroraBrowserSpeechPacksRuntimeStatus
+  readonly localSpeechCatalog: AuroraLocalSpeechCatalogPort
 }
 
 export interface AuroraBrowserLightweightAssistantConfig {
@@ -119,22 +125,18 @@ let browserMeshNodeCompositionStatus: BrowserMeshNodeCompositionStatus = {
   productMessage: 'This device is not set up for sharing.',
 }
 let browserMeshNodeServicesFactoryForTests: BrowserMeshNodeServicesFactory | null = null
-let browserSpeechPackOpenerForTests: BrowserSpeechPackOpener | null = null
+let browserVoicePackCatalogForTests: BrowserVoicePackCatalogSource | null = null
 
 type BrowserMeshNodeServicesFactory = (
   options: BrowserMeshNodeServicesOptions,
 ) => Promise<BrowserMeshNodeServices>
 
-type BrowserSpeechPackOpener = (
-  policy: Extract<BrowserSpeechPackPolicy, { readonly state: 'configured' }>,
-) => Promise<AuroraHostedBrowserSpeechPackStatus>
+export type BrowserVoicePackCatalogSource = {
+  listCatalog(): Promise<AuroraBrowserSpeechPackCatalogResult>
+  select(request: AuroraBrowserSpeechPackInstallRequest): Promise<AuroraBrowserSpeechPackInstallReceipt>
+}
 
-export type AuroraBrowserHostedSpeechPackRuntimeStatus =
-  | AuroraHostedBrowserSpeechPackStatus
-  | {
-      readonly state: 'disabled'
-      readonly pack: null
-    }
+export const AURORA_BROWSER_VOICE_PACKS_CHANGED_EVENT = 'aurora-browser-voice-packs-changed'
 
 class MissingGatewayTransport implements AuroraTransport {
   readonly kind = 'http'
@@ -207,7 +209,7 @@ export function createAuroraBrowserAssistantProvider(): LightweightAssistantProv
 }
 
 export function createAuroraBrowserRuntime(): AuroraBrowserRuntime {
-  return createAuroraBrowserRuntimeFromStore(null)
+  return createAuroraBrowserRuntimeFromStore(null, null, disabledBrowserSpeechPacks())
 }
 
 export async function createAuroraBrowserRuntimeAsync({
@@ -251,37 +253,35 @@ export async function createAuroraBrowserRuntimeAsync({
     if (browserRuntimeProfileTransition) await browserRuntimeProfileTransition
     return await createAuroraBrowserRuntimeAsync({ localAssistant })
   }
-  const runtime = createAuroraBrowserRuntimeFromStore(meshNodeServices, localAssistant)
-  const hostedBrowserSpeechPack = await resolveHostedBrowserSpeechPack(runtimeProfile)
+  const browserSpeechPacks = await resolveBrowserSpeechPacks(runtimeProfile)
   if (profileRevision !== browserRuntimeProfileRevision) {
-    await runtime.close().catch(() => undefined)
+    await closeBrowserMeshNodeServices(meshNodeServices).catch(() => undefined)
     if (browserRuntimeProfileTransition) await browserRuntimeProfileTransition
     return await createAuroraBrowserRuntimeAsync({ localAssistant })
   }
-  return Object.assign(runtime, { hostedBrowserSpeechPack }) as AuroraBrowserRuntime
+  return createAuroraBrowserRuntimeFromStore(meshNodeServices, localAssistant, browserSpeechPacks)
 }
 
-async function resolveHostedBrowserSpeechPack(
+async function resolveBrowserSpeechPacks(
   runtimeProfile: AuroraRuntimeProfileV2 | undefined,
-): Promise<AuroraBrowserHostedSpeechPackRuntimeStatus> {
-  if (runtimeProfile?.localNode.enabledCapabilityPacks.includes('foreground-voice') !== true) {
-    return Object.freeze({ state: 'disabled', pack: null })
+): Promise<AuroraBrowserSpeechPacksRuntimeStatus> {
+  const surface = getAuroraSurfaceProfile({
+    runtimeMode: 'web-thin',
+    transportKind: 'http',
+    nodeMode: runtimeProfile?.nodeMode,
+    runtimeTier: runtimeProfile?.runtimeTier,
+    enabledCapabilityPacks: runtimeProfile?.localNode.enabledCapabilityPacks ?? [],
+    localSpeechPackState: runtimeProfile?.localNode.localSpeechPackState,
+  })
+  const foregroundVoiceSelected = runtimeProfile?.localNode.enabledCapabilityPacks.includes('foreground-voice') === true
+  if (!foregroundVoiceSelected || !surface.usesBrowserVoiceRuntime) {
+    return disabledBrowserSpeechPacks()
   }
-  const policy = browserSpeechPackPolicyFromEnv()
-  if (policy.state === 'not-configured') {
-    return Object.freeze({ state: 'not-configured', pack: null })
-  }
-  if (policy.state === 'invalid') {
-    return Object.freeze({
-      state: 'rejected',
-      reason: policy.reason,
-      pack: null,
-    })
-  }
-  const opener = browserSpeechPackOpenerForTests ?? ((configuredPolicy) => openHostedBrowserSttSpeechPack({
-    trust: configuredPolicy.trust,
-  }))
-  return await opener(policy)
+  return await openActiveBrowserSpeechPacks({
+    enabled: true,
+    trustSelections: browserSpeechTrustSelectionsForProfile(runtimeProfile),
+    ttsVoiceId: runtimeProfile?.localNode.localSpeechSelection?.tts?.voiceId ?? null,
+  })
 }
 
 async function resolveBrowserMeshNodeServices(
@@ -319,13 +319,14 @@ async function resolveBrowserMeshNodeServices(
 function createAuroraBrowserRuntimeFromStore(
   meshNodeServices: BrowserMeshNodeServices | null,
   localAssistant: AuroraBrowserLightweightAssistantConfig | null = null,
+  browserSpeechPacks: AuroraBrowserSpeechPacksRuntimeStatus = disabledBrowserSpeechPacks(),
 ): AuroraBrowserRuntime {
   const credentialStore = ensureBrowserCredentialStore()
   const profileDocument = credentialStore.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
   const runtimeProfile = activeRuntimeProfile(profileDocument)
   const thinProfile = thinRuntimeProfileFromRuntimeProfile(runtimeProfile)
   const baseKey = browserClientCacheKey(null)
-  const key = browserClientCacheKey(meshNodeServices)
+  const key = browserClientCacheKey(meshNodeServices, browserSpeechPacks.revision)
   const cached = browserRuntimeCache
   if (cached?.key === key && cached.localAssistant === localAssistant) return cached.runtime
   if (
@@ -349,7 +350,8 @@ function createAuroraBrowserRuntimeFromStore(
     mode,
     nodeRole: effectiveMeshNodeServices?.enabled ? 'mesh-node' : 'remote-console',
     enabledCapabilityPacks: runtimeProfile?.localNode.enabledCapabilityPacks ?? [],
-    localSpeechPackState: runtimeProfile?.localNode.localSpeechPackState,
+    localSpeechPackState: browserSpeechPacks.state === 'ready' ? 'ready' : runtimeProfile?.localNode.localSpeechPackState,
+    localSpeechEngineCapabilities: browserSpeechPacks.state === 'ready' ? browserSpeechPacks.capabilities : null,
     gatewayUrl,
     bearerToken: () => runtime.client.auth.bearerToken(),
     signalingUrl: thinProfile?.signalingUrl,
@@ -390,6 +392,8 @@ function createAuroraBrowserRuntimeFromStore(
       browserMeshNodeCompositionStatus,
       runtimeProfile?.nodeMode === 'mesh-node',
     ),
+    browserSpeechPacks,
+    localSpeechCatalog: createBrowserLocalSpeechCatalogPort(),
   }) as AuroraBrowserRuntime
   const closeRuntime = runtime.close.bind(runtime)
   let closed = false
@@ -430,7 +434,7 @@ export function resetAuroraBrowserClientForTests(): void {
   browserCredentialStore = null
   browserRuntimeProfileRevision += 1
   browserMeshNodeServicesFactoryForTests = null
-  browserSpeechPackOpenerForTests = null
+  browserVoicePackCatalogForTests = null
 }
 
 export function auroraBrowserMeshNodeCompositionStatus(): BrowserMeshNodeCompositionStatus {
@@ -478,11 +482,13 @@ export function setAuroraBrowserMeshNodeServicesFactoryForTests(
   browserMeshNodeServicesFactoryForTests = factory
 }
 
-export function setAuroraBrowserSpeechPackOpenerForTests(
-  opener: BrowserSpeechPackOpener | null,
+export function setAuroraBrowserVoicePackCatalogSourceForTests(
+  source: BrowserVoicePackCatalogSource | null,
 ): void {
-  browserSpeechPackOpenerForTests = opener
+  browserVoicePackCatalogForTests = source
 }
+
+export const setAuroraBrowserSpeechPackOpenerForTests = setAuroraBrowserVoicePackCatalogSourceForTests
 
 export function auroraBrowserThinProfileDocument(): ThinProfileDocument {
   const runtimeDocument = ensureBrowserCredentialStore().loadRuntimeProfileDocument()
@@ -638,6 +644,28 @@ export async function saveAuroraBrowserRuntimeProfile(
   await finishBrowserRuntimeProfileTransition(store)
 }
 
+export async function saveAuroraBrowserLocalSpeechSelection(
+  selection: AuroraLocalSpeechSelectionProfile,
+): Promise<void> {
+  const current = auroraBrowserRuntimeProfile()
+  if (!current) throw new Error('Browser runtime profile is unavailable')
+  const enabledCapabilityPacks = current.localNode.enabledCapabilityPacks.includes('foreground-voice')
+    ? current.localNode.enabledCapabilityPacks
+    : [...current.localNode.enabledCapabilityPacks, 'foreground-voice' as const]
+  await saveAuroraBrowserRuntimeProfile({
+    ...current,
+    localNode: {
+      ...current.localNode,
+      enabledCapabilityPacks,
+      localSpeechSelection: {
+        ...current.localNode.localSpeechSelection,
+        ...selection,
+      },
+    },
+  })
+  dispatchBrowserVoicePacksChanged()
+}
+
 export async function selectAuroraBrowserThinProfile(
   profileId: string,
 ): Promise<void> {
@@ -673,12 +701,13 @@ export function auroraBrowserRuntimeDiagnostics(): string[] {
   })
 }
 
-function browserClientCacheKey(meshNodeServices: BrowserMeshNodeServices | null = null): string {
+function browserClientCacheKey(meshNodeServices: BrowserMeshNodeServices | null = null, browserSpeechPacksRevision = 'none'): string {
   const document = browserCredentialStore?.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
   return JSON.stringify({
     document,
     demoMode: isBrowserDemoMode(),
     rolloutFlags: browserWebRtcRolloutFlags(),
+    browserSpeechPacksRevision,
     meshNodeServices: meshNodeServices
       ? {
         enabled: meshNodeServices.enabled,
@@ -687,6 +716,127 @@ function browserClientCacheKey(meshNodeServices: BrowserMeshNodeServices | null 
       }
       : null,
   })
+}
+
+function disabledBrowserSpeechPacks(): AuroraBrowserSpeechPacksRuntimeStatus {
+  return Object.freeze({
+    state: 'disabled',
+    packs: Object.freeze([]),
+    capabilities: Object.freeze({ vad: false, kws: false, stt: false, tts: false }),
+    revision: 'disabled',
+  })
+}
+
+function browserSpeechTrustSelectionsForProfile(
+  runtimeProfile: AuroraRuntimeProfileV2 | undefined,
+): AuroraBrowserSpeechPackTrustSelection[] {
+  const selected = runtimeProfile?.localNode.localSpeechSelection
+  if (!selected) return []
+  const stored = loadBrowserSpeechTrustSelections()
+  const selections: AuroraBrowserSpeechPackTrustSelection[] = []
+  for (const task of ['vad', 'kws', 'stt', 'tts'] as const) {
+    const taskSelection = selected[task]
+    if (!taskSelection) continue
+    const trust = stored.find((candidate) =>
+      candidate.task === task
+      && candidate.packId === taskSelection.packId
+      && candidate.packVersion === taskSelection.packRevision
+      && (task !== 'tts' || candidate.voiceId === taskSelection.voiceId)
+    )
+    if (trust) selections.push(trust)
+  }
+  return selections
+}
+
+function loadBrowserSpeechTrustSelections(): AuroraBrowserSpeechPackTrustSelection[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(BROWSER_SPEECH_TRUST_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(isBrowserSpeechTrustSelection)
+  } catch {
+    return []
+  }
+}
+
+function saveBrowserSpeechTrustSelection(selection: AuroraBrowserSpeechPackTrustSelection): void {
+  if (typeof window === 'undefined') return
+  const current = loadBrowserSpeechTrustSelections()
+  const next = [
+    ...current.filter((candidate) => !sameBrowserSpeechTrustSelection(candidate, selection)),
+    selection,
+  ]
+  window.localStorage.setItem(BROWSER_SPEECH_TRUST_STORAGE_KEY, JSON.stringify(next))
+}
+
+function sameBrowserSpeechTrustSelection(
+  left: AuroraBrowserSpeechPackTrustSelection,
+  right: AuroraBrowserSpeechPackTrustSelection,
+): boolean {
+  return left.task === right.task
+    && left.packId === right.packId
+    && left.packVersion === right.packVersion
+    && left.voiceId === right.voiceId
+    && left.referenceProfileId === right.referenceProfileId
+}
+
+function isBrowserSpeechTrustSelection(value: unknown): value is AuroraBrowserSpeechPackTrustSelection {
+  if (typeof value !== 'object' || value === null) return false
+  const record = value as Partial<AuroraBrowserSpeechPackTrustSelection>
+  return isBrowserSpeechTask(record.task)
+    && typeof record.packId === 'string'
+    && typeof record.packVersion === 'string'
+    && typeof record.releaseKeyId === 'string'
+    && typeof record.releasePublicKeyBase64 === 'string'
+    && typeof record.expectedManifestSha256 === 'string'
+    && (record.slotId === undefined || typeof record.slotId === 'string')
+    && (record.voiceId === undefined || typeof record.voiceId === 'string')
+    && (record.referenceProfileId === undefined || typeof record.referenceProfileId === 'string')
+}
+
+function isBrowserSpeechTask(value: unknown): value is AuroraBrowserSpeechPackTask {
+  return value === 'vad' || value === 'kws' || value === 'stt' || value === 'tts'
+}
+
+function createBrowserLocalSpeechCatalogPort(): AuroraLocalSpeechCatalogPort {
+  return Object.freeze({
+    available: browserVoicePackCatalogSource() !== null,
+    async listCatalog(): Promise<AuroraBrowserSpeechPackCatalogResult> {
+      const source = browserVoicePackCatalogSource()
+      if (!source) return Object.freeze({ state: 'unavailable', items: Object.freeze([]) })
+      return await source.listCatalog()
+    },
+    async select(request: AuroraBrowserSpeechPackInstallRequest): Promise<AuroraBrowserSpeechPackInstallReceipt> {
+      const source = browserVoicePackCatalogSource()
+      if (!source) throw new Error('voice_download_unavailable')
+      const receipt = await source.select(request)
+      saveBrowserSpeechTrustSelection(receipt.trust)
+      await saveAuroraBrowserLocalSpeechSelection({
+        [receipt.task]: {
+          packId: receipt.packId,
+          packRevision: receipt.packVersion,
+          ...(receipt.trust.voiceId ? { voiceId: receipt.trust.voiceId } : {}),
+          ...(request.selection.voiceRevision ? { voiceRevision: request.selection.voiceRevision } : {}),
+          ...(request.selection.referenceProfileId ? { referenceProfileId: request.selection.referenceProfileId } : {}),
+        },
+      })
+      return receipt
+    },
+  })
+}
+
+function browserVoicePackCatalogSource(): BrowserVoicePackCatalogSource | null {
+  if (browserVoicePackCatalogForTests) return browserVoicePackCatalogForTests
+  if (typeof window === 'undefined') return null
+  const candidate = (window as Window & { __auroraLocalSpeechCatalog?: BrowserVoicePackCatalogSource }).__auroraLocalSpeechCatalog
+  return candidate && typeof candidate.listCatalog === 'function' && typeof candidate.select === 'function' ? candidate : null
+}
+
+function dispatchBrowserVoicePacksChanged(): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(AURORA_BROWSER_VOICE_PACKS_CHANGED_EVENT))
 }
 
 async function closeBrowserRuntimeCache(): Promise<void> {

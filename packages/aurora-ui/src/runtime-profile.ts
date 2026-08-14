@@ -62,6 +62,7 @@ export interface AuroraLocalSpeechAssetSelection {
   packRevision: string
   voiceId?: string | undefined
   voiceRevision?: string | undefined
+  referenceProfileId?: string | undefined
 }
 
 export interface AuroraLocalWakePhraseSelection {
@@ -475,7 +476,7 @@ function sanitizeLocalSpeechAssetSelection(
   task: AuroraLocalSpeechTask,
 ): AuroraLocalSpeechAssetSelection {
   if (!isRecord(value)) throw new Error('Runtime profile local speech asset selection is invalid')
-  const allowed = new Set(['packId', 'packRevision', 'voiceId', 'voiceRevision'])
+  const allowed = new Set(['packId', 'packRevision', 'voiceId', 'voiceRevision', 'referenceProfileId'])
   for (const key of Object.keys(value)) {
     if (!allowed.has(key)) throw new Error('Runtime profile local speech asset selection field is invalid')
   }
@@ -483,6 +484,7 @@ function sanitizeLocalSpeechAssetSelection(
   const packRevision = requiredCatalogText(value.packRevision, 'local speech pack revision', 256)
   const voiceId = optionalCatalogText(value.voiceId, 'local speech voice id', 256)
   const voiceRevision = optionalCatalogText(value.voiceRevision, 'local speech voice revision', 256)
+  const referenceProfileId = optionalCatalogText(value.referenceProfileId, 'local speech reference profile id', 256)
   if ((voiceId === undefined) !== (voiceRevision === undefined)) {
     throw new Error('Runtime profile local speech voice selection is incomplete')
   }
@@ -494,6 +496,7 @@ function sanitizeLocalSpeechAssetSelection(
     packRevision,
     ...(voiceId ? { voiceId } : {}),
     ...(voiceRevision ? { voiceRevision } : {}),
+    ...(referenceProfileId ? { referenceProfileId } : {}),
   }
 }
 

@@ -1,7 +1,8 @@
 'use client'
 
 import { SettingsView, type AuroraShellSnapshot, type RouteAvailability } from '@aurora/ui'
-import { useBrowserRoute, useBrowserShellRuntime } from '../browser-shell-runtime'
+import { saveAuroraBrowserLocalSpeechSelection } from '../aurora-client'
+import { useBrowserRoute, useBrowserRuntimeProfile, useBrowserShellRuntime } from '../browser-shell-runtime'
 
 export function SettingsClientPage({
   snapshot,
@@ -18,6 +19,7 @@ export function SettingsClientPage({
   const activeSettingsRoute = useBrowserRoute(settingsRoute)
   const activeConfigRoute = useBrowserRoute(configRoute)
   const activeDataRoute = useBrowserRoute(dataRoute)
+  const runtimeProfile = useBrowserRuntimeProfile()
 
   return (
     <SettingsView
@@ -26,6 +28,10 @@ export function SettingsClientPage({
       configRoute={activeConfigRoute}
       dataRoute={activeDataRoute}
       initialTab={activeSettingsRoute.disabled ? 'advanced' : 'general'}
+      runtimeProfile={runtimeProfile}
+      surfaceProfile={runtime.surface}
+      localSpeechCatalog={runtime.localSpeechCatalog}
+      onLocalSpeechSelectionConfirmed={saveAuroraBrowserLocalSpeechSelection}
     />
   )
 }

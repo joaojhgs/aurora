@@ -2,9 +2,15 @@ import {
   AuroraBrowserModelStoreHost,
   openActiveBrowserModelPack,
   type AuroraBrowserActiveModelPack,
+  type AuroraBrowserModelPackScope,
   type AuroraBrowserModelPackReleaseTrustKey,
 } from '@aurora/voice-web/browser'
-import type { AuroraVoiceWebModelDescriptor, AuroraWebModelStoreHost } from '@aurora/voice-web'
+import type {
+  AuroraVoiceWebModelBindings,
+  AuroraVoiceWebModelDescriptor,
+  AuroraVoiceWebModelTask,
+  AuroraWebModelStoreHost,
+} from '@aurora/voice-web'
 
 export interface AuroraHostedBrowserSpeechPackTrustInput {
   readonly releaseKeyId: string
@@ -41,6 +47,102 @@ export interface AuroraHostedBrowserSpeechPackOptions {
   readonly globalObject?: Parameters<typeof AuroraBrowserModelStoreHost.create>[0]
   readonly createHost?: () => Promise<AuroraWebModelStoreHost>
 }
+
+export type AuroraBrowserSpeechPackTask = AuroraVoiceWebModelTask
+
+export interface AuroraBrowserSpeechPackTrustSelection extends AuroraHostedBrowserSpeechPackTrustInput {
+  readonly task: AuroraBrowserSpeechPackTask
+  readonly packId: string
+  readonly packVersion: string
+  readonly slotId?: string | undefined
+  readonly voiceId?: string | undefined
+  readonly referenceProfileId?: string | undefined
+}
+
+export interface AuroraBrowserSpeechPackCatalogSelection {
+  readonly task: AuroraBrowserSpeechPackTask
+  readonly packId: string
+  readonly packVersion: string
+  readonly displayName: string
+  readonly language?: string | undefined
+  readonly voiceId?: string | undefined
+  readonly voiceRevision?: string | undefined
+  readonly requiresReferenceProfile?: boolean | undefined
+  readonly referenceProfileId?: string | undefined
+  readonly referenceProfileSelected?: boolean | undefined
+  readonly cached?: boolean | undefined
+  readonly active?: boolean | undefined
+}
+
+export interface AuroraBrowserSpeechPackCatalogResult {
+  readonly state: 'ready' | 'unavailable'
+  readonly items: readonly AuroraBrowserSpeechPackCatalogSelection[]
+}
+
+export interface AuroraBrowserSpeechPackInstallProgress {
+  readonly state: 'queued' | 'downloading' | 'saving' | 'ready'
+  readonly receivedBytes?: number | undefined
+  readonly totalBytes?: number | undefined
+}
+
+export interface AuroraBrowserSpeechPackInstallRequest {
+  readonly selection: AuroraBrowserSpeechPackCatalogSelection
+  readonly signal?: AbortSignal | undefined
+  readonly onProgress?: ((progress: AuroraBrowserSpeechPackInstallProgress) => void) | undefined
+}
+
+export interface AuroraBrowserSpeechPackInstallReceipt {
+  readonly task: AuroraBrowserSpeechPackTask
+  readonly packId: string
+  readonly packVersion: string
+  readonly trust: AuroraBrowserSpeechPackTrustSelection
+}
+
+export interface AuroraLocalSpeechCatalogPort {
+  readonly available: boolean
+  listCatalog(): Promise<AuroraBrowserSpeechPackCatalogResult>
+  select(request: AuroraBrowserSpeechPackInstallRequest): Promise<AuroraBrowserSpeechPackInstallReceipt>
+}
+
+export type AuroraBrowserSpeechPackInstallPort = AuroraLocalSpeechCatalogPort
+
+export type AuroraBrowserSpeechPacksRuntimeStatus =
+  | {
+      readonly state: 'disabled' | 'not-configured' | 'absent'
+      readonly packs: readonly AuroraBrowserActiveModelPack[]
+      readonly modelBindings?: undefined
+      readonly capabilities: Record<AuroraBrowserSpeechPackTask, boolean>
+      readonly ttsVoiceId?: undefined
+      readonly revision: string
+    }
+  | {
+      readonly state: 'ready'
+      readonly packs: readonly AuroraBrowserActiveModelPack[]
+      readonly modelBindings: AuroraVoiceWebModelBindings
+      readonly capabilities: Record<AuroraBrowserSpeechPackTask, boolean>
+      readonly ttsVoiceId?: string | undefined
+      readonly revision: string
+    }
+  | {
+      readonly state: 'rejected' | 'storage-unavailable'
+      readonly reason: string
+      readonly packs: readonly AuroraBrowserActiveModelPack[]
+      readonly modelBindings?: undefined
+      readonly capabilities: Record<AuroraBrowserSpeechPackTask, boolean>
+      readonly ttsVoiceId?: undefined
+      readonly revision: string
+    }
+
+export interface AuroraBrowserSpeechPacksOptions {
+  readonly enabled?: boolean | undefined
+  readonly trustSelections?: readonly AuroraBrowserSpeechPackTrustSelection[] | null | undefined
+  readonly tasks?: readonly AuroraBrowserSpeechPackTask[] | undefined
+  readonly ttsVoiceId?: string | null | undefined
+  readonly globalObject?: Parameters<typeof AuroraBrowserModelStoreHost.create>[0]
+  readonly createHost?: () => Promise<AuroraWebModelStoreHost | null>
+}
+
+export const AURORA_BROWSER_SPEECH_PACK_TASKS: readonly AuroraBrowserSpeechPackTask[] = Object.freeze(['vad', 'kws', 'stt', 'tts'])
 
 export async function openHostedBrowserSttSpeechPack(
   options: AuroraHostedBrowserSpeechPackOptions = {},
@@ -90,6 +192,82 @@ export async function openHostedBrowserSttSpeechPack(
       pack: null,
     })
   }
+}
+
+export async function openActiveBrowserSpeechPacks(
+  options: AuroraBrowserSpeechPacksOptions = {},
+): Promise<AuroraBrowserSpeechPacksRuntimeStatus> {
+  if (options.enabled === false) return emptyBrowserSpeechPacksStatus('disabled')
+  const tasks = options.tasks ?? AURORA_BROWSER_SPEECH_PACK_TASKS
+  const trustSelections = new Map<string, AuroraBrowserSpeechPackTrustSelection>()
+  for (const selection of options.trustSelections ?? []) {
+    trustSelections.set(selection.task, selection)
+  }
+  if (trustSelections.size === 0) return emptyBrowserSpeechPacksStatus('not-configured')
+
+  let host: AuroraWebModelStoreHost | null
+  try {
+    host = options.createHost
+      ? await options.createHost()
+      : await AuroraBrowserModelStoreHost.openExisting(options.globalObject)
+  } catch (error) {
+    return rejectedBrowserSpeechPacksStatus('storage-unavailable', safeReason(error, 'open'))
+  }
+  if (host === null) return emptyBrowserSpeechPacksStatus('absent')
+
+  const packs: AuroraBrowserActiveModelPack[] = []
+  const files: AuroraVoiceWebModelBindings['files'][number][] = []
+  const models: AuroraVoiceWebModelDescriptor[] = []
+  const capabilities = emptyCapabilities()
+  try {
+    for (const task of tasks) {
+      const trusted = trustSelections.get(task)
+      if (!trusted) continue
+      const trust = normalizeTrustInput(trusted)
+      if (trust.state === 'not-configured') continue
+      if (trust.state === 'invalid') return rejectedBrowserSpeechPacksStatus('rejected', trust.reason)
+      const scope: AuroraBrowserModelPackScope = trusted.slotId ? { task, slotId: trusted.slotId } : { task }
+      const pack = await openActiveBrowserModelPack(host, scope, {
+        trustedReleaseKeys: [trust.releaseKey],
+        expectedReleaseManifestSha256: trust.expectedManifestSha256,
+      })
+      if (pack === null) continue
+      const taskModels = pack.models.filter((model) => model.task === task)
+      if (taskModels.length === 0) return rejectedBrowserSpeechPacksStatus('rejected', 'unavailable')
+      packs.push(freezePack(pack))
+      models.push(...taskModels)
+      capabilities[task] = true
+      for (const file of pack.files) {
+        files.push({
+          task,
+          fileId: file.fileId,
+          virtualPath: virtualPathFromModels(taskModels, file.fileId),
+          sha256: file.sha256,
+          byteLength: file.byteLength,
+          bytes: await file.readAll(),
+        })
+      }
+    }
+  } catch (error) {
+    if (isBrowserModelPackError(error)) {
+      return rejectedBrowserSpeechPacksStatus('rejected', error.code)
+    }
+    return rejectedBrowserSpeechPacksStatus('storage-unavailable', safeReason(error, 'read'))
+  }
+
+  if (files.length === 0) return emptyBrowserSpeechPacksStatus('absent')
+  const modelBindings: AuroraVoiceWebModelBindings = Object.freeze({
+    files: Object.freeze(files),
+    models: Object.freeze(models),
+  })
+  return Object.freeze({
+    state: 'ready',
+    packs: Object.freeze(packs),
+    modelBindings,
+    capabilities,
+    ...(options.ttsVoiceId ? { ttsVoiceId: options.ttsVoiceId } : {}),
+    revision: browserSpeechPacksRevision(packs),
+  })
 }
 
 type NormalizedTrustInput =
@@ -147,6 +325,49 @@ function freezePack(pack: AuroraBrowserActiveModelPack): AuroraBrowserActiveMode
     files,
     models,
   })
+}
+
+function emptyBrowserSpeechPacksStatus(
+  state: 'disabled' | 'not-configured' | 'absent',
+): AuroraBrowserSpeechPacksRuntimeStatus {
+  return Object.freeze({
+    state,
+    packs: Object.freeze([]),
+    capabilities: emptyCapabilities(),
+    revision: state,
+  })
+}
+
+function rejectedBrowserSpeechPacksStatus(
+  state: 'rejected' | 'storage-unavailable',
+  reason: string,
+): AuroraBrowserSpeechPacksRuntimeStatus {
+  return Object.freeze({
+    state,
+    reason,
+    packs: Object.freeze([]),
+    capabilities: emptyCapabilities(),
+    revision: `${state}:${reason}`,
+  })
+}
+
+function emptyCapabilities(): Record<AuroraBrowserSpeechPackTask, boolean> {
+  return { vad: false, kws: false, stt: false, tts: false }
+}
+
+function virtualPathFromModels(models: readonly AuroraVoiceWebModelDescriptor[], fileId: string): string {
+  for (const model of models) {
+    const file = model.files.find((candidate) => candidate.fileId === fileId)
+    if (file) return file.virtualPath
+  }
+  return `/aurora/${fileId}`
+}
+
+function browserSpeechPacksRevision(packs: readonly AuroraBrowserActiveModelPack[]): string {
+  return packs
+    .map((pack) => `${pack.identity.scope.task}:${pack.identity.packId}:${pack.identity.packVersion}:${pack.identity.variantId}`)
+    .sort()
+    .join('|')
 }
 
 function isBrowserModelPackError(error: unknown): error is { readonly code: string } {

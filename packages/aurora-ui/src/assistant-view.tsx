@@ -35,9 +35,10 @@ import {
   type LocalDataScope,
   type LocalDataSession,
 } from '@aurora/client/local-data'
-import {
-  createAuroraBrowserVoiceRuntime,
+import type {
+  createAuroraBrowserVoiceRuntime as createAuroraBrowserVoiceRuntimeType,
 } from '@aurora/voice-web/browser'
+import type { AuroraVoiceInferenceOutput, AuroraVoiceTtsAudio } from '@aurora/voice-web'
 import type { AssistantVoiceRoutes, RouteAvailability } from './shell-data'
 import { RouteSheet } from './route-sheet'
 import { AudioRecorderVisualizer } from './audio-recorder-visualizer'
@@ -79,6 +80,7 @@ import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from './p
 import type { AuroraSurfaceProfile } from './platform-surface'
 import type { NativeDesktopVoicePhase, NativeDesktopVoicePort, NativeDesktopVoiceStatus, NativeDesktopVoiceStopReason, NativeDesktopVoiceTrigger } from './native-desktop-voice'
 import type { NativeMobileVoicePort } from './native-mobile-voice'
+import type { AuroraBrowserSpeechPacksRuntimeStatus } from './browser-speech-pack'
 import {
   createLightweightAssistantOrchestrator,
   isLightweightLocalAssistantAvailable,
@@ -104,6 +106,7 @@ export interface AssistantViewProps {
   surfaceProfile?: AuroraSurfaceProfile | undefined
   nativeVoice?: NativeDesktopVoicePort | null | undefined
   nativeMobileVoice?: NativeMobileVoicePort | null | undefined
+  browserSpeechPacks?: AuroraBrowserSpeechPacksRuntimeStatus | null | undefined
 }
 
 export interface AssistantRuntimeHealth {
@@ -332,8 +335,10 @@ type BrowserOpenFilePicker = (options?: {
   excludeAcceptAllOption?: boolean
   types?: Array<{ description: string; accept: Record<string, string[]> }>
 }) => Promise<BrowserFileSystemFileHandle[]>
-type AuroraBrowserVoiceRuntimeInstance = ReturnType<typeof createAuroraBrowserVoiceRuntime>
+type AuroraBrowserVoiceRuntimeFactory = typeof createAuroraBrowserVoiceRuntimeType
+type AuroraBrowserVoiceRuntimeInstance = ReturnType<AuroraBrowserVoiceRuntimeFactory>
 type AuroraBrowserCapturedAudio = Awaited<ReturnType<AuroraBrowserVoiceRuntimeInstance['stop']>>
+let auroraBrowserVoiceRuntimeFactoryPromise: Promise<AuroraBrowserVoiceRuntimeFactory> | null = null
 type BrowserVoiceTurnSettlementOutcome = 'complete' | 'abandon' | 'cancel'
 interface BrowserVoiceRuntimeEventSnapshot {
   readonly kind: string
@@ -344,6 +349,7 @@ interface BrowserVoiceRuntimeEventSnapshot {
   readonly byteLength: number
   readonly queuedBytes: number
   readonly reason: string | null
+  readonly inference?: AuroraVoiceInferenceOutput
   readonly redacted: true
   readonly occurredAtMs: number
 }
@@ -371,7 +377,8 @@ export function AssistantView({
   localAssistant = null,
   surfaceProfile: providedSurfaceProfile,
   nativeVoice = null,
-  nativeMobileVoice = null
+  nativeMobileVoice = null,
+  browserSpeechPacks = null
 }: AssistantViewProps) {
   const [session, setSession] = useState<AssistantSessionSnapshot>(() => initialSession ?? defaultAssistantSessionForTransport(client.transport.kind))
   const [sessionIndex, setSessionIndex] = useState<DBSessionRecord[]>([])
@@ -450,6 +457,8 @@ export function AssistantView({
   const lastAssistantMessageIdRef = useRef<string | null>(null)
   const streamedTtsQueueRef = useRef<string[]>([])
   const streamedTtsAudioRef = useRef<StreamedTtsAudioPlayback | null>(null)
+  const browserVoiceRemoteTtsAudioSeenRef = useRef(false)
+  const browserVoiceLocalTranscriptRef = useRef('')
   function setSpeakingMessageId(next: string | null) {
     speakingMessageIdRef.current = next
     setSpeakingMessageIdState(next)
@@ -582,6 +591,9 @@ export function AssistantView({
   const usesNativeMobileVoice = surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'mobile-native'
   const usesFocusedBrowserVoiceRuntime = surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'webview-focused'
   const receivesCoordinatorVoiceEvents = surfaceProfile.voiceCapture.wakewordOwner === 'coordinator-daemon'
+  const browserSpeechPacksRevision = browserSpeechPacks?.revision ?? 'none'
+  const readyBrowserSpeechPacks = browserSpeechPacks?.state === 'ready' ? browserSpeechPacks : null
+  const browserLocalTtsVoiceId = readyBrowserSpeechPacks?.capabilities.tts ? readyBrowserSpeechPacks.ttsVoiceId : undefined
   const remotePrivacyWarning = assistantRemotePrivacyWarning(route)
   const voiceModel = useMemo(
     () => buildAssistantVoiceModel({
@@ -714,7 +726,17 @@ export function AssistantView({
       return
     }
     if (!chunk.audioData) return
+    browserVoiceRemoteTtsAudioSeenRef.current = true
     enqueueTtsAudio(chunk.audioData, chunk.encoding ?? 'wav', chunk.mimeType)
+  }
+
+  function enqueueBrowserTtsAudio(audio: AuroraVoiceTtsAudio): boolean {
+    if (typeof window === 'undefined' || typeof window.URL?.createObjectURL !== 'function') return false
+    if (audio.sampleCount <= 0 || audio.pcm.length === 0) return false
+    const url = window.URL.createObjectURL(new Blob([wavBytesFromPcm16(audio.pcm, audio.sampleRateHz)], { type: 'audio/wav' }))
+    streamedTtsQueueRef.current.push(url)
+    void drainStreamedTtsAudioQueue()
+    return true
   }
 
   function enqueueTtsAudio(audioData: string, encoding: string, explicitMimeType?: string | null): boolean {
@@ -931,6 +953,16 @@ export function AssistantView({
       await disposeBrowserVoiceRuntime()
     })()
   }, [])
+
+  useEffect(() => {
+    readAloudFallbackTokenRef.current += 1
+    const runtime = browserVoiceRuntimeRef.current
+    if (!runtime) return
+    browserVoiceRuntimeRef.current = null
+    clearBrowserVoiceRuntimeEventSubscription()
+    void runtime.cancel('voice_selection_changed').catch(() => undefined)
+    void runtime.dispose().catch(() => undefined)
+  }, [browserSpeechPacksRevision])
 
   useEffect(() => {
     let active = true
@@ -1669,7 +1701,7 @@ export function AssistantView({
         if (pendingIndex === -1) return attachment
         const outcome = outcomes.get(pendingIndex)
         if (!outcome) {
-          return { ...attachment, status: 'error', progress: 0, message: 'No backend outcome was returned for this context item.' }
+          return { ...attachment, status: 'error', progress: 0, message: 'Aurora could not finish this context item. Try again.' }
         }
         return {
           ...attachment,
@@ -1952,6 +1984,7 @@ export function AssistantView({
       const userId = `voice-user-${event.sessionId ?? eventKey}`
       const pendingId = event.sessionId ?? `voice-assistant-${eventKey}`
       voicePendingAssistantIdRef.current = pendingId
+      browserVoiceRemoteTtsAudioSeenRef.current = false
       setVoiceResponsePendingId(pendingId)
       armVoiceResponseTimeout(pendingId)
       voiceTranscriptPreviewRef.current = ''
@@ -2105,6 +2138,11 @@ export function AssistantView({
       return
     }
     if (update.kind !== 'completed' && update.kind !== 'fallback') return
+    const shouldSpeakWithBrowserTts = Boolean(
+      browserLocalTtsVoiceId
+      && !browserVoiceRemoteTtsAudioSeenRef.current
+      && update.text.trim()
+    )
     setVoiceCaptureStatus('idle')
     voicePendingAssistantIdRef.current = null
     setVoiceResponsePendingId(null)
@@ -2142,6 +2180,13 @@ export function AssistantView({
           : [...current.messages, assistantMessage]
       }
     })
+    if (shouldSpeakWithBrowserTts) {
+      void synthesizeBrowserReadAloud(update.text, pendingId ?? update.messageId ?? lastAssistantMessageIdRef.current)
+        .then((played) => {
+          if (played) setStreamState((current) => ({ ...current, message: 'Aurora is speaking.' }))
+        })
+        .catch(() => undefined)
+    }
   }
 
   function applyNativeDesktopVoiceStatus(status: NativeDesktopVoiceStatus) {
@@ -2260,7 +2305,7 @@ export function AssistantView({
       setActiveAssistantPendingId(null)
     }
     setStreamState((current) => current.status === 'streaming'
-      ? { ...current, status: 'idle', message: reason === 'tts_started' ? 'Assistant response received; TTS playback is separate.' : current.message }
+      ? { ...current, status: 'idle', message: reason === 'tts_started' ? 'Assistant response received; spoken response is separate.' : current.message }
       : current)
   }
 
@@ -2297,7 +2342,7 @@ export function AssistantView({
           ...current,
           status: 'idle',
           message: reason === 'tts_started'
-            ? 'Assistant text observed from TTS playback; generation is complete.'
+            ? 'Assistant response received.'
             : 'Voice response received from Aurora.'
         }
       : current)
@@ -2324,6 +2369,11 @@ export function AssistantView({
         })
         if (!result.ok) throw result.error
         setStreamState((current) => ({ ...current, message: 'Reading assistant response through Aurora TTS.' }))
+        return
+      }
+      if (browserLocalTtsVoiceId) {
+        await synthesizeBrowserReadAloud(speakableText, message.id)
+        setStreamState((current) => ({ ...current, message: 'Aurora is reading this response on this device.' }))
         return
       }
       const result = await client.assistant.synthesizeReadAloud({
@@ -2354,7 +2404,7 @@ export function AssistantView({
     grantScope: AssistantApprovalGrantScope
   ) {
     if (!tool.pendingId && !tool.approvalRequestId && !tool.localConfirmationToken) {
-      setLastError('This tool approval card is missing backend approval identifiers.')
+      setLastError('This approval needs to be refreshed before Aurora can continue.')
       return
     }
     setLastError(null)
@@ -2479,6 +2529,7 @@ export function AssistantView({
   async function stopReadAloud(reason: string) {
     readAloudFallbackTokenRef.current += 1
     stopStreamedTtsPlayback()
+    await cancelBrowserVoiceRuntime(reason)
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel()
     }
@@ -2488,6 +2539,22 @@ export function AssistantView({
       reason
     })
     if (!result.ok) setLastError(productAssistantErrorCopy(result.error))
+  }
+
+  async function synthesizeBrowserReadAloud(textToSpeak: string, messageId: string | null = null): Promise<boolean> {
+    if (!browserLocalTtsVoiceId) return false
+    const token = readAloudFallbackTokenRef.current + 1
+    readAloudFallbackTokenRef.current = token
+    if (messageId) setSpeakingMessageId(messageId)
+    const runtime = await browserVoiceRuntime()
+    const audio = await runtime.synthesizeSpeech({
+      text: textToSpeak,
+      voiceId: browserLocalTtsVoiceId,
+      generation: token
+    })
+    if (readAloudFallbackTokenRef.current !== token) return false
+    if (!enqueueBrowserTtsAudio(audio)) throw new Error('This device could not start audio playback.')
+    return true
   }
 
   function browserReadAloud(textToSpeak: string, messageId: string | null = null): boolean {
@@ -3049,10 +3116,18 @@ export function AssistantView({
     await cancelBrowserVoiceRuntime(reason)
   }
 
-  function browserVoiceRuntime(): AuroraBrowserVoiceRuntimeInstance {
+  async function browserVoiceRuntime(): Promise<AuroraBrowserVoiceRuntimeInstance> {
     if (!browserVoiceRuntimeRef.current) {
+      const createAuroraBrowserVoiceRuntime = await loadAuroraBrowserVoiceRuntimeFactory()
+      const browserPackOptions = readyBrowserSpeechPacks
+        ? {
+            modelBindings: readyBrowserSpeechPacks.modelBindings,
+            sherpaAssets: defaultSameOriginSherpaAssetUrls(),
+          }
+        : {}
       const runtime = createAuroraBrowserVoiceRuntime({
         ownerId: 'aurora-assistant-view',
+        ...browserPackOptions,
         lifecycle: browserVoiceLifecycleEligibility,
         audio: {
           onAudioLevel: (level, peak) => {
@@ -3078,8 +3153,13 @@ export function AssistantView({
       activeVoiceSessionRef.current = event.sessionId
     }
     if (event.kind === 'session_started') {
+      browserVoiceLocalTranscriptRef.current = ''
       setVoiceCaptureStatus('listening')
       return
+    }
+    if (event.kind === 'voice_inference') {
+      const nextText = event.inference?.stt.at(-1)?.text.trim()
+      if (nextText) browserVoiceLocalTranscriptRef.current = nextText
     }
     if (event.kind === 'frame_dropped') {
       setLastError('Microphone capture is continuing with reduced quality.')
@@ -3218,7 +3298,8 @@ export function AssistantView({
       message: 'Requesting focused microphone access for push-to-talk…'
     }))
     try {
-      const started = await browserVoiceRuntime().start()
+      const runtime = await browserVoiceRuntime()
+      const started = await runtime.start()
       if (browserVoiceOperationTokenRef.current !== token) {
         return false
       }
@@ -3273,40 +3354,43 @@ export function AssistantView({
       ownedVoiceSessionIdsRef.current.clear()
       return
     }
-    let result: Awaited<ReturnType<typeof client.assistant.transcribeVoiceAudio>>
-    try {
-      result = await client.assistant.transcribeVoiceAudio({
-        audio_data: int16PcmToLittleEndianBase64(captured.pcm),
-        format: 'raw',
-        sample_rate: 16000,
-        channels: 1,
-        model: 'accurate',
-        routePolicy: routePolicyFromRoute(voiceModel.transcriptionRoute)
-      })
-    } catch (error) {
-      const settled = await settleBrowserVoiceTurn(token, 'abandon', 'transcription_failed')
-      if (browserVoiceOperationTokenRef.current !== token) return
-      if (!settled.current) return
-      setLastError(productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error))))
-      setVoiceCaptureStatus('error')
-      activeVoiceSessionRef.current = null
-      ownedVoiceSessionIdsRef.current.clear()
-      return
+    let transcript = readyBrowserSpeechPacks?.capabilities.stt ? browserVoiceLocalTranscriptRef.current.trim() : ''
+    if (!transcript) {
+      let result: Awaited<ReturnType<typeof client.assistant.transcribeVoiceAudio>>
+      try {
+        result = await client.assistant.transcribeVoiceAudio({
+          audio_data: int16PcmToLittleEndianBase64(captured.pcm),
+          format: 'raw',
+          sample_rate: 16000,
+          channels: 1,
+          model: 'accurate',
+          routePolicy: routePolicyFromRoute(voiceModel.transcriptionRoute)
+        })
+      } catch (error) {
+        const settled = await settleBrowserVoiceTurn(token, 'abandon', 'transcription_failed')
+        if (browserVoiceOperationTokenRef.current !== token) return
+        if (!settled.current) return
+        setLastError(productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error))))
+        setVoiceCaptureStatus('error')
+        activeVoiceSessionRef.current = null
+        ownedVoiceSessionIdsRef.current.clear()
+        return
+      }
+      if (browserVoiceOperationTokenRef.current !== token) {
+        await settleBrowserVoiceTurn(token, 'abandon', 'stale_transcription')
+        return
+      }
+      if (!result.ok) {
+        const settled = await settleBrowserVoiceTurn(token, 'abandon', 'transcription_failed')
+        if (!settled.current) return
+        setLastError(productAssistantErrorCopy(result.error))
+        setVoiceCaptureStatus('error')
+        activeVoiceSessionRef.current = null
+        ownedVoiceSessionIdsRef.current.clear()
+        return
+      }
+      transcript = result.data.text.trim()
     }
-    if (browserVoiceOperationTokenRef.current !== token) {
-      await settleBrowserVoiceTurn(token, 'abandon', 'stale_transcription')
-      return
-    }
-    if (!result.ok) {
-      const settled = await settleBrowserVoiceTurn(token, 'abandon', 'transcription_failed')
-      if (!settled.current) return
-      setLastError(productAssistantErrorCopy(result.error))
-      setVoiceCaptureStatus('error')
-      activeVoiceSessionRef.current = null
-      ownedVoiceSessionIdsRef.current.clear()
-      return
-    }
-    const transcript = result.data.text.trim()
     if (!transcript) {
       const settled = await settleBrowserVoiceTurn(token, 'abandon', 'empty_transcription')
       if (!settled.current) return
@@ -3926,11 +4010,11 @@ export function buildAssistantVoiceModel(input: {
   voiceEvents?: VoiceRuntimeEvent[] | undefined
   waveformBars?: number[] | undefined
 }): AssistantVoiceModel {
-  const transcription = input.voiceRoutes?.transcription ?? missingVoiceRoute('voice-transcription', 'Remote transcription', 'Transcription.Transcribe', 'raw-audio')
+  const transcription = input.voiceRoutes?.transcription ?? missingVoiceRoute('voice-transcription', 'Connected speech', 'Transcription.Transcribe', 'raw-audio')
   const wakeProcess = input.voiceRoutes?.wakeProcess ?? missingVoiceRoute('voice-wake-process', 'Wake audio processing', 'WakeWord.ProcessAudio', 'raw-audio')
   const wakeControl = input.voiceRoutes?.wakeControl ?? missingVoiceRoute('voice-wake-control', 'Wake foreground control', 'WakeWord.Control', 'raw-audio')
-  const ttsSynthesize = input.voiceRoutes?.ttsSynthesize ?? missingVoiceRoute('voice-tts-synthesize', 'TTS synthesis', 'TTS.Synthesize', 'personal')
-  const ttsStop = input.voiceRoutes?.ttsStop ?? missingVoiceRoute('voice-tts-stop', 'TTS playback stop', 'TTS.Stop', 'personal')
+  const ttsSynthesize = input.voiceRoutes?.ttsSynthesize ?? missingVoiceRoute('voice-tts-synthesize', 'Spoken replies', 'TTS.Synthesize', 'personal')
+  const ttsStop = input.voiceRoutes?.ttsStop ?? missingVoiceRoute('voice-tts-stop', 'Stop spoken replies', 'TTS.Stop', 'personal')
   const nativeCapture = nativeCaptureState(input.nativeAvailable ?? false, input.nativePlatform ?? 'not available', input.nativePermissions ?? [], input.nativeCapabilities ?? [])
   const surfaceProfile = input.surfaceProfile ?? getAuroraSurfaceProfile({
     runtimeMode: input.client.transport.kind === 'tauri-local' ? 'desktop-local' : input.client.transport.kind === 'native-mobile' ? 'mobile' : undefined,
@@ -5389,7 +5473,7 @@ function createAttachmentDraft(input: {
     status: 'staged',
     progress: 0,
     message: input.contentText
-      ? 'Staged for backend validation.'
+      ? 'Ready for review.'
       : 'Preview staged; Aurora will receive file metadata only until binary extraction is enabled.',
     reasonCode: null,
     redacted: false
@@ -7529,6 +7613,53 @@ function toolStatusFromUpdate(update: AssistantStreamUpdate): AssistantToolCallC
 function metadataStringValue(metadata: Record<string, unknown>, key: string): string | null {
   const value = metadata[key]
   return typeof value === 'string' && value.trim() ? value : null
+}
+
+function defaultSameOriginSherpaAssetUrls(): NonNullable<Parameters<AuroraBrowserVoiceRuntimeFactory>[0]['sherpaAssets']> {
+  const origin = typeof window !== 'undefined' && window.location?.origin
+    ? window.location.origin
+    : 'http://localhost'
+  return {
+    vadAsrModuleUrl: new URL('/voice/sherpa/sherpa-onnx-wasm-main-vad-asr.js', origin),
+    kwsModuleUrl: new URL('/voice/sherpa/sherpa-onnx-wasm-kws-main.js', origin),
+    ttsModuleUrl: new URL('/voice/sherpa/sherpa-onnx-wasm-main-tts.js', origin),
+  }
+}
+
+async function loadAuroraBrowserVoiceRuntimeFactory(): Promise<AuroraBrowserVoiceRuntimeFactory> {
+  auroraBrowserVoiceRuntimeFactoryPromise ??= import('@aurora/voice-web/browser')
+    .then((module) => module.createAuroraBrowserVoiceRuntime)
+  return await auroraBrowserVoiceRuntimeFactoryPromise
+}
+
+function wavBytesFromPcm16(pcm: Int16Array, sampleRateHz: number): Uint8Array {
+  const headerBytes = 44
+  const dataBytes = pcm.length * 2
+  const bytes = new Uint8Array(headerBytes + dataBytes)
+  const view = new DataView(bytes.buffer)
+  writeAscii(view, 0, 'RIFF')
+  view.setUint32(4, 36 + dataBytes, true)
+  writeAscii(view, 8, 'WAVE')
+  writeAscii(view, 12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, sampleRateHz, true)
+  view.setUint32(28, sampleRateHz * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  writeAscii(view, 36, 'data')
+  view.setUint32(40, dataBytes, true)
+  for (let index = 0; index < pcm.length; index += 1) {
+    view.setInt16(headerBytes + index * 2, pcm[index] ?? 0, true)
+  }
+  return bytes
+}
+
+function writeAscii(view: DataView, offset: number, value: string): void {
+  for (let index = 0; index < value.length; index += 1) {
+    view.setUint8(offset + index, value.charCodeAt(index))
+  }
 }
 
 function metadataBooleanValue(metadata: Record<string, unknown>, key: string): boolean | null {
