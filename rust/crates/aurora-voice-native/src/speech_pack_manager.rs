@@ -19,7 +19,7 @@ use url::Url;
 
 use crate::{AssetIntegrity, DownloadError, DownloadPolicy, DownloadProgress, NativeDownloader};
 
-const STATE_SCHEMA_VERSION: u32 = 1;
+const STATE_SCHEMA_VERSION: u32 = 2;
 const STATE_FILE: &str = "speech-packs.json";
 const ARCHIVE_FILE: &str = "archive.tar.bz2";
 const TMP_PREFIX: &str = ".tmp-";
@@ -208,6 +208,10 @@ impl SpeechPackManager {
             completed_bytes: extract_report.extracted_bytes,
             expected_bytes: self.config.max_extracted_bytes,
         });
+        let receipt = build_binding_receipt(
+            &extract_root(&self.config.root, &entry.archive.sha256),
+            &entry,
+        )?;
         let bindings = self.resolve_entry_bindings(&entry)?;
         let installed = InstalledRecord {
             voice_id: entry.voice_id.clone(),
@@ -217,6 +221,7 @@ impl SpeechPackManager {
             archive_bytes: entry.archive.byte_size,
             extracted_bytes: extract_report.extracted_bytes,
             installed_at: now_epoch_seconds(),
+            receipt,
         };
         {
             let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
@@ -236,15 +241,34 @@ impl SpeechPackManager {
     pub fn list_installed_voices(&self) -> Result<Vec<InstalledSpeechPack>, SpeechPackError> {
         let catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
         let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
-        let state = read_state(&self.config.root)?;
+        let mut state = read_state(&self.config.root)?;
+        let mut changed = false;
         let mut installed = Vec::new();
-        for record in state.installed.values() {
+        let voice_ids = state.installed.keys().cloned().collect::<Vec<_>>();
+        for voice_id in voice_ids {
+            let Some(record) = state.installed.get(&voice_id).cloned() else {
+                continue;
+            };
             let Some(entry) = catalog.voice(&record.voice_id) else {
                 continue;
             };
-            if self.resolve_entry_bindings(entry).is_ok() {
-                installed.push(record.clone().into_public());
+            match self.ensure_record_verified_or_recovered(entry, record) {
+                Ok(updated) => {
+                    if state.installed.get(&voice_id) != Some(&updated) {
+                        state.installed.insert(voice_id, updated.clone());
+                        changed = true;
+                    }
+                    installed.push(updated.into_public());
+                }
+                Err(SpeechPackError::CorruptCache) | Err(SpeechPackError::InvalidArchive) => {
+                    state.installed.remove(&voice_id);
+                    changed = true;
+                }
+                Err(error) => return Err(error),
             }
+        }
+        if changed {
+            write_state_atomic(&self.config.root, &state)?;
         }
         installed.sort_by(|left, right| left.voice_id.cmp(&right.voice_id));
         Ok(installed)
@@ -260,15 +284,16 @@ impl SpeechPackManager {
             .voice(voice_id)
             .ok_or(SpeechPackError::UnknownVoice)?;
         let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
-        let state = read_state(&self.config.root)?;
+        let mut state = read_state(&self.config.root)?;
         let record = state
             .installed
             .get(voice_id)
+            .cloned()
             .ok_or(SpeechPackError::UnknownVoice)?;
-        if record.archive_sha256 != entry.archive.sha256
-            || record.archive_bytes != entry.archive.byte_size
-        {
-            return Err(SpeechPackError::CorruptCache);
+        let updated = self.ensure_record_verified_or_recovered(entry, record)?;
+        if state.installed.get(voice_id) != Some(&updated) {
+            state.installed.insert(voice_id.to_owned(), updated);
+            write_state_atomic(&self.config.root, &state)?;
         }
         self.resolve_entry_bindings(entry)
     }
@@ -367,7 +392,6 @@ impl SpeechPackManager {
             .saturating_add(directory_size(&extracted_dir(&self.config.root))?);
         let required = used
             .checked_add(entry.archive.byte_size)
-            .and_then(|value| value.checked_add(self.config.max_extracted_bytes))
             .ok_or(SpeechPackError::ResourceLimit)?;
         if required > quota {
             return Err(SpeechPackError::ResourceLimit);
@@ -400,6 +424,34 @@ impl SpeechPackManager {
         ensure_contained(&root, &bindings.model_card)?;
         Ok(bindings)
     }
+
+    fn ensure_record_verified_or_recovered(
+        &self,
+        entry: &TtsCatalogEntry,
+        mut record: InstalledRecord,
+    ) -> Result<InstalledRecord, SpeechPackError> {
+        if record.archive_sha256 != entry.archive.sha256
+            || record.archive_bytes != entry.archive.byte_size
+        {
+            return Err(SpeechPackError::CorruptCache);
+        }
+        let root = extract_root(&self.config.root, &entry.archive.sha256);
+        if verify_binding_receipt(&root, entry, &record.receipt).is_ok() {
+            return Ok(record);
+        }
+
+        let archive = archive_path(&self.config.root, &entry.archive.sha256);
+        let actual = inspect_file(&archive)?;
+        if actual.sha256 != entry.archive.sha256 || actual.byte_size != entry.archive.byte_size {
+            return Err(SpeechPackError::CorruptCache);
+        }
+        remove_dir_if_exists(&root)?;
+        let report =
+            extract_archive_bounded(&self.config, entry, &archive, &CancellationToken::new())?;
+        record.extracted_bytes = report.extracted_bytes;
+        record.receipt = build_binding_receipt(&root, entry)?;
+        Ok(record)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -427,6 +479,44 @@ struct InstalledRecord {
     archive_bytes: u64,
     extracted_bytes: u64,
     installed_at: u64,
+    receipt: BindingReceipt,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct BindingReceipt {
+    root: DirectoryReceipt,
+    model: FileReceipt,
+    config: FileReceipt,
+    tokens: FileReceipt,
+    data_dir: DirectoryReceipt,
+    model_card: FileReceipt,
+    extracted_paths: Vec<ExtractedPathReceipt>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct DirectoryReceipt {
+    relative_path: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct FileReceipt {
+    relative_path: String,
+    byte_size: u64,
+    sha256: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct ExtractedPathReceipt {
+    relative_path: String,
+    kind: ExtractedPathKind,
+    byte_size: Option<u64>,
+    sha256: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+enum ExtractedPathKind {
+    Directory,
+    File,
 }
 
 impl InstalledRecord {
@@ -523,6 +613,7 @@ fn extract_archive_contents(
     let archive = File::open(archive_path).map_err(|_| SpeechPackError::CorruptCache)?;
     let decoder = BzDecoder::new(archive);
     let mut archive = tar::Archive::new(decoder);
+    let quota_baseline = quota_baseline_without_temp(config, temp_root)?;
     let mut seen = BTreeSet::new();
     let mut entries_seen = 0_usize;
     let mut files_seen = 0_usize;
@@ -579,6 +670,14 @@ fn extract_archive_contents(
         if extracted_bytes > config.max_extracted_bytes {
             return Err(SpeechPackError::ResourceLimit);
         }
+        if let Some(quota) = config.quota_bytes {
+            let required = quota_baseline
+                .checked_add(extracted_bytes)
+                .ok_or(SpeechPackError::ResourceLimit)?;
+            if required > quota {
+                return Err(SpeechPackError::ResourceLimit);
+            }
+        }
         if let Some(parent) = output.parent() {
             fs::create_dir_all(parent).map_err(|_| SpeechPackError::State)?;
         }
@@ -614,6 +713,108 @@ fn verify_bindings_in_root(root: &Path, entry: &TtsCatalogEntry) -> Result<(), S
     require_file(root, &root.join(&entry.bindings.tokens))?;
     require_directory(root, &root.join(&entry.bindings.data_dir))?;
     require_file(root, &root.join(&entry.bindings.model_card))?;
+    Ok(())
+}
+
+fn build_binding_receipt(
+    root: &Path,
+    entry: &TtsCatalogEntry,
+) -> Result<BindingReceipt, SpeechPackError> {
+    verify_bindings_in_root(root, entry)?;
+    Ok(BindingReceipt {
+        root: directory_receipt(&entry.archive.root),
+        model: file_receipt(root, &entry.bindings.model)?,
+        config: file_receipt(root, &entry.bindings.config)?,
+        tokens: file_receipt(root, &entry.bindings.tokens)?,
+        data_dir: directory_receipt(&entry.bindings.data_dir),
+        model_card: file_receipt(root, &entry.bindings.model_card)?,
+        extracted_paths: extracted_path_receipts(root)?,
+    })
+}
+
+fn verify_binding_receipt(
+    root: &Path,
+    entry: &TtsCatalogEntry,
+    receipt: &BindingReceipt,
+) -> Result<(), SpeechPackError> {
+    verify_bindings_in_root(root, entry)?;
+    let expected = BindingReceipt {
+        root: directory_receipt(&entry.archive.root),
+        model: file_receipt(root, &entry.bindings.model)?,
+        config: file_receipt(root, &entry.bindings.config)?,
+        tokens: file_receipt(root, &entry.bindings.tokens)?,
+        data_dir: directory_receipt(&entry.bindings.data_dir),
+        model_card: file_receipt(root, &entry.bindings.model_card)?,
+        extracted_paths: extracted_path_receipts(root)?,
+    };
+    if &expected == receipt {
+        Ok(())
+    } else {
+        Err(SpeechPackError::CorruptCache)
+    }
+}
+
+fn directory_receipt(path: impl AsRef<Path>) -> DirectoryReceipt {
+    DirectoryReceipt {
+        relative_path: path.as_ref().to_string_lossy().into_owned(),
+    }
+}
+
+fn file_receipt(root: &Path, path: impl AsRef<Path>) -> Result<FileReceipt, SpeechPackError> {
+    let path = path.as_ref();
+    let full_path = root.join(path);
+    require_file(root, &full_path)?;
+    let inspection = inspect_regular_file(&full_path, SpeechPackError::CorruptCache)?;
+    Ok(FileReceipt {
+        relative_path: path.to_string_lossy().into_owned(),
+        byte_size: inspection.byte_size,
+        sha256: inspection.sha256,
+    })
+}
+
+fn extracted_path_receipts(root: &Path) -> Result<Vec<ExtractedPathReceipt>, SpeechPackError> {
+    let mut receipts = Vec::new();
+    collect_extracted_path_receipts(root, root, &mut receipts)?;
+    receipts.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+    Ok(receipts)
+}
+
+fn collect_extracted_path_receipts(
+    root: &Path,
+    current: &Path,
+    receipts: &mut Vec<ExtractedPathReceipt>,
+) -> Result<(), SpeechPackError> {
+    for entry in fs::read_dir(current).map_err(|_| SpeechPackError::InvalidArchive)? {
+        let entry = entry.map_err(|_| SpeechPackError::InvalidArchive)?;
+        let path = entry.path();
+        ensure_contained(root, &path)?;
+        canonical_contained(root, &path)?;
+        let metadata = fs::symlink_metadata(&path).map_err(|_| SpeechPackError::InvalidArchive)?;
+        let relative_path = path
+            .strip_prefix(root)
+            .map_err(|_| SpeechPackError::InvalidArchive)?
+            .to_string_lossy()
+            .into_owned();
+        if metadata.file_type().is_dir() {
+            receipts.push(ExtractedPathReceipt {
+                relative_path,
+                kind: ExtractedPathKind::Directory,
+                byte_size: None,
+                sha256: None,
+            });
+            collect_extracted_path_receipts(root, &path, receipts)?;
+        } else if metadata.file_type().is_file() {
+            let inspection = inspect_regular_file(&path, SpeechPackError::CorruptCache)?;
+            receipts.push(ExtractedPathReceipt {
+                relative_path,
+                kind: ExtractedPathKind::File,
+                byte_size: Some(inspection.byte_size),
+                sha256: Some(inspection.sha256),
+            });
+        } else {
+            return Err(SpeechPackError::InvalidArchive);
+        }
+    }
     Ok(())
 }
 
@@ -670,10 +871,11 @@ fn safe_archive_path(path: &Path) -> Result<PathBuf, SpeechPackError> {
 
 fn require_file(root: &Path, path: &Path) -> Result<(), SpeechPackError> {
     ensure_contained(root, path)?;
-    fs::metadata(path)
+    canonical_contained(root, path)?;
+    fs::symlink_metadata(path)
         .map_err(|_| SpeechPackError::InvalidArchive)
         .and_then(|metadata| {
-            if metadata.is_file() {
+            if metadata.file_type().is_file() {
                 Ok(())
             } else {
                 Err(SpeechPackError::InvalidArchive)
@@ -683,10 +885,11 @@ fn require_file(root: &Path, path: &Path) -> Result<(), SpeechPackError> {
 
 fn require_directory(root: &Path, path: &Path) -> Result<(), SpeechPackError> {
     ensure_contained(root, path)?;
-    fs::metadata(path)
+    canonical_contained(root, path)?;
+    fs::symlink_metadata(path)
         .map_err(|_| SpeechPackError::InvalidArchive)
         .and_then(|metadata| {
-            if metadata.is_dir() {
+            if metadata.file_type().is_dir() {
                 Ok(())
             } else {
                 Err(SpeechPackError::InvalidArchive)
@@ -705,11 +908,18 @@ fn ensure_contained(root: &Path, path: &Path) -> Result<(), SpeechPackError> {
 }
 
 fn inspect_file(path: &Path) -> Result<FileInspection, SpeechPackError> {
-    let mut file = File::open(path).map_err(|_| SpeechPackError::CorruptCache)?;
-    let metadata = file.metadata().map_err(|_| SpeechPackError::CorruptCache)?;
-    if !metadata.is_file() {
-        return Err(SpeechPackError::CorruptCache);
+    inspect_regular_file(path, SpeechPackError::CorruptCache)
+}
+
+fn inspect_regular_file(
+    path: &Path,
+    error: SpeechPackError,
+) -> Result<FileInspection, SpeechPackError> {
+    let metadata = fs::symlink_metadata(path).map_err(|_| error.clone())?;
+    if !metadata.file_type().is_file() {
+        return Err(error);
     }
+    let mut file = File::open(path).map_err(|_| SpeechPackError::CorruptCache)?;
     let mut hasher = Sha256::new();
     let mut buffer = [0_u8; 64 * 1024];
     loop {
@@ -728,24 +938,87 @@ fn inspect_file(path: &Path) -> Result<FileInspection, SpeechPackError> {
 }
 
 fn directory_size(path: &Path) -> Result<u64, SpeechPackError> {
-    if !path.exists() {
-        return Ok(0);
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_dir() => {}
+        Ok(metadata) if metadata.file_type().is_file() => return Ok(metadata.len()),
+        Ok(_) => return Err(SpeechPackError::InvalidArchive),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(_) => return Err(SpeechPackError::State),
     }
     let mut total = 0_u64;
     for entry in fs::read_dir(path).map_err(|_| SpeechPackError::State)? {
         let entry = entry.map_err(|_| SpeechPackError::State)?;
-        let metadata = entry.metadata().map_err(|_| SpeechPackError::State)?;
-        if metadata.is_dir() {
+        let metadata = fs::symlink_metadata(entry.path()).map_err(|_| SpeechPackError::State)?;
+        if metadata.file_type().is_dir() {
             total = total
                 .checked_add(directory_size(&entry.path())?)
                 .ok_or(SpeechPackError::ResourceLimit)?;
-        } else if metadata.is_file() {
+        } else if metadata.file_type().is_file() {
             total = total
                 .checked_add(metadata.len())
                 .ok_or(SpeechPackError::ResourceLimit)?;
         } else {
             return Err(SpeechPackError::InvalidArchive);
         }
+    }
+    Ok(total)
+}
+
+fn canonical_contained(root: &Path, path: &Path) -> Result<(), SpeechPackError> {
+    let root = root
+        .canonicalize()
+        .map_err(|_| SpeechPackError::InvalidArchive)?;
+    let path = path
+        .canonicalize()
+        .map_err(|_| SpeechPackError::InvalidArchive)?;
+    if path.starts_with(&root) {
+        Ok(())
+    } else {
+        Err(SpeechPackError::InvalidArchive)
+    }
+}
+
+fn quota_baseline_without_temp(
+    config: &SpeechPackManagerConfig,
+    temp_root: &Path,
+) -> Result<u64, SpeechPackError> {
+    if config.quota_bytes.is_none() {
+        return Ok(0);
+    }
+    let mut total = 0_u64;
+    for dir in [cache_dir(&config.root), extracted_dir(&config.root)] {
+        total = total
+            .checked_add(directory_size_excluding(&dir, temp_root)?)
+            .ok_or(SpeechPackError::ResourceLimit)?;
+    }
+    Ok(total)
+}
+
+fn directory_size_excluding(path: &Path, excluded: &Path) -> Result<u64, SpeechPackError> {
+    let excluded = excluded
+        .canonicalize()
+        .ok()
+        .unwrap_or_else(|| excluded.to_path_buf());
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_dir() => {}
+        Ok(metadata) if metadata.file_type().is_file() => return Ok(metadata.len()),
+        Ok(_) => return Err(SpeechPackError::InvalidArchive),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(_) => return Err(SpeechPackError::State),
+    }
+    let path_key = path
+        .canonicalize()
+        .ok()
+        .unwrap_or_else(|| path.to_path_buf());
+    if path_key == excluded {
+        return Ok(0);
+    }
+    let mut total = 0_u64;
+    for entry in fs::read_dir(path).map_err(|_| SpeechPackError::State)? {
+        let entry = entry.map_err(|_| SpeechPackError::State)?;
+        total = total
+            .checked_add(directory_size_excluding(&entry.path(), &excluded)?)
+            .ok_or(SpeechPackError::ResourceLimit)?;
     }
     Ok(total)
 }
@@ -984,6 +1257,18 @@ mod tests {
         SpeechPackManager::open(config).expect("manager")
     }
 
+    fn quota_manager(root: &Path, max_asset_bytes: u64, quota_bytes: u64) -> SpeechPackManager {
+        let mut config = SpeechPackManagerConfig::new(root, Some(quota_bytes)).expect("config");
+        let mut policy = DownloadPolicy::https_only(max_asset_bytes).expect("policy");
+        policy.allow_loopback_http = true;
+        config.download_policy = policy;
+        config.max_extracted_bytes = 4 * 1024 * 1024;
+        config.max_file_bytes = 2 * 1024 * 1024;
+        config.max_entries = 64;
+        config.max_files = 32;
+        SpeechPackManager::open(config).expect("manager")
+    }
+
     fn make_archive(root: &str, model_stem: &str) -> Vec<u8> {
         make_archive_with(root, model_stem, &[])
     }
@@ -1050,6 +1335,7 @@ mod tests {
                 archive_bytes: entry.archive.byte_size,
                 extracted_bytes: directory_size(&extracted).expect("size"),
                 installed_at: now_epoch_seconds(),
+                receipt: build_binding_receipt(&extracted, entry).expect("receipt"),
             },
         );
         write_state_atomic(root, &state).expect("state");
@@ -1122,7 +1408,7 @@ mod tests {
         let reopened = test_manager(directory.path(), archive.len() as u64 + 100);
         let state = read_state(directory.path()).expect("state");
         assert_eq!(state.installed.len(), 1);
-        assert!(reopened.resolve_entry_bindings(&entry).is_ok());
+        assert!(reopened.resolve_catalog_entry_for_test(&entry).is_ok());
     }
 
     #[test]
@@ -1229,6 +1515,114 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn quota_preflight_uses_archive_bytes_and_extraction_enforces_actual_usage() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let root = "vits-piper-en_US-ljspeech-medium";
+        let archive = make_archive(root, "en_US-ljspeech-medium");
+        let server = OneShotServer::new(archive.clone());
+        let entry = test_entry(server.url.to_string(), &archive);
+        let quota = archive.len() as u64 + 8;
+        let manager = quota_manager(directory.path(), archive.len() as u64 + 100, quota);
+
+        assert_eq!(
+            manager
+                .install_catalog_entry_for_test(&entry, &CancellationToken::new(), |_| {})
+                .await,
+            Err(SpeechPackError::ResourceLimit)
+        );
+        assert!(read_state(directory.path())
+            .expect("state")
+            .installed
+            .is_empty());
+        assert!(!extract_root(directory.path(), &entry.archive.sha256).exists());
+        assert!(!extracted_dir(directory.path())
+            .join(format!("{}{}", TMP_PREFIX, entry.archive.sha256))
+            .exists());
+    }
+
+    #[tokio::test]
+    async fn tampered_installed_file_is_restored_from_verified_archive() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let root = "vits-piper-en_US-ljspeech-medium";
+        let archive = make_archive(root, "en_US-ljspeech-medium");
+        let server = OneShotServer::new(archive.clone());
+        let entry = test_entry(server.url.to_string(), &archive);
+        let manager = test_manager(directory.path(), archive.len() as u64 + 100);
+        manager
+            .install_catalog_entry_for_test(&entry, &CancellationToken::new(), |_| {})
+            .await
+            .expect("install");
+        fs::write(
+            extract_root(directory.path(), &entry.archive.sha256).join(&entry.bindings.model),
+            b"tampered",
+        )
+        .expect("tamper");
+
+        let bindings = manager
+            .resolve_catalog_entry_for_test(&entry)
+            .expect("resolve after recovery");
+
+        assert_eq!(fs::read(bindings.model).expect("model"), b"onnx");
+    }
+
+    #[tokio::test]
+    async fn tampered_installed_file_without_verified_archive_is_marked_corrupt() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let root = "vits-piper-en_US-ljspeech-medium";
+        let archive = make_archive(root, "en_US-ljspeech-medium");
+        let server = OneShotServer::new(archive.clone());
+        let entry = test_entry(server.url.to_string(), &archive);
+        let manager = test_manager(directory.path(), archive.len() as u64 + 100);
+        manager
+            .install_catalog_entry_for_test(&entry, &CancellationToken::new(), |_| {})
+            .await
+            .expect("install");
+        fs::write(
+            extract_root(directory.path(), &entry.archive.sha256).join(&entry.bindings.model),
+            b"tampered",
+        )
+        .expect("tamper");
+        remove_file_if_exists(&archive_path(directory.path(), &entry.archive.sha256))
+            .expect("remove archive");
+
+        assert_eq!(
+            manager.resolve_catalog_entry_for_test(&entry),
+            Err(SpeechPackError::CorruptCache)
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn symlink_tamper_is_rejected_and_restored_from_verified_archive() {
+        use std::os::unix::fs::symlink;
+
+        let directory = tempfile::tempdir().expect("tempdir");
+        let root = "vits-piper-en_US-ljspeech-medium";
+        let archive = make_archive(root, "en_US-ljspeech-medium");
+        let server = OneShotServer::new(archive.clone());
+        let entry = test_entry(server.url.to_string(), &archive);
+        let manager = test_manager(directory.path(), archive.len() as u64 + 100);
+        manager
+            .install_catalog_entry_for_test(&entry, &CancellationToken::new(), |_| {})
+            .await
+            .expect("install");
+        let model =
+            extract_root(directory.path(), &entry.archive.sha256).join(&entry.bindings.model);
+        remove_file_if_exists(&model).expect("remove model");
+        symlink("/tmp/outside-model", &model).expect("symlink tamper");
+
+        let bindings = manager
+            .resolve_catalog_entry_for_test(&entry)
+            .expect("resolve after recovery");
+
+        assert!(fs::symlink_metadata(&bindings.model)
+            .expect("model metadata")
+            .file_type()
+            .is_file());
+        assert_eq!(fs::read(bindings.model).expect("model"), b"onnx");
+    }
+
+    #[tokio::test]
     async fn cancellation_before_install_leaves_no_installed_voice() {
         let directory = tempfile::tempdir().expect("tempdir");
         let root = "vits-piper-en_US-ljspeech-medium";
@@ -1303,6 +1697,10 @@ mod tests {
                 expected_bytes: self.config.max_extracted_bytes,
             });
             let bindings = self.resolve_entry_bindings(entry)?;
+            let receipt = build_binding_receipt(
+                &extract_root(&self.config.root, &entry.archive.sha256),
+                entry,
+            )?;
             let mut state = read_state(&self.config.root)?;
             state.installed.insert(
                 entry.voice_id.clone(),
@@ -1314,6 +1712,7 @@ mod tests {
                     archive_bytes: entry.archive.byte_size,
                     extracted_bytes: report.extracted_bytes,
                     installed_at: now_epoch_seconds(),
+                    receipt,
                 },
             );
             write_state_atomic(&self.config.root, &state)?;
@@ -1323,6 +1722,25 @@ mod tests {
                 expected_bytes: entry.archive.byte_size,
             });
             Ok(bindings)
+        }
+
+        fn resolve_catalog_entry_for_test(
+            &self,
+            entry: &TtsCatalogEntry,
+        ) -> Result<SpeechPackBindings, SpeechPackError> {
+            let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
+            let mut state = read_state(&self.config.root)?;
+            let record = state
+                .installed
+                .get(&entry.voice_id)
+                .cloned()
+                .ok_or(SpeechPackError::UnknownVoice)?;
+            let updated = self.ensure_record_verified_or_recovered(entry, record)?;
+            if state.installed.get(&entry.voice_id) != Some(&updated) {
+                state.installed.insert(entry.voice_id.clone(), updated);
+                write_state_atomic(&self.config.root, &state)?;
+            }
+            self.resolve_entry_bindings(entry)
         }
     }
 }
