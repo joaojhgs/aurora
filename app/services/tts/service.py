@@ -128,6 +128,36 @@ def _text_log_metadata(text: str) -> str:
     return f"text_chars={len(text)}"
 
 
+def _safe_tts_error(exc: Exception) -> str:
+    """Return a stable non-sensitive error code for logs and events."""
+    if isinstance(exc, TTSProviderError):
+        return f"tts_provider_{exc.code}"
+    if isinstance(exc, (VoiceCatalogError, VoiceRegistryError)):
+        return "tts_voice_management_failed"
+    return f"tts_{type(exc).__name__.lower()}"
+
+
+def _safe_tts_event_error(exc: Exception) -> str:
+    """Return a product-safe TTS error event message."""
+    if isinstance(exc, TTSProviderError) and exc.code in {
+        "unsupported_voice",
+        "unavailable",
+        "capability_changed",
+    }:
+        return "TTS voice is unavailable"
+    if isinstance(exc, TTSProviderError) and exc.code == "cancelled":
+        return "TTS request was cancelled"
+    return "TTS request failed"
+
+
+def _trusted_manifest_keys(registry_cfg: object | None) -> tuple[str, ...]:
+    """Normalize generated config root models into raw public-key strings."""
+    keys = getattr(registry_cfg, "trusted_manifest_public_keys", None)
+    if not keys:
+        return ()
+    return tuple(str(getattr(key, "root", key)) for key in keys if str(getattr(key, "root", key)))
+
+
 @dataclass
 class _TTSStreamState:
     """Internal ordered state for a text-to-audio stream."""
@@ -361,7 +391,8 @@ class TTSService(BaseService):
             await provider.stop()
         except Exception as cleanup_error:
             log_error(
-                f"Failed to stop TTS provider after {context}: {cleanup_error}", exc_info=True
+                f"Failed to stop TTS provider after {context}: "
+                f"error={_safe_tts_error(cleanup_error)}"
             )
 
     async def _stop_playback_stream(self, stream: object | None) -> None:
@@ -628,7 +659,7 @@ class TTSService(BaseService):
             log_info("TTS engine initialized successfully")
 
         except Exception as e:
-            log_error(f"Failed to initialize TTS engine: {e}", exc_info=True)
+            log_error(f"Failed to initialize TTS engine: error={_safe_tts_error(e)}")
             raise
 
     async def _initialize_engine_fail_soft(self, context: str) -> bool:
@@ -640,7 +671,9 @@ class TTSService(BaseService):
             self._provider = None
             self.engine = None
             self.stream = None
-            log_error(f"TTS runtime unavailable during {context}: {exc}", exc_info=True)
+            log_error(
+                f"TTS runtime unavailable during {context}: error={_safe_tts_error(exc)}",
+            )
             return False
 
     def _on_audio_start(self):
@@ -798,7 +831,9 @@ class TTSService(BaseService):
             except Exception as e:
                 if new_provider is not None and not new_runtime_installed:
                     await self._stop_provider_safely(new_provider, "reload pre-swap failure")
-                log_error(f"Failed to reinitialize TTS engine: {e}", exc_info=True)
+                log_error(
+                    f"Failed to reinitialize TTS engine: error={_safe_tts_error(e)}",
+                )
         else:
             log_debug(f"TTS service reloaded for section: {config_section}")
 
@@ -885,7 +920,8 @@ class TTSService(BaseService):
         fingerprint, response = cached
         if fingerprint != self._mutation_fingerprint(request):
             raise ValueError("operation_id payload mismatch")
-        if hasattr(response, "model_fields") and "idempotent" in response.model_fields:
+        response_fields = getattr(type(response), "model_fields", {})
+        if "idempotent" in response_fields:
             return response.model_copy(update={"idempotent": True})
         return response
 
@@ -921,6 +957,13 @@ class TTSService(BaseService):
             asset_base_url=registry_cfg.asset_base_url if registry_cfg else None,
             cache_dir=resolve_path(cache_dir),
             registry=self._voice_registry(tts_cfg),
+            trusted_manifest_sha256=(
+                registry_cfg.trusted_manifest_sha256 if registry_cfg else None
+            ),
+            trusted_manifest_public_keys=_trusted_manifest_keys(registry_cfg),
+            trusted_manifest_signature=(
+                registry_cfg.trusted_manifest_signature if registry_cfg else None
+            ),
         )
 
     async def _current_voice_profiles(self) -> list[TTSVoiceProfileDescriptor]:
@@ -930,6 +973,7 @@ class TTSService(BaseService):
         if tts_cfg.provider == "pockettts":
             with contextlib.suppress(Exception):
                 registry_entries = list(await self._voice_registry(tts_cfg).inventory())
+        default_voice_id = tts_cfg.default_voice_id
         active_voice_id: str | None = None
         provider_ready = False
         if self._provider is not None:
@@ -1474,12 +1518,15 @@ class TTSService(BaseService):
             )
             try:
                 result = await installer.install_voice(request.voice_id)
-            except (VoiceCatalogError, VoiceRegistryError):
-                log_error("TTS voice install failed: error=VoiceCatalogError")
+            except (VoiceCatalogError, VoiceRegistryError) as exc:
+                log_error(f"TTS voice install failed: error={_safe_tts_error(exc)}")
                 response = TTSInstallVoiceProfileResponse(
                     voice_id=request.voice_id,
                     status="rejected",
                     correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "install_voice_profile", request, response, envelope
                 )
                 self._cache_mutation("install_voice_profile", request, response, envelope)
                 return response
@@ -1491,6 +1538,9 @@ class TTSService(BaseService):
                 correlation_id=request.correlation_id,
             )
             await self._initialize_engine_fail_soft("voice install")
+            await self._audit_voice_management(
+                "install_voice_profile", request, response, envelope
+            )
             self._cache_mutation("install_voice_profile", request, response, envelope)
         return response
 
@@ -1585,10 +1635,27 @@ class TTSService(BaseService):
                 self._provider = None
                 self.engine = None
                 self.stream = None
-            await self._voice_registry(tts_cfg).delete_voice(request.voice_id)
+            try:
+                await self._voice_registry(tts_cfg).delete_voice(request.voice_id)
+            except VoiceRegistryError as exc:
+                log_error(f"TTS voice removal failed: error={_safe_tts_error(exc)}")
+                response = TTSRemoveVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="rejected",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "remove_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("remove_voice_profile", request, response, envelope)
+                return response
             self._voice_revision += 1
             if status == "drained":
                 await self._initialize_engine_fail_soft("voice removal")
+            await self._audit_voice_management(
+                "remove_voice_profile", request, response, envelope
+            )
             self._cache_mutation("remove_voice_profile", request, response, envelope)
         return response
 
@@ -1677,6 +1744,7 @@ class TTSService(BaseService):
             )
             self._voice_revision += 1
             await self._initialize_engine_fail_soft("default voice change")
+            await self._audit_voice_management("set_default_voice", request, response, envelope)
             self._cache_mutation("set_default_voice", request, response, envelope)
         return response
 
@@ -2108,13 +2176,13 @@ class TTSService(BaseService):
             return EmptyOutput()
 
         except Exception as e:
-            log_error(f"Error handling TTS request: {e}", exc_info=True)
+            log_error(f"Error handling TTS request: error={_safe_tts_error(e)}")
             import uuid
 
             request_id = str(uuid.uuid4())
             await self.bus.publish(
                 TTSMethods.ERROR,
-                TTSErrorEvent(request_id=request_id, error=str(e)),
+                TTSErrorEvent(request_id=request_id, error=_safe_tts_event_error(e)),
                 event=True,
                 mesh=False,
                 origin="internal",
@@ -2179,10 +2247,10 @@ class TTSService(BaseService):
                 )
             return EmptyOutput()
         except Exception as e:
-            log_error(f"Error starting TTS stream: {e}", exc_info=True)
+            log_error(f"Error starting TTS stream: error={_safe_tts_error(e)}")
             await self._publish_stream_error(
                 request.stream_id,
-                str(e),
+                _safe_tts_event_error(e),
                 request.correlation_id or _envelope_correlation_id(envelope),
                 caller_peer_id=_envelope_caller_peer_id(envelope),
                 principal_id=_envelope_principal_id(envelope),
@@ -2227,10 +2295,12 @@ class TTSService(BaseService):
             await self._drain_stream(request.stream_id)
             return EmptyOutput()
         except Exception as e:
-            log_error(f"Error processing TTS stream chunk: {e}", exc_info=True)
+            log_error(
+                f"Error processing TTS stream chunk: error={_safe_tts_error(e)}",
+            )
             await self._publish_stream_error(
                 request.stream_id,
-                str(e),
+                _safe_tts_event_error(e),
                 request.correlation_id or _envelope_correlation_id(envelope),
                 caller_peer_id=_envelope_caller_peer_id(envelope),
                 principal_id=_envelope_principal_id(envelope),
@@ -2271,10 +2341,10 @@ class TTSService(BaseService):
             await self._drain_stream(request.stream_id)
             return EmptyOutput()
         except Exception as e:
-            log_error(f"Error ending TTS stream: {e}", exc_info=True)
+            log_error(f"Error ending TTS stream: error={_safe_tts_error(e)}")
             await self._publish_stream_error(
                 request.stream_id,
-                str(e),
+                _safe_tts_event_error(e),
                 request.correlation_id or _envelope_correlation_id(envelope),
                 caller_peer_id=_envelope_caller_peer_id(envelope),
                 principal_id=_envelope_principal_id(envelope),
@@ -2328,7 +2398,7 @@ class TTSService(BaseService):
             )
             return EmptyOutput()
         except Exception as e:
-            log_error(f"Error stopping TTS: {e}", exc_info=True)
+            log_error(f"Error stopping TTS: error={_safe_tts_error(e)}")
             return EmptyOutput()
 
     @method_contract(
@@ -2363,7 +2433,7 @@ class TTSService(BaseService):
                 )
             return EmptyOutput()
         except Exception as e:
-            log_error(f"Error pausing TTS: {e}", exc_info=True)
+            log_error(f"Error pausing TTS: error={_safe_tts_error(e)}")
             return EmptyOutput()
 
     @method_contract(
@@ -2398,7 +2468,7 @@ class TTSService(BaseService):
                 )
             return EmptyOutput()
         except Exception as e:
-            log_error(f"Error resuming TTS: {e}", exc_info=True)
+            log_error(f"Error resuming TTS: error={_safe_tts_error(e)}")
             return EmptyOutput()
 
     async def _ensure_voice_available(self, voice: str | None) -> None:
@@ -2406,10 +2476,10 @@ class TTSService(BaseService):
         if voice is None:
             return
         if self._provider is None:
-            raise RuntimeError("TTS provider not initialized")
+            raise TTSProviderError("unavailable", "TTS voice is unavailable")
         voices = await self._provider.list_voices()
         if not any(item.voice_id == voice and item.ready for item in voices):
-            raise RuntimeError("Requested voice is unavailable")
+            raise TTSProviderError("unsupported_voice", "TTS voice is unavailable")
 
     def _begin_playback_request(self, request_id: str, text: str) -> int:
         """Register a provider-backed playback request before synthesis starts."""
@@ -2508,7 +2578,7 @@ class TTSService(BaseService):
             # when the audio stream actually finishes playing
 
         except Exception as e:
-            log_error(f"Error playing TTS: {e}", exc_info=True)
+            log_error(f"Error playing TTS: error={_safe_tts_error(e)}")
             self._playing = False
             self._current_text = None
             self._current_request_id = None
@@ -2645,7 +2715,7 @@ class TTSService(BaseService):
             Tuple of (audio_bytes, sample_rate)
         """
         if self._provider is None:
-            raise RuntimeError("TTS provider not initialized")
+            raise TTSProviderError("unavailable", "TTS voice is unavailable")
         try:
             result = await self._provider.synthesize(
                 ProviderSynthesisRequest(
@@ -2658,7 +2728,7 @@ class TTSService(BaseService):
                 )
             )
         except TTSProviderError as exc:
-            raise RuntimeError(str(exc)) from exc
+            raise RuntimeError(_safe_tts_event_error(exc)) from exc
         return result.audio, result.sample_rate
 
     @method_contract(
@@ -2730,7 +2800,7 @@ class TTSService(BaseService):
             )
 
         except Exception as e:
-            log_error(f"Error in TTS synthesis: {e}", exc_info=True)
+            log_error(f"Error in TTS synthesis: error={_safe_tts_error(e)}")
             raise
 
     async def _drain_stream(self, stream_id: str) -> None:
@@ -2849,7 +2919,7 @@ class TTSService(BaseService):
                         stream_id, stream_epoch
                     ):
                         return
-                    raise RuntimeError(str(exc)) from exc
+                    raise RuntimeError(_safe_tts_event_error(exc)) from exc
                 finally:
                     async with self._stream_state_lock:
                         state = self._stream_states.get(stream_id)

@@ -244,7 +244,7 @@ async def test_synthesize_maps_piper_failure_without_echoing_request_text(
             TTSSynthesizeRequest(text="private words", voice="standard:test:missing", format="wav")
         )
 
-    assert str(exc_info.value) == "Requested voice is unavailable"
+    assert str(exc_info.value) == "TTS voice is unavailable"
     assert "private words" not in str(exc_info.value)
 
 
@@ -264,7 +264,7 @@ async def test_tts_request_error_event_does_not_include_request_text(
     error_call = next(
         call for call in mock_bus.publish.await_args_list if call.args[0] == TTSMethods.ERROR
     )
-    assert error_call.args[1].error == "audio output unavailable"
+    assert error_call.args[1].error == "TTS request failed"
     assert not hasattr(error_call.args[1], "text")
     assert error_call.kwargs["event"] is True
     assert error_call.kwargs["mesh"] is False
@@ -283,7 +283,7 @@ async def test_tts_request_validates_requested_voice_before_server_playback(
     error_call = next(
         call for call in mock_bus.publish.await_args_list if call.args[0] == TTSMethods.ERROR
     )
-    assert error_call.args[1].error == "Requested voice is unavailable"
+    assert error_call.args[1].error == "TTS voice is unavailable"
     assert not hasattr(error_call.args[1], "text")
 
 

@@ -519,6 +519,22 @@ def _assert_outcome_audit(mock_bus, *, method: str, status: str) -> None:
     assert details["status"] == status
 
 
+def _assert_last_two_management_audits(
+    mock_bus, *, method: str, outcome_status: str
+) -> None:
+    intent_call, outcome_call = mock_bus.request.await_args_list[-2:]
+    assert intent_call.args[0] == AuthMethods.STORE_AUDIT_EVENT
+    assert outcome_call.args[0] == AuthMethods.STORE_AUDIT_EVENT
+    intent_details = json.loads(intent_call.args[1].details)
+    outcome_details = json.loads(outcome_call.args[1].details)
+    assert intent_details["method"] == method
+    assert intent_details["phase"] == "intent"
+    assert intent_details["status"] == "attempted"
+    assert outcome_details["method"] == method
+    assert outcome_details["phase"] == "outcome"
+    assert outcome_details["status"] == outcome_status
+
+
 @pytest.mark.asyncio
 async def test_pockettts_runtime_uses_system_language_quality_and_no_realtimetts(
     monkeypatch, mock_bus
@@ -871,6 +887,30 @@ def test_tts_voice_registration_contract_metadata() -> None:
             assert metadata["method_type"] == "manage"
             assert metadata["required_perms"] == ["TTS.manage"]
             assert metadata["callable_feature_ids"] == ["speech_voice_management"]
+
+
+def test_voice_catalog_installer_receives_configured_trust_policy(tmp_path) -> None:
+    service = TTSService()
+    tts_cfg = Tts(
+        provider="pockettts",
+        voice_registry=VoiceRegistryConfig(
+            manifest_path="https://example.test/voices.manifest.json",
+            asset_base_url="https://example.test/assets/",
+            trusted_manifest_sha256="a" * 64,
+            trusted_manifest_public_keys=["b" * 32, "c" * 32],
+            trusted_manifest_signature="d" * 64,
+            cache_dir=str(tmp_path),
+        ),
+        providers=Providers(pockettts=Pockettts()),
+    )
+
+    installer = service._voice_catalog_installer(tts_cfg)
+
+    assert installer.manifest_path == "https://example.test/voices.manifest.json"
+    assert installer.asset_base_url == "https://example.test/assets/"
+    assert installer.trusted_manifest_sha256 == "a" * 64
+    assert installer.trusted_manifest_public_keys == ("b" * 32, "c" * 32)
+    assert installer.trusted_manifest_signature == "d" * 64
 
 
 @pytest.mark.asyncio
@@ -2051,7 +2091,7 @@ async def test_install_voice_profile_rejects_multi_asset_manifest(
 
 
 @pytest.mark.asyncio
-async def test_install_voice_profile_success_audits_intent_not_completed_outcome(
+async def test_install_voice_profile_success_audits_intent_and_committed_outcome(
     tmp_path, monkeypatch, mock_bus
 ) -> None:
     mock_bus.request = AsyncMock()
@@ -2109,7 +2149,9 @@ async def test_install_voice_profile_success_audits_intent_not_completed_outcome
     assert response.status == "installed"
     assert response.revision == "rev1"
     assert InstallingVoiceRegistry.install_calls == 1
-    _assert_intent_attempt_audit(mock_bus, method="install_voice_profile")
+    _assert_last_two_management_audits(
+        mock_bus, method="install_voice_profile", outcome_status="installed"
+    )
 
 
 @pytest.mark.asyncio
@@ -2151,6 +2193,60 @@ async def test_list_voice_profiles_includes_uninstalled_catalog_entries(
     assert [
         (profile.voice_id, profile.installed, profile.ready) for profile in response.profiles
     ] == [("standard:starter_en:alba", False, False)]
+
+
+@pytest.mark.asyncio
+async def test_voice_profiles_keep_default_and_active_independent(monkeypatch, mock_bus) -> None:
+    default_voice = "standard:starter_en:bela"
+    active_voice = "standard:starter_en:alba"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=active_voice,
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            artifact_refs=("artifacts/alba/voice-state.safetensors",),
+            source_retained=False,
+        ),
+        types.SimpleNamespace(
+            voice_id=default_voice,
+            display_name="Bela",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev2",
+            artifact_refs=("artifacts/bela/voice-state.safetensors",),
+            source_retained=False,
+        ),
+    ]
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            default_voice_id=default_voice,
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    service = TTSService()
+    service._provider = FakeVoiceListingProvider((), active_voice=active_voice)
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    response = await service.list_voice_profiles(TTSListVoiceProfilesRequest())
+
+    by_id = {profile.voice_id: profile for profile in response.profiles}
+    assert by_id[active_voice].active is True
+    assert by_id[active_voice].default is False
+    assert by_id[default_voice].active is False
+    assert by_id[default_voice].default is True
 
 
 @pytest.mark.asyncio
@@ -2255,7 +2351,69 @@ async def test_remove_standard_voice_profile_deletes_registry_artifacts(
 
     assert response.status == "removed"
     assert FakeVoiceRegistry.deleted == ["standard:starter_en:alba"]
-    _assert_intent_attempt_audit(mock_bus, method="remove_voice_profile")
+    _assert_last_two_management_audits(
+        mock_bus, method="remove_voice_profile", outcome_status="removed"
+    )
+
+
+@pytest.mark.asyncio
+async def test_remove_active_voice_does_not_clear_different_persisted_default(
+    monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    active_voice = "standard:starter_en:alba"
+    default_voice = "standard:starter_en:bela"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=active_voice,
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            artifact_refs=("artifacts/alba/voice-state.safetensors",),
+            source_retained=False,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            default_voice_id=default_voice,
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    updated_paths: list[tuple[str, object]] = []
+
+    async def fake_update(path: str, value: object, *, timeout: float = 15.0) -> bool:
+        del timeout
+        updated_paths.append((path, value))
+        return True
+
+    service = TTSService()
+    service._provider = FakeVoiceListingProvider((), active_voice=active_voice)
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.config_api.aupdate_config", fake_update)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr(service, "_initialize_engine_fail_soft", AsyncMock(return_value=True))
+
+    response = await service.remove_voice_profile(
+        TTSRemoveVoiceProfileRequest(
+            operation_id="remove-active-not-default",
+            voice_id=active_voice,
+            expected_revision="rev1",
+        )
+    )
+
+    assert response.status == "drained"
+    assert updated_paths == []
+    assert FakeVoiceRegistry.deleted == [active_voice]
+    _assert_last_two_management_audits(
+        mock_bus, method="remove_voice_profile", outcome_status="drained"
+    )
 
 
 @pytest.mark.asyncio
@@ -2305,7 +2463,9 @@ async def test_set_default_voice_persists_config_and_reloads_runtime(monkeypatch
     assert response.status == "activated"
     assert updated_paths == [("services.tts.default_voice_id", "standard:starter_en:alba")]
     reload_runtime.assert_awaited_once_with("default voice change")
-    _assert_intent_attempt_audit(mock_bus, method="set_default_voice")
+    _assert_last_two_management_audits(
+        mock_bus, method="set_default_voice", outcome_status="activated"
+    )
 
 
 @pytest.mark.asyncio
