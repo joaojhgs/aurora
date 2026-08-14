@@ -482,7 +482,7 @@ async function loadControlledSherpaHelpers(urls: readonly string[], fetchImpl: t
   const helpers: MutableSherpaHelpers = {}
   for (const url of urls) await fetchNeutralEngineSource(url, fetchImpl)
   for (const url of urls) {
-    const module = await import(/* @vite-ignore */ url) as Partial<SherpaHelpers> & { readonly OfflineRecognizer?: unknown }
+    const module = await dynamicImport(url) as Partial<SherpaHelpers> & { readonly OfflineRecognizer?: unknown }
     if (typeof module.createVad === 'function') helpers.createVad = module.createVad
     if (typeof module.createOfflineRecognizer === 'function') helpers.createOfflineRecognizer = module.createOfflineRecognizer
     if (helpers.createOfflineRecognizer === undefined && typeof module.OfflineRecognizer === 'function') {
@@ -497,7 +497,7 @@ async function loadControlledSherpaHelpers(urls: readonly string[], fetchImpl: t
 
 async function loadControlledSherpaModule(url: string, _files: readonly AuroraVoiceWebModelFileBinding[], fetchImpl: typeof fetch): Promise<SherpaModule> {
   await fetchNeutralEngineSource(url, fetchImpl)
-  const imported = await import(/* @vite-ignore */ url) as { readonly default?: unknown }
+  const imported = await dynamicImport(url) as { readonly default?: unknown }
   if (typeof imported.default !== 'function') throw unavailable('safe_sherpa_loader_missing')
   const wasmUrl = wasmUrlForEngineModule(url)
   await assertFetchableNeutralWasm(wasmUrl, fetchImpl)
@@ -511,6 +511,10 @@ async function loadControlledSherpaModule(url: string, _files: readonly AuroraVo
       return new URL(path, url).href
     }
   }) as Promise<SherpaModule>
+}
+
+function dynamicImport(url: string): Promise<unknown> {
+  return Function('url', 'return import(url)')(url) as Promise<unknown>
 }
 
 export async function fetchNeutralEngineSource(url: string, fetchImpl: typeof fetch = globalThis.fetch): Promise<string> {
