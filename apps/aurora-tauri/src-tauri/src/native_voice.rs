@@ -22,21 +22,25 @@ use {
     },
     aurora_voice_native::{
         build_installed_kws_provider_from_phrases, build_installed_stt_provider,
-        build_installed_tts_provider, build_installed_vad_provider, CpalAudioInput,
-        CpalAudioOutput, GatewayAuth, MicrophoneAudioPolicy, NativeAudioConfig,
-        NativeCaptureConfig, NativeCaptureControl, NativeGatewayCaptureGrant,
-        NativeGatewayCaptureHandoff, NativeGatewayCaptureHandoffConfig, NativeGatewayFiniteStt,
-        NativeGatewayFiniteSttConfig, NativeGatewayTransport, NativeGatewayTtsConfig,
-        NativeGatewayTtsSynthesizer, SpeechPackManager, SpeechPackManagerConfig, TransportLimits,
+        build_installed_tts_provider, build_installed_tts_provider_with_reference,
+        build_installed_vad_provider, CpalAudioInput, CpalAudioOutput, GatewayAuth,
+        MicrophoneAudioPolicy, NativeAudioConfig, NativeCaptureConfig, NativeCaptureControl,
+        NativeGatewayCaptureGrant, NativeGatewayCaptureHandoff, NativeGatewayCaptureHandoffConfig,
+        NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig, NativeGatewayTransport,
+        NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer, SpeechPackManager,
+        SpeechPackManagerConfig, TransportLimits,
     },
     aurora_voice_sherpa::{
-        NativeKwsBackend, NativeVadBackend, SherpaKwsPhraseInput, SherpaKwsProvider,
-        SherpaVadProvider,
+        NativeKwsBackend, NativeTtsReferenceAudio, NativeVadBackend, SherpaKwsPhraseInput,
+        SherpaKwsProvider, SherpaVadProvider,
     },
     serde_json::Value,
+    sha2::{Digest, Sha256},
     std::cell::Cell,
     std::cell::RefCell,
-    std::path::PathBuf,
+    std::fs,
+    std::io::Write,
+    std::path::{Path, PathBuf},
     std::rc::Rc,
     std::thread,
     std::time::Duration,
@@ -67,6 +71,12 @@ const DEVICE_ROUTE: &str = "default";
 const ROUTE_REVISION: u64 = 1;
 #[cfg(desktop)]
 const TTS_MAX_AUDIO_SAMPLES: usize = 16_000 * 30;
+#[cfg(desktop)]
+const TTS_REFERENCE_PROFILE_VERSION: u8 = 1;
+#[cfg(desktop)]
+const TTS_REFERENCE_PROFILE_MAX_JSON_BYTES: u64 = 16 * 1024 * 1024;
+#[cfg(desktop)]
+const TTS_REFERENCE_PROFILE_MAX_TEXT_BYTES: usize = 4096;
 #[cfg(desktop)]
 const HANDOFF_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
 #[cfg(desktop)]
@@ -1214,14 +1224,36 @@ fn build_runtime(
                 .voice_id
                 .as_deref()
                 .ok_or_else(|| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+            let voice_catalog = TtsVoiceCatalog::embedded()
+                .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+            let voice = voice_catalog
+                .voice(voice_id)
+                .ok_or_else(|| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+            let manager = manager
+                .as_ref()
+                .ok_or_else(|| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+            let provider = match voice.model_family.as_str() {
+                "vits_piper" => build_installed_tts_provider(manager, voice_id),
+                "pockettts" => {
+                    let reference_profile_id =
+                        selection.reference_profile_id.as_deref().ok_or_else(|| {
+                            NativeVoiceCommandError::unavailable("local_speech_unavailable")
+                        })?;
+                    let reference_profile =
+                        load_desktop_tts_reference_profile(app, reference_profile_id, voice_id)?;
+                    build_installed_tts_provider_with_reference(
+                        manager,
+                        voice_id,
+                        Some(reference_profile.to_native()?),
+                        reference_profile.reference_text.clone(),
+                    )
+                }
+                _ => Err(EngineError::InvalidRequest),
+            };
             DesktopTts::new(
-                build_installed_tts_provider(
-                    manager.as_ref().ok_or_else(|| {
-                        NativeVoiceCommandError::unavailable("local_speech_unavailable")
-                    })?,
-                    voice_id,
-                )
-                .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?,
+                provider.map_err(|_| {
+                    NativeVoiceCommandError::unavailable("local_speech_unavailable")
+                })?,
             )
         }
         None => {
@@ -1470,6 +1502,233 @@ fn speech_pack_manager_at(root: PathBuf) -> Result<SpeechPackManager, NativeVoic
         .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
     SpeechPackManager::open(config)
         .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))
+}
+
+#[cfg(desktop)]
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DesktopTtsReferenceProfile {
+    version: u8,
+    id: String,
+    #[serde(default)]
+    voice_id: Option<String>,
+    sample_rate_hz: i32,
+    samples: Vec<f32>,
+    #[serde(default)]
+    reference_text: Option<String>,
+    #[serde(default)]
+    revision: Option<String>,
+}
+
+#[cfg(desktop)]
+impl DesktopTtsReferenceProfile {
+    fn new(
+        id: String,
+        voice_id: Option<String>,
+        sample_rate_hz: i32,
+        samples: Vec<f32>,
+        reference_text: Option<String>,
+        revision: Option<String>,
+    ) -> Self {
+        Self {
+            version: TTS_REFERENCE_PROFILE_VERSION,
+            id,
+            voice_id,
+            sample_rate_hz,
+            samples,
+            reference_text,
+            revision,
+        }
+    }
+
+    fn to_native(&self) -> Result<NativeTtsReferenceAudio, NativeVoiceCommandError> {
+        NativeTtsReferenceAudio::new(self.sample_rate_hz, self.samples.clone())
+            .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))
+    }
+}
+
+#[cfg(desktop)]
+impl std::fmt::Debug for DesktopTtsReferenceProfile {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("DesktopTtsReferenceProfile")
+            .field("version", &self.version)
+            .field("id", &self.id)
+            .field("voice_id", &self.voice_id)
+            .field("sample_rate_hz", &self.sample_rate_hz)
+            .field("sample_count", &self.samples.len())
+            .field("samples", &"<redacted>")
+            .field(
+                "reference_text_bytes",
+                &self.reference_text.as_ref().map(String::len),
+            )
+            .field("revision", &self.revision)
+            .finish()
+    }
+}
+
+#[cfg(desktop)]
+fn desktop_tts_reference_profile_dir_at(root: &Path) -> PathBuf {
+    root.join("speech-packs").join("reference-profiles")
+}
+
+#[cfg(desktop)]
+fn desktop_tts_reference_profile_path_at(root: &Path, profile_id: &str) -> PathBuf {
+    let mut hasher = Sha256::new();
+    hasher.update(profile_id.as_bytes());
+    let digest = hasher.finalize();
+    let mut file_name = String::with_capacity(69);
+    for byte in digest {
+        file_name.push_str(&format!("{byte:02x}"));
+    }
+    file_name.push_str(".json");
+    desktop_tts_reference_profile_dir_at(root).join(file_name)
+}
+
+#[cfg(desktop)]
+fn validate_desktop_tts_reference_profile(
+    profile: &DesktopTtsReferenceProfile,
+    expected_id: &str,
+    expected_voice_id: &str,
+) -> Result<(), NativeVoiceCommandError> {
+    if profile.version != TTS_REFERENCE_PROFILE_VERSION
+        || profile.id != expected_id
+        || !valid_reference_profile_id(&profile.id)
+        || profile
+            .voice_id
+            .as_deref()
+            .is_some_and(|voice_id| voice_id != expected_voice_id)
+    {
+        return Err(NativeVoiceCommandError::unavailable(
+            "local_speech_unavailable",
+        ));
+    }
+    if let Some(reference_text) = &profile.reference_text {
+        if reference_text.trim().is_empty()
+            || reference_text.len() > TTS_REFERENCE_PROFILE_MAX_TEXT_BYTES
+            || reference_text.as_bytes().contains(&0)
+        {
+            return Err(NativeVoiceCommandError::unavailable(
+                "local_speech_unavailable",
+            ));
+        }
+    }
+    if profile
+        .revision
+        .as_deref()
+        .is_some_and(|revision| !valid_reference_profile_id(revision))
+    {
+        return Err(NativeVoiceCommandError::unavailable(
+            "local_speech_unavailable",
+        ));
+    }
+    let _ = profile.to_native()?;
+    Ok(())
+}
+
+#[cfg(desktop)]
+fn load_desktop_tts_reference_profile_at(
+    root: &Path,
+    profile_id: &str,
+    expected_voice_id: &str,
+) -> Result<DesktopTtsReferenceProfile, NativeVoiceCommandError> {
+    if !valid_reference_profile_id(profile_id) {
+        return Err(NativeVoiceCommandError::unavailable(
+            "local_speech_unavailable",
+        ));
+    }
+    let path = desktop_tts_reference_profile_path_at(root, profile_id);
+    let metadata = fs::metadata(&path)
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    if !metadata.is_file() || metadata.len() > TTS_REFERENCE_PROFILE_MAX_JSON_BYTES {
+        return Err(NativeVoiceCommandError::unavailable(
+            "local_speech_unavailable",
+        ));
+    }
+    let payload = fs::read_to_string(&path)
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    let profile: DesktopTtsReferenceProfile = serde_json::from_str(&payload)
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    validate_desktop_tts_reference_profile(&profile, profile_id, expected_voice_id)?;
+    Ok(profile)
+}
+
+#[cfg(desktop)]
+fn load_desktop_tts_reference_profile(
+    app: &AppHandle,
+    profile_id: &str,
+    expected_voice_id: &str,
+) -> Result<DesktopTtsReferenceProfile, NativeVoiceCommandError> {
+    let root = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    load_desktop_tts_reference_profile_at(&root, profile_id, expected_voice_id)
+}
+
+#[cfg(desktop)]
+#[allow(dead_code)]
+pub(super) fn store_desktop_tts_reference_profile(
+    app: &AppHandle,
+    profile_id: String,
+    voice_id: String,
+    sample_rate_hz: i32,
+    samples: Vec<f32>,
+    reference_text: Option<String>,
+    revision: Option<String>,
+) -> Result<(), NativeVoiceCommandError> {
+    let root = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    let profile = DesktopTtsReferenceProfile::new(
+        profile_id,
+        Some(voice_id.clone()),
+        sample_rate_hz,
+        samples,
+        reference_text,
+        revision,
+    );
+    store_desktop_tts_reference_profile_at(&root, &profile, &voice_id)
+}
+
+#[cfg(desktop)]
+fn store_desktop_tts_reference_profile_at(
+    root: &Path,
+    profile: &DesktopTtsReferenceProfile,
+    expected_voice_id: &str,
+) -> Result<(), NativeVoiceCommandError> {
+    validate_desktop_tts_reference_profile(profile, &profile.id, expected_voice_id)?;
+    let dir = desktop_tts_reference_profile_dir_at(root);
+    fs::create_dir_all(&dir)
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    let path = desktop_tts_reference_profile_path_at(root, &profile.id);
+    let temp = path.with_extension("json.tmp");
+    let payload = serde_json::to_vec(profile)
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    if payload.len() as u64 > TTS_REFERENCE_PROFILE_MAX_JSON_BYTES {
+        return Err(NativeVoiceCommandError::unavailable(
+            "local_speech_unavailable",
+        ));
+    }
+    {
+        let mut file = fs::File::create(&temp)
+            .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let permissions = fs::Permissions::from_mode(0o600);
+            file.set_permissions(permissions)
+                .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+        }
+        file.write_all(&payload)
+            .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+        file.sync_all()
+            .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    }
+    fs::rename(temp, path)
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    Ok(())
 }
 
 #[cfg(desktop)]
@@ -1754,6 +2013,8 @@ struct LocalSpeechAssetSelection {
     voice_id: Option<String>,
     #[serde(default)]
     voice_revision: Option<String>,
+    #[serde(default)]
+    reference_profile_id: Option<String>,
 }
 
 #[cfg(desktop)]
@@ -1928,6 +2189,7 @@ fn validate_local_speech_selection(selection: &LocalSpeechSelection) -> Result<(
         if selected.pack_revision != speech_catalog.revision()
             || selected.voice_id.is_some()
             || selected.voice_revision.is_some()
+            || selected.reference_profile_id.is_some()
             || speech_catalog
                 .model(&selected.pack_id)
                 .is_none_or(|entry| entry.task != expected_task)
@@ -1953,16 +2215,35 @@ fn validate_local_speech_selection(selection: &LocalSpeechSelection) -> Result<(
     if let Some(selected) = &selection.tts {
         let catalog = TtsVoiceCatalog::embedded().map_err(|_| PROFILE_REASON)?;
         let voice_id = selected.voice_id.as_deref().ok_or(PROFILE_REASON)?;
+        let voice = catalog.voice(voice_id).ok_or(PROFILE_REASON)?;
         if selected.pack_revision != catalog.revision()
             || selected.voice_revision.as_deref() != Some(catalog.revision())
-            || catalog
-                .voice(voice_id)
-                .is_none_or(|entry| entry.language != selected.pack_id)
+            || voice.language != selected.pack_id
         {
             return Err(PROFILE_REASON);
         }
+        match (
+            voice.model_family.as_str(),
+            selected.reference_profile_id.as_deref(),
+        ) {
+            ("pockettts", Some(reference_profile_id))
+                if valid_reference_profile_id(reference_profile_id) => {}
+            ("pockettts", _) => return Err(PROFILE_REASON),
+            (_, Some(_)) => return Err(PROFILE_REASON),
+            _ => {}
+        }
     }
     Ok(())
+}
+
+#[cfg(desktop)]
+fn valid_reference_profile_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 256
+        && value.as_bytes()[0].is_ascii_alphanumeric()
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b':'))
 }
 
 #[cfg(desktop)]
@@ -2206,6 +2487,15 @@ fn reason_from_core_error(error: &VoiceCoreError) -> &'static str {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[cfg(desktop)]
+    fn unique_test_dir(name: &str) -> PathBuf {
+        let suffix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        std::env::temp_dir().join(format!("aurora-{name}-{}-{suffix}", std::process::id()))
+    }
 
     #[cfg(desktop)]
     #[test]
@@ -2582,6 +2872,7 @@ mod tests {
                     pack_revision: catalog.revision().to_owned(),
                     voice_id: None,
                     voice_revision: None,
+                    reference_profile_id: None,
                 }),
                 ..LocalSpeechSelection::default()
             },
@@ -2631,6 +2922,7 @@ mod tests {
                 pack_revision: catalog.revision().to_owned(),
                 voice_id: None,
                 voice_revision: None,
+                reference_profile_id: None,
             }),
             ..LocalSpeechSelection::default()
         });
@@ -2671,31 +2963,39 @@ mod tests {
         let vad = vad_models.first().expect("vad model");
         let kws = kws_models.first().expect("kws model");
         let stt = stt_models.first().expect("stt model");
-        let voice = voice_catalog.entries.first().expect("tts voice");
+        let voice = voice_catalog
+            .entries
+            .iter()
+            .find(|entry| entry.model_family == "vits_piper")
+            .expect("piper tts voice");
         let selection = LocalSpeechSelection {
             vad: Some(LocalSpeechAssetSelection {
                 pack_id: vad.model_id.clone(),
                 pack_revision: speech_catalog.revision().to_owned(),
                 voice_id: None,
                 voice_revision: None,
+                reference_profile_id: None,
             }),
             kws: Some(LocalSpeechAssetSelection {
                 pack_id: kws.model_id.clone(),
                 pack_revision: speech_catalog.revision().to_owned(),
                 voice_id: None,
                 voice_revision: None,
+                reference_profile_id: None,
             }),
             stt: Some(LocalSpeechAssetSelection {
                 pack_id: stt.model_id.clone(),
                 pack_revision: speech_catalog.revision().to_owned(),
                 voice_id: None,
                 voice_revision: None,
+                reference_profile_id: None,
             }),
             tts: Some(LocalSpeechAssetSelection {
                 pack_id: voice.language.clone(),
                 pack_revision: voice_catalog.revision().to_owned(),
                 voice_id: Some(voice.voice_id.clone()),
                 voice_revision: Some(voice_catalog.revision().to_owned()),
+                reference_profile_id: None,
             }),
             wake_phrase: None,
         };
@@ -2738,6 +3038,7 @@ mod tests {
                 pack_revision: "stale".to_owned(),
                 voice_id: None,
                 voice_revision: None,
+                reference_profile_id: None,
             }),
             ..LocalSpeechSelection::default()
         };
@@ -2752,6 +3053,7 @@ mod tests {
                 pack_revision: speech_catalog.revision().to_owned(),
                 voice_id: None,
                 voice_revision: None,
+                reference_profile_id: None,
             }),
             ..LocalSpeechSelection::default()
         };
@@ -2766,6 +3068,7 @@ mod tests {
                 pack_revision: speech_catalog.revision().to_owned(),
                 voice_id: Some("standard:piper:en_us-ljspeech-medium".to_owned()),
                 voice_revision: None,
+                reference_profile_id: None,
             }),
             ..LocalSpeechSelection::default()
         };
@@ -2795,6 +3098,7 @@ mod tests {
                 pack_revision: catalog.revision().to_owned(),
                 voice_id: None,
                 voice_revision: None,
+                reference_profile_id: None,
             }),
             wake_phrase: Some(phrase.clone()),
             ..LocalSpeechSelection::default()
@@ -2826,7 +3130,11 @@ mod tests {
     #[test]
     fn local_speech_selection_rejects_invalid_tts_voice_binding() {
         let voice_catalog = TtsVoiceCatalog::embedded().expect("voice catalog");
-        let voice = voice_catalog.entries.first().expect("tts voice");
+        let voice = voice_catalog
+            .entries
+            .iter()
+            .find(|entry| entry.model_family == "vits_piper")
+            .expect("piper tts voice");
 
         let wrong_language = LocalSpeechSelection {
             tts: Some(LocalSpeechAssetSelection {
@@ -2834,6 +3142,7 @@ mod tests {
                 pack_revision: voice_catalog.revision().to_owned(),
                 voice_id: Some(voice.voice_id.clone()),
                 voice_revision: Some(voice_catalog.revision().to_owned()),
+                reference_profile_id: None,
             }),
             ..LocalSpeechSelection::default()
         };
@@ -2848,6 +3157,7 @@ mod tests {
                 pack_revision: voice_catalog.revision().to_owned(),
                 voice_id: Some(voice.voice_id.clone()),
                 voice_revision: Some("stale".to_owned()),
+                reference_profile_id: None,
             }),
             ..LocalSpeechSelection::default()
         };
@@ -2862,6 +3172,7 @@ mod tests {
                 pack_revision: "stale".to_owned(),
                 voice_id: Some(voice.voice_id.clone()),
                 voice_revision: Some(voice_catalog.revision().to_owned()),
+                reference_profile_id: None,
             }),
             ..LocalSpeechSelection::default()
         };
@@ -2876,6 +3187,7 @@ mod tests {
                 pack_revision: voice_catalog.revision().to_owned(),
                 voice_id: None,
                 voice_revision: None,
+                reference_profile_id: None,
             }),
             ..LocalSpeechSelection::default()
         };
@@ -2883,6 +3195,118 @@ mod tests {
             validate_local_speech_selection(&model_without_selected_voice),
             Err(PROFILE_REASON)
         );
+    }
+
+    #[test]
+    fn pocket_tts_selection_requires_explicit_reference_profile() {
+        let voice_catalog = TtsVoiceCatalog::embedded().expect("voice catalog");
+        let voice = voice_catalog
+            .entries
+            .iter()
+            .find(|entry| entry.model_family == "pockettts")
+            .expect("pockettts voice");
+
+        let missing_reference = LocalSpeechSelection {
+            tts: Some(LocalSpeechAssetSelection {
+                pack_id: voice.language.clone(),
+                pack_revision: voice_catalog.revision().to_owned(),
+                voice_id: Some(voice.voice_id.clone()),
+                voice_revision: Some(voice_catalog.revision().to_owned()),
+                reference_profile_id: None,
+            }),
+            ..LocalSpeechSelection::default()
+        };
+        assert_eq!(
+            validate_local_speech_selection(&missing_reference),
+            Err(PROFILE_REASON)
+        );
+
+        let explicit_reference = LocalSpeechSelection {
+            tts: Some(LocalSpeechAssetSelection {
+                pack_id: voice.language.clone(),
+                pack_revision: voice_catalog.revision().to_owned(),
+                voice_id: Some(voice.voice_id.clone()),
+                voice_revision: Some(voice_catalog.revision().to_owned()),
+                reference_profile_id: Some("speaker:voice-1".to_owned()),
+            }),
+            ..LocalSpeechSelection::default()
+        };
+        validate_local_speech_selection(&explicit_reference).expect("pocket reference profile");
+
+        let piper = voice_catalog
+            .entries
+            .iter()
+            .find(|entry| entry.model_family == "vits_piper")
+            .expect("piper voice");
+        let piper_with_reference = LocalSpeechSelection {
+            tts: Some(LocalSpeechAssetSelection {
+                pack_id: piper.language.clone(),
+                pack_revision: voice_catalog.revision().to_owned(),
+                voice_id: Some(piper.voice_id.clone()),
+                voice_revision: Some(voice_catalog.revision().to_owned()),
+                reference_profile_id: Some("speaker:voice-1".to_owned()),
+            }),
+            ..LocalSpeechSelection::default()
+        };
+        assert_eq!(
+            validate_local_speech_selection(&piper_with_reference),
+            Err(PROFILE_REASON)
+        );
+    }
+
+    #[test]
+    fn desktop_tts_reference_profiles_are_private_bounded_and_redacted() {
+        let root = unique_test_dir("desktop-tts-reference");
+        let voice_id = "standard:pockettts:en-us-test";
+        let profile = DesktopTtsReferenceProfile::new(
+            "speaker:voice-1".to_owned(),
+            Some(voice_id.to_owned()),
+            16_000,
+            vec![0.0, 0.1, -0.1, 0.0],
+            Some("reference text".to_owned()),
+            Some("rev-1".to_owned()),
+        );
+        store_desktop_tts_reference_profile_at(&root, &profile, voice_id).expect("store profile");
+        let path = desktop_tts_reference_profile_path_at(&root, "speaker:voice-1");
+        assert!(path.exists());
+        assert!(!path.to_string_lossy().contains("speaker:voice-1"));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&path).expect("metadata").permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+
+        let loaded = load_desktop_tts_reference_profile_at(&root, "speaker:voice-1", voice_id)
+            .expect("load profile");
+        assert_eq!(loaded.reference_text.as_deref(), Some("reference text"));
+        let debug = format!("{loaded:?}");
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains("0.1"));
+
+        let empty = DesktopTtsReferenceProfile::new(
+            "speaker:empty".to_owned(),
+            Some(voice_id.to_owned()),
+            16_000,
+            Vec::new(),
+            None,
+            None,
+        );
+        assert!(store_desktop_tts_reference_profile_at(&root, &empty, voice_id).is_err());
+
+        let unknown = serde_json::json!({
+            "version": TTS_REFERENCE_PROFILE_VERSION,
+            "id": "speaker:unknown",
+            "voiceId": voice_id,
+            "sampleRateHz": 16000,
+            "samples": [0.0, 0.1],
+            "rawAudioPath": "/private/path.wav"
+        });
+        let unknown_path = desktop_tts_reference_profile_path_at(&root, "speaker:unknown");
+        fs::write(&unknown_path, unknown.to_string()).expect("write unknown profile");
+        assert!(load_desktop_tts_reference_profile_at(&root, "speaker:unknown", voice_id).is_err());
+
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -2932,12 +3356,14 @@ mod tests {
                     pack_revision: speech_catalog.revision().to_owned(),
                     voice_id: None,
                     voice_revision: None,
+                    reference_profile_id: None,
                 }),
                 kws: Some(LocalSpeechAssetSelection {
                     pack_id: kws_model_id,
                     pack_revision: speech_catalog.revision().to_owned(),
                     voice_id: None,
                     voice_revision: None,
+                    reference_profile_id: None,
                 }),
                 wake_phrase: Some(LocalWakePhraseSelection {
                     phrase_id: DEFAULT_WAKE_PHRASE_ID.to_owned(),
@@ -2999,6 +3425,7 @@ mod tests {
                     pack_revision: speech_catalog.revision().to_owned(),
                     voice_id: None,
                     voice_revision: None,
+                    reference_profile_id: None,
                 }),
                 ..LocalSpeechSelection::default()
             },
@@ -3013,12 +3440,14 @@ mod tests {
                     pack_revision: speech_catalog.revision().to_owned(),
                     voice_id: None,
                     voice_revision: None,
+                    reference_profile_id: None,
                 }),
                 kws: Some(LocalSpeechAssetSelection {
                     pack_id: kws_model_id,
                     pack_revision: speech_catalog.revision().to_owned(),
                     voice_id: None,
                     voice_revision: None,
+                    reference_profile_id: None,
                 }),
                 wake_phrase: Some(LocalWakePhraseSelection {
                     phrase_id: DEFAULT_WAKE_PHRASE_ID.to_owned(),
