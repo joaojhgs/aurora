@@ -332,7 +332,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "Gateway.ExplainRoute",
         direction: "input",
         model_name: "RouteExplainRequest",
-        schema_hash: "d05010e28be60b0dd3ae969cef25872b43158512976806b473fe430dbe756561",
+        schema_hash: "8016d24300f51a4ffcacd85f07d3764e5f373276bbb36a8081b99650e357d77d",
         schema_json: include_str!("../schema/route_explain_request.json"),
     },
     SchemaDescriptor {
@@ -484,7 +484,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "TTS.CreateVoiceProfile",
         direction: "input",
         model_name: "TTSCreateVoiceProfileRequest",
-        schema_hash: "11fc8f0c64f33e9d874885cf8a0b21917fb0f22f37709191b411158d92ee5203",
+        schema_hash: "71864d04c37f9d3891344d90eb1c694da70e06c9b1ad131e174276d13b861d15",
         schema_json: include_str!("../schema/tts_create_voice_profile_request.json"),
     },
     SchemaDescriptor {
@@ -524,7 +524,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "TTS.GetCapabilities",
         direction: "output",
         model_name: "TTSGetCapabilitiesResponse",
-        schema_hash: "038cb33a1ca8eafea60a326169eb770b91032226281ade8613427e706ed8fb29",
+        schema_hash: "01b05a49afa867e44fa37e1801bc85a2757f4055001dbee0afe71a741f58c155",
         schema_json: include_str!("../schema/tts_get_capabilities_response.json"),
     },
     SchemaDescriptor {
@@ -580,7 +580,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "TTS.ListVoices",
         direction: "input",
         model_name: "TTSListVoicesRequest",
-        schema_hash: "52a2cd8c57d91f1c49accf6ee916d477970ccef16c06fc381b7926f01300f9aa",
+        schema_hash: "5a67735133d22419018f9e3f35063734fc61d78a182d0011b4a691d5db384d1e",
         schema_json: include_str!("../schema/tts_list_voices_request.json"),
     },
     SchemaDescriptor {
@@ -612,7 +612,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "TTS.Request",
         direction: "input",
         model_name: "TTSRequest",
-        schema_hash: "efaf5f938c5119a8569cbd8dfe941543adfb31bff29efcc470430420e1d2c467",
+        schema_hash: "847bdcf850fb47d40ef76f6e827fbd24282ed9464bd2d847b4f46d94aa45d29a",
         schema_json: include_str!("../schema/tts_request.json"),
     },
     SchemaDescriptor {
@@ -676,7 +676,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "TTS.StreamStart",
         direction: "input",
         model_name: "TTSStreamStartRequest",
-        schema_hash: "b4d6db1532cd3519475101c2b6bf28cb6a6d144eb4b42293680f51a1768f31e6",
+        schema_hash: "00bb387df534190b9026e472cff6d6c1deeed67429a309bfdc731cbb13f8d498",
         schema_json: include_str!("../schema/tts_stream_start_request.json"),
     },
     SchemaDescriptor {
@@ -692,7 +692,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "TTS.Synthesize",
         direction: "input",
         model_name: "TTSSynthesizeRequest",
-        schema_hash: "d5408ff48dccb96b3ee7c1c578ce9c27b10f7a33e37fbb97430e2d8222ab8bb6",
+        schema_hash: "64b7c626f0fb673eb8ed097d9098c0ed3a9c44937f7c87f0f461b6261500dc25",
         schema_json: include_str!("../schema/tts_synthesize_request.json"),
     },
     SchemaDescriptor {
@@ -868,7 +868,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "Transcription.Transcribe",
         direction: "input",
         model_name: "TranscribeAudioRequest",
-        schema_hash: "00a0d251f18c3afec3b2593dfe57999a7fdaae76d3b937b3bdec90bbd3a7f56f",
+        schema_hash: "3628310e0ac6d0b784ae6197b91dcc55fe1e9b3b5b33d08bffd45f5baac983fa",
         schema_json: include_str!("../schema/transcribe_audio_request.json"),
     },
     SchemaDescriptor {

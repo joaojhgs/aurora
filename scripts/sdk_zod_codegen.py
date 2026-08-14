@@ -1133,7 +1133,7 @@ def render_zod_module(contract_schema: dict[str, Any]) -> str:
         "  return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(',')}}`",
         "}",
         "function speechLanguageRequirementDigest(value: Record<string, unknown>): string {",
-        "  return bytesToHex(sha256(new TextEncoder().encode(canonicalJson({ auto_language_candidates: Array.isArray(value.auto_language_candidates) ? value.auto_language_candidates : [], language: value.language ?? null, mode: value.mode, table_revision: typeof value.table_revision === 'string' ? value.table_revision : 'aurora-speech-language-v1' }))))",
+        "  return bytesToHex(sha256(new TextEncoder().encode(canonicalJson({ auto_language_candidates: Array.isArray(value.auto_language_candidates) ? value.auto_language_candidates : [], language: value.language ?? null, mode: value.mode, table_revision: typeof value.table_revision === 'string' ? value.table_revision : 'aurora-speech-language-v2' }))))",
         "}",
         "",
         "function hasControlCharacter(value: string): boolean {",

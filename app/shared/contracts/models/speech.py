@@ -11,33 +11,24 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.shared.contracts.io_model import IOModel
 
-SPEECH_LANGUAGE_TABLE_REVISION: Literal["aurora-speech-language-v1"] = "aurora-speech-language-v1"
+SPEECH_LANGUAGE_TABLE_REVISION: Literal["aurora-speech-language-v2"] = "aurora-speech-language-v2"
 SPEECH_ROUTE_REQUIREMENT_REVISION: Literal["aurora-speech-route-requirement-v1"] = (
     "aurora-speech-route-requirement-v1"
 )
-SpeechLanguageTag = Literal["de", "en", "es", "fr", "it", "ja", "ko", "pt", "zh"]
+SPEECH_LANGUAGE_TAG_PATTERN = r"^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$"
+SpeechLanguageTag = Annotated[
+    str,
+    Field(min_length=2, max_length=255, pattern=SPEECH_LANGUAGE_TAG_PATTERN),
+]
 NormalizedSpeechLanguage = SpeechLanguageTag | Literal["auto"]
 
-SUPPORTED_SPEECH_LANGUAGE_TAGS: tuple[SpeechLanguageTag, ...] = (
-    "de",
-    "en",
-    "es",
-    "fr",
-    "it",
-    "ja",
-    "ko",
-    "pt",
-    "zh",
-)
-# V1 intentionally declares no locale fallbacks. A locale such as pt-BR stays
-# ineligible until a later table revision names the exact pt-BR -> pt mapping.
-SUPPORTED_SPEECH_LOCALE_FALLBACKS: tuple[tuple[str, str], ...] = ()
 MAX_SPEECH_LANGUAGE_CANDIDATES = 8
-MAX_SPEECH_CONSTRAINT_LANGUAGES = 64
+MAX_SPEECH_CONSTRAINT_LANGUAGES = 1024
 MAX_READY_VOICE_IDS = 256
 MAX_JS_SAFE_INTEGER = 9_007_199_254_740_991
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_SPEECH_LANGUAGE_TAG_RE = re.compile(SPEECH_LANGUAGE_TAG_PATTERN)
 _STANDARD_VOICE_ID_PATTERN = r"standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}"
 _CLONE_VOICE_ID_PATTERN = (
     r"clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
@@ -52,7 +43,12 @@ _CLONE_VOICE_ID_RE = re.compile(rf"^{_CLONE_VOICE_ID_PATTERN}$")
 def normalize_speech_language(
     value: str | None, *, allow_auto: bool = False
 ) -> NormalizedSpeechLanguage | None:
-    """Normalize a wire language tag against Aurora's explicit v1 table."""
+    """Normalize an open BCP 47-style speech language tag.
+
+    Pack catalogs remain authoritative for runtime availability. Accepting a
+    well-formed tag here only makes it routable; it does not claim that a model
+    for the language is installed.
+    """
 
     if value is None:
         return None
@@ -63,8 +59,8 @@ def normalize_speech_language(
         return None
     if allow_auto and normalized == "auto":
         return "auto"
-    if normalized not in SUPPORTED_SPEECH_LANGUAGE_TAGS:
-        raise ValueError(f"unsupported speech language: {value!r}")
+    if not _SPEECH_LANGUAGE_TAG_RE.fullmatch(normalized):
+        raise ValueError(f"invalid BCP 47 speech language: {value!r}")
     return cast(SpeechLanguageTag, normalized)
 
 
@@ -112,7 +108,7 @@ class SpeechLanguageRequirement(IOModel):
     auto_language_candidates: list[SpeechLanguageTag] = Field(
         default_factory=list, max_length=MAX_SPEECH_LANGUAGE_CANDIDATES
     )
-    table_revision: Literal["aurora-speech-language-v1"] = SPEECH_LANGUAGE_TABLE_REVISION
+    table_revision: Literal["aurora-speech-language-v2"] = SPEECH_LANGUAGE_TABLE_REVISION
     digest: str | None = None
 
     model_config = ConfigDict(extra="forbid")
@@ -205,7 +201,7 @@ def compute_speech_projection_binding_revision(
 
 
 class SpeechLocaleFallback(IOModel):
-    """Explicit locale/language fallback supported by a resident speech model."""
+    """Explicit locale/language fallback declared by a resident speech pack."""
 
     requested_language: SpeechLanguageTag
     served_language: SpeechLanguageTag
@@ -219,9 +215,8 @@ class SpeechLocaleFallback(IOModel):
 
     @model_validator(mode="after")
     def _validate_declared_fallback(self) -> SpeechLocaleFallback:
-        fallback = (self.requested_language, self.served_language)
-        if fallback not in SUPPORTED_SPEECH_LOCALE_FALLBACKS:
-            raise ValueError("locale fallback is not declared by the language table")
+        if self.requested_language == self.served_language:
+            raise ValueError("fallback requested and served languages must differ")
         return self
 
 
@@ -231,7 +226,7 @@ class SpeechMethodConstraints(IOModel):
     constraint_version: Literal["aurora-speech-method-constraints-v1"] = (
         "aurora-speech-method-constraints-v1"
     )
-    locale_table_revision: Literal["aurora-speech-language-v1"] = SPEECH_LANGUAGE_TABLE_REVISION
+    locale_table_revision: Literal["aurora-speech-language-v2"] = SPEECH_LANGUAGE_TABLE_REVISION
     exact_languages: list[SpeechLanguageTag] = Field(
         default_factory=list, max_length=MAX_SPEECH_CONSTRAINT_LANGUAGES
     )

@@ -96,29 +96,10 @@
         "primary_language": {
           "type": "string",
           "title": "Primary language",
-          "description": "Language Aurora uses whenever one device language is required.",
-          "enum": [
-            "en",
-            "pt",
-            "es",
-            "fr",
-            "de",
-            "it",
-            "ja",
-            "ko",
-            "zh"
-          ],
-          "ui_choices": [
-            "en",
-            "pt",
-            "es",
-            "fr",
-            "de",
-            "it",
-            "ja",
-            "ko",
-            "zh"
-          ],
+          "description": "BCP 47 language tag Aurora uses whenever one device language is required. Available choices come from the installed speech-pack catalog.",
+          "pattern": "^(?:[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
+          "minLength": 2,
+          "maxLength": 255,
           "default": "en",
           "reload_impact": {
             "reload_required": true,
@@ -135,31 +116,10 @@
         "voice_language": {
           "type": "string",
           "title": "Voice language",
-          "description": "Automatic detects speech while spoken replies and wake listening use the primary language.",
-          "enum": [
-            "auto",
-            "en",
-            "pt",
-            "es",
-            "fr",
-            "de",
-            "it",
-            "ja",
-            "ko",
-            "zh"
-          ],
-          "ui_choices": [
-            "auto",
-            "en",
-            "pt",
-            "es",
-            "fr",
-            "de",
-            "it",
-            "ja",
-            "ko",
-            "zh"
-          ],
+          "description": "Automatic detection or a BCP 47 speech language tag from the installed speech-pack catalog.",
+          "pattern": "^(?:[Aa][Uu][Tt][Oo]|[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
+          "minLength": 2,
+          "maxLength": 255,
           "default": "auto",
           "reload_impact": {
             "reload_required": true,
@@ -773,31 +733,9 @@
           "properties": {
             "language": {
               "type": "string",
-              "enum": [
-                "",
-                "en",
-                "pt",
-                "es",
-                "fr",
-                "de",
-                "it",
-                "ja",
-                "ko",
-                "zh"
-              ],
-              "description": "Language for speech recognition (empty for auto-detect)",
-              "ui_choices": [
-                "",
-                "en",
-                "pt",
-                "es",
-                "fr",
-                "de",
-                "it",
-                "ja",
-                "ko",
-                "zh"
-              ],
+              "pattern": "^(?:|[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
+              "maxLength": 255,
+              "description": "BCP 47 language tag for speech recognition (empty for auto-detect)",
               "default": "en"
             },
             "coordinator": {

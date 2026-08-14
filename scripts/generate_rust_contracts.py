@@ -45,7 +45,7 @@ _MARKER_POSITIVE_INPUTS: dict[str, dict[str, Any]] = {
             "language_requirement": {
                 "mode": "auto",
                 "auto_language_candidates": [" EN ", "de", "en"],
-                "digest": "9b3fc27fe4d574def0265873b3d71aa1efa79169d71005ae823a56f398aac40c",
+                "digest": "977dad0465fea992514ab202f6deea54d7dcb5e9801711ebfb3bf25cf07bc793",
             }
         },
     },
@@ -319,14 +319,14 @@ def _marker_negative_cases(
             marker_paths, "language", "x-aurora-speech-language-string-normalize"
         )
         invalid = dict(base)
-        invalid["language"] = "pt_BR"
+        invalid["language"] = "en--US"
         add(invalid, "$.language", "speech_language", language_marker)
     if schema_id == "TTS.CreateVoiceProfile.input.TTSCreateVoiceProfileRequest":
         language_marker = _matching_marker_path(
             marker_paths, "language", "x-aurora-speech-language-string-normalize"
         )
         invalid = dict(base)
-        invalid["language"] = "pt_BR"
+        invalid["language"] = "en--US"
         add(invalid, "$.language", "speech_language", language_marker)
     if schema_id == "TTS.UpdateVoiceProfile.input.TTSUpdateVoiceProfileRequest":
         peer_marker = _matching_marker_path(
@@ -344,7 +344,7 @@ def _marker_negative_cases(
             "x-aurora-speech-language-array-normalize",
         )
         invalid = json.loads(json.dumps(base))
-        invalid["capabilities"]["ready_languages"] = ["pt_BR"]
+        invalid["capabilities"]["ready_languages"] = ["en--US"]
         add(invalid, "$.capabilities.ready_languages", "speech_language_array", ready_marker)
         resident_pack_ready_marker = _matching_marker_path(
             marker_paths,
@@ -352,7 +352,7 @@ def _marker_negative_cases(
             "x-aurora-speech-language-array-normalize",
         )
         invalid = json.loads(json.dumps(base))
-        invalid["capabilities"]["resident_language_packs"][0]["ready_languages"] = ["pt_BR"]
+        invalid["capabilities"]["resident_language_packs"][0]["ready_languages"] = ["en--US"]
         add(
             invalid,
             "$.capabilities.resident_language_packs.0.ready_languages",
@@ -454,7 +454,7 @@ def _marker_negative_cases(
             marker_paths, "language", "x-aurora-speech-language-auto-null"
         )
         invalid = dict(base)
-        invalid["language"] = "pt_BR"
+        invalid["language"] = "en--US"
         add(invalid, "$.language", "speech_language", language_marker)
         candidates_marker = _matching_marker_path(
             marker_paths,
@@ -462,7 +462,7 @@ def _marker_negative_cases(
             "x-aurora-speech-language-array-normalize",
         )
         invalid = dict(base)
-        invalid["auto_language_candidates"] = ["pt_BR"]
+        invalid["auto_language_candidates"] = ["en--US"]
         add(invalid, "$.auto_language_candidates", "speech_language_array", candidates_marker)
     if schema_id == "Gateway.ExplainRoute.input.RouteExplainRequest":
         raw_marker = _matching_marker_path(
@@ -504,7 +504,7 @@ def _marker_negative_cases(
             "x-aurora-speech-language-string-normalize",
         )
         invalid = json.loads(json.dumps(base))
-        invalid["speech"]["language_requirement"] = {"mode": "exact", "language": "pt_BR"}
+        invalid["speech"]["language_requirement"] = {"mode": "exact", "language": "en--US"}
         add(
             invalid,
             "$.speech.language_requirement.language",
@@ -517,7 +517,7 @@ def _marker_negative_cases(
             "x-aurora-speech-language-array-normalize",
         )
         invalid = json.loads(json.dumps(base))
-        invalid["speech"]["language_requirement"]["auto_language_candidates"] = ["pt_BR"]
+        invalid["speech"]["language_requirement"]["auto_language_candidates"] = ["en--US"]
         add(
             invalid,
             "$.speech.language_requirement.auto_language_candidates",

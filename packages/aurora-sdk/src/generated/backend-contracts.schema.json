@@ -314,7 +314,7 @@
       "callable_features": [],
       "exposure": "external",
       "input_model": "RouteExplainRequest",
-      "input_schema_hash": "d05010e28be60b0dd3ae969cef25872b43158512976806b473fe430dbe756561",
+      "input_schema_hash": "8016d24300f51a4ffcacd85f07d3764e5f373276bbb36a8081b99650e357d77d",
       "input_schema_id": "Gateway.ExplainRoute.input.RouteExplainRequest",
       "method_id": "Gateway.ExplainRoute",
       "method_type": "use",
@@ -449,7 +449,7 @@
       "module": "TTS",
       "name": "GetCapabilities",
       "output_model": "TTSGetCapabilitiesResponse",
-      "output_schema_hash": "038cb33a1ca8eafea60a326169eb770b91032226281ade8613427e706ed8fb29",
+      "output_schema_hash": "01b05a49afa867e44fa37e1801bc85a2757f4055001dbee0afe71a741f58c155",
       "output_schema_id": "TTS.GetCapabilities.output.TTSGetCapabilitiesResponse",
       "required_perms": [
         "TTS.use"
@@ -485,7 +485,7 @@
       ],
       "exposure": "both",
       "input_model": "TTSListVoicesRequest",
-      "input_schema_hash": "52a2cd8c57d91f1c49accf6ee916d477970ccef16c06fc381b7926f01300f9aa",
+      "input_schema_hash": "5a67735133d22419018f9e3f35063734fc61d78a182d0011b4a691d5db384d1e",
       "input_schema_id": "TTS.ListVoices.input.TTSListVoicesRequest",
       "method_id": "TTS.ListVoices",
       "method_type": "use",
@@ -1068,7 +1068,7 @@
       ],
       "exposure": "both",
       "input_model": "TTSCreateVoiceProfileRequest",
-      "input_schema_hash": "11fc8f0c64f33e9d874885cf8a0b21917fb0f22f37709191b411158d92ee5203",
+      "input_schema_hash": "71864d04c37f9d3891344d90eb1c694da70e06c9b1ad131e174276d13b861d15",
       "input_schema_id": "TTS.CreateVoiceProfile.input.TTSCreateVoiceProfileRequest",
       "method_id": "TTS.CreateVoiceProfile",
       "method_type": "manage",
@@ -1163,7 +1163,7 @@
       ],
       "exposure": "both",
       "input_model": "TTSRequest",
-      "input_schema_hash": "efaf5f938c5119a8569cbd8dfe941543adfb31bff29efcc470430420e1d2c467",
+      "input_schema_hash": "847bdcf850fb47d40ef76f6e827fbd24282ed9464bd2d847b4f46d94aa45d29a",
       "input_schema_id": "TTS.Request.input.TTSRequest",
       "method_id": "TTS.Request",
       "method_type": "use",
@@ -1207,7 +1207,7 @@
       ],
       "exposure": "both",
       "input_model": "TTSStreamStartRequest",
-      "input_schema_hash": "b4d6db1532cd3519475101c2b6bf28cb6a6d144eb4b42293680f51a1768f31e6",
+      "input_schema_hash": "00bb387df534190b9026e472cff6d6c1deeed67429a309bfdc731cbb13f8d498",
       "input_schema_id": "TTS.StreamStart.input.TTSStreamStartRequest",
       "method_id": "TTS.StreamStart",
       "method_type": "use",
@@ -1337,7 +1337,7 @@
       ],
       "exposure": "both",
       "input_model": "TTSSynthesizeRequest",
-      "input_schema_hash": "d5408ff48dccb96b3ee7c1c578ce9c27b10f7a33e37fbb97430e2d8222ab8bb6",
+      "input_schema_hash": "64b7c626f0fb673eb8ed097d9098c0ed3a9c44937f7c87f0f461b6261500dc25",
       "input_schema_id": "TTS.Synthesize.input.TTSSynthesizeRequest",
       "method_id": "TTS.Synthesize",
       "method_type": "use",
@@ -1739,7 +1739,7 @@
       ],
       "exposure": "both",
       "input_model": "TranscribeAudioRequest",
-      "input_schema_hash": "00a0d251f18c3afec3b2593dfe57999a7fdaae76d3b937b3bdec90bbd3a7f56f",
+      "input_schema_hash": "3628310e0ac6d0b784ae6197b91dcc55fe1e9b3b5b33d08bffd45f5baac983fa",
       "input_schema_id": "Transcription.Transcribe.input.TranscribeAudioRequest",
       "method_id": "Transcription.Transcribe",
       "method_type": "use",
@@ -2530,17 +2530,9 @@
             "properties": {
               "auto_language_candidates": {
                 "items": {
-                  "enum": [
-                    "de",
-                    "en",
-                    "es",
-                    "fr",
-                    "it",
-                    "ja",
-                    "ko",
-                    "pt",
-                    "zh"
-                  ],
+                  "maxLength": 255,
+                  "minLength": 2,
+                  "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
                   "type": "string"
                 },
                 "maxItems": 8,
@@ -2564,17 +2556,9 @@
               "language": {
                 "anyOf": [
                   {
-                    "enum": [
-                      "de",
-                      "en",
-                      "es",
-                      "fr",
-                      "it",
-                      "ja",
-                      "ko",
-                      "pt",
-                      "zh"
-                    ],
+                    "maxLength": 255,
+                    "minLength": 2,
+                    "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
                     "type": "string"
                   },
                   {
@@ -2594,8 +2578,8 @@
                 "type": "string"
               },
               "table_revision": {
-                "const": "aurora-speech-language-v1",
-                "default": "aurora-speech-language-v1",
+                "const": "aurora-speech-language-v2",
+                "default": "aurora-speech-language-v2",
                 "title": "Table Revision",
                 "type": "string"
               }
@@ -2684,7 +2668,7 @@
         "x-aurora-route-explain-selector-fields": true,
         "x-aurora-route-explain-speech-no-raw-payload": true
       },
-      "schema_hash": "d05010e28be60b0dd3ae969cef25872b43158512976806b473fe430dbe756561",
+      "schema_hash": "8016d24300f51a4ffcacd85f07d3764e5f373276bbb36a8081b99650e357d77d",
       "schema_id": "Gateway.ExplainRoute.input.RouteExplainRequest",
       "vectors": {}
     },
@@ -5867,17 +5851,9 @@
           "language": {
             "anyOf": [
               {
-                "enum": [
-                  "de",
-                  "en",
-                  "es",
-                  "fr",
-                  "it",
-                  "ja",
-                  "ko",
-                  "pt",
-                  "zh"
-                ],
+                "maxLength": 255,
+                "minLength": 2,
+                "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
                 "type": "string"
               },
               {
@@ -5931,7 +5907,7 @@
         "type": "object",
         "x-aurora-extra-behavior": "forbid"
       },
-      "schema_hash": "11fc8f0c64f33e9d874885cf8a0b21917fb0f22f37709191b411158d92ee5203",
+      "schema_hash": "71864d04c37f9d3891344d90eb1c694da70e06c9b1ad131e174276d13b861d15",
       "schema_id": "TTS.CreateVoiceProfile.input.TTSCreateVoiceProfileRequest",
       "vectors": {}
     },
@@ -6524,17 +6500,9 @@
               },
               "ready_languages": {
                 "items": {
-                  "enum": [
-                    "de",
-                    "en",
-                    "es",
-                    "fr",
-                    "it",
-                    "ja",
-                    "ko",
-                    "pt",
-                    "zh"
-                  ],
+                  "maxLength": 255,
+                  "minLength": 2,
+                  "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
                   "type": "string"
                 },
                 "maxItems": 64,
@@ -6652,17 +6620,9 @@
               },
               "ready_languages": {
                 "items": {
-                  "enum": [
-                    "de",
-                    "en",
-                    "es",
-                    "fr",
-                    "it",
-                    "ja",
-                    "ko",
-                    "pt",
-                    "zh"
-                  ],
+                  "maxLength": 255,
+                  "minLength": 2,
+                  "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
                   "type": "string"
                 },
                 "maxItems": 64,
@@ -6707,7 +6667,7 @@
         "type": "object",
         "x-aurora-extra-behavior": "forbid"
       },
-      "schema_hash": "038cb33a1ca8eafea60a326169eb770b91032226281ade8613427e706ed8fb29",
+      "schema_hash": "01b05a49afa867e44fa37e1801bc85a2757f4055001dbee0afe71a741f58c155",
       "schema_id": "TTS.GetCapabilities.output.TTSGetCapabilitiesResponse",
       "vectors": {}
     },
@@ -7778,17 +7738,9 @@
           "language": {
             "anyOf": [
               {
-                "enum": [
-                  "de",
-                  "en",
-                  "es",
-                  "fr",
-                  "it",
-                  "ja",
-                  "ko",
-                  "pt",
-                  "zh"
-                ],
+                "maxLength": 255,
+                "minLength": 2,
+                "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
                 "type": "string"
               },
               {
@@ -7815,7 +7767,7 @@
         "type": "object",
         "x-aurora-extra-behavior": "forbid"
       },
-      "schema_hash": "52a2cd8c57d91f1c49accf6ee916d477970ccef16c06fc381b7926f01300f9aa",
+      "schema_hash": "5a67735133d22419018f9e3f35063734fc61d78a182d0011b4a691d5db384d1e",
       "schema_id": "TTS.ListVoices.input.TTSListVoicesRequest",
       "vectors": {}
     },
@@ -8333,17 +8285,9 @@
           "language": {
             "anyOf": [
               {
-                "enum": [
-                  "de",
-                  "en",
-                  "es",
-                  "fr",
-                  "it",
-                  "ja",
-                  "ko",
-                  "pt",
-                  "zh"
-                ],
+                "maxLength": 255,
+                "minLength": 2,
+                "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
                 "type": "string"
               },
               {
@@ -8395,7 +8339,7 @@
         "type": "object",
         "x-aurora-extra-behavior": "strip"
       },
-      "schema_hash": "efaf5f938c5119a8569cbd8dfe941543adfb31bff29efcc470430420e1d2c467",
+      "schema_hash": "847bdcf850fb47d40ef76f6e827fbd24282ed9464bd2d847b4f46d94aa45d29a",
       "schema_id": "TTS.Request.input.TTSRequest",
       "vectors": {}
     },
@@ -9151,17 +9095,9 @@
           "language": {
             "anyOf": [
               {
-                "enum": [
-                  "de",
-                  "en",
-                  "es",
-                  "fr",
-                  "it",
-                  "ja",
-                  "ko",
-                  "pt",
-                  "zh"
-                ],
+                "maxLength": 255,
+                "minLength": 2,
+                "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
                 "type": "string"
               },
               {
@@ -9232,7 +9168,7 @@
         "type": "object",
         "x-aurora-extra-behavior": "strip"
       },
-      "schema_hash": "b4d6db1532cd3519475101c2b6bf28cb6a6d144eb4b42293680f51a1768f31e6",
+      "schema_hash": "00bb387df534190b9026e472cff6d6c1deeed67429a309bfdc731cbb13f8d498",
       "schema_id": "TTS.StreamStart.input.TTSStreamStartRequest",
       "vectors": {}
     },
@@ -9371,17 +9307,9 @@
           "language": {
             "anyOf": [
               {
-                "enum": [
-                  "de",
-                  "en",
-                  "es",
-                  "fr",
-                  "it",
-                  "ja",
-                  "ko",
-                  "pt",
-                  "zh"
-                ],
+                "maxLength": 255,
+                "minLength": 2,
+                "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
                 "type": "string"
               },
               {
@@ -9447,7 +9375,7 @@
         "type": "object",
         "x-aurora-extra-behavior": "strip"
       },
-      "schema_hash": "d5408ff48dccb96b3ee7c1c578ce9c27b10f7a33e37fbb97430e2d8222ab8bb6",
+      "schema_hash": "64b7c626f0fb673eb8ed097d9098c0ed3a9c44937f7c87f0f461b6261500dc25",
       "schema_id": "TTS.Synthesize.input.TTSSynthesizeRequest",
       "vectors": {}
     },
@@ -16032,17 +15960,9 @@
           },
           "auto_language_candidates": {
             "items": {
-              "enum": [
-                "de",
-                "en",
-                "es",
-                "fr",
-                "it",
-                "ja",
-                "ko",
-                "pt",
-                "zh"
-              ],
+              "maxLength": 255,
+              "minLength": 2,
+              "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
               "type": "string"
             },
             "maxItems": 8,
@@ -16065,17 +15985,9 @@
           "language": {
             "anyOf": [
               {
-                "enum": [
-                  "de",
-                  "en",
-                  "es",
-                  "fr",
-                  "it",
-                  "ja",
-                  "ko",
-                  "pt",
-                  "zh"
-                ],
+                "maxLength": 255,
+                "minLength": 2,
+                "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
                 "type": "string"
               },
               {
@@ -16119,7 +16031,7 @@
         "x-aurora-extra-behavior": "strip",
         "x-aurora-stt-transcribe-language-shape": true
       },
-      "schema_hash": "00a0d251f18c3afec3b2593dfe57999a7fdaae76d3b937b3bdec90bbd3a7f56f",
+      "schema_hash": "3628310e0ac6d0b784ae6197b91dcc55fe1e9b3b5b33d08bffd45f5baac983fa",
       "schema_id": "Transcription.Transcribe.input.TranscribeAudioRequest",
       "vectors": {}
     },

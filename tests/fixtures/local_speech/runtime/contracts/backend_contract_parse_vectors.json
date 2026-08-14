@@ -2,7 +2,7 @@
   "artifact": "aurora-rust-contract-parse-vectors",
   "generator_format_version": "aurora-rust-contract-codegen-v1",
   "schema_artifact": "aurora-sdk-backend-contracts",
-  "schema_content_hash": "1d0f1fd4def1b0ab519a0f1011f97ee20816f9da82a56d35f9daa7107b58501d",
+  "schema_content_hash": "daa45ce48991fd5840682c74bd8381e2834258abed8160052b298f2ec3408e76",
   "vectors": [
     {
       "accepted": true,
@@ -324,7 +324,7 @@
               "de",
               "en"
             ],
-            "digest": "9b3fc27fe4d574def0265873b3d71aa1efa79169d71005ae823a56f398aac40c",
+            "digest": "977dad0465fea992514ab202f6deea54d7dcb5e9801711ebfb3bf25cf07bc793",
             "mode": "auto"
           }
         },
@@ -350,14 +350,14 @@
               "de",
               "en"
             ],
-            "digest": "9b3fc27fe4d574def0265873b3d71aa1efa79169d71005ae823a56f398aac40c",
+            "digest": "977dad0465fea992514ab202f6deea54d7dcb5e9801711ebfb3bf25cf07bc793",
             "mode": "auto",
-            "table_revision": "aurora-speech-language-v1"
+            "table_revision": "aurora-speech-language-v2"
           }
         },
         "topic": "TTS.Request"
       },
-      "normalized_hash": "025d24111a936c1632376d96ae2fa3b7091fc7a013432bec6d13e360607ae751",
+      "normalized_hash": "081adb81afe82e2b2a1216a9ef31ee2fb7d280e0271fe8b839157a49773ff712",
       "schema_id": "Gateway.ExplainRoute.input.RouteExplainRequest"
     },
     {
@@ -428,7 +428,7 @@
         },
         "speech": {
           "language_requirement": {
-            "language": "pt_BR",
+            "language": "en--US",
             "mode": "exact"
           }
         },
@@ -454,9 +454,9 @@
         "speech": {
           "language_requirement": {
             "auto_language_candidates": [
-              "pt_BR"
+              "en--US"
             ],
-            "digest": "9b3fc27fe4d574def0265873b3d71aa1efa79169d71005ae823a56f398aac40c",
+            "digest": "977dad0465fea992514ab202f6deea54d7dcb5e9801711ebfb3bf25cf07bc793",
             "mode": "auto"
           }
         },
@@ -1324,7 +1324,7 @@
       "input": {
         "consent": true,
         "display_name": "Clone",
-        "language": "pt_BR",
+        "language": "en--US",
         "operation_id": " create-1 ",
         "sealed_audio_ref": "voice-import:upload-1"
       },
@@ -1344,7 +1344,7 @@
       "input": {
         "consent": true,
         "display_name": "Clone",
-        "language": "pt_BR",
+        "language": "en--US",
         "operation_id": " create-1 ",
         "sealed_audio_ref": "voice-import:upload-1"
       },
@@ -1524,7 +1524,7 @@
           "model_status": "ready",
           "ready": true,
           "ready_languages": [
-            "pt_BR"
+            "en--US"
           ],
           "resident_base_model_count": 1,
           "resident_language_pack_ids": [
@@ -1583,7 +1583,7 @@
             {
               "pack_id": "pack-a",
               "ready_languages": [
-                "pt_BR"
+                "en--US"
               ]
             }
           ],
@@ -2076,7 +2076,7 @@
       "case_index": 0,
       "direction": "input",
       "input": {
-        "language": "pt_BR"
+        "language": "en--US"
       },
       "issue_category": "speech_language",
       "issue_path": "$.language",
@@ -2239,7 +2239,7 @@
       "case_index": 0,
       "direction": "input",
       "input": {
-        "language": "pt_BR",
+        "language": "en--US",
         "text": "hello"
       },
       "issue_category": "speech_language",
@@ -2336,7 +2336,7 @@
       "case_index": 0,
       "direction": "input",
       "input": {
-        "language": "pt_BR",
+        "language": "en--US",
         "stream_id": "stream-1"
       },
       "issue_category": "speech_language",
@@ -2374,7 +2374,7 @@
       "case_index": 0,
       "direction": "input",
       "input": {
-        "language": "pt_BR",
+        "language": "en--US",
         "text": "hello"
       },
       "issue_category": "speech_language",
@@ -5048,7 +5048,7 @@
           "de",
           "en"
         ],
-        "language": "pt_BR"
+        "language": "en--US"
       },
       "issue_category": "speech_language",
       "issue_path": "$.language",
@@ -5066,7 +5066,7 @@
       "input": {
         "audio_data": "AA==",
         "auto_language_candidates": [
-          "pt_BR"
+          "en--US"
         ],
         "language": " AUTO "
       },

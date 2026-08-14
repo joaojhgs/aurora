@@ -66,13 +66,15 @@ STANDARD_ID = "standard:english_2026-04:default"
 
 
 def test_language_requirement_normalizes_and_digests_exact() -> None:
-    requirement = SpeechLanguageRequirement.model_validate({"mode": "exact", "language": "EN"})
+    requirement = SpeechLanguageRequirement.model_validate(
+        {"mode": "exact", "language": "ZH_hant_TW"}
+    )
 
-    assert requirement.language == "en"
+    assert requirement.language == "zh-hant-tw"
     assert requirement.table_revision == SPEECH_LANGUAGE_TABLE_REVISION
     assert requirement.digest == requirement.compute_digest()
 
-    same = SpeechLanguageRequirement(mode="exact", language="en", digest=requirement.digest)
+    same = SpeechLanguageRequirement(mode="exact", language="zh-hant-tw", digest=requirement.digest)
     assert same.digest == requirement.digest
 
 
@@ -95,17 +97,36 @@ def test_create_voice_profile_requires_opaque_sealed_reference() -> None:
 
 def test_language_requirement_normalizes_auto_candidates() -> None:
     requirement = SpeechLanguageRequirement.model_validate(
-        {"mode": "auto", "auto_language_candidates": ["ES", "en", "es"]}
+        {
+            "mode": "auto",
+            "auto_language_candidates": ["PT_br", "es-419", "pt-BR", "zh-Hant"],
+        }
     )
 
     assert requirement.language is None
-    assert requirement.auto_language_candidates == ["en", "es"]
+    assert requirement.auto_language_candidates == ["es-419", "pt-br", "zh-hant"]
 
 
-@pytest.mark.parametrize("tag", ["english", "french", "pt-BR", ""])
-def test_language_requirement_rejects_unsupported_and_blank_exact_tags(tag: str) -> None:
+@pytest.mark.parametrize("tag", ["", "-en", "en--US", "en US", "x"])
+def test_language_requirement_rejects_malformed_and_blank_exact_tags(tag: str) -> None:
     with pytest.raises(ValidationError):
         SpeechLanguageRequirement.model_validate({"mode": "exact", "language": tag})
+
+
+@pytest.mark.parametrize(
+    ("tag", "expected"),
+    [
+        ("pt-BR", "pt-br"),
+        ("zh-Hant-TW", "zh-hant-tw"),
+        ("sr_Latn_RS", "sr-latn-rs"),
+        ("x-Aurora-Custom", "x-aurora-custom"),
+        ("und", "und"),
+    ],
+)
+def test_language_requirement_accepts_open_bcp47_tags(tag: str, expected: str) -> None:
+    requirement = SpeechLanguageRequirement.model_validate({"mode": "exact", "language": tag})
+
+    assert requirement.language == expected
 
 
 def test_language_requirement_rejects_wrong_digest() -> None:
@@ -172,12 +193,14 @@ def test_speech_constraints_require_resident_identity_for_ready_state() -> None:
         SpeechMethodConstraints(exact_languages=["en"], speech_capability_revision=1)
 
 
-def test_locale_fallbacks_require_an_explicit_table_entry() -> None:
-    with pytest.raises(ValidationError, match="unsupported speech language"):
-        SpeechLocaleFallback.model_validate(
-            {"requested_language": "pt-BR", "served_language": "pt"}
-        )
-    with pytest.raises(ValidationError, match="not declared"):
+def test_locale_fallbacks_are_explicit_pack_declarations() -> None:
+    fallback = SpeechLocaleFallback.model_validate(
+        {"requested_language": "pt-BR", "served_language": "pt"}
+    )
+    assert fallback.requested_language == "pt-br"
+    assert fallback.served_language == "pt"
+
+    with pytest.raises(ValidationError, match="must differ"):
         SpeechLocaleFallback(requested_language="fr", served_language="fr")
 
 
@@ -249,12 +272,14 @@ def test_tts_language_is_backward_compatible_and_exact_only() -> None:
     assert TTSRequest.model_validate({"text": "hello", "language": "EN"}).language == "en"
     assert TTSSynthesizeRequest(text="hello", language="fr").language == "fr"
     assert TTSStreamStartRequest(stream_id="s1", language="de").language == "de"
+    assert TTSRequest(text="olá", language="pt-BR").language == "pt-br"
+    assert TTSSynthesizeRequest(text="你好", language="zh-Hant").language == "zh-hant"
     assert TTSRequest(text="hello", voice=STANDARD_ID).voice == STANDARD_ID
 
     with pytest.raises(ValidationError, match="exact, not auto"):
         TTSRequest.model_validate({"text": "hello", "language": "auto"})
     with pytest.raises(ValidationError):
-        TTSSynthesizeRequest.model_validate({"text": "hello", "language": "english"})
+        TTSSynthesizeRequest.model_validate({"text": "hello", "language": "en--US"})
     with pytest.raises(ValidationError):
         TTSStreamStartRequest(stream_id="s1", voice="raw-provider-id")
 
@@ -735,7 +760,7 @@ def test_stt_language_auto_and_exact_candidate_rules() -> None:
             audio_data="AA==", language="en", auto_language_candidates=["en", "fr"]
         )
     with pytest.raises(ValidationError):
-        TranscribeAudioRequest.model_validate({"audio_data": "AA==", "language": "french"})
+        TranscribeAudioRequest.model_validate({"audio_data": "AA==", "language": "en--US"})
     with pytest.raises(ValidationError):
         TranscribeAudioRequest(
             audio_data="AA==",

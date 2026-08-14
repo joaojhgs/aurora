@@ -138,17 +138,9 @@
       "properties": {
         "auto_language_candidates": {
           "items": {
-            "enum": [
-              "de",
-              "en",
-              "es",
-              "fr",
-              "it",
-              "ja",
-              "ko",
-              "pt",
-              "zh"
-            ],
+            "maxLength": 255,
+            "minLength": 2,
+            "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
             "type": "string"
           },
           "maxItems": 8,
@@ -172,17 +164,9 @@
         "language": {
           "anyOf": [
             {
-              "enum": [
-                "de",
-                "en",
-                "es",
-                "fr",
-                "it",
-                "ja",
-                "ko",
-                "pt",
-                "zh"
-              ],
+              "maxLength": 255,
+              "minLength": 2,
+              "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
               "type": "string"
             },
             {
@@ -202,8 +186,8 @@
           "type": "string"
         },
         "table_revision": {
-          "const": "aurora-speech-language-v1",
-          "default": "aurora-speech-language-v1",
+          "const": "aurora-speech-language-v2",
+          "default": "aurora-speech-language-v2",
           "title": "Table Revision",
           "type": "string"
         }

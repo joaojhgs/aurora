@@ -76,17 +76,25 @@ class System(BaseConfigModel):
     """
     Base directory for voice/model files
     """
-    primary_language: Literal["en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"] | None = Field(
-        "en", title="Primary language"
+    primary_language: str | None = Field(
+        "en",
+        max_length=255,
+        min_length=2,
+        pattern="^(?:[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
+        title="Primary language",
     )
     """
-    Language Aurora uses whenever one device language is required.
+    BCP 47 language tag Aurora uses whenever one device language is required. Available choices come from the installed speech-pack catalog.
     """
-    voice_language: Literal["auto", "en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"] | None = (
-        Field("auto", title="Voice language")
+    voice_language: str | None = Field(
+        "auto",
+        max_length=255,
+        min_length=2,
+        pattern="^(?:[Aa][Uu][Tt][Oo]|[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
+        title="Voice language",
     )
     """
-    Automatic detects speech while spoken replies and wake listening use the primary language.
+    Automatic detection or a BCP 47 speech language tag from the installed speech-pack catalog.
     """
 
 
@@ -1108,9 +1116,13 @@ class Transcription(BaseConfigModel):
 
 
 class Stt(BaseConfigModel):
-    language: Literal["", "en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"] | None = "en"
+    language: str | None = Field(
+        "en",
+        max_length=255,
+        pattern="^(?:|[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
+    )
     """
-    Language for speech recognition (empty for auto-detect)
+    BCP 47 language tag for speech recognition (empty for auto-detect)
     """
     coordinator: Coordinator | None = None
     """
