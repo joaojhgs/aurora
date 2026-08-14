@@ -226,7 +226,9 @@ describe('Tauri CI native evidence contract', () => {
     expect(packageJson.scripts['android:build:client:aab']).toBe('node ./scripts/build-android-client-bundle.mjs --kind aab')
     expect(packageJson.scripts['android:build:thin:aab']).toBe('pnpm android:build:client:aab')
     expect(packageJson.scripts['android:build:thin:aab']).not.toBe('node ./scripts/build-android-thin-bundle.mjs --kind aab')
-    expect(androidClientBuildWrapper).toContain("run('pnpm', ['android:sync-native-plugin'])")
+    expect(androidClientBuildWrapper).toContain(
+      "run('pnpm', ['android:sync-native-plugin'], nativeSpeechBuild.env)",
+    )
     expect(androidClientBuildWrapper).toContain("buildArgs.push('--config', tempConfigPath)")
     expect(androidClientBuildWrapper).toContain('sourceConfigWritten: false')
     expect(androidClientBuildWrapper).toContain('rmSync(sourceConfigPath, { force: true })')
