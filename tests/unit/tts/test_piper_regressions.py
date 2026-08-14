@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import io
+import json
 import sys
 import types
 import wave
@@ -14,6 +15,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from app.services.tts import service as tts_service_module
 from app.services.tts.piper_catalog import (
     CATALOG_REVISION,
     PiperCatalogInstallResult,
@@ -871,3 +873,60 @@ async def test_process_entrypoint_stops_bus_when_tts_service_stop_fails(
 
     service.stop.assert_awaited_once_with()
     bus.stop.assert_awaited_once_with()
+
+
+def test_tts_audio_ducking_lowers_and_restores_other_linux_streams(monkeypatch) -> None:
+    """uses pactl to lower non-Aurora sink inputs and restore their volumes."""
+    commands: list[list[str]] = []
+    own_pid = "1234"
+    sink_inputs = [
+        {
+            "index": 5,
+            "properties": {"application.process.id": own_pid},
+            "volume": {"front-left": {"value_percent": "100%"}},
+        },
+        {
+            "index": 8,
+            "properties": {"application.process.id": "9999"},
+            "volume": {
+                "front-left": {"value_percent": "82%"},
+                "front-right": {"value_percent": "78%"},
+            },
+        },
+    ]
+
+    def fake_run(args, **_kwargs):
+        commands.append(list(args))
+        if args[-2:] == ["list", "sink-inputs"]:
+            return SimpleNamespace(stdout=json.dumps(sink_inputs))
+        return SimpleNamespace(stdout="")
+
+    monkeypatch.setattr(tts_service_module.sys, "platform", "linux")
+    monkeypatch.setattr(tts_service_module.os, "getpid", lambda: int(own_pid))
+    monkeypatch.setattr(tts_service_module.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(tts_service_module.subprocess, "run", fake_run)
+    tts_service_module._DUCKED_SINK_INPUTS.clear()
+    tts_service_module._DUCKING_UNAVAILABLE_LOGGED = False
+
+    tts_service_module.reduce_volume_except_current()
+    tts_service_module.restore_volume_except_current()
+
+    assert commands == [
+        ["/usr/bin/pactl", "--format=json", "list", "sink-inputs"],
+        ["/usr/bin/pactl", "set-sink-input-volume", "8", "35%"],
+        ["/usr/bin/pactl", "set-sink-input-volume", "8", "80%"],
+    ]
+
+
+def test_tts_audio_ducking_logs_once_when_platform_unsupported(monkeypatch) -> None:
+    """does not silently pretend to duck audio on unsupported platforms."""
+    messages: list[str] = []
+    monkeypatch.setattr(tts_service_module.sys, "platform", "darwin")
+    monkeypatch.setattr(tts_service_module, "log_debug", messages.append)
+    tts_service_module._DUCKED_SINK_INPUTS.clear()
+    tts_service_module._DUCKING_UNAVAILABLE_LOGGED = False
+
+    tts_service_module.reduce_volume_except_current()
+    tts_service_module.reduce_volume_except_current()
+
+    assert messages == ["TTS audio ducking unavailable: unsupported platform"]

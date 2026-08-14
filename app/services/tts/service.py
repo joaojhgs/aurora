@@ -17,6 +17,8 @@ import io
 import json
 import os
 import shutil
+import subprocess
+import sys
 import uuid
 import wave
 from collections.abc import AsyncIterator
@@ -342,15 +344,104 @@ def _validate_import_audio_payload(payload: bytes, session: _VoiceImportSession)
         raise ValueError("voice import duration mismatch")
 
 
-# TODO: Implement volume control functions
-def reduce_volume_except_current():
-    """Placeholder for reducing system volume during TTS."""
-    pass
+_DUCKED_SINK_INPUTS: dict[str, int] = {}
+_DUCKING_UNAVAILABLE_LOGGED = False
 
 
-def restore_volume_except_current():
-    """Placeholder for restoring system volume after TTS."""
-    pass
+def _run_pactl(args: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603 - executable is resolved with shutil.which.
+        args,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=1.0,
+    )
+
+
+def _sink_input_volume_percent(sink_input: dict[str, Any]) -> int | None:
+    volume = sink_input.get("volume")
+    if not isinstance(volume, dict) or not volume:
+        return None
+    values: list[int] = []
+    for channel in volume.values():
+        if isinstance(channel, dict) and isinstance(channel.get("value_percent"), str):
+            with contextlib.suppress(ValueError):
+                values.append(int(channel["value_percent"].rstrip("%")))
+        elif isinstance(channel, dict) and isinstance(channel.get("value"), int):
+            values.append(round(channel["value"] * 100 / 65536))
+    if not values:
+        return None
+    return max(0, min(150, round(sum(values) / len(values))))
+
+
+def _log_ducking_unavailable(reason: str) -> None:
+    global _DUCKING_UNAVAILABLE_LOGGED
+    if _DUCKING_UNAVAILABLE_LOGGED:
+        return
+    _DUCKING_UNAVAILABLE_LOGGED = True
+    log_debug(f"TTS audio ducking unavailable: {reason}")
+
+
+def reduce_volume_except_current() -> None:
+    """Lower other PulseAudio/PipeWire streams while Aurora is speaking."""
+    if _DUCKED_SINK_INPUTS:
+        return
+    if not sys.platform.startswith("linux"):
+        _log_ducking_unavailable("unsupported platform")
+        return
+    pactl = shutil.which("pactl")
+    if pactl is None:
+        _log_ducking_unavailable("pactl not found")
+        return
+
+    try:
+        result = _run_pactl([pactl, "--format=json", "list", "sink-inputs"])
+        sink_inputs = json.loads(result.stdout or "[]")
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
+        _log_ducking_unavailable(_safe_tts_error(exc))
+        return
+    if not isinstance(sink_inputs, list):
+        _log_ducking_unavailable("unexpected pactl response")
+        return
+
+    own_pid = str(os.getpid())
+    for sink_input in sink_inputs:
+        if not isinstance(sink_input, dict):
+            continue
+        index = sink_input.get("index")
+        properties = sink_input.get("properties")
+        if index is None or not isinstance(properties, dict):
+            continue
+        if str(properties.get("application.process.id")) == own_pid:
+            continue
+        previous_volume = _sink_input_volume_percent(sink_input)
+        if previous_volume is None:
+            continue
+        sink_input_id = str(index)
+        try:
+            _run_pactl([pactl, "set-sink-input-volume", sink_input_id, "35%"])
+        except (OSError, subprocess.SubprocessError) as exc:
+            log_debug(f"TTS audio ducking skipped for stream {sink_input_id}: {_safe_tts_error(exc)}")
+            continue
+        _DUCKED_SINK_INPUTS[sink_input_id] = previous_volume
+
+
+def restore_volume_except_current() -> None:
+    """Restore streams lowered by reduce_volume_except_current."""
+    if not _DUCKED_SINK_INPUTS:
+        return
+    pactl = shutil.which("pactl")
+    if pactl is None:
+        _DUCKED_SINK_INPUTS.clear()
+        _log_ducking_unavailable("pactl not found during restore")
+        return
+    restored = dict(_DUCKED_SINK_INPUTS)
+    _DUCKED_SINK_INPUTS.clear()
+    for sink_input_id, volume_percent in restored.items():
+        try:
+            _run_pactl([pactl, "set-sink-input-volume", sink_input_id, f"{volume_percent}%"])
+        except (OSError, subprocess.SubprocessError) as exc:
+            log_debug(f"TTS audio ducking restore skipped for stream {sink_input_id}: {_safe_tts_error(exc)}")
 
 
 # Service implementation
