@@ -831,8 +831,8 @@ fn fake_wake_providers(
     vad_speech: impl IntoIterator<Item = u64>,
     vad_segments: impl IntoIterator<Item = u64>,
 ) -> (
-    Box<dyn VadStreamProvider>,
-    Box<dyn KwsStreamProvider>,
+    Box<dyn VadStreamProvider + Send>,
+    Box<dyn KwsStreamProvider + Send>,
     WakeOrchestrationConfig,
 ) {
     let vad_binding = test_task_binding(VoiceTask::VoiceActivityDetection, PackTask::Vad);

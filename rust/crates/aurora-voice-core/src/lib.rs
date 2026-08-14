@@ -965,16 +965,36 @@ impl WakeOrchestrationConfig {
     }
 }
 
+/// Type-erased VAD provider accepted by the shared wake runtime.
+///
+/// Native owners move the complete runtime onto a dedicated session thread, so
+/// native providers must be movable across threads. Browser WASM stays on its
+/// owning JavaScript thread and must not inherit that native-only constraint.
+#[cfg(not(target_arch = "wasm32"))]
+pub type WakeVadProvider = Box<dyn VadStreamProvider + Send>;
+
+/// Type-erased VAD provider accepted by the shared wake runtime on browser WASM.
+#[cfg(target_arch = "wasm32")]
+pub type WakeVadProvider = Box<dyn VadStreamProvider>;
+
+/// Type-erased KWS provider accepted by the shared wake runtime.
+#[cfg(not(target_arch = "wasm32"))]
+pub type WakeKwsProvider = Box<dyn KwsStreamProvider + Send>;
+
+/// Type-erased KWS provider accepted by the shared wake runtime on browser WASM.
+#[cfg(target_arch = "wasm32")]
+pub type WakeKwsProvider = Box<dyn KwsStreamProvider>;
+
 struct WakeRuntime {
-    vad: Box<dyn VadStreamProvider>,
-    kws: Box<dyn KwsStreamProvider>,
+    vad: WakeVadProvider,
+    kws: WakeKwsProvider,
     config: WakeOrchestrationConfig,
 }
 
 impl WakeRuntime {
     fn new(
-        vad: Box<dyn VadStreamProvider>,
-        kws: Box<dyn KwsStreamProvider>,
+        vad: WakeVadProvider,
+        kws: WakeKwsProvider,
         config: WakeOrchestrationConfig,
     ) -> Result<Self, VoiceCoreError> {
         config.validate()?;
@@ -1057,8 +1077,8 @@ where
 
     pub fn with_wake_providers(
         mut self,
-        vad: Box<dyn VadStreamProvider>,
-        kws: Box<dyn KwsStreamProvider>,
+        vad: WakeVadProvider,
+        kws: WakeKwsProvider,
         config: WakeOrchestrationConfig,
     ) -> Result<Self, VoiceCoreError> {
         self.wake = Some(WakeRuntime::new(vad, kws, config)?);
@@ -1977,6 +1997,7 @@ mod tests {
     use std::cell::RefCell;
     use std::collections::{BTreeSet, VecDeque};
     use std::rc::Rc;
+    use std::sync::{Arc, Mutex};
 
     const HASH: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
@@ -2424,27 +2445,36 @@ mod tests {
 
     #[derive(Clone, Default)]
     struct FakeWakeProviderHandles {
-        vad_cancelled: Rc<RefCell<Vec<u64>>>,
-        kws_cancelled: Rc<RefCell<Vec<u64>>>,
-        vad_resets: Rc<RefCell<Vec<StreamResetReason>>>,
-        kws_resets: Rc<RefCell<Vec<StreamResetReason>>>,
-        fail_vad_cancel: Rc<RefCell<bool>>,
-        fail_kws_cancel: Rc<RefCell<bool>>,
-        fail_vad_reset: Rc<RefCell<bool>>,
-        fail_kws_reset: Rc<RefCell<bool>>,
+        vad_cancelled: Arc<Mutex<Vec<u64>>>,
+        kws_cancelled: Arc<Mutex<Vec<u64>>>,
+        vad_resets: Arc<Mutex<Vec<StreamResetReason>>>,
+        kws_resets: Arc<Mutex<Vec<StreamResetReason>>>,
+        fail_vad_cancel: Arc<Mutex<bool>>,
+        fail_kws_cancel: Arc<Mutex<bool>>,
+        fail_vad_reset: Arc<Mutex<bool>>,
+        fail_kws_reset: Arc<Mutex<bool>>,
     }
 
     impl FakeWakeProviderHandles {
         fn vad_cancelled(&self) -> Vec<u64> {
-            self.vad_cancelled.borrow().clone()
+            self.vad_cancelled
+                .lock()
+                .expect("VAD cancellation handle should not be poisoned")
+                .clone()
         }
 
         fn kws_cancelled(&self) -> Vec<u64> {
-            self.kws_cancelled.borrow().clone()
+            self.kws_cancelled
+                .lock()
+                .expect("KWS cancellation handle should not be poisoned")
+                .clone()
         }
 
         fn fail_vad_cancel(&self) {
-            *self.fail_vad_cancel.borrow_mut() = true;
+            *self
+                .fail_vad_cancel
+                .lock()
+                .expect("VAD failure handle should not be poisoned") = true;
         }
     }
 
@@ -2502,8 +2532,21 @@ mod tests {
         }
 
         async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
-            self.handles.kws_cancelled.borrow_mut().push(generation);
-            if *self.handles.fail_kws_cancel.borrow() {
+            self.handles
+                .kws_cancelled
+                .lock()
+                .map_err(|_| EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                })?
+                .push(generation);
+            if *self
+                .handles
+                .fail_kws_cancel
+                .lock()
+                .map_err(|_| EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                })?
+            {
                 return Err(EngineError::ProviderFault {
                     code: EngineFaultCode::Provider,
                 });
@@ -2546,8 +2589,21 @@ mod tests {
             _session: &BoundStreamSession,
             reason: StreamResetReason,
         ) -> Result<(), EngineError> {
-            self.handles.kws_resets.borrow_mut().push(reason);
-            if *self.handles.fail_kws_reset.borrow() {
+            self.handles
+                .kws_resets
+                .lock()
+                .map_err(|_| EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                })?
+                .push(reason);
+            if *self
+                .handles
+                .fail_kws_reset
+                .lock()
+                .map_err(|_| EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                })?
+            {
                 return Err(EngineError::ProviderFault {
                     code: EngineFaultCode::Provider,
                 });
@@ -2613,8 +2669,21 @@ mod tests {
         }
 
         async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
-            self.handles.vad_cancelled.borrow_mut().push(generation);
-            if *self.handles.fail_vad_cancel.borrow() {
+            self.handles
+                .vad_cancelled
+                .lock()
+                .map_err(|_| EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                })?
+                .push(generation);
+            if *self
+                .handles
+                .fail_vad_cancel
+                .lock()
+                .map_err(|_| EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                })?
+            {
                 return Err(EngineError::ProviderFault {
                     code: EngineFaultCode::Provider,
                 });
@@ -2668,14 +2737,35 @@ mod tests {
             _session: &BoundStreamSession,
             reason: StreamResetReason,
         ) -> Result<(), EngineError> {
-            self.handles.vad_resets.borrow_mut().push(reason);
-            if *self.handles.fail_vad_reset.borrow() {
+            self.handles
+                .vad_resets
+                .lock()
+                .map_err(|_| EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                })?
+                .push(reason);
+            if *self
+                .handles
+                .fail_vad_reset
+                .lock()
+                .map_err(|_| EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                })?
+            {
                 return Err(EngineError::ProviderFault {
                     code: EngineFaultCode::Provider,
                 });
             }
             Ok(())
         }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn native_wake_runtime_can_move_to_a_session_thread() {
+        fn assert_send<T: Send>() {}
+
+        assert_send::<WakeRuntime>();
     }
 
     #[test]

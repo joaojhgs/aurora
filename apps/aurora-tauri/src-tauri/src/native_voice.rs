@@ -1570,6 +1570,10 @@ fn reason_from_core_error(error: &VoiceCoreError) -> &'static str {
         VoiceCoreError::StaleGeneration | VoiceCoreError::OwnerMismatch => STALE_CONTROL_REASON,
         VoiceCoreError::Cancelled => "cancelled",
         VoiceCoreError::GenerationExhausted => "generation_exhausted",
+        VoiceCoreError::WakeUnavailable => "wake_unavailable",
+        VoiceCoreError::WakeNotDetected => "wake_not_detected",
+        VoiceCoreError::SpeechNotDetected => "speech_not_detected",
+        VoiceCoreError::SpeechTimeout => "speech_timeout",
         VoiceCoreError::TransportFault { .. } => "gateway_unavailable",
         VoiceCoreError::Engine(_) => "engine_unavailable",
         VoiceCoreError::InvalidIdentifier | VoiceCoreError::InvalidTransition => "invalid_state",
@@ -1588,6 +1592,27 @@ fn reason_from_core_error(error: &VoiceCoreError) -> &'static str {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[cfg(desktop)]
+    #[test]
+    fn wake_failures_map_to_stable_redacted_reason_codes() {
+        assert_eq!(
+            reason_from_core_error(&VoiceCoreError::WakeUnavailable),
+            "wake_unavailable"
+        );
+        assert_eq!(
+            reason_from_core_error(&VoiceCoreError::WakeNotDetected),
+            "wake_not_detected"
+        );
+        assert_eq!(
+            reason_from_core_error(&VoiceCoreError::SpeechNotDetected),
+            "speech_not_detected"
+        );
+        assert_eq!(
+            reason_from_core_error(&VoiceCoreError::SpeechTimeout),
+            "speech_timeout"
+        );
+    }
 
     #[test]
     fn start_request_rejects_unknown_fields() {
