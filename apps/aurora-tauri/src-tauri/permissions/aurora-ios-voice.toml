@@ -7,5 +7,10 @@ commands.allow = [
   "aurora_ios_voice_foreground_capture_stop",
   "aurora_ios_voice_foreground_capture_finish",
   "aurora_ios_voice_foreground_capture_status",
+  "aurora_ios_voice_pack_catalog_set",
+  "aurora_ios_voice_pack_list",
+  "aurora_ios_voice_pack_status",
+  "aurora_ios_voice_pack_download",
+  "aurora_ios_voice_pack_remove",
   "aurora_ios_background_status",
 ]

@@ -17,6 +17,15 @@ typedef struct AuroraIosVoiceSessionStatus {
   uint64_t failed_turns;
 } AuroraIosVoiceSessionStatus;
 
+typedef struct AuroraIosVoiceTaskPackBinding {
+  // 1=kws, 2=wakeword, 3=vad, 4=stt, 5=tts.
+  int32_t task;
+  // Optional NUL-terminated UTF-8 slot id. Null means the default slot.
+  const char *slot_id;
+  // Required NUL-terminated UTF-8 active pack path selected by Swift.
+  const char *pack_path;
+} AuroraIosVoiceTaskPackBinding;
+
 enum {
   AURORA_IOS_VOICE_OK = 0,
   AURORA_IOS_VOICE_INVALID_ARGUMENT = -1,
@@ -81,6 +90,12 @@ AuroraIosVoiceSession *aurora_ios_voice_session_new(
     const char *gateway,
     const char *bearer,
     uint32_t remote_audio_consent);
+AuroraIosVoiceSession *aurora_ios_voice_session_new_with_pack_bindings(
+    const char *gateway,
+    const char *bearer,
+    uint32_t remote_audio_consent,
+    const AuroraIosVoiceTaskPackBinding *bindings,
+    uintptr_t bindings_len);
 void aurora_ios_voice_session_free(AuroraIosVoiceSession *session);
 AuroraIosAudioState *aurora_ios_voice_session_audio_state(
     AuroraIosVoiceSession *session);

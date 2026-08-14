@@ -12,6 +12,7 @@ const credentialStore = readFileSync(
   resolve(sourceRoot, 'AuroraIOSVoiceCredentialStore.swift'),
   'utf8',
 )
+const packManager = readFileSync(resolve(sourceRoot, 'AuroraIOSVoicePackManager.swift'), 'utf8')
 const plugin = readFileSync(resolve(sourceRoot, 'AuroraNativePlugin.swift'), 'utf8')
 const header = readFileSync(
   resolve(packageRoot, 'Sources', 'CAuroraIOSVoiceBridge', 'include', 'aurora_ios_voice_bridge.h'),
@@ -27,6 +28,7 @@ function assert(condition, message) {
 
 for (const symbol of [
   'aurora_ios_voice_session_new',
+  'aurora_ios_voice_session_new_with_pack_bindings',
   'aurora_ios_voice_session_audio_state',
   'aurora_ios_voice_session_start',
   'aurora_ios_voice_session_start_background',
@@ -49,6 +51,17 @@ assert(sessionHost.includes('remoteAudioConsent'), 'session host must preserve e
 assert(
   sessionHost.includes('AuroraIOSVoiceCredentialStore.load'),
   'session host must support native stored credentials',
+)
+assert(
+  sessionHost.includes('requiredSlots: ["stt"]')
+    && sessionHost.includes('AuroraIOSVoicePackManager.boundPackPaths')
+    && sessionHost.includes('requiredTaskPackUnavailable'),
+  'session host must require slot-bound ready packs before native session construction',
+)
+assert(
+  sessionHost.includes('AuroraIosVoiceTaskPackBinding')
+    && sessionHost.includes('aurora_ios_voice_session_new_with_pack_bindings'),
+  'session host must pass selected pack bindings to Rust',
 )
 assert(
   credentialStore.includes('kSecAttrAccessibleWhenUnlockedThisDeviceOnly'),
@@ -93,6 +106,45 @@ assert(plugin.includes('startBackground()'), 'background start must use the Rust
 assert(plugin.includes('session.finish(generation: generation)'), 'finish must complete the Rust generation')
 assert(plugin.includes('voiceSessionGeneration'), 'foreground lifecycle must retain generation identity')
 assert(plugin.includes('voiceSession?.captureStats() ?? voiceCapture.stats()'), 'status must report Rust-owned capture stats after cutover')
+for (const command of [
+  'voicePackCatalogSet',
+  'voicePackList',
+  'voicePackStatus',
+  'voicePackDownload',
+  'voicePackRemove',
+]) {
+  assert(plugin.includes(command), `native plugin must expose ${command}`)
+}
+assert(
+  plugin.includes('nativeTurnTransportAvailable = false')
+    && plugin.includes('nativeTurnTransportReady()')
+    && plugin.includes('packCatalogReady'),
+  'public iOS voice capture must remain withheld while reporting pack readiness honestly',
+)
+for (const snippet of [
+  'operationQueue.sync',
+  'validateDownloadTarget',
+  'resolvesToAllowedHost',
+  'getaddrinfo',
+  'isDisallowedIPv4',
+  'isDisallowedIPv6',
+  'willPerformHTTPRedirection',
+  'Content-Length',
+  'SHA256',
+  'writeAtomically',
+  'replaceItemAt',
+  'stagingPrefix',
+  'metadata.json',
+  'active.json',
+  'boundPackPaths(for slots:',
+  'entry.acknowledged',
+]) {
+  assert(packManager.includes(snippet), `voice pack manager must preserve safety policy: ${snippet}`)
+}
+assert(
+  !packManager.includes('Bundle.main') && !packManager.includes('.onnx'),
+  'voice pack manager must not use embedded model weights',
+)
 for (const notification of [
   'AVAudioSession.interruptionNotification',
   'AVAudioSession.routeChangeNotification',
@@ -114,12 +166,9 @@ assert(playback.includes('aurora_ios_audio_output_acknowledge'), 'playback must 
 assert(playback.includes('AVAudioPlayerNode'), 'playback must use native AVAudioPlayerNode')
 assert(playback.includes('aurora_ios_audio_output_close'), 'playback must close output on stop')
 assert(playback.includes('chunkInFlight'), 'playback must acknowledge one chunk before draining another')
-assert(
-  plugin.includes('nativeTurnTransportAvailable = false'),
-  'public iOS capability must remain withheld until runtime evidence exists',
-)
 assert(!sessionHost.includes('print('), 'session host must not log credentials or audio state')
 assert(!sessionHost.includes('bearerToken'), 'session host must not expose credential getters')
 assert(!credentialStore.includes('invoke.resolve(record.bearer)'), 'credential store must not return raw bearer values')
+assert(!packManager.includes('print('), 'pack manager must not log catalog or cache state')
 
 console.log('iOS native voice session source policy passed')

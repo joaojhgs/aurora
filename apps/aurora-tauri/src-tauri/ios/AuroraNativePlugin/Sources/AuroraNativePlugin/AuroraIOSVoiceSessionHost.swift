@@ -8,7 +8,14 @@ public enum AuroraIOSVoiceSessionHostError: Error {
   case credentialsUnavailable
   case nativeSessionUnavailable
   case audioStateUnavailable
+  case requiredTaskPackUnavailable
   case commandFailed(Int32)
+}
+
+private struct AuroraIOSVoiceTaskPackPathBinding {
+  let task: Int32
+  let slotId: String
+  let packPath: String
 }
 
 /// Swift-owned lifecycle host for a Rust-owned native voice session.
@@ -23,11 +30,22 @@ public final class AuroraIOSVoiceSessionHost {
   private var playback: AuroraIOSVoicePlayback?
   private let output: OpaquePointer?
   private let audioSession: AVAudioSession
+  private let boundTaskPackPaths: [String: String]
   private var activeGeneration: UInt64?
   private var backgroundSessionActive = false
   private var lifecycleObservers: [NSObjectProtocol] = []
 
   public convenience init(
+    storedConfiguration audioSession: AVAudioSession = .sharedInstance()
+  ) throws {
+    try self.init(
+      requiredSlots: ["stt"],
+      storedConfiguration: audioSession
+    )
+  }
+
+  public convenience init(
+    requiredSlots: [String],
     storedConfiguration audioSession: AVAudioSession = .sharedInstance()
   ) throws {
     guard let configuration = try AuroraIOSVoiceCredentialStore.load() else {
@@ -37,6 +55,7 @@ public final class AuroraIOSVoiceSessionHost {
       gateway: configuration.gateway,
       bearer: configuration.bearer,
       remoteAudioConsent: configuration.remoteAudioConsent,
+      requiredSlots: requiredSlots,
       audioSession: audioSession
     )
   }
@@ -47,23 +66,36 @@ public final class AuroraIOSVoiceSessionHost {
     remoteAudioConsent: Bool,
     audioSession: AVAudioSession = .sharedInstance()
   ) throws {
-    guard !gateway.isEmpty else { throw AuroraIOSVoiceSessionHostError.invalidGateway }
-    let session = gateway.withCString { gatewayPointer in
-      if let bearer, !bearer.isEmpty {
-        return bearer.withCString { bearerPointer in
-          aurora_ios_voice_session_new(
-            gatewayPointer,
-            bearerPointer,
-            remoteAudioConsent ? 1 : 0
-          )
-        }
-      }
-      return aurora_ios_voice_session_new(
-        gatewayPointer,
-        nil,
-        remoteAudioConsent ? 1 : 0
-      )
+    try self.init(
+      gateway: gateway,
+      bearer: bearer,
+      remoteAudioConsent: remoteAudioConsent,
+      requiredSlots: ["stt"],
+      audioSession: audioSession
+    )
+  }
+
+  private init(
+    gateway: String,
+    bearer: String?,
+    remoteAudioConsent: Bool,
+    requiredSlots: [String],
+    audioSession: AVAudioSession = .sharedInstance()
+  ) throws {
+    let normalizedSlots = requiredSlots.map { $0.lowercased() }
+    let boundPackPaths = try AuroraIOSVoicePackManager.boundPackPaths(for: normalizedSlots)
+    guard boundPackPaths.count == Set(normalizedSlots).count else {
+      throw AuroraIOSVoiceSessionHostError.requiredTaskPackUnavailable
     }
+    let taskBindings = try Self.taskPackBindings(from: boundPackPaths)
+
+    guard !gateway.isEmpty else { throw AuroraIOSVoiceSessionHostError.invalidGateway }
+    let session = Self.createNativeSession(
+      gateway: gateway,
+      bearer: bearer,
+      remoteAudioConsent: remoteAudioConsent,
+      bindings: taskBindings
+    )
     guard let session else {
       throw AuroraIOSVoiceSessionHostError.nativeSessionUnavailable
     }
@@ -74,6 +106,7 @@ public final class AuroraIOSVoiceSessionHost {
     self.nativeSession = session
     self.output = aurora_ios_voice_session_output(session)
     self.audioSession = audioSession
+    self.boundTaskPackPaths = boundPackPaths
     self.capture = AuroraIOSVoiceCapture(
       borrowingState: state,
       session: audioSession
@@ -83,6 +116,99 @@ public final class AuroraIOSVoiceSessionHost {
     }
     self.activeGeneration = nil
     installLifecycleObservers()
+  }
+
+  private static func createNativeSession(
+    gateway: String,
+    bearer: String?,
+    remoteAudioConsent: Bool,
+    bindings: [AuroraIOSVoiceTaskPackPathBinding]
+  ) -> OpaquePointer? {
+    gateway.withCString { gatewayPointer in
+      let buildWithBearer: (UnsafePointer<CChar>?) -> OpaquePointer? = { bearerPointer in
+        withNativePackBindings(bindings) { nativeBindings, bindingCount in
+          aurora_ios_voice_session_new_with_pack_bindings(
+            gatewayPointer,
+            bearerPointer,
+            remoteAudioConsent ? 1 : 0,
+            nativeBindings,
+            bindingCount
+          )
+        }
+      }
+      if let bearer, !bearer.isEmpty {
+        return bearer.withCString { bearerPointer in
+          buildWithBearer(bearerPointer)
+        }
+      }
+      return buildWithBearer(nil)
+    }
+  }
+
+  private static func taskPackBindings(
+    from paths: [String: String]
+  ) throws -> [AuroraIOSVoiceTaskPackPathBinding] {
+    try paths.map { slot, packPath in
+      guard let task = taskCode(for: slot) else {
+        throw AuroraIOSVoiceSessionHostError.requiredTaskPackUnavailable
+      }
+      return AuroraIOSVoiceTaskPackPathBinding(
+        task: task,
+        slotId: slot,
+        packPath: packPath
+      )
+    }
+  }
+
+  private static func taskCode(for slot: String) -> Int32? {
+    switch slot.lowercased() {
+    case "kws":
+      return 1
+    case "wakeword":
+      return 2
+    case "vad":
+      return 3
+    case "stt":
+      return 4
+    case "tts":
+      return 5
+    default:
+      return nil
+    }
+  }
+
+  private static func withNativePackBindings<T>(
+    _ bindings: [AuroraIOSVoiceTaskPackPathBinding],
+    _ body: (UnsafePointer<AuroraIosVoiceTaskPackBinding>?, UInt) -> T
+  ) -> T {
+    guard !bindings.isEmpty else {
+      return body(nil, 0)
+    }
+    var nativeBindings = Array(
+      repeating: AuroraIosVoiceTaskPackBinding(task: 0, slot_id: nil, pack_path: nil),
+      count: bindings.count
+    )
+
+    func bind(_ index: Int) -> T {
+      guard index < bindings.count else {
+        return nativeBindings.withUnsafeBufferPointer { buffer in
+          body(buffer.baseAddress, UInt(buffer.count))
+        }
+      }
+      let binding = bindings[index]
+      return binding.slotId.withCString { slotPointer in
+        binding.packPath.withCString { packPathPointer in
+          nativeBindings[index] = AuroraIosVoiceTaskPackBinding(
+            task: binding.task,
+            slot_id: slotPointer,
+            pack_path: packPathPointer
+          )
+          return bind(index + 1)
+        }
+      }
+    }
+
+    return bind(0)
   }
 
   deinit {
