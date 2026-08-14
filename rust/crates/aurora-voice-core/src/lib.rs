@@ -967,22 +967,11 @@ impl WakeOrchestrationConfig {
 
 /// Type-erased VAD provider accepted by the shared wake runtime.
 ///
-/// Native owners move the complete runtime onto a dedicated session thread, so
-/// native providers must be movable across threads. Browser WASM stays on its
-/// owning JavaScript thread and must not inherit that native-only constraint.
-#[cfg(not(target_arch = "wasm32"))]
-pub type WakeVadProvider = Box<dyn VadStreamProvider + Send>;
-
-/// Type-erased VAD provider accepted by the shared wake runtime on browser WASM.
-#[cfg(target_arch = "wasm32")]
+/// Native Sherpa handles are owned and used on a single runtime thread; the
+/// runtime itself is not required to be moved after provider construction.
 pub type WakeVadProvider = Box<dyn VadStreamProvider>;
 
 /// Type-erased KWS provider accepted by the shared wake runtime.
-#[cfg(not(target_arch = "wasm32"))]
-pub type WakeKwsProvider = Box<dyn KwsStreamProvider + Send>;
-
-/// Type-erased KWS provider accepted by the shared wake runtime on browser WASM.
-#[cfg(target_arch = "wasm32")]
 pub type WakeKwsProvider = Box<dyn KwsStreamProvider>;
 
 struct WakeRuntime {

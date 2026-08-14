@@ -32,14 +32,14 @@ cpal.workspace = true
 
 [features]
 default = []
-desktop-sherpa = [
+native-sherpa = [
     "dep:aurora-voice-sherpa",
     "aurora-voice-sherpa/native-kws",
     "aurora-voice-sherpa/native-stt",
     "aurora-voice-sherpa/native-vad",
 ]
-desktop-sherpa-tts = [
-    "desktop-sherpa",
+native-sherpa-tts = [
+    "native-sherpa",
     "aurora-voice-sherpa/native-tts",
 ]
 ios-sherpa = [
@@ -49,6 +49,8 @@ ios-sherpa = [
     "aurora-voice-sherpa/native-tts",
     "aurora-voice-sherpa/native-vad",
 ]
+desktop-sherpa = ["native-sherpa"]
+desktop-sherpa-tts = ["native-sherpa-tts"]
 
 [dev-dependencies]
 tempfile.workspace = true

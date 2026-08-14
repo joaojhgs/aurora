@@ -550,7 +550,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     fun startVoiceForegroundService(invoke: Invoke) {
         val args = invoke.parseArgs(AndroidVoiceForegroundServiceStartArgs::class.java)
         val status = voiceForegroundServiceStatusObject()
-        if (args.backgroundSession) {
+        if (args.backgroundSession && !status.getBoolean("backgroundStartable")) {
             val ret = JSObject()
             ret.put("started", false)
             ret.put("status", status)
@@ -629,10 +629,15 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             invoke.reject("pack_not_found")
             return
         }
+        val task = inferAuroraSpeechPackTask(entry.tasks)
+        if (task == null) {
+            invoke.reject("pack_not_supported")
+            return
+        }
         val packId = entry.packId
-        val existing = isPackDownloaded(packId, entry.sha256)
+        val existing = isPackInstalledForRuntime(entry)
         if (existing && !args.forceDownload) {
-            if (args.activate) setActivePack(packId)
+            if (args.activate) setActivePack(entry)
             val ret = JSObject()
             ret.put("started", false)
             ret.put("packId", packId)
@@ -658,7 +663,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                 ret.put("jobId", previous)
                 ret.put("status", voicePackCatalogStatusObject())
                 ret.put("reason", "pack_operation_in_progress")
-                ret.put("installed", isPackDownloaded(packId, entry.sha256))
+                ret.put("installed", isPackInstalledForRuntime(entry))
                 invoke.resolve(ret)
                 return
             }
@@ -675,16 +680,15 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         kotlin.concurrent.thread(start = true) {
             val lock = voicePackLock(packId)
             synchronized(lock) {
-                cleanStalePackArtifacts(packId)
                 state.status = "started"
-                val result = downloadPackToCache(entry.uri, packId, entry.sha256, entry.sizeBytes)
-                when (result.first) {
+                val result = installPackForRuntime(entry, task)
+                when (result) {
                     VoicePackDownloadResult.SUCCESS -> {
                         state.status = "completed"
-                        state.downloadedBytes = result.second
-                        state.totalBytes = result.second
+                        state.downloadedBytes = entry.sizeBytes
+                        state.totalBytes = entry.sizeBytes
                         state.completedAtMs = currentUnixMs()
-                        if (args.activate) setActivePack(packId)
+                        if (args.activate) setActivePack(entry)
                     }
                     VoicePackDownloadResult.BAD_HASH -> {
                         state.status = "failed"
@@ -717,9 +721,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                 }
                 if (state.status == "failed") state.completedAtMs = currentUnixMs()
                 if (state.status == "completed" && !args.activate) {
-                    val active = activePackId()
-                    if (active == null || !isPackDownloaded(active, null)) {
-                        setActivePack(packId)
+                    val active = activePackId(task)
+                    if (active == null || !isActivePackReady(task)) {
+                        setActivePack(entry)
                     }
                 }
             }
@@ -765,7 +769,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             invoke.reject("pack_not_found")
             return
         }
-        if (!isPackDownloaded(args.packId, candidate.sha256)) {
+        if (!isPackInstalledForRuntime(candidate)) {
             invoke.reject("pack_not_downloaded")
             return
         }
@@ -774,7 +778,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             return
         }
         synchronized(voicePackLock(args.packId)) {
-            setActivePack(args.packId)
+            setActivePack(candidate)
         }
         val ret = JSObject()
         ret.put("activated", true)
@@ -792,9 +796,13 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             return
         }
         val removed = synchronized(voicePackLock(args.packId)) {
-            val removedNow = removePackFiles(args.packId)
+            val removedNow = removePackForRuntime(entry)
+            val task = inferAuroraSpeechPackTask(entry.tasks)
+            if (task != null && activePackId(task) == args.packId) {
+                clearActivePack(task)
+            }
             if (activePackId() == args.packId) {
-                clearActivePack()
+                clearLegacyActivePack()
             }
             removedNow
         }
@@ -1498,21 +1506,21 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun localLightInferenceStatusObject(): JSObject {
         val installed = voicePackCatalogEntries()
-        val activePackId = activePackId()
+        val activePackId = activePackId(AuroraSpeechPackTask.STT)
         val activePack = activePackId?.let { active -> installed.firstOrNull { it.packId == active } }
         val catalogCount = installed.size
-        val installedCount = installed.count { isPackDownloaded(it.packId, it.sha256) }
+        val installedCount = installed.count { isPackInstalledForRuntime(it) }
         val activeCacheReady = activePack != null && isPackReadyForRuntime(activePack)
         val routeConfigured = AuroraVoiceNativeConfigStore.isConfigured(activity)
         val ret = JSObject()
         ret.put("platform", "android")
         ret.put("providerId", "native:mobile-local-light")
-        ret.put("available", false)
+        ret.put("available", activeCacheReady && routeConfigured)
         ret.put("requestable", catalogCount > 0)
-        ret.put("modelRuntimeProvider", false)
+        ret.put("modelRuntimeProvider", true)
         ret.put("backendModelCatalogRequired", catalogCount == 0)
-        ret.put("engineReady", false)
-        ret.put("rustCatalogBridgeReady", false)
+        ret.put("engineReady", activeCacheReady)
+        ret.put("rustCatalogBridgeReady", true)
         ret.put("routeConfigured", routeConfigured)
         ret.put("hardwareAcceleration", "unknown")
         ret.put("catalogCount", catalogCount)
@@ -1520,8 +1528,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("modelId", if (activePackId == null) JSONObject.NULL else activePackId)
         ret.put("modelPresent", activeCacheReady)
         ret.put("permissionGranted", true)
-        ret.put("state", "degraded")
-        ret.put("fallbackAvailable", true)
+        ret.put("state", if (activeCacheReady && routeConfigured) "ready" else "degraded")
+        ret.put("fallbackAvailable", !activeCacheReady)
         ret.put("fallbackProviderId", "local:Orchestrator:llama-cpp")
         ret.put(
             "reason",
@@ -1529,12 +1537,12 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                 !activeCacheReady && catalogCount > 0 -> "compatible_pack_not_available"
                 !routeConfigured -> "voice_route_unconfigured"
                 catalogCount == 0 -> "backend_model_catalog_required"
-                else -> "rust_catalog_bridge_pending"
+                else -> "ready"
             },
         )
         ret.put("evidenceSource", "android-native-local-light-adapter")
         ret.put("activePack", activePack?.let(::voicePackRuntimeSummary) ?: JSONObject())
-        ret.put("activePackReadyForRuntime", false)
+        ret.put("activePackReadyForRuntime", activeCacheReady)
         ret.put("activePackCacheReady", activeCacheReady)
         ret.put("secretsRedacted", true)
         return ret
@@ -1565,7 +1573,13 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private fun hasPackagePermission(permission: String): Boolean =
         activity.packageManager.checkPermission(permission, activity.packageName) == PackageManager.PERMISSION_GRANTED
 
-    private fun backgroundSessionAllowed(): Boolean = false
+    private fun backgroundSessionAllowed(): Boolean =
+        AuroraVoiceNativeConfigStore.isConfigured(activity) &&
+            isActivePackReady(AuroraSpeechPackTask.STT) &&
+            isActivePackReady(AuroraSpeechPackTask.TTS) &&
+            isActivePackReady(AuroraSpeechPackTask.VAD) &&
+            isActivePackReady(AuroraSpeechPackTask.KWS) &&
+            wakePhraseSelection() != null
 
     private fun voicePackCatalogEntries(): List<VoicePackCatalogEntry> {
         val raw = voicePackPrefs().getString(VOICE_PACK_CATALOG_KEY, "[]") ?: "[]"
@@ -1625,14 +1639,18 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private fun voicePackCatalogStatusObject(): JSObject {
         val catalog = voicePackCatalogEntries()
         val active = activePackId()
-        val cacheDir = File(activity.filesDir, VOICE_PACK_CACHE_DIR)
         val ret = JSObject()
         ret.put("platform", "android")
         ret.put("available", backgroundSessionAllowed())
         ret.put("activePackId", active ?: JSONObject.NULL)
+        ret.put("activeSttPackId", activePackId(AuroraSpeechPackTask.STT) ?: JSONObject.NULL)
+        ret.put("activeTtsPackId", activePackId(AuroraSpeechPackTask.TTS) ?: JSONObject.NULL)
+        ret.put("activeVadPackId", activePackId(AuroraSpeechPackTask.VAD) ?: JSONObject.NULL)
+        ret.put("activeKwsPackId", activePackId(AuroraSpeechPackTask.KWS) ?: JSONObject.NULL)
         val entries = JSArray()
         catalog.forEach { entry ->
-            val installed = isPackDownloaded(entry.packId, entry.sha256)
+            val task = inferAuroraSpeechPackTask(entry.tasks)
+            val installed = isPackInstalledForRuntime(entry)
             val item = JSObject()
             item.put("packId", entry.packId)
             item.put("packName", entry.packName)
@@ -1642,7 +1660,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             item.put("sha256", entry.sha256)
             item.put("sizeBytes", entry.sizeBytes)
             item.put("installed", installed)
-            item.put("active", entry.packId == active)
+            item.put("active", if (task == null) entry.packId == active else entry.packId == activePackId(task))
+            item.put("runtimeTask", task?.nativeName ?: JSONObject.NULL)
             item.put("tasks", JSArray().also { jsonArray ->
                 entry.tasks.forEach { jsonArray.put(it) }
             })
@@ -1656,14 +1675,14 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             item.put("license", entry.license)
             item.put("attributionRequired", entry.attributionRequired)
             item.put("attributionText", entry.attributionText)
-            item.put("readyForRuntime", false)
-            item.put("readyForInstall", isPackReadyForRuntime(entry))
-            item.put("cachePath", if (installed) File(cacheDir, safePackFileName(entry.packId)).path else JSONObject.NULL)
-            item.put("evidenceSource", "android-voice-pack-cache")
+            item.put("readyForRuntime", installed && task != null && isPackReadyForRuntime(entry))
+            item.put("readyForInstall", task != null && isPackDownloadReady(entry))
+            item.put("cachePath", JSONObject.NULL)
+            item.put("evidenceSource", "android-native-speech-pack-manager")
             entries.put(item)
         }
         ret.put("entries", entries)
-        ret.put("evidenceSource", "android-voice-pack-cache")
+        ret.put("evidenceSource", "android-native-speech-pack-manager")
         ret.put("secretsRedacted", true)
         return ret
     }
@@ -1741,11 +1760,22 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun activePackId(): String? = voicePackPrefs().getString(VOICE_PACK_ACTIVE_ID_KEY, null)
 
-    private fun setActivePack(packId: String) {
-        voicePackPrefs().edit().putString(VOICE_PACK_ACTIVE_ID_KEY, packId).apply()
+    private fun activePackId(task: AuroraSpeechPackTask): String? =
+        voicePackPrefs().getString(auroraSpeechPackActiveKey(task), null)
+
+    private fun setActivePack(entry: VoicePackCatalogEntry) {
+        val task = inferAuroraSpeechPackTask(entry.tasks) ?: return
+        voicePackPrefs().edit()
+            .putString(VOICE_PACK_ACTIVE_ID_KEY, entry.packId)
+            .putString(auroraSpeechPackActiveKey(task), entry.packId)
+            .apply()
     }
 
-    private fun clearActivePack() {
+    private fun clearActivePack(task: AuroraSpeechPackTask) {
+        voicePackPrefs().edit().remove(auroraSpeechPackActiveKey(task)).apply()
+    }
+
+    private fun clearLegacyActivePack() {
         voicePackPrefs().edit().remove(VOICE_PACK_ACTIVE_ID_KEY).apply()
     }
 
@@ -1756,22 +1786,28 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("provider", entry.provider)
         ret.put("language", entry.language)
         ret.put("sizeBytes", entry.sizeBytes)
-        ret.put("installed", isPackDownloaded(entry.packId, entry.sha256))
-        ret.put("cachePath", File(activity.filesDir, "${VOICE_PACK_CACHE_DIR}/${safePackFileName(entry.packId)}").path)
+        ret.put("installed", isPackInstalledForRuntime(entry))
+        ret.put("cachePath", JSONObject.NULL)
         return ret
     }
 
-    private fun isAnyPackDownloaded(): Boolean = voicePackCatalogEntries().any { isPackDownloaded(it.packId, it.sha256) }
+    private fun isAnyPackDownloaded(): Boolean = voicePackCatalogEntries().any { isPackInstalledForRuntime(it) }
 
     private fun isPackReadyForRuntime(entry: VoicePackCatalogEntry): Boolean =
-        isPackDownloaded(entry.packId, entry.sha256) &&
+        isPackInstalledForRuntime(entry) &&
             isPackDownloadReady(entry) &&
             isPackMetadataRuntimeCompatible(entry)
 
     private fun isActiveCompatiblePackReady(): Boolean {
-        val active = activePackId() ?: return false
+        val active = activePackId(AuroraSpeechPackTask.STT) ?: activePackId() ?: return false
         val entry = findCatalogEntry(active) ?: return false
         return isPackReadyForRuntime(entry)
+    }
+
+    private fun isActivePackReady(task: AuroraSpeechPackTask): Boolean {
+        val active = activePackId(task) ?: return false
+        val entry = findCatalogEntry(active) ?: return false
+        return inferAuroraSpeechPackTask(entry.tasks) == task && isPackReadyForRuntime(entry)
     }
 
     private fun isPackMetadataRuntimeCompatible(entry: VoicePackCatalogEntry): Boolean {
@@ -1797,6 +1833,85 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             isValidHexSha256(entry.sha256) &&
             isPositiveAndBoundedSize(entry.sizeBytes)
     }.getOrDefault(false)
+
+    private fun isPackInstalledForRuntime(entry: VoicePackCatalogEntry): Boolean {
+        val task = inferAuroraSpeechPackTask(entry.tasks) ?: return false
+        if (!packCatalogFileNameRegex.matches(entry.packId)) return false
+        return runCatching {
+            AuroraNativeSpeechPackBridge.resolve(activity, entry.packId, task)
+        }.getOrDefault(false)
+    }
+
+    private fun installPackForRuntime(
+        entry: VoicePackCatalogEntry,
+        task: AuroraSpeechPackTask,
+    ): VoicePackDownloadResult {
+        if (!isPackDownloadReady(entry)) return VoicePackDownloadResult.INVALID_INPUT
+        return if (
+            runCatching {
+                AuroraNativeSpeechPackBridge.install(activity, entry.packId, task)
+            }.getOrDefault(false)
+        ) {
+            VoicePackDownloadResult.SUCCESS
+        } else {
+            VoicePackDownloadResult.WRITE_FAILED
+        }
+    }
+
+    private fun removePackForRuntime(entry: VoicePackCatalogEntry): Boolean {
+        val task = inferAuroraSpeechPackTask(entry.tasks) ?: return false
+        return runCatching {
+            AuroraNativeSpeechPackBridge.remove(activity, entry.packId, task)
+        }.getOrDefault(false)
+    }
+
+    private fun wakePhraseSelection(): AuroraWakePhraseSelection? {
+        val prefs = voicePackPrefs()
+        val id = prefs.getString(AURORA_WAKE_PHRASE_ID_KEY, null)?.trim().orEmpty()
+        val text = prefs.getString(AURORA_WAKE_PHRASE_TEXT_KEY, null)?.trim().orEmpty()
+        val revision = prefs.getString(AURORA_WAKE_PHRASE_REVISION_KEY, null)?.trim().orEmpty()
+        if (id.isNotBlank() && text.isNotBlank() && revision.isNotBlank()) {
+            return AuroraWakePhraseSelection(id, text, revision)
+        }
+        return wakePhraseSelectionFromRuntimeProfile()
+    }
+
+    private fun wakePhraseSelectionFromRuntimeProfile(): AuroraWakePhraseSelection? {
+        val raw = activity
+            .getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE)
+            .getString(THIN_PROFILE_KEY, null)
+            ?: return null
+        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+        val activeProfileId = root.optString("activeProfileId", "").takeIf { it.isNotBlank() }
+        val profile = if (activeProfileId != null) {
+            val profileMap = root.optJSONObject("profiles")
+            val profileArray = root.optJSONArray("profiles")
+            profileMap?.optJSONObject(activeProfileId)
+                ?: profileArray?.let { profiles ->
+                    (0 until profiles.length())
+                        .mapNotNull { index -> profiles.optJSONObject(index) }
+                        .firstOrNull { item -> item.optString("id") == activeProfileId }
+                }
+        } else {
+            null
+        } ?: root.optJSONObject("activeProfile")
+            ?: root.optJSONObject("profile")
+            ?: return null
+        val selection = profile
+            .optJSONObject("localNode")
+            ?.optJSONObject("localSpeechSelection")
+            ?: profile.optJSONObject("localSpeechSelection")
+            ?: return null
+        val phrase = selection.optJSONObject("wakePhrase") ?: selection
+        val id = phrase.optString("id", phrase.optString("phraseId", "")).trim()
+        val text = phrase.optString("text", phrase.optString("phrase", "")).trim()
+        val revision = phrase.optString("revision", phrase.optString("phraseRevision", "")).trim()
+        return if (id.isNotBlank() && text.isNotBlank() && revision.isNotBlank()) {
+            AuroraWakePhraseSelection(id, text, revision)
+        } else {
+            null
+        }
+    }
 
     private fun downloadPackToCache(
         source: String,
@@ -1942,7 +2057,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                 connection.connectTimeout = VOICE_PACK_DOWNLOAD_CONNECT_TIMEOUT_MS
                 connection.readTimeout = VOICE_PACK_DOWNLOAD_READ_TIMEOUT_MS
                 connection.connect()
-                when (val code = connection.responseCode) {
+                when (connection.responseCode) {
                     in 300..399 -> {
                         val location = connection.getHeaderField("Location")
                         val next = resolveRedirectUri(current, location) ?: return null
@@ -2106,8 +2221,13 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     ): JSObject {
         val manifestReady = hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE) &&
             (Build.VERSION.SDK_INT < 34 || hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE_MICROPHONE))
-        val nativeSessionReady = AuroraVoiceNativeConfigStore.isConfigured(activity)
-        val backgroundRuntimeReady = false
+        val nativeSessionReady = AuroraVoiceNativeConfigStore.isConfigured(activity) &&
+            isActivePackReady(AuroraSpeechPackTask.STT) &&
+            isActivePackReady(AuroraSpeechPackTask.TTS)
+        val backgroundRuntimeReady = nativeSessionReady &&
+            isActivePackReady(AuroraSpeechPackTask.VAD) &&
+            isActivePackReady(AuroraSpeechPackTask.KWS) &&
+            wakePhraseSelection() != null
         val notificationReady = canPostNotifications()
         val startable = microphoneGranted && foregroundServiceReady && manifestReady && notificationReady && nativeSessionReady
         val ret = JSObject()
@@ -2166,7 +2286,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         if (!manifestReady) return "foreground_service_manifest_missing"
         if (!microphoneGranted) return "microphone_permission_missing"
         if (!notificationReady) return "notification_delivery_unavailable"
-        if (!nativeSessionReady) return "native_voice_route_missing"
+        if (!nativeSessionReady) return "native_voice_runtime_missing"
         if (startable) return "foreground_service_startable"
         return "foreground_service_degraded"
     }

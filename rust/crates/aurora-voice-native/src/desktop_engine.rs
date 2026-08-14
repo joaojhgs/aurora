@@ -11,7 +11,7 @@ use aurora_voice_sherpa::{
     NativeSttModelFiles, NativeVadBackend, SherpaFiniteSttEngine, SherpaKwsPhraseCompileError,
     SherpaKwsPhraseInput, SherpaKwsPhraseSet, SherpaKwsProvider, SherpaVadProvider,
 };
-#[cfg(feature = "desktop-sherpa-tts")]
+#[cfg(feature = "native-sherpa-tts")]
 use aurora_voice_sherpa::{NativeTtsBackend, NativeTtsVitsPiperModelFiles, SherpaTtsProvider};
 
 use crate::{NativeModelStore, SpeechModelBindings, SpeechPackManager};
@@ -173,7 +173,7 @@ pub fn build_installed_stt_provider(
 }
 
 /// Native desktop TTS provider bound to an installed TTS catalog voice.
-#[cfg(feature = "desktop-sherpa-tts")]
+#[cfg(feature = "native-sherpa-tts")]
 pub fn build_installed_tts_provider(
     manager: &SpeechPackManager,
     voice_id: &str,

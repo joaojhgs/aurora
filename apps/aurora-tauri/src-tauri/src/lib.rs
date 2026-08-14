@@ -10011,6 +10011,9 @@ mod tests {
         let plugin = include_str!(
             "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt"
         );
+        let speech_packs = include_str!(
+            "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativeSpeechPacks.kt"
+        );
         let rust_audio = include_str!("android_audio.rs");
         let shared_audio =
             include_str!("../../../../rust/crates/aurora-voice-native/src/android_capture.rs");
@@ -10034,6 +10037,8 @@ mod tests {
             "AuroraNativeAudioOutputBridge",
             "AuroraAudioPlayback",
             "AuroraNativeVoiceSessionBridge",
+            "nativeCreateWithPackSelection",
+            "auroraSpeechPackStoreRoot",
             "AuroraVoiceNativeConfigStore",
             "isConfigured",
             "VOICE_GATEWAY_KEY",
@@ -10063,6 +10068,9 @@ mod tests {
             );
         }
         for required in [
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeSpeechPackBridge_nativeInstall",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeSpeechPackBridge_nativeResolve",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeSpeechPackBridge_nativeRemove",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativeCreate",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativePushPcm",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativeDrainPcm",
@@ -10073,6 +10081,7 @@ mod tests {
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeStats",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeFree",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeCreate",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeCreateWithPackSelection",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeStart",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeStartBackground",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeFinish",
@@ -10107,7 +10116,20 @@ mod tests {
         assert!(plugin.contains("notificationReady"));
         assert!(plugin.contains("canPostNotifications()"));
         assert!(plugin.contains("notification_delivery_unavailable"));
-        assert!(plugin.contains("native_voice_route_missing"));
+        assert!(plugin.contains("native_voice_runtime_missing"));
+        for required in [
+            "AuroraNativeSpeechPackBridge",
+            "nativeInstall",
+            "nativeResolve",
+            "nativeRemove",
+            "inferAuroraSpeechPackTask",
+            "AURORA_SPEECH_PACK_STORE_DIR",
+        ] {
+            assert!(
+                speech_packs.contains(required),
+                "missing Android speech-pack bridge contract: {required}"
+            );
+        }
         for command in [
             "startVoiceForegroundService",
             "finishVoiceForegroundService",
@@ -10138,7 +10160,8 @@ mod tests {
             assert!(rust_source.contains(command), "{command}");
         }
         assert!(plugin.contains("backendAudioEvidenceRequired"));
-        assert!(service.contains("BACKGROUND_VOICE_AVAILABLE = false"));
+        assert!(service.contains("isActivePackReady(AuroraSpeechPackTask.VAD)"));
+        assert!(service.contains("isActivePackReady(AuroraSpeechPackTask.KWS)"));
         assert!(service.contains("background_voice_unavailable"));
         for required in [
             "VoiceInteractionSessionService",

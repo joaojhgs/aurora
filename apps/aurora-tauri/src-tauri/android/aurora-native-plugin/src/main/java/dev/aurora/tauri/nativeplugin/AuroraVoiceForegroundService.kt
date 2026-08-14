@@ -36,7 +36,6 @@ import javax.crypto.spec.GCMParameterSpec
 
 private const val AURORA_VOICE_CHANNEL_ID = "aurora_voice_capture"
 private const val AURORA_VOICE_NOTIFICATION_ID = 4203
-private const val BACKGROUND_VOICE_AVAILABLE = false
 private const val SAMPLE_RATE_HZ = 16_000
 private const val CHANNEL_COUNT = 1
 private const val QUEUE_CAPACITY_CHUNKS = 8
@@ -52,6 +51,8 @@ private const val VOICE_BEARER_KEY = "aurora.voice.bearer"
 private const val VOICE_GENERIC_GATEWAY_KEY = "aurora.gateway"
 private const val VOICE_GENERIC_BEARER_KEY = "aurora.auth"
 private const val VOICE_REMOTE_AUDIO_CONSENT_KEY = "aurora.voice.remote_audio_consent"
+private const val THIN_PROFILE_PREFS = "aurora_thin_profile"
+private const val THIN_PROFILE_KEY = "aurora.session.android-thin-connection-profile.v1"
 private const val VOICE_PACK_PREFS = "aurora_voice_pack_cache"
 private const val VOICE_PACK_CATALOG_KEY = "catalog"
 private const val VOICE_PACK_ACTIVE_ID_KEY = "active_voice_pack_id"
@@ -306,8 +307,32 @@ private class AuroraNativeVoiceSessionBridge(
     gateway: String,
     bearer: String,
     remoteAudioConsent: Boolean,
+    packStoreRoot: String? = null,
+    sttModelId: String? = null,
+    ttsVoiceId: String? = null,
+    vadModelId: String? = null,
+    kwsModelId: String? = null,
+    wakePhraseId: String? = null,
+    wakePhraseText: String? = null,
+    wakePhraseRevision: String? = null,
 ) : AuroraPcmIngressBridge, AuroraPcmOutputBridge {
-    private var handle: Long = nativeCreate(gateway, bearer, remoteAudioConsent)
+    private var handle: Long = if (packStoreRoot != null && sttModelId != null && ttsVoiceId != null) {
+        nativeCreateWithPackSelection(
+            gateway,
+            bearer,
+            remoteAudioConsent,
+            packStoreRoot,
+            sttModelId,
+            ttsVoiceId,
+            vadModelId.orEmpty(),
+            kwsModelId.orEmpty(),
+            wakePhraseId.orEmpty(),
+            wakePhraseText.orEmpty(),
+            wakePhraseRevision.orEmpty(),
+        )
+    } else {
+        nativeCreate(gateway, bearer, remoteAudioConsent)
+    }
 
     fun start(): Long {
         return start(background = false)
@@ -365,6 +390,19 @@ private class AuroraNativeVoiceSessionBridge(
     }
 
     private external fun nativeCreate(gateway: String, bearer: String, remoteAudioConsent: Boolean): Long
+    private external fun nativeCreateWithPackSelection(
+        gateway: String,
+        bearer: String,
+        remoteAudioConsent: Boolean,
+        packStoreRoot: String,
+        sttModelId: String,
+        ttsVoiceId: String,
+        vadModelId: String,
+        kwsModelId: String,
+        wakePhraseId: String,
+        wakePhraseText: String,
+        wakePhraseRevision: String,
+    ): Long
     private external fun nativeStart(handle: Long): Long
     private external fun nativeStartBackground(handle: Long): Long
     private external fun nativeFinish(handle: Long, generation: Long): Int
@@ -636,11 +674,6 @@ class AuroraVoiceForegroundService : Service() {
         }
         val backgroundSession = intent?.action == ACTION_START_BACKGROUND ||
             intent?.action == ACTION_START_ASSISTANT
-        if (backgroundSession && !BACKGROUND_VOICE_AVAILABLE) {
-            captureError = "background_voice_unavailable"
-            stopSelf()
-            return START_NOT_STICKY
-        }
         if (backgroundSession && !isBackgroundVoiceSessionAvailable()) {
             captureError = "background_voice_unavailable"
             stopSelf()
@@ -659,25 +692,28 @@ class AuroraVoiceForegroundService : Service() {
             return START_NOT_STICKY
         }
         initializeNativeVoiceSession()
+        if (session == null) {
+            captureError = "voice_runtime_unavailable"
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (capture == null) {
             captureError = null
-            session?.let { nativeSession ->
-                sessionGeneration = if (backgroundSession) {
-                    nativeSession.startBackground()
-                } else {
-                    nativeSession.start()
-                }
-                if (sessionGeneration == 0L) {
-                    captureError = "voice_runtime_unavailable"
-                    stopSelf()
-                    return START_NOT_STICKY
-                }
+            val nativeSession = session ?: return START_NOT_STICKY
+            sessionGeneration = if (backgroundSession) {
+                nativeSession.startBackground()
+            } else {
+                nativeSession.start()
             }
-            val ingress = session ?: AuroraNativeAudioBridge()
-            capture = AuroraAudioCapture(this, ingress, { snapshot ->
+            if (sessionGeneration == 0L) {
+                captureError = "voice_runtime_unavailable"
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            capture = AuroraAudioCapture(this, nativeSession, { snapshot ->
                 captureSnapshot = snapshot
                 updateNotification(snapshot)
-            }, closeBridgeOnClose = session == null)
+            }, closeBridgeOnClose = false)
             if (capture?.start() != true) stopSelf()
         }
         return START_NOT_STICKY
@@ -691,7 +727,12 @@ class AuroraVoiceForegroundService : Service() {
             return false
         }
         if (!hasPostNotificationsPermission() || !canPostNotifications()) return false
-        return AuroraVoiceNativeConfigStore.isConfigured(this) && isActiveCompatiblePackReady()
+        return AuroraVoiceNativeConfigStore.isConfigured(this) &&
+            isActivePackReady(AuroraSpeechPackTask.STT) &&
+            isActivePackReady(AuroraSpeechPackTask.TTS) &&
+            isActivePackReady(AuroraSpeechPackTask.VAD) &&
+            isActivePackReady(AuroraSpeechPackTask.KWS) &&
+            wakePhraseSelection() != null
     }
 
     private fun hasPostNotificationsPermission(): Boolean =
@@ -700,14 +741,24 @@ class AuroraVoiceForegroundService : Service() {
     private fun canPostNotifications(): Boolean = hasPostNotificationsPermission() && NotificationManagerCompat.from(this).areNotificationsEnabled()
 
     private fun isActiveCompatiblePackReady(): Boolean {
-        val active = getActivePackId() ?: return false
-        val catalog = runCatching { readCatalogEntries() }.getOrElse { emptyList() }
-        val entry = catalog.firstOrNull { it.packId == active } ?: return false
-        return isPackMetadataRuntimeCompatible(entry) && isPackDownloaded(entry.packId, entry.sha256)
+        return isActivePackReady(AuroraSpeechPackTask.STT) && isActivePackReady(AuroraSpeechPackTask.TTS)
     }
 
     private fun getActivePackId(): String? =
         getSharedPreferences(VOICE_PACK_PREFS, Context.MODE_PRIVATE).getString(VOICE_PACK_ACTIVE_ID_KEY, null)
+
+    private fun getActivePackId(task: AuroraSpeechPackTask): String? =
+        getSharedPreferences(VOICE_PACK_PREFS, Context.MODE_PRIVATE)
+            .getString(auroraSpeechPackActiveKey(task), null)
+
+    private fun isActivePackReady(task: AuroraSpeechPackTask): Boolean {
+        val active = getActivePackId(task) ?: return false
+        val catalog = runCatching { readCatalogEntries() }.getOrElse { emptyList() }
+        val entry = catalog.firstOrNull { it.packId == active } ?: return false
+        return inferAuroraSpeechPackTask(entry.tasks) == task &&
+            isPackMetadataRuntimeCompatible(entry) &&
+            isPackInstalled(entry.packId, task)
+    }
 
     private fun readCatalogEntries(): List<VoicePackCatalogEntry> {
         val raw = getSharedPreferences(VOICE_PACK_PREFS, Context.MODE_PRIVATE).getString(VOICE_PACK_CATALOG_KEY, "[]") ?: "[]"
@@ -804,17 +855,87 @@ class AuroraVoiceForegroundService : Service() {
         return expected == actual
     }
 
+    private fun isPackInstalled(packId: String, task: AuroraSpeechPackTask): Boolean {
+        if (!voicePackCatalogFileNameRegex.matches(packId)) return false
+        return runCatching { AuroraNativeSpeechPackBridge.resolve(this, packId, task) }.getOrDefault(false)
+    }
+
+    private fun wakePhraseSelection(): AuroraWakePhraseSelection? {
+        val prefs = getSharedPreferences(VOICE_PACK_PREFS, Context.MODE_PRIVATE)
+        val id = prefs.getString(AURORA_WAKE_PHRASE_ID_KEY, null)?.trim().orEmpty()
+        val text = prefs.getString(AURORA_WAKE_PHRASE_TEXT_KEY, null)?.trim().orEmpty()
+        val revision = prefs.getString(AURORA_WAKE_PHRASE_REVISION_KEY, null)?.trim().orEmpty()
+        if (id.isNotBlank() && text.isNotBlank() && revision.isNotBlank()) {
+            return AuroraWakePhraseSelection(id, text, revision)
+        }
+        return wakePhraseSelectionFromRuntimeProfile()
+    }
+
+    private fun wakePhraseSelectionFromRuntimeProfile(): AuroraWakePhraseSelection? {
+        val raw = getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE)
+            .getString(THIN_PROFILE_KEY, null)
+            ?: return null
+        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+        val activeProfileId = root.optString("activeProfileId", "").takeIf { it.isNotBlank() }
+        val profile = if (activeProfileId != null) {
+            val profileMap = root.optJSONObject("profiles")
+            val profileArray = root.optJSONArray("profiles")
+            profileMap?.optJSONObject(activeProfileId)
+                ?: profileArray?.let { profiles ->
+                    (0 until profiles.length())
+                        .mapNotNull { index -> profiles.optJSONObject(index) }
+                        .firstOrNull { item -> item.optString("id") == activeProfileId }
+                }
+        } else {
+            null
+        } ?: root.optJSONObject("activeProfile")
+            ?: root.optJSONObject("profile")
+            ?: return null
+        val selection = profile
+            .optJSONObject("localNode")
+            ?.optJSONObject("localSpeechSelection")
+            ?: profile.optJSONObject("localSpeechSelection")
+            ?: return null
+        val phrase = selection.optJSONObject("wakePhrase") ?: selection
+        val id = phrase.optString("id", phrase.optString("phraseId", "")).trim()
+        val text = phrase.optString("text", phrase.optString("phrase", "")).trim()
+        val revision = phrase.optString("revision", phrase.optString("phraseRevision", "")).trim()
+        return if (id.isNotBlank() && text.isNotBlank() && revision.isNotBlank()) {
+            AuroraWakePhraseSelection(id, text, revision)
+        } else {
+            null
+        }
+    }
+
     private fun initializeNativeVoiceSession() {
         if (playback != null) return
         val nativeConfig = AuroraVoiceNativeConfigStore.load(this)
+        val sttModelId = getActivePackId(AuroraSpeechPackTask.STT)
+        val ttsVoiceId = getActivePackId(AuroraSpeechPackTask.TTS)
+        val vadModelId = getActivePackId(AuroraSpeechPackTask.VAD)
+        val kwsModelId = getActivePackId(AuroraSpeechPackTask.KWS)
+        val wakePhrase = wakePhraseSelection()
         session = nativeConfig?.let {
-            AuroraNativeVoiceSessionBridge(it.gateway, it.bearer, it.remoteAudioConsent)
+            if (sttModelId != null && ttsVoiceId != null) {
+                AuroraNativeVoiceSessionBridge(
+                    it.gateway,
+                    it.bearer,
+                    it.remoteAudioConsent,
+                    auroraSpeechPackStoreRoot(this).path,
+                    sttModelId,
+                    ttsVoiceId,
+                    vadModelId,
+                    kwsModelId,
+                    wakePhrase?.id,
+                    wakePhrase?.text,
+                    wakePhrase?.revision,
+                )
+            } else {
+                null
+            }
         }
-        playback = if (session != null) {
-            AuroraAudioPlayback(session!!, closeBridgeOnClose = false)
-        } else {
-            AuroraAudioPlayback(AuroraNativeAudioOutputBridge())
-        }
+        val nativeSession = session ?: return
+        playback = AuroraAudioPlayback(nativeSession, closeBridgeOnClose = false)
         playback?.start()
     }
 
