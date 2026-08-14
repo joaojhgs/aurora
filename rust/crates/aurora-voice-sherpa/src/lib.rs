@@ -414,25 +414,8 @@ pub fn compile_zh_en_2025_phrase_set(
     let lexicon = load_kws_phone_lexicon(lexicon_path)?;
     let mut compiled = Vec::new();
     for phrase in phrases {
-        let phrase_text = phrase.phrase_text();
-        let (pieces, native_label) = if phrase_text.chars().any(|ch| is_cjk_unified(ch)) {
-            if phrase_text.chars().any(|ch| ch.is_ascii_alphabetic()) {
-                return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
-            }
-            let native_label = normalize_chinese_kws_phrase(phrase_text)?;
-            (compile_partial_pinyin_tokens(&native_label)?, native_label)
-        } else {
-            let words = normalize_english_phone_phrase(phrase_text)?;
-            let mut pieces = Vec::new();
-            for word in words.split(' ') {
-                let phones = lexicon
-                    .get(word)
-                    .ok_or(SherpaKwsPhraseCompileError::InvalidPhrase)?;
-                pieces.extend(phones.iter().cloned());
-            }
-            let native_label = words.replace(' ', "_");
-            (pieces, native_label)
-        };
+        let (pieces, native_label) =
+            compile_zh_en_phone_pinyin_tokens(phrase.phrase_text(), &lexicon)?;
         validate_compiled_token_sequence(&pieces, &token_table)?;
         compiled.push(
             SherpaKwsPhrase::new(
@@ -1850,23 +1833,73 @@ fn normalize_chinese_kws_phrase(value: &str) -> Result<String, SherpaKwsPhraseCo
 }
 
 #[cfg(feature = "kws-pinyin")]
-fn normalize_english_phone_phrase(value: &str) -> Result<String, SherpaKwsPhraseCompileError> {
-    if value.len() > MAX_KWS_PHRASE_TEXT_BYTES
-        || value
-            .chars()
-            .any(|ch| !(ch == '\'' || ch.is_ascii_alphabetic() || ch.is_ascii_whitespace()))
-    {
+fn compile_zh_en_phone_pinyin_tokens(
+    value: &str,
+    lexicon: &BTreeMap<String, Vec<String>>,
+) -> Result<(Vec<String>, String), SherpaKwsPhraseCompileError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.len() > MAX_KWS_PHRASE_TEXT_BYTES {
         return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
     }
-    let normalized = value
-        .split_ascii_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_ascii_uppercase();
-    if normalized.is_empty() || normalized.len() > MAX_KWS_PHRASE_TEXT_BYTES {
+    let mut pieces = Vec::new();
+    let mut native_label = String::new();
+    let mut word = String::new();
+    let mut pending_separator = false;
+
+    for ch in trimmed.chars() {
+        if ch.is_ascii_whitespace() {
+            flush_phone_word(&mut word, &mut pieces, &mut native_label, lexicon)?;
+            if !native_label.is_empty() {
+                pending_separator = true;
+            }
+            continue;
+        }
+        if is_cjk_unified(ch) {
+            flush_phone_word(&mut word, &mut pieces, &mut native_label, lexicon)?;
+            push_label_separator(&mut native_label, &mut pending_separator);
+            push_partial_pinyin_tokens(ch, &mut pieces)?;
+            native_label.push(ch);
+            continue;
+        }
+        if ch == '\'' || ch.is_ascii_alphabetic() {
+            push_label_separator(&mut native_label, &mut pending_separator);
+            word.extend(ch.to_uppercase());
+            continue;
+        }
         return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
     }
-    Ok(normalized)
+    flush_phone_word(&mut word, &mut pieces, &mut native_label, lexicon)?;
+    if pieces.is_empty() || native_label.is_empty() || pending_separator {
+        return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+    }
+    Ok((pieces, native_label))
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn flush_phone_word(
+    word: &mut String,
+    pieces: &mut Vec<String>,
+    native_label: &mut String,
+    lexicon: &BTreeMap<String, Vec<String>>,
+) -> Result<(), SherpaKwsPhraseCompileError> {
+    if word.is_empty() {
+        return Ok(());
+    }
+    let phones = lexicon
+        .get(word.as_str())
+        .ok_or(SherpaKwsPhraseCompileError::InvalidPhrase)?;
+    pieces.extend(phones.iter().cloned());
+    native_label.push_str(word);
+    word.clear();
+    Ok(())
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn push_label_separator(native_label: &mut String, pending_separator: &mut bool) {
+    if *pending_separator && !native_label.is_empty() {
+        native_label.push('_');
+    }
+    *pending_separator = false;
 }
 
 #[cfg(feature = "kws-pinyin")]
@@ -1888,16 +1921,25 @@ fn is_cjk_unified(ch: char) -> bool {
 fn compile_partial_pinyin_tokens(value: &str) -> Result<Vec<String>, SherpaKwsPhraseCompileError> {
     let mut pieces = Vec::new();
     for ch in value.chars() {
-        let pinyin = pinyin::ToPinyin::to_pinyin(&ch)
-            .ok_or(SherpaKwsPhraseCompileError::InvalidPhrase)?
-            .with_tone();
-        let (initial, final_part) = split_partial_pinyin(pinyin)?;
-        if let Some(initial) = initial {
-            pieces.push(initial.to_owned());
-        }
-        pieces.push(final_part.to_owned());
+        push_partial_pinyin_tokens(ch, &mut pieces)?;
     }
     Ok(pieces)
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn push_partial_pinyin_tokens(
+    ch: char,
+    pieces: &mut Vec<String>,
+) -> Result<(), SherpaKwsPhraseCompileError> {
+    let pinyin = pinyin::ToPinyin::to_pinyin(&ch)
+        .ok_or(SherpaKwsPhraseCompileError::InvalidPhrase)?
+        .with_tone();
+    let (initial, final_part) = split_partial_pinyin(pinyin)?;
+    if let Some(initial) = initial {
+        pieces.push(initial.to_owned());
+    }
+    pieces.push(final_part.to_owned());
+    Ok(())
 }
 
 #[cfg(feature = "kws-pinyin")]
@@ -3939,7 +3981,7 @@ mod tests {
     fn zh_en_phone_pinyin_compiler_uses_verified_tokens_and_lexicon() {
         let tokens_path = write_temp_kws_file(
             "zh-en-tokens",
-            "<blk> 0\n<sos/eos> 1\n<unk> 2\nL 3\nAY1 4\nT 5\nAH1 6\nP 7\nl 8\nuò 9\nsh 10\ní 11\n",
+            "<blk> 0\n<sos/eos> 1\n<unk> 2\nL 3\nAY1 4\nT 5\nAH1 6\nP 7\nl 8\nuò 9\nsh 10\ní 11\nn 12\nǐ 13\nh 14\nǎo 15\n",
         );
         let lexicon_path = write_temp_kws_file("zh-en-lexicon", "LIGHT L AY1 T\nUP AH1 P\n");
         let phrases = compile_zh_en_2025_phrase_set(
@@ -3949,6 +3991,7 @@ mod tests {
             [
                 SherpaKwsPhraseInput::new("wake.en", "light up").expect("phrase input"),
                 SherpaKwsPhraseInput::new("wake.zh", "落实").expect("phrase input"),
+                SherpaKwsPhraseInput::new("wake.mixed", "light 你好 up").expect("phrase input"),
             ],
         )
         .expect("compile phrases");
@@ -3960,11 +4003,52 @@ mod tests {
         assert_eq!(phrases.keyword_spec_for("wake.zh"), Some("l uò sh í @落实"));
         assert_eq!(phrases.logical_id_for_native("落实"), Some("wake.zh"));
         assert_eq!(
+            phrases.keyword_spec_for("wake.mixed"),
+            Some("L AY1 T n ǐ h ǎo AH1 P @LIGHT_你好_UP")
+        );
+        assert_eq!(
+            phrases.logical_id_for_native("LIGHT_你好_UP"),
+            Some("wake.mixed")
+        );
+        let adjacent = compile_zh_en_2025_phrase_set(
+            "rev-adjacent",
+            &tokens_path,
+            &lexicon_path,
+            [SherpaKwsPhraseInput::new("wake.adjacent", "light你好up").expect("phrase input")],
+        )
+        .expect("compile adjacent mixed phrase");
+        assert_eq!(
+            adjacent.keyword_spec_for("wake.adjacent"),
+            Some("L AY1 T n ǐ h ǎo AH1 P @LIGHT你好UP")
+        );
+        assert_eq!(
             compile_zh_en_2025_phrase_set(
                 "rev-bilingual",
                 &tokens_path,
                 &lexicon_path,
                 [SherpaKwsPhraseInput::new("wake.unknown", "unknown").expect("phrase input")],
+            ),
+            Err(SherpaKwsPhraseCompileError::InvalidPhrase)
+        );
+        assert_eq!(
+            compile_zh_en_2025_phrase_set(
+                "rev-bilingual",
+                &tokens_path,
+                &lexicon_path,
+                [SherpaKwsPhraseInput::new("wake.punctuation", "light, 你好")
+                    .expect("phrase input")],
+            ),
+            Err(SherpaKwsPhraseCompileError::InvalidPhrase)
+        );
+        assert_eq!(
+            compile_zh_en_2025_phrase_set(
+                "rev-bilingual",
+                &tokens_path,
+                &lexicon_path,
+                [
+                    SherpaKwsPhraseInput::new("wake.mixed_unknown", "light hello 你好")
+                        .expect("phrase input")
+                ],
             ),
             Err(SherpaKwsPhraseCompileError::InvalidPhrase)
         );
