@@ -256,6 +256,7 @@ export interface AndroidVoicePackCatalogEntry {
   uri?: string
   sha256: string
   sizeBytes: number
+  engineRuntimeRevision?: string
   installed: boolean
   active: boolean
   runtimeTask?: NativeSpeechPackTask | null
