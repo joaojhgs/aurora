@@ -1000,6 +1000,9 @@ class TTSService(BaseService):
     ) -> list[TTSVoiceDescriptor]:
         voices = await self._provider.list_voices() if self._provider is not None else ()
         provider_caps = self._provider.capabilities if self._provider is not None else None
+        effective_language = _voice_language_pack(await self._effective_tts_language())
+        if effective_language is None:
+            return []
         remote_caller = envelope is not None and (
             envelope.origin == "external" or _envelope_caller_peer_id(envelope) is not None
         )
@@ -1011,7 +1014,7 @@ class TTSService(BaseService):
             if remote_caller and is_clone:
                 continue
             language = _voice_language_pack(voice.language)
-            if language is None:
+            if language is None or language != effective_language:
                 continue
             descriptors.append(
                 TTSVoiceDescriptor(

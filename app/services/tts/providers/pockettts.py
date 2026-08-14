@@ -1075,7 +1075,7 @@ class PocketTTSProvider:
                 voice_id=voice_id,
                 display_name=names.get(voice_id) or voice_id,
                 ready=ready,
-                language=loaded.config_info.product_language,
+                language=loaded.config.effective_language,
             )
             for voice_id in loaded.voice_states
         )
