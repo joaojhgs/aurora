@@ -198,7 +198,7 @@ function inspectAppImage(path, rel) {
     const root = join(extractDir, 'squashfs-root')
     if (!existsSync(root)) throw new Error('AppImage extraction did not create squashfs-root')
     report.checkedInstallers += 1
-    scanExtractedTree(root, `appimage:${rel}`, artifactRoot)
+    scanExtractedTree(root, `appimage:${rel}`)
   } catch (error) {
     addFailure('installer-inspection', `installer:${rel}`, `failed to extract AppImage installer: ${errorMessage(error)}`)
   } finally {
@@ -206,7 +206,7 @@ function inspectAppImage(path, rel) {
   }
 }
 
-function scanExtractedTree(root, prefix, externalRoot = null) {
+function scanExtractedTree(root, prefix) {
   for (const extracted of walkFilesystem(root)) {
     const rel = normalizePath(relative(root, extracted))
     const stat = lstatSync(extracted)
@@ -218,7 +218,7 @@ function scanExtractedTree(root, prefix, externalRoot = null) {
         target = normalizePath(readlinkSync(extracted))
       } catch {}
       checkPath(rel, location)
-      if (target !== '<unreadable>' && isContainedSymlink(root, extracted, target, externalRoot)) continue
+      if (target !== '<unreadable>' && isContainedSymlink(root, extracted, target)) continue
       checkPath(target, `${location}->${redacted(target)}`)
       addFailure('symlink-unsupported', location, `symbolic links are not allowed in release artifacts; target=${redacted(target)}`)
       continue
@@ -232,16 +232,12 @@ function scanExtractedTree(root, prefix, externalRoot = null) {
   }
 }
 
-function isContainedSymlink(root, linkPath, target, externalRoot = null) {
+function isContainedSymlink(root, linkPath, target) {
   if (!target || target.startsWith('<') || target.includes('\0')) return false
   const resolvedTarget = resolve(dirname(linkPath), target)
-  return [root, externalRoot]
-    .filter(Boolean)
-    .some((candidateRoot) => {
-      const relativeTarget = relative(resolve(candidateRoot), resolvedTarget)
-      return relativeTarget === ''
-        || (!relativeTarget.startsWith('..') && !relativeTarget.startsWith('/') && !relativeTarget.match(/^[A-Za-z]:[/\\]/))
-    })
+  const relativeTarget = relative(resolve(root), resolvedTarget)
+  return relativeTarget === ''
+    || (!relativeTarget.startsWith('..') && !relativeTarget.startsWith('/') && !relativeTarget.match(/^[A-Za-z]:[/\\]/))
 }
 
 function inspectZipLikeArchive(buffer, label, depth) {

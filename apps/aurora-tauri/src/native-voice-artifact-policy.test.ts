@@ -2,7 +2,15 @@
 
 import { execFileSync, spawnSync } from 'node:child_process'
 import { crc32, deflateRawSync } from 'node:zlib'
-import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readlinkSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -10,6 +18,7 @@ import { describe, expect, it } from 'vitest'
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const script = join(packageRoot, 'scripts', 'assert-native-voice-artifact-policy.mjs')
+const appImageNormalizer = join(packageRoot, 'scripts', 'normalize-appimage-bundle.mjs')
 const wrapper = join(packageRoot, 'scripts', 'verify-desktop-client-bundle.mjs')
 const prepareClient = join(packageRoot, 'scripts', 'prepare-client-bundle.mjs')
 
@@ -214,6 +223,49 @@ describe('native voice desktop artifact policy', () => {
     expect(report.forbiddenMatches).toEqual([])
   })
 
+  it('rejects AppImage symlinks that only resolve through the original build directory', () => {
+    const context = createContext()
+    const externalIcon = join(context.artifactRoot, 'Aurora.png')
+    const image = join(context.artifactRoot, 'Aurora.AppImage')
+    writeArtifact(context, 'Aurora.png', 'icon bytes\n')
+    writeArtifact(
+      context,
+      'Aurora.AppImage',
+      `#!/usr/bin/env node
+const { mkdirSync, symlinkSync, writeFileSync } = require('node:fs')
+const { join } = require('node:path')
+const root = join(process.cwd(), 'squashfs-root')
+mkdirSync(root, { recursive: true })
+writeFileSync(join(root, 'Aurora.png'), 'packaged icon\\n')
+symlinkSync(${JSON.stringify(externalIcon)}, join(root, '.DirIcon'))
+`,
+    )
+    chmodSync(image, 0o755)
+
+    const result = runPolicy(context)
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('symlink-unsupported')
+    expect(result.stderr).toContain('appimage:Aurora.AppImage:.DirIcon')
+  })
+
+  it('normalizes an absolute AppImage directory icon to a packaged relative link', () => {
+    const context = createContext()
+    const appDir = join(context.root, 'Aurora.AppDir')
+    const icon = join(appDir, 'Aurora.png')
+    mkdirSync(appDir, { recursive: true })
+    writeFileSync(icon, 'icon bytes\n')
+    symlinkSync(icon, join(appDir, '.DirIcon'))
+
+    const result = spawnSync(process.execPath, [appImageNormalizer, '--appdir', appDir], {
+      cwd: packageRoot,
+      encoding: 'utf8',
+    })
+
+    expect(result.status, result.stderr).toBe(0)
+    expect(readlinkSync(join(appDir, '.DirIcon'))).toBe('Aurora.png')
+  })
+
   it('rejects secrets inside zip entry content', () => {
     const context = createContext()
     mkdirSync(context.artifactRoot, { recursive: true })
@@ -360,9 +412,30 @@ describe('native voice desktop artifact policy', () => {
     expect(packageJson.scripts['verify:bundle:desktop-client']).toBe(
       'node ./scripts/verify-desktop-client-bundle.mjs',
     )
+    expect(packageJson.scripts['normalize:bundle:appimage']).toBe(
+      'node ./scripts/normalize-appimage-bundle.mjs',
+    )
+    expect(packageJson.scripts['build:bundle:desktop-client']).toContain(
+      'pnpm normalize:bundle:appimage',
+    )
     expect(packageJson.scripts['build:bundle:desktop-client']).toContain(
       'pnpm verify:bundle:desktop-client',
     )
+    for (const script of [
+      'build:bundle:desktop-local-minimal',
+      'build:bundle:local-cpu',
+      'build:bundle:local-cuda',
+      'build:bundle:local-rocm',
+      'build:bundle:local-metal',
+      'build:bundle:local-vulkan',
+      'build:bundle:local-sycl',
+      'build:bundle:local-rpc',
+      'build:bundle:full',
+    ]) {
+      expect(packageJson.scripts[script], script).toContain(
+        'pnpm normalize:bundle:appimage',
+      )
+    }
     expect(packageJson.scripts['build:bundle:linux-rpm:desktop-client']).toContain(
       'pnpm verify:bundle:desktop-client',
     )
